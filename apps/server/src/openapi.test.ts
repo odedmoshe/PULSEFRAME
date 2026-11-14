@@ -1,0 +1,91 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { describeOps } from '@pulseframe/core';
+import { startServer, type RunningServer } from './index.ts';
+import { buildOpenApi } from './openapi.ts';
+
+const doc = buildOpenApi() as any;
+const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+const entries: { path: string; method: string; op: any }[] = Object.entries<any>(doc.paths).flatMap(([p, item]) => Object.entries<any>(item).filter(([m]) => METHODS.includes(m)).map(([method, op]) => ({ path: p, method, op })));
+
+describe('openapi structure', () => {
+  it('is OpenAPI 3.1.0 with required metadata', () => {
+    expect(doc.openapi).toBe('3.1.0');
+    expect(doc.info.title).toBe('PULSEFRAME Studio API');
+    expect(Object.keys(doc.components.securitySchemes)).toEqual(['bearerAuth', 'cookieSession']);
+    expect(doc['x-internal-routes']).toHaveLength(3);
+    expect(Object.keys(doc.paths).some((p) => p.includes('/render/'))).toBe(false);
+  });
+  it('every operation has id, scope and responses', () => {
+    const ids = new Set<string>();
+    for (const { path: p, method, op } of entries) {
+      expect(op.operationId, `${method} ${p}`).toBeTruthy();
+      expect(ids.has(op.operationId), `dup ${op.operationId}`).toBe(false);
+      ids.add(op.operationId);
+      expect(op['x-required-scope'], `${method} ${p}`).toBeTruthy();
+      expect(Object.keys(op.responses).length).toBeGreaterThan(0);
+    }
+  });
+  it('is deterministic', () => expect(JSON.stringify(buildOpenApi())).toBe(JSON.stringify(buildOpenApi())));
+  it('contains known routes', () => {
+    for (const p of ['/api/v1/projects', '/api/v1/ops', '/api/v1/capabilities', '/api/v1/projects/{id}/undo']) expect(doc.paths[p], p).toBeTruthy();
+  });
+  it('transaction ops oneOf covers the registry exactly once', () => {
+    const items = doc.components.schemas.TransactionRequest.properties.ops.items.oneOf as any[];
+    const names = items.map((i) => i.properties.op.const);
+    expect([...names].sort()).toEqual(describeOps().map((o) => o.name).sort());
+    expect(new Set(names).size).toBe(names.length);
+    for (const internal of ['import_asset', 'restore_entities']) expect(names).not.toContain(internal);
+  });
+});
+
+describe('openapi against the real server', () => {
+  let server: RunningServer;
+  let dir: string;
+  let h: Record<string, string>;
+  const f = (p: string, init: RequestInit = {}) => fetch(server.url + p, { ...init, headers: { ...h, ...(init.headers as any) } });
+
+  beforeAll(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-openapi-'));
+    server = await startServer({ port: 20000 + Math.floor(Math.random() * 20000), dataDir: dir });
+    h = { authorization: `Bearer ${server.auth.tokens.agent}`, connection: 'close' };
+  });
+  afterAll(async () => {
+    await server?.close();
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('every documented route exists (not the catch-all 404)', async () => {
+    for (const { path: p, method } of entries) {
+      const url = p.replace(/\{[^}]+\}/g, 'dummy');
+      const init: RequestInit = method === 'post' ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' } : { method: 'GET' };
+      const res = await f(url, init);
+      const text = await res.text().catch(() => '');
+      const isCatchAll = res.status === 404 && (() => { try { const e = JSON.parse(text).error; return e.code === 'not_found' && e.message === 'no such API route'; } catch { return false; } })();
+      expect(isCatchAll, `${method} ${p} -> ${res.status}`).toBe(false);
+    }
+  }, 60_000);
+
+  it('transaction body: documented payload accepted, unknown property rejected', async () => {
+    const created = await f('/api/v1/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'openapi' }) });
+    expect(created.status).toBe(201);
+    const id = ((await created.json()) as any).project.id;
+    const post = (body: unknown, sub = 'transactions') => f(`/api/v1/projects/${id}/${sub}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const base = { requestId: 'r1', label: 'x', idempotencyKey: 'k1', dependsOn: [], ops: [{ op: 'not_an_op', args: {} }] };
+    expect((await post(base, 'operations/validate')).status).not.toBe(400);
+    expect((await post({ ...base, extra: 1 })).status).toBe(400);
+    expect((await post({ ops: [{ op: 'x', args: {}, extra: 1 }] })).status).toBe(400);
+    expect((await post({ ops: [] })).status).toBe(400);
+    // other small bodies
+    const p2 = (url: string, body: unknown) => f(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    expect((await p2('/api/v1/projects', { name: 'n', width: 640, height: 360, frameRate: { num: 30, den: 1 } })).status).toBe(201);
+    expect((await p2('/api/v1/projects', { name: 'n', extra: 1 })).status).toBe(400);
+    expect((await p2(`/api/v1/projects/${id}/capabilities/some.cap/runs`, { params: {}, idempotencyKey: 'k' })).status).not.toBe(400);
+    expect((await p2(`/api/v1/projects/${id}/capabilities/some.cap/runs`, { extra: 1 })).status).toBe(400);
+    expect((await p2('/api/v1/capabilities/import', { id: 'a.b', title: 't', graph: {}, extra: 1 })).status).toBe(400);
+    expect((await p2('/api/v1/capabilities/import', { id: 'a.b', title: 't', graph: {} })).status).not.toBe(400);
+    expect((await p2(`/api/v1/projects/${id}/undo`, { transactionId: 'tx_none' })).status).not.toBe(400);
+  }, 30_000);
+});

@@ -34,6 +34,9 @@ describe('Store', () => {
     const first = s.commit({ projectId: doc.id, actor: 'u', ops: [text(0)], idempotencyKey: 'k1', expectedRevision: 0 });
     const again = s.commit({ projectId: doc.id, actor: 'u', ops: [text(0)], idempotencyKey: 'k1', expectedRevision: 0 });
     expect(again).toMatchObject({ replayed: true, revision: first.revision, transactionId: first.transactionId });
+    // Same intent with different key order / an equivalent unreduced time (e.g. another transport) is still the same request.
+    const reordered = { args: { duration: { timescale: 2, value: '2' }, start: text(0).args.start, text: 't0' }, op: 'add_text' };
+    expect(s.commit({ projectId: doc.id, actor: 'u', ops: [reordered], idempotencyKey: 'k1' })).toMatchObject({ replayed: true, revision: first.revision });
     expect(status(() => s.commit({ projectId: doc.id, actor: 'u', ops: [text(5)], idempotencyKey: 'k1' }))).toBe('409:idempotency_key_reused');
     expect(status(() => s.commit({ projectId: doc.id, actor: 'u', ops: [text(5)], expectedRevision: 0 }))).toBe('409:stale_revision');
     expect(status(() => s.commit({ projectId: doc.id, actor: 'u', ops: [{ op: 'import_asset', args: {} }] }))).toBe('403:forbidden_op');

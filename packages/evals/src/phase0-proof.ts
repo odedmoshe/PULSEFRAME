@@ -194,6 +194,37 @@ async function main() {
   check('off-frame time is rejected and the error offers the nearest valid value', bad.isError && bad.data.error.code === 'invalid_args' && !!bad.data.error.details.nearest, bad.data?.error?.details?.nearest);
   check('rejected edits did not change the revision', (await getDoc()).revision === rev + 1);
 
+  console.log('\n# Phase 1: semantic rebase, conflicts and compensating undo');
+  const b0 = (await getDoc()).revision;
+  await rest(`/projects/${projectId}/transactions`, { method: 'POST', body: JSON.stringify({ ops: [{ op: 'set_clip_transform', args: { clipId: textClip.id, transform: { y: 0.31 } } }] }) });
+  const rebased = await call('set_clip_gain', { projectId, baseRevision: b0, clipId: tl.tracks.find((t: any) => t.kind === 'audio').clips[0].id, gain: 0.9 });
+  check('rebase: an agent edit based on an older revision is accepted when it touches items nobody changed since', !rebased.isError && rebased.data.committed && rebased.data.rebasedFrom === b0 && rebased.data.revision === b0 + 2, { rebasedFrom: rebased.data.rebasedFrom, revision: rebased.data.revision });
+  const clash = await call('update_text', { projectId, baseRevision: b0, clipId: textClip.id, text: 'stale intent' });
+  check('conflict: the same stale base is refused for an item that changed, naming the item, revision and actor', clash.isError && clash.data.error.code === 'conflict' && clash.data.error.details.conflicts[0].entityId === textClip.id && clash.data.error.details.conflicts[0].changedAtRevision === b0 + 1, clash.data.error?.details?.conflicts);
+  const agentUndo = await call('undo', { projectId });
+  check('agent undo: reverses its own last edit as a new revision', !agentUndo.isError && agentUndo.data.kind === 'undo' && agentUndo.data.revision === b0 + 3);
+  await waitRevision(b0 + 3);
+  // Human: delete a clip in the UI, then Ctrl+Z. The agent's edits made in between must survive.
+  const clipsBefore = await page.locator('.clip').count();
+  const docBefore = JSON.stringify((await getDoc()).project.sequences);
+  await page.locator('[data-track-kind=video]').first().click();
+  await page.locator('canvas').click();
+  await page.keyboard.press('Delete');
+  await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n - 2, clipsBefore);
+  const mid = await call('set_clip_transform', { projectId, clipId: textClip.id, transform: { x: 0.01 } });
+  await waitRevision(mid.data.revision);
+  await page.keyboard.press('Control+KeyZ');
+  await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n, clipsBefore);
+  const afterUndo = (await getDoc()).project;
+  const tc = afterUndo.sequences.seq_main!.tracks.find((t) => t.kind === 'text')!.clips[0]!;
+  check('human undo (Ctrl+Z) restores the deleted clip and its linked audio; the agent edit made in between is kept', tc.transform.x === 0.01 && JSON.stringify({ ...afterUndo.sequences, }) !== docBefore && afterUndo.sequences.seq_main!.tracks.filter((t) => t.kind !== 'text').every((t) => t.clips.length === 2));
+  await call('set_clip_transform', { projectId, clipId: textClip.id, transform: { x: 0 } });
+  await page.getByTestId('redo').click();
+  await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n - 2, clipsBefore);
+  await page.getByTestId('undo').click();
+  await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n, clipsBefore);
+  check('redo then undo via the header buttons round-trips', true);
+
   // This client uses the SDK default (2025-era handshake), exercising the server's stateless legacy fallback.
   const observer = new Client({ name: 'phase0-observer', version: '0.0.0' });
   await observer.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { authorization: `Bearer ${observerToken}` } } }));

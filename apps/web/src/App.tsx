@@ -103,7 +103,7 @@ export function App() {
       setSave('save.saved');
       return r;
     } catch (e) {
-      if (e instanceof ApiFailure && e.code === 'stale_revision') {
+      if (e instanceof ApiFailure && (e.code === 'stale_revision' || e.code === 'conflict')) {
         await load(doc.id);
         setSave('save.conflict');
       } else {
@@ -113,6 +113,19 @@ export function App() {
       return null;
     }
   }, [fail, load]);
+
+  const history = useCallback(async (mode: 'undo' | 'redo') => {
+    const { doc } = state.current;
+    if (!doc) return;
+    setError(null);
+    try {
+      await api.undo(doc.id, mode);
+      await load(doc.id);
+    } catch (e) {
+      if (e instanceof ApiFailure && (e.code === 'nothing_to_undo' || e.code === 'nothing_to_redo')) return;
+      fail(e instanceof ApiFailure && e.code === 'undo_conflict' ? new Error(t('undo.conflict')) : e);
+    }
+  }, [fail, load, t]);
 
   const player = playerRef.current;
   const rate = doc?.settings.frameRate ?? { num: 30, den: 1 };
@@ -151,7 +164,12 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || e.altKey) return;
+      if (e.metaKey || e.ctrlKey) {
+        if (e.code === 'KeyZ') { e.preventDefault(); void history(e.shiftKey ? 'redo' : 'undo'); }
+        else if (e.code === 'KeyY') { e.preventDefault(); void history('redo'); }
+        return;
+      }
       const p = playerRef.current;
       if (!p) return;
       const step = e.shiftKey ? 10 : 1;
@@ -188,6 +206,8 @@ export function App() {
         <span className="spacer" />
         <span className={`save ${save === 'save.conflict' || save === 'save.offline' ? 'warn' : ''}`} role="status" data-testid="save-state">{t(save)}</span>
         <span className="rev" data-testid="revision">{t('revision')} <bdi>{revision}</bdi></span>
+        <button className="ghost" disabled={!doc} onClick={() => void history('undo')} data-testid="undo" title="Ctrl+Z">{t('undo')}</button>
+        <button className="ghost" disabled={!doc} onClick={() => void history('redo')} data-testid="redo" title="Ctrl+Shift+Z">{t('redo')}</button>
         <button className="ghost" onClick={() => setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle">{t('lang.toggle')}</button>
         {job?.status === 'succeeded' && <a className="ghost" href={`/api/v1/jobs/${job.id}/output`} data-testid="export-download">{t('export.done')}</a>}
         <button className="primary" disabled={!doc || !!exporting || player?.frameCount === 0} onClick={() => doc && api.startExport(doc.id).then((j) => setJob({ id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null })).catch(fail)} data-testid="export">

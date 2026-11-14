@@ -34,7 +34,19 @@ export const AssetSchema = z
       .strict()
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string() }).strict().optional(),
-    provenance: z.object({ origin: z.enum(['upload', 'fixture', 'generated']), importedAt: z.string(), importedBy: z.string() }).strict(),
+    image: z.object({ width: z.number().int().positive(), height: z.number().int().positive(), codec: z.string(), hasAlpha: z.boolean() }).strict().optional(),
+    provenance: z
+      .object({
+        origin: z.enum(['upload', 'fixture', 'generated', 'derived']),
+        importedAt: z.string(),
+        importedBy: z.string(),
+        /** Present for provider outputs (SPEC §25, Amendment A1 FF-08): enough to recreate the recipe and trace lineage. */
+        derived: z
+          .object({ jobId: z.string(), capabilityId: z.string(), capabilityVersion: z.string(), graphDigest: z.string(), params: z.record(z.string(), z.unknown()), sourceAssetIds: z.array(z.string()), outputName: z.string(), outputRole: z.string(), encoding: z.string(), provider: z.record(z.string(), z.unknown()) })
+          .strict()
+          .optional(),
+      })
+      .strict(),
   })
   .strict();
 

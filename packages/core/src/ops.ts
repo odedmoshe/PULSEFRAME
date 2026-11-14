@@ -9,6 +9,7 @@ import {
   type Clip, type MediaClip, type ProjectDocument, type Sequence, type Track,
 } from './schema.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
+import { restoreEntities, type EntityState } from './entities.ts';
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
@@ -176,7 +177,7 @@ defineOp({
     if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId }, 'Call get_summary to list assets.');
     const rate = d.settings.frameRate;
     const sourceIn = a.sourceIn ?? T.ZERO;
-    if (T.isNegative(sourceIn) || !T.lt(sourceIn, asset.duration)) throw new OpError('out_of_bounds', 'sourceIn is outside the asset', { sourceIn, assetDuration: asset.duration });
+    if (asset.kind !== 'image' && (T.isNegative(sourceIn) || !T.lt(sourceIn, asset.duration))) throw new OpError('out_of_bounds', 'sourceIn is outside the asset', { sourceIn, assetDuration: asset.duration });
     const available = T.sub(asset.duration, sourceIn);
     // Default: the longest frame-aligned duration that stays inside the source.
     const duration = a.duration ?? (asset.kind === 'image' ? T.rt(5, 1) : T.frameTime(T.frameCount(available, rate), rate));
@@ -186,7 +187,7 @@ defineOp({
     if (asset.kind !== 'image' && T.lt(available, duration)) throw new OpError('out_of_bounds', 'clip would read past the end of the source', { available, requested: duration }, 'Shorten duration or lower sourceIn.');
     if (T.isNegative(a.start)) throw new OpError('out_of_bounds', 'start must be >= 0', { start: a.start });
     const end = T.add(a.start, duration);
-    const hasPicture = !!asset.video || asset.kind === 'image';
+    const hasPicture = !!asset.video || (asset.kind === 'image' && !!asset.image);
     const wantAudio = !!asset.audio && (a.withLinkedAudio ?? true);
     const ids: string[] = [];
     const linkGroupId = hasPicture && wantAudio ? ctx.newId('lnk') : null;
@@ -387,6 +388,22 @@ defineOp({
     const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
     for (const { track, clip } of targets) track.clips.splice(track.clips.indexOf(clip), 1);
     return { affectedIds: targets.map((t) => t.clip.id), summary: `Deleted ${targets.length} clip(s)` };
+  },
+});
+
+defineOp({
+  name: 'restore_entities',
+  version: 1,
+  internal: true,
+  description: 'Set entities to recorded states. Issued only by the server for undo/redo and reviewed attachments, so history stays replayable.',
+  args: z.object({ targets: z.array(z.object({ id: z.string(), state: z.unknown().nullable() }).strict()).min(1).max(5000) }).strict(),
+  apply(d, a) {
+    try {
+      restoreEntities(d, a.targets as { id: string; state: EntityState | null }[]);
+    } catch (e: any) {
+      throw new OpError('invalid_result', `cannot restore: ${e.message}`);
+    }
+    return { affectedIds: a.targets.map((t) => t.id), summary: `Restored ${a.targets.length} item(s)` };
   },
 });
 

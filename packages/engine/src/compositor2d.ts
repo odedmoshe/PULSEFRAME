@@ -5,12 +5,12 @@
  * Conventions: sRGB 8-bit, straight-alpha canvas source-over compositing, SDR Rec.709 assumed for sources.
  * Text is shaped by the browser engine (HarfBuzz inside Chromium) using a bundled, pinned font file.
  */
-import type { Layer, RenderGraph, TextLayer, VideoLayer } from './evaluate.ts';
+import type { Layer, PictureLayer, RenderGraph, TextLayer } from './evaluate.ts';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Something that can paint a decoded source frame into a rectangle. */
 export interface FrameImage { draw(ctx: Ctx2D, dx: number, dy: number, dw: number, dh: number): void }
-export type FrameProvider = (layer: VideoLayer) => Promise<FrameImage | null>;
+export type FrameProvider = (layer: PictureLayer) => Promise<FrameImage | null>;
 
 /** Text wraps at this fraction of the frame width (before the layer's own scale). */
 export const TEXT_MAX_WIDTH_FRAC = 0.9;
@@ -92,7 +92,7 @@ function drawText(ctx: Ctx2D, g: RenderGraph, layer: TextLayer) {
 /** Draw one evaluated frame. Awaits source frames; drawing order equals graph.layers order. */
 export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[] }> {
   const missing: string[] = [];
-  const images = await Promise.all(g.layers.map((l) => (l.kind === 'video' ? frames(l) : null)));
+  const images = await Promise.all(g.layers.map((l) => (l.kind === 'text' ? null : frames(l))));
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;

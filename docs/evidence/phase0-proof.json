@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T21:30:40.870Z",
+  "ranAt": "2026-11-14T21:51:42.025Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 185,
+    "editorShellInteractiveMs": 278,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,20 +30,20 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 14.5,
-      "requestToVisibleInEditorMs": 38.9,
+      "requestToCommitMs": 12.8,
+      "requestToVisibleInEditorMs": 37.1,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 5.91,
-      "p95": 10.05,
-      "max": 10.78
+      "median": 7.7,
+      "p95": 11.98,
+      "max": 14.88
     },
     "export": {
-      "file": "job_0xf4ydUhkZ0.mp4",
+      "file": "job_n9MQWQjCvyM.mp4",
       "bytes": 107979,
-      "revision": 36,
+      "revision": 45,
       "route": "server-software-canvas2d",
       "audioClipsMixed": 2,
       "validation": {
@@ -60,13 +60,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 657,
-        "readback": 685,
-        "upload": 5233
+        "draw": 615,
+        "readback": 702,
+        "upload": 5194
       },
-      "wallSeconds": 7.365,
-      "realtimeFactor": 0.47522063815342835,
-      "uiWallSeconds": 7.422
+      "wallSeconds": 7.355,
+      "realtimeFactor": 0.47586675730795375,
+      "uiWallSeconds": 7.412
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -187,7 +187,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 22
+        "count": 24
       }
     },
     {
@@ -195,7 +195,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_453697befb1",
+          "id": "clp_6a983265421",
           "start": {
             "value": "2",
             "timescale": 1
@@ -215,8 +215,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 14.5,
-        "requestToVisibleInEditorMs": 38.9,
+        "requestToCommitMs": 12.8,
+        "requestToVisibleInEditorMs": 37.1,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -230,11 +230,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_e0e56417910"
+          "selected": "clip-clp_4cc95372eb0"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_e0e56417910"
+          "selected": "clip-clp_4cc95372eb0"
         }
       }
     },
@@ -252,7 +252,7 @@
           "expectedRevision": 5,
           "currentRevision": 6
         },
-        "hint": "Re-read the timeline at the current revision and resubmit."
+        "hint": "Re-read the timeline at the current revision and resubmit, or send baseRevision to allow a safe rebase."
       }
     },
     {
@@ -265,6 +265,38 @@
     },
     {
       "name": "rejected edits did not change the revision",
+      "ok": true
+    },
+    {
+      "name": "rebase: an agent edit based on an older revision is accepted when it touches items nobody changed since",
+      "ok": true,
+      "detail": {
+        "rebasedFrom": 6,
+        "revision": 8
+      }
+    },
+    {
+      "name": "conflict: the same stale base is refused for an item that changed, naming the item, revision and actor",
+      "ok": true,
+      "detail": [
+        {
+          "entityId": "clp_4cc95372eb0",
+          "changedAtRevision": 7,
+          "by": "agent:local",
+          "deleted": false
+        }
+      ]
+    },
+    {
+      "name": "agent undo: reverses its own last edit as a new revision",
+      "ok": true
+    },
+    {
+      "name": "human undo (Ctrl+Z) restores the deleted clip and its linked audio; the agent edit made in between is kept",
+      "ok": true
+    },
+    {
+      "name": "redo then undo via the header buttons round-trips",
       "ok": true
     },
     {
@@ -286,7 +318,7 @@
       "name": "render_frame returns a PNG with revision metadata",
       "ok": true,
       "detail": {
-        "revision": 36,
+        "revision": 45,
         "frameIndex": 70,
         "time": {
           "value": "7",
@@ -305,7 +337,7 @@
       "ok": true,
       "detail": {
         "status": "succeeded",
-        "revision": 36,
+        "revision": 45,
         "error": null
       }
     },
@@ -370,7 +402,7 @@
       "name": "replaying the op log from revision 0 reproduces the materialized document exactly",
       "ok": true,
       "detail": {
-        "revision": 37
+        "revision": 46
       }
     },
     {

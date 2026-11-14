@@ -43,7 +43,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     server.registerTool('describe_ops', { description: 'List every editing operation with its JSON Schema.', inputSchema: z.object({}), annotations: ro }, () =>
       run('observe', () => ({ ops: listOps().filter((o) => !o.internal).map((o) => ({ name: o.name, version: o.version, description: o.description, argsSchema: z.toJSONSchema(o.args) })) })));
 
-    const txMeta = { projectId: pid, expectedRevision: z.number().int().optional().describe('Reject if the project has moved past this revision'), idempotencyKey: z.string().max(128).optional(), label: z.string().max(200).optional() };
+    const txMeta = { projectId: pid, expectedRevision: z.number().int().optional().describe('Strict: reject if the project has moved past this revision'), baseRevision: z.number().int().optional().describe('Revision you last read. The edit is rebased if nothing it depends on changed since; otherwise a conflict lists what changed'), idempotencyKey: z.string().max(128).optional(), label: z.string().max(200).optional() };
     server.registerTool(
       'apply_transaction',
       { description: 'Apply several operations atomically (all-or-nothing) as one revision. Set dryRun to validate without committing.', inputSchema: z.object({ ...txMeta, dryRun: z.boolean().optional(), ops: z.array(z.object({ op: z.string(), args: z.record(z.string(), z.unknown()) })).min(1).max(200) }) },
@@ -53,11 +53,14 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       if (op.internal) continue;
       const shape = (op.args as unknown as z.ZodObject).shape;
       server.registerTool(op.name, { description: op.description, inputSchema: z.object({ ...txMeta, ...shape }) }, (a: Record<string, unknown>) => {
-        const { projectId, expectedRevision, idempotencyKey, label, ...args } = a as any;
-        return run('edit', () => store.commit({ projectId, expectedRevision, idempotencyKey, label, actor: principal.actor, ops: [{ op: op.name, args }] }));
+        const { projectId, expectedRevision, baseRevision, idempotencyKey, label, ...args } = a as any;
+        return run('edit', () => store.commit({ projectId, expectedRevision, baseRevision, idempotencyKey, label, actor: principal.actor, ops: [{ op: op.name, args }] }));
       });
     }
 
+    for (const mode of ['undo', 'redo'] as const)
+      server.registerTool(mode, { description: mode === 'undo' ? 'Undo your own most recent edit (or a given transaction) as a new compensating revision. Refused with a conflict list if those items were changed afterwards; later unrelated edits are kept.' : 'Redo your most recent undo.', inputSchema: z.object({ projectId: pid, transactionId: z.string().optional() }) }, ({ projectId, transactionId }) =>
+        run('edit', () => store.undo(projectId, principal.actor, mode, transactionId)));
     server.registerTool(
       'render_frame',
       { description: 'Render one exact frame of the current revision through the same compositor used for export. Returns a PNG plus revision metadata.', inputSchema: z.object({ projectId: pid, frameIndex: z.number().int().min(0).optional(), time: RationalTimeSchema.optional() }), annotations: ro },
@@ -75,8 +78,8 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('observe', () => jobView(store.getJob(jobId))));
     server.registerTool('list_capabilities', { description: 'Optional provider capabilities (reviewed workflows) with their qualification status, blockers, resource data and provider readiness. Listing never starts a worker.', inputSchema: z.object({}), annotations: ro }, () =>
       run('observe', () => capabilities.list()));
-    server.registerTool('run_capability', { description: 'Run a reviewed, published capability by id with validated parameters as a durable job. Raw workflow graphs cannot be submitted. Returns a jobId; poll get_job.', inputSchema: z.object({ projectId: pid, capabilityId: z.string(), params: z.record(z.string(), z.unknown()).optional(), idempotencyKey: z.string().max(128).optional() }) }, ({ projectId, capabilityId, params, idempotencyKey }) =>
-      run('edit', () => { const job = capabilities.start({ projectId, capabilityId, params: params ?? {}, idempotencyKey, actor: principal.actor }); return { jobId: job.id, status: job.status, type: job.type }; }));
+    server.registerTool('run_capability', { description: 'Run a reviewed, published capability by id with validated parameters as a durable job. Raw workflow graphs cannot be submitted. Returns a jobId; poll get_job.', inputSchema: z.object({ projectId: pid, capabilityId: z.string(), params: z.record(z.string(), z.unknown()).optional(), idempotencyKey: z.string().max(128).optional(), attach: z.object({ start: RationalTimeSchema, duration: RationalTimeSchema.optional(), trackId: z.string().optional() }).optional().describe('Place the primary output on the timeline when done, unless its dependencies changed (then it stays a proposal in the library)'), dependsOn: z.array(z.string()).optional() }) }, ({ projectId, capabilityId, params, idempotencyKey, attach, dependsOn }) =>
+      run('edit', () => { const job = capabilities.start({ projectId, capabilityId, params: params ?? {}, idempotencyKey, attach, dependsOn, actor: principal.actor }); return { jobId: job.id, status: job.status, type: job.type }; }));
     server.registerTool('cancel_job', { description: 'Request cancellation of a capability job. The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
       run('edit', () => capabilities.cancel(jobId, principal.actor)));
     return server;

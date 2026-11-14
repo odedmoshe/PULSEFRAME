@@ -33,7 +33,7 @@ export const SMOKE_SOLID_IMAGE: CapabilityDescriptor = DescriptorSchema.parse({
   resources: { downloadBytes: 0, estimatedResidencyBytes: 0, hostRamBytes: null, measuredProfiles: [] },
   egress: 'none',
   languages: [],
-  limitations: ['Diagnostic only: produces no creative media and is not attachable to a timeline.'],
+  limitations: ['Diagnostic only: the output is a flat colour. It can be placed on the timeline solely to exercise the attachment path.'],
   qualification: {
     schemaValid: { status: 'pass', evidence: 'DescriptorSchema + graph digest' },
     dependencyReady: { status: 'pass', evidence: 'no models; core nodes only (checked against /object_info at run time)' },

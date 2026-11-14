@@ -22,8 +22,11 @@ export interface VideoLayer {
   sourceHeight: number;
   transform: Transform;
 }
+/** A still picture. Same placement rules as video; one decoded image for the whole clip. */
+export interface ImageLayer { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform }
 export interface TextLayer { kind: 'text'; clipId: string; trackId: string; text: string; style: TextStyle; transform: Transform }
-export type Layer = VideoLayer | TextLayer;
+export type Layer = VideoLayer | ImageLayer | TextLayer;
+export type PictureLayer = VideoLayer | ImageLayer;
 export interface ActiveAudio { clipId: string; trackId: string; assetId: string; sourceTime: T.RationalTime; gain: number }
 export interface RenderGraph {
   time: T.RationalTime;
@@ -53,6 +56,8 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       const sourceTime = T.add(clip.sourceIn, T.sub(time, clip.start));
       if (track.kind === 'audio') {
         if (!track.muted && asset.audio) graph.audio.push({ clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime, gain: clip.gain });
+      } else if (track.kind === 'video' && asset.kind === 'image' && asset.image && !track.hidden) {
+        graph.layers.push({ kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: clip.transform });
       } else if (track.kind === 'video' && asset.video && !track.hidden) {
         const rate = asset.video.frameRate;
         let idx = T.frameIndexAt(sourceTime, rate);
@@ -75,7 +80,7 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
     time: g.time,
     seconds: T.toSeconds(g.time),
     frameIndex: g.frameIndex,
-    layers: g.layers.map((l) => (l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime } : { kind: l.kind, clipId: l.clipId, text: l.text })),
+    layers: g.layers.map((l) => (l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId } : { kind: l.kind, clipId: l.clipId, text: l.text })),
     audio: g.audio,
   };
 }

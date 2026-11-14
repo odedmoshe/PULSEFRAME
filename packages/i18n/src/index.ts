@@ -12,6 +12,7 @@ export const he = {
   'timeline': 'ציר זמן', 'activity': 'פעילות', 'activity.empty': 'אין פעילות עדיין', 'actor.user': 'את/ה', 'actor.agent': 'סוכן',
   'error.generic': 'הפעולה נכשלה', 'track.video': 'וידאו', 'track.audio': 'אודיו', 'track.text': 'טקסט',
   'phase0.badge': 'שלב 0 — הוכחת היתכנות',
+  'undo': 'ביטול', 'redo': 'ביצוע מחדש', 'undo.conflict': 'לא ניתן לבטל: הפריטים שונו מאז',
   'providers': 'ספקי AI (אופציונלי)', 'providers.notConfigured': 'ComfyUI לא מוגדר. העורך פועל במלואו גם בלעדיו.', 'providers.unreachable': 'ComfyUI מוגדר אך אינו זמין', 'providers.ready': 'ComfyUI מחובר', 'providers.smoke': 'בדיקת חיבור (ללא מודלים)', 'providers.running': 'מריץ…', 'providers.ok': 'הפלט אומת', 'providers.failed': 'הבדיקה נכשלה',
 };
 export const en: Record<keyof typeof he, string> = {
@@ -26,6 +27,7 @@ export const en: Record<keyof typeof he, string> = {
   'timeline': 'Timeline', 'activity': 'Activity', 'activity.empty': 'No activity yet', 'actor.user': 'You', 'actor.agent': 'Agent',
   'error.generic': 'The action failed', 'track.video': 'Video', 'track.audio': 'Audio', 'track.text': 'Text',
   'phase0.badge': 'Phase 0 — feasibility proof',
+  'undo': 'Undo', 'redo': 'Redo', 'undo.conflict': 'Cannot undo: those items were changed since',
   'providers': 'AI providers (optional)', 'providers.notConfigured': 'ComfyUI is not configured. The editor works fully without it.', 'providers.unreachable': 'ComfyUI is configured but unreachable', 'providers.ready': 'ComfyUI connected', 'providers.smoke': 'Connection test (model-free)', 'providers.running': 'Running…', 'providers.ok': 'Output validated', 'providers.failed': 'Test failed',
 };
 export type Key = keyof typeof he;

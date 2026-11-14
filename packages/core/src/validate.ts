@@ -51,7 +51,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         const asset = doc.assets[c.assetId];
         if (!asset) { issues.push({ code: 'missing_asset', message: `clip ${c.id} references missing asset ${c.assetId}`, ids: [c.id, c.assetId] }); continue; }
         if (tr.kind === 'text') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on text track`, ids: [c.id, tr.id] });
-        if (tr.kind === 'video' && !asset.video && asset.kind !== 'image') issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
+        if (tr.kind === 'video' && !asset.video && !(asset.kind === 'image' && asset.image)) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
         if (tr.kind === 'audio' && !asset.audio) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no audio for audio track`, ids: [c.id, tr.id] });
         if (T.isNegative(c.sourceIn)) issues.push({ code: 'source_out_of_bounds', message: `clip ${c.id} sourceIn < 0`, ids: [c.id] });
         if (asset.kind !== 'image' && T.lt(asset.duration, T.add(c.sourceIn, c.duration)))

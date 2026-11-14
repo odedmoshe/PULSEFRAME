@@ -24,3 +24,11 @@ Each entry: what is blocked, how to reproduce, impact, proposed way forward. Wor
 
 ## B-5 — Preconditions inside the project (not external)
 Stale-result protection (FFG-09) needs entity versions (Phase 1). Timeline attachment needs image/derived assets (Phase 2). Worker lease and budgets need Phase 5/10 work.
+
+## B-6 — Model hosts are denied by the environment network policy
+- **Reproduce:** `curl https://huggingface.co/api/models/ZhengPeng7/BiRefNet` → `CONNECT tunnel failed, response 403`; GitHub release downloads also 403.
+- **Impact:** the authorised bounded trial (one small CPU workflow, ≤ 1 GB, ≤ 10 min) could not start: no model weights can be fetched. 0 bytes downloaded, 0 s of inference used.
+  ComfyUI 0.45.0 already includes core `LoadBackgroundRemovalModel` and `RemoveBackground` nodes and a `models/background_removal` folder, so the workflow itself needs no custom node.
+- **Unblocked by:** allowing `huggingface.co` (and the CDN host it redirects downloads to) in the environment's network settings, or placing a licence-reviewed
+  BiRefNet weight file with a known SHA-256 in `.artifacts/comfyui/models/background_removal/`.
+- **Meanwhile:** the source-staging path is built and tested with a model-free image workflow, so only the weights and the qualification run are missing.

@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter @pulseframe/server --filter @pulseframe/web dev",
     "build": "pnpm --filter @pulseframe/web build",
@@ -14,7 +16,8 @@
     "probe": "tsx apps/renderer/src/probe-cli.ts",
     "proof": "tsx packages/evals/src/phase0-proof.ts",
     "proof:g0": "tsx packages/evals/src/g0-proof.ts",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm proof"
+    "check:notices": "tsx packages/evals/src/notices-check.ts",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm check:notices && pnpm proof"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
@@ -23,5 +26,10 @@
     "typescript": "7.0.2",
     "vitest": "5.1.0"
   },
-  "pnpm": { "onlyBuiltDependencies": ["better-sqlite3", "esbuild"] }
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  }
 }

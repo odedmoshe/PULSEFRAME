@@ -23,8 +23,9 @@ export const api = {
   createProject: (name: string) => call<{ project: ProjectDocument; revision: number }>('/projects', json({ name })),
   getProject: (id: string) => call<{ project: ProjectDocument; revision: number }>(`/projects/${id}`),
   history: (id: string) => call<{ events: RevisionEvent[] }>(`/projects/${id}/history?since=0`),
-  commit: (id: string, expectedRevision: number, ops: OpCall[], label?: string) =>
-    call<CommitResult>(`/projects/${id}/transactions`, json({ expectedRevision, idempotencyKey: crypto.randomUUID(), label, ops })),
+  commit: (id: string, baseRevision: number, ops: OpCall[], label?: string) =>
+    call<CommitResult>(`/projects/${id}/transactions`, json({ baseRevision, idempotencyKey: crypto.randomUUID(), label, ops })),
+  undo: (id: string, mode: 'undo' | 'redo') => call<CommitResult>(`/projects/${id}/${mode}`, json({})),
   upload: (id: string, file: File) =>
     call<{ assetId: string; revision: number; asset: Asset }>(`/projects/${id}/assets`, { method: 'POST', headers: { 'x-filename': encodeURIComponent(file.name), 'content-type': 'application/octet-stream' }, body: file }),
   assetBlob: async (id: string, assetId: string) => {

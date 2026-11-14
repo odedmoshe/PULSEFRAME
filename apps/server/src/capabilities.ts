@@ -13,7 +13,7 @@ import {
   type Blocker, type CapabilityDescriptor, type ProviderAdapter,
 } from '@pulseframe/providers';
 import type { Config } from './config.ts';
-import { ffprobe } from './ingest.ts';
+import { describeMedia, ffprobe } from './ingest.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
 const TYPE = 'capability';
@@ -82,7 +82,7 @@ export class Capabilities {
   }
 
   /** The single entry point used by UI, REST and MCP. */
-  start(req: { projectId: string; capabilityId: string; params: Record<string, unknown>; actor: string; idempotencyKey?: string }): JobRow {
+  start(req: { projectId: string; capabilityId: string; params: Record<string, unknown>; actor: string; idempotencyKey?: string; attach?: { start: unknown; duration?: unknown; trackId?: string }; dependsOn?: string[] }): JobRow {
     const d = this.descriptor(req.capabilityId);
     if (req.idempotencyKey) {
       const prior = this.store.findJobByKey(TYPE, req.actor, req.idempotencyKey);
@@ -104,6 +104,9 @@ export class Capabilities {
     const job = this.store.createJob(req.projectId, TYPE, req.actor, {
       capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, params: resolved.resolved, graph: resolved.graph,
       clientRequestId: randomUUID(), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, sources: [],
+      attach: req.attach ?? null,
+      // Stale-result protection (SPEC §20, FFG-09): remember the version of everything the placement depends on.
+      preconditions: [...new Set([...(req.dependsOn ?? []), ...(req.attach?.trackId ? [req.attach.trackId] : [])])].map((entityId) => ({ entityId, version: this.store.entityVersion(req.projectId, entityId)?.revision ?? 0 })),
     });
     void this.run(job.id);
     return job;
@@ -147,6 +150,39 @@ export class Capabilities {
     const p = this.drive(jobId).finally(() => this.active.delete(jobId));
     this.active.set(jobId, p);
     return p;
+  }
+  /**
+   * Bring the validated primary output into the project through normal operations.
+   * 1. Always: import it as a derived asset (provenance + recipe), so the result is never lost.
+   * 2. If a placement was requested: re-check every recorded precondition against current entity
+   *    versions. Unchanged -> add the clip. Changed, deleted or no longer fitting -> leave the asset
+   *    in the library as a proposal and say why. A late result never overwrites newer edits.
+   */
+  private async attach(job: JobRow, bundle: any[], recipe: any) {
+    const primary = bundle.find((o) => o.role === 'primary' && o.mediaType !== 'audio') ?? bundle.find((o) => o.role === 'primary');
+    if (!primary) return { status: 'not-attached', reason: 'capability declares no primary output' };
+    const meta = await describeMedia(this.store.blobPath(primary.contentHash));
+    const asset = {
+      ...meta, name: `${job.input.capabilityId} · ${job.id}`.slice(0, 256), contentHash: primary.contentHash, byteSize: primary.bytes,
+      provenance: { origin: 'derived' as const, importedAt: new Date().toISOString(), importedBy: job.actor, derived: { jobId: job.id, capabilityId: recipe.capabilityId, capabilityVersion: recipe.capabilityVersion, graphDigest: recipe.graphDigest, params: recipe.params, sourceAssetIds: [], outputName: primary.name, outputRole: primary.role, encoding: primary.encoding, provider: recipe.provider } },
+    };
+    const imp = this.store.commit({ projectId: job.projectId, actor: job.actor, allowInternal: true, label: `Result of ${job.input.capabilityId}`, ops: [{ op: 'import_asset', args: { asset } }] });
+    const assetId = imp.results[0]!.output!.assetId as string;
+    const base = { assetId, deduplicated: !!imp.results[0]!.output!.deduplicated };
+    const want = job.input.attach;
+    if (!want) return { status: 'imported', ...base, reason: 'no placement requested; the asset is in the library' };
+    const conflicts = (job.input.preconditions as { entityId: string; version: number }[]).flatMap((p) => {
+      const v = this.store.entityVersion(job.projectId, p.entityId);
+      return (v?.revision ?? 0) !== p.version ? [{ entityId: p.entityId, expectedVersion: p.version, currentVersion: v?.revision ?? 0, deleted: v?.deleted ?? false, by: v?.actor ?? null }] : [];
+    });
+    if (conflicts.length) return { status: 'proposed', ...base, reason: 'items this placement depended on changed while the job ran; nothing was placed', conflicts, proposal: want };
+    try {
+      const r = this.store.commit({ projectId: job.projectId, actor: job.actor, label: `Place result of ${job.input.capabilityId}`, ops: [{ op: 'add_clip', args: { assetId, start: want.start, ...(want.duration ? { duration: want.duration } : {}), ...(want.trackId ? { trackId: want.trackId } : {}) } }] });
+      return { status: 'attached', ...base, clipId: r.results[0]!.output!.clipId, trackId: r.results[0]!.output!.trackId, revision: r.revision, transactionId: r.transactionId };
+    } catch (e) {
+      if (e instanceof ApiError) return { status: 'proposed', ...base, reason: `placement no longer valid: ${e.message}`, error: e.code, proposal: want };
+      throw e;
+    }
   }
   private async drive(jobId: string) {
     if (!this.adapter) return;
@@ -217,14 +253,16 @@ export class Capabilities {
         bundle.push({ name: f.name, role: f.role, mediaType: f.mediaType, encoding: f.encoding, contentHash, bytes: f.bytes.length, mimeType: mime, codec: (v ?? a).codec_name, width: v?.width ?? null, height: v?.height ?? null, pixFmt: v?.pix_fmt ?? null, hasAlpha: /a/.test(String(v?.pix_fmt ?? '').replace(/^(gray|pal|ya)/, '')) && /rgba|bgra|ya|yuva|gbrap/.test(String(v?.pix_fmt)), durationSeconds: probe.format?.duration ? Number(probe.format.duration) : null });
       }
       lap('validation');
+      const recipe = { capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, params: job.input.params, sources: job.input.sources, provider: { id: adapter.id, runtimeVersion: readiness?.runtimeVersion ?? null, device: readiness?.device ?? null } };
+      const attachment = await this.attach(job, bundle, recipe);
+      lap('attachment');
       const final = this.store.getJob(jobId);
       this.store.updateJob(jobId, {
         status: 'succeeded', stage: null,
         output: {
-          ...final.output, providerJobId, bundle,
-          recipe: { capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, params: job.input.params, sources: job.input.sources, provider: { id: adapter.id, runtimeVersion: readiness?.runtimeVersion ?? null, device: readiness?.device ?? null } },
+          ...final.output, providerJobId, bundle, recipe,
           stageSeconds: { ...t, basis: 'measured (wall clock, includes 200 ms polling granularity)' },
-          attachment: { status: 'not-attached', reason: 'derived output is stored and validated; timeline attachment requires image/derived-asset operations (Phase 2)' },
+          attachment,
           ...(final.status === 'cancel-requested' ? { cancel: { ...final.output?.cancel, outcome: 'completed-before-cancel-took-effect' } } : {}),
         },
       });

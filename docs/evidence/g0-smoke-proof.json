@@ -1,7 +1,7 @@
 {
-  "ranAt": "2026-11-14T21:30:51.313Z",
+  "ranAt": "2026-11-14T21:51:56.486Z",
   "result": "PASSED",
-  "scope": "Amendment A1 G0, first half: model-free smoke workflow only. No model, no GPU, no media workflow, no timeline attachment, no stale-result case.",
+  "scope": "Amendment A1 G0 on the model-free smoke workflow: provider path, attachment through operations and stale-result protection. No model, no GPU, no media-input workflow.",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -22,11 +22,12 @@
     "capability": "comfy.smoke.solid-image",
     "workload": "320x192 solid image, batch 1",
     "stageSeconds": {
-      "preparing": 0.207,
-      "submit": 0.012,
-      "providerQueueAndInference": 0.465,
-      "transfer": 0.006,
-      "validation": 0.058,
+      "preparing": 0.306,
+      "submit": 0.011,
+      "providerQueueAndInference": 0.425,
+      "transfer": 0.008,
+      "validation": 0.055,
+      "attachment": 0.056,
       "basis": "measured (wall clock, includes 200 ms polling granularity)"
     },
     "peakDeviceMemoryBytes": null,
@@ -99,11 +100,12 @@
       "ok": true,
       "detail": {
         "stageSeconds": {
-          "preparing": 0.207,
-          "submit": 0.012,
-          "providerQueueAndInference": 0.465,
-          "transfer": 0.006,
-          "validation": 0.058,
+          "preparing": 0.306,
+          "submit": 0.011,
+          "providerQueueAndInference": 0.425,
+          "transfer": 0.008,
+          "validation": 0.055,
+          "attachment": 0.056,
           "basis": "measured (wall clock, includes 200 ms polling granularity)"
         },
         "bytes": 875
@@ -123,7 +125,15 @@
       "ok": true
     },
     {
-      "name": "output is NOT reported as attached to the timeline (not implemented yet)",
+      "name": "result enters the project as a derived asset with lineage (job, capability version, graph digest, params, provider)",
+      "ok": true,
+      "detail": {
+        "capability": "comfy.smoke.solid-image",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "name": "no placement was requested, so nothing was put on the timeline",
       "ok": true
     },
     {
@@ -157,7 +167,48 @@
     {
       "name": "run-earned evidence now cites the recorded job and names the profile it applies to",
       "ok": true,
-      "detail": "job job_xkizNNr4K4M: cpu (cpu), ComfyUI 0.45.0, 2026-11-14T21:30:45.048Z"
+      "detail": "job job_xxPZJHByxCk: cpu (cpu), ComfyUI 0.45.0, 2026-11-14T21:51:46.273Z"
+    },
+    {
+      "name": "requested placement: output is attached as a normal clip via add_clip, in its own revision, by the requesting actor",
+      "ok": true,
+      "detail": {
+        "revision": 4
+      }
+    },
+    {
+      "name": "the attached provider image renders through the shared compositor (pixel read from render_frame)",
+      "ok": true,
+      "detail": [
+        255,
+        136,
+        0
+      ]
+    },
+    {
+      "name": "the placement is an ordinary transaction: undo removes the clip and keeps the derived asset",
+      "ok": true
+    },
+    {
+      "name": "stale result: the job finished but its dependency was edited meanwhile -> nothing placed, newer edit intact",
+      "ok": true,
+      "detail": [
+        {
+          "entityId": "clp_a6e0fb12c50",
+          "expectedVersion": 6,
+          "currentVersion": 7,
+          "deleted": false,
+          "by": "agent:local"
+        }
+      ]
+    },
+    {
+      "name": "stale result: the output is kept as a derived asset the user can still place manually",
+      "ok": true
+    },
+    {
+      "name": "the proposed asset can be placed with the normal add_clip operation",
+      "ok": true
     },
     {
       "name": "cancel of a provider-queued job removes it from the queue and reports exactly that",
@@ -177,7 +228,7 @@
       "detail": {
         "status": "succeeded",
         "attempt": 1,
-        "providerRunsOfOurs": 19,
+        "providerRunsOfOurs": 15,
         "historyDelta": 2
       }
     },

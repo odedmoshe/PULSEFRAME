@@ -6,18 +6,21 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { describeOps, summarize, timeline } from '@pulseframe/core';
+import { describeOps, RationalTimeSchema, summarize, timeline } from '@pulseframe/core';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
 import type { Exporter } from './export.ts';
 import { ingestUpload } from './ingest.ts';
+import { buildOpenApi } from './openapi.ts';
 import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
 
 const TxBody = z
   .object({
     requestId: z.string().max(128).optional(),
-    expectedRevision: z.number().int().nonnegative().optional(),
+    expectedRevision: z.number().int().nonnegative().optional().describe('Strict: reject unless this is the current revision'),
+    baseRevision: z.number().int().nonnegative().optional().describe('Revision the caller last saw; the edit is rebased if nothing it depends on changed since'),
+    dependsOn: z.array(z.string()).max(200).optional(),
     idempotencyKey: z.string().min(1).max(128).optional(),
     label: z.string().max(200).optional(),
     ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(200),
@@ -29,7 +32,14 @@ type Env = { Variables: { principal: Principal } };
 /** Public job shape, identical for REST and MCP. Snapshots and resolved graphs stay server-side. */
 export const jobView = ({ input, ...j }: JobRow) => ({ ...j, revision: input.revision ?? input.projectRevision, ...(j.type === 'capability' ? { capabilityId: input.capabilityId, capabilityVersion: input.capabilityVersion, graphDigest: input.graphDigest, params: input.params } : {}) });
 
-const RunBody = z.object({ params: z.record(z.string(), z.unknown()).default({}), idempotencyKey: z.string().min(1).max(128).optional() }).strict();
+const RunBody = z
+  .object({
+    params: z.record(z.string(), z.unknown()).default({}),
+    idempotencyKey: z.string().min(1).max(128).optional(),
+    attach: z.object({ start: RationalTimeSchema, duration: RationalTimeSchema.optional(), trackId: z.string().optional() }).strict().optional().describe('Place the primary output on the timeline when the job finishes, if nothing it depends on changed meanwhile'),
+    dependsOn: z.array(z.string()).max(100).optional().describe('Entity ids the placement depends on; a change to any of them turns the placement into a proposal'),
+  })
+  .strict();
 const ImportBody = z.object({ id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/), title: z.string().min(1).max(120), graph: z.unknown() }).strict();
 
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, mcp: (req: Request) => Promise<Response>) {
@@ -106,6 +116,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
 
   // ----- discovery -----
   app.get('/api/v1/ops', (c) => { need(c, 'observe'); return c.json({ ops: describeOps() }); });
+  app.get('/api/v1/openapi.json', (c) => { need(c, 'observe'); return c.json(buildOpenApi()); });
   app.get('/api/v1/whoami', (c) => c.json(c.var.principal));
 
   // ----- projects -----
@@ -130,6 +141,15 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/transactions', commit(false));
   app.post('/api/v1/projects/:id/operations', commit(false));
   app.post('/api/v1/projects/:id/operations/validate', commit(true));
+  const UndoBody = z.object({ transactionId: z.string().optional() }).strict();
+  for (const mode of ['undo', 'redo'] as const)
+    app.post(`/api/v1/projects/:id/${mode}`, async (c) => {
+      const p = need(c, 'edit');
+      const parsed = UndoBody.safeParse((await c.req.json().catch(() => ({}))) ?? {});
+      if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
+      const b = parsed.data;
+      return c.json(store.undo(c.req.param('id'), p.actor, mode, b.transactionId));
+    });
 
   // ----- revision events (SSE), with replay of missed revisions on (re)connect -----
   app.get('/api/v1/projects/:id/events', (c) => {
@@ -213,7 +233,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/capabilities/:capabilityId/runs', async (c) => {
     const p = need(c, 'edit');
     const b = await body(c, RunBody);
-    const job = capabilities.start({ projectId: c.req.param('id'), capabilityId: c.req.param('capabilityId'), params: b.params, idempotencyKey: b.idempotencyKey, actor: p.actor });
+    const job = capabilities.start({ projectId: c.req.param('id'), capabilityId: c.req.param('capabilityId'), params: b.params, idempotencyKey: b.idempotencyKey, attach: b.attach, dependsOn: b.dependsOn, actor: p.actor });
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => { const p = need(c, 'edit'); return c.json(await capabilities.cancel(c.req.param('jobId'), p.actor)); });

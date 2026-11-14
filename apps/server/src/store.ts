@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
-import { applyTransaction, createProject, migrateProject, OpError, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, canonical, createProject, diffEntities, entityMap, migrateProject, OpError, referencedIds, sameEntity, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
@@ -29,6 +29,16 @@ export interface CommitRequest {
   requestId?: string;
   allowInternal?: boolean;
   dryRun?: boolean;
+  /**
+   * Revision the caller last saw. Unlike expectedRevision this allows the project to have moved on:
+   * the edit is accepted if no entity it reads or changes was modified after baseRevision (semantic rebase).
+   */
+  baseRevision?: number;
+  /** Extra entity ids the caller's intent depends on (beyond those named in op arguments). */
+  dependsOn?: string[];
+  /** Set only by Store.undo/redo. */
+  kind?: 'edit' | 'undo' | 'redo';
+  undoes?: string;
 }
 export interface CommitResult {
   transactionId: string | null;
@@ -39,8 +49,11 @@ export interface CommitResult {
   summary: string;
   results: { op: string; summary: string; affectedIds: string[]; output?: Record<string, unknown> }[];
   warnings: string[];
+  kind?: 'edit' | 'undo' | 'redo';
+  undoes?: string;
+  rebasedFrom?: number;
 }
-export interface RevisionEvent { seq: number; projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string }
+export interface RevisionEvent { seq: number; projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string; kind?: string }
 export interface JobRow { id: string; projectId: string; type: string; actor: string; status: string; stage: string | null; attempt: number; input: any; output: any; error: any; createdAt: string; updatedAt: string }
 
 const id = (prefix: string, bytes = 8) => `${prefix}_${randomBytes(bytes).toString('base64url').replace(/[-_]/g, 'x')}`;
@@ -73,7 +86,16 @@ export class Store {
       CREATE TABLE IF NOT EXISTS blobs (hash TEXT PRIMARY KEY, size INTEGER NOT NULL, mime TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, type TEXT NOT NULL, actor TEXT NOT NULL, status TEXT NOT NULL, stage TEXT, attempt INTEGER NOT NULL DEFAULT 0,
         input TEXT NOT NULL, output TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS entity_versions (project_id TEXT NOT NULL, entity_id TEXT NOT NULL, revision INTEGER NOT NULL, deleted INTEGER NOT NULL, actor TEXT NOT NULL, PRIMARY KEY (project_id, entity_id));
     `);
+    // Storage migrations (PRAGMA user_version). v1: undo metadata and per-transaction entity changes.
+    const version = this.db.pragma('user_version', { simple: true }) as number;
+    if (version < 1) {
+      const cols = new Set((this.db.prepare("SELECT name FROM pragma_table_info('transactions')").all() as any[]).map((c) => c.name));
+      for (const [name, ddl] of [['kind', "TEXT NOT NULL DEFAULT 'edit'"], ['undoes', 'TEXT'], ['undone_by', 'TEXT'], ['changes', "TEXT NOT NULL DEFAULT '[]'"]] as const)
+        if (!cols.has(name)) this.db.exec(`ALTER TABLE transactions ADD COLUMN ${name} ${ddl}`);
+      this.db.pragma('user_version = 1');
+    }
   }
 
   // ---------- projects ----------
@@ -111,13 +133,32 @@ export class Store {
       if (req.idempotencyKey && !req.dryRun) {
         const prior = this.db.prepare('SELECT id, revision, ops, result FROM transactions WHERE project_id = ? AND actor = ? AND idempotency_key = ?').get(req.projectId, req.actor, req.idempotencyKey) as any;
         if (prior) {
-          if (prior.ops !== JSON.stringify(req.ops)) throw new ApiError(409, 'idempotency_key_reused', 'idempotencyKey was already used with different operations', { transactionId: prior.id });
+          if (canonical(JSON.parse(prior.ops)) !== canonical(req.ops)) throw new ApiError(409, 'idempotency_key_reused', 'idempotencyKey was already used with different operations', { transactionId: prior.id });
           return { ...JSON.parse(prior.result), transactionId: prior.id, revision: prior.revision, committed: true, replayed: true };
         }
       }
-      // Phase 0 concurrency rule: a stated expectedRevision must be current. Semantic rebasing is Phase 1.
+      // Strict mode: a stated expectedRevision must be current.
       if (req.expectedRevision !== undefined && req.expectedRevision !== revision)
-        throw new ApiError(409, 'stale_revision', `expectedRevision ${req.expectedRevision} is not the current revision ${revision}`, { expectedRevision: req.expectedRevision, currentRevision: revision }, 'Re-read the timeline at the current revision and resubmit.');
+        throw new ApiError(409, 'stale_revision', `expectedRevision ${req.expectedRevision} is not the current revision ${revision}`, { expectedRevision: req.expectedRevision, currentRevision: revision }, 'Re-read the timeline at the current revision and resubmit, or send baseRevision to allow a safe rebase.');
+      // Rebase mode: accept a stale base only if nothing this edit reads or writes changed since the caller looked.
+      const stale = req.baseRevision !== undefined && req.baseRevision < revision;
+      if (req.baseRevision !== undefined && (req.baseRevision > revision || req.baseRevision < 0)) throw new ApiError(400, 'invalid_request', `baseRevision ${req.baseRevision} is ahead of the current revision ${revision}`);
+      const newer = (ids: Iterable<string>) => {
+        const out: { entityId: string; changedAtRevision: number; by: string; deleted: boolean }[] = [];
+        for (const e of ids) {
+          const v = this.entityVersion(req.projectId, e);
+          if (v && v.revision > req.baseRevision!) out.push({ entityId: e, changedAtRevision: v.revision, by: v.actor, deleted: v.deleted });
+        }
+        return out;
+      };
+      const conflict = (c: ReturnType<typeof newer>) => new ApiError(409, 'conflict', `${c.length} item(s) this edit depends on changed after revision ${req.baseRevision}`, { baseRevision: req.baseRevision, currentRevision: revision, conflicts: c }, 'Re-read those items, decide again, and resubmit with the new baseRevision.');
+      if (stale) {
+        const live = entityMap(doc);
+        const refs = referencedIds(req.ops.map((o) => o.args), (s) => live.has(s) || !!this.entityVersion(req.projectId, s));
+        for (const d of req.dependsOn ?? []) refs.add(d);
+        const c = newer(refs);
+        if (c.length) throw conflict(c);
+      }
       const idSeed = randomBytes(5).toString('hex');
       let applied;
       try {
@@ -126,24 +167,75 @@ export class Store {
         if (e instanceof OpError) throw new ApiError(e.code === 'forbidden_op' ? 403 : e.code === 'not_found' ? 404 : 422, e.code, e.message, e.details, e.hint);
         throw e;
       }
-      const base = { affectedIds: applied.affectedIds, summary: applied.summary, results: applied.results, warnings: [] as string[] };
+      const changes = diffEntities(doc, applied.doc);
+      if (stale) {
+        const c = newer(changes.map((x) => x.id));
+        if (c.length) throw conflict(c);
+      }
+      const affectedIds = [...new Set([...applied.affectedIds, ...changes.map((c) => c.id)])];
+      const base = { affectedIds, summary: applied.summary, results: applied.results, warnings: [] as string[], ...(req.kind && req.kind !== 'edit' ? { kind: req.kind, undoes: req.undoes } : {}), ...(stale ? { rebasedFrom: req.baseRevision } : {}) };
       if (req.dryRun) return { ...base, transactionId: null, revision, committed: false, replayed: false };
-      if (applied.affectedIds.length === 0 && JSON.stringify(applied.doc) === JSON.stringify(doc))
-        return { ...base, transactionId: null, revision, committed: false, replayed: false, warnings: ['no_change'] };
+      if (changes.length === 0) return { ...base, transactionId: null, revision, committed: false, replayed: false, warnings: ['no_change'] };
       const txId = id('tx');
       const next = revision + 1;
       const at = now();
       this.db.prepare('UPDATE projects SET doc = ?, revision = ?, updated_at = ? WHERE id = ? AND revision = ?').run(JSON.stringify(applied.doc), next, at, req.projectId, revision);
       this.db
-        .prepare('INSERT INTO transactions (project_id, revision, id, actor, label, idempotency_key, request_id, id_seed, allow_internal, ops, result, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-        .run(req.projectId, next, txId, req.actor, req.label ?? null, req.idempotencyKey ?? null, req.requestId ?? null, idSeed, req.allowInternal ? 1 : 0, JSON.stringify(req.ops), JSON.stringify(base), at);
-      const event: Omit<RevisionEvent, 'seq'> = { projectId: req.projectId, revision: next, transactionId: txId, actor: req.actor, label: req.label ?? null, summary: applied.summary, affectedIds: applied.affectedIds, at };
+        .prepare('INSERT INTO transactions (project_id, revision, id, actor, label, idempotency_key, request_id, id_seed, allow_internal, ops, result, created_at, kind, undoes, changes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        .run(req.projectId, next, txId, req.actor, req.label ?? null, req.idempotencyKey ?? null, req.requestId ?? null, idSeed, req.allowInternal ? 1 : 0, JSON.stringify(req.ops), JSON.stringify(base), at, req.kind ?? 'edit', req.undoes ?? null, JSON.stringify(changes));
+      if (req.undoes) this.db.prepare('UPDATE transactions SET undone_by = ? WHERE project_id = ? AND id = ?').run(txId, req.projectId, req.undoes);
+      const setVersion = this.db.prepare('INSERT INTO entity_versions (project_id, entity_id, revision, deleted, actor) VALUES (?,?,?,?,?) ON CONFLICT(project_id, entity_id) DO UPDATE SET revision = excluded.revision, deleted = excluded.deleted, actor = excluded.actor');
+      for (const c of changes) setVersion.run(req.projectId, c.id, next, c.after ? 0 : 1, req.actor);
+      const event: Omit<RevisionEvent, 'seq'> = { projectId: req.projectId, revision: next, transactionId: txId, actor: req.actor, label: req.label ?? null, summary: applied.summary, affectedIds, at, kind: req.kind ?? 'edit' };
       this.db.prepare('INSERT INTO outbox (project_id, kind, payload, created_at) VALUES (?, ?, ?, ?)').run(req.projectId, 'revision', JSON.stringify(event), at);
       return { ...base, transactionId: txId, revision: next, committed: true, replayed: false };
     });
     const result = run.immediate();
     if (result.committed && !result.replayed) this.drainOutbox();
     return result;
+  }
+
+  /** Revision at which an entity last changed (and whether that change deleted it). null = unchanged since creation. */
+  entityVersion(projectId: string, entityId: string): { revision: number; deleted: boolean; actor: string } | null {
+    const r = this.db.prepare('SELECT revision, deleted, actor FROM entity_versions WHERE project_id = ? AND entity_id = ?').get(projectId, entityId) as any;
+    return r ? { revision: r.revision, deleted: !!r.deleted, actor: r.actor } : null;
+  }
+
+  /**
+   * Undo/redo as a compensating transaction (SPEC §6). Per-actor stack. The target's entities are
+   * restored only if each is still exactly as the target left it; otherwise the undo is refused with
+   * the list of conflicts, and unrelated later edits by anyone are never touched.
+   */
+  undo(projectId: string, actor: string, mode: 'undo' | 'redo', transactionId?: string): CommitResult {
+    const run = this.db.transaction((): CommitRequest => {
+      const { doc } = this.getProject(projectId);
+      const kinds = mode === 'undo' ? "('edit','redo')" : "('undo')";
+      const target = (transactionId
+        ? this.db.prepare(`SELECT * FROM transactions WHERE project_id = ? AND id = ?`).get(projectId, transactionId)
+        : this.db.prepare(`SELECT * FROM transactions WHERE project_id = ? AND actor = ? AND kind IN ${kinds} AND undone_by IS NULL ORDER BY revision DESC LIMIT 1`).get(projectId, actor)) as any;
+      if (!target) throw new ApiError(409, mode === 'undo' ? 'nothing_to_undo' : 'nothing_to_redo', `no transaction of yours is available to ${mode}`);
+      if (target.undone_by) throw new ApiError(409, 'already_undone', `transaction ${target.id} was already reversed by ${target.undone_by}`);
+      if (mode === 'redo') {
+        if (target.kind !== 'undo') throw new ApiError(409, 'not_redoable', 'only an undo can be redone');
+        // A new edit by the same actor after the undo abandons the redo branch (standard stack semantics).
+        const later = this.db.prepare("SELECT 1 FROM transactions WHERE project_id = ? AND actor = ? AND kind = 'edit' AND revision > ?").get(projectId, target.actor, target.revision);
+        if (later) throw new ApiError(409, 'nothing_to_redo', 'you edited after undoing; that redo is no longer available');
+      }
+      const changes: EntityChange[] = JSON.parse(target.changes);
+      const live = entityMap(doc);
+      const conflicts = changes.filter((c) => !sameEntity(live.get(c.id) ?? null, c.after)).map((c) => ({ entityId: c.id, ...(this.entityVersion(projectId, c.id) ?? {}) }));
+      if (conflicts.length) throw new ApiError(409, 'undo_conflict', `cannot ${mode}: ${conflicts.length} item(s) were changed afterwards`, { transactionId: target.id, conflicts }, 'Those later changes are kept. Undo them first, or edit manually.');
+      const label = `${mode === 'undo' ? 'Undo' : 'Redo'}: ${target.label ?? JSON.parse(target.result).summary}`.slice(0, 200);
+      return { projectId, actor, label, allowInternal: true, kind: mode, undoes: target.id, ops: [{ op: 'restore_entities', args: { targets: changes.map((c) => ({ id: c.id, state: c.before })) } }] };
+    });
+    const req = run.immediate();
+    try {
+      return this.commit(req);
+    } catch (e) {
+      // Restoring would produce an invalid timeline (e.g. the space is now occupied): a conflict, not a server error.
+      if (e instanceof ApiError && e.code === 'invalid_result') throw new ApiError(409, 'undo_conflict', `cannot ${mode}: ${e.message}`, { transactionId: req.undoes });
+      throw e;
+    }
   }
 
   /** Publish committed-but-unpublished outbox rows in order. Safe to call any time, including after a crash. */
@@ -157,9 +249,9 @@ export class Store {
   }
   /** Committed revision events after `sinceRevision`, for reconnect/resync. */
   eventsSince(projectId: string, sinceRevision: number): RevisionEvent[] {
-    return (this.db.prepare('SELECT revision, id, actor, label, result, created_at FROM transactions WHERE project_id = ? AND revision > ? ORDER BY revision').all(projectId, sinceRevision) as any[]).map((t) => {
+    return (this.db.prepare('SELECT revision, id, actor, label, result, created_at, kind FROM transactions WHERE project_id = ? AND revision > ? ORDER BY revision').all(projectId, sinceRevision) as any[]).map((t) => {
       const r = JSON.parse(t.result);
-      return { seq: 0, projectId, revision: t.revision, transactionId: t.id, actor: t.actor, label: t.label, summary: r.summary, affectedIds: r.affectedIds, at: t.created_at };
+      return { seq: 0, projectId, revision: t.revision, transactionId: t.id, actor: t.actor, label: t.label, summary: r.summary, affectedIds: r.affectedIds, at: t.created_at, kind: t.kind };
     });
   }
 
