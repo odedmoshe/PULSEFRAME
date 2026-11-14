@@ -121,6 +121,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // Grants limited to certain projects cannot even read others.
   app.use('/api/v1/projects/:id/*', async (c, next) => { gov.assertMayAct(c.var.principal, c.req.param('id'), 'observe'); await next(); });
   app.use('/api/v1/projects/:id', async (c, next) => { gov.assertMayAct(c.var.principal, c.req.param('id'), 'observe'); await next(); });
+  // Guards must be registered before the routes they protect (Hono applies middleware in registration order).
+  // Jobs are reached by id, not by project path: a project-limited grant must not see or touch other projects' jobs.
+  const jobScope = async (c: Context<Env>, next: () => Promise<void>) => { gov.assertMayAct(c.var.principal, store.getJob(c.req.param('jobId')!).projectId, 'observe'); await next(); };
+  app.use('/api/v1/jobs/:jobId', jobScope);
+  app.use('/api/v1/jobs/:jobId/*', jobScope);
+  // Starting any job is refused while agents are paused, whichever route creates it.
+  app.use('/api/v1/projects/:id/exports/browser', async (c, next) => { gov.assertMayAct(c.var.principal, c.req.param('id'), 'job'); await next(); });
+
 
   // ----- discovery -----
   app.get('/api/v1/ops', (c) => { need(c, 'observe'); return c.json({ ops: describeOps() }); });
@@ -339,12 +347,6 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
     return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), j.output.mimeType ?? 'video/mp4', `pulseframe-${j.id}${path.extname(j.output.file)}`);
   });
-  // Jobs are reached by id, not by project path: a project-limited grant must not see or touch other projects' jobs.
-  const jobScope = async (c: Context<Env>, next: () => Promise<void>) => { gov.assertMayAct(c.var.principal, store.getJob(c.req.param('jobId')!).projectId, 'observe'); await next(); };
-  app.use('/api/v1/jobs/:jobId', jobScope);
-  app.use('/api/v1/jobs/:jobId/*', jobScope);
-  // Starting any job is refused while agents are paused, whichever route creates it.
-  app.use('/api/v1/projects/:id/exports/browser', async (c, next) => { gov.assertMayAct(c.var.principal, c.req.param('id'), 'job'); await next(); });
   // ----- browser export route: the tab renders and encodes; the server holds the durable job and a tab lease -----
   const browserExport = registerBrowserExportRoutes(app, store, exporter);
   (app as any).browserExport = browserExport;
