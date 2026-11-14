@@ -51,7 +51,7 @@ Linux 6.18 x64 · Intel Xeon @ 2.10 GHz, 4 logical CPUs · 15.7 GiB RAM · no GP
 | Browser export 640×360, 105 frames (WebCodecs H.264 + Opus) | 0.59 s ≈ 5.9× real time | 1 | Worker-reported; in-memory output; software encoder in headless Chromium |
 | Cancel a running export | 166 ms to `canceled`, no leftovers | 1 | |
 | Paused preview vs headless still | byte-identical, 30/30 frames | 2 scenes | Same compositor, two hosts |
-| Compositor vs H.264 high export | min PSNR 36.8 dB, min SSIM 0.997 | 38 frames | 640×360 synthetic scene with Hebrew text, alpha image, rotation, keyframes |
+| Compositor vs H.264 high export | min PSNR 36.8 dB, min SSIM 0.997 | 47 frames | 640×360 synthetic scene with Hebrew text, alpha image, rotation, keyframes |
 | Quality ladder (min PSNR / min SSIM) | standard 35.7 / 0.993 · draft 32.0 / 0.979 · WebM standard 35.65 / 0.985 | 38 frames each | Report only |
 | Small text region, H.264 4:2:0 | 14 px: 29.1–31.4 dB · 28.8 px @720p: 33.9 dB · 43 px @1080p: 35.8 dB | flash frames | One synthetic scene; content-dependent |
 | Size estimate vs actual | 22.3 MB estimated vs 0.75 MB actual (1080p synthetic) | 1 | The heuristic is far off for flat synthetic content; it is labelled an estimate |

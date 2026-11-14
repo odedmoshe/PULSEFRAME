@@ -46,8 +46,8 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Still images (PNG/JPEG/WebP) at ingest, rendered as image layers | tested | `docs/evidence/g0-smoke-proof.json` checks "still image upload…" (exact dimensions) and "the attached provider image renders through the shared compositor…" |
 | Ingest derivatives: frame-indexed thumbnail sprite, 3-level waveform peaks, frame-identical H.264 proxy, restart recovery | tested | `apps/server/src/derive.test.ts`; `phase0-proof.json` "ingest derivatives…" |
 | Range-read media access, bounded decoder/still caches; preview decodes the proxy, export the original | tested | `phase0-proof.json` "preview after reload decodes the proxy…", "decoder count stays within its budget" |
-| Seek conformance: 7 fixtures (H.264 gop30/bf2, gop250/bf3, 29.97 fps, 60-in-30, VP9/WebM, AV1/MP4, 25 fps) x 1,000 seeded random seeks + sequential control | tested (report not committed) | `packages/evals/src/seek-conformance.ts`; 0 mismatches in the run reported by the worker on this profile, report at `.artifacts/conformance/seek-conformance.json` (not committed). HEVC is not directly decodable here (conformed instead); VFR handled only via conform |
-| Ten-minute A/V sync export test | implemented, not runtime-qualified | `packages/evals/src/av-sync-long.ts` written; `docs/evidence/av-sync-long.json` does not exist, run pending |
+| Seek conformance: 7 fixtures (H.264 gop30/bf2, gop250/bf3, 29.97 fps, 60-in-30, VP9/WebM, AV1/MP4, 25 fps) x 1,000 seeded random seeks + sequential control | tested | `packages/evals/src/seek-conformance.ts`; `docs/evidence/seek-conformance.json`: 0 mismatches, all 7 fixtures pass (seed 1, one run on this profile; no nightly runs). HEVC is not directly decodable here (conformed instead); VFR handled only via conform |
+| Ten-minute A/V sync export test | tested | `docs/evidence/av-sync-long.json`: one 640x360 run with an edit, 16,879 frames, 563 flash/beep pairs, max offset 0.063 ms, drift 0 ms, export 3.45x real time on this CPU. Single run; no repeat or nightly runs |
 | Undo/redo as compensating transactions, per actor | tested | `undo.test.ts`; proof checks \"agent undo:\", \"human undo (Ctrl+Z)…\", \"redo then undo…\". Refused with a conflict list when items changed later; other actors' edits survive. Buttons and Ctrl/Cmd+Z, Shift+Z, Y. No restore-as-branch, no drag coalescing. Undo-all/redo-all property test runs 60 times per test run; the 10,000-sequence nightly run is not set up |
 | Rebase of stale edits via `baseRevision`; typed `conflict` | tested | `undo.test.ts`; proof checks beginning \"rebase:\" and \"conflict:\". Strict `expectedRevision` kept. Conflicts are per entity, not per property |
 | Three-client convergence (2 REST+SSE, 1 MCP) | tested | `packages/evals/src/convergence.test.ts`, 15 seeds x 40 steps per run; the 1,000-seed nightly run is not set up. Offline drafts and revoked access not covered |
@@ -61,8 +61,11 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Keyboard editing by physical key codes | tested (subset) | Space, arrows, Shift+arrows, Home/End, S, Delete, `[` `]`, K keyframe, undo/redo; remappable per user (see above). Not covered: J/K/L, I/O, copy/paste |
 | Save/reload, op-log replay, restart recovery | tested | `store.test.ts`, proof |
 | Server export MP4 H.264 High + AAC, BT.709 tagged | tested | Proof: 105/105 frames source-exact, A/V onset error 0.06 ms, PSNR 46.7 dB / SSIM 0.998 on one frame |
-| Browser-side export | unavailable here / not built | AAC encode missing in this Chromium; route planned for Phase 4 |
-| Export cancel, range export, stills, GIF, sidecars, archive | not built | |
+| Server export planning: immutable manifest, preflight blockers, MP4 H.264+AAC, WebM VP9+Opus, WAV, PNG still, frame range, scale, quality | tested | `docs/evidence/phase4-proof.json` (19 checks): typed refusals (missing media, non-bundled font), range audio cut by absolute samples, PNG identical to `render_frame`. Size estimate is labelled an estimate |
+| Export cancel and retry (REST, MCP, editor) | tested | `phase4-proof.json`: queued removed, running stopped with nothing published, retry renders the original immutable snapshot. No checkpoint/resume |
+| Browser-side export (WebCodecs + Mediabunny, tab lease with heartbeats) | tested (limited) | `docs/evidence/browser-export-proof.json` (23 checks), `apps/server/src/browser-export.test.ts`. On this Chromium it writes H.264 + **Opus** in MP4 because AAC encode is unavailable (declared substitution, not MP4+AAC). Output buffered in memory; lease state in memory only; no automatic routing; Chromium only |
+| Preview/export parity | tested | `docs/evidence/parity-suite.json`: paused preview vs headless still byte-identical on 30/30 frames with and without video; compositor vs decoded H.264 export min PSNR 36.8 dB / SSIM 0.997 on this synthetic scene. 14 px text over saturated edges ~29 dB (warning); the text-size envelope is a characterisation, not a guarantee |
+| Streaming output, GIF/animated WebP, subtitle sidecars, project archive, batch variants, hardware encoder profile | not built | |
 | GPU compositor, effects, transitions, masks, captions, audio DSP, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface
@@ -70,11 +73,16 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Capability | Status | Evidence / limits |
 |---|---|---|
 | REST `/api/v1` subset | tested | Proof |
-| OpenAPI 3.1 at `GET /api/v1/openapi.json`, generated from the op registry | tested | Checked in both directions against the real route table (`apps/server/src/openapi.test.ts`) |
+| OpenAPI 3.1 at `GET /api/v1/openapi.json`, generated from the op registry | tested | Checked in both directions against the real route table (`apps/server/src/openapi.test.ts`); 60 operations per PROGRESS (count not asserted in the test) |
 | MCP over HTTP, protocol 2026-07-28, stateless | tested | Official client pinned to 2026-07-28 |
 | MCP legacy (2025-11-25) clients | tested | Served by the SDK's stateless fallback |
-| Tools generated from the op registry + senses `get_summary`, `get_timeline`, `describe_ops`, `render_frame` | tested | Only the official SDK client has been tried; no third-party MCP host |
-| Scopes `observe` / `edit` enforced server-side | tested | No project/track/range scopes, budgets, Pause Agent, approvals |
+| Tools generated from the op registry + senses `get_summary`, `get_timeline`, `describe_ops`, `render_frame`, `describe_moment`, `render_contact_sheet`, `plan_export`, `get_controls` | tested | 35 MCP tools from one registry (`docs/evidence/phase5-proof.json`). Only the official SDK client has been tried; no third-party MCP host. No transcript, audio-analysis or preview-clip senses; no MCP Tasks extension, resources, prompts or playbooks; no OAuth |
+| Agent grants: Observe / Propose / Edit / Autopilot, project/track/range limits, expiry, revocation | tested | `apps/server/src/governance.test.ts` (12 tests), phase5 proof. Limits enforced from the entity diff; range limit only unit-tested. Management is REST only (no UI) |
+| Pause Agent / Take Over | tested | Owner-only, server-side `agent_paused`; reads and owner edits continue (phase5 proof) |
+| Proposals with before/after stills, owner accept/reject, stale detection | tested | Accepted proposals commit under the owner and are undoable (phase5 proof, `governance.test.ts`). No proposal branches |
+| Single-use approvals bound to an action hash | tested (limited) | Expiring, owner-only, single use; bound to the action hash and owner identity, not to a project revision. Used for agent-requested model downloads only |
+| Budget ledger | tested (unit only) | Reservation/settle/release in `governance.test.ts`; not exercised end to end, no paid provider exists |
+| Ten scripted MCP goals | tested | Deterministic script over the official MCP client, not a language model (phase5 proof). No Director (LLM) |
 | Live UI update from agent edits (SSE) | tested | ~39 ms commit-to-visible on loopback, single sample (the latest proof run recorded ~43 ms) |
 
 ## Optional AI providers
