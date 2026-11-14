@@ -1,0 +1,390 @@
+{
+  "ranAt": "2026-11-14T21:30:40.870Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGiB": 15.7,
+    "gpu": "none (software)",
+    "node": "v22.23.4",
+    "chromium": "153.0.8010.12",
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "project": {
+    "width": 1080,
+    "height": 1920,
+    "frameRate": {
+      "num": 30,
+      "den": 1
+    },
+    "exportedFrames": 105
+  },
+  "measurements": {
+    "editorShellInteractiveMs": 185,
+    "mcp": {
+      "negotiatedProtocolVersion": "2026-07-28",
+      "server": {
+        "name": "pulseframe-studio",
+        "version": "0.0.0"
+      }
+    },
+    "agentEdit": {
+      "requestToCommitMs": 14.5,
+      "requestToVisibleInEditorMs": 38.9,
+      "note": "single sample, loopback, includes Playwright polling overhead"
+    },
+    "restCommitLatencyMs": {
+      "samples": 30,
+      "median": 5.91,
+      "p95": 10.05,
+      "max": 10.78
+    },
+    "export": {
+      "file": "job_0xf4ydUhkZ0.mp4",
+      "bytes": 107979,
+      "revision": 36,
+      "route": "server-software-canvas2d",
+      "audioClipsMixed": 2,
+      "validation": {
+        "videoCodec": "h264",
+        "audioCodec": "aac",
+        "frames": 105,
+        "expectedFrames": 105,
+        "width": 1080,
+        "height": 1920,
+        "frameRate": "30/1",
+        "pixFmt": "yuv420p",
+        "colorSpace": "bt709",
+        "audioSampleRate": 48000,
+        "durationSeconds": 3.5
+      },
+      "renderStageMs": {
+        "draw": 657,
+        "readback": 685,
+        "upload": 5233
+      },
+      "wallSeconds": 7.365,
+      "realtimeFactor": 0.47522063815342835,
+      "uiWallSeconds": 7.422
+    },
+    "parityFrame70": {
+      "psnrDb": 46.687164,
+      "ssim": 0.99795,
+      "targets": {
+        "psnrDb": 36,
+        "ssim": 0.985
+      },
+      "note": "compositor PNG vs decoded H.264 (crf 16, 4:2:0) frame; one frame, not a suite"
+    },
+    "avSync": {
+      "expectedOnsetsSeconds": [
+        0,
+        1,
+        2.5
+      ],
+      "measuredOnsetsSeconds": [
+        0.0001,
+        1.0001,
+        2.5001
+      ],
+      "maxAbsErrorMs": 0.06,
+      "frameMs": 33.33
+    }
+  },
+  "checks": [
+    {
+      "name": "fixture generated (H.264 High + B-frames + AAC, frame-index barcode, 1 kHz beep each second)",
+      "ok": true,
+      "detail": {
+        "bytes": 49384
+      }
+    },
+    {
+      "name": "no credential -> 401",
+      "ok": true
+    },
+    {
+      "name": "unknown bearer token -> 401",
+      "ok": true
+    },
+    {
+      "name": "observe-only token cannot create a project -> 403",
+      "ok": true
+    },
+    {
+      "name": "cross-origin page cannot obtain a browser session -> 403",
+      "ok": true
+    },
+    {
+      "name": "foreign Host header (DNS rebinding) -> 403 even with a valid token",
+      "ok": true
+    },
+    {
+      "name": "UI boots in Hebrew, RTL, and creates the first project itself",
+      "ok": true
+    },
+    {
+      "name": "timeline stays LTR inside the RTL interface",
+      "ok": true
+    },
+    {
+      "name": "import: server probed the real container/codecs and content-addressed the file",
+      "ok": true,
+      "detail": {
+        "codec": "h264",
+        "frames": 120,
+        "duration": {
+          "value": "4",
+          "timescale": 1
+        },
+        "audio": {
+          "sampleRate": 48000,
+          "channels": 2,
+          "codec": "aac"
+        }
+      }
+    },
+    {
+      "name": "edit: add to timeline creates linked picture + audio clips",
+      "ok": true
+    },
+    {
+      "name": "preview: frame-step keyboard navigation paints the exact requested frame",
+      "ok": true
+    },
+    {
+      "name": "edit: keyboard split (S) at the playhead splits picture and linked audio",
+      "ok": true
+    },
+    {
+      "name": "edit: Hebrew + niqqud + digits + Latin text stored verbatim",
+      "ok": true
+    },
+    {
+      "name": "preview: canvas shows source frame 60 at timeline frame 60 (barcode read from preview pixels)",
+      "ok": true,
+      "detail": {
+        "canvas": "540x960"
+      }
+    },
+    {
+      "name": "preview: playback advances and pauses",
+      "ok": true
+    },
+    {
+      "name": "MCP: negotiated the 2026-07-28 protocol revision",
+      "ok": true,
+      "detail": {
+        "negotiatedProtocolVersion": "2026-07-28",
+        "server": {
+          "name": "pulseframe-studio",
+          "version": "0.0.0"
+        }
+      }
+    },
+    {
+      "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
+      "ok": true,
+      "detail": {
+        "count": 22
+      }
+    },
+    {
+      "name": "MCP sense: get_timeline returns exact rational times and ids",
+      "ok": true,
+      "detail": {
+        "right": {
+          "id": "clp_453697befb1",
+          "start": {
+            "value": "2",
+            "timescale": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "agent edit: 4-op transaction committed atomically as one revision",
+      "ok": true,
+      "detail": {
+        "revision": 6,
+        "summary": "Trimmed start of clip to 2.500s; Moved clip to 2.000s; Updated text \"נערך ע״י סוכן · Agent edit\"; Trimmed end of clip to 3.500s"
+      }
+    },
+    {
+      "name": "live UI update: agent edit appears in the open editor without reload",
+      "ok": true,
+      "detail": {
+        "requestToCommitMs": 14.5,
+        "requestToVisibleInEditorMs": 38.9,
+        "note": "single sample, loopback, includes Playwright polling overhead"
+      }
+    },
+    {
+      "name": "live UI update: activity feed attributes the change to the agent (actor from auth)",
+      "ok": true
+    },
+    {
+      "name": "human keeps control: playhead and selection unchanged by the agent edit",
+      "ok": true,
+      "detail": {
+        "before": {
+          "timecode": "00:00:02:10",
+          "selected": "clip-clp_e0e56417910"
+        },
+        "after": {
+          "timecode": "00:00:02:10",
+          "selected": "clip-clp_e0e56417910"
+        }
+      }
+    },
+    {
+      "name": "idempotency: resending the same key returns the original revision, no second commit",
+      "ok": true
+    },
+    {
+      "name": "stale expectedRevision is rejected with a typed, actionable error",
+      "ok": true,
+      "detail": {
+        "code": "stale_revision",
+        "message": "expectedRevision 5 is not the current revision 6",
+        "details": {
+          "expectedRevision": 5,
+          "currentRevision": 6
+        },
+        "hint": "Re-read the timeline at the current revision and resubmit."
+      }
+    },
+    {
+      "name": "off-frame time is rejected and the error offers the nearest valid value",
+      "ok": true,
+      "detail": {
+        "value": "2",
+        "timescale": 15
+      }
+    },
+    {
+      "name": "rejected edits did not change the revision",
+      "ok": true
+    },
+    {
+      "name": "MCP scopes: observe-only agent can read but its mutation is refused server-side",
+      "ok": true
+    },
+    {
+      "name": "MCP compatibility: a 2025-era client is served by the stateless legacy fallback",
+      "ok": true,
+      "detail": {
+        "negotiated": "2025-11-25"
+      }
+    },
+    {
+      "name": "MCP without credentials -> 401",
+      "ok": true
+    },
+    {
+      "name": "render_frame returns a PNG with revision metadata",
+      "ok": true,
+      "detail": {
+        "revision": 36,
+        "frameIndex": 70,
+        "time": {
+          "value": "7",
+          "timescale": 3
+        },
+        "width": 1080,
+        "height": 1920
+      }
+    },
+    {
+      "name": "editing continues while the export job runs",
+      "ok": true
+    },
+    {
+      "name": "export: durable job succeeded and used the pre-edit snapshot revision",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "revision": 36,
+        "error": null
+      }
+    },
+    {
+      "name": "export: playable MP4, H.264 + AAC, exact frame count/size/rate, BT.709 tagged",
+      "ok": true,
+      "detail": {
+        "video": "h264 High 1080x1920 30/1 yuv420p bt709",
+        "frames": "105",
+        "audio": "aac 48000Hz 2ch",
+        "duration": "3.500000",
+        "bytes": "107979"
+      }
+    },
+    {
+      "name": "export: decodes end-to-end without errors",
+      "ok": true
+    },
+    {
+      "name": "export: all 105 frames show the exact source frame the evaluator selected (across the split, trim and move)",
+      "ok": true,
+      "detail": {
+        "mismatchedFrames": [],
+        "expectAt60": 75
+      }
+    },
+    {
+      "name": "parity: decoded export frame vs compositor still meets the initial lossy targets (PSNR>=36 dB, SSIM>=0.985)",
+      "ok": true,
+      "detail": {
+        "psnrDb": 46.687164,
+        "ssim": 0.99795
+      }
+    },
+    {
+      "name": "audio: beeps land where the edit puts them, within one frame (and the trimmed beep is gone)",
+      "ok": true,
+      "detail": {
+        "expectedOnsetsSeconds": [
+          0,
+          1,
+          2.5
+        ],
+        "measuredOnsetsSeconds": [
+          0.0001,
+          1.0001,
+          2.5001
+        ],
+        "maxAbsErrorMs": 0.06,
+        "frameMs": 33.33
+      }
+    },
+    {
+      "name": "audio: stream duration equals video duration within one frame",
+      "ok": true,
+      "detail": {
+        "audio": "3.500000",
+        "video": "3.500000"
+      }
+    },
+    {
+      "name": "replaying the op log from revision 0 reproduces the materialized document exactly",
+      "ok": true,
+      "detail": {
+        "revision": 37
+      }
+    },
+    {
+      "name": "language toggle switches to English/LTR without losing the project",
+      "ok": true
+    },
+    {
+      "name": "restart: project, revision and tokens persist; history is complete and gap-free",
+      "ok": true
+    },
+    {
+      "name": "no uncaught errors in the editor page",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

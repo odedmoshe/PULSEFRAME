@@ -1,0 +1,77 @@
+/**
+ * Local-profile access control (SPEC §4, §26). Loopback-only does not mean unauthenticated:
+ *  - Host header must be a loopback name (DNS-rebinding defence).
+ *  - Browsers: an HttpOnly SameSite=Strict session cookie, issued only to allow-listed origins.
+ *  - Agents/scripts: bearer tokens stored 0600 in the data dir. Scopes are enforced here, server-side.
+ * Actor identity always comes from the credential, never from request bodies.
+ */
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { Config } from './config.ts';
+import { ApiError } from './store.ts';
+
+export type Scope = 'observe' | 'edit';
+export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: Scope[] }
+export interface Tokens { agent: string; observer: string }
+
+const COOKIE = 'pf_session';
+export class Auth {
+  readonly tokens: Tokens;
+  private sessions = new Map<string, Principal>();
+  private allowedHosts: Set<string>;
+  private allowedOrigins: Set<string>;
+
+  constructor(private cfg: Config) {
+    const file = path.join(cfg.dataDir, 'tokens.json');
+    if (fs.existsSync(file)) this.tokens = JSON.parse(fs.readFileSync(file, 'utf8'));
+    else {
+      this.tokens = { agent: `pfa_${randomBytes(24).toString('base64url')}`, observer: `pfo_${randomBytes(24).toString('base64url')}` };
+      fs.writeFileSync(file, JSON.stringify(this.tokens, null, 2), { mode: 0o600 });
+    }
+    const hosts = ['127.0.0.1', 'localhost', '[::1]'].map((h) => `${h}:${cfg.port}`);
+    this.allowedHosts = new Set([...hosts, ...cfg.extraOrigins.map((o) => new URL(o).host)]);
+    this.allowedOrigins = new Set([...hosts.map((h) => `http://${h}`), ...cfg.extraOrigins]);
+  }
+
+  private same(a: string, b: string) {
+    const x = Buffer.from(a);
+    const y = Buffer.from(b);
+    return x.length === y.length && timingSafeEqual(x, y);
+  }
+  checkHost(req: Request) {
+    const host = req.headers.get('host') ?? '';
+    if (!this.allowedHosts.has(host)) throw new ApiError(403, 'forbidden_host', 'Host header is not an allowed loopback name');
+  }
+  originAllowed(req: Request): boolean {
+    const origin = req.headers.get('origin');
+    return origin === null ? req.headers.get('sec-fetch-site') !== 'cross-site' : this.allowedOrigins.has(origin);
+  }
+  /** Issue a browser session. Only for same-site browser requests from an allow-listed origin. */
+  issueSession(req: Request): string {
+    if (!this.originAllowed(req)) throw new ApiError(403, 'forbidden_origin', 'origin not allowed');
+    const sid = randomBytes(24).toString('base64url');
+    this.sessions.set(sid, { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] });
+    return `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/`;
+  }
+  authenticate(req: Request): Principal {
+    const header = req.headers.get('authorization');
+    if (header?.startsWith('Bearer ')) {
+      const token = header.slice(7);
+      if (this.same(token, this.tokens.agent)) return { actor: 'agent:local', kind: 'agent', scopes: ['observe', 'edit'] };
+      if (this.same(token, this.tokens.observer)) return { actor: 'agent:observer', kind: 'agent', scopes: ['observe'] };
+      throw new ApiError(401, 'invalid_token', 'bearer token not recognised');
+    }
+    const sid = new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`).exec(req.headers.get('cookie') ?? '')?.[1];
+    const session = sid && this.sessions.get(sid);
+    if (session) {
+      // Cookie credentials are ambient, so they are only honoured for allow-listed origins (CSRF defence).
+      if (!this.originAllowed(req)) throw new ApiError(403, 'forbidden_origin', 'origin not allowed');
+      return session;
+    }
+    throw new ApiError(401, 'unauthenticated', 'authentication required', {}, 'Send Authorization: Bearer <token> (see tokens.json in the data directory).');
+  }
+  require(p: Principal, scope: Scope) {
+    if (!p.scopes.includes(scope)) throw new ApiError(403, 'insufficient_scope', `this credential lacks the "${scope}" scope`, { required: scope, granted: p.scopes });
+  }
+}

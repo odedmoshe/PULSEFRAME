@@ -1,0 +1,27 @@
+{
+  "name": "pulseframe",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @pulseframe/server --filter @pulseframe/web dev",
+    "build": "pnpm --filter @pulseframe/web build",
+    "start": "pnpm --filter @pulseframe/server start",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "fixtures": "tsx packages/fixtures/src/cli.ts",
+    "probe": "tsx apps/renderer/src/probe-cli.ts",
+    "proof": "tsx packages/evals/src/phase0-proof.ts",
+    "proof:g0": "tsx packages/evals/src/g0-proof.ts",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm proof"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "fast-check": "4.10.2",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  },
+  "pnpm": { "onlyBuiltDependencies": ["better-sqlite3", "esbuild"] }
+}

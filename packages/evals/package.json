@@ -1,0 +1,16 @@
+{
+  "name": "@pulseframe/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@pulseframe/core": "workspace:*",
+    "@pulseframe/engine": "workspace:*",
+    "@pulseframe/fixtures": "workspace:*",
+    "@pulseframe/server": "workspace:*",
+    "@pulseframe/time": "workspace:*",
+    "playwright": "1.63.0",
+    "@pulseframe/providers": "workspace:*"
+  }
+}

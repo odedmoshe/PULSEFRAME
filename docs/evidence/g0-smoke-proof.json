@@ -1,0 +1,215 @@
+{
+  "ranAt": "2026-11-14T21:30:51.313Z",
+  "result": "PASSED",
+  "scope": "Amendment A1 G0, first half: model-free smoke workflow only. No model, no GPU, no media workflow, no timeline attachment, no stale-result case.",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGiB": 15.7,
+    "gpu": "none"
+  },
+  "provider": {
+    "url": "http://127.0.0.1:8188",
+    "comfyui": "0.45.0",
+    "device": {
+      "name": "cpu",
+      "type": "cpu",
+      "vramTotalBytes": null
+    }
+  },
+  "measuredProfile": {
+    "capability": "comfy.smoke.solid-image",
+    "workload": "320x192 solid image, batch 1",
+    "stageSeconds": {
+      "preparing": 0.207,
+      "submit": 0.012,
+      "providerQueueAndInference": 0.465,
+      "transfer": 0.006,
+      "validation": 0.058,
+      "basis": "measured (wall clock, includes 200 ms polling granularity)"
+    },
+    "peakDeviceMemoryBytes": null,
+    "note": "CPU device: no device-memory measurement available"
+  },
+  "checks": [
+    {
+      "name": "unconfigured provider is reported as not configured (not simulated)",
+      "ok": true,
+      "detail": "PF_COMFYUI_URL is not set"
+    },
+    {
+      "name": "running a capability without a provider -> 503 provider_not_configured with a setup hint",
+      "ok": true
+    },
+    {
+      "name": "core editing still works with no provider",
+      "ok": true
+    },
+    {
+      "name": "listing/polling capabilities and provider status submits nothing to the worker",
+      "ok": true
+    },
+    {
+      "name": "provider readiness reports the actual runtime and device",
+      "ok": true,
+      "detail": {
+        "comfyui": "0.45.0",
+        "device": {
+          "name": "cpu",
+          "type": "cpu",
+          "vramTotalBytes": null
+        },
+        "hostRamGiB": 13.4
+      }
+    },
+    {
+      "name": "before any run, the capability shows the two run-earned dimensions as not assessed",
+      "ok": true
+    },
+    {
+      "name": "resource fields are separate quantities (download bytes, estimated residency, measured profiles)",
+      "ok": true
+    },
+    {
+      "name": "import returns a draft whose unknown model, unknown node and URL block publication",
+      "ok": true,
+      "detail": [
+        "unreviewed_control",
+        "unreviewed_output",
+        "unknown_node_pack",
+        "unresolved_model",
+        "model_license_unknown",
+        "model_not_commercially_eligible",
+        "graph_defined_egress",
+        "not_dependencyReady",
+        "not_licenseReviewed",
+        "not_executed",
+        "not_qualityReviewed",
+        "not_hebrewQualified",
+        "not_hardwareQualified"
+      ]
+    },
+    {
+      "name": "import executed nothing on the provider",
+      "ok": true
+    },
+    {
+      "name": "REST run: durable job succeeded only after output was downloaded, digested and probed",
+      "ok": true,
+      "detail": {
+        "stageSeconds": {
+          "preparing": 0.207,
+          "submit": 0.012,
+          "providerQueueAndInference": 0.465,
+          "transfer": 0.006,
+          "validation": 0.058,
+          "basis": "measured (wall clock, includes 200 ms polling granularity)"
+        },
+        "bytes": 875
+      }
+    },
+    {
+      "name": "output pixels match the requested colour (decoded, not assumed)",
+      "ok": true,
+      "detail": [
+        61,
+        224,
+        200
+      ]
+    },
+    {
+      "name": "recipe is recorded: capability version, graph digest, resolved params, runtime and device",
+      "ok": true
+    },
+    {
+      "name": "output is NOT reported as attached to the timeline (not implemented yet)",
+      "ok": true
+    },
+    {
+      "name": "idempotency key: second request returns the same job; provider ran once",
+      "ok": true
+    },
+    {
+      "name": "MCP run_capability creates the same authoritative job shape as REST, with the agent as actor",
+      "ok": true
+    },
+    {
+      "name": "agents cannot smuggle a raw graph or unexposed fields through parameters",
+      "ok": true
+    },
+    {
+      "name": "out-of-range parameter is rejected before any job or submission exists",
+      "ok": true
+    },
+    {
+      "name": "observe-only credential cannot start a provider job",
+      "ok": true
+    },
+    {
+      "name": "rejected requests reached the provider zero times",
+      "ok": true
+    },
+    {
+      "name": "UI button creates the same job shape through the same route, with the user as actor",
+      "ok": true
+    },
+    {
+      "name": "run-earned evidence now cites the recorded job and names the profile it applies to",
+      "ok": true,
+      "detail": "job job_xkizNNr4K4M: cpu (cpu), ComfyUI 0.45.0, 2026-11-14T21:30:45.048Z"
+    },
+    {
+      "name": "cancel of a provider-queued job removes it from the queue and reports exactly that",
+      "ok": true,
+      "detail": {
+        "stageBefore": "queued",
+        "outcome": "removed-from-queue"
+      }
+    },
+    {
+      "name": "cancelling our queued job did not interrupt the job that owned the worker",
+      "ok": true
+    },
+    {
+      "name": "restart: the known job is resumed from its stored provider id and completes, without a second submission",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "attempt": 1,
+        "providerRunsOfOurs": 19,
+        "historyDelta": 2
+      }
+    },
+    {
+      "name": "truncated output: job fails output_invalid, nothing is listed as a usable asset",
+      "ok": true,
+      "detail": {
+        "code": "output_invalid",
+        "message": "output \"image\" is 0x0, expected 320x192",
+        "details": {}
+      }
+    },
+    {
+      "name": "missing output after a \"successful\" provider run: job fails, not succeeds",
+      "ok": true
+    },
+    {
+      "name": "ambiguous submission (accepted, response lost): reconciled by our request id, executed exactly once",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "providerRuns": 1
+      }
+    },
+    {
+      "name": "ambiguous submission with no provider record: left visibly as submission-unknown, never blindly retried",
+      "ok": true,
+      "detail": {
+        "code": "submission_unknown",
+        "message": "connection reset before any response (injected)",
+        "retryable": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+:root {
+  --pf-bg: #0e1013; --pf-surface: #16191e; --pf-surface-raised: #1d2128; --pf-border: #2a2f38;
+  --pf-text: #e8eaee; --pf-text-muted: #9aa2ae;
+  --pf-accent: #3de0c8; --pf-accent-2: #4cc2ff; --pf-accent-3: #9b8cff; --pf-danger: #ff6b6b; --pf-warn: #f5b84b;
+  --pf-r-sm: 4px; --pf-r-md: 8px; --pf-r-lg: 12px;
+  --pf-s-1: 4px; --pf-s-2: 8px; --pf-s-3: 12px; --pf-s-4: 16px; --pf-s-5: 24px;
+  --pf-font: 'Heebo', system-ui, sans-serif; --pf-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --pf-fs-sm: 12px; --pf-fs-md: 14px; --pf-fs-lg: 16px;
+  --pf-clip-video: #2b6f8f; --pf-clip-audio: #2f7d63; --pf-clip-text: #6a5bbf;
+}

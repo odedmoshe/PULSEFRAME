@@ -1,0 +1,8 @@
+{
+  "name": "@pulseframe/providers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./*": "./src/*" },
+  "dependencies": { "zod": "4.6.7" }
+}
