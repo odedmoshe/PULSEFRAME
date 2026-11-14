@@ -12,7 +12,7 @@ const hint = (keymap: Keymap, id: string) => { const k = keymap.keysFor(id)[0]; 
 export function Header() {
   const { editor, state, t } = useEditorState();
   const { doc, save, revision, exportJob: job, lang } = state;
-  const exporting = job && (job.status === 'queued' || job.status === 'running');
+  const exporting = job && ['queued', 'running', 'cancel-requested'].includes(job.status);
   return (
     <header className="header">
       <span className="logo" dangerouslySetInnerHTML={{ __html: LOGO_SVG }} />
@@ -26,6 +26,9 @@ export function Header() {
       <button className="ghost" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog">{t('cmd.palette')} <kbd>{chordLabel('Mod+KeyK')}</kbd></button>
       <button className="ghost" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle">{t('lang.toggle')}</button>
       {job?.status === 'succeeded' && <a className="ghost" href={`/api/v1/jobs/${job.id}/output`} data-testid="export-download">{t('export.done')}</a>}
+      {exporting && <button className="ghost danger" onClick={() => editor.cancelExport()} data-testid="export-cancel">{t('export.cancel')}</button>}
+      {job?.status === 'canceled' && <span className="save warn" role="status" data-testid="export-canceled">{t('export.canceled')}</span>}
+      {(job?.status === 'canceled' || job?.status === 'failed') && <button className="ghost" onClick={() => editor.retryExport()} data-testid="export-retry">{t('export.retry')}</button>}
       <button className="primary" disabled={!doc || !!exporting || editor.player?.frameCount === 0} onClick={() => editor.startExport()} data-testid="export">
         {exporting ? `${t('export.running')} ${job?.stage ?? ''}` : t('export')}
       </button>

@@ -226,6 +226,11 @@ export class Editor {
     const { doc } = this.state;
     if (doc) api.startExport(doc.id).then((j) => this.set({ exportJob: { id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);
   }
+  cancelExport() { const j = this.state.exportJob; if (j) api.cancelJob(j.id).catch(this.fail); }
+  retryExport() {
+    const j = this.state.exportJob;
+    if (j) api.retryJob(j.id).then((n) => this.set({ exportJob: { id: n.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);
+  }
   runCapability(capabilityId: string) {
     const { doc } = this.state;
     if (doc) api.runCapability(doc.id, capabilityId, {}).then((j) => this.set({ capJob: { id: j.jobId, type: 'capability', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);

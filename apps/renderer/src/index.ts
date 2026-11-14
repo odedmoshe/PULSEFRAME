@@ -24,9 +24,11 @@ export class RenderHost {
     });
     return this.browser;
   }
-  private async withPage<R>(url: string, fn: (page: Page) => Promise<R>): Promise<R> {
+  private async withPage<R>(url: string, fn: (page: Page) => Promise<R>, onAbort?: (abort: () => void) => void): Promise<R> {
     const browser = await this.launch();
     const context = await browser.newContext({ serviceWorkers: 'block' });
+    // Cancellation closes the page context; the pending evaluate rejects and the caller cleans up.
+    onAbort?.(() => void context.close().catch(() => {}));
     const page = await context.newPage();
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
@@ -47,8 +49,8 @@ export class RenderHost {
     const b64 = await this.withPage(url, (p) => p.evaluate((i) => window.__pf!.renderPng(i), frameIndex));
     return Buffer.from(b64, 'base64');
   }
-  async renderAll(url: string): Promise<ExportStats> {
-    return this.withPage(url, (p) => p.evaluate(() => window.__pf!.exportAll()));
+  async renderAll(url: string, onAbort?: (abort: () => void) => void): Promise<ExportStats> {
+    return this.withPage(url, (p) => p.evaluate(() => window.__pf!.exportAll()), onAbort);
   }
   async close() {
     const b = await this.browser?.catch(() => undefined);

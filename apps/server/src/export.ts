@@ -7,10 +7,11 @@
  * publishes its output with an atomic rename, so a retry never yields a duplicate or partial file.
  */
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
@@ -19,38 +20,165 @@ import { ApiError, type JobRow, type Store } from './store.ts';
 
 const exec = promisify(execFile);
 
+export const ExportOptionsSchema = z
+  .object({
+    format: z.enum(['mp4-h264-aac', 'webm-vp9-opus', 'wav', 'png']).default('mp4-h264-aac').describe('Container/codecs. wav = audio only; png = one still frame'),
+    quality: z.enum(['draft', 'standard', 'high']).default('high'),
+    scale: z.union([z.literal(1), z.literal(0.5), z.literal(0.25)]).default(1).describe('Output size relative to the project size (rounded to even dimensions)'),
+    range: z.object({ startFrame: z.number().int().nonnegative(), endFrame: z.number().int().positive() }).strict().optional().describe('Half-open frame range [startFrame, endFrame); default is the whole sequence'),
+    frame: z.number().int().nonnegative().optional().describe('Frame index for format=png'),
+  })
+  .strict();
+export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
+const CRF = { 'mp4-h264-aac': { draft: 28, standard: 21, high: 16 }, 'webm-vp9-opus': { draft: 40, standard: 32, high: 24 } } as const;
+/** Rough bits per pixel per frame, used ONLY for the labelled size estimate. */
+const BPP = { draft: 0.03, standard: 0.07, high: 0.14 } as const;
+export const ENGINE = { compositor: 'canvas2d/1', evaluator: 'evaluate/1', fontFamilies: ['Heebo'] } as const;
+
 export interface RenderSession {
   doc: ProjectDocument;
   revision: number;
   jobId: string | null;
+  firstFrame: number;
+  outWidth: number;
+  outHeight: number;
   frameBytes: number;
   totalFrames: number;
   nextFrame: number;
   sink: ChildProcessWithoutNullStreams | null;
 }
+export interface Manifest {
+  revision: number;
+  engine: typeof ENGINE & { schemaVersion: number };
+  options: ExportOptions;
+  output: { width: number; height: number; firstFrame: number; frames: number; frameRate: { num: number; den: number }; sampleRate: number };
+  assets: { id: string; contentHash: string; byteSize: number; kind: string; clips: number }[];
+  fonts: { family: string; files: { name: string; sha256: string }[] }[];
+  /** Labelled estimate, never a promise. */
+  estimate: { bytes: number | null; basis: string };
+}
+export interface Blocker { code: string; message: string; ids: string[] }
 
 export class Exporter {
   readonly sessions = new Map<string, RenderSession>();
   private queue: Promise<void> = Promise.resolve();
+  private cancelRequested = new Set<string>();
+  private running: { jobId: string; ff?: ChildProcessWithoutNullStreams; abort?: () => void } | null = null;
   constructor(private store: Store, private host: RenderHost, private renderPageUrl: () => string, private webDist: string) {}
 
-  private open(doc: ProjectDocument, revision: number, jobId: string | null): { token: string; session: RenderSession; url: string } {
+  /**
+   * Everything a render depends on, fixed at the moment the job is created (SPEC §9): the document snapshot,
+   * the exact asset and font bytes, engine versions and options. Returns blockers instead of starting a render that cannot be faithful.
+   */
+  plan(doc: ProjectDocument, revision: number, raw: unknown): { manifest: Manifest; blockers: Blocker[]; warnings: Blocker[] } {
+    const parsed = ExportOptionsSchema.safeParse(raw ?? {});
+    if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
+    const options = parsed.data;
+    const { width, height, frameRate, sampleRate } = doc.settings;
+    const total = T.frameCount(sequenceDuration(doc), frameRate);
+    const blockers: Blocker[] = [];
+    const warnings: Blocker[] = [];
+    const even = (n: number) => Math.max(2, Math.round((n * options.scale) / 2) * 2);
+    const outWidth = even(width);
+    const outHeight = even(height);
+    let first = 0;
+    let frames = total;
+    if (options.format === 'png') {
+      first = options.frame ?? 0;
+      frames = 1;
+      if (first >= Math.max(1, total)) blockers.push({ code: 'out_of_bounds', message: `frame ${first} is outside 0..${total - 1}`, ids: [] });
+    } else if (options.range) {
+      first = options.range.startFrame;
+      frames = Math.min(options.range.endFrame, total) - first;
+      if (frames <= 0) blockers.push({ code: 'empty_range', message: `range [${options.range.startFrame}, ${options.range.endFrame}) contains no frames (sequence has ${total})`, ids: [] });
+    }
+    if (total === 0) blockers.push({ code: 'empty_sequence', message: 'the sequence has no clips to export', ids: [] });
+    const seq = doc.sequences[doc.mainSequenceId]!;
+    const used = new Map<string, number>();
+    const families = new Set<string>();
+    const from = T.frameTime(first, frameRate);
+    const to = T.frameTime(first + Math.max(0, frames), frameRate);
+    for (const tr of seq.tracks)
+      for (const c of tr.clips) {
+        if (!T.lt(c.start, to) || !T.lt(from, T.add(c.start, c.duration))) continue; // outside the exported range
+        if (c.type === 'media') used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
+        else families.add(c.style.fontFamily);
+      }
+    const assets = [...used].map(([id, clips]) => {
+      const a = doc.assets[id]!;
+      let present = false;
+      try { present = fs.statSync(this.store.blobPath(a.contentHash)).size === a.byteSize; } catch { /* missing */ }
+      if (!present) blockers.push({ code: 'missing_media', message: `source media for "${a.name}" is not available to the render worker`, ids: [id] });
+      return { id, contentHash: a.contentHash, byteSize: a.byteSize, kind: a.kind, clips };
+    });
+    for (const fam of families) if (!ENGINE.fontFamilies.includes(fam as 'Heebo')) blockers.push({ code: 'missing_font', message: `font "${fam}" is not bundled with the renderer; text would silently fall back`, ids: [] });
+    const fonts = [...families].filter((f) => ENGINE.fontFamilies.includes(f as 'Heebo')).map((family) => ({ family, files: this.fontFiles(family) }));
+    if (fonts.some((f) => f.files.length === 0)) blockers.push({ code: 'renderer_unavailable', message: 'the web bundle with the render page and fonts has not been built (run `pnpm build`)', ids: [] });
+    if (options.format === 'webm-vp9-opus' && doc.settings.sampleRate !== 48000) warnings.push({ code: 'resampled_audio', message: 'Opus is encoded at 48 kHz; audio will be resampled', ids: [] });
+    const seconds = (frames * frameRate.den) / frameRate.num;
+    const video = options.format === 'mp4-h264-aac' || options.format === 'webm-vp9-opus';
+    const estimate = video
+      ? { bytes: Math.round((outWidth * outHeight * frames * BPP[options.quality]) / 8 + seconds * 24_000), basis: 'heuristic bits-per-pixel for the chosen quality; real size depends on content' }
+      : options.format === 'wav' ? { bytes: Math.round(seconds * sampleRate * 4 + 44), basis: 'exact for 16-bit stereo PCM' } : { bytes: null, basis: 'not estimated for stills' };
+    return {
+      manifest: { revision, engine: { ...ENGINE, schemaVersion: doc.schemaVersion }, options, output: { width: outWidth, height: outHeight, firstFrame: first, frames: Math.max(0, frames), frameRate, sampleRate }, assets, fonts, estimate },
+      blockers, warnings,
+    };
+  }
+  private fontCache = new Map<string, { name: string; sha256: string }[]>();
+  private fontFiles(family: string) {
+    let f = this.fontCache.get(family);
+    if (!f || f.length === 0) {
+      const dir = path.join(this.webDist, 'assets');
+      const prefix = `${family.toLowerCase()}-`;
+      f = !fs.existsSync(dir) ? [] : fs.readdirSync(dir).filter((n) => n.startsWith(prefix) && n.endsWith('.woff2')).sort().map((name) => ({ name, sha256: createHash('sha256').update(fs.readFileSync(path.join(dir, name))).digest('hex') }));
+      this.fontCache.set(family, f);
+    }
+    return f;
+  }
+  /** Create the durable job (or refuse with the blockers). The single entry point for UI, REST and MCP. */
+  start(projectId: string, actor: string, rawOptions: unknown, retryOf?: JobRow): JobRow {
+    const p = retryOf ? { doc: retryOf.input.snapshot as ProjectDocument, revision: retryOf.input.revision as number } : this.store.getProject(projectId);
+    const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
+    if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, 'Fix the listed blockers (relink media, change the font or the range) and try again.');
+    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot: p.doc, manifest, warnings, retryOf: retryOf?.id ?? null });
+    this.enqueue(job);
+    return job;
+  }
+  retry(jobId: string, actor: string): JobRow {
+    const j = this.store.getJob(jobId);
+    if (j.type !== 'export') throw new ApiError(409, 'retry_not_supported', `retrying ${j.type} jobs is not supported`);
+    if (!['failed', 'canceled'].includes(j.status)) throw new ApiError(409, 'job_not_retryable', `job is ${j.status}`, { status: j.status });
+    return this.start(j.projectId, actor, undefined, j); // same immutable snapshot and options, new job id
+  }
+  /** Queued: removed. Running: encoder and render page are stopped and partial output deleted. */
+  cancel(jobId: string, actor: string) {
+    const j = this.store.getJob(jobId);
+    if (['succeeded', 'failed', 'canceled'].includes(j.status)) return { jobId, status: j.status, outcome: 'already-finished' };
+    this.cancelRequested.add(jobId);
+    if (j.status === 'queued') { this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: `canceled by ${actor} before it started` } }); return { jobId, status: 'canceled', outcome: 'removed-from-queue' }; }
+    this.store.updateJob(jobId, { status: 'cancel-requested' });
+    if (this.running?.jobId === jobId) { this.running.ff?.kill('SIGKILL'); this.running.abort?.(); }
+    return { jobId, status: 'cancel-requested', outcome: 'stopping' };
+  }
+
+  private open(doc: ProjectDocument, revision: number, jobId: string | null, out: { width: number; height: number; firstFrame: number; frames: number }): { token: string; session: RenderSession; url: string } {
     if (!fs.existsSync(path.join(this.webDist, 'render.html')))
       throw new ApiError(503, 'renderer_unavailable', 'the web bundle containing the render page has not been built', {}, 'Run `pnpm build` and retry.');
     const token = randomBytes(24).toString('base64url');
-    const { width, height, frameRate } = doc.settings;
-    const session: RenderSession = { doc, revision, jobId, frameBytes: width * height * 4, totalFrames: T.frameCount(sequenceDuration(doc), frameRate), nextFrame: 0, sink: null };
+    const session: RenderSession = { doc, revision, jobId, firstFrame: out.firstFrame, outWidth: out.width, outHeight: out.height, frameBytes: out.width * out.height * 4, totalFrames: out.frames, nextFrame: 0, sink: null };
     this.sessions.set(token, session);
     return { token, session, url: `${this.renderPageUrl()}#token=${token}` };
   }
 
   /** Agent sense / parity reference: one frame through the same compositor as export, as PNG. */
-  async renderStill(doc: ProjectDocument, revision: number, frameIndex: number): Promise<Buffer> {
-    const { token, session, url } = this.open(doc, revision, null);
+  async renderStill(doc: ProjectDocument, revision: number, frameIndex: number, scale: 1 | 0.5 | 0.25 = 1): Promise<Buffer> {
+    const { manifest, blockers } = this.plan(doc, revision, { format: 'png', frame: frameIndex, scale });
+    const hard = blockers.filter((b) => b.code !== 'empty_sequence');
+    if (hard.length) throw new ApiError(422, hard[0]!.code === 'out_of_bounds' ? 'out_of_bounds' : 'render_blocked', hard[0]!.message, { blockers: hard });
+    const { token, url } = this.open(doc, revision, null, { width: manifest.output.width, height: manifest.output.height, firstFrame: frameIndex, frames: 1 });
     try {
-      if (!Number.isInteger(frameIndex) || frameIndex < 0 || frameIndex >= Math.max(1, session.totalFrames))
-        throw new ApiError(422, 'out_of_bounds', `frame ${frameIndex} is outside 0..${session.totalFrames - 1}`, { frameCount: session.totalFrames });
-      return await this.host.renderStill(url, frameIndex);
+      return await this.host.renderStill(url, 0);
     } finally {
       this.sessions.delete(token);
     }
@@ -72,7 +200,8 @@ export class Exporter {
     s.nextFrame += count;
     const sink = s.sink;
     await new Promise<void>((resolve, reject) => {
-      const onErr = (e: Error) => reject(e);
+      // The encoder going away mid-write means the job was canceled or failed: a typed conflict, not a server error.
+      const onErr = () => reject(new ApiError(409, 'render_session_closed', 'the encoder for this render session has stopped'));
       sink.stdin.once('error', onErr);
       const done = () => { sink.stdin.off('error', onErr); resolve(); };
       if (sink.stdin.write(data)) done();
@@ -82,7 +211,7 @@ export class Exporter {
   }
 
   /** Sample-exact audio mix of the snapshot as a WAV file (separate stream from video). */
-  private async renderAudio(doc: ProjectDocument, totalSamples: number, outFile: string) {
+  private async renderAudio(doc: ProjectDocument, firstSample: number, totalSamples: number, outFile: string) {
     const sr = doc.settings.sampleRate;
     const seq = doc.sequences[doc.mainSequenceId]!;
     const clips = seq.tracks.filter((t) => t.kind === 'audio' && !t.muted).flatMap((t) => t.clips).filter((c) => c.type === 'media' && c.gain > 0 && doc.assets[c.assetId]?.audio);
@@ -97,7 +226,9 @@ export class Exporter {
       const src = T.nearestSampleIndex(c.sourceIn, sr);
       filters.push(`[${i}:a:0]aresample=${sr},aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=start_sample=${src}:end_sample=${src + len},asetpts=PTS-STARTPTS,volume=${c.gain.toFixed(6)},adelay=delays=${at}S:all=1[c${i}]`);
     });
-    const tail = `apad=whole_len=${totalSamples},atrim=end_sample=${totalSamples}[out]`;
+    // Mix on the full timeline, then cut the exported range by absolute sample positions.
+    const endSample = firstSample + totalSamples;
+    const tail = `apad=whole_len=${endSample},atrim=start_sample=${firstSample}:end_sample=${endSample},asetpts=PTS-STARTPTS[out]`;
     if (clips.length === 0) filters.push(`anullsrc=r=${sr}:cl=stereo,atrim=end_sample=${totalSamples}[out]`);
     else if (clips.length === 1) filters.push(`[c0]${tail}`);
     else filters.push(`${clips.map((_, i) => `[c${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,${tail}`);
@@ -114,58 +245,106 @@ export class Exporter {
     const work = path.join(this.store.tmpDir, `${jobId}_${attempt}`);
     fs.mkdirSync(work, { recursive: true });
     const doc: ProjectDocument = job.input.snapshot;
+    // Jobs created before manifests existed (or recovered ones) get a default plan from their own snapshot.
+    const manifest: Manifest = job.input.manifest ?? this.plan(doc, job.input.revision, {}).manifest;
+    const { options, output } = manifest;
     let token: string | undefined;
     const started = Date.now();
+    const canceled = () => this.cancelRequested.has(jobId);
+    this.running = { jobId };
     try {
-      const { width, height, frameRate, sampleRate } = doc.settings;
-      if (width % 2 || height % 2) throw new ApiError(422, 'unsupported_export', 'H.264 4:2:0 export needs even width and height', { width, height });
-      const opened = this.open(doc, job.input.revision, jobId);
-      token = opened.token;
-      const s = opened.session;
-      if (s.totalFrames === 0) throw new ApiError(422, 'empty_sequence', 'the sequence has no clips to export');
-      const duration = T.frameTime(s.totalFrames, frameRate);
-      const totalSamples = T.nearestSampleIndex(duration, sampleRate);
-      const wav = path.join(work, 'mix.wav');
-      this.store.updateJob(jobId, { stage: 'rendering audio' });
-      const audioClips = await this.renderAudio(doc, totalSamples, wav);
-      const partial = path.join(work, 'out.mp4');
-      const ff = spawn('ffmpeg', [
-        '-hide_banner', '-v', 'error', '-y',
-        '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${width}x${height}`, '-framerate', `${frameRate.num}/${frameRate.den}`, '-i', 'pipe:0',
-        '-i', wav, '-map', '0:v:0', '-map', '1:a:0',
-        '-vf', 'scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p',
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '16', '-profile:v', 'high',
-        '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
-        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-f', 'mp4', partial,
-      ]);
-      let stderr = '';
-      ff.stderr.on('data', (d) => (stderr += d));
-      ff.stdin.on('error', () => {});
-      const exited = new Promise<number>((res) => ff.on('close', (code) => res(code ?? -1)));
-      s.sink = ff;
-      this.store.updateJob(jobId, { stage: `rendering 0/${s.totalFrames}` });
-      const renderStats = await this.host.renderAll(opened.url);
-      if (s.nextFrame !== s.totalFrames) throw new Error(`renderer delivered ${s.nextFrame} of ${s.totalFrames} frames`);
-      ff.stdin.end();
-      this.store.updateJob(jobId, { stage: 'encoding' });
-      const code = await exited;
-      if (code !== 0) throw new Error(`ffmpeg exited ${code}: ${stderr.slice(-800)}`);
-      this.store.updateJob(jobId, { stage: 'validating' });
-      const probe = await ffprobe(partial);
-      const v = probe.streams.find((x: any) => x.codec_type === 'video');
-      const a = probe.streams.find((x: any) => x.codec_type === 'audio');
-      const validation = { videoCodec: v?.codec_name, audioCodec: a?.codec_name, frames: Number(v?.nb_frames), expectedFrames: s.totalFrames, width: v?.width, height: v?.height, frameRate: v?.r_frame_rate, pixFmt: v?.pix_fmt, colorSpace: v?.color_space, audioSampleRate: Number(a?.sample_rate), durationSeconds: Number(probe.format.duration) };
-      if (validation.videoCodec !== 'h264' || validation.audioCodec !== 'aac' || validation.frames !== s.totalFrames || v.width !== width || v.height !== height)
-        throw new Error(`export failed validation: ${JSON.stringify(validation)}`);
-      const final = path.join(this.store.outDir, `${jobId}.mp4`);
+      // The manifest is re-verified at run time: bytes must still be the ones the job was planned against.
+      for (const a of manifest.assets) {
+        let ok = false;
+        try { ok = fs.statSync(this.store.blobPath(a.contentHash)).size === a.byteSize; } catch { /* missing */ }
+        if (!ok) throw new ApiError(422, 'render_blocked', `source media ${a.id} is no longer available`, { blockers: [{ code: 'missing_media', ids: [a.id] }] });
+      }
+      const { frameRate, sampleRate } = output;
+      const ext = { 'mp4-h264-aac': 'mp4', 'webm-vp9-opus': 'webm', wav: 'wav', png: 'png' }[options.format];
+      const partial = path.join(work, `out.${ext}`);
+      const final = path.join(this.store.outDir, `${jobId}.${ext}`);
+      const firstSample = T.nearestSampleIndex(T.frameTime(output.firstFrame, frameRate), sampleRate);
+      const totalSamples = T.nearestSampleIndex(T.frameTime(output.firstFrame + output.frames, frameRate), sampleRate) - firstSample;
+      let audioClips = 0;
+      let renderStageMs: unknown = null;
+      let validation: Record<string, unknown>;
+
+      if (options.format === 'png') {
+        this.store.updateJob(jobId, { stage: 'rendering still' });
+        fs.writeFileSync(partial, await this.renderStill(doc, job.input.revision, output.firstFrame, options.scale));
+        const p = await ffprobe(partial);
+        validation = { codec: p.streams[0]?.codec_name, width: p.streams[0]?.width, height: p.streams[0]?.height, frame: output.firstFrame };
+        if (validation.codec !== 'png' || validation.width !== output.width || validation.height !== output.height) throw new Error(`export failed validation: ${JSON.stringify(validation)}`);
+      } else {
+        const wav = options.format === 'wav' ? partial : path.join(work, 'mix.wav');
+        this.store.updateJob(jobId, { stage: 'rendering audio' });
+        audioClips = await this.renderAudio(doc, firstSample, totalSamples, wav);
+        if (canceled()) throw new Error('canceled');
+        if (options.format === 'wav') {
+          const p = await ffprobe(partial);
+          const a = p.streams.find((x: any) => x.codec_type === 'audio');
+          validation = { audioCodec: a?.codec_name, audioSampleRate: Number(a?.sample_rate), channels: a?.channels, samples: Number(a?.duration_ts), expectedSamples: totalSamples };
+          if (validation.samples !== totalSamples) throw new Error(`export failed validation: ${JSON.stringify(validation)}`);
+        } else {
+          const opened = this.open(doc, job.input.revision, jobId, { width: output.width, height: output.height, firstFrame: output.firstFrame, frames: output.frames });
+          token = opened.token;
+          const s = opened.session;
+          const mp4 = options.format === 'mp4-h264-aac';
+          const crf = String(CRF[options.format][options.quality]);
+          const ff = spawn('ffmpeg', [
+            '-hide_banner', '-v', 'error', '-y',
+            '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${output.width}x${output.height}`, '-framerate', `${frameRate.num}/${frameRate.den}`, '-i', 'pipe:0',
+            '-i', wav, '-map', '0:v:0', '-map', '1:a:0',
+            '-vf', 'scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p',
+            ...(mp4 ? ['-c:v', 'libx264', '-preset', options.quality === 'draft' ? 'veryfast' : 'medium', '-crf', crf, '-profile:v', 'high'] : ['-c:v', 'libvpx-vp9', '-crf', crf, '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', options.quality === 'high' ? '2' : '4']),
+            '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
+            ...(mp4 ? ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-f', 'mp4'] : ['-c:a', 'libopus', '-b:a', '160k', '-f', 'webm']), partial,
+          ]);
+          this.running.ff = ff;
+          let stderr = '';
+          ff.stderr.on('data', (d) => (stderr += d));
+          ff.stdin.on('error', () => {});
+          const exited = new Promise<number>((res) => ff.on('close', (code) => res(code ?? -1)));
+          s.sink = ff;
+          this.store.updateJob(jobId, { stage: `rendering 0/${s.totalFrames}` });
+          const render = this.host.renderAll(opened.url, (abort) => { if (this.running) this.running.abort = abort; });
+          const stats = await render;
+          if (canceled()) throw new Error('canceled');
+          if (s.nextFrame !== s.totalFrames) throw new Error(`renderer delivered ${s.nextFrame} of ${s.totalFrames} frames`);
+          renderStageMs = stats.stageMs;
+          ff.stdin.end();
+          this.store.updateJob(jobId, { stage: 'encoding' });
+          const code = await exited;
+          if (canceled()) throw new Error('canceled');
+          if (code !== 0) throw new Error(`ffmpeg exited ${code}: ${stderr.slice(-800)}`);
+          this.store.updateJob(jobId, { stage: 'validating' });
+          const probe = await ffprobe(partial);
+          const v = probe.streams.find((x: any) => x.codec_type === 'video');
+          const a = probe.streams.find((x: any) => x.codec_type === 'audio');
+          // WebM does not store a frame count; count packets for it.
+          const frames = v?.nb_frames ? Number(v.nb_frames) : Number((await exec('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-count_packets', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', partial], { timeout: 120_000 })).stdout.trim());
+          validation = { videoCodec: v?.codec_name, audioCodec: a?.codec_name, frames, expectedFrames: s.totalFrames, width: v?.width, height: v?.height, frameRate: v?.r_frame_rate, pixFmt: v?.pix_fmt, colorSpace: v?.color_space, audioSampleRate: Number(a?.sample_rate), durationSeconds: Number(probe.format.duration) };
+          if (validation.videoCodec !== (mp4 ? 'h264' : 'vp9') || validation.audioCodec !== (mp4 ? 'aac' : 'opus') || frames !== s.totalFrames || v.width !== output.width || v.height !== output.height)
+            throw new Error(`export failed validation: ${JSON.stringify(validation)}`);
+        }
+      }
+      if (canceled()) throw new Error('canceled');
       fs.renameSync(partial, final);
+      const wall = (Date.now() - started) / 1000;
+      const bytes = fs.statSync(final).size;
       this.store.updateJob(jobId, {
         status: 'succeeded', stage: null,
-        output: { file: `${jobId}.mp4`, bytes: fs.statSync(final).size, revision: job.input.revision, route: 'server-software-canvas2d', audioClipsMixed: audioClips, validation, renderStageMs: renderStats.stageMs, wallSeconds: (Date.now() - started) / 1000, realtimeFactor: T.toSeconds(duration) / ((Date.now() - started) / 1000) },
+        output: {
+          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', wav: 'audio/wav', png: 'image/png' }[ext], bytes, revision: job.input.revision, route: 'server-software-canvas2d', options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output },
+          estimate: { ...manifest.estimate, actualBytes: bytes }, audioClipsMixed: audioClips, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
+        },
       });
     } catch (e: any) {
-      this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'export_failed', message: String(e?.message ?? e), retryable: true } });
+      if (canceled()) this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'export was canceled; partial output was discarded', retryable: true } });
+      else this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'export_failed', message: String(e?.message ?? e), retryable: true } });
     } finally {
+      this.running = null;
+      this.cancelRequested.delete(jobId);
       if (token) {
         this.sessions.get(token)?.sink?.kill('SIGKILL');
         this.sessions.delete(token);

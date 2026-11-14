@@ -66,7 +66,8 @@ export class Player {
         const doc = this.doc;
         const { width, height, frameRate } = doc.settings;
         // Preview may reduce resolution; layout is resolution-independent so semantics are unchanged.
-        const scale = Math.min(1, 960 / height);
+        // Draft resolution while playing; FULL project resolution when paused, so a still preview is the real picture (SPEC §8).
+        const scale = this.playing ? Math.min(1, 960 / height) : 1;
         const w = Math.round(width * scale);
         const h = Math.round(height * scale);
         if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
@@ -79,6 +80,7 @@ export class Player {
           if (this.late.length > 3000) this.late.shift();
         }
         this.canvas.dataset.frame = String(frame);
+        this.canvas.dataset.quality = scale === 1 ? 'full' : 'draft';
         this.onTick();
       }
     } catch (e) {
@@ -198,6 +200,7 @@ export class Player {
     if (this.tap) { this.tap.port.onmessage = null; this.tap.disconnect(); this.tap = null; }
     for (const n of this.nodes) { try { n.stop(); } catch { /* already stopped */ } n.disconnect(); }
     this.nodes = [];
+    if (this.doc) this.request(this.frame); // repaint the paused frame at full quality
     this.onTick();
   }
   /** Measured, not estimated. `clock` says which timebase the numbers refer to. */

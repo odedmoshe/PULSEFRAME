@@ -25,6 +25,7 @@ export const he = {
   'op.rename_project': 'שינוי שם הפרויקט', 'op.import_asset': 'ייבוא מדיה', 'op.add_track': 'הוספת רצועה', 'op.add_clip': 'הוספת קליפ', 'op.add_text': 'הוספת טקסט', 'op.update_text': 'עריכת טקסט',
   'op.set_clip_transform': 'שינוי מיקום/גודל', 'op.set_clip_gain': 'שינוי עוצמה', 'op.move_clip': 'הזזת קליפ', 'op.trim_clip': 'חיתוך קצה', 'op.split_clip': 'פיצול קליפ', 'op.delete_clip': 'מחיקת קליפ',
   'op.set_keyframe': 'קיפריים', 'op.delete_keyframe': 'הסרת קיפריים', 'op.clear_keyframes': 'ניקוי קיפריימים', 'op.restore_entities': 'שחזור',
+  'export.cancel': 'ביטול הייצוא', 'export.canceled': 'הייצוא בוטל', 'export.retry': 'ניסיון חוזר',
   'undo': 'ביטול', 'redo': 'ביצוע מחדש', 'undo.conflict': 'לא ניתן לבטל: הפריטים שונו מאז',
   'providers': 'ספקי AI (אופציונלי)', 'providers.notConfigured': 'ComfyUI לא מוגדר. העורך פועל במלואו גם בלעדיו.', 'providers.unreachable': 'ComfyUI מוגדר אך אינו זמין', 'providers.ready': 'ComfyUI מחובר', 'providers.smoke': 'בדיקת חיבור (ללא מודלים)', 'providers.running': 'מריץ…', 'providers.ok': 'הפלט אומת', 'providers.failed': 'הבדיקה נכשלה',
 };
@@ -53,6 +54,7 @@ export const en: Record<keyof typeof he, string> = {
   'op.rename_project': 'Renamed project', 'op.import_asset': 'Imported media', 'op.add_track': 'Added track', 'op.add_clip': 'Added clip', 'op.add_text': 'Added text', 'op.update_text': 'Edited text',
   'op.set_clip_transform': 'Changed position/size', 'op.set_clip_gain': 'Changed gain', 'op.move_clip': 'Moved clip', 'op.trim_clip': 'Trimmed edge', 'op.split_clip': 'Split clip', 'op.delete_clip': 'Deleted clip',
   'op.set_keyframe': 'Keyframe', 'op.delete_keyframe': 'Removed keyframe', 'op.clear_keyframes': 'Cleared keyframes', 'op.restore_entities': 'Restored',
+  'export.cancel': 'Cancel export', 'export.canceled': 'Export canceled', 'export.retry': 'Retry',
   'undo': 'Undo', 'redo': 'Redo', 'undo.conflict': 'Cannot undo: those items were changed since',
   'providers': 'AI providers (optional)', 'providers.notConfigured': 'ComfyUI is not configured. The editor works fully without it.', 'providers.unreachable': 'ComfyUI is configured but unreachable', 'providers.ready': 'ComfyUI connected', 'providers.smoke': 'Connection test (model-free)', 'providers.running': 'Running…', 'providers.ok': 'Output validated', 'providers.failed': 'Test failed',
 };

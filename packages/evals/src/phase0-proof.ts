@@ -119,16 +119,21 @@ async function main() {
   check('edit: Hebrew + niqqud + digits + Latin text stored verbatim', textClip.type === 'text' && textClip.text === HEB);
 
   // --- preview pixels: the canvas must show the source frame the evaluator selected
+  /** One pixel row through the barcode strip of the preview canvas (the canvas may be full resolution, so do not ship it all). */
   const previewBarcode = async () => {
     return page.evaluate(() => {
       const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement;
-      const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
-      return { w: c.width, h: c.height, frame: Number(c.dataset.frame), data: Array.from(d.data.filter((_, i) => i % 4 !== 3)) };
+      const fit = Math.min(c.width / 640, c.height / 360);
+      const y = Math.round((c.height - 360 * fit) / 2 + (360 * fit) / 12);
+      const d = c.getContext('2d')!.getImageData(0, y, c.width, 1);
+      return { w: c.width, h: c.height, y, frame: Number(c.dataset.frame), quality: c.dataset.quality, data: Array.from(d.data.filter((_, i) => i % 4 !== 3)) };
     });
   };
+  /** Barcode from that single row: horizontal placement as in the frame, vertical position collapsed to row 0. */
+  const rowRect = (W: number, H: number) => { const fit = Math.min(W / 640, H / 360); return { x: (W - 640 * fit) / 2, y: 0, w: 640 * fit, h: 0 }; };
   const srcRect = (W: number, H: number) => { const fit = Math.min(W / 640, H / 360); return { x: (W - 640 * fit) / 2, y: (H - 360 * fit) / 2, w: 640 * fit, h: 360 * fit }; };
   const pv = await previewBarcode();
-  check('preview: canvas shows source frame 60 at timeline frame 60 (barcode read from preview pixels)', readBarcode(Uint8Array.from(pv.data), pv.w, 3, srcRect(pv.w, pv.h)) === 60, { canvas: `${pv.w}x${pv.h}` });
+  check('preview: paused canvas is full project resolution and shows source frame 60 at timeline frame 60 (barcode read from preview pixels)', readBarcode(Uint8Array.from(pv.data), pv.w, 3, rowRect(pv.w, pv.h)) === 60 && pv.quality === 'full' && pv.w === 1080, { canvas: `${pv.w}x${pv.h}`, quality: pv.quality });
 
   // --- playback
   await page.keyboard.press('Home');
@@ -342,7 +347,7 @@ async function main() {
     await waitPainted(target);
     const shot = await previewBarcode();
     const layer = evaluate(live.project, T.frameTime(target, live.project.settings.frameRate)).layers.find((l) => l.kind === 'video');
-    if (!layer || layer.kind !== 'video' || readBarcode(Uint8Array.from(shot.data), shot.w, 3, srcRect(shot.w, shot.h)) !== layer.sourceFrameIndex) wrong.push(target);
+    if (!layer || layer.kind !== 'video' || readBarcode(Uint8Array.from(shot.data), shot.w, 3, rowRect(shot.w, shot.h)) !== layer.sourceFrameIndex) wrong.push(target);
   }
   const media = await page.evaluate(() => (window as any).__pfMedia());
   measurements.previewMedia = { ...media, rangedResponses: ranged.length, statuses: [...new Set(ranged.map((r) => `${r.url}:${r.status}`))] };

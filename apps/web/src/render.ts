@@ -14,13 +14,17 @@ const token = new URLSearchParams(location.hash.slice(1)).get('token');
 const base = `/api/v1/render/${token}`;
 let doc: ProjectDocument;
 let frameCount = 0;
+let firstFrame = 0;
+let outWidth = 0;
+let outHeight = 0;
 let ctx: CanvasRenderingContext2D;
 // Export always decodes the ORIGINAL bytes (never a proxy), read by HTTP range requests.
 const pool = new MediaPool({ assetUrl: (assetId) => `${base}/assets/${assetId}`, maxDecoders: 8 });
 
 async function draw(index: number) {
-  const g = evaluate(doc, T.frameTime(index, doc.settings.frameRate));
-  const { missing } = await drawGraph(ctx, g, pool.frames);
+  // `index` is relative to the exported range. Layout is resolution-independent, so a scaled output only changes the raster size.
+  const g = evaluate(doc, T.frameTime(firstFrame + index, doc.settings.frameRate));
+  const { missing } = await drawGraph(ctx, { ...g, width: outWidth, height: outHeight }, pool.frames);
   // Final renders never substitute black for media that failed to decode.
   if (missing.length) throw new Error(`frame ${index}: source frame unavailable for clips ${missing.join(', ')}`);
 }
@@ -30,11 +34,11 @@ window.__pf = {
     if (!token) throw new Error('missing render token');
     const r = await fetch(`${base}/snapshot`);
     if (!r.ok) throw new Error(`snapshot: HTTP ${r.status}`);
-    ({ doc, frameCount } = await r.json());
+    ({ doc, frameCount, firstFrame, outWidth, outHeight } = await r.json());
     await ensureFonts();
     const canvas = document.createElement('canvas');
-    canvas.width = doc.settings.width;
-    canvas.height = doc.settings.height;
+    canvas.width = outWidth;
+    canvas.height = outHeight;
     ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false, colorSpace: 'srgb' })!;
     document.body.append(canvas);
     return { frameCount };
@@ -48,7 +52,8 @@ window.__pf = {
     return btoa(s);
   },
   async exportAll() {
-    const { width, height } = doc.settings;
+    const width = outWidth;
+    const height = outHeight;
     const frameBytes = width * height * 4;
     const perBatch = Math.max(1, Math.min(16, Math.floor((24 << 20) / frameBytes)));
     let batch = new Uint8Array(frameBytes * perBatch);

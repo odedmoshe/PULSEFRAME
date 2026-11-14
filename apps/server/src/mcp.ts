@@ -10,7 +10,7 @@ import * as T from '@pulseframe/time';
 import { listOps, RationalTimeSchema, summarize, timeline } from '@pulseframe/core';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
-import type { Exporter } from './export.ts';
+import { ExportOptionsSchema, type Exporter } from './export.ts';
 import type { Presence } from './presence.ts';
 import { jobView } from './http.ts';
 import { ApiError, type Store } from './store.ts';
@@ -75,16 +75,20 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
           return { content: [{ type: 'text' as const, text: JSON.stringify({ revision: p.revision, frameIndex: index, time: T.frameTime(index, p.doc.settings.frameRate), width: p.doc.settings.width, height: p.doc.settings.height }) }, { type: 'image' as const, data: png.toString('base64'), mimeType: 'image/png' }] };
         }),
     );
-    server.registerTool('export_project', { description: 'Start a durable MP4 (H.264 + AAC) export of the current revision. Returns a jobId; poll get_job.', inputSchema: z.object({ projectId: pid }) }, ({ projectId }) =>
-      run('edit', () => { const p = store.getProject(projectId); const job = store.createJob(projectId, 'export', principal.actor, { revision: p.revision, snapshot: p.doc }); exporter.enqueue(job); return { jobId: job.id, status: job.status, revision: p.revision }; }));
+    server.registerTool('export_project', { description: 'Start a durable export of the current revision (immutable snapshot). Formats: mp4-h264-aac (default), webm-vp9-opus, wav (audio only), png (one frame). Optional frame range, scale and quality. Refused with a list of render blockers if media or fonts are missing. Returns a jobId and a labelled size estimate; poll get_job.', inputSchema: z.object({ projectId: pid, ...ExportOptionsSchema.shape }) }, ({ projectId, ...options }) =>
+      run('edit', () => { const job = exporter.start(projectId, principal.actor, options); return { jobId: job.id, status: job.status, revision: job.input.revision, estimate: job.input.manifest.estimate, warnings: job.input.warnings }; }));
+    server.registerTool('plan_export', { description: 'Preflight an export without starting it: resolved output size and frame count, the exact asset and font manifest, render blockers and warnings, and a labelled size estimate.', inputSchema: z.object({ projectId: pid, ...ExportOptionsSchema.shape }), annotations: ro }, ({ projectId, ...options }) =>
+      run('observe', () => { const p = store.getProject(projectId); return exporter.plan(p.doc, p.revision, options); }));
+    server.registerTool('retry_job', { description: 'Retry a failed or canceled export from the same immutable snapshot and options. Creates a new job.', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
+      run('edit', () => { const job = exporter.retry(jobId, principal.actor); return { jobId: job.id, status: job.status, retryOf: job.input.retryOf }; }));
     server.registerTool('get_job', { description: 'Status, stage and result of a job.', inputSchema: z.object({ jobId: z.string() }), annotations: ro }, ({ jobId }) =>
       run('observe', () => jobView(store.getJob(jobId))));
     server.registerTool('list_capabilities', { description: 'Optional provider capabilities (reviewed workflows) with their qualification status, blockers, resource data and provider readiness. Listing never starts a worker.', inputSchema: z.object({}), annotations: ro }, () =>
       run('observe', () => capabilities.list()));
     server.registerTool('run_capability', { description: 'Run a reviewed, published capability by id with validated parameters as a durable job. Raw workflow graphs cannot be submitted. Returns a jobId; poll get_job.', inputSchema: z.object({ projectId: pid, capabilityId: z.string(), params: z.record(z.string(), z.unknown()).optional(), idempotencyKey: z.string().max(128).optional(), attach: z.object({ start: RationalTimeSchema, duration: RationalTimeSchema.optional(), trackId: z.string().optional() }).optional().describe('Place the primary output on the timeline when done, unless its dependencies changed (then it stays a proposal in the library)'), dependsOn: z.array(z.string()).optional() }) }, ({ projectId, capabilityId, params, idempotencyKey, attach, dependsOn }) =>
       run('edit', () => { const job = capabilities.start({ projectId, capabilityId, params: params ?? {}, idempotencyKey, attach, dependsOn, actor: principal.actor }); return { jobId: job.id, status: job.status, type: job.type }; }));
-    server.registerTool('cancel_job', { description: 'Request cancellation of a capability job. The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
-      run('edit', () => capabilities.cancel(jobId, principal.actor)));
+    server.registerTool('cancel_job', { description: 'Request cancellation of an export or capability job. The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
+      run('edit', () => (store.getJob(jobId).type === 'export' ? exporter.cancel(jobId, principal.actor) : capabilities.cancel(jobId, principal.actor))));
     return server;
   });
 

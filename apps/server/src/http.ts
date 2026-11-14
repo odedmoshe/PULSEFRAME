@@ -32,7 +32,7 @@ const NewProject = z.object({ name: z.string().min(1).max(200), width: z.number(
 
 type Env = { Variables: { principal: Principal } };
 /** Public job shape, identical for REST and MCP. Snapshots and resolved graphs stay server-side. */
-export const jobView = ({ input, ...j }: JobRow) => ({ ...j, revision: input.revision ?? input.projectRevision, ...(j.type === 'capability' ? { capabilityId: input.capabilityId, capabilityVersion: input.capabilityVersion, graphDigest: input.graphDigest, params: input.params } : {}) });
+export const jobView = ({ input, ...j }: JobRow) => ({ ...j, revision: input.revision ?? input.projectRevision, ...(j.type === 'export' ? { options: input.manifest?.options, estimate: input.manifest?.estimate, warnings: input.warnings ?? [], retryOf: input.retryOf ?? null } : {}), ...(j.type === 'capability' ? { capabilityId: input.capabilityId, capabilityVersion: input.capabilityVersion, graphDigest: input.graphDigest, params: input.params } : {}) });
 
 const RunBody = z
   .object({
@@ -94,7 +94,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     }
     return new Response(Readable.toWeb(fs.createReadStream(file)) as any, { headers: { ...headers, 'Content-Length': String(size) } });
   };
-  app.get('/api/v1/render/:token/snapshot', (c) => { const s = session(c.req.param('token')); return c.json({ doc: s.doc, revision: s.revision, frameCount: s.totalFrames }); });
+  app.get('/api/v1/render/:token/snapshot', (c) => { const s = session(c.req.param('token')); return c.json({ doc: s.doc, revision: s.revision, frameCount: s.totalFrames, firstFrame: s.firstFrame, outWidth: s.outWidth, outHeight: s.outHeight }); });
   app.get('/api/v1/render/:token/assets/:assetId', (c) => {
     const a = session(c.req.param('token')).doc.assets[c.req.param('assetId')];
     if (!a) throw new ApiError(404, 'asset_not_found', 'asset not in snapshot');
@@ -251,19 +251,25 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
 
   // ----- jobs / export -----
-  app.post('/api/v1/projects/:id/exports', (c) => {
+  app.post('/api/v1/projects/:id/exports', async (c) => {
     const pr = need(c, 'edit');
-    const p = store.getProject(c.req.param('id'));
-    const job = store.createJob(p.doc.id, 'export', pr.actor, { revision: p.revision, snapshot: p.doc });
-    exporter.enqueue(job);
-    return c.json({ jobId: job.id, status: job.status, revision: p.revision }, 202);
+    const options = await c.req.json().catch(() => ({}));
+    const job = exporter.start(c.req.param('id'), pr.actor, options);
+    return c.json({ jobId: job.id, status: job.status, revision: job.input.revision, estimate: job.input.manifest.estimate, warnings: job.input.warnings }, 202);
   });
+  /** Dry run: what would be exported, what it depends on, and what blocks it. Starts nothing. */
+  app.post('/api/v1/projects/:id/exports/plan', async (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    return c.json(exporter.plan(p.doc, p.revision, await c.req.json().catch(() => ({}))));
+  });
+  app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => { need(c, 'observe'); return c.json(jobView(store.getJob(c.req.param('jobId')))); });
   app.get('/api/v1/jobs/:jobId/output', (c) => {
     need(c, 'observe');
     const j = store.getJob(c.req.param('jobId'));
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
-    return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), 'video/mp4', `pulseframe-${j.id}.mp4`);
+    return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), j.output.mimeType ?? 'video/mp4', `pulseframe-${j.id}${path.extname(j.output.file)}`);
   });
   // ----- optional provider capabilities (Amendment A1). No route accepts a raw graph for execution. -----
   app.get('/api/v1/capabilities', async (c) => { need(c, 'observe'); return c.json(await capabilities.list()); });
@@ -282,7 +288,11 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const job = await capabilities.startDownload(c.req.param('id'), c.req.param('capabilityId'), b.confirmBytes, p.actor);
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
-  app.post('/api/v1/jobs/:jobId/cancel', async (c) => { const p = need(c, 'edit'); return c.json(await capabilities.cancel(c.req.param('jobId'), p.actor)); });
+  app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
+    const p = need(c, 'edit');
+    const j = store.getJob(c.req.param('jobId'));
+    return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
+  });
   app.get('/api/v1/jobs/:jobId/outputs/:index', (c) => {
     need(c, 'observe');
     const j = store.getJob(c.req.param('jobId'));
