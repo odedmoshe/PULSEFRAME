@@ -34,6 +34,8 @@ export class Capabilities {
   private active = new Map<string, Promise<void>>();
   private stopped = false;
   readonly models: ModelStore;
+  /** Set by the server so job results respect Pause Agent. */
+  governance: { isPaused(projectId: string): boolean } | null = null;
 
   constructor(private store: Store, private cfg: Config, adapter?: ProviderAdapter) {
     this.models = new ModelStore(cfg.comfyuiModelsDir, cfg.modelHosts);
@@ -239,6 +241,8 @@ export class Capabilities {
       return (v?.revision ?? 0) !== p.version ? [{ entityId: p.entityId, expectedVersion: p.version, currentVersion: v?.revision ?? 0, deleted: v?.deleted ?? false, by: v?.actor ?? null }] : [];
     });
     if (conflicts.length) return { status: 'proposed', ...base, reason: 'items this placement depended on changed while the job ran; nothing was placed', conflicts, proposal: want };
+    // Pause Agent: a job that was already running finishes, but an agent's result is not placed while agents are paused.
+    if (job.actor.startsWith('agent:') && this.governance?.isPaused(job.projectId)) return { status: 'proposed', ...base, reason: 'agents are paused on this project; the result is kept in the library and was not placed', proposal: want };
     try {
       const r = this.store.commit({ projectId: job.projectId, actor: job.actor, label: `Place result of ${job.input.capabilityId}`, ops: [{ op: 'add_clip', args: { assetId, start: want.start, ...(want.duration ? { duration: want.duration } : {}), ...(want.trackId ? { trackId: want.trackId } : {}) } }] });
       return { status: 'attached', ...base, clipId: r.results[0]!.output!.clipId, trackId: r.results[0]!.output!.trackId, revision: r.revision, transactionId: r.transactionId };

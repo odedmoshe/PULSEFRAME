@@ -26,6 +26,8 @@ export const he = {
   'op.set_clip_transform': 'שינוי מיקום/גודל', 'op.set_clip_gain': 'שינוי עוצמה', 'op.move_clip': 'הזזת קליפ', 'op.trim_clip': 'חיתוך קצה', 'op.split_clip': 'פיצול קליפ', 'op.delete_clip': 'מחיקת קליפ',
   'op.set_keyframe': 'קיפריים', 'op.delete_keyframe': 'הסרת קיפריים', 'op.clear_keyframes': 'ניקוי קיפריימים', 'op.restore_entities': 'שחזור',
   'export.cancel': 'ביטול הייצוא', 'export.canceled': 'הייצוא בוטל', 'export.retry': 'ניסיון חוזר',
+  'agents.pause': 'השהה סוכן', 'agents.resume': 'המשך סוכן', 'agents.paused': 'הסוכנים מושהים', 'proposals': 'הצעות', 'proposals.none': 'אין הצעות פתוחות', 'proposal.accept': 'אישור', 'proposal.reject': 'דחייה',
+  'proposal.before': 'לפני', 'proposal.after': 'אחרי', 'proposal.stale': 'הפרויקט השתנה מאז ההצעה; היא לא הוחלה', 'proposal.from': 'הצעה מאת',
   'undo': 'ביטול', 'redo': 'ביצוע מחדש', 'undo.conflict': 'לא ניתן לבטל: הפריטים שונו מאז',
   'providers': 'ספקי AI (אופציונלי)', 'providers.notConfigured': 'ComfyUI לא מוגדר. העורך פועל במלואו גם בלעדיו.', 'providers.unreachable': 'ComfyUI מוגדר אך אינו זמין', 'providers.ready': 'ComfyUI מחובר', 'providers.smoke': 'בדיקת חיבור (ללא מודלים)', 'providers.running': 'מריץ…', 'providers.ok': 'הפלט אומת', 'providers.failed': 'הבדיקה נכשלה',
 };
@@ -55,6 +57,8 @@ export const en: Record<keyof typeof he, string> = {
   'op.set_clip_transform': 'Changed position/size', 'op.set_clip_gain': 'Changed gain', 'op.move_clip': 'Moved clip', 'op.trim_clip': 'Trimmed edge', 'op.split_clip': 'Split clip', 'op.delete_clip': 'Deleted clip',
   'op.set_keyframe': 'Keyframe', 'op.delete_keyframe': 'Removed keyframe', 'op.clear_keyframes': 'Cleared keyframes', 'op.restore_entities': 'Restored',
   'export.cancel': 'Cancel export', 'export.canceled': 'Export canceled', 'export.retry': 'Retry',
+  'agents.pause': 'Pause agent', 'agents.resume': 'Resume agent', 'agents.paused': 'Agents are paused', 'proposals': 'Proposals', 'proposals.none': 'No open proposals', 'proposal.accept': 'Approve', 'proposal.reject': 'Reject',
+  'proposal.before': 'Before', 'proposal.after': 'After', 'proposal.stale': 'The project changed since this proposal; it was not applied', 'proposal.from': 'Proposal from',
   'undo': 'Undo', 'redo': 'Redo', 'undo.conflict': 'Cannot undo: those items were changed since',
   'providers': 'AI providers (optional)', 'providers.notConfigured': 'ComfyUI is not configured. The editor works fully without it.', 'providers.unreachable': 'ComfyUI is configured but unreachable', 'providers.ready': 'ComfyUI connected', 'providers.smoke': 'Connection test (model-free)', 'providers.running': 'Running…', 'providers.ok': 'Output validated', 'providers.failed': 'Test failed',
 };

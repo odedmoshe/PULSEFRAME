@@ -21,6 +21,8 @@ export function Header() {
       <span className="spacer" />
       <span className={`save ${save === 'save.conflict' || save === 'save.offline' ? 'warn' : ''}`} role="status" data-testid="save-state">{t(save)}</span>
       <span className="rev" data-testid="revision">{t('revision')} <bdi>{revision}</bdi></span>
+      <button className={`ghost ${state.agentsPaused ? 'paused' : ''}`} disabled={!doc} aria-pressed={state.agentsPaused} onClick={() => editor.setAgentsPaused(!state.agentsPaused)} data-testid="pause-agent">{state.agentsPaused ? t('agents.resume') : t('agents.pause')}</button>
+      {state.agentsPaused && <span className="save warn" role="status" data-testid="agents-paused">{t('agents.paused')}</span>}
       <button className="ghost" disabled={!doc} onClick={() => void editor.history('undo')} data-testid="undo" title="Ctrl+Z">{t('undo')}</button>
       <button className="ghost" disabled={!doc} onClick={() => void editor.history('redo')} data-testid="redo" title="Ctrl+Shift+Z">{t('redo')}</button>
       <button className="ghost" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog">{t('cmd.palette')} <kbd>{chordLabel('Mod+KeyK')}</kbd></button>
@@ -131,6 +133,27 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     <aside className="inspector" aria-label={t('inspector')}>
       <h2>{t('inspector')}</h2>
       {!sel ? <p className="muted">{t('inspector.none')}</p> : <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
+      <h2>{t('proposals')}</h2>
+      {state.proposals.length === 0 ? <p className="muted">{t('proposals.none')}</p> : (
+        <ul className="proposals" data-testid="proposals">
+          {state.proposals.map((p) => (
+            <li key={p.id} data-proposal-id={p.id}>
+              <span className="muted">{t('proposal.from')} <bdi>{p.actor}</bdi></span>
+              <strong dir="auto">{p.label ?? p.summary}</strong>
+              {/* Before/after stills rendered by the export compositor at the middle of the first clip the proposal changes. */}
+              <span className="ba">
+                {(['before', 'after'] as const).map((side) => (
+                  <figure key={side}><img alt={t(`proposal.${side}` as Key)} loading="lazy" src={`/api/v1/projects/${state.doc?.id}/proposals/${p.id}/frame?side=${side}&scale=0.25&index=${p.previewFrame}`} /><figcaption>{t(`proposal.${side}` as Key)}</figcaption></figure>
+                ))}
+              </span>
+              <span className="row">
+                <button className="primary" onClick={() => void editor.decideProposal(p.id, 'accept')} data-testid="proposal-accept">{t('proposal.accept')}</button>
+                <button className="ghost" onClick={() => void editor.decideProposal(p.id, 'reject')} data-testid="proposal-reject">{t('proposal.reject')}</button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       <h2>{t('activity')}</h2>
       <label className="check"><input type="checkbox" checked={state.followAgent} onChange={(e) => editor.set({ followAgent: e.target.checked })} data-testid="follow-agent" /> {t('follow.agent')}</label>
       <ol className="activity" data-testid="activity" aria-live="polite">

@@ -73,7 +73,7 @@ export interface MediaPoolOptions {
   maxStills?: number;
   decoderByteCache?: number;
 }
-export interface MediaPoolStats { decoders: number; stills: number; maxDecoders: number; maxStills: number; decoderByteCacheBytes: number; sources: Record<string, 'local' | 'proxy' | 'original'>; opened: number; disposed: number }
+export interface MediaPoolStats { decoders: number; stills: number; maxDecoders: number; maxStills: number; decoderByteCacheBytes: number; sources: Record<string, 'local' | 'proxy' | 'original'>; sourcesUsed: Record<string, string[]>; opened: number; disposed: number }
 
 export class MediaPool {
   private local = new Map<string, Blob>();
@@ -81,6 +81,9 @@ export class MediaPool {
   private decoders = new Map<string, { assetId: string; dec: Promise<ClipDecoder> }>();
   private stills = new Map<string, { used: number; img: Promise<{ bmp: ImageBitmap; image: FrameImage }> }>();
   private sources: Record<string, 'local' | 'proxy' | 'original'> = {};
+  /** Every kind of source a decoder was opened on, per asset (for diagnostics and tests). */
+  private used: Record<string, string[]> = {};
+  private note(assetId: string, kind: 'local' | 'proxy' | 'original') { this.sources[assetId] = kind; if (!this.used[assetId]?.includes(kind)) (this.used[assetId] ??= []).push(kind); }
   private opened = 0;
   private disposed = 0;
   private maxDecoders: number;
@@ -108,11 +111,12 @@ export class MediaPool {
     }
     return b;
   }
-  private async videoSource(assetId: string): Promise<Blob | string> {
+  private async videoSource(assetId: string, quality: 'draft' | 'full'): Promise<Blob | string> {
     const l = this.local.get(assetId);
-    if (l) { this.sources[assetId] = 'local'; return l; }
-    const proxy = await this.opts.previewUrl?.(assetId).catch(() => null);
-    this.sources[assetId] = proxy ? 'proxy' : 'original';
+    if (l) { this.note(assetId, 'local'); return l; }
+    // The proxy is a draft approximation: only playback uses it. A paused (full-quality) frame decodes the original.
+    const proxy = quality === 'draft' ? await this.opts.previewUrl?.(assetId).catch(() => null) : null;
+    this.note(assetId, proxy ? 'proxy' : 'original');
     return proxy ?? this.opts.assetUrl(assetId);
   }
   private still(assetId: string): Promise<FrameImage> {
@@ -131,22 +135,27 @@ export class MediaPool {
     s.used = performance.now();
     return s.img.then((x) => x.image);
   }
-  readonly frames: FrameProvider = async (layer: PictureLayer) => {
+  /** Full quality: always the original media (export, agent stills, paused preview). */
+  readonly frames: FrameProvider = (layer: PictureLayer) => this.frame(layer, 'full');
+  /** Draft quality: the frame-identical proxy when one exists (playback). */
+  readonly draftFrames: FrameProvider = (layer: PictureLayer) => this.frame(layer, 'draft');
+  private async frame(layer: PictureLayer, quality: 'draft' | 'full'): Promise<FrameImage | null> {
     if (layer.kind === 'image') return this.still(layer.assetId);
-    let d = this.decoders.get(layer.clipId);
+    const key = `${layer.clipId}:${quality}`;
+    let d = this.decoders.get(key);
     if (!d || d.assetId !== layer.assetId) {
       if (d) void d.dec.then((x) => x.dispose()).catch(() => {});
-      const dec = this.videoSource(layer.assetId).then((src) => ClipDecoder.open(src, 30, this.byteCache));
+      const dec = this.videoSource(layer.assetId, quality).then((src) => ClipDecoder.open(src, 30, this.byteCache));
       d = { assetId: layer.assetId, dec };
-      this.decoders.set(layer.clipId, d);
+      this.decoders.set(key, d);
       this.opened++;
-      dec.catch(() => this.decoders.delete(layer.clipId));
+      dec.catch(() => this.decoders.delete(key));
       void this.evict();
     }
     const dec = await d.dec;
     dec.lastUsed = performance.now();
     return dec.frame(layer.sourceSeekSeconds);
-  };
+  }
   /** Bounded decoder count: prompt disposal of the least recently used. */
   private async evict() {
     if (this.decoders.size <= this.maxDecoders) return;
@@ -175,7 +184,7 @@ export class MediaPool {
     for (const [k, v] of this.decoders) if (v.assetId === assetId) { this.decoders.delete(k); this.disposed++; void v.dec.then((d) => d.dispose()).catch(() => {}); }
   }
   stats(): MediaPoolStats {
-    return { decoders: this.decoders.size, stills: this.stills.size, maxDecoders: this.maxDecoders, maxStills: this.maxStills, decoderByteCacheBytes: this.byteCache, sources: { ...this.sources }, opened: this.opened, disposed: this.disposed };
+    return { decoders: this.decoders.size, stills: this.stills.size, maxDecoders: this.maxDecoders, maxStills: this.maxStills, decoderByteCacheBytes: this.byteCache, sources: { ...this.sources }, sourcesUsed: structuredClone(this.used), opened: this.opened, disposed: this.disposed };
   }
   async dispose() {
     for (const v of this.decoders.values()) void v.dec.then((d) => d.dispose()).catch(() => {});

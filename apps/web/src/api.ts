@@ -14,6 +14,7 @@ async function call<R>(path: string, init?: RequestInit): Promise<R> {
 const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 export interface RevisionEvent { projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string; kind?: string; ops?: string[] }
+export interface Proposal { id: string; actor: string; label: string | null; summary: string; status: string; baseRevision: number; createdAt: string; previewFrame: number }
 export interface JobEvent { id: string; type: string; status: string; stage: string | null; output: any; error: any }
 export interface CommitResult { revision: number; committed: boolean; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
 
@@ -39,6 +40,10 @@ export const api = {
   presence: (id: string, sessionId: string, frame: number, selection: string[]) => call<unknown>(`/projects/${id}/presence`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, frame, selection }) }),
   cancelJob: (jobId: string) => call<{ status: string; outcome: string }>(`/jobs/${jobId}/cancel`, json({})),
   retryJob: (jobId: string) => call<{ jobId: string }>(`/jobs/${jobId}/retry`, json({})),
+  controls: (id: string) => call<{ agentsPaused: boolean }>(`/projects/${id}/controls`),
+  setPaused: (id: string, paused: boolean) => call<{ agentsPaused: boolean }>(`/projects/${id}/agents/${paused ? 'pause' : 'resume'}`, json({})),
+  proposals: (id: string) => call<{ proposals: Proposal[] }>(`/projects/${id}/proposals?status=open`),
+  decideProposal: (id: string, proposalId: string, decision: 'accept' | 'reject') => call<{ proposal: Proposal }>(`/projects/${id}/proposals/${proposalId}/${decision}`, json({})),
   startExport: (id: string) => call<{ jobId: string }>(`/projects/${id}/exports`, { method: 'POST' }),
   events: (id: string, since: number) => new EventSource(`/api/v1/projects/${id}/events?since=${since}`, { withCredentials: true }),
 };

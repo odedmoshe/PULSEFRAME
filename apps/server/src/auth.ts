@@ -12,13 +12,16 @@ import type { Config } from './config.ts';
 import { ApiError } from './store.ts';
 
 export type Scope = 'observe' | 'edit';
-export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: Scope[] }
+export type { Principal } from './governance.ts';
+import type { Principal } from './governance.ts';
 export interface Tokens { agent: string; observer: string }
 
 const COOKIE = 'pf_session';
 export class Auth {
   readonly tokens: Tokens;
   private sessions = new Map<string, Principal>();
+  /** Named agent grants (governance.ts). Checked before the bootstrap tokens. */
+  resolveGrant: ((token: string) => Principal | null) | null = null;
   private allowedHosts: Set<string>;
   private allowedOrigins: Set<string>;
 
@@ -58,6 +61,8 @@ export class Auth {
     const header = req.headers.get('authorization');
     if (header?.startsWith('Bearer ')) {
       const token = header.slice(7);
+      const granted = this.resolveGrant?.(token);
+      if (granted) return granted;
       if (this.same(token, this.tokens.agent)) return { actor: 'agent:local', kind: 'agent', scopes: ['observe', 'edit'] };
       if (this.same(token, this.tokens.observer)) return { actor: 'agent:observer', kind: 'agent', scopes: ['observe'] };
       throw new ApiError(401, 'invalid_token', 'bearer token not recognised');

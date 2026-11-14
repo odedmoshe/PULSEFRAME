@@ -72,7 +72,7 @@ export class Player {
         const h = Math.round(height * scale);
         if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
         const g = evaluate(doc, T.frameTime(frame, frameRate));
-        await drawGraph(this.canvas.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, this.pool.frames);
+        await drawGraph(this.canvas.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames);
         this.painted = frame;
         if (this.playing) {
           const { num, den } = frameRate;
@@ -81,6 +81,7 @@ export class Player {
         }
         this.canvas.dataset.frame = String(frame);
         this.canvas.dataset.quality = scale === 1 ? 'full' : 'draft';
+        this.canvas.dataset.source = scale === 1 ? 'original' : 'proxy-or-original';
         this.onTick();
       }
     } catch (e) {

@@ -15,12 +15,13 @@
     "@hono/node-server": "2.1.8",
     "@modelcontextprotocol/server": "2.4.0",
     "@pulseframe/core": "workspace:*",
+    "@pulseframe/engine": "workspace:*",
+    "@pulseframe/providers": "workspace:*",
     "@pulseframe/renderer": "workspace:*",
     "@pulseframe/time": "workspace:*",
     "better-sqlite3": "13.2.0",
     "hono": "4.13.18",
-    "zod": "4.6.7",
-    "@pulseframe/providers": "workspace:*"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0"

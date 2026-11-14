@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T22:27:49.377Z",
+  "ranAt": "2026-11-14T23:03:07.451Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -20,7 +20,7 @@
       "name": "import control is reachable with Tab and shows a visible focus ring",
       "ok": true,
       "detail": {
-        "tabs": 6
+        "tabs": 7
       }
     },
     {

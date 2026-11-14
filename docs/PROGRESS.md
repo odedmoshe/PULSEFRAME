@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-14, checkpoint 4 (Phase 2 and Phase 3 gate criteria met on the CPU profile; Phase 4 next).
+Last updated: 2026-11-14, checkpoint 5 (Phase 4 and Phase 5 gate criteria met on the CPU profile; Phase 6 next).
 
 Status words: **verified-here** = checked on the current CPU profile · **implemented, not qualified** = code exists, needs a runtime/target we lack ·
 **blocked** · **not started**. Nothing is "verified on target profile" yet: no GPU reference machine exists.
@@ -21,8 +21,10 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | A1 · G1 — BiRefNet image matting | **Implemented, experimental; CPU functional trial passed** — not quality-reviewed, not GPU-qualified | `pnpm trial:birefnet` 13/13, `docs/evidence/g1-birefnet-cpu-trial.json` |
 | Phase 2 — Media and playback | **Gate criteria met, verified-here**; scope items still open (below) | seek conformance 7 fixtures × 1,000 random seeks, 0 wrong (`docs/evidence/seek-conformance.json`); 10-minute A/V sync export (`docs/evidence/av-sync-long.json`); proof 52/52 |
 | Phase 3 — Editor interaction | **Gate criteria met, verified-here**; scope items still open (below) | `pnpm proof:phase3` 27/27 (`docs/evidence/phase3-proof.json`), baselines in `docs/evidence/baselines/` |
-| Phase 4 — Production export | Next | — |
-| Phases 5–13, G2–G3 | Not started | — |
+| Phase 4 — Production export | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase4` 19/19; `pnpm proof:browser-export` 23/23; `pnpm conformance:parity` pass (`docs/evidence/parity-suite.json`) |
+| Phase 5 — Complete agent surface | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase5` 22/22 (`docs/evidence/phase5-proof.json`); `governance.test.ts` |
+| Phase 6 — Typography and captions | Next | — |
+| Phases 7–13, G2–G3 | Not started | — |
 
 ## Completed and verified-here
 
@@ -80,8 +82,29 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Found by looking at screenshots, then fixed: palette screenshot taken mid-fade (now deterministic), English activity text in the Hebrew UI, 17-decimal drag values.
 - Open Phase 3 scope: source viewer, minimap, loop range, J/K/L shuttle, I/O marks, markers, copy/paste, groups, multi-select/marquee, cross-track drag, workspaces (Quick/Pro/Motion), saved layouts, tooltips, first-run demo, tablet/mobile layouts, automated accessibility audit and screen-reader walkthrough (not run), text handle bounds approximate.
 
+**Checkpoint 5 — Phase 4 (production export)**
+- Every export is planned into an immutable manifest: document snapshot, asset content hashes, bundled font file hashes, engine versions, output geometry, and a size estimate labelled as an estimate.
+- Preflight blockers refuse a render that could not be faithful (missing media, non-bundled font, empty range) with typed errors; blockers outside the exported range do not block it.
+- Formats: MP4 H.264+AAC, WebM VP9+Opus, WAV audio-only, PNG still; frame range, scale (1, 0.5, 0.25) and quality; audio cut by absolute sample positions.
+- Cancel (queued → removed; running → stopped in ~0.2 s, nothing published, scratch removed) and retry from the same snapshot even after the project moved on; available in REST, MCP and the editor.
+- **Browser export route** (worker-built, lead-integrated): the tab renders with the same evaluator/compositor and encodes with WebCodecs + Mediabunny under a 15 s tab lease with heartbeats; lease loss fails the job (`lease_lost`), another session cannot take it over, completion is single-use. On this Chromium it produces H.264 + **Opus** in MP4 because no AAC encoder exists, and declares that substitution. 105 frames at 640×360 in 0.59 s in one run; every frame source-exact; SSIM 0.9965–0.998 against the server route.
+- **Parity suite:** paused editor preview vs headless still — byte-identical on 30/30 frames, with and without video (after a fix: the paused preview now decodes the original, playback uses the proxy). Compositor vs decoded H.264 export (38 frames): min PSNR 36.8 dB, min SSIM 0.997; colour, temporal and barcode checks clean.
+  Measured limit: 14 px text over saturated colour edges drops to 29.1 dB in 4:2:0 at 640×360 (warning, not hidden); 28.8 px at 720p measured 33.9 dB and 43 px at 1080p 35.8 dB on one synthetic scene. The "qualified text size" statement derived from this is weak (the worker flagged it) and is treated as a characterisation, not a guarantee.
+- Preview is full project resolution when paused.
+- Open Phase 4 scope: streaming output target (browser route buffers in memory), checkpoint/resume of a partly rendered job, animated GIF/WebP, subtitle sidecars, project archive, batch variants, hardware-encoder profile and 4K (no GPU), long-export memory soak, lease state survives only in memory.
+
+**Checkpoint 5 — Phase 5 (agent surface and human control)**
+- Named agent grants (token shown once, stored hashed) with modes Observe / Propose / Edit / Autopilot, optional project, track and time-range limits, expiry and revocation. Limits are enforced from the exact entity diff of each edit, so moves across tracks, deletes, bundled transactions and undo are covered.
+- Pause Agent / Take Over: owner-only, server-side; agent edits, jobs and proposals return `agent_paused`; reading and the owner's edits continue; jobs already running finish but their results are kept as proposals rather than placed.
+- Proposals: a Propose-mode credential gets a proposal from every ordinary editing tool; the owner reviews before/after stills in the editor and accepts or rejects; accepted proposals commit under the owner (so Ctrl+Z works); a proposal written against changed content goes stale instead of overwriting it.
+- Approvals: single-use, expiring, bound to a hash of the exact action; only the owner's session can approve; used for agent-requested model downloads.
+- Budget ledger: atomic reservation, settle/release, unknown outcomes stay counted; Autopilot only. Unit-tested; **not exercised end to end because no paid provider exists**.
+- New senses: `describe_moment`, `render_contact_sheet`, `plan_export`, `get_controls`; 35 MCP tools from one registry.
+- **Ten scripted goals through MCP** (deterministic script over the official client, not a language model): rough cut, tighten, Hebrew title with keyframed fade verified from stills, reorder, remove a second and close gaps, inspect-correct-reinspect, propose → owner accepts in the editor → owner undoes, range export verified frame by frame, agent undo, scoped captions-only agent.
+- Open Phase 5 scope: MCP Tasks extension (jobs are polled by id; the server does not claim Tasks), MCP resources/prompts/playbooks, OAuth for remote MCP, third-party MCP hosts untested, grants/approvals management UI (REST only), activity/call log dialog, transcript and audio-analysis senses (need Phases 6/9), preview-clip sense, range-limited grant only unit-tested.
+
 ## In progress
-- Phase 4: export options (range, scale, quality, codec), cancellation and retry, asset/font manifest with render-blocker preflight, full-quality paused preview, parity suite across frames, browser export route where the browser can encode.
+- Phase 6: shared text layout contract, font catalog, rich text, text animation presets, caption track with SRT/VTT import/export, transcript-linked edits. ASR needs a model/provider decision.
 
 ## Blocked / unverified (with what would unblock)
 
@@ -96,15 +119,14 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 
 ## Dependency-aware task list (next first)
 
-1. **Phase 4a** (lead): export options + immutable manifest (asset hashes, font hashes, compositor/op versions) + preflight blockers; cancel and retry; stills and audio-only; estimated size labelled as an estimate.
-2. **Phase 4b** (worker, after 4a contract): parity suite — raw preview vs raw headless frame (needs full-quality paused preview, lead), and compositor vs decoded export across ≥ 20 frames including text edges, alpha images, rotation and animated layers.
-3. **Phase 4c** (worker): browser export route (WebCodecs + Mediabunny mux) with tab lease/heartbeat; capability-gated (this Chromium has no AAC encoder → Opus or server route).
-4. **Phase 5** (lead for authorization): per-project/track/range scopes, proposals and branches, Pause Agent, budgets and approvals, worker lease (FF-07), contact sheet / preview clip / describe_moment senses, ten scripted MCP goals.
-5. Phase 6 typography/captions → 7 motion/catalog/Lab (FF-09) → 8 sound → 9 analysis → 10 generative → 11 Director (FF-10, FF-11) → 12 delivery (FF-12) → 13 qualification.
-6. Carry-over scope from Phases 2–3 listed above; nightly large property/convergence runs; real-image matting fixtures; a11y audit.
+1. **Phase 6a** (lead): caption track + cue model and ops (add/split/merge/shift), SRT/VTT import/export with exact time mapping, captions remapped through cuts; text layout contract (line breaking, fit-to-box) as a pure module shared by preview and export.
+2. **Phase 6b** (worker): caption styles and text animation presets as catalog entries rendered by the compositor; font catalog with licence/coverage manifest (only fonts whose files and licences can be verified from npm packages here).
+3. **Phase 6c** (blocked on a decision): ASR/alignment — local model download (size and licence to be approved; the 1 GB trial grant is used up) or a provider credential. Until then captions are manual/imported.
+4. Phase 7 effects/transitions/Lab → needs a GPU compositor decision (B-1); Canvas2D-feasible subset first.
+5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
 
 ## Next executable action
-`pnpm install && pnpm check` (expect 143 tests, proof 52/52), `pnpm proof:phase3` (27/27); with ComfyUI running `pnpm proof:g0` (39/39). Then Phase 4a in `apps/server/src/export.ts` (options, manifest, cancel/retry) and `apps/server/src/http.ts`.
+`pnpm install && pnpm build && pnpm test` (expect 166+ tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (22/22), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6a starting in `packages/core/src/schema.ts` (caption track) and `packages/core/src/ops.ts`.
 
 ## Agent / model summary
 
@@ -124,6 +146,8 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | 3 | `pf-scout` | audit of evidence citations | `haiku` | not observable | 23,751 tok · 24 s |
 | 4 | Lead | conform route, range/proxy media, streamed audio + sync measurement, keyframes, editor store/commands, presence, integration, all proofs | as above | as above | — |
 | 4 | `pf-implementer` ×6 | seek conformance (61,746 tok · 704 s); filmstrips/waveforms (48,146 · 109 s); OpenAPI sync (36,716 · 33 s); command palette (46,357 · 92 s); drag + canvas handles (53,525 · 121 s); status-doc sync (79,350 · 113 s) | `sonnet` | not observable | as listed |
+| 5 | Lead | export options/manifest/cancel/retry, full-quality preview, governance (grants, pause, proposals, approvals, budget), integration, proofs | as above | as above | — |
+| 5 | `pf-implementer` ×3 | parity suite (90,457 + 99,731 tok on resume); browser export route (168,016 tok · 510 s); OpenAPI update | `sonnet` | not observable | as listed |
 
 The `pf-implementer` definition was exercised on three real tasks: each stayed inside its file scope and reported defects instead of patching shared code
 (it found the undo-body 500 and the raw-JSON idempotency comparison; both fixed by the lead). `pf-scout` was exercised once, read-only, and found two citation mismatches (fixed).

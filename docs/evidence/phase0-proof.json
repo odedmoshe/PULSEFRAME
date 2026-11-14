@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T22:45:14.218Z",
+  "ranAt": "2026-11-14T22:57:21.196Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 205,
+    "editorShellInteractiveMs": 217,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 21,
-      "requestToVisibleInEditorMs": 43.4,
+      "requestToCommitMs": 17.5,
+      "requestToVisibleInEditorMs": 35.7,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 6.69,
-      "p95": 13.11,
-      "max": 13.27
+      "median": 6.61,
+      "p95": 10.94,
+      "max": 12.27
     },
     "export": {
-      "file": "job_z3NOrUM7W1k.mp4",
+      "file": "job_ewBRVyALu8I.mp4",
       "mimeType": "video/mp4",
       "bytes": 107979,
       "revision": 45,
@@ -62,7 +62,7 @@
         },
         "assets": [
           {
-            "id": "ast_1252e697a60",
+            "id": "ast_0705bc748f0",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -124,13 +124,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 700,
-        "readback": 726,
-        "upload": 5545
+        "draw": 680,
+        "readback": 740,
+        "upload": 5191
       },
-      "wallSeconds": 7.842,
-      "realtimeFactor": 0.4463147156337669,
-      "uiWallSeconds": 7.996
+      "wallSeconds": 7.499,
+      "realtimeFactor": 0.4667288971862915,
+      "uiWallSeconds": 7.939
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -162,13 +162,18 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_1252e697a60": "proxy"
+        "ast_0705bc748f0": "original"
+      },
+      "sourcesUsed": {
+        "ast_0705bc748f0": [
+          "original"
+        ]
       },
       "opened": 2,
       "disposed": 0,
       "rangedResponses": 2,
       "statuses": [
-        "derivatives/proxy:206"
+        "ast_0705bc748f0/content:206"
       ]
     },
     "previewSync": {
@@ -186,9 +191,9 @@
       "framesRequested": 104,
       "framesPainted": 104,
       "paintLatenessMs": {
-        "median": 14.67,
-        "p95": 24,
-        "max": 38.67
+        "median": 5.33,
+        "p95": 21.33,
+        "max": 36
       },
       "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
       "audioOnsetMaxErrorMs": 0.06
@@ -299,7 +304,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 30
+        "count": 35
       }
     },
     {
@@ -307,7 +312,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_4d9d7615ed1",
+          "id": "clp_492a268b5e1",
           "start": {
             "value": "2",
             "timescale": 1
@@ -327,8 +332,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 21,
-        "requestToVisibleInEditorMs": 43.4,
+        "requestToCommitMs": 17.5,
+        "requestToVisibleInEditorMs": 35.7,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -342,11 +347,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_49d03821890"
+          "selected": "clip-clp_867eeca82f0"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_49d03821890"
+          "selected": "clip-clp_867eeca82f0"
         }
       }
     },
@@ -392,7 +397,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_49d03821890",
+          "entityId": "clp_867eeca82f0",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -518,13 +523,10 @@
       }
     },
     {
-      "name": "preview after reload decodes the proxy by HTTP range requests and still shows the exact source frame on 12 random-access seeks",
+      "name": "paused preview after reload decodes the ORIGINAL by HTTP range requests (no whole-file download) and shows the exact source frame on 12 random-access seeks",
       "ok": true,
       "detail": {
         "wrong": [],
-        "sources": {
-          "ast_1252e697a60": "proxy"
-        },
         "statuses": {
           "decoders": 2,
           "stills": 0,
@@ -532,13 +534,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_1252e697a60": "proxy"
+            "ast_0705bc748f0": "original"
+          },
+          "sourcesUsed": {
+            "ast_0705bc748f0": [
+              "original"
+            ]
           },
           "opened": 2,
           "disposed": 0,
           "rangedResponses": 2,
           "statuses": [
-            "derivatives/proxy:206"
+            "ast_0705bc748f0/content:206"
           ]
         }
       }
@@ -561,9 +568,9 @@
         "framesRequested": 104,
         "framesPainted": 104,
         "paintLatenessMs": {
-          "median": 14.67,
-          "p95": 24,
-          "max": 38.67
+          "median": 5.33,
+          "p95": 21.33,
+          "max": 36
         },
         "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
         "audioOnsetMaxErrorMs": 0.06
@@ -580,6 +587,18 @@
         ],
         "maxErrorMs": 0.06,
         "scheduledAheadMaxMs": 2090.7
+      }
+    },
+    {
+      "name": "playback used the frame-identical proxy (draft quality), also read by range requests",
+      "ok": true,
+      "detail": {
+        "sourcesUsed": {
+          "ast_0705bc748f0": [
+            "original",
+            "proxy"
+          ]
+        }
       }
     },
     {

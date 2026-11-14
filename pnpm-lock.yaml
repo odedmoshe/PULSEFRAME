@@ -41,6 +41,9 @@ importers:
       '@pulseframe/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@pulseframe/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@pulseframe/providers':
         specifier: workspace:*
         version: link:../../packages/providers

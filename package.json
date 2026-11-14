@@ -22,7 +22,10 @@
     "trial:birefnet": "tsx packages/evals/src/g1-birefnet-trial.ts",
     "conformance:avsync": "tsx packages/evals/src/av-sync-long.ts",
     "proof:phase3": "tsx packages/evals/src/phase3-proof.ts",
-    "proof:phase4": "tsx packages/evals/src/phase4-proof.ts"
+    "proof:phase4": "tsx packages/evals/src/phase4-proof.ts",
+    "proof:browser-export": "tsx packages/evals/src/browser-export-proof.ts",
+    "conformance:parity": "tsx packages/evals/src/parity-suite.ts",
+    "proof:phase5": "tsx packages/evals/src/phase5-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

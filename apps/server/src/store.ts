@@ -36,6 +36,8 @@ export interface CommitRequest {
   baseRevision?: number;
   /** Extra entity ids the caller's intent depends on (beyond those named in op arguments). */
   dependsOn?: string[];
+  /** Authorization hook: sees the exact entity diff before anything is written; throw ApiError to refuse. */
+  guard?: (ctx: { changes: EntityChange[]; before: ProjectDocument; after: ProjectDocument }) => void;
   /** Set only by Store.undo/redo. */
   kind?: 'edit' | 'undo' | 'redo';
   undoes?: string;
@@ -172,6 +174,7 @@ export class Store {
         const c = newer(changes.map((x) => x.id));
         if (c.length) throw conflict(c);
       }
+      req.guard?.({ changes, before: doc, after: applied.doc });
       const affectedIds = [...new Set([...applied.affectedIds, ...changes.map((c) => c.id)])];
       const base = { affectedIds, summary: applied.summary, results: applied.results, warnings: [] as string[], ...(req.kind && req.kind !== 'edit' ? { kind: req.kind, undoes: req.undoes } : {}), ...(stale ? { rebasedFrom: req.baseRevision } : {}) };
       if (req.dryRun) return { ...base, transactionId: null, revision, committed: false, replayed: false };
@@ -206,7 +209,7 @@ export class Store {
    * restored only if each is still exactly as the target left it; otherwise the undo is refused with
    * the list of conflicts, and unrelated later edits by anyone are never touched.
    */
-  undo(projectId: string, actor: string, mode: 'undo' | 'redo', transactionId?: string): CommitResult {
+  undo(projectId: string, actor: string, mode: 'undo' | 'redo', transactionId?: string, guard?: CommitRequest['guard']): CommitResult {
     const run = this.db.transaction((): CommitRequest => {
       const { doc } = this.getProject(projectId);
       const kinds = mode === 'undo' ? "('edit','redo')" : "('undo')";
@@ -230,7 +233,7 @@ export class Store {
     });
     const req = run.immediate();
     try {
-      return this.commit(req);
+      return this.commit({ ...req, guard });
     } catch (e) {
       // Restoring would produce an invalid timeline (e.g. the space is now occupied): a conflict, not a server error.
       if (e instanceof ApiError && e.code === 'invalid_result') throw new ApiError(409, 'undo_conflict', `cannot ${mode}: ${e.message}`, { transactionId: req.undoes });

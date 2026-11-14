@@ -351,7 +351,7 @@ async function main() {
   }
   const media = await page.evaluate(() => (window as any).__pfMedia());
   measurements.previewMedia = { ...media, rangedResponses: ranged.length, statuses: [...new Set(ranged.map((r) => `${r.url}:${r.status}`))] };
-  check('preview after reload decodes the proxy by HTTP range requests and still shows the exact source frame on 12 random-access seeks', wrong.length === 0 && Object.values(media.sources).every((v) => v === 'proxy') && ranged.some((r) => r.status === 206 && r.url.includes('proxy')) && !ranged.some((r) => r.url.endsWith('content') && r.status === 200), { wrong, sources: media.sources, statuses: measurements.previewMedia });
+  check('paused preview after reload decodes the ORIGINAL by HTTP range requests (no whole-file download) and shows the exact source frame on 12 random-access seeks', wrong.length === 0 && ranged.some((r) => r.status === 206 && r.url.endsWith('content')) && !ranged.some((r) => r.url.endsWith('content') && r.status === 200), { wrong, statuses: measurements.previewMedia });
   await page.evaluate(() => { (window as any).__pfAudioTap = true; });
   await page.keyboard.press('Home');
   await waitPainted(0);
@@ -366,6 +366,8 @@ async function main() {
   (measurements.previewSync as any).audioOnsetMaxErrorMs = onsetErr === null ? null : +(onsetErr * 1000).toFixed(2);
   if (sync.clock === 'audio') check('preview audio (streamed, bounded lookahead): beeps reach the output stage within one frame of their timeline positions on the audio clock', sync.audioOnsetsTimelineSeconds.length === 3 && onsetErr! < 1 / 30 && sync.audioScheduledAheadMaxMs < sync.audioLookaheadMs + 600, { onsets: sync.audioOnsetsTimelineSeconds, maxErrorMs: (measurements.previewSync as any).audioOnsetMaxErrorMs, scheduledAheadMaxMs: sync.audioScheduledAheadMaxMs });
   else check('preview audio clock unavailable in this browser session: playback used the monotonic fallback (audio sync NOT measured)', true, { audioContextState: sync.audioContextState });
+  const media2 = await page.evaluate(() => (window as any).__pfMedia());
+  check('playback used the frame-identical proxy (draft quality), also read by range requests', Object.values(media2.sourcesUsed as Record<string, string[]>).every((u) => u.includes('proxy') && u.includes('original')) && ranged.some((r) => r.status === 206 && r.url.includes('proxy')), { sourcesUsed: media2.sourcesUsed });
   check('decoder count stays within its budget', media.decoders <= media.maxDecoders, { decoders: media.decoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed });
   await page.screenshot({ path: path.join(evidenceDir, 'phase0-editor-after-agent-he.png') });
   await page.getByTestId('lang-toggle').click();

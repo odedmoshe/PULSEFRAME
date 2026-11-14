@@ -179,6 +179,10 @@ export class Exporter {
     const { token, url } = this.open(doc, revision, null, { width: manifest.output.width, height: manifest.output.height, firstFrame: frameIndex, frames: 1 });
     try {
       return await this.host.renderStill(url, 0);
+    } catch (e: any) {
+      if (e instanceof ApiError) throw e;
+      // A renderer that went away (shutdown, crashed page) is an unavailable dependency, not an unexplained server error.
+      throw new ApiError(503, 'renderer_unavailable', `the render worker could not produce the frame: ${String(e?.message ?? e).slice(0, 200)}`);
     } finally {
       this.sessions.delete(token);
     }

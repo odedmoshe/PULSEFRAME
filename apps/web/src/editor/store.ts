@@ -8,7 +8,7 @@ import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
 import { clipEnd, findClip, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { createT, dirOf, type Key, type Lang } from '@pulseframe/i18n';
-import { api, ApiFailure, type CommitResult, type JobEvent, type RevisionEvent } from '../api.ts';
+import { api, ApiFailure, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
 import { Player } from '../player.ts';
@@ -36,6 +36,9 @@ export interface EditorState {
   ghosts: Ghost[];
   /** Opt-in: move my playhead/selection with the agent. Off by default; any manual seek or selection turns it off. */
   followAgent: boolean;
+  /** Owner control: agents may not mutate this project while true (enforced by the server). */
+  agentsPaused: boolean;
+  proposals: Proposal[];
   /** Timeline zoom in pixels per second. */
   pxPerSecond: number;
 }
@@ -45,7 +48,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false,
+    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [],
   };
   private listeners = new Set<() => void>();
   private es?: EventSource;
@@ -147,6 +150,11 @@ export class Editor {
         } finally { this.following = false; }
       }
     });
+    const refreshProposals = () => void api.proposals(projectId).then((r) => this.set({ proposals: r.proposals })).catch(() => {});
+    es.addEventListener('proposal', refreshProposals);
+    es.addEventListener('control', (m) => this.set({ agentsPaused: !!JSON.parse((m as MessageEvent).data).agentsPaused }));
+    refreshProposals();
+    void api.controls(projectId).then((c) => this.set({ agentsPaused: c.agentsPaused })).catch(() => {});
     es.addEventListener('job', (m) => { const j: JobEvent = JSON.parse((m as MessageEvent).data); this.set(j.type === 'capability' ? { capJob: j } : j.type === 'export' ? { exportJob: j } : {}); });
     es.onerror = () => this.set({ save: 'save.offline' });
     es.onopen = () => this.set({ save: 'save.saved' });
@@ -225,6 +233,20 @@ export class Editor {
   startExport() {
     const { doc } = this.state;
     if (doc) api.startExport(doc.id).then((j) => this.set({ exportJob: { id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);
+  }
+  /** Pause Agent / Take Over: the server refuses agent mutations until the owner resumes. */
+  setAgentsPaused(paused: boolean) { const d = this.state.doc; if (d) api.setPaused(d.id, paused).then((r) => this.set({ agentsPaused: r.agentsPaused })).catch(this.fail); }
+  async decideProposal(proposalId: string, decision: 'accept' | 'reject') {
+    const d = this.state.doc;
+    if (!d) return;
+    this.set({ error: null });
+    try {
+      await api.decideProposal(d.id, proposalId, decision);
+      await this.load(d.id);
+    } catch (e) {
+      this.fail(e instanceof ApiFailure && e.code === 'proposal_stale' ? new Error(this.t('proposal.stale')) : e);
+    }
+    this.set({ proposals: (await api.proposals(d.id).catch(() => ({ proposals: this.state.proposals }))).proposals });
   }
   cancelExport() { const j = this.state.exportJob; if (j) api.cancelJob(j.id).catch(this.fail); }
   retryExport() {
