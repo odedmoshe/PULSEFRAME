@@ -97,7 +97,7 @@ async function main() {
 
   // --- edit via keyboard (physical key codes; works on a Hebrew layout)
   await page.locator('[data-track-kind=video]').first().click();
-  await page.getByTestId('preview').click();
+  await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
   for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+ArrowRight');
   await waitPainted(60);
   check('preview: frame-step keyboard navigation paints the exact requested frame', (await page.getByTestId('timecode').textContent()) === '00:00:02:00');
@@ -212,7 +212,7 @@ async function main() {
   const clipsBefore = await page.locator('.clip').count();
   const docBefore = JSON.stringify((await getDoc()).project.sequences);
   await page.locator('[data-track-kind=video]').first().click();
-  await page.getByTestId('preview').click();
+  await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
   await page.keyboard.press('Delete');
   await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n - 2, clipsBefore);
   const mid = await call('set_clip_transform', { projectId, clipId: textClip.id, transform: { x: 0.01 } });
@@ -334,7 +334,7 @@ async function main() {
   page.on('response', (r) => { if (/\/(content|derivatives\/proxy)$/.test(new URL(r.url()).pathname)) ranged.push({ url: new URL(r.url()).pathname.split('/').slice(-2).join('/'), status: r.status() }); });
   await page.goto(`${base}/?project=${projectId}`);
   await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement)?.dataset.frame === '0');
-  await page.getByTestId('preview').click();
+  await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
   const wrong: number[] = [];
   const visited = [0, 59, 60, 61, 104, 30, 90, 7, 100, 45, 75, 15];
   for (const target of visited) {

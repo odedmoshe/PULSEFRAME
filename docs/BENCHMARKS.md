@@ -30,5 +30,18 @@ Linux 6.18 x64 · Intel Xeon @ 2.10 GHz, 4 logical CPUs · 15.7 GiB RAM · no GP
 ## G0 provider smoke (ComfyUI 0.45.0, CPU)
 `comfy.smoke.solid-image`, 320×192, batch 1: preparing 0.21 s · submit 0.01 s · queue+inference 0.47 s (200 ms polling granularity) · transfer 0.01 s · validation 0.06 s. Peak device memory: not measurable on a CPU device.
 
+## Phase 2 measurements (same machine, 2026-11-14)
+
+| Measurement | Value | Samples | Notes |
+|---|---|---|---|
+| Random-seek correctness | 0 wrong of 7,000 | 7 fixtures × 1,000 seeded seeks | Through the real decode + export path; each single-frame clip is its own decoder. `docs/evidence/seek-conformance.json` |
+| Random-seek export time | 24–44 s per 1,000-frame export at 640×360 | 7 | Long GOP (250) is the slow one (44 s) |
+| Ten-minute export | 163 s for 562.6 s of 640×360 video = **3.45× real time** | 1 | draw 30 s, readback 11 s, transfer+encode 115 s. `docs/evidence/av-sync-long.json` |
+| A/V sync over ten minutes | max offset 0.063 ms; drift 0 ms | 563 flash/beep pairs | One edit in the middle |
+| Preview audio onset error | 0.06 ms | 3 beeps, 1 run | Sample-accurate tap on the audio clock, headless |
+| Preview frame paint lateness | median 5–15 ms, p95 21–24 ms, max 24–28 ms | 104 frames × 2 runs | 1080×1920 project previewed at 540×960 from the proxy; software raster |
+| Ingest derivatives (90-frame 640×360 clip) | 0.64 s for thumbnails + waveform + proxy | 1 | Worker-reported |
+| BiRefNet image matting, CPU | ~30 s including model load, 640×480 input | 1 | Functional trial only; not a GPU figure |
+
 ## Not measured
-Preview frame rate, seek latency, large-timeline behaviour, memory growth, cold start, any GPU figure, any model workload.
+Preview frames per second, interactive seek latency (ms to the correct frame), large-timeline behaviour, memory growth/soak, cold start, any GPU figure, any model workload on a GPU.
