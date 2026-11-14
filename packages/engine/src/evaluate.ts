@@ -7,7 +7,7 @@
  *   sourceTime = clip.sourceIn + (t - clip.start);  sourceFrame = floor(sourceTime * assetFrameRate)
  */
 import * as T from '@pulseframe/time';
-import type { ProjectDocument, TextStyle, Transform } from '@pulseframe/core';
+import { transformAt, type ProjectDocument, type TextStyle, type Transform } from '@pulseframe/core';
 
 export interface VideoLayer {
   kind: 'video';
@@ -48,7 +48,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       // half-open [start, start+duration)
       if (T.lt(time, clip.start) || !T.lt(time, T.add(clip.start, clip.duration))) continue;
       if (clip.type === 'text') {
-        if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: clip.transform });
+        if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time) });
         continue;
       }
       const asset = doc.assets[clip.assetId];
@@ -57,7 +57,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       if (track.kind === 'audio') {
         if (!track.muted && asset.audio) graph.audio.push({ clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime, gain: clip.gain });
       } else if (track.kind === 'video' && asset.kind === 'image' && asset.image && !track.hidden) {
-        graph.layers.push({ kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: clip.transform });
+        graph.layers.push({ kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time) });
       } else if (track.kind === 'video' && asset.video && !track.hidden) {
         const rate = asset.video.frameRate;
         let idx = T.frameIndexAt(sourceTime, rate);
@@ -65,7 +65,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
         graph.layers.push({
           kind: 'video', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime, sourceFrameIndex: idx,
           sourceSeekSeconds: ((idx + 0.5) * rate.den) / rate.num,
-          sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: clip.transform,
+          sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: transformAt(clip, time),
         });
       }
     }

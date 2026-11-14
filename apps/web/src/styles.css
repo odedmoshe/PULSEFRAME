@@ -61,3 +61,15 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: 56px; background: var(--pf-accent); pointer-events: none; }
 .playhead::before { content: ''; position: absolute; top: 0; left: -5px; border: 6px solid transparent; border-top-color: var(--pf-accent); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.clip-label { position: relative; z-index: 1; text-shadow: 0 1px 2px rgba(0,0,0,.9); }
+.kf { position: absolute; top: 2px; width: 7px; height: 7px; margin-left: -3.5px; background: var(--pf-warn); transform: rotate(45deg); z-index: 2; pointer-events: none; }
+.animated { color: var(--pf-warn); font-style: normal; }
+.fields label > span { display: flex; gap: 6px; align-items: baseline; }
+.fields .val { margin-inline-start: auto; font-family: var(--pf-mono); color: var(--pf-text); }
+.ghost-playhead { position: absolute; top: 0; bottom: 0; width: 0; margin-left: 56px; border-left: 2px dashed var(--pf-accent-3); pointer-events: none; z-index: 3; }
+.ghost-playhead.user { border-color: var(--pf-accent-2); }
+.ghost-playhead span { position: absolute; top: 0; left: 4px; font-size: 10px; white-space: nowrap; padding: 1px 5px; border-radius: 3px; background: var(--pf-accent-3); color: #14102b; font-weight: 700; }
+.ghost-playhead.user span { background: var(--pf-accent-2); color: #04202e; }
+.clip.ghost-selected { outline: 2px dashed var(--pf-accent-3); outline-offset: 1px; }
+.check { display: flex !important; flex-direction: row; gap: 8px; align-items: center; font-size: var(--pf-fs-sm); color: var(--pf-text-muted); margin-bottom: var(--pf-s-2); }
+.canvas-wrap { position: relative; }

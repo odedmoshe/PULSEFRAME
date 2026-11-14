@@ -15,11 +15,8 @@ const base = `/api/v1/render/${token}`;
 let doc: ProjectDocument;
 let frameCount = 0;
 let ctx: CanvasRenderingContext2D;
-const pool = new MediaPool(async (assetId) => {
-  const r = await fetch(`${base}/assets/${assetId}`);
-  if (!r.ok) throw new Error(`asset ${assetId}: HTTP ${r.status}`);
-  return r.blob();
-});
+// Export always decodes the ORIGINAL bytes (never a proxy), read by HTTP range requests.
+const pool = new MediaPool({ assetUrl: (assetId) => `${base}/assets/${assetId}`, maxDecoders: 8 });
 
 async function draw(index: number) {
   const g = evaluate(doc, T.frameTime(index, doc.settings.frameRate));

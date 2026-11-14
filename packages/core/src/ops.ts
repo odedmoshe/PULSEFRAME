@@ -5,11 +5,12 @@
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
-  AssetSchema, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
+  ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
   type Clip, type MediaClip, type ProjectDocument, type Sequence, type Track,
 } from './schema.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
 import { restoreEntities, type EntityState } from './entities.ts';
+import { sampleKeyframes, shiftKeyframes } from './animation.ts';
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
@@ -269,6 +270,66 @@ defineOp({
   },
 });
 
+const KfTarget = { clipId: z.string(), property: z.enum(ANIMATABLE), time: RT.describe('Offset from the clip start (frame-aligned). Use the playhead minus the clip start.') };
+defineOp({
+  name: 'set_keyframe',
+  version: 1,
+  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key.',
+  args: z.object({ ...KfTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear') }).strict(),
+  apply(d, a) {
+    const { clip } = mustClip(d, a.clipId);
+    assertAligned(d, a.time, 'time');
+    if (!TransformSchema.shape[a.property].safeParse(a.value).success) throw new OpError('invalid_args', `value ${a.value} is out of range for ${a.property}`, { property: a.property });
+    const keys = [...(clip.keyframes?.[a.property] ?? [])];
+    const i = keys.findIndex((k) => T.eq(k.time, a.time));
+    const key = { time: a.time, value: a.value, easing: a.easing ?? (i >= 0 ? keys[i]!.easing : 'linear') };
+    if (i >= 0) keys[i] = key;
+    else keys.push(key);
+    keys.sort((x, y) => T.cmp(x.time, y.time));
+    clip.keyframes = { ...clip.keyframes, [a.property]: keys };
+    return { affectedIds: [clip.id], summary: `Keyframe ${a.property}=${a.value} at +${fmt(a.time)}`, output: { keyframeCount: keys.length } };
+  },
+});
+defineOp({
+  name: 'delete_keyframe',
+  version: 1,
+  description: 'Remove the keyframe at exactly this clip-local time. Removing the last key of a property freezes the property at the value it had there.',
+  args: z.object(KfTarget).strict(),
+  apply(d, a) {
+    const { clip } = mustClip(d, a.clipId);
+    const keys = clip.keyframes?.[a.property] ?? [];
+    const i = keys.findIndex((k) => T.eq(k.time, a.time));
+    if (i < 0) throw new OpError('not_found', `no ${a.property} keyframe at that time`, { clipId: clip.id, times: keys.map((k) => k.time) }, 'Use one of the listed times.');
+    const rest = keys.filter((_, j) => j !== i);
+    const kf = { ...clip.keyframes };
+    if (rest.length) kf[a.property] = rest;
+    else { delete kf[a.property]; clip.transform = { ...clip.transform, [a.property]: keys[i]!.value }; }
+    clip.keyframes = Object.keys(kf).length ? kf : undefined;
+    if (!clip.keyframes) delete clip.keyframes;
+    return { affectedIds: [clip.id], summary: `Removed ${a.property} keyframe at +${fmt(a.time)}`, output: { keyframeCount: rest.length } };
+  },
+});
+defineOp({
+  name: 'clear_keyframes',
+  version: 1,
+  description: 'Remove all keyframes of one property (or of every property) from a clip. Each cleared property keeps the value it has at `at` (clip-local, default the clip start).',
+  args: z.object({ clipId: z.string(), property: z.enum(ANIMATABLE).optional(), at: RT.optional() }).strict(),
+  apply(d, a) {
+    const { clip } = mustClip(d, a.clipId);
+    if (!clip.keyframes) return { affectedIds: [], summary: 'No keyframes to clear' };
+    const kf = { ...clip.keyframes };
+    for (const p of a.property ? [a.property] : ANIMATABLE) {
+      const keys = kf[p];
+      if (!keys?.length) continue;
+      clip.transform = { ...clip.transform, [p]: sampleKeyframes(keys, a.at ?? T.ZERO) };
+      delete kf[p];
+    }
+    if (Object.keys(kf).length) clip.keyframes = kf;
+    else delete clip.keyframes;
+    return { affectedIds: [clip.id], summary: `Cleared ${a.property ?? 'all'} keyframes` };
+  },
+});
+
 defineOp({
   name: 'set_clip_gain',
   version: 1,
@@ -341,6 +402,7 @@ defineOp({
           clip.sourceIn = sourceIn;
         }
         assertFree(track, a.to, end, new Set([clip.id]));
+        shiftKeyframes(clip, delta); // the animation stays attached to the content, not to the moved edge
         clip.start = a.to;
         clip.duration = T.sub(end, a.to);
         sortClips(track);
@@ -368,6 +430,7 @@ defineOp({
       right.id = ctx.newId('clp');
       right.start = a.at;
       right.duration = T.sub(clip.duration, left);
+      shiftKeyframes(right, left);
       if (right.type === 'media') { right.sourceIn = T.add(right.sourceIn, left); if (right.linkGroupId) right.linkGroupId = newLink; }
       clip.duration = left;
       track.clips.push(right);

@@ -22,7 +22,7 @@ const pathParam = (name: string, description: string): J => ({ name, in: 'path',
 const bodyOf = (schema: J, required = true): J => ({ required, content: json(schema) });
 const idem = { type: 'string', minLength: 1, maxLength: 128 };
 
-interface Route { method: 'get' | 'post'; path: string; id: string; scope: 'observe' | 'edit' | 'none'; summary: string; parameters?: J[]; requestBody?: J; responses: J; security?: J[] }
+interface Route { method: 'get' | 'post' | 'put'; path: string; id: string; scope: 'observe' | 'edit' | 'none'; summary: string; description?: string; extra?: J; parameters?: J[]; requestBody?: J; responses: J; security?: J[] }
 
 export function buildOpenApi(): Record<string, unknown> {
   const ops = describeOps();
@@ -70,13 +70,29 @@ export function buildOpenApi(): Record<string, unknown> {
     Job: {
       type: 'object', required: ['id', 'projectId', 'type', 'actor', 'status'],
       properties: {
-        id: { type: 'string' }, projectId: { type: 'string' }, type: { enum: ['export', 'capability'] }, actor: { type: 'string' }, status: { type: 'string' },
+        id: { type: 'string' }, projectId: { type: 'string' }, type: { enum: ['export', 'capability', 'model-download'] }, actor: { type: 'string' }, status: { enum: ['queued', 'running', 'succeeded', 'failed', 'canceled', 'cancel-requested', 'submission-unknown'] },
         stage: { type: ['string', 'null'] }, attempt: { type: 'integer' }, output: {}, error: {}, createdAt: { type: 'string' }, updatedAt: { type: 'string' },
         revision: { type: 'integer' }, capabilityId: { type: 'string' }, capabilityVersion: {}, graphDigest: { type: 'string' }, params: { type: 'object', additionalProperties: true },
       },
     },
     JobAccepted: { type: 'object', required: ['jobId', 'status'], properties: { jobId: { type: 'string' }, status: { type: 'string' }, revision: { type: 'integer' }, type: { type: 'string' } } },
-    RunRequest: { type: 'object', additionalProperties: false, properties: { params: { type: 'object', additionalProperties: true, default: {} }, idempotencyKey: idem } },
+    RationalTime: { type: 'object', additionalProperties: false, required: ['value', 'timescale'], properties: { value: { type: 'string', description: 'Integer ticks as a decimal string' }, timescale: { type: 'integer', exclusiveMinimum: 0 } } },
+    RunRequest: {
+      type: 'object', additionalProperties: false,
+      properties: {
+        params: { type: 'object', additionalProperties: true, default: {} }, idempotencyKey: idem,
+        attach: { type: 'object', additionalProperties: false, required: ['start'], description: 'Place the primary output on the timeline when the job finishes, if nothing it depends on changed meanwhile', properties: { start: ref('RationalTime'), duration: ref('RationalTime'), trackId: { type: 'string' } } },
+        dependsOn: { type: 'array', maxItems: 100, items: { type: 'string' }, description: 'Entity ids the placement depends on; a change to any of them turns the placement into a proposal' },
+      },
+    },
+    DownloadRequest: { type: 'object', additionalProperties: false, required: ['confirmBytes'], properties: { confirmBytes: { type: 'integer', exclusiveMinimum: 0, description: 'Exact byte count shown to the owner; must match the server-computed size' } } },
+    Derivative: {
+      type: 'object', required: ['kind', 'status'],
+      properties: {
+        kind: { enum: ['thumbnails', 'waveform', 'proxy'] }, status: { enum: ['queued', 'running', 'ready', 'failed', 'not-applicable'] },
+        bytes: { type: ['integer', 'null'] }, mimeType: { type: ['string', 'null'] }, meta: { type: ['object', 'null'], additionalProperties: true }, error: { type: ['string', 'null'] }, updatedAt: { type: 'string' },
+      },
+    },
     ImportRequest: {
       type: 'object', additionalProperties: false, required: ['id', 'title', 'graph'],
       properties: { id: { type: 'string', pattern: '^[a-z0-9]+(\\.[a-z0-9-]+)+$' }, title: { type: 'string', minLength: 1, maxLength: 120 }, graph: { description: 'Workflow graph to import as a draft; never executed directly' } },
@@ -101,10 +117,14 @@ export function buildOpenApi(): Record<string, unknown> {
     ...(['transactions', 'operations'] as const).map((seg): Route => ({ method: 'post', path: `${P}/projects/{id}/${seg}`, id: seg === 'transactions' ? 'commitTransaction' : 'commitOperations', scope: 'edit', summary: `Apply a transaction of operations atomically${seg === 'operations' ? ' (alias of /transactions)' : ''}`, parameters: [pid], requestBody: bodyOf(ref('TransactionRequest')), responses: { '200': okJson('Commit result', ref('CommitResult')), ...errs('400', '401', '403', '404', '409', '422') } })),
     { method: 'post', path: `${P}/projects/{id}/operations/validate`, id: 'validateOperations', scope: 'edit', summary: 'Dry-run a transaction without committing', parameters: [pid], requestBody: bodyOf(ref('TransactionRequest')), responses: { '200': okJson('Dry-run result (committed=false)', ref('CommitResult')), ...errs('400', '401', '403', '404', '409', '422') } },
     ...(['undo', 'redo'] as const).map((m): Route => ({ method: 'post', path: `${P}/projects/{id}/${m}`, id: m, scope: 'edit', summary: `${m === 'undo' ? 'Undo' : 'Redo'} the latest (or a named) transaction`, parameters: [pid], requestBody: bodyOf(ref('UndoRequest'), false), responses: { '200': okJson('Commit result', ref('CommitResult')), ...errs('400', '401', '403', '404', '409') } })),
-    { method: 'get', path: `${P}/projects/{id}/events`, id: 'streamProjectEvents', scope: 'observe', summary: 'Server-sent events: hello, revision, job', parameters: [pid, { name: 'since', in: 'query', schema: { type: 'integer', minimum: 0 }, description: 'Replay revisions after this one (or send Last-Event-ID)' }, { name: 'Last-Event-ID', in: 'header', schema: { type: 'string' } }], responses: { '200': { description: 'Event stream', content: { 'text/event-stream': { schema: { type: 'string' } } } }, ...errs('401', '403', '404') } },
+    { method: 'get', path: `${P}/projects/{id}/events`, id: 'streamProjectEvents', scope: 'observe', summary: 'Server-sent events: hello, revision, job, derivative', description: 'Events: `hello` {revision} once on connect; `revision` (id = revision number) for each committed revision, replayed from `since`/Last-Event-ID; `job` {id,type,status,stage,output,error} on job changes in this project; `derivative` {assetId,kind,status} when a derivative changes state.', parameters: [pid, { name: 'since', in: 'query', schema: { type: 'integer', minimum: 0 }, description: 'Replay revisions after this one (or send Last-Event-ID)' }, { name: 'Last-Event-ID', in: 'header', schema: { type: 'string' } }], responses: { '200': { description: 'Event stream', content: { 'text/event-stream': { schema: { type: 'string' } } } }, ...errs('401', '403', '404') } },
     { method: 'post', path: `${P}/projects/{id}/assets`, id: 'uploadAsset', scope: 'edit', summary: 'Upload media (raw body) and import it as an asset', parameters: [pid, { name: 'x-filename', in: 'header', schema: { type: 'string' }, description: 'URI-encoded file name; default "upload"' }], requestBody: { required: true, content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } }, responses: { '201': okJson('Imported', { type: 'object', required: ['assetId', 'revision'], properties: { assetId: { type: 'string' }, revision: { type: 'integer' }, deduplicated: { type: 'boolean' }, asset: { type: 'object', additionalProperties: true } } }), ...errs('400', '401', '403', '404', '422') } },
     { method: 'get', path: `${P}/projects/{id}/assets/{assetId}/content`, id: 'getAssetContent', scope: 'observe', summary: 'Asset bytes (supports Range)', parameters: [pid, pathParam('assetId', 'Asset id')], responses: { ...rangeable('Asset bytes; media type is the asset mimeType', 'application/octet-stream'), ...errs('401', '403', '404') } },
     { method: 'get', path: `${P}/projects/{id}/frame`, id: 'renderFrame', scope: 'observe', summary: 'Render a still frame with the shared evaluator and compositor', parameters: [pid, { name: 'index', in: 'query', schema: { type: 'integer', minimum: 0 }, description: 'Frame index; takes precedence over seconds' }, { name: 'seconds', in: 'query', schema: { type: 'string' }, description: 'Decimal seconds, default "0"' }], responses: { '200': { description: 'PNG; headers X-PF-Revision and X-PF-Frame-Index', headers: { 'X-PF-Revision': { schema: { type: 'string' } }, 'X-PF-Frame-Index': { schema: { type: 'string' } } }, content: { 'image/png': { schema: { type: 'string', format: 'binary' } } } }, ...errs('400', '401', '403', '404', '503') } },
+    { method: 'get', path: `${P}/projects/{id}/assets/{assetId}/derivatives`, id: 'listAssetDerivatives', scope: 'observe', summary: 'Derivatives (thumbnails, waveform, proxy) of an asset; starts them if none exist', parameters: [pid, pathParam('assetId', 'Asset id')], responses: { '200': okJson('Derivative list', { type: 'object', required: ['assetId', 'derivatives'], properties: { assetId: { type: 'string' }, derivatives: { type: 'array', items: ref('Derivative') } } }), ...errs('401', '403', '404') } },
+    { method: 'put', path: `${P}/projects/{id}/presence`, id: 'setPresence', scope: 'observe', summary: 'Announce this session\'s playhead and selection (transient; not part of the project)', parameters: [pid], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['sessionId'], properties: { sessionId: { type: 'string', minLength: 1, maxLength: 64 }, frame: { type: ['integer', 'null'], minimum: 0 }, selection: { type: 'array', maxItems: 200, items: { type: 'string' } }, label: { type: 'string', maxLength: 80 } } } } } }, responses: { '200': okJson('Presence entry', { type: 'object' }), ...errs('400', '401', '403', '404') } },
+    { method: 'get', path: `${P}/projects/{id}/presence`, id: 'listPresence', scope: 'observe', summary: 'Current participants (expire after 30 s without an update)', parameters: [pid], responses: { '200': okJson('Presence list', { type: 'object' }), ...errs('401', '403') } },
+    { method: 'get', path: `${P}/projects/{id}/assets/{assetId}/derivatives/{kind}`, id: 'getAssetDerivative', scope: 'observe', summary: 'Derivative bytes (supports Range)', description: 'Returns 404 `derivative_not_ready` (details: status, error) unless the derivative is ready.', parameters: [pid, pathParam('assetId', 'Asset id'), { name: 'kind', in: 'path', required: true, schema: { enum: ['thumbnails', 'waveform', 'proxy'] } }], responses: { ...rangeable('Derivative bytes; media type is the derivative mimeType', 'application/octet-stream'), ...errs('401', '403', '404') } },
     { method: 'post', path: `${P}/projects/{id}/exports`, id: 'createExport', scope: 'edit', summary: 'Start an export job for the current revision', parameters: [pid], responses: { '202': okJson('Accepted', ref('JobAccepted')), ...errs('401', '403', '404') } },
     { method: 'get', path: `${P}/jobs/{jobId}`, id: 'getJob', scope: 'observe', summary: 'Job status', parameters: [pathParam('jobId', 'Job id')], responses: { '200': okJson('Job view', ref('Job')), ...errs('401', '403', '404') } },
     { method: 'get', path: `${P}/jobs/{jobId}/output`, id: 'getJobOutput', scope: 'observe', summary: 'Download a finished export (MP4, supports Range)', parameters: [pathParam('jobId', 'Job id')], responses: { ...rangeable('MP4 video', 'video/mp4'), ...errs('401', '403', '404', '409') } },
@@ -113,12 +133,14 @@ export function buildOpenApi(): Record<string, unknown> {
     { method: 'get', path: `${P}/capabilities`, id: 'listCapabilities', scope: 'observe', summary: 'Provider capabilities and setup state', responses: { '200': okJson('Capabilities list', { type: 'object', additionalProperties: true }), ...errs('401', '403') } },
     { method: 'post', path: `${P}/capabilities/import`, id: 'importCapabilityDraft', scope: 'edit', summary: 'Import a workflow graph as a capability draft (not executed)', requestBody: bodyOf(ref('ImportRequest')), responses: { '200': okJson('Draft descriptor', { type: 'object', additionalProperties: true }), ...errs('400', '401', '403', '422') } },
     { method: 'post', path: `${P}/projects/{id}/capabilities/{capabilityId}/runs`, id: 'runCapability', scope: 'edit', summary: 'Start a capability run as a durable job', parameters: [pid, pathParam('capabilityId', 'Capability id')], requestBody: bodyOf(ref('RunRequest')), responses: { '202': okJson('Accepted', ref('JobAccepted')), ...errs('400', '401', '403', '404', '409', '422', '503') } },
+    { method: 'post', path: `${P}/projects/{id}/capabilities/{capabilityId}/models/download`, id: 'downloadCapabilityModels', scope: 'edit', summary: 'Download a capability\'s models as a durable job (owner session only)', description: 'A deliberate human action: not exposed over MCP, and bound to the exact byte count shown. Agent credentials get 403 `human_approval_required`. 409 codes: `download_size_mismatch`, `models_already_ready`, `capability_blocked`.', extra: { 'x-owner-session-only': true }, parameters: [pid, pathParam('capabilityId', 'Capability id')], requestBody: bodyOf(ref('DownloadRequest')), responses: { '202': okJson('Accepted', ref('JobAccepted')), ...errs('400', '401', '403', '404', '409', '503') } },
+    { method: 'get', path: `${P}/openapi.json`, id: 'getOpenApi', scope: 'observe', summary: 'This OpenAPI document', responses: { '200': okJson('OpenAPI 3.1 document', { type: 'object', additionalProperties: true }), ...errs('401', '403') } },
   ];
 
   const paths: Record<string, Record<string, J>> = {};
   for (const r of routes) {
     (paths[r.path] ??= {})[r.method] = {
-      operationId: r.id, summary: r.summary, 'x-required-scope': r.scope,
+      operationId: r.id, summary: r.summary, ...(r.description ? { description: r.description } : {}), 'x-required-scope': r.scope, ...(r.extra ?? {}),
       ...(r.security ? { security: r.security } : {}),
       ...(r.parameters ? { parameters: r.parameters } : {}),
       ...(r.requestBody ? { requestBody: r.requestBody } : {}),

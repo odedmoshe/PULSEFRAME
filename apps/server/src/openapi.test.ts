@@ -3,6 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { describeOps } from '@pulseframe/core';
+import { Presence } from './presence.ts';
+import { createApp } from './http.ts';
+import { loadConfig } from './config.ts';
+import { Auth } from './auth.ts';
+import { Capabilities } from './capabilities.ts';
+import { Derivatives } from './derive.ts';
+import { Exporter } from './export.ts';
+import { createMcp } from './mcp.ts';
+import { Store } from './store.ts';
+import { RenderHost } from '@pulseframe/renderer';
 import { startServer, type RunningServer } from './index.ts';
 import { buildOpenApi } from './openapi.ts';
 
@@ -87,5 +97,44 @@ describe('openapi against the real server', () => {
     expect((await p2('/api/v1/capabilities/import', { id: 'a.b', title: 't', graph: {}, extra: 1 })).status).toBe(400);
     expect((await p2('/api/v1/capabilities/import', { id: 'a.b', title: 't', graph: {} })).status).not.toBe(400);
     expect((await p2(`/api/v1/projects/${id}/undo`, { transactionId: 'tx_none' })).status).not.toBe(400);
+  }, 30_000);
+});
+
+describe('openapi vs the registered route table', () => {
+  it('documented and registered routes match both ways', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-openapi-routes-'));
+    const cfg = { ...loadConfig(), dataDir: dir, port: 0 };
+    const store = new Store(dir);
+    const auth = new Auth(cfg);
+    const host = new RenderHost();
+    const exporter = new Exporter(store, host, () => 'http://127.0.0.1/render.html', cfg.webDist);
+    const capabilities = new Capabilities(store, cfg);
+    const derivatives = new Derivatives(store);
+    const presence = new Presence();
+    try {
+      const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, createMcp(store, auth, exporter, capabilities, presence));
+      const toDoc = (p: string) => p.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+      const registered = new Set<string>();
+      for (const r of app.routes) {
+        const m = r.method.toLowerCase();
+        if (m === 'all' || !r.path.startsWith('/api/v1/') || r.path.includes('*')) continue;
+        registered.add(`${m} ${toDoc(r.path)}`);
+      }
+      registered.add('post /mcp'); // app.all('/mcp'): documented as post
+      const internal = new Set<string>(doc['x-internal-routes'].map((s: string) => { const [m, p] = s.split(' '); return `${m!.toLowerCase()} ${p}`; }));
+      const documented = new Set(entries.map((e) => `${e.method} ${e.path}`));
+      const isInternal = (k: string) => k.split(' ')[1]!.startsWith('/api/v1/render/');
+      const missingDocs = [...registered].filter((k) => !isInternal(k) && !documented.has(k));
+      const missingInternal = [...registered].filter((k) => isInternal(k) && !internal.has(k));
+      const stale = [...documented].filter((k) => !registered.has(k));
+      const staleInternal = [...internal].filter((k) => !registered.has(k));
+      expect({ missingDocs, missingInternal, stale, staleInternal }).toEqual({ missingDocs: [], missingInternal: [], stale: [], staleInternal: [] });
+    } finally {
+      await capabilities.stop();
+      await derivatives.stop();
+      await host.close();
+      store.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }, 30_000);
 });

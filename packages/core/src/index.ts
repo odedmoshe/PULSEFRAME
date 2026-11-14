@@ -3,3 +3,4 @@ export * from './validate.ts';
 export * from './ops.ts';
 export * from './queries.ts';
 export * from './entities.ts';
+export * from './animation.ts';

@@ -14,6 +14,13 @@ Status: accepted (2026-11-14); G0 first slice implemented, see docs/PROGRESS.md
 - ComfyUI is **not bundled or redistributed** (GPL-3.0 core; nodes and weights carry their own terms). The user or operator runs it; we store its URL.
   A separate process is an architecture boundary, not a licence opinion — see docs/INTEGRATIONS.md.
 
+## Additions after G0
+- **Runnable vs published.** Structural, dependency, licence and egress blockers always stop execution. Dimensions that can only be earned from outputs
+  (executed, hardware-qualified, quality-reviewed, Hebrew-qualified) do not, but while a *review* dimension is open the capability is `experimental` and every recipe says so.
+- **Media inputs** are project asset ids only; the server stages the bytes itself under content-addressed names. A caller can never pass a path or URL.
+- **Results** are imported as derived assets with lineage, then attached with ordinary operations, or kept as a proposal when recorded entity versions changed (stale-result protection).
+- **Model files** (local provider): ready = exact size + SHA-256; downloads are explicit owner actions bound to the exact byte count, never available to agent credentials or over MCP.
+
 ## Consequences / open items
 - Worker lease, prewarm, affinity (FF-07), model packs and digests (FF-05), stale-result protection and budget reservation depend on Phase 1/5/10 work.
 - Attaching generated media to the timeline needs image/derived-asset support (Phase 2).

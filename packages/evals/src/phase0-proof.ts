@@ -97,7 +97,7 @@ async function main() {
 
   // --- edit via keyboard (physical key codes; works on a Hebrew layout)
   await page.locator('[data-track-kind=video]').first().click();
-  await page.locator('canvas').click();
+  await page.getByTestId('preview').click();
   for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+ArrowRight');
   await waitPainted(60);
   check('preview: frame-step keyboard navigation paints the exact requested frame', (await page.getByTestId('timecode').textContent()) === '00:00:02:00');
@@ -212,7 +212,7 @@ async function main() {
   const clipsBefore = await page.locator('.clip').count();
   const docBefore = JSON.stringify((await getDoc()).project.sequences);
   await page.locator('[data-track-kind=video]').first().click();
-  await page.locator('canvas').click();
+  await page.getByTestId('preview').click();
   await page.keyboard.press('Delete');
   await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n - 2, clipsBefore);
   const mid = await call('set_clip_transform', { projectId, clipId: textClip.id, transform: { x: 0.01 } });
@@ -329,6 +329,39 @@ async function main() {
   const live = await getDoc();
   const replay = await (await rest(`/projects/${projectId}?revision=${live.revision}`)).json();
   check('replaying the op log from revision 0 reproduces the materialized document exactly', JSON.stringify(replay.project) === JSON.stringify(live.project), { revision: live.revision });
+  console.log('\n# Phase 2: range reads, proxy preview, bounded decoders (fresh page: no local file)');
+  const ranged: { url: string; status: number }[] = [];
+  page.on('response', (r) => { if (/\/(content|derivatives\/proxy)$/.test(new URL(r.url()).pathname)) ranged.push({ url: new URL(r.url()).pathname.split('/').slice(-2).join('/'), status: r.status() }); });
+  await page.goto(`${base}/?project=${projectId}`);
+  await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement)?.dataset.frame === '0');
+  await page.getByTestId('preview').click();
+  const wrong: number[] = [];
+  const visited = [0, 59, 60, 61, 104, 30, 90, 7, 100, 45, 75, 15];
+  for (const target of visited) {
+    await page.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, (target / 30) * 90 + 0.5);
+    await waitPainted(target);
+    const shot = await previewBarcode();
+    const layer = evaluate(live.project, T.frameTime(target, live.project.settings.frameRate)).layers.find((l) => l.kind === 'video');
+    if (!layer || layer.kind !== 'video' || readBarcode(Uint8Array.from(shot.data), shot.w, 3, srcRect(shot.w, shot.h)) !== layer.sourceFrameIndex) wrong.push(target);
+  }
+  const media = await page.evaluate(() => (window as any).__pfMedia());
+  measurements.previewMedia = { ...media, rangedResponses: ranged.length, statuses: [...new Set(ranged.map((r) => `${r.url}:${r.status}`))] };
+  check('preview after reload decodes the proxy by HTTP range requests and still shows the exact source frame on 12 random-access seeks', wrong.length === 0 && Object.values(media.sources).every((v) => v === 'proxy') && ranged.some((r) => r.status === 206 && r.url.includes('proxy')) && !ranged.some((r) => r.url.endsWith('content') && r.status === 200), { wrong, sources: media.sources, statuses: measurements.previewMedia });
+  await page.evaluate(() => { (window as any).__pfAudioTap = true; });
+  await page.keyboard.press('Home');
+  await waitPainted(0);
+  await page.getByTestId('play').click();
+  await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 0 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 30_000 });
+  const sync = await page.evaluate(() => (window as any).__pfSync());
+  measurements.previewSync = { ...sync, note: 'one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it' };
+  check('preview playback ran to the end on a measured clock; paint lateness recorded (measurement, not a pass/fail target)', sync.framesPainted > 10 && sync.paintLatenessMs.median !== null, measurements.previewSync);
+  // Preview audio: where do the beeps land on the playback clock, compared with where the edit puts them?
+  const expectBeeps = [0, 1, 2.5];
+  const onsetErr = sync.clock === 'audio' ? Math.max(...expectBeeps.map((e, i) => Math.abs((sync.audioOnsetsTimelineSeconds[i] ?? 99) - e))) : null;
+  (measurements.previewSync as any).audioOnsetMaxErrorMs = onsetErr === null ? null : +(onsetErr * 1000).toFixed(2);
+  if (sync.clock === 'audio') check('preview audio (streamed, bounded lookahead): beeps reach the output stage within one frame of their timeline positions on the audio clock', sync.audioOnsetsTimelineSeconds.length === 3 && onsetErr! < 1 / 30 && sync.audioScheduledAheadMaxMs < sync.audioLookaheadMs + 600, { onsets: sync.audioOnsetsTimelineSeconds, maxErrorMs: (measurements.previewSync as any).audioOnsetMaxErrorMs, scheduledAheadMaxMs: sync.audioScheduledAheadMaxMs });
+  else check('preview audio clock unavailable in this browser session: playback used the monotonic fallback (audio sync NOT measured)', true, { audioContextState: sync.audioContextState });
+  check('decoder count stays within its budget', media.decoders <= media.maxDecoders, { decoders: media.decoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed });
   await page.screenshot({ path: path.join(evidenceDir, 'phase0-editor-after-agent-he.png') });
   await page.getByTestId('lang-toggle').click();
   await page.waitForFunction(() => document.documentElement.dir === 'ltr');

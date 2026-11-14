@@ -1,0 +1,22 @@
+/* Direct manipulation: timeline ghost hints and canvas handles. Physical left/top on purpose (canvas is never mirrored). */
+[data-timeline-drag]:not([data-timeline-drag='idle']) { cursor: grabbing; user-select: none; }
+[data-timeline-drag='trim-start'], [data-timeline-drag='trim-end'] { cursor: ew-resize !important; }
+.clip-ghost { position: absolute; top: 0; bottom: 0; pointer-events: none; border: 1px dashed currentColor; background: rgba(120, 160, 255, 0.25); border-radius: 4px; z-index: 5; }
+.clip-ghost.invalid { border-color: #e5484d; background: rgba(229, 72, 77, 0.25); cursor: not-allowed; }
+.clip-ghost.snapped { border-style: solid; }
+
+.ch-root { position: absolute; pointer-events: none; direction: ltr; touch-action: none; overflow: visible; }
+.ch-box { position: absolute; box-sizing: border-box; border: 1px solid #4c8dff; pointer-events: none; }
+.ch-move { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: transparent; cursor: move; pointer-events: auto; touch-action: none; }
+.ch-move:focus-visible { outline: 2px solid #4c8dff; outline-offset: 2px; }
+.ch-handle { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; padding: 0; border: 1px solid #4c8dff; background: #fff; border-radius: 2px; pointer-events: auto; touch-action: none; z-index: 1; }
+.ch-handle:focus-visible { outline: 2px solid #ffb020; outline-offset: 1px; }
+.ch-n, .ch-s { cursor: ns-resize; }
+.ch-e, .ch-w { cursor: ew-resize; }
+.ch-ne, .ch-sw { cursor: nesw-resize; }
+.ch-nw, .ch-se { cursor: nwse-resize; }
+.ch-rotate { left: 50%; top: -28px; border-radius: 50%; cursor: grab; }
+.ch-stem { position: absolute; left: 50%; top: -22px; width: 1px; height: 22px; background: #4c8dff; pointer-events: none; }
+.ch-guide { position: absolute; background: #ff4fa3; pointer-events: none; }
+.ch-guide-v { left: 50%; top: 0; bottom: 0; width: 1px; }
+.ch-guide-h { top: 50%; left: 0; right: 0; height: 1px; }

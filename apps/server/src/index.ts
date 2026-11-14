@@ -9,6 +9,7 @@ import { Derivatives } from './derive.ts';
 import { Exporter } from './export.ts';
 import { createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
+import { Presence } from './presence.ts';
 import { Store } from './store.ts';
 
 export { loadConfig, type Config } from './config.ts';
@@ -23,7 +24,8 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const exporter = new Exporter(store, host, () => `${url}/render.html`, cfg.webDist);
   const capabilities = new Capabilities(store, cfg, deps.providerAdapter);
   const derivatives = new Derivatives(store);
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, createMcp(store, auth, exporter, capabilities));
+  const presence = new Presence();
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, createMcp(store, auth, exporter, capabilities, presence));
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');

@@ -8,7 +8,11 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface BarcodeFixtureOptions { out: string; width?: number; height?: number; fps?: { num: number; den: number }; frames?: number; sampleRate?: number }
+export interface BarcodeFixtureOptions { out: string; width?: number; height?: number; fps?: { num: number; den: number }; frames?: number; sampleRate?: number;
+  /** Video codec (default h264). */ codec?: 'h264' | 'vp9' | 'av1';
+  /** Container (default mp4; mp4 gets AAC, webm gets Opus). Muxing vp9/av1 into mp4 is supported by ffmpeg. */ container?: 'mp4' | 'webm';
+  /** B-frames, h264 only (default 2). */ bframes?: number;
+  /** Keyframe interval in frames (default: rounded fps, i.e. 1 s). */ gop?: number }
 export const BARCODE = { bits: 16, stripFrac: 1 / 6 } as const;
 
 const run = (cmd: string, args: string[], feed?: (stdin: NodeJS.WritableStream) => Promise<void>) =>
@@ -82,7 +86,7 @@ function beepWav(seconds: number, sampleRate: number): Buffer {
   return Buffer.concat([h, data]);
 }
 
-/** H.264 (High, B-frames, 1 s GOP) + AAC in MP4. */
+/** Default: H.264 (High, B-frames, 1 s GOP) + AAC in MP4. See options for VP9/AV1, webm, B-frames and GOP. */
 export async function generateBarcodeFixture(o: BarcodeFixtureOptions) {
   const width = o.width ?? 640;
   const height = o.height ?? 360;
@@ -90,6 +94,14 @@ export async function generateBarcodeFixture(o: BarcodeFixtureOptions) {
   const frames = o.frames ?? 120;
   const sampleRate = o.sampleRate ?? 48000;
   const fpsRounded = Math.round(fps.num / fps.den);
+  const codec = o.codec ?? 'h264';
+  const container = o.container ?? 'mp4';
+  const bframes = o.bframes ?? 2;
+  const gop = o.gop ?? fpsRounded;
+  const videoArgs =
+    codec === 'h264' ? ['-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-bf', String(bframes)]
+    : codec === 'vp9' ? ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '20', '-deadline', 'good', '-cpu-used', '4', '-row-mt', '1']
+    : ['-c:v', 'libsvtav1', '-crf', '20', '-preset', '8'];
   fs.mkdirSync(path.dirname(o.out), { recursive: true });
   const wav = `${o.out}.wav`;
   fs.writeFileSync(wav, beepWav((frames * fps.den) / fps.num, sampleRate));
@@ -97,8 +109,8 @@ export async function generateBarcodeFixture(o: BarcodeFixtureOptions) {
     await run(
       'ffmpeg',
       ['-hide_banner', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${width}x${height}`, '-framerate', `${fps.num}/${fps.den}`, '-i', 'pipe:0', '-i', wav,
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-bf', '2', '-g', String(fpsRounded), '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
-        '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-fflags', '+bitexact', '-flags:v', '+bitexact', o.out],
+        ...videoArgs, '-pix_fmt', 'yuv420p', '-g', String(gop), '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
+        '-c:a', container === 'webm' ? 'libopus' : 'aac', '-b:a', '160k', ...(container === 'mp4' ? ['-movflags', '+faststart'] : []), '-fflags', '+bitexact', '-flags:v', '+bitexact', o.out],
       async (stdin) => {
         for (let i = 0; i < frames; i++) if (!stdin.write(barcodeFrame(i, width, height, fpsRounded))) await new Promise((r) => stdin.once('drain', r));
       },
@@ -106,5 +118,5 @@ export async function generateBarcodeFixture(o: BarcodeFixtureOptions) {
   } finally {
     fs.rmSync(wav, { force: true });
   }
-  return { file: o.out, width, height, fps, frames, sampleRate, beepEverySeconds: 1, beepMs: 100 };
+  return { file: o.out, width, height, fps, frames, sampleRate, codec, container, bframes: codec === 'h264' ? bframes : null, gop, beepEverySeconds: 1, beepMs: 100 };
 }

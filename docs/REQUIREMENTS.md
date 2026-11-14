@@ -20,7 +20,7 @@ Governing documents: `docs/SPEC.md` v3.0 (sections 0-30, Appendices A-D) with Am
 | `not started` | No implementation. |
 | `conditional` | Addendum candidate that needs evidence or licensing before it may start. |
 
-Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.test.ts`, `packages/engine/src/evaluate.test.ts`, `packages/i18n/src/i18n.test.ts`, `packages/providers/src/providers.test.ts`, `apps/server/src/store.test.ts`, `apps/server/src/undo.test.ts`, `apps/server/src/openapi.test.ts`, `packages/evals/src/convergence.test.ts`, `packages/evals/src/notices-check.ts` (`pnpm check:notices`), `packages/evals/src/phase0-proof.ts` producing `docs/evidence/phase0-proof.json` (47 checks), `packages/evals/src/g0-proof.ts` producing `docs/evidence/g0-smoke-proof.json` (35 checks, real ComfyUI on CPU), `docs/evidence/capability-probe.json`. All evidence comes from the provisional CPU functional-validation profile, not a GPU reference.
+Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.test.ts`, `packages/engine/src/evaluate.test.ts`, `packages/i18n/src/i18n.test.ts`, `packages/providers/src/providers.test.ts`, `apps/server/src/store.test.ts`, `apps/server/src/undo.test.ts`, `apps/server/src/openapi.test.ts`, `packages/evals/src/convergence.test.ts`, `packages/evals/src/notices-check.ts` (`pnpm check:notices`), `packages/evals/src/phase0-proof.ts` producing `docs/evidence/phase0-proof.json` (52 checks), `packages/evals/src/g0-proof.ts` producing `docs/evidence/g0-smoke-proof.json` (39 checks, real ComfyUI on CPU), `docs/evidence/phase3-proof.json` (27 checks, editor interaction), `docs/evidence/g1-birefnet-cpu-trial.json` (13 checks, bounded CPU trial), `docs/evidence/capability-probe.json`; also `apps/server/src/{models,derive,conform}.test.ts`, `packages/core/src/animation.test.ts`, `apps/web/src/editor/*.test.ts`. All evidence comes from the provisional CPU functional-validation profile, not a GPU reference.
 
 ---
 
@@ -39,9 +39,9 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 |---|---|---|---|---|---|---|---|---|---|
 | R-02.1 | 2 | Quick/Pro/Motion/Captions/Color/Sound/Deliver workspace presets over one document | 3 | R-05.1 | Workspace switcher | — | — | not started | Single fixed layout only |
 | R-02.2 | 2 | Original logo, wordmark, design tokens, configurable name, Cyber theme | 0 | — | Header brand | — | — | partial | `packages/brand` logo and tokens; no Cyber theme |
-| R-02.3 | 2 main layout | Header, preview, transport, library, inspector, timeline, activity feed, jobs tray | 3 | R-06.1 | Editor shell | — | — | partial | Minimal library, preview, transport, inspector, timeline, activity feed; no jobs tray, source viewer, minimap |
-| R-02.4 | 2 | Canvas handles, crop, anchor, guides, safe areas, A/B compare, direct text edit | 3 | R-08.1 | Preview canvas | set_clip_transform | — | not started | Numeric inspector only |
-| R-02.5 | 2 | Command palette, saved panel arrangements, density, tooltips, keyboard discovery | 3 | R-12.1 | Palette | — | — | not started | |
+| R-02.3 | 2 main layout | Header, preview, transport, library, inspector, timeline, activity feed, jobs tray | 3 | R-06.1 | Editor shell | — | — | partial | Editor shell with library, preview, transport, inspector, timeline, activity feed (localised from operation names), presence ghost; three committed screenshot baselines compared by SSIM (`docs/evidence/baselines/`, `docs/evidence/phase3-proof.json` check "visual baselines…"). No jobs tray, source viewer, minimap |
+| R-02.4 | 2 | Canvas handles, crop, anchor, guides, safe areas, A/B compare, direct text edit | 3 | R-08.1 | Preview canvas | set_clip_transform | — | partial | Canvas move/scale/rotate handles, one transaction per drag (`apps/web/src/editor/interactions.math.test.ts`; phase3 proof "canvas handle…"); text handle bounds approximate. No crop, anchor, guides, safe areas, A/B compare or direct text edit |
+| R-02.5 | 2 | Command palette, saved panel arrangements, density, tooltips, keyboard discovery | 3 | R-12.1 | Palette | — | partial | Command registry driving keyboard, palette and buttons; bilingual palette; shortcuts remappable per user (`apps/web/src/editor/commands.test.ts`, `palette.search.test.ts`; phase3 proof). No saved panel arrangements, density, tooltips system or workspaces |
 | R-02.6 | 2 | Real empty/loading/offline/error/conflict/missing-media states; first-run demo and tour | 3 | R-07.2 | Editor | — | — | partial | Typed errors and first-project bootstrap; no demo, tour, offline or missing-media states |
 | R-02.7 | 2 | Tablet layout and mobile capture/review surface | 12 | R-02.1 | Responsive UI | — | — | not started | |
 
@@ -50,9 +50,9 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
 | R-03.1 | 3 | Hebrew default, persistent he/EN toggle, mirrored chrome, LTR timeline and timecodes | 0 | — | Language toggle | — | — | done | P0: UI boots in Hebrew RTL; timeline stays LTR; language toggle switches to English/LTR |
-| R-03.2 | 3 | Translate every string with locale-aware plurals | 0 | R-03.1 | All UI | — | — | partial | `i18n.test.ts` key parity he/en; plurals not covered |
+| R-03.2 | 3 | Translate every string with locale-aware plurals | 0 | R-03.1 | All UI | — | — | partial | `i18n.test.ts` key parity he/en; activity feed localised from operation names (phase3 proof "activity feed is written in the interface language…"); plurals not covered |
 | R-03.3 | 3 | WCAG 2.2 AA: focus, names, contrast, SR announcements, reduced motion, DOM timeline outline | 3 | R-02.3 | Editor | — | — | not started | No accessibility audit |
-| R-03.4 | 3 | Required shortcuts by physical key; disabled while typing; remappable | 3 | R-02.3 | Shortcuts | — | — | partial | Space, arrows, Shift+arrows, Home/End, S, Delete, [ ], Ctrl/Cmd+Z, Shift+Z, Y (P0: "human undo (Ctrl+Z)…"); missing J/K/L, I/O, copy, remap |
+| R-03.4 | 3 | Required shortcuts by physical key; disabled while typing; remappable | 3 | R-02.3 | Shortcuts | — | — | partial | Physical-key shortcuts, disabled while typing or while the palette is open, remappable per user (`commands.test.ts`; phase3 proof "remapped shortcut…", "editing shortcuts are inert while the palette is open"). Missing: J/K/L shuttle, I/O marks, markers, copy/paste |
 | R-03.5 | 3 | Caption readability and flash intensity as creative controls with reduced-flash alternatives | 7 | R-16.1 | Inspector | — | — | not started | |
 | R-03.6 | 3, 15 | Bidi isolation, shaping, graphemes, niqqud, mixed Hebrew/Latin text | 0 | R-15.1 | Text inspector | add_text, update_text | Chromium raster | partial | P0: Hebrew+niqqud+digits+Latin stored verbatim, preview and export; no grapheme animation |
 
@@ -70,9 +70,9 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-05.1 | 5 | Versioned ProjectDocument with migration entry point, stable ids, binaries outside | 1 | — | — | — | — | partial | Schema v1 for assets, sequences, tracks, clips, text, transform, gain, links (`core.test.ts`); no effects, transitions, masks, markers, keyframes, captions, variants, compounds, buses |
+| R-05.1 | 5 | Versioned ProjectDocument with migration entry point, stable ids, binaries outside | 1 | — | — | — | — | partial | Schema v1 for assets, sequences, tracks, clips, text, transform, gain, links (`core.test.ts`) and keyframes on x, y, scale, rotation, opacity (`packages/core/src/animation.test.ts`); no effects, transitions, masks, markers, captions, variants, compounds, buses |
 | R-05.2 | 5 | Rational time; frame/sample exactness; half-open intervals; micros only at boundary | 1 | — | Timecode | — | — | done | `time.test.ts` unit and property tests; ADR-0003 |
-| R-05.3 | 5 | Non-drop timecode mapping now; drop-frame display, VFR rules, source time maps and speed | 2 | R-05.2 | Transport | — | — | partial | Non-drop only; speed fixed at 1; no drop-frame, VFR, ramps, freeze, reverse |
+| R-05.3 | 5 | Non-drop timecode mapping now; drop-frame display, VFR rules, source time maps and speed | 2 | R-05.2 | Transport | — | — | partial | Non-drop only; speed fixed at 1; VFR handled only by conforming at ingest (`apps/server/src/conform.test.ts`). No drop-frame, ramps, freeze, reverse |
 | R-05.4 | 5 | Reference/bounds/overlap/link/lock validation and nesting-cycle checks | 1 | R-05.1 | Typed errors | all ops | — | partial | Bounds, link and off-frame validation in ops; no nesting, track-lock policy per type, transition regions |
 | R-05.5 | 5 | Responsive constraints and per-variant overrides for aspect changes | 12 | R-05.1 | Inspector | — | — | not started | |
 
@@ -92,9 +92,9 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
 | R-07.1 | 7 | Edit local files before upload finishes; OPFS/IndexedDB; quotas; local drafts with base revision | 2 | R-06.4 | Library, save state | — | — | not started | |
-| R-07.2 | 7 | Streamed upload, sha256 content addressing, ffprobe; immutable originals (video/audio, CFR, unrotated) | 2 | R-04.2 | Library import | POST assets, import_asset | — | partial | P0: server probed and content-addressed the file; PNG/JPEG/WebP stills are accepted and render as image layers (G0 proof: "the attached provider image renders through the shared compositor…"); no dedicated still-upload test; no rotation, HDR, VFR, resumable upload, dedup UI |
+| R-07.2 | 7 | Streamed upload, sha256 content addressing, ffprobe; immutable originals (video/audio, CFR, unrotated) | 2 | R-04.2 | Library import | POST assets, import_asset | — | partial | P0: server probed and content-addressed the file; still images (PNG/JPEG/WebP) ingest with exact dimensions and render (`docs/evidence/g0-smoke-proof.json` "still image upload…"); rotation, VFR and non-decodable codecs (HEVC) go through the conform route with original bytes kept (`apps/server/src/conform.test.ts`). No HDR, resumable upload, dedup UI |
 | R-07.3 | 7 | Ingestion routes: URL import, Phone Drop, recorder, folders, stock connectors | 3 | R-26.3 | Library | job | — | not started | |
-| R-07.4 | 7 | Thumbnails, multiresolution waveforms, proxies, original/proxy/conform mapping | 2 | R-07.2 | Timeline badges | proxy job | — | not started | |
+| R-07.4 | 7 | Thumbnails, multiresolution waveforms, proxies, original/proxy/conform mapping | 2 | R-07.2 | Timeline badges | proxy job | done | Frame-indexed thumbnail sprite, 3-level waveform peaks, frame-identical H.264 proxy, restart recovery (`apps/server/src/derive.test.ts`; `docs/evidence/phase0-proof.json` "ingest derivatives…"); conform mapping recorded (`conform.test.ts`). Analysis caches and bins not covered here |
 | R-07.5 | 7 | Bins, tags, favorites, usage counts, missing-media recovery, relink | 3 | R-07.2 | Library | — | — | not started | |
 | R-07.6 | 7 | Analysis cache keyed by content, range, parameters and model version | 9 | R-20.1 | — | analysis job | — | not started | |
 
@@ -103,7 +103,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
 | R-08.1 | 8 | Pure evaluator and one compositor shared by preview, render_frame and export | 2 | R-05.1 | Preview | render_frame | Server export | partial | `evaluate.test.ts`; Canvas2D only; no effects, blends, transitions, masks |
-| R-08.2 | 8 | WebCodecs decode (Mediabunny); keyframe/B-frame/PTS-correct seek; reverse via GOP cache | 2 | R-08.1 | Preview | — | — | partial | P0: preview shows exact frame 60; no VFR, reverse, proxy seek, seek bench |
+| R-08.2 | 8 | WebCodecs decode (Mediabunny); keyframe/B-frame/PTS-correct seek; reverse via GOP cache | 2 | R-08.1 | Preview | — | — | partial | P0: exact frame 60; "preview after reload decodes the proxy…" (range reads, 12 random seeks); "decoder count stays within its budget". `packages/evals/src/seek-conformance.ts`: 7 fixtures x 1,000 seeded random seeks plus sequential control, 0 mismatches in the worker-reported run; report `.artifacts/conformance/seek-conformance.json` is not committed. HEVC not directly decodable (conformed); VFR only via conform; no reverse/GOP cache |
 | R-08.3 | 8 | WebGPU preferred, WebGL2 fallback, pooled targets, device-loss recovery, linear-light intermediates | 7 | R-08.1 | — | capability probe | — | not started | Canvas2D only |
 | R-08.4 | 8 | SDR Rec.709 with explicit transfer/range metadata; documented HDR-to-SDR tone map | 2 | R-07.2 | — | — | Server MP4 | partial | P0: BT.709 tagged export; no HDR tone map |
 | R-08.5 | 8 | Deterministic seeded noise; temporal effects window; seek equals sequential evaluation | 7 | R-13.1 | — | — | — | not started | |
@@ -123,7 +123,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-10.1 | 10 | Clip gain/trim/placement mix; WebAudio preview on audio clock with monotonic fallback | 2 | R-08.1 | Transport | set_clip_gain | ffmpeg mix | partial | P0: beats land within one frame; stream duration matches video; no pan, fades, buses |
+| R-10.1 | 10 | Clip gain/trim/placement mix; WebAudio preview on audio clock with monotonic fallback | 2 | R-08.1 | Transport | set_clip_gain | ffmpeg mix | partial | P0: beats land within one frame; stream duration matches video; preview audio streamed with bounded lookahead on the audio clock, onsets within 0.06 ms of timeline positions, video paint lateness median ~15 ms / p95 ~21 ms ("preview audio (streamed…", "preview playback ran to the end…"); one 3.5 s run on the CPU profile. No pan, fades, buses, AudioWorklet DSP |
 | R-10.2 | 10 | Shared DSP modules: EQ, compressor, gate, limiter, de-esser, denoise, reverb, delay, pitch | 8 | R-10.1 | Sound workspace | audio ops | Offline host | not started | |
 | R-10.3 | 10 | Meters, loudness/true-peak normalization, ducking, buses, mute/solo | 8 | R-10.2 | Meters | loudness op | Mix | not started | |
 | R-10.4 | 10 | Music tools: beat grid, tap tempo, downbeat, fit-to-duration, stems; J/L edits, crossfades | 9 | R-10.1 | Timeline | beat job | — | not started | |
@@ -138,7 +138,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-11.3 | 11 | Track controls: lock, visibility, mute, solo, rename, height, reorder, grouping | 3 | R-06.1 | Track header | update_track | — | partial | Lock/mute/hidden flags in schema; no ops or UI beyond creation |
 | R-11.4 | 11 | Ripple/roll/slip/slide, insert/overwrite, J/L, detach, freeze/reverse, ramps | 3 | R-06.6, R-05.3 | Timeline tools | new ops | — | not started | |
 | R-11.5 | 11 | Transitions with handle model and explicit shortage policy; markers and protected ranges | 7 | R-06.6 | Timeline | transition ops, marker ops | — | not started | |
-| R-11.6 | 11 | Filmstrips, waveforms, badges, minimap, keyframe lanes; virtualization by measurement | 3 | R-07.4 | Timeline | — | — | not started | |
+| R-11.6 | 11 | Filmstrips, waveforms, badges, minimap, keyframe lanes; virtualization by measurement | 3 | R-07.4 | Timeline | — | partial | Filmstrip thumbnails and waveforms on timeline clips (`apps/web/src/clipVisuals.math.test.ts` covers the index math; the drawing itself has no automated test). No minimap, keyframe lanes, virtualization measurement |
 
 ## Section 12: Catalog system and Lab
 
@@ -161,7 +161,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-14.1 | 14 | Keyframes, easing, Bezier and spring curves, motion paths, graph editor | 7 | R-05.1 | Graph editor | keyframe ops | Compositor | not started | |
+| R-14.1 | 14 | Keyframes, easing, Bezier and spring curves, motion paths, graph editor | 7 | R-05.1 | Graph editor | keyframe ops | partial | Keyframes for x, y, scale, rotation, opacity with linear/hold/ease easings; ops set_keyframe/delete_keyframe/clear_keyframes; exact preservation across trim and split (`packages/core/src/animation.test.ts`, `packages/engine/src/evaluate.test.ts`). No graph editor, Bezier/spring, motion paths, keyframes on crop/mask/effects/audio |
 | R-14.2 | 14 | Time remapping: speed, ramps, reverse, freeze, boomerang, fit-to-duration, audio policy | 7 | R-05.3 | Inspector | time ops | Compositor, audio | not started | Speed fixed at 1 |
 | R-14.3 | 14 | Typed signal bindings (beat, band, speech, motion, landmark) baked to keys | 9 | R-14.1, R-20.1 | Motion workspace | binding ops | Compositor | not started | |
 | R-14.4 | 14 | Depth features (2.5D parallax, haze, push) with stated limits | 9 | R-13.3 | Photo Motion | depth job | Compositor | not started | |
@@ -200,7 +200,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 |---|---|---|---|---|---|---|---|---|---|
 | R-18.1 | 18 | Capability registry and adapter records (versions, limits, licenses, retention, pricing, test status) | 10 | R-12.1 | Capabilities panel | get_capabilities | — | partial | `packages/providers` descriptor and adapter contract (`providers.test.ts`); no registry persistence, no UI, no REST/MCP surface |
 | R-18.2 | 18 | Browser/service/provider tiers; auto routing; local-only mode | 9 | R-18.1 | Settings | routing | — | not started | |
-| R-18.3 | 18 | On-device model manager: pinned checksums, download, cancel, quota, removal | 9 | R-18.1 | Model manager | download job | — | not started | |
+| R-18.3 | 18 | On-device model manager: pinned checksums, download, cancel, quota, removal | 9 | R-18.1 | Model manager | download job | partial | Resumable, host-restricted, size+SHA-256-verified download; explicit owner-only download bound to the exact byte count (`apps/server/src/models.test.ts`; `docs/evidence/g1-birefnet-cpu-trial.json`). Uninstall not built; cancel and quota not evidenced |
 
 ## Section 19: Signature creative workflows
 
@@ -231,7 +231,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 |---|---|---|---|---|---|---|---|---|---|
 | R-21.1 | 21 | Director chat with provider-neutral AgentRuntime and approved tools only | 11 | R-22.4 | Director panel | AgentRuntime | — | not started | |
 | R-21.2 | 21 | Permission modes Observe/Propose/Edit/Autopilot with project/track/range/budget scopes | 5 | R-26.1 | Settings | grants | — | partial | Observe/edit token scopes enforced on REST and MCP; no per-project/track scopes, budgets, Propose, Autopilot |
-| R-21.3 | 21 | Proposal branches, diffs, accept by transaction, ghost selection, Follow Agent | 5 | R-23.1 | Proposal review | proposal ops | — | not started | |
+| R-21.3 | 21 | Proposal branches, diffs, accept by transaction, ghost selection, Follow Agent | 5 | R-23.1 | Proposal review | proposal ops | partial | Presence only: agent/human ghost playhead and selection via REST and MCP `set_view`; opt-in Follow Agent that a manual seek ends (`apps/server/src/presence.ts`; phase3 proof). No proposal branches, diffs or accept |
 | R-21.4 | 21 | Pause Agent, single-use approval records bound to action hash, rate limits | 5 | R-21.2 | Header | pause_agent, approval | — | not started | |
 | R-21.5 | 21 | Untrusted-content handling; versioned playbooks as resources/prompts | 5 | R-22.5 | — | MCP prompts | — | not started | |
 
@@ -286,7 +286,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-27.1 | 27 | Provider-free core: import, timeline, text, audio, save/reload, baseline export | 0 | R-09.1 | Editor | all | Server MP4 | partial | P0: works without credentials; no keyframes, effects, caption editing |
+| R-27.1 | 27 | Provider-free core: import, timeline, text, audio, save/reload, baseline export | 0 | R-09.1 | Editor | all | Server MP4 | partial | P0: works without credentials; keyframes exist; no effects, caption editing |
 | R-27.2 | 27 | Five honest AI capability states; mocks only in tests; labelled demo projects | 10 | R-18.1 | Capabilities panel | get_capabilities | — | partial | Seven-dimension descriptor with computed blockers (`providers.test.ts`); no UI |
 | R-28.1 | 28 | Deliverables 1-12 (source, brand, OpenAPI, profiles, catalogs, manifests, containers, guidance) | 13 | all | — | — | — | not started | |
 
@@ -297,7 +297,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-29.1 | 29 | Core Hebrew glossary applied to UI strings | 0 | R-03.1 | All UI | — | — | partial | he/en dictionaries with key-parity test (`i18n.test.ts`); glossary conformance not audited |
 | R-30.1 | 30 project/history | Project, history, markers, checkpoint, fork, proposals, undo/redo tools | 5 | R-06.5, R-23.1 | — | MCP/REST | — | partial | rename_project only |
 | R-30.2 | 30 tracks, clips | Track ops and clip ops (import/add/move/trim/split/delete; slip, slide, duplicate, compound, insert) | 5 | R-11.4 | — | MCP/REST | — | partial | add_track, add_clip, move_clip, trim_clip, split_clip, delete_clip; rest missing |
-| R-30.3 | 30 time, animation, appearance | Speed, ramp, keyframe, effect, mask, blend, transition tools | 7 | R-14.1, R-13.1 | — | MCP/REST | — | not started | |
+| R-30.3 | 30 time, animation, appearance | Speed, ramp, keyframe, effect, mask, blend, transition tools | 7 | R-14.1, R-13.1 | — | MCP/REST | partial | set_keyframe, delete_keyframe, clear_keyframes only; no speed, ramp, effect, mask, blend, transition tools |
 | R-30.4 | 30 text, audio, analysis, elements, senses, jobs, permissions | Text/caption, audio, AI, recipe, sense, job and permission tool groups | 5 | R-22.3 | — | MCP/REST | — | partial | add_text, update_text, set_clip_gain, get_summary, get_timeline, render_frame, export_project, get_job; rest missing |
 
 ## Appendix A: Production catalog targets
@@ -327,36 +327,36 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-C.2 | C2 | Reference workload targets (preview, seek, large timeline, agent latency, startup, export, soak) | 13 | R-C.1 | — | bench scripts | — | not started | |
 | R-C.3 | C3 operations | Unit and property tests; 10,000 nightly sequences; undo-all/redo-all projection compare | 1 | R-06.5 | — | test suites | — | partial | Time property tests, op unit tests, and undo-all/redo-all projection property test, 60 runs per test run (`undo.test.ts`; `PF_PROPERTY_RUNS` raises it). The 10,000-sequence nightly run is not set up |
 | R-C.4 | C3 concurrency | Three-client random interleavings, 1,000 seeded schedules, offline conflicts | 3 | R-07.1 | — | test suites | — | partial | Three clients (2 REST+SSE, 1 MCP), 15 seeds x 40 steps per run (`packages/evals/src/convergence.test.ts`). The 1,000-seed nightly run is not set up; offline drafts and revoked access not covered |
-| R-C.5 | C3 media | Barcode fixtures, 1,000 random seeks per fixture, codec/GOP/VFR/rotation matrix | 2 | R-08.2 | — | fixtures | — | partial | `packages/fixtures` barcode generator; H.264+B-frames only, no seek matrix |
-| R-C.6 | C3 sync | Ten-minute flash/beep A/V offset, no cumulative drift | 4 | R-10.1 | — | proof | — | partial | P0: beeps within one frame on a short fixture; no ten-minute run |
+| R-C.5 | C3 media | Barcode fixtures, 1,000 random seeks per fixture, codec/GOP/VFR/rotation matrix | 2 | R-08.2 | — | fixtures | — | partial | `packages/fixtures` barcode generator; `seek-conformance.ts` runs 7 fixtures (H.264 gop30/bf2, gop250/bf3, 29.97 fps, 60-in-30, VP9/WebM, AV1/MP4, 25 fps) x 1,000 seeded random seeks plus sequential control, 0 mismatches in the worker-reported run; report not committed. HEVC conformed rather than decoded, VFR/rotation only via `conform.test.ts`; nightly/repeat runs not set up |
+| R-C.6 | C3 sync | Ten-minute flash/beep A/V offset, no cumulative drift | 4 | R-10.1 | — | proof | — | partial | P0: beeps within one frame on a short fixture; ten-minute test written (`packages/evals/src/av-sync-long.ts`), run pending: `docs/evidence/av-sync-long.json` does not exist |
 | R-C.7 | C3 render parity | Raw preview vs headless (2/255) and decoded export (SSIM, PSNR) plus text/mask/temporal checks | 4 | R-09.1 | — | proof | — | partial | P0: lossy parity PSNR>=36, SSIM>=0.985; no raw-vs-raw test, no edge checks |
 | R-C.8 | C3 temporal | Random-seek equals sequential for seeded temporal effects | 7 | R-08.5 | — | tests | — | not started | |
 | R-C.9 | C3 audio DSP | Null tests, latency compensation, loudness within 0.5 LU | 8 | R-10.2 | — | tests | — | not started | |
 | R-C.10 | C3 captions, beats | Word-boundary error (median 80 ms, p95 200 ms) and beat F1 corpora | 9 | R-16.2, R-10.4 | — | corpora | — | not started | |
 | R-C.11 | C3 durability, money | Crash between commit, outbox, queue, event; provider timeout; budget races | 10 | R-20.2 | — | tests | — | partial | `store.test.ts` outbox and job restart recovery; no provider or budget cases |
 | R-C.12 | C3 security | SSRF, archive traversal, webhook auth, secret redaction, origin checks | 13 | R-26.3 | — | tests | — | partial | P0 origin, Host and scope checks only |
-| R-C.13 | C3 accessibility | Automated and manual keyboard, screen-reader, RTL/LTR, niqqud, reduced-motion checks | 13 | R-03.3 | — | Playwright | — | partial | P0: RTL boot, LTR timeline, Hebrew+niqqud text; no automated a11y suite |
+| R-C.13 | C3 accessibility | Automated and manual keyboard, screen-reader, RTL/LTR, niqqud, reduced-motion checks | 13 | R-03.3 | — | Playwright | — | partial | P0: RTL boot, LTR timeline, Hebrew+niqqud text; phase3 proof: keyboard-only import/arrange/trim/split/keyframe workflow, palette focus. No axe run, no screen-reader walkthrough, no automated a11y suite |
 | R-C.14 | C4 | Ten repeatable acceptance demonstrations with script, fixtures, assertions, outcome | 13 | R-00.2 | — | demo scripts | — | not started | Phase 0 proof is not one of the ten |
 
 ## Addendum A1: Freefield / ComfyUI requirements
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| FF-01 | Addendum 4, FF-01 | ComfyUI as optional provider behind provider/job/op layers; no raw graph from untrusted agents | G0 (2, 10) | R-18.1, R-20.1 | Capabilities panel | provider job | — | partial | Smoke capability runs as a durable Studio job via UI, REST and MCP; no raw-graph route (`docs/evidence/g0-smoke-proof.json`). Output attachment via ops now exists (see FF-08). Missing: media inputs, budget checks. |
+| FF-01 | Addendum 4, FF-01 | ComfyUI as optional provider behind provider/job/op layers; no raw graph from untrusted agents | G0 (2, 10) | R-18.1, R-20.1 | Capabilities panel | provider job | — | partial | Smoke and media-input capabilities run as durable Studio jobs via UI, REST and MCP; no raw-graph route; media parameters accept only project asset ids (`docs/evidence/g0-smoke-proof.json` "media parameters accept only…"). Missing: video/audio range inputs, budget checks |
 | FF-02 | FF-02 | Adapter contract: discover, probe, estimate, submit, status, cancel, collect; progress labelled; brief and prompt kept | G0 (10) | FF-01 | Jobs tray | adapter | — | partial | Contract + ComfyUI HTTP adapter: probe, submit, status, cancel, collect, reconcile by request id (`docs/evidence/g0-smoke-proof.json`). Missing: estimates from measurements, prompt/brief retention, remote workers. |
 | FF-03 | FF-03 | Reviewed workflow import: draft only, review checklist, no install or execution | G0 (10) | FF-04 | Import review | import_workflow | — | partial | Parse-only API-format importer and `POST /capabilities/import` return drafts with blockers (`providers.test.ts`, `docs/evidence/g0-smoke-proof.json`). Missing: UI-format, persisted drafts, review UI, publication flow. |
-| FF-04 | FF-04 | Descriptor with seven separate qualification statuses and publication blockers | G0 (10) | R-18.1 | Capabilities panel | descriptor | — | partial | Seven dimensions and computed blockers (`providers.test.ts`); no persistence, no UI |
-| FF-05 | FF-05 | Capability packs with shared dependencies, missing bytes, resumable digest-verified download | G1 (9) | FF-04, R-18.3 | Model manager | pack job | — | not started | |
+| FF-04 | FF-04 | Descriptor with seven separate qualification statuses and publication blockers | G0 (10) | R-18.1 | Capabilities panel | descriptor | — | partial | Seven dimensions and computed blockers (`providers.test.ts`); open quality/Hebrew reviews do not block a run but label capability and results experimental (`apps/server/src/capabilities.ts`; `g1-birefnet-cpu-trial.json` "capability is listed as experimental…"). No persistence, no UI |
+| FF-05 | FF-05 | Capability packs with shared dependencies, missing bytes, resumable digest-verified download | G1 (9) | FF-04, R-18.3 | Model manager | pack job | partial | Ready only with exact size + SHA-256; resumable, host-restricted verified downloads (`apps/server/src/models.test.ts`; `docs/evidence/g1-birefnet-cpu-trial.json`). Missing: shared-dependency accounting, uninstall, readiness report for disk/RAM/GPU |
 | FF-06 | FF-06 | Resource metadata separating download, residency, host RAM, measured VRAM, stage time, cost | G1 (9) | FF-04 | Capability card | — | — | partial | Separate fields exposed by the API; one measured CPU stage-time profile (`docs/evidence/g0-smoke-proof.json`). No device-memory measurement (no GPU). |
 | FF-07 | FF-07 | Worker admission: no billable wake from browsing, prewarm rules, lease, affinity | G0 (10) | R-20.3 | Jobs tray | worker lease | — | partial | Listing/polling submits nothing; queued cancel leaves the running job untouched (`docs/evidence/g0-smoke-proof.json`). Missing: worker lease, prewarm, affinity, multi-user ownership. |
-| FF-08 | FF-08 | Durable job and media contract: bounded range transfer, probed outputs, canonical attachment | G0 (10) | R-20.1, R-20.4 | Jobs tray | provider job | Attached asset | partial | Durable intent before dispatch, idempotency key, restart resume, submission-unknown, outputs digested and probed before success (`docs/evidence/g0-smoke-proof.json`). Outputs become derived assets with lineage (job, capability version, graph digest, params, provider) and attach through `add_clip` in their own revision; undo removes the clip and keeps the asset; stale-result check present. Missing: source-range staging of media inputs, cost reservation. |
+| FF-08 | FF-08 | Durable job and media contract: bounded range transfer, probed outputs, canonical attachment | G0 (10) | R-20.1, R-20.4 | Jobs tray | provider job | Attached asset | partial | Durable intent before dispatch, idempotency key, restart resume, submission-unknown, outputs digested and probed before success (`docs/evidence/g0-smoke-proof.json`). Outputs become derived assets with lineage and attach through `add_clip` in their own revision; undo removes the clip and keeps the asset; stale-result check. Image inputs staged from project asset ids only, streamed under content-addressed names, declared output-size contracts ("media workflow ran…", "lineage:"). Missing: video/audio source-range staging, cost reservation |
 | FF-09 | FF-09 | Lab examples from recorded runs: load, restore settings, compare, flag weak, replace | G2 (7) | R-12.2, FF-08 | /lab | example replay | — | not started | |
 | FF-10 | FF-10 | Typed "Use in..." chaining and recipe chains with lineage and cached partial reuse | G2 (11) | FF-08, R-24.1 | Use in... menu | chain plan | — | not started | |
 | FF-11 | FF-11 | Reference Board with role-typed sets and versions in history; LoRA training deferred | G2 (11) | FF-10 | Reference Board | reference ops | — | not started | |
 | FF-12 | FF-12 | Generative Reframe as explicit mode beside Crop/Fit/Blur-fill; protected region; timing preserved | G2 (12) | FF-08, R-19.6 | Reframe mode | reframe job | Attached asset | not started | |
 | FF-13 | FF-13 | Relight (image first), Mixed Media, Cinema controls as creative guidance | G2 (10) | FF-08 | Effects drawer | provider job | Attached asset | not started | |
 | FF-14 | FF-14 | Motion Transfer and Recast with enforced segment limits; reject, never truncate | G3 (10) | FF-08 | Recast panel | provider job | Attached asset | not started | |
-| FF-15 | FF-15 | Typed auxiliary outputs (matte, depth, normals, guide, audio, preview) with labelled visualisations | G1 (9) | FF-08 | Asset inspector | provider job | Aux assets | not started | |
+| FF-15 | FF-15 | Typed auxiliary outputs (matte, depth, normals, guide, audio, preview) with labelled visualisations | G1 (9) | FF-08 | Asset inspector | provider job | partial | Typed output bundle with RGBA cutout and matte role for `comfy.image.remove-background` (`docs/evidence/g1-birefnet-cpu-trial.json` "typed output bundle…"). No depth or normals, no numeric-encoding contract beyond the label |
 | FF-X1 | Addendum 7 | Camera Copy, with Cameraman v2 excluded from commercial profile | G3 | FF-14, FFG-12 | — | — | — | conditional | Needs licensed implementation |
 | FF-X2 | Addendum 7 | Novel-view Reshoot with warp guide and synthesized-hole display | G3 | FF-14 | — | — | — | conditional | Model terms unresolved |
 | FF-X3 | Addendum 7 | Learned SDR-to-HDR with real high-bit-depth pipeline | G3 | R-08.4 | — | — | — | conditional | Needs HDR export path |
@@ -371,7 +371,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | FFG-01 | Addendum 9 | Provider boundary: UI, REST and MCP create the same authoritative job shape | G0 (10) | FF-01 | Jobs tray | provider job | — | done | `docs/evidence/g0-smoke-proof.json`: MCP and UI job shapes equal the REST job shape |
 | FFG-02 | Addendum 9 | Structural import: unbound controls and unknown models block publication | G0 (10) | FF-03 | Import review | import_workflow | — | done | `providers.test.ts` structural blockers |
 | FFG-03 | Addendum 9 | No implicit execution: import performs no install, node execution or GPU wake | G0 (10) | FF-03 | — | import_workflow | — | done | `providers.test.ts` (no network on import); `docs/evidence/g0-smoke-proof.json`: check "import executed nothing on the provider" |
-| FFG-04 | Addendum 9 | Model integrity: partial or corrupt file fails digest and is never ready | G1 (9) | FF-05 | Model manager | pack job | — | partial | Digest required by descriptor; no downloader |
+| FFG-04 | Addendum 9 | Model integrity: partial or corrupt file fails digest and is never ready | G1 (9) | FF-05 | Model manager | pack job | — | done | `apps/server/src/models.test.ts`: partial download resumed, digest mismatch refused, never ready until size + SHA-256 verified; `g1-birefnet-cpu-trial.json` "model downloaded by an explicit owner action and verified…" |
 | FFG-05 | Addendum 9 | Resource qualification: download, residency and measured VRAM shown separately | G1 (9) | FF-06 | Capability card | — | — | partial | `docs/evidence/g0-smoke-proof.json`: fields are separate in the API; no measured device memory exists yet (CPU only) |
 | FFG-06 | Addendum 9 | Worker isolation: concurrent jobs cannot unload or interrupt another's worker | G0 (10) | FF-07 | — | worker lease | — | partial | `docs/evidence/g0-smoke-proof.json`: cancelling a queued job does not interrupt the job owning the worker. No lease; ComfyUI interrupt is global |
 | FFG-07 | Addendum 9 | Recovery: restart preserves known jobs; ambiguous submissions reconciled without blind retry | G0 (10) | R-20.2 | Jobs tray | reconcile_job | — | partial | `docs/evidence/g0-smoke-proof.json`: restart resumes a known job without resubmission; lost-response and never-received cases via injected faults. Not tested: real crash inside the submit call; paid providers |

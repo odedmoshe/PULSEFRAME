@@ -35,6 +35,22 @@ export const AssetSchema = z
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string() }).strict().optional(),
     image: z.object({ width: z.number().int().positive(), height: z.number().int().positive(), codec: z.string(), hasAlpha: z.boolean() }).strict().optional(),
+    /**
+     * Present when the stored media is a conformed copy (SPEC §7): the original could not be edited directly
+     * (variable frame rate, rotation metadata, or a codec the editor cannot decode). The original bytes are kept.
+     */
+    conform: z
+      .object({
+        originalContentHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+        originalByteSize: z.number().int().nonnegative(),
+        reasons: z.array(z.enum(['variable-frame-rate', 'rotation', 'codec'])).min(1),
+        original: z.object({ codec: z.string(), width: z.number().int(), height: z.number().int(), avgFrameRate: z.string(), rFrameRate: z.string(), rotation: z.number(), frameCount: z.number().int().nullable(), durationSeconds: z.number() }).strict(),
+        /** How source frames map to conformed frames. */
+        frameMapping: z.enum(['identity', 'cfr-nearest-timestamp']),
+        method: z.string(),
+      })
+      .strict()
+      .optional(),
     provenance: z
       .object({
         origin: z.enum(['upload', 'fixture', 'generated', 'derived']),
@@ -79,7 +95,21 @@ export const DEFAULT_TEXT_STYLE = {
   fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.06, color: '#FFFFFF', align: 'center', direction: 'auto', lineHeight: 1.2, background: null, stroke: '#000000', strokeFrac: 0.08,
 } as const satisfies z.infer<typeof TextStyleSchema>;
 
-const ClipBase = { id: Id, start: RationalTimeSchema, duration: RationalTimeSchema, transform: TransformSchema };
+export const ANIMATABLE = ['x', 'y', 'scale', 'rotation', 'opacity'] as const;
+export type Animatable = (typeof ANIMATABLE)[number];
+export const EASINGS = ['linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out'] as const;
+export const KeyframeSchema = z
+  .object({
+    /** Offset from the clip start. May lie outside [0, duration): after a trim or split the curve keeps its exact shape. */
+    time: RationalTimeSchema,
+    value: z.number(),
+    /** Shape of the segment that STARTS at this key. */
+    easing: z.enum(EASINGS),
+  })
+  .strict();
+/** Per-property keyframe lists, strictly increasing in time. A property without keys uses the static transform value. */
+export const KeyframesSchema = z.object(Object.fromEntries(ANIMATABLE.map((p) => [p, z.array(KeyframeSchema).max(2000).optional()])) as Record<Animatable, z.ZodOptional<z.ZodArray<typeof KeyframeSchema>>>).strict();
+const ClipBase = { id: Id, start: RationalTimeSchema, duration: RationalTimeSchema, transform: TransformSchema, keyframes: KeyframesSchema.optional() };
 export const MediaClipSchema = z
   .object({
     ...ClipBase,
@@ -115,6 +145,8 @@ export const ProjectSchema = z
 export type RationalTimeJson = z.infer<typeof RationalTimeSchema>;
 export type Asset = z.infer<typeof AssetSchema>;
 export type Transform = z.infer<typeof TransformSchema>;
+export type Keyframe = z.infer<typeof KeyframeSchema>;
+export type Keyframes = z.infer<typeof KeyframesSchema>;
 export type TextStyle = z.infer<typeof TextStyleSchema>;
 export type MediaClip = z.infer<typeof MediaClipSchema>;
 export type TextClip = z.infer<typeof TextClipSchema>;

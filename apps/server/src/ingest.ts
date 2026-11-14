@@ -24,6 +24,12 @@ const MIME: Record<string, string> = { mp4: 'video/mp4', webm: 'video/webm', wav
 
 const ALPHA_PIX = /^(rgba|bgra|argb|abgr|ya\d|yuva|gbrap|pal8|rgba64|ya16)/;
 export type MediaMeta = Pick<Asset, 'kind' | 'container' | 'mimeType' | 'duration' | 'video' | 'audio' | 'image'>;
+/** Video codecs the editor decodes directly (WebCodecs, measured in docs/CAPABILITIES.md). Anything else is conformed. */
+const EDITABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1']);
+export class NeedsConform extends Error {
+  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }) { super('needs conform'); }
+}
+const STANDARD_RATES = [[24000, 1001], [24, 1], [25, 1], [30000, 1001], [30, 1], [50, 1], [60000, 1001], [60, 1]] as const;
 /** Probe a local file and describe it as asset metadata. Used for uploads and for provider outputs alike. */
 export async function describeMedia(file: string): Promise<MediaMeta> {
   let probe;
@@ -49,10 +55,18 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
   if (v) {
     const rate = parseRate(v.avg_frame_rate) ?? parseRate(v.r_frame_rate);
     if (!rate) throw new ApiError(415, 'unsupported_media', 'video stream has no usable frame rate');
-    if (v.avg_frame_rate !== v.r_frame_rate) throw new ApiError(415, 'unsupported_media', 'variable-frame-rate sources are not supported yet (planned conform route, Phase 2)', { avg: v.avg_frame_rate, r: v.r_frame_rate });
     const frameCount = v.nb_frames ? Number(v.nb_frames) : null;
     const rotation = Number(v.side_data_list?.find((s: any) => s.rotation !== undefined)?.rotation ?? 0);
-    if (rotation % 360 !== 0) throw new ApiError(415, 'unsupported_media', 'rotated sources are not supported yet (Phase 2)', { rotation });
+    const reasons: NeedsConform['reasons'] = [];
+    if (v.avg_frame_rate !== v.r_frame_rate) reasons.push('variable-frame-rate');
+    if (rotation % 360 !== 0) reasons.push('rotation');
+    if (!EDITABLE_VIDEO.has(v.codec_name)) reasons.push('codec');
+    if (reasons.length) {
+      // Constant target rate: the standard rate nearest the average rate (a documented choice, not a guess per frame).
+      const avg = rate.num / rate.den;
+      const [num, den] = [...STANDARD_RATES].sort((x, y) => Math.abs(x[0] / x[1] - avg) - Math.abs(y[0] / y[1] - avg))[0]!;
+      throw new NeedsConform(reasons, { codec: v.codec_name, width: v.width, height: v.height, avgFrameRate: v.avg_frame_rate, rFrameRate: v.r_frame_rate, rotation, frameCount, durationSeconds: Number(probe.format?.duration ?? 0) }, reasons.includes('variable-frame-rate') ? { num, den } : rate);
+    }
     // Exact duration from frame count when the container states it; otherwise the decimal container duration.
     if (frameCount) duration = T.frameTime(frameCount, rate);
     video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount };
@@ -78,10 +92,41 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
   try {
     await pipeline(Readable.fromWeb(body as any), meter, fs.createWriteStream(tmp, { mode: 0o600 }));
     if (size === 0) throw new ApiError(400, 'empty_upload', 'upload body is empty');
-    const meta = await describeMedia(tmp);
-    const contentHash = `sha256:${hash.digest('hex')}`;
-    store.putBlob(contentHash, tmp, size, meta.mimeType);
-    return { ...meta, name: path.basename(name).slice(0, 256) || 'untitled', contentHash, byteSize: size, provenance: { origin: 'upload', importedAt: new Date().toISOString(), importedBy: actor } };
+    const originalHash = `sha256:${hash.digest('hex')}`;
+    const provenance = { origin: 'upload' as const, importedAt: new Date().toISOString(), importedBy: actor };
+    const assetName = path.basename(name).slice(0, 256) || 'untitled';
+    let meta: MediaMeta;
+    try {
+      meta = await describeMedia(tmp);
+    } catch (e) {
+      if (!(e instanceof NeedsConform)) throw e;
+      // Conform route: keep the original bytes untouched, edit a constant-rate, upright H.264 copy, record the mapping.
+      const out = `${tmp}.conform.mp4`;
+      try {
+        await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-protocol_whitelist', 'file', '-i', tmp,
+          '-map', '0:v:0', '-map', '0:a:0?', '-fps_mode', 'cfr', '-r', `${e.targetRate.num}/${e.targetRate.den}`,
+          '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-bf', '2',
+          '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out], { timeout: 30 * 60_000, maxBuffer: 8 << 20 });
+        const conformed = await describeMedia(out);
+        const cHash = createHash('sha256');
+        await pipeline(fs.createReadStream(out), cHash);
+        const contentHash = `sha256:${cHash.digest('hex')}`;
+        const cSize = fs.statSync(out).size;
+        store.putBlob(originalHash, tmp, size, 'application/octet-stream');
+        store.putBlob(contentHash, out, cSize, conformed.mimeType);
+        return {
+          ...conformed, name: assetName, contentHash, byteSize: cSize, provenance,
+          conform: { originalContentHash: originalHash, originalByteSize: size, reasons: e.reasons, original: e.original, frameMapping: e.reasons.includes('variable-frame-rate') ? 'cfr-nearest-timestamp' : 'identity', method: `ffmpeg libx264 crf 15, -fps_mode cfr -r ${e.targetRate.num}/${e.targetRate.den}, display rotation applied` },
+        };
+      } catch (err) {
+        if (err instanceof ApiError || err instanceof NeedsConform) throw new ApiError(415, 'unsupported_media', 'the file needed conforming and the conformed result is still not editable', { reasons: e.reasons });
+        throw new ApiError(415, 'unsupported_media', `the file needs conforming (${e.reasons.join(', ')}) and ffmpeg could not convert it`, { reasons: e.reasons });
+      } finally {
+        fs.rmSync(out, { force: true });
+      }
+    }
+    store.putBlob(originalHash, tmp, size, meta.mimeType);
+    return { ...meta, name: assetName, contentHash: originalHash, byteSize: size, provenance };
   } finally {
     fs.rmSync(tmp, { force: true });
   }

@@ -1,5 +1,5 @@
 import * as T from '@pulseframe/time';
-import type { Clip, ProjectDocument, Track } from './schema.ts';
+import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -44,6 +44,16 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if (prev && forbidsOverlap(tr) && T.lt(c.start, clipEnd(prev)))
           issues.push({ code: 'overlap', message: `clips ${prev.id} and ${c.id} overlap on ${tr.kind} track ${tr.id}`, ids: [prev.id, c.id] });
         prev = c;
+        for (const prop of ANIMATABLE) {
+          const keys = c.keyframes?.[prop];
+          if (!keys) continue;
+          if (keys.length === 0) issues.push({ code: 'empty_keyframes', message: `clip ${c.id} has an empty ${prop} keyframe list`, ids: [c.id] });
+          keys.forEach((k, i) => {
+            if (i > 0 && !T.lt(keys[i - 1]!.time, k.time)) issues.push({ code: 'unsorted_keyframes', message: `clip ${c.id} ${prop} keyframes are not strictly increasing in time`, ids: [c.id] });
+            if (!T.isFrameAligned(k.time, rate)) issues.push({ code: 'not_frame_aligned', message: `clip ${c.id} ${prop} keyframe is not on a frame boundary`, ids: [c.id] });
+            if (!TransformSchema.shape[prop].safeParse(k.value).success) issues.push({ code: 'keyframe_out_of_range', message: `clip ${c.id} ${prop} keyframe value ${k.value} is out of range`, ids: [c.id] });
+          });
+        }
         if (c.type === 'text') {
           if (tr.kind !== 'text') issues.push({ code: 'incompatible_track', message: `text clip ${c.id} on ${tr.kind} track`, ids: [c.id, tr.id] });
           continue;

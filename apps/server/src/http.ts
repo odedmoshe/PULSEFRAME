@@ -14,6 +14,7 @@ import type { DerivativeKind, Derivatives } from './derive.ts';
 import type { Exporter } from './export.ts';
 import { ingestUpload } from './ingest.ts';
 import { buildOpenApi } from './openapi.ts';
+import type { Presence } from './presence.ts';
 import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
 
 const TxBody = z
@@ -43,7 +44,7 @@ const RunBody = z
   .strict();
 const ImportBody = z.object({ id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/), title: z.string().min(1).max(120), graph: z.unknown() }).strict();
 
-export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, mcp: (req: Request) => Promise<Response>) {
+export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>) {
   const app = new Hono<Env>();
   const body = async <S extends z.ZodType>(c: Context, schema: S): Promise<z.infer<S>> => {
     const parsed = schema.safeParse(await c.req.json().catch(() => undefined));
@@ -66,7 +67,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       c.header('Vary', 'Origin');
       if (c.req.method === 'OPTIONS') {
         c.header('Access-Control-Allow-Headers', 'content-type, authorization, x-filename');
-        c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
         return c.body(null, 204);
       }
     }
@@ -173,6 +174,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       const onDerivative = (d: any) => { const a = Object.values(store.getProject(projectId).doc.assets).find((x) => x.contentHash === d.assetHash); if (a) void stream.writeSSE({ event: 'derivative', data: JSON.stringify({ assetId: a.id, kind: d.kind, status: d.status }) }); };
       store.events.on('job', onJob);
       store.events.on('derivative', onDerivative);
+      const onPresence = (p: any) => p.projectId === projectId && void stream.writeSSE({ event: 'presence', data: JSON.stringify(p) });
+      presence.events.on('presence', onPresence);
       try {
         await stream.writeSSE({ event: 'hello', data: JSON.stringify({ revision: current }) });
         for (const e of store.eventsSince(projectId, since)) await send(e);
@@ -183,9 +186,20 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
         store.events.off('revision', onEvent);
         store.events.off('job', onJob);
         store.events.off('derivative', onDerivative);
+        presence.events.off('presence', onPresence);
       }
     });
   });
+
+  // ----- presence: transient session state, never part of the document or the op log -----
+  const PresenceBody = z.object({ sessionId: z.string().min(1).max(64), frame: z.number().int().nonnegative().nullable().optional(), selection: z.array(z.string()).max(200).optional(), label: z.string().max(80).optional() }).strict();
+  app.put('/api/v1/projects/:id/presence', async (c) => {
+    const p = need(c, 'observe');
+    store.getProject(c.req.param('id'));
+    const b = await body(c, PresenceBody);
+    return c.json(presence.update(c.req.param('id'), { sessionId: b.sessionId, actor: p.actor, kind: p.kind, frame: b.frame ?? null, selection: b.selection ?? [], label: b.label ?? null }));
+  });
+  app.get('/api/v1/projects/:id/presence', (c) => { need(c, 'observe'); return c.json({ presence: presence.list(c.req.param('id')) }); });
 
   // ----- media -----
   app.post('/api/v1/projects/:id/assets', async (c) => {

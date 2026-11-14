@@ -40,3 +40,23 @@ describe('evaluate', () => {
     expect(resolveDirection('שלום', 'ltr')).toBe('ltr');
   });
 });
+
+describe('animated layers', () => {
+  it('evaluate applies keyframes per frame and is identical for random and sequential access', () => {
+    let doc = project();
+    const text = doc.sequences.seq_main!.tracks.find((t) => t.kind === 'text')!.clips[0]!;
+    doc = applyTransaction(doc, [
+      { op: 'set_keyframe', args: { clipId: text.id, property: 'y', time: f(0), value: 0.4 } },
+      { op: 'set_keyframe', args: { clipId: text.id, property: 'y', time: f(10), value: -0.1, easing: 'ease-out' } },
+      { op: 'set_keyframe', args: { clipId: text.id, property: 'opacity', time: f(0), value: 0 } },
+      { op: 'set_keyframe', args: { clipId: text.id, property: 'opacity', time: f(5), value: 1 } },
+    ], { idSeed: 'k', actor: 't' }).doc;
+    const layer = (frame: number) => evaluate(doc, f(frame)).layers.find((l) => l.kind === 'text')!;
+    expect(layer(45).transform).toMatchObject({ y: 0.4, opacity: 0 });
+    expect(layer(50).transform.y).toBeCloseTo(0.15, 10);
+    expect(layer(50).transform.opacity).toBe(1);
+    expect(layer(55).transform.y).toBeCloseTo(-0.1, 10);
+    const seq = Array.from({ length: 15 }, (_, i) => JSON.stringify(layer(45 + i).transform));
+    for (const i of [14, 0, 7, 3, 11]) expect(JSON.stringify(layer(45 + i).transform)).toBe(seq[i]);
+  });
+});
