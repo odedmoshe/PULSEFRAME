@@ -53,12 +53,12 @@ describe('qualification and licensing (FF-04, §8 of the addendum)', () => {
     expect(codes(SMOKE_SOLID_IMAGE).sort()).toEqual(['not_executed', 'not_hardwareQualified']);
   });
   it('a research-only model excludes the workflow from the commercial profile even when everything else passes', () => {
-    const d = withFlags({ ...SMOKE_SOLID_IMAGE, id: 'test.camera-copy', models: [{ role: 'lora', path: 'cameraman_v2.safetensors', publisher: 'Cseti', revision: 'abc', sha256: 'a'.repeat(64), bytes: 1000, license: 'research-only', licenseEvidence: 'publisher model card', commercialUse: 'prohibited', gated: false }] });
+    const d = withFlags({ ...SMOKE_SOLID_IMAGE, id: 'test.camera-copy', models: [{ role: 'lora', path: 'cameraman_v2.safetensors', publisher: 'Cseti', revision: 'abc', sha256: 'a'.repeat(64), bytes: 1000, license: 'research-only', licenseEvidence: 'publisher model card', commercialUse: 'prohibited', gated: false, source: null }] });
     expect(codes(d, 'commercial')).toEqual(['model_not_commercially_eligible']);
     expect(codes(d, 'research')).toEqual([]);
   });
   it('a size or a file name is not integrity: a model without a digest stays unresolved', () => {
-    const d = withFlags({ ...SMOKE_SOLID_IMAGE, models: [{ role: 'ckpt', path: 'm.safetensors', publisher: 'p', revision: 'r', sha256: null, bytes: 123, license: 'x', licenseEvidence: 'y', commercialUse: 'allowed', gated: false }] });
+    const d = withFlags({ ...SMOKE_SOLID_IMAGE, models: [{ role: 'ckpt', path: 'm.safetensors', publisher: 'p', revision: 'r', sha256: null, bytes: 123, license: 'x', licenseEvidence: 'y', commercialUse: 'allowed', gated: false, source: null }] });
     expect(codes(d)).toEqual(['unresolved_model']);
   });
   it('editing a reviewed graph invalidates its digest', () => {

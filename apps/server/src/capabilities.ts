@@ -14,11 +14,18 @@ import {
 } from '@pulseframe/providers';
 import type { Config } from './config.ts';
 import { describeMedia, ffprobe } from './ingest.ts';
+import { ModelStore, type ModelStatus } from './models.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
 const TYPE = 'capability';
-/** These two dimensions can only be earned by running; they do not stop a diagnostic/first run. */
-const EARNED_BY_RUNNING = new Set(['not_executed', 'not_hardwareQualified']);
+/**
+ * Dimensions that can only be earned from actual outputs. They never stop a run (otherwise nothing could be
+ * evaluated), but while any is open the capability is EXPERIMENTAL: listed as such, and every result is labelled.
+ * Structural, dependency, licence and egress blockers always stop execution.
+ */
+const EARNED_BY_RUNNING = new Set(['not_executed', 'not_hardwareQualified', 'not_qualityReviewed', 'not_hebrewQualified']);
+/** Run-earned dimensions that a recorded run does NOT satisfy by itself: they need a human review. */
+const NEEDS_REVIEW = new Set(['not_qualityReviewed', 'not_hebrewQualified']);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class Capabilities {
@@ -26,8 +33,10 @@ export class Capabilities {
   private configError: string | null = null;
   private active = new Map<string, Promise<void>>();
   private stopped = false;
+  readonly models: ModelStore;
 
   constructor(private store: Store, private cfg: Config, adapter?: ProviderAdapter) {
+    this.models = new ModelStore(cfg.comfyuiModelsDir, cfg.modelHosts);
     if (adapter) this.adapter = adapter;
     else if (cfg.comfyuiUrl) {
       try { this.adapter = new ComfyUIAdapter(cfg.comfyuiUrl, { allowRemote: cfg.comfyuiAllowRemote }); } catch (e: any) { this.configError = e.message; }
@@ -55,17 +64,23 @@ export class Capabilities {
     return {
       profile: this.cfg.distributionProfile,
       provider: await this.providerStatus(),
-      capabilities: BUILTIN_CAPABILITIES.map((raw) => {
+      capabilities: await Promise.all(BUILTIN_CAPABILITIES.map(async (raw) => {
         const d = this.withEvidence(raw);
         const blockers = publicationBlockers(d, this.cfg.distributionProfile);
+        const modelStatus = await this.modelStatus(d);
+        const modelsReady = modelStatus.every((m) => m.state === 'ready');
         return {
           id: d.id, version: d.version, state: d.state, title: d.title, description: d.description, graphDigest: d.graphDigest,
           inputs: d.inputs.map(({ binding: _b, reviewed: _r, ...i }) => i), outputs: d.outputs.map((o) => ({ name: o.name, role: o.role, mediaType: o.mediaType, encoding: o.encoding })),
-          models: d.models, resources: d.resources, limits: d.limits, limitations: d.limitations, qualification: d.qualification,
-          blockers, runnable: !!this.adapter && this.executionBlockers(blockers).length === 0,
+          models: d.models.map((m, i) => ({ ...m, status: modelStatus[i] })), modelsReady, missingDownloadBytes: modelStatus.reduce((n, m) => n + (m.state === 'ready' ? 0 : m.missingBytes), 0), resources: d.resources, limits: d.limits, limitations: d.limitations, qualification: d.qualification,
+          blockers, runnable: !!this.adapter && modelsReady && this.executionBlockers(blockers).length === 0,
+          experimental: blockers.some((b) => NEEDS_REVIEW.has(b.code)), openReviews: blockers.filter((b) => NEEDS_REVIEW.has(b.code)).map((b) => b.code.slice(4)),
         };
-      }),
+      })),
     };
+  }
+  modelStatus(d: CapabilityDescriptor): Promise<ModelStatus[]> {
+    return Promise.all(d.models.map((m) => this.models.status(m)));
   }
   private executionBlockers = (b: Blocker[]) => b.filter((x) => !EARNED_BY_RUNNING.has(x.code));
 
@@ -81,6 +96,42 @@ export class Capabilities {
     }
   }
 
+  /**
+   * Explicit, human-authorised model download (FF-05). `confirmBytes` must equal the exact missing byte count
+   * the caller was shown, so an approval cannot silently cover a different (larger) download.
+   */
+  async startDownload(projectId: string, capabilityId: string, confirmBytes: number, actor: string): Promise<JobRow> {
+    const d = this.descriptor(capabilityId);
+    const status = await this.modelStatus(d);
+    const missing = status.reduce((n, m) => n + (m.state === 'ready' ? 0 : m.missingBytes), 0);
+    if (missing === 0) throw new ApiError(409, 'models_already_ready', 'all model files for this capability are present and verified');
+    const lic = publicationBlockers(d, this.cfg.distributionProfile).filter((b) => /model|license|unresolved/i.test(b.code));
+    if (lic.length) throw new ApiError(409, 'capability_blocked', 'model files for this capability may not be downloaded in this profile', { blockers: lic });
+    if (confirmBytes !== missing) throw new ApiError(409, 'download_size_mismatch', `this download is ${missing} bytes; confirmBytes was ${confirmBytes}`, { missingDownloadBytes: missing }, 'Re-read the capability and confirm the exact size shown.');
+    const job = this.store.createJob(projectId, 'model-download', actor, { capabilityId: d.id, capabilityVersion: d.version, approvedBytes: missing, models: d.models.map((m) => ({ path: m.path, sha256: m.sha256, bytes: m.bytes, source: m.source })) });
+    void this.driveDownload(job.id, d);
+    return job;
+  }
+  private async driveDownload(jobId: string, d: CapabilityDescriptor) {
+    const started = Date.now();
+    try {
+      this.store.updateJob(jobId, { status: 'running', stage: 'preparing', attempt: 1 });
+      const done: ModelStatus[] = [];
+      for (const m of d.models) {
+        let last = 0;
+        done.push(await this.models.download(m, (got, total) => {
+          if (got - last < 8 << 20 && got !== total) return;
+          last = got;
+          this.store.updateJob(jobId, { stage: `downloading ${m.path}: ${got}/${total} bytes (measured)` });
+        }));
+        this.store.updateJob(jobId, { stage: `verified ${m.path}` });
+      }
+      this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { models: done, wallSeconds: (Date.now() - started) / 1000 } });
+    } catch (e: any) {
+      this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'model_download_failed', message: String(e?.message ?? e), retryable: true } });
+    }
+  }
+
   /** The single entry point used by UI, REST and MCP. */
   start(req: { projectId: string; capabilityId: string; params: Record<string, unknown>; actor: string; idempotencyKey?: string; attach?: { start: unknown; duration?: unknown; trackId?: string }; dependsOn?: string[] }): JobRow {
     const d = this.descriptor(req.capabilityId);
@@ -91,6 +142,8 @@ export class Capabilities {
     if (d.state !== 'published') throw new ApiError(409, 'capability_is_draft', 'drafts cannot be executed');
     const blockers = this.executionBlockers(publicationBlockers(d, this.cfg.distributionProfile));
     if (blockers.length) throw new ApiError(409, 'capability_blocked', `capability ${d.id} is not eligible to run in the ${this.cfg.distributionProfile} profile`, { blockers });
+    const notReady = this.cfg.comfyuiModelsDir || d.models.length === 0 ? [] : d.models.map((m) => m.path);
+    if (notReady.length) throw new ApiError(409, 'model_not_ready', 'model files cannot be verified because PF_COMFYUI_MODELS_DIR is not set', { models: notReady });
     if (!this.adapter) throw new ApiError(503, 'provider_not_configured', `the ComfyUI provider is not configured (${this.configError ?? 'PF_COMFYUI_URL is not set'})`, {}, 'Start ComfyUI and set PF_COMFYUI_URL, e.g. http://127.0.0.1:8188. See docs/INTEGRATIONS.md.');
     let resolved;
     try {
@@ -99,11 +152,21 @@ export class Capabilities {
       if (e instanceof CapabilityError) throw new ApiError(422, e.code, e.message, e.details);
       throw e;
     }
-    const { revision } = this.store.getProject(req.projectId);
+    const { doc, revision } = this.store.getProject(req.projectId);
+    // Media inputs are project assets. Bind a content-addressed name now; the bytes are staged when the job runs.
+    const sources = resolved.media.map((m) => {
+      const a = doc.assets[m.assetId];
+      if (!a) throw new ApiError(404, 'asset_not_found', `asset ${m.assetId} is not in this project`, { parameter: m.name });
+      if (a.kind !== m.type || !a.image) throw new ApiError(422, 'incompatible', `parameter "${m.name}" needs an ${m.type} asset; ${m.assetId} is ${a.kind}`, { parameter: m.name });
+      if (d.limits.maxPixels && a.image.width * a.image.height > d.limits.maxPixels) throw new ApiError(422, 'input_too_large', `source is ${a.image.width}x${a.image.height}; this capability is qualified up to ${d.limits.maxPixels} pixels`, { parameter: m.name });
+      const stagedName = `pf_${a.contentHash.slice(7, 39)}.${a.container === 'jpeg' ? 'jpg' : a.container}`;
+      resolved.graph[m.nodeId]!.inputs[m.input] = stagedName;
+      return { input: m.name, assetId: a.id, contentHash: a.contentHash, mimeType: a.mimeType, width: a.image.width, height: a.image.height, bytes: a.byteSize, stagedName };
+    });
     // Submission intent, including the id we will give the provider, is durable before anything is dispatched.
     const job = this.store.createJob(req.projectId, TYPE, req.actor, {
       capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, params: resolved.resolved, graph: resolved.graph,
-      clientRequestId: randomUUID(), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, sources: [],
+      clientRequestId: randomUUID(), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, sources,
       attach: req.attach ?? null,
       // Stale-result protection (SPEC §20, FFG-09): remember the version of everything the placement depends on.
       preconditions: [...new Set([...(req.dependsOn ?? []), ...(req.attach?.trackId ? [req.attach.trackId] : [])])].map((entityId) => ({ entityId, version: this.store.entityVersion(req.projectId, entityId)?.revision ?? 0 })),
@@ -164,7 +227,7 @@ export class Capabilities {
     const meta = await describeMedia(this.store.blobPath(primary.contentHash));
     const asset = {
       ...meta, name: `${job.input.capabilityId} · ${job.id}`.slice(0, 256), contentHash: primary.contentHash, byteSize: primary.bytes,
-      provenance: { origin: 'derived' as const, importedAt: new Date().toISOString(), importedBy: job.actor, derived: { jobId: job.id, capabilityId: recipe.capabilityId, capabilityVersion: recipe.capabilityVersion, graphDigest: recipe.graphDigest, params: recipe.params, sourceAssetIds: [], outputName: primary.name, outputRole: primary.role, encoding: primary.encoding, provider: recipe.provider } },
+      provenance: { origin: 'derived' as const, importedAt: new Date().toISOString(), importedBy: job.actor, derived: { jobId: job.id, capabilityId: recipe.capabilityId, capabilityVersion: recipe.capabilityVersion, graphDigest: recipe.graphDigest, params: recipe.params, sourceAssetIds: (job.input.sources as any[]).map((x) => x.assetId), outputName: primary.name, outputRole: primary.role, encoding: primary.encoding, provider: recipe.provider } },
     };
     const imp = this.store.commit({ projectId: job.projectId, actor: job.actor, allowInternal: true, label: `Result of ${job.input.capabilityId}`, ops: [{ op: 'import_asset', args: { asset } }] });
     const assetId = imp.results[0]!.output!.assetId as string;
@@ -200,7 +263,17 @@ export class Capabilities {
         readiness = await adapter.probe(d);
         if (!readiness.reachable) throw new ApiError(503, 'provider_unreachable', `ComfyUI is not reachable: ${readiness.problems.join('; ')}`);
         if (readiness.missingNodeClasses.length || readiness.missingModels.length) throw new ApiError(409, 'dependency_missing', readiness.problems.join('; '), { missingNodeClasses: readiness.missingNodeClasses, missingModels: readiness.missingModels });
+        const ms = await this.modelStatus(d);
+        const bad = ms.filter((m) => m.state !== 'ready');
+        if (bad.length) throw new ApiError(409, 'model_not_ready', `model files are not ready: ${bad.map((m) => `${m.path} (${m.state})`).join(', ')}`, { models: bad }, 'Download and verify the models for this capability first.');
         lap('preparing');
+        // Stage only the selected sources, streamed from the blob store (FF-08: bounded transfer, no whole-project upload).
+        for (const src of job.input.sources as any[]) {
+          this.store.updateJob(jobId, { stage: `transfer (staging input "${src.input}", ${src.bytes} bytes)` });
+          const ref = await adapter.stage(this.store.blobPath(src.contentHash), src.stagedName, src.mimeType);
+          if (ref !== src.stagedName) throw new ApiError(502, 'stage_failed', `provider stored the source as "${ref}", expected "${src.stagedName}"`);
+        }
+        lap('staging');
         this.store.updateJob(jobId, { stage: 'submitting', output: { readiness } });
         try {
           providerJobId = (await adapter.submit(job.input.graph, job.input.clientRequestId)).providerJobId;
@@ -245,15 +318,19 @@ export class Capabilities {
         const v = probe.streams?.find((x: any) => x.codec_type === 'video');
         const a = probe.streams?.find((x: any) => x.codec_type === 'audio');
         if ((f.mediaType === 'audio' && !a) || (f.mediaType !== 'audio' && !v)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" does not contain ${f.mediaType}`); }
-        // Declared-parameter checks where the capability defines them (the smoke graph declares its exact size).
+        // Declared size contract from the reviewed descriptor.
+        const exp = d.outputs.find((o) => o.name === f.name)?.expectSize;
         const p = job.input.params;
-        if (v && typeof p.width === 'number' && typeof p.height === 'number' && (v.width !== p.width || v.height !== p.height)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" is ${v.width}x${v.height}, expected ${p.width}x${p.height}`); }
+        const src = exp && 'sameAsInput' in exp ? (job.input.sources as any[]).find((x) => x.input === exp.sameAsInput) : null;
+        const want = exp && 'fromParams' in exp ? { w: p[exp.fromParams[0]], h: p[exp.fromParams[1]] } : src ? { w: src.width, h: src.height } : null;
+        if (v && want && (v.width !== want.w || v.height !== want.h)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" is ${v.width}x${v.height}, expected ${want.w}x${want.h}`); }
         const mime = f.mediaType === 'image' ? `image/${v.codec_name === 'mjpeg' ? 'jpeg' : v.codec_name}` : f.mediaType === 'video' ? 'video/mp4' : 'audio/wav';
         this.store.putBlob(contentHash, tmp, f.bytes.length, mime);
         bundle.push({ name: f.name, role: f.role, mediaType: f.mediaType, encoding: f.encoding, contentHash, bytes: f.bytes.length, mimeType: mime, codec: (v ?? a).codec_name, width: v?.width ?? null, height: v?.height ?? null, pixFmt: v?.pix_fmt ?? null, hasAlpha: /a/.test(String(v?.pix_fmt ?? '').replace(/^(gray|pal|ya)/, '')) && /rgba|bgra|ya|yuva|gbrap/.test(String(v?.pix_fmt)), durationSeconds: probe.format?.duration ? Number(probe.format.duration) : null });
       }
       lap('validation');
-      const recipe = { capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, params: job.input.params, sources: job.input.sources, provider: { id: adapter.id, runtimeVersion: readiness?.runtimeVersion ?? null, device: readiness?.device ?? null } };
+      const openReviews = publicationBlockers(d, this.cfg.distributionProfile).filter((b) => NEEDS_REVIEW.has(b.code)).map((b) => b.code.slice(4));
+      const recipe = { experimental: openReviews.length > 0, openReviews, capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, params: job.input.params, sources: job.input.sources, provider: { id: adapter.id, runtimeVersion: readiness?.runtimeVersion ?? null, device: readiness?.device ?? null } };
       const attachment = await this.attach(job, bundle, recipe);
       lap('attachment');
       const final = this.store.getJob(jobId);

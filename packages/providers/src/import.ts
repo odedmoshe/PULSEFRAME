@@ -5,10 +5,10 @@
 import { ComfyGraphSchema, graphDigest, publicationBlockers, type Blocker, type CapabilityDescriptor } from './descriptor.ts';
 
 /** Node classes shipped in ComfyUI core that the importer can attribute without a runtime. Extend only after review. */
-export const KNOWN_CORE_NODES = new Set(['EmptyImage', 'SaveImage', 'PreviewImage', 'LoadImage', 'ImageScale', 'ImageInvert', 'ImageBlur', 'ImageBatch', 'SolidMask', 'MaskToImage', 'ImageCompositeMasked', 'ImagePadForOutpaint']);
+export const KNOWN_CORE_NODES = new Set(['EmptyImage', 'SaveImage', 'PreviewImage', 'LoadImage', 'ImageScale', 'ImageInvert', 'ImageBlur', 'ImageBatch', 'SolidMask', 'MaskToImage', 'ImageCompositeMasked', 'ImagePadForOutpaint', 'LoadBackgroundRemovalModel', 'RemoveBackground', 'JoinImageWithAlpha', 'InvertMask']);
 const OUTPUT_NODES: Record<string, 'image' | 'video' | 'audio'> = { SaveImage: 'image', PreviewImage: 'image', SaveAnimatedWEBP: 'video', SaveAnimatedPNG: 'video', SaveVideo: 'video', SaveWEBM: 'video', VHS_VideoCombine: 'video', SaveAudio: 'audio' };
 const MEDIA_LOADERS: Record<string, 'image' | 'video' | 'audio'> = { LoadImage: 'image', LoadVideo: 'video', VHS_LoadVideo: 'video', LoadAudio: 'audio' };
-const MODEL_FIELD = /^(ckpt_name|lora_name|vae_name|unet_name|clip_name\d*|control_net_name|model_name|upscale_model|style_model_name|clip_vision_name|gligen_name)$/;
+const MODEL_FIELD = /^(bg_removal_name|ckpt_name|lora_name|vae_name|unet_name|clip_name\d*|control_net_name|model_name|upscale_model|style_model_name|clip_vision_name|gligen_name)$/;
 const MODEL_FILE = /\.(safetensors|ckpt|pt|pth|gguf|onnx|bin|sft)$/i;
 const isLink = (v: unknown) => Array.isArray(v) && v.length === 2 && typeof v[0] === 'string' && typeof v[1] === 'number';
 const NA = { status: 'not_assessed' as const };
@@ -43,7 +43,7 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
       }
       if (typeof value === 'string' && /^[a-z][a-z0-9+.-]*:\/\//i.test(value)) { egress = 'graph-defined'; findings.push(`node ${nodeId} (${node.class_type}) field "${field}" contains a URL; graph-defined endpoints are never contacted on import and block publication`); }
       if (typeof value === 'string' && (MODEL_FIELD.test(field) || MODEL_FILE.test(value))) {
-        models.push({ role: field, path: value, publisher: null, revision: null, sha256: null, bytes: null, license: null, licenseEvidence: null, commercialUse: 'unknown', gated: false });
+        models.push({ role: field, path: value, publisher: null, revision: null, sha256: null, bytes: null, license: null, licenseEvidence: null, commercialUse: 'unknown', gated: false, source: null });
         continue;
       }
       const media = MEDIA_LOADERS[node.class_type];
@@ -56,7 +56,7 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
       else findings.push(`node ${nodeId} field "${field}" has a structured literal that is kept fixed`);
     }
     const out = OUTPUT_NODES[node.class_type];
-    if (out) outputs.push({ name: name(`out_${nodeId}`), role: 'primary', mediaType: out, nodeId, encoding: 'display', reviewed: false });
+    if (out) outputs.push({ name: name(`out_${nodeId}`), role: 'primary', mediaType: out, nodeId, encoding: 'display', expectSize: null, reviewed: false });
   }
   const classes = [...new Set(Object.values(graph).map((n) => n.class_type))].sort();
   const draft: CapabilityDescriptor = {

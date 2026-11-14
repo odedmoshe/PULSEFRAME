@@ -10,6 +10,7 @@ import { describeOps, RationalTimeSchema, summarize, timeline } from '@pulsefram
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
+import type { DerivativeKind, Derivatives } from './derive.ts';
 import type { Exporter } from './export.ts';
 import { ingestUpload } from './ingest.ts';
 import { buildOpenApi } from './openapi.ts';
@@ -42,7 +43,7 @@ const RunBody = z
   .strict();
 const ImportBody = z.object({ id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/), title: z.string().min(1).max(120), graph: z.unknown() }).strict();
 
-export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, mcp: (req: Request) => Promise<Response>) {
+export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, mcp: (req: Request) => Promise<Response>) {
   const app = new Hono<Env>();
   const body = async <S extends z.ZodType>(c: Context, schema: S): Promise<z.infer<S>> => {
     const parsed = schema.safeParse(await c.req.json().catch(() => undefined));
@@ -169,7 +170,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       const onEvent = (e: RevisionEvent) => (live ? void send(e) : pending.push(e));
       const onJob = (j: any) => j.projectId === projectId && void stream.writeSSE({ event: 'job', data: JSON.stringify({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error }) });
       store.events.on('revision', onEvent);
+      const onDerivative = (d: any) => { const a = Object.values(store.getProject(projectId).doc.assets).find((x) => x.contentHash === d.assetHash); if (a) void stream.writeSSE({ event: 'derivative', data: JSON.stringify({ assetId: a.id, kind: d.kind, status: d.status }) }); };
       store.events.on('job', onJob);
+      store.events.on('derivative', onDerivative);
       try {
         await stream.writeSSE({ event: 'hello', data: JSON.stringify({ revision: current }) });
         for (const e of store.eventsSince(projectId, since)) await send(e);
@@ -179,6 +182,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       } finally {
         store.events.off('revision', onEvent);
         store.events.off('job', onJob);
+        store.events.off('derivative', onDerivative);
       }
     });
   });
@@ -194,6 +198,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // The ingest job attaches its result through a normal (internal) operation.
     const r = store.commit({ projectId, actor: p.actor, label: `Import ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
     const assetId = r.results[0]!.output!.assetId as string;
+    // Thumbnails, waveform peaks and a proxy are produced progressively in the background; editing does not wait for them.
+    derivatives.ensure(store.getProject(projectId).doc.assets[assetId]!);
     return c.json({ assetId, revision: r.revision, deduplicated: r.results[0]!.output!.deduplicated, asset: store.getProject(projectId).doc.assets[assetId] }, 201);
   });
   app.get('/api/v1/projects/:id/assets/:assetId/content', (c) => {
@@ -201,6 +207,24 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const a = store.getProject(c.req.param('id')).doc.assets[c.req.param('assetId')];
     if (!a) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
     return sendBlob(c, store.blobPath(a.contentHash), a.mimeType);
+  });
+
+  const assetOf = (c: Context<Env>) => {
+    const a = store.getProject(c.req.param('id')!).doc.assets[c.req.param('assetId')!];
+    if (!a) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
+    return a;
+  };
+  app.get('/api/v1/projects/:id/assets/:assetId/derivatives', (c) => {
+    need(c, 'observe');
+    const a = assetOf(c);
+    const rows = derivatives.list(a.contentHash);
+    return c.json({ assetId: a.id, derivatives: (rows.length ? rows : derivatives.ensure(a)).map(({ assetHash: _h, blobHash: _b, ...r }) => r) });
+  });
+  app.get('/api/v1/projects/:id/assets/:assetId/derivatives/:kind', (c) => {
+    need(c, 'observe');
+    const row = derivatives.get(assetOf(c).contentHash, c.req.param('kind') as DerivativeKind);
+    if (!row || row.status !== 'ready' || !row.blobHash) throw new ApiError(404, 'derivative_not_ready', `derivative is ${row?.status ?? 'unknown'}`, { status: row?.status ?? null, error: row?.error ?? null });
+    return sendBlob(c, store.blobPath(row.blobHash), row.mimeType ?? 'application/octet-stream');
   });
 
   // ----- senses -----
@@ -234,6 +258,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = need(c, 'edit');
     const b = await body(c, RunBody);
     const job = capabilities.start({ projectId: c.req.param('id'), capabilityId: c.req.param('capabilityId'), params: b.params, idempotencyKey: b.idempotencyKey, attach: b.attach, dependsOn: b.dependsOn, actor: p.actor });
+    return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
+  });
+  // Model downloads are a deliberate human action: not exposed as an MCP tool, and bound to the exact byte count shown.
+  app.post('/api/v1/projects/:id/capabilities/:capabilityId/models/download', async (c) => {
+    const p = need(c, 'edit');
+    if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
+    const b = await body(c, z.object({ confirmBytes: z.number().int().positive() }).strict());
+    const job = await capabilities.startDownload(c.req.param('id'), c.req.param('capabilityId'), b.confirmBytes, p.actor);
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => { const p = need(c, 'edit'); return c.json(await capabilities.cancel(c.req.param('jobId'), p.actor)); });

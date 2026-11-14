@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T21:51:56.486Z",
+  "ranAt": "2026-11-14T22:03:49.001Z",
   "result": "PASSED",
   "scope": "Amendment A1 G0 on the model-free smoke workflow: provider path, attachment through operations and stale-result protection. No model, no GPU, no media-input workflow.",
   "machine": {
@@ -22,12 +22,13 @@
     "capability": "comfy.smoke.solid-image",
     "workload": "320x192 solid image, batch 1",
     "stageSeconds": {
-      "preparing": 0.306,
-      "submit": 0.011,
-      "providerQueueAndInference": 0.425,
-      "transfer": 0.008,
-      "validation": 0.055,
-      "attachment": 0.056,
+      "preparing": 0.19,
+      "staging": 0,
+      "submit": 0.006,
+      "providerQueueAndInference": 0.387,
+      "transfer": 0.007,
+      "validation": 0.064,
+      "attachment": 0.061,
       "basis": "measured (wall clock, includes 200 ms polling granularity)"
     },
     "peakDeviceMemoryBytes": null,
@@ -100,12 +101,13 @@
       "ok": true,
       "detail": {
         "stageSeconds": {
-          "preparing": 0.306,
-          "submit": 0.011,
-          "providerQueueAndInference": 0.425,
-          "transfer": 0.008,
-          "validation": 0.055,
-          "attachment": 0.056,
+          "preparing": 0.19,
+          "staging": 0,
+          "submit": 0.006,
+          "providerQueueAndInference": 0.387,
+          "transfer": 0.007,
+          "validation": 0.064,
+          "attachment": 0.061,
           "basis": "measured (wall clock, includes 200 ms polling granularity)"
         },
         "bytes": 875
@@ -167,13 +169,59 @@
     {
       "name": "run-earned evidence now cites the recorded job and names the profile it applies to",
       "ok": true,
-      "detail": "job job_xxPZJHByxCk: cpu (cpu), ComfyUI 0.45.0, 2026-11-14T21:51:46.273Z"
+      "detail": "job job_6aQzPr84GAM: cpu (cpu), ComfyUI 0.45.0, 2026-11-14T22:03:38.185Z"
+    },
+    {
+      "name": "still image upload: probed as an image asset with exact dimensions",
+      "ok": true,
+      "detail": {
+        "width": 320,
+        "height": 180,
+        "codec": "png",
+        "hasAlpha": false
+      }
+    },
+    {
+      "name": "media workflow ran on the staged source: output keeps the source size and the hard edge became a gradient",
+      "ok": true,
+      "detail": {
+        "stageSeconds": {
+          "preparing": 0.197,
+          "staging": 0.008,
+          "submit": 0.007,
+          "providerQueueAndInference": 0.215,
+          "transfer": 0.007,
+          "validation": 0.05,
+          "attachment": 0.054,
+          "basis": "measured (wall clock, includes 200 ms polling granularity)"
+        },
+        "edgeProfile": [
+          0,
+          30,
+          132,
+          234,
+          254
+        ]
+      }
+    },
+    {
+      "name": "lineage: the derived asset records its source asset, and the job records the source content hash that was staged",
+      "ok": true
+    },
+    {
+      "name": "media parameters accept only project asset ids: unknown asset 404, file path and URL rejected, nothing submitted",
+      "ok": true,
+      "detail": [
+        "asset_not_found",
+        "invalid_parameter",
+        "invalid_parameter"
+      ]
     },
     {
       "name": "requested placement: output is attached as a normal clip via add_clip, in its own revision, by the requesting actor",
       "ok": true,
       "detail": {
-        "revision": 4
+        "revision": 6
       }
     },
     {
@@ -194,9 +242,9 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_a6e0fb12c50",
-          "expectedVersion": 6,
-          "currentVersion": 7,
+          "entityId": "clp_96de512dca0",
+          "expectedVersion": 8,
+          "currentVersion": 9,
           "deleted": false,
           "by": "agent:local"
         }
@@ -228,7 +276,7 @@
       "detail": {
         "status": "succeeded",
         "attempt": 1,
-        "providerRunsOfOurs": 15,
+        "providerRunsOfOurs": 39,
         "historyDelta": 2
       }
     },

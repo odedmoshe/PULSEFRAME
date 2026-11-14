@@ -25,7 +25,7 @@ export const SMOKE_SOLID_IMAGE: CapabilityDescriptor = DescriptorSchema.parse({
     { name: 'height', label: { he: 'גובה', en: 'Height' }, type: 'int', binding: { nodeId: '1', input: 'height' }, required: false, default: 256, min: 16, max: 1024, reviewed: true },
     { name: 'color', label: { he: 'צבע (RGB שלם)', en: 'Colour (RGB integer)' }, type: 'int', binding: { nodeId: '1', input: 'color' }, required: false, default: 0x3de0c8, min: 0, max: 0xffffff, reviewed: true },
   ],
-  outputs: [{ name: 'image', role: 'primary', mediaType: 'image', nodeId: '2', encoding: 'display', reviewed: true }],
+  outputs: [{ name: 'image', role: 'primary', mediaType: 'image', nodeId: '2', encoding: 'display', reviewed: true, expectSize: { fromParams: ['width', 'height'] } }],
   requiredNodes: [{ classType: 'EmptyImage', pack: 'core', packVersion: null }, { classType: 'SaveImage', pack: 'core', packVersion: null }],
   models: [],
   runtime: { comfyuiCommit: null, imageDigest: null },
@@ -44,4 +44,112 @@ export const SMOKE_SOLID_IMAGE: CapabilityDescriptor = DescriptorSchema.parse({
     hardwareQualified: { status: 'not_assessed', evidence: 'set from a recorded run on a named profile' },
   },
 });
-export const BUILTIN_CAPABILITIES: CapabilityDescriptor[] = [SMOKE_SOLID_IMAGE];
+const blurGraph: ComfyGraph = {
+  '1': { class_type: 'LoadImage', inputs: { image: 'pulseframe_input.png' } },
+  '2': { class_type: 'ImageBlur', inputs: { image: ['1', 0], blur_radius: 8, sigma: 4 } },
+  '3': { class_type: 'SaveImage', inputs: { images: ['2', 0], filename_prefix: 'pulseframe_blur' } },
+};
+/**
+ * First reviewed MEDIA-INPUT workflow (G0): model-free Gaussian blur of a project still.
+ * It exists to qualify source staging, lineage and output contracts with a real source asset; it needs no weights.
+ */
+export const IMAGE_SOFT_BLUR: CapabilityDescriptor = DescriptorSchema.parse({
+  id: 'comfy.image.soft-blur',
+  version: '1.0.0',
+  provider: 'comfyui',
+  state: 'published',
+  title: { he: 'טשטוש רך לתמונה', en: 'Soft blur (image)' },
+  description: { he: 'טשטוש גאוסיאני של תמונת מקור מהפרויקט. ללא מודלים.', en: 'Gaussian blur of a still from the project. No models.' },
+  source: { repository: null, commit: null, notices: 'Authored for PULSEFRAME; uses ComfyUI core nodes only.' },
+  graph: blurGraph,
+  graphDigest: graphDigest(blurGraph),
+  inputs: [
+    { name: 'image', label: { he: 'תמונת מקור', en: 'Source image' }, type: 'image', binding: { nodeId: '1', input: 'image' }, required: true, reviewed: true },
+    { name: 'radius', label: { he: 'רדיוס (פיקסלים)', en: 'Radius (pixels)' }, type: 'int', binding: { nodeId: '2', input: 'blur_radius' }, required: false, default: 8, min: 1, max: 31, reviewed: true },
+    { name: 'sigma', label: { he: 'רכות', en: 'Softness (sigma)' }, type: 'float', binding: { nodeId: '2', input: 'sigma' }, required: false, default: 4, min: 0.1, max: 10, reviewed: true },
+  ],
+  outputs: [{ name: 'image', role: 'primary', mediaType: 'image', nodeId: '3', encoding: 'display', reviewed: true, expectSize: { sameAsInput: 'image' } }],
+  requiredNodes: [{ classType: 'LoadImage', pack: 'core', packVersion: null }, { classType: 'ImageBlur', pack: 'core', packVersion: null }, { classType: 'SaveImage', pack: 'core', packVersion: null }],
+  models: [],
+  runtime: { comfyuiCommit: null, imageDigest: null },
+  limits: { maxFrames: 1, maxPixels: 4096 * 4096 },
+  resources: { downloadBytes: 0, estimatedResidencyBytes: 0, hostRamBytes: null, measuredProfiles: [] },
+  egress: 'none',
+  languages: [],
+  limitations: ['Still images only. Alpha is not preserved (output is opaque RGB).', 'A native compositor blur effect (Phase 7) will supersede this for timeline use; it stays as the reference media-input workflow.'],
+  qualification: {
+    schemaValid: { status: 'pass', evidence: 'DescriptorSchema + graph digest' },
+    dependencyReady: { status: 'pass', evidence: 'no models; core nodes only (checked against /object_info at run time)' },
+    licenseReviewed: { status: 'pass', evidence: 'no model weights; graph authored in this repository' },
+    executed: { status: 'not_assessed', evidence: 'set from a recorded run on a named profile' },
+    qualityReviewed: { status: 'not_assessed', evidence: 'needs a reviewed fixture set; a single edge-profile check is not a quality review' },
+    hebrewQualified: NA,
+    hardwareQualified: { status: 'not_assessed', evidence: 'set from a recorded run on a named profile' },
+  },
+});
+const matteGraph: ComfyGraph = {
+  '1': { class_type: 'LoadImage', inputs: { image: 'pulseframe_input.png' } },
+  '2': { class_type: 'LoadBackgroundRemovalModel', inputs: { bg_removal_name: 'birefnet.safetensors' } },
+  '3': { class_type: 'RemoveBackground', inputs: { bg_removal_model: ['2', 0], image: ['1', 0] } },
+  '4': { class_type: 'MaskToImage', inputs: { mask: ['3', 0] } },
+  '5': { class_type: 'SaveImage', inputs: { images: ['4', 0], filename_prefix: 'pulseframe_matte' } },
+  '6': { class_type: 'InvertMask', inputs: { mask: ['3', 0] } },
+  '7': { class_type: 'JoinImageWithAlpha', inputs: { image: ['1', 0], alpha: ['6', 0] } },
+  '8': { class_type: 'SaveImage', inputs: { images: ['7', 0], filename_prefix: 'pulseframe_cutout' } },
+};
+/**
+ * First MODEL-BASED candidate (Amendment A1 G1): BiRefNet still-image matting through ComfyUI core nodes.
+ * EXPERIMENTAL: executed only as a bounded CPU functional trial. Not quality-reviewed, not GPU-qualified.
+ */
+export const IMAGE_REMOVE_BACKGROUND: CapabilityDescriptor = DescriptorSchema.parse({
+  id: 'comfy.image.remove-background',
+  version: '0.1.0',
+  provider: 'comfyui',
+  state: 'published',
+  title: { he: 'הסרת רקע מתמונה (ניסיוני)', en: 'Remove background, image (experimental)' },
+  description: { he: 'חיתוך נושא מתמונה עם מסכת אלפא, באמצעות BiRefNet. נבדק פונקציונלית על CPU בלבד.', en: 'Subject cutout with an alpha matte using BiRefNet. Functionally tried on CPU only.' },
+  source: { repository: 'https://github.com/comfyanonymous/ComfyUI', commit: 'eee59185ff4f43ae2d9ad122b245619d27d9daad', notices: 'Graph authored for PULSEFRAME from ComfyUI core nodes (comfy_extras.nodes_bg_removal). Not copied from Freefield.' },
+  graph: matteGraph,
+  graphDigest: graphDigest(matteGraph),
+  inputs: [{ name: 'image', label: { he: 'תמונת מקור', en: 'Source image' }, type: 'image', binding: { nodeId: '1', input: 'image' }, required: true, reviewed: true }],
+  outputs: [
+    { name: 'cutout', role: 'primary', mediaType: 'image', nodeId: '8', encoding: 'display', reviewed: true, expectSize: { sameAsInput: 'image' } },
+    { name: 'matte', role: 'matte', mediaType: 'image', nodeId: '5', encoding: 'numeric', reviewed: true, expectSize: { sameAsInput: 'image' } },
+  ],
+  requiredNodes: ['LoadImage', 'LoadBackgroundRemovalModel', 'RemoveBackground', 'MaskToImage', 'InvertMask', 'JoinImageWithAlpha', 'SaveImage'].map((classType) => ({ classType, pack: 'core', packVersion: null })),
+  models: [{
+    role: 'background_removal',
+    path: 'background_removal/birefnet.safetensors',
+    publisher: 'ZhengPeng7 (BiRefNet); file as packaged by Comfy-Org',
+    revision: 'Comfy-Org/BiRefNet@884af709e9b795d89dafbf97f29c8d6a2386f5c6',
+    sha256: '9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154',
+    bytes: 444473596,
+    license: 'MIT',
+    licenseEvidence: 'Original publisher model card https://huggingface.co/ZhengPeng7/BiRefNet (revision e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4) is tagged license:mit and its model.safetensors has the identical SHA-256. Checked 2026-11-14 from repository metadata only; training-data terms were not reviewed.',
+    commercialUse: 'allowed',
+    gated: false,
+    source: 'https://huggingface.co/Comfy-Org/BiRefNet/resolve/884af709e9b795d89dafbf97f29c8d6a2386f5c6/background_removal/birefnet.safetensors',
+  }],
+  runtime: { comfyuiCommit: 'eee59185ff4f43ae2d9ad122b245619d27d9daad', imageDigest: null },
+  limits: { maxFrames: 1, maxPixels: 2048 * 2048 },
+  // Three different quantities (FF-06). Residency and device memory are unknown until measured on a GPU profile.
+  resources: { downloadBytes: 444473596, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
+  egress: 'none',
+  languages: [],
+  limitations: [
+    'Still images only. Applying an image matting model to video needs separate flicker, hair, blur and occlusion tests.',
+    'Not quality-reviewed: no reviewed fixtures for hair, fine edges, motion blur or occlusion.',
+    'Only run on a CPU device so far; no GPU memory or speed figures exist. Model file size is not runtime memory.',
+    'The matte isolates existing pixels; it does not reconstruct what was behind the subject.',
+  ],
+  qualification: {
+    schemaValid: { status: 'pass', evidence: 'DescriptorSchema + graph digest' },
+    dependencyReady: { status: 'pass', evidence: 'core nodes; model file verified by size and SHA-256 at run time' },
+    licenseReviewed: { status: 'pass', evidence: 'weights tagged MIT by the original publisher; digest-identical file (see model record). Metadata-level check, pending owner/legal confirmation.' },
+    executed: { status: 'not_assessed', evidence: 'set from a recorded run on a named profile' },
+    qualityReviewed: { status: 'not_assessed', evidence: 'no reviewed fixture set' },
+    hebrewQualified: NA,
+    hardwareQualified: { status: 'not_assessed', evidence: 'set from a recorded run; a CPU run is not GPU qualification' },
+  },
+});
+export const BUILTIN_CAPABILITIES: CapabilityDescriptor[] = [SMOKE_SOLID_IMAGE, IMAGE_SOFT_BLUR, IMAGE_REMOVE_BACKGROUND];

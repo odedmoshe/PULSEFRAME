@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T21:51:42.025Z",
+  "ranAt": "2026-11-14T22:03:32.689Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 278,
+    "editorShellInteractiveMs": 217,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 12.8,
-      "requestToVisibleInEditorMs": 37.1,
+      "requestToCommitMs": 13.2,
+      "requestToVisibleInEditorMs": 34.2,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 7.7,
-      "p95": 11.98,
-      "max": 14.88
+      "median": 5.67,
+      "p95": 11.82,
+      "max": 12.82
     },
     "export": {
-      "file": "job_n9MQWQjCvyM.mp4",
+      "file": "job_mhtBkvHFiYg.mp4",
       "bytes": 107979,
       "revision": 45,
       "route": "server-software-canvas2d",
@@ -60,13 +60,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 615,
-        "readback": 702,
-        "upload": 5194
+        "draw": 642,
+        "readback": 1003,
+        "upload": 6086
       },
-      "wallSeconds": 7.355,
-      "realtimeFactor": 0.47586675730795375,
-      "uiWallSeconds": 7.412
+      "wallSeconds": 8.591,
+      "realtimeFactor": 0.40740309626353166,
+      "uiWallSeconds": 8.945
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -146,6 +146,15 @@
       }
     },
     {
+      "name": "ingest derivatives: thumbnails, waveform peaks and a frame-identical proxy are produced in the background",
+      "ok": true,
+      "detail": [
+        "proxy:ready:42755",
+        "thumbnails:ready:4235",
+        "waveform:ready:3948"
+      ]
+    },
+    {
       "name": "edit: add to timeline creates linked picture + audio clips",
       "ok": true
     },
@@ -195,7 +204,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_6a983265421",
+          "id": "clp_39740ab3731",
           "start": {
             "value": "2",
             "timescale": 1
@@ -215,8 +224,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 12.8,
-        "requestToVisibleInEditorMs": 37.1,
+        "requestToCommitMs": 13.2,
+        "requestToVisibleInEditorMs": 34.2,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -230,11 +239,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_4cc95372eb0"
+          "selected": "clip-clp_d775be5ed00"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_4cc95372eb0"
+          "selected": "clip-clp_d775be5ed00"
         }
       }
     },
@@ -280,7 +289,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_4cc95372eb0",
+          "entityId": "clp_d775be5ed00",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false

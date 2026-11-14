@@ -17,18 +17,16 @@ Each entry: what is blocked, how to reproduce, impact, proposed way forward. Wor
 - **Impact:** only the default PyPI wheel (bundles CUDA libraries, ~4 GB venv) can be installed. Not a product issue.
 - **Proposed:** none needed unless disk matters; the host can be allowed in the environment's network settings.
 
-## B-4 — No model-based ComfyUI workflow can be qualified here (Amendment A1 G0 second half, G1–G3)
+## B-4 — No model-based ComfyUI workflow can be *qualified* here (GPU, quality) — functional CPU runs are possible
 - **Reproduce:** `GET /api/v1/capabilities` → provider device is `cpu`.
 - **Impact:** "one qualified media workflow" (G0), and every G1–G3 workflow, needs model downloads and, realistically, a GPU. Quality, VRAM and hardware qualification cannot be produced in this environment. No model has been downloaded: that needs an explicit decision (size, licence, cost).
+- **Update 2026-11-14:** owner designated this machine a provisional CPU functional profile and authorised one bounded trial; BiRefNet image matting ran on CPU (functional evidence only). GPU memory/speed and quality review remain open for every workflow.
 - **Proposed:** (a) the owner names a GPU machine or approved remote worker and a first workflow — BiRefNet image matte is the smallest candidate (0.44 GB of weights reported); or (b) authorise a CPU attempt of that single workflow here for functional (not performance) evidence. Until then, G0 continues with the parts that do not need a model: image/derived-asset support, attachment via operations, stale-result protection.
 
 ## B-5 — Preconditions inside the project (not external)
 Stale-result protection (FFG-09) needs entity versions (Phase 1). Timeline attachment needs image/derived assets (Phase 2). Worker lease and budgets need Phase 5/10 work.
 
-## B-6 — Model hosts are denied by the environment network policy
-- **Reproduce:** `curl https://huggingface.co/api/models/ZhengPeng7/BiRefNet` → `CONNECT tunnel failed, response 403`; GitHub release downloads also 403.
-- **Impact:** the authorised bounded trial (one small CPU workflow, ≤ 1 GB, ≤ 10 min) could not start: no model weights can be fetched. 0 bytes downloaded, 0 s of inference used.
-  ComfyUI 0.45.0 already includes core `LoadBackgroundRemovalModel` and `RemoveBackground` nodes and a `models/background_removal` folder, so the workflow itself needs no custom node.
-- **Unblocked by:** allowing `huggingface.co` (and the CDN host it redirects downloads to) in the environment's network settings, or placing a licence-reviewed
-  BiRefNet weight file with a known SHA-256 in `.artifacts/comfyui/models/background_removal/`.
-- **Meanwhile:** the source-staging path is built and tested with a model-free image workflow, so only the weights and the qualification run are missing.
+## B-6 — RESOLVED 2026-11-14: model host was denied by the environment network policy
+The owner allowed the host. `huggingface.co` is reachable through the environment proxy. Node's built-in `fetch` ignores `HTTPS_PROXY` unless
+`NODE_USE_ENV_PROXY=1` is set (Node ≥ 22.21), so model downloads from the server need that variable **in proxied environments only**.
+The bounded BiRefNet trial then ran: see docs/INTEGRATIONS.md and `docs/evidence/g1-birefnet-cpu-trial.json`.

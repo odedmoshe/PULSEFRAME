@@ -5,13 +5,14 @@ import type { ProviderAdapter } from '@pulseframe/providers';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
+import { Derivatives } from './derive.ts';
 import { Exporter } from './export.ts';
 import { createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
 import { Store } from './store.ts';
 
 export { loadConfig, type Config } from './config.ts';
-export interface RunningServer { url: string; cfg: Config; store: Store; auth: Auth; close(): Promise<void> }
+export interface RunningServer { url: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; close(): Promise<void> }
 
 export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
@@ -21,7 +22,8 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const url = `http://${cfg.host}:${cfg.port}`;
   const exporter = new Exporter(store, host, () => `${url}/render.html`, cfg.webDist);
   const capabilities = new Capabilities(store, cfg, deps.providerAdapter);
-  const app = createApp(cfg, store, auth, exporter, capabilities, createMcp(store, auth, exporter, capabilities));
+  const derivatives = new Derivatives(store);
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, createMcp(store, auth, exporter, capabilities));
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');
@@ -29,10 +31,12 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   store.drainOutbox();
   for (const job of store.recoverJobs('export')) exporter.enqueue(job);
   await capabilities.recover();
+  derivatives.recover();
   return {
-    url, cfg, store, auth,
+    url, cfg, store, auth, derivatives,
     async close() {
       await capabilities.stop();
+      await derivatives.stop();
       await new Promise((r) => server.close(r));
       await host.close();
       store.close();

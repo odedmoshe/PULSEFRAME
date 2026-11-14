@@ -38,6 +38,8 @@ export const OutputSchema = z
     nodeId: z.string(),
     /** FF-15: an RGB picture of depth is not numeric depth. */
     encoding: z.enum(['display', 'rgb-visualization', 'numeric']).default('display'),
+    /** Declared size contract, checked on the downloaded file before the job may succeed. */
+    expectSize: z.union([z.object({ fromParams: z.tuple([z.string(), z.string()]) }).strict(), z.object({ sameAsInput: z.string() }).strict()]).nullable().default(null),
     reviewed: z.boolean(),
   })
   .strict();
@@ -53,6 +55,8 @@ export const ModelSchema = z
     licenseEvidence: z.string().nullable(),
     commercialUse: z.enum(['allowed', 'conditional', 'prohibited', 'unknown']),
     gated: z.boolean(),
+    /** Immutable download URL (pinned revision). Never taken from an imported graph. */
+    source: z.string().url().nullable(),
   })
   .strict();
 export const DescriptorSchema = z
@@ -138,11 +142,13 @@ export class CapabilityError extends Error {
  * Validate caller parameters against the reviewed inputs and write them into a private copy of the
  * pinned graph. Callers can only set what a reviewer exposed; nothing else in the graph is reachable.
  */
-export function resolveGraph(d: CapabilityDescriptor, params: Record<string, unknown>): { graph: ComfyGraph; resolved: Record<string, number | string | boolean> } {
+export interface MediaBinding { name: string; type: 'image' | 'video' | 'audio' | 'mask'; assetId: string; nodeId: string; input: string }
+export function resolveGraph(d: CapabilityDescriptor, params: Record<string, unknown>): { graph: ComfyGraph; resolved: Record<string, number | string | boolean>; media: MediaBinding[] } {
   const known = new Set(d.inputs.map((i) => i.name));
   for (const k of Object.keys(params)) if (!known.has(k)) throw new CapabilityError('unknown_parameter', `"${k}" is not a parameter of ${d.id}`, { allowed: [...known] });
   const graph: ComfyGraph = structuredClone(d.graph);
   const resolved: Record<string, number | string | boolean> = {};
+  const media: MediaBinding[] = [];
   for (const i of d.inputs) {
     let v = params[i.name] ?? i.default;
     if (v === undefined) {
@@ -159,9 +165,15 @@ export function resolveGraph(d: CapabilityDescriptor, params: Record<string, unk
       if (typeof v !== 'string' || !i.options?.includes(v)) throw bad('is not one of the allowed options');
     } else if (i.type === 'string') {
       if (typeof v !== 'string' || v.length > (i.maxLength ?? 2000)) throw bad('must be text within the length limit');
-    } else throw new CapabilityError('unsupported_input_type', `media input "${i.name}" (${i.type}) needs asset staging, which is not implemented yet`, { name: i.name });
+    } else if (i.type === 'image') {
+      // Media parameters are project asset ids. The caller never supplies a path or URL; the server stages the asset itself.
+      if (typeof v !== 'string' || !/^ast_[A-Za-z0-9]+$/.test(v)) throw bad('must be the id of an image asset in this project');
+      media.push({ name: i.name, type: i.type, assetId: v, nodeId: i.binding.nodeId, input: i.binding.input });
+      resolved[i.name] = v;
+      continue;
+    } else throw new CapabilityError('unsupported_input_type', `${i.type} input "${i.name}" needs range extraction and staging, which is not implemented yet`, { name: i.name });
     graph[i.binding.nodeId]!.inputs[i.binding.input] = v;
     resolved[i.name] = v as number | string | boolean;
   }
-  return { graph, resolved };
+  return { graph, resolved, media };
 }

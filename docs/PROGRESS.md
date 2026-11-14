@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-14, checkpoint 2 (Phase 1 gate). Read this first; then `docs/CAPABILITIES.md` and the relevant ADRs.
+Last updated: 2026-11-14, checkpoint 3 (G0 complete on CPU; bounded model trial; Phase 2a). Read this first; then `docs/CAPABILITIES.md` and the relevant ADRs.
 
 Status words: **verified-here** = checked on the current CPU profile · **implemented, not qualified** = code exists, needs a runtime/target we lack ·
 **blocked** · **not started**. Nothing is "verified on target profile" yet: no GPU reference machine exists.
@@ -16,9 +16,10 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | Phase 0 — Readiness and spike | **Gate met, verified-here** | `pnpm proof` (now 47 checks), probe, ADR-0001…0007 |
 | Phase 1 — Authoritative core | **Gate met, verified-here** | 69 unit/property/integration tests; convergence 15 seeds × 40 steps (60 seeds also run once); proof 47/47 |
 | A1 · G0 — provider path on a model-free workflow, attachment, stale-result | **Verified-here (model-free)** | `pnpm proof:g0` 35/35 against real ComfyUI on CPU |
-| A1 · G0 — media-*input* workflow (source staging) | In progress (next) | — |
-| A1 · G0/G1 — any model-based workflow | **Blocked** (B-4, B-6): no GPU; model hosts denied by network policy | — |
-| Phase 2 — Media and playback | Started (still-image assets done) | — |
+| A1 · G0 — media-input workflow with source staging (model-free blur) | **Verified-here** | `pnpm proof:g0` now 39/39 |
+| A1 · model files: digest-verified readiness + explicit resumable download (FF-05 core, FFG-04) | **Verified-here** | `apps/server/src/models.test.ts`; trial |
+| A1 · G1 — BiRefNet image matting | **Implemented, experimental; CPU functional trial passed** — not quality-reviewed, not GPU-qualified | `pnpm trial:birefnet` 13/13, `docs/evidence/g1-birefnet-cpu-trial.json` |
+| Phase 2 — Media and playback | In progress: still images, ingest derivatives (thumbnails, waveform peaks, frame-identical proxy) done | `derive.test.ts`; proof 48/48 |
 | Phases 3–13, G1–G3 | Not started | — |
 
 ## Completed and verified-here
@@ -46,15 +47,23 @@ same job shape from UI/REST/MCP, cancellation of a queued job, restart resume, a
 output validation, **derived assets with lineage**, **attach-or-propose through `add_clip`**, **stale-result protection** (dependency edited while the job waited → nothing placed, asset kept as proposal),
 attached provider image verified by pixel through `render_frame`, undo of the placement.
 
+**Checkpoint 3 additions**
+- Media-input staging: capability parameters of type image are project asset ids only (paths/URLs rejected); the source is streamed to the provider under a content-addressed name; job and derived asset record source hash and lineage; declared output-size contracts are enforced.
+- Model store: ready = exact size + SHA-256; partial or one-bit-wrong files are never ready; explicit owner-only download bound to the exact byte count, resumable, host-restricted, verified before publish.
+- Experimental status: open quality/Hebrew reviews do not block a run but label the capability and every result.
+- Bounded BiRefNet trial (owner-authorised): 444 MB downloaded and verified in 29 s; one CPU inference ~30 s; matte IoU 0.9997 on one synthetic image with known truth; RGBA cutout attached and alpha pixel-checked through the shared compositor. Functional evidence only.
+- Ingest derivatives (worker-built, lead-integrated): JPEG thumbnail sprite selected by frame index, 3-level waveform peaks, H.264 proxy with identical frame count/rate (every proxy frame barcode-checked), restart recovery, served via REST and announced over SSE. Not yet used by the UI or the preview.
+- `GET /api/v1/openapi.json` does not list itself (known gap).
+
 ## In progress
-- G0 media-input staging: a reviewed model-free image workflow that takes a project asset as input (source hash, lineage, bounded transfer).
-- Phase 2 media foundation (see task list).
+- Phase 2b: range-read asset access and bounded decoder/frame caches; use the proxy for preview.
+- Phase 2c: conformance fixtures and seeded seek tests; preview A/V sync measurement; long-media behaviour.
 
 ## Blocked / unverified (with what would unblock)
 
 | Item | State | Affected criterion | Unblocked by |
 |---|---|---|---|
-| Any model-based workflow incl. the authorised ≤1 GB BiRefNet CPU trial | blocked (B-6) | A1 G0 "one qualified media workflow", G1 | `huggingface.co` (and GitHub release downloads) are denied by the environment's network policy (proxy 403). Allow `huggingface.co` + its CDN host in the environment's network settings. ComfyUI 0.45.0 already ships core `LoadBackgroundRemovalModel` / `RemoveBackground` nodes, so no custom node is needed. Trial stopped cleanly: 0 bytes downloaded, 0 s inference |
+| Quality review and GPU qualification of BiRefNet (and every other model workflow) | implemented, not runtime-qualified | A1 G1 gates, FFG-05, FFG-11 | Reviewed real-image fixtures (hair, edges, blur, occlusion) with usable licences; a GPU profile. Further model downloads need a new authorisation (the 1 GB trial grant is used: 0.44 GB) |
 | GPU compositor, GPU/VRAM qualification, Appendix C2 performance targets | implementation can proceed; execution cannot be verified (B-1) | Phases 2, 4, 7, 13; FF-06 | A GPU reference machine |
 | Browser MP4+AAC export | blocked here (B-2) | Phase 4 browser route | A Chrome build with AAC WebCodecs encode |
 | Preview A/V sync; preview/export parity across many frames; long media; real camera/phone footage; other browsers; other MCP hosts | unverified | Phases 2–4 gates | Scheduled in Phase 2/4 below; other browsers are not installed here (Chromium only) |
@@ -63,16 +72,15 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 
 ## Dependency-aware task list (next first)
 
-1. **G0 media-input staging** (lead) — needs: derived assets ✓. Unlocks: every source-based workflow.
-2. **Phase 2a ingest artefacts** (worker, contract = `describeMedia` + blob store): thumbnails, multiresolution waveform peaks, proxies as derived blobs with exact original↔proxy mapping; per-asset state.
-3. **Phase 2b decode scheduling + bounded caches** (lead): range-read asset access (no whole-file download), decoder/frame cache budgets, resource-lifetime test.
-4. **Phase 2c A/V conformance** (lead + worker for fixtures): VFR/rotation conform route via ffmpeg; fixtures for H.264/VP9/AV1, B-frames, fractional rates; 1,000 seeded seeks per fixture; 10-minute flash/beep sync fixture; preview A/V sync measurement.
-5. **Phase 2d audio clock + shared audio contract** (lead): AudioWorklet playback path replacing whole-file decode.
-6. Phase 3 editor interaction → Phase 4 export (cancel, range, browser route where possible, parity suite) → Phase 5 agent surface (scopes, proposals, Pause Agent, budgets) → Phase 6 typography/captions → Phase 7 motion/catalog/Lab → Phase 8 sound → Phase 9 analysis → Phase 10 generative → Phase 11 Director → Phase 12 delivery → Phase 13 qualification.
-7. Housekeeping: sync `docs/REQUIREMENTS.md` / `docs/CAPABILITIES.md` rows to this checkpoint (worker); nightly large property/convergence runs.
+1. **Phase 2b** (lead): HTTP range reads for assets in the editor and render worker (no whole-file download); bounded decoder + frame cache with explicit budgets; preview decodes the proxy, export decodes the original; resource-lifetime test.
+2. **Phase 2c** (worker for fixtures, lead for evaluator rules): VFR / rotation conform route; fixtures for H.264/VP9/AV1, B-frames, 30000/1001; 1,000 seeded seeks per fixture against barcode truth; 10-minute flash/beep export sync fixture; preview A/V sync measurement.
+3. **Phase 2 UI use of derivatives** (worker): filmstrip thumbnails and waveforms on timeline clips; per-asset processing state.
+4. **Phase 2d** (lead): audio clock via AudioWorklet with shared render contract; remove whole-file `decodeAudioData`.
+5. Phase 3 editor interaction → 4 export → 5 agent surface (scopes, proposals, Pause Agent, budgets; also FF-07 worker lease) → 6 typography/captions → 7 motion/catalog/Lab (FF-09) → 8 sound → 9 analysis (G1 remainder: MoGe-2, SeedVR2 — need new download authorisation and GPU) → 10 generative → 11 Director (FF-10, FF-11) → 12 delivery (FF-12) → 13 qualification.
+6. Housekeeping: nightly large property/convergence runs; list `/openapi.json` in the document; real-image matting fixtures.
 
 ## Next executable action
-`pnpm install && pnpm check` (expect 69 tests, proof 47/47), start ComfyUI (docs/INTEGRATIONS.md) and `pnpm proof:g0` (35/35); then task 1 in `packages/providers/src/builtin.ts`, `packages/providers/src/comfy.ts` (`/upload/image`) and `apps/server/src/capabilities.ts`.
+`pnpm install && pnpm check` (expect 80 tests, proof 48/48); with ComfyUI running, `pnpm proof:g0` (39/39). Then task 1: add range support use in `apps/web/src/media.ts` (Mediabunny `UrlSource`) and cache budgets, starting from `apps/server/src/http.ts` `sendBlob` (already answers Range requests).
 
 ## Agent / model summary
 
@@ -86,6 +94,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | 2 | `pf-implementer` | OpenAPI generation + drift test | definition: `sonnet` | not observable | 37,410 tok · 70 s |
 | 2 | `pf-implementer` | convergence test | definition: `sonnet` | not observable | 80,056 tok · 296 s |
 
+| 3 | Lead | media staging, model store, BiRefNet trial, integration | as above | as above | — |
+| 3 | `pf-implementer` | ingest derivatives + tests | `sonnet` | not observable | 54,498 tok · 139 s |
+| 3 | `pf-implementer` | REQUIREMENTS/CAPABILITIES sync (to checkpoint 2) | `sonnet` | not observable | 52,705 tok · 46 s |
+| 3 | `pf-scout` | audit of evidence citations | `haiku` | not observable | 23,751 tok · 24 s |
+
 The `pf-implementer` definition was exercised on three real tasks: each stayed inside its file scope and reported defects instead of patching shared code
-(it found the undo-body 500 and the raw-JSON idempotency comparison; both fixed by the lead). `pf-scout` has not been exercised yet.
-No cost figures are available. No paid call, model download or GPU wake-up has been made.
+(it found the undo-body 500 and the raw-JSON idempotency comparison; both fixed by the lead). `pf-scout` was exercised once, read-only, and found two citation mismatches (fixed).
+No cost figures are available. No paid call or GPU wake-up has been made. One model download was made under the owner's explicit grant: 444,473,596 bytes.

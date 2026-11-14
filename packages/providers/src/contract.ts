@@ -27,6 +27,8 @@ export interface ProviderAdapter {
   readonly id: string;
   probe(descriptor?: CapabilityDescriptor): Promise<Readiness>;
   estimate(descriptor: CapabilityDescriptor): Estimate;
+  /** Copy one local source file to the provider under a caller-chosen, content-addressed name. Idempotent. Returns the reference to bind in the graph. */
+  stage(localPath: string, name: string, mimeType: string): Promise<string>;
   /** `clientRequestId` is persisted by the caller BEFORE this call so an ambiguous outcome can be reconciled. */
   submit(graph: Record<string, unknown>, clientRequestId: string): Promise<Submission>;
   status(providerJobId: string): Promise<RemoteState>;

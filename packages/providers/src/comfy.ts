@@ -2,6 +2,7 @@
  * ComfyUI adapter over ComfyUI's own HTTP API (ADR-0007). The base URL is operator configuration,
  * never taken from a graph or a request. Local-only policy: non-loopback hosts must be explicitly allowed.
  */
+import { openAsBlob } from 'node:fs';
 import type { CancelOutcome, CollectedOutput, Estimate, ProviderAdapter, Readiness, RemoteState, Submission } from './contract.ts';
 import type { CapabilityDescriptor } from './descriptor.ts';
 
@@ -48,9 +49,7 @@ export class ComfyUIAdapter implements ProviderAdapter {
         const info = await this.json('/object_info');
         out.missingNodeClasses = d.requiredNodes.map((n) => n.classType).filter((c) => !(c in info));
         if (out.missingNodeClasses.length) out.problems.push(`node classes not installed: ${out.missingNodeClasses.join(', ')}`);
-        // Model presence needs a digest check (FF-05); listing a file name is not proof, so any model is reported until that exists.
-        out.missingModels = d.models.map((m) => m.path);
-        if (out.missingModels.length) out.problems.push('model integrity verification is not implemented; models are treated as not ready');
+        // Model readiness is decided by the Studio (digest-verified files, FF-05), not by listing provider file names.
       }
     } catch (e: any) {
       out.problems.push(e.message);
@@ -60,6 +59,18 @@ export class ComfyUIAdapter implements ProviderAdapter {
   estimate(d: CapabilityDescriptor): Estimate {
     const p = d.resources.measuredProfiles[0];
     return { downloadBytes: d.resources.downloadBytes, durationSeconds: p?.wallSeconds ?? null, costUsd: null, basis: p ? 'measured-profile' : 'none' };
+  }
+  async stage(localPath: string, name: string, mimeType: string): Promise<string> {
+    if (!/^[A-Za-z0-9_.-]{1,80}$/.test(name)) throw new ProviderError('bad_stage_name', 'staged file name must be a plain file name');
+    const form = new FormData();
+    // openAsBlob is file-backed: the upload streams from disk instead of buffering the whole source in memory.
+    form.append('image', await openAsBlob(localPath, { type: mimeType }), name);
+    form.append('overwrite', 'true');
+    form.append('type', 'input');
+    const r = await this.call('/upload/image', { method: 'POST', body: form });
+    const body = await r.json().catch(() => null);
+    if (!r.ok || typeof body?.name !== 'string') throw new ProviderError('stage_failed', `ComfyUI did not accept the source file: HTTP ${r.status}`);
+    return body.subfolder ? `${body.subfolder}/${body.name}` : body.name;
   }
   async submit(graph: Record<string, unknown>, clientRequestId: string): Promise<Submission> {
     const r = await this.call('/prompt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: graph, client_id: clientRequestId, extra_data: { pulseframe_request: clientRequestId } }) });

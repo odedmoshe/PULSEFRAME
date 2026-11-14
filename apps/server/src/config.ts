@@ -13,6 +13,10 @@ export interface Config {
   /** Optional ComfyUI provider (Amendment A1). Unset = provider not configured; the editor works without it. */
   comfyuiUrl: string | null;
   comfyuiAllowRemote: boolean;
+  /** Local ComfyUI `models` directory, when the provider runs on this machine. Enables digest verification and downloads. */
+  comfyuiModelsDir: string | null;
+  /** Hosts model files may be downloaded from (redirect targets must match too; a leading dot means any subdomain). */
+  modelHosts: string[];
   /** Licence profile used to decide which capabilities may run. */
   distributionProfile: 'commercial' | 'research';
 }
@@ -29,6 +33,8 @@ export function loadConfig(env = process.env): Config {
     maxUploadBytes: Number(env.PF_MAX_UPLOAD_BYTES ?? 2 * 1024 ** 3),
     comfyuiUrl: env.PF_COMFYUI_URL || null,
     comfyuiAllowRemote: env.PF_COMFYUI_ALLOW_REMOTE === '1',
+    comfyuiModelsDir: env.PF_COMFYUI_MODELS_DIR ? path.resolve(env.PF_COMFYUI_MODELS_DIR) : null,
+    modelHosts: (env.PF_MODEL_HOSTS ?? 'huggingface.co,.hf.co').split(',').filter(Boolean),
     distributionProfile: env.PF_PROFILE === 'research' ? 'research' : 'commercial',
   };
 }

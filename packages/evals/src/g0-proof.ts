@@ -127,6 +127,28 @@ async function main() {
   const after = (await call('/capabilities')).body.capabilities[0];
   check('run-earned evidence now cites the recorded job and names the profile it applies to', after.qualification.executed.status === 'pass' && /job_/.test(after.qualification.executed.evidence) && /only for this profile/.test(after.qualification.hardwareQualified.evidence), after.qualification.executed.evidence);
 
+  console.log('\n# media-input workflow: a project still is staged to the provider (model-free blur)');
+  const BLUR = 'comfy.image.soft-blur';
+  const srcPng = path.join(art, 'edge.png');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=white:s=320x180', '-vf', 'drawbox=x=0:y=0:w=160:h=180:color=black:t=fill', '-frames:v', '1', srcPng]);
+  const up = await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { authorization: `Bearer ${s.auth.tokens.agent}`, 'x-filename': 'edge.png', connection: 'close' }, body: fs.readFileSync(srcPng) });
+  const upBody: any = await up.json();
+  check('still image upload: probed as an image asset with exact dimensions', up.status === 201 && upBody.asset.kind === 'image' && upBody.asset.image.width === 320 && upBody.asset.image.height === 180 && upBody.asset.image.hasAlpha === false, upBody.asset?.image);
+  const hBlur = await historyCount();
+  const bl = await call(`/projects/${pid}/capabilities/${BLUR}/runs`, { params: { image: upBody.assetId, radius: 12, sigma: 6 } });
+  const jBl = await waitJob(call, bl.body.jobId);
+  const blOut = jBl.output?.bundle?.[0];
+  const blPng = path.join(art, 'blurred.png');
+  fs.writeFileSync(blPng, Buffer.from((await call(`/jobs/${jBl.id}/outputs/0`)).body));
+  const row = execFileSync('ffmpeg', ['-v', 'error', '-i', blPng, '-vf', 'crop=320:1:0:90', '-f', 'rawvideo', '-pix_fmt', 'gray', '-']);
+  check('media workflow ran on the staged source: output keeps the source size and the hard edge became a gradient', jBl.status === 'succeeded' && blOut.width === 320 && blOut.height === 180 && row[20]! < 8 && row[300]! > 247 && row[160]! > 60 && row[160]! < 195 && row[152]! < row[168]!, { stageSeconds: jBl.output?.stageSeconds, edgeProfile: [row[20], row[150], row[160], row[170], row[300]] });
+  const blAsset = (await call(`/projects/${pid}`)).body.project.assets[jBl.output.attachment.assetId];
+  check('lineage: the derived asset records its source asset, and the job records the source content hash that was staged', blAsset.provenance.derived.sourceAssetIds[0] === upBody.assetId && jBl.output.recipe.sources[0].contentHash === upBody.asset.contentHash && jBl.output.recipe.sources[0].bytes === upBody.asset.byteSize);
+  const badAsset = await call(`/projects/${pid}/capabilities/${BLUR}/runs`, { params: { image: 'ast_doesnotexist' } });
+  const pathParam = await call(`/projects/${pid}/capabilities/${BLUR}/runs`, { params: { image: '../../../etc/passwd' } });
+  const urlParam = await call(`/projects/${pid}/capabilities/${BLUR}/runs`, { params: { image: 'https://example.com/x.png' } });
+  check('media parameters accept only project asset ids: unknown asset 404, file path and URL rejected, nothing submitted', badAsset.status === 404 && pathParam.status === 422 && urlParam.status === 422 && (await historyCount()) === hBlur + 1, [badAsset.body.error.code, pathParam.body.error.code, urlParam.body.error.code]);
+
   console.log('\n# attachment through operations, and stale-result protection');
   const T30 = (n: number) => ({ value: String(n), timescale: 30 });
   const at = await call(`/projects/${pid}/capabilities/${SMOKE}/runs`, { params: { width: 256, height: 256, color: 0xff8800 }, attach: { start: T30(0), duration: T30(60) } });
