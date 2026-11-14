@@ -66,7 +66,10 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Browser-side export (WebCodecs + Mediabunny, tab lease with heartbeats) | tested (limited) | `docs/evidence/browser-export-proof.json` (23 checks), `apps/server/src/browser-export.test.ts`. On this Chromium it writes H.264 + **Opus** in MP4 because AAC encode is unavailable (declared substitution, not MP4+AAC). Output buffered in memory; lease state in memory only; no automatic routing; Chromium only |
 | Preview/export parity | tested | `docs/evidence/parity-suite.json`: paused preview vs headless still byte-identical on 30/30 frames with and without video; compositor vs decoded H.264 export min PSNR 36.8 dB / SSIM 0.997 on this synthetic scene. 14 px text over saturated edges ~29 dB (warning); the text-size envelope is a characterisation, not a guarantee |
 | Streaming output, GIF/animated WebP, subtitle sidecars, project archive, batch variants, hardware encoder profile | not built | |
-| GPU compositor, effects, transitions, masks, captions, audio DSP, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
+| Captions: manual cues and transcript-linked tracks, 4 presets (classic, karaoke, word-pop, box-highlight), Hebrew/mixed-direction word layout, SRT/VTT import, SRT/VTT/ASS export | tested | `docs/evidence/phase6-proof.json` (26 checks), `packages/*/src/captions.test.ts`, `subtitles.test.ts`. Six golden renders; one bundled font |
+| Transcript editing: typed/imported transcripts in source time, corrections that keep the original, delete words → ripple cut of picture, sound and captions, `cut_range` | tested (synthetic transcript) | `phase6-proof.json`: frame-exact cut, audio onset error 0.042 ms on one fixture. Real speech not exercised |
+| Speech recognition, forced alignment, silence/filler detection, translation | not built | Blocked on B-7 (ASR); silence detection is next |
+| GPU compositor, effects, transitions, masks, audio DSP, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface
 

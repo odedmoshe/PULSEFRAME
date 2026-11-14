@@ -66,7 +66,7 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
   if (clip.type === 'text') {
     const lines = Math.max(1, clip.text.split('\n').length);
     natural = { w: frameW * TEXT_NOMINAL_W, h: lines * clip.style.sizeFrac * clip.style.lineHeight * frameH, fit: false };
-  } else {
+  } else if (clip.type === 'media') {
     const a = doc.assets[clip.assetId];
     const dims = a?.video ?? a?.image;
     if (dims) natural = { w: dims.width, h: dims.height, fit: true };

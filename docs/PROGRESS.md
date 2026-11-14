@@ -23,7 +23,7 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | Phase 3 — Editor interaction | **Gate criteria met, verified-here**; scope items still open (below) | `pnpm proof:phase3` 27/27 (`docs/evidence/phase3-proof.json`), baselines in `docs/evidence/baselines/` |
 | Phase 4 — Production export | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase4` 19/19; `pnpm proof:browser-export` 23/23; `pnpm conformance:parity` pass (`docs/evidence/parity-suite.json`) |
 | Phase 5 — Complete agent surface | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase5` 22/22 (`docs/evidence/phase5-proof.json`); `governance.test.ts` |
-| Phase 6 — Typography and captions | Next | — |
+| Phase 6 — Typography and captions | **Partly met, verified-here on a synthetic transcript.** Gate has three parts: Hebrew/mixed-script golden tests pass (6 renders, small set); transcript removal preserves sync (frame- and sample-checked); **timing corpus not reported — no speech recognition exists here (B-7)** | `pnpm proof:phase6` 26/26 (`docs/evidence/phase6-proof.json`); `captions.test.ts` in core and engine; `subtitles.test.ts` |
 | Phases 7–13, G2–G3 | Not started | — |
 
 ## Completed and verified-here
@@ -103,8 +103,20 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - **Ten scripted goals through MCP** (deterministic script over the official client, not a language model): rough cut, tighten, Hebrew title with keyframed fade verified from stills, reorder, remove a second and close gaps, inspect-correct-reinspect, propose → owner accepts in the editor → owner undoes, range export verified frame by frame, agent undo, scoped captions-only agent.
 - Open Phase 5 scope: MCP Tasks extension (jobs are polled by id; the server does not claim Tasks), MCP resources/prompts/playbooks, OAuth for remote MCP, third-party MCP hosts untested, grants/approvals management UI (REST only), activity/call log dialog, transcript and audio-analysis senses (need Phases 6/9), preview-clip sense, range-limited grant only unit-tested.
 
+**Checkpoint 6 — Phase 6a (captions and transcript editing)**
+- Document: `transcripts` by asset in **source time** (phrases, words with stable ids, timing grade `word` / `segment` / `approximate`, original text kept after corrections); caption tracks (`manual` cues or `transcript` mode linked to a media track) with a style (4 presets: classic, karaoke, word-pop, box-highlight).
+- Captions in transcript mode are evaluated at render time from source time, so they follow every cut, trim and move with no re-timing step; words that were cut out are not shown. SRT/VTT/ASS export uses the same rule as the picture.
+- New ops (all through `Store.commit`, so REST, MCP, undo and proposals apply): `add_caption_track`, `set_caption_style`, `add_cue`, `update_cue`, `merge_cues`, `import_captions`, `set_transcript`, `import_transcript`, `correct_transcript`, `cut_range` (ripple across all tracks; a locked track fails the cut instead of drifting), `delete_transcript_range` (text-based editing). `set_transcript` cannot be labelled as speech recognition by a client.
+- Word-level highlight and word-precise cuts need word-level timing: estimated timing draws no highlight and refuses a precise cut with a reason.
+- Subtitle codec: SRT/WebVTT parse and serialize, ASS export, exact millisecond rationals, frame snapping with the largest shift reported (36 tests).
+- Word-level bidi layout for captions (Hebrew base with embedded Latin/number runs) as a pure, unit-tested function; the six committed renders were inspected by eye once.
+- Senses: REST `GET …/transcripts/{assetId}`, `GET …/captions?format=srt|vtt|ass`; MCP `get_transcript`, `export_captions` (37 MCP tools).
+- Editor: transcript panel (click a word to seek, shift-click range, delete words, correct a phrase, timing badges, honest empty state with SRT/VTT import) and caption controls (preset, position, size, colours, import, export links). Verified by the proof for these flows only; Inspector is now crowded (needs the workspace/tab layout from Phase 3 carry-over); no accessibility audit.
+- Measured in the proof (one fixture, this CPU profile): after deleting two "words", export has exactly 207 frames with the cut at frame 60 → source frame 93, next beep at 2.900 s (max onset error 0.042 ms), caption phrase change on the same frame as the beep; correcting text leaves exported audio bit-identical.
+- **Not done in Phase 6:** speech recognition / forced alignment and the timing corpus (B-7), silence/filler candidates, font catalog beyond Heebo, rich text, text animation presets, the other 16 catalog caption styles, reading-speed rules, translation review, per-word manual cue timing UI, transcript entity is one undo unit (two people correcting different phrases at once will conflict rather than merge).
+
 ## In progress
-- Phase 6: shared text layout contract, font catalog, rich text, text animation presets, caption track with SRT/VTT import/export, transcript-linked edits. ASR needs a model/provider decision.
+- Phase 6b: silence candidates from audio analysis (no model needed), text animation presets, font manifest. ASR remains blocked on B-7.
 
 ## Blocked / unverified (with what would unblock)
 
@@ -115,18 +127,19 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | Browser MP4+AAC export | blocked here (B-2) | Phase 4 browser route | A Chrome build with AAC WebCodecs encode |
 | Preview A/V sync; preview/export parity across many frames; long media; real camera/phone footage; other browsers; other MCP hosts | unverified | Phases 2–4 gates | Scheduled in Phase 2/4 below; other browsers are not installed here (Chromium only) |
 | Worker lease / prewarm / budgets (FF-07) | not started | G3, Phase 10 | Phase 5 scopes + Phase 10 |
+| Speech recognition, forced alignment, timing corpus (B-7) | blocked on an owner decision | Phase 6 gate (timing corpus), R-16.2, R-C.10 | Authorise a local ASR model download (size/licence to approve) or supply a provider credential |
 | No pull request | deferred by owner | — | Branch organisation later |
 
 ## Dependency-aware task list (next first)
 
-1. **Phase 6a** (lead): caption track + cue model and ops (add/split/merge/shift), SRT/VTT import/export with exact time mapping, captions remapped through cuts; text layout contract (line breaking, fit-to-box) as a pure module shared by preview and export.
-2. **Phase 6b** (worker): caption styles and text animation presets as catalog entries rendered by the compositor; font catalog with licence/coverage manifest (only fonts whose files and licences can be verified from npm packages here).
+1. **Phase 6b** (lead): silence detection as a derivative job → cut candidates delivered as a proposal (`cut_range` ops), never applied silently.
+2. **Phase 6b** (worker): text animation presets, and text animation presets as catalog entries rendered by the compositor; font catalog with licence/coverage manifest (only fonts whose files and licences can be verified from npm packages here).
 3. **Phase 6c** (blocked on a decision): ASR/alignment — local model download (size and licence to be approved; the 1 GB trial grant is used up) or a provider credential. Until then captions are manual/imported.
 4. Phase 7 effects/transitions/Lab → needs a GPU compositor decision (B-1); Canvas2D-feasible subset first.
 5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
 
 ## Next executable action
-`pnpm install && pnpm build && pnpm test` (expect 166+ tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (22/22), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6a starting in `packages/core/src/schema.ts` (caption track) and `packages/core/src/ops.ts`.
+`pnpm install && pnpm build && pnpm test` (expect 217 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (26/26), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
 
 ## Agent / model summary
 
@@ -148,6 +161,8 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | 4 | `pf-implementer` ×6 | seek conformance (61,746 tok · 704 s); filmstrips/waveforms (48,146 · 109 s); OpenAPI sync (36,716 · 33 s); command palette (46,357 · 92 s); drag + canvas handles (53,525 · 121 s); status-doc sync (79,350 · 113 s) | `sonnet` | not observable | as listed |
 | 5 | Lead | export options/manifest/cancel/retry, full-quality preview, governance (grants, pause, proposals, approvals, budget), integration, proofs | as above | as above | — |
 | 5 | `pf-implementer` ×3 | parity suite (90,457 + 99,731 tok on resume); browser export route (168,016 tok · 510 s); OpenAPI update | `sonnet` | not observable | as listed |
+| 6 | Lead | transcript/caption model, ops, evaluation, bidi caption layout, REST/MCP, proof | as above | as above | — |
+| 6 | `pf-implementer` ×2 | subtitle codec (45,369 tok · 158 s); transcript/caption editor UI (60,659 tok · 92 s) | `sonnet` | not observable | as listed |
 
 The `pf-implementer` definition was exercised on three real tasks: each stayed inside its file scope and reported defects instead of patching shared code
 (it found the undo-body 500 and the raw-JSON idempotency comparison; both fixed by the lead). `pf-scout` was exercised once, read-only, and found two citation mismatches (fixed).

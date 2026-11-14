@@ -7,6 +7,7 @@
  *   sourceTime = clip.sourceIn + (t - clip.start);  sourceFrame = floor(sourceTime * assetFrameRate)
  */
 import * as T from '@pulseframe/time';
+import { captionAt, type CaptionLayer } from './captions.ts';
 import { transformAt, type ProjectDocument, type TextStyle, type Transform } from '@pulseframe/core';
 
 export interface VideoLayer {
@@ -25,7 +26,7 @@ export interface VideoLayer {
 /** A still picture. Same placement rules as video; one decoded image for the whole clip. */
 export interface ImageLayer { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform }
 export interface TextLayer { kind: 'text'; clipId: string; trackId: string; text: string; style: TextStyle; transform: Transform }
-export type Layer = VideoLayer | ImageLayer | TextLayer;
+export type Layer = VideoLayer | ImageLayer | TextLayer | CaptionLayer;
 export type PictureLayer = VideoLayer | ImageLayer;
 export interface ActiveAudio { clipId: string; trackId: string; assetId: string; sourceTime: T.RationalTime; gain: number }
 export interface RenderGraph {
@@ -43,7 +44,9 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
   if (!seq) throw new Error(`sequence ${sequenceId} not found`);
   const { width, height, frameRate, background } = doc.settings;
   const graph: RenderGraph = { time, frameIndex: T.frameIndexAt(time, frameRate), width, height, background, layers: [], audio: [] };
+  const captions: CaptionLayer[] = [];
   for (const track of seq.tracks) {
+    if (track.kind === 'caption') { const c = captionAt(doc, seq, track, time); if (c) captions.push(c); continue; }
     for (const clip of track.clips) {
       // half-open [start, start+duration)
       if (T.lt(time, clip.start) || !T.lt(time, T.add(clip.start, clip.duration))) continue;
@@ -51,6 +54,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
         if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time) });
         continue;
       }
+      if (clip.type !== 'media') continue;
       const asset = doc.assets[clip.assetId];
       if (!asset) continue;
       const sourceTime = T.add(clip.sourceIn, T.sub(time, clip.start));
@@ -70,6 +74,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       }
     }
   }
+  graph.layers.push(...captions); // captions always draw above picture and titles
   return graph;
 }
 
@@ -80,7 +85,7 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
     time: g.time,
     seconds: T.toSeconds(g.time),
     frameIndex: g.frameIndex,
-    layers: g.layers.map((l) => (l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId } : { kind: l.kind, clipId: l.clipId, text: l.text })),
+    layers: g.layers.map((l) => (l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : { kind: l.kind, clipId: l.clipId, text: l.text })),
     audio: g.audio,
   };
 }

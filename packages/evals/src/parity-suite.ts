@@ -149,7 +149,7 @@ async function main() {
     return { pid, doc, big, small, box, imgAsset: img.assetId as string };
   }
   const still = async (pid: string, n: number) => { const r = await call(`/projects/${pid}/frame?index=${n}`); if (r.status !== 200) throw new Error(`frame ${n}: ${r.status}`); return r.body as Buffer; };
-  const imageCx = (doc: any, n: number) => { const l = evaluate(doc, f(n)).layers.find((x: any) => x.kind === 'image'); return l ? 320 + l.transform.x * W : null; };
+  const imageCx = (doc: any, n: number) => { const l = evaluate(doc, f(n)).layers.find((x: any) => x.kind === 'image') as any; return l ? 320 + l.transform.x * W : null; };
 
   const browser = await chromium.launch();
   const warnings: string[] = [];

@@ -4,3 +4,4 @@ export * from './ops.ts';
 export * from './queries.ts';
 export * from './entities.ts';
 export * from './animation.ts';
+export * from './subtitles.ts';

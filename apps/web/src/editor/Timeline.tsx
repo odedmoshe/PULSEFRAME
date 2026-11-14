@@ -5,7 +5,7 @@ import { ClipVisuals } from '../ClipVisuals.tsx';
 import { useEditorState } from './store.ts';
 import { useTimelineDrag } from './TimelineDrag.tsx';
 
-export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'text' ? c.text : doc.assets[c.assetId]?.name ?? c.assetId);
+export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.text);
 
 /**
  * DOM timeline: every clip is a real button, so the structure is directly accessible (SPEC §3).
@@ -28,7 +28,7 @@ export function Timeline() {
           </div>
           {doc && [...doc.sequences[doc.mainSequenceId]!.tracks].reverse().map((tr) => (
             <div className={`track ${tr.kind}`} key={tr.id} role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`} data-track-id={tr.id}>
-              <span className="track-name">{tr.name}</span>
+              <span className="track-name">{tr.kind === 'caption' ? `${t('track.caption')}${tr.caption?.mode === 'transcript' ? ' ✦' : ''}` : tr.name}</span>
               {ghost && tr.clips.some((c) => c.id === ghost.clipId) && (
                 <div className={`clip-ghost${ghost.invalid ? ' invalid' : ''}${ghost.snappedTo ? ' snapped' : ''}`} data-testid="clip-ghost" style={{ left: ghost.leftPx, width: ghost.widthPx }} />
               )}
@@ -36,10 +36,10 @@ export function Timeline() {
                 const width = Math.max(4, T.toSeconds(c.duration) * pps - 1);
                 const asset = c.type === 'media' ? doc.assets[c.assetId] : undefined;
                 return (
-                  <button key={c.id} role="listitem" className={`clip ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-clip-type={c.type} data-track-kind={tr.kind}
+                  <button key={c.id} role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-clip-type={c.type} data-track-kind={tr.kind}
                     style={{ left: T.toSeconds(c.start) * pps, width }} onClick={() => editor.select(c.id)} aria-pressed={selection.includes(c.id)}
                     aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
-                    {asset && asset.kind !== 'image' && tr.kind !== 'text' && (
+                    {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                       <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.duration} widthPx={width} heightPx={34} refreshKey={derivativeTick} />
                     )}
                     <span dir="auto" className="clip-label">{clipLabel(doc, c)}</span>

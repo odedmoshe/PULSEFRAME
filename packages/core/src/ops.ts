@@ -6,10 +6,12 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
-  type Clip, type MediaClip, type ProjectDocument, type Sequence, type Track,
+  CaptionStyleSchema, DEFAULT_CAPTION_STYLE,
+  type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Sequence, type Track, type Transcript,
 } from './schema.ts';
+import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
-import { restoreEntities, type EntityState } from './entities.ts';
+import { restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
 import { sampleKeyframes, shiftKeyframes } from './animation.ts';
 
 export type OpErrorCode =
@@ -95,7 +97,7 @@ function assertAligned(d: ProjectDocument, t: T.RationalTime, what: string) {
 }
 function newTrack(seq: Sequence, kind: Track['kind'], ctx: OpContext, name?: string): Track {
   const count = seq.tracks.filter((t) => t.kind === kind).length + 1;
-  const track: Track = { id: ctx.newId('trk'), kind, name: name ?? `${kind === 'video' ? 'V' : kind === 'audio' ? 'A' : 'T'}${count}`, locked: false, muted: false, hidden: false, clips: [] };
+  const track: Track = { id: ctx.newId('trk'), kind, name: name ?? `${kind === 'video' ? 'V' : kind === 'audio' ? 'A' : kind === 'caption' ? 'C' : 'T'}${count}`, locked: false, muted: false, hidden: false, clips: [] };
   // Bottom-most first: picture tracks, then text tracks, then audio.
   const at = kind === 'audio' ? -1 : kind === 'video' ? seq.tracks.findIndex((t) => t.kind !== 'video') : seq.tracks.findIndex((t) => t.kind === 'audio');
   seq.tracks.splice(at < 0 ? seq.tracks.length : at, 0, track);
@@ -431,6 +433,7 @@ defineOp({
       right.start = a.at;
       right.duration = T.sub(clip.duration, left);
       shiftKeyframes(right, left);
+      if (clip.type === 'caption') { delete clip.words; delete (right as typeof clip).words; }
       if (right.type === 'media') { right.sourceIn = T.add(right.sourceIn, left); if (right.linkGroupId) right.linkGroupId = newLink; }
       clip.duration = left;
       track.clips.push(right);
@@ -471,6 +474,309 @@ defineOp({
 });
 
 // ---------- transactions ----------
+// ---------- captions, transcripts and range cuts (SPEC §16) ----------
+function newCaptionTrack(seq: Sequence, ctx: OpContext, mode: 'manual' | 'transcript', linkedTrackId: string | null, style?: Partial<CaptionStyle>, name?: string): Track {
+  if (linkedTrackId) {
+    const l = seq.tracks.find((t) => t.id === linkedTrackId);
+    if (!l || (l.kind !== 'audio' && l.kind !== 'video')) throw new OpError('not_found', `linked track ${linkedTrackId} must be an existing audio or video track`, { linkedTrackId });
+  }
+  const t = newTrack(seq, 'caption', ctx, name);
+  t.caption = { mode, linkedTrackId, style: { ...DEFAULT_CAPTION_STYLE, ...style } };
+  return t;
+}
+const mustCaptionTrack = (seq: Sequence, trackId: string) => {
+  const t = mustTrack(seq, trackId);
+  if (t.kind !== 'caption' || !t.caption) throw new OpError('incompatible', `track ${trackId} is not a caption track`, { trackId });
+  return t;
+};
+const manualCaptionTrack = (seq: Sequence, ctx: OpContext, trackId?: string) => {
+  const t = trackId ? mustCaptionTrack(seq, trackId) : seq.tracks.find((x) => x.kind === 'caption' && x.caption?.mode === 'manual' && !x.locked) ?? newCaptionTrack(seq, ctx, 'manual', null);
+  if (t.caption!.mode !== 'manual') throw new OpError('incompatible', `caption track ${t.id} shows a transcript; cues can only be added to a manual caption track`, { trackId: t.id }, 'Omit trackId to use or create a manual caption track.');
+  return t;
+};
+
+defineOp({
+  name: 'add_caption_track',
+  version: 1,
+  description: 'Add a caption track. mode=transcript shows the transcript of whatever plays on the linked audio/video track (captions follow every cut automatically); mode=manual holds its own timed cues.',
+  args: z.object({ sequenceId: z.string().optional(), mode: z.enum(['manual', 'transcript']), linkedTrackId: z.string().optional().describe('transcript mode: track whose clips are captioned. Omit to caption the first playing clip that has a transcript.'), style: CaptionStyleSchema.partial().optional(), name: z.string().max(128).optional() }).strict(),
+  apply(d, a, ctx) {
+    const t = newCaptionTrack(seqOf(d, a.sequenceId), ctx, a.mode, a.mode === 'transcript' ? a.linkedTrackId ?? null : null, a.style, a.name);
+    return { affectedIds: [t.id], summary: `Added ${a.mode} caption track ${t.name}`, output: { trackId: t.id } };
+  },
+});
+
+defineOp({
+  name: 'set_caption_style',
+  version: 1,
+  description: 'Change the look of a caption track (preset, font, size, colours, position, line limits). Unspecified fields are kept.',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string(), style: CaptionStyleSchema.partial() }).strict(),
+  apply(d, a) {
+    const t = mustCaptionTrack(seqOf(d, a.sequenceId), a.trackId);
+    t.caption!.style = { ...t.caption!.style, ...a.style };
+    return { affectedIds: [t.id], summary: `Updated caption style (${t.caption!.style.preset})` };
+  },
+});
+
+defineOp({
+  name: 'add_cue',
+  version: 1,
+  description: 'Add one manually timed caption cue (frame-aligned start and duration). Creates a manual caption track when none exists.',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string().optional(), start: RT, duration: RT, text: z.string().min(1).max(2000) }).strict(),
+  apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
+    assertAligned(d, a.start, 'start');
+    assertAligned(d, a.duration, 'duration');
+    if (!T.lt(T.ZERO, a.duration) || T.isNegative(a.start)) throw new OpError('invalid_args', 'start must be >= 0 and duration > 0');
+    const track = manualCaptionTrack(seq, ctx, a.trackId);
+    assertFree(track, a.start, T.add(a.start, a.duration));
+    const clip: Clip = { id: ctx.newId('cue'), type: 'caption', text: a.text, start: a.start, duration: a.duration, transform: { ...DEFAULT_TRANSFORM } };
+    track.clips.push(clip);
+    sortClips(track);
+    return { affectedIds: [clip.id, track.id], summary: `Added caption "${a.text.slice(0, 40)}" at ${fmt(a.start)}`, output: { clipId: clip.id, trackId: track.id } };
+  },
+});
+
+defineOp({
+  name: 'update_cue',
+  version: 1,
+  description: 'Change the text of a caption cue. Timing is changed with move_clip / trim_clip / split_clip.',
+  args: z.object({ clipId: z.string(), text: z.string().min(1).max(2000) }).strict(),
+  apply(d, a) {
+    const { clip } = mustClip(d, a.clipId);
+    if (clip.type !== 'caption') throw new OpError('incompatible', `clip ${a.clipId} is not a caption cue`, { clipId: a.clipId });
+    clip.text = a.text;
+    delete clip.words; // per-word timing described the old text
+    return { affectedIds: [clip.id], summary: `Updated caption "${a.text.slice(0, 40)}"` };
+  },
+});
+
+defineOp({
+  name: 'merge_cues',
+  version: 1,
+  description: 'Merge a caption cue with the next cue on its track into one cue covering both.',
+  args: z.object({ clipId: z.string(), separator: z.string().max(4).optional() }).strict(),
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    const next = f.track.clips[f.index + 1];
+    if (f.clip.type !== 'caption' || !next || next.type !== 'caption') throw new OpError('incompatible', 'merge_cues needs a caption cue that has a following cue', { clipId: a.clipId });
+    f.clip.text = `${f.clip.text}${a.separator ?? ' '}${next.text}`;
+    f.clip.duration = T.sub(clipEnd(next), f.clip.start);
+    delete f.clip.words;
+    f.track.clips.splice(f.index + 1, 1);
+    return { affectedIds: [f.clip.id, next.id], summary: 'Merged two captions' };
+  },
+});
+
+defineOp({
+  name: 'import_captions',
+  version: 1,
+  description: 'Import an SRT or WebVTT file as manual caption cues in TIMELINE time. Cue times are snapped to the nearest frame; the largest shift is reported. Overlapping cues are rejected, not silently dropped.',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string().optional(), content: z.string().min(1).max(2_000_000), format: z.enum(['srt', 'vtt']).optional(), offset: RT.optional().describe('Added to every cue time (frame-aligned)'), replace: z.boolean().optional().describe('Remove the track\'s existing cues first') }).strict(),
+  apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
+    let parsed;
+    try { parsed = parseSubtitles(a.content, a.format); } catch (e: any) { throw new OpError('invalid_args', `cannot read subtitles: ${e.message}`, { line: e.line, code: e.code }); }
+    if (parsed.cues.length === 0) throw new OpError('invalid_args', 'the file contains no usable cues', { warnings: parsed.warnings.slice(0, 20) });
+    const offset = a.offset ?? T.ZERO;
+    assertAligned(d, offset, 'offset');
+    const snapped = snapCuesToFrames(parsed.cues.map((c) => ({ ...c, start: T.add(c.start, offset), end: T.add(c.end, offset) })), d.settings.frameRate);
+    const track = manualCaptionTrack(seq, ctx, a.trackId);
+    const removed = a.replace ? track.clips.map((c) => c.id) : [];
+    if (a.replace) track.clips = [];
+    const ids: string[] = [];
+    for (const c of snapped.cues) {
+      if (T.isNegative(c.start)) throw new OpError('out_of_bounds', 'a cue starts before 0 after applying the offset', { text: c.text.slice(0, 40) });
+      assertFree(track, c.start, c.end);
+      const clip: Clip = { id: ctx.newId('cue'), type: 'caption', text: c.text, start: c.start, duration: T.sub(c.end, c.start), transform: { ...DEFAULT_TRANSFORM } };
+      track.clips.push(clip);
+      ids.push(clip.id);
+    }
+    sortClips(track);
+    return { affectedIds: [track.id, ...ids, ...removed], summary: `Imported ${ids.length} captions (${parsed.format.toUpperCase()})`, output: { trackId: track.id, cueIds: ids, format: parsed.format, maxShiftSeconds: snapped.maxShiftSeconds, warnings: parsed.warnings.slice(0, 50) } };
+  },
+});
+
+const WordIn = z.object({ text: z.string().min(1).max(200), start: RT, duration: RT, confidence: z.number().min(0).max(1).optional() }).strict();
+const SegmentIn = z.object({ start: RT, duration: RT, text: z.string().max(4000), speaker: z.string().max(80).optional(), words: z.array(WordIn).max(2000).optional(), approximate: z.boolean().optional().describe('true when word times are estimates') }).strict();
+function buildTranscript(d: ProjectDocument, ctx: OpContext, assetId: string, language: string, kind: 'import' | 'manual', segments: z.infer<typeof SegmentIn>[]): Transcript {
+  const asset = d.assets[assetId];
+  if (!asset) throw new OpError('not_found', `asset ${assetId} not found`, { assetId });
+  if (!asset.audio) throw new OpError('incompatible', `asset ${assetId} has no audio to transcribe`, { assetId });
+  const out: Transcript = { assetId, language, origin: { kind, provider: null, model: null, createdAt: 'op', createdBy: ctx.actor }, segments: [] };
+  let prevEnd = T.ZERO;
+  for (const s of [...segments].sort((x, y) => T.cmp(x.start, y.start))) {
+    const end = T.add(s.start, s.duration);
+    if (T.lt(s.start, prevEnd) || !T.lt(T.ZERO, s.duration)) throw new OpError('invalid_args', 'segments must not overlap and must have a duration', { start: s.start, text: s.text.slice(0, 40) });
+    if (T.lt(asset.duration, s.start)) throw new OpError('out_of_bounds', 'a segment starts after the end of the media', { start: s.start, assetDuration: asset.duration });
+    prevEnd = end;
+    out.segments.push({
+      id: ctx.newId('seg'), start: s.start, duration: s.duration, text: s.text, original: null, speaker: s.speaker ?? null,
+      timing: s.words?.length ? (s.approximate ? 'approximate' : 'word') : 'segment',
+      words: (s.words ?? []).map((w) => ({ id: ctx.newId('wrd'), text: w.text, start: w.start, duration: w.duration, confidence: w.confidence ?? null })),
+    });
+  }
+  return out;
+}
+
+defineOp({
+  name: 'set_transcript',
+  version: 1,
+  description: 'Set the transcript of a media asset from typed or imported text, timed in the SOURCE media\'s own time. This records human/imported text only; speech-recognition results arrive through provider jobs, never through this operation.',
+  args: z.object({ assetId: z.string(), language: z.string().min(2).max(35), origin: z.enum(['import', 'manual']).optional(), segments: z.array(SegmentIn).min(1).max(20000) }).strict(),
+  apply(d, a, ctx) {
+    d.transcripts[a.assetId] = buildTranscript(d, ctx, a.assetId, a.language, a.origin ?? 'manual', a.segments);
+    const t = d.transcripts[a.assetId]!;
+    return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Set transcript (${t.segments.length} phrases, ${a.language})`, output: { segmentIds: t.segments.map((s) => s.id), wordIds: t.segments.map((s) => s.words.map((w) => w.id)) } };
+  },
+});
+
+defineOp({
+  name: 'import_transcript',
+  version: 1,
+  description: 'Use an SRT or WebVTT file, timed against the SOURCE media, as that asset\'s transcript. Phrases are timed; words are not (no karaoke or word-precise cuts until word timing exists).',
+  args: z.object({ assetId: z.string(), language: z.string().min(2).max(35), content: z.string().min(1).max(2_000_000), format: z.enum(['srt', 'vtt']).optional() }).strict(),
+  apply(d, a, ctx) {
+    let parsed;
+    try { parsed = parseSubtitles(a.content, a.format); } catch (e: any) { throw new OpError('invalid_args', `cannot read subtitles: ${e.message}`, { line: e.line, code: e.code }); }
+    if (parsed.cues.length === 0) throw new OpError('invalid_args', 'the file contains no usable cues', { warnings: parsed.warnings.slice(0, 20) });
+    d.transcripts[a.assetId] = buildTranscript(d, ctx, a.assetId, a.language, 'import', parsed.cues.map((c) => ({ start: c.start, duration: T.sub(c.end, c.start), text: c.text })));
+    return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Imported transcript (${parsed.cues.length} phrases, ${parsed.format.toUpperCase()})`, output: { segmentIds: d.transcripts[a.assetId]!.segments.map((s) => s.id), warnings: parsed.warnings.slice(0, 50) } };
+  },
+});
+
+defineOp({
+  name: 'correct_transcript',
+  version: 1,
+  description: 'Correct the text of one transcript phrase. The audio is not changed and the recognised original is kept. If the number of words changes, word times become estimates (marked approximate).',
+  args: z.object({ assetId: z.string(), segmentId: z.string(), text: z.string().min(1).max(4000) }).strict(),
+  apply(d, a, ctx) {
+    const seg = d.transcripts[a.assetId]?.segments.find((s) => s.id === a.segmentId);
+    if (!seg) throw new OpError('not_found', `phrase ${a.segmentId} not found in the transcript of ${a.assetId}`, { segmentId: a.segmentId });
+    if (seg.original === null) seg.original = seg.text;
+    seg.text = a.text;
+    const tokens = a.text.split(/\s+/).filter(Boolean);
+    if (seg.words.length > 0) {
+      if (tokens.length === seg.words.length) seg.words.forEach((w, i) => { w.text = tokens[i]!; });
+      else {
+        // Spread the new words over the phrase in proportion to their length, on a microsecond grid.
+        const total = tokens.reduce((n, t) => n + t.length, 0) || 1;
+        const startUs = T.toMicros(seg.start), durUs = T.toMicros(seg.duration);
+        let acc = 0;
+        seg.words = tokens.map((t) => {
+          const from = startUs + (durUs * BigInt(acc)) / BigInt(total);
+          acc += t.length;
+          const to = startUs + (durUs * BigInt(acc)) / BigInt(total);
+          return { id: ctx.newId('wrd'), text: t, start: T.fromMicros(from), duration: T.fromMicros(to - from), confidence: null };
+        });
+        seg.timing = 'approximate';
+      }
+    }
+    return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Corrected transcript: "${a.text.slice(0, 40)}"`, output: { timing: seg.timing } };
+  },
+});
+
+/** Remove [start,end) from the given tracks; with ripple, everything later moves earlier by the removed length. */
+function cutRange(seq: Sequence, start: T.RationalTime, end: T.RationalTime, tracks: Track[], ripple: boolean, ctx: OpContext) {
+  const len = T.sub(end, start);
+  const removed: string[] = [], changed: string[] = [], created: string[] = [];
+  const relink = new Map<string, string>();
+  for (const track of tracks) {
+    if (track.locked) throw new OpError('track_locked', `track ${track.id} is locked, so the cut cannot keep tracks in sync`, { trackId: track.id }, 'Unlock the track, or pass trackIds without it (other tracks will then shift relative to it).');
+    const next: Clip[] = [];
+    for (const clip of track.clips) {
+      const cEnd = clipEnd(clip);
+      if (!T.lt(start, cEnd)) { next.push(clip); continue; }
+      if (!T.lt(clip.start, end)) {
+        if (ripple) { clip.start = T.sub(clip.start, len); changed.push(clip.id); }
+        next.push(clip);
+        continue;
+      }
+      const hasLeft = T.lt(clip.start, start), hasRight = T.lt(end, cEnd);
+      if (!hasLeft && !hasRight) { removed.push(clip.id); continue; }
+      let right: Clip | null = null;
+      if (hasRight) {
+        right = hasLeft ? structuredClone(clip) : clip;
+        const delta = T.sub(end, clip.start);
+        if (hasLeft) {
+          right.id = ctx.newId('clp');
+          created.push(right.id);
+          if (right.type === 'media' && right.linkGroupId) {
+            if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk'));
+            right.linkGroupId = relink.get(right.linkGroupId)!;
+          }
+        }
+        if (right.type === 'media') right.sourceIn = T.add(right.sourceIn, delta);
+        if (right.type === 'caption') delete right.words;
+        shiftKeyframes(right, delta);
+        right.start = ripple ? start : end;
+        right.duration = T.sub(cEnd, end);
+      }
+      if (hasLeft) {
+        clip.duration = T.sub(start, clip.start);
+        if (clip.type === 'caption') delete clip.words;
+        next.push(clip);
+      }
+      changed.push(clip.id);
+      if (right) next.push(right);
+    }
+    track.clips = next;
+    sortClips(track);
+  }
+  return { removed, changed, created };
+}
+
+defineOp({
+  name: 'cut_range',
+  version: 1,
+  description: 'Remove a frame-aligned time range from the timeline. By default every track is cut and later material moves earlier (ripple) so picture, sound and captions stay in sync. A locked track makes the cut fail rather than drift.',
+  args: z.object({ sequenceId: z.string().optional(), start: RT, end: RT, trackIds: z.array(z.string()).min(1).optional(), ripple: z.boolean().optional() }).strict(),
+  apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
+    assertAligned(d, a.start, 'start');
+    assertAligned(d, a.end, 'end');
+    if (T.isNegative(a.start) || !T.lt(a.start, a.end)) throw new OpError('invalid_args', 'need 0 <= start < end');
+    const tracks = a.trackIds ? a.trackIds.map((id) => mustTrack(seq, id)) : seq.tracks;
+    const r = cutRange(seq, a.start, a.end, tracks, a.ripple !== false, ctx);
+    return { affectedIds: [...new Set([...r.removed, ...r.changed, ...r.created])], summary: `Cut ${fmt(T.sub(a.end, a.start))} at ${fmt(a.start)}${a.ripple === false ? ' (gap left)' : ''}`, output: { removedClipIds: r.removed, createdClipIds: r.created } };
+  },
+});
+
+defineOp({
+  name: 'delete_transcript_range',
+  version: 1,
+  description: 'Text-based editing: remove the given spoken words (first to last, inclusive) from the timeline wherever that media is used. Picture, sound and captions are cut together and later material closes the gap. Needs word-level timing; cut points snap to the nearest frame.',
+  args: z.object({ sequenceId: z.string().optional(), assetId: z.string(), fromWordId: z.string(), toWordId: z.string(), allowApproximate: z.boolean().optional() }).strict(),
+  apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
+    const tr = d.transcripts[a.assetId];
+    if (!tr) throw new OpError('not_found', `asset ${a.assetId} has no transcript`, { assetId: a.assetId });
+    const flat = tr.segments.flatMap((s) => s.words.map((w) => ({ w, s })));
+    const i = flat.findIndex((x) => x.w.id === a.fromWordId), j = flat.findIndex((x) => x.w.id === a.toWordId);
+    if (i < 0 || j < i) throw new OpError('not_found', 'fromWordId/toWordId must be words of this transcript, in order', { fromWordId: a.fromWordId, toWordId: a.toWordId });
+    const picked = flat.slice(i, j + 1);
+    if (!a.allowApproximate && picked.some((x) => x.s.timing !== 'word'))
+      throw new OpError('incompatible', 'these words only have estimated times, so a word-precise cut would be a guess', { timing: 'approximate' }, 'Use cut_range with explicit times, or pass allowApproximate=true to accept an estimated cut.');
+    const srcStart = picked[0]!.w.start, last = picked.at(-1)!.w, srcEnd = T.add(last.start, last.duration);
+    const rate = d.settings.frameRate;
+    const ranges: { start: T.RationalTime; end: T.RationalTime }[] = [];
+    for (const track of seq.tracks)
+      for (const c of track.clips) {
+        if (c.type !== 'media' || c.assetId !== a.assetId) continue;
+        const from = T.max(c.sourceIn, srcStart), to = T.min(T.add(c.sourceIn, c.duration), srcEnd);
+        if (!T.lt(from, to)) continue;
+        const start = T.snapToFrame(T.add(c.start, T.sub(from, c.sourceIn)), rate), end = T.snapToFrame(T.add(c.start, T.sub(to, c.sourceIn)), rate);
+        if (T.lt(start, end) && !ranges.some((r) => T.eq(r.start, start) && T.eq(r.end, end))) ranges.push({ start, end });
+      }
+    if (ranges.length === 0) throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId });
+    ranges.sort((x, y) => T.cmp(y.start, x.start)); // latest first, so earlier ranges keep their times
+    const affected = new Set<string>();
+    for (const r of ranges) { const c = cutRange(seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created]) affected.add(id); }
+    const text = picked.map((x) => x.w.text).join(' ');
+    return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline`, output: { ranges: ranges.reverse(), words: picked.length } };
+  },
+});
+
 export interface OpCall { op: string; args: unknown }
 export interface TransactionResult { doc: ProjectDocument; results: (OpResult & { op: string })[]; affectedIds: string[]; summary: string }
 

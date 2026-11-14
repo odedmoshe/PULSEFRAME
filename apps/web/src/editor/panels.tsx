@@ -5,6 +5,7 @@ import type { Clip } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
+import { CaptionControls, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
 const hint = (keymap: Keymap, id: string) => { const k = keymap.keysFor(id)[0]; return k ? <kbd>{chordLabel(k)}</kbd> : null; };
@@ -133,6 +134,10 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     <aside className="inspector" aria-label={t('inspector')}>
       <h2>{t('inspector')}</h2>
       {!sel ? <p className="muted">{t('inspector.none')}</p> : <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
+      <h2>{t('transcript')}</h2>
+      <TranscriptPanel />
+      <h2>{t('captions')}</h2>
+      <CaptionControls editor={editor} />
       <h2>{t('proposals')}</h2>
       {state.proposals.length === 0 ? <p className="muted">{t('proposals.none')}</p> : (
         <ul className="proposals" data-testid="proposals">

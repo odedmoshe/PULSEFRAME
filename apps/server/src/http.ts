@@ -6,7 +6,8 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { describeOps, RationalTimeSchema, summarize, timeline } from '@pulseframe/core';
+import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, summarize, timeline, transcriptView, type ProjectDocument } from '@pulseframe/core';
+import { captionCues } from '@pulseframe/engine';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
@@ -146,6 +147,19 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
   app.get('/api/v1/projects/:id/summary', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, ...summarize(p.doc) }); });
   app.get('/api/v1/projects/:id/timeline', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, ...timeline(p.doc) }); });
+  app.get('/api/v1/projects/:id/transcripts/:assetId', (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    const view = transcriptView(p.doc, c.req.param('assetId'));
+    if (!view) throw new ApiError(404, 'not_found', 'this asset has no transcript');
+    return c.json({ revision: p.revision, ...view });
+  });
+  app.get('/api/v1/projects/:id/captions', (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt');
+    return c.body(out.text, 200, { 'content-type': `${out.mime}; charset=utf-8`, 'content-disposition': `attachment; filename="captions.${out.format}"`, 'x-pulseframe-revision': String(p.revision), 'x-pulseframe-cues': String(out.cues) });
+  });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
 
   // ----- edits: one command path for UI, REST and (via store.commit) MCP -----
@@ -391,4 +405,16 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     app.get('*', serveStatic({ root, path: 'index.html' }));
   } else app.get('/', (c) => c.text('PULSEFRAME server is running. Build the web app with `pnpm build`, or use `pnpm dev`.'));
   return app;
+}
+
+/** Serialize one caption track (default: the first) as it plays on the timeline. */
+export function exportCaptions(doc: ProjectDocument, trackId: string | undefined, format: string) {
+  if (format !== 'srt' && format !== 'vtt' && format !== 'ass') throw new ApiError(400, 'invalid_args', 'format must be srt, vtt or ass');
+  const seq = doc.sequences[doc.mainSequenceId]!;
+  const track = trackId ? seq.tracks.find((t) => t.id === trackId && t.kind === 'caption') : seq.tracks.find((t) => t.kind === 'caption');
+  if (!track) throw new ApiError(404, 'not_found', trackId ? `caption track ${trackId} not found` : 'the project has no caption track');
+  const cues = captionCues(doc, seq, track);
+  const st = track.caption!.style;
+  const text = format === 'srt' ? serializeSrt(cues) : format === 'vtt' ? serializeVtt(cues) : serializeAss(cues, { width: doc.settings.width, height: doc.settings.height, fontFamily: st.fontFamily, fontSize: Math.round(st.sizeFrac * doc.settings.height), primaryColor: st.color.slice(0, 7), outlineColor: (st.stroke ?? '#000000').slice(0, 7), alignment: st.position === 'top' ? 8 : st.position === 'center' ? 5 : 2, marginV: Math.round(st.marginFrac * doc.settings.height) });
+  return { format, text, cues: cues.length, trackId: track.id, mime: format === 'vtt' ? 'text/vtt' : format === 'srt' ? 'application/x-subrip' : 'text/x-ssa' };
 }

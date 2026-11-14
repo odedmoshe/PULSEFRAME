@@ -121,10 +121,74 @@ export const MediaClipSchema = z
   })
   .strict();
 export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema }).strict();
-export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema]);
+
+// ---------- captions and transcripts (SPEC §16) ----------
+export const CAPTION_PRESETS = ['classic', 'karaoke', 'word-pop', 'box-highlight'] as const;
+export const CaptionStyleSchema = z
+  .object({
+    preset: z.enum(CAPTION_PRESETS).describe('classic = whole phrase; karaoke = spoken words change colour; word-pop = one word at a time; box-highlight = box behind the current word'),
+    fontFamily: z.string().max(64),
+    fontWeight: z.number().int().min(100).max(900),
+    sizeFrac: z.number().min(0.01).max(0.5).describe('Font size as a fraction of frame height'),
+    color: Color,
+    highlightColor: Color,
+    background: Color.nullable(),
+    stroke: Color.nullable(),
+    strokeFrac: z.number().min(0).max(0.5),
+    position: z.enum(['bottom', 'top', 'center']),
+    marginFrac: z.number().min(0).max(0.45).describe('Safe margin from the frame edge, as a fraction of frame height'),
+    maxLines: z.number().int().min(1).max(4),
+    maxCharsPerLine: z.number().int().min(6).max(80).describe('Reading-width guide; configurable per language and style, not a universal rule'),
+    direction: z.enum(['auto', 'rtl', 'ltr']),
+  })
+  .strict();
+export const DEFAULT_CAPTION_STYLE = {
+  preset: 'classic', fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.045, color: '#FFFFFF', highlightColor: '#3DE0C8', background: '#000000B3', stroke: null, strokeFrac: 0.08,
+  position: 'bottom', marginFrac: 0.08, maxLines: 2, maxCharsPerLine: 32, direction: 'auto',
+} as const satisfies z.infer<typeof CaptionStyleSchema>;
+/** A manually timed cue on the timeline. `words` (optional) are timed relative to the cue start. */
+export const CaptionClipSchema = z
+  .object({
+    ...ClipBase,
+    type: z.literal('caption'),
+    text: z.string().max(2000),
+    words: z.array(z.object({ text: z.string().min(1).max(200), start: RationalTimeSchema, duration: RationalTimeSchema }).strict()).max(500).optional(),
+  })
+  .strict();
+/** One recognised or typed word, timed in SOURCE time of its asset (so captions follow every cut exactly). */
+export const WordSchema = z.object({ id: Id, text: z.string().min(1).max(200), start: RationalTimeSchema, duration: RationalTimeSchema, confidence: z.number().min(0).max(1).nullable() }).strict();
+export const SegmentSchema = z
+  .object({
+    id: Id,
+    start: RationalTimeSchema,
+    duration: RationalTimeSchema,
+    /** Text shown. Corrections change this; they never change the audio. */
+    text: z.string().max(4000),
+    /** What recognition originally produced, kept once a correction is made. */
+    original: z.string().max(4000).nullable(),
+    speaker: z.string().max(80).nullable(),
+    /** word = each word is timed; segment = only the phrase is timed; approximate = word times are estimates and must not drive precision cuts or karaoke. */
+    timing: z.enum(['word', 'segment', 'approximate']),
+    words: z.array(WordSchema).max(2000),
+  })
+  .strict();
+export const TranscriptSchema = z
+  .object({
+    assetId: Id,
+    language: z.string().min(2).max(35).describe('BCP 47 tag, e.g. he, en, he-IL'),
+    origin: z.object({ kind: z.enum(['import', 'manual', 'asr']), provider: z.string().nullable(), model: z.string().nullable(), createdAt: z.string(), createdBy: z.string() }).strict(),
+    segments: z.array(SegmentSchema).max(20000),
+  })
+  .strict();
+
+export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema]);
 
 export const TrackSchema = z
-  .object({ id: Id, kind: z.enum(['video', 'audio', 'text']), name: z.string().max(128), locked: z.boolean(), muted: z.boolean(), hidden: z.boolean(), clips: z.array(ClipSchema) })
+  .object({
+    id: Id, kind: z.enum(['video', 'audio', 'text', 'caption']), name: z.string().max(128), locked: z.boolean(), muted: z.boolean(), hidden: z.boolean(), clips: z.array(ClipSchema),
+    /** Caption tracks only. transcript mode shows the transcript of whatever is playing on the linked track; manual mode shows this track's own cues. */
+    caption: z.object({ mode: z.enum(['manual', 'transcript']), linkedTrackId: Id.nullable(), style: CaptionStyleSchema }).strict().optional(),
+  })
   .strict();
 export const SequenceSchema = z.object({ id: Id, name: z.string().max(128), tracks: z.array(TrackSchema).describe('Bottom-most layer first') }).strict();
 
@@ -139,6 +203,8 @@ export const ProjectSchema = z
     assets: z.record(Id, AssetSchema),
     sequences: z.record(Id, SequenceSchema),
     mainSequenceId: Id,
+    /** Transcripts by asset id, in source time. */
+    transcripts: z.record(Id, TranscriptSchema).default({}),
   })
   .strict();
 
@@ -150,6 +216,11 @@ export type Keyframes = z.infer<typeof KeyframesSchema>;
 export type TextStyle = z.infer<typeof TextStyleSchema>;
 export type MediaClip = z.infer<typeof MediaClipSchema>;
 export type TextClip = z.infer<typeof TextClipSchema>;
+export type CaptionClip = z.infer<typeof CaptionClipSchema>;
+export type CaptionStyle = z.infer<typeof CaptionStyleSchema>;
+export type Transcript = z.infer<typeof TranscriptSchema>;
+export type Segment = z.infer<typeof SegmentSchema>;
+export type Word = z.infer<typeof WordSchema>;
 export type Clip = z.infer<typeof ClipSchema>;
 export type Track = z.infer<typeof TrackSchema>;
 export type Sequence = z.infer<typeof SequenceSchema>;
@@ -175,6 +246,7 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
       },
     },
     mainSequenceId: 'seq_main',
+    transcripts: {},
   };
 }
 

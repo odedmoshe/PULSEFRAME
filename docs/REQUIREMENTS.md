@@ -181,10 +181,10 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-16.1 | 16 | Caption data model, cues, SRT/VTT import/export, native rich captions, ASS export | 6 | R-05.1 | Captions workspace | cue ops | SRT/VTT/ASS | not started | |
-| R-16.2 | 16 | ASR/alignment adapters, stable word ids, corrections, per-language timing corpus | 6 | R-18.1 | Transcript panel | asr job | — | not started | |
-| R-16.3 | 16 | Transcript-guided edits, silence/filler candidates, caption remap after cuts | 6 | R-16.2, R-06.6 | Transcript panel | cleanup proposal | — | not started | |
-| R-16.4 | 16 | Caption styles (karaoke, current word), reading-speed rules, translation timing review | 6 | R-16.1 | Caption inspector | style ops | Compositor | not started | |
+| R-16.1 | 16 | Caption data model, cues, SRT/VTT import/export, native rich captions, ASS export | 6 | R-05.1 | Captions workspace | cue ops | SRT/VTT/ASS | partial | `phase6-proof.json`, `subtitles.test.ts`, `captions.test.ts`: cue model, SRT/VTT import/export, ASS export, transcript-linked captions. No rich per-cue styling, no per-word manual timing UI |
+| R-16.2 | 16 | ASR/alignment adapters, stable word ids, corrections, per-language timing corpus | 6 | R-18.1 | Transcript panel | asr job | — | partial | Stable word ids, corrections keeping the original, timing grades (`captions.test.ts`). ASR/alignment adapters and timing corpus blocked (B-7) |
+| R-16.3 | 16 | Transcript-guided edits, silence/filler candidates, caption remap after cuts | 6 | R-16.2, R-06.6 | Transcript panel | cleanup proposal | — | partial | `delete_transcript_range`, `cut_range`; captions follow cuts by construction (`phase6-proof.json`: frame- and sample-checked on a synthetic transcript). No silence/filler candidates |
+| R-16.4 | 16 | Caption styles (karaoke, current word), reading-speed rules, translation timing review | 6 | R-16.1 | Caption inspector | style ops | Compositor | partial | 4 presets incl. karaoke and current-word box (`phase6-proof.json` golden renders). No reading-speed rules, no translation review |
 
 ## Section 17: Narration, voices, localization
 
@@ -309,7 +309,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-A.3 | A catalog | At least 45 transitions on at least 12 core kernels | 7 | R-13.4 | Transitions drawer | transition ops | Compositor | not started | |
 | R-A.4 | A catalog | 40 text presets | 6 | R-15.3 | Text drawer | text ops | Compositor | not started | |
 | R-A.5 | A catalog | 30 text animations | 6 | R-15.3 | Text drawer | animation ops | Compositor | not started | |
-| R-A.6 | A catalog | 20 caption styles | 6 | R-16.4 | Captions drawer | caption style ops | Compositor | not started | |
+| R-A.6 | A catalog | 20 caption styles | 6 | R-16.4 | Captions drawer | caption style ops | Compositor | partial | 4 of 20 caption styles |
 | R-A.7 | A catalog | 8 velocity presets (Montage, Hero, Bullet, Flash In, Flash Out, Jump Cut, Smooth Ramp, Stutter) | 7 | R-14.2 | Inspector | time ops | Compositor, audio | not started | |
 | R-A.8 | A catalog | 40 color looks | 7 | R-13.1 | Effects drawer | grade ops | Compositor | not started | |
 | R-A.9 | A catalog | 80 SFX assets, original or licensed | 8 | R-10.5 | Sound drawer | add_clip | Mix | not started | |

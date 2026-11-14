@@ -1,0 +1,199 @@
+/**
+ * Caption evaluation and layout (SPEC §16). Pure: no DOM, no I/O.
+ *
+ * Transcript captions are derived at render time from SOURCE time: timeline time -> playing clip ->
+ * source time -> phrase/word. Nothing is re-timed when the edit changes, so captions cannot drift from a cut.
+ */
+import * as T from '@pulseframe/time';
+import type { CaptionStyle, ProjectDocument, Segment, Sequence, Track } from '@pulseframe/core';
+
+export type WordState = 'past' | 'current' | 'future' | 'plain';
+export interface CaptionLayer {
+  kind: 'caption';
+  trackId: string;
+  /** Cue clip id (manual) or transcript phrase id. */
+  sourceId: string;
+  style: CaptionStyle;
+  /** Words of the page being shown, in reading (logical) order. `plain` = no per-word timing available. */
+  words: { text: string; state: WordState }[];
+}
+
+const tokens = (text: string) => text.split(/\s+/).filter(Boolean);
+
+/** Greedy split of words into pages of at most `capacity` characters (a single longer word gets its own page). */
+export function captionPages(words: string[], capacity: number): number[][] {
+  const pages: number[][] = [];
+  let cur: number[] = [], used = 0;
+  words.forEach((w, i) => {
+    const need = (cur.length ? 1 : 0) + w.length;
+    if (cur.length && used + need > capacity) { pages.push(cur); cur = []; used = 0; }
+    used += (cur.length ? 1 : 0) + w.length;
+    cur.push(i);
+  });
+  if (cur.length) pages.push(cur);
+  return pages;
+}
+
+const RTL = /[֐-ࣿיִ-﷿ﹰ-﻿]/;
+const LTR = /[A-Za-zÀ-ɏͰ-ϿЀ-ӿ]/;
+type Dir = 'rtl' | 'ltr';
+const wordDir = (w: string): Dir | null => (RTL.test(w) ? 'rtl' : LTR.test(w) ? 'ltr' : null);
+
+/**
+ * Word-level visual order for one line (left to right on screen), a word-granular form of UAX #9:
+ * words run in the base direction; a run of opposite-direction words keeps its own internal order.
+ * Words without letters (numbers, symbols) join the opposite-direction run only when they sit inside one.
+ */
+export function visualOrder(words: string[], base: Dir): number[] {
+  const dirs = words.map(wordDir);
+  const resolved: Dir[] = dirs.map((d, i) => {
+    if (d) return d;
+    let p = i - 1, n = i + 1;
+    while (p >= 0 && !dirs[p]) p--;
+    while (n < dirs.length && !dirs[n]) n++;
+    return p >= 0 && n < dirs.length && dirs[p] === dirs[n] ? dirs[p]! : base;
+  });
+  // Start from the base direction (rtl: last word leftmost), then restore the internal order of opposite-direction runs.
+  const order = words.map((_, i) => i);
+  if (base === 'rtl') order.reverse();
+  const opposite: Dir = base === 'rtl' ? 'ltr' : 'rtl';
+  for (let i = 0; i < order.length; ) {
+    if (resolved[order[i]!] !== opposite) { i++; continue; }
+    let j = i;
+    while (j < order.length && resolved[order[j]!] === opposite) j++;
+    for (let a = i, b = j - 1; a < b; a++, b--) [order[a], order[b]] = [order[b]!, order[a]!];
+    i = j;
+  }
+  return order;
+}
+
+/** Greedy line breaking in logical order. Words are never split; an over-long word gets its own line. */
+export function wrapWords(widths: number[], spaceWidth: number, maxWidth: number): number[][] {
+  const lines: number[][] = [];
+  let cur: number[] = [], w = 0;
+  widths.forEach((ww, i) => {
+    const need = (cur.length ? spaceWidth : 0) + ww;
+    if (cur.length && w + need > maxWidth) { lines.push(cur); cur = []; w = 0; }
+    w += (cur.length ? spaceWidth : 0) + ww;
+    cur.push(i);
+  });
+  if (cur.length) lines.push(cur);
+  return lines;
+}
+
+const activeMedia = (track: Track, time: T.RationalTime) => {
+  for (const c of track.clips) if (c.type === 'media' && !T.lt(time, c.start) && T.lt(time, T.add(c.start, c.duration))) return c;
+  return null;
+};
+
+function transcriptLayer(doc: ProjectDocument, seq: Sequence, track: Track, time: T.RationalTime): CaptionLayer | null {
+  const cfg = track.caption!;
+  const sources = cfg.linkedTrackId ? seq.tracks.filter((t) => t.id === cfg.linkedTrackId) : seq.tracks.filter((t) => t.kind === 'audio' || t.kind === 'video');
+  for (const src of sources) {
+    const clip = activeMedia(src, time);
+    const transcript = clip && doc.transcripts?.[clip.assetId];
+    if (!clip || !transcript) continue;
+    const st = T.add(clip.sourceIn, T.sub(time, clip.start));
+    const seg: Segment | undefined = transcript.segments.find((s) => !T.lt(st, s.start) && T.lt(st, T.add(s.start, s.duration)));
+    if (!seg) return null;
+    const capacity = cfg.style.maxLines * cfg.style.maxCharsPerLine;
+    if (seg.words.length === 0) {
+      // Only the phrase is timed: pages advance in proportion to their length (a display estimate, never used for cuts).
+      const words = tokens(seg.text);
+      const pages = captionPages(words, capacity);
+      const total = words.reduce((n, w) => n + w.length, 0) || 1;
+      const frac = T.toSeconds(T.sub(st, seg.start)) / T.toSeconds(seg.duration);
+      let acc = 0, page = pages[pages.length - 1] ?? [];
+      for (const p of pages) { acc += p.reduce((n, i) => n + words[i]!.length, 0); if (frac < acc / total) { page = p; break; } }
+      return { kind: 'caption', trackId: track.id, sourceId: seg.id, style: cfg.style, words: page.map((i) => ({ text: words[i]!, state: 'plain' })) };
+    }
+    // Hide words whose audio is no longer on the linked track (cut out), so the caption shows what is heard.
+    const used = src.clips.filter((c) => c.type === 'media' && c.assetId === clip.assetId) as Extract<Track['clips'][number], { type: 'media' }>[];
+    const heard = seg.words.filter((w) => {
+      const mid = T.add(w.start, { value: w.duration.value, timescale: w.duration.timescale * 2 });
+      return used.some((c) => !T.lt(mid, c.sourceIn) && T.lt(mid, T.add(c.sourceIn, c.duration)));
+    });
+    if (heard.length === 0) return null;
+    const pages = captionPages(heard.map((w) => w.text), capacity);
+    let lastStarted = 0;
+    heard.forEach((w, i) => { if (!T.lt(st, w.start)) lastStarted = i; });
+    const page = pages.find((p) => p.includes(lastStarted)) ?? pages[0]!;
+    const timed = seg.timing === 'word';
+    return {
+      kind: 'caption', trackId: track.id, sourceId: seg.id, style: cfg.style,
+      words: page.map((i) => {
+        const w = heard[i]!;
+        const state: WordState = !timed ? 'plain' : T.lt(st, w.start) ? 'future' : T.lt(st, T.add(w.start, w.duration)) ? 'current' : 'past';
+        return { text: w.text, state };
+      }),
+    };
+  }
+  return null;
+}
+
+/** The caption (if any) a caption track shows at `time`. */
+export function captionAt(doc: ProjectDocument, seq: Sequence, track: Track, time: T.RationalTime): CaptionLayer | null {
+  if (track.kind !== 'caption' || !track.caption || track.hidden) return null;
+  if (track.caption.mode === 'transcript') return transcriptLayer(doc, seq, track, time);
+  for (const c of track.clips) {
+    if (c.type !== 'caption' || T.lt(time, c.start) || !T.lt(time, T.add(c.start, c.duration))) continue;
+    const words = tokens(c.text);
+    const pages = captionPages(words, track.caption.style.maxLines * track.caption.style.maxCharsPerLine);
+    // Long manual cues page evenly over the cue.
+    const frac = T.toSeconds(T.sub(time, c.start)) / T.toSeconds(c.duration);
+    const page = pages[Math.min(pages.length - 1, Math.floor(frac * pages.length))] ?? [];
+    return { kind: 'caption', trackId: track.id, sourceId: c.id, style: track.caption.style, words: page.map((i) => ({ text: words[i]!, state: 'plain' })) };
+  }
+  return null;
+}
+
+/**
+ * A caption track resolved to timeline cues (for SRT/VTT/ASS export and burn-in checks).
+ * Manual tracks return their cues. Transcript tracks return what is heard: one cue per clip x phrase x page,
+ * snapped to frames, with words that were cut out omitted.
+ */
+export function captionCues(doc: ProjectDocument, seq: Sequence, track: Track): { start: T.RationalTime; end: T.RationalTime; text: string }[] {
+  if (track.kind !== 'caption' || !track.caption) return [];
+  if (track.caption.mode === 'manual') return track.clips.filter((c) => c.type === 'caption').map((c) => ({ start: c.start, end: T.add(c.start, c.duration), text: (c as { text: string }).text }));
+  const cfg = track.caption, rate = doc.settings.frameRate, capacity = cfg.style.maxLines * cfg.style.maxCharsPerLine;
+  const sources = cfg.linkedTrackId ? seq.tracks.filter((t) => t.id === cfg.linkedTrackId) : seq.tracks.filter((t) => t.kind === 'audio' || t.kind === 'video');
+  const out: { start: T.RationalTime; end: T.RationalTime; text: string }[] = [];
+  const push = (start: T.RationalTime, end: T.RationalTime, text: string) => {
+    const s = T.snapToFrame(start, rate), e = T.snapToFrame(end, rate);
+    const prev = out.at(-1);
+    const from = prev && T.lt(s, prev.end) ? prev.end : s;
+    if (!T.lt(from, e) || !text) return;
+    if (prev && prev.text === text && T.eq(prev.end, from)) prev.end = e; // the same phrase continuing across a cut is one cue
+    else out.push({ start: from, end: e, text });
+  };
+  // Timeline instants already captioned by an earlier source track are skipped (the renderer picks the first source too).
+  const covered: { start: T.RationalTime; end: T.RationalTime }[] = [];
+  for (const src of sources) {
+    for (const clip of src.clips) {
+      if (clip.type !== 'media') continue;
+      const transcript = doc.transcripts?.[clip.assetId];
+      const cEnd = T.add(clip.start, clip.duration);
+      if (!transcript || covered.some((r) => T.lt(clip.start, r.end) && T.lt(r.start, cEnd))) continue;
+      covered.push({ start: clip.start, end: cEnd });
+      const srcEnd = T.add(clip.sourceIn, clip.duration);
+      const toTimeline = (t: T.RationalTime) => T.add(clip.start, T.sub(T.min(T.max(t, clip.sourceIn), srcEnd), clip.sourceIn));
+      for (const seg of transcript.segments) {
+        const segEnd = T.add(seg.start, seg.duration);
+        if (!T.lt(seg.start, srcEnd) || !T.lt(clip.sourceIn, segEnd)) continue;
+        if (seg.words.length === 0) { push(toTimeline(seg.start), toTimeline(segEnd), seg.text); continue; }
+        const mid = (w: { start: T.RationalTime; duration: T.RationalTime }) => T.add(w.start, { value: w.duration.value, timescale: w.duration.timescale * 2 });
+        // Same rule as the renderer: a phrase shows every word still heard somewhere on this track.
+        const used = src.clips.filter((c) => c.type === 'media' && c.assetId === clip.assetId) as typeof clip[];
+        const here = seg.words.filter((w) => used.some((c) => !T.lt(mid(w), c.sourceIn) && T.lt(mid(w), T.add(c.sourceIn, c.duration))));
+        const pages = captionPages(here.map((w) => w.text), capacity);
+        pages.forEach((p, pi) => {
+          const first = here[p[0]!]!, nextPage = pages[pi + 1];
+          const start = pi === 0 ? T.max(seg.start, clip.sourceIn) : first.start;
+          const end = nextPage ? here[nextPage[0]!]!.start : segEnd;
+          push(toTimeline(start), toTimeline(end), p.map((i) => here[i]!.text).join(' '));
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => T.cmp(a.start, b.start));
+}

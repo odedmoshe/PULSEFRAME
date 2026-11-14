@@ -30,6 +30,14 @@ export const he = {
   'proposal.before': 'לפני', 'proposal.after': 'אחרי', 'proposal.stale': 'הפרויקט השתנה מאז ההצעה; היא לא הוחלה', 'proposal.from': 'הצעה מאת',
   'undo': 'ביטול', 'redo': 'ביצוע מחדש', 'undo.conflict': 'לא ניתן לבטל: הפריטים שונו מאז',
   'providers': 'ספקי AI (אופציונלי)', 'providers.notConfigured': 'ComfyUI לא מוגדר. העורך פועל במלואו גם בלעדיו.', 'providers.unreachable': 'ComfyUI מוגדר אך אינו זמין', 'providers.ready': 'ComfyUI מחובר', 'providers.smoke': 'בדיקת חיבור (ללא מודלים)', 'providers.running': 'מריץ…', 'providers.ok': 'הפלט אומת', 'providers.failed': 'הבדיקה נכשלה',
+  'track.caption': 'כתוביות', 'transcript': 'תמלול', 'transcript.empty': 'אין תמלול לקליפ הזה. זיהוי דיבור אינו מוגדר במחשב זה, ולכן לא נוצר תמלול אוטומטי. אפשר לייבא קובץ כתוביות שמתוזמן מול המדיה המקורית.',
+  'transcript.import': 'ייבוא תמלול (SRT/VTT)', 'transcript.language': 'שפת התמלול', 'transcript.selectClip': 'בחרו קליפ מדיה כדי לייבא לו תמלול', 'transcript.phrase': 'משפט',
+  'transcript.delete': 'מחיקת המילים שנבחרו', 'transcript.cutAnyway': 'חיתוך בכל זאת (משוער)', 'transcript.edit': 'עריכת טקסט', 'transcript.save': 'שמירה', 'transcript.cancel': 'ביטול',
+  'transcript.approx': 'זמני מילים משוערים', 'transcript.segmentOnly': 'תזמון משפט בלבד', 'transcript.cutFailed': 'החיתוך לא בוצע',
+  'captions': 'כתוביות', 'caption.add': 'הוספת רצועת כתוביות', 'caption.preset': 'סגנון', 'caption.position': 'מיקום', 'caption.size': 'גודל', 'caption.color': 'צבע טקסט', 'caption.highlight': 'צבע הדגשה',
+  'caption.preset.classic': 'קלאסי', 'caption.preset.karaoke': 'קריוקי', 'caption.preset.word-pop': 'מילה אחר מילה', 'caption.preset.box-highlight': 'הדגשה בתיבה',
+  'caption.pos.bottom': 'למטה', 'caption.pos.top': 'למעלה', 'caption.pos.center': 'במרכז', 'captions.import': 'ייבוא כתוביות (SRT/VTT)', 'captions.export.srt': 'ייצוא SRT', 'captions.export.vtt': 'ייצוא VTT',
+  'lang.he': 'עברית', 'lang.en': 'אנגלית',
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -61,6 +69,14 @@ export const en: Record<keyof typeof he, string> = {
   'proposal.before': 'Before', 'proposal.after': 'After', 'proposal.stale': 'The project changed since this proposal; it was not applied', 'proposal.from': 'Proposal from',
   'undo': 'Undo', 'redo': 'Redo', 'undo.conflict': 'Cannot undo: those items were changed since',
   'providers': 'AI providers (optional)', 'providers.notConfigured': 'ComfyUI is not configured. The editor works fully without it.', 'providers.unreachable': 'ComfyUI is configured but unreachable', 'providers.ready': 'ComfyUI connected', 'providers.smoke': 'Connection test (model-free)', 'providers.running': 'Running…', 'providers.ok': 'Output validated', 'providers.failed': 'Test failed',
+  'track.caption': 'Captions', 'transcript': 'Transcript', 'transcript.empty': 'This clip has no transcript. Speech recognition is not set up on this machine, so none is generated automatically. You can import a subtitle file timed against the original media.',
+  'transcript.import': 'Import transcript (SRT/VTT)', 'transcript.language': 'Transcript language', 'transcript.selectClip': 'Select a media clip to import a transcript for it', 'transcript.phrase': 'Phrase',
+  'transcript.delete': 'Delete selected words', 'transcript.cutAnyway': 'Cut anyway (estimated)', 'transcript.edit': 'Edit text', 'transcript.save': 'Save', 'transcript.cancel': 'Cancel',
+  'transcript.approx': 'estimated word times', 'transcript.segmentOnly': 'phrase timing only', 'transcript.cutFailed': 'The cut was not made',
+  'captions': 'Captions', 'caption.add': 'Add caption track', 'caption.preset': 'Style', 'caption.position': 'Position', 'caption.size': 'Size', 'caption.color': 'Text colour', 'caption.highlight': 'Highlight colour',
+  'caption.preset.classic': 'Classic', 'caption.preset.karaoke': 'Karaoke', 'caption.preset.word-pop': 'Word pop', 'caption.preset.box-highlight': 'Box highlight',
+  'caption.pos.bottom': 'Bottom', 'caption.pos.top': 'Top', 'caption.pos.center': 'Center', 'captions.import': 'Import captions (SRT/VTT)', 'captions.export.srt': 'Export SRT', 'captions.export.vtt': 'Export VTT',
+  'lang.he': 'Hebrew', 'lang.en': 'English',
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };

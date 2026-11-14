@@ -30,3 +30,9 @@ Stale-result protection (FFG-09) needs entity versions (Phase 1). Timeline attac
 The owner allowed the host. `huggingface.co` is reachable through the environment proxy. Node's built-in `fetch` ignores `HTTPS_PROXY` unless
 `NODE_USE_ENV_PROXY=1` is set (Node ≥ 22.21), so model downloads from the server need that variable **in proxied environments only**.
 The bounded BiRefNet trial then ran: see docs/INTEGRATIONS.md and `docs/evidence/g1-birefnet-cpu-trial.json`.
+
+## B-7 — Speech recognition and alignment need an owner decision
+- **What works without it:** typed or imported (SRT/VTT) transcripts, caption rendering, text corrections, word-based cuts when word times are supplied, all proven on a synthetic transcript (`docs/evidence/phase6-proof.json`).
+- **What is blocked:** automatic transcription, forced alignment, Hebrew word-boundary accuracy (SPEC Appendix C target: median 80 ms, p95 200 ms), filler-word detection. No ASR adapter exists; none is faked.
+- **Why blocked:** a local model is a new download (the single 1 GB trial grant was scoped to one workflow and is used); a hosted provider needs a credential and may cost money. Neither is covered by an existing grant.
+- **Decision needed:** (a) approve one local ASR model download (name, size and licence will be shown before download; CPU-only here, so speed evidence would be functional, not performance), or (b) provide a provider credential through the environment's credential form.

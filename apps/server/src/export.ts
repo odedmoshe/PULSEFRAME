@@ -102,7 +102,8 @@ export class Exporter {
       for (const c of tr.clips) {
         if (!T.lt(c.start, to) || !T.lt(from, T.add(c.start, c.duration))) continue; // outside the exported range
         if (c.type === 'media') used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
-        else families.add(c.style.fontFamily);
+        else if (c.type === 'text') families.add(c.style.fontFamily);
+        if (tr.caption) families.add(tr.caption.style.fontFamily);
       }
     const assets = [...used].map(([id, clips]) => {
       const a = doc.assets[id]!;

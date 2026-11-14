@@ -7,14 +7,14 @@
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { listOps, RationalTimeSchema, summarize, timeline } from '@pulseframe/core';
+import { listOps, RationalTimeSchema, summarize, timeline, transcriptView } from '@pulseframe/core';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import { ExportOptionsSchema, type Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import type { Presence } from './presence.ts';
 import { describeMoment } from '@pulseframe/engine';
-import { jobView } from './http.ts';
+import { exportCaptions, jobView } from './http.ts';
 import { ApiError, type Store } from './store.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
@@ -73,6 +73,10 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('observe', () => { read(projectId); return { proposals: gov.listProposals(projectId, status).map(({ ops: _o, changes, ...p }) => ({ ...p, changedIds: changes.map((c) => c.id) })) }; }));
     server.registerTool('describe_moment', { description: 'Everything active at one exact frame: picture/text layers with their source frame, and audio clips. Use before and after an edit to check its effect.', inputSchema: z.object({ projectId: pid, frameIndex: z.number().int().min(0) }), annotations: ro }, ({ projectId, frameIndex }) =>
       run('observe', () => { const p = read(projectId); return { revision: p.revision, ...describeMoment(p.doc, T.frameTime(frameIndex, p.doc.settings.frameRate)) }; }));
+    server.registerTool('get_transcript', { description: 'Read the transcript of a media asset: phrases and words with ids and SOURCE times. Use the word ids with delete_transcript_range to cut speech by text, and phrase ids with correct_transcript.', inputSchema: z.object({ projectId: pid, assetId: z.string() }), annotations: ro }, ({ projectId, assetId }) =>
+      run('observe', () => { const p = read(projectId); const v = transcriptView(p.doc, assetId); if (!v) throw new ApiError(404, 'not_found', 'this asset has no transcript', { assetId }, 'get_summary lists the assets that have one.'); return { revision: p.revision, ...v }; }));
+    server.registerTool('export_captions', { description: 'A caption track as it plays on the timeline, as SRT, WebVTT or ASS text (frame-snapped; words that were cut out are omitted).', inputSchema: z.object({ projectId: pid, trackId: z.string().optional(), format: z.enum(['srt', 'vtt', 'ass']).optional() }), annotations: ro }, ({ projectId, trackId, format }) =>
+      run('observe', () => { const p = read(projectId); const o = exportCaptions(p.doc, trackId, format ?? 'srt'); return { revision: p.revision, format: o.format, trackId: o.trackId, cues: o.cues, text: o.text }; }));
     server.registerTool('render_contact_sheet', { description: 'Render several exact frames of the current revision as small stills (same compositor as export) to inspect an edit at a glance. At most 12 frames per call; each image is labelled with its frame index in the text part.', inputSchema: z.object({ projectId: pid, frames: z.array(z.number().int().min(0)).min(1).max(12) }), annotations: ro }, ({ projectId, frames }) =>
       run('observe', async () => {
         const p = read(projectId);

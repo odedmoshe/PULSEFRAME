@@ -33,6 +33,11 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     uniq(seq.id);
     for (const tr of seq.tracks) {
       uniq(tr.id);
+      if ((tr.kind === 'caption') !== !!tr.caption) issues.push({ code: 'caption_config', message: `track ${tr.id}: caption settings must exist exactly on caption tracks`, ids: [tr.id] });
+      if (tr.caption?.linkedTrackId) {
+        const linked = seq.tracks.find((t) => t.id === tr.caption!.linkedTrackId);
+        if (!linked || (linked.kind !== 'audio' && linked.kind !== 'video')) issues.push({ code: 'caption_link', message: `caption track ${tr.id} is linked to a missing or non-media track`, ids: [tr.id] });
+      }
       let prev: Clip | undefined;
       for (const c of tr.clips) {
         uniq(c.id);
@@ -54,10 +59,11 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (!TransformSchema.shape[prop].safeParse(k.value).success) issues.push({ code: 'keyframe_out_of_range', message: `clip ${c.id} ${prop} keyframe value ${k.value} is out of range`, ids: [c.id] });
           });
         }
-        if (c.type === 'text') {
-          if (tr.kind !== 'text') issues.push({ code: 'incompatible_track', message: `text clip ${c.id} on ${tr.kind} track`, ids: [c.id, tr.id] });
+        if (c.type === 'text' || c.type === 'caption') {
+          if (tr.kind !== c.type) issues.push({ code: 'incompatible_track', message: `${c.type} clip ${c.id} on ${tr.kind} track`, ids: [c.id, tr.id] });
           continue;
         }
+        if (tr.kind === 'caption') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on caption track`, ids: [c.id, tr.id] });
         const asset = doc.assets[c.assetId];
         if (!asset) { issues.push({ code: 'missing_asset', message: `clip ${c.id} references missing asset ${c.assetId}`, ids: [c.id, c.assetId] }); continue; }
         if (tr.kind === 'text') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on text track`, ids: [c.id, tr.id] });
@@ -66,6 +72,23 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if (T.isNegative(c.sourceIn)) issues.push({ code: 'source_out_of_bounds', message: `clip ${c.id} sourceIn < 0`, ids: [c.id] });
         if (asset.kind !== 'image' && T.lt(asset.duration, T.add(c.sourceIn, c.duration)))
           issues.push({ code: 'source_out_of_bounds', message: `clip ${c.id} reads past the end of asset ${asset.id}`, ids: [c.id, asset.id] });
+      }
+    }
+  }
+  for (const [key, tr] of Object.entries(doc.transcripts ?? {})) {
+    if (key !== tr.assetId) issues.push({ code: 'key_mismatch', message: `transcript key ${key} != assetId ${tr.assetId}`, ids: [key] });
+    if (!doc.assets[tr.assetId]?.audio) issues.push({ code: 'missing_asset', message: `transcript refers to asset ${tr.assetId}, which is missing or has no audio`, ids: [tr.assetId] });
+    let prevEnd = T.ZERO;
+    for (const seg of tr.segments) {
+      uniq(seg.id);
+      const end = T.add(seg.start, seg.duration);
+      if (T.lt(seg.start, prevEnd) || !T.lt(T.ZERO, seg.duration)) issues.push({ code: 'transcript_order', message: `segment ${seg.id} overlaps the previous one or has no duration`, ids: [seg.id] });
+      prevEnd = end;
+      let w = seg.start;
+      for (const word of seg.words) {
+        uniq(word.id);
+        if (T.lt(word.start, w) || T.lt(end, T.add(word.start, word.duration)) || T.isNegative(word.duration)) issues.push({ code: 'transcript_order', message: `word ${word.id} is out of order or outside its segment`, ids: [word.id, seg.id] });
+        w = T.add(word.start, word.duration);
       }
     }
   }
