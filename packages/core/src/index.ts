@@ -5,3 +5,5 @@ export * from './queries.ts';
 export * from './entities.ts';
 export * from './animation.ts';
 export * from './subtitles.ts';
+export * from './cleanup.ts';
+export * from './fonts.ts';

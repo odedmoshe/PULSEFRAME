@@ -23,7 +23,7 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | Phase 3 — Editor interaction | **Gate criteria met, verified-here**; scope items still open (below) | `pnpm proof:phase3` 27/27 (`docs/evidence/phase3-proof.json`), baselines in `docs/evidence/baselines/` |
 | Phase 4 — Production export | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase4` 19/19; `pnpm proof:browser-export` 23/23; `pnpm conformance:parity` pass (`docs/evidence/parity-suite.json`) |
 | Phase 5 — Complete agent surface | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase5` 22/22 (`docs/evidence/phase5-proof.json`); `governance.test.ts` |
-| Phase 6 — Typography and captions | **Partly met, verified-here on a synthetic transcript.** Gate has three parts: Hebrew/mixed-script golden tests pass (6 renders, small set); transcript removal preserves sync (frame- and sample-checked); **timing corpus not reported — no speech recognition exists here (B-7)** | `pnpm proof:phase6` 26/26 (`docs/evidence/phase6-proof.json`); `captions.test.ts` in core and engine; `subtitles.test.ts` |
+| Phase 6 — Typography and captions | **Partly met, verified-here on a synthetic transcript.** Gate has three parts: Hebrew/mixed-script golden tests pass (6 renders, small set); transcript removal preserves sync (frame- and sample-checked); **timing corpus not reported — no speech recognition exists here (B-7)** | `pnpm proof:phase6` 33/33 (`docs/evidence/phase6-proof.json`); `captions.test.ts` in core and engine; `subtitles.test.ts` |
 | Phases 7–13, G2–G3 | Not started | — |
 
 ## Completed and verified-here
@@ -115,8 +115,16 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Measured in the proof (one fixture, this CPU profile): after deleting two "words", export has exactly 207 frames with the cut at frame 60 → source frame 93, next beep at 2.900 s (max onset error 0.042 ms), caption phrase change on the same frame as the beep; correcting text leaves exported audio bit-identical.
 - **Not done in Phase 6:** speech recognition / forced alignment and the timing corpus (B-7), silence/filler candidates, font catalog beyond Heebo, rich text, text animation presets, the other 16 catalog caption styles, reading-speed rules, translation review, per-word manual cue timing UI, transcript entity is one undo unit (two people correcting different phrases at once will conflict rather than merge).
 
+**Checkpoint 6b — silence candidates, clip animation, font catalog**
+- Silence candidates: ffmpeg `silencedetect` on the original file (no model) → source ranges → timeline cuts snapped inward with breathing room. Read-only (`POST …/analysis/silences`, MCP `find_silences`); the caller applies the returned ops as one transaction pinned to the analysed revision, so a stale result is refused. Editor panel lists candidates and removes them in one undoable step. Proven on the beep fixture only; quiet speech vs silence on real recordings is **unverified**.
+- `animate_clip`: entrance/exit (fade, pop, four slides) written as ordinary keyframes, so they stay editable. Not built: per-character/per-word text animation, the wider preset catalog.
+- Font catalog: 5 OFL families with Hebrew subsets (Heebo, Rubik, Assistant, Frank Ruhl Libre, Secular One), exact npm versions, licence text in the bundled notices (build check enforces it), every face verified loaded before any frame is drawn, export manifest pins files by SHA-256. Target is 60 families / 20 Hebrew; this is 5. "Hebrew coverage" here means declared subset + load check, not a typographic review.
+- Font pickers for titles and captions. Inspector is long; needs tabs/workspaces.
+- Test-harness note: the Phase 0 preview-audio check failed once in a loaded run (scheduled-ahead 2101.3 ms vs a 2100 ms bound; sync error was 0.06 ms). Three reruns passed at 2090.7 ms. The bound was 9 ms tight and is now +650 ms; recorded here rather than hidden.
+- Open in Phase 6: ASR/alignment/timing corpus (B-7), filler-word candidates (needs ASR), rich text, per-word text animation, reading-speed rules, translation review, remaining caption styles and fonts.
+
 ## In progress
-- Phase 6b: silence candidates from audio analysis (no model needed), text animation presets, font manifest. ASR remains blocked on B-7.
+- Phase 7 (motion, effects, catalog, Lab): Canvas2D-feasible subset first; GPU compositor decision pending B-1.
 
 ## Blocked / unverified (with what would unblock)
 
@@ -132,14 +140,14 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 
 ## Dependency-aware task list (next first)
 
-1. **Phase 6b** (lead): silence detection as a derivative job → cut candidates delivered as a proposal (`cut_range` ops), never applied silently.
+1. **Inspector tabs/workspaces** (worker): the single Inspector column now holds properties, animation, transcript, silences, captions, proposals and activity.
 2. **Phase 6b** (worker): text animation presets, and text animation presets as catalog entries rendered by the compositor; font catalog with licence/coverage manifest (only fonts whose files and licences can be verified from npm packages here).
 3. **Phase 6c** (blocked on a decision): ASR/alignment — local model download (size and licence to be approved; the 1 GB trial grant is used up) or a provider credential. Until then captions are manual/imported.
 4. Phase 7 effects/transitions/Lab → needs a GPU compositor decision (B-1); Canvas2D-feasible subset first.
 5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
 
 ## Next executable action
-`pnpm install && pnpm build && pnpm test` (expect 217 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (26/26), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
+`pnpm install && pnpm build && pnpm test` (expect 220 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
 
 ## Agent / model summary
 
@@ -162,7 +170,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | 5 | Lead | export options/manifest/cancel/retry, full-quality preview, governance (grants, pause, proposals, approvals, budget), integration, proofs | as above | as above | — |
 | 5 | `pf-implementer` ×3 | parity suite (90,457 + 99,731 tok on resume); browser export route (168,016 tok · 510 s); OpenAPI update | `sonnet` | not observable | as listed |
 | 6 | Lead | transcript/caption model, ops, evaluation, bidi caption layout, REST/MCP, proof | as above | as above | — |
-| 6 | `pf-implementer` ×2 | subtitle codec (45,369 tok · 158 s); transcript/caption editor UI (60,659 tok · 92 s) | `sonnet` | not observable | as listed |
+| 6 | `pf-implementer` ×3 | subtitle codec (45,369 tok · 158 s); transcript/caption editor UI (60,659 tok · 92 s); silence + animation UI (46,726 tok · 62 s) | `sonnet` | not observable | as listed |
 
 The `pf-implementer` definition was exercised on three real tasks: each stayed inside its file scope and reported defects instead of patching shared code
 (it found the undo-body 500 and the raw-JSON idempotency comparison; both fixed by the lead). `pf-scout` was exercised once, read-only, and found two citation mismatches (fixed).

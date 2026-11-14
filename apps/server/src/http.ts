@@ -6,7 +6,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, summarize, timeline, transcriptView, type ProjectDocument } from '@pulseframe/core';
+import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type ProjectDocument } from '@pulseframe/core';
 import { captionCues } from '@pulseframe/engine';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
@@ -15,6 +15,7 @@ import type { DerivativeKind, Derivatives } from './derive.ts';
 import type { Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
+import { detectSilences } from './analysis.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import type { Presence } from './presence.ts';
@@ -159,6 +160,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = store.getProject(c.req.param('id'));
     const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt');
     return c.body(out.text, 200, { 'content-type': `${out.mime}; charset=utf-8`, 'content-disposition': `attachment; filename="captions.${out.format}"`, 'x-pulseframe-revision': String(p.revision), 'x-pulseframe-cues': String(out.cues) });
+  });
+  app.post('/api/v1/projects/:id/analysis/silences', async (c) => {
+    need(c, 'observe');
+    return c.json(await findSilences(store, c.req.param('id'), await body(c, SilenceBody)));
   });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
 
@@ -417,4 +422,31 @@ export function exportCaptions(doc: ProjectDocument, trackId: string | undefined
   const st = track.caption!.style;
   const text = format === 'srt' ? serializeSrt(cues) : format === 'vtt' ? serializeVtt(cues) : serializeAss(cues, { width: doc.settings.width, height: doc.settings.height, fontFamily: st.fontFamily, fontSize: Math.round(st.sizeFrac * doc.settings.height), primaryColor: st.color.slice(0, 7), outlineColor: (st.stroke ?? '#000000').slice(0, 7), alignment: st.position === 'top' ? 8 : st.position === 'center' ? 5 : 2, marginV: Math.round(st.marginFrac * doc.settings.height) });
   return { format, text, cues: cues.length, trackId: track.id, mime: format === 'vtt' ? 'text/vtt' : format === 'srt' ? 'application/x-subrip' : 'text/x-ssa' };
+}
+
+export const SilenceBody = z.object({
+  assetId: z.string(),
+  thresholdDb: z.number().min(-90).max(-10).optional().describe('Quieter than this counts as silence. Default -35 dB'),
+  minSeconds: z.number().min(0.1).max(30).optional().describe('Shortest silence to report. Default 0.5 s'),
+  keepSeconds: z.number().min(0).max(5).optional().describe('Silence left untouched on each side of a cut. Default 0.1 s'),
+}).strict();
+/** Silent stretches of an asset and the cuts that would remove them from the current timeline. Read-only: nothing is edited. */
+export async function findSilences(store: Store, projectId: string, a: z.infer<typeof SilenceBody>) {
+  const p = store.getProject(projectId);
+  const asset = p.doc.assets[a.assetId];
+  if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+  if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio');
+  const opts = { thresholdDb: a.thresholdDb ?? -35, minSeconds: a.minSeconds ?? 0.5 };
+  const keepSeconds = a.keepSeconds ?? 0.1;
+  const source = await detectSilences(store.blobPath(asset.contentHash), opts);
+  const candidates = sourceRangesToTimeline(p.doc, a.assetId, source, T.fromSeconds(keepSeconds.toFixed(6)));
+  const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
+  return {
+    revision: p.revision, assetId: a.assetId, method: 'ffmpeg silencedetect on the original file', options: { ...opts, keepSeconds },
+    sourceSilences: source.map((r) => ({ startSeconds: sec(r.start), endSeconds: sec(r.end) })),
+    candidates: candidates.map((r) => ({ start: r.start, end: r.end, startSeconds: sec(r.start), seconds: sec(T.sub(r.end, r.start)) })),
+    removableSeconds: sec(candidates.reduce((n, r) => T.add(n, T.sub(r.end, r.start)), T.ZERO)),
+    ops: cutOps(candidates),
+    note: 'Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it). Quiet speech can be mistaken for silence: review before applying.',
+  };
 }

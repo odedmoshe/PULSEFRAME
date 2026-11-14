@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T23:25:28.537Z",
+  "ranAt": "2026-11-14T23:36:53.420Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Synthetic transcript on a beep fixture. Speech recognition, forced alignment and real speech are not exercised.",
-  "passed": 26,
-  "total": 26,
+  "passed": 33,
+  "total": 33,
   "checks": [
     {
       "name": "no transcript: the panel says so and offers import; it does not invent text",
@@ -234,6 +234,79 @@
         "box-highlight": 1,
         "word-pop": 1
       }
+    },
+    {
+      "name": "silence analysis finds the 8 gaps between beeps, proposes 8 frame-aligned cuts, and edits nothing",
+      "ok": true,
+      "detail": {
+        "first": {
+          "startSeconds": 0.1,
+          "endSeconds": 1.00002
+        },
+        "removableSeconds": 5.6
+      }
+    },
+    {
+      "name": "applying the candidates as one transaction keeps every beep (8 onsets), closes the gaps evenly, and cannot be applied twice",
+      "ok": true,
+      "detail": {
+        "onsets": [
+          0,
+          0.3,
+          0.6,
+          0.9,
+          1.2,
+          1.5,
+          1.8,
+          2.1
+        ],
+        "frames": 72,
+        "secondApply": "stale_revision"
+      }
+    },
+    {
+      "name": "animate_clip: title is invisible on its first frame, partly visible mid-entrance, fully visible at rest, fading again near the end",
+      "ok": true,
+      "detail": {
+        "g0": 0,
+        "g6": 270,
+        "g30": 301,
+        "g58": 0
+      }
+    },
+    {
+      "name": "all 5 catalog families render differently from each other (none fell back to another face), and the export manifest pins the font files by SHA-256",
+      "ok": true,
+      "detail": {
+        "families": [
+          "Heebo",
+          "Rubik",
+          "Assistant",
+          "Frank Ruhl Libre",
+          "Secular One"
+        ],
+        "manifestFonts": [
+          "Secular One:2"
+        ]
+      }
+    },
+    {
+      "name": "editor: \"find silences\" lists candidates without editing; \"remove\" applies them as one undoable step",
+      "ok": true,
+      "detail": {
+        "found": 7,
+        "framesBefore": 207,
+        "framesAfter": 60
+      }
+    },
+    {
+      "name": "editor: one Ctrl+Z restores every removed silence",
+      "ok": true
+    },
+    {
+      "name": "editor: entrance preset writes keyframes on the selected title; font picker changes its family; no uncaught errors",
+      "ok": true,
+      "detail": []
     },
     {
       "name": "agent reads the transcript, deletes one word by id, and reads back captions without that word",

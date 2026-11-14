@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from '@pulseframe/core';
-import { CAPTION_PRESETS } from '@pulseframe/core';
+import { CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
+import { api, type SilenceResult } from '../api.ts';
 import { useEditorState, type Editor } from './store.ts';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
@@ -141,6 +142,71 @@ function Phrase({ seg, editing, onEdit, onSave, renderWord }: { seg: Segment; ed
   );
 }
 
+export function SilencePanel() {
+  const { editor, state, t } = useEditorState();
+  const { doc } = state;
+  const sel = editor.selected;
+  const selAsset = sel?.clip.type === 'media' ? sel.clip.assetId : null;
+  const assetId = selAsset ?? (doc ? mainTracks(doc).flatMap((tr) => (tr.kind === 'video' || tr.kind === 'audio' ? tr.clips : []))
+    .find((c): c is MediaClip => c.type === 'media' && !!doc.assets[c.assetId]?.audio)?.assetId ?? null : null);
+  const [minS, setMinS] = useState('0.5');
+  const [keepS, setKeepS] = useState('0.1');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [res, setRes] = useState<SilenceResult | null>(null);
+  useEffect(() => { setRes(null); setErr(null); setStale(false); }, [assetId]);
+  if (!doc || !assetId) return null;
+  const rate = editor.rate;
+  const find = async () => {
+    setBusy(true); setErr(null); setStale(false); setRes(null);
+    try { setRes(await api.findSilences(doc.id, { assetId, minSeconds: Number(minS), keepSeconds: Number(keepS) })); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+  const apply = async () => {
+    if (!res || res.candidates.length === 0) return;
+    if (editor.getState().revision !== res.revision) { setRes(null); setStale(true); return; }
+    const r = await editor.commit(res.ops, 'Remove silences');
+    if (r) setRes(null);
+  };
+  const valid = Number(minS) > 0 && minS !== '' && Number(keepS) >= 0 && keepS !== '';
+  return (
+    <div className="fields silences" data-testid="silence-panel" data-asset-id={assetId}>
+      <p className="muted">{t('silence.hint')}</p>
+      <label>{t('silence.min')}
+        <input type="number" min={0.05} step={0.05} value={minS} onChange={(e) => setMinS(e.target.value)} data-testid="silence-min" />
+      </label>
+      <label>{t('silence.keep')}
+        <input type="number" min={0} step={0.05} value={keepS} onChange={(e) => setKeepS(e.target.value)} data-testid="silence-keep" />
+      </label>
+      <button className="ghost" disabled={busy || !valid} onClick={() => void find()} data-testid="silence-find">{busy ? t('silence.finding') : t('silence.find')}</button>
+      {err && <p className="muted danger" role="alert" data-testid="silence-error">{err}</p>}
+      {stale && <p className="muted danger" role="alert" data-testid="silence-stale">{t('silence.stale')}</p>}
+      {res && (
+        <>
+          <p role="status" data-testid="silence-summary" data-count={res.candidates.length}>
+            {res.candidates.length === 0 ? t('silence.none') : `${t('silence.count')}: `}
+            {res.candidates.length > 0 && <bdi>{res.candidates.length} · {res.removableSeconds.toFixed(2)}s</bdi>}
+          </p>
+          <ol className="silence-list">
+            {res.candidates.map((c, i) => {
+              const fr = Math.max(0, Math.round((c.startSeconds * rate.num) / rate.den));
+              const tc = T.toTimecode(T.frameTime(fr, rate), rate);
+              return (
+                <li key={i}>
+                  <button type="button" className="ghost small" dir="ltr" onClick={() => editor.seek(fr)} data-testid="silence-item">{tc} · {c.seconds.toFixed(2)}s</button>
+                </li>
+              );
+            })}
+          </ol>
+          <button className="primary" disabled={res.candidates.length === 0} onClick={() => void apply()} data-testid="silence-apply">{t('silence.apply')}</button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ColorField({ label, value, onCommit, testid }: { label: string; value: string; onCommit: (v: string) => void; testid: string }) {
   const [v, setV] = useState(value.slice(0, 7));
   useEffect(() => setV(value.slice(0, 7)), [value]);
@@ -169,6 +235,11 @@ export function CaptionControls({ editor }: { editor: Editor }) {
           <label>{t('caption.preset')}
             <select value={style.preset} onChange={(e) => setStyle({ preset: e.target.value })} data-testid="caption-preset">
               {CAPTION_PRESETS.map((p) => <option key={p} value={p}>{t(`caption.preset.${p}` as Key)}</option>)}
+            </select>
+          </label>
+          <label>{t('font.family')}
+            <select value={style.fontFamily} onChange={(e) => setStyle({ fontFamily: e.target.value })} data-testid="caption-font">
+              {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}
             </select>
           </label>
           <label>{t('caption.position')}

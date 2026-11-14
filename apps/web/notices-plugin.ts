@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import type { Plugin } from 'vite';
+import { FONT_CATALOG } from '../../packages/core/src/fonts.ts';
 
 interface Pkg { name: string; version: string; license: string; url: string; text: string; dir: string }
 
@@ -50,9 +51,9 @@ export function noticesPlugin(): Plugin {
     apply: 'build',
     generateBundle(_opts, bundle) {
       const dirs = new Set<string>();
-      let heebo = false;
+      const fontPkgs = new Set<string>();
       for (const [fileName, out] of Object.entries(bundle)) {
-        if (out.type === 'asset' && /(^|\/)heebo-[^/]*\.woff2?$/.test(fileName)) heebo = true;
+        if (out.type === 'asset') for (const f of FONT_CATALOG) if (new RegExp(`(^|/)${f.slug}-[^/]*\\.woff2?$`).test(fileName)) fontPkgs.add(f.package);
         if (out.type !== 'chunk') continue;
         for (const id of Object.keys(out.modules)) {
           const clean = id.split('?')[0]!.replace(/^\0/, '');
@@ -61,11 +62,11 @@ export function noticesPlugin(): Plugin {
           if (dir) dirs.add(dir);
         }
       }
-      if (heebo) dirs.add(dirname(require.resolve('@fontsource/heebo/package.json')));
+      for (const p of fontPkgs) dirs.add(dirname(require.resolve(`${p}/package.json`)));
       const pkgs = [...dirs].map(readPkg).filter((p) => !p.name.startsWith('@pulseframe/'));
       const byKey = new Map(pkgs.map((p) => [`${p.name}@${p.version}`, p]));
       const list = [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
-      if (heebo && !list.some((p) => p.name === '@fontsource/heebo')) throw new Error('notices: heebo font emitted but package not listed');
+      for (const p of fontPkgs) if (!list.some((x) => x.name === p)) throw new Error(`notices: font files of ${p} emitted but package not listed`);
 
       const parts: string[] = [
         'THIRD-PARTY NOTICES',
@@ -86,9 +87,8 @@ export function noticesPlugin(): Plugin {
             `  npm tarball: https://registry.npmjs.org/mediabunny/-/mediabunny-${p.version}.tgz`,
           );
         }
-        if (p.name === '@fontsource/heebo') {
-          parts.push('', 'Heebo font files (heebo-*.woff2/.woff) are distributed under the SIL Open Font License 1.1; the licence text below accompanies them.');
-        }
+        const font = FONT_CATALOG.find((f) => f.package === p.name);
+        if (font) parts.push('', `${font.family} font files (${font.slug}-*.woff2/.woff) are distributed under the SIL Open Font License 1.1; the licence text below accompanies them.`);
         parts.push('', '-'.repeat(78), p.text);
       }
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.txt', source: parts.join('\n') + '\n' });

@@ -474,6 +474,53 @@ defineOp({
 });
 
 // ---------- transactions ----------
+
+const MOTION = ['none', 'fade', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right'] as const;
+export const CLIP_MOTIONS = MOTION;
+/** Offset from the resting transform at the far end of an entrance/exit. */
+const MOTION_FROM: Record<(typeof MOTION)[number], Partial<Record<'opacity' | 'scale' | 'x' | 'y', (rest: number) => number>>> = {
+  none: {},
+  fade: { opacity: () => 0 },
+  pop: { opacity: () => 0, scale: (r) => Math.max(0.01, r * 0.6) },
+  'slide-up': { opacity: () => 0, y: (r) => r + 0.08 },
+  'slide-down': { opacity: () => 0, y: (r) => r - 0.08 },
+  'slide-left': { opacity: () => 0, x: (r) => r + 0.1 },
+  'slide-right': { opacity: () => 0, x: (r) => r - 0.1 },
+};
+defineOp({
+  name: 'animate_clip',
+  version: 1,
+  description: 'Give a text or picture clip an entrance and/or exit (fade, pop, slide). Writes ordinary keyframes on opacity/scale/x/y, replacing existing keys on the properties it uses, so the result stays editable with set_keyframe. The exit is placed against the current clip end; run again after changing the duration.',
+  args: z.object({ clipId: z.string(), in: z.enum(MOTION).optional(), out: z.enum(MOTION).optional(), inFrames: z.number().int().min(1).max(600).optional(), outFrames: z.number().int().min(1).max(600).optional() }).strict(),
+  apply(d, a) {
+    const { clip, track } = mustClip(d, a.clipId);
+    if (clip.type === 'caption' || track.kind === 'audio') throw new OpError('incompatible', 'only text and picture clips can be animated', { clipId: clip.id });
+    const rate = d.settings.frameRate;
+    const total = T.frameIndexAt(clip.duration, rate);
+    const enter = a.in ?? 'none', exit = a.out ?? 'none';
+    const nIn = enter === 'none' ? 0 : a.inFrames ?? 12, nOut = exit === 'none' ? 0 : a.outFrames ?? 12;
+    if (nIn + nOut > total) throw new OpError('out_of_bounds', `entrance (${nIn}) plus exit (${nOut}) frames exceed the clip length (${total} frames)`, { clipFrames: total }, 'Use fewer frames.');
+    const props = new Set([...Object.keys(MOTION_FROM[enter]), ...Object.keys(MOTION_FROM[exit])]) as Set<'opacity' | 'scale' | 'x' | 'y'>;
+    if (props.size === 0) throw new OpError('invalid_args', 'choose an entrance and/or an exit');
+    const keyframes = { ...clip.keyframes };
+    for (const p of props) {
+      const rest = clip.transform[p];
+      const keys: { time: T.RationalTime; value: number; easing: (typeof EASINGS)[number] }[] = [];
+      const from = MOTION_FROM[enter][p], to = MOTION_FROM[exit][p];
+      if (from) keys.push({ time: T.ZERO, value: from(rest), easing: 'ease-out' });
+      keys.push({ time: T.frameTime(nIn, rate), value: rest, easing: 'linear' });
+      if (to) {
+        if (total - nOut > nIn) keys.push({ time: T.frameTime(total - nOut, rate), value: rest, easing: 'ease-in' });
+        else keys[keys.length - 1]!.easing = 'ease-in';
+        keys.push({ time: T.frameTime(total, rate), value: to(rest), easing: 'linear' });
+      }
+      keyframes[p] = keys;
+    }
+    clip.keyframes = keyframes;
+    return { affectedIds: [clip.id], summary: `Animated clip (${enter === 'none' ? '' : `in: ${enter}`}${enter !== 'none' && exit !== 'none' ? ', ' : ''}${exit === 'none' ? '' : `out: ${exit}`})`, output: { properties: [...props] } };
+  },
+});
+
 // ---------- captions, transcripts and range cuts (SPEC §16) ----------
 function newCaptionTrack(seq: Sequence, ctx: OpContext, mode: 'manual' | 'transcript', linkedTrackId: string | null, style?: Partial<CaptionStyle>, name?: string): Track {
   if (linkedTrackId) {

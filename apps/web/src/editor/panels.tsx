@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import type { Clip } from '@pulseframe/core';
+import { FONT_CATALOG } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
-import { CaptionControls, TranscriptPanel } from './TranscriptPanel.tsx';
+import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
 const hint = (keymap: Keymap, id: string) => { const k = keymap.keysFor(id)[0]; return k ? <kbd>{chordLabel(k)}</kbd> : null; };
@@ -134,8 +135,11 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     <aside className="inspector" aria-label={t('inspector')}>
       <h2>{t('inspector')}</h2>
       {!sel ? <p className="muted">{t('inspector.none')}</p> : <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
+      {sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}
       <h2>{t('transcript')}</h2>
       <TranscriptPanel />
+      <h2>{t('silence')}</h2>
+      <SilencePanel />
       <h2>{t('captions')}</h2>
       <CaptionControls editor={editor} />
       <h2>{t('proposals')}</h2>
@@ -176,6 +180,35 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   );
 }
 
+const ANIMS = ['none', 'fade', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right'] as const;
+
+function AnimateControls({ clipId }: { clipId: string }) {
+  const { editor, t } = useEditorState();
+  const [inA, setInA] = useState<string>('none');
+  const [outA, setOutA] = useState<string>('none');
+  const [frames, setFrames] = useState('12');
+  const n = Math.round(Number(frames));
+  const ok = (inA !== 'none' || outA !== 'none') && Number.isFinite(n) && n >= 1;
+  const opts = ANIMS.map((a) => <option key={a} value={a}>{t(`animate.${a}` as Key)}</option>);
+  return (
+    <div className="fields" data-testid="animate-controls">
+      <h3>{t('animate')}</h3>
+      <label>{t('animate.in')}
+        <select value={inA} onChange={(e) => setInA(e.target.value)} data-testid="animate-in">{opts}</select>
+      </label>
+      <label>{t('animate.out')}
+        <select value={outA} onChange={(e) => setOutA(e.target.value)} data-testid="animate-out">{opts}</select>
+      </label>
+      <label>{t('animate.frames')}
+        <input type="number" min={1} step={1} value={frames} onChange={(e) => setFrames(e.target.value)} data-testid="animate-frames" />
+      </label>
+      <p className="muted">{t('animate.note')}</p>
+      <button className="primary" disabled={!ok} data-testid="animate-apply"
+        onClick={() => void editor.commit([{ op: 'animate_clip', args: { clipId, ...(inA !== 'none' ? { in: inA } : {}), ...(outA !== 'none' ? { out: outA } : {}), inFrames: n, outFrames: n } }], 'Animate clip')}>{t('animate.apply')}</button>
+    </div>
+  );
+}
+
 function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
   const { editor, t } = useEditorState();
   const [text, setText] = useState(clip.type === 'text' ? clip.text : '');
@@ -191,6 +224,11 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
           <label>{t('text.content')}
             <textarea dir="auto" rows={3} value={text} data-testid="text-content" onChange={(e) => setText(e.target.value)}
               onBlur={() => text && text !== clip.text && void editor.commit([{ op: 'update_text', args: { clipId: clip.id, text } }], 'Edit text')} />
+          </label>
+          <label>{t('font.family')}
+            <select value={clip.style.fontFamily} data-testid="text-font" onChange={(e) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: e.target.value } } }], 'Font')}>
+              {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}
+            </select>
           </label>
           <label>{t('text.size')}
             <input type="range" min={0.02} max={0.2} step={0.005} defaultValue={clip.style.sizeFrac} onPointerUp={(e) => sizeCommit(Number(e.currentTarget.value))} onKeyUp={(e) => sizeCommit(Number(e.currentTarget.value))} />

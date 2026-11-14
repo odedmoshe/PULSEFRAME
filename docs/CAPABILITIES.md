@@ -68,7 +68,10 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Streaming output, GIF/animated WebP, subtitle sidecars, project archive, batch variants, hardware encoder profile | not built | |
 | Captions: manual cues and transcript-linked tracks, 4 presets (classic, karaoke, word-pop, box-highlight), Hebrew/mixed-direction word layout, SRT/VTT import, SRT/VTT/ASS export | tested | `docs/evidence/phase6-proof.json` (26 checks), `packages/*/src/captions.test.ts`, `subtitles.test.ts`. Six golden renders; one bundled font |
 | Transcript editing: typed/imported transcripts in source time, corrections that keep the original, delete words → ripple cut of picture, sound and captions, `cut_range` | tested (synthetic transcript) | `phase6-proof.json`: frame-exact cut, audio onset error 0.042 ms on one fixture. Real speech not exercised |
-| Speech recognition, forced alignment, silence/filler detection, translation | not built | Blocked on B-7 (ASR); silence detection is next |
+| Silence candidates (ffmpeg measurement → reviewable timeline cuts), REST + MCP + editor | tested (synthetic) | `phase6-proof.json`; `cleanup.test.ts`. Real recordings not exercised |
+| Entrance/exit animation presets as editable keyframes (`animate_clip`) | tested | `cleanup.test.ts`, `phase6-proof.json` |
+| Font catalog: 5 OFL Hebrew-capable families, pinned, licence-checked at build, load-verified | tested | `pnpm check:notices`, `phase6-proof.json` |
+| Speech recognition, forced alignment, filler detection, translation | not built | Blocked on B-7 |
 | GPU compositor, effects, transitions, masks, audio DSP, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface

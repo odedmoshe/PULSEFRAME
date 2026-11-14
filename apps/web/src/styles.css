@@ -100,3 +100,8 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 
 /* Form controls inside panels follow the dark theme instead of the browser default. */
 .fields select, .transcript select { background: var(--panel-2, #151a21); color: inherit; border: 1px solid var(--line, #2a313c); border-radius: 8px; padding: 6px 8px; font: inherit; }
+
+.silence-list { list-style: none; margin: 0; padding: 0; max-height: 10rem; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.silence-list button { width: 100%; text-align: start; }
+[data-testid="animate-controls"] h3 { margin: 0; font-size: 0.9em; }
+.fields input[type=number], .transcript input[type=number], .fields input[type=text] { background: var(--panel-2, #151a21); color: inherit; border: 1px solid var(--line, #2a313c); border-radius: 8px; padding: 6px 8px; font: inherit; }

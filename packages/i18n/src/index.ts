@@ -34,9 +34,15 @@ export const he = {
   'transcript.import': 'ייבוא תמלול (SRT/VTT)', 'transcript.language': 'שפת התמלול', 'transcript.selectClip': 'בחרו קליפ מדיה כדי לייבא לו תמלול', 'transcript.phrase': 'משפט',
   'transcript.delete': 'מחיקת המילים שנבחרו', 'transcript.cutAnyway': 'חיתוך בכל זאת (משוער)', 'transcript.edit': 'עריכת טקסט', 'transcript.save': 'שמירה', 'transcript.cancel': 'ביטול',
   'transcript.approx': 'זמני מילים משוערים', 'transcript.segmentOnly': 'תזמון משפט בלבד', 'transcript.cutFailed': 'החיתוך לא בוצע',
-  'captions': 'כתוביות', 'caption.add': 'הוספת רצועת כתוביות', 'caption.preset': 'סגנון', 'caption.position': 'מיקום', 'caption.size': 'גודל', 'caption.color': 'צבע טקסט', 'caption.highlight': 'צבע הדגשה',
+  'font.family': 'גופן', 'captions': 'כתוביות', 'caption.add': 'הוספת רצועת כתוביות', 'caption.preset': 'סגנון', 'caption.position': 'מיקום', 'caption.size': 'גודל', 'caption.color': 'צבע טקסט', 'caption.highlight': 'צבע הדגשה',
   'caption.preset.classic': 'קלאסי', 'caption.preset.karaoke': 'קריוקי', 'caption.preset.word-pop': 'מילה אחר מילה', 'caption.preset.box-highlight': 'הדגשה בתיבה',
   'caption.pos.bottom': 'למטה', 'caption.pos.top': 'למעלה', 'caption.pos.center': 'במרכז', 'captions.import': 'ייבוא כתוביות (SRT/VTT)', 'captions.export.srt': 'ייצוא SRT', 'captions.export.vtt': 'ייצוא VTT',
+  'op.add_caption_track': 'הוספת רצועת כתוביות', 'op.set_caption_style': 'עיצוב כתוביות', 'op.add_cue': 'הוספת כתובית', 'op.update_cue': 'עריכת כתובית', 'op.merge_cues': 'מיזוג כתוביות', 'op.import_captions': 'ייבוא כתוביות',
+  'op.set_transcript': 'הגדרת תמלול', 'op.import_transcript': 'ייבוא תמלול', 'op.correct_transcript': 'תיקון תמלול', 'op.cut_range': 'חיתוך טווח', 'op.delete_transcript_range': 'מחיקת מילים מהתמלול', 'op.animate_clip': 'אנימציית כניסה/יציאה',
+  'silence': 'שקטים', 'silence.hint': 'אלה הצעות בלבד. דיבור שקט עלול להיות מזוהה בטעות כשקט, לכן כדאי לעבור על הרשימה לפני ההסרה.', 'silence.min': 'אורך שקט מינימלי (שניות)', 'silence.keep': 'להשאיר בקצוות (שניות)',
+  'silence.find': 'חיפוש שקטים', 'silence.finding': 'מחפש…', 'silence.apply': 'הסרת השקטים', 'silence.count': 'שקטים שנמצאו', 'silence.none': 'לא נמצאו שקטים', 'silence.stale': 'הפרויקט השתנה, יש לחפש שוב',
+  'animate': 'אנימציית כניסה ויציאה', 'animate.in': 'כניסה', 'animate.out': 'יציאה', 'animate.frames': 'משך (פריימים)', 'animate.apply': 'החלה', 'animate.note': 'הפעולה מחליפה קיפריימים קיימים של אטימות, קנה מידה ומיקום שהאנימציה משתמשת בהם.',
+  'animate.none': 'ללא', 'animate.fade': 'עמעום', 'animate.pop': 'קפיצה', 'animate.slide-up': 'החלקה מלמטה', 'animate.slide-down': 'החלקה מלמעלה', 'animate.slide-left': 'החלקה משמאל', 'animate.slide-right': 'החלקה מימין',
   'lang.he': 'עברית', 'lang.en': 'אנגלית',
 };
 export const en: Record<keyof typeof he, string> = {
@@ -73,9 +79,15 @@ export const en: Record<keyof typeof he, string> = {
   'transcript.import': 'Import transcript (SRT/VTT)', 'transcript.language': 'Transcript language', 'transcript.selectClip': 'Select a media clip to import a transcript for it', 'transcript.phrase': 'Phrase',
   'transcript.delete': 'Delete selected words', 'transcript.cutAnyway': 'Cut anyway (estimated)', 'transcript.edit': 'Edit text', 'transcript.save': 'Save', 'transcript.cancel': 'Cancel',
   'transcript.approx': 'estimated word times', 'transcript.segmentOnly': 'phrase timing only', 'transcript.cutFailed': 'The cut was not made',
-  'captions': 'Captions', 'caption.add': 'Add caption track', 'caption.preset': 'Style', 'caption.position': 'Position', 'caption.size': 'Size', 'caption.color': 'Text colour', 'caption.highlight': 'Highlight colour',
+  'font.family': 'Font', 'captions': 'Captions', 'caption.add': 'Add caption track', 'caption.preset': 'Style', 'caption.position': 'Position', 'caption.size': 'Size', 'caption.color': 'Text colour', 'caption.highlight': 'Highlight colour',
   'caption.preset.classic': 'Classic', 'caption.preset.karaoke': 'Karaoke', 'caption.preset.word-pop': 'Word pop', 'caption.preset.box-highlight': 'Box highlight',
   'caption.pos.bottom': 'Bottom', 'caption.pos.top': 'Top', 'caption.pos.center': 'Center', 'captions.import': 'Import captions (SRT/VTT)', 'captions.export.srt': 'Export SRT', 'captions.export.vtt': 'Export VTT',
+  'op.add_caption_track': 'Added caption track', 'op.set_caption_style': 'Caption style', 'op.add_cue': 'Added caption', 'op.update_cue': 'Edited caption', 'op.merge_cues': 'Merged captions', 'op.import_captions': 'Imported captions',
+  'op.set_transcript': 'Set transcript', 'op.import_transcript': 'Imported transcript', 'op.correct_transcript': 'Corrected transcript', 'op.cut_range': 'Cut range', 'op.delete_transcript_range': 'Deleted transcript words', 'op.animate_clip': 'Entrance/exit animation',
+  'silence': 'Silences', 'silence.hint': 'These are suggestions only. Quiet speech may be detected as silence, so review the list before removing.', 'silence.min': 'Minimum silence (seconds)', 'silence.keep': 'Keep at edges (seconds)',
+  'silence.find': 'Find silences', 'silence.finding': 'Searching…', 'silence.apply': 'Remove silences', 'silence.count': 'Silences found', 'silence.none': 'No silences found', 'silence.stale': 'The project changed, search again',
+  'animate': 'Entrance and exit animation', 'animate.in': 'Entrance', 'animate.out': 'Exit', 'animate.frames': 'Length (frames)', 'animate.apply': 'Apply', 'animate.note': 'This replaces any existing opacity, scale and position keyframes the animation uses.',
+  'animate.none': 'None', 'animate.fade': 'Fade', 'animate.pop': 'Pop', 'animate.slide-up': 'Slide up', 'animate.slide-down': 'Slide down', 'animate.slide-left': 'Slide left', 'animate.slide-right': 'Slide right',
   'lang.he': 'Hebrew', 'lang.en': 'English',
 };
 export type Key = keyof typeof he;

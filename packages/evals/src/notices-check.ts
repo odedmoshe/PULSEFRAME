@@ -1,6 +1,7 @@
 // Run after `pnpm build`: verifies licence notices ship with the web bundle.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { FONT_CATALOG } from '@pulseframe/core';
 
 const root = resolve(import.meta.dirname, '../../..');
 const dist = resolve(root, 'apps/web/dist');
@@ -29,9 +30,22 @@ for (const n of ['react', 'react-dom']) {
 }
 
 const assets = resolve(dist, 'assets');
-const fonts = existsSync(assets) ? readdirSync(assets).filter((f) => /^heebo-.*\.woff2$/.test(f)) : [];
-need(fonts.length > 0, 'no heebo-*.woff2 in dist/assets');
+const emitted = existsSync(assets) ? readdirSync(assets) : [];
+let fontFiles = 0;
+for (const f of FONT_CATALOG) {
+  // Every catalog font: pinned in package.json, files emitted for each weight (Hebrew + Latin), package + OFL text in the notices.
+  need(web.dependencies[f.package] === f.version, `${f.package} is not pinned to ${f.version} in apps/web/package.json`);
+  for (const w of f.weights) for (const subset of ['hebrew', 'latin']) {
+    const hit = emitted.filter((n) => n.startsWith(`${f.slug}-${subset}-${w}-normal`) && n.endsWith('.woff2'));
+    need(hit.length === 1, `expected one ${f.slug}-${subset}-${w}-normal*.woff2 in dist/assets, found ${hit.length}`);
+    fontFiles += hit.length;
+  }
+  const i = text.indexOf(`\n${f.package} ${f.version}\n`);
+  need(i >= 0, `missing ${f.package} ${f.version} in notices`);
+  const next = text.indexOf('\n' + '='.repeat(78), i + 1);
+  need(/SIL OPEN FONT LICENSE/i.test(text.slice(i, next < 0 ? undefined : next)), `no OFL text under ${f.package}`);
+}
 
 const m = /^Packages: (.*)$/m.exec(text);
 const count = m ? m[1]!.split(', ').length : 0;
-console.log(`PASS notices-check: ${count} packages listed, ${fonts.length} heebo woff2 files alongside notice`);
+console.log(`PASS notices-check: ${count} packages listed, ${FONT_CATALOG.length} font families (${fontFiles} woff2 files) with OFL text alongside`);

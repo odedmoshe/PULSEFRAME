@@ -16,7 +16,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import * as T from '@pulseframe/time';
-import { parseSubtitles } from '@pulseframe/core';
+import { FONT_CATALOG, parseSubtitles } from '@pulseframe/core';
 import { evaluate, type CaptionLayer } from '@pulseframe/engine';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
@@ -35,6 +35,7 @@ const WORDS = ['שלום', 'עולם', 'Hello', '2026', 'בדיקה', 'כתוב�
 const HIGHLIGHT = [0x3d, 0xe0, 0xc8];
 /** Pixels close to the highlight colour in the lower third of an RGB24 frame. */
 const lit = (rgb: Buffer, w = W, h = H) => { let n = 0; for (let y = Math.floor(h * 0.6); y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 3; if (Math.abs(rgb[i]! - HIGHLIGHT[0]!) < 28 && Math.abs(rgb[i + 1]! - HIGHLIGHT[1]!) < 28 && Math.abs(rgb[i + 2]! - HIGHLIGHT[2]!) < 28) n++; } return n; };
+const sha = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
 const decodePng = (file: string) => ff(['-i', file, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
 /** Beep onsets (seconds) in mono 48 kHz s16le PCM. */
 function onsets(pcm: Buffer): number[] {
@@ -43,6 +44,18 @@ function onsets(pcm: Buffer): number[] {
   for (let i = 0; i < pcm.length / 2; i++) {
     const loud = Math.abs(pcm.readInt16LE(i * 2)) > 3000;
     if (loud && quiet >= 4800) out.push(i / 48000);
+    quiet = loud ? 0 : quiet + 1;
+  }
+  return out;
+}
+
+/** Like onsets(), for beeps that are closer together (at least 50 ms of quiet between them). */
+function onsets2(pcm: Buffer): number[] {
+  const out: number[] = [];
+  let quiet = 2400;
+  for (let i = 0; i < pcm.length / 2; i++) {
+    const loud = Math.abs(pcm.readInt16LE(i * 2)) > 3000;
+    if (loud && quiet >= 2400) out.push(i / 48000);
     quiet = loud ? 0 : quiet + 1;
   }
   return out;
@@ -80,7 +93,8 @@ async function main() {
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     await page.goto(s.url);
     await page.waitForFunction(() => !!document.querySelector('[data-testid=project-name]')?.textContent);
-    const upid: string = (await call('/projects')).body.projects[0].id;
+    let upid = '';
+    for (let i = 0; i < 100 && !upid; i++) { upid = (await call('/projects')).body.projects[0]?.id ?? ''; if (!upid) await sleep(100); }
     const uup: any = await (await fetch(`${s.url}/api/v1/projects/${upid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'speech.mp4' }, body: fs.readFileSync(fixture.file) })).json();
     await call(`/projects/${upid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: uup.assetId, start: f(0) } }] });
     await page.getByTestId('transcript-panel').waitFor();
@@ -175,7 +189,6 @@ async function main() {
     const fix = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'correct_transcript', args: { assetId, segmentId: seg1, text: 'שלום חברים Hello 2026' } }] });
     d = await doc(pid);
     const ex2 = await exportMp4(pid, 'corrected.mp4');
-    const sha = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
     check('correcting a word changes the caption, keeps word timing, keeps the original text, and leaves exported audio bit-identical', fix.status === 200 && fix.body.results[0].output.timing === 'word' && say(caption(d, 30)) === 'שלום חברים*' && d.transcripts[assetId].segments[0].original === WORDS.slice(0, 4).join(' ') && sha(ex2.pcm) === sha(ex.pcm), { caption: say(caption(d, 30)), audioIdentical: sha(ex2.pcm) === sha(ex.pcm) });
     void pcmBefore;
     const reword = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'correct_transcript', args: { assetId, segmentId: tv.body.segments[1].id, text: 'שלוש מילים בלבד' } }] });
@@ -226,6 +239,66 @@ async function main() {
     }
     check('caption renders match the committed baselines (SSIM ≥ 0.995), or were written on first run', Object.values(golden).every((g) => g === 'baseline written' || (typeof g === 'number' && g >= 0.995)), golden);
 
+    console.log('\n# silence candidates and clip animation (no model needed)');
+    const pid4 = (await call('/projects', { name: 'phase6-silence', width: W, height: H })).body.project.id;
+    const up4: any = await (await fetch(`${s.url}/api/v1/projects/${pid4}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'speech.mp4' }, body: fs.readFileSync(fixture.file) })).json();
+    await call(`/projects/${pid4}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up4.assetId, start: f(0) } }] });
+    const sil = await call(`/projects/${pid4}/analysis/silences`, { assetId: up4.assetId, minSeconds: 0.5, keepSeconds: 0.1 });
+    const revBefore = (await call(`/projects/${pid4}`)).body.revision;
+    check('silence analysis finds the 8 gaps between beeps, proposes 8 frame-aligned cuts, and edits nothing', sil.status === 200 && sil.body.sourceSilences.length === 8 && sil.body.candidates.length === 8 && sil.body.candidates.every((c: any) => T.isFrameAligned(c.start, R) && T.isFrameAligned(c.end, R)) && revBefore === sil.body.revision, { first: sil.body.sourceSilences[0], removableSeconds: sil.body.removableSeconds });
+    const applied = await call(`/projects/${pid4}/transactions`, { ops: sil.body.ops, expectedRevision: sil.body.revision });
+    const again = await call(`/projects/${pid4}/transactions`, { ops: sil.body.ops, expectedRevision: sil.body.revision });
+    const ex4 = await exportMp4(pid4, 'tight.mp4');
+    const on4 = onsets2(ex4.pcm);
+    const gaps = on4.slice(1).map((x, i) => x - on4[i]!);
+    check('applying the candidates as one transaction keeps every beep (8 onsets), closes the gaps evenly, and cannot be applied twice', applied.status === 200 && again.status === 409 && on4.length === 8 && Math.max(...gaps) - Math.min(...gaps) < 0.002 && ex4.rgb.length / (W * H * 3) === 240 - Math.round(sil.body.removableSeconds * 30), { onsets: on4.map((x) => Number(x.toFixed(3))), frames: ex4.rgb.length / (W * H * 3), secondApply: again.body.error?.code });
+    const title = await call(`/projects/${pid4}/transactions`, { ops: [{ op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60), style: { color: '#00FF00' } } }] });
+    const titleId = title.body.results[0].output.clipId;
+    const anim = await call(`/projects/${pid4}/transactions`, { ops: [{ op: 'animate_clip', args: { clipId: titleId, in: 'fade', out: 'slide-down', inFrames: 12, outFrames: 12 } }] });
+    const green = (rgb: Buffer) => { let n = 0; for (let i = 0; i < rgb.length; i += 3) if (rgb[i]! < 90 && rgb[i + 1]! > 170 && rgb[i + 2]! < 90) n++; return n; };
+    const g0 = green(decodePng(await still(pid4, 0, 'anim-f0'))), g6 = green(decodePng(await still(pid4, 6, 'anim-f6'))), g30 = green(decodePng(await still(pid4, 30, 'anim-f30'))), g58 = green(decodePng(await still(pid4, 58, 'anim-f58')));
+    check('animate_clip: title is invisible on its first frame, partly visible mid-entrance, fully visible at rest, fading again near the end', anim.status === 200 && g0 === 0 && g30 > 200 && g6 < g30 && g58 < g30, { g0, g6, g30, g58 });
+
+    console.log('\n# font catalog');
+    const fontHashes: Record<string, string> = {};
+    for (const font of FONT_CATALOG) {
+      await call(`/projects/${pid4}/transactions`, { ops: [{ op: 'update_text', args: { clipId: titleId, text: 'שָׁלוֹם עולם Hello 123', style: { fontFamily: font.family, fontWeight: 400 } } }] });
+      fontHashes[font.family] = sha(decodePng(await still(pid4, 30, `font-${font.slug}`)));
+    }
+    const plan5 = (await call(`/projects/${pid4}/exports/plan`, {})).body;
+    check(`all ${FONT_CATALOG.length} catalog families render differently from each other (none fell back to another face), and the export manifest pins the font files by SHA-256`, new Set(Object.values(fontHashes)).size === FONT_CATALOG.length && plan5.blockers.length === 0 && plan5.manifest.fonts.some((x: any) => x.family === FONT_CATALOG.at(-1)!.family && x.files.length > 0 && x.files.every((y: any) => /^[0-9a-f]{64}$/.test(y.sha256))), { families: Object.keys(fontHashes), manifestFonts: plan5.manifest.fonts.map((x: any) => `${x.family}:${x.files.length}`) });
+
+    console.log('\n# editor: silence and animation controls, font picker');
+    const pid5 = upid; // the project the editor has open
+    const page2 = await (await browser.newContext({ viewport: { width: 1440, height: 2400 }, reducedMotion: 'reduce' })).newPage();
+    const errors2: string[] = [];
+    page2.on('pageerror', (e) => errors2.push(String(e)));
+    page2.on('console', (m) => m.type() === 'error' && errors2.push(m.text()));
+    await page2.goto(`${s.url}/?project=${pid5}`);
+    await page2.getByTestId('silence-find').waitFor();
+    const before5 = await doc(pid5);
+    await page2.getByTestId('silence-find').click();
+    await page2.locator('[data-testid=silence-summary][data-count]').waitFor();
+    const found = Number(await page2.getByTestId('silence-summary').getAttribute('data-count'));
+    await page2.getByTestId('silence-apply').click();
+    await page2.waitForFunction(async ([id, n]) => (await (await fetch(`/api/v1/projects/${id}`)).json()).project.sequences.seq_main.tracks.find((t: any) => t.kind === 'audio').clips.length > (n as number), [pid5, before5.sequences.seq_main.tracks.find((t: any) => t.kind === 'audio').clips.length] as const);
+    const after5 = await doc(pid5);
+    const dur = (d: any) => Math.max(...d.sequences.seq_main.tracks.flatMap((t: any) => t.clips.map((c: any) => T.frameIndexAt(T.add(c.start, c.duration), R))));
+    check('editor: "find silences" lists candidates without editing; "remove" applies them as one undoable step', found > 0 && dur(after5) < dur(before5), { found, framesBefore: dur(before5), framesAfter: dur(after5) });
+    await page2.keyboard.press('Control+z');
+    await page2.waitForFunction(async ([id, n]) => { const d = (await (await fetch(`/api/v1/projects/${id}`)).json()).project; return Math.max(...d.sequences.seq_main.tracks.flatMap((t: any) => t.clips.map((c: any) => Number(c.start.value) / c.start.timescale + Number(c.duration.value) / c.duration.timescale))) * 30 > (n as number) - 0.5; }, [pid5, dur(before5)] as const);
+    check('editor: one Ctrl+Z restores every removed silence', dur(await doc(pid5)) === dur(before5));
+    const addText = await call(`/projects/${pid5}/transactions`, { ops: [{ op: 'add_text', args: { text: 'כותרת', start: f(0), duration: f(60) } }] });
+    const tid = addText.body.results[0].output.clipId;
+    await page2.locator(`.clip[data-clip-id="${tid}"]`).click();
+    await page2.getByTestId('animate-in').selectOption('pop');
+    await page2.getByTestId('animate-apply').click();
+    await page2.getByTestId('text-font').selectOption('Frank Ruhl Libre');
+    await page2.waitForFunction(async ([id, c]) => { const d = (await (await fetch(`/api/v1/projects/${id}`)).json()).project; const clip = d.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((x: any) => x.id === c); return !!clip?.keyframes?.scale && clip.style.fontFamily === 'Frank Ruhl Libre'; }, [pid5, tid] as const);
+    await page2.screenshot({ path: path.join(art, 'editor-phase6b.png'), fullPage: false });
+    check('editor: entrance preset writes keyframes on the selected title; font picker changes its family; no uncaught errors', errors2.length === 0, errors2.slice(0, 4));
+    await page2.close();
+
     console.log('\n# agent (MCP)');
     const c = new Client({ name: 'phase6-script', version: '0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
     await c.connect(new StreamableHTTPClientTransport(new URL(`${s.url}/mcp`), { requestInit: { headers: bearer(s.auth.tokens.agent) } }));
@@ -235,7 +308,7 @@ async function main() {
     const heard = gt.data.segments[1].words;
     const cutByAgent = await tool('delete_transcript_range', { projectId: pid, assetId, fromWordId: heard[2].id, toWordId: heard[2].id });
     const exported = await tool('export_captions', { projectId: pid, format: 'vtt' });
-    check('agent reads the transcript, deletes one word by id, and reads back captions without that word', ['get_transcript', 'export_captions', 'delete_transcript_range', 'correct_transcript', 'import_captions', 'cut_range'].every((n) => names.includes(n)) && !gt.isError && !cutByAgent.isError && !/PULSEFRAME/.test(exported.data.text) && /סוף/.test(exported.data.text), { cut: cutByAgent.data?.results?.[0]?.summary ?? cutByAgent.data, cues: exported.data.cues });
+    check('agent reads the transcript, deletes one word by id, and reads back captions without that word', ['get_transcript', 'export_captions', 'delete_transcript_range', 'correct_transcript', 'import_captions', 'cut_range', 'find_silences', 'animate_clip'].every((n) => names.includes(n)) && !gt.isError && !cutByAgent.isError && !/PULSEFRAME/.test(exported.data.text) && /סוף/.test(exported.data.text), { cut: cutByAgent.data?.results?.[0]?.summary ?? cutByAgent.data, cues: exported.data.cues });
     await c.close();
   } catch (e) {
     console.error(e);

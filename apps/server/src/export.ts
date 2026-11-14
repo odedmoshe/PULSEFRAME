@@ -13,7 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
+import { findFont, FONT_CATALOG, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { ffprobe } from './ingest.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
@@ -33,7 +33,7 @@ export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
 const CRF = { 'mp4-h264-aac': { draft: 28, standard: 21, high: 16 }, 'webm-vp9-opus': { draft: 40, standard: 32, high: 24 } } as const;
 /** Rough bits per pixel per frame, used ONLY for the labelled size estimate. */
 const BPP = { draft: 0.03, standard: 0.07, high: 0.14 } as const;
-export const ENGINE = { compositor: 'canvas2d/1', evaluator: 'evaluate/1', fontFamilies: ['Heebo'] } as const;
+export const ENGINE = { compositor: 'canvas2d/1', evaluator: 'evaluate/1', fontFamilies: FONT_CATALOG.map((f) => f.family) } as const;
 
 export interface RenderSession {
   doc: ProjectDocument;
@@ -112,8 +112,8 @@ export class Exporter {
       if (!present) blockers.push({ code: 'missing_media', message: `source media for "${a.name}" is not available to the render worker`, ids: [id] });
       return { id, contentHash: a.contentHash, byteSize: a.byteSize, kind: a.kind, clips };
     });
-    for (const fam of families) if (!ENGINE.fontFamilies.includes(fam as 'Heebo')) blockers.push({ code: 'missing_font', message: `font "${fam}" is not bundled with the renderer; text would silently fall back`, ids: [] });
-    const fonts = [...families].filter((f) => ENGINE.fontFamilies.includes(f as 'Heebo')).map((family) => ({ family, files: this.fontFiles(family) }));
+    for (const fam of families) if (!ENGINE.fontFamilies.includes(fam)) blockers.push({ code: 'missing_font', message: `font "${fam}" is not bundled with the renderer; text would silently fall back`, ids: [] });
+    const fonts = [...families].filter((f) => ENGINE.fontFamilies.includes(f)).map((family) => ({ family, files: this.fontFiles(family) }));
     if (fonts.some((f) => f.files.length === 0)) blockers.push({ code: 'renderer_unavailable', message: 'the web bundle with the render page and fonts has not been built (run `pnpm build`)', ids: [] });
     if (options.format === 'webm-vp9-opus' && doc.settings.sampleRate !== 48000) warnings.push({ code: 'resampled_audio', message: 'Opus is encoded at 48 kHz; audio will be resampled', ids: [] });
     const seconds = (frames * frameRate.den) / frameRate.num;
@@ -131,7 +131,7 @@ export class Exporter {
     let f = this.fontCache.get(family);
     if (!f || f.length === 0) {
       const dir = path.join(this.webDist, 'assets');
-      const prefix = `${family.toLowerCase()}-`;
+      const prefix = `${findFont(family)?.slug ?? family.toLowerCase()}-`;
       f = !fs.existsSync(dir) ? [] : fs.readdirSync(dir).filter((n) => n.startsWith(prefix) && n.endsWith('.woff2')).sort().map((name) => ({ name, sha256: createHash('sha256').update(fs.readFileSync(path.join(dir, name))).digest('hex') }));
       this.fontCache.set(family, f);
     }

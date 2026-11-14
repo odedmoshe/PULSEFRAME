@@ -14,7 +14,7 @@ import { ExportOptionsSchema, type Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import type { Presence } from './presence.ts';
 import { describeMoment } from '@pulseframe/engine';
-import { exportCaptions, jobView } from './http.ts';
+import { exportCaptions, findSilences, jobView, SilenceBody } from './http.ts';
 import { ApiError, type Store } from './store.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
@@ -77,6 +77,8 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('observe', () => { const p = read(projectId); const v = transcriptView(p.doc, assetId); if (!v) throw new ApiError(404, 'not_found', 'this asset has no transcript', { assetId }, 'get_summary lists the assets that have one.'); return { revision: p.revision, ...v }; }));
     server.registerTool('export_captions', { description: 'A caption track as it plays on the timeline, as SRT, WebVTT or ASS text (frame-snapped; words that were cut out are omitted).', inputSchema: z.object({ projectId: pid, trackId: z.string().optional(), format: z.enum(['srt', 'vtt', 'ass']).optional() }), annotations: ro }, ({ projectId, trackId, format }) =>
       run('observe', () => { const p = read(projectId); const o = exportCaptions(p.doc, trackId, format ?? 'srt'); return { revision: p.revision, format: o.format, trackId: o.trackId, cues: o.cues, text: o.text }; }));
+    server.registerTool('find_silences', { description: 'Measure silent stretches in a media asset and return the timeline cuts that would remove them (with the ops to apply). Read-only: review the candidates, then apply the returned ops in one apply_transaction with expectedRevision, or propose them.', inputSchema: z.object({ projectId: pid, ...SilenceBody.shape }), annotations: ro }, ({ projectId, ...a }) =>
+      run('observe', () => { read(projectId); return findSilences(store, projectId, a); }));
     server.registerTool('render_contact_sheet', { description: 'Render several exact frames of the current revision as small stills (same compositor as export) to inspect an edit at a glance. At most 12 frames per call; each image is labelled with its frame index in the text part.', inputSchema: z.object({ projectId: pid, frames: z.array(z.number().int().min(0)).min(1).max(12) }), annotations: ro }, ({ projectId, frames }) =>
       run('observe', async () => {
         const p = read(projectId);

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T23:25:06.643Z",
+  "ranAt": "2026-11-14T23:36:26.058Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -11,35 +11,35 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 0.623,
+        "wall": 0.664,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 1.116,
+        "wall": 1.089,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.125
+        "wall": 0.116
       },
       "png": {
-        "wall": 0.22
+        "wall": 0.252
       }
     },
     "cancel": {
       "stageAtCancel": "rendering 9/600",
-      "msToCanceled": 161
+      "msToCanceled": 163
     },
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 35.657,
-      "realtimeFactor": 0.5608996830916791,
+      "wallSeconds": 34.236,
+      "realtimeFactor": 0.584180394905947,
       "renderStageMs": {
-        "draw": 5379,
-        "readback": 3342,
-        "upload": 25807
+        "draw": 5299,
+        "readback": 3276,
+        "upload": 24545
       },
       "bytes": 747124,
       "estimateBytes": 22252800
@@ -68,7 +68,11 @@
           "compositor": "canvas2d/1",
           "evaluator": "evaluate/1",
           "fontFamilies": [
-            "Heebo"
+            "Heebo",
+            "Rubik",
+            "Assistant",
+            "Frank Ruhl Libre",
+            "Secular One"
           ],
           "schemaVersion": 1
         }
@@ -164,7 +168,7 @@
       "ok": true,
       "detail": {
         "stageAtCancel": "rendering 9/600",
-        "msToCanceled": 161
+        "msToCanceled": 163
       }
     },
     {
@@ -181,12 +185,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 35.657,
-        "realtimeFactor": 0.5608996830916791,
+        "wallSeconds": 34.236,
+        "realtimeFactor": 0.584180394905947,
         "renderStageMs": {
-          "draw": 5379,
-          "readback": 3342,
-          "upload": 25807
+          "draw": 5299,
+          "readback": 3276,
+          "upload": 24545
         },
         "bytes": 747124,
         "estimateBytes": 22252800

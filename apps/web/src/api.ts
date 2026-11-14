@@ -17,6 +17,7 @@ export interface RevisionEvent { projectId: string; revision: number; transactio
 export interface Proposal { id: string; actor: string; label: string | null; summary: string; status: string; baseRevision: number; createdAt: string; previewFrame: number }
 export interface JobEvent { id: string; type: string; status: string; stage: string | null; output: any; error: any }
 export interface CommitResult { revision: number; committed: boolean; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
+export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string }
 
 export const api = {
   session: () => call<{ actor: string }>('/session'),
@@ -34,6 +35,8 @@ export const api = {
     if (!r.ok) throw new ApiFailure(r.status, 'asset_fetch_failed', `HTTP ${r.status}`);
     return r.blob();
   },
+  findSilences: (id: string, body: { assetId: string; minSeconds: number; keepSeconds: number }) =>
+    call<SilenceResult>(`/projects/${id}/analysis/silences`, json(body)),
   capabilities: () => call<{ provider: { configured: boolean; reason: string | null; readiness: { reachable: boolean; runtimeVersion: string | null; device: { name: string; type: string } | null } | null }; capabilities: { id: string; runnable: boolean; title: { he: string; en: string } }[] }>('/capabilities'),
   runCapability: (id: string, capabilityId: string, params: Record<string, unknown>) => call<{ jobId: string }>(`/projects/${id}/capabilities/${capabilityId}/runs`, json({ params, idempotencyKey: crypto.randomUUID() })),
   derivatives: (id: string, assetId: string) => call<{ derivatives: { kind: string; status: string; meta: any }[] }>(`/projects/${id}/assets/${assetId}/derivatives`),
