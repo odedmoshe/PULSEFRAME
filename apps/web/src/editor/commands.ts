@@ -158,6 +158,7 @@ export const COMMANDS: Command[] = [
   // The timeline lists tracks top-down in reverse list order (the last track is drawn on top and shown first), so "up" on screen is a higher index.
   { id: 'track.moveUp', label: 'cmd.trackUp', group: 'edit', keys: [], enabled: (e) => trackMove(e, 1) !== null, run: (e) => e.commit(() => { const m = trackMove(e, 1); return m ? [{ op: 'move_track', args: m }] : null; }, 'Move track') },
   { id: 'track.moveDown', label: 'cmd.trackDown', group: 'edit', keys: [], enabled: (e) => trackMove(e, -1) !== null, run: (e) => e.commit(() => { const m = trackMove(e, -1); return m ? [{ op: 'move_track', args: m }] : null; }, 'Move track') },
+  { id: 'edit.link', label: 'cmd.linkClips', group: 'edit', keys: [], enabled: (e) => e.getState().selection.length >= 2, run: (e) => e.commit([{ op: 'link_clips', args: { clipIds: e.getState().selection } }], 'Link clips') },
   { id: 'track.removeEmpty', label: 'cmd.removeEmptyTracks', group: 'edit', keys: [], enabled: (e) => emptyTracks(e).length > 0, run: (e) => e.commit(emptyTracks(e).map((id) => ({ op: 'remove_track', args: { trackId: id } })), 'Remove empty tracks') },
   { id: 'edit.closeGaps', label: 'cmd.closeGaps', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: (e) => e.commit([{ op: 'close_gaps', args: {} }], 'Close gaps') },
   { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },

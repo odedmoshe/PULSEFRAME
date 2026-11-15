@@ -706,6 +706,30 @@ defineOp({
 });
 
 defineOp({
+  name: 'link_clips',
+  version: 1,
+  description: 'Link clips so they move, trim, split and delete together (a picture with its sound). They must cover exactly the same stretch of the timeline, be on different tracks, play in the same direction and speed, and none may be linked already (use unlink_clip first).',
+  args: z.object({ clipIds: z.array(z.string()).min(2).max(8) }).strict(),
+  apply(d, a, ctx) {
+    if (new Set(a.clipIds).size !== a.clipIds.length) throw new OpError('invalid_args', 'the same clip is listed twice');
+    const found = a.clipIds.map((id) => mustClip(d, id));
+    const first = found[0]!.clip;
+    for (const f of found) {
+      if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be linked', { clipId: f.clip.id });
+      if (f.clip.linkGroupId) throw new OpError('incompatible', 'this clip is already linked', { clipId: f.clip.id }, 'Use unlink_clip first.');
+      if (f.clip.freeze) throw new OpError('incompatible', 'a freeze frame cannot be linked', { clipId: f.clip.id });
+      if (!T.eq(f.clip.start, first.start) || !T.eq(f.clip.duration, first.duration)) throw new OpError('incompatible', 'linked clips must start and end together', { clipId: f.clip.id, start: f.clip.start, duration: f.clip.duration });
+      const sp = (c: Clip) => (c.type === 'media' && c.speed ? c.speed.num / c.speed.den : 1);
+      if (sp(f.clip) !== sp(first) || !!(f.clip as MediaClip).reverse !== !!(first as MediaClip).reverse) throw new OpError('incompatible', 'linked clips must play at the same speed and in the same direction', { clipId: f.clip.id });
+    }
+    if (new Set(found.map((f) => f.track.id)).size !== found.length) throw new OpError('incompatible', 'linked clips must be on different tracks');
+    const link = ctx.newId('lnk');
+    for (const f of found) (f.clip as MediaClip).linkGroupId = link;
+    return { affectedIds: found.map((f) => f.clip.id), summary: `Linked ${found.length} clips`, output: { linkGroupId: link } };
+  },
+});
+
+defineOp({
   name: 'set_clip_reverse',
   version: 1,
   description: 'Play a clip backwards (reverse=true) or forwards again (false): a video clip on a video track, a sound clip on a sound track, or both when they are linked (they reverse together unless includeLinked=false, which also unlinks them). The clip keeps its place, length and the stretch of source it uses; only the order changes. Not for freeze frames or stills. A transition or crossfade into the next clip must still have enough spare source in the new direction.',
