@@ -56,6 +56,17 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
   const toggle = useCallback(() => { const pl = playerRef.current; if (!pl) return; if (pl.playing) pl.pause(); else void pl.play(); }, []);
   const markIn = useCallback(() => { const f = playerRef.current?.frame ?? 0; setIn(f); setOut((o) => (o !== null && o <= f ? null : o)); }, []);
   const markOut = useCallback(() => { const f = (playerRef.current?.frame ?? 0) + 1; setOut(f); setIn((i) => (i >= f ? 0 : i)); }, []); // the frame under the playhead is the last one included
+  /** Ripple insert at the timeline playhead: open a gap of the range's length there and place the range in it, as one transaction. */
+  const insert = async () => {
+    if (!asset || end <= inFrame) return;
+    setBusy(true); setErr(null);
+    try {
+      playerRef.current?.pause();
+      const at = T.frameTime(editor.frame, rate), duration = T.frameTime(end - inFrame, rate);
+      await editor.commit([{ op: 'insert_gap', args: { at, duration } }, { op: 'add_clip', args: { assetId, start: at, sourceIn: T.frameTime(inFrame, rate), duration } }], 'Insert clip');
+      onClose();
+    } catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
+  };
   const add = async () => {
     if (!asset || end <= inFrame) return;
     setBusy(true); setErr(null);
@@ -118,6 +129,7 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
         </p>
         <div className="row">
           <button type="button" className="primary" disabled={busy || end <= inFrame || total === 0} onClick={() => void add()} data-testid="source-add">{t('source.add')}</button>
+          <button type="button" className="ghost" disabled={busy || end <= inFrame || total === 0} onClick={() => void insert()} data-testid="source-insert">{t('source.insert')} <bdi dir="ltr">({T.toTimecode(T.frameTime(editor.frame, rate), rate)})</bdi></button>
         </div>
         {err && <p className="muted danger" role="alert" data-testid="source-error">{err}</p>}
       </div>

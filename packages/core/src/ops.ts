@@ -1495,6 +1495,64 @@ defineOp({
   },
 });
 
+/** Open a gap of `len` at `at` on the given tracks: clips that start at or after `at` move later; a clip lying across `at` is split there and its later part moves. */
+function openGap(d: ProjectDocument, at: T.RationalTime, len: T.RationalTime, tracks: Track[], ctx: OpContext) {
+  const changed: string[] = [], created: string[] = [];
+  const relink = new Map<string, string>();
+  for (const track of tracks) {
+    if (track.locked) throw new OpError('track_locked', `track ${track.id} is locked, so the insert cannot keep tracks in sync`, { trackId: track.id }, 'Unlock the track, or pass trackIds without it (other tracks will then shift relative to it).');
+    const next: Clip[] = [];
+    for (const clip of track.clips) {
+      const cEnd = clipEnd(clip);
+      if (!T.lt(at, cEnd)) { next.push(clip); continue; }
+      if (!T.lt(clip.start, at)) { clip.start = T.add(clip.start, len); changed.push(clip.id); next.push(clip); continue; }
+      // the clip lies across the insert point: same rules as a cut that removes nothing
+      const right = structuredClone(clip);
+      const delta = T.sub(at, clip.start);
+      right.id = ctx.newId('clp');
+      copyOverrides(d, clip.id, right.id);
+      created.push(right.id);
+      if (right.type === 'media' && right.linkGroupId) {
+        if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk'));
+        right.linkGroupId = relink.get(right.linkGroupId)!;
+      }
+      if (right.type === 'media') { delete right.transition; delete right.fadeIn; right.sourceIn = T.add(right.sourceIn, toSourceSpan(right, delta)); }
+      if (right.type === 'caption') delete right.words;
+      shiftKeyframes(right, delta);
+      right.start = T.add(at, len);
+      right.duration = T.sub(cEnd, at);
+      clampFades(right);
+      if (clip.type === 'media') delete clip.fadeOut;
+      clip.duration = delta;
+      clampFades(clip);
+      if (clip.type === 'caption') delete clip.words;
+      changed.push(clip.id);
+      next.push(clip, right);
+    }
+    track.clips = next;
+    sortClips(track);
+  }
+  return { changed, created };
+}
+
+defineOp({
+  name: 'insert_gap',
+  version: 1,
+  description: 'Open an empty, frame-aligned stretch of time at a point on the timeline (ripple insert): everything at or after it moves later on every track, a clip lying across the point is split there, and markers at or after the point move too, so picture, sound and captions stay in sync. Follow it with add_clip at the same point, in the same transaction, to insert material. A locked track makes it fail rather than drift.',
+  args: z.object({ sequenceId: z.string().optional(), at: RT, duration: RT, trackIds: z.array(z.string()).min(1).optional() }).strict(),
+  apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
+    assertAligned(d, a.at, 'at');
+    assertAligned(d, a.duration, 'duration');
+    if (T.isNegative(a.at) || !T.lt(T.ZERO, a.duration)) throw new OpError('invalid_args', 'need at >= 0 and duration > 0');
+    const tracks = a.trackIds ? a.trackIds.map((id) => mustTrack(seq, id)) : seq.tracks;
+    const r = openGap(d, a.at, a.duration, tracks, ctx);
+    const moved: string[] = [];
+    if (!a.trackIds) for (const m of Object.values(d.markers ?? {})) if (m.sequenceId === seq.id && !T.lt(m.time, a.at)) { m.time = T.add(m.time, a.duration); moved.push(m.id); }
+    return { affectedIds: [...new Set([...r.changed, ...r.created, ...moved])], summary: `Opened ${fmt(a.duration)} at ${fmt(a.at)}`, output: { createdClipIds: r.created, movedMarkerIds: moved } };
+  },
+});
+
 defineOp({
   name: 'delete_transcript_range',
   version: 1,

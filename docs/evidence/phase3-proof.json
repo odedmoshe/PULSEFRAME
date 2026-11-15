@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:46:38.017Z",
+  "ranAt": "2026-11-15T09:51:52.062Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -190,6 +190,44 @@
         "frames": 42,
         "shownFirst": 30,
         "shownLast": 71
+      }
+    },
+    {
+      "name": "\"insert at the playhead\" from the source viewer is one transaction: the clip under the playhead is split there, the 20-frame range sits in the gap, everything later moves 20 frames, and the timeline shows the frames in order (…, before the cut, the inserted 100–119, then the continuation)",
+      "ok": true,
+      "detail": {
+        "atFrame": 171,
+        "startOf": 161,
+        "row": [
+          [
+            0,
+            10,
+            30
+          ],
+          [
+            10,
+            20,
+            100
+          ],
+          [
+            30,
+            32,
+            40
+          ]
+        ],
+        "shown": [
+          39,
+          100,
+          119,
+          40,
+          71
+        ],
+        "lenBefore": 203,
+        "lenAfter": 223,
+        "revisions": [
+          16,
+          17
+        ]
       }
     },
     {

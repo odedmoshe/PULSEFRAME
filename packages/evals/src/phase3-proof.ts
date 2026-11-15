@@ -300,6 +300,36 @@ async function main() {
     };
     const shownFirst = pic ? await stillCode(startFrame) : -1, shownLast = pic ? await stillCode(startFrame + 41) : -1;
     check('source viewer: opens from the library by keyboard, shows the file\'s own frames (0, 30, 71 by barcode), plays; I and O mark a range of 42 frames; "add" places exactly that range at the end of the timeline as one transaction (picture + linked sound) and the timeline then shows source frames 30 and 71 at its first and last frame; shortcuts typed in the viewer do not move the timeline behind it; focus returns to the button', svFirst === 0 && at30 === 30 && at71 === 71 && svRange.in === 30 && svRange.out === 72 && untouched && svPlayed && focusBack && svAfter.revision === svBefore.revision + 1 && svAdded.length === 2 && !!pic && T.frameIndexAt(pic.sourceIn, R) === 30 && T.frameIndexAt(pic.duration, R) === 42 && shownFirst === 30 && shownLast === 71, { svFirst, at30, at71, svRange, untouched, svPlayed, focusBack, revisions: [svBefore.revision, svAfter.revision], svAdded: svAdded.length, clipsBefore, sourceIn: pic && T.frameIndexAt(pic.sourceIn, R), frames: pic && T.frameIndexAt(pic.duration, R), shownFirst, shownLast });
+
+    console.log('\n# insert at the playhead');
+    const ib = await getDoc();
+    const vTrack = (d: ProjectDocument) => d.sequences.seq_main!.tracks.find((tr) => tr.clips.some((c) => c.id === pic.id))!;
+    const startOf = T.frameIndexAt(pic.start, R);
+    // put the playhead 10 frames into the clip added above, then insert source frames 100..119 there
+    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    await page.keyboard.press('Home');
+    for (let i = 0; i < Math.floor((startOf + 10) / 10); i++) await page.keyboard.press('Shift+ArrowRight');
+    for (let i = 0; i < (startOf + 10) % 10; i++) await page.keyboard.press('ArrowRight');
+    await page.waitForFunction((t) => document.querySelector('[data-testid=preview]')?.getAttribute('data-frame') === String(t), startOf + 10, { timeout: 10000 }).catch(() => {});
+    const atFrame = Number(await page.getByTestId('preview').getAttribute('data-frame'));
+    await page.getByTestId(`view-${assetId}`).click();
+    await page.getByTestId('source-viewer').waitFor();
+    await page.getByTestId('source-scrub').fill('100');
+    await srcAt(100);
+    await page.keyboard.press('i');
+    await page.getByTestId('source-scrub').fill('119');
+    await srcAt(119);
+    await page.keyboard.press('o');
+    await page.getByTestId('source-insert').click();
+    await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
+    let ia = await getDoc();
+    for (let i = 0; i < 50 && ia.revision === ib.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ia = await getDoc(); }
+    const row = vTrack(ia.project).clips.filter((c) => T.frameIndexAt(c.start, R) >= startOf).sort((a, b) => T.cmp(a.start, b.start)).map((c: any) => [T.frameIndexAt(c.start, R) - startOf, T.frameIndexAt(c.duration, R), T.frameIndexAt(c.sourceIn, R)]);
+    const k = atFrame - startOf;
+    const shown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 19), await stillCode(atFrame + 20), await stillCode(startOf + 41 + 20)];
+    const lenBefore = T.frameIndexAt(ib.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).reduce((m, c) => T.max(m, T.add(c.start, c.duration)), T.ZERO), R);
+    const lenAfter = T.frameIndexAt(ia.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).reduce((m, c) => T.max(m, T.add(c.start, c.duration)), T.ZERO), R);
+    check('"insert at the playhead" from the source viewer is one transaction: the clip under the playhead is split there, the 20-frame range sits in the gap, everything later moves 20 frames, and the timeline shows the frames in order (…, before the cut, the inserted 100–119, then the continuation)', atFrame === startOf + 10 && ia.revision === ib.revision + 1 && JSON.stringify(row) === JSON.stringify([[0, k, 30], [k, 20, 100], [k + 20, 42 - k, 30 + k]]) && JSON.stringify(shown) === JSON.stringify([30 + k - 1, 100, 119, 30 + k, 71]) && lenAfter === lenBefore + 20, { atFrame, startOf, row, shown, lenBefore, lenAfter, revisions: [ib.revision, ia.revision] });
     check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.

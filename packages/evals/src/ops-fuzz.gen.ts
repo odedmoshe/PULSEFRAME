@@ -116,6 +116,7 @@ export function createFuzz(seed: number) {
       () => ({ op: 'set_transition', args: { clipId: touchingVideo.length && rnd() < 0.85 ? pick(touchingVideo).c.id : videoId(), type: rnd() < 0.2 ? null : pick(['cross-dissolve', 'dip-to-black', 'wipe-left', 'slide-left']), frames: 1 + int(30) } }),
       () => ({ op: 'add_marker', args: { time: at(), label: pick(['', 'note', 'סמן']) } }),
       () => ({ op: 'update_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none', time: fr(), color: pick(['blue', 'green', 'yellow', 'red', 'purple'] as const) } }),
+      () => ({ op: 'insert_gap', args: { at: f(int(400)), duration: rnd() < 0.1 ? f(0) : f(1 + int(90)) } }),
       () => ({ op: 'remove_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none' } }),
       () => ({ op: 'add_variant', args: pick([{ profileId: 'vertical-9x16' }, { width: 360, height: 360, name: 'sq' }, { width: 361, height: 640 }]) }),
       () => ({ op: 'set_variant_override', args: { variantId: variants.length ? pick(variants) : 'var_none', clipId: any(), ...(rnd() < 0.5 ? { transform: rnd() < 0.15 ? null : { x: Number((rnd() - 0.5).toFixed(2)), scale: 1.3 } } : rnd() < 0.5 ? { hidden: rnd() < 0.7 } : { text: rnd() < 0.2 ? null : 'קצר short', textStyle: rnd() < 0.2 ? null : { sizeFrac: 0.1 } }) } }),
