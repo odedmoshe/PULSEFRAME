@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T18:21:02.556Z",
+  "ranAt": "2026-11-15T18:24:00.524Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -354,6 +354,35 @@
       }
     },
     {
+      "name": "slide by dragging: Ctrl + dragging the clip three frames later gives the same frames as three keyboard slides, in one transaction, with the timeline length unchanged; one undo restores it",
+      "ok": true,
+      "detail": {
+        "slidByDrag": [
+          39,
+          40,
+          42,
+          73,
+          82,
+          113
+        ],
+        "slid": [
+          39,
+          40,
+          42,
+          73,
+          82,
+          113
+        ],
+        "revisions": 1,
+        "unslidDrag": [
+          39,
+          73,
+          82,
+          110
+        ]
+      }
+    },
+    {
       "name": "\"play backwards\" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, an exported file of that stretch shows the same twelve frames in the same order, the clip is marked on the timeline, and unchecking restores 73…82",
       "ok": true,
       "detail": {
@@ -428,8 +457,8 @@
         "assetName": "ראיון.mp4",
         "focusOnRename": true,
         "revisions": [
-          41,
-          44
+          43,
+          46
         ]
       }
     },
@@ -444,8 +473,8 @@
         "emptyBefore": 1,
         "emptyCmd": "track.removeEmpty",
         "revisions": [
-          44,
-          47
+          46,
+          49
         ]
       }
     },
@@ -464,9 +493,9 @@
       "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
       "ok": true,
       "detail": {
-        "revision": 50,
-        "allRows": 50,
-        "firstRev": "50",
+        "revision": 52,
+        "allRows": 52,
+        "firstRev": "52",
         "rawNames": 0,
         "agentRows": 1,
         "agentOnly": true,
@@ -484,8 +513,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          50,
-          52
+          52,
+          54
         ]
       }
     },
@@ -503,19 +532,19 @@
             "code": 3
           },
           {
-            "frame": 6,
+            "frame": 7,
             "quality": "draft",
-            "code": 6
+            "code": 7
           },
           {
-            "frame": 9,
+            "frame": 10,
             "quality": "draft",
-            "code": 9
+            "code": 10
           },
           {
-            "frame": 12,
+            "frame": 13,
             "quality": "draft",
-            "code": 12
+            "code": 13
           },
           {
             "frame": 16,
@@ -523,9 +552,9 @@
             "code": 16
           },
           {
-            "frame": 18,
+            "frame": 19,
             "quality": "draft",
-            "code": 18
+            "code": 19
           }
         ],
         "mismatches": []

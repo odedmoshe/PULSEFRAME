@@ -34,12 +34,18 @@ interface Session {
    * dragged edge, so the cut moves and nothing else does. `limit` is the furthest the cut may go (the neighbour keeps one frame).
    */
   roll: { neighbourId: string; limit: T.RationalTime } | null;
+  /**
+   * Slide: Ctrl/Cmd held when a drag starts on the body of a single clip that has a clip touching it on each side. The clip
+   * keeps its length and content; the neighbour ahead is trimmed back and the one behind is extended. `min`/`max` bound its start.
+   */
+  slide: { prevId: string; nextId: string; min: T.RationalTime; max: T.RationalTime } | null;
   /** Final frame-aligned result of the latest pointer position. */
   result: { start: T.RationalTime; end: T.RationalTime } | null;
 }
 
 /**
- * Drag to move / trim timeline clips; Ctrl/Cmd + drag on an edge that touches the next clip rolls the cut between them.
+ * Drag to move / trim timeline clips; Ctrl/Cmd + drag on an edge that touches the next clip rolls the cut between them;
+ * Ctrl/Cmd + drag on the body of a clip that has a clip touching it on each side slides it between them.
  * Nothing is committed while dragging; one transaction on pointer up.
  * Spread `containerProps` on the scroll container. Leaves click handling (selection) to the clip buttons.
  */
@@ -69,11 +75,18 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
       const self = { op: 'trim_clip', args: { clipId: s.clipId, edge: 'end', to: r.end } }, nb = { op: 'trim_clip', args: { clipId: s.roll.neighbourId, edge: 'start', to: r.end } };
       return T.lt(origEnd, r.end) ? [nb, self] : [self, nb];
     })();
-    const ops = rollOps ?? (s.mode === 'move'
+    const slideOps = (() => {
+      if (!s.slide || s.mode !== 'move') return null;
+      const trimPrev = { op: 'trim_clip', args: { clipId: s.slide.prevId, edge: 'end', to: r.start } };
+      const trimNext = { op: 'trim_clip', args: { clipId: s.slide.nextId, edge: 'start', to: r.end } };
+      const move = { op: 'move_clip', args: { clipId: s.clipId, start: r.start } };
+      return T.lt(s.start, r.start) ? [trimNext, move, trimPrev] : [trimPrev, move, trimNext]; // make room first, fill the gap last
+    })();
+    const ops = rollOps ?? slideOps ?? (s.mode === 'move'
       ? (s.companions.length ? [{ op: 'move_clips', args: { clipIds: [s.clipId, ...s.companions], delta: T.sub(r.start, s.start) } }] : [{ op: 'move_clip', args: { clipId: s.clipId, start: r.start } }])
       : [{ op: 'trim_clip', args: { clipId: s.clipId, edge: s.mode === 'trim-start' ? 'start' : 'end', to: s.mode === 'trim-start' ? r.start : r.end } }]);
     // The ghost stays until the server answers; a rejection (null) just removes it, the store reports the error.
-    void editor.commit(ops as never, rollOps ? 'Roll cut' : s.mode === 'move' ? 'Move clip' : 'Trim clip').finally(() => setGhost(null));
+    void editor.commit(ops as never, rollOps ? 'Roll cut' : slideOps ? 'Slide clip' : s.mode === 'move' ? 'Move clip' : 'Trim clip').finally(() => setGhost(null));
   }, [editor]);
 
   useEffect(() => {
@@ -97,7 +110,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     container.current = e.currentTarget;
     session.current = {
       pointerId: e.pointerId, clipId: id, mode, startX: e.clientX, captured: false, start: found.clip.start, duration: found.clip.duration,
-      trackId: found.tr.id, trackKind: found.tr.kind, result: null, companions: [], groupMin: found.clip.start, roll: null,
+      trackId: found.tr.id, trackKind: found.tr.kind, result: null, companions: [], groupMin: found.clip.start, roll: null, slide: null,
     };
     if (mode !== 'move' && (e.ctrlKey || e.metaKey)) {
       const frame = T.frameTime(1, editor.rate), endOf = clipEnd(found.clip);
@@ -106,6 +119,11 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     }
     // Dragging one clip of a multi-selection moves the whole selection (move only; trimming stays per clip).
     const selection = editor.getState().selection;
+    if (mode === 'move' && (e.ctrlKey || e.metaKey) && !(selection.length > 1 && selection.includes(id))) {
+      const frame = T.frameTime(1, editor.rate), endOf = clipEnd(found.clip);
+      const prev = found.tr.clips.find((c) => c.id !== id && T.eq(clipEnd(c), found.clip.start)), next = found.tr.clips.find((c) => c.id !== id && T.eq(c.start, endOf));
+      if (prev && next) session.current.slide = { prevId: prev.id, nextId: next.id, min: T.add(prev.start, frame), max: T.sub(T.sub(clipEnd(next), frame), found.clip.duration) };
+    }
     if (mode === 'move' && selection.length > 1 && selection.includes(id)) {
       const all = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => (tr.locked ? [] : tr.clips));
       const others = all.filter((c) => c.id !== id && selection.includes(c.id));
@@ -132,6 +150,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     if (!self) { end(true); return; }
     const group = new Set<string>([s.clipId, ...s.companions]);
     if (s.roll) group.add(s.roll.neighbourId); // the neighbour gives way: it is neither an obstacle nor a snap target
+    if (s.slide) { group.add(s.slide.prevId); group.add(s.slide.nextId); }
     const link = (c: Clip) => (c.type === 'media' ? c.linkGroupId : null);
     const lg = link(self);
     if (lg) for (const tr of tracks) for (const c of tr.clips) if (link(c) === lg) group.add(c.id);
@@ -156,7 +175,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
       const cut = s.mode === 'trim-start' ? s.start : T.add(s.start, s.duration);
       for (let i = cands.length - 1; i >= 0; i--) if (T.eq(cands[i]!, cut)) { cands.splice(i, 1); kinds.splice(i, 1); }
     }
-    const snapping = !e.altKey;
+    const snapping = !e.altKey && !s.slide; // a slide moves between its two neighbours by whole frames; there is nothing useful to snap to
     let snappedTo: SnapKind | null = null;
     const trySnap = (time: T.RationalTime) => {
       if (!snapping) return null;
@@ -180,6 +199,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
       // The earliest moving clip stops at 0, so the group keeps its shape.
       const floor = T.sub(s.start, s.groupMin);
       if (T.lt(start, floor)) start = floor;
+      if (s.slide) { if (T.lt(start, s.slide.min)) start = s.slide.min; if (T.lt(s.slide.max, start)) start = s.slide.max; }
       endT = T.add(start, s.duration);
     } else if (s.mode === 'trim-start') {
       const raw = T.add(s.start, delta);

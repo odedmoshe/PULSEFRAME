@@ -413,6 +413,26 @@ async function main() {
     const unslid = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
     check('slide by keyboard: three presses move the selected clip three frames later between its neighbours (same ten pictures; the clip before it plays three frames more, the clip after it starts three frames later), the timeline keeps its length, and sliding back restores it', JSON.stringify(slid) === JSON.stringify([30 + k - 1, 30 + k, 30 + k + 2, 73, 82, 113]) && lenSlid === endOf(sdB.project) && JSON.stringify(unslid) === JSON.stringify([30 + k - 1, 73, 82, 110]) && sdA.revision === sdB.revision + 6, { slid, unslid, lengths: [endOf(sdB.project), lenSlid], revisions: [sdB.revision, sdA.revision] });
 
+    console.log('\n# slide by dragging');
+    const sgB = await getDoc();
+    const sgBox = (await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).boundingBox())!;
+    const sgPx = sgBox.width / T.frameIndexAt(slipClip.duration, R);
+    await page.keyboard.down('Control');
+    await page.mouse.move(sgBox.x + sgBox.width / 2, sgBox.y + sgBox.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 3; i++) await page.mouse.move(sgBox.x + sgBox.width / 2 + i * sgPx, sgBox.y + sgBox.height / 2, { steps: 2 });
+    await page.mouse.up();
+    await page.keyboard.up('Control');
+    let sgA = await getDoc();
+    for (let i = 0; i < 50 && sgA.revision === sgB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); sgA = await getDoc(); }
+    const slidByDrag = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 2), await stillCode(atFrame + 3), await stillCode(atFrame + 12), await stillCode(atFrame + 13)];
+    const lenSg = endOf(sgA.project), revSg = sgA.revision;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && sgA.revision === revSg; i++) { await new Promise((r) => setTimeout(r, 100)); sgA = await getDoc(); }
+    const unslidDrag = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    check('slide by dragging: Ctrl + dragging the clip three frames later gives the same frames as three keyboard slides, in one transaction, with the timeline length unchanged; one undo restores it', JSON.stringify(slidByDrag) === JSON.stringify(slid) && revSg === sgB.revision + 1 && lenSg === endOf(sgB.project) && JSON.stringify(unslidDrag) === JSON.stringify(unslid), { slidByDrag, slid, revisions: revSg - sgB.revision, unslidDrag });
+
     console.log('\n# reverse');
     const rb0 = await getDoc();
     await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click(); // the clip showing source 73–82 at atFrame..atFrame+9
