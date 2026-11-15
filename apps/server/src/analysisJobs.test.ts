@@ -71,4 +71,31 @@ describe('analysis as a durable job', () => {
       expect(refused.error.code).toBe('would_discard_edits');
     } finally { await s.close(); }
   }, 120_000);
+
+  it('a library file removed while its analysis job is waiting: the job fails with a typed error, nothing is attached, the server keeps serving', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-anjob2-'));
+    dirs.push(dir);
+    const s = await startServer({ port: 8973, dataDir: dir });
+    const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
+    const post = async (p: string, body: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() as any }; };
+    const get = async (p: string) => (await fetch(`${s.url}/api/v1${p}`, { headers: h })).json() as Promise<any>;
+    try {
+      const pid = (await post('/projects', { name: 'gone' })).body.project.id;
+      const assetId = (await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'clicks.wav' }, body: new Uint8Array(clicks()) })).json() as any).assetId as string;
+      const started = await post(`/projects/${pid}/assets/${assetId}/analyze`, { kind: 'beats', background: true });
+      expect(started.status).toBe(202);
+      const removed = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'remove_asset', args: { assetId } }] });
+      expect(removed.status).toBe(200);
+      let job: any;
+      for (let i = 0; i < 300; i++) { job = await get(`/jobs/${started.body.jobId}`); if (['succeeded', 'failed', 'canceled'].includes(job.status)) break; await sleep(100); }
+      expect(job.status).toBe('failed');
+      expect(typeof job.error?.code).toBe('string');
+      const after = await get(`/projects/${pid}`);
+      expect(after.project.assets[assetId]).toBeUndefined();
+      expect(after.project.analyses?.[assetId]).toBeUndefined();
+      expect(after.revision).toBe(removed.body.revision); // the job changed nothing
+      expect((await post('/projects', { name: 'still serving' })).status).toBe(201);
+    } finally { await s.close(); }
+  }, 60_000);
 });
+
