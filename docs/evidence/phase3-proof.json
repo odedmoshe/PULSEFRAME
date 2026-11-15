@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T12:55:58.214Z",
+  "ranAt": "2026-11-15T12:58:55.771Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -283,6 +283,48 @@
           22,
           24
         ]
+      }
+    },
+    {
+      "name": "during playback the preview draws, for every frame it reports, the same source frame as the server still of that timeline frame (read by barcode from the moving canvas)",
+      "ok": true,
+      "detail": {
+        "sampled": 40,
+        "movingFramesCompared": 38,
+        "differentSourceFrames": 29,
+        "firstFrames": [
+          {
+            "frame": 3,
+            "quality": "draft",
+            "code": 3
+          },
+          {
+            "frame": 6,
+            "quality": "draft",
+            "code": 6
+          },
+          {
+            "frame": 9,
+            "quality": "draft",
+            "code": 9
+          },
+          {
+            "frame": 12,
+            "quality": "draft",
+            "code": 12
+          },
+          {
+            "frame": 16,
+            "quality": "draft",
+            "code": 16
+          },
+          {
+            "frame": 18,
+            "quality": "draft",
+            "code": 18
+          }
+        ],
+        "mismatches": []
       }
     },
     {

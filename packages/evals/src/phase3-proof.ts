@@ -380,6 +380,30 @@ async function main() {
     for (let i = 0; i < 50 && endOf(ga.project) !== wantEnd; i++) { await new Promise((r) => setTimeout(r, 100)); ga = await getDoc(); }
     check('"close empty gaps" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost', gapCmd === 'edit.closeGaps' && endOf(ga.project) === wantEnd && covered(ga.project) === wantEnd && ga.revision === gb.revision + 2, { gapCmd, endBefore: gEnd, coveredBefore: covered(gb.project), endAfter: endOf(ga.project), coveredAfter: covered(ga.project), revisions: [gb.revision, ga.revision] });
 
+    console.log('\n# frames during playback');
+    // While playing, read the barcode straight off the preview canvas together with the frame number the player says it drew,
+    // then compare with the server still of that same frame. (Paused frames are compared elsewhere; this is the moving picture.)
+    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Space');
+    const samples: { frame: number; code: number; quality: string }[] = [];
+    for (let i = 0; i < 40; i++) {
+      const smp = await page.evaluate(() => {
+        const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement;
+        const ph = (cv.width * 360) / 640, py = (cv.height - ph) / 2;
+        const row = cv.getContext('2d')!.getImageData(0, Math.round(py + ph / 12), cv.width, 1).data;
+        return { frame: Number(cv.dataset.frame), quality: cv.dataset.quality ?? '', w: cv.width, data: Array.from(row.filter((_, k) => k % 4 !== 3)) };
+      });
+      samples.push({ frame: smp.frame, quality: smp.quality, code: readBarcode(Uint8Array.from(smp.data), smp.w, 3, { x: 0, y: 0, w: smp.w, h: 0 }) });
+      await new Promise((r) => setTimeout(r, 90));
+    }
+    await page.keyboard.press('Space');
+    const moving = samples.filter((x) => x.quality === 'draft');
+    const distinct = [...new Map(moving.map((x) => [x.frame, x])).values()];
+    const mismatches: unknown[] = [];
+    for (const x of distinct) { const want = await stillCode(x.frame); if (want !== x.code) mismatches.push({ frame: x.frame, playback: x.code, still: want }); }
+    check('during playback the preview draws, for every frame it reports, the same source frame as the server still of that timeline frame (read by barcode from the moving canvas)', distinct.length >= 15 && mismatches.length === 0 && new Set(distinct.map((x) => x.code)).size >= 10, { sampled: samples.length, movingFramesCompared: distinct.length, differentSourceFrames: new Set(distinct.map((x) => x.code)).size, firstFrames: distinct.slice(0, 6), mismatches: mismatches.slice(0, 5) });
+
     console.log('\n# workspaces');
     const wb = await getDoc();
     const tabsShown = async () => page.locator('[role=tab]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid!.replace('inspector-tab-', '')));
