@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T16:23:17.252Z",
+  "ranAt": "2026-11-15T16:26:23.204Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -11,35 +11,35 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 0.917,
+        "wall": 0.921,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 1.249,
+        "wall": 1.375,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.246
+        "wall": 0.234
       },
       "png": {
-        "wall": 0.318
+        "wall": 0.326
       }
     },
     "cancel": {
-      "stageAtCancel": "rendering 9/600",
-      "msToCanceled": 163
+      "stageAtCancel": "rendering 6/600",
+      "msToCanceled": 166
     },
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 41.46,
-      "realtimeFactor": 0.482392667631452,
+      "wallSeconds": 42.488,
+      "realtimeFactor": 0.47072114479382415,
       "renderStageMs": {
-        "draw": 6848,
-        "readback": 3612,
-        "upload": 29258
+        "draw": 6752,
+        "readback": 3662,
+        "upload": 30287
       },
       "bytes": 747124,
       "estimateBytes": 22252800
@@ -167,8 +167,8 @@
       "name": "a running export is canceled promptly: encoder stopped, no partial file published, scratch removed",
       "ok": true,
       "detail": {
-        "stageAtCancel": "rendering 9/600",
-        "msToCanceled": 163
+        "stageAtCancel": "rendering 6/600",
+        "msToCanceled": 166
       }
     },
     {
@@ -185,12 +185,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 41.46,
-        "realtimeFactor": 0.482392667631452,
+        "wallSeconds": 42.488,
+        "realtimeFactor": 0.47072114479382415,
         "renderStageMs": {
-          "draw": 6848,
-          "readback": 3612,
-          "upload": 29258
+          "draw": 6752,
+          "readback": 3662,
+          "upload": 30287
         },
         "bytes": 747124,
         "estimateBytes": 22252800
