@@ -59,7 +59,7 @@ export const AssetSchema = z
       .object({
         originalContentHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
         originalByteSize: z.number().int().nonnegative(),
-        reasons: z.array(z.enum(['variable-frame-rate', 'rotation', 'codec', 'pixel-aspect', 'still-format'])).min(1),
+        reasons: z.array(z.enum(['variable-frame-rate', 'rotation', 'codec', 'pixel-aspect', 'still-format', 'hdr'])).min(1),
         original: z.object({ codec: z.string(), width: z.number().int(), height: z.number().int(), avgFrameRate: z.string(), rFrameRate: z.string(), rotation: z.number(), frameCount: z.number().int().nullable(), durationSeconds: z.number() }).strict(),
         /** How source frames map to conformed frames. */
         frameMapping: z.enum(['identity', 'cfr-nearest-timestamp']),

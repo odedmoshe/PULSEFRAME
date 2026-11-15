@@ -7,7 +7,7 @@ import type { Asset } from './schema.ts';
 import { startOffsetFrames } from './speed.ts';
 
 export type AssetNotice =
-  | { code: 'converted'; reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect' | 'still-format')[] }
+  | { code: 'converted'; reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect' | 'still-format' | 'hdr')[] }
   | { code: 'picture-starts-late'; frames: number }
   | { code: 'sound-offset'; seconds: number }
   | { code: 'colour-untagged'; readAs: 'auto' | 'bt601' };

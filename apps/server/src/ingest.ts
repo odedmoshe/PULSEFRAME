@@ -64,8 +64,11 @@ const ALPHA_PIX = /^(rgba|bgra|argb|abgr|ya\d|yuva|gbrap|pal8|rgba64|ya16)/;
 export type MediaMeta = Pick<Asset, 'kind' | 'container' | 'mimeType' | 'duration' | 'video' | 'audio' | 'image' | 'timeOrigin'>;
 /** Video codecs the editor decodes directly (WebCodecs, measured in docs/CAPABILITIES.md). Anything else is conformed. */
 const EDITABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1']);
+/** Transfer functions of high-dynamic-range video: PQ (HDR10, Dolby Vision base layers) and HLG. */
+const HDR_TRANSFERS = new Set(['smpte2084', 'arib-std-b67']);
+const HDR_TO_SDR = 'zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:param=0.6:desat=0,zscale=t=bt709:m=bt709:r=tv';
 export class NeedsConform extends Error {
-  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect' | 'still-format')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }) { super('needs conform'); }
+  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect' | 'still-format' | 'hdr')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }) { super('needs conform'); }
 }
 const STANDARD_RATES = [[24000, 1001], [24, 1], [25, 1], [30000, 1001], [30, 1], [50, 1], [60000, 1001], [60, 1]] as const;
 /** Probe a local file and describe it as asset metadata. Used for uploads and for provider outputs alike. */
@@ -123,6 +126,8 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
     // Non-square pixels (anamorphic DV/HDV/broadcast material): the stored width is not the shown width. The conformed copy has square pixels.
     const [sarN, sarD] = String(v.sample_aspect_ratio ?? '1:1').split(':').map(Number);
     if (sarN! > 0 && sarD! > 0 && Math.abs(sarN! / sarD! - 1) > 0.005) reasons.push('pixel-aspect');
+    // High dynamic range (PQ or HLG): the editor works in standard range (BT.709, 8 bits), so the copy is tone-mapped. Read as it is, such a picture looks grey and washed out.
+    if (HDR_TRANSFERS.has(String(v.color_transfer))) reasons.push('hdr');
     if (reasons.length) {
       // Constant target rate: the standard rate nearest the average rate (a documented choice, not a guess per frame).
       const avg = rate.num / rate.den;
@@ -208,7 +213,9 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
           // without it the copy would merely be labelled BT.709 and untagged / standard-definition sources would shift in colour.
           // Constant rate by the fps filter: each source frame goes to the nearest slot and a gap is filled by HOLDING THE PREVIOUS frame,
           // as players do. (The encoder-side `-fps_mode cfr -r` filled a gap with the frame that follows it, which showed a picture one frame early.)
-          '-vf', `fps=${e.targetRate.num}/${e.targetRate.den},scale=trunc(iw*sar/2)*2:trunc(ih/2)*2:out_color_matrix=bt709:out_range=tv,setsar=1,format=yuv420p`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-bf', '2',
+          // High dynamic range first: to linear light with HDR reference white (203 nits, BT.2408) as standard-range white, into BT.709 primaries,
+          // highlights above that rolled off (mobius), then the BT.709 transfer. Everything at or below reference white keeps its level.
+          '-vf', `${e.reasons.includes('hdr') ? HDR_TO_SDR + ',' : ''}fps=${e.targetRate.num}/${e.targetRate.den},scale=trunc(iw*sar/2)*2:trunc(ih/2)*2:out_color_matrix=bt709:out_range=tv,setsar=1,format=yuv420p`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-bf', '2',
           '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out], { timeout: 30 * 60_000, maxBuffer: 8 << 20 });
         const conformed = await describeMedia(out);
         const cHash = createHash('sha256');
@@ -219,7 +226,7 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
         store.putBlob(contentHash, out, cSize, conformed.mimeType);
         return {
           ...conformed, name: assetName, contentHash, byteSize: cSize, provenance,
-          conform: { originalContentHash: originalHash, originalByteSize: size, reasons: e.reasons, original: e.original, frameMapping: e.reasons.includes('variable-frame-rate') ? 'cfr-nearest-timestamp' : 'identity', method: `ffmpeg libx264 crf 15, -fps_mode cfr -r ${e.targetRate.num}/${e.targetRate.den}, display rotation applied` },
+          conform: { originalContentHash: originalHash, originalByteSize: size, reasons: e.reasons, original: e.original, frameMapping: e.reasons.includes('variable-frame-rate') ? 'cfr-nearest-timestamp' : 'identity', method: `ffmpeg libx264 crf 15, constant rate ${e.targetRate.num}/${e.targetRate.den} (fps filter), display rotation applied${e.reasons.includes('hdr') ? '; high dynamic range tone-mapped to standard range (reference white 203 nits, mobius roll-off of highlights, BT.709)' : ''}` },
         };
       } catch (err) {
         if (err instanceof ApiError || err instanceof NeedsConform) throw new ApiError(415, 'unsupported_media', 'the file needed conforming and the conformed result is still not editable', { reasons: e.reasons });

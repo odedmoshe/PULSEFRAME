@@ -162,6 +162,25 @@ describe('conform route (SPEC §7)', () => {
     for (const o of [5, 6, 7, 8]) { const f2 = withTag(o); expect(jpegOrientation(f2)).toBe(o); expect((await upload(f2)).image).toMatchObject({ width: 360, height: 640 }); }
     expect(jpegOrientation(path.join(dir, 'base.mp4'))).toBe(1); // not a JPEG
   }, 120_000);
+  it('high dynamic range (PQ and HLG, 10-bit HEVC) is tone-mapped to standard range: colour bars come back at their standard levels instead of grey and washed out', async () => {
+    const pixelsOf = (file: string) => { const raw = execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-i', file, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 28 }); return (x: number) => [...raw.subarray((100 * 640 + x) * 3, (100 * 640 + x) * 3 + 3)]; };
+    for (const [name, transfer] of [['pq', 'smpte2084'], ['hlg', 'arib-std-b67']] as const) {
+      const hdr = path.join(dir, `hdr-${name}.mp4`);
+      // standard colour bars placed at HDR reference white (203 nits) in BT.2020, as a camera or phone would record them
+      ff(['-f', 'lavfi', '-i', 'smptebars=s=640x360:r=30:d=1', '-vf', `zscale=tin=bt709:pin=bt709:min=bt709:rin=tv:t=${transfer}:p=bt2020:m=bt2020nc:r=tv:npl=203,format=yuv420p10le`, '-c:v', 'libx265', '-x265-params', 'log-level=error', '-color_primaries', 'bt2020', '-color_trc', transfer, '-colorspace', 'bt2020nc', '-pix_fmt', 'yuv420p10le', '-tag:v', 'hvc1', hdr]);
+      const a = await upload(hdr);
+      expect(a.conform?.reasons, name).toContain('hdr');
+      expect(a.conform?.method).toMatch(/tone-mapped/);
+      expect(a.video).toMatchObject({ codec: 'h264', width: 640, height: 360 });
+      const at = pixelsOf(store.blobPath(a.contentHash));
+      const grey = at(45), red = at(503), blue = at(594), green = at(320);
+      // the 75 % grey bar is 190 in standard range; read without tone mapping it comes out near 128
+      for (const c of grey) expect(Math.abs(c - 190), `${name} grey ${grey}`).toBeLessThanOrEqual(name === 'pq' ? 8 : 25);
+      expect(red[0]! > 170 && red[1]! < 45 && red[2]! < 30, `${name} red ${red}`).toBe(true);
+      expect(blue[2]! > 170 && blue[0]! < 30 && blue[1]! < 40, `${name} blue ${blue}`).toBe(true);
+      expect(green[1]! > 140 && green[0]! < 45 && green[2]! < 30, `${name} green ${green}`).toBe(true);
+    }
+  }, 120_000);
   it('non-media bytes are still rejected with a typed error', async () => {
     const junk = path.join(dir, 'junk.mp4');
     fs.writeFileSync(junk, Buffer.alloc(5000, 7));
