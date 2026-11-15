@@ -111,6 +111,7 @@ async function main() {
     check('goal 7a — Propose mode: an ordinary editing tool returns a proposal and commits nothing', !pr.isError && pr.data.proposed === true && pr.data.committed === false && (await doc()).revision === revBefore, pr.data);
     const browser = await chromium.launch();
     const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
+    await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     const pageErrors: string[] = [];
     page.on('pageerror', (e) => pageErrors.push(String(e)));
     await page.goto(`${origin}/?project=${pid}`);

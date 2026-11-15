@@ -131,6 +131,7 @@ async function main() {
     console.log('\n# cancel and retry from the editor');
     const browser = await chromium.launch();
     const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
+    await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     await page.goto(`${s.url}/?project=${big}`);
     await page.locator('.clip').first().waitFor();
     await page.getByTestId('export').click();

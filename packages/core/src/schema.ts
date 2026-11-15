@@ -4,6 +4,7 @@
  * Transient state (selection, playhead, presence, panel layout) is NOT part of this document.
  */
 import { z } from 'zod';
+import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 
 export const SCHEMA_VERSION = 1;
 
@@ -109,7 +110,12 @@ export const KeyframeSchema = z
   .strict();
 /** Per-property keyframe lists, strictly increasing in time. A property without keys uses the static transform value. */
 export const KeyframesSchema = z.object(Object.fromEntries(ANIMATABLE.map((p) => [p, z.array(KeyframeSchema).max(2000).optional()])) as Record<Animatable, z.ZodOptional<z.ZodArray<typeof KeyframeSchema>>>).strict();
-const ClipBase = { id: Id, start: RationalTimeSchema, duration: RationalTimeSchema, transform: TransformSchema, keyframes: KeyframesSchema.optional() };
+const ClipBase = {
+  id: Id, start: RationalTimeSchema, duration: RationalTimeSchema, transform: TransformSchema, keyframes: KeyframesSchema.optional(),
+  /** Applied in order to the transformed layer, before mask, blend and opacity compositing. */
+  effects: z.array(EffectInstanceSchema).max(16).optional(),
+  blend: z.enum(BLEND_MODES).optional(),
+};
 export const MediaClipSchema = z
   .object({
     ...ClipBase,
@@ -118,6 +124,8 @@ export const MediaClipSchema = z
     sourceIn: RationalTimeSchema.describe('Source time shown at the clip start (speed is 1 in schema v1)'),
     gain: z.number().min(0).max(8).describe('Linear audio gain'),
     linkGroupId: Id.nullable(),
+    mask: MaskSchema.optional(),
+    transition: TransitionSchema.optional(),
   })
   .strict();
 export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema }).strict();

@@ -160,6 +160,7 @@ async function main() {
     // ================= Test 1 =================
     async function previewTest(label: string, scene: Awaited<ReturnType<typeof build>>, strict: boolean) {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
+      await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
       const errs: string[] = [];
       page.on('pageerror', (e) => errs.push(String(e)));
       await page.goto(`${s.url}/?project=${scene.pid}`);

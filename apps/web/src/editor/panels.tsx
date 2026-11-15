@@ -6,6 +6,7 @@ import { FONT_CATALOG } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
+import { LookPanel } from './LookPanel.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -128,20 +129,82 @@ const TRANSFORM_FIELDS: { prop: 'x' | 'y' | 'scale' | 'rotation' | 'opacity'; la
   { prop: 'opacity', label: 'transform.opacity', min: 0, max: 1, step: 0.05 },
 ];
 
+const INSPECTOR_TABS = ['clip', 'speech', 'captions', 'review', 'all'] as const;
+type InspectorTab = (typeof INSPECTOR_TABS)[number];
+const TAB_KEY = 'pf.inspector.tab.v1';
+
+function loadTab(): InspectorTab {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    if ((INSPECTOR_TABS as readonly string[]).includes(v ?? '')) return v as InspectorTab;
+  } catch { /* storage unavailable */ }
+  return 'clip';
+}
+
 export function Inspector({ keymap }: { keymap: Keymap }) {
   const { editor, state, t } = useEditorState();
   const sel = editor.selected;
+  const [tab, setTabState] = useState<InspectorTab>(loadTab);
+  const setTab = (next: InspectorTab) => {
+    setTabState(next);
+    try { localStorage.setItem(TAB_KEY, next); } catch { /* ignore */ }
+  };
+  const onTabKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const i = INSPECTOR_TABS.indexOf(tab);
+    const rtl = getComputedStyle(e.currentTarget).direction === 'rtl';
+    let n = i;
+    // Visual left/right; DOM order runs right-to-left in RTL.
+    if (e.key === 'ArrowRight') n = rtl ? i - 1 : i + 1;
+    else if (e.key === 'ArrowLeft') n = rtl ? i + 1 : i - 1;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = INSPECTOR_TABS.length - 1;
+    else return;
+    e.preventDefault();
+    n = (n + INSPECTOR_TABS.length) % INSPECTOR_TABS.length;
+    setTab(INSPECTOR_TABS[n]!);
+    document.getElementById(`inspector-tab-${INSPECTOR_TABS[n]}`)?.focus();
+  };
+  const show = (id: InspectorTab) => tab === 'all' || tab === id;
+  const open = state.proposals.length;
+  const panelProps = (id: Exclude<InspectorTab, 'all'>) => ({
+    role: 'tabpanel' as const,
+    id: `inspector-panel-${id}`,
+    'aria-labelledby': `inspector-tab-${id}`,
+    hidden: !show(id),
+    className: 'inspector-panel',
+    'data-testid': `inspector-panel-${id}`,
+  });
   return (
     <aside className="inspector" aria-label={t('inspector')}>
       <h2>{t('inspector')}</h2>
-      {!sel ? <p className="muted">{t('inspector.none')}</p> : <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
-      {sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}
-      <h2>{t('transcript')}</h2>
-      <TranscriptPanel />
-      <h2>{t('silence')}</h2>
-      <SilencePanel />
-      <h2>{t('captions')}</h2>
-      <CaptionControls editor={editor} />
+      <div className="inspector-tabs" role="tablist" aria-label={t('inspector')} onKeyDown={onTabKey}>
+        {INSPECTOR_TABS.map((id) => (
+          <button key={id} type="button" role="tab" id={`inspector-tab-${id}`} data-testid={`inspector-tab-${id}`}
+            aria-selected={tab === id} aria-controls={id === 'all' ? INSPECTOR_TABS.filter((x) => x !== 'all').map((x) => `inspector-panel-${x}`).join(' ') : `inspector-panel-${id}`}
+            tabIndex={tab === id ? 0 : -1} className={`inspector-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+            {t(`inspector.tab.${id}` as Key)}
+            {id === 'review' && open > 0 && (
+              <span className="tab-badge" role="img" aria-label={`${open} ${t('inspector.tab.review.badge')}`} data-testid="inspector-review-badge">{open}</span>
+            )}
+          </button>
+        ))}
+      </div>
+      <div {...panelProps('clip')}>
+        {!sel ? <p className="muted">{t('inspector.none')}</p> : <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
+        {sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}
+        {sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} />}
+      </div>
+      <div {...panelProps('speech')}>
+        <h2>{t('transcript')}</h2>
+        <TranscriptPanel />
+        <h2>{t('silence')}</h2>
+        <SilencePanel />
+      </div>
+      <div {...panelProps('captions')}>
+        <h2>{t('captions')}</h2>
+        <CaptionControls editor={editor} />
+      </div>
+      <div {...panelProps('review')}>
       <h2>{t('proposals')}</h2>
       {state.proposals.length === 0 ? <p className="muted">{t('proposals.none')}</p> : (
         <ul className="proposals" data-testid="proposals">
@@ -176,6 +239,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
           </li>
         ))}
       </ol>
+      </div>
     </aside>
   );
 }

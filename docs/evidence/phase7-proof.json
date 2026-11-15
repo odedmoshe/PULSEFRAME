@@ -1,0 +1,313 @@
+{
+  "ranAt": "2026-11-15T00:00:38.053Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Canvas2D look system on one synthetic fixture. No GPU compositor; shader effect families, keying, time effects and speed ramps are not built.",
+  "measurements": {
+    "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
+    "exportWithLooks": {
+      "frames": 30,
+      "wallMs": 947,
+      "minPsnrDb": 42.16,
+      "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
+    },
+    "lab": {
+      "tiles": 134,
+      "effects": 12,
+      "blends": 17,
+      "transitions": 12,
+      "masks": 5
+    }
+  },
+  "passed": 30,
+  "total": 30,
+  "checks": [
+    {
+      "name": "catalog lists exactly what is registered: 12 effects with parameter schemas and defaults, 12 transitions, 17 blend modes",
+      "ok": true,
+      "detail": {
+        "effects": [
+          "color.adjust",
+          "color.grayscale",
+          "color.sepia",
+          "color.invert",
+          "color.tint",
+          "blur.gaussian",
+          "light.vignette",
+          "light.diffusion",
+          "stylize.shadow",
+          "stylize.pixelate",
+          "stylize.grain",
+          "digital.rgb-split"
+        ]
+      }
+    },
+    {
+      "name": "color.grayscale: every pixel is neutral (R=G=B within 2)",
+      "ok": true
+    },
+    {
+      "name": "color.invert: pixel + original = 255",
+      "ok": true
+    },
+    {
+      "name": "color.adjust: brightness 0 is black; saturation 0 is neutral",
+      "ok": true
+    },
+    {
+      "name": "blur.gaussian: the steepest edge is less than half as steep, and the frame edges are not darkened (edge pixels are extended, not faded to transparent)",
+      "ok": true,
+      "detail": {
+        "sharpBase": 134,
+        "sharpBlur": 5,
+        "leftEdge": [
+          101,
+          101
+        ]
+      }
+    },
+    {
+      "name": "stylize.pixelate: pixels inside one 36 px block are identical; neighbouring blocks can differ",
+      "ok": true
+    },
+    {
+      "name": "color.tint (multiply, red, full): green and blue are removed, red is kept",
+      "ok": true,
+      "detail": {
+        "r": [
+          "36.3",
+          "36.3"
+        ]
+      }
+    },
+    {
+      "name": "light.vignette: corners are much darker, the centre is untouched",
+      "ok": true,
+      "detail": {
+        "corner": [
+          102,
+          2
+        ]
+      }
+    },
+    {
+      "name": "stylize.grain: changes the picture, keeps average brightness, is identical when the same frame is rendered again, and differs on the next frame",
+      "ok": true,
+      "detail": {
+        "meanBase": "93.71",
+        "meanGrain": "93.43"
+      }
+    },
+    {
+      "name": "digital.rgb-split: red and blue separate at edges (many more pixels with a large red-blue gap); green stays in place",
+      "ok": true,
+      "detail": {
+        "fringeBase": 0,
+        "fringeSplit": 658
+      }
+    },
+    {
+      "name": "light.diffusion: never darker than the original, brighter overall",
+      "ok": true,
+      "detail": {
+        "meanBase": "93.7",
+        "meanGlow": "133.7"
+      }
+    },
+    {
+      "name": "bypass and remove both give back the exact original frame",
+      "ok": true
+    },
+    {
+      "name": "effect order matters and is honoured: tint→grayscale is neutral, grayscale→tint is coloured; the export manifest lists both effects with versions",
+      "ok": true,
+      "detail": [
+        {
+          "type": "color.tint",
+          "version": 1,
+          "clips": 1
+        },
+        {
+          "type": "color.grayscale",
+          "version": 1,
+          "clips": 1
+        }
+      ]
+    },
+    {
+      "name": "stylize.shadow on a title: black pixels appear below the letters; the letters themselves stay",
+      "ok": true,
+      "detail": {
+        "before": 0,
+        "after": 1983
+      }
+    },
+    {
+      "name": "difference of a picture with itself is black; add doubles (clamped); multiply squares; screen is the inverse of multiply — all within 2 levels",
+      "ok": true,
+      "detail": {
+        "difference": 0,
+        "add": {
+          "mean": 0,
+          "max": 0,
+          "samples": 172800
+        },
+        "multiply": {
+          "mean": 0.321,
+          "max": 0.9254901960784312,
+          "samples": 172800
+        },
+        "screen": {
+          "mean": 0.186,
+          "max": 0.4745098039215634,
+          "samples": 172800
+        }
+      }
+    },
+    {
+      "name": "every blend mode renders without error",
+      "ok": true,
+      "detail": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)"
+    },
+    {
+      "name": "ellipse mask: inside is the picture, outside is background; invert swaps them; feather makes a soft edge; the mask moves with the clip",
+      "ok": true,
+      "detail": {
+        "softEdgePixels": [
+          2,
+          114
+        ]
+      }
+    },
+    {
+      "name": "removing the mask restores the exact original frame",
+      "ok": true
+    },
+    {
+      "name": "dissolve: frame 64 is exactly (1-p)·A + p·B of the two source frames; the frames just outside the transition are untouched",
+      "ok": true,
+      "detail": {
+        "p": 0.3757,
+        "mean": 0.171,
+        "max": 0.9203606311044439,
+        "samples": 172800
+      }
+    },
+    {
+      "name": "random access: frame 64 rendered alone, and again after rendering other frames, is byte-identical",
+      "ok": true
+    },
+    {
+      "name": "wipe-left: right of the moving edge is B, left of it is still A",
+      "ok": true,
+      "detail": {
+        "edgeX": 400,
+        "mean": 0,
+        "max": 0,
+        "samples": 171180
+      }
+    },
+    {
+      "name": "push-left: A slides out to the left while B slides in from the right (compared below the barcode strip; sub-pixel offsets allow small differences)",
+      "ok": true,
+      "detail": {
+        "mean": 0,
+        "max": 5,
+        "samples": 137460
+      }
+    },
+    {
+      "name": "dip-black: before the midpoint the outgoing picture fades toward black by exactly 2p",
+      "ok": true,
+      "detail": {
+        "mean": 0.221,
+        "max": 0.735537190082646,
+        "samples": 172800
+      }
+    },
+    {
+      "name": "zoom: differs from both sides and from a plain dissolve",
+      "ok": true
+    },
+    {
+      "name": "all 12 transitions render a mid-frame that differs from both sides",
+      "ok": true,
+      "detail": [
+        "dissolve:ok",
+        "dip-black:ok",
+        "dip-white:ok",
+        "wipe-left:ok",
+        "wipe-right:ok",
+        "wipe-up:ok",
+        "wipe-down:ok",
+        "push-left:ok",
+        "push-right:ok",
+        "push-up:ok",
+        "push-down:ok",
+        "zoom:ok"
+      ]
+    },
+    {
+      "name": "no unused source after the previous clip: the transition is refused with the usable length, not faked with a freeze",
+      "ok": true,
+      "detail": "the previous clip has only 0 unused source frames after its end; the transition needs 10"
+    },
+    {
+      "name": "export of a range with a dissolve and two effects: 30 frames, and 9 checked frames match the stills of the same frames (PSNR ≥ 32 dB after H.264)",
+      "ok": true,
+      "detail": {
+        "frames": 30,
+        "wallMs": 947,
+        "minPsnrDb": 42.16,
+        "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
+      }
+    },
+    {
+      "name": "agent discovers the catalog, adds an effect, sees it in describe_moment, and gets a clear refusal for an effect that does not exist",
+      "ok": true,
+      "detail": {
+        "refusal": "{\"error\":{\"code\":\"not_found\",\"message\":\"effect \\\"film.halation\\\" does not exist\",\"details\":{\"index\":0,\"op\":\"add_effect\",\"type\":\"film.halation\",\"available\":[\"col"
+      }
+    },
+    {
+      "name": "editor: add an effect from the catalog, change a generated parameter slider, reorder, bypass, set blend, mask and transition — each lands in the document",
+      "ok": true,
+      "detail": {
+        "addedFx": true,
+        "changed": true,
+        "reordered": true,
+        "bypass": true,
+        "rest": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip, which is meant to be a flat colour), default and extreme variants differ (where the default is not already the maximum), no page errors",
+      "ok": true,
+      "detail": {
+        "tiles": 134,
+        "effects": 12,
+        "blends": 17,
+        "transitions": 12,
+        "masks": 5,
+        "sameVariants": [
+          "color.grayscale",
+          "color.sepia",
+          "color.invert"
+        ],
+        "aspects": [
+          "16:9",
+          "9:16"
+        ],
+        "bodyErrors": null,
+        "flat": [],
+        "labErrors": []
+      }
+    }
+  ]
+}

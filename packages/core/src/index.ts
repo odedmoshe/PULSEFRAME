@@ -7,3 +7,4 @@ export * from './animation.ts';
 export * from './subtitles.ts';
 export * from './cleanup.ts';
 export * from './fonts.ts';
+export * from './effects.ts';

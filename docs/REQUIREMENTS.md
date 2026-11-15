@@ -106,8 +106,8 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-08.2 | 8 | WebCodecs decode (Mediabunny); keyframe/B-frame/PTS-correct seek; reverse via GOP cache | 2 | R-08.1 | Preview | — | — | partial | P0: exact frame 60; "preview after reload decodes the proxy…" (range reads, 12 random seeks); "decoder count stays within its budget". `docs/evidence/seek-conformance.json` (`packages/evals/src/seek-conformance.ts`): 7 fixtures x 1,000 seeded random seeks plus sequential control, 0 mismatches, all fixtures pass (one seed, one run). HEVC not directly decodable (conformed); VFR only via conform; no reverse/GOP cache; no nightly runs |
 | R-08.3 | 8 | WebGPU preferred, WebGL2 fallback, pooled targets, device-loss recovery, linear-light intermediates | 7 | R-08.1 | — | capability probe | — | not started | Canvas2D only |
 | R-08.4 | 8 | SDR Rec.709 with explicit transfer/range metadata; documented HDR-to-SDR tone map | 2 | R-07.2 | — | — | Server MP4 | partial | P0: BT.709 tagged export; no HDR tone map |
-| R-08.5 | 8 | Deterministic seeded noise; temporal effects window; seek equals sequential evaluation | 7 | R-13.1 | — | — | — | not started | |
-| R-08.6 | 8 | Effect contract: id/version, params, budgets, fallback, cache key; unsupported effect is a blocker | 7 | R-12.1 | Inspector | — | — | not started | |
+| R-08.5 | 8 | Deterministic seeded noise; temporal effects window; seek equals sequential evaluation | 7 | R-13.1 | — | — | — | partial | Seeded grain is a pure function of seed + frame; random access byte-identical (`phase7-proof.json`, `look.test.ts`). No temporal effects exist yet |
+| R-08.6 | 8 | Effect contract: id/version, params, budgets, fallback, cache key; unsupported effect is a blocker | 7 | R-12.1 | Inspector | — | — | partial | Registry with id/version/params/defaults/cost; unknown effect is a validation issue and an export blocker; manifest lists versions (`effects.test.ts`, `phase7-proof.json`). No budgets, fallbacks or cache keys |
 
 ## Section 9: Export
 
@@ -144,18 +144,18 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-12.1 | 12 | Versioned catalog entries (schema, defaults, ranges, license, preview, export) generating inspectors, search, palette, API/MCP discovery | 7 | R-06.1 | Library drawers | list_catalog, GET catalog/:kind | — | not started | |
-| R-12.2 | 12 | /lab with 16:9 and 9:16 fixtures, paired preview/export frames, contact sheets, loops | 7 | R-12.1, R-08.1 | /lab | — | PNG, loop | not started | |
-| R-12.3 | 12 | Hover preview, apply, intensity, bypass, before/after, reorder, favorites, recents, user presets | 7 | R-12.1 | Inspector | effect ops | — | not started | |
+| R-12.1 | 12 | Versioned catalog entries (schema, defaults, ranges, license, preview, export) generating inspectors, search, palette, API/MCP discovery | 7 | R-06.1 | Library drawers | list_catalog, GET catalog/:kind | — | partial | Effects, transitions, blends, masks, caption presets, motions, fonts discoverable via `GET /api/v1/catalog` and `list_catalog`; effect inspectors generated from schemas. No licence/preview metadata per entry, no search |
+| R-12.2 | 12 | /lab with 16:9 and 9:16 fixtures, paired preview/export frames, contact sheets, loops | 7 | R-12.1, R-08.1 | /lab | — | PNG, loop | partial | `/lab.html`: 134 tiles, 16:9 + 9:16, default/extreme, transitions in 5 steps, drawn by the shared compositor (`phase7-proof.json`). No paired export frames, contact-sheet export or loops |
+| R-12.3 | 12 | Hover preview, apply, intensity, bypass, before/after, reorder, favorites, recents, user presets | 7 | R-12.1 | Inspector | effect ops | — | partial | Apply, parameters, bypass, reorder, remove in the editor. No hover preview, before/after, favourites, recents, user presets |
 
 ## Section 13: Effects, masks, keying, transitions
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-13.1 | 13 | Effect families (camera, color, lens, blur, time, distortion, digital) with seeded determinism | 7 | R-08.6 | Effects drawer | effect ops | Compositor | not started | |
-| R-13.2 | 13 | Masks, mattes, chroma key with spill suppression, blend set | 7 | R-08.1 | Mask editor | mask ops | Compositor | not started | |
+| R-13.1 | 13 | Effect families (camera, color, lens, blur, time, distortion, digital) with seeded determinism | 7 | R-08.6 | Effects drawer | effect ops | Compositor | partial | 12 Canvas2D effects (color, blur, light, stylize, digital), pixel-checked. Camera/lens/time/distortion families need a GPU compositor (B-1) |
+| R-13.2 | 13 | Masks, mattes, chroma key with spill suppression, blend set | 7 | R-08.1 | Mask editor | mask ops | Compositor | partial | Rect/rounded/ellipse masks with feather/invert; 17 blend modes with arithmetic checks. No polygon/text masks, mattes or chroma key |
 | R-13.3 | 13 | Subject workflows: cutout, background treatments, outline, echo, tracked blur | 9 | R-13.2, R-19.3 | Subject Stage | analysis, mask ops | Compositor | not started | |
-| R-13.4 | 13 | Transition families incl. smart transitions; AI Bridge as separate async capability | 7 | R-11.5 | Transitions drawer | transition ops, bridge job | Compositor | not started | |
+| R-13.4 | 13 | Transition families incl. smart transitions; AI Bridge as separate async capability | 7 | R-11.5 | Transitions drawer | transition ops, bridge job | Compositor | partial | 12 transitions with exact-arithmetic checks and handle validation. No smart transitions, no audio crossfade, no AI Bridge |
 
 ## Section 14: Motion, velocity, depth, layouts
 

@@ -88,6 +88,7 @@ async function main() {
   try {
     console.log('\n# editor: transcript panel and caption controls');
     const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
+    await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
@@ -271,6 +272,7 @@ async function main() {
     console.log('\n# editor: silence and animation controls, font picker');
     const pid5 = upid; // the project the editor has open
     const page2 = await (await browser.newContext({ viewport: { width: 1440, height: 2400 }, reducedMotion: 'reduce' })).newPage();
+    await page2.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     const errors2: string[] = [];
     page2.on('pageerror', (e) => errors2.push(String(e)));
     page2.on('console', (m) => m.type() === 'error' && errors2.push(m.text()));

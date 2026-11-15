@@ -6,7 +6,7 @@ export const he = {
   'revision': 'גרסה', 'export': 'ייצוא', 'export.running': 'מייצא…', 'export.done': 'הורדת הסרטון', 'export.failed': 'הייצוא נכשל',
   'media': 'מדיה', 'media.import': 'ייבוא קובץ', 'media.uploading': 'מעלה…', 'media.empty': 'אין עדיין מדיה. ייבאו קובץ וידאו או אודיו.', 'media.add': 'הוספה לציר הזמן', 'media.unsupported': 'הקובץ אינו נתמך',
   'text': 'טקסט', 'text.add': 'הוספת טקסט', 'text.default': 'טקסט חדש', 'text.content': 'תוכן', 'text.size': 'גודל', 'text.y': 'מיקום אנכי',
-  'inspector': 'מאפיינים', 'inspector.none': 'בחרו קליפ בציר הזמן', 'clip.start': 'התחלה', 'clip.duration': 'משך',
+  'inspector': 'מאפיינים', 'inspector.tab.clip': 'קליפ', 'inspector.tab.speech': 'דיבור', 'inspector.tab.captions': 'כתוביות', 'inspector.tab.review': 'סקירה', 'inspector.tab.all': 'הצג הכול', 'inspector.tab.review.badge': 'הצעות פתוחות', 'inspector.none': 'בחרו קליפ בציר הזמן', 'clip.start': 'התחלה', 'clip.duration': 'משך',
   'split': 'פיצול', 'delete': 'מחיקה', 'trim.start': 'חיתוך התחלה לסמן', 'trim.end': 'חיתוך סוף לסמן',
   'play': 'ניגון', 'pause': 'השהיה', 'frame.prev': 'פריים קודם', 'frame.next': 'פריים הבא', 'preview': 'תצוגה מקדימה',
   'timeline': 'ציר זמן', 'activity': 'פעילות', 'activity.empty': 'אין פעילות עדיין', 'actor.user': 'את/ה', 'actor.agent': 'סוכן',
@@ -43,6 +43,10 @@ export const he = {
   'silence.find': 'חיפוש שקטים', 'silence.finding': 'מחפש…', 'silence.apply': 'הסרת השקטים', 'silence.count': 'שקטים שנמצאו', 'silence.none': 'לא נמצאו שקטים', 'silence.stale': 'הפרויקט השתנה, יש לחפש שוב',
   'animate': 'אנימציית כניסה ויציאה', 'animate.in': 'כניסה', 'animate.out': 'יציאה', 'animate.frames': 'משך (פריימים)', 'animate.apply': 'החלה', 'animate.note': 'הפעולה מחליפה קיפריימים קיימים של אטימות, קנה מידה ומיקום שהאנימציה משתמשת בהם.',
   'animate.none': 'ללא', 'animate.fade': 'עמעום', 'animate.pop': 'קפיצה', 'animate.slide-up': 'החלקה מלמטה', 'animate.slide-down': 'החלקה מלמעלה', 'animate.slide-left': 'החלקה משמאל', 'animate.slide-right': 'החלקה מימין',
+  'look': 'מראה', 'look.effects': 'אפקטים', 'look.effects.none': 'אין אפקטים על הקליפ', 'look.effect.add': 'הוספת אפקט…', 'look.effect.bypass': 'פעיל', 'look.effect.up': 'הזזה למעלה', 'look.effect.down': 'הזזה למטה', 'look.effect.remove': 'הסרת אפקט', 'look.blend': 'מצב מיזוג',
+  'look.mask': 'מסכה', 'look.mask.enabled': 'מסכה פעילה', 'look.mask.shape': 'צורה', 'look.mask.rect': 'מלבן', 'look.mask.ellipse': 'אליפסה', 'look.mask.x': 'מיקום אופקי', 'look.mask.y': 'מיקום אנכי', 'look.mask.width': 'רוחב', 'look.mask.height': 'גובה', 'look.mask.radius': 'עיגול פינות', 'look.mask.feather': 'רכות קצוות', 'look.mask.invert': 'היפוך מסכה',
+  'look.transition': 'מעבר', 'look.transition.type': 'סוג המעבר', 'look.transition.none': 'ללא', 'look.transition.frames': 'משך (פריימים)', 'look.transition.note': 'המעבר מתנגן בתחילת הקליפ הזה מעל הקליפ הקודם. כדי שיעבוד, חייב להישאר חומר מקור שלא בשימוש אחרי סוף הקליפ הקודם.',
+  'look.cat.color': 'צבע', 'look.cat.blur': 'טשטוש', 'look.cat.light': 'אור', 'look.cat.stylize': 'סגנון', 'look.cat.digital': 'דיגיטלי',
   'lang.he': 'עברית', 'lang.en': 'אנגלית',
 };
 export const en: Record<keyof typeof he, string> = {
@@ -51,7 +55,7 @@ export const en: Record<keyof typeof he, string> = {
   'revision': 'Revision', 'export': 'Export', 'export.running': 'Exporting…', 'export.done': 'Download video', 'export.failed': 'Export failed',
   'media': 'Media', 'media.import': 'Import file', 'media.uploading': 'Uploading…', 'media.empty': 'No media yet. Import a video or audio file.', 'media.add': 'Add to timeline', 'media.unsupported': 'Unsupported file',
   'text': 'Text', 'text.add': 'Add text', 'text.default': 'New text', 'text.content': 'Content', 'text.size': 'Size', 'text.y': 'Vertical position',
-  'inspector': 'Inspector', 'inspector.none': 'Select a clip on the timeline', 'clip.start': 'Start', 'clip.duration': 'Duration',
+  'inspector': 'Inspector', 'inspector.tab.clip': 'Clip', 'inspector.tab.speech': 'Speech', 'inspector.tab.captions': 'Captions', 'inspector.tab.review': 'Review', 'inspector.tab.all': 'Show all', 'inspector.tab.review.badge': 'open proposals', 'inspector.none': 'Select a clip on the timeline', 'clip.start': 'Start', 'clip.duration': 'Duration',
   'split': 'Split', 'delete': 'Delete', 'trim.start': 'Trim start to playhead', 'trim.end': 'Trim end to playhead',
   'play': 'Play', 'pause': 'Pause', 'frame.prev': 'Previous frame', 'frame.next': 'Next frame', 'preview': 'Preview',
   'timeline': 'Timeline', 'activity': 'Activity', 'activity.empty': 'No activity yet', 'actor.user': 'You', 'actor.agent': 'Agent',
@@ -88,6 +92,10 @@ export const en: Record<keyof typeof he, string> = {
   'silence.find': 'Find silences', 'silence.finding': 'Searching…', 'silence.apply': 'Remove silences', 'silence.count': 'Silences found', 'silence.none': 'No silences found', 'silence.stale': 'The project changed, search again',
   'animate': 'Entrance and exit animation', 'animate.in': 'Entrance', 'animate.out': 'Exit', 'animate.frames': 'Length (frames)', 'animate.apply': 'Apply', 'animate.note': 'This replaces any existing opacity, scale and position keyframes the animation uses.',
   'animate.none': 'None', 'animate.fade': 'Fade', 'animate.pop': 'Pop', 'animate.slide-up': 'Slide up', 'animate.slide-down': 'Slide down', 'animate.slide-left': 'Slide left', 'animate.slide-right': 'Slide right',
+  'look': 'Look', 'look.effects': 'Effects', 'look.effects.none': 'No effects on this clip', 'look.effect.add': 'Add effect…', 'look.effect.bypass': 'Enabled', 'look.effect.up': 'Move up', 'look.effect.down': 'Move down', 'look.effect.remove': 'Remove effect', 'look.blend': 'Blend mode',
+  'look.mask': 'Mask', 'look.mask.enabled': 'Mask enabled', 'look.mask.shape': 'Shape', 'look.mask.rect': 'Rectangle', 'look.mask.ellipse': 'Ellipse', 'look.mask.x': 'Horizontal position', 'look.mask.y': 'Vertical position', 'look.mask.width': 'Width', 'look.mask.height': 'Height', 'look.mask.radius': 'Corner rounding', 'look.mask.feather': 'Edge softness', 'look.mask.invert': 'Invert mask',
+  'look.transition': 'Transition', 'look.transition.type': 'Transition type', 'look.transition.none': 'None', 'look.transition.frames': 'Length (frames)', 'look.transition.note': 'The transition plays at the start of this clip, over the previous clip. It needs unused source material after the previous clip\'s end.',
+  'look.cat.color': 'Color', 'look.cat.blur': 'Blur', 'look.cat.light': 'Light', 'look.cat.stylize': 'Stylize', 'look.cat.digital': 'Digital',
   'lang.he': 'Hebrew', 'lang.en': 'English',
 };
 export type Key = keyof typeof he;

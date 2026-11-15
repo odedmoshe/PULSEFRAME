@@ -6,7 +6,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type ProjectDocument } from '@pulseframe/core';
+import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type ProjectDocument } from '@pulseframe/core';
 import { captionCues } from '@pulseframe/engine';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
@@ -371,6 +371,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   (app as any).browserExport = browserExport;
 
   // ----- optional provider capabilities (Amendment A1). No route accepts a raw graph for execution. -----
+  app.get('/api/v1/catalog', (c) => { need(c, 'observe'); return c.json(catalog()); });
   app.get('/api/v1/capabilities', async (c) => { need(c, 'observe'); return c.json(await capabilities.list()); });
   app.post('/api/v1/capabilities/import', async (c) => { need(c, 'edit'); const b = await body(c, ImportBody); return c.json(capabilities.importDraft(b.graph, { id: b.id, title: b.title })); });
   app.post('/api/v1/projects/:id/capabilities/:capabilityId/runs', async (c) => {
@@ -450,3 +451,12 @@ export async function findSilences(store: Store, projectId: string, a: z.infer<t
     note: 'Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it). Quiet speech can be mistaken for silence: review before applying.',
   };
 }
+
+/** Everything creative that is registered in this build: effects, transitions, blends, masks, caption presets, clip motions, fonts. */
+export const catalog = () => ({
+  ...describeCatalog(),
+  captionPresets: [...CAPTION_PRESETS],
+  clipMotions: CLIP_MOTIONS.filter((m) => m !== 'none'),
+  fonts: FONT_CATALOG,
+  note: 'This is the complete list for this build; anything not listed here does not exist. All entries render through the same Canvas2D compositor in preview and export.',
+});

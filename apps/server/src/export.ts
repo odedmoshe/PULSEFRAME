@@ -13,7 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { findFont, FONT_CATALOG, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
+import { findEffect, findFont, FONT_CATALOG, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { ffprobe } from './ingest.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
@@ -54,6 +54,9 @@ export interface Manifest {
   output: { width: number; height: number; firstFrame: number; frames: number; frameRate: { num: number; den: number }; sampleRate: number };
   assets: { id: string; contentHash: string; byteSize: number; kind: string; clips: number }[];
   fonts: { family: string; files: { name: string; sha256: string }[] }[];
+  /** Effect and transition implementations the render depends on, with their versions. */
+  effects: { type: string; version: number; clips: number }[];
+  transitions: { type: string; clips: number }[];
   /** Labelled estimate, never a promise. */
   estimate: { bytes: number | null; basis: string };
 }
@@ -98,10 +101,13 @@ export class Exporter {
     const families = new Set<string>();
     const from = T.frameTime(first, frameRate);
     const to = T.frameTime(first + Math.max(0, frames), frameRate);
+    const fxUsed = new Map<string, number>(), trUsed = new Map<string, number>();
     for (const tr of seq.tracks)
       for (const c of tr.clips) {
         if (!T.lt(c.start, to) || !T.lt(from, T.add(c.start, c.duration))) continue; // outside the exported range
         if (c.type === 'media') used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
+        for (const fx of c.effects ?? []) if (fx.enabled) fxUsed.set(fx.type, (fxUsed.get(fx.type) ?? 0) + 1);
+        if (c.type === 'media' && c.transition) trUsed.set(c.transition.type, (trUsed.get(c.transition.type) ?? 0) + 1);
         else if (c.type === 'text') families.add(c.style.fontFamily);
         if (tr.caption) families.add(tr.caption.style.fontFamily);
       }
@@ -116,13 +122,16 @@ export class Exporter {
     const fonts = [...families].filter((f) => ENGINE.fontFamilies.includes(f)).map((family) => ({ family, files: this.fontFiles(family) }));
     if (fonts.some((f) => f.files.length === 0)) blockers.push({ code: 'renderer_unavailable', message: 'the web bundle with the render page and fonts has not been built (run `pnpm build`)', ids: [] });
     if (options.format === 'webm-vp9-opus' && doc.settings.sampleRate !== 48000) warnings.push({ code: 'resampled_audio', message: 'Opus is encoded at 48 kHz; audio will be resampled', ids: [] });
+    const effects = [...fxUsed].map(([type, clips]) => ({ type, version: findEffect(type)?.version ?? 0, clips }));
+    for (const fx of effects) if (fx.version === 0) blockers.push({ code: 'unknown_effect', message: `effect "${fx.type}" is not available in this renderer; exporting would silently drop it`, ids: [] });
+    const transitions = [...trUsed].map(([type, clips]) => ({ type, clips }));
     const seconds = (frames * frameRate.den) / frameRate.num;
     const video = options.format === 'mp4-h264-aac' || options.format === 'webm-vp9-opus';
     const estimate = video
       ? { bytes: Math.round((outWidth * outHeight * frames * BPP[options.quality]) / 8 + seconds * 24_000), basis: 'heuristic bits-per-pixel for the chosen quality; real size depends on content' }
       : options.format === 'wav' ? { bytes: Math.round(seconds * sampleRate * 4 + 44), basis: 'exact for 16-bit stereo PCM' } : { bytes: null, basis: 'not estimated for stills' };
     return {
-      manifest: { revision, engine: { ...ENGINE, schemaVersion: doc.schemaVersion }, options, output: { width: outWidth, height: outHeight, firstFrame: first, frames: Math.max(0, frames), frameRate, sampleRate }, assets, fonts, estimate },
+      manifest: { revision, engine: { ...ENGINE, schemaVersion: doc.schemaVersion }, options, output: { width: outWidth, height: outHeight, firstFrame: first, frames: Math.max(0, frames), frameRate, sampleRate }, assets, fonts, effects, transitions, estimate },
       blockers, warnings,
     };
   }

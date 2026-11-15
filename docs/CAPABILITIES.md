@@ -72,7 +72,9 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Entrance/exit animation presets as editable keyframes (`animate_clip`) | tested | `cleanup.test.ts`, `phase6-proof.json` |
 | Font catalog: 5 OFL Hebrew-capable families, pinned, licence-checked at build, load-verified | tested | `pnpm check:notices`, `phase6-proof.json` |
 | Speech recognition, forced alignment, filler detection, translation | not built | Blocked on B-7 |
-| GPU compositor, effects, transitions, masks, audio DSP, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
+| Look system: 12 effects, 17 blend modes, rect/ellipse masks (feather, invert), 12 transitions, one Canvas2D implementation for preview and export | tested | `docs/evidence/phase7-proof.json` (30 checks, pixel arithmetic), `effects.test.ts`, `look.test.ts`; `/lab.html`. One synthetic fixture; 1080p+ cost unmeasured |
+| Catalog discovery (`GET /api/v1/catalog`, MCP `list_catalog`) and generated effect inspectors | tested | `phase7-proof.json` |
+| GPU compositor, shader effect families, keying, keyframed effect parameters, speed ramps, audio DSP, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface
 

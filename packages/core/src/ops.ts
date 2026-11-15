@@ -10,6 +10,7 @@ import {
   type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Sequence, type Track, type Transcript,
 } from './schema.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
+import { BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
 import { restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
 import { sampleKeyframes, shiftKeyframes } from './animation.ts';
@@ -434,6 +435,7 @@ defineOp({
       right.duration = T.sub(clip.duration, left);
       shiftKeyframes(right, left);
       if (clip.type === 'caption') { delete clip.words; delete (right as typeof clip).words; }
+      if (right.type === 'media') delete right.transition; // the transition belongs to the original cut point
       if (right.type === 'media') { right.sourceIn = T.add(right.sourceIn, left); if (right.linkGroupId) right.linkGroupId = newLink; }
       clip.duration = left;
       track.clips.push(right);
@@ -518,6 +520,124 @@ defineOp({
     }
     clip.keyframes = keyframes;
     return { affectedIds: [clip.id], summary: `Animated clip (${enter === 'none' ? '' : `in: ${enter}`}${enter !== 'none' && exit !== 'none' ? ', ' : ''}${exit === 'none' ? '' : `out: ${exit}`})`, output: { properties: [...props] } };
+  },
+});
+
+
+// ---------- effects, blend, mask, transitions (SPEC §8, §13) ----------
+const pictureClip = (d: ProjectDocument, clipId: string) => {
+  const f = mustClip(d, clipId);
+  if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture and title clips', { clipId });
+  return f;
+};
+const parseEffect = (type: string, params: unknown) => {
+  if (!findEffect(type)) throw new OpError('not_found', `effect "${type}" does not exist`, { type, available: EFFECTS.map((e) => e.id) }, 'Call list_catalog for the available effects and their parameters.');
+  try { return effectParams(type, params); } catch (e: any) { throw new OpError('invalid_args', `invalid parameters for ${type}`, { issues: e.issues?.slice(0, 8) }, 'Call list_catalog for the parameter schema.'); }
+};
+defineOp({
+  name: 'add_effect',
+  version: 1,
+  description: 'Add an effect to a picture or title clip. Effects run in list order on the clip, before its mask, blend mode and opacity. Unspecified parameters take the effect\'s defaults. Discover effects with list_catalog.',
+  args: z.object({ clipId: z.string(), type: z.string(), params: z.record(z.string(), z.unknown()).optional(), index: z.number().int().min(0).optional() }).strict(),
+  apply(d, a, ctx) {
+    const { clip } = pictureClip(d, a.clipId);
+    const list = [...(clip.effects ?? [])];
+    if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
+    const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
+    list.splice(Math.min(a.index ?? list.length, list.length), 0, fx);
+    clip.effects = list;
+    return { affectedIds: [clip.id], summary: `Added effect ${a.type}`, output: { effectId: fx.id, params: fx.params } };
+  },
+});
+const mustEffect = (clip: Clip, effectId: string) => {
+  const i = (clip.effects ?? []).findIndex((e) => e.id === effectId);
+  if (i < 0) throw new OpError('not_found', `effect ${effectId} not found on clip ${clip.id}`, { effectId, clipId: clip.id });
+  return i;
+};
+defineOp({
+  name: 'update_effect',
+  version: 1,
+  description: 'Change parameters of an effect on a clip (unspecified ones are kept), bypass or re-enable it, or move it to another position in the clip\'s effect order.',
+  args: z.object({ clipId: z.string(), effectId: z.string(), params: z.record(z.string(), z.unknown()).optional(), enabled: z.boolean().optional(), index: z.number().int().min(0).optional() }).strict(),
+  apply(d, a) {
+    const { clip } = pictureClip(d, a.clipId);
+    const i = mustEffect(clip, a.effectId);
+    const list = [...clip.effects!];
+    const fx = { ...list[i]! };
+    if (a.params) fx.params = parseEffect(fx.type, { ...fx.params, ...a.params });
+    if (a.enabled !== undefined) fx.enabled = a.enabled;
+    list.splice(i, 1);
+    list.splice(Math.min(a.index ?? i, list.length), 0, fx);
+    clip.effects = list;
+    return { affectedIds: [clip.id], summary: `Updated effect ${fx.type}${a.enabled === false ? ' (bypassed)' : ''}`, output: { params: fx.params } };
+  },
+});
+defineOp({
+  name: 'remove_effect',
+  version: 1,
+  description: 'Remove an effect from a clip.',
+  args: z.object({ clipId: z.string(), effectId: z.string() }).strict(),
+  apply(d, a) {
+    const { clip } = pictureClip(d, a.clipId);
+    const i = mustEffect(clip, a.effectId);
+    const type = clip.effects![i]!.type;
+    const list = clip.effects!.filter((_, k) => k !== i);
+    if (list.length) clip.effects = list; else delete clip.effects;
+    return { affectedIds: [clip.id], summary: `Removed effect ${type}` };
+  },
+});
+defineOp({
+  name: 'set_clip_blend',
+  version: 1,
+  description: 'Set how a picture or title clip blends with what is below it (normal, multiply, screen, overlay, add, ...).',
+  args: z.object({ clipId: z.string(), mode: z.enum(BLEND_MODES) }).strict(),
+  apply(d, a) {
+    const { clip } = pictureClip(d, a.clipId);
+    if (a.mode === 'normal') delete clip.blend; else clip.blend = a.mode;
+    return { affectedIds: [clip.id], summary: `Blend mode ${a.mode}` };
+  },
+});
+defineOp({
+  name: 'set_clip_mask',
+  version: 1,
+  description: 'Set, change or clear (mask=null) a rectangle/ellipse mask on a picture clip. Position and size are fractions of the clip\'s own picture, so the mask moves and scales with it. Unspecified fields keep their current value (or the default for a new mask).',
+  args: z.object({ clipId: z.string(), mask: MaskSchema.partial().nullable() }).strict(),
+  apply(d, a) {
+    const { clip, track } = pictureClip(d, a.clipId);
+    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'masks apply to picture clips on video tracks', { clipId: clip.id });
+    if (a.mask === null) { delete clip.mask; return { affectedIds: [clip.id], summary: 'Removed mask' }; }
+    clip.mask = { ...(clip.mask ?? DEFAULT_MASK), ...a.mask };
+    return { affectedIds: [clip.id], summary: `Mask ${clip.mask.shape}${clip.mask.invert ? ' (inverted)' : ''}`, output: { mask: clip.mask } };
+  },
+});
+/** The clip that ends exactly where `clip` starts on the same track, if any. */
+export function previousAdjacent(track: Track, clip: Clip): MediaClip | null {
+  for (const c of track.clips) if (c.type === 'media' && c.id !== clip.id && T.eq(clipEnd(c), clip.start)) return c;
+  return null;
+}
+defineOp({
+  name: 'set_transition',
+  version: 1,
+  description: 'Put a transition at the START of a picture clip (type=null removes it). It plays over the clip\'s first frames while the previous clip on the same track keeps playing underneath, which needs that many unused source frames after the previous clip\'s out point. With no previous clip the transition reveals the clip over the layers below. Sound is not crossfaded.',
+  args: z.object({ clipId: z.string(), type: z.enum(TRANSITION_IDS).nullable(), frames: z.number().int().min(1).max(150).optional() }).strict(),
+  apply(d, a) {
+    const { clip, track } = pictureClip(d, a.clipId);
+    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
+    if (a.type === null) { delete clip.transition; return { affectedIds: [clip.id], summary: 'Removed transition' }; }
+    const rate = d.settings.frameRate;
+    const frames = a.frames ?? 15;
+    const own = T.frameIndexAt(clip.duration, rate);
+    if (frames > own) throw new OpError('out_of_bounds', `the transition (${frames} frames) is longer than the clip (${own} frames)`, { maxFrames: own }, 'Use at most maxFrames.');
+    const prev = previousAdjacent(track, clip);
+    if (prev) {
+      const asset = d.assets[prev.assetId]!;
+      if (asset.kind !== 'image') {
+        const handle = T.frameIndexAt(T.sub(asset.duration, T.add(prev.sourceIn, prev.duration)), rate);
+        if (handle < frames) throw new OpError('out_of_bounds', `the previous clip has only ${handle} unused source frames after its end; the transition needs ${frames}`, { maxFrames: handle, previousClipId: prev.id }, handle > 0 ? 'Use at most maxFrames, or trim the end of the previous clip to free more source.' : 'Trim the end of the previous clip to free source frames for the transition.');
+      }
+    }
+    clip.transition = { type: a.type, frames };
+    return { affectedIds: [clip.id], summary: `Transition ${a.type} (${frames} frames)`, output: { previousClipId: prev?.id ?? null } };
   },
 });
 
@@ -753,6 +873,7 @@ function cutRange(seq: Sequence, start: T.RationalTime, end: T.RationalTime, tra
             right.linkGroupId = relink.get(right.linkGroupId)!;
           }
         }
+        if (right.type === 'media' && hasLeft) delete right.transition;
         if (right.type === 'media') right.sourceIn = T.add(right.sourceIn, delta);
         if (right.type === 'caption') delete right.words;
         shiftKeyframes(right, delta);

@@ -24,7 +24,8 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | Phase 4 — Production export | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase4` 19/19; `pnpm proof:browser-export` 23/23; `pnpm conformance:parity` pass (`docs/evidence/parity-suite.json`) |
 | Phase 5 — Complete agent surface | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase5` 22/22 (`docs/evidence/phase5-proof.json`); `governance.test.ts` |
 | Phase 6 — Typography and captions | **Partly met, verified-here on a synthetic transcript.** Gate has three parts: Hebrew/mixed-script golden tests pass (6 renders, small set); transcript removal preserves sync (frame- and sample-checked); **timing corpus not reported — no speech recognition exists here (B-7)** | `pnpm proof:phase6` 33/33 (`docs/evidence/phase6-proof.json`); `captions.test.ts` in core and engine; `subtitles.test.ts` |
-| Phases 7–13, G2–G3 | Not started | — |
+| Phase 7 — Motion and creative catalog | **First batch verified-here (Canvas2D look system).** Gate ("every shipped entry has working preview/export and reviewed visual fixtures") holds for the 12 effects, 17 blend modes, 2 mask shapes and 12 transitions that exist; most of the phase scope is not built | `pnpm proof:phase7` 30/30 (`docs/evidence/phase7-proof.json`), `effects.test.ts`, `look.test.ts`, `/lab.html` |
+| Phases 8–13, G2–G3 | Not started | — |
 
 ## Completed and verified-here
 
@@ -123,8 +124,16 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Test-harness note: the Phase 0 preview-audio check failed once in a loaded run (scheduled-ahead 2101.3 ms vs a 2100 ms bound; sync error was 0.06 ms). Three reruns passed at 2090.7 ms. The bound was 9 ms tight and is now +650 ms; recorded here rather than hidden.
 - Open in Phase 6: ASR/alignment/timing corpus (B-7), filler-word candidates (needs ASR), rich text, per-word text animation, reading-speed rules, translation review, remaining caption styles and fonts.
 
+**Checkpoint 7a — look system on the shared compositor**
+- Registry (`packages/core/src/effects.ts`): each effect has id, version, bilingual name, parameter schema with defaults and ranges, cost class, and declares it has no temporal dependency. 12 effects: color adjust, black & white, sepia, invert, tint, gaussian blur (edges extended, not faded), vignette, diffusion glow, drop shadow, pixelate, seeded grain, RGB split. 17 blend modes. Rect/rounded/ellipse masks with feather and invert that follow the clip. 12 transitions (dissolve, dip black/white, 4 wipes, 4 pushes, zoom) that play at the start of a clip over the previous clip's source handle; refused with the usable length when there is no handle.
+- One implementation (`packages/engine/src/look.ts`) used by preview, stills and export. Order: place → effects in list order → mask → transition → blend. Clips without a look take the old direct path, so existing output is unchanged (parity suite still byte-identical).
+- Ops: `add_effect`, `update_effect` (params, bypass, reorder), `remove_effect`, `set_clip_blend`, `set_clip_mask`, `set_transition`. Unknown effect types are rejected by validation and by export preflight. Export manifest lists effects with versions. Discovery: `GET /api/v1/catalog`, MCP `list_catalog` (40 MCP tools).
+- Proof checks pixels, not screenshots: e.g. dissolve frame = (1−p)·A + p·B within 1 level (mean 0.17), wipe edge exact, blend arithmetic within 1 level, grain identical on re-render and different on the next frame, random access byte-identical, export of a range with looks vs stills min PSNR 42.2 dB over 9 frames (one fixture, 640×360).
+- Editor: effect list with controls generated from the schemas, bypass/reorder/remove, blend, mask and transition controls. `/lab.html`: 134 tiles for every entry in 16:9 and 9:16, default and extreme, transitions in 5 steps; looked at once by the lead (not a design review).
+- **Not built (Phase 7 scope):** GPU compositor and every shader family (distortion, glitch, film, lens, kaleidoscope…), chroma key and mattes, polygon/text masks, tracked masks, keyframed effect parameters, adjustment layers, speed ramps/velocity, motion blur, graph editor, layouts, hover preview/favourites/user presets, Lab export-pairing and loops, audio crossfade in transitions. Performance of heavy looks at 1080p+ is unmeasured. Catalog targets (Appendix A) are far away: 12 effects, 12 transitions.
+
 ## In progress
-- Phase 7 (motion, effects, catalog, Lab): Canvas2D-feasible subset first; GPU compositor decision pending B-1.
+- Phase 7b candidates without a GPU: keyframed effect parameters, adjustment layers, speed changes. Then Phase 8 (sound).
 
 ## Blocked / unverified (with what would unblock)
 
@@ -147,7 +156,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
 
 ## Next executable action
-`pnpm install && pnpm build && pnpm test` (expect 220 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
+`pnpm install && pnpm build && pnpm test` (expect 228 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
 
 ## Agent / model summary
 
@@ -170,6 +179,8 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | 5 | Lead | export options/manifest/cancel/retry, full-quality preview, governance (grants, pause, proposals, approvals, budget), integration, proofs | as above | as above | — |
 | 5 | `pf-implementer` ×3 | parity suite (90,457 + 99,731 tok on resume); browser export route (168,016 tok · 510 s); OpenAPI update | `sonnet` | not observable | as listed |
 | 6 | Lead | transcript/caption model, ops, evaluation, bidi caption layout, REST/MCP, proof | as above | as above | — |
+| 7 | Lead | effect/blend/mask/transition registry, ops, evaluator, compositor, proof | as above | as above | — |
+| 7 | `pf-implementer` ×2 | Inspector tabs (20,231 tok · 35 s); look panel + Lab page (73,450 tok · 140 s) | `sonnet` | not observable | as listed |
 | 6 | `pf-implementer` ×3 | subtitle codec (45,369 tok · 158 s); transcript/caption editor UI (60,659 tok · 92 s); silence + animation UI (46,726 tok · 62 s) | `sonnet` | not observable | as listed |
 
 The `pf-implementer` definition was exercised on three real tasks: each stayed inside its file scope and reported defects instead of patching shared code
