@@ -194,6 +194,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - The ledger is settled in one place when a job ends: success settles the reserved amount; a cancel before the job ever started releases it; **any other ending (failed, canceled after starting, submission unknown) stays counted** until the owner releases it (`POST /jobs/{id}/budget/release`). Unit-tested (`governance.test.ts`).
 - **Not exercised end to end:** no priced capability exists, so the reservation call inside the capability job path has only been type-checked and read, not run. This must be proven with the first paid provider (Phase 10) before it is relied on. Costs are fixed per run; providers that bill by usage will need actual-cost reporting.
 
+**Checkpoint 13d — editor interactions that had been built but not exercised**
+- `pnpm proof:editor-interactions` (7/7, `docs/evidence/editor-interactions-proof.json`) drives in headless Chromium: a canvas drag while viewing a format creates a format-only override of exactly the dragged fraction (master untouched); hide-in-format and clear-override; clip moves snapping to beats with the toggle on and not with it off; add/remove a beat at the playhead; the level meter showing a real level during playback; "export all formats" producing one finished download per format at the right size.
+- This supersedes the "not exercised in a browser" notes in checkpoints 8a (meter), 9a (beat snapping, manual beat edits) and 12a (canvas override drag, hide-in-format, batch-export list).
+- **Still unverified:** audible fades and ducking during live playback (only the offline WebAudio chain is measured against the mixer); the Inspector sliders editing the master while a format is viewed (a known inconsistency, not a test gap); other browsers; touch input.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 

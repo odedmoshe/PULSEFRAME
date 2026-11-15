@@ -1,0 +1,81 @@
+{
+  "ranAt": "2026-11-15T01:54:46.765Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
+  "passed": 7,
+  "total": 7,
+  "checks": [
+    {
+      "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
+      "ok": true,
+      "detail": {
+        "override": {
+          "x": 0.0833,
+          "y": 0.0938
+        },
+        "expected": {
+          "dx": 0.083,
+          "dy": 0.094
+        },
+        "canvas": [
+          360,
+          640
+        ]
+      }
+    },
+    {
+      "name": "\"hide in this format\" hides the clip there only; \"clear override\" removes the override",
+      "ok": true
+    },
+    {
+      "name": "with snapping on, a clip dropped near a beat lands exactly on it; with snapping off the same drag lands on a plain frame",
+      "ok": true,
+      "detail": {
+        "beatFrames": [
+          15,
+          30,
+          45,
+          60,
+          75
+        ],
+        "afterSnap": 15,
+        "afterFree": 22
+      }
+    },
+    {
+      "name": "\"add beat at playhead\" and \"remove nearest beat\" change the stored beat grid and mark it as corrected by hand",
+      "ok": true,
+      "detail": {
+        "beats": 23
+      }
+    },
+    {
+      "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
+      "ok": true,
+      "detail": {
+        "peakDbShown": 0
+      }
+    },
+    {
+      "name": "\"export all formats\" lists one job per format and each finishes with a download of the right size",
+      "ok": true,
+      "detail": {
+        "sizes": [
+          "360x360",
+          "360x640"
+        ]
+      }
+    },
+    {
+      "name": "no uncaught errors in the page during these interactions",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}
