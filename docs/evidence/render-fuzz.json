@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T13:54:50.153Z",
+  "ranAt": "2026-11-15T13:59:43.776Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -51,7 +51,7 @@
         "withEffects": 6,
         "withTransition": 2
       },
-      "pictureFramesCompared": 5,
+      "pictureFramesCompared": 7,
       "parity": [
         {
           "frame": 57,
@@ -85,6 +85,41 @@
           },
           "exportVsStill": {
             "mean": 0.95
+          }
+        },
+        {
+          "frame": 42,
+          "features": [
+            "freeze",
+            "mask",
+            "transition"
+          ],
+          "stillMeanLevel": 84.5,
+          "painted": true,
+          "previewSize": "640x360",
+          "previewVsStill": {
+            "mean": 0,
+            "worst": 0
+          },
+          "exportVsStill": {
+            "mean": 1.04
+          }
+        },
+        {
+          "frame": 205,
+          "features": [
+            "mask",
+            "transition"
+          ],
+          "stillMeanLevel": 74.6,
+          "painted": true,
+          "previewSize": "640x360",
+          "previewVsStill": {
+            "mean": 0,
+            "worst": 0
+          },
+          "exportVsStill": {
+            "mean": 1.39
           }
         },
         {
@@ -486,8 +521,8 @@
         "accepted": 85,
         "refused": 75,
         "clips": 28,
-        "frames": 566,
-        "seconds": 18.87,
+        "frames": 548,
+        "seconds": 18.27,
         "formats": 0,
         "effects": 0,
         "freezes": 1,
@@ -503,11 +538,11 @@
         "warnings": 5
       },
       "export": {
-        "frames": 566,
+        "frames": 548,
         "rate": "30/1",
-        "videoSeconds": 18.867,
-        "audioSeconds": 18.866,
-        "bytes": 299661
+        "videoSeconds": 18.267,
+        "audioSeconds": 18.266,
+        "bytes": 284000
       },
       "features": {
         "videoClips": 5,
@@ -538,27 +573,12 @@
           }
         },
         {
-          "frame": 283,
-          "features": [],
-          "stillMeanLevel": 1.1,
-          "painted": true,
-          "previewSize": "640x360",
-          "previewVsStill": {
-            "mean": 0,
-            "worst": 0
-          },
-          "exportVsStill": {
-            "mean": 0.01
-          }
-        },
-        {
-          "frame": 113,
+          "frame": 109,
           "features": [
-            "blend",
-            "freeze",
-            "keyframes"
+            "keyframes",
+            "mask"
           ],
-          "stillMeanLevel": 118.4,
+          "stillMeanLevel": 94.5,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -566,11 +586,11 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 2.61
+            "mean": 2.22
           }
         },
         {
-          "frame": 198,
+          "frame": 191,
           "features": [
             "keyframes"
           ],
@@ -583,6 +603,22 @@
           },
           "exportVsStill": {
             "mean": 2.2
+          }
+        },
+        {
+          "frame": 147,
+          "features": [
+            "keyframes"
+          ],
+          "stillMeanLevel": 116.9,
+          "painted": true,
+          "previewSize": "640x360",
+          "previewVsStill": {
+            "mean": 0,
+            "worst": 0
+          },
+          "exportVsStill": {
+            "mean": 2.41
           }
         }
       ],
@@ -946,7 +982,7 @@
         "rate": "30/1",
         "videoSeconds": 14.933,
         "audioSeconds": 14.933,
-        "bytes": 175432
+        "bytes": 175433
       },
       "features": {
         "videoClips": 9,
@@ -1053,7 +1089,7 @@
       "detail": []
     },
     {
-      "name": "on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (35 frames compared in 9 projects; frames per feature on the picture: {\"freeze\":9,\"mask\":8,\"blend\":9,\"speed\":6,\"effect\":12,\"keyframes\":9,\"reverse\":4})",
+      "name": "on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (37 frames compared in 9 projects; frames per feature on the picture: {\"freeze\":9,\"mask\":11,\"blend\":8,\"speed\":6,\"transition\":2,\"effect\":12,\"keyframes\":10,\"reverse\":4})",
       "ok": true,
       "detail": [
         {
@@ -1076,6 +1112,24 @@
                 "worst": 0
               },
               "export": 0.95
+            },
+            {
+              "frame": 42,
+              "level": 84.5,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 1.04
+            },
+            {
+              "frame": 205,
+              "level": 74.6,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 1.39
             },
             {
               "frame": 286,
@@ -1242,31 +1296,31 @@
               "export": 2.61
             },
             {
-              "frame": 283,
-              "level": 1.1,
+              "frame": 109,
+              "level": 94.5,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.01
+              "export": 2.22
             },
             {
-              "frame": 113,
-              "level": 118.4,
-              "preview": {
-                "mean": 0,
-                "worst": 0
-              },
-              "export": 2.61
-            },
-            {
-              "frame": 198,
+              "frame": 191,
               "level": 93.7,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
               "export": 2.2
+            },
+            {
+              "frame": 147,
+              "level": 116.9,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 2.41
             }
           ]
         },
