@@ -18,6 +18,7 @@ export function AccessPanel() {
   const [budget, setBudget] = useState('0');
   const [token, setToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [rpm, setRpm] = useState('');
 
   const load = async () => {
     try { setGrants((await api.listGrants()).grants); } catch (e) { setErr(describeError(e)); setGrants([]); }
@@ -38,6 +39,7 @@ export function AccessPanel() {
         name: name.trim(), mode,
         ...(thisProject && projectId ? { projectIds: [projectId] } : {}),
         ...(mode === 'autopilot' && units > 0 ? { budgetCents: units * 100 } : {}),
+        ...(Math.floor(Number(rpm)) >= 1 ? { requestsPerMinute: Math.min(100000, Math.floor(Number(rpm))) } : {}),
       });
       setToken(r.token); setCopied(false); setName('');
       await load();
@@ -80,7 +82,7 @@ export function AccessPanel() {
             <li key={g.id} data-testid="grant-row" data-grant-id={g.id} data-status={st}>
               <strong dir="auto">{g.name}</strong>
               <span>{t(`access.mode.${g.mode}` as Key)} <span className="muted">— {t(`access.mode.${g.mode}.hint` as Key)}</span></span>
-              <span className="muted">{scopeOf(g)} · {t(`access.status.${st}` as Key)}</span>
+              <span className="muted">{scopeOf(g)} · {t(`access.status.${st}` as Key)}{g.requestsPerMinute ? <> · <bdi dir="ltr" data-testid="grant-rpm-shown">{g.requestsPerMinute}</bdi> {t('access.rpm.unit')}</> : null}</span>
               {st === 'active' && <button type="button" className="ghost danger" disabled={busy} onClick={() => void revoke(g.id)} data-testid="grant-revoke">{t('access.revoke')}</button>}
             </li>
           );
@@ -109,6 +111,10 @@ export function AccessPanel() {
             <p className="muted">{t('access.budget.hint')}</p>
           </>
         )}
+        <label>{t('access.rpm')}
+          <input type="number" dir="ltr" min={1} max={100000} step={1} value={rpm} placeholder="—" onChange={(e) => setRpm(e.target.value)} data-testid="grant-rpm" />
+        </label>
+        <p className="muted">{t('access.rpm.hint')}</p>
         <button type="submit" className="primary" disabled={busy || !name.trim()} data-testid="grant-create">{t('access.createBtn')}</button>
       </form>
     </section>

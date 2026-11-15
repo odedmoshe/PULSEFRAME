@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:14:51.030Z",
+  "ranAt": "2026-11-15T09:18:31.746Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -10,7 +10,7 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 141,
+      "controls": 142,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -27,7 +27,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 141,
+          "controls": 142,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -36,7 +36,7 @@
         },
         {
           "state": "format-view",
-          "controls": 138,
+          "controls": 139,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -46,7 +46,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 147,
+          "controls": 148,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -60,7 +60,7 @@
         },
         {
           "state": "command-palette",
-          "controls": 144,
+          "controls": 145,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -78,7 +78,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 141,
+      "controls": 142,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -95,7 +95,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 141,
+          "controls": 142,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -104,7 +104,7 @@
         },
         {
           "state": "format-view",
-          "controls": 138,
+          "controls": 139,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -114,7 +114,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 147,
+          "controls": 148,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -128,7 +128,7 @@
         },
         {
           "state": "command-palette",
-          "controls": 144,
+          "controls": 145,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
