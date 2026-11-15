@@ -483,7 +483,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - `set_variant_override` accepts `text` and `textStyle` for title clips (null clears each); stored in the variant's override, applied by `projectVariant`, so preview, stills and export of that format use it and the master and other formats do not. Master edits to fields that are not overridden still reach the format.
 - Editor: while a format is viewed, the title's text field and size slider show and edit that format's values, with a note and "back to the master text". Font and other style fields still edit the master from that view.
 - Verified here: `variants.test.ts` (new test: isolation, merge, master edits, clearing, refusals); operations and store fuzz include the new arguments (94 tests in those three files); 392 unit tests; `pnpm proof:editor-interactions` 20/20 twice (rendered frame of the format changes; master and another format byte-identical; restore byte-identical); phase12 15, phase3 27, phase5 33; accessibility audit clean.
-- Not done: per-format caption text or line breaks; a rendered check of the size override (only the wording is checked on rendered frames); `conformance:render-fuzz` was not rerun with the widened generator.
+- Not done: per-format caption text or line breaks; a rendered check of the size override (only the wording is checked on rendered frames). `conformance:render-fuzz` was rerun afterwards with the widened generator: 2/2 (10 of 10 sessions rendered; 24 frames compared).
 
 **Checkpoint 14q — `Secure` session cookie option**
 - `PF_SECURE_COOKIE=1` adds `Secure` to the owner session cookie, for use behind a TLS-terminating proxy together with the public origin in `PF_EXTRA_ORIGINS`. Off by default (loopback HTTP).
