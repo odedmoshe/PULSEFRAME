@@ -146,6 +146,25 @@ describe('add_clip on chosen tracks', () => {
   });
 });
 
+describe('duplicate_clips with preferred tracks', () => {
+  it('copies go to the preferred track of their kind when it is free, picture and sound each to their own; a busy preferred track falls back as before; a missing one is refused', () => {
+    const { doc, videoId, audioId } = project();
+    let r = tx(doc, [{ op: 'add_track', args: { kind: 'video' } }, { op: 'add_track', args: { kind: 'audio' } }]);
+    const v2 = r.results[0]!.output!.trackId as string, a2 = r.results[1]!.output!.trackId as string;
+    const d = r.doc;
+    r = tx(d, [{ op: 'duplicate_clips', args: { clipIds: [videoId, audioId], at: f(300), preferTrackIds: [v2, a2] } }]);
+    const made = r.results[0]!.output!.createdClipIds as string[];
+    expect(made.map((id) => findClip(r.doc, id)!.track.id).sort()).toEqual([v2, a2].sort());
+    const [x, y] = made.map((id) => findClip(r.doc, id)!.clip as any);
+    expect(x.linkGroupId && x.linkGroupId === y.linkGroupId).toBe(true); // still a linked pair
+    expect(validateProject(r.doc)).toEqual([]);
+    // the preferred picture track is busy at that time: the copy goes where it would have gone without a preference
+    const busy = tx(r.doc, [{ op: 'duplicate_clips', args: { clipIds: [videoId], at: f(300), preferTrackIds: [v2] } }]);
+    expect(findClip(busy.doc, (busy.results[0]!.output!.createdClipIds as string[])[0]!)!.track.id).toBe(findClip(d, videoId)!.track.id);
+    expect(code(() => tx(d, [{ op: 'duplicate_clips', args: { clipIds: [videoId], at: f(300), preferTrackIds: ['trk_none'] } }]))).toBe('not_found');
+  });
+});
+
 describe('slip_clip', () => {
   it('shows a different stretch of the source without moving or resizing the clip; linked sound follows; limits are the ends of the source', () => {
     const { doc, videoId, audioId, titleId } = project(); // 240-frame source

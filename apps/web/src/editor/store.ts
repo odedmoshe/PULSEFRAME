@@ -51,6 +51,8 @@ export interface EditorState {
   safeAreaOn: boolean;
   /** Workspace preset: which Inspector panels are offered. A view setting of this browser; it never changes the project. */
   workspace: Workspace;
+  /** Target tracks (chosen with the ◎ button of a track): where clips added from the library, pasted or duplicated go first. Kept in this browser only. */
+  targets: { video: string | null; audio: string | null };
   /** Clip ids remembered by Copy (session state only). */
   clipboard: string[];
   /** Clips marked by Cut; they move on the next Paste (nothing is committed until then). */
@@ -69,7 +71,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), clipboard: [], cutPending: [],
+    provider: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -295,6 +297,14 @@ export class Editor {
       this.set({ uploading: false });
     }
   }
+  /** Choose (or, given the current one, clear) the target track of its kind. */
+  toggleTarget(kind: 'video' | 'audio', trackId: string) { this.set({ targets: { ...this.state.targets, [kind]: this.state.targets[kind] === trackId ? null : trackId } }); }
+  /** The chosen target track of a kind, if it still exists and is not locked. */
+  target(kind: 'video' | 'audio'): string | null {
+    const d = this.state.doc, id = this.state.targets[kind];
+    const tr = d && id ? d.sequences[d.mainSequenceId]!.tracks.find((t) => t.id === id) : undefined;
+    return tr && tr.kind === kind && !tr.locked ? tr.id : null;
+  }
   setWorkspace(workspace: Workspace) { try { localStorage.setItem(WS_KEY, workspace); } catch { /* ignore */ } this.set({ workspace }); }
   /** 'toggle' adds the clip to the selection or removes it (Shift/Ctrl/⌘-click); the default replaces the selection. */
   select(id: string | null, mode: 'replace' | 'toggle' = 'replace') {
@@ -361,7 +371,13 @@ export class Editor {
     if (doc) for (const tr of doc.sequences[doc.mainSequenceId]!.tracks) if (tr.kind !== 'text') for (const c of tr.clips) end = T.max(end, clipEnd(c));
     return T.snapToFrame(end, this.rate);
   }
-  addAsset(assetId: string) { return this.commit([{ op: 'add_clip', args: { assetId, start: this.appendPoint() } }], 'Add clip'); }
+  addAsset(assetId: string) {
+    const a = this.state.doc?.assets[assetId];
+    const picture = !!a && (!!a.video || a.kind === 'image'), v = this.target('video'), au = this.target('audio');
+    // target tracks: the picture (or a sound-only file) goes to its target, the linked sound of a picture file to the sound target
+    const where = picture ? { ...(v ? { trackId: v } : {}), ...(au && a?.audio ? { audioTrackId: au } : {}) } : au ? { trackId: au } : {};
+    return this.commit([{ op: 'add_clip', args: { assetId, start: this.appendPoint(), ...where } }], 'Add clip');
+  }
   async addText() {
     const rate = this.rate;
     const r = await this.commit([{ op: 'add_text', args: { text: this.t('text.default'), start: this.playhead, duration: T.frameTime(Math.round((2 * rate.num) / rate.den), rate) } }], 'Add text');
@@ -409,8 +425,9 @@ export class Editor {
   clearCut() { if (this.state.cutPending.length) this.set({ cutPending: [], clipboard: [] }); }
   /** Copied clip ids that still exist in the document. */
   get clipboardLive(): string[] { const d = this.state.doc; return d ? this.state.clipboard.filter((id) => findClip(d, id)) : []; }
+  private preferTracks() { const ids = [this.target('video'), this.target('audio')].filter((x): x is string => !!x); return ids.length ? { preferTrackIds: ids } : {}; }
   private async duplicate(clipIds: string[], at: T.RationalTime, label: string) {
-    const r = await this.commit([{ op: 'duplicate_clips', args: { clipIds, at } }], label);
+    const r = await this.commit([{ op: 'duplicate_clips', args: { clipIds, at, ...this.preferTracks() } }], label);
     const created = r?.results[0]?.output?.createdClipIds;
     if (Array.isArray(created) && created.length) this.set({ selection: created as string[], ...(this.following ? {} : { followAgent: false }) });
     return r;
@@ -424,7 +441,7 @@ export class Editor {
   /** Cut + paste = one transaction: duplicate at the playhead, then delete the originals. */
   private async pasteCut(ids: string[]) {
     const r = await this.commit([
-      { op: 'duplicate_clips', args: { clipIds: ids, at: this.playhead } },
+      { op: 'duplicate_clips', args: { clipIds: ids, at: this.playhead, ...this.preferTracks() } },
       ...ids.map((clipId) => ({ op: 'delete_clip', args: { clipId, includeLinked: false } })),
     ], 'Move clips');
     if (r) {

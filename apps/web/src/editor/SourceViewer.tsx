@@ -34,8 +34,8 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
   const [inFrame, setIn] = useState(0);
   const [outFrame, setOut] = useState<number | null>(null); // exclusive; null = the end of the file
   // Target tracks for add / insert / overwrite: '' = automatic (the first unlocked track with room).
-  const [vTarget, setVTarget] = useState('');
-  const [aTarget, setATarget] = useState('');
+  const [vTarget, setVTarget] = useState(() => editor.target('video') ?? ''); // starts from the timeline's target tracks
+  const [aTarget, setATarget] = useState(() => editor.target('audio') ?? '');
   // Built once per file: later project edits do not matter to the viewer.
   const doc = useMemo(() => { try { return state.doc && asset ? sourceDocument(state.doc, asset) : null; } catch (e) { return e instanceof Error ? e : new Error(String(e)); } }, [assetId]); // eslint-disable-line react-hooks/exhaustive-deps
 

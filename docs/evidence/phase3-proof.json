@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T20:17:47.241Z",
+  "ranAt": "2026-11-15T20:37:10.886Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -254,6 +254,23 @@
       }
     },
     {
+      "name": "timeline target tracks: with ◎ pressed on a picture track and a sound track, \"add to timeline\" puts the file's picture and sound on those tracks and a paste of the copied picture clip puts the copy on the target picture track (the sound clip was not selected, so it is not copied); every other track is untouched",
+      "ok": true,
+      "detail": {
+        "pressedTargets": 2,
+        "addedOnTargets": [
+          1,
+          1,
+          true
+        ],
+        "pastedOnTargets": [
+          2,
+          1,
+          true
+        ]
+      }
+    },
+    {
       "name": "source viewer target tracks: with a picture track and a sound track chosen, \"overwrite\" puts the range (source 20–29) on exactly those tracks at the playhead in one transaction, leaves every other track as it was, and the frame there now shows the new picture on top; undo and removing the two tracks restore the timeline",
       "ok": true,
       "detail": {
@@ -288,8 +305,8 @@
         ],
         "sourceIn": 73,
         "revisions": [
-          22,
-          26
+          25,
+          29
         ]
       }
     },
@@ -315,8 +332,8 @@
           223
         ],
         "revisions": [
-          26,
-          30
+          29,
+          33
         ]
       }
     },
@@ -371,8 +388,8 @@
           223
         ],
         "revisions": [
-          32,
-          38
+          35,
+          41
         ]
       }
     },
@@ -480,8 +497,8 @@
         "assetName": "ראיון.mp4",
         "focusOnRename": true,
         "revisions": [
-          47,
-          50
+          50,
+          53
         ]
       }
     },
@@ -496,8 +513,8 @@
         "emptyBefore": 1,
         "emptyCmd": "track.removeEmpty",
         "revisions": [
-          50,
-          53
+          53,
+          56
         ]
       }
     },
@@ -516,11 +533,11 @@
       "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
       "ok": true,
       "detail": {
-        "revision": 56,
-        "allRows": 56,
-        "firstRev": "56",
+        "revision": 59,
+        "allRows": 59,
+        "firstRev": "59",
         "rawNames": 0,
-        "agentRows": 3,
+        "agentRows": 4,
         "agentOnly": true,
         "closedH": true,
         "focusH": true
@@ -536,8 +553,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          56,
-          58
+          59,
+          61
         ]
       }
     },
@@ -547,17 +564,17 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 29,
+        "differentSourceFrames": 30,
         "firstFrames": [
           {
-            "frame": 3,
+            "frame": 4,
             "quality": "draft",
-            "code": 3
+            "code": 4
           },
           {
-            "frame": 6,
+            "frame": 7,
             "quality": "draft",
-            "code": 6
+            "code": 7
           },
           {
             "frame": 9,
@@ -570,14 +587,14 @@
             "code": 13
           },
           {
-            "frame": 16,
+            "frame": 17,
             "quality": "draft",
-            "code": 16
+            "code": 17
           },
           {
-            "frame": 19,
+            "frame": 20,
             "quality": "draft",
-            "code": 19
+            "code": 20
           }
         ],
         "mismatches": []

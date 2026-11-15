@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T20:16:30.563Z",
+  "ranAt": "2026-11-15T20:43:48.131Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -291,7 +291,7 @@
       "ok": true,
       "detail": {
         "headline": "אין מקום פנוי ברצועה",
-        "detail": "range overlaps clip clp_a937c344c51 on track trk_video",
+        "detail": "range overlaps clip clp_474e726a4a1 on track trk_video",
         "detailDir": "ltr",
         "pageDir": "rtl",
         "unchanged": true

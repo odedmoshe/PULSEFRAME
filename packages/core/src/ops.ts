@@ -1066,8 +1066,8 @@ defineOp({
 defineOp({
   name: 'duplicate_clips',
   version: 1,
-  description: 'Copy clips with everything on them (trim, transform, keyframes, effects, mask, fades, per-format overrides) to a new time. Give `at` (timeline time where the earliest copied clip should start) or `offset` (shift from the originals). Copies go on the same tracks when free, otherwise on another compatible track. Linked picture+sound pairs stay linked to each other, not to the originals.',
-  args: z.object({ clipIds: z.array(z.string()).min(1).max(200), at: RT.optional(), offset: RT.optional() }).strict(),
+  description: 'Copy clips with everything on them (trim, transform, keyframes, effects, mask, fades, per-format overrides) to a new time. Give `at` (timeline time where the earliest copied clip should start) or `offset` (shift from the originals). Copies go on a preferred track of their kind when one is given and free, else on the same tracks when free, otherwise on another compatible track. Linked picture+sound pairs stay linked to each other, not to the originals.',
+  args: z.object({ clipIds: z.array(z.string()).min(1).max(200), at: RT.optional(), offset: RT.optional(), preferTrackIds: z.array(z.string()).max(8).optional().describe('Tracks to try first for the copies of their kind (a picture track for picture copies, a sound track for sound copies), before the tracks the originals are on') }).strict(),
   apply(d, a, ctx) {
     if ((a.at === undefined) === (a.offset === undefined)) throw new OpError('invalid_args', 'give exactly one of `at` or `offset`');
     const found = [...new Set(a.clipIds)].map((id) => { const f = findClip(d, id); if (!f) throw new OpError('not_found', `clip ${id} not found`, { clipId: id }); return f; });
@@ -1087,7 +1087,8 @@ defineOp({
       }
       const end = clipEnd(copy);
       const free = (t: Track) => !t.locked && !(forbidsOverlap(t) && overlaps(t, copy.start, end, new Set()));
-      let track: Track | undefined = free(f.track) ? f.track : f.seq.tracks.find((t) => t.kind === f.track.kind && t.id !== f.track.id && (t.kind !== 'caption' || t.caption?.mode === 'manual') && free(t));
+      const preferred = (a.preferTrackIds ?? []).map((id) => mustTrack(f.seq, id)).find((t) => t.kind === f.track.kind && (t.kind !== 'caption' || t.caption?.mode === 'manual') && free(t));
+      let track: Track | undefined = preferred ?? (free(f.track) ? f.track : f.seq.tracks.find((t) => t.kind === f.track.kind && t.id !== f.track.id && (t.kind !== 'caption' || t.caption?.mode === 'manual') && free(t)));
       if (!track) {
         if (f.track.kind === 'caption') throw new OpError('overlap', 'no free place for the copied caption', { clipId: f.clip.id });
         track = newTrack(f.seq, f.track.kind, ctx);

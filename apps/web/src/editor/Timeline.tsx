@@ -97,6 +97,10 @@ export function Timeline() {
                 <span className="track-name" dir="auto" title={tr.name}>{tr.kind === 'caption' ? `${t('track.caption')}${tr.caption?.mode === 'transcript' ? ' ✦' : ''}` : tr.name}</span>
                 <span className="track-buttons">
                   {tr.kind !== 'caption' && <InlineRename value={tr.name} label={`${t('track.rename')}: ${tr.name}`} testid="track-rename" onCommit={(name) => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, name } }], 'Rename track')} />}
+                  {(tr.kind === 'video' || tr.kind === 'audio') && (
+                    <button type="button" className="track-btn" aria-pressed={state.targets[tr.kind] === tr.id} disabled={tr.locked} data-testid="track-target" aria-label={`${t('track.target')}: ${tr.name}`} title={t('track.target.help')}
+                      onPointerDown={(e) => e.stopPropagation()} onClick={() => editor.toggleTarget(tr.kind as 'video' | 'audio', tr.id)}>◎</button>
+                  )}
                   <button type="button" className="track-btn" aria-pressed={tr.locked} data-testid="track-lock" aria-label={`${t(tr.locked ? 'track.unlock' : 'track.lock')}: ${tr.name}`} title={t(tr.locked ? 'track.unlock' : 'track.lock')}
                     onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, locked: !tr.locked } }], 'Lock track')}>{tr.locked ? '🔒' : '🔓'}</button>
                   {tr.kind === 'audio' ? (

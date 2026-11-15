@@ -378,6 +378,29 @@ async function main() {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await key('Control+z');
     for (let i = 0; i < 50 && onTrack(ttA.project, vT).length; i++) { await new Promise((r) => setTimeout(r, 100)); ttA = await getDoc(); }
+    // target tracks on the timeline: with ◎ pressed on the two new tracks, "add to timeline" from the library and paste land on them
+    const targetBtns = page.locator(`.track:has([data-testid=track-target])`);
+    const pressTarget = async (name: string) => { await page.locator('.track', { has: page.locator(`.track-name[title="${name}"]`) }).getByTestId('track-target').click(); };
+    await pressTarget('V-target');
+    await pressTarget('A-target');
+    const pressedTargets = await page.locator('[data-testid=track-target][aria-pressed=true]').count();
+    const tgB = await getDoc();
+    await page.getByTestId(`add-${assetId}`).click();
+    let tgA = await getDoc();
+    for (let i = 0; i < 50 && tgA.revision === tgB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); tgA = await getDoc(); }
+    const addedOnTargets = [onTrack(tgA.project, vT).length, onTrack(tgA.project, aT).length, others(tgA.project) === others(tgB.project)];
+    // copy the clip just added (it is on the target picture track) and paste at frame 0: the copies go to the target tracks again
+    const addedClip = tgA.project.sequences.seq_main!.tracks.find((tr) => tr.id === vT)!.clips[0]!;
+    await page.locator(`.clip[data-clip-id="${addedClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+c');
+    await page.getByTestId('ruler').click({ position: { x: 0.5, y: 5 } });
+    await key('Control+v');
+    let tgP = await getDoc();
+    for (let i = 0; i < 50 && tgP.revision === tgA.revision; i++) { await new Promise((r) => setTimeout(r, 100)); tgP = await getDoc(); }
+    const pastedOnTargets = [onTrack(tgP.project, vT).length, onTrack(tgP.project, aT).length, others(tgP.project) === others(tgB.project)];
+    check('timeline target tracks: with ◎ pressed on a picture track and a sound track, "add to timeline" puts the file\'s picture and sound on those tracks and a paste of the copied picture clip puts the copy on the target picture track (the sound clip was not selected, so it is not copied); every other track is untouched', (await targetBtns.count()) >= 2 && pressedTargets === 2 && JSON.stringify(addedOnTargets) === '[1,1,true]' && JSON.stringify(pastedOnTargets) === '[2,1,true]', { pressedTargets, addedOnTargets, pastedOnTargets });
+    await post([...tgP.project.sequences.seq_main!.tracks.filter((tr) => tr.id === vT).flatMap((tr) => tr.clips).map((c) => ({ op: 'delete_clip', args: { clipId: c.id } }))]);
     const removed = await post([{ op: 'remove_track', args: { trackId: vT } }, { op: 'remove_track', args: { trackId: aT } }]);
     await page.waitForFunction((n) => document.querySelectorAll('.track').length === n, tt0.project.sequences.seq_main!.tracks.length, { timeout: 8000 }).catch(() => {});
     check('source viewer target tracks: with a picture track and a sound track chosen, "overwrite" puts the range (source 20–29) on exactly those tracks at the playhead in one transaction, leaves every other track as it was, and the frame there now shows the new picture on top; undo and removing the two tracks restore the timeline',
@@ -636,7 +659,7 @@ async function main() {
     const closedH = (await page.getByTestId('activity-dialog').count()) === 0;
     await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open', undefined, { timeout: 3000 }).catch(() => {}); // focus is handed back just after the dialog is removed
     const focusH = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open');
-    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 3 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
+    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 4 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
 
     console.log('\n# close gaps');
     const gb = await getDoc();

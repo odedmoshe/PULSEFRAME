@@ -49,16 +49,16 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 
 .timeline { grid-area: timeline; background: var(--pf-surface); border-top: 1px solid var(--pf-border); min-height: 0; }
 .tl-scroll { height: 100%; overflow: auto; }
-.tl-inner { position: relative; padding-left: 56px; min-height: 100%; }
+.tl-inner { position: relative; padding-left: 76px; min-height: 100%; }
 .ruler { position: relative; height: 24px; border-bottom: 1px solid var(--pf-border); cursor: pointer; }
 .ruler span { position: absolute; top: 4px; font: 11px var(--pf-mono); color: var(--pf-text-muted); border-left: 1px solid var(--pf-border); padding-left: 4px; height: 20px; }
 .track { position: relative; height: 44px; border-bottom: 1px solid var(--pf-border); }
-.track-name { position: absolute; left: -56px; width: 56px; top: 12px; text-align: center; font: 11px var(--pf-mono); color: var(--pf-text-muted); }
+.track-name { position: absolute; left: -76px; width: 76px; top: 12px; text-align: center; font: 11px var(--pf-mono); color: var(--pf-text-muted); }
 .clip { position: absolute; top: 5px; height: 34px; padding: 0 8px; border-radius: var(--pf-r-sm); border: 1px solid transparent; overflow: hidden; white-space: nowrap; font-size: var(--pf-fs-sm); justify-content: flex-start; color: #fff; }
 .clip span { overflow: hidden; text-overflow: ellipsis; }
 .track.video .clip { background: var(--pf-clip-video); } .track.audio .clip { background: var(--pf-clip-audio); } .track.text .clip { background: var(--pf-clip-text); }
 .clip.selected { border-color: #fff; box-shadow: 0 0 0 1px #fff; }
-.playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: 56px; background: var(--pf-accent); pointer-events: none; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: 76px; background: var(--pf-accent); pointer-events: none; }
 .playhead::before { content: ''; position: absolute; top: 0; left: -5px; border: 6px solid transparent; border-top-color: var(--pf-accent); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .clip-label { position: relative; z-index: 1; text-shadow: 0 1px 2px rgba(0,0,0,.9); }
@@ -66,7 +66,7 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .animated { color: var(--pf-warn); font-style: normal; }
 .fields label > span { display: flex; gap: 6px; align-items: baseline; }
 .fields .val { margin-inline-start: auto; font-family: var(--pf-mono); color: var(--pf-text); }
-.ghost-playhead { position: absolute; top: 0; bottom: 0; width: 0; margin-left: 56px; border-left: 2px dashed var(--pf-accent-3); pointer-events: none; z-index: 3; }
+.ghost-playhead { position: absolute; top: 0; bottom: 0; width: 0; margin-left: 76px; border-left: 2px dashed var(--pf-accent-3); pointer-events: none; z-index: 3; }
 .ghost-playhead.user { border-color: var(--pf-accent-2); }
 .ghost-playhead span { position: absolute; top: 0; left: 4px; font-size: 10px; white-space: nowrap; padding: 1px 5px; border-radius: 3px; background: var(--pf-accent-3); color: #14102b; font-weight: 700; }
 .ghost-playhead.user span { background: var(--pf-accent-2); color: #04202e; }
@@ -144,7 +144,7 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 
 .timeline { position: relative; }
 .tl-snap { position: absolute; top: 0; right: 16px; background: var(--pf-surface); opacity: .95; display: inline-flex; gap: 6px; align-items: center; font-size: var(--pf-fs-sm); color: var(--pf-text-muted); padding: 2px 8px; z-index: 4; }
-.tl-markers { position: absolute; top: 0; left: 56px; height: 24px; width: 0; pointer-events: none; z-index: 2; }
+.tl-markers { position: absolute; top: 0; left: 76px; height: 24px; width: 0; pointer-events: none; z-index: 2; }
 .tl-markers i { position: absolute; top: 0; pointer-events: none; }
 .tl-markers .beat-marker { height: 9px; width: 1px; background: var(--pf-accent-2); opacity: .8; }
 .tl-markers .beat-marker.bar { height: 14px; width: 2px; opacity: 1; } /* first beat of a bar */
@@ -219,8 +219,8 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .source-viewer .source-canvas { inline-size: 100%; max-block-size: 46vh; object-fit: contain; background: #000; border-radius: var(--pf-r-sm); }
 .source-viewer .source-canvas.sound-only { block-size: 48px; }
 .source-viewer input[type=range] { inline-size: 100%; }
-.track-head { position: absolute; left: -56px; width: 56px; top: 2px; height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
-.track-head .track-name { position: static; width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track-head { position: absolute; left: -76px; width: 76px; top: 2px; height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.track-head .track-name { position: static; width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track-buttons { display: flex; gap: 2px; }
 .track-btn { inline-size: 22px; block-size: 18px; padding: 0; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--pf-text-muted); font-size: 11px; line-height: 1; cursor: pointer; }
 .track-btn[aria-pressed='true'] { border-color: var(--pf-border); background: var(--pf-surface-2, rgba(255,255,255,.08)); color: var(--pf-text); }
