@@ -9,6 +9,7 @@ const ACTIVE = ['queued', 'running', 'cancel-requested'];
 
 /** Linked formats, creative preflight and export of one or all formats (SPEC §19.8, §19.14). */
 export function DeliverPanel() {
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const { editor, state, t } = useEditorState();
   const { doc, viewVariantId, lang, revision, exportJob } = state;
   const variants = doc ? Object.values(doc.variants ?? {}) : [];
@@ -157,6 +158,29 @@ export function DeliverPanel() {
           </ul>
         )}
       </section>
+      <section aria-label={t('archive.title')}>
+        <h3>{t('archive.title')}</h3>
+        <p className="muted small">{t('archive.note')}</p>
+        <div className="row">
+          {doc && <a className="ghost" href={`/api/v1/projects/${doc.id}/archive`} download data-testid="archive-download">{t('archive.download')}</a>}
+          <label className="ghost file">{t('archive.import')}
+            <input type="file" accept=".tar,application/x-tar" data-testid="archive-import" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void importArchiveFile(file, (m) => setArchiveError(m)); }} />
+          </label>
+        </div>
+        {archiveError && <p className="danger" role="alert" data-testid="archive-error">{archiveError}</p>}
+      </section>
     </div>
   );
+}
+
+/** Upload an archive; on success open the new project (a full page load keeps one editor instance per project). */
+async function importArchiveFile(file: File, onError: (message: string) => void) {
+  try {
+    const r = await fetch('/api/v1/projects/import', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/x-tar' }, body: file });
+    const data = await r.json();
+    if (!r.ok) return onError(`${data?.error?.message ?? `HTTP ${r.status}`}`);
+    location.assign(`/?project=${encodeURIComponent(data.project.id)}`);
+  } catch (e) {
+    onError(e instanceof Error ? e.message : String(e));
+  }
 }

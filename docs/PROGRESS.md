@@ -199,6 +199,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - This supersedes the "not exercised in a browser" notes in checkpoints 8a (meter), 9a (beat snapping, manual beat edits) and 12a (canvas override drag, hide-in-format, batch-export list).
 - **Still unverified:** audible fades and ducking during live playback (only the offline WebAudio chain is measured against the mixer); the Inspector sliders editing the master while a format is viewed (a known inconsistency, not a test gap); other browsers; touch input.
 
+**Checkpoint 13e — portable project archive**
+- `GET …/projects/{id}/archive` streams one tar file (manifest, project document, every media blob by content hash, including untouched originals of conformed media); `POST …/projects/import` creates a new project from one. The tar reader/writer is purpose-built: only the three expected entry kinds are accepted, every blob is hashed against its name, the manifest and document are validated, and nothing is added unless everything checks out.
+- Tested: round trip into a different store, deterministic bytes, exact Content-Length, reuse of media already present; rejection of a flipped byte, an entry renamed to escape the blob directory, a truncated file and a non-archive, each leaving no project, blob or temp file behind (`archive.test.ts`); restore over HTTP onto a second server with an empty data directory where a rendered frame is byte-identical (`pnpm soak`); download and re-import through the editor (`pnpm proof:editor-interactions`, now 8/8).
+- Not included in an archive by design: edit history (the import starts a new one), derivatives, exports, grants. Not built: media garbage collection, disk quota, automatic backups. Archives are uncompressed and limited to four times the upload limit.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 

@@ -19,6 +19,8 @@ import { ingestUpload } from './ingest.ts';
 import { detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX } from './sfx.ts';
 import { preflight } from './preflight.ts';
+import { importArchive, planArchive, writeArchive } from './archive.ts';
+import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { variantDoc } from './export.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
@@ -153,6 +155,28 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const rev = c.req.query('revision');
     const p = rev === undefined ? store.getProject(c.req.param('id')) : store.replay(c.req.param('id'), Number(rev));
     return c.json({ project: p.doc, revision: p.revision });
+  });
+  app.get('/api/v1/projects/:id/archive', (c) => {
+    need(c, 'observe');
+    const plan = planArchive(store, c.req.param('id'));
+    const name = plan.doc.name.replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 60) || 'project';
+    return new Response(Readable.toWeb(Readable.from(writeArchive(plan))) as ReadableStream, { headers: { 'content-type': 'application/x-tar', 'content-length': String(plan.bytes), 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}.pulseframe.tar` } });
+  });
+  app.post('/api/v1/projects/import', async (c) => {
+    const who = need(c, 'edit');
+    if (who.grant?.projectIds) throw new ApiError(403, 'out_of_scope', 'this grant is limited to specific projects and cannot create new ones');
+    gov.assertUnrestricted(who, 'import a project');
+    if (!c.req.raw.body) throw new ApiError(400, 'empty_upload', 'request has no body');
+    const tmp = path.join(store.tmpDir, `imp_${Date.now()}_${Math.random().toString(36).slice(2)}.tar`);
+    let size = 0;
+    try {
+      await pipeline(Readable.fromWeb(c.req.raw.body as any), async function* (src) { for await (const chunk of src) { size += chunk.length; if (size > cfg.maxUploadBytes * 4) throw new ApiError(413, 'upload_too_large', 'archive is too large'); yield chunk; } }, fs.createWriteStream(tmp, { mode: 0o600 }));
+      const r = importArchive(store, tmp);
+      for (const a of Object.values(r.doc.assets)) derivatives.ensure(a);
+      return c.json({ project: { id: r.doc.id, name: r.doc.name }, revision: r.revision, blobsAdded: r.blobsAdded, blobsAlreadyPresent: r.blobsAlreadyPresent }, 201);
+    } finally {
+      fs.rmSync(tmp, { force: true });
+    }
   });
   app.get('/api/v1/projects/:id/summary', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, ...summarize(p.doc) }); });
   app.get('/api/v1/projects/:id/timeline', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, ...timeline(p.doc) }); });

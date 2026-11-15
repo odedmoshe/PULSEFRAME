@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T01:54:46.765Z",
+  "ranAt": "2026-11-15T01:59:26.120Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 7,
-  "total": 7,
+  "passed": 8,
+  "total": 8,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -70,6 +70,14 @@
           "360x360",
           "360x640"
         ]
+      }
+    },
+    {
+      "name": "download the project archive in the editor, import it back, and the editor opens a new project with the same content",
+      "ok": true,
+      "detail": {
+        "file": "interactions.pulseframe.tar",
+        "bytes": 2791936
       }
     },
     {

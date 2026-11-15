@@ -41,9 +41,12 @@ rsync -a .data/blobs .data/out .data/tokens.json /path/to/backup/
 ```
 Restore: stop the server, put the files back under `PF_DATA_DIR`, start the server. Blobs are content-addressed and immutable, so an incremental copy of `blobs/` is safe.
 
-Not built: automatic backups, garbage collection of unreferenced media, project archive export/import, disk quota. Deleting a clip never deletes its media.
+### Moving or backing up one project
+The editor's Deliver tab has "Download archive" and "Import archive as a new project" (REST: `GET /api/v1/projects/{id}/archive`, `POST /api/v1/projects/import`). An archive is one tar file with the project and all its media; every file is verified on import. Edit history, exports and credentials are not included.
 
-**The restore procedure above has not been exercised by an automated test.** The parts that are tested: reopening a data directory after a restart, replaying a project from its operation log, and recovering interrupted export jobs (`store.test.ts`, Phase 0 and Phase 4 proofs).
+Not built: automatic backups, garbage collection of unreferenced media, disk quota. Deleting a clip never deletes its media.
+
+**The whole-data-directory copy above has not been exercised by an automated test.** Tested instead: restoring a single project from its archive onto a second server with an empty data directory (`pnpm soak`), and reopening a data directory after a restart, replaying a project from its operation log, and recovering interrupted export jobs (`store.test.ts`, Phase 0 and Phase 4 proofs).
 
 ## Verification commands
 All proofs start their own server on their own port and data directory under `.artifacts/`, and write a JSON report to `docs/evidence/`. Run `pnpm build` first.

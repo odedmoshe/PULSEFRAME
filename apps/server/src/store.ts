@@ -107,6 +107,13 @@ export class Store {
     this.db.prepare('INSERT INTO projects (id, revision, doc, initial_doc, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?)').run(doc.id, json, json, now(), now());
     return { doc, revision: 0 };
   }
+  /** Create a project from an existing document (archive import). It gets a new id and starts its own history at revision 0. */
+  importProject(source: ProjectDocument): { doc: ProjectDocument; revision: number } {
+    const doc = { ...source, id: id('prj') };
+    const json = JSON.stringify(doc);
+    this.db.prepare('INSERT INTO projects (id, revision, doc, initial_doc, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?)').run(doc.id, json, json, now(), now());
+    return { doc, revision: 0 };
+  }
   listProjects() {
     return (this.db.prepare('SELECT id, revision, doc, updated_at FROM projects ORDER BY updated_at DESC').all() as any[]).map((r) => ({ id: r.id, name: JSON.parse(r.doc).name as string, revision: r.revision as number, updatedAt: r.updated_at as string }));
   }

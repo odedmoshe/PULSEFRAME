@@ -149,6 +149,17 @@ async function main() {
     }
     await page.screenshot({ path: path.join(art, 'editor.png') });
     check('"export all formats" lists one job per format and each finishes with a download of the right size', links.length === 2 && JSON.stringify(sizes.sort()) === JSON.stringify(['360x360', '360x640']), { sizes });
+    console.log('\n# project archive from the editor');
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('archive-download').click()]);
+    const arcFile = path.join(art, 'project.tar');
+    await download.saveAs(arcFile);
+    const before = await doc();
+    await page.getByTestId('archive-import').setInputFiles(arcFile);
+    await page.waitForFunction((old) => new URLSearchParams(location.search).get('project') !== old && !!new URLSearchParams(location.search).get('project'), pid, { timeout: 30000 });
+    await page.getByTestId('timecode').waitFor();
+    const newId = new URL(page.url()).searchParams.get('project')!;
+    const imported = (await call(`/projects/${newId}`)).body.project;
+    check('download the project archive in the editor, import it back, and the editor opens a new project with the same content', newId !== pid && /\.pulseframe\.tar$/.test(download.suggestedFilename()) && JSON.stringify({ ...imported, id: before.id }) === JSON.stringify(before), { file: download.suggestedFilename(), bytes: fs.statSync(arcFile).size });
     check('no uncaught errors in the page during these interactions', errors.length === 0, errors.slice(0, 4));
     await page.close();
   } catch (e) {

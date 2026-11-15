@@ -110,6 +110,20 @@ async function main() {
     const afterRestart = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'rename_project', args: { name: 'after restart' } }] });
     const undoAfter = await call(`/projects/${pid}/undo`, {});
     check('after a server restart the project reopens identical, accepts new edits, and undo history still works', JSON.stringify(reopened.project) === JSON.stringify(live.project) && reopened.revision === live.revision && afterRestart.status === 200 && undoAfter.status === 200, measurements.restart);
+    // Move the project to another machine: download its archive over HTTP and import it into a second server with an empty data directory.
+    const t3 = performance.now();
+    const arc = Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/archive`, { headers: { connection: 'close', ...creds[0]! } })).arrayBuffer());
+    const s2 = await startServer({ port: 8806, dataDir: path.join(art, 'data-restored') });
+    try {
+      const h2 = { authorization: `Bearer ${s2.auth.tokens.agent}`, connection: 'close' };
+      const imp = await fetch(`${s2.url}/api/v1/projects/import`, { method: 'POST', headers: { ...h2, 'content-type': 'application/x-tar' }, body: arc });
+      const impBody: any = await imp.json();
+      const restored: any = await (await fetch(`${s2.url}/api/v1/projects/${impBody.project?.id}`, { headers: h2 })).json();
+      const frameOf = async (base: string, id: string, hd: Record<string, string>) => Buffer.from(await (await fetch(`${base}/api/v1/projects/${id}/frame?index=3`, { headers: hd })).arrayBuffer());
+      const a1 = await frameOf(s.url, pid, { connection: 'close', ...creds[0]! }), a2 = await frameOf(s2.url, impBody.project?.id, h2);
+      measurements.archive = { bytes: arc.length, exportImportMs: Math.round(performance.now() - t3) };
+      check('the project archive restores on a second server with an empty data directory: same document (new id), media present, and a rendered frame is byte-identical to the original', imp.status === 201 && JSON.stringify({ ...restored.project, id: reopened.project.id }) === JSON.stringify(reopened.project) && a1.length > 500 && a1.equals(a2), { ...(measurements.archive as object), blobsAdded: impBody.blobsAdded });
+    } finally { await s2.close(); }
     const integrity = (s.store as any).db.prepare('PRAGMA integrity_check').get() as { integrity_check: string };
     check('SQLite integrity check passes', integrity.integrity_check === 'ok', integrity);
   } catch (e) {
