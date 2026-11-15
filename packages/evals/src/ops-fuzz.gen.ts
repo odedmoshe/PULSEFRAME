@@ -120,6 +120,7 @@ export function createFuzz(seed: number) {
       () => ({ op: 'set_project_format', args: pick([{ background: '#203040' }, { fit: pick(['contain', 'cover'] as const) }, { width: 640, height: 360 }, { width: 641 }]) }),
       () => ({ op: 'rename_asset', args: { assetId: pick(assetIds), name: pick(['a.mp4', 'קובץ', 'x']) } }),
       () => ({ op: 'remove_asset', args: { assetId: pick(assetIds) } }),
+      () => ({ op: 'move_track', args: { trackId: trackId(), toIndex: int(tracks.length + 1) } }),
       () => ({ op: 'remove_track', args: { trackId: trackId() } }),
       () => ({ op: 'unlink_clip', args: { clipId: any() } }),
       () => ({ op: 'set_clip_reverse', args: { clipId: any(), reverse: rnd() < 0.75 } }),

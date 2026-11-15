@@ -495,6 +495,28 @@ async function main() {
     for (let i = 0; i < 50; i++) { qa = await getDoc(); if (qa.project.sequences.seq_main!.tracks.every((tr) => tr.clips.length > 0)) break; await new Promise((r) => setTimeout(r, 100)); }
     check('editor: the project is renamed in the header; "clear all keyframes" removes a clip\'s animation; "remove empty tracks" from the palette removes the empty track added earlier, in one transaction each', qa.project.name === 'סרט הדגמה Demo' && shownName === 'סרט הדגמה Demo' && !!keyed && cleared && emptyBefore >= 1 && emptyCmd === 'track.removeEmpty' && qa.project.sequences.seq_main!.tracks.every((tr) => tr.clips.length > 0) && qa.revision === qb.revision + 3, { name: qa.project.name, shownName, keyed: !!keyed, cleared, emptyBefore, emptyCmd, revisions: [qb.revision, qa.revision] });
 
+    console.log('\n# move a track');
+    const mvB = await getDoc();
+    const orderOf = (d: ProjectDocument) => d.sequences.seq_main!.tracks.map((tr) => tr.id);
+    const shownOrder = async () => page.locator('.track').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.trackId));
+    const anyClip = mvB.project.sequences.seq_main!.tracks[0]!.clips[0]!; // a clip on the first track in the list (shown at the bottom)
+    await page.locator(`.clip[data-clip-id="${anyClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+KeyK');
+    await page.getByTestId('palette-input').fill('track up');
+    const upCmd = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    await key('Enter');
+    let mvA = await getDoc();
+    for (let i = 0; i < 50 && mvA.revision === mvB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvA = await getDoc(); }
+    await page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('.track')].map((e) => (e as HTMLElement).dataset.trackId)) === want, JSON.stringify([...orderOf(mvA.project)].reverse()), { timeout: 8000 }).catch(() => {});
+    const shownAfter = await shownOrder();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+KeyZ');
+    let mvU = await getDoc();
+    for (let i = 0; i < 50 && mvU.revision === mvA.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvU = await getDoc(); }
+    const b0 = orderOf(mvB.project);
+    check('"move track up" from the palette swaps the selected clip\'s track with the one above it (list order and the timeline rows both change), and Ctrl+Z restores the order', upCmd === 'track.moveUp' && JSON.stringify(orderOf(mvA.project)) === JSON.stringify([b0[1], b0[0], ...b0.slice(2)]) && JSON.stringify(shownAfter) === JSON.stringify([...orderOf(mvA.project)].reverse()) && JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), { upCmd, before: b0.length, moved: orderOf(mvA.project)[1] === b0[0], shownMatches: JSON.stringify(shownAfter) === JSON.stringify([...orderOf(mvA.project)].reverse()), restored: JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0) });
+
     console.log('\n# close gaps');
     const gb = await getDoc();
     const gEnd = endOf(gb.project);

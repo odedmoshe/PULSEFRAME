@@ -202,3 +202,35 @@ describe('project frame and library entries', () => {
   });
 });
 
+describe('track order', () => {
+  it('moving a picture track changes what is drawn on top; one undo restores the order; adding or removing another track is not an order change', () => {
+    const { fwd: doc, assetId } = project(); // tracks: video, audio (clip at 20..119)
+    let r = tx(doc, [{ op: 'add_track', args: { kind: 'video', name: 'top' } }]);
+    const top = r.results[0]!.output!.trackId as string;
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(20), sourceIn: f(200), duration: f(30), trackId: top, withLinkedAudio: false } }]);
+    const base = r.doc;
+    const order = (d: ProjectDocument) => d.sequences[d.mainSequenceId]!.tracks.map((t) => t.name);
+    const drawn = (d: ProjectDocument) => evaluate(d, f(30)).layers.filter((l) => l.kind === 'video').map((l: any) => l.sourceFrameIndex);
+    expect(drawn(base)).toEqual([60, 210]); // list order: the later track is on top
+    const moved = tx(base, [{ op: 'move_track', args: { trackId: top, toIndex: 0 } }]).doc;
+    expect(validateProject(moved)).toEqual([]);
+    expect(order(moved)[0]).toBe('top');
+    expect(drawn(moved)).toEqual([210, 60]);
+    const changes = diffEntities(base, moved);
+    expect(changes.map((c) => c.id)).toEqual([`order:${base.mainSequenceId}`]);
+    const back = structuredClone(moved);
+    restoreEntities(back, changes.map((x) => ({ id: x.id, state: x.before })));
+    expect(back).toEqual(base);
+    // an unrelated track added after the move does not stop the undo from restoring the relative order, and is not itself an order change
+    const later = tx(moved, [{ op: 'add_track', args: { kind: 'text', name: 'titles' } }]).doc;
+    expect(diffEntities(moved, later).some((c) => c.id.startsWith('order:'))).toBe(false);
+    const undone = structuredClone(later);
+    restoreEntities(undone, changes.map((x) => ({ id: x.id, state: x.before })));
+    expect(drawn(undone)).toEqual([60, 210]);
+    expect(order(undone)).toContain('titles');
+    expect(validateProject(undone)).toEqual([]);
+    expect(code(() => tx(base, [{ op: 'move_track', args: { trackId: top, toIndex: order(base).indexOf('top') } }]))).toBe('invalid_args');
+    expect(code(() => tx(base, [{ op: 'move_track', args: { trackId: 'trk_none', toIndex: 0 } }]))).toBe('not_found');
+  });
+});
+

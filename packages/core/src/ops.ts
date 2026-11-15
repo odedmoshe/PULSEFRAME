@@ -14,7 +14,7 @@ import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, pictureSourceAt, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
-import { analysisEntityId, fingerprint, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
+import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 
 export type OpErrorCode =
@@ -232,6 +232,22 @@ defineOp({
     if (a.muted !== undefined) t.muted = a.muted;
     const flags = [t.locked ? 'locked' : null, t.hidden ? 'hidden' : null, t.muted ? 'muted' : null].filter(Boolean).join(', ');
     return { affectedIds: [t.id], summary: `Track ${t.name}${flags ? `: ${flags}` : ': unlocked, shown'}` };
+  },
+});
+defineOp({
+  name: 'move_track',
+  version: 1,
+  description: 'Change where a track sits in the list. Picture and title tracks are drawn in list order, later ones on top, so this changes what covers what; for sound tracks it only changes the order shown. toIndex counts from 0 in the current list (see get_timeline).',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string(), toIndex: z.number().int().min(0).max(999) }).strict(),
+  apply(d, a) {
+    const seq = seqOf(d, a.sequenceId);
+    const from = seq.tracks.findIndex((x) => x.id === a.trackId);
+    if (from < 0) throw new OpError('not_found', `track ${a.trackId} not found`, { trackId: a.trackId });
+    const to = Math.min(a.toIndex, seq.tracks.length - 1);
+    if (to === from) throw new OpError('invalid_args', 'the track is already there', { trackId: a.trackId, index: from });
+    const [t] = seq.tracks.splice(from, 1);
+    seq.tracks.splice(to, 0, t!);
+    return { affectedIds: [trackOrderEntityId(seq.id)], summary: `Moved track ${t!.name} to position ${to + 1}`, output: { index: to } };
   },
 });
 defineOp({

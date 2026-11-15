@@ -17,9 +17,13 @@ export type EntityState =
   | { kind: 'analysis'; analysis: Analysis }
   | { kind: 'variant'; variant: Variant }
   | { kind: 'recipeRun'; run: RecipeRun }
-  | { kind: 'marker'; marker: Marker };
+  | { kind: 'marker'; marker: Marker }
+  /** The stacking order of a sequence's tracks. Compared only over the tracks both sides have, so adding or removing a track is not an order change. */
+  | { kind: 'trackOrder'; sequenceId: string; ids: string[] };
 /** Entity id of an asset's analysis results. */
 export const analysisEntityId = (assetId: string) => `analysis:${assetId}`;
+/** Entity id of a sequence's track order. */
+export const trackOrderEntityId = (sequenceId: string) => `order:${sequenceId}`;
 /** Entity id of an asset's transcript. */
 export const transcriptEntityId = (assetId: string) => `transcript:${assetId}`;
 export interface EntityChange { id: string; before: EntityState | null; after: EntityState | null }
@@ -43,12 +47,14 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
   for (const v of Object.values(doc.variants ?? {})) m.set(v.id, { kind: 'variant', variant: v });
   for (const r of Object.values(doc.recipeRuns ?? {})) m.set(r.id, { kind: 'recipeRun', run: r });
   for (const k of Object.values(doc.markers ?? {})) m.set(k.id, { kind: 'marker', marker: k });
-  for (const seq of Object.values(doc.sequences))
+  for (const seq of Object.values(doc.sequences)) {
+    m.set(trackOrderEntityId(seq.id), { kind: 'trackOrder', sequenceId: seq.id, ids: seq.tracks.map((t) => t.id) });
     seq.tracks.forEach((t, index) => {
       const { clips, ...track } = t;
       m.set(t.id, { kind: 'track', sequenceId: seq.id, index, track });
       for (const clip of clips) m.set(clip.id, { kind: 'clip', sequenceId: seq.id, trackId: t.id, clip });
     });
+  }
   return m;
 }
 /** Track position is ordering metadata: unrelated track insertions must not count as a change to this track. */
@@ -73,12 +79,18 @@ function same(a: unknown, b: unknown): boolean {
 export function sameEntity(a: EntityState | null | undefined, b: EntityState | null | undefined): boolean {
   if (!a || !b) return !a && !b;
   if (a.kind !== b.kind) return false;
+  if (a.kind === 'trackOrder' && b.kind === 'trackOrder') { const [x, y] = commonOrder(a.ids, b.ids); return a.sequenceId === b.sequenceId && x.length === y.length && x.every((id, i) => id === y[i]); }
   // Track position is ordering metadata (see `comparable`).
   if (a.kind === 'track' && b.kind === 'track') return a.sequenceId === b.sequenceId && same(a.track, b.track);
   return same(a, b);
 }
+/** Each list restricted to the ids the other also has: the relative order of the tracks both sides know. */
+const commonOrder = (a: string[], b: string[]): [string[], string[]] => { const inB = new Set(b), inA = new Set(a); return [a.filter((id) => inB.has(id)), b.filter((id) => inA.has(id))]; };
 /** The slower string form of the same comparison; kept as the reference the fast path is tested against. */
-export const sameEntityCanonical = (a: EntityState | null | undefined, b: EntityState | null | undefined) => comparable(a) === comparable(b);
+export const sameEntityCanonical = (a: EntityState | null | undefined, b: EntityState | null | undefined) => {
+  if (a?.kind === 'trackOrder' && b?.kind === 'trackOrder') { const [x, y] = commonOrder(a.ids, b.ids); return a.sequenceId === b.sequenceId && canonical(x) === canonical(y); }
+  return comparable(a) === comparable(b);
+};
 
 export function diffEntities(before: ProjectDocument, after: ProjectDocument): EntityChange[] {
   const a = entityMap(before);
@@ -127,6 +139,17 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
       Object.assign(existing, structuredClone(state.track));
     }
     else seq.tracks.splice(Math.min(state.index, seq.tracks.length), 0, { ...structuredClone(state.track), clips: [] });
+  }
+  // 2b. track order: the tracks named in the target take that relative order, in the slots they occupy now; other tracks stay put
+  for (const { state } of targets) {
+    if (state?.kind !== 'trackOrder') continue;
+    const seq = draft.sequences[state.sequenceId];
+    if (!seq) continue;
+    const want = state.ids.filter((id) => seq.tracks.some((t) => t.id === id));
+    const wanted = new Set(want);
+    const byId = new Map(seq.tracks.map((t) => [t.id, t]));
+    let k = 0;
+    seq.tracks = seq.tracks.map((t) => (wanted.has(t.id) ? byId.get(want[k++]!)! : t));
   }
   // 3. clips
   for (const { state } of targets) {

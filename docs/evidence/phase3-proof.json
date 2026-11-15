@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T14:58:21.434Z",
+  "ranAt": "2026-11-15T15:35:24.803Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -367,6 +367,17 @@
       }
     },
     {
+      "name": "\"move track up\" from the palette swaps the selected clip's track with the one above it (list order and the timeline rows both change), and Ctrl+Z restores the order",
+      "ok": true,
+      "detail": {
+        "upCmd": "track.moveUp",
+        "before": 3,
+        "moved": true,
+        "shownMatches": true,
+        "restored": true
+      }
+    },
+    {
       "name": "\"close empty gaps\" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost",
       "ok": true,
       "detail": {
@@ -376,8 +387,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          35,
-          37
+          37,
+          39
         ]
       }
     },
@@ -387,7 +398,7 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 28,
+        "differentSourceFrames": 29,
         "firstFrames": [
           {
             "frame": 3,

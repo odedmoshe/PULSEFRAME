@@ -36,6 +36,14 @@ const emptyTracks = (e: Editor): string[] => {
   const tracks = d.sequences[d.mainSequenceId]!.tracks;
   return tracks.filter((t) => t.clips.length === 0 && !t.locked && !tracks.some((x) => x.id !== t.id && (x.audio?.duck?.sourceTrackIds.includes(t.id) || x.caption?.linkedTrackId === t.id))).map((t) => t.id);
 };
+/** Where the selected clip's track would go when moved by `by` places in the list, or null when it cannot move. */
+const trackMove = (e: Editor, by: number): { trackId: string; toIndex: number } | null => {
+  const d = e.doc, s = e.selected;
+  if (!d || !s) return null;
+  const tracks = d.sequences[d.mainSequenceId]!.tracks;
+  const i = tracks.findIndex((t) => t.id === s.track.id), to = i + by;
+  return i < 0 || to < 0 || to >= tracks.length ? null : { trackId: s.track.id, toIndex: to };
+};
 const nudge = (frames: number) => (e: Editor) => {
   const clips = selectedClips(e);
   if (!clips.length) return;
@@ -128,6 +136,9 @@ export const COMMANDS: Command[] = [
   { id: 'edit.slipEarlier', label: 'cmd.slipEarlier', group: 'edit', keys: ['Mod+Alt+ArrowLeft'], enabled: canSlip, run: slip(-1) },
   { id: 'edit.slipLater10', label: 'cmd.slipLater10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowRight'], enabled: canSlip, run: slip(10) },
   { id: 'edit.slipEarlier10', label: 'cmd.slipEarlier10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowLeft'], enabled: canSlip, run: slip(-10) },
+  // The timeline lists tracks top-down in reverse list order (the last track is drawn on top and shown first), so "up" on screen is a higher index.
+  { id: 'track.moveUp', label: 'cmd.trackUp', group: 'edit', keys: [], enabled: (e) => trackMove(e, 1) !== null, run: (e) => { const m = trackMove(e, 1); return m ? e.commit([{ op: 'move_track', args: m }], 'Move track') : undefined; } },
+  { id: 'track.moveDown', label: 'cmd.trackDown', group: 'edit', keys: [], enabled: (e) => trackMove(e, -1) !== null, run: (e) => { const m = trackMove(e, -1); return m ? e.commit([{ op: 'move_track', args: m }], 'Move track') : undefined; } },
   { id: 'track.removeEmpty', label: 'cmd.removeEmptyTracks', group: 'edit', keys: [], enabled: (e) => emptyTracks(e).length > 0, run: (e) => e.commit(emptyTracks(e).map((id) => ({ op: 'remove_track', args: { trackId: id } })), 'Remove empty tracks') },
   { id: 'edit.closeGaps', label: 'cmd.closeGaps', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: (e) => e.commit([{ op: 'close_gaps', args: {} }], 'Close gaps') },
   { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },
