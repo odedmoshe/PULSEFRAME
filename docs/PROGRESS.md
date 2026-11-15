@@ -502,6 +502,10 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Consequence to know: an ordinary file whose sound is a frame or more longer than its picture (common in phone recordings) is now that much longer on the timeline, with the last picture held. Existing projects keep the lengths they were imported with.
 - `PF_MATRIX_ONLY=<regex>` runs matching input-matrix cases only (development aid; the count checks then fail by design).
 
+**Checkpoint 14t — backups are read back**
+- After the database copy is written, `backupDataDir` opens it, runs SQLite's integrity check and counts the projects; a copy that fails is a failed backup (reported by the scheduler and the CLI). Each copied media file's size is compared with its source before it is moved into place.
+- Verified here: `backup.test.ts` 4/4 (the result now carries the project count read from the copy). The failure paths (a damaged copy, a short file copy) are not exercised by a test. Media bytes are compared by size only, not by content hash.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -526,7 +530,7 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 Unblocked (no decision needed), roughly by value:
 1. Editor: source viewer, workspaces (Phase 3 carry-over; markers, multi-select, marquee and J/L shuttle are done).
 2. Speed ramps, reverse, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed, freeze frame and linear volume keys are done).
-3. Backup verification after writing and pruning of media in the backup (scheduled backups with snapshot retention are done).
+3. Pruning of media in the backup; content-hash verification of copied media (scheduled backups, snapshot retention and a read-back integrity check of the database copy are done).
 4. Per-format caption text and line breaks (per-format caption style and per-format title wording/style exist); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 5. Approvals list UI; activity log dialog; MCP resource change notifications; remaining transient states in the accessibility audit (confirmation forms, error and busy states).
 6. Inputs: a colour choice for untagged files (the editor now says when colours are a guess); HDR; the AVI one-frame difference; frames during playback; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.

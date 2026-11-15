@@ -38,6 +38,7 @@ describe('backup of a running server and restore', () => {
 
       const r1 = await backupDataDir(src, dest); // server A is still running and has an open WAL
       expect(r1.databaseBytes).toBeGreaterThan(0);
+      expect(r1.projects).toBe(1); // read back from the verified copy
       expect(r1.filesCopied).toBeGreaterThan(0);
       expect(fs.existsSync(path.join(dest, 'tmp'))).toBe(false); // scratch is not backed up
       expect(fs.statSync(path.join(dest, 'tokens.json')).mode & 0o777).toBe(0o600);

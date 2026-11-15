@@ -8,7 +8,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface BackupResult { dest: string; databaseBytes: number; filesCopied: number; filesSkipped: number; bytesCopied: number }
+export interface BackupResult { dest: string; /** Projects in the verified database copy. */ projects: number; databaseBytes: number; filesCopied: number; filesSkipped: number; bytesCopied: number }
 
 function copyTree(src: string, dest: string, r: BackupResult) {
   if (!fs.existsSync(src)) return;
@@ -20,6 +20,7 @@ function copyTree(src: string, dest: string, r: BackupResult) {
     const size = fs.statSync(a).size;
     if (fs.existsSync(b) && fs.statSync(b).size === size) { r.filesSkipped++; continue; } // content-addressed / finished files do not change
     fs.copyFileSync(a, `${b}.part`);
+    if (fs.statSync(`${b}.part`).size !== size) { fs.rmSync(`${b}.part`, { force: true }); throw new Error(`short copy of ${path.relative(src, a)}`); }
     fs.renameSync(`${b}.part`, b);
     r.filesCopied++; r.bytesCopied += size;
   }
@@ -30,13 +31,20 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
   if (!fs.existsSync(dbFile)) throw new Error(`${src} is not a PULSEFRAME data directory (no pulseframe.sqlite)`);
   if (path.resolve(dest) === path.resolve(src) || path.resolve(dest).startsWith(path.resolve(src) + path.sep)) throw new Error('the backup destination must be outside the data directory');
   fs.mkdirSync(dest, { recursive: true, mode: 0o700 });
-  const r: BackupResult = { dest: path.resolve(dest), databaseBytes: 0, filesCopied: 0, filesSkipped: 0, bytesCopied: 0 };
+  const r: BackupResult = { dest: path.resolve(dest), projects: 0, databaseBytes: 0, filesCopied: 0, filesSkipped: 0, bytesCopied: 0 };
   // 1. database first: everything it refers to already exists on disk, and files are never modified afterwards
   const out = path.join(dest, 'pulseframe.sqlite');
   for (const stale of [out, `${out}-wal`, `${out}-shm`]) fs.rmSync(stale, { force: true });
   const db = new Database(dbFile, { readonly: true, fileMustExist: true });
   try { await db.backup(out); } finally { db.close(); }
   r.databaseBytes = fs.statSync(out).size;
+  // Read the copy back: a backup that cannot be opened or fails SQLite's own integrity check is reported as a failure, not kept as if good.
+  const copy = new Database(out, { readonly: true, fileMustExist: true });
+  try {
+    const verdict = copy.pragma('integrity_check', { simple: true });
+    if (verdict !== 'ok') throw new Error(`the database copy failed its integrity check: ${String(verdict).slice(0, 200)}`);
+    r.projects = (copy.prepare('SELECT COUNT(*) AS n FROM projects').get() as { n: number }).n;
+  } finally { copy.close(); }
   // 2. media (and their derivatives) and finished exports
   for (const d of ['blobs', 'out']) copyTree(path.join(src, d), path.join(dest, d), r);
   // 3. credentials
