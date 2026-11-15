@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T08:10:36.292Z",
+  "ranAt": "2026-11-15T08:48:52.249Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 16,
-  "total": 16,
+  "passed": 17,
+  "total": 17,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -153,6 +153,23 @@
         ],
         "removed": true,
         "undone": true
+      }
+    },
+    {
+      "name": "shuttle: L plays, L again goes to 2× (indicator shown, measured speed about 2×); J goes backwards at 1× and J again at 2×; Space stops and the frame holds; shuttling backwards stops at the first frame",
+      "ok": true,
+      "detail": {
+        "sh0": "",
+        "sh1": "▶▶ ×2",
+        "fwd2": 2.01,
+        "sh2": "◀◀ ×1",
+        "back1": -1,
+        "sh3": "◀◀ ×2",
+        "sh4": "",
+        "still": true,
+        "pausedIcon": true,
+        "atStart": 0,
+        "shEnd": ""
       }
     },
     {

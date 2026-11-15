@@ -84,6 +84,9 @@ const selectAdjacent = (dir: 1 | -1) => (e: Editor) => {
 
 export const COMMANDS: Command[] = [
   { id: 'transport.toggle', label: 'cmd.playPause', group: 'transport', keys: ['Space'], run: (e) => (e.player?.playing ? e.player.pause() : e.player?.play()) },
+  // Shuttle: L forwards (play, then 2×, 4×, 8×), J backwards (1×, 2×, 4×, 8×). Faster than 1× and backwards are silent. Space stops.
+  { id: 'transport.shuttleForward', label: 'cmd.shuttleForward', group: 'transport', keys: ['KeyL'], enabled: (e) => (e.player?.frameCount ?? 0) > 0, run: (e) => { const p = e.player; if (!p) return; const r = p.playing ? (p.shuttleRate || 1) : 0; p.shuttle(r > 0 ? Math.min(8, r * 2) : 1); } },
+  { id: 'transport.shuttleBack', label: 'cmd.shuttleBack', group: 'transport', keys: ['KeyJ'], enabled: (e) => (e.player?.frameCount ?? 0) > 0, run: (e) => { const p = e.player; if (!p) return; const r = p.playing ? (p.shuttleRate || 1) : 0; p.shuttle(r < 0 ? Math.max(-8, r * 2) : -1); } },
   { id: 'transport.loop', label: 'cmd.loop', group: 'transport', keys: ['Shift+KeyL'], run: (e) => e.toggleLoop() },
   { id: 'transport.prevFrame', label: 'frame.prev', group: 'transport', keys: ['ArrowLeft'], run: step(-1) },
   { id: 'transport.nextFrame', label: 'frame.next', group: 'transport', keys: ['ArrowRight'], run: step(1) },

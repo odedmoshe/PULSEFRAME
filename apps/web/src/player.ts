@@ -18,6 +18,9 @@ export class Player {
   /** How many times playback wrapped around since it was created (for tests and diagnostics). */
   loops = 0;
   clock: 'audio' | 'monotonic' = 'monotonic';
+  /** Shuttle speed in multiples of real time (negative = backwards); 0 when not shuttling. Normal playback is not a shuttle. */
+  shuttleRate = 0;
+  static readonly SHUTTLE_MAX = 8;
   private busy = false;
   private want: number | null = null;
   private raf = 0;
@@ -216,8 +219,34 @@ export class Player {
     this.raf = requestAnimationFrame(tick);
     this.onTick();
   }
+  /**
+   * Move through the timeline at `rate` times real time, backwards when negative. Silent (sound is only played at normal speed)
+   * and timed by the monotonic clock; frames that cannot be drawn in time are skipped, never queued. Stops at either end.
+   * `rate` 1 is ordinary playback with sound; 0 pauses.
+   */
+  shuttle(rate: number) {
+    if (!this.doc || this.frameCount === 0) return;
+    if (this.playing) this.pause();
+    if (rate === 0) return;
+    if (rate === 1) { void this.play(); return; }
+    const r = Math.max(-Player.SHUTTLE_MAX, Math.min(Player.SHUTTLE_MAX, rate));
+    const last = this.frameCount - 1;
+    if ((r < 0 && this.frame <= 0) || (r > 0 && this.frame >= last)) return; // nowhere to go
+    const fps = this.doc.settings.frameRate, from = this.frame, t0 = performance.now();
+    this.playing = true; this.shuttleRate = r; this.clock = 'monotonic'; this.generation++;
+    const tick = () => {
+      if (!this.playing || this.shuttleRate !== r) return;
+      const f = from + Math.trunc((((performance.now() - t0) / 1000) * r * fps.num) / fps.den); // from absolute elapsed time: no accumulated rounding
+      if (f <= 0 || f >= last) { this.frame = f <= 0 ? 0 : last; this.pause(); return; }
+      if (f !== this.frame) { this.frame = f; this.request(f); this.onTick(); }
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
+    this.onTick();
+  }
   pause() {
     this.playing = false;
+    this.shuttleRate = 0;
     this.generation++;
     cancelAnimationFrame(this.raf);
     if (this.analyser) { this.analyser.disconnect(); this.analyser = null; }

@@ -150,6 +150,7 @@ export function Transport() {
       <button className="primary" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} data-testid="play">{p?.playing ? '❚❚' : '▶'}</button>
       <button className="ghost" onClick={() => run(editor, 'transport.nextFrame')} aria-label={t('frame.next')}>▶︎</button>
       <button className="ghost" onClick={() => run(editor, 'transport.loop')} aria-pressed={!!p?.loop} aria-label={t('cmd.loop')} title={t('cmd.loop')} data-testid="loop">⟳</button>
+      {!!p?.shuttleRate && <span className="shuttle" role="status" data-testid="shuttle" aria-label={`${t(p.shuttleRate < 0 ? 'cmd.shuttleBack' : 'cmd.shuttleForward')} ×${Math.abs(p.shuttleRate)}`}>{p.shuttleRate < 0 ? '◀◀' : '▶▶'} ×{Math.abs(p.shuttleRate)}</span>}
       <span className="timecode" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>
       <span className="muted">/ {T.toTimecode(editor.duration, rate)} · {editor.viewDoc?.settings.width}×{editor.viewDoc?.settings.height} · {(rate.num / rate.den).toFixed(rate.den === 1 ? 0 : 2)} fps</span>
     </div>

@@ -261,6 +261,35 @@ async function main() {
     const tlq = (await call(`/projects/${pid}/timeline`)).body.markers.user;
     check('markers: M adds one at the playhead; name (Hebrew + Latin) and colour are committed edits; a marker added by an agent appears; Shift+M / Alt+M jump between them; remove and undo work; the timeline query lists both', mAdded && named && shownMarkers.length === 2 && shownMarkers[0]?.frame === 60 && /פזמון chorus/.test(shownMarkers[0]?.name ?? '') && hop1 === '00:00:02:00' && hop2 === '00:00:05:00' && hop3 === '00:00:02:00' && mRemoved && undone && tlq.length === 2 && tlq[1].seconds === 5, { shownMarkers, hops: [hop1, hop2, hop3], removed: mRemoved, undone });
 
+    console.log('\n# shuttle (J / L)');
+    const tcFrame = async () => { const m = (await tc()).match(/(\d+):(\d+):(\d+)[:;](\d+)/); return m ? ((+m[1]! * 60 + +m[2]!) * 60 + +m[3]!) * 30 + +m[4]! : -1; };
+    const shuttleText = async () => ((await page.getByTestId('shuttle').count()) ? ((await page.getByTestId('shuttle').textContent()) ?? '').replace(/\s+/g, ' ').trim() : '');
+    const speedOver = async (ms: number) => { const a = await tcFrame(), t = Date.now(); await sleep(ms); const b = await tcFrame(); const v = (b - a) / (((Date.now() - t) / 1000) * 30); return v; };
+    // the undo above reaches the page a moment after the server: wait for it, because a project change arriving during playback pauses it
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 2, undefined, { timeout: 8000 });
+    await page.mouse.click(rb.x + 90.5, rb.y + 5); // frame 30
+    await page.keyboard.press('l');
+    await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.textContent === '❚❚', undefined, { timeout: 5000 });
+    const sh0 = await shuttleText(); // ordinary playback: no shuttle indicator
+    await page.keyboard.press('l');
+    await page.getByTestId('shuttle').waitFor();
+    const sh1 = await shuttleText();
+    const fwd2 = await speedOver(1000);
+    await page.keyboard.press('j');
+    const sh2 = await shuttleText();
+    const back1 = await speedOver(800);
+    await page.keyboard.press('j');
+    const sh3 = await shuttleText();
+    await page.keyboard.press('Space');
+    const stoppedAt = await tcFrame();
+    await sleep(300);
+    const sh4 = await shuttleText(), still = (await tcFrame()) === stoppedAt, pausedIcon = (await page.getByTestId('play').textContent()) === '▶';
+    await page.mouse.click(rb.x + 60.5, rb.y + 5); // frame 20
+    for (let i = 0; i < 3; i++) await page.keyboard.press('j'); // ×4 backwards: reaches the start within a fraction of a second
+    await page.waitForFunction(() => !document.querySelector('[data-testid=shuttle]') && document.querySelector('[data-testid=play]')?.textContent === '▶', undefined, { timeout: 5000 }).catch(() => {});
+    const atStart = await tcFrame(), shEnd = await shuttleText();
+    check('shuttle: L plays, L again goes to 2× (indicator shown, measured speed about 2×); J goes backwards at 1× and J again at 2×; Space stops and the frame holds; shuttling backwards stops at the first frame', sh0 === '' && /▶▶ ×2/.test(sh1) && fwd2 > 1.5 && fwd2 < 2.5 && /◀◀ ×1/.test(sh2) && back1 < -0.6 && back1 > -1.4 && /◀◀ ×2/.test(sh3) && sh4 === '' && still && pausedIcon && atStart === 0 && shEnd === '', { sh0, sh1, fwd2: +fwd2.toFixed(2), sh2, back1: +back1.toFixed(2), sh3, sh4, still, pausedIcon, atStart, shEnd });
+
     console.log('\n# multi-select: move, nudge and delete several clips together');
     const mp = (await call('/projects', { name: 'multi', width: 640, height: 360 })).body.project.id;
     const mpic = await upload(mp, picFile);
