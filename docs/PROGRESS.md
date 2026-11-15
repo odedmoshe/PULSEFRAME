@@ -605,6 +605,9 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - `conformance:render-fuzz` rerun with the ops of 15g–15i in the generator: 2/2, 10 of 10 sessions rendered, 44 frames in 9 projects (transition 10, reverse 8, effect 20, mask 16, keyframes 6, blend 5, freeze 4, speed 2).
 - Not done: changing frame rate or sample rate of an existing project; rename has no editor control; removing a file does not cancel analysis jobs already running for it (their result is refused when it arrives; not tested).
 
+**Regression after checkpoint 15i — all passing (current CPU profile)**
+- `pnpm proof` 54 · phase3 37 · phase4 19 · phase5 34 · phase6 35 · phase7 31 · phase8 20 · phase9 12 · phase11 12 · phase12 17 · browser-export 23 · editor-interactions 20 · owner-ui 9 · speed 16 · soak 7 · start-offset 4 · projects 2 · long 6, each under its own time limit, none hung. Render fuzz 2/2 just before (15i). Unit tests 411; accessibility audit clean at 15i. Not rerun since the regression after 14z: inputs, images, seek, parity.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
