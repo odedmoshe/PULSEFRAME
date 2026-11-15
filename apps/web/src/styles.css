@@ -215,3 +215,6 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 
 .marquee { position: absolute; z-index: 5; border: 1px solid var(--pf-accent); background: color-mix(in srgb, var(--pf-accent) 18%, transparent); pointer-events: none; }
 .tl-inner { user-select: none; }
+.source-viewer .source-canvas { inline-size: 100%; max-block-size: 46vh; object-fit: contain; background: #000; border-radius: var(--pf-r-sm); }
+.source-viewer .source-canvas.sound-only { block-size: 48px; }
+.source-viewer input[type=range] { inline-size: 100%; }

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:41:07.932Z",
+  "ranAt": "2026-11-15T09:45:51.401Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -10,7 +10,7 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 142,
+      "controls": 143,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -27,7 +27,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 142,
+          "controls": 143,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -36,7 +36,7 @@
         },
         {
           "state": "format-view",
-          "controls": 139,
+          "controls": 140,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -46,7 +46,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 148,
+          "controls": 149,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -59,8 +59,22 @@
           "focusReturned": true
         },
         {
+          "state": "source-viewer",
+          "controls": 152,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "startsInside": true,
+          "tabStepsThatLeftTheDialog": 0,
+          "openUntilEscape": true,
+          "closed": true,
+          "focusAfterClose": "button[data-testid=view-ast_c0051013390]",
+          "focusReturned": true
+        },
+        {
           "state": "command-palette",
-          "controls": 145,
+          "controls": 146,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -78,7 +92,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 142,
+      "controls": 143,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -95,7 +109,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 142,
+          "controls": 143,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -104,7 +118,7 @@
         },
         {
           "state": "format-view",
-          "controls": 139,
+          "controls": 140,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -114,7 +128,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 148,
+          "controls": 149,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -127,8 +141,22 @@
           "focusReturned": true
         },
         {
+          "state": "source-viewer",
+          "controls": 152,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "startsInside": true,
+          "tabStepsThatLeftTheDialog": 0,
+          "openUntilEscape": true,
+          "closed": true,
+          "focusAfterClose": "button[data-testid=view-ast_c0051013390]",
+          "focusReturned": true
+        },
+        {
           "state": "command-palette",
-          "controls": 145,
+          "controls": 146,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],

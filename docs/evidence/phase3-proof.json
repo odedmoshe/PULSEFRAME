@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:26:55.078Z",
+  "ranAt": "2026-11-15T09:46:38.017Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -161,9 +161,35 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 1,
-        "editor-en": 1,
-        "palette-en": 1
+        "editor-he": 0.984584,
+        "editor-en": 0.983132,
+        "palette-en": 0.986847
+      }
+    },
+    {
+      "name": "source viewer: opens from the library by keyboard, shows the file's own frames (0, 30, 71 by barcode), plays; I and O mark a range of 42 frames; \"add\" places exactly that range at the end of the timeline as one transaction (picture + linked sound) and the timeline then shows source frames 30 and 71 at its first and last frame; shortcuts typed in the viewer do not move the timeline behind it; focus returns to the button",
+      "ok": true,
+      "detail": {
+        "svFirst": 0,
+        "at30": 30,
+        "at71": 71,
+        "svRange": {
+          "in": 30,
+          "out": 72
+        },
+        "untouched": true,
+        "svPlayed": true,
+        "focusBack": true,
+        "revisions": [
+          15,
+          16
+        ],
+        "svAdded": 2,
+        "clipsBefore": 7,
+        "sourceIn": 30,
+        "frames": 42,
+        "shownFirst": 30,
+        "shownLast": 71
       }
     },
     {

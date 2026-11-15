@@ -26,6 +26,7 @@ export function App() {
       if (!cmd) return;
       if (typing && !(chord.startsWith('Mod+') && cmd.group === 'view')) return;
       if (editor.getState().paletteOpen && cmd.id !== 'view.palette') return;
+      if (document.querySelector('.pf-dlg[aria-modal="true"]')) return; // a modal dialog is open: editor shortcuts do not act on the timeline behind it
       e.preventDefault();
       if (!cmd.enabled || cmd.enabled(editor)) void cmd.run(editor);
     };

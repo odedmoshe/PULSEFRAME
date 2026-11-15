@@ -163,6 +163,10 @@ async function main() {
       const pd = await dialogBehaviour('projects-dialog', async () => { await page.getByTestId('projects-open').click(); }, '[data-testid=projects-open]');
       await auditState('projects-dialog', { startsInside: pd.startsInside, tabStepsThatLeftTheDialog: pd.tabStepsThatLeftTheDialog }, true);
       Object.assign(states.at(-1), await pd.close());
+      // source viewer dialog
+      const sv = await dialogBehaviour('source-viewer', async () => { await page.getByTestId(`view-${up.assetId}`).click(); }, `[data-testid="view-${up.assetId}"]`);
+      await auditState('source-viewer', { startsInside: sv.startsInside, tabStepsThatLeftTheDialog: sv.tabStepsThatLeftTheDialog }, true);
+      Object.assign(states.at(-1), await sv.close());
       // command palette
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
       await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);

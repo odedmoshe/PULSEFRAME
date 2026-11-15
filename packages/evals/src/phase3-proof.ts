@@ -11,7 +11,7 @@ import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
 import { transformAt, type ProjectDocument } from '@pulseframe/core';
-import { generateBarcodeFixture } from '@pulseframe/fixtures';
+import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -251,6 +251,55 @@ async function main() {
     const feed = await page.locator('[data-testid=activity] li').first().textContent();
     check('activity feed is written in the interface language (Hebrew), not in server English', /[\u0590-\u05FF]/.test(feed ?? '') && !/Keyframe|Moved|Trimmed/.test(feed ?? ''), feed);
     check('visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run', Object.values(baselines).every((b) => b === 'baseline written' || (typeof b === 'number' && b >= 0.98)), baselines);
+
+    console.log('\n# source viewer');
+    const svBefore = await getDoc();
+    const assetId = Object.values(svBefore.project.assets).find((a) => a.kind === 'video')!.id;
+    const clipsBefore = svBefore.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).length;
+    const srcCode = async () => {
+      const shot = await page.evaluate(() => { const cv = document.querySelector('[data-testid=source-canvas]') as HTMLCanvasElement; return { w: cv.width, frame: cv.dataset.frame, quality: cv.dataset.quality, data: Array.from(cv.getContext('2d')!.getImageData(0, Math.round(cv.height / 12), cv.width, 1).data.filter((_, i) => i % 4 !== 3)) }; });
+      return { code: readBarcode(Uint8Array.from(shot.data), shot.w, 3, { x: 0, y: 0, w: shot.w, h: 0 }), frame: Number(shot.frame) };
+    };
+    const srcAt = async (f: number) => { await page.waitForFunction((t) => { const cv = document.querySelector('[data-testid=source-canvas]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, f, { timeout: 15000 }); return (await srcCode()).code; };
+    await page.getByTestId(`view-${assetId}`).focus();
+    await page.keyboard.press('Enter');
+    await page.getByTestId('source-viewer').waitFor();
+    const svFirst = await srcAt(0);
+    await page.getByTestId('source-scrub').fill('30');
+    const at30 = await srcAt(30);
+    await page.keyboard.press('i'); // mark in at frame 30
+    for (let i = 0; i < 4; i++) await page.keyboard.press('Shift+ArrowRight'); // +40
+    await page.keyboard.press('ArrowRight'); // 71
+    const at71 = await srcAt(71);
+    await page.keyboard.press('o'); // frame 71 is the last one included
+    const svRange = await page.getByTestId('source-range').evaluate((el) => ({ in: Number((el as HTMLElement).dataset.in), out: Number((el as HTMLElement).dataset.out) }));
+    // shortcuts pressed in the dialog must not reach the timeline behind it
+    const playheadBefore = await page.getByTestId('timecode').textContent();
+    await page.keyboard.press('Home');
+    await page.keyboard.press('m');
+    const untouched = (await page.getByTestId('timecode').textContent()) === playheadBefore && (await getDoc()).revision === svBefore.revision;
+    await page.getByTestId('source-play').click();
+    await page.waitForFunction(() => Number((document.querySelector('[data-testid=source-canvas]') as HTMLCanvasElement)?.dataset.frame) > 80, undefined, { timeout: 8000 }).catch(() => {});
+    const svPlayed = (await srcCode()).frame > 80;
+    await page.getByTestId('source-add').click();
+    await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
+    const focusBack = await page.evaluate((id) => (document.activeElement as HTMLElement | null)?.dataset?.testid === `view-${id}`, assetId);
+    let svAfter = await getDoc();
+    for (let i = 0; i < 50 && svAfter.revision === svBefore.revision; i++) { await new Promise((r) => setTimeout(r, 100)); svAfter = await getDoc(); }
+    const svAdded = svAfter.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).filter((c) => !svBefore.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).some((o) => o.id === c.id));
+    const pic = svAdded.find((c) => c.type === 'media' && svAfter.project.sequences.seq_main!.tracks.find((tr) => tr.clips.includes(c))!.kind === 'video') as any;
+    // the timeline shows source frame 30 at the new clip's svFirst frame and 71 at its last
+    const startFrame = pic ? T.frameIndexAt(pic.start, R) : -1;
+    const stillCode = async (index: number) => {
+      const png = Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${index}`, { headers: h })).arrayBuffer());
+      const r = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: png, maxBuffer: 1 << 28 });
+      const w = svAfter.project.settings.width, hgt = svAfter.project.settings.height;
+      // the 16:9 picture is fitted into the project frame: find its rectangle
+      const ph = Math.round((w * 360) / 640), py = Math.round((hgt - ph) / 2);
+      return readBarcode(new Uint8Array(r.stdout), w, 3, { x: 0, y: py, w, h: ph });
+    };
+    const shownFirst = pic ? await stillCode(startFrame) : -1, shownLast = pic ? await stillCode(startFrame + 41) : -1;
+    check('source viewer: opens from the library by keyboard, shows the file\'s own frames (0, 30, 71 by barcode), plays; I and O mark a range of 42 frames; "add" places exactly that range at the end of the timeline as one transaction (picture + linked sound) and the timeline then shows source frames 30 and 71 at its first and last frame; shortcuts typed in the viewer do not move the timeline behind it; focus returns to the button', svFirst === 0 && at30 === 30 && at71 === 71 && svRange.in === 30 && svRange.out === 72 && untouched && svPlayed && focusBack && svAfter.revision === svBefore.revision + 1 && svAdded.length === 2 && !!pic && T.frameIndexAt(pic.sourceIn, R) === 30 && T.frameIndexAt(pic.duration, R) === 42 && shownFirst === 30 && shownLast === 71, { svFirst, at30, at71, svRange, untouched, svPlayed, focusBack, revisions: [svBefore.revision, svAfter.revision], svAdded: svAdded.length, clipsBefore, sourceIn: pic && T.frameIndexAt(pic.sourceIn, R), frames: pic && T.frameIndexAt(pic.duration, R), shownFirst, shownLast });
     check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.

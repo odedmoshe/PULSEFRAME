@@ -13,6 +13,7 @@ import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
+import { SourceViewer } from './SourceViewer.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -81,6 +82,7 @@ export function ErrorBar() {
 export function Library() {
   const { editor, state, t } = useEditorState();
   const { doc, uploading } = state;
+  const [viewing, setViewing] = useState<string | null>(null);
   return (
     <aside className="library" aria-label={t('media')}>
       <h2>{t('media')}</h2>
@@ -89,6 +91,7 @@ export function Library() {
         <input type="file" accept="video/*,audio/*,image/png,image/jpeg,image/webp" disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void editor.importFile(f); }} />
       </label>
       {doc && Object.keys(doc.assets).length === 0 && <p className="muted">{t('media.empty')}</p>}
+      {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`)?.focus(), 0); }} />}
       <ul className="assets">
         {doc && Object.values(doc.assets).map((a) => (
           <li key={a.id}>
@@ -104,6 +107,7 @@ export function Library() {
               </span>
             ))}
             <button className="ghost" onClick={() => void editor.addAsset(a.id)} data-testid={`add-${a.id}`}>{t('media.add')}</button>
+            {a.kind !== 'image' && <button className="ghost" onClick={() => setViewing(a.id)} data-testid={`view-${a.id}`}>{t('source.open')}</button>}
           </li>
         ))}
       </ul>
