@@ -60,6 +60,24 @@ const rollOps = (e: Editor, frames: number): { op: string; args: unknown }[] | n
   const a = { op: 'trim_clip', args: { clipId: s.clip.id, edge: 'start', to } }, b = { op: 'trim_clip', args: { clipId: prev.id, edge: 'end', to } };
   return frames > 0 ? [a, b] : [b, a];
 };
+/**
+ * Slide the selected clip by `frames` between the clip that ends where it starts and the clip that starts where it ends:
+ * the clip keeps its length and content, the neighbour ahead of it is trimmed back and the one behind it is extended.
+ * Null without both neighbours or when a neighbour would vanish. The server refuses it if the extended neighbour lacks source material.
+ */
+const slideOps = (e: Editor, frames: number): { op: string; args: unknown }[] | null => {
+  const s = e.selected;
+  if (!s || e.getState().selection.length !== 1) return null;
+  const prev = s.track.clips.find((c) => c.id !== s.clip.id && T.eq(clipEnd(c), s.clip.start));
+  const next = s.track.clips.find((c) => c.id !== s.clip.id && T.eq(c.start, clipEnd(s.clip)));
+  if (!prev || !next) return null;
+  const a = T.frameIndexAt(s.clip.start, e.rate) + frames, b = T.frameIndexAt(clipEnd(s.clip), e.rate) + frames;
+  if (a <= T.frameIndexAt(prev.start, e.rate) || b >= T.frameIndexAt(clipEnd(next), e.rate)) return null;
+  const trimPrev = { op: 'trim_clip', args: { clipId: prev.id, edge: 'end', to: T.frameTime(a, e.rate) } };
+  const trimNext = { op: 'trim_clip', args: { clipId: next.id, edge: 'start', to: T.frameTime(b, e.rate) } };
+  const move = { op: 'move_clip', args: { clipId: s.clip.id, start: T.frameTime(a, e.rate) } };
+  return frames > 0 ? [trimNext, move, trimPrev] : [trimPrev, move, trimNext]; // make room first, fill the gap last
+};
 const nudge = (frames: number) => (e: Editor) => {
   const clips = selectedClips(e);
   if (!clips.length) return;
@@ -151,6 +169,9 @@ export const COMMANDS: Command[] = [
   // Roll: move the cut between the selected clip and the clip before it, without moving anything else (one transaction of two trims).
   { id: 'edit.rollLater', label: 'cmd.rollLater', group: 'edit', keys: ['Mod+BracketRight'], enabled: (e) => !!rollOps(e, 1), run: (e) => e.commit(() => rollOps(e, 1), 'Roll cut') }, // computed when the commit runs, so repeated presses each move one more frame
   { id: 'edit.rollEarlier', label: 'cmd.rollEarlier', group: 'edit', keys: ['Mod+BracketLeft'], enabled: (e) => !!rollOps(e, -1), run: (e) => e.commit(() => rollOps(e, -1), 'Roll cut') }, // computed when the commit runs, so repeated presses each move one more frame
+  // Slide: move the selected clip between its two neighbours; the one it moves towards gets shorter, the one it leaves gets longer (three steps, one transaction).
+  { id: 'edit.slideLater', label: 'cmd.slideLater', group: 'edit', keys: ['Mod+Shift+BracketRight'], enabled: (e) => !!slideOps(e, 1), run: (e) => e.commit(() => slideOps(e, 1), 'Slide clip') },
+  { id: 'edit.slideEarlier', label: 'cmd.slideEarlier', group: 'edit', keys: ['Mod+Shift+BracketLeft'], enabled: (e) => !!slideOps(e, -1), run: (e) => e.commit(() => slideOps(e, -1), 'Slide clip') },
   { id: 'edit.slipLater', label: 'cmd.slipLater', group: 'edit', keys: ['Mod+Alt+ArrowRight'], enabled: canSlip, run: slip(1) },
   { id: 'edit.slipEarlier', label: 'cmd.slipEarlier', group: 'edit', keys: ['Mod+Alt+ArrowLeft'], enabled: canSlip, run: slip(-1) },
   { id: 'edit.slipLater10', label: 'cmd.slipLater10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowRight'], enabled: canSlip, run: slip(10) },
@@ -216,6 +237,6 @@ export function chordLabel(chord: string, mac = typeof navigator !== 'undefined'
 }
 
 // Commands that change the selected clips do nothing while a selected clip is on a locked track.
-const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.split', 'edit.delete', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.add', 'keyframe.remove']);
+const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.add', 'keyframe.remove']);
 for (const c of COMMANDS) if (CHANGES_SELECTION.has(c.id)) { const was = c.enabled; c.enabled = (e) => !e.selectionLocked && (!was || was(e)); }
 
