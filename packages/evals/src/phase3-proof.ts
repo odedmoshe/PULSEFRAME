@@ -379,12 +379,21 @@ async function main() {
     await page.waitForFunction((t) => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, atFrame + 2, { timeout: 15000 }).catch(() => {});
     const previewFrame = Number(await page.getByTestId('preview').getAttribute('data-frame'));
     const previewCode = await page.evaluate(() => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; const ph = (cv.width * 360) / 640, py = (cv.height - ph) / 2; const row = cv.getContext('2d')!.getImageData(0, Math.round(py + ph / 12), cv.width, 1).data; return { w: cv.width, data: Array.from(row.filter((_, k) => k % 4 !== 3)) }; }).then((x) => readBarcode(Uint8Array.from(x.data), x.w, 3, { x: 0, y: 0, w: x.w, h: 0 }));
+    // the exported file shows the same order (server export of just this stretch, read by barcode)
+    const exJob = (await (await fetch(`${s.url}/api/v1/projects/${pid}/exports`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ range: { startFrame: atFrame - 1, endFrame: atFrame + 11 }, quality: 'high' }) })).json()) as any;
+    let exStatus = '';
+    for (let i = 0; i < 600; i++) { exStatus = ((await (await fetch(`${s.url}/api/v1/jobs/${exJob.jobId}`, { headers: h })).json()) as any).status; if (['succeeded', 'failed', 'canceled'].includes(exStatus)) break; await new Promise((r) => setTimeout(r, 200)); }
+    const exFile = path.join(art, 'reverse-range.mp4');
+    fs.writeFileSync(exFile, Buffer.from(await (await fetch(`${s.url}/api/v1/jobs/${exJob.jobId}/output`, { headers: h })).arrayBuffer()));
+    const exRaw = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-i', exFile, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 30 }).stdout;
+    const ew = ra.project.settings.width, eh = ra.project.settings.height, eph = Math.round((ew * 360) / 640), epy = Math.round((eh - eph) / 2), efb = ew * eh * 3;
+    const exported = Array.from({ length: Math.floor(exRaw.length / efb) }, (_, i) => readBarcode(new Uint8Array(exRaw.buffer, exRaw.byteOffset + i * efb, efb), ew, 3, { x: 0, y: epy, w: ew, h: eph }));
     const marked = await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).getAttribute('data-reverse');
     await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
     await page.getByTestId('reverse-toggle').click();
     for (let i = 0; i < 50 && ra.revision !== rb0.revision + 2; i++) { await new Promise((r) => setTimeout(r, 100)); ra = await getDoc(); }
     const fwdAgain = [await stillCode(atFrame), await stillCode(atFrame + 9)];
-    check('"play backwards" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, the clip is marked on the timeline, and unchecking restores 73…82', JSON.stringify(revShown) === JSON.stringify([30 + k - 1, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 110]) && revClip.reverse === true && T.eq(revClip.start, slipClip.start) && T.eq(revClip.duration, slipClip.duration) && previewFrame === atFrame + 2 && previewCode === 80 && marked === 'true' && JSON.stringify(fwdAgain) === JSON.stringify([73, 82]), { revShown, previewFrame, previewCode, marked, fwdAgain });
+    check('"play backwards" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, an exported file of that stretch shows the same twelve frames in the same order, the clip is marked on the timeline, and unchecking restores 73…82', JSON.stringify(revShown) === JSON.stringify([30 + k - 1, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 110]) && revClip.reverse === true && T.eq(revClip.start, slipClip.start) && T.eq(revClip.duration, slipClip.duration) && previewFrame === atFrame + 2 && previewCode === 80 && exStatus === 'succeeded' && JSON.stringify(exported) === JSON.stringify(revShown) && marked === 'true' && JSON.stringify(fwdAgain) === JSON.stringify([73, 82]), { revShown, exported, exStatus, previewFrame, previewCode, marked, fwdAgain });
 
     console.log('\n# close gaps');
     const gb = await getDoc();
