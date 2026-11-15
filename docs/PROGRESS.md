@@ -834,6 +834,10 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified here: `scopes.test.ts` (2 tests of the analysis on known pixels), `pnpm proof:phase3` 50/50 (new check: both scopes drawn, average luma within 3 levels and range within 12 of the server still of the same frame), accessibility audit clean, 459 unit tests.
 - Not done: no vectorscope, no RGB parade, no scope of a selected clip alone (always the whole frame), no colour wheels or curves; the scopes are not updated during playback faster than the preview paints.
 
+**Regression after checkpoint 16v — all passing (one run on this CPU profile)**
+- proof 54 · phase3 50 · phase4 20 · phase5 34 · phase6 37 · phase7 31 · phase8 21 · phase9 14 · phase11 12 · phase12 20 · browser-export 23 · editor-interactions 24 · owner-ui 9 · speed 19 · pitch 10 · reverse-sound 7 · soak 7 · start-offset 4 · projects 2 · long 6 · render-fuzz 2 · images 3 · parity pass · seek 5 files pass · inputs 4/4 (30 correct + 1 noted) · accessibility audit no findings · 459 unit tests.
+- State of the unblocked list after 16m–16v: done — pitch-keeping stretch, continuous speed ramp, smooth volume stretches and freehand drawing, bar-start cuts, target tracks, drag from the library, word entrance in captions, Motion and Color workspaces with scopes, HDR sources tone-mapped at import. Deliberately not done — translating the detail text of server refusals (needs a message key at about two hundred refusal sites; the headline by code is translated). Left open and smaller than what was done: trimming or cutting a ramped clip, eased ramps, a vectorscope, user-made panel arrangements, dropping files from the computer onto the timeline, target tracks remembered across reloads. HDR output and everything else on the blocked list still need the resources in `docs/BLOCKERS.md`.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
