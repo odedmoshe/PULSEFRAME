@@ -210,6 +210,35 @@ async function main() {
     check('editor Sound tab: volume in dB, mute, ducking source, loudness target, measured loudness shown, fade-in on the selected clip — each lands in the document; no page errors', gainOk && muteOk && duckOk && targetOk && Math.abs(shown - apiL) < 0.15 && fadeOk && eerr.length === 0, { gainOk, muteOk, duckOk, targetOk, shownLufs: shown, apiLufs: apiL, fadeOk, errors: eerr.slice(0, 3) });
     await ep.close();
 
+    console.log('\n# live playback in the browser: fades and ducking as heard');
+    const livePid = (await call('/projects', { name: 'phase8-live', width: 640, height: 360 })).body.project.id;
+    const lm2 = await upload(livePid, musicFile), lv2 = await upload(livePid, voiceFile);
+    const ltr = await txs(livePid, [{ op: 'add_track', args: { kind: 'audio', name: 'voice' } }, { op: 'add_track', args: { kind: 'audio', name: 'music' } }]);
+    const [lvt, lmt] = ltr.results.map((x: any) => x.output.trackId);
+    const lcl = await txs(livePid, [{ op: 'add_clip', args: { assetId: lm2.assetId, start: f(0), trackId: lmt } }, { op: 'add_clip', args: { assetId: lv2.assetId, start: f(0), trackId: lvt } }]);
+    const lmc = lcl.results[0].output.audioClipId ?? lcl.results[0].output.clipId, lvc = lcl.results[1].output.audioClipId ?? lcl.results[1].output.clipId;
+    await txs(livePid, [
+      { op: 'set_clip_gain', args: { clipId: lvc, gain: 0.001 } }, // the voice only triggers ducking here; it is made inaudible so the measured level is the music alone
+      { op: 'set_transcript', args: { assetId: lv2.assetId, language: 'he', segments: [{ start: T.rt(2, 1), duration: T.rt(2, 1), text: 'שלום לכולם' }] } },
+      { op: 'set_ducking', args: { trackId: lmt, sourceTrackIds: [lvt], reductionDb: 12, attackMs: 100, releaseMs: 300 } },
+      { op: 'set_clip_fades', args: { clipId: lmc, fadeIn: T.rt(1, 1), fadeOut: T.rt(2, 1) } },
+    ]);
+    const live = await (await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' })).newPage();
+    await live.addInitScript(() => { (window as any).__pfAudioTap = true; });
+    await live.goto(`${s.ownerUrl}&project=${livePid}`);
+    await live.getByTestId('timecode').waitFor();
+    await live.getByTestId('play').click();
+    await live.waitForFunction(() => { const st = (window as any).__pfSync?.(); return st && st.audioLevels.length > 150; }, undefined, { timeout: 40000 });
+    const stats: any = await live.evaluate(() => (window as any).__pfSync());
+    await live.close();
+    const levelAt = (t: number) => { const w = (stats.audioLevels as { t: number; peak: number }[]).reduce((best, x) => (Math.abs(x.t + 0.025 - t) < Math.abs(best.t + 0.025 - t) ? x : best)); return w.peak; };
+    const lowG = 10 ** (-12 / 20);
+    const livePts: [number, number][] = [[0.5, 0.25], [1.5, 0.5], [3.0, 0.5 * lowG], [4.15, 0.5 * (1 + lowG) / 2], [5.0, 0.5], [7.0, 0.25]];
+    const liveMeasured = livePts.map(([t]) => r3(levelAt(t)));
+    const liveErr = Math.max(...livePts.map(([t, g]) => Math.abs(levelAt(t) - g)));
+    measurements.livePlayback = { clock: stats.clock, audioContextState: stats.audioContextState, windows: stats.audioLevels.length, expected: livePts.map(([, g]) => r3(g)), measured: liveMeasured, maxAbsError: r3(liveErr), note: 'peak of 50 ms windows at the output stage during real-time playback in headless Chromium; a window spans part of a ramp, so ramps carry about ±0.02 of inherent error' };
+    check('during real-time playback the output level follows the plan: fade-in, steady level, 12 dB duck while the phrase is spoken, release, fade-out (6 points within 0.04 of full scale)', stats.clock === 'audio' && liveErr < 0.04, measurements.livePlayback);
+
     console.log('\n# agent (MCP)');
     const c = new Client({ name: 'phase8-script', version: '0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
     await c.connect(new StreamableHTTPClientTransport(new URL(`${s.url}/mcp`), { requestInit: { headers: h } }));

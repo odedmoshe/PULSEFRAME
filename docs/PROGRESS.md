@@ -198,7 +198,8 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 **Checkpoint 13d — editor interactions that had been built but not exercised**
 - `pnpm proof:editor-interactions` (7/7, `docs/evidence/editor-interactions-proof.json`) drives in headless Chromium: a canvas drag while viewing a format creates a format-only override of exactly the dragged fraction (master untouched); hide-in-format and clear-override; clip moves snapping to beats with the toggle on and not with it off; add/remove a beat at the playhead; the level meter showing a real level during playback; "export all formats" producing one finished download per format at the right size.
 - This supersedes the "not exercised in a browser" notes in checkpoints 8a (meter), 9a (beat snapping, manual beat edits) and 12a (canvas override drag, hide-in-format, batch-export list).
-- **Still unverified:** audible fades and ducking during live playback (only the offline WebAudio chain is measured against the mixer); the Inspector sliders editing the master while a format is viewed (a known inconsistency, not a test gap); other browsers; touch input.
+- Live playback of fades and ducking was measured afterwards (`pnpm proof:phase8`, now 18 checks): output level per 50 ms window during real-time playback in headless Chromium matches the plan at six points (steady 0.5 and ducked 0.1256 exact; ramps within 0.036 of full scale, which is the window's own resolution). The Inspector/format inconsistency was fixed in checkpoint 13f.
+- **Still unverified:** other browsers; touch input; real audio hardware (headless Chromium has no sound device, so output latency to a speaker is not measured).
 
 **Checkpoint 13e — portable project archive**
 - `GET …/projects/{id}/archive` streams one tar file (manifest, project document, every media blob by content hash, including untouched originals of conformed media); `POST …/projects/import` creates a new project from one. The tar reader/writer is purpose-built: only the three expected entry kinds are accepted, every blob is hashed against its name, the manifest and document are validated, and nothing is added unless everything checks out.
@@ -241,7 +242,6 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 Unblocked (no decision needed), roughly by value:
 1. Editor: cut command, multi-select drag, loop playback, J/K/L, markers, source viewer, workspaces (Phase 3 carry-over).
 2. Keyframed effect parameters; speed changes with audio; audio crossfades and volume automation (Phases 7–8 carry-over).
-3. Live-playback measurement of fades and ducking (only the offline chain is measured today).
 4. Media garbage collection and disk quota; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Grants and approvals management UI; MCP resources/prompts; activity log dialog.
@@ -263,7 +263,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 pnpm install && pnpm build && pnpm test
 ```
 Expect 256 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 30 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 30 · `pnpm proof:phase8` 17 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 10 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 30 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 30 · `pnpm proof:phase8` 18 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 10 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

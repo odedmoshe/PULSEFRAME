@@ -25,6 +25,8 @@ export class Player {
   static readonly AUDIO_LOOKAHEAD = 1.5;
   private scheduledAheadMax = 0;
   private onsets: number[] = [];
+  /** Measurement only (tests set window.__pfAudioTap): output level per 50 ms window, in timeline seconds. */
+  private levels: { t: number; peak: number }[] = [];
   private tap: AudioWorkletNode | null = null;
   private tapLoaded = false;
   private analyser: AnalyserNode | null = null;
@@ -108,10 +110,17 @@ export class Player {
     if (audioOk && (globalThis as any).__pfAudioTap && !this.tapLoaded) {
       // AudioWorklet tap: sample-accurate (currentFrame), unlike ScriptProcessor whose callbacks lag by a block.
       const code = `registerProcessor('pf-onset-tap', class extends AudioWorkletProcessor {
-        constructor() { super(); this.quiet = 0; }
+        constructor() { super(); this.quiet = 0; this.peak = 0; this.n = 0; this.t0 = 0; }
         process(inputs) {
           const ch = inputs[0] && inputs[0][0];
-          if (ch) for (let i = 0; i < ch.length; i++) { const f = currentFrame + i; if (f >= this.quiet && Math.abs(ch[i]) > 0.15) { this.port.postMessage(f / sampleRate); this.quiet = f + sampleRate * 0.3; } }
+          if (ch) for (let i = 0; i < ch.length; i++) {
+            const f = currentFrame + i, a = Math.abs(ch[i]);
+            if (f >= this.quiet && a > 0.15) { this.port.postMessage(f / sampleRate); this.quiet = f + sampleRate * 0.3; }
+            // Level windows of 50 ms: the peak of each window, stamped with the window's start time on the audio clock.
+            if (this.n === 0) this.t0 = f;
+            if (a > this.peak) this.peak = a;
+            if (++this.n >= sampleRate * 0.05) { this.port.postMessage({ t: this.t0 / sampleRate, peak: this.peak }); this.n = 0; this.peak = 0; }
+          }
           return true;
         }
       });`;
@@ -136,6 +145,7 @@ export class Player {
     const master = audioOk ? this.actx!.createGain() : null;
     master?.connect(this.actx!.destination);
     this.onsets = [];
+    this.levels = [];
     if (master) {
       // Level meter tap (observation only; the analyser has no output so it does not change what is heard).
       const an = this.actx!.createAnalyser();
@@ -146,7 +156,10 @@ export class Player {
     }
     if (master && (globalThis as any).__pfAudioTap) {
       const tap = new AudioWorkletNode(this.actx!, 'pf-onset-tap', { numberOfOutputs: 0 });
-      tap.port.onmessage = (e) => this.onsets.push(+((e.data as number) - originClock + t0).toFixed(5));
+      tap.port.onmessage = (e) => {
+        if (typeof e.data === 'number') this.onsets.push(+(e.data - originClock + t0).toFixed(5));
+        else this.levels.push({ t: +((e.data as { t: number }).t - originClock + t0).toFixed(4), peak: +(e.data as { peak: number }).peak.toFixed(4) });
+      };
       master.connect(tap);
       this.tap = tap;
     }
@@ -227,7 +240,7 @@ export class Player {
   syncStats() {
     const v = [...this.late].sort((a, b) => a - b);
     const q = (p: number) => (v.length ? +(v[Math.min(v.length - 1, Math.floor(v.length * p))]! * 1000).toFixed(2) : null);
-    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, audioOnsetsTimelineSeconds: [...this.onsets], framesRequested: this.requested, framesPainted: v.length, paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) } };
+    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) } };
   }
   dispose() {
     this.pause();

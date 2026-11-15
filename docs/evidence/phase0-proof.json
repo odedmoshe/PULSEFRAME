@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T02:07:29.168Z",
+  "ranAt": "2026-11-15T02:15:49.650Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 320,
+    "editorShellInteractiveMs": 339,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 17.1,
-      "requestToVisibleInEditorMs": 41,
+      "requestToCommitMs": 13.2,
+      "requestToVisibleInEditorMs": 41.8,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 6.73,
-      "p95": 8.98,
-      "max": 12.56
+      "median": 6.56,
+      "p95": 9.69,
+      "max": 14.69
     },
     "export": {
-      "file": "job_SBwJWO106ZM.mp4",
+      "file": "job_8Ozh4qKijLc.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -68,7 +68,7 @@
         },
         "assets": [
           {
-            "id": "ast_3bb28c02b10",
+            "id": "ast_85794587f40",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -135,13 +135,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 620,
-        "readback": 686,
-        "upload": 5059
+        "draw": 633,
+        "readback": 656,
+        "upload": 5078
       },
-      "wallSeconds": 7.451,
-      "realtimeFactor": 0.4697356059589317,
-      "uiWallSeconds": 7.981
+      "wallSeconds": 7.328,
+      "realtimeFactor": 0.4776200873362445,
+      "uiWallSeconds": 7.473
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -173,10 +173,10 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_3bb28c02b10": "original"
+        "ast_85794587f40": "original"
       },
       "sourcesUsed": {
-        "ast_3bb28c02b10": [
+        "ast_85794587f40": [
           "original"
         ]
       },
@@ -184,7 +184,7 @@
       "disposed": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_3bb28c02b10/content:206"
+        "ast_85794587f40/content:206"
       ]
     },
     "previewSync": {
@@ -199,12 +199,302 @@
         1.00006,
         2.50006
       ],
+      "audioLevels": [
+        {
+          "t": -0.1307,
+          "peak": 0
+        },
+        {
+          "t": -0.07,
+          "peak": 0
+        },
+        {
+          "t": -0.02,
+          "peak": 0.5178
+        },
+        {
+          "t": 0.03,
+          "peak": 0.5047
+        },
+        {
+          "t": 0.08,
+          "peak": 0.5015
+        },
+        {
+          "t": 0.13,
+          "peak": 0
+        },
+        {
+          "t": 0.18,
+          "peak": 0
+        },
+        {
+          "t": 0.23,
+          "peak": 0
+        },
+        {
+          "t": 0.28,
+          "peak": 0
+        },
+        {
+          "t": 0.33,
+          "peak": 0
+        },
+        {
+          "t": 0.38,
+          "peak": 0
+        },
+        {
+          "t": 0.43,
+          "peak": 0
+        },
+        {
+          "t": 0.48,
+          "peak": 0
+        },
+        {
+          "t": 0.53,
+          "peak": 0
+        },
+        {
+          "t": 0.58,
+          "peak": 0
+        },
+        {
+          "t": 0.63,
+          "peak": 0
+        },
+        {
+          "t": 0.68,
+          "peak": 0
+        },
+        {
+          "t": 0.73,
+          "peak": 0
+        },
+        {
+          "t": 0.78,
+          "peak": 0
+        },
+        {
+          "t": 0.83,
+          "peak": 0
+        },
+        {
+          "t": 0.88,
+          "peak": 0
+        },
+        {
+          "t": 0.93,
+          "peak": 0
+        },
+        {
+          "t": 0.98,
+          "peak": 0.5011
+        },
+        {
+          "t": 1.03,
+          "peak": 0.5003
+        },
+        {
+          "t": 1.08,
+          "peak": 0.5004
+        },
+        {
+          "t": 1.13,
+          "peak": 0
+        },
+        {
+          "t": 1.18,
+          "peak": 0
+        },
+        {
+          "t": 1.23,
+          "peak": 0
+        },
+        {
+          "t": 1.28,
+          "peak": 0
+        },
+        {
+          "t": 1.33,
+          "peak": 0
+        },
+        {
+          "t": 1.38,
+          "peak": 0
+        },
+        {
+          "t": 1.43,
+          "peak": 0
+        },
+        {
+          "t": 1.48,
+          "peak": 0
+        },
+        {
+          "t": 1.53,
+          "peak": 0
+        },
+        {
+          "t": 1.58,
+          "peak": 0
+        },
+        {
+          "t": 1.63,
+          "peak": 0
+        },
+        {
+          "t": 1.68,
+          "peak": 0
+        },
+        {
+          "t": 1.73,
+          "peak": 0
+        },
+        {
+          "t": 1.78,
+          "peak": 0
+        },
+        {
+          "t": 1.83,
+          "peak": 0
+        },
+        {
+          "t": 1.88,
+          "peak": 0
+        },
+        {
+          "t": 1.93,
+          "peak": 0
+        },
+        {
+          "t": 1.98,
+          "peak": 0.0058
+        },
+        {
+          "t": 2.03,
+          "peak": 0
+        },
+        {
+          "t": 2.08,
+          "peak": 0
+        },
+        {
+          "t": 2.13,
+          "peak": 0
+        },
+        {
+          "t": 2.18,
+          "peak": 0
+        },
+        {
+          "t": 2.23,
+          "peak": 0
+        },
+        {
+          "t": 2.28,
+          "peak": 0
+        },
+        {
+          "t": 2.33,
+          "peak": 0
+        },
+        {
+          "t": 2.38,
+          "peak": 0
+        },
+        {
+          "t": 2.43,
+          "peak": 0
+        },
+        {
+          "t": 2.48,
+          "peak": 0.5055
+        },
+        {
+          "t": 2.53,
+          "peak": 0.5004
+        },
+        {
+          "t": 2.58,
+          "peak": 0.5015
+        },
+        {
+          "t": 2.63,
+          "peak": 0
+        },
+        {
+          "t": 2.68,
+          "peak": 0
+        },
+        {
+          "t": 2.73,
+          "peak": 0
+        },
+        {
+          "t": 2.78,
+          "peak": 0
+        },
+        {
+          "t": 2.83,
+          "peak": 0
+        },
+        {
+          "t": 2.88,
+          "peak": 0
+        },
+        {
+          "t": 2.93,
+          "peak": 0
+        },
+        {
+          "t": 2.98,
+          "peak": 0
+        },
+        {
+          "t": 3.03,
+          "peak": 0
+        },
+        {
+          "t": 3.08,
+          "peak": 0
+        },
+        {
+          "t": 3.13,
+          "peak": 0
+        },
+        {
+          "t": 3.18,
+          "peak": 0
+        },
+        {
+          "t": 3.23,
+          "peak": 0
+        },
+        {
+          "t": 3.28,
+          "peak": 0
+        },
+        {
+          "t": 3.33,
+          "peak": 0
+        },
+        {
+          "t": 3.38,
+          "peak": 0
+        },
+        {
+          "t": 3.43,
+          "peak": 0
+        }
+      ],
       "framesRequested": 104,
       "framesPainted": 104,
       "paintLatenessMs": {
-        "median": 16,
-        "p95": 24,
-        "max": 46.67
+        "median": 14.67,
+        "p95": 26.67,
+        "max": 36
       },
       "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
       "audioOnsetMaxErrorMs": 0.06
@@ -333,7 +623,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_15d0bc74211",
+          "id": "clp_aacb058e4e1",
           "start": {
             "value": "2",
             "timescale": 1
@@ -353,8 +643,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 17.1,
-        "requestToVisibleInEditorMs": 41,
+        "requestToCommitMs": 13.2,
+        "requestToVisibleInEditorMs": 41.8,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -368,11 +658,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_fd0530b27e0"
+          "selected": "clip-clp_8fe565a1eb0"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_fd0530b27e0"
+          "selected": "clip-clp_8fe565a1eb0"
         }
       }
     },
@@ -418,7 +708,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_fd0530b27e0",
+          "entityId": "clp_8fe565a1eb0",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -555,10 +845,10 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_3bb28c02b10": "original"
+            "ast_85794587f40": "original"
           },
           "sourcesUsed": {
-            "ast_3bb28c02b10": [
+            "ast_85794587f40": [
               "original"
             ]
           },
@@ -566,7 +856,7 @@
           "disposed": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_3bb28c02b10/content:206"
+            "ast_85794587f40/content:206"
           ]
         }
       }
@@ -586,12 +876,302 @@
           1.00006,
           2.50006
         ],
+        "audioLevels": [
+          {
+            "t": -0.1307,
+            "peak": 0
+          },
+          {
+            "t": -0.07,
+            "peak": 0
+          },
+          {
+            "t": -0.02,
+            "peak": 0.5178
+          },
+          {
+            "t": 0.03,
+            "peak": 0.5047
+          },
+          {
+            "t": 0.08,
+            "peak": 0.5015
+          },
+          {
+            "t": 0.13,
+            "peak": 0
+          },
+          {
+            "t": 0.18,
+            "peak": 0
+          },
+          {
+            "t": 0.23,
+            "peak": 0
+          },
+          {
+            "t": 0.28,
+            "peak": 0
+          },
+          {
+            "t": 0.33,
+            "peak": 0
+          },
+          {
+            "t": 0.38,
+            "peak": 0
+          },
+          {
+            "t": 0.43,
+            "peak": 0
+          },
+          {
+            "t": 0.48,
+            "peak": 0
+          },
+          {
+            "t": 0.53,
+            "peak": 0
+          },
+          {
+            "t": 0.58,
+            "peak": 0
+          },
+          {
+            "t": 0.63,
+            "peak": 0
+          },
+          {
+            "t": 0.68,
+            "peak": 0
+          },
+          {
+            "t": 0.73,
+            "peak": 0
+          },
+          {
+            "t": 0.78,
+            "peak": 0
+          },
+          {
+            "t": 0.83,
+            "peak": 0
+          },
+          {
+            "t": 0.88,
+            "peak": 0
+          },
+          {
+            "t": 0.93,
+            "peak": 0
+          },
+          {
+            "t": 0.98,
+            "peak": 0.5011
+          },
+          {
+            "t": 1.03,
+            "peak": 0.5003
+          },
+          {
+            "t": 1.08,
+            "peak": 0.5004
+          },
+          {
+            "t": 1.13,
+            "peak": 0
+          },
+          {
+            "t": 1.18,
+            "peak": 0
+          },
+          {
+            "t": 1.23,
+            "peak": 0
+          },
+          {
+            "t": 1.28,
+            "peak": 0
+          },
+          {
+            "t": 1.33,
+            "peak": 0
+          },
+          {
+            "t": 1.38,
+            "peak": 0
+          },
+          {
+            "t": 1.43,
+            "peak": 0
+          },
+          {
+            "t": 1.48,
+            "peak": 0
+          },
+          {
+            "t": 1.53,
+            "peak": 0
+          },
+          {
+            "t": 1.58,
+            "peak": 0
+          },
+          {
+            "t": 1.63,
+            "peak": 0
+          },
+          {
+            "t": 1.68,
+            "peak": 0
+          },
+          {
+            "t": 1.73,
+            "peak": 0
+          },
+          {
+            "t": 1.78,
+            "peak": 0
+          },
+          {
+            "t": 1.83,
+            "peak": 0
+          },
+          {
+            "t": 1.88,
+            "peak": 0
+          },
+          {
+            "t": 1.93,
+            "peak": 0
+          },
+          {
+            "t": 1.98,
+            "peak": 0.0058
+          },
+          {
+            "t": 2.03,
+            "peak": 0
+          },
+          {
+            "t": 2.08,
+            "peak": 0
+          },
+          {
+            "t": 2.13,
+            "peak": 0
+          },
+          {
+            "t": 2.18,
+            "peak": 0
+          },
+          {
+            "t": 2.23,
+            "peak": 0
+          },
+          {
+            "t": 2.28,
+            "peak": 0
+          },
+          {
+            "t": 2.33,
+            "peak": 0
+          },
+          {
+            "t": 2.38,
+            "peak": 0
+          },
+          {
+            "t": 2.43,
+            "peak": 0
+          },
+          {
+            "t": 2.48,
+            "peak": 0.5055
+          },
+          {
+            "t": 2.53,
+            "peak": 0.5004
+          },
+          {
+            "t": 2.58,
+            "peak": 0.5015
+          },
+          {
+            "t": 2.63,
+            "peak": 0
+          },
+          {
+            "t": 2.68,
+            "peak": 0
+          },
+          {
+            "t": 2.73,
+            "peak": 0
+          },
+          {
+            "t": 2.78,
+            "peak": 0
+          },
+          {
+            "t": 2.83,
+            "peak": 0
+          },
+          {
+            "t": 2.88,
+            "peak": 0
+          },
+          {
+            "t": 2.93,
+            "peak": 0
+          },
+          {
+            "t": 2.98,
+            "peak": 0
+          },
+          {
+            "t": 3.03,
+            "peak": 0
+          },
+          {
+            "t": 3.08,
+            "peak": 0
+          },
+          {
+            "t": 3.13,
+            "peak": 0
+          },
+          {
+            "t": 3.18,
+            "peak": 0
+          },
+          {
+            "t": 3.23,
+            "peak": 0
+          },
+          {
+            "t": 3.28,
+            "peak": 0
+          },
+          {
+            "t": 3.33,
+            "peak": 0
+          },
+          {
+            "t": 3.38,
+            "peak": 0
+          },
+          {
+            "t": 3.43,
+            "peak": 0
+          }
+        ],
         "framesRequested": 104,
         "framesPainted": 104,
         "paintLatenessMs": {
-          "median": 16,
-          "p95": 24,
-          "max": 46.67
+          "median": 14.67,
+          "p95": 26.67,
+          "max": 36
         },
         "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
         "audioOnsetMaxErrorMs": 0.06
@@ -615,7 +1195,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_3bb28c02b10": [
+          "ast_85794587f40": [
             "original",
             "proxy"
           ]
