@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T15:59:01.188Z",
+  "ranAt": "2026-11-15T16:48:48.794Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -36,8 +36,8 @@
       }
     }
   },
-  "passed": 18,
-  "total": 18,
+  "passed": 19,
+  "total": 19,
   "checks": [
     {
       "name": "catalog offers format profiles; a 9:16 variant renders at its own size; \"cover\" fills the frame with the centre of the picture, \"contain\" shows the whole picture with bars",
@@ -242,6 +242,21 @@
         "text": "שורה שנייה",
         "captionTopAt100": 0.853,
         "captionTopAt70": -0.003,
+        "errors": []
+      }
+    },
+    {
+      "name": "editor: \"merge with the next caption\" joins two cues into one covering both; \"hide this caption in this format\" removes it from that format's frame only (the master frame is byte-identical)",
+      "ok": true,
+      "detail": {
+        "text": "HELLO AGAIN שורה שנייה",
+        "duration": {
+          "value": "5",
+          "timescale": 1
+        },
+        "tallBefore": 0.767,
+        "tallAfter": -0.002,
+        "masterSame": true,
         "errors": []
       }
     }
