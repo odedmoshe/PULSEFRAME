@@ -44,7 +44,27 @@ function referencedHashes(store: Store): Set<string> {
   return out;
 }
 
-export function storageReport(store: Store, by: Principal, now = Date.now()) {
+/** Bytes of every file under the data directory (media, derivatives, exports, temporary files, database). */
+export function dataDirBytes(dir: string): number {
+  let n = 0;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    try { n += e.isDirectory() ? dataDirBytes(p) : e.isFile() ? fs.statSync(p).size : 0; } catch { /* a file removed while walking */ }
+  }
+  return n;
+}
+/**
+ * Refuse work that needs `neededBytes` more when the configured ceiling would be passed. No ceiling (0) never refuses.
+ * Returns how much room is left (Infinity without a ceiling) so a streaming upload can be cut off at that point.
+ */
+export function assertStorageRoom(store: Store, quotaBytes: number, neededBytes: number, what: string): number {
+  if (!quotaBytes) return Infinity;
+  const usedBytes = dataDirBytes(store.dataDir);
+  if (usedBytes + neededBytes > quotaBytes)
+    throw new ApiError(507, 'storage_quota_exceeded', `not enough room to ${what}: the storage ceiling is ${quotaBytes} bytes and ${usedBytes} are in use`, { quotaBytes, usedBytes, neededBytes }, 'Delete projects you no longer need and run the storage clean-up (owner: project manager → storage), or raise PF_MAX_STORAGE_BYTES.');
+  return quotaBytes - usedBytes;
+}
+export function storageReport(store: Store, by: Principal, now = Date.now(), quotaBytes = 0) {
   ownerOnly(by, 'inspect storage');
   const refs = referencedHashes(store);
   const blobDir = path.join(store.dataDir, 'blobs');
@@ -64,6 +84,8 @@ export function storageReport(store: Store, by: Principal, now = Date.now()) {
     databaseBytes: fs.statSync(path.join(store.dataDir, 'pulseframe.sqlite')).size,
     media: { files: used, bytes: usedBytes },
     exportsBytes: dirBytes(store.outDir),
+    totalBytes: dataDirBytes(store.dataDir),
+    quotaBytes: quotaBytes || null,
     unreferenced: { files: collectable.length, bytes: collectable.reduce((n, b) => n + b.bytes, 0), tooNewToJudge: tooNew, hashes: collectable.map((b) => b.hash) },
     rule: 'A file is unreferenced only if no remaining project (including its history), job or proposal mentions its content hash, and it is older than ten minutes.',
   };

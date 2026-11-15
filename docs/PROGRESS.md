@@ -298,6 +298,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Panels read and found not affected: Transcript (clicks carry their own word ids), Deliver, Recipes, Projects, Access, canvas handles (commit through the same transform path, now fixed).
 - Verified: phase0 54, phase3 27, phase7 31, phase9 12, phase12 13, editor-interactions 15, 277 unit tests. **No new check reproduces these two specific races** (they need sub-frame timing); the fix is by construction and the existing checks show no regression.
 
+**Checkpoint 13r — optional storage ceiling**
+- `PF_MAX_STORAGE_BYTES` (config `maxStorageBytes`, 0 = off, the default): a ceiling for everything in the data directory. Uploads, project imports, exports and batch exports are refused with a typed `507 storage_quota_exceeded` (ceiling, bytes in use, bytes needed, and what to do) once it would be passed. An upload whose declared size cannot fit is refused before anything is stored; an upload of unknown size is cut off at the room left. Editing is never refused.
+- The storage report and the project manager dialog show the total in use and the ceiling.
+- Verified: `quota.test.ts` (2, over HTTP): fits / does not fit / nothing kept from the refused upload; at the ceiling exports, imports and uploads are refused while a normal edit succeeds; room freed → uploads work again. 279 unit tests; owner-ui 7, phase0 54, phase12 13 (ceiling off).
+- Limits: the usage is measured by walking the data directory on each upload/export request (fine for hundreds of files, not measured for very large libraries); an export that starts under the ceiling may finish over it (its size is not known in advance); derivatives (thumbnails, proxies) made after an accepted upload are not pre-counted; sound-effect generation and model downloads are not checked; no per-project or per-credential quota; no automatic clean-up.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -322,7 +328,7 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 Unblocked (no decision needed), roughly by value:
 1. Editor: J/K/L, source viewer, workspaces, marquee selection (Phase 3 carry-over; markers and multi-select are done).
 2. Speed ramps, reverse, freeze frame, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed and linear volume keys are done).
-4. Disk quota; whole-data-directory restore test; automatic backups.
+4. Whole-data-directory restore test; automatic backups (an optional storage ceiling exists).
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
 7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
@@ -342,7 +348,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 277 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 279 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.

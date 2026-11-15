@@ -42,6 +42,7 @@ function StoragePanel() {
           <dt>{t('storage.database')}</dt><dd dir="ltr">{formatBytes(rep.databaseBytes)}</dd>
           <dt>{t('storage.media')}</dt><dd dir="ltr">{rep.media.files} {t('storage.files')} · {formatBytes(rep.media.bytes)}</dd>
           <dt>{t('storage.exports')}</dt><dd dir="ltr">{formatBytes(rep.exportsBytes)}</dd>
+          <dt>{t('storage.total')}</dt><dd dir="ltr" data-testid="storage-total">{formatBytes(rep.totalBytes)}{rep.quotaBytes ? ` / ${formatBytes(rep.quotaBytes)}` : ''}</dd>
           <dt>{t('storage.unreferenced')}</dt>
           <dd dir="ltr">{rep.unreferenced.files} {t('storage.files')} · {formatBytes(rep.unreferenced.bytes)}{rep.unreferenced.tooNewToJudge ? ` · ${rep.unreferenced.tooNewToJudge} ${t('storage.tooNew')}` : ''}</dd>
         </dl>

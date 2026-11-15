@@ -19,7 +19,7 @@ import { ingestUpload } from './ingest.ts';
 import { detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX } from './sfx.ts';
 import { preflight } from './preflight.ts';
-import { collectGarbage, deleteProject, storageReport } from './storage.ts';
+import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
@@ -177,7 +177,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return c.json({ project: p.doc, revision: p.revision });
   });
   app.post('/api/v1/projects/:id/delete', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ confirmName: z.string() }).strict()); return c.json(deleteProject(store, p, c.req.param('id'), b.confirmName)); });
-  app.get('/api/v1/storage', (c) => { const p = need(c, 'observe'); const { hashes: _h, ...unref } = storageReport(store, p).unreferenced; return c.json({ ...storageReport(store, p), unreferenced: unref }); });
+  app.get('/api/v1/storage', (c) => { const p = need(c, 'observe'); const rep = storageReport(store, p, Date.now(), cfg.maxStorageBytes); const { hashes: _h, ...unref } = rep.unreferenced; return c.json({ ...rep, unreferenced: unref }); });
   app.post('/api/v1/storage/gc', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ apply: z.boolean().optional() }).strict()); return c.json(collectGarbage(store, p, b.apply === true)); });
   app.get('/api/v1/projects/:id/archive', (c) => {
     need(c, 'observe');
@@ -190,6 +190,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (who.grant?.projectIds) throw new ApiError(403, 'out_of_scope', 'this grant is limited to specific projects and cannot create new ones');
     gov.assertUnrestricted(who, 'import a project');
     if (!c.req.raw.body) throw new ApiError(400, 'empty_upload', 'request has no body');
+    assertStorageRoom(store, cfg.maxStorageBytes, Number(c.req.header('content-length') ?? 0) || 1, 'import this project');
     const tmp = path.join(store.tmpDir, `imp_${Date.now()}_${Math.random().toString(36).slice(2)}.tar`);
     let size = 0;
     try {
@@ -245,6 +246,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const pr = need(c, 'edit');
     const projectId = c.req.param('id');
     gov.assertMayAct(pr, projectId, 'job');
+    assertStorageRoom(store, cfg.maxStorageBytes, 1, 'start exports');
     const b = await body(c, z.object({ variantIds: z.array(z.string()).min(1).max(8), options: z.record(z.string(), z.unknown()).optional() }).strict());
     const doc = store.getProject(projectId).doc;
     // All-or-nothing: every variant must exist and plan without blockers before any job is created.
@@ -391,7 +393,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertUnrestricted(p, 'add media to the library');
     if (!c.req.raw.body) throw new ApiError(400, 'empty_upload', 'request has no body');
     const name = decodeURIComponent(c.req.header('x-filename') ?? 'upload');
-    const asset = await ingestUpload(store, c.req.raw.body, name, p.actor, cfg.maxUploadBytes);
+    // Storage ceiling: refuse up front when the declared size cannot fit, and cut a stream of unknown size off at the room left.
+    const room = assertStorageRoom(store, cfg.maxStorageBytes, Number(c.req.header('content-length') ?? 0) || 1, 'store this upload');
+    const asset = await ingestUpload(store, c.req.raw.body, name, p.actor, Math.min(cfg.maxUploadBytes, room));
     // The ingest job attaches its result through a normal (internal) operation.
     const r = store.commit({ projectId, actor: p.actor, label: `Import ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
     const assetId = r.results[0]!.output!.assetId as string;
@@ -446,6 +450,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const pr = need(c, 'edit');
     gov.assertMayAct(pr, c.req.param('id'), 'job');
     const options = await c.req.json().catch(() => ({}));
+    assertStorageRoom(store, cfg.maxStorageBytes, 1, 'start an export'); // the output size is not known in advance; an export is refused once the ceiling is reached
     const job = exporter.start(c.req.param('id'), pr.actor, options);
     return c.json({ jobId: job.id, status: job.status, revision: job.input.revision, estimate: job.input.manifest.estimate, warnings: job.input.warnings }, 202);
   });
