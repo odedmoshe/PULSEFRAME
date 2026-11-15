@@ -238,6 +238,32 @@ async function main() {
       if (!fs.existsSync(ref) || process.env.PF_UPDATE_BASELINES === '1') { fs.copyFileSync(file, ref); golden[name] = 'baseline written'; continue; }
       golden[name] = Number(/All:([\d.]+)/.exec(spawnSync('ffmpeg', ['-hide_banner', '-i', file, '-i', ref, '-lavfi', 'ssim', '-f', 'null', '-'], { encoding: 'utf8' }).stderr)?.[1]);
     }
+    // the three later presets, measured rather than only compared with a stored picture: counts of near-white (text) and highlight-coloured pixels in the caption area
+    const capPixels = (file: string) => {
+      const rgb = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-i', file, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 28 }).stdout;
+      let white = 0, faint = 0, accent = 0;
+      for (let y = Math.floor(H * 0.6); y < H; y++) for (let x = 0; x < W; x++) {
+        const o = (y * W + x) * 3, r = rgb[o]!, g = rgb[o + 1]!, b = rgb[o + 2]!;
+        if (r > 235 && g > 235 && b > 235) white++;
+        else if (Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && r > 70 && r < 150) faint++;
+        else if (r > 200 && g < 90 && b > 200) accent++;
+      }
+      return { white, faint, accent };
+    };
+    const presetShot = async (preset: string, frame: number) => {
+      await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_caption_style', args: { trackId: capTrack, style: { preset, color: '#FFFFFF', highlightColor: '#FF00FF', background: '#000000', stroke: null } } }] });
+      return capPixels(await still(pid, frame, `preset-${preset}-${frame}`));
+    };
+    const all = await presetShot('classic', 118);
+    const revealMid = await presetShot('reveal', 118), revealLate = await presetShot('reveal', 140);
+    const classicLate = await presetShot('classic', 140);
+    const under = await presetShot('underline', 118);
+    const dim = await presetShot('dim-ahead', 118);
+    const presetMeasures = { classic118: all, reveal118: revealMid, reveal140: revealLate, classic140: classicLate, underline118: under, dimAhead118: dim };
+    check('later caption presets, measured on the frame where a word in the middle of the phrase is being spoken: "reveal" shows fewer text pixels than the whole phrase and never more than it later on; "underline" shows the whole phrase plus a bar in the highlight colour; "dim ahead" shows fewer full-white pixels than the whole phrase and faint ones in their place; the whole phrase itself has no highlight colour',
+      all.white > 200 && all.accent === 0 && revealMid.white > 0 && revealMid.white < all.white * 0.95 && revealLate.white >= revealMid.white && revealLate.white <= classicLate.white
+      && under.accent > 20 && Math.abs(under.white - all.white) <= all.white * 0.03 && dim.white < all.white * 0.95 && dim.faint > all.faint + 50 && dim.accent === 0, presetMeasures);
+    await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_caption_style', args: { trackId: capTrack, style: { preset: 'karaoke', color: '#FFFFFF', highlightColor: '#3DE0C8', background: '#000000B3' } } }] });
     check('caption renders match the committed baselines (SSIM ≥ 0.995), or were written on first run', Object.values(golden).every((g) => g === 'baseline written' || (typeof g === 'number' && g >= 0.995)), golden);
 
     console.log('\n# silence candidates and clip animation (no model needed)');

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T17:46:46.761Z",
+  "ranAt": "2026-11-15T18:25:56.018Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Synthetic transcript on a beep fixture. Speech recognition, forced alignment and real speech are not exercised.",
-  "passed": 35,
-  "total": 35,
+  "passed": 36,
+  "total": 36,
   "checks": [
     {
       "name": "no transcript: the panel says so and offers import; it does not invent text",
@@ -222,6 +222,42 @@
           "ids": []
         }
       ]
+    },
+    {
+      "name": "later caption presets, measured on the frame where a word in the middle of the phrase is being spoken: \"reveal\" shows fewer text pixels than the whole phrase and never more than it later on; \"underline\" shows the whole phrase plus a bar in the highlight colour; \"dim ahead\" shows fewer full-white pixels than the whole phrase and faint ones in their place; the whole phrase itself has no highlight colour",
+      "ok": true,
+      "detail": {
+        "classic118": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0
+        },
+        "reveal118": {
+          "white": 766,
+          "faint": 183,
+          "accent": 0
+        },
+        "reveal140": {
+          "white": 814,
+          "faint": 183,
+          "accent": 0
+        },
+        "classic140": {
+          "white": 2173,
+          "faint": 442,
+          "accent": 0
+        },
+        "underline118": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 168
+        },
+        "dimAhead118": {
+          "white": 766,
+          "faint": 1809,
+          "accent": 0
+        }
+      }
     },
     {
       "name": "caption renders match the committed baselines (SSIM ≥ 0.995), or were written on first run",

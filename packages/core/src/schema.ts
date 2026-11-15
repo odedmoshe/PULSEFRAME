@@ -159,10 +159,10 @@ export const MediaClipSchema = z
 export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema }).strict();
 
 // ---------- captions and transcripts (SPEC §16) ----------
-export const CAPTION_PRESETS = ['classic', 'karaoke', 'word-pop', 'box-highlight'] as const;
+export const CAPTION_PRESETS = ['classic', 'karaoke', 'word-pop', 'box-highlight', 'reveal', 'underline', 'dim-ahead'] as const;
 export const CaptionStyleSchema = z
   .object({
-    preset: z.enum(CAPTION_PRESETS).describe('classic = whole phrase; karaoke = spoken words change colour; word-pop = one word at a time; box-highlight = box behind the current word'),
+    preset: z.enum(CAPTION_PRESETS).describe('classic = whole phrase; karaoke = spoken words change colour; word-pop = one word at a time; box-highlight = box behind the current word; reveal = each word appears when it is spoken; underline = a bar under the current word; dim-ahead = words not yet spoken are faint'),
     fontFamily: z.string().max(64),
     fontWeight: z.number().int().min(100).max(900),
     sizeFrac: z.number().min(0.01).max(0.5).describe('Font size as a fraction of frame height'),

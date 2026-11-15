@@ -132,6 +132,9 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
     for (const k of order) {
       const i = line[k]!, w = words[i]!;
       const lit = w.state === 'current' || (s.preset === 'karaoke' && w.state === 'past');
+      // reveal: a word that has not been spoken yet is not drawn; its place is kept, so the line does not move as words arrive
+      if (s.preset === 'reveal' && w.state === 'future') { x += widths[i]! + space; continue; }
+      if (s.preset === 'dim-ahead' && w.state === 'future') ctx.globalAlpha = 0.4; // outline and fill both
       if (s.preset === 'box-highlight' && w.state === 'current') {
         ctx.fillStyle = s.highlightColor;
         ctx.beginPath();
@@ -143,8 +146,14 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
         ctx.lineWidth = px * s.strokeFrac * 2;
         ctx.strokeText(w.text, x, baseline);
       }
-      ctx.fillStyle = lit && s.preset !== 'box-highlight' && s.preset !== 'classic' ? s.highlightColor : s.color;
+      const plainColour = s.preset === 'box-highlight' || s.preset === 'classic' || s.preset === 'reveal' || s.preset === 'underline' || s.preset === 'dim-ahead';
+      ctx.fillStyle = lit && !plainColour ? s.highlightColor : s.color;
       ctx.fillText(w.text, x, baseline);
+      ctx.globalAlpha = 1;
+      if (s.preset === 'underline' && w.state === 'current') {
+        ctx.fillStyle = s.highlightColor;
+        ctx.fillRect(x, baseline + px * 0.14, widths[i]!, Math.max(2, px * 0.1));
+      }
       x += widths[i]! + space;
     }
   });
