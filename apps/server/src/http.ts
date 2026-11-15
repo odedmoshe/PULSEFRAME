@@ -19,6 +19,7 @@ import { ingestUpload } from './ingest.ts';
 import { detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX } from './sfx.ts';
 import { preflight } from './preflight.ts';
+import { collectGarbage, deleteProject, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
@@ -156,6 +157,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = rev === undefined ? store.getProject(c.req.param('id')) : store.replay(c.req.param('id'), Number(rev));
     return c.json({ project: p.doc, revision: p.revision });
   });
+  app.post('/api/v1/projects/:id/delete', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ confirmName: z.string() }).strict()); return c.json(deleteProject(store, p, c.req.param('id'), b.confirmName)); });
+  app.get('/api/v1/storage', (c) => { const p = need(c, 'observe'); const { hashes: _h, ...unref } = storageReport(store, p).unreferenced; return c.json({ ...storageReport(store, p), unreferenced: unref }); });
+  app.post('/api/v1/storage/gc', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ apply: z.boolean().optional() }).strict()); return c.json(collectGarbage(store, p, b.apply === true)); });
   app.get('/api/v1/projects/:id/archive', (c) => {
     need(c, 'observe');
     const plan = planArchive(store, c.req.param('id'));

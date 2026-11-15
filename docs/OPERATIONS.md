@@ -44,7 +44,20 @@ Restore: stop the server, put the files back under `PF_DATA_DIR`, start the serv
 ### Moving or backing up one project
 The editor's Deliver tab has "Download archive" and "Import archive as a new project" (REST: `GET /api/v1/projects/{id}/archive`, `POST /api/v1/projects/import`). An archive is one tar file with the project and all its media; every file is verified on import. Edit history, exports and credentials are not included.
 
-Not built: automatic backups, garbage collection of unreferenced media, disk quota. Deleting a clip never deletes its media.
+### Deleting a project and reclaiming space (owner only, REST)
+Deleting is permanent; download the archive first if you may want it back.
+These routes need the owner session (the cookie obtained with the owner link), not an agent token. From a terminal:
+```bash
+curl -s -c /tmp/pf.cookie -H "origin: http://127.0.0.1:8787" -H "x-pf-owner-key: <owner key from tokens.json>" http://127.0.0.1:8787/api/v1/session
+```
+```bash
+curl -s -b /tmp/pf.cookie -H "origin: http://127.0.0.1:8787" http://127.0.0.1:8787/api/v1/storage
+```
+- `POST /api/v1/projects/{id}/delete` with `{"confirmName": "<exact project name>"}`
+- `GET /api/v1/storage` to see what is in use and what nothing refers to
+- `POST /api/v1/storage/gc` with `{}` for a dry run, `{"apply": true}` to remove unreferenced media
+
+Deleting a clip never deletes its media. Not built: an editor control for these, automatic backups, disk quota.
 
 **The whole-data-directory copy above has not been exercised by an automated test.** Tested instead: restoring a single project from its archive onto a second server with an empty data directory (`pnpm soak`), and reopening a data directory after a restart, replaying a project from its operation log, and recovering interrupted export jobs (`store.test.ts`, Phase 0 and Phase 4 proofs).
 

@@ -179,6 +179,12 @@ async function main() {
       const cancelByAgent = await A.call('cancel_job', { jobId: ownerJob });
       const cancelByOwner = await rest(`/jobs/${ownerJob}/cancel`, {});
       check('an agent cannot cancel a job the owner started; the owner can cancel it', cancelByAgent.isError && cancelByAgent.data?.error?.code === 'not_your_job' && cancelByOwner.status === 200, { agent: cancelByAgent.data?.error?.code });
+      const delAgent = await rest(`/projects/${other}/delete`, { confirmName: 'other' }, bearer(editor.token));
+      const gcAgent = await rest('/storage/gc', { apply: true }, bearer(editor.token));
+      const repAgent = await rest('/storage', undefined, bearer(editor.token));
+      const delWrong = await rest(`/projects/${other}/delete`, { confirmName: 'Other' });
+      const repOwner = await rest('/storage');
+      check('deleting a project and cleaning storage are owner-only: an editing agent gets 403 for delete, clean-up and the storage report; the owner needs the exact project name', delAgent.status === 403 && gcAgent.status === 403 && repAgent.status === 403 && delWrong.status === 409 && repOwner.status === 200 && repOwner.body.projects >= 2 && !('hashes' in repOwner.body.unreferenced), { agent: [delAgent.status, gcAgent.status, repAgent.status], wrongName: delWrong.body.error?.code });
       const playlist = Buffer.from('#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.0,\n/etc/hostname\n#EXT-X-ENDLIST\n');
       const pl = await fetch(`${origin}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...owner, 'x-filename': 'list.m3u8', connection: 'close' }, body: playlist });
       check('a playlist file (which could point at other files or URLs) is not accepted as media', pl.status === 415, { status: pl.status });

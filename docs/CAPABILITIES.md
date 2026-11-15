@@ -87,6 +87,7 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Publishing connectors, thumbnails/metadata, provenance manifests | not built | |
 | Rule-based recipes (beat montage, social pack, tidy speech): plan, apply as one undo, regenerate keeping hand edits | tested | `docs/evidence/phase11-proof.json` (11 checks). No language model involved |
 | Natural-language Director, Prompt-to-Draft, Long-to-Shorts, brand kits | not built | Blocked on B-9 |
+| Project deletion and conservative clean-up of unreferenced media (owner only, REST) | tested | `storage.test.ts`, `phase5-proof.json`. No editor control, no quota |
 | Portable project archive (export, verified import as a new project) | tested | `archive.test.ts`, `docs/evidence/soak.json` (restore on a second server, frame byte-identical), `editor-interactions-proof.json`. History not included; no GC or quota |
 | Accessibility (automated heuristic audit, he + en): names, contrast, focus visibility, tab semantics | tested (heuristic) | `docs/evidence/a11y-audit.json`; self-checks with planted defects. Not a WCAG conformance claim; no screen-reader testing |
 | Long-session stability: 3,000 transactions, replay, restart | tested (one run) | `docs/evidence/soak.json`. Commit time grows with project size: ≈20 ms median at ~700 clips on this machine |

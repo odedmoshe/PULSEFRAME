@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T02:22:21.879Z",
+  "ranAt": "2026-11-15T02:28:29.387Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -76,11 +76,11 @@
       "detail": {
         "proposed": true,
         "committed": false,
-        "proposalId": "prp_xkz1MShRPv0",
+        "proposalId": "prp_xYDbbc4Xcmg",
         "baseRevision": 10,
         "summary": "Updated text \"פתיחה חלופית\"",
         "changedIds": [
-          "clp_51c652894f0"
+          "clp_a477d79ba80"
         ],
         "status": "open"
       }
@@ -113,7 +113,7 @@
       "name": "goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied",
       "ok": true,
       "detail": {
-        "entityId": "clp_b5c5ff00da4",
+        "entityId": "clp_9d1ac849294",
         "reason": "track trk_video is outside the grant"
       }
     },
@@ -154,6 +154,18 @@
       "ok": true,
       "detail": {
         "agent": "not_your_job"
+      }
+    },
+    {
+      "name": "deleting a project and cleaning storage are owner-only: an editing agent gets 403 for delete, clean-up and the storage report; the owner needs the exact project name",
+      "ok": true,
+      "detail": {
+        "agent": [
+          403,
+          403,
+          403
+        ],
+        "wrongName": "confirmation_mismatch"
       }
     },
     {

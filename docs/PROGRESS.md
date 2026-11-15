@@ -225,6 +225,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - `pnpm proof:editor-interactions` is now 12 checks.
 - Not built: speed changes, volume automation curves, audio crossfade attached to picture transitions, crossfade UI (op and agent tool only).
 
+**Checkpoint 13h — data lifecycle**
+- `POST /projects/{id}/delete` (owner only, the exact project name as confirmation, refused while jobs are queued or running) removes the project, its history, jobs, proposals and exported files. Media is kept at that point because other projects may use the same files.
+- `GET /storage` reports projects, database size, media in use, exports, and media nothing refers to. `POST /storage/gc` is a dry run unless `apply=true`. A file is collectable only if its content hash appears nowhere in any remaining project (current document, initial document, operation history), job or proposal, and it is older than ten minutes. Derivatives go with their source.
+- Tests: `storage.test.ts` (shared media kept, history references kept, dry run removes nothing, grace period, idempotent, owner-only) and one HTTP authorization check in `pnpm proof:phase5` (31).
+- **No editor control for either** (REST only), no disk quota, no automatic clean-up, no undo of a deletion (use the archive export first).
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -249,7 +255,7 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 Unblocked (no decision needed), roughly by value:
 1. Editor: multi-select drag, loop playback, J/K/L, markers, source viewer, workspaces; crossfade control in the Sound tab (Phase 3/8 carry-over).
 2. Speed changes with audio; volume automation curves (Phases 7–8 carry-over).
-4. Media garbage collection and disk quota; whole-data-directory restore test; automatic backups.
+4. Disk quota; editor controls for project deletion and storage clean-up; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Grants and approvals management UI; MCP resources/prompts; activity log dialog.
 7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
@@ -269,8 +275,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 258 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 30 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 19 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+Expect 260 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 31 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 19 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 
