@@ -223,8 +223,13 @@ export function CaptionControls({ editor }: { editor: Editor }) {
   if (!doc) return null;
   const track = mainTracks(doc).find((x) => x.kind === 'caption' && x.caption);
   const hasTranscript = Object.keys(doc.transcripts).length > 0;
-  const style = track?.caption?.style;
+  const master = track?.caption?.style;
+  // While a format is viewed, size and position are edited for that format only; everything else stays a master setting.
+  const variantId = state.viewVariantId;
+  const formatStyle = variantId ? doc.variants[variantId]?.captionStyle : undefined;
+  const style = master && formatStyle ? { ...master, ...formatStyle } : master;
   const setStyle = (patch: Record<string, unknown>) => track && void editor.commit([{ op: 'set_caption_style', args: { trackId: track.id, style: patch } }], 'Caption style');
+  const setScoped = (patch: Record<string, unknown>) => (variantId ? void editor.commit([{ op: 'update_variant', args: { variantId, captionStyle: patch } }], 'Caption style (format)') : setStyle(patch));
   const base = `/api/v1/projects/${doc.id}/captions`;
   return (
     <div className="fields" data-testid="caption-controls">
@@ -243,14 +248,20 @@ export function CaptionControls({ editor }: { editor: Editor }) {
             </select>
           </label>
           <label>{t('caption.position')}
-            <select value={style.position} onChange={(e) => setStyle({ position: e.target.value })} data-testid="caption-position">
+            <select value={style.position} onChange={(e) => setScoped({ position: e.target.value })} data-testid="caption-position">
               {(['bottom', 'center', 'top'] as const).map((p) => <option key={p} value={p}>{t(`caption.pos.${p}` as Key)}</option>)}
             </select>
           </label>
           <label>{t('caption.size')}
             <input key={`${track.id}:${style.sizeFrac}`} type="range" min={0.02} max={0.12} step={0.005} defaultValue={Math.min(0.12, Math.max(0.02, style.sizeFrac))} data-testid="caption-size"
-              onPointerUp={(e) => setStyle({ sizeFrac: Number(e.currentTarget.value) })} onKeyUp={(e) => setStyle({ sizeFrac: Number(e.currentTarget.value) })} />
+              onPointerUp={(e) => setScoped({ sizeFrac: Number(e.currentTarget.value) })} onKeyUp={(e) => setScoped({ sizeFrac: Number(e.currentTarget.value) })} />
           </label>
+          {variantId && (
+            <div className="transform-scope" data-testid="caption-scope" data-scope="format">
+              <span className="muted">{t('caption.scopeFormat')}</span>
+              <button className="ghost" disabled={!formatStyle} data-testid="caption-reset-format" onClick={() => void editor.commit([{ op: 'update_variant', args: { variantId, captionStyle: null } }], 'Reset format captions')}>{t('caption.resetFormat')}</button>
+            </div>
+          )}
           <ColorField label={t('caption.color')} value={style.color} testid="caption-color" onCommit={(v) => setStyle({ color: v })} />
           <ColorField label={t('caption.highlight')} value={style.highlightColor} testid="caption-highlight" onCommit={(v) => setStyle({ highlightColor: v })} />
           <div className="row">

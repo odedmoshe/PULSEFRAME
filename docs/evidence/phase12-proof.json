@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T04:27:40.882Z",
+  "ranAt": "2026-11-15T04:34:36.575Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -12,10 +12,32 @@
     "coverVsCrop": {
       "psnrDb": 46.86,
       "note": "variant frame vs the master frame cropped and scaled by ffmpeg (different resampling filters, so not identical)"
+    },
+    "captionsPerFormat": {
+      "master": {
+        "top": 0.844,
+        "bottom": 0.883,
+        "height": 0.0417
+      },
+      "tall": {
+        "top": 0.842,
+        "bottom": 0.883,
+        "height": 0.0422
+      },
+      "tallWithOwnStyle": {
+        "top": 0.145,
+        "bottom": 0.23,
+        "height": 0.0859
+      },
+      "tallAfterReset": {
+        "top": 0.842,
+        "bottom": 0.883,
+        "height": 0.0422
+      }
     }
   },
-  "passed": 13,
-  "total": 13,
+  "passed": 15,
+  "total": 15,
   "checks": [
     {
       "name": "catalog offers format profiles; a 9:16 variant renders at its own size; \"cover\" fills the frame with the centre of the picture, \"contain\" shows the whole picture with bars",
@@ -38,6 +60,32 @@
       "ok": true,
       "detail": {
         "pieces": 2
+      }
+    },
+    {
+      "name": "captions per format: with a format-only style (top, twice the size) the tall version draws the caption in the top half at about twice the height, while the master frame draws its caption in exactly the same rows as before; clearing it returns the tall version to the master style",
+      "ok": true,
+      "detail": {
+        "master": {
+          "top": 0.844,
+          "bottom": 0.883,
+          "height": 0.0417
+        },
+        "tall": {
+          "top": 0.842,
+          "bottom": 0.883,
+          "height": 0.0422
+        },
+        "tallWithOwnStyle": {
+          "top": 0.145,
+          "bottom": 0.23,
+          "height": 0.0859
+        },
+        "tallAfterReset": {
+          "top": 0.842,
+          "bottom": 0.883,
+          "height": 0.0422
+        }
       }
     },
     {
@@ -139,6 +187,15 @@
           "upscaled"
         ],
         "target": -14,
+        "errors": []
+      }
+    },
+    {
+      "name": "editor: with a format selected, changing the caption position is stored for that format only (master stays \"bottom\"); \"follow the master again\" clears it; no page errors",
+      "ok": true,
+      "detail": {
+        "formatPos": "center",
+        "masterPos": "bottom",
         "errors": []
       }
     }

@@ -86,6 +86,29 @@ async function main() {
     const vAfter = await still(pid, 100, vert, 'vertical-after-master-edit');
     check('master edits reach the variant and the override survives them: after a ripple cut and a text change, both title pieces in the variant are still at the overridden position', titlePieces.length === 2 && titlePieces.every((c: any) => d1.variants[vert].overrides[c.id]?.transform.y === -0.3) && green(vAfter, 0, 0.4) > 100 && green(vAfter, 0.6, 1) === 0, { pieces: titlePieces.length });
 
+    console.log('\n# captions per format');
+    const cp = (await call('/projects', { name: 'phase12-captions', width: 640, height: 360 })).body.project.id;
+    const cv = (await txs(cp, [
+      { op: 'add_caption_track', args: { mode: 'manual', style: { preset: 'classic', sizeFrac: 0.06, position: 'bottom', color: '#FFFFFF', stroke: null, background: null } } },
+      { op: 'add_cue', args: { start: f(0), duration: f(60), text: 'HELLO' } },
+      { op: 'add_variant', args: { name: 'Tall', width: 360, height: 640 } },
+    ])).results[2].output.variantId as string;
+    /** Rows of the frame that contain caption (bright) pixels: first row, last row, as fractions of the height. */
+    const band = (img: { rgb: Buffer; w: number; h: number }) => {
+      let top = -1, bottom = -1;
+      for (let y = 0; y < img.h; y++) { let lit = false; for (let x = 0; x < img.w && !lit; x++) { const c = px(img, x, y); lit = c[0]! + c[1]! + c[2]! > 600; } if (lit) { if (top < 0) top = y; bottom = y; } }
+      return { top: Number((top / img.h).toFixed(3)), bottom: Number((bottom / img.h).toFixed(3)), height: Number(((bottom - top + 1) / img.h).toFixed(4)) };
+    };
+    const capMaster0 = band(await still(cp, 10));
+    const capTall0 = band(await still(cp, 10, cv));
+    await txs(cp, [{ op: 'update_variant', args: { variantId: cv, captionStyle: { position: 'top', sizeFrac: 0.12 } } }]);
+    const capMaster1 = band(await still(cp, 10));
+    const capTall1 = band(await still(cp, 10, cv, 'captions-tall-override'));
+    await txs(cp, [{ op: 'update_variant', args: { variantId: cv, captionStyle: null } }]);
+    const capTall2 = band(await still(cp, 10, cv));
+    measurements.captionsPerFormat = { master: capMaster0, tall: capTall0, tallWithOwnStyle: capTall1, tallAfterReset: capTall2 };
+    check('captions per format: with a format-only style (top, twice the size) the tall version draws the caption in the top half at about twice the height, while the master frame draws its caption in exactly the same rows as before; clearing it returns the tall version to the master style', capMaster0.top > 0.5 && capTall0.top > 0.5 && capTall1.bottom < 0.5 && capTall1.height > capTall0.height * 1.7 && capTall1.height < capTall0.height * 2.3 && JSON.stringify(capMaster1) === JSON.stringify(capMaster0) && JSON.stringify(capTall2) === JSON.stringify(capTall0), measurements.captionsPerFormat);
+
     console.log('\n# export of formats');
     const job = await waitJob((await call(`/projects/${pid}/exports`, { variantId: vert, range: { startFrame: 0, endFrame: 30 } })).body.jobId);
     await txs(pid, [{ op: 'set_variant_override', args: { variantId: vert, clipId: titlePieces[0].id, transform: { y: 0.3 } } }]); // change after the job was created
@@ -202,6 +225,25 @@ async function main() {
     let target: number | undefined;
     for (let i = 0; i < 80 && target === undefined; i++) { target = (await call(`/projects/${pid}`)).body.project.settings.loudness?.target; await sleep(100); }
     check('editor: choosing a format changes the preview to its shape with a format badge and the safe-area guide; a profile button adds a format; preflight lists issues for the viewed format and its fix button applies the fix', Math.abs(masterRatio - 640 / 360) < 0.01 && Math.abs(variantRatio - 360 / 640) < 0.01 && variantsAfter === variantsBefore + 1 && shownCodes.includes('no_loudness_target') && hadFix && target === -14 && errors.length === 0, { masterRatio: Number(masterRatio.toFixed(3)), variantRatio: Number(variantRatio.toFixed(3)), shownCodes, target, errors: errors.slice(0, 3) });
+    // captions per format from the editor: while a format is viewed, position/size edits go to that format only
+    const cpage = await page.context().newPage();
+    await cpage.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+    const cErrors: string[] = [];
+    cpage.on('pageerror', (e) => cErrors.push(String(e)));
+    cpage.on('console', (m) => m.type() === 'error' && cErrors.push(m.text()));
+    await cpage.goto(`${s.url}/?project=${cp}`);
+    await cpage.getByTestId('caption-position').waitFor();
+    await cpage.getByTestId('format-switch').selectOption(cv);
+    await cpage.getByTestId('caption-scope').waitFor();
+    await cpage.getByTestId('caption-position').selectOption('center');
+    let cdoc: any;
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cdoc.variants[cv].captionStyle?.position === 'center') break; await sleep(100); }
+    const masterPos = cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').caption.style.position;
+    const formatPos = cdoc.variants[cv].captionStyle?.position;
+    await cpage.locator('[data-testid=caption-reset-format]:not([disabled])').click();
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (!cdoc.variants[cv].captionStyle) break; await sleep(100); }
+    check('editor: with a format selected, changing the caption position is stored for that format only (master stays "bottom"); "follow the master again" clears it; no page errors', formatPos === 'center' && masterPos === 'bottom' && !cdoc.variants[cv].captionStyle && cErrors.length === 0, { formatPos, masterPos, errors: cErrors.slice(0, 3) });
+    await cpage.close();
     await page.close();
   } catch (e) {
     console.error(e);

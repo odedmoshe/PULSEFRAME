@@ -212,6 +212,8 @@ export const VariantSchema = z
     fit: z.enum(['contain', 'cover']).describe('contain = whole picture visible (bars possible); cover = picture fills the frame (edges cropped)'),
     profileId: z.string().max(64).nullable().describe('Format profile this variant was created from, if any'),
     safeArea: SafeAreaSchema.nullable(),
+    /** Caption style fields that differ in this format (e.g. size, position); everything else follows the master caption style. */
+    captionStyle: CaptionStyleSchema.partial().optional(),
     overrides: z.record(z.string(), VariantOverrideSchema),
   })
   .strict();

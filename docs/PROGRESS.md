@@ -321,6 +321,13 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Full regression with this change: 282 unit tests; phase0 54, phase3 27, phase4 19, phase5 33, phase6 35, phase7 31, phase8 20, phase9 12, phase11 12, phase12 13, browser-export 23, editor-interactions 15, owner-ui 7, soak 7, accessibility audit clean. The speed proof failed its new Inspector check once in that run (15/16): the proof counted the ❄ marker before the page had re-rendered. It now waits for the page; four further runs passed 16/16.
 - Limits: the hold always inserts time (no "replace the rest of the clip with a still", no freeze at the end without inserting); music crossing the point is cut and resumes after the hold, like all other sound; preview playback across a hold was not measured (export was); transcript-driven captions do not show during a hold (it has no speech); no reverse, no speed ramps.
 
+**Checkpoint 13u — caption style per format**
+- A format variant can carry its own caption style fields (`captionStyle`, any subset of the caption style; set through `update_variant`, merged on repeated edits, `null` clears). The projection used by preview, stills, export and preflight applies them to that format only; fields not set keep following the master, including later master changes.
+- Editor: while a format is selected, the caption position and size controls edit that format only, with a note and a "follow the master again" button (the same pattern as the transform sliders).
+- Verified: `variants.test.ts` (6) and `pnpm proof:phase12` (now 15; three consecutive runs): rendered stills show the caption in the top half at about twice the height in the tall version only (measured rows: master 0.844–0.883, tall with its own style 0.145–0.230), the master draws in the same rows as before, clearing restores the tall version; an editor check stores a position for the format, leaves the master at "bottom", and resets. 283 unit tests; phase6 35, phase11 12, editor-interactions 15, accessibility audit clean. Other proofs were not re-run for this change.
+- Limits: the editor exposes only position and size per format (the op accepts any caption style field); no per-format caption **text** or line-breaking overrides; no per-format title text.
+- Known weakness of the proofs, seen three times this session (Phase 12, speed, editor-interactions): a check that polls the server and then reads the page can run before the page has re-rendered. Each instance found was fixed by waiting for the page; **other instances may exist**, so a single odd failure of a page-reading check should be re-run and inspected before it is believed either way.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -346,7 +353,7 @@ Unblocked (no decision needed), roughly by value:
 1. Editor: J/K/L, source viewer, workspaces, marquee selection (Phase 3 carry-over; markers and multi-select are done).
 2. Speed ramps, reverse, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed, freeze frame and linear volume keys are done).
 4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
-5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
+5. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
 7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
 8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
@@ -365,8 +372,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 282 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+Expect 283 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

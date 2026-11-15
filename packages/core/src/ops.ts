@@ -806,10 +806,12 @@ defineOp({
 defineOp({
   name: 'update_variant',
   version: 1,
-  description: 'Rename a format variant or change its size, fill mode (contain/cover) or safe-area guides. Overrides are kept.',
-  args: z.object({ variantId: z.string(), name: z.string().min(1).max(80).optional(), width: z.number().int().min(16).max(8192).optional(), height: z.number().int().min(16).max(8192).optional(), fit: z.enum(['contain', 'cover']).optional(), safeArea: SafeAreaSchema.nullable().optional() }).strict(),
+  description: 'Rename a format variant or change its size, fill mode (contain/cover), safe-area guides, or the caption style for this format only (e.g. larger or higher captions in the vertical version). Clip overrides are kept.',
+  args: z.object({ variantId: z.string(), name: z.string().min(1).max(80).optional(), width: z.number().int().min(16).max(8192).optional(), height: z.number().int().min(16).max(8192).optional(), fit: z.enum(['contain', 'cover']).optional(), safeArea: SafeAreaSchema.nullable().optional(), captionStyle: CaptionStyleSchema.partial().nullable().optional().describe('Caption style fields for this format only, merged into what is already set; null clears them so the format follows the master again') }).strict(),
   apply(d, a) {
     const v = mustVariant(d, a.variantId);
+    if (a.captionStyle === null) delete v.captionStyle;
+    else if (a.captionStyle) v.captionStyle = { ...v.captionStyle, ...a.captionStyle };
     if ((a.width ?? v.width) % 2 || (a.height ?? v.height) % 2) throw new OpError('invalid_args', 'width and height must be even');
     Object.assign(v, { ...(a.name !== undefined ? { name: a.name } : {}), ...(a.width !== undefined ? { width: a.width } : {}), ...(a.height !== undefined ? { height: a.height } : {}), ...(a.fit !== undefined ? { fit: a.fit } : {}), ...(a.safeArea !== undefined ? { safeArea: a.safeArea } : {}) });
     return { affectedIds: [v.id], summary: `Updated format ${v.name}` };

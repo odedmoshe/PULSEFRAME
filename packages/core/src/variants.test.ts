@@ -86,6 +86,24 @@ describe('linked format variants', () => {
     expect(code(() => tx(d, [{ op: 'duplicate_clips', args: { clipIds: [titleId] } }]))).toBe('invalid_args');
     expect(code(() => tx(d, [{ op: 'duplicate_clips', args: { clipIds: [titleId], offset: f(-500) } }]))).toBe('out_of_bounds');
   });
+  it('caption style can differ per format: fields set for a format replace the master there only, merge on repeated edits, and null follows the master again', () => {
+    const { doc, variantId } = project();
+    let d = tx(doc, [{ op: 'add_caption_track', args: { mode: 'manual', style: { sizeFrac: 0.05, position: 'bottom' } } }, { op: 'add_cue', args: { start: f(0), duration: f(60), text: 'שלום' } }]).doc;
+    const trackOf = (x: ProjectDocument) => Object.values(x.sequences)[0]!.tracks.find((t) => t.kind === 'caption')!;
+    d = tx(d, [{ op: 'update_variant', args: { variantId, captionStyle: { sizeFrac: 0.09 } } }]).doc;
+    d = tx(d, [{ op: 'update_variant', args: { variantId, captionStyle: { position: 'top' } } }]).doc; // merges with the size already set
+    expect(validateProject(d)).toEqual([]);
+    expect(d.variants[variantId]!.captionStyle).toEqual({ sizeFrac: 0.09, position: 'top' });
+    expect(trackOf(d).caption!.style).toMatchObject({ sizeFrac: 0.05, position: 'bottom' }); // master untouched
+    expect(trackOf(projectVariant(d, variantId)).caption!.style).toMatchObject({ sizeFrac: 0.09, position: 'top', color: trackOf(d).caption!.style.color });
+    // a later master change to another field shows in the format too; the format keeps its own size and position
+    d = tx(d, [{ op: 'set_caption_style', args: { trackId: trackOf(d).id, style: { color: '#FFEE00', sizeFrac: 0.06 } } }]).doc;
+    expect(trackOf(projectVariant(d, variantId)).caption!.style).toMatchObject({ sizeFrac: 0.09, position: 'top', color: '#FFEE00' });
+    d = tx(d, [{ op: 'update_variant', args: { variantId, captionStyle: null } }]).doc;
+    expect(d.variants[variantId]!.captionStyle).toBeUndefined();
+    expect(trackOf(projectVariant(d, variantId)).caption!.style).toMatchObject({ sizeFrac: 0.06, position: 'bottom' });
+    expect(code(() => tx(d, [{ op: 'update_variant', args: { variantId, captionStyle: { sizeFrac: 9 } } }]))).toBe('invalid_args');
+  });
   it('a variant is one undoable entity; bad input is refused', () => {
     const { doc, titleId, variantId } = project();
     const r = tx(doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, transform: { x: 0.1 } } }]);
