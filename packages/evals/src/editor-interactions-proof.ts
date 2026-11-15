@@ -354,6 +354,38 @@ async function main() {
     await mpage.keyboard.press('Control+z');
     const revUndo = await mUntil([21, 66, 120]);
     check('multi-select: Ctrl+click adds a clip to the selection; dragging one moves both by the same 20 frames in one transaction and a third clip stays; Alt+→ nudges both; Ctrl+A selects all, Shift+click removes one; Delete removes the two selected in one transaction and one undo restores them', twoSelected === 2 && revDrag === rev0 + 1 && stillTwo === 2 && revNudge === rev0 + 2 && allSelected === 3 && revDelete === rev0 + 3 && revUndo === rev0 + 4 && mErrors.length === 0, { twoSelected, stillTwo, allSelected, revisions: [rev0, revDrag, revNudge, revDelete, revUndo], errors: mErrors.slice(0, 3) });
+
+    console.log('\n# marquee selection');
+    const selIds = async () => (await mpage.locator('.clip.selected').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.clipId))).sort();
+    const [qa, qb, qc] = [(await clipEl(mA).boundingBox())!, (await clipEl(mB).boundingBox())!, (await clipEl(mC).boundingBox())!];
+    const revM = (await mdoc()).revision as number;
+    const laneY = qa.y - 3; // inside the track lane, above the clip
+    await mpage.mouse.click(qa.x - 8, laneY); // plain click on empty space clears the selection
+    const cleared0 = (await selIds()).length;
+    await mpage.mouse.move(qa.x - 8, laneY);
+    await mpage.mouse.down();
+    await mpage.mouse.move(qb.x + qb.width / 2, qa.y + qa.height - 4, { steps: 6 });
+    const boxShown = await mpage.getByTestId('marquee').count();
+    const during = await selIds();
+    await mpage.mouse.up();
+    const afterAB = await selIds(), boxGone = (await mpage.getByTestId('marquee').count()) === 0;
+    await mpage.keyboard.down('Shift');
+    await mpage.mouse.move(qc.x - 6, laneY);
+    await mpage.mouse.down();
+    await mpage.mouse.move(qc.x + 10, qc.y + 12, { steps: 4 });
+    await mpage.mouse.up();
+    await mpage.keyboard.up('Shift');
+    const afterAdd = await selIds();
+    await mpage.mouse.move(qb.x - 6, laneY);
+    await mpage.mouse.down();
+    await mpage.mouse.move(qb.x + 12, qb.y + 12, { steps: 4 });
+    const midEscape = await selIds();
+    await mpage.keyboard.press('Escape');
+    const afterEscape = await selIds();
+    await mpage.mouse.up();
+    const afterEscapeUp = await selIds();
+    const want = (ids: string[]) => JSON.stringify([...ids].sort());
+    check('marquee: dragging a box over empty timeline space selects exactly the clips it touches (live while dragging); Shift+drag adds to the selection; Escape during a drag restores the selection from before it; a plain click on empty space clears it; none of this changes the project', cleared0 === 0 && boxShown === 1 && want(during as string[]) === want([mA, mB]) && want(afterAB as string[]) === want([mA, mB]) && boxGone && want(afterAdd as string[]) === want([mA, mB, mC]) && want(midEscape as string[]) === want([mB]) && want(afterEscape as string[]) === want([mA, mB, mC]) && want(afterEscapeUp as string[]) === want([mA, mB, mC]) && (await mdoc()).revision === revM, { cleared0, boxShown, during, afterAB, afterAdd, midEscape, afterEscape, afterEscapeUp });
     await mpage.close();
 
     console.log('\n# subtitle file in a legacy Hebrew encoding');

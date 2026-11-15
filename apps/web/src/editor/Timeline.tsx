@@ -6,6 +6,7 @@ import { readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
 import { useEditorState } from './store.ts';
 import { useTimelineDrag } from './TimelineDrag.tsx';
+import { useMarquee } from './TimelineMarquee.tsx';
 
 const MAX_MARKERS = 3000;
 
@@ -38,6 +39,7 @@ export function Timeline() {
   const ghostSel = new Set(ghosts.flatMap((g) => g.selection));
   const rate = editor.rate;
   const { containerProps, ghost } = useTimelineDrag();
+  const { marqueeProps, box } = useMarquee(editor);
   const [snapBeats, setSnapBeats] = useState(readSnapBeats);
   const markers = useMemo(() => {
     if (!doc) return { scenes: [] as T.RationalTime[], beats: [] as T.RationalTime[], truncated: false };
@@ -59,7 +61,8 @@ export function Timeline() {
       </label>
       {here && <MarkerBar marker={here} />}
       <div className="tl-scroll" {...containerProps}>
-        <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }}>
+        <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}>
+          {box && <div className="marquee" data-testid="marquee" aria-hidden="true" style={box} />}
           <div className="ruler" data-testid="ruler" onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.round(((x / pps) * rate.num) / rate.den)); }}>
             {Array.from({ length: Math.floor(totalSeconds / tickEvery) + 1 }, (_, i) => <span key={i} style={{ left: i * tickEvery * pps }}>{i * tickEvery}s</span>)}
             {userMarkers.map((m) => (
