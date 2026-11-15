@@ -13,6 +13,10 @@ export class Player {
   doc: ProjectDocument | null = null;
   frame = 0;
   playing = false;
+  /** Restart from the beginning when the end is reached. Session setting; never stored in the project. */
+  loop = false;
+  /** How many times playback wrapped around since it was created (for tests and diagnostics). */
+  loops = 0;
   clock: 'audio' | 'monotonic' = 'monotonic';
   private busy = false;
   private want: number | null = null;
@@ -210,7 +214,12 @@ export class Player {
       const elapsed = Math.max(0, now() - this.origin.clock);
       // Frame from absolute elapsed time: no accumulated per-frame rounding.
       const f = this.origin.frame + Math.floor((elapsed * rate.num) / rate.den);
-      if (f >= this.frameCount) { this.pause(); this.frame = this.frameCount - 1; this.request(this.frame); this.onTick(); return; }
+      if (f >= this.frameCount) {
+        this.pause();
+        // Loop: start again from the first frame (audio is rescheduled from there, so picture and sound stay locked).
+        if (this.loop && this.frameCount > 1) { this.frame = 0; this.loops++; this.request(0); this.onTick(); void this.play(); return; }
+        this.frame = this.frameCount - 1; this.request(this.frame); this.onTick(); return;
+      }
       if (f !== this.frame) { this.frame = f; this.requested++; this.request(f); this.onTick(); }
       this.raf = requestAnimationFrame(tick);
     };
