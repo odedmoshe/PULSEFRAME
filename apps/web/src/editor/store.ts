@@ -226,11 +226,14 @@ export class Editor {
     this.writes = p.catch(() => undefined);
     return p;
   }
-  commit(ops: OpCall[], label?: string): Promise<CommitResult | null> { return this.enqueue(() => this.commitNow(ops, label)); }
+  /** `ops` may be a function: it is called when this write's turn comes, so it can decide from the document as it is then (after the user's earlier queued edits). Returning null or nothing commits nothing. */
+  commit(ops: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> { return this.enqueue(() => this.commitNow(ops, label)); }
   history(mode: 'undo' | 'redo'): Promise<void> { return this.enqueue(() => this.historyNow(mode)); }
-  private async commitNow(ops: OpCall[], label?: string): Promise<CommitResult | null> {
+  private async commitNow(given: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> {
     const { doc, revision } = this.state;
     if (!doc) return null;
+    const ops = typeof given === 'function' ? given() : given;
+    if (!ops?.length) return null;
     this.set({ save: 'save.saving', error: null });
     try {
       const r = await api.commit(doc.id, revision, ops, label);

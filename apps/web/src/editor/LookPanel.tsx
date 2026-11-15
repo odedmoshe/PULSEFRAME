@@ -83,16 +83,33 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
           const keys = fx.keyframes?.[name] ?? [];
           const animated = keys.length > 0;
           const hasKey = inside && keys.some((k) => T.eq(k.time, local));
-          const setKey = (value: number) => void editor.commit([{ op: 'set_effect_keyframe', args: { clipId, effectId: fx.id, param: name, time: local, value } }], 'Effect keyframe');
+          // Decisions are taken from live state, not from this render: the playhead when the control is used, and the
+          // effect as it is when the edit's turn comes (after the user's own earlier, still queued edits).
+          const liveLocal = () => { const c = editor.doc ? findClip(editor.doc, clipId)?.clip : undefined; return c && T.lte(c.start, editor.playhead) && T.lt(editor.playhead, clipEnd(c)) ? T.sub(editor.playhead, c.start) : null; };
+          const liveFx = () => { const c = editor.doc ? findClip(editor.doc, clipId)?.clip : undefined; return c?.effects?.find((e) => e.id === fx.id); };
+          const keyOp = (at: T.RationalTime, value: number) => ({ op: 'set_effect_keyframe', args: { clipId, effectId: fx.id, param: name, time: at, value } });
           const keyer: Keyer = {
             animated, pressed: hasKey, enabled: inside, title: t('cmd.keyframeAdd'), animatedTitle: t('keyframes.animated'),
             onToggle: () => {
-              if (hasKey) void editor.commit([{ op: 'delete_effect_keyframe', args: { clipId, effectId: fx.id, param: name, time: local } }], 'Remove effect keyframe');
-              else setKey(Number(current[name]));
+              const at = liveLocal();
+              if (!at) return;
+              void editor.commit(() => {
+                const cur = liveFx();
+                if (!cur) return null;
+                return cur.keyframes?.[name]?.some((k) => T.eq(k.time, at)) ? [{ op: 'delete_effect_keyframe', args: { clipId, effectId: fx.id, param: name, time: at } }] : [keyOp(at, Number(effectParamsAt(cur, at)[name]))];
+              }, 'Effect keyframe');
             },
           };
           return <ParamControl key={name} name={name} prop={prop} keyer={keyer} value={animated ? current[name] : fx.params[name]}
-            onCommit={(v) => (animated ? (inside && setKey(Number(v))) : update({ params: { [name]: v } }))} />;
+            onCommit={(v) => {
+              const at = liveLocal();
+              void editor.commit(() => {
+                const cur = liveFx();
+                if (!cur) return null;
+                if (!cur.keyframes?.[name]?.length) return [{ op: 'update_effect', args: { clipId, effectId: fx.id, params: { [name]: v } } }];
+                return at ? [keyOp(at, Number(v))] : null;
+              }, 'Effect parameter');
+            }} />;
         })}
       </div>
     </li>

@@ -189,8 +189,7 @@ async function main() {
     await until((x2) => clipOf(x2, picClip).effects?.length === 1);
     await page.locator('[data-testid=effect-key][data-param=radius]').click();
     const firstKey = await until((x2) => clipOf(x2, picClip).effects?.[0]?.keyframes?.radius?.length === 1);
-    // The panel decides between "change the static value" and "write a key" from what it currently shows, so wait until it shows the parameter as animated (a person would see the ◆ too).
-    await page.getByTestId('effect-animated').first().waitFor({ timeout: 8000 }).catch(() => {});
+    // No wait for the panel here, on purpose: the slider is used straight after the ◆ click and must still write a key (the decision is taken when the edit's turn comes).
     await page.mouse.click(px0 + 60, rb.y + rb.height / 2); // 20 frames later
     await page.locator('[data-testid=effect-param][data-param=radius]').fill('0.1');
     await page.locator('[data-testid=effect-param][data-param=radius]').dispatchEvent('pointerup');

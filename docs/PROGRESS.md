@@ -264,7 +264,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
   1. Two quick edits to the same item (name a marker, then pick its colour; a key, then another) were both sent with the same base revision, and the server correctly refused the second as a conflict — with the user's own first edit. The editor now runs its own commits and undo/redo one after another (`apps/web/src/editor/store.ts`); conflicts with other participants are detected as before (Phase 3 and 5 conflict checks pass).
   2. A number field whose value follows the playhead re-committed its old text on blur after the playhead had moved, writing a stray volume key. Number fields in the Sound tab now commit only text typed since the last commit.
   3. The volume handlers used the playhead position of the last render; typing straight after a seek could write the key at the previous position. They read the live playhead now.
-- The same check exposed two places where the proof itself raced the page (it waited for the server, then acted on a panel that had not caught up). Those steps now wait for what the panel shows. **Open, same class as (3), not fixed:** the Look panel's effect-key button and slider decide "write a key" vs "change the static value" and the key time from their last render; a very fast action right after a seek or an edit can take the wrong branch. Markers checkpoint 13k was verified with only one run of this proof before these fixes; with the fixes it passed 8 runs in a row.
+- The same check exposed two places where the proof itself raced the page (it waited for the server, then acted on a panel that had not caught up). Those steps now wait for what the panel shows. The Look panel had the same weakness as (3) — its effect-key button and slider chose "write a key" vs "change the static value" from their last render — and is fixed as well: `Editor.commit` accepts a function that is evaluated when the edit's turn comes, so the choice is made from the document as it is then. The proof no longer waits before using the slider and passed 8 runs in a row. Other panels were not audited for this pattern. Markers checkpoint 13k was verified with only one run of this proof before these fixes; with the fixes it passed 8 runs in a row.
 
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
@@ -290,7 +290,7 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 Unblocked (no decision needed), roughly by value:
 1. Editor: multi-select drag, J/K/L, source viewer, workspaces (Phase 3 carry-over; markers are done).
 2. Speed ramps, reverse, freeze frame, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed and linear volume keys are done).
-3. Editor handlers that act on render-time state (Look panel effect keys): read live state at commit time.
+3. Audit the remaining editor panels for handlers that act on render-time state (Look and Sound are done).
 4. Disk quota; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; MCP resources/prompts; activity log dialog; dialogs and transient states in the accessibility audit.
