@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T01:38:47.522Z",
+  "ranAt": "2026-11-15T02:10:51.451Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -59,14 +59,14 @@
     },
     "browserExport": {
       "frames": 105,
-      "wallSeconds": 0.51,
-      "realtimeFactor": 6.836,
+      "wallSeconds": 0.45,
+      "realtimeFactor": 7.813,
       "bytes": 283785,
-      "wallInPageMs": 470,
+      "wallInPageMs": 416,
       "note": "headless Chromium, software (no GPU), 640x360 high quality; wall time includes asset fetch, audio mix, encode, SHA-256, base64 transfer"
     },
     "parity": {
-      "serverRouteWallSeconds": 1.668,
+      "serverRouteWallSeconds": 1.975,
       "serverBytes": 76665,
       "browserBytes": 283785,
       "ssimByFrame": {
@@ -214,7 +214,7 @@
           "location": "client-download",
           "note": "the media bytes were produced and stay in the browser tab that held the lease; the server stores only this record",
           "bytes": 283785,
-          "sha256": "7519d2d5c3e63ca05b295351aa6ed96fc493162b89d622349f4001e578133998",
+          "sha256": "8d67116750aa228d56d9fdec9b134a017106279d930b51bff1ffb552c71bf35f",
           "videoCodec": "avc",
           "audioCodec": "opus",
           "frames": 105,
@@ -223,6 +223,7 @@
           "revision": 4,
           "options": {
             "format": "mp4-h264-aac",
+            "captions": "burned",
             "quality": "high",
             "scale": 1
           }
@@ -233,8 +234,8 @@
       "name": "job row sha256 and bytes equal those of the file the proof received",
       "ok": true,
       "detail": {
-        "server": "7519d2d5c3e63ca05b295351aa6ed96fc493162b89d622349f4001e578133998",
-        "received": "7519d2d5c3e63ca05b295351aa6ed96fc493162b89d622349f4001e578133998"
+        "server": "8d67116750aa228d56d9fdec9b134a017106279d930b51bff1ffb552c71bf35f",
+        "received": "8d67116750aa228d56d9fdec9b134a017106279d930b51bff1ffb552c71bf35f"
       }
     },
     {
@@ -289,8 +290,8 @@
       "name": "restart: a NEW job over a fresh snapshot succeeds; exactly one succeeded job carries its output; the lost job published nothing",
       "ok": true,
       "detail": {
-        "newJob": "job_1cuX8HjJoCI",
-        "lostJob": "job_iRkZhf1xVdY"
+        "newJob": "job_txkb3vqtiPM",
+        "lostJob": "job_EPmd7dQw8qM"
       }
     },
     {
