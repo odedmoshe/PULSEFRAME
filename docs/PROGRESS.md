@@ -405,6 +405,19 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified: `notices.test.ts` (2), two ingest tests in `conform.test.ts` (untagged marked, tagged not), and the matrix's preview check now also requires the library to show exactly the expected notices: 4 of the 29 files show one (sound offset; converted ×2; untagged colour), 25 show none. 294 unit tests; phase0 54, phase3 27, phase5 33, accessibility audit clean, input matrix 4/4.
 - Limits: informational only — the user cannot choose a colour reading for untagged files; a conformed copy of an untagged source is not flagged although its conversion also assumed BT.601; no notice for the AVI early-frame difference, for beat analysis cut at 20 minutes (stated in the analysis result instead), or for assets imported before this change.
 
+**Checkpoint 14e — still-image matrix: 24 ways of storing one picture; four defects fixed**
+- `pnpm conformance:images` (`packages/evals/src/image-matrix.ts`, evidence `docs/evidence/image-matrix.json`): the same four-quadrant picture stored as PNG (RGB, with transparency, indexed, greyscale, 16-bit greyscale), JPEG (baseline, progressive, greyscale, CMYK, orientation tags 2, 3, 6, 8, 20 megapixels), WebP (lossy, lossless with transparency, animated), GIF (one frame, animated), BMP, TIFF, AVIF, a portrait PNG, and an SVG containing a script. Each accepted file is checked at four points (six for the portrait picture) on a server-rendered still and on the editor preview; refusals must be typed.
+- **First run: 15 of 24 shown correctly. Defects found and fixed:**
+  1. **Photos stored sideways with an orientation tag (tags 6 and 8 — the usual case for phone photos) were shown wrong**: the browser turns them when drawing, but the size recorded at import was the stored one, so the picture was fitted to the wrong shape. Import now reads the tag and records the size as shown.
+  2. **AVIF was accepted and then could not be rendered** (it was taken for a one-second video the browser reader could not open).
+  3. **A GIF with a single frame became a 0.1-second video clip.**
+  4. **BMP and TIFF were refused** (typed, but needlessly). Items 2–4: such stills are now converted to a lossless PNG copy at import, the original bytes are kept, and the library says so.
+  5. An animated WebP was refused with a misleading reason ("dimensions missing or exceed 64 megapixels"); the message now says animated WebP is not supported.
+- (One flag in the first run was my fixture's mistake — the 16-bit PNG was built from the red channel — not a product fault.)
+- **Result: 22 shown correctly on both the rendered still and the preview; 2 refused as intended** (animated WebP; SVG, which is never accepted). Converted pictures show the "converted" notice; the others show none.
+- Verified with these changes: 296 unit tests (`conform.test.ts` gained still conversion and orientation-tag tests); image matrix 3/3; input matrix 4/4; start-offset 4; phase0 54, phase3 27, phase4 19, phase6 35, phase12 15; accessibility audit clean. Other proofs were not re-run for this change (it touches still-image import only).
+- Not checked: colour profiles (ICC), wide gamut and HDR, CMYK beyond "looks like the RGB original at four points", EXIF orientation in formats other than JPEG, HEIC (the path exists; no HEIC fixture could be made here), animated pictures beyond their first frame, real photographs.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -449,8 +462,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 294 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
+Expect 296 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateBarcodeFixture, readBarcode } from '../../../packages/fixtures/src/index.ts';
-import { ingestUpload } from './ingest.ts';
+import { ingestUpload, jpegOrientation } from './ingest.ts';
 import { Store } from './store.ts';
 
 let dir: string;
@@ -110,6 +110,40 @@ describe('conform route (SPEC §7)', () => {
     expect(a.conform).toBeUndefined();
     expect(a.video!.untaggedColour).toBe(true);
   }, 60_000);
+  it('still pictures in formats the editor does not draw directly (BMP, TIFF, one-frame GIF) become a lossless PNG copy; the original bytes are kept', async () => {
+    for (const [name, args] of [['one.bmp', ['-frames:v', '1']], ['one.tiff', ['-frames:v', '1']], ['one.gif', ['-frames:v', '1']]] as const) {
+      const file = path.join(dir, name);
+      ff(['-i', base, ...args, file]);
+      const a = await upload(file);
+      expect(a.kind, name).toBe('image');
+      expect(a.image, name).toMatchObject({ width: 640, height: 360, codec: 'png' });
+      expect(a.conform, name).toMatchObject({ reasons: ['still-format'], frameMapping: 'identity' });
+      expect(fs.existsSync(store.blobPath(a.conform!.originalContentHash)), name).toBe(true);
+    }
+    // an animated GIF stays a (converted) video
+    const anim = path.join(dir, 'anim.gif');
+    ff(['-i', base, '-frames:v', '6', '-vf', 'fps=10', anim]);
+    expect((await upload(anim)).kind).toBe('video');
+  }, 120_000);
+  it('JPEG orientation tag: a photo stored sideways is recorded at the size it is shown; other tags leave the size alone', async () => {
+    const jpg = path.join(dir, 'plain.jpg');
+    ff(['-i', base, '-frames:v', '1', '-q:v', '3', jpg]); // 640×360, no EXIF
+    const plain = fs.readFileSync(jpg);
+    const withTag = (o: number) => { // insert an EXIF APP1 segment carrying only the Orientation tag right after the SOI marker
+      const tiff = Buffer.alloc(26);
+      tiff.write('MM', 0, 'latin1'); tiff.writeUInt16BE(42, 2); tiff.writeUInt32BE(8, 4); tiff.writeUInt16BE(1, 8);
+      tiff.writeUInt16BE(0x0112, 10); tiff.writeUInt16BE(3, 12); tiff.writeUInt32BE(1, 14); tiff.writeUInt16BE(o, 18); tiff.writeUInt32BE(0, 22);
+      const body = Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), tiff]);
+      const head = Buffer.alloc(4); head.writeUInt16BE(0xffe1, 0); head.writeUInt16BE(body.length + 2, 2);
+      const file = path.join(dir, `exif${o}.jpg`);
+      fs.writeFileSync(file, Buffer.concat([plain.subarray(0, 2), head, body, plain.subarray(2)]));
+      return file;
+    };
+    expect(jpegOrientation(jpg)).toBe(1);
+    for (const o of [1, 2, 3, 4]) { const f2 = withTag(o); expect(jpegOrientation(f2)).toBe(o); expect((await upload(f2)).image).toMatchObject({ width: 640, height: 360 }); }
+    for (const o of [5, 6, 7, 8]) { const f2 = withTag(o); expect(jpegOrientation(f2)).toBe(o); expect((await upload(f2)).image).toMatchObject({ width: 360, height: 640 }); }
+    expect(jpegOrientation(path.join(dir, 'base.mp4'))).toBe(1); // not a JPEG
+  }, 120_000);
   it('non-media bytes are still rejected with a typed error', async () => {
     const junk = path.join(dir, 'junk.mp4');
     fs.writeFileSync(junk, Buffer.alloc(5000, 7));

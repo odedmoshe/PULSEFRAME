@@ -16,6 +16,35 @@ export async function ffprobe(file: string): Promise<any> {
   const { stdout } = await exec('ffprobe', ['-v', 'error', '-protocol_whitelist', 'file', '-print_format', 'json', '-show_format', '-show_streams', file], { timeout: 30_000, maxBuffer: 8 << 20 });
   return JSON.parse(stdout);
 }
+/** EXIF orientation (1–8) of a JPEG, or 1 when it has none. Reads only the start of the file. */
+export function jpegOrientation(file: string): number {
+  let b: Buffer;
+  try { const fd = fs.openSync(file, 'r'); b = Buffer.alloc(262144); const n = fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd); b = b.subarray(0, n); } catch { return 1; }
+  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return 1;
+  let o = 2;
+  while (o + 4 <= b.length && b[o] === 0xff) {
+    const marker = b[o + 1]!, len = b.readUInt16BE(o + 2);
+    if (marker === 0xda || len < 2) break; // start of scan: no more headers
+    if (marker === 0xe1 && b.toString('latin1', o + 4, o + 10) === 'Exif\0\0') {
+      const t = o + 10; // TIFF header
+      if (t + 8 > b.length) return 1;
+      const le = b.toString('latin1', t, t + 2) === 'II';
+      const u16 = (p: number) => (le ? b.readUInt16LE(p) : b.readUInt16BE(p));
+      const u32 = (p: number) => (le ? b.readUInt32LE(p) : b.readUInt32BE(p));
+      const ifd = t + u32(t + 4);
+      if (ifd + 2 > b.length) return 1;
+      const count = u16(ifd);
+      for (let i = 0; i < count; i++) {
+        const e = ifd + 2 + i * 12;
+        if (e + 12 > b.length) return 1;
+        if (u16(e) === 0x0112) { const val = u16(e + 8); return val >= 1 && val <= 8 ? val : 1; }
+      }
+      return 1;
+    }
+    o += 2 + len;
+  }
+  return 1;
+}
 /** Number of video packets in the first video stream, read without decoding (null when it cannot be determined). */
 export async function countVideoPackets(file: string): Promise<number | null> {
   try {
@@ -36,7 +65,7 @@ export type MediaMeta = Pick<Asset, 'kind' | 'container' | 'mimeType' | 'duratio
 /** Video codecs the editor decodes directly (WebCodecs, measured in docs/CAPABILITIES.md). Anything else is conformed. */
 const EDITABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1']);
 export class NeedsConform extends Error {
-  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }) { super('needs conform'); }
+  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect' | 'still-format')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }) { super('needs conform'); }
 }
 const STANDARD_RATES = [[24000, 1001], [24, 1], [25, 1], [30000, 1001], [30, 1], [50, 1], [60000, 1001], [60, 1]] as const;
 /** Probe a local file and describe it as asset metadata. Used for uploads and for provider outputs alike. */
@@ -56,11 +85,23 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
   // other files or URLs, which must never be followed on behalf of an uploader.
   if (!formats.some((f) => CONTAINERS.has(f) || /_pipe$/.test(f))) throw new ApiError(415, 'unsupported_media', `container format "${formats.join(',')}" is not accepted`, { accepted: [...CONTAINERS] });
   const stillCodec = ({ png: 'image/png', mjpeg: 'image/jpeg', webp: 'image/webp' } as Record<string, string>)[v?.codec_name];
-  if (v && stillCodec && formats.some((f) => /image2|_pipe$/.test(f)) && !a) {
-    if (!(v.width > 0 && v.height > 0) || v.width * v.height > 64_000_000) throw new ApiError(415, 'unsupported_media', 'image dimensions are missing or exceed 64 megapixels');
-    return { kind: 'image', container: v.codec_name === 'mjpeg' ? 'jpeg' : v.codec_name, mimeType: stillCodec, duration: T.ZERO, image: { width: v.width, height: v.height, codec: v.codec_name, hasAlpha: ALPHA_PIX.test(String(v.pix_fmt ?? '')) } };
+  const isStillFile = formats.some((f) => /image2|_pipe$/.test(f));
+  if (v && stillCodec && isStillFile && !a) {
+    if (!(v.width > 0 && v.height > 0)) throw new ApiError(415, 'unsupported_media', v.codec_name === 'webp' ? 'this WebP could not be read as a single picture (animated WebP is not supported)' : 'the picture could not be read (no dimensions)');
+    if (v.width * v.height > 64_000_000) throw new ApiError(415, 'unsupported_media', 'the picture is larger than 64 megapixels');
+    // A JPEG may be stored sideways with a tag saying how to turn it (photos from phones). The browser turns it when drawing,
+    // so the size recorded here must be the size as shown, or the picture would be fitted to the wrong shape.
+    const turned = v.codec_name === 'mjpeg' && [5, 6, 7, 8].includes(jpegOrientation(file));
+    return { kind: 'image', container: v.codec_name === 'mjpeg' ? 'jpeg' : v.codec_name, mimeType: stillCodec, duration: T.ZERO, image: { width: turned ? v.height : v.width, height: turned ? v.width : v.height, codec: v.codec_name, hasAlpha: ALPHA_PIX.test(String(v.pix_fmt ?? '')) } };
   }
-  if (v && formats.some((f) => /image2|_pipe$/.test(f))) throw new ApiError(415, 'unsupported_media', `still image format ${v.codec_name} is not supported yet`);
+  // Stills in formats the browser path does not draw directly are converted to PNG (lossless) at import:
+  // BMP, TIFF, a GIF with a single frame, and AVIF / HEIF pictures (which ffprobe reports as one-frame "video").
+  const brand = String(probe.format?.tags?.major_brand ?? '').trim().toLowerCase();
+  const heifStill = ['avif', 'heic', 'heix', 'mif1'].includes(brand);
+  const oneFrameGif = formats.includes('gif') && v && Number(v.nb_frames ?? 0) === 1;
+  if (v && !a && ((isStillFile && ['bmp', 'tiff'].includes(v.codec_name)) || oneFrameGif || heifStill))
+    throw new NeedsConform(['still-format'], { codec: String(v.codec_name), width: Number(v.width) || 0, height: Number(v.height) || 0, avgFrameRate: '0/0', rFrameRate: '0/0', rotation: 0, frameCount: 1, durationSeconds: 0 }, { num: 1, den: 1 });
+  if (v && isStillFile) throw new ApiError(415, 'unsupported_media', `still image format ${v.codec_name} is not supported yet`);
   const container = formats.includes('mp4') ? 'mp4' : formats.includes('webm') ? 'webm' : (formats[0] ?? 'unknown');
   let duration = T.fromSeconds(String(Number(probe.format?.duration ?? (v ?? a).duration ?? 0).toFixed(6)));
   // The container's own start time. Players (and ffmpeg) treat it as time zero; MPEG-TS files typically start around 1.4 s.
@@ -131,6 +172,25 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
       meta = await describeMedia(tmp);
     } catch (e) {
       if (!(e instanceof NeedsConform)) throw e;
+      if (e.reasons.includes('still-format')) {
+        // Still picture in a format the editor does not draw directly: keep the original bytes, edit a lossless PNG copy.
+        const png = `${tmp}.still.png`;
+        try {
+          await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-protocol_whitelist', 'file', '-i', tmp, '-map', '0:v:0', '-frames:v', '1', '-c:v', 'png', png], { timeout: 5 * 60_000, maxBuffer: 8 << 20 });
+          const converted = await describeMedia(png);
+          const cHash = createHash('sha256');
+          await pipeline(fs.createReadStream(png), cHash);
+          const contentHash = `sha256:${cHash.digest('hex')}`;
+          const cSize = fs.statSync(png).size;
+          store.putBlob(originalHash, tmp, size, 'application/octet-stream');
+          store.putBlob(contentHash, png, cSize, converted.mimeType);
+          return { ...converted, name: assetName, contentHash, byteSize: cSize, provenance, conform: { originalContentHash: originalHash, originalByteSize: size, reasons: e.reasons, original: e.original, frameMapping: 'identity', method: 'ffmpeg, first picture to PNG (lossless)' } };
+        } catch (err) {
+          fs.rmSync(png, { force: true });
+          if (err instanceof ApiError) throw err;
+          throw new ApiError(415, 'unsupported_media', `this ${e.original.codec} picture could not be converted for editing`, {}, 'Convert it to PNG or JPEG and import that.');
+        }
+      }
       // Conform route: keep the original bytes untouched, edit a constant-rate, upright H.264 copy, record the mapping.
       const out = `${tmp}.conform.mp4`;
       try {
