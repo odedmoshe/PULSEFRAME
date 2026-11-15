@@ -30,7 +30,7 @@ async function main() {
   const s = await startServer({ port: 8792, dataDir: path.join(art, 'data') });
   const origin = s.url;
   // The owner's own session (as the editor obtains it) and a REST helper for any credential.
-  const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]!;
+  const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   const owner = { cookie, origin };
   const rest = async (p: string, body?: unknown, cred: Record<string, string> = owner, method?: string) => {
     const r = await fetch(`${origin}/api/v1${p}`, { method: method ?? (body === undefined ? 'GET' : 'POST'), headers: { ...cred, connection: 'close', ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -114,8 +114,10 @@ async function main() {
     await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     const pageErrors: string[] = [];
     page.on('pageerror', (e) => pageErrors.push(String(e)));
-    await page.goto(`${origin}/?project=${pid}`);
+    await page.goto(`${s.ownerUrl}&project=${pid}`);
     await page.locator(`[data-proposal-id="${pr.data.proposalId}"]`).waitFor();
+    // The before/after stills load lazily, so bring the proposal into view first (the Inspector has grown since this proof was written).
+    await page.locator(`[data-proposal-id="${pr.data.proposalId}"]`).scrollIntoViewIfNeeded();
     const imgs = await page.locator(`[data-proposal-id="${pr.data.proposalId}"] img`).evaluateAll((els) => Promise.all(els.map(async (el) => { const i = el as HTMLImageElement; if (!i.complete) await new Promise((r) => { i.onload = r; i.onerror = r; }); return i.naturalWidth; })));
     await page.screenshot({ path: path.join(root, 'docs/evidence/phase5-proposal-review-he.png') });
     await page.getByTestId('proposal-accept').click();
@@ -150,6 +152,37 @@ async function main() {
     const noOther = await S.call('get_timeline', { projectId: other });
     const ctrl = await S.call('get_controls', { projectId: pid });
     check('goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied', !okText.isError && noVideo.isError && noVideo.data.error.code === 'out_of_scope' && noMix.isError && noMix.data.error.code === 'out_of_scope' && noOther.isError && noOther.data.error.code === 'out_of_scope' && (await doc()).project.name === 'phase5' && ctrl.data.limits.trackIds[0] === 'trk_text', noVideo.data.error.details?.violations?.[0]);
+
+    console.log('\n# findings of the independent security review (each was reproducible before the fix)');
+    {
+      const noKey = await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close' } });
+      const withAgent = await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', ...bearer(editor.token) } });
+      check('an agent (or any local program) cannot mint an owner session: without the launch secret the session route answers 401 and sets no cookie', noKey.status === 401 && withAgent.status === 401 && !noKey.headers.get('set-cookie') && !withAgent.headers.get('set-cookie'), { noKey: noKey.status, agent: withAgent.status });
+      const up2 = await fetch(`${origin}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...bearer(scoped.token), 'x-filename': 'x.mp4', connection: 'close' }, body: fs.readFileSync(fixture.file) });
+      const an2 = await rest(`/projects/${pid}/assets/${assetId}/analyze`, { kind: 'scenes' }, bearer(scoped.token));
+      const sfx2 = await rest(`/projects/${pid}/sfx`, { sfxId: 'sfx.click' }, bearer(scoped.token));
+      check('a grant limited to certain tracks cannot change things outside clips through side doors: upload, analysis data and sound-effect import are refused as out of scope', up2.status === 403 && an2.status === 403 && sfx2.status === 403 && an2.body.error.code === 'out_of_scope', { upload: up2.status, analyze: an2.body.error?.code, sfx: sfx2.status });
+      const ownerTx = await rest(`/projects/${pid}/transactions`, { ops: [{ op: 'rename_project', args: { name: 'phase5 renamed by owner' } }] });
+      const hist = (await rest(`/projects/${pid}/history?since=0`)).body.events as any[];
+      const ownerTxId = hist.find((e) => e.revision === ownerTx.body.revision)?.transactionId;
+      const agentUndo = await A.call('undo', { projectId: pid, transactionId: ownerTxId });
+      const stillRenamed = (await doc()).project.name === 'phase5 renamed by owner';
+      const ownerUndo = await rest(`/projects/${pid}/undo`, { transactionId: ownerTxId });
+      check('an agent cannot reverse the owner\'s transaction by naming its id; the owner can', !!ownerTxId && agentUndo.isError && stillRenamed && ownerUndo.status === 200 && (await doc()).project.name !== 'phase5 renamed by owner', { agent: agentUndo.data?.error?.code });
+      const limited = await grant({ name: 'one-project', mode: 'edit', projectIds: [pid] });
+      const L = await mcpFor(limited.token);
+      const view = await L.call('set_view', { projectId: other, frame: 3 });
+      const ctl = await L.call('get_controls', { projectId: other });
+      check('a grant limited to one project cannot show presence in, or read controls of, another project through MCP', view.isError && ctl.isError, { set_view: view.data?.error?.code, get_controls: ctl.data?.error?.code });
+      await L.c.close();
+      const ownerJob = (await rest(`/projects/${pid}/exports`, { quality: 'draft', scale: 0.25 })).body.jobId;
+      const cancelByAgent = await A.call('cancel_job', { jobId: ownerJob });
+      const cancelByOwner = await rest(`/jobs/${ownerJob}/cancel`, {});
+      check('an agent cannot cancel a job the owner started; the owner can cancel it', cancelByAgent.isError && cancelByAgent.data?.error?.code === 'not_your_job' && cancelByOwner.status === 200, { agent: cancelByAgent.data?.error?.code });
+      const playlist = Buffer.from('#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.0,\n/etc/hostname\n#EXT-X-ENDLIST\n');
+      const pl = await fetch(`${origin}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...owner, 'x-filename': 'list.m3u8', connection: 'close' }, body: playlist });
+      check('a playlist file (which could point at other files or URLs) is not accepted as media', pl.status === 415, { status: pl.status });
+    }
 
     console.log('\n# human control and authorization boundaries');
     // Pause Agent from the editor.
@@ -199,7 +232,7 @@ async function main() {
     const revoked = await fetch(`${origin}/api/v1/projects/${pid}/timeline`, { headers: { ...bearer(scoped.token), connection: 'close' } });
     check('a revoked grant stops working immediately (401 grant_revoked)', revoked.status === 401 && (await revoked.json()).error.code === 'grant_revoked');
     const listed = (await rest('/grants')).body.grants;
-    check('grant tokens are never returned again after creation', listed.length === 3 && !JSON.stringify(listed).includes(editor.token.slice(4)) && listed.every((g: any) => !('token' in g)));
+    check('grant tokens are never returned again after creation', listed.length === 4 && !JSON.stringify(listed).includes(editor.token.slice(4)) && listed.every((g: any) => !('token' in g)));
     check('no uncaught errors in the editor page', pageErrors.length === 0, pageErrors.slice(0, 3));
     await browser.close();
     await Promise.all([A.c.close(), P.c.close(), S.c.close()]);

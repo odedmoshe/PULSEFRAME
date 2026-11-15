@@ -43,6 +43,9 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
   const a = streams.find((s) => s.codec_type === 'audio');
   const formats: string[] = String(probe.format?.format_name ?? '').split(',');
   if (!v && !a) throw new ApiError(415, 'unsupported_media', 'no audio or video stream found');
+  // Only self-contained media files are accepted. Playlist and script-like formats (HLS, DASH, concat, SDP, ...) can point at
+  // other files or URLs, which must never be followed on behalf of an uploader.
+  if (!formats.some((f) => CONTAINERS.has(f) || /_pipe$/.test(f))) throw new ApiError(415, 'unsupported_media', `container format "${formats.join(',')}" is not accepted`, { accepted: [...CONTAINERS] });
   const stillCodec = ({ png: 'image/png', mjpeg: 'image/jpeg', webp: 'image/webp' } as Record<string, string>)[v?.codec_name];
   if (v && stillCodec && formats.some((f) => /image2|_pipe$/.test(f)) && !a) {
     if (!(v.width > 0 && v.height > 0) || v.width * v.height > 64_000_000) throw new ApiError(415, 'unsupported_media', 'image dimensions are missing or exceed 64 megapixels');
@@ -76,6 +79,9 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
   const mimeType = (v ? MIME[container] : MIME[container === 'mp4' ? 'm4a' : container]) ?? 'application/octet-stream';
   return { kind: v ? 'video' : 'audio', container, mimeType, duration, video, audio };
 }
+
+/** Self-contained containers ffprobe may report for an upload (names as ffmpeg prints them). */
+const CONTAINERS = new Set(['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2', 'matroska', 'webm', 'wav', 'mp3', 'ogg', 'flac', 'aac', 'avi', 'mpegts', 'image2', 'gif', 'aiff', 'w64', 'caf']);
 
 export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array>, name: string, actor: string, maxBytes: number): Promise<Omit<Asset, 'id'>> {
   const tmp = path.join(store.tmpDir, `up_${randomBytes(8).toString('hex')}`);

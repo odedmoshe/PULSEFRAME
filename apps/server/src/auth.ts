@@ -14,7 +14,8 @@ import { ApiError } from './store.ts';
 export type Scope = 'observe' | 'edit';
 export type { Principal } from './governance.ts';
 import type { Principal } from './governance.ts';
-export interface Tokens { agent: string; observer: string }
+/** `owner` is the launch secret that lets a browser become the owner; `agent`/`observer` are the built-in bearer credentials. */
+export interface Tokens { agent: string; observer: string; owner: string }
 
 const COOKIE = 'pf_session';
 export class Auth {
@@ -27,11 +28,9 @@ export class Auth {
 
   constructor(private cfg: Config) {
     const file = path.join(cfg.dataDir, 'tokens.json');
-    if (fs.existsSync(file)) this.tokens = JSON.parse(fs.readFileSync(file, 'utf8'));
-    else {
-      this.tokens = { agent: `pfa_${randomBytes(24).toString('base64url')}`, observer: `pfo_${randomBytes(24).toString('base64url')}` };
-      fs.writeFileSync(file, JSON.stringify(this.tokens, null, 2), { mode: 0o600 });
-    }
+    const stored: Partial<Tokens> = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+    this.tokens = { agent: stored.agent ?? `pfa_${randomBytes(24).toString('base64url')}`, observer: stored.observer ?? `pfo_${randomBytes(24).toString('base64url')}`, owner: stored.owner ?? `pfk_${randomBytes(24).toString('base64url')}` };
+    if (!stored.agent || !stored.observer || !stored.owner) fs.writeFileSync(file, JSON.stringify(this.tokens, null, 2), { mode: 0o600 });
     const hosts = ['127.0.0.1', 'localhost', '[::1]'].map((h) => `${h}:${cfg.port}`);
     this.allowedHosts = new Set([...hosts, ...cfg.extraOrigins.map((o) => new URL(o).host)]);
     this.allowedOrigins = new Set([...hosts.map((h) => `http://${h}`), ...cfg.extraOrigins]);
@@ -50,9 +49,20 @@ export class Auth {
     const origin = req.headers.get('origin');
     return origin === null ? req.headers.get('sec-fetch-site') !== 'cross-site' : this.allowedOrigins.has(origin);
   }
-  /** Issue a browser session. Only for same-site browser requests from an allow-listed origin. */
+  /** The owner session already carried by this request, if any. */
+  sessionOf(req: Request): Principal | null {
+    const sid = new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`).exec(req.headers.get('cookie') ?? '')?.[1];
+    return (sid && this.originAllowed(req) && this.sessions.get(sid)) || null;
+  }
+  /**
+   * Issue the owner's browser session. An allowed origin is NOT proof of being the owner's browser (any local program can send
+   * that header), so the caller must also present the launch secret from the link the server prints at start-up.
+   * Agents are given bearer tokens or grants, never this secret, so they cannot promote themselves to owner over HTTP.
+   */
   issueSession(req: Request): string {
     if (!this.originAllowed(req)) throw new ApiError(403, 'forbidden_origin', 'origin not allowed');
+    const key = req.headers.get('x-pf-owner-key') ?? '';
+    if (!key || !this.same(key, this.tokens.owner)) throw new ApiError(401, 'owner_key_required', 'opening the editor as the owner needs the link the server printed when it started', {}, 'Open the "Editor (owner)" link from the server start-up output; it carries a one-machine secret key.');
     const sid = randomBytes(24).toString('base64url');
     this.sessions.set(sid, { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] });
     return `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/`;

@@ -241,7 +241,7 @@ async function main() {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-    await page.goto(`${s.url}/?project=${mp.pid}`);
+    await page.goto(`${s.ownerUrl}&project=${mp.pid}`);
     await page.locator(`.clip[data-clip-id="${mp.clipId}"]`).click();
     await page.getByTestId('look-panel').waitFor();
     const clipNow = async () => (await call(`/projects/${mp.pid}`)).body.project.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((x: any) => x.id === mp.clipId);

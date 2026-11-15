@@ -109,6 +109,14 @@ export class Governance {
     if ((need === 'edit' || need === 'job') && mode === 'propose') throw new ApiError(403, 'insufficient_scope', 'this credential may only propose edits', { mode }, 'Submit the edit as a proposal.');
   }
   /** Track and time-range limits, checked against the exact entity diff of the edit. */
+  /**
+   * Some actions change things that are not clips (media library, analysis data) or place results where the caller chooses.
+   * A grant limited to certain tracks or a time range cannot be checked against those, so it is refused rather than let through.
+   */
+  assertUnrestricted(p: Principal, what: string): void {
+    const g = p.kind === 'agent' ? p.grant : undefined;
+    if (g && (g.trackIds || g.range)) throw new ApiError(403, 'out_of_scope', `this grant is limited to certain tracks or a time range and cannot ${what}`, { grant: { trackIds: g.trackIds, range: g.range } }, 'Ask the owner for a grant without track or range limits, or to do this step.');
+  }
   private scopeGuard(p: Principal): CommitRequest['guard'] {
     const g = p.grant;
     if (!g || (!g.trackIds && !g.range)) return undefined;
@@ -138,7 +146,8 @@ export class Governance {
   }
   undoAs(p: Principal, projectId: string, mode: 'undo' | 'redo', transactionId?: string): CommitResult {
     if (p.kind === 'agent') this.assertMayAct(p, projectId, 'edit');
-    return this.store.undo(projectId, p.actor, mode, transactionId, p.kind === 'agent' ? this.scopeGuard(p) : undefined);
+    // Agents may only reverse their own transactions, also when naming one by id; the owner may reverse anyone's.
+    return this.store.undo(projectId, p.actor, mode, transactionId, p.kind === 'agent' ? this.scopeGuard(p) : undefined, p.kind !== 'agent');
   }
 
   // ---------- proposals ----------

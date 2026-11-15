@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T00:52:48.198Z",
+  "ranAt": "2026-11-15T01:34:36.323Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -23,7 +23,7 @@
       "name": "discovery: editing, senses, proposals, jobs and control tools are all listed from one registry",
       "ok": true,
       "detail": {
-        "tools": 72
+        "tools": 75
       }
     },
     {
@@ -76,11 +76,11 @@
       "detail": {
         "proposed": true,
         "committed": false,
-        "proposalId": "prp_PWKphuSH87w",
+        "proposalId": "prp_5lJVhEpktKw",
         "baseRevision": 10,
         "summary": "Updated text \"פתיחה חלופית\"",
         "changedIds": [
-          "clp_46bc0bf7b60"
+          "clp_a57b6414330"
         ],
         "status": "open"
       }
@@ -113,8 +113,54 @@
       "name": "goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied",
       "ok": true,
       "detail": {
-        "entityId": "clp_85d07ec5c24",
+        "entityId": "clp_80f8edb4424",
         "reason": "track trk_video is outside the grant"
+      }
+    },
+    {
+      "name": "an agent (or any local program) cannot mint an owner session: without the launch secret the session route answers 401 and sets no cookie",
+      "ok": true,
+      "detail": {
+        "noKey": 401,
+        "agent": 401
+      }
+    },
+    {
+      "name": "a grant limited to certain tracks cannot change things outside clips through side doors: upload, analysis data and sound-effect import are refused as out of scope",
+      "ok": true,
+      "detail": {
+        "upload": 403,
+        "analyze": "out_of_scope",
+        "sfx": 403
+      }
+    },
+    {
+      "name": "an agent cannot reverse the owner's transaction by naming its id; the owner can",
+      "ok": true,
+      "detail": {
+        "agent": "nothing_to_undo"
+      }
+    },
+    {
+      "name": "a grant limited to one project cannot show presence in, or read controls of, another project through MCP",
+      "ok": true,
+      "detail": {
+        "set_view": "out_of_scope",
+        "get_controls": "out_of_scope"
+      }
+    },
+    {
+      "name": "an agent cannot cancel a job the owner started; the owner can cancel it",
+      "ok": true,
+      "detail": {
+        "agent": "not_your_job"
+      }
+    },
+    {
+      "name": "a playlist file (which could point at other files or URLs) is not accepted as media",
+      "ok": true,
+      "detail": {
+        "status": 415
       }
     },
     {

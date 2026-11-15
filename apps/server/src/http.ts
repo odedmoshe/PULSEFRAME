@@ -16,7 +16,7 @@ import type { DerivativeKind, Derivatives } from './derive.ts';
 import type { Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
-import { detectBeatsOfFile, detectScenes, detectSilences } from './analysis.ts';
+import { detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX } from './sfx.ts';
 import { preflight } from './preflight.ts';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
@@ -119,7 +119,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
 
   // ----- session + auth -----
   app.get('/api/v1/session', (c) => {
-    c.header('Set-Cookie', auth.issueSession(c.req.raw));
+    // A browser that already holds the owner session (reloads, other pages of the app) needs no key again.
+    if (!auth.sessionOf(c.req.raw)) c.header('Set-Cookie', auth.issueSession(c.req.raw));
     return c.json({ actor: 'user:local', scopes: ['observe', 'edit'] });
   });
   app.all('/mcp', (c) => mcp(c.req.raw));
@@ -340,6 +341,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const projectId = c.req.param('id');
     store.getProject(projectId);
     gov.assertMayAct(p, projectId, 'edit');
+    gov.assertUnrestricted(p, 'add media to the library');
     if (!c.req.raw.body) throw new ApiError(400, 'empty_upload', 'request has no body');
     const name = decodeURIComponent(c.req.header('x-filename') ?? 'upload');
     const asset = await ingestUpload(store, c.req.raw.body, name, p.actor, cfg.maxUploadBytes);
@@ -425,6 +427,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/capabilities/:capabilityId/runs', async (c) => {
     const p = need(c, 'edit');
     gov.assertMayAct(p, c.req.param('id'), 'job');
+    gov.assertUnrestricted(p, 'run provider jobs (their results are added to the library and may be placed on any track)');
     const b = await body(c, RunBody);
     const job = capabilities.start({ projectId: c.req.param('id'), capabilityId: c.req.param('capabilityId'), params: b.params, idempotencyKey: b.idempotencyKey, attach: b.attach, dependsOn: b.dependsOn, actor: p.actor });
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
@@ -440,6 +443,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
     const p = need(c, 'edit');
     const j = store.getJob(c.req.param('jobId'));
+    assertMayCancel(gov, p, j);
     if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
   });
@@ -487,7 +491,7 @@ export async function findSilences(store: Store, projectId: string, a: z.infer<t
   if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio');
   const opts = { thresholdDb: a.thresholdDb ?? -35, minSeconds: a.minSeconds ?? 0.5 };
   const keepSeconds = a.keepSeconds ?? 0.1;
-  const source = await detectSilences(store.blobPath(asset.contentHash), opts);
+  const source = await heavy(() => detectSilences(store.blobPath(asset.contentHash), opts));
   const candidates = sourceRangesToTimeline(p.doc, a.assetId, source, T.fromSeconds(keepSeconds.toFixed(6)));
   const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
   return {
@@ -519,6 +523,7 @@ export async function programmeLoudness(store: Store, projectId: string) {
   if (plan.totalSamples === 0 || plan.clips.length === 0) return { revision: p.revision, integratedLufs: null, truePeakDbtp: null, rangeLu: null, clips: 0, note: 'The timeline has no audible sound.' };
   if (plan.totalSamples > plan.sampleRate * 3600) throw new ApiError(422, 'too_long', 'loudness measurement is limited to one hour of programme');
   const raw = path.join(store.tmpDir, `loud_${projectId}_${p.revision}_${Date.now()}.f32`);
+  return heavy(async () => {
   try {
     const { clips, peak } = await mixToRaw(plan, (assetId) => store.blobPath(p.doc.assets[assetId]!.contentHash), 0, plan.totalSamples, raw);
     const m = await measureLoudness(raw, plan.sampleRate);
@@ -533,12 +538,14 @@ export async function programmeLoudness(store: Store, projectId: string) {
   } finally {
     fs.rmSync(raw, { force: true });
   }
+  });
 }
 
 export const SfxBody = z.object({ sfxId: z.string(), start: RationalTimeSchema.optional().describe('Place it on the timeline at this frame-aligned time (omit to only add it to the media library)'), trackId: z.string().optional() }).strict();
 /** Synthesise a built-in sound effect, attach it as a normal asset, and optionally place it. Goes through governance like any edit. */
 export async function addSfx(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof SfxBody>) {
   gov.assertMayAct(principal, projectId, 'edit'); // same rule as uploading media: needs edit rights and agents must not be paused
+  gov.assertUnrestricted(principal, 'add media to the library');
   const asset = await makeSfx(store, a.sfxId, principal.actor);
   const imp = store.commit({ projectId, actor: principal.actor, label: `Add sound ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
   const assetId = imp.results[0]!.output!.assetId as string;
@@ -557,6 +564,7 @@ export const AnalyzeBody = z.object({ kind: z.enum(['scenes', 'beats']), overwri
 /** Measure scene cuts or beats from the source file and attach the result to the project as editable data. */
 export async function analyzeAsset(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
   gov.assertMayAct(principal, projectId, 'edit');
+  gov.assertUnrestricted(principal, 'change analysis data');
   const p = store.getProject(projectId);
   const asset = p.doc.assets[a.assetId];
   if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
@@ -567,12 +575,19 @@ export async function analyzeAsset(store: Store, gov: Governance, principal: Pri
   if (a.kind === 'scenes') {
     if (!asset.video) throw new ApiError(422, 'no_video', 'this asset has no moving picture to analyse');
     const threshold = a.threshold ?? 0.3;
-    args = { method: 'ffmpeg scene score (hard cuts only; dissolves are not detected)', params: { threshold }, times: await detectScenes(file, threshold, asset.video.frameRate) };
+    args = { method: 'ffmpeg scene score (hard cuts only; dissolves are not detected)', params: { threshold }, times: await heavy(() => detectScenes(file, threshold, asset.video!.frameRate)) };
   } else {
     if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to analyse');
-    const r = await detectBeatsOfFile(file);
+    const r = await heavy(() => detectBeatsOfFile(file));
     args = { method: 'spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse', params: { sampleRate: 22050, hop: 256 }, times: r.beats.filter((s) => s <= T.toSeconds(asset.duration)).map((s) => T.fromSeconds(s.toFixed(4))), bpm: r.bpm, confidence: r.confidence };
   }
   const r = store.commit({ projectId, actor: principal.actor, label: a.kind === 'scenes' ? 'Find scene cuts' : 'Find beats', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: a.assetId, kind: a.kind, createdAt: new Date().toISOString(), ...args } }] });
   return { revision: r.revision, summary: r.summary, ...analysisView(store.getProject(projectId).doc.analyses[a.assetId]!) };
+}
+
+/** Cancelling is an action: a paused agent may not do it, and an agent may only cancel jobs it started. The owner may cancel any job. */
+export function assertMayCancel(gov: Governance, p: Principal, job: JobRow) {
+  if (p.kind !== 'agent') return;
+  gov.assertMayAct(p, job.projectId, 'job');
+  if (job.actor !== p.actor) throw new ApiError(403, 'not_your_job', 'agents can only cancel jobs they started', { jobId: job.id, startedBy: job.actor });
 }

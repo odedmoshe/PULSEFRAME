@@ -163,7 +163,7 @@ async function main() {
       await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
       const errs: string[] = [];
       page.on('pageerror', (e) => errs.push(String(e)));
-      await page.goto(`${s.url}/?project=${scene.pid}`);
+      await page.goto(`${s.ownerUrl}&project=${scene.pid}`);
       await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement)?.dataset.frame === '0');
       await page.locator('[data-testid=ruler]').waitFor();
       const rows: any[] = [];

@@ -116,7 +116,7 @@ async function main() {
   // UI
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.goto(`${s.url}/?project=${pid}`);
+  await page.goto(`${s.ownerUrl}&project=${pid}`);
   await page.locator('[data-testid=provider-status][data-state=ready]').waitFor();
   await page.getByTestId('provider-smoke').click();
   await page.locator('[data-testid=provider-result][data-job]').waitFor({ timeout: 60_000 });

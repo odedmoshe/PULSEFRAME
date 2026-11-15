@@ -35,7 +35,7 @@ pnpm build
 ```bash
 pnpm start
 ```
-Open http://127.0.0.1:8787. Agent tokens are written to `.data/tokens.json`; the MCP endpoint is `http://127.0.0.1:8787/mcp` (send `Authorization: Bearer <token>`). Other pages: `/lab.html` (every effect, blend and transition as drawn by the compositor) and `/selftest.html` (browser audio self-test).
+Open the **"Editor (owner)" link printed at start-up** (`http://127.0.0.1:8787/?key=…`). The key proves you are the owner; the bare address without a session only shows a message. Agent tokens are written to `.data/tokens.json`; the MCP endpoint is `http://127.0.0.1:8787/mcp` (send `Authorization: Bearer <token>`). Other pages: `/lab.html` (every effect, blend and transition as drawn by the compositor) and `/selftest.html` (browser audio self-test).
 
 ## Verify
 ```bash

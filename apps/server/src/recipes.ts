@@ -5,7 +5,7 @@
 import * as T from '@pulseframe/time';
 import { findClip, fingerprint, planRecipe, RecipeError, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
-import { detectSilences } from './analysis.ts';
+import { detectSilences, heavy } from './analysis.ts';
 import type { Governance } from './governance.ts';
 import { ApiError, type Store } from './store.ts';
 
@@ -21,7 +21,7 @@ async function context(store: Store, projectId: string, recipeId: string, params
   const ctx: PlanContext = { protectedRanges };
   if (recipeId === 'tidy-speech' && typeof params?.assetId === 'string') {
     const asset = store.getProject(projectId).doc.assets[params.assetId];
-    if (asset?.audio) ctx.silences = { [params.assetId]: await detectSilences(store.blobPath(asset.contentHash), { thresholdDb: -35, minSeconds: 0.5 }) };
+    if (asset?.audio) ctx.silences = { [params.assetId]: await heavy(() => detectSilences(store.blobPath(asset.contentHash), { thresholdDb: -35, minSeconds: 0.5 })) };
   }
   return ctx;
 }

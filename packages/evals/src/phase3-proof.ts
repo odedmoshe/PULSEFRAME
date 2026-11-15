@@ -37,7 +37,7 @@ async function main() {
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   try {
-    await page.goto(s.url);
+    await page.goto(s.ownerUrl);
     await page.waitForFunction(() => document.querySelector('[data-testid=project-name]')?.textContent === 'הפרויקט שלי');
     const pid: string = (await (await fetch(`${s.url}/api/v1/projects`, { headers: h })).json()).projects[0].id;
     const getDoc = async () => (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json()) as { project: ProjectDocument; revision: number };

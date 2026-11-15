@@ -55,6 +55,9 @@ async function main() {
   check('no credential -> 401', (await rest('/projects', {}, null)).status === 401);
   check('unknown bearer token -> 401', (await rest('/projects', {}, 'pfa_wrong')).status === 401);
   check('observe-only token cannot create a project -> 403', (await rest('/projects', { method: 'POST', body: JSON.stringify({ name: 'x' }) }, observerToken)).status === 403);
+  const sess = async (headers: Record<string, string>) => (await fetch(`${base}/api/v1/session`, { headers: { connection: 'close', ...headers } }));
+  const noKey = await sess({ origin: base }), badKey = await sess({ origin: base, 'x-pf-owner-key': 'pfk_wrong' }), agentTry = await sess({ origin: base, authorization: `Bearer ${server.auth.tokens.agent}` }), goodKey = await sess({ origin: base, 'x-pf-owner-key': server.auth.tokens.owner });
+  check('the owner session needs the launch secret: no key, a wrong key, or an agent token with a same-origin header all get 401; the right key gets a cookie', noKey.status === 401 && badKey.status === 401 && agentTry.status === 401 && !noKey.headers.get('set-cookie') && goodKey.status === 200 && /pf_session=/.test(goodKey.headers.get('set-cookie') ?? ''), { noKey: noKey.status, badKey: badKey.status, agent: agentTry.status, good: goodKey.status });
   check('cross-origin page cannot obtain a browser session -> 403', (await fetch(`${base}/api/v1/session`, { headers: { origin: 'https://evil.example' } })).status === 403);
   const rebind = await new Promise<number>((resolve) => {
     // fetch() will not let us forge Host, so speak HTTP directly.
@@ -71,7 +74,7 @@ async function main() {
   page.on('pageerror', (e) => pageErrors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && pageErrors.push(m.text()));
   const tLoad = Date.now();
-  await page.goto(base);
+  await page.goto(server.ownerUrl);
   await page.waitForFunction(() => document.querySelector('[data-testid=project-name]')?.textContent === 'הפרויקט שלי');
   measurements.editorShellInteractiveMs = Date.now() - tLoad;
   check('UI boots in Hebrew, RTL, and creates the first project itself', (await page.evaluate(() => document.documentElement.dir)) === 'rtl');
@@ -338,7 +341,7 @@ async function main() {
   console.log('\n# Phase 2: range reads, proxy preview, bounded decoders (fresh page: no local file)');
   const ranged: { url: string; status: number }[] = [];
   page.on('response', (r) => { if (/\/(content|derivatives\/proxy)$/.test(new URL(r.url()).pathname)) ranged.push({ url: new URL(r.url()).pathname.split('/').slice(-2).join('/'), status: r.status() }); });
-  await page.goto(`${base}/?project=${projectId}`);
+  await page.goto(`${base}/?project=${projectId}`); // same browser context: the owner session cookie is already held, no key needed
   await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement)?.dataset.frame === '0');
   await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
   const wrong: number[] = [];

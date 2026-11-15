@@ -85,6 +85,7 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Publishing connectors, thumbnails/metadata, provenance manifests | not built | |
 | Rule-based recipes (beat montage, social pack, tidy speech): plan, apply as one undo, regenerate keeping hand edits | tested | `docs/evidence/phase11-proof.json` (11 checks). No language model involved |
 | Natural-language Director, Prompt-to-Draft, Long-to-Shorts, brand kits | not built | Blocked on B-9 |
+| Owner session bound to a launch secret; restricted grants refused for non-clip side doors; own-transaction undo and own-job cancel for agents; concurrency limit on heavy read-only work; container allowlist | tested | `docs/evidence/phase5-proof.json` (six review checks), `phase0-proof.json`, `analysis.test.ts`; ADR-0002 amendment. One code review, not a penetration test; browser-side security not reviewed |
 | GPU compositor, shader effect families, keying, keyframed effect parameters, speed ramps, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface

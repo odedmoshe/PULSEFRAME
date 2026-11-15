@@ -5,6 +5,18 @@ export class ApiFailure extends Error {
     super(message);
   }
 }
+/**
+ * The owner link printed by the server carries `?key=…`. It is sent once to obtain the session cookie and then removed
+ * from the address bar, so it does not linger in the visible URL or get copied by accident.
+ */
+export function ownerKeyHeader(): Record<string, string> {
+  const url = new URL(location.href);
+  const key = url.searchParams.get('key');
+  if (!key) return {};
+  url.searchParams.delete('key');
+  history.replaceState(null, '', url);
+  return { 'x-pf-owner-key': key };
+}
 async function call<R>(path: string, init?: RequestInit): Promise<R> {
   const r = await fetch(`/api/v1${path}`, { credentials: 'same-origin', ...init });
   const data = r.headers.get('content-type')?.includes('json') ? await r.json() : undefined;
@@ -42,7 +54,7 @@ export function writeSnapBeats(on: boolean): void {
 export const api = {
   analyzeAsset: (id: string, assetId: string, body: { kind: 'scenes' | 'beats'; threshold?: number }) =>
     call<AnalyzeResult>(`/projects/${id}/assets/${assetId}/analyze`, json(body)),
-  session: () => call<{ actor: string }>('/session'),
+  session: () => call<{ actor: string }>('/session', { headers: ownerKeyHeader() }),
   listProjects: () => call<{ projects: { id: string; name: string; revision: number }[] }>('/projects'),
   createProject: (name: string) => call<{ project: ProjectDocument; revision: number }>('/projects', json({ name })),
   getProject: (id: string) => call<{ project: ProjectDocument; revision: number }>(`/projects/${id}`),

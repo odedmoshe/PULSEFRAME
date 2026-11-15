@@ -33,7 +33,7 @@ async function main() {
   const origin = s.url;
   const agent = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   // The owner's own session, as the local browser UI obtains it.
-  const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]!;
+  const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   const owner = { cookie, origin, connection: 'close' };
   const call = async (p: string, body?: unknown, headers: Record<string, string> = agent) => {
     const r = await fetch(`${origin}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...headers, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

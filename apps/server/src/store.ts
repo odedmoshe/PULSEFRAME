@@ -209,12 +209,12 @@ export class Store {
    * restored only if each is still exactly as the target left it; otherwise the undo is refused with
    * the list of conflicts, and unrelated later edits by anyone are never touched.
    */
-  undo(projectId: string, actor: string, mode: 'undo' | 'redo', transactionId?: string, guard?: CommitRequest['guard']): CommitResult {
+  undo(projectId: string, actor: string, mode: 'undo' | 'redo', transactionId?: string, guard?: CommitRequest['guard'], anyActor = false): CommitResult {
     const run = this.db.transaction((): CommitRequest => {
       const { doc } = this.getProject(projectId);
       const kinds = mode === 'undo' ? "('edit','redo')" : "('undo')";
       const target = (transactionId
-        ? this.db.prepare(`SELECT * FROM transactions WHERE project_id = ? AND id = ?`).get(projectId, transactionId)
+        ? (anyActor ? this.db.prepare(`SELECT * FROM transactions WHERE project_id = ? AND id = ?`).get(projectId, transactionId) : this.db.prepare(`SELECT * FROM transactions WHERE project_id = ? AND id = ? AND actor = ?`).get(projectId, transactionId, actor))
         : this.db.prepare(`SELECT * FROM transactions WHERE project_id = ? AND actor = ? AND kind IN ${kinds} AND undone_by IS NULL ORDER BY revision DESC LIMIT 1`).get(projectId, actor)) as any;
       if (!target) throw new ApiError(409, mode === 'undo' ? 'nothing_to_undo' : 'nothing_to_redo', `no transaction of yours is available to ${mode}`);
       if (target.undone_by) throw new ApiError(409, 'already_undone', `transaction ${target.id} was already reversed by ${target.undone_by}`);

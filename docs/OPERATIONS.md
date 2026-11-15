@@ -23,7 +23,7 @@ This describes the one supported deployment profile: a single user, one machine,
   tmp/                               scratch; safe to delete while the server is stopped
   tokens.json                        bearer tokens for the built-in agent and observer credentials
 ```
-`tokens.json` and the database hold credentials (grant tokens are stored hashed). Keep the directory private (it is created with mode 0700).
+`tokens.json` holds the built-in agent and observer tokens and the owner launch key (the secret in the owner link printed at start-up; anyone who can read this file can act as the owner). It and the database hold credentials (grant tokens are stored hashed). Keep the directory private (it is created with mode 0700).
 
 ## Backup and restore
 The database runs in WAL mode, so copying the `.sqlite` file alone while the server runs can miss recent writes.

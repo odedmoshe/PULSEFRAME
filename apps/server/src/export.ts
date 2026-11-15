@@ -17,6 +17,9 @@ import { findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, t
 import type { RenderHost } from '@pulseframe/renderer';
 import { audioPlan } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
+import { limiter } from './analysis.ts';
+
+const stillLimit = limiter(2, 32);
 import { ffprobe } from './ingest.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
@@ -199,7 +202,8 @@ export class Exporter {
     if (hard.length) throw new ApiError(422, hard[0]!.code === 'out_of_bounds' ? 'out_of_bounds' : 'render_blocked', hard[0]!.message, { blockers: hard });
     const { token, url } = this.open(doc, revision, null, { width: manifest.output.width, height: manifest.output.height, firstFrame: frameIndex, frames: 1 });
     try {
-      return await this.host.renderStill(url, 0);
+      // Stills are reachable with a read-only credential and each opens a browser page: run at most two at a time.
+      return await stillLimit(() => this.host.renderStill(url, 0));
     } catch (e: any) {
       if (e instanceof ApiError) throw e;
       // A renderer that went away (shutdown, crashed page) is an unavailable dependency, not an unexplained server error.

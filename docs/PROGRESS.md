@@ -174,8 +174,17 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - REST plan/apply/regenerate, MCP `plan_recipe`, `apply_recipe`, `regenerate_recipe`; recipes listed in the catalog.
 - **Not built (Phase 11 scope):** natural-language planning, Prompt-to-Draft, Long-to-Shorts, hooks, B-roll, sound design, brand kits, user-authored recipes/macros.
 
+**Checkpoint 13a — independent security review and fixes**
+- A separate read-only reviewer traced the server's authorization paths. It confirmed one high, two medium and five low findings and reported the areas it found sound (no caller can inject internal ops; observe/propose credentials cannot persist changes; no command injection; blob and model paths; model downloads; ComfyUI loopback; CORS).
+- **High, fixed:** any local program could obtain the owner session (no proof of being the owner's browser). The session now needs a launch secret carried by the owner link the server prints at start-up (ADR-0002 amendment). Consequence for users: open the printed link, not the bare address.
+- **Medium, fixed:** track/range-limited grants could change non-clip data through upload, sound-effect import, analysis and provider-job attachment; agents could undo anyone's transaction by id.
+- **Low, fixed:** project-limited grants via two MCP tools; cancel ignoring pause/ownership; no limit on heavy read-only work (now two at a time, bounded queue, timeouts); ffmpeg protocol whitelist missing on analysis and mix paths; playlists accepted as media.
+- **Recorded, not fixed:** budget ledger is not wired to anything (no paid capability exists); no per-credential rate limits or export quotas.
+- Six regression checks added to `pnpm proof:phase5` (30/30) and one to `pnpm proof` (54/54); `analysis.test.ts` covers the limiter.
+- This was one review by one reviewer reading code; it is not a penetration test, and the browser side (XSS, content security policy) was not reviewed.
+
 ## In progress
-- Phase 13 work that can be done here: failure/soak tests, accessibility and security review of what exists, packaging and documentation. Phase 10 stays blocked on providers.
+- Phase 13: accessibility audit of the editor, then soak/failure tests. Phase 10 stays blocked on providers.
 
 ## Blocked / unverified (with what would unblock)
 
@@ -200,7 +209,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
 
 ## Next executable action
-`pnpm install && pnpm build && pnpm test` (expect 247 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:phase8` (17/17), `pnpm proof:phase9` (12/12), `pnpm proof:phase11` (11/11), `pnpm proof:phase12` (13/13), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
+`pnpm install && pnpm build && pnpm test` (expect 247 tests), then `pnpm proof` (54/54), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (30/30), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:phase8` (17/17), `pnpm proof:phase9` (12/12), `pnpm proof:phase11` (11/11), `pnpm proof:phase12` (13/13), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
 
 ## Agent / model summary
 

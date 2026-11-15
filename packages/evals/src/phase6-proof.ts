@@ -92,7 +92,7 @@ async function main() {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-    await page.goto(s.url);
+    await page.goto(s.ownerUrl);
     await page.waitForFunction(() => !!document.querySelector('[data-testid=project-name]')?.textContent);
     let upid = '';
     for (let i = 0; i < 100 && !upid; i++) { upid = (await call('/projects')).body.projects[0]?.id ?? ''; if (!upid) await sleep(100); }
@@ -276,7 +276,7 @@ async function main() {
     const errors2: string[] = [];
     page2.on('pageerror', (e) => errors2.push(String(e)));
     page2.on('console', (m) => m.type() === 'error' && errors2.push(m.text()));
-    await page2.goto(`${s.url}/?project=${pid5}`);
+    await page2.goto(`${s.ownerUrl}&project=${pid5}`);
     await page2.getByTestId('silence-find').waitFor();
     const before5 = await doc(pid5);
     await page2.getByTestId('silence-find').click();

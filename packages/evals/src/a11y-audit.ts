@@ -105,7 +105,7 @@ async function main() {
     for (const lang of ['he', 'en'] as const) {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
-      await page.goto(`${s.url}/?project=${pid}`);
+      await page.goto(`${s.ownerUrl}&project=${pid}`);
       await page.getByTestId('timecode').waitFor();
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
       await page.locator(`.clip[data-clip-id="${clipId}"]`).click();

@@ -137,7 +137,7 @@ export class Editor {
   /** Boot: session → project → fonts → player → live revision stream. */
   async boot(canvas: HTMLCanvasElement) {
     this.setLang(this.state.lang);
-    await api.session();
+    try { await api.session(); } catch (e) { throw e instanceof ApiFailure && e.code === 'owner_key_required' ? new Error(this.t('boot.ownerKey')) : e; }
     await ensureFonts();
     let id = new URLSearchParams(location.search).get('project');
     if (!id) {

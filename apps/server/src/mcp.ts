@@ -14,7 +14,7 @@ import { ExportOptionsSchema, type Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import type { Presence } from './presence.ts';
 import { describeMoment } from '@pulseframe/engine';
-import { addSfx, analysisView, analyzeAsset, AnalyzeBody, catalog, exportCaptions, findSilences, jobView, programmeLoudness, SfxBody, SilenceBody } from './http.ts';
+import { addSfx, assertMayCancel, analysisView, analyzeAsset, AnalyzeBody, catalog, exportCaptions, findSilences, jobView, programmeLoudness, SfxBody, SilenceBody } from './http.ts';
 import { ApiError, type Store } from './store.ts';
 import { preflight } from './preflight.ts';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
@@ -99,9 +99,9 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         return { content };
       }));
     server.registerTool('get_controls', { description: 'Your own permission mode and limits on this project, and whether the owner has paused agents.', inputSchema: z.object({ projectId: pid }), annotations: ro }, ({ projectId }) =>
-      run('observe', () => ({ projectId, actor: principal.actor, mode: principal.mode ?? (principal.scopes.includes('edit') ? 'edit' : 'observe'), agentsPaused: gov.isPaused(projectId), limits: principal.grant ? { projectIds: principal.grant.projectIds, trackIds: principal.grant.trackIds, range: principal.grant.range, budgetCents: principal.grant.budgetCents, ...gov.spend(principal.grant.id), expiresAt: principal.grant.expiresAt } : null })));
+      run('observe', () => (read(projectId), { projectId, actor: principal.actor, mode: principal.mode ?? (principal.scopes.includes('edit') ? 'edit' : 'observe'), agentsPaused: gov.isPaused(projectId), limits: principal.grant ? { projectIds: principal.grant.projectIds, trackIds: principal.grant.trackIds, range: principal.grant.range, budgetCents: principal.grant.budgetCents, ...gov.spend(principal.grant.id), expiresAt: principal.grant.expiresAt } : null })));
     server.registerTool('set_view', { description: 'Show collaborators where you are looking: your playhead frame and selected clip ids appear in the editor as a labelled ghost. Transient; does not edit the project and never moves the human\'s own playhead unless they chose to follow you.', inputSchema: z.object({ projectId: pid, frame: z.number().int().min(0).optional(), selection: z.array(z.string()).max(200).optional(), label: z.string().max(80).optional().describe('Short note about what you are doing') }), annotations: ro }, ({ projectId, frame, selection, label }) =>
-      run('observe', () => { store.getProject(projectId); return presence.update(projectId, { sessionId: 'mcp', actor: principal.actor, kind: principal.kind, frame: frame ?? null, selection: selection ?? [], label: label ?? null }); }));
+      run('observe', () => { read(projectId); return presence.update(projectId, { sessionId: 'mcp', actor: principal.actor, kind: principal.kind, frame: frame ?? null, selection: selection ?? [], label: label ?? null }); }));
     server.registerTool(
       'render_frame',
       { description: 'Render one exact frame of the current revision through the same compositor used for export. Returns a PNG plus revision metadata.', inputSchema: z.object({ projectId: pid, frameIndex: z.number().int().min(0).optional(), time: RationalTimeSchema.optional() }), annotations: ro },
@@ -124,9 +124,9 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     server.registerTool('list_capabilities', { description: 'Optional provider capabilities (reviewed workflows) with their qualification status, blockers, resource data and provider readiness. Listing never starts a worker.', inputSchema: z.object({}), annotations: ro }, () =>
       run('observe', () => capabilities.list()));
     server.registerTool('run_capability', { description: 'Run a reviewed, published capability by id with validated parameters as a durable job. Raw workflow graphs cannot be submitted. Returns a jobId; poll get_job.', inputSchema: z.object({ projectId: pid, capabilityId: z.string(), params: z.record(z.string(), z.unknown()).optional(), idempotencyKey: z.string().max(128).optional(), attach: z.object({ start: RationalTimeSchema, duration: RationalTimeSchema.optional(), trackId: z.string().optional() }).optional().describe('Place the primary output on the timeline when done, unless its dependencies changed (then it stays a proposal in the library)'), dependsOn: z.array(z.string()).optional() }) }, ({ projectId, capabilityId, params, idempotencyKey, attach, dependsOn }) =>
-      run('edit', () => { gov.assertMayAct(principal, projectId, 'job'); const job = capabilities.start({ projectId, capabilityId, params: params ?? {}, idempotencyKey, attach, dependsOn, actor: principal.actor }); return { jobId: job.id, status: job.status, type: job.type }; }));
+      run('edit', () => { gov.assertMayAct(principal, projectId, 'job'); gov.assertUnrestricted(principal, 'run provider jobs (their results are added to the library and may be placed on any track)'); const job = capabilities.start({ projectId, capabilityId, params: params ?? {}, idempotencyKey, attach, dependsOn, actor: principal.actor }); return { jobId: job.id, status: job.status, type: job.type }; }));
     server.registerTool('cancel_job', { description: 'Request cancellation of an export or capability job. The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
-      run('edit', () => (gov.assertMayAct(principal, store.getJob(jobId).projectId, 'observe'), store.getJob(jobId).type === 'export' ? exporter.cancel(jobId, principal.actor) : capabilities.cancel(jobId, principal.actor))));
+      run('edit', () => (gov.assertMayAct(principal, store.getJob(jobId).projectId, 'observe'), assertMayCancel(gov, principal, store.getJob(jobId)), store.getJob(jobId).type === 'export' ? exporter.cancel(jobId, principal.actor) : capabilities.cancel(jobId, principal.actor))));
     return server;
   });
 

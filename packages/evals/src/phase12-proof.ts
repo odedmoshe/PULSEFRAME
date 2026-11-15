@@ -176,7 +176,7 @@ async function main() {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-    await page.goto(`${s.url}/?project=${pid}`);
+    await page.goto(`${s.ownerUrl}&project=${pid}`);
     await page.getByTestId('deliver-panel').waitFor();
     const ratio = async () => page.getByTestId('preview').evaluate((c) => (c as HTMLCanvasElement).width / (c as HTMLCanvasElement).height);
     const masterRatio = await ratio();

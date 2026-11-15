@@ -180,7 +180,7 @@ async function main() {
     const eerr: string[] = [];
     ep.on('pageerror', (e) => eerr.push(String(e)));
     ep.on('console', (m) => m.type() === 'error' && eerr.push(m.text()));
-    await ep.goto(`${s.url}/?project=${pid}`);
+    await ep.goto(`${s.ownerUrl}&project=${pid}`);
     await ep.getByTestId('sound-panel').waitFor();
     const docNow = async () => (await call(`/projects/${pid}`)).body.project;
     const until = async (pred: (d: any) => boolean) => { for (let i = 0; i < 100; i++) { if (pred(await docNow())) return true; await sleep(100); } return false; };

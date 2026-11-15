@@ -141,7 +141,7 @@ async function main() {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => m.type() === 'error' && !/409|Conflict/.test(m.text()) && errors.push(m.text()));
-    await page.goto(`${s.url}/?project=${ep}`);
+    await page.goto(`${s.ownerUrl}&project=${ep}`);
     await page.getByTestId('recipes-panel').waitFor();
     const card = page.locator('[data-testid=recipe-card][data-recipe-id="beat-montage"]');
     await card.getByTestId('recipe-plan').click();

@@ -163,7 +163,7 @@ async function main() {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-    await page.goto(`${s.url}/?project=${ep}`);
+    await page.goto(`${s.ownerUrl}&project=${ep}`);
     await page.locator(`.clip[data-clip-id="${ec}"]`).click();
     await page.getByTestId('analysis-panel').waitFor();
     const noMarkers = await page.getByTestId('scene-marker').count();

@@ -14,7 +14,7 @@ import { Presence } from './presence.ts';
 import { Store } from './store.ts';
 
 export { loadConfig, type Config } from './config.ts';
-export interface RunningServer { url: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; close(): Promise<void> }
+export interface RunningServer { url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; close(): Promise<void> }
 
 export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
@@ -43,7 +43,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   await capabilities.recover();
   derivatives.recover();
   return {
-    url, cfg, store, auth, derivatives, governance,
+    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance,
     async close() {
       (app as any).browserExport?.stop();
       await capabilities.stop();

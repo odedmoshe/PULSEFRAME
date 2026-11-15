@@ -3,6 +3,7 @@
  * will call `runBrowserExport` directly). It obtains the owner cookie the same way the editor does.
  */
 import { BrowserExportError, probeCapabilities, runBrowserExport, type BrowserCapabilities } from './browserExport.ts';
+import { ownerKeyHeader } from './api.ts';
 
 interface PageResult { jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number; base64: string }
 type Api = {
@@ -36,7 +37,7 @@ const run: Api['run'] = async (projectId, options = {}) => {
 };
 window.__pfBrowserExport = {
   // Same owner-cookie handshake as the editor.
-  ready: fetch('/api/v1/session', { credentials: 'same-origin' }).then((r) => { if (!r.ok) throw new Error(`session: HTTP ${r.status}`); }),
+  ready: fetch('/api/v1/session', { credentials: 'same-origin', headers: ownerKeyHeader() }).then((r) => { if (!r.ok) throw new Error(`session: HTTP ${r.status}`); }),
   last,
   capabilities: probeCapabilities,
   run,

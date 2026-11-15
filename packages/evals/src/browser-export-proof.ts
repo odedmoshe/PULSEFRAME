@@ -68,7 +68,7 @@ async function main() {
     page.on('pageerror', (e) => pageErrors.push(String(e)));
     // The 409s are the deliberate negative requests of checks 5-7; Chromium logs every non-2xx fetch as a console error.
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource: the server responded with a status of 409/.test(m.text()) && pageErrors.push(m.text()));
-    await page.goto(`${base}/browser-export.html`);
+    await page.goto(`${base}/browser-export.html?key=${server.auth.tokens.owner}`);
     await page.evaluate(() => window.__pfBrowserExport.ready);
     return { page, ctx: c };
   };

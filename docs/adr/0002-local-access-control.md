@@ -19,3 +19,16 @@ Per-project/track/range scopes, budgets, Pause Agent, approval records, rate lim
 
 ## Trade-off
 Any local process running as the same OS user can read `tokens.json`. That matches the trust level of the data directory itself.
+
+## Amendment 2026-11-15 — the owner session needs a launch secret
+**Problem found by an independent review.** `GET /api/v1/session` gave the owner cookie to any request with an allowed or absent `Origin` header. A browser cannot forge that header, but any local program can, including an agent holding only an observe or propose credential. As owner it could create grants, accept its own proposals, approve downloads and resume paused agents, which defeats the control model in ADR-0002 and SPEC §21.
+
+**Decision.** The session is issued only when the request also carries the launch secret (`tokens.owner`, header `x-pf-owner-key`). The server prints an owner link (`http://127.0.0.1:8787/?key=…`) at start-up; the editor sends the key once, receives the cookie and removes the key from the address bar. A browser that already holds a valid session needs no key. Agents receive bearer tokens or grants, never this secret.
+
+**What this does and does not protect.** It stops an agent that talks to the server over HTTP/MCP from promoting itself to owner. It does not protect against a program that can read the data directory as the same OS user (it can read `tokens.json`, including the owner key, and the database). That remains the documented trust boundary of the local profile.
+
+**Consequences.** After a server restart the session map is empty, so the owner link must be opened again. Opening the bare address without a session shows a message explaining this.
+
+Other fixes from the same review (all covered by checks in `pnpm proof:phase5`): grants limited to tracks or a time range are refused for uploads, sound-effect import, analysis data and provider jobs (those changes cannot be checked against clip limits); undo/redo by transaction id is limited to the caller's own transactions for agents; agents may only cancel their own jobs and not while paused; two MCP tools now check project limits; heavy read-only work (analysis, loudness, stills) is limited to two at a time with a bounded queue and analysis processes time out; every ffmpeg call on user files uses a protocol whitelist; uploads must be self-contained media containers (playlists are refused).
+
+**Not fixed, recorded:** the budget ledger is implemented and unit-tested but nothing calls it, because no capability costs money yet; it must be wired before any paid provider is enabled. The export render queue is serial but exports themselves have no per-credential quota. Rate limiting per credential does not exist.
