@@ -234,3 +234,8 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .asset-name-row .asset-name { flex: 1; min-inline-size: 0; }
 .tl-add-track { position: absolute; top: 0; right: 250px; z-index: 3; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; background: var(--pf-surface); opacity: .95; padding: 2px 4px; }
 .tl-add-track button { padding: 1px 6px; font-size: 11px; }
+.ramp { border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); padding: 6px 8px; margin: 0; }
+.ramp legend { font-size: var(--pf-fs-sm); color: var(--pf-text-muted); padding: 0 4px; }
+.ramp .row { display: flex; gap: 6px; }
+.ramp .row label { flex: 1; min-inline-size: 0; }
+.ramp .row input { inline-size: 100%; }

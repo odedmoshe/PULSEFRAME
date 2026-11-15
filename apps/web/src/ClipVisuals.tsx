@@ -142,7 +142,7 @@ export function ClipVisuals(props: {
           if (mn === 0 && mx === 0 && first + Math.floor((x * count) / W) >= m.totalSamples) continue; // no data here
           const top = Math.max(0, mid - mx * k);
           const bottom = Math.min(H, mid - mn * k);
-          ctx.fillRect(x, top, 1, Math.max(1, bottom - top));
+          ctx.fillRect(reverse ? W - 1 - x : x, top, 1, Math.max(1, bottom - top)); // a reversed clip: the wave runs the way it is heard
         }
       } else return;
       host.setAttribute('data-drawn', '1');

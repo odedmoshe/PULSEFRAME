@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, diffEntities, findClip, OpError, restoreEntities, sequenceDuration, sourceAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, clipEnd, createProject, diffEntities, findClip, OpError, restoreEntities, sequenceDuration, sourceAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -187,6 +187,48 @@ describe('unlink_clip', () => {
     expect(fi(a().duration)).toBe(240);
     expect(code(() => tx(d, [{ op: 'unlink_clip', args: { clipId: audioId } }]))).toBe('invalid_args');
     expect(code(() => tx(doc, [{ op: 'unlink_clip', args: { clipId: titleId } }]))).toBe('invalid_args');
+  });
+});
+
+describe('fit_music', () => {
+  const music = { kind: 'audio' as const, name: 'm.wav', contentHash: `sha256:${'e'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(20, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-15T00:00:00Z', importedBy: 'test' } };
+  function withMusic() {
+    const { doc } = project(); // picture 0..240, title 0..60
+    let r = tx(doc, [{ op: 'import_asset', args: { asset: music } }], true);
+    const musicId = r.results[0]!.output!.assetId as string;
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: musicId, start: f(30) } }]); // 20 s of music from 1 s: runs far past the picture
+    return { doc: r.doc, musicId, clipId: (r.results[0]!.output as any).clipId as string };
+  }
+  it('without beats it ends exactly with the picture and fades out; with beats it ends on the last beat before the picture ends', () => {
+    const { doc, musicId, clipId } = withMusic();
+    const plain = tx(doc, [{ op: 'fit_music', args: { clipId } }]);
+    const c = findClip(plain.doc, clipId)!.clip as any;
+    expect([fi(c.start), fi(clipEnd(c)), fi(c.fadeOut)]).toEqual([30, 240, 30]);
+    expect(plain.results[0]!.output).toMatchObject({ onBeat: false });
+    expect(validateProject(plain.doc)).toEqual([]);
+    // beats every 0.8 s of the source (24 frames): the clip starts at timeline 30, so beats fall at 30 + 24k
+    const beats = Array.from({ length: 20 }, (_, k) => f(24 * (k + 1)));
+    const analysed = tx(doc, [{ op: 'attach_analysis', args: { assetId: musicId, kind: 'beats', method: 'test', params: {}, createdAt: '2026-11-15T00:00:00Z', times: beats, bpm: 75 } }], true).doc;
+    const fitted = tx(analysed, [{ op: 'fit_music', args: { clipId, fadeOut: f(10) } }]);
+    const b = findClip(fitted.doc, clipId)!.clip as any;
+    expect([fi(clipEnd(b)), fi(b.fadeOut)]).toEqual([222, 10]); // 30 + 24·8 = 222 is the last beat at or before 240
+    expect(fitted.results[0]!.output).toMatchObject({ onBeat: true });
+    // an explicit end
+    expect(fi(clipEnd(findClip(tx(analysed, [{ op: 'fit_music', args: { clipId, to: f(100) } }]).doc, clipId)!.clip))).toBe(78);
+  });
+  it('music shorter than the picture ends on its own last beat and says how much is missing; refusals', () => {
+    const { doc, musicId, clipId, } = withMusic();
+    const { videoId } = (() => { const d0 = doc; const v = d0.sequences[d0.mainSequenceId]!.tracks.find((t) => t.kind === 'video')!.clips[0]!; return { videoId: v.id }; })();
+    // start the music 18 s into its source: only 2 s (60 frames) remain, the picture needs 210 more
+    const late = tx(doc, [{ op: 'trim_clip', args: { clipId, edge: 'end', to: f(60) } }, { op: 'slip_clip', args: { clipId, by: f(540) } }]).doc;
+    const r = tx(late, [{ op: 'fit_music', args: { clipId } }]);
+    const c = findClip(r.doc, clipId)!.clip as any;
+    expect(fi(clipEnd(c))).toBe(90); // all the source there is
+    expect(fi((r.results[0]!.output as any).shortBy)).toBe(150);
+    expect(code(() => tx(doc, [{ op: 'fit_music', args: { clipId: videoId } }]))).toBe('incompatible');
+    expect(code(() => tx(doc, [{ op: 'fit_music', args: { clipId, to: f(20) } }]))).toBe('out_of_bounds');
+    const linkedAudio = doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.kind === 'audio')!.clips.find((x) => x.type === 'media' && x.assetId !== musicId)!;
+    expect(code(() => tx(doc, [{ op: 'fit_music', args: { clipId: linkedAudio.id } }]))).toBe('incompatible');
   });
 });
 

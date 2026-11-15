@@ -90,7 +90,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if (tr.kind === 'text') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on text track`, ids: [c.id, tr.id] });
         if (tr.kind === 'video' && !asset.video && !(asset.kind === 'image' && asset.image)) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
         if (tr.kind === 'audio' && !asset.audio) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no audio for audio track`, ids: [c.id, tr.id] });
-        if (c.reverse && (tr.kind !== 'video' || !asset.video || c.freeze || c.linkGroupId)) issues.push({ code: 'incompatible_track', message: `clip ${c.id}: only an unlinked video clip on a video track can play backwards`, ids: [c.id] });
+        if (c.reverse && (c.freeze || asset.kind === 'image' || (tr.kind === 'video' ? !asset.video : tr.kind === 'audio' ? !asset.audio : true))) issues.push({ code: 'incompatible_track', message: `clip ${c.id}: only a video clip on a video track or a sound clip on a sound track can play backwards`, ids: [c.id] });
         if (c.freeze && (tr.kind !== 'video' || !asset.video)) issues.push({ code: 'incompatible_track', message: `clip ${c.id}: a freeze frame needs a video asset on a video track`, ids: [c.id] });
         if (c.volume) {
           if (tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: volume automation belongs to clips on audio tracks`, ids: [c.id] });

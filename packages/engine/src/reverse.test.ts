@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, diffEntities, findClip, OpError, restoreEntities, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { audioPlan } from './audio.ts';
 import { evaluate } from './evaluate.ts';
 
 const R = { num: 30, den: 1 };
@@ -35,15 +36,27 @@ describe('reverse playback of a clip', () => {
     expect(shown(doc, 20, 120)).toEqual(range(149, 50));
     expect([shown(doc, 19, 20)[0], shown(doc, 120, 121)[0]]).toEqual([null, null]);
     const c = findClip(doc, clipId)!.clip as any, a = findClip(doc, audioId)!.clip as any;
-    expect([T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R), T.frameIndexAt(c.sourceIn, R), c.linkGroupId, a.linkGroupId]).toEqual([20, 100, 50, null, null]);
-    expect((result.output as any).unlinkedClipIds).toEqual([audioId]);
+    // picture and its linked sound reverse together and stay linked
+    expect([T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R), T.frameIndexAt(c.sourceIn, R), c.reverse, a.reverse]).toEqual([20, 100, 50, true, true]);
+    expect(c.linkGroupId).not.toBeNull();
+    expect(a.linkGroupId).toBe(c.linkGroupId);
+    expect((result.output as any).reversedClipIds.sort()).toEqual([clipId, audioId].sort());
+    // the sound plan reads the same stretch of source and marks it reversed
+    const planned = audioPlan(doc).clips.find((x) => x.clipId === audioId)!;
+    expect([planned.reverse, planned.source, planned.length]).toEqual([true, Math.round((50 / 30) * 48000), Math.round((100 / 30) * 48000)]);
+    expect(audioPlan(fwd).clips.find((x) => x.clipId === audioId)!.reverse).toBeUndefined();
+    // one side only: it is reversed alone and the pair is unlinked
+    const solo = tx(fwd, [{ op: 'set_clip_reverse', args: { clipId, reverse: true, includeLinked: false } }]);
+    const sc = findClip(solo.doc, clipId)!.clip as any, sa = findClip(solo.doc, audioId)!.clip as any;
+    expect([sc.reverse, sa.reverse, sc.linkGroupId, sa.linkGroupId]).toEqual([true, undefined, null, null]);
+    expect(validateProject(solo.doc)).toEqual([]);
     const back = structuredClone(doc);
     restoreEntities(back, diffEntities(fwd, doc).map((x) => ({ id: x.id, state: x.before })));
     expect(back).toEqual(fwd);
     const again = tx(doc, [{ op: 'set_clip_reverse', args: { clipId, reverse: false } }]).doc;
     expect(shown(again, 20, 120)).toEqual(range(50, 149));
     expect(code(() => tx(doc, [{ op: 'set_clip_reverse', args: { clipId, reverse: true } }]))).toBe('invalid_args');
-    expect(code(() => tx(doc, [{ op: 'set_clip_reverse', args: { clipId: audioId, reverse: true } }]))).toBe('incompatible');
+    expect(code(() => tx(doc, [{ op: 'set_clip_reverse', args: { clipId: audioId, reverse: true } }]))).toBe('invalid_args'); // already reversed, with its picture
   });
   it('split, ripple insert and a cut in the middle leave every remaining frame showing what it showed', () => {
     const { doc, clipId } = project();
@@ -231,6 +244,60 @@ describe('track order', () => {
     expect(validateProject(undone)).toEqual([]);
     expect(code(() => tx(base, [{ op: 'move_track', args: { trackId: top, toIndex: order(base).indexOf('top') } }]))).toBe('invalid_args');
     expect(code(() => tx(base, [{ op: 'move_track', args: { trackId: 'trk_none', toIndex: 0 } }]))).toBe('not_found');
+  });
+});
+
+describe('analysis marks under a reversed clip', () => {
+  it('beats and silences of the source fall where the reversed clip plays them', async () => {
+    const { timelineMarkers, sourceRangesToTimeline } = await import('@pulseframe/core');
+    const { fwd, doc, assetId } = project(); // source 50..149 at timeline 20..119 (frames); reversed in `doc`
+    const withBeats = (d: ProjectDocument) => tx(d, [{ op: 'attach_analysis', args: { assetId, kind: 'beats', method: 'test', params: {}, createdAt: '2026-11-15T00:00:00Z', times: [f(60), f(100), f(145), f(200)] } }], true).doc;
+    const fi = (t: T.RationalTime) => T.frameIndexAt(t, R);
+    expect(timelineMarkers(withBeats(fwd)).beats.map(fi)).toEqual([30, 70, 115]); // source 60, 100, 145 at 20 + (s − 50); 200 is outside the clip
+    expect(timelineMarkers(withBeats(doc)).beats.map(fi)).toEqual([25, 70, 110]); // reversed: source s is reached at 20 + (150 − s)
+    // a silent stretch of the source, 80..100, plays at 50..70 forwards and at 70..90 reversed
+    const range = [{ start: f(80), end: f(100) }];
+    expect(sourceRangesToTimeline(fwd, assetId, range).map((r) => [fi(r.start), fi(r.end)])).toEqual([[50, 70]]);
+    expect(sourceRangesToTimeline(doc, assetId, range).map((r) => [fi(r.start), fi(r.end)])).toEqual([[70, 90]]);
+  });
+});
+
+describe('speed ramp (stepped)', () => {
+  it('replaces the clip and its linked sound by consecutive steps of rising speed that play the source on without gaps or repeats; one undo restores the clip', () => {
+    const { fwd: doc, clipId, audioId } = project(); // source 50..149 at timeline 20..119
+    const r = tx(doc, [{ op: 'speed_ramp', args: { clipId, from: 0.5, to: 2, steps: 4 } }]);
+    const d = r.doc;
+    expect(validateProject(d)).toEqual([]);
+    const out = r.results[0]!.output as any;
+    expect(out.speeds).toEqual([0.5, 1, 1.5, 2]);
+    expect(out.durationFrames).toBe(50 + 25 + 16 + 12); // 25 source frames per step at each speed, down to whole frames
+    const tracks = d.sequences[d.mainSequenceId]!.tracks;
+    const v = tracks.find((t) => t.kind === 'video')!.clips as any[], a = tracks.find((t) => t.kind === 'audio')!.clips as any[];
+    expect(v.map((c) => [T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R)])).toEqual([[20, 50], [70, 25], [95, 16], [111, 12]]);
+    expect(a.map((c) => [T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R)])).toEqual(v.map((c) => [T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R)]));
+    expect([v[0].id, a[0].id]).toEqual([clipId, audioId]);
+    v.forEach((c, k) => { expect(c.linkGroupId).toBe(a[k].linkGroupId); if (k) expect(c.linkGroupId).not.toBe(v[k - 1].linkGroupId); });
+    // the picture: never goes back, never jumps by more than the speed of the step, starts at source 50 and stays inside the old stretch
+    const seen = shown(d, 20, 20 + out.durationFrames) as number[];
+    expect(seen[0]).toBe(50);
+    expect(seen.every((x, i) => i === 0 || (x >= seen[i - 1]! && x - seen[i - 1]! <= 2))).toBe(true);
+    expect(seen.at(-1)!).toBeLessThan(150);
+    expect(seen.at(-1)!).toBeGreaterThan(140); // nearly all of the stretch is played
+    // each step starts exactly where the one before stopped reading
+    for (let k = 1; k < 4; k++) expect(T.eq(v[k].sourceIn, T.add(v[k - 1].sourceIn, T.normalize({ value: (BigInt(v[k - 1].duration.value) * BigInt(v[k - 1].speed?.num ?? 1)).toString(), timescale: v[k - 1].duration.timescale * (v[k - 1].speed?.den ?? 1) })))).toBe(true);
+    const back = structuredClone(d);
+    restoreEntities(back, diffEntities(doc, d).map((x) => ({ id: x.id, state: x.before })));
+    expect(back).toEqual(doc);
+  });
+  it('is refused when it would run into the next clip, on clips with keyframes, reversed clips and titles; a slowing ramp needs room', () => {
+    const { fwd: doc, doc: reversed, clipId, assetId } = project();
+    const crowded = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(125), duration: f(30), withLinkedAudio: false } }]).doc;
+    expect(code(() => tx(crowded, [{ op: 'speed_ramp', args: { clipId, from: 0.5, to: 0.5, steps: 2 } }]))).toBe('overlap'); // twice as long: 200 frames from 20
+    expect(code(() => tx(crowded, [{ op: 'speed_ramp', args: { clipId, from: 1, to: 4, steps: 6 } }]))).toBe('ok'); // shorter than before: fits
+    const keyed = tx(doc, [{ op: 'set_keyframe', args: { clipId, property: 'opacity', time: f(10), value: 0.5 } }]).doc;
+    expect(code(() => tx(keyed, [{ op: 'speed_ramp', args: { clipId, from: 1, to: 2 } }]))).toBe('incompatible');
+    expect(code(() => tx(reversed, [{ op: 'speed_ramp', args: { clipId, from: 1, to: 2 } }]))).toBe('incompatible');
+    expect(code(() => tx(doc, [{ op: 'speed_ramp', args: { clipId, from: 1, to: 2, steps: 1 } }]))).toBe('invalid_args');
   });
 });
 

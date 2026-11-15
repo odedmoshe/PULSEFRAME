@@ -35,7 +35,9 @@ export const AssetSchema = z
         /** When the first video frame does not sit at the file's own start (see Asset.timeOrigin): how much later it starts (remuxed files, Matroska/TS, B-frames without an edit list). */
         startTime: RationalTimeSchema.optional(),
         /** True when the file does not say how its colours are encoded. It is then shown as the browser reads it (BT.709 in Chromium), which for standard-definition material differs slightly from the BT.601 reading other players use. */
-        untaggedColour: z.literal(true).optional() })
+        untaggedColour: z.literal(true).optional(),
+        /** The owner's choice for a file with `untaggedColour`: read its colours as BT.601 (standard-definition material) instead of the browser's BT.709 reading. Applied as a colour correction in the compositor, so preview, stills and export agree. */
+        readColourAs: z.literal('bt601').optional() })
       .strict()
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string(),
@@ -142,7 +144,7 @@ export const MediaClipSchema = z
     speed: z.object({ num: z.number().int().min(1).max(8000), den: z.number().int().min(1).max(8000) }).strict().optional(),
     /** Freeze frame: the clip holds the single source picture at `sourceIn` for its whole length. Video tracks only; it has no sound. */
     freeze: z.literal(true).optional(),
-    /** Reverse: the clip plays its stretch of source backwards (picture only: video tracks; the clip has no linked sound). `sourceIn` is still the earliest source time of the stretch. */
+    /** Reverse: the clip plays its stretch of source backwards (picture on a video track, sound on an audio track; linked clips reverse together). `sourceIn` is still the earliest source time of the stretch. */
     reverse: z.literal(true).optional(),
     linkGroupId: Id.nullable(),
     /** Audio clips: linear fades at the clip edges (durations). */

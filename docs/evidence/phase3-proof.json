@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T15:41:17.066Z",
+  "ranAt": "2026-11-15T16:19:46.499Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -271,6 +271,33 @@
       }
     },
     {
+      "name": "roll by keyboard: the cut before the selected clip moves two frames later (the earlier clip plays two frames more, the selected clip starts two frames later with the same picture at every other frame), the timeline keeps its length, and rolling back restores it",
+      "ok": true,
+      "detail": {
+        "rolled": [
+          39,
+          40,
+          41,
+          75,
+          82,
+          110
+        ],
+        "unrolled": [
+          39,
+          73,
+          82
+        ],
+        "lengths": [
+          223,
+          223
+        ],
+        "revisions": [
+          22,
+          26
+        ]
+      }
+    },
+    {
       "name": "\"play backwards\" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, an exported file of that stretch shows the same twelve frames in the same order, the clip is marked on the timeline, and unchecking restores 73…82",
       "ok": true,
       "detail": {
@@ -345,8 +372,8 @@
         "assetName": "ראיון.mp4",
         "focusOnRename": true,
         "revisions": [
-          29,
-          32
+          33,
+          36
         ]
       }
     },
@@ -361,8 +388,8 @@
         "emptyBefore": 1,
         "emptyCmd": "track.removeEmpty",
         "revisions": [
-          32,
-          35
+          36,
+          39
         ]
       }
     },
@@ -378,6 +405,20 @@
       }
     },
     {
+      "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
+      "ok": true,
+      "detail": {
+        "revision": 42,
+        "allRows": 42,
+        "firstRev": "42",
+        "rawNames": 0,
+        "agentRows": 1,
+        "agentOnly": true,
+        "closedH": true,
+        "focusH": true
+      }
+    },
+    {
       "name": "\"close empty gaps\" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost",
       "ok": true,
       "detail": {
@@ -387,8 +428,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          37,
-          39
+          42,
+          44
         ]
       }
     },
@@ -401,34 +442,34 @@
         "differentSourceFrames": 29,
         "firstFrames": [
           {
-            "frame": 3,
+            "frame": 4,
             "quality": "draft",
-            "code": 3
+            "code": 4
           },
           {
-            "frame": 6,
+            "frame": 8,
             "quality": "draft",
-            "code": 6
+            "code": 8
           },
           {
-            "frame": 9,
+            "frame": 11,
             "quality": "draft",
-            "code": 9
+            "code": 11
           },
           {
-            "frame": 12,
+            "frame": 14,
             "quality": "draft",
-            "code": 12
-          },
-          {
-            "frame": 16,
-            "quality": "draft",
-            "code": 16
+            "code": 14
           },
           {
             "frame": 18,
             "quality": "draft",
             "code": 18
+          },
+          {
+            "frame": 21,
+            "quality": "draft",
+            "code": 21
           }
         ],
         "mismatches": []

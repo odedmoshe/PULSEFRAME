@@ -363,6 +363,20 @@ async function main() {
     const slipShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
     check('slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged', sa.revision === sb.revision + 4 && T.eq(slipped.start, slipClip.start) && T.eq(slipped.duration, slipClip.duration) && T.frameIndexAt(slipped.sourceIn, R) === 73 && JSON.stringify(slipShown) === JSON.stringify([30 + k - 1, 73, 82, 110]), { slipShown, sourceIn: T.frameIndexAt(slipped.sourceIn, R), revisions: [sb.revision, sa.revision] });
 
+    console.log('\n# roll');
+    const rollB = await getDoc();
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+BracketRight', 2);
+    let rollA = await getDoc();
+    for (let i = 0; i < 50 && rollA.revision < rollB.revision + 2; i++) { await new Promise((r) => setTimeout(r, 100)); rollA = await getDoc(); }
+    const rolled = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 1), await stillCode(atFrame + 2), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    const lenRolled = endOf(rollA.project);
+    await key('Control+BracketLeft', 2);
+    for (let i = 0; i < 50 && rollA.revision < rollB.revision + 4; i++) { await new Promise((r) => setTimeout(r, 100)); rollA = await getDoc(); }
+    const unrolled = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9)];
+    check('roll by keyboard: the cut before the selected clip moves two frames later (the earlier clip plays two frames more, the selected clip starts two frames later with the same picture at every other frame), the timeline keeps its length, and rolling back restores it', JSON.stringify(rolled) === JSON.stringify([30 + k - 1, 30 + k, 30 + k + 1, 75, 82, 110]) && lenRolled === endOf(rollB.project) && JSON.stringify(unrolled) === JSON.stringify([30 + k - 1, 73, 82]) && rollA.revision === rollB.revision + 4, { rolled, unrolled, lengths: [endOf(rollB.project), lenRolled], revisions: [rollB.revision, rollA.revision] });
+
     console.log('\n# reverse');
     const rb0 = await getDoc();
     await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click(); // the clip showing source 73–82 at atFrame..atFrame+9
@@ -516,6 +530,25 @@ async function main() {
     for (let i = 0; i < 50 && mvU.revision === mvA.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvU = await getDoc(); }
     const b0 = orderOf(mvB.project);
     check('"move track up" from the palette swaps the selected clip\'s track with the one above it (list order and the timeline rows both change), and Ctrl+Z restores the order', upCmd === 'track.moveUp' && JSON.stringify(orderOf(mvA.project)) === JSON.stringify([b0[1], b0[0], ...b0.slice(2)]) && JSON.stringify(shownAfter) === JSON.stringify([...orderOf(mvA.project)].reverse()) && JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), { upCmd, before: b0.length, moved: orderOf(mvA.project)[1] === b0[0], shownMatches: JSON.stringify(shownAfter) === JSON.stringify([...orderOf(mvA.project)].reverse()), restored: JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0) });
+
+    console.log('\n# full history dialog');
+    await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'add_marker', args: { time: T.frameTime(7, R), label: 'from an agent' } }] }) }); // one edit by an agent, so the filter has something to show
+    const hb = await getDoc();
+    await page.waitForFunction((n) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) >= n, hb.revision, { timeout: 8000 }).catch(() => {});
+    await page.getByTestId('activity-open').click();
+    await page.getByTestId('activity-dialog').waitFor();
+    await page.waitForFunction((n) => document.querySelectorAll('[data-testid=activity-full] li').length === n, hb.revision, { timeout: 8000 }).catch(() => {});
+    const allRows = await page.locator('[data-testid=activity-full] li').count();
+    const firstRev = await page.locator('[data-testid=activity-full] li').first().getAttribute('data-revision');
+    const rawNames = await page.locator('[data-testid=activity-full] li').evaluateAll((els) => els.map((e) => e.textContent ?? '').filter((x) => /\b[a-z]+_[a-z_]+\b/.test(x)).length); // an untranslated operation name looks like set_clip_reverse
+    await page.getByTestId('activity-filter').selectOption('agent');
+    const agentRows = await page.locator('[data-testid=activity-full] li').count();
+    const agentOnly = await page.locator('[data-testid=activity-full] li').evaluateAll((els) => els.every((e) => (e as HTMLElement).dataset.actor?.startsWith('agent')));
+    await page.keyboard.press('Escape');
+    const closedH = (await page.getByTestId('activity-dialog').count()) === 0;
+    await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open', undefined, { timeout: 3000 }).catch(() => {}); // focus is handed back just after the dialog is removed
+    const focusH = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open');
+    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 1 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
 
     console.log('\n# close gaps');
     const gb = await getDoc();

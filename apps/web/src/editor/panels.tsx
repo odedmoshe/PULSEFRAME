@@ -15,6 +15,7 @@ import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
 import { SourceViewer } from './SourceViewer.tsx';
 import { InlineRename } from './InlineRename.tsx';
+import { ActivityDialog } from './ActivityDialog.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -113,6 +114,14 @@ export function Library() {
                   : n.code === 'picture-starts-late' ? `${t('notice.pictureLate')} (${n.frames})`
                   : n.code === 'sound-offset' ? `${n.seconds > 0 ? t('notice.soundLate') : t('notice.soundEarly')} (${Math.abs(n.seconds).toFixed(2)}s)`
                   : t('notice.colourUntagged')}
+                {n.code === 'colour-untagged' && (
+                  <label className="notice-choice">{t('notice.colourReadAs')}{' '}
+                    <select value={n.readAs} data-testid={`colour-read-${a.id}`} onChange={(e) => void editor.commit([{ op: 'set_asset_colour', args: { assetId: a.id, readAs: e.target.value } }], 'Colour reading')}>
+                      <option value="auto">{t('notice.colourReadAs.auto')}</option>
+                      <option value="bt601">{t('notice.colourReadAs.bt601')}</option>
+                    </select>
+                  </label>
+                )}
               </span>
             ))}
             <button className="ghost" onClick={() => void editor.addAsset(a.id)} data-testid={`add-${a.id}`}>{t('media.add')}</button>
@@ -196,6 +205,28 @@ function SpeedField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
 }
 
 /** Freeze frame: hold the picture at the playhead for a chosen time. Everything after it moves later (one transaction). */
+/** A gradual speed change over the selected clip, as consecutive steps of constant speed (see the `speed_ramp` op). */
+function RampField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
+  const { editor, t } = useEditorState();
+  const [from, setFrom] = useState('1');
+  const [to, setTo] = useState('2');
+  const [steps, setSteps] = useState('8');
+  const a = Number(from), b = Number(to), n = Math.round(Number(steps));
+  const ok = a >= 0.1 && a <= 8 && b >= 0.1 && b <= 8 && a !== b && n >= 2 && n <= 24 && !clip.keyframes && !clip.volume && !clip.transition && !clip.reverse;
+  return (
+    <fieldset className="ramp" data-testid="ramp">
+      <legend>{t('ramp.title')}</legend>
+      <div className="row">
+        <label>{t('ramp.from')}<input type="number" dir="ltr" min={0.1} max={8} step={0.05} value={from} onChange={(e) => setFrom(e.target.value)} data-testid="ramp-from" /></label>
+        <label>{t('ramp.to')}<input type="number" dir="ltr" min={0.1} max={8} step={0.05} value={to} onChange={(e) => setTo(e.target.value)} data-testid="ramp-to" /></label>
+        <label>{t('ramp.steps')}<input type="number" dir="ltr" min={2} max={24} step={1} value={steps} onChange={(e) => setSteps(e.target.value)} data-testid="ramp-steps" /></label>
+      </div>
+      <p className="muted">{t('ramp.note')}</p>
+      <button type="button" className="ghost" disabled={!ok} data-testid="ramp-apply" onClick={() => void editor.commit([{ op: 'speed_ramp', args: { clipId: clip.id, from: a, to: b, steps: n } }], 'Speed ramp')}>{t('ramp.apply')}</button>
+    </fieldset>
+  );
+}
+
 function FreezeField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   const { editor, t } = useEditorState();
   const [secs, setSecs] = useState('1');
@@ -251,6 +282,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   const { editor, state, t } = useEditorState();
   const sel = editor.selected;
   const [tab, setTabState] = useState<InspectorTab>(loadTab);
+  const [activityOpen, setActivityOpen] = useState(false);
   const setTab = (next: InspectorTab) => {
     setTabState(next);
     try { localStorage.setItem(TAB_KEY, next); } catch { /* ignore */ }
@@ -378,6 +410,8 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         </>
       )}
       <h2>{t('activity')}</h2>
+      <button type="button" className="ghost" data-testid="activity-open" onClick={() => setActivityOpen(true)}>{t('activity.all')}</button>
+      {activityOpen && <ActivityDialog onClose={() => { setActivityOpen(false); setTimeout(() => document.querySelector<HTMLElement>('[data-testid=activity-open]')?.focus(), 0); }} />}
       <label className="check"><input type="checkbox" checked={state.followAgent} onChange={(e) => editor.set({ followAgent: e.target.checked })} data-testid="follow-agent" /> {t('follow.agent')}</label>
       <ol className="activity" data-testid="activity" aria-live="polite">
         {state.activity.length === 0 && <li className="muted">{t('activity.empty')}</li>}
@@ -482,13 +516,14 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
         </>
       )}
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedField clip={clip} />}
+      {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <RampField clip={clip} />}
       {clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video && <FreezeField clip={clip} />}
-      {clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video && (
+      {clip.type === 'media' && !variantId && !clip.freeze && (editor.selected?.track.kind === 'video' ? !!editor.doc?.assets[clip.assetId]?.video : editor.selected?.track.kind === 'audio' && !!editor.doc?.assets[clip.assetId]?.audio) && (
         <>
           <label className="check">
             <input type="checkbox" checked={!!clip.reverse} data-testid="reverse-toggle" onChange={(e) => void editor.commit([{ op: 'set_clip_reverse', args: { clipId: clip.id, reverse: e.target.checked } }], 'Reverse clip')} /> {t('reverse.label')}
           </label>
-          <p className="muted" data-testid="reverse-note">{t(clip.linkGroupId && !clip.reverse ? 'reverse.note.linked' : 'reverse.note')}</p>
+          <p className="muted" data-testid="reverse-note">{t(clip.linkGroupId ? 'reverse.note.linked' : 'reverse.note')}</p>
         </>
       )}
       {clip.type === 'media' && clip.linkGroupId && !variantId && (

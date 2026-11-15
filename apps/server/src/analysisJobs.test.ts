@@ -97,5 +97,34 @@ describe('analysis as a durable job', () => {
       expect((await post('/projects', { name: 'still serving' })).status).toBe(201);
     } finally { await s.close(); }
   }, 60_000);
+
+  it('silence and loudness measurements can run as jobs: the job output equals the in-request result and the project is not changed', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-anjob3-'));
+    dirs.push(dir);
+    const s = await startServer({ port: 8974, dataDir: dir });
+    const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
+    const post = async (p: string, body: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() as any }; };
+    const done = async (jobId: string) => { for (let i = 0; i < 300; i++) { const j: any = await (await fetch(`${s.url}/api/v1/jobs/${jobId}`, { headers: h })).json(); if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j; await sleep(100); } throw new Error('job did not finish'); };
+    try {
+      const pid = (await post('/projects', { name: 'measure' })).body.project.id;
+      const assetId = (await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'clicks.wav' }, body: new Uint8Array(clicks()) })).json() as any).assetId as string;
+      const added = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId, start: { value: '0', timescale: 30 } } }] });
+      const sync = await post(`/projects/${pid}/analysis/silences`, { assetId, minSeconds: 0.2 });
+      expect(sync.status).toBe(200);
+      const started = await post(`/projects/${pid}/analysis/silences`, { assetId, minSeconds: 0.2, background: true });
+      expect(started.status).toBe(202);
+      const job = await done(started.body.jobId);
+      expect(job).toMatchObject({ status: 'succeeded', type: 'analysis' });
+      expect(job.output.kind).toBe('silences');
+      expect(job.output.result).toEqual(sync.body);
+      expect(job.output.result.sourceSilences.length).toBeGreaterThan(5); // the gaps between the clicks
+      const loudSync = await post(`/projects/${pid}/analysis/loudness`, {});
+      const loudJob = await done((await post(`/projects/${pid}/analysis/loudness`, { background: true })).body.jobId);
+      expect(loudJob.status).toBe('succeeded');
+      expect(loudJob.output.result).toEqual(loudSync.body);
+      expect((await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json() as any).revision).toBe(added.body.revision);
+      expect((await post(`/projects/${pid}/analysis/silences`, { assetId: 'ast_none', background: true })).status).toBe(404);
+    } finally { await s.close(); }
+  }, 90_000);
 });
 

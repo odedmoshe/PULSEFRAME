@@ -167,6 +167,10 @@ async function main() {
       const sv = await dialogBehaviour('source-viewer', async () => { await page.getByTestId(`view-${up.assetId}`).click(); }, `[data-testid="view-${up.assetId}"]`);
       await auditState('source-viewer', { startsInside: sv.startsInside, tabStepsThatLeftTheDialog: sv.tabStepsThatLeftTheDialog }, true);
       Object.assign(states.at(-1), await sv.close());
+      // full history dialog
+      const ad = await dialogBehaviour('activity-dialog', async () => { await page.getByTestId('activity-open').click(); }, '[data-testid=activity-open]');
+      await auditState('activity-dialog', { startsInside: ad.startsInside, tabStepsThatLeftTheDialog: ad.tabStepsThatLeftTheDialog }, true);
+      Object.assign(states.at(-1), await ad.close());
       // command palette
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
       await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);

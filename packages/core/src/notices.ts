@@ -10,7 +10,7 @@ export type AssetNotice =
   | { code: 'converted'; reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect' | 'still-format')[] }
   | { code: 'picture-starts-late'; frames: number }
   | { code: 'sound-offset'; seconds: number }
-  | { code: 'colour-untagged' };
+  | { code: 'colour-untagged'; readAs: 'auto' | 'bt601' };
 
 export function assetNotices(asset: Asset): AssetNotice[] {
   const out: AssetNotice[] = [];
@@ -20,6 +20,6 @@ export function assetNotices(asset: Asset): AssetNotice[] {
   if (lead >= 2) out.push({ code: 'picture-starts-late', frames: lead });
   const snd = asset.audio?.startTime ? T.toSeconds(asset.audio.startTime) : 0;
   if (Math.abs(snd) >= 0.05) out.push({ code: 'sound-offset', seconds: Number(snd.toFixed(3)) });
-  if (asset.video?.untaggedColour && !asset.conform) out.push({ code: 'colour-untagged' });
+  if (asset.video?.untaggedColour && !asset.conform) out.push({ code: 'colour-untagged', readAs: asset.video.readColourAs ?? 'auto' });
   return out;
 }

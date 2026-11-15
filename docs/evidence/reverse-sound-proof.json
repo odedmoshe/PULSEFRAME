@@ -1,0 +1,202 @@
+{
+  "ranAt": "2026-11-15T15:59:22.189Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "gpu": "none"
+  },
+  "scope": "One synthetic 4-second fixture (frame barcode + 1 kHz beeps), reversed as a linked picture+sound pair, on the server export, the browser export and the editor preview. Not covered: long clips, speed combined with reverse in the browser routes, crossfades.",
+  "passed": 7,
+  "total": 7,
+  "checks": [
+    {
+      "name": "forward export: 120 frames in order and four beeps, one per second",
+      "ok": true,
+      "detail": {
+        "beeps": [
+          [
+            0,
+            0.1
+          ],
+          [
+            1,
+            1.1
+          ],
+          [
+            2,
+            2.1
+          ],
+          [
+            3,
+            3.1
+          ]
+        ]
+      }
+    },
+    {
+      "name": "one transaction reverses the picture and its linked sound together; they stay linked",
+      "ok": true
+    },
+    {
+      "name": "server export, reversed: frame i shows source frame 119 − i for all 120 frames, and each beep starts and ends within 3 ms of its mirrored position",
+      "ok": true,
+      "detail": {
+        "want": [
+          [
+            0.9,
+            1
+          ],
+          [
+            1.9,
+            2
+          ],
+          [
+            2.9,
+            3
+          ],
+          [
+            3.9,
+            4
+          ]
+        ],
+        "got": [
+          [
+            0.9,
+            1
+          ],
+          [
+            1.9,
+            2
+          ],
+          [
+            2.9,
+            3
+          ],
+          [
+            3.9,
+            4
+          ]
+        ],
+        "firstFrames": [
+          119,
+          118,
+          117,
+          116
+        ],
+        "lastFrames": [
+          3,
+          2,
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "name": "a frame range of the reversed clip (sound only) has its beeps where that range has them",
+      "ok": true,
+      "detail": {
+        "want": [
+          [
+            0.3999999999999999,
+            0.5
+          ],
+          [
+            1.4,
+            1.5
+          ]
+        ],
+        "got": [
+          [
+            0.4,
+            0.5
+          ],
+          [
+            1.4,
+            1.5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "browser export, reversed: the same 120 frames in the same order, and each beep within one frame of its mirrored position",
+      "ok": true,
+      "detail": {
+        "note": "mp4/opus",
+        "want": [
+          [
+            0.9,
+            1
+          ],
+          [
+            1.9,
+            2
+          ],
+          [
+            2.9,
+            3
+          ],
+          [
+            3.9,
+            4
+          ]
+        ],
+        "got": [
+          [
+            0.9,
+            1
+          ],
+          [
+            1.9,
+            2
+          ],
+          [
+            2.9,
+            3
+          ],
+          [
+            3.9,
+            4
+          ]
+        ],
+        "firstFrames": [
+          119,
+          118,
+          117,
+          116
+        ]
+      }
+    },
+    {
+      "name": "editor preview, reversed: paused frames 0, 1, 60 and 119 show source frames 119, 118, 59 and 0; played on the audio clock, each beep starts within one frame of its mirrored position; the sound clip is marked as reversed; no page errors",
+      "ok": true,
+      "detail": {
+        "previewFrames": {
+          "0": 119,
+          "1": 118,
+          "60": 59,
+          "119": 0
+        },
+        "previewClock": "audio",
+        "wantOnsets": [
+          0.9,
+          1.9,
+          2.9,
+          3.9
+        ],
+        "previewOnsets": [
+          0.9,
+          1.9,
+          2.9,
+          3.9
+        ],
+        "badge": "true",
+        "errors": []
+      }
+    },
+    {
+      "name": "switched back, the export is the forward one again (frames in order, beeps where they were)",
+      "ok": true
+    }
+  ]
+}

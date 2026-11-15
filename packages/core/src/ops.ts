@@ -185,6 +185,19 @@ defineOp({
   },
 });
 defineOp({
+  name: 'set_asset_colour',
+  version: 1,
+  description: 'For a video file that does not say how its colours are encoded (the library shows a note): choose how to read them. bt601 = standard-definition material (the reading most other players use for it); auto = as the browser reads it (BT.709). The choice applies to every clip of the file, in preview, stills and export.',
+  args: z.object({ assetId: z.string(), readAs: z.enum(['auto', 'bt601']) }).strict(),
+  apply(d, a) {
+    const asset = d.assets[a.assetId];
+    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    if (!asset.video?.untaggedColour || asset.conform) throw new OpError('incompatible', 'this file states how its colours are encoded (or was converted at import), so there is nothing to choose', { assetId: asset.id });
+    if (a.readAs === 'bt601') asset.video.readColourAs = 'bt601'; else delete asset.video.readColourAs;
+    return { affectedIds: [asset.id], summary: `Colours of "${asset.name.slice(0, 40)}" read as ${a.readAs === 'bt601' ? 'BT.601' : 'the browser reads them (BT.709)'}` };
+  },
+});
+defineOp({
   name: 'remove_asset',
   version: 1,
   description: 'Remove a file from the project library, together with its transcript and analysis results. Refused while any clip uses it. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
@@ -473,6 +486,61 @@ const volumeTarget = (d: ProjectDocument, clipId: string) => {
   return f.clip;
 };
 defineOp({
+  name: 'speed_ramp',
+  version: 1,
+  description: 'Change a clip\'s speed gradually from one value to another over its length. The clip is replaced by `steps` consecutive clips (and the same for its linked sound), each at a constant speed between `from` and `to`, playing the source on without gaps or repeats; a stepped ramp keeps every time exact. The ramp plays the same stretch of source as before (to within the rounding of each step to whole frames), so its length on the timeline changes; nothing else moves, and it is refused if the new length would run into the next clip. Not for clips with keyframes, volume keys or a transition, freeze frames, reversed clips or stills. One undo restores the single clip.',
+  args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), steps: z.number().int().min(2).max(24).optional().describe('Default 8'), includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a, ctx) {
+    const f = mustClip(d, a.clipId);
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
+    const rate = d.settings.frameRate;
+    const steps = a.steps ?? 8;
+    const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
+    for (const { clip } of targets) {
+      if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
+      if (clip.freeze || clip.reverse) throw new OpError('incompatible', 'a freeze frame or a reversed clip cannot be ramped', { clipId: clip.id });
+      if (clip.keyframes || clip.volume || clip.transition || clip.effects?.some((e) => e.keyframes)) throw new OpError('incompatible', 'remove keyframes, volume keys and the transition first: they would not survive the division into steps', { clipId: clip.id });
+    }
+    // One plan for all targets (they share place and length): the timeline length of each step in whole frames.
+    const lead = targets[0]!.clip;
+    const span = toSourceSpan(lead, lead.duration); // source shown now
+    const speeds = Array.from({ length: steps }, (_, k) => speedFromNumber(Number((a.from + ((a.to - a.from) * k) / (steps - 1)).toFixed(3))));
+    const part = T.normalize({ value: span.value, timescale: span.timescale * steps }); // an equal share of the source for each step
+    const frames = speeds.map((sp) => Math.max(1, T.frameIndexAt(T.normalize({ value: (BigInt(part.value) * BigInt(sp.den)).toString(), timescale: part.timescale * sp.num }), rate)));
+    const total = frames.reduce((n, x) => n + x, 0);
+    const newEnd = T.add(lead.start, T.frameTime(total, rate));
+    const created: string[] = [];
+    const links = targets.length > 1 ? speeds.map(() => ctx.newId('lnk')) : null;
+    for (const { track, clip } of targets) {
+      assertFree(track, clip.start, newEnd, new Set([clip.id]));
+      const asset = d.assets[clip.assetId]!;
+      let start = clip.start, sourceIn = clip.sourceIn;
+      const parts: MediaClip[] = [];
+      for (let k = 0; k < steps; k++) {
+        const sp = speeds[k]!;
+        const duration = T.frameTime(frames[k]!, rate);
+        const p: MediaClip = structuredClone(clip);
+        p.id = k === 0 ? clip.id : ctx.newId('clp'); // the first step keeps the clip's id, so references to it stay valid
+        p.start = start; p.duration = duration; p.sourceIn = sourceIn;
+        if (sp.num === sp.den) delete p.speed; else p.speed = sp;
+        p.linkGroupId = links ? links[k]! : null;
+        if (k > 0) delete p.fadeIn;
+        if (k < steps - 1) delete p.fadeOut;
+        clampFades(p);
+        const used = toSourceSpan(p, duration);
+        if (T.lt(asset.duration, T.add(sourceIn, used))) throw new OpError('out_of_bounds', 'the ramp would read past the end of the source', { clipId: clip.id });
+        if (k > 0) { copyOverrides(d, clip.id, p.id); created.push(p.id); }
+        parts.push(p);
+        start = T.add(start, duration); sourceIn = T.add(sourceIn, used);
+      }
+      track.clips.splice(track.clips.indexOf(clip), 1, ...parts);
+      sortClips(track);
+    }
+    return { affectedIds: [...targets.map((t) => t.clip.id), ...created], summary: `Speed ramp ${a.from}× → ${a.to}× in ${steps} steps`, output: { createdClipIds: created, steps, durationFrames: total, speeds: speeds.map((sp) => Number((sp.num / sp.den).toFixed(3))) } };
+  },
+});
+
+defineOp({
   name: 'set_volume_keyframe',
   version: 1,
   description: 'Volume automation: set the level of a sound clip at a clip-local, frame-aligned time (0 = silent, 1 = unchanged, up to 4). The level moves in a straight line between keys and holds before the first and after the last. It multiplies the clip gain, fades and ducking.',
@@ -640,30 +708,41 @@ defineOp({
 defineOp({
   name: 'set_clip_reverse',
   version: 1,
-  description: 'Play a video clip backwards (reverse=true) or forwards again (false). It keeps its place, length and the stretch of source it shows; only the order of the pictures changes. Picture only: sound is not reversed, so a linked sound clip is unlinked and keeps playing forwards (mute or delete it if that is not wanted). Not for freeze frames or stills. A transition into the next clip must still have enough spare source in the new direction.',
-  args: z.object({ clipId: z.string(), reverse: z.boolean() }).strict(),
+  description: 'Play a clip backwards (reverse=true) or forwards again (false): a video clip on a video track, a sound clip on a sound track, or both when they are linked (they reverse together unless includeLinked=false, which also unlinks them). The clip keeps its place, length and the stretch of source it uses; only the order changes. Not for freeze frames or stills. A transition or crossfade into the next clip must still have enough spare source in the new direction.',
+  args: z.object({ clipId: z.string(), reverse: z.boolean(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
-    const clip = f.clip;
-    const asset = clip.type === 'media' ? d.assets[clip.assetId] : undefined;
-    if (clip.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'only a video clip on a video track can play backwards', { clipId: a.clipId });
-    if (clip.freeze) throw new OpError('incompatible', 'a freeze frame has no direction', { clipId: a.clipId });
-    // A transition into the NEXT clip plays this clip on past its end; after a change of direction that material lies on the other side of the stretch.
-    const i = f.track.clips.indexOf(clip);
-    const next = f.track.clips[i + 1];
-    if (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip))) {
-      const after = T.frameIndexAt(handleAfterEnd({ ...clip, ...(a.reverse ? { reverse: true as const } : { reverse: undefined }) }, asset.duration), d.settings.frameRate);
-      if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames in the new direction but only ${after} exist`, { clipId: a.clipId, nextClipId: next.id, maxFrames: after }, 'Shorten or remove that transition first, or slip this clip.');
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can play backwards', { clipId: a.clipId });
+    const others = linked(d, f.clip);
+    const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : others)];
+    if (targets.every((t) => !!t.clip.reverse === a.reverse)) throw new OpError('invalid_args', `the clip already plays ${a.reverse ? 'backwards' : 'forwards'}`, { clipId: a.clipId });
+    const affected: string[] = [];
+    for (const { track, clip } of targets) {
+      const asset = d.assets[clip.assetId];
+      if (!asset || asset.kind === 'image' || (track.kind === 'video' ? !asset.video : track.kind === 'audio' ? !asset.audio : true)) throw new OpError('incompatible', 'only a video clip on a video track or a sound clip on a sound track can play backwards', { clipId: clip.id });
+      if (clip.freeze) throw new OpError('incompatible', 'a freeze frame has no direction', { clipId: clip.id });
+      if (!!clip.reverse === a.reverse) continue;
+      // What plays on past this clip's end (a picture transition, or the tail of a sound crossfade) lies on the other side of the stretch after a change of direction.
+      const i = track.clips.indexOf(clip);
+      const next = track.clips[i + 1];
+      const flipped = { ...clip, ...(a.reverse ? { reverse: true as const } : { reverse: undefined }) };
+      if (track.kind === 'video' && next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip))) {
+        const after = T.frameIndexAt(handleAfterEnd(flipped, asset.duration), d.settings.frameRate);
+        if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames in the new direction but only ${after} exist`, { clipId: clip.id, nextClipId: next.id, maxFrames: after }, 'Shorten or remove that transition first, or slip this clip.');
+      }
+      if (track.kind === 'audio' && clip.fadeOut && next && next.type === 'media' && next.fadeIn && T.lt(next.start, clipEnd(clip)))
+        throw new OpError('incompatible', 'remove the crossfade into the next clip first', { clipId: clip.id, nextClipId: next.id }, 'Use set_audio_crossfade with duration 0.');
+      if (a.reverse) clip.reverse = true; else delete clip.reverse;
+      affected.push(clip.id);
     }
-    if (!!clip.reverse === a.reverse) throw new OpError('invalid_args', `the clip already plays ${a.reverse ? 'backwards' : 'forwards'}`, { clipId: a.clipId });
-    const affected = [clip.id];
-    let unlinked = 0;
-    if (a.reverse) {
-      const others = linked(d, clip);
-      if (clip.linkGroupId) { clip.linkGroupId = null; if (others.length === 1) { others[0]!.clip.linkGroupId = null; } for (const o of others) { affected.push(o.clip.id); unlinked++; } }
-      clip.reverse = true;
-    } else delete clip.reverse;
-    return { affectedIds: affected, summary: a.reverse ? `Clip plays backwards${unlinked ? '; its sound was unlinked and still plays forwards' : ''}` : 'Clip plays forwards', output: { unlinkedClipIds: affected.slice(1) } };
+    // Reversing one side only leaves picture and sound running in opposite directions: they are no longer one linked thing.
+    const unlinked: string[] = [];
+    if (a.includeLinked === false && f.clip.linkGroupId) {
+      (f.clip as MediaClip).linkGroupId = null;
+      if (others.length === 1) { others[0]!.clip.linkGroupId = null; unlinked.push(others[0]!.clip.id); }
+      for (const o of others) if (!affected.includes(o.clip.id)) affected.push(o.clip.id);
+    }
+    return { affectedIds: affected, summary: `Clip plays ${a.reverse ? 'backwards' : 'forwards'}${targets.length > 1 ? ' (picture and sound)' : ''}${unlinked.length ? '; unlinked from its other half' : ''}`, output: { reversedClipIds: targets.map((t) => t.clip.id), unlinkedClipIds: unlinked } };
   },
 });
 
@@ -1186,6 +1265,7 @@ defineOp({
     if (T.isNegative(a.duration)) throw new OpError('invalid_args', 'duration must be >= 0');
     // The earlier clip either ends exactly at this clip's start, or already overlaps it by an existing crossfade.
     const prev = track.clips.find((c) => c.type === 'media' && c.id !== clip.id && T.eq(T.sub(clipEnd(c), c.fadeOut ?? T.ZERO), clip.start) && T.lte(c.start, clip.start)) as MediaClip | undefined;
+    if (prev?.reverse && !T.isZero(a.duration)) throw new OpError('incompatible', 'a crossfade out of a clip that plays backwards is not supported yet', { clipId: clip.id, previousClipId: prev.id });
     if (!prev) throw new OpError('not_found', 'no audio clip ends where this one starts on the same track', { clipId: clip.id }, 'Move the clips so they touch, then crossfade.');
     const base = T.sub(prev.duration, prev.fadeOut ?? T.ZERO); // length without any existing crossfade tail
     const asset = d.assets[prev.assetId]!;
@@ -1196,6 +1276,40 @@ defineOp({
     if (T.isZero(a.duration)) { delete prev.fadeOut; delete clip.fadeIn; } else { prev.fadeOut = a.duration; clip.fadeIn = a.duration; }
     sortClips(track);
     return { affectedIds: [prev.id, clip.id], summary: T.isZero(a.duration) ? 'Removed crossfade' : `Crossfade ${fmt(a.duration)}`, output: { previousClipId: prev.id } };
+  },
+});
+defineOp({
+  name: 'fit_music',
+  version: 1,
+  description: 'Make a music clip end with the picture: its end is set to the last beat at or before the end of the picture and titles (or before `to`), or exactly there when the file has no beat analysis, and it fades out. If the music is shorter than the picture it ends on its own last usable beat and the output says by how much it falls short. The clip must not be linked to a picture.',
+  args: z.object({ clipId: z.string(), to: RT.optional().describe('Timeline time to end at; default: the end of the last picture, title or caption clip'), fadeOut: RT.optional().describe('Fade-out length; default one second (at most half the clip)') }).strict(),
+  apply(d, a) {
+    const { clip, track, seq } = mustClip(d, a.clipId);
+    if (clip.type !== 'media' || track.kind !== 'audio') throw new OpError('incompatible', 'fit_music applies to a sound clip on a sound track', { clipId: a.clipId });
+    if (clip.linkGroupId) throw new OpError('incompatible', 'this sound is linked to a picture; detach it first if it should be fitted on its own', { clipId: clip.id }, 'Use unlink_clip.');
+    if (clip.reverse) throw new OpError('incompatible', 'a clip that plays backwards cannot be fitted to beats', { clipId: clip.id });
+    const rate = d.settings.frameRate;
+    if (a.to) assertAligned(d, a.to, 'to');
+    if (a.fadeOut) assertAligned(d, a.fadeOut, 'fadeOut');
+    const pictureEnd = seq.tracks.filter((t) => t.kind !== 'audio').flatMap((t) => t.clips).reduce((m, c) => T.max(m, clipEnd(c)), T.ZERO);
+    const target = a.to ?? pictureEnd;
+    if (!T.lt(clip.start, target)) throw new OpError('out_of_bounds', a.to ? 'the end must lie after the start of the music' : 'there is no picture, title or caption after the start of this music to fit it to', { clipStart: clip.start, target });
+    const asset = d.assets[clip.assetId]!;
+    const frame = (t: T.RationalTime) => T.frameTime(T.frameIndexAt(t, rate), rate); // down to a whole frame
+    const maxEnd = frame(T.add(clip.start, toTimelineSpan(clip, T.sub(asset.duration, clip.sourceIn))));
+    const limit = T.min(target, maxEnd);
+    // beats of the source at or after the clip's in-point, as timeline times of this clip (also past its current end)
+    const beats = (d.analyses?.[clip.assetId]?.beats?.beats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
+    const end = beats.length ? beats.reduce((m, t) => T.max(m, t)) : limit;
+    if (!T.lt(clip.start, end)) throw new OpError('out_of_bounds', 'nothing of the music would remain', { clipId: clip.id });
+    assertFree(track, clip.start, end, new Set([clip.id]));
+    clip.duration = T.sub(end, clip.start);
+    const half = frame(T.rt(BigInt(clip.duration.value), clip.duration.timescale * 2));
+    const fade = T.min(a.fadeOut ?? T.frameTime(Math.round(rate.num / rate.den), rate), half);
+    if (T.isZero(fade)) delete clip.fadeOut; else clip.fadeOut = fade;
+    clampFades(clip);
+    const shortBy = T.lt(maxEnd, target) ? T.sub(target, end) : T.ZERO;
+    return { affectedIds: [clip.id], summary: `Music ends at ${fmt(end)}${beats.length ? ' (on a beat)' : ''}${T.isZero(shortBy) ? '' : `; ${fmt(shortBy)} short of the picture`}`, output: { end, onBeat: beats.length > 0, fadeOut: clip.fadeOut ?? T.ZERO, shortBy } };
   },
 });
 defineOp({

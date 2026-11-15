@@ -52,6 +52,12 @@ sqlite3 .data/pulseframe.sqlite ".backup '/path/to/backup/pulseframe.sqlite'"
 rsync -a .data/blobs .data/out .data/tokens.json /path/to/backup/
 ```
 Automatic (tested by `apps/server/src/backup.test.ts`): start the server with `PF_BACKUP_DIR=/path/to/backup`. While the server runs it repeats the backup above every `PF_BACKUP_EVERY_HOURS` hours and also keeps `snapshots/pulseframe-<UTC time>.sqlite`, one database per run, deleting all but the newest `PF_BACKUP_KEEP`. The first run is due one interval after the newest existing snapshot (at once if there is none). Media and exports in the backup are never deleted by this, so every retained snapshot finds its files; the backup therefore only grows, and removing media nobody needs from it is manual. A failed run is logged, shown in the editor (Projects → Automatic backup) and in `GET /api/v1/backup`, and tried again at the next interval. The owner can start a run from that panel or with `POST /api/v1/backup`. It only runs while the server is running; nothing checks that the destination is a different disk.
+Check a backup at any time (tested by `apps/server/src/backup.test.ts`):
+```bash
+pnpm backup --verify /path/to/backup
+```
+It opens every database in the backup (the current one and each snapshot) and runs SQLite's integrity check, re-hashes every media file against the content hash it is named by, and checks that every media file the current database refers to is present. It changes nothing and exits non-zero if anything is wrong. It reads all media, so it takes as long as hashing the whole backup.
+
 To go back to an older state: stop the server, copy the chosen snapshot over `pulseframe.sqlite` in the backup directory, and restore as below.
 
 Restore: stop the server, put the files back under `PF_DATA_DIR` (or point `PF_DATA_DIR` at the copy), start the server. Blobs are content-addressed and immutable, so an incremental copy of `blobs/` is safe.

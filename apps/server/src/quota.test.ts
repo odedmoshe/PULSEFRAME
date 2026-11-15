@@ -61,4 +61,5 @@ describe('storage ceiling', () => {
     fs.rmSync(path.join(dir, 'filler.bin'));
     expect((await upload(wav(1), 'tiny.wav')).status).toBe(201);
   });
+
 });

@@ -196,6 +196,11 @@ export function SoundPanel() {
             <button type="button" className="ghost" data-testid="sound-crossfade-apply" disabled={xf === '' || !Number.isFinite(Number(xf)) || Number(xf) < 0}
               onClick={() => void editor.commit([{ op: 'set_audio_crossfade', args: { clipId: clip.id, duration: T.snapToFrame(T.rt(Math.round(Number(xf) * 1000), 1000), editor.rate) } }], 'Audio crossfade')}>{t('sound.crossfade.apply')}</button>
           </div>
+          {!clip.linkGroupId && !clip.reverse && (
+            <div className="row">
+              <button type="button" className="ghost" data-testid="sound-fit-music" title={t('sound.fit.hint')} onClick={() => void editor.commit([{ op: 'fit_music', args: { clipId: clip.id } }], 'Fit music')}>{t('sound.fit')}</button>
+            </div>
+          )}
         </>
       )}
 

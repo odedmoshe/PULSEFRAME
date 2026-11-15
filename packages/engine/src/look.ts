@@ -287,3 +287,32 @@ export function compositeLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRe
   } else ctx.drawImage(layer.canvas, 0, 0);
   ctx.restore();
 }
+
+// ---- colour matrix correction for sources read with the wrong YCbCr matrix ----
+/**
+ * The 3×3 matrix that turns RGB decoded with the BT.709 matrix into the RGB the same YCbCr data gives with the BT.601 matrix.
+ * (Both use the same quantisation, so the offsets cancel and the correction is linear in the encoded RGB values.)
+ */
+export const BT709_AS_BT601: readonly number[] = (() => {
+  const toYcc = (kr: number, kb: number) => { const kg = 1 - kr - kb; return [[kr, kg, kb], [-kr / (2 * (1 - kb)), -kg / (2 * (1 - kb)), 0.5], [0.5, -kg / (2 * (1 - kr)), -kb / (2 * (1 - kr))]]; };
+  const toRgb = (kr: number, kb: number) => { const kg = 1 - kr - kb; return [[1, 0, 2 * (1 - kr)], [1, (-2 * kb * (1 - kb)) / kg, (-2 * kr * (1 - kr)) / kg], [1, 2 * (1 - kb), 0]]; };
+  const a = toRgb(0.299, 0.114), b = toYcc(0.2126, 0.0722);
+  const m: number[] = [];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) m.push(a[i]![0]! * b[0]![j]! + a[i]![1]! * b[1]![j]! + a[i]![2]! * b[2]![j]!);
+  return m;
+})();
+/** Apply a 3×3 colour matrix to every pixel of a buffer, in place (alpha untouched). */
+export function applyColourMatrix(buf: Buf, m: readonly number[]): void {
+  const { width, height } = buf.canvas;
+  const img = buf.ctx.getImageData(0, 0, width, height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    const r = d[i]!, g = d[i + 1]!, b = d[i + 2]!;
+    d[i] = m[0]! * r + m[1]! * g + m[2]! * b; // Uint8ClampedArray rounds and clamps
+    d[i + 1] = m[3]! * r + m[4]! * g + m[5]! * b;
+    d[i + 2] = m[6]! * r + m[7]! * g + m[8]! * b;
+  }
+  buf.ctx.putImageData(img, 0, 0);
+}
+

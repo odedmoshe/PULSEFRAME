@@ -24,6 +24,7 @@ export const AGENT_GUIDE = `# PULSEFRAME Studio — guide for agents (v${PLAYBOO
 - Send \`baseRevision\` (the revision you last read). If someone changed the same items since, you get a conflict listing them: re-read and decide again.
 - Group related operations in one \`apply_transaction\`; it is all-or-nothing. \`dryRun: true\` validates without committing.
 - Look at your result: \`render_frame\` returns a picture of any frame; \`preflight\` lists problems before export.
+- To be told when a project changes instead of polling: open a \`subscriptions/listen\` stream for the project resources (pulseframe://projects/{id}/summary and /timeline) and for resource list changes. You are only told about projects your credential may read.
 
 ## What you may do
 - Your credential has a mode. Observe: read only. Propose: your edits become proposals the owner accepts or rejects. Edit / Autopilot: edits apply directly. A grant may also be limited to projects, tracks or a time range; anything outside is refused with a typed error.
@@ -86,6 +87,8 @@ const PLAYBOOKS: { name: string; title: string; description: string; extra?: Rec
   },
 ];
 
+/** The per-project resources (pulseframe://projects/{id}/<kind>); a commit to a project updates all of them. */
+export const PROJECT_RESOURCE_KINDS = ['summary', 'timeline'] as const;
 export function registerResourcesAndPrompts(server: McpServer, deps: { store: Store; auth: Auth; gov: Governance; principal: Principal }) {
   const { store, auth, gov, principal } = deps;
   const json = (uri: URL, data: unknown) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(data) }] });

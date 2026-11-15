@@ -228,8 +228,11 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return c.body(out.text, 200, { 'content-type': `${out.mime}; charset=utf-8`, 'content-disposition': `attachment; filename="captions.${out.format}"`, 'x-pulseframe-revision': String(p.revision), 'x-pulseframe-cues': String(out.cues) });
   });
   app.post('/api/v1/projects/:id/analysis/silences', async (c) => {
-    need(c, 'observe');
-    return c.json(await findSilences(store, c.req.param('id'), await body(c, SilenceBody)));
+    const p = need(c, 'observe');
+    const { background, ...b } = await body(c, SilenceBody.extend({ background: z.boolean().optional() }).strict());
+    // background=true: a durable job (poll get job); the result is the same object, as the job's output. Use it for long recordings.
+    if (background) { const j = startMeasurementJob(store, p, c.req.param('id'), 'silences', b); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await findSilences(store, c.req.param('id'), b));
   });
   app.post('/api/v1/projects/:id/assets/:assetId/analyze', async (c) => {
     const p = need(c, 'edit');
@@ -263,10 +266,17 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const doc = store.getProject(projectId).doc;
     // All-or-nothing: every variant must exist and plan without blockers before any job is created.
     for (const id of b.variantIds) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, variantId: id }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `format ${id} cannot be exported: ${plan.blockers[0]!.message}`, { variantId: id, blockers: plan.blockers }); }
+    gov.takeExportQuota(pr, b.variantIds.length, true);
     const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }));
+    gov.takeExportQuota(pr, jobs.length);
     return c.json({ jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, status: j.status })) }, 202);
   });
-  app.post('/api/v1/projects/:id/analysis/loudness', async (c) => { need(c, 'observe'); return c.json(await programmeLoudness(store, c.req.param('id'))); });
+  app.post('/api/v1/projects/:id/analysis/loudness', async (c) => {
+    const p = need(c, 'observe');
+    const b = await c.req.json().catch(() => ({}));
+    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', {}); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await programmeLoudness(store, c.req.param('id')));
+  });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
 
   // ----- edits: one command path for UI, REST and (via store.commit) MCP -----
@@ -463,7 +473,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(pr, c.req.param('id'), 'job');
     const options = await c.req.json().catch(() => ({}));
     assertStorageRoom(store, cfg.maxStorageBytes, 1, 'start an export'); // the output size is not known in advance; an export is refused once the ceiling is reached
+    gov.takeExportQuota(pr, 1, true);
     const job = exporter.start(c.req.param('id'), pr.actor, options);
+    gov.takeExportQuota(pr);
     return c.json({ jobId: job.id, status: job.status, revision: job.input.revision, estimate: job.input.manifest.estimate, warnings: job.input.warnings }, 202);
   });
   /** Dry run: what would be exported, what it depends on, and what blocks it. Starts nothing. */
@@ -686,11 +698,26 @@ export function startAnalysisJob(store: Store, gov: Governance, principal: Princ
   void runAnalysisJob(store, job.id);
   return store.getJob(job.id);
 }
+/** Start a silence or loudness measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
+export function startMeasurementJob(store: Store, principal: Principal, projectId: string, kind: 'silences' | 'loudness', options: unknown): JobRow {
+  const p = store.getProject(projectId); // 404 before any job exists
+  if (kind === 'silences' && !p.doc.assets[(options as { assetId: string }).assetId]) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
+  const job = store.createJob(projectId, 'analysis', principal.actor, { kind, options, projectRevision: p.revision });
+  void runAnalysisJob(store, job.id);
+  return store.getJob(job.id);
+}
 async function runAnalysisJob(store: Store, jobId: string) {
   if (store.getJob(jobId).status !== 'queued') return;
   store.updateJob(jobId, { status: 'running', stage: 'measuring' });
   const j = store.getJob(jobId);
   try {
+    // Measurements that attach nothing to the project (silence candidates, programme loudness): the result is the job's output.
+    if (j.input.kind === 'silences' || j.input.kind === 'loudness') {
+      const result = j.input.kind === 'silences' ? await findSilences(store, j.projectId, j.input.options) : await programmeLoudness(store, j.projectId);
+      if (store.getJob(jobId).status === 'cancel-requested') { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled while measuring; the result was discarded' } }); return; }
+      store.updateJob(jobId, { status: 'succeeded', stage: null, output: { kind: j.input.kind, result } });
+      return;
+    }
     const r = await measureAndAttach(store, j.actor, j.projectId, j.input, () => store.getJob(jobId).status === 'cancel-requested');
     if (!r) { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled while measuring; the result was discarded' } }); return; }
     store.updateJob(jobId, { status: 'succeeded', stage: null, output: { kind: j.input.kind, assetId: j.input.assetId, revision: r.revision, scenes: r.scenes ? { count: r.scenes.count } : undefined, beats: r.beats ? { count: r.beats.count, bpm: r.beats.bpm, confidence: r.beats.confidence } : undefined } });
