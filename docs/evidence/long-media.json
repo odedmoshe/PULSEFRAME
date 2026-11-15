@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T16:56:43.336Z",
+  "ranAt": "2026-11-15T17:16:37.190Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,34 +13,34 @@
   "measurements": {
     "minutes": 20,
     "fileMB": 37.9,
-    "generateSeconds": 70.4,
-    "ingestSeconds": 0.4,
+    "generateSeconds": 63.6,
+    "ingestSeconds": 0.3,
     "analysis": {
       "beats": {
         "status": "succeeded",
-        "seconds": 12.3
+        "seconds": 12.7
       },
       "scenes": {
         "status": "succeeded",
-        "seconds": 16
+        "seconds": 14.9
       }
     },
     "editsDuringAnalysis": {
-      "count": 42,
+      "count": 41,
       "medianMs": 12,
-      "p95Ms": 23,
-      "maxMs": 40
+      "p95Ms": 20,
+      "maxMs": 23
     },
     "timeline": {
       "shots": 20,
-      "splitMs": 16,
-      "timelineQueryMs": 40,
+      "splitMs": 30,
+      "timelineQueryMs": 43,
       "beatMarkers": 2000,
-      "userMarkers": 42
+      "userMarkers": 41
     },
     "editor": {
-      "openSeconds": 0.8,
-      "seekToLastFrameSeconds": 0.4,
+      "openSeconds": 0.7,
+      "seekToLastFrameSeconds": 0.3,
       "meanLevelOfMiddleRow": 111.2,
       "timecode": "00:19:59:29"
     }
@@ -52,14 +52,14 @@
       "detail": {
         "seconds": 1200,
         "frames": 36000,
-        "ingestSeconds": 0.4
+        "ingestSeconds": 0.3
       }
     },
     {
       "name": "scene job: finishes and finds all 19 cuts on the exact frames, no false cuts",
       "ok": true,
       "detail": {
-        "seconds": 16,
+        "seconds": 14.9,
         "found": 19,
         "firstWrong": null
       }
@@ -68,7 +68,7 @@
       "name": "beat job: finishes with a tempo within 1 BPM of 120 and a beat count within 2% of 2400",
       "ok": true,
       "detail": {
-        "seconds": 12.3,
+        "seconds": 12.7,
         "bpm": 120.19,
         "count": 2399,
         "confidence": 0.992
@@ -78,10 +78,10 @@
       "name": "edits made while both jobs ran all succeeded and stayed prompt (median under 100 ms, worst under 2 s)",
       "ok": true,
       "detail": {
-        "count": 42,
+        "count": 41,
         "medianMs": 12,
-        "p95Ms": 23,
-        "maxMs": 40
+        "p95Ms": 20,
+        "maxMs": 23
       }
     },
     {
@@ -89,18 +89,18 @@
       "ok": true,
       "detail": {
         "shots": 20,
-        "splitMs": 16,
-        "timelineQueryMs": 40,
+        "splitMs": 30,
+        "timelineQueryMs": 43,
         "beatMarkers": 2000,
-        "userMarkers": 42
+        "userMarkers": 41
       }
     },
     {
       "name": "editor: opens the 20-minute project and paints the very last frame (35999) after a jump to the end, picture not black, no page errors",
       "ok": true,
       "detail": {
-        "openSeconds": 0.8,
-        "seekToLastFrameSeconds": 0.4,
+        "openSeconds": 0.7,
+        "seekToLastFrameSeconds": 0.3,
         "meanLevelOfMiddleRow": 111.2,
         "timecode": "00:19:59:29",
         "errors": []

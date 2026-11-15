@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T16:30:17.771Z",
+  "ranAt": "2026-11-15T17:11:18.343Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -152,9 +152,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 245,
-        "wantEnd": 239,
-        "gotEnd": 239,
+        "pictureEnd": 290,
+        "wantEnd": 284,
+        "gotEnd": 284,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -188,9 +188,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.99,
+        "fwd2": 2.02,
         "sh2": "◀◀ ×1",
-        "back1": -0.99,
+        "back1": -1,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -204,9 +204,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.99,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.03,
+        "shuttleSpeed": 1.99,
         "staysPaused": true
       }
     },
@@ -234,30 +234,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_ded91737c50",
-          "clp_ded91737c51"
+          "clp_d1b382f5a20",
+          "clp_d1b382f5a21"
         ],
         "afterAB": [
-          "clp_ded91737c50",
-          "clp_ded91737c51"
+          "clp_d1b382f5a20",
+          "clp_d1b382f5a21"
         ],
         "afterAdd": [
-          "clp_ded91737c50",
-          "clp_ded91737c51",
-          "clp_ded91737c52"
+          "clp_d1b382f5a20",
+          "clp_d1b382f5a21",
+          "clp_d1b382f5a22"
         ],
         "midEscape": [
-          "clp_ded91737c51"
+          "clp_d1b382f5a21"
         ],
         "afterEscape": [
-          "clp_ded91737c50",
-          "clp_ded91737c51",
-          "clp_ded91737c52"
+          "clp_d1b382f5a20",
+          "clp_d1b382f5a21",
+          "clp_d1b382f5a22"
         ],
         "afterEscapeUp": [
-          "clp_ded91737c50",
-          "clp_ded91737c51",
-          "clp_ded91737c52"
+          "clp_d1b382f5a20",
+          "clp_d1b382f5a21",
+          "clp_d1b382f5a22"
         ]
       }
     },
