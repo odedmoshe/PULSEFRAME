@@ -582,6 +582,9 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - **Flaw in my own test, found here:** the render fuzz's "dressing" step asked for four transition types of which three do not exist (`cross-dissolve`, `dip-to-black`, `slide-left`), so those requests were refused and almost no transitions reached the rendered projects. Earlier statements that the render fuzz covered transitions "thinly" were therefore generous: it covered `wipe-left` on a quarter of the eligible cuts at most. The names are corrected (`dissolve`, `dip-black`, `wipe-left`, `push-left`) and frames inside transitions are now always among the compared frames.
 - Rerun with the corrected names: 2/2, 39 frames in 9 of 10 projects. Five compared frames lie inside a transition, in 3 projects (one of them on a reversed clip with an effect and a mask): preview equal to the still on all five, export within 2.54 of 255. Transitions still reach only a few projects, because random sessions seldom leave two picture clips touching; this is agreement between routes, not a check against an independent reference.
 
+**Regression after checkpoint 15f — all passing (current CPU profile)**
+- `pnpm proof` 54 · phase3 35 · phase4 19 · phase5 34 · phase6 35 · phase7 31 · phase8 20 · phase9 12 · phase11 12 · phase12 16 · browser-export 23 · editor-interactions 20 · owner-ui 9 · speed 16 · soak 7 · start-offset 4 · projects 2 · long 6, each under its own time limit, none hung. Render fuzz 2/2 was run just before (see 15f). Unit tests 407. Not rerun since the regression after 14z: inputs, images, seek, parity; the accessibility audit was last run at 15e.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
