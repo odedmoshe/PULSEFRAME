@@ -588,7 +588,7 @@ export async function programmeLoudness(store: Store, projectId: string) {
   const raw = path.join(store.tmpDir, `loud_${projectId}_${p.revision}_${Date.now()}.f32`);
   return heavy(async () => {
   try {
-    const { clips, peak } = await mixToRaw(plan, (assetId) => store.blobPath(p.doc.assets[assetId]!.contentHash), 0, plan.totalSamples, raw, undefined, (assetId) => timeOriginSeconds(p.doc.assets[assetId]));
+    const { clips, peak } = await mixToRaw(plan, (assetId) => store.blobPath(p.doc.assets[assetId]!.contentHash), 0, plan.totalSamples, raw, undefined, (assetId) => timeOriginSeconds(p.doc.assets[assetId]), (assetId) => p.doc.assets[assetId]?.audio?.channels === 1);
     const m = await measureLoudness(raw, plan.sampleRate);
     const target = p.doc.settings.loudness ?? null;
     const g = target ? normalisationGain(m, target.target, target.truePeak) : null;

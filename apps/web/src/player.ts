@@ -170,8 +170,8 @@ export class Player {
           const speed = c.speed;
           const srcFrom = sourceIn + Math.max(0, t0 - start) * speed;
           const srcTo = sourceIn + (end - start) * speed;
-          // The decoder reports the file's raw timestamps; source times here are measured from the file's own start (asset.timeOrigin).
-          const origin = doc.assets[c.assetId]?.timeOrigin ? T.toSeconds(doc.assets[c.assetId]!.timeOrigin!) : 0;
+          // The decoder reports the file's raw timestamps; source times here are measured from the file's own start as this reader sees it.
+          const origin = opened.origin;
           for await (const raw of opened.sink.buffers(srcFrom + origin, srcTo + origin)) {
             const b = { buffer: raw.buffer, duration: raw.duration, timestamp: raw.timestamp - origin };
             if (gen !== this.generation) break;

@@ -11,7 +11,7 @@
  *  - Audio is mixed with an OfflineAudioContext from whole decoded assets (limitation: long media is decoded whole; a
  *    streaming AudioBufferSink path is the follow-up).
  */
-import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
+import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Input, Mp4OutputFormat, Output, Quality, UrlSource, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
 import { audioPlan, drawGraph, evaluate } from '@pulseframe/engine';
@@ -97,41 +97,68 @@ async function api<R>(apiBase: string, path: string, body: unknown): Promise<R> 
 }
 
 /** Whole-sample mix of the exported range, positions rounded from ABSOLUTE rational times (never accumulated). */
-const startSeconds = (t: T.RationalTime | undefined) => (t ? T.toSeconds(t) : 0);
+/** Decoded sound of one asset as timed pieces, read with the same demuxer and decoder as the preview (any container the editor accepts). */
+interface SoundPiece { buffer: AudioBuffer; /** Seconds from the file's own start. */ at: number; duration: number }
+async function decodeSound(url: string): Promise<SoundPiece[]> {
+  const input = new Input({ source: new UrlSource(url, { requestInit: { credentials: 'same-origin' }, maxCacheSize: 32 << 20 }), formats: ALL_FORMATS });
+  try {
+    const track = await input.getPrimaryAudioTrack();
+    if (!track) return [];
+    if (!(await track.canDecode())) throw new Error(`this browser cannot decode the sound of this file (${track.codec ?? 'unknown codec'})`);
+    // This reader's time zero for the file: the earliest presented timestamp of any stream, never below zero (as in the preview).
+    const origin = Math.max(0, await input.getFirstTimestamp());
+    const out: SoundPiece[] = [];
+    for await (const b of new AudioBufferSink(track).buffers()) out.push({ buffer: b.buffer, at: b.timestamp - origin, duration: b.duration });
+    return out;
+  } finally { input.dispose(); }
+}
+/** Test utility: how this browser's decoder times the sound of a file: the first timestamp and where loud onsets fall on that timeline. */
+export async function probeSound(url: string): Promise<{ codec: string | null; firstTimestamp: number; pieces: number; onsets: number[]; samples: number; lastEnd: number; sampleRate: number | null }> {
+  const input = new Input({ source: new UrlSource(url, { requestInit: { credentials: 'same-origin' } }), formats: ALL_FORMATS });
+  try {
+    const track = await input.getPrimaryAudioTrack();
+    if (!track) return { codec: null, firstTimestamp: 0, pieces: 0, onsets: [], samples: 0, lastEnd: 0, sampleRate: null };
+    let n = 0, sr: number | null = null, quietUntil = -1, samples = 0, lastEnd = 0;
+    const onsets: number[] = [];
+    for await (const b of new AudioBufferSink(track).buffers()) {
+      n++; sr = b.buffer.sampleRate; samples += b.buffer.length; lastEnd = b.timestamp + b.duration;
+      const x = b.buffer.getChannelData(0);
+      for (let i = 0; i < x.length; i++) { const t = b.timestamp + i / b.buffer.sampleRate; if (t >= quietUntil && Math.abs(x[i]!) > 0.1) { onsets.push(Number(t.toFixed(4))); quietUntil = t + 0.3; } }
+    }
+    return { codec: track.codec ?? null, firstTimestamp: await track.getFirstTimestamp(), pieces: n, onsets, samples, lastEnd, sampleRate: sr };
+  } finally { input.dispose(); }
+}
 async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, out: Leased['manifest']['output'], rate: number, stopped: () => void): Promise<AudioBuffer> {
   const firstSample = T.nearestSampleIndex(T.frameTime(out.firstFrame, out.frameRate), rate);
   const totalSamples = T.nearestSampleIndex(T.frameTime(out.firstFrame + out.frames, out.frameRate), rate) - firstSample;
   const ctx = new OfflineAudioContext(2, Math.max(1, totalSamples), rate);
-  const seq = doc.sequences[doc.mainSequenceId]!;
-  const decoded = new Map<string, Promise<AudioBuffer>>();
+  const decoded = new Map<string, Promise<SoundPiece[]>>();
   const decode = (assetId: string) => {
     let d = decoded.get(assetId);
-    if (!d) {
-      d = fetch(assetUrl(assetId), { credentials: 'same-origin' }).then(async (r) => {
-        if (!r.ok) throw new Error(`audio asset ${assetId}: HTTP ${r.status}`);
-        return ctx.decodeAudioData(await r.arrayBuffer()); // resamples to the context rate
-      });
-      decoded.set(assetId, d);
-    }
+    if (!d) { d = decodeSound(assetUrl(assetId)); decoded.set(assetId, d); }
     return d;
   };
   // Same audio plan as the server export and the preview: gain, pan, fades and ducking mean the same thing on every route.
+  // Sound pieces are placed by their own timestamps on the file's clock, exactly as the preview does, so a sound stream that
+  // starts late (or a container the browser's built-in audio decoder cannot read) behaves the same on every route.
   for (const c of audioPlan(doc).clips) {
     const s0 = Math.max(c.at, firstSample);
     const s1 = Math.min(c.at + c.length, firstSample + totalSamples);
     if (s1 <= s0) continue;
     stopped();
-    const buf = await decode(c.assetId);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = c.speed; // varispeed, same as the server mix and the preview
-    src.connect(plannedClipInput(ctx, c, rate, ctx.destination, (c.at - firstSample) / rate, s0 - c.at));
-    // The plan's source positions are on the file's own clock; the decoded buffer starts at the first sound sample.
-    // When the file's sound starts late, the stretch before it is silence: start later and read from the buffer's beginning.
-    const lead = startSeconds(doc.assets[c.assetId]?.audio?.startTime);
-    let when = (s0 - firstSample) / rate, offset = (c.source + (s0 - c.at) * c.speed) / rate - lead, span = ((s1 - s0) * c.speed) / rate;
-    if (offset < 0) { when += -offset / c.speed; span += offset; offset = 0; }
-    if (span > 0) src.start(when, offset, span);
+    const pieces = await decode(c.assetId);
+    const input = plannedClipInput(ctx, c, rate, ctx.destination, (c.at - firstSample) / rate, s0 - c.at);
+    // the stretch of source this clip needs, in source seconds, and the output time at which it starts
+    const srcFrom = (c.source + (s0 - c.at) * c.speed) / rate, srcTo = (c.source + (s1 - c.at) * c.speed) / rate, outFrom = (s0 - firstSample) / rate;
+    for (const p of pieces) {
+      const from = Math.max(p.at, srcFrom), to = Math.min(p.at + p.duration, srcTo);
+      if (to <= from) continue;
+      const node = ctx.createBufferSource();
+      node.buffer = p.buffer;
+      node.playbackRate.value = c.speed; // varispeed, same as the server mix and the preview
+      node.connect(input);
+      node.start(outFrom + (from - srcFrom) / c.speed, from - p.at, to - from);
+    }
   }
   stopped();
   return ctx.startRendering();

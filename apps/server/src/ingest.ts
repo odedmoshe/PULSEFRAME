@@ -66,7 +66,8 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
   // The container's own start time. Players (and ffmpeg) treat it as time zero; MPEG-TS files typically start around 1.4 s.
   // Stream start times below are measured from it, so only the offsets BETWEEN picture and sound are kept.
   const originRaw = Number(probe.format?.start_time ?? 0);
-  const origin = Number.isFinite(originRaw) ? originRaw : 0;
+  // Never below zero: material stamped before time 0 is not presented by players, so it is cut here too rather than shifting everything later.
+  const origin = Number.isFinite(originRaw) ? Math.max(0, originRaw) : 0;
   let video: Asset['video'];
   if (v) {
     const rate = parseRate(v.avg_frame_rate) ?? parseRate(v.r_frame_rate);

@@ -1,14 +1,14 @@
 {
-  "ranAt": "2026-11-15T06:01:01.952Z",
+  "ranAt": "2026-11-15T06:35:30.660Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
-  "scope": "Synthetic variants of one 4-second barcode fixture, server export route only (the preview and the browser export are not exercised here). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms), by staying within about a frame of the picture, and by the peak level of each stereo channel at one beep (±1.5 dB against a direct decode of the input that uses the same down-mix rule, so the down-mix coefficients themselves are not independently verified). Picture is checked by frame identity and by the background colour of four frames (worst channel difference ≤ 12 of 255 against a direct decode of the input).",
-  "passed": 2,
-  "total": 2,
+  "scope": "Synthetic variants of one 4-second barcode fixture, server export route and browser export route (the editor preview is not exercised here). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms), by staying within about a frame of the picture, and by the peak level of each stereo channel at one beep (±1.5 dB against a direct decode of the input; a mono source is expected at full level in both channels; for more than two channels the reference uses the same down-mix rule as the product, so those coefficients are not independently verified). Picture is checked by frame identity and by the background colour of four frames (worst channel difference ≤ 12 of 255 against a direct decode of the input).",
+  "passed": 3,
+  "total": 3,
   "tally": {
     "exports-correctly": 27,
     "exports-with-noted-difference": 2
@@ -69,16 +69,16 @@
       },
       "level": {
         "referencePeaks": [
-          0.502,
-          0.502
+          0.709,
+          0.709
         ],
         "exportPeaks": [
-          0.501,
-          0.501
+          0.709,
+          0.709
         ],
         "differenceDb": [
-          -0.01,
-          -0.01
+          0,
+          0
         ]
       },
       "avSkewSeconds": [
@@ -88,7 +88,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 1ch 44100",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.709,
+            0.709
+          ],
+          "exportPeaks": [
+            0.716,
+            0.716
+          ],
+          "differenceDb": [
+            0.09,
+            0.09
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "aac 5.1 48 kHz",
@@ -164,7 +240,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 6ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.503,
+            0.503
+          ],
+          "differenceDb": [
+            0.03,
+            0.03
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "pcm 24-bit 96 kHz in MOV",
@@ -240,7 +392,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "pcm_s24le 2ch 96000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "mp3 in MP4",
@@ -316,7 +544,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "mp3 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.476,
+            0.476
+          ],
+          "exportPeaks": [
+            0.476,
+            0.476
+          ],
+          "differenceDb": [
+            -0.01,
+            -0.01
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "no sound stream",
@@ -358,7 +662,49 @@
       },
       "avSkewSeconds": [],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": null,
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [],
+          "got": [],
+          "designed": []
+        },
+        "avSkewSeconds": [],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "sound 2 s shorter than picture",
@@ -426,35 +772,103 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1
+          ],
+          "got": [
+            0,
+            1
+          ],
+          "designed": [
+            0,
+            1
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.503,
+            0.503
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "sound starts 0.1 s before time 0 (negative start)",
       "asset": {
         "kind": "video",
-        "seconds": 4.133,
+        "seconds": 4,
         "conformed": false,
         "video": "h264 640x360",
         "audio": "aac 2ch 48000",
-        "vStart": 0.121,
-        "aStart": 0
+        "vStart": 0,
+        "aStart": -0.121
       },
       "picture": {
-        "exportedFrames": 124,
-        "referenceFrames": 124,
+        "exportedFrames": 120,
+        "referenceFrames": 120,
         "wrongFrames": 0,
         "firstWrong": null,
         "first4": [
           0,
-          0,
-          0,
-          0
+          1,
+          2,
+          3
         ],
         "referenceFirst4": [
           0,
-          0,
-          0,
-          0
+          1,
+          2,
+          3
         ]
       },
       "colour": {
@@ -463,16 +877,16 @@
       },
       "sound": {
         "reference": [
-          0.021,
-          1.021,
-          2.021,
-          3.021
+          0,
+          0.9,
+          1.9,
+          2.9
         ],
         "got": [
-          0.021,
-          1.021,
-          2.021,
-          3.021
+          0,
+          0.9,
+          1.9,
+          2.9
         ],
         "designed": [
           0.9,
@@ -495,13 +909,87 @@
         ]
       },
       "avSkewSeconds": [
-        -0.112,
-        -0.112,
-        -0.112
+        -0.1,
+        -0.1,
+        -0.1
       ],
       "designedSkewSeconds": -0.1,
       "outcome": "exports-correctly",
-      "note": "built with its sound 0.1 s ahead of its picture; the export must keep exactly that relation"
+      "note": "built with its sound 0.1 s ahead of its picture, so its first beep lies before time 0 and is not presented; the export must keep exactly that relation",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": -0.121
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            0.9,
+            1.9,
+            2.9
+          ],
+          "got": [
+            0,
+            0.9,
+            1.9,
+            2.9
+          ],
+          "designed": [
+            0.9,
+            1.9,
+            2.9
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          -0.1,
+          -0.1,
+          -0.1
+        ],
+        "designedSkewSeconds": -0.1,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "MOV container",
@@ -577,7 +1065,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "Matroska container",
@@ -652,7 +1216,82 @@
         -0.012
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4.033,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0.021,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 121,
+          "referenceFrames": 121,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            0,
+            1,
+            2
+          ],
+          "referenceFirst4": [
+            0,
+            0,
+            1,
+            2
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0.021,
+            1.021,
+            2.021,
+            3.021
+          ],
+          "got": [
+            0.021,
+            1.021,
+            2.021,
+            3.021
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.503,
+            0.503
+          ],
+          "differenceDb": [
+            0.03,
+            0.03
+          ]
+        },
+        "avSkewSeconds": [
+          -0.012,
+          -0.012,
+          -0.012
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "MPEG-TS container",
@@ -728,7 +1367,82 @@
       ],
       "designedSkewSeconds": 0,
       "outcome": "exports-correctly",
-      "note": "MPEG-TS streams normally start at a non-zero timestamp"
+      "note": "MPEG-TS streams normally start at a non-zero timestamp",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4.033,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0.021334,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 121,
+          "referenceFrames": 121,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            0,
+            1,
+            2
+          ],
+          "referenceFirst4": [
+            0,
+            0,
+            1,
+            2
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0.021,
+            1.021,
+            2.021,
+            3.021
+          ],
+          "got": [
+            0.021,
+            1.021,
+            2.021,
+            3.021
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.503,
+            0.503
+          ],
+          "differenceDb": [
+            0.03,
+            0.03
+          ]
+        },
+        "avSkewSeconds": [
+          -0.012,
+          -0.012,
+          -0.012
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "AVI container (MPEG-4 part 2 + MP3)",
@@ -811,7 +1525,90 @@
         -0.01
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-with-noted-difference"
+      "outcome": "exports-with-noted-difference",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4.033,
+          "conformed": [
+            "codec"
+          ],
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 121,
+          "referenceFrames": 121,
+          "wrongFrames": 1,
+          "firstWrong": {
+            "at": 1,
+            "shows": 1,
+            "reference": 0
+          },
+          "first4": [
+            0,
+            1,
+            1,
+            2
+          ],
+          "referenceFirst4": [
+            0,
+            0,
+            1,
+            2
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 7
+        },
+        "noted": "conformed copy differs from the reference in 1 of the first 5 frames (which early frame is repeated): export [0,1,1,2], reference [0,0,1,2]",
+        "sound": {
+          "reference": [
+            0.023,
+            1.023,
+            2.023,
+            3.023
+          ],
+          "got": [
+            0.023,
+            1.023,
+            2.023,
+            3.023
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.479,
+            0.479
+          ],
+          "exportPeaks": [
+            0.482,
+            0.482
+          ],
+          "differenceDb": [
+            0.05,
+            0.05
+          ]
+        },
+        "avSkewSeconds": [
+          0.023,
+          -0.01,
+          -0.01,
+          -0.01
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "noted-difference",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "WebM (VP9 + Opus)",
@@ -821,8 +1618,8 @@
         "conformed": false,
         "video": "vp9 640x360",
         "audio": "opus 2ch 48000",
-        "vStart": 0.007,
-        "aStart": 0
+        "vStart": 0,
+        "aStart": -0.007
       },
       "picture": {
         "exportedFrames": 120,
@@ -848,16 +1645,16 @@
       },
       "sound": {
         "reference": [
-          0.007,
-          1.007,
-          2.007,
-          3.007
+          0,
+          1,
+          2,
+          3
         ],
         "got": [
-          0.007,
-          1.007,
-          2.007,
-          3.007
+          0,
+          1,
+          2,
+          3
         ],
         "designed": [
           0,
@@ -872,22 +1669,98 @@
           0.514
         ],
         "exportPeaks": [
-          0.513,
-          0.513
+          0.514,
+          0.514
         ],
         "differenceDb": [
-          -0.01,
-          -0.01
+          0,
+          0
         ]
       },
       "avSkewSeconds": [
-        0.007,
-        0.007,
-        0.007,
-        0.007
+        0,
+        0,
+        0,
+        0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "vp9 640x360",
+          "audio": "opus 2ch 48000",
+          "vStart": 0,
+          "aStart": -0.007
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.514,
+            0.514
+          ],
+          "exportPeaks": [
+            0.515,
+            0.515
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "non-square pixels (480×360 stored, 4:3 pixel shape → 640×360 shown)",
@@ -965,7 +1838,85 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": [
+            "pixel-aspect"
+          ],
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.503,
+            0.503
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "H.264 10-bit",
@@ -1041,7 +1992,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 5
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "H.264 4:4:4",
@@ -1117,7 +2144,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "H.264 4:2:2",
@@ -1193,7 +2296,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "H.264 interlaced coding",
@@ -1269,7 +2448,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "odd picture size 642×362",
@@ -1345,7 +2600,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 642x362",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 5
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "H.264 tagged BT.601",
@@ -1421,7 +2752,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 1
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "H.264 BT.601 data with no colour tags",
@@ -1499,7 +2906,84 @@
       ],
       "designedSkewSeconds": 0,
       "outcome": "exports-with-noted-difference",
-      "note": "untagged: decoders must guess; the reference assumes BT.601 as ffmpeg does"
+      "note": "untagged: decoders must guess; the reference assumes BT.601 as ffmpeg does",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 13
+        },
+        "noted": "the file carries no colour tags: shown as the browser reads it, 13 of 255 away from the BT.601 reading used by the reference",
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "noted-difference",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "H.264 full range (BT.709)",
@@ -1575,7 +3059,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 2
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "H.264 full range BT.601 (typical phone/JPEG-style)",
@@ -1651,7 +3211,83 @@
         0
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "video",
+          "seconds": 4,
+          "conformed": false,
+          "video": "h264 640x360",
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "picture": {
+          "exportedFrames": 120,
+          "referenceFrames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "referenceFirst4": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "colour": {
+          "framesCompared": 4,
+          "worstChannelDifference": 3
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "avSkewSeconds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "designedSkewSeconds": 0,
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "WAV 16-bit",
@@ -1698,7 +3334,54 @@
           0
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "audio",
+          "seconds": 4.011,
+          "conformed": false,
+          "video": null,
+          "audio": "pcm_s16le 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.507,
+            0.507
+          ],
+          "differenceDb": [
+            0.11,
+            0.11
+          ]
+        },
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "WAV 24-bit 44.1 kHz mono",
@@ -1733,19 +3416,66 @@
       },
       "level": {
         "referencePeaks": [
-          0.354,
-          0.354
+          0.501,
+          0.501
         ],
         "exportPeaks": [
-          0.354,
-          0.354
+          0.501,
+          0.501
         ],
         "differenceDb": [
           0,
           0
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "audio",
+          "seconds": 4.011,
+          "conformed": false,
+          "video": null,
+          "audio": "pcm_s24le 1ch 44100",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "FLAC",
@@ -1792,7 +3522,54 @@
           0
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "audio",
+          "seconds": 4.011,
+          "conformed": false,
+          "video": null,
+          "audio": "flac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.502,
+            0.502
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "MP3",
@@ -1839,7 +3616,54 @@
           0
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "audio",
+          "seconds": 4.056,
+          "conformed": false,
+          "video": null,
+          "audio": "mp3 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.476,
+            0.476
+          ],
+          "exportPeaks": [
+            0.476,
+            0.476
+          ],
+          "differenceDb": [
+            -0.01,
+            -0.01
+          ]
+        },
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "M4A (AAC)",
@@ -1886,7 +3710,54 @@
           0
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "audio",
+          "seconds": 4.01,
+          "conformed": false,
+          "video": null,
+          "audio": "aac 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.501,
+            0.501
+          ],
+          "exportPeaks": [
+            0.503,
+            0.503
+          ],
+          "differenceDb": [
+            0.02,
+            0.02
+          ]
+        },
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "Ogg Vorbis",
@@ -1933,7 +3804,54 @@
           0
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "audio",
+          "seconds": 4.011,
+          "conformed": false,
+          "video": null,
+          "audio": "vorbis 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            0.997,
+            1.997,
+            2.997
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.519,
+            0.519
+          ],
+          "exportPeaks": [
+            0.522,
+            0.522
+          ],
+          "differenceDb": [
+            0.05,
+            0.05
+          ]
+        },
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     },
     {
       "case": "Opus",
@@ -1980,12 +3898,64 @@
           0
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "asset": {
+          "kind": "audio",
+          "seconds": 4.017,
+          "conformed": false,
+          "video": null,
+          "audio": "opus 2ch 48000",
+          "vStart": 0,
+          "aStart": 0
+        },
+        "sound": {
+          "reference": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "designed": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "level": {
+          "referencePeaks": [
+            0.514,
+            0.514
+          ],
+          "exportPeaks": [
+            0.517,
+            0.517
+          ],
+          "differenceDb": [
+            0.06,
+            0.06
+          ]
+        },
+        "outcome": "correct",
+        "codecs": "mp4/avc/opus"
+      }
     }
   ],
   "checks": [
     {
       "name": "no file is accepted at ingest and then fails or comes out wrong (29 files tried)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "the browser export route gives the same result as the reference for every file the server route exports (29 files)",
       "ok": true,
       "detail": []
     },

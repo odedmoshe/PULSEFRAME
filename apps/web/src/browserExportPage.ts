@@ -3,7 +3,7 @@
  * will call `runBrowserExport` directly). It obtains the owner cookie the same way the editor does.
  */
 import './strictPage.ts';
-import { BrowserExportError, probeCapabilities, runBrowserExport, type BrowserCapabilities } from './browserExport.ts';
+import { BrowserExportError, probeCapabilities, probeSound, runBrowserExport, type BrowserCapabilities } from './browserExport.ts';
 import { ownerKeyHeader } from './api.ts';
 
 interface PageResult { jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number; base64: string }
@@ -19,6 +19,8 @@ type Api = {
   /** Raw authenticated POST with the tab's own cookie (test utility: used to attempt calls as another session). */
   post(path: string, body: unknown): Promise<{ status: number; code?: string; body: any }>;
   tryRun(projectId: string, options?: Record<string, unknown>): Promise<{ ok: true; result: PageResult } | { ok: false; code: string; message: string; missing?: string[] }>;
+  /** Test utility: decoder timing of one asset's sound. */
+  probeSound(projectId: string, assetId: string): ReturnType<typeof probeSound>;
 };
 declare global { interface Window { __pfBrowserExport: Api } }
 
@@ -48,6 +50,7 @@ window.__pfBrowserExport = {
     const j = await r.json().catch(() => ({}));
     return { status: r.status, code: j?.error?.code, body: j };
   },
+  probeSound: (projectId, assetId) => probeSound(`/api/v1/projects/${projectId}/assets/${assetId}/content`),
   async tryRun(projectId, options = {}) {
     try { return { ok: true, result: await run(projectId, options) }; } catch (e: any) { return { ok: false, code: e instanceof BrowserExportError ? e.code : 'error', message: String(e?.message ?? e), missing: e?.missing }; }
   },

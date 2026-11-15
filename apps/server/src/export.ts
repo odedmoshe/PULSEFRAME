@@ -270,7 +270,7 @@ export class Exporter {
 
   /** Sample-exact audio mix of the snapshot as a WAV file (separate stream from video), following the shared audio plan. */
   private renderAudio(doc: ProjectDocument, firstSample: number, totalSamples: number, outFile: string, isCanceled: () => boolean) {
-    return renderMix(audioPlan(doc), (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled, (assetId) => timeOriginSeconds(doc.assets[assetId]));
+    return renderMix(audioPlan(doc), (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled, (assetId) => timeOriginSeconds(doc.assets[assetId]), (assetId) => doc.assets[assetId]?.audio?.channels === 1);
   }
 
   private async run(jobId: string) {

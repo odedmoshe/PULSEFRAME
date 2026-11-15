@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
@@ -41,7 +42,7 @@ async function main() {
     { name: 'mp3 in MP4', file: p('a-mp3.mp4'), make: ['-i', base, ...V, ...A, '-c:a', 'libmp3lame', '-b:a', '160k'], picture: true, sound: BEEPS },
     { name: 'no sound stream', file: p('a-none.mp4'), make: ['-i', base, ...V, '-an'], picture: true, sound: [] },
     { name: 'sound 2 s shorter than picture', file: p('a-short.mp4'), make: ['-i', base, ...V, ...A, '-c:a', 'aac', '-t', '4', '-af', 'atrim=0:2'], picture: true, sound: [0, 1] },
-    { name: 'sound starts 0.1 s before time 0 (negative start)', file: p('a-neg.mkv'), make: ['-i', base, '-itsoffset', '-0.1', '-i', base, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-avoid_negative_ts', 'disabled'], picture: true, sound: [0.9, 1.9, 2.9], skew: -0.1, note: 'built with its sound 0.1 s ahead of its picture; the export must keep exactly that relation' },
+    { name: 'sound starts 0.1 s before time 0 (negative start)', file: p('a-neg.mkv'), make: ['-i', base, '-itsoffset', '-0.1', '-i', base, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-avoid_negative_ts', 'disabled'], picture: true, sound: [0.9, 1.9, 2.9], skew: -0.1, note: 'built with its sound 0.1 s ahead of its picture, so its first beep lies before time 0 and is not presented; the export must keep exactly that relation' },
     // --- containers (same streams)
     { name: 'MOV container', file: p('c.mov'), make: ['-i', base, '-c', 'copy'], picture: true, sound: BEEPS },
     { name: 'Matroska container', file: p('c.mkv'), make: ['-i', base, '-c', 'copy'], picture: true, sound: BEEPS },
@@ -88,7 +89,7 @@ async function main() {
    * (first picture held until it starts, square pixels) and its sound decoded from time 0. The export must match this.
    */
   /** The file's own start time as ffprobe reports it for the container (independent of which streams are decoded). */
-  const originOf = (file: string) => { const x = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=start_time', '-of', 'csv=p=0', file], { encoding: 'utf8' }).trim()); return Number.isFinite(x) ? x : 0; };
+  const originOf = (file: string) => { const x = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=start_time', '-of', 'csv=p=0', file], { encoding: 'utf8' }).trim()); return Number.isFinite(x) ? Math.max(0, x) : 0; }; // never below zero: material before time 0 is not presented
   /**
    * Picture reference, by arithmetic on the file's own timestamps: decode every frame in presentation order, read each frame's
    * timestamp with ffprobe, place frame k on the 30 fps grid at round((pts_k − origin) × 30), and hold a frame until the next one.
@@ -110,8 +111,9 @@ async function main() {
   };
   const pixelAt = (raw: Buffer, frame: number) => { const o = frame * W * H * 3 + (120 * W + 40) * 3; return [raw[o]!, raw[o + 1]!, raw[o + 2]!]; };
   /** Peak of each stereo channel in a short window (the second beep), from a decode that keeps the container's clock. */
-  const peaks = (file: string, origin: number | null, at: number) => {
-    const pcm = ffraw([...(origin === null ? [] : ['-copyts']), '-i', file, '-map', '0:a:0', '-af', `aresample=48000${origin === null ? '' : `:first_pts=${Math.round(origin * 48000)}`},aformat=sample_fmts=flt:channel_layouts=stereo`, '-f', 'f32le', '-']);
+  /** `mono`: the reference for a mono source is the full signal in both channels (what players do), not a −3 dB spread. */
+  const peaks = (file: string, origin: number | null, at: number, mono = false) => {
+    const pcm = ffraw([...(origin === null ? [] : ['-copyts']), '-i', file, '-map', '0:a:0', '-af', `aresample=48000${origin === null ? '' : `:first_pts=${Math.round(origin * 48000)}`},${mono ? 'pan=stereo|c0=c0|c1=c0,' : ''}aformat=sample_fmts=flt:channel_layouts=stereo`, '-f', 'f32le', '-']);
     const x = new Float32Array(pcm.buffer, pcm.byteOffset, pcm.length / 4);
     const from = Math.round((at + 0.004) * 48000), to = Math.round((at + 0.04) * 48000);
     let l = 0, r = 0;
@@ -125,25 +127,8 @@ async function main() {
     for (let i = 0, quiet = 0; i < x.length; i++) if (i >= quiet && Math.abs(x[i]!) > 0.1) { out.push(Number((i / 48000).toFixed(3))); quiet = i + 48000 * 0.3; }
     return out;
   };
-  const rows: any[] = [];
-  try {
-    for (const c of cases) {
-      const row: any = { case: c.name };
-      rows.push(row);
-      const made = c.make ? ffq([...c.make, c.file]) : null;
-      if (made) { row.outcome = 'fixture-not-built'; row.detail = made; continue; }
-      const pid = (await call('/projects', { name: c.name.slice(0, 60), width: W, height: H })).body.project.id;
-      const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(c.file) }, body: fs.readFileSync(c.file) })).json();
-      if (!up.assetId) { row.outcome = 'refused-at-ingest'; row.detail = `${up.error?.code}: ${String(up.error?.message).slice(0, 120)}`; continue; }
-      row.asset = { kind: up.asset.kind, seconds: Number(T.toSeconds(up.asset.duration).toFixed(3)), conformed: up.asset.conform ? up.asset.conform.reasons ?? true : false, video: up.asset.video ? `${up.asset.video.codec} ${up.asset.video.width}x${up.asset.video.height}` : null, audio: up.asset.audio ? `${up.asset.audio.codec} ${up.asset.audio.channels}ch ${up.asset.audio.sampleRate}` : null, vStart: up.asset.video?.startTime ? T.toSeconds(up.asset.video.startTime) : 0, aStart: up.asset.audio?.startTime ? T.toSeconds(up.asset.audio.startTime) : 0 };
-      const add = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }] });
-      if (add.status !== 200) { row.outcome = 'accepted-but-cannot-be-placed'; row.detail = add.body?.error?.code; continue; }
-      const jobId = (await call(`/projects/${pid}/exports`, c.picture ? {} : { format: 'wav' })).body.jobId;
-      let job: any;
-      for (;;) { job = (await call(`/jobs/${jobId}`)).body; if (['succeeded', 'failed', 'canceled'].includes(job.status)) break; await sleep(100); }
-      if (job.status !== 'succeeded') { row.outcome = 'ACCEPTED-BUT-EXPORT-FAILED'; row.detail = String(job.error?.message ?? job.error?.code).slice(0, 200); continue; }
-      const out = p(`out-${rows.length}.${c.picture ? 'mp4' : 'wav'}`);
-      fs.writeFileSync(out, (await call(`/jobs/${jobId}/output`)).body);
+  /** Compare one exported file with the references built from the input; fills `row` and returns what is wrong. */
+  const assess = (c: Case, row: any, out: string): string[] => {
       const problems: string[] = [];
       const clipSeconds = row.asset.seconds;
       if (c.picture) {
@@ -178,7 +163,7 @@ async function main() {
         if (got.length !== truth.length || got.some((g, i) => Math.abs(g - truth[i]!) > 0.012)) problems.push('sound');
         // level per stereo channel at the second beep the clip contains: export vs a direct decode of the input (same down-mix rule)
         if (truth.length >= 2 && got.length >= 2 && !problems.includes('sound')) {
-          const refPeaks = peaks(c.file, originOf(c.file), truth[1]!), outPeaks = peaks(out, null, got[1]!);
+          const refPeaks = peaks(c.file, originOf(c.file), truth[1]!, / 1ch /.test(String(row.asset.audio))), outPeaks = peaks(out, null, got[1]!);
           const dB = refPeaks.map((p, ch) => (p > 0.001 && outPeaks[ch]! > 0.001 ? Number((20 * Math.log10(outPeaks[ch]! / p)).toFixed(2)) : p <= 0.001 && outPeaks[ch]! <= 0.001 ? 0 : 99));
           row.level = { referencePeaks: refPeaks.map((p) => Number(p.toFixed(3))), exportPeaks: outPeaks.map((p) => Number(p.toFixed(3))), differenceDb: dB };
           if (dB.some((d) => Math.abs(d) > 1.5)) problems.push('level');
@@ -189,21 +174,64 @@ async function main() {
           const fb = W * H * 3;
           const idx = Array.from({ length: raw.length / fb }, (_, i) => readBarcode(raw.subarray(i * fb, (i + 1) * fb), W, 3, { x: 0, y: 0, w: W, h: H }));
           // a beep belongs to the frame whose index is a whole second; skip a frame that is being held from the very start
-          const skew = got.map((g) => { const k = Math.round(g - (c.skew ?? 0)); const at = idx.indexOf(k * 30); return at < 0 || (at === 0 && idx[1] === idx[0]) ? null : Number((g - at / 30).toFixed(3)); }).filter((x): x is number => x !== null);
+          // (a beep cut off by time 0 starts "at 0" only because its beginning is not presented: it says nothing about step)
+          const skew = got.filter((g) => !(g < 0.01 && (c.skew ?? 0) < 0)).map((g) => { const k = Math.round(g - (c.skew ?? 0)); const at = idx.indexOf(k * 30); return at < 0 || (at === 0 && idx[1] === idx[0]) ? null : Number((g - at / 30).toFixed(3)); }).filter((x): x is number => x !== null);
           row.avSkewSeconds = skew;
           row.designedSkewSeconds = c.skew ?? 0;
           if ((got.length >= 2 && skew.length < 2) || skew.some((x) => Math.abs(x - (c.skew ?? 0)) > 0.045)) problems.push('picture/sound out of step');
         }
       }
+    return problems;
+  };
+  const rows: any[] = [];
+  const browser = process.env.PF_MATRIX_BROWSER === '0' ? null : await chromium.launch();
+  const page = browser ? await browser.newPage() : null;
+  if (page) { await page.goto(`${s.url}/browser-export.html?key=${s.auth.tokens.owner}`); await page.evaluate(() => (window as any).__pfBrowserExport.ready); }
+  try {
+    for (const c of cases) {
+      const row: any = { case: c.name };
+      rows.push(row);
+      const made = c.make ? ffq([...c.make, c.file]) : null;
+      if (made) { row.outcome = 'fixture-not-built'; row.detail = made; continue; }
+      const pid = (await call('/projects', { name: c.name.slice(0, 60), width: W, height: H })).body.project.id;
+      const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(c.file) }, body: fs.readFileSync(c.file) })).json();
+      if (!up.assetId) { row.outcome = 'refused-at-ingest'; row.detail = `${up.error?.code}: ${String(up.error?.message).slice(0, 120)}`; continue; }
+      row.asset = { kind: up.asset.kind, seconds: Number(T.toSeconds(up.asset.duration).toFixed(3)), conformed: up.asset.conform ? up.asset.conform.reasons ?? true : false, video: up.asset.video ? `${up.asset.video.codec} ${up.asset.video.width}x${up.asset.video.height}` : null, audio: up.asset.audio ? `${up.asset.audio.codec} ${up.asset.audio.channels}ch ${up.asset.audio.sampleRate}` : null, vStart: up.asset.video?.startTime ? T.toSeconds(up.asset.video.startTime) : 0, aStart: up.asset.audio?.startTime ? T.toSeconds(up.asset.audio.startTime) : 0 };
+      const add = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }] });
+      if (add.status !== 200) { row.outcome = 'accepted-but-cannot-be-placed'; row.detail = add.body?.error?.code; continue; }
+      const jobId = (await call(`/projects/${pid}/exports`, c.picture ? {} : { format: 'wav' })).body.jobId;
+      let job: any;
+      for (;;) { job = (await call(`/jobs/${jobId}`)).body; if (['succeeded', 'failed', 'canceled'].includes(job.status)) break; await sleep(100); }
+      if (job.status !== 'succeeded') { row.outcome = 'ACCEPTED-BUT-EXPORT-FAILED'; row.detail = String(job.error?.message ?? job.error?.code).slice(0, 200); continue; }
+      const out = p(`out-${rows.length}.${c.picture ? 'mp4' : 'wav'}`);
+      fs.writeFileSync(out, (await call(`/jobs/${jobId}/output`)).body);
+      const problems = assess(c, row, out);
       row.outcome = problems.length ? `ACCEPTED-BUT-WRONG (${problems.join(', ')})` : row.noted ? 'exports-with-noted-difference' : 'exports-correctly';
       if (c.note) row.note = c.note;
+      // --- the same project through the browser export route (the browser's own decoders and encoders)
+      if (page) {
+        const rb: any = { asset: row.asset };
+        row.browser = rb;
+        const r: any = await page.evaluate(([pid2]) => (window as any).__pfBrowserExport.tryRun(pid2, { quality: 'high' }), [pid] as const).catch((e) => ({ ok: false, code: 'page_error', message: String(e) }));
+        if (!r.ok) { rb.outcome = 'REFUSED-BY-BROWSER-ROUTE'; rb.detail = `${r.code}: ${String(r.message).slice(0, 140)}`; }
+        else {
+          const bf = p(`browser-${rows.length}.${r.result.container}`);
+          fs.writeFileSync(bf, Buffer.from(r.result.base64, 'base64'));
+          const bp = assess(c, rb, bf); // sound-only files are compared by sound alone
+          rb.outcome = bp.length ? `WRONG (${bp.join(', ')})` : rb.noted ? 'noted-difference' : 'correct';
+          rb.codecs = `${r.result.container}/${r.result.videoCodec}/${r.result.audioCodec}`;
+        }
+      }
     }
     for (const r of rows) console.log(`${String(r.outcome).padEnd(34)} ${r.case}${r.asset?.conformed ? '  [conformed]' : ''}${r.noted ? `  — ${r.noted}` : ''}${r.detail ? `  — ${r.detail}` : ''}${/^ACCEPTED/.test(String(r.outcome)) ? `  — asset ${JSON.stringify(r.asset)} picture ${JSON.stringify(r.picture)} colour ${JSON.stringify(r.colour)} sound ${JSON.stringify(r.sound)} level ${JSON.stringify(r.level)} skew ${JSON.stringify(r.avSkewSeconds)}` : ''}`);
+    if (page) { console.log('\nbrowser export route:'); for (const r of rows) if (r.browser) console.log(`  ${String(r.browser.outcome).padEnd(40)} ${r.case}${r.browser.detail ? `  — ${r.browser.detail}` : ''}${/^WRONG/.test(String(r.browser.outcome)) ? `  — picture ${JSON.stringify(r.browser.picture)} colour ${JSON.stringify(r.browser.colour)} sound ${JSON.stringify(r.browser.sound)} level ${JSON.stringify(r.browser.level)} skew ${JSON.stringify(r.browser.avSkewSeconds)}` : ''}${r.browser.noted ? `  — ${r.browser.noted}` : ''}`); }
     console.log('colour worst difference (of 255) per picture file:', JSON.stringify(Object.fromEntries(rows.filter((r) => r.colour).map((r) => [r.case.slice(0, 28), r.colour.worstChannelDifference]))));
     console.log('level difference in dB [L, R] per file:', JSON.stringify(Object.fromEntries(rows.filter((r) => r.level).map((r) => [r.case.slice(0, 28), r.level.differenceDb]))));
     const defects = rows.filter((r) => /^ACCEPTED/.test(r.outcome) || r.outcome === 'accepted-but-cannot-be-placed');
+    const browserBad = rows.filter((r) => r.browser && !['correct', 'noted-difference'].includes(r.browser.outcome));
     const notBuilt = rows.filter((r) => r.outcome === 'fixture-not-built');
     check(`no file is accepted at ingest and then fails or comes out wrong (${rows.length - notBuilt.length} files tried)`, defects.length === 0, defects.map((r) => ({ case: r.case, outcome: r.outcome, detail: r.detail, picture: r.picture, sound: r.sound })));
+    if (page) check(`the browser export route gives the same result as the reference for every file the server route exports (${rows.filter((r) => r.browser).length} files)`, browserBad.length === 0, browserBad.map((r) => ({ case: r.case, outcome: r.browser.outcome, detail: r.browser.detail, sound: r.browser.sound, level: r.browser.level, colour: r.browser.colour })));
     const refused = rows.filter((r) => r.outcome === 'refused-at-ingest');
     check(`every refusal at ingest is a typed error (${refused.length} refusal(s) in this run${refused.length ? '' : ' — nothing was refused, so this check proves nothing here'})`, refused.every((r) => /^[a-z_]+: /.test(r.detail)), refused.map((r) => ({ case: r.case, detail: r.detail })));
     if (notBuilt.length) console.log(`note: ${notBuilt.length} fixture(s) could not be built by this ffmpeg and were not tried: ${notBuilt.map((r) => r.case).join('; ')}`);
@@ -211,11 +239,12 @@ async function main() {
     console.error(e);
     check('run completed', false, String(e).slice(0, 600));
   } finally {
+    await browser?.close();
     await s.close();
     const failed = checks.filter((x) => !x.ok);
     const tally: Record<string, number> = {};
     for (const r of rows) tally[String(r.outcome).replace(/ \(.*\)$/, '')] = (tally[String(r.outcome).replace(/ \(.*\)$/, '')] ?? 0) + 1;
-    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'Synthetic variants of one 4-second barcode fixture, server export route only (the preview and the browser export are not exercised here). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms), by staying within about a frame of the picture, and by the peak level of each stereo channel at one beep (±1.5 dB against a direct decode of the input that uses the same down-mix rule, so the down-mix coefficients themselves are not independently verified). Picture is checked by frame identity and by the background colour of four frames (worst channel difference ≤ 12 of 255 against a direct decode of the input).', passed: checks.length - failed.length, total: checks.length, tally, rows, checks };
+    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'Synthetic variants of one 4-second barcode fixture, server export route and browser export route (the editor preview is not exercised here). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms), by staying within about a frame of the picture, and by the peak level of each stereo channel at one beep (±1.5 dB against a direct decode of the input; a mono source is expected at full level in both channels; for more than two channels the reference uses the same down-mix rule as the product, so those coefficients are not independently verified). Picture is checked by frame identity and by the background colour of four frames (worst channel difference ≤ 12 of 255 against a direct decode of the input).', passed: checks.length - failed.length, total: checks.length, tally, rows, checks };
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     fs.writeFileSync(path.join(root, 'docs/evidence/input-matrix.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(`\nInput matrix ${report.result}: ${report.passed}/${report.total}  ${JSON.stringify(tally)}`);

@@ -41,7 +41,9 @@ export const AssetSchema = z
       startTime: RationalTimeSchema.optional() }).strict().optional(),
     /**
      * The file's own start time when it is not 0 (MPEG-TS streams typically start around 1.4 s). Players and this editor treat
-     * it as time zero: stream start times above are measured from it. Decoders that see raw timestamps add it back.
+     * it as time zero: stream start times above are measured from it. This value is how FFMPEG's reader numbers the file and is used
+     * only by the server's ffmpeg-based decoders; the browser's reader numbers some files differently (an MP3's encoder delay,
+     * for one) and derives its own origin the same way: the earliest presented timestamp, never below zero.
      */
     timeOrigin: RationalTimeSchema.optional(),
     image: z.object({ width: z.number().int().positive(), height: z.number().int().positive(), codec: z.string(), hasAlpha: z.boolean() }).strict().optional(),

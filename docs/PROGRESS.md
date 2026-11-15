@@ -382,6 +382,17 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Result: 27 export correctly, 2 noted (the AVI early-frame difference and the untagged-colour case). 291 unit tests; phase0 54, phase4 19, start-offset 4. Other proofs were not re-run after the colour-conversion change (it only affects files that are conformed).
 - Still not shown: the 5.1 down-mix coefficients (the reference uses the same rule); colour beyond one background patch per frame (no gradients, skin tones or fine chroma detail); HDR / wide gamut (not handled at all); these shapes in the preview or the browser export; real camera files.
 
+**Checkpoint 14b — the same 29 shapes through the browser export; three more defects fixed**
+- The input matrix now sends every project through the browser export route as well and holds it to the same references (third check of `pnpm conformance:inputs`).
+- **First browser-route run found:**
+  1. **Mono sources were 3 dB quieter in the server export than in the browser export and the preview.** The server used ffmpeg's default mono-to-stereo conversion (−3 dB per channel); the browser plays mono at full level in both channels, as players do. The server now does the same. *This changes the level of every mono clip in server exports by +3 dB compared with earlier builds.*
+  2. **MPEG-TS could not be exported in the browser at all** ("Unable to decode audio data") and **MP3 sound inside MP4 came out 23 ms early**: the browser export decoded sound with the browser's built-in audio decoder, a different reader from the preview's. It now uses the preview's reader and places sound by its own timestamps, so both browser paths behave alike for every container the editor accepts.
+  3. **A standalone MP3 then came out 23 ms early on the browser route**: caused by my own "container origin" from checkpoint 13z — ffprobe reports an MP3's encoder delay as the file's start time, which is how that tool numbers the file, not something the browser's reader shares. Each side now takes its origin from its own reader (earliest presented timestamp, never below zero). A decoder-timing probe in the export page showed the browser's MP3 timing itself is exact (beeps at 0, 1, 2, 3 s).
+  4. Consequence of "never below zero": material stamped before time 0 is not presented (as in players); the file built with its sound 0.1 s early loses the start of its first beep and keeps the 0.1 s lead, identically on both routes.
+- **Result: both routes give 27 correct and the same 2 noted differences** (AVI early frame; untagged colour). Colour within 1–6 of 255 and level within 0.14 dB on the server route (browser route held to ≤ 12 and ≤ 1.5 dB).
+- Complete regression with these changes: 291 unit tests; phase0 54, phase3 27, phase4 19, phase5 33, phase6 35, phase7 31, phase8 20, phase9 12, phase11 12, phase12 15, browser-export 23, editor-interactions 15, owner-ui 7, speed 16, soak 7, accessibility audit clean, parity suite pass, start-offset 4, long media 6, input matrix 3, seek conformance 7 configurations with 0 wrong frames in 1,000 random seeks each.
+- Not covered: the editor **preview** of these shapes (it shares the readers now used by the browser export, which is an inference, not a measurement, except for start offsets in 13x/13y); 5.1 down-mix coefficients; HDR; real camera files. Vorbis in Ogg is 2.6 ms early in the browser's reader (measured by the probe; inside the tolerance).
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -409,7 +420,7 @@ Unblocked (no decision needed), roughly by value:
 4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 5. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
-7. Inputs: run the matrix through the preview and the browser export; untagged colour (tell the user, offer a choice); HDR; the AVI one-frame difference; sound longer than the picture; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
+7. Inputs: run the matrix through the editor preview; untagged colour (tell the user, offer a choice); HDR; the AVI one-frame difference; sound longer than the picture; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
 8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
@@ -427,7 +438,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 pnpm install && pnpm build && pnpm test
 ```
 Expect 291 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:inputs` 2 (27 of 29 shapes correct, 2 noted).
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:inputs` 3 (27 of 29 shapes correct and 2 noted, on the server route and on the browser route).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 
