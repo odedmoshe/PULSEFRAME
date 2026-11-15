@@ -68,7 +68,7 @@ export class Auth {
     if (!key || !this.same(key, this.tokens.owner)) throw new ApiError(401, 'owner_key_required', 'opening the editor as the owner needs the link the server printed when it started', {}, 'Open the "Editor (owner)" link from the server start-up output; it carries a one-machine secret key.');
     const sid = randomBytes(24).toString('base64url');
     this.sessions.set(sid, { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] });
-    return `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/`;
+    return `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/${this.cfg.secureCookie ? '; Secure' : ''}`;
   }
   /**
    * Per-credential request budget for agents: a token bucket holding ten seconds' worth of requests, refilled continuously.

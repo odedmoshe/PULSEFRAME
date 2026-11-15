@@ -25,6 +25,8 @@ export interface Config {
    * (the convergence test and the soak do), and a default limit throttled them. The owner's browser session is never limited.
    */
   agentRequestsPerMinute: number;
+  /** Add `Secure` to the owner session cookie (set when the server is reached through HTTPS, i.e. behind a TLS-terminating proxy). Off by default: the local profile is plain HTTP on loopback. */
+  secureCookie: boolean;
   /** Directory for automatic backups (outside the data directory); null = automatic backups off (the default). */
   backupDir: string | null;
   /** Hours between automatic backups when `backupDir` is set (default 24; 0 = off). */
@@ -51,6 +53,7 @@ export function loadConfig(env = process.env): Config {
     modelHosts: (env.PF_MODEL_HOSTS ?? 'huggingface.co,.hf.co').split(',').filter(Boolean),
     maxStorageBytes: Math.max(0, Number(env.PF_MAX_STORAGE_BYTES ?? 0)) || 0,
     agentRequestsPerMinute: Math.max(0, Number(env.PF_AGENT_RPM ?? 0)) || 0,
+    secureCookie: env.PF_SECURE_COOKIE === '1',
     backupDir: env.PF_BACKUP_DIR ? path.resolve(env.PF_BACKUP_DIR) : null,
     backupEveryHours: Math.max(0, Number(env.PF_BACKUP_EVERY_HOURS ?? 24)) || 0,
     backupKeep: Math.max(1, Math.floor(Number(env.PF_BACKUP_KEEP ?? 14)) || 14),

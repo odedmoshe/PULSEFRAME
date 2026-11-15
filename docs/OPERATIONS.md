@@ -12,6 +12,7 @@ This describes the one supported deployment profile: a single user, one machine,
 | `PF_EXTRA_ORIGINS` | none | Additional allowed browser origins (comma-separated). |
 | `PF_MAX_UPLOAD_BYTES` | see `config.ts` | Largest accepted upload. |
 | `PF_MAX_STORAGE_BYTES` | `0` (off) | Ceiling for the whole data directory. At the ceiling, uploads, imports and exports are refused with `507 storage_quota_exceeded`; editing continues. Free space by deleting projects and running the storage clean-up. |
+| `PF_SECURE_COOKIE` | unset (off) | `1` adds `Secure` to the owner session cookie; use behind a TLS-terminating proxy. |
 | `PF_BACKUP_DIR` | unset (off) | Directory for automatic backups; must be outside the data directory (the server refuses to start otherwise). |
 | `PF_BACKUP_EVERY_HOURS` | `24` | Hours between automatic backups when `PF_BACKUP_DIR` is set; `0` turns the schedule off ("Back up now" still works). |
 | `PF_BACKUP_KEEP` | `14` | Dated database snapshots to retain (at least 1). |
@@ -80,7 +81,7 @@ Deleting a clip never deletes its media. Not built: an editor control for deleti
 The built server (`pnpm start`) sends a strict content security policy with its pages and `nosniff`, `no-referrer` and a frame ban with every response; API and stored-file responses are sandboxed. Consequences for operators:
 - Put nothing in front of the server that injects inline scripts or styles into pages (some proxies and "optimisers" do); it will be blocked.
 - The Vite dev server (`pnpm dev`, port 5173) does not apply the policy. Check policy-sensitive changes against `pnpm build && pnpm start`.
-- Behind TLS, add the `Secure` attribute to the session cookie at the proxy (the server issues it for loopback HTTP without it).
+- Behind a TLS-terminating proxy, start the server with `PF_SECURE_COOKIE=1` so the owner session cookie carries `Secure`, and add the public `https://…` origin to `PF_EXTRA_ORIGINS` (the session is only issued to listed origins). Tested for the attribute and the origin rule only (`apps/server/src/session.test.ts`); no proxy deployment has been run.
 
 ## Verification commands
 All proofs start their own server on their own port and data directory under `.artifacts/`, and write a JSON report to `docs/evidence/`. Run `pnpm build` first.
