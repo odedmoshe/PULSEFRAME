@@ -495,6 +495,13 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - The editor's grant form has an optional "requests per minute" field and the list shows the limit. Verified: `pnpm proof:owner-ui` 9/9 (a grant created with 12 is answered 429 on the third request in a row), phase5 33, accessibility audit clean.
 - Not done: export quotas per grant.
 
+**Checkpoint 14s — sound longer than the picture**
+- **Defect found and fixed:** a file whose sound runs on after its last picture was imported at the picture's length, so the rest of the sound was silently dropped (a 2 s picture with 4 s of sound lost its last two beeps on every route). `apps/server/src/ingest.ts` now makes the asset as long as its sound, in whole frames, when the sound ends a whole frame or more after the picture; the last picture is held under it, as players do. Files whose sound ends with (or before) the picture are unchanged.
+- Found by a new input-matrix case, "picture 2 s shorter than sound". Input matrix now: 30 shapes, 4/4 checks, 28 export correctly and 2 noted (the same two as before: the AVI early frame and the untagged-colour file), on the server export, the browser export and the editor preview.
+- Verified here after the change: 395 unit tests (new ingest test in `conform.test.ts`); `pnpm proof` 54 · phase3 27 · phase4 19 · phase5 33 · phase6 35 · phase7 31 · phase8 20 · phase9 12 · phase11 12 · phase12 15 · browser-export 23 · editor-interactions 20 · owner-ui 9 · speed 16 · soak 7 · start-offset 4 · projects 2 · long 6 · parity pass. Not rerun: seek, images, render-fuzz, a11y audit.
+- Consequence to know: an ordinary file whose sound is a frame or more longer than its picture (common in phone recordings) is now that much longer on the timeline, with the last picture held. Existing projects keep the lengths they were imported with.
+- `PF_MATRIX_ONLY=<regex>` runs matching input-matrix cases only (development aid; the count checks then fail by design).
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -522,7 +529,7 @@ Unblocked (no decision needed), roughly by value:
 3. Backup verification after writing and pruning of media in the backup (scheduled backups with snapshot retention are done).
 4. Per-format caption text and line breaks (per-format caption style and per-format title wording/style exist); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 5. Approvals list UI; activity log dialog; MCP resource change notifications; remaining transient states in the accessibility audit (confirmation forms, error and busy states).
-6. Inputs: a colour choice for untagged files (the editor now says when colours are a guess); HDR; the AVI one-frame difference; sound longer than the picture; frames during playback; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
+6. Inputs: a colour choice for untagged files (the editor now says when colours are a guess); HDR; the AVI one-frame difference; frames during playback; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
 7. Export quotas per grant (a per-grant request budget exists, in the editor and over REST). A `Secure` cookie option exists; a real TLS proxy deployment is untested.
 8. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
@@ -539,8 +546,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 394 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 20 · `pnpm proof:owner-ui` 9 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:projects` 2 (15 project settings; 7 of them also on the browser export and the preview) · `pnpm conformance:render-fuzz` 2 (10 random sessions; about twelve minutes) · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
+Expect 395 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 20 · `pnpm proof:owner-ui` 9 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:projects` 2 (15 project settings; 7 of them also on the browser export and the preview) · `pnpm conformance:render-fuzz` 2 (10 random sessions; about twelve minutes) · `pnpm conformance:inputs` 4 (30 shapes on the server export, the browser export and the editor preview: 28 correct and 2 noted; about ten minutes).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

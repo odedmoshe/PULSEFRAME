@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T08:57:57.764Z",
+  "ranAt": "2026-11-15T09:32:47.789Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,27 +13,27 @@
       "committed": 2641,
       "refusedAsInvalidOrConflict": 359,
       "serverErrors": 0,
-      "wallSeconds": 64.1,
+      "wallSeconds": 59.9,
       "finalRevision": 2631,
       "clips": 708
     },
     "commitLatencyMs": {
       "first300": {
-        "median": 5.23,
-        "p95": 8.66
+        "median": 4.95,
+        "p95": 7.78
       },
       "last300": {
-        "median": 22.43,
-        "p95": 31.85
+        "median": 20.95,
+        "p95": 34.8
       },
       "note": "includes HTTP round trip on loopback; each commit is followed by a full project read in this harness",
       "smallProjectAfterLongHistory": {
-        "median": 5.09,
+        "median": 5.29,
         "p95": 7.57
       },
       "scaling": {
         "clipsAtEnd": 708,
-        "msPerHundredClips": 2.43,
+        "msPerHundredClips": 2.26,
         "explanation": "every commit copies, validates, diffs and stores the whole document, so cost grows with project size"
       }
     },
@@ -42,18 +42,18 @@
       "bytesPerCommit": 2844
     },
     "memory": {
-      "harnessAndServerRssGrowthMb": 119
+      "harnessAndServerRssGrowthMb": 167
     },
     "replay": {
       "opsReplayed": 2631,
-      "ms": 9290
+      "ms": 7925
     },
     "restart": {
-      "reopenMs": 29
+      "reopenMs": 28
     },
     "archive": {
       "bytes": 390656,
-      "exportImportMs": 1091
+      "exportImportMs": 917
     }
   },
   "passed": 7,
@@ -67,7 +67,7 @@
         "committed": 2641,
         "refusedAsInvalidOrConflict": 359,
         "serverErrors": 0,
-        "wallSeconds": 64.1,
+        "wallSeconds": 59.9,
         "finalRevision": 2631,
         "clips": 708
       }
@@ -76,30 +76,30 @@
       "name": "history length does not slow edits: a small project in the same database, after thousands of revisions elsewhere, commits as fast as at the start of the session",
       "ok": true,
       "detail": {
-        "median": 5.09,
+        "median": 5.29,
         "p95": 7.57
       }
     },
     {
-      "name": "project size does slow edits (measured, a known limit of whole-document commits): median 22.43 ms with 708 clips; regression guard: under 50 ms at this size",
+      "name": "project size does slow edits (measured, a known limit of whole-document commits): median 20.95 ms with 708 clips; regression guard: under 50 ms at this size",
       "ok": true,
       "detail": {
         "first300": {
-          "median": 5.23,
-          "p95": 8.66
+          "median": 4.95,
+          "p95": 7.78
         },
         "last300": {
-          "median": 22.43,
-          "p95": 31.85
+          "median": 20.95,
+          "p95": 34.8
         },
         "note": "includes HTTP round trip on loopback; each commit is followed by a full project read in this harness",
         "smallProjectAfterLongHistory": {
-          "median": 5.09,
+          "median": 5.29,
           "p95": 7.57
         },
         "scaling": {
           "clipsAtEnd": 708,
-          "msPerHundredClips": 2.43,
+          "msPerHundredClips": 2.26,
           "explanation": "every commit copies, validates, diffs and stores the whole document, so cost grows with project size"
         }
       }
@@ -109,14 +109,14 @@
       "ok": true,
       "detail": {
         "opsReplayed": 2631,
-        "ms": 9290
+        "ms": 7925
       }
     },
     {
       "name": "after a server restart the project reopens identical, accepts new edits, and undo history still works",
       "ok": true,
       "detail": {
-        "reopenMs": 29
+        "reopenMs": 28
       }
     },
     {
@@ -124,7 +124,7 @@
       "ok": true,
       "detail": {
         "bytes": 390656,
-        "exportImportMs": 1091,
+        "exportImportMs": 917,
         "blobsAdded": 1
       }
     },
