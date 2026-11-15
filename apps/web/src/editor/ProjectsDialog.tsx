@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { api, ApiFailure, type GcResult, type ProjectListItem, type StorageReport } from '../api.ts';
+import { api, ApiFailure, type BackupStatus, type GcResult, type ProjectListItem, type StorageReport } from '../api.ts';
 import { useEditorState } from './store.ts';
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
@@ -55,6 +55,39 @@ function StoragePanel() {
       {dry?.wouldRemove && <p role="status" data-testid="storage-gc-dry"><span>{t('storage.wouldRemove')}: </span><bdi dir="ltr">{dry.wouldRemove.files} {t('storage.files')} · {formatBytes(dry.wouldRemove.bytes)}</bdi></p>}
       {done?.removed && <p role="status" data-testid="storage-gc-done"><span>{t('storage.removed')}: </span><bdi dir="ltr">{done.removed.files} {t('storage.files')} · {formatBytes(done.removed.bytes)}</bdi></p>}
       {err && <p className="muted danger" role="alert" data-testid="storage-error">{err}</p>}
+    </section>
+  );
+}
+
+function BackupPanel() {
+  const { t } = useEditorState();
+  const [st, setSt] = useState<BackupStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const refresh = useCallback(async () => { try { setSt(await api.backup()); } catch (e) { setErr(describeError(e)); } }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+  const run = async () => {
+    setBusy(true); setErr(null);
+    try { setSt(await api.backupNow()); } catch (e) { setErr(describeError(e)); await refresh(); } finally { setBusy(false); }
+  };
+  const when = (ms: number) => <bdi dir="ltr">{new Date(ms).toLocaleString()}</bdi>;
+  return (
+    <section className="pf-dlg-section" data-testid="backup" aria-labelledby="pf-backup-h">
+      <h3 id="pf-backup-h">{t('backup.title')}</h3>
+      {st && !st.enabled && <p className="muted" dir="auto" data-testid="backup-off">{t('backup.off')}</p>}
+      {st?.enabled && (
+        <>
+          <dl className="sound-result">
+            <dt>{t('backup.every')}</dt><dd><bdi>{st.everyHours}</bdi> {t('backup.hours')}</dd>
+            <dt>{t('backup.last')}</dt><dd data-testid="backup-last">{st.lastAt ? <>{when(st.lastAt)}{st.lastOk === false ? ` · ${t('backup.failed')}` : ''}</> : t('backup.never')}</dd>
+            <dt>{t('backup.next')}</dt><dd>{st.nextAt ? when(st.nextAt) : '—'}</dd>
+            <dt>{t('backup.snapshots')}</dt><dd dir="ltr" data-testid="backup-snapshots">{st.snapshots} / {st.keep}</dd>
+          </dl>
+          {st.lastOk === false && st.lastError && <p className="muted danger" role="alert" dir="auto" data-testid="backup-last-error">{st.lastError}</p>}
+          <div className="row"><button type="button" className="ghost" disabled={busy || st.running} onClick={() => void run()} data-testid="backup-now">{t('backup.now')}</button></div>
+        </>
+      )}
+      {err && <p className="muted danger" role="alert" data-testid="backup-error">{err}</p>}
     </section>
   );
 }
@@ -162,6 +195,7 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }) {
           <button type="submit" className="primary" disabled={busy || !newName.trim()} data-testid="project-new">{t('projects.new.create')}</button>
         </form>
         <StoragePanel />
+        <BackupPanel />
       </div>
     </div>
   );

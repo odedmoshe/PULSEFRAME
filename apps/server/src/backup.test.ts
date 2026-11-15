@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { backupDataDir } from './backup.ts';
+import Database from 'better-sqlite3';
+import { backupDataDir, backupWithHistory, BackupScheduler, listSnapshots } from './backup.ts';
 import { startServer } from './index.ts';
 
 const dirs: string[] = [];
@@ -76,5 +77,76 @@ describe('backup of a running server and restore', () => {
       await expect(backupDataDir(src, path.join(src, 'inside'))).rejects.toThrow(/outside/);
       await expect(backupDataDir(tmp('pf-bk-empty-'), path.join(dest, 'x'))).rejects.toThrow(/not a PULSEFRAME data directory/);
     } finally { await a.close(); }
+  });
+
+  it('backups with history keep the newest dated snapshots, never lose media an older snapshot needs, and an older snapshot restores', async () => {
+    const src = tmp('pf-bk3-src-'), dest = path.join(tmp('pf-bk3-dest-'), 'copy');
+    const a = await startServer({ port: 8964, dataDir: src });
+    const h = { authorization: `Bearer ${a.auth.tokens.agent}`, connection: 'close' };
+    const post = async (url: string, p: string, body: unknown) => (await fetch(`${url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
+    let b: Awaited<ReturnType<typeof startServer>> | undefined;
+    try {
+      const pid = (await post(a.url, '/projects', { name: 'history' })).project.id;
+      const t0 = Date.UTC(2026, 0, 1, 3, 0, 0);
+      const revs: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        const r = await post(a.url, `/projects/${pid}/transactions`, { ops: [{ op: 'add_marker', args: { time: f(i * 10), label: `m${i}` } }] });
+        revs.push(r.revision);
+        const out = await backupWithHistory(src, dest, 3, t0 + i * 3600_000);
+        expect(out.snapshots.length).toBe(Math.min(3, i + 1));
+        expect(out.removed.length).toBe(i >= 3 ? 1 : 0);
+      }
+      expect(listSnapshots(dest)).toEqual(['pulseframe-20260101T050000Z.sqlite', 'pulseframe-20260101T060000Z.sqlite', 'pulseframe-20260101T070000Z.sqlite']);
+      // each retained snapshot is a complete database at the revision of its run
+      for (const [i, n] of listSnapshots(dest).entries()) {
+        const db = new Database(path.join(dest, 'snapshots', n), { readonly: true });
+        try { expect(db.pragma('integrity_check', { simple: true })).toBe('ok'); expect(JSON.stringify(db.prepare('select * from projects').all())).toContain(`m${i + 2}`); expect(JSON.stringify(db.prepare('select * from projects').all())).not.toContain(`m${i + 3}`); } finally { db.close(); }
+      }
+      // going back: the oldest retained snapshot over the copy's database starts as a working server at that revision
+      fs.copyFileSync(path.join(dest, 'snapshots', 'pulseframe-20260101T050000Z.sqlite'), path.join(dest, 'pulseframe.sqlite'));
+      b = await startServer({ port: 8965, dataDir: dest });
+      const restored: any = await (await fetch(`${b.url}/api/v1/projects/${pid}`, { headers: h })).json();
+      expect(restored.revision).toBe(revs[2]);
+      expect(Object.keys(restored.project.markers ?? {}).length || restored.project.markers.length).toBe(3);
+    } finally { await b?.close(); await a.close(); }
+  });
+
+  it('the scheduler runs on its interval, reports status over the API, lets only the owner start a run, records a failure without stopping, and is off unless configured', async () => {
+    const src = tmp('pf-bk4-src-'), dest = path.join(tmp('pf-bk4-dest-'), 'auto');
+    expect(() => new BackupScheduler(src, path.join(src, 'in'), 1, 3)).toThrow(/outside/);
+    const a = await startServer({ port: 8966, dataDir: src, backupDir: dest, backupEveryHours: 24, backupKeep: 2 });
+    const agent = { authorization: `Bearer ${a.auth.tokens.agent}`, connection: 'close' };
+    const ownerOf = async (srv: typeof a) => ({ origin: srv.url, connection: 'close', cookie: (await fetch(`${srv.url}/api/v1/session`, { headers: { origin: srv.url, 'x-pf-owner-key': srv.auth.tokens.owner, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]! });
+    const ownerH = await ownerOf(a);
+    try {
+      let st: any = await (await fetch(`${a.url}/api/v1/backup`, { headers: agent })).json();
+      expect(st).toMatchObject({ enabled: true, everyHours: 24, keep: 2, lastAt: null, snapshots: 0 });
+      expect(st.nextAt).toBeGreaterThan(Date.now() - 1000); // no snapshot yet: the first run is due at once
+      expect(st.nextAt).toBeLessThan(Date.now() + 5000);
+      for (let i = 0; i < 100 && !(st.lastAt && !st.running); i++) { await new Promise((r) => setTimeout(r, 100)); st = await (await fetch(`${a.url}/api/v1/backup`, { headers: agent })).json(); }
+      expect(st).toMatchObject({ lastOk: true, lastError: null, snapshots: 1 });
+      expect(st.nextAt).toBeGreaterThan(Date.now() + 23 * 3600_000); // then one interval later
+      expect(fs.existsSync(path.join(dest, 'pulseframe.sqlite'))).toBe(true);
+      expect((await fetch(`${a.url}/api/v1/backup`, { method: 'POST', headers: agent })).status).toBe(403);
+      expect((await fetch(`${a.url}/api/v1/backup`, { method: 'POST' })).status).toBe(401);
+      // a failing run is reported and the server keeps working
+      fs.rmSync(dest, { recursive: true, force: true }); fs.writeFileSync(dest, 'a file where the directory should be');
+      const failed = await fetch(`${a.url}/api/v1/backup`, { method: 'POST', headers: ownerH });
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toMatchObject({ lastOk: false });
+      expect((await fetch(`${a.url}/api/v1/projects`, { headers: agent })).status).toBe(200);
+      fs.rmSync(dest);
+      const ok = await fetch(`${a.url}/api/v1/backup`, { method: 'POST', headers: ownerH });
+      expect(ok.status).toBe(200);
+      expect(await ok.json()).toMatchObject({ lastOk: true, lastError: null });
+    } finally { await a.close(); }
+    // a restart with a fresh snapshot present waits for the interval instead of running at once
+    const a2 = await startServer({ port: 8966, dataDir: src, backupDir: dest, backupEveryHours: 24, backupKeep: 2 });
+    try { expect(a2.backup.status().nextAt!).toBeGreaterThan(Date.now() + 23 * 3600_000); } finally { await a2.close(); }
+    const off = await startServer({ port: 8967, dataDir: tmp('pf-bk5-src-') });
+    try {
+      expect(await (await fetch(`${off.url}/api/v1/backup`, { headers: { authorization: `Bearer ${off.auth.tokens.agent}` } })).json()).toMatchObject({ enabled: false, nextAt: null });
+      expect((await fetch(`${off.url}/api/v1/backup`, { method: 'POST', headers: await ownerOf(off) })).status).toBe(409);
+    } finally { await off.close(); }
   });
 });

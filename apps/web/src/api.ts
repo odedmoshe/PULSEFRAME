@@ -61,6 +61,8 @@ export const api = {
   listProjectsFull: () => call<{ projects: ProjectListItem[] }>('/projects'),
   deleteProject: (id: string, confirmName: string) => call<unknown>(`/projects/${encodeURIComponent(id)}/delete`, json({ confirmName })),
   storage: () => call<StorageReport>('/storage'),
+  backup: () => call<BackupStatus>('/backup'),
+  backupNow: () => call<BackupStatus>('/backup', json({})),
   storageGc: (apply: boolean) => call<GcResult>('/storage/gc', json(apply ? { apply: true } : {})),
   listGrants: () => call<{ grants: GrantItem[] }>('/grants'),
   createGrant: (body: { name: string; mode: GrantMode; projectIds?: string[]; budgetCents?: number }) => call<{ grant: GrantItem; token: string }>('/grants', json(body)),
@@ -115,3 +117,5 @@ export const api = {
   regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
   events: (id: string, since: number) => new EventSource(`/api/v1/projects/${id}/events?since=${since}`, { withCredentials: true }),
 };
+
+export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

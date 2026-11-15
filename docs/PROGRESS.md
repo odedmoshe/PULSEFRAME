@@ -456,6 +456,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Result on this profile (10 seeds × 160 steps): 2/2. 24 frames compared in 8 of 10 projects; preview equal to the still on every one (0 mean, 0 worst); export within 0.01–1.89. Two projects had no non-black frame at the sampled positions and contributed nothing. An earlier run with a picture threshold of 8 compared 21 frames in 7 projects with the same outcome.
 - This is agreement between the three routes, not a comparison with an independent reference: a mistake shared by all three would pass. Transitions and effects remain thinly represented by the generator.
 
+**Checkpoint 14l — automatic backups with retention**
+- `PF_BACKUP_DIR` (off by default), `PF_BACKUP_EVERY_HOURS` (24), `PF_BACKUP_KEEP` (14). `BackupScheduler` in `apps/server/src/backup.ts` runs the existing online backup on an interval and keeps dated database snapshots (`snapshots/pulseframe-<UTC>.sqlite`), pruning to the newest N. Media in the backup is never pruned, so each retained snapshot stays restorable.
+- `GET /api/v1/backup` (status), `POST /api/v1/backup` (owner session only; 409 when not configured; 500 with the status when the run failed). Projects dialog shows the schedule, last/next run, snapshots present, the last error, and "Back up now".
+- Verified here: 4 unit tests in `backup.test.ts` (retention 5 runs → 3 kept with the right contents; the oldest retained snapshot starts as a working server at its revision; scheduler first run, owner-only, a failing destination is reported and the server keeps serving, recovery, restart waits for the interval, off unless configured); `pnpm proof:owner-ui` 8/8; a11y audit clean; 391 unit tests.
+- Not verified: the timer over real hours (only the immediate first run and the computed next time); behaviour when the destination disk fills mid-copy beyond "the run is recorded as failed"; the backup is not read back after writing.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -480,7 +486,7 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 Unblocked (no decision needed), roughly by value:
 1. Editor: J/K/L, source viewer, workspaces, marquee selection (Phase 3 carry-over; markers and multi-select are done).
 2. Speed ramps, reverse, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed, freeze frame and linear volume keys are done).
-3. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
+3. Backup verification after writing and pruning of media in the backup (scheduled backups with snapshot retention are done).
 4. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 5. Approvals list UI; activity log dialog; MCP resource change notifications; remaining transient states in the accessibility audit (confirmation forms, error and busy states).
 6. Inputs: a colour choice for untagged files (the editor now says when colours are a guess); HDR; the AVI one-frame difference; sound longer than the picture; frames during playback; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
@@ -500,8 +506,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 389 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 16 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:projects` 2 (15 project settings; 7 of them also on the browser export and the preview) · `pnpm conformance:render-fuzz` 2 (10 random sessions; about twelve minutes) · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
+Expect 391 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 16 · `pnpm proof:owner-ui` 8 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:projects` 2 (15 project settings; 7 of them also on the browser export and the preview) · `pnpm conformance:render-fuzz` 2 (10 random sessions; about twelve minutes) · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

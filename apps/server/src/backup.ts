@@ -44,3 +44,74 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
   if (fs.existsSync(tokens)) { fs.copyFileSync(tokens, path.join(dest, 'tokens.json')); fs.chmodSync(path.join(dest, 'tokens.json'), 0o600); }
   return r;
 }
+
+/** Name of a dated database snapshot; sorts by time. */
+const snapName = (at: number) => `pulseframe-${new Date(at).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')}.sqlite`;
+const SNAP_RE = /^pulseframe-\d{8}T\d{6}Z\.sqlite$/;
+export const listSnapshots = (dest: string): string[] => {
+  const d = path.join(dest, 'snapshots');
+  return fs.existsSync(d) ? fs.readdirSync(d).filter((n) => SNAP_RE.test(n)).sort() : [];
+};
+
+/**
+ * A backup with history: the destination is a restorable data directory (as `backupDataDir` leaves it) plus
+ * `snapshots/pulseframe-<UTC time>.sqlite`, one database per run, of which the newest `keep` are retained.
+ * Media and exports in the destination are never deleted by this, so every retained snapshot finds its files.
+ * To go back to an older state: stop the server and copy that snapshot over `pulseframe.sqlite` in the copy.
+ */
+export async function backupWithHistory(src: string, dest: string, keep: number, now = Date.now()): Promise<BackupResult & { snapshot: string; snapshots: string[]; removed: string[] }> {
+  const r = await backupDataDir(src, dest);
+  const dir = path.join(dest, 'snapshots');
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const snapshot = snapName(now);
+  fs.copyFileSync(path.join(dest, 'pulseframe.sqlite'), path.join(dir, `${snapshot}.part`));
+  fs.renameSync(path.join(dir, `${snapshot}.part`), path.join(dir, snapshot));
+  const all = listSnapshots(dest);
+  const removed = all.slice(0, Math.max(0, all.length - Math.max(1, Math.floor(keep))));
+  for (const n of removed) fs.rmSync(path.join(dir, n), { force: true });
+  return { ...r, snapshot, snapshots: listSnapshots(dest), removed };
+}
+
+export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }
+
+/** Runs `backupWithHistory` on an interval while the server is up. A failed run is recorded and retried at the next interval; it never stops the server. */
+export class BackupScheduler {
+  private timer: NodeJS.Timeout | null = null;
+  private current: Promise<void> | null = null;
+  private last: { at: number; ok: boolean; error: string | null } | null = null;
+  private nextAt: number | null = null;
+  constructor(private src: string, private dest: string | null, private everyHours: number, private keep: number, private log: (m: string) => void = (m) => console.error(m)) {
+    if (dest) { // refuse a bad destination at start, not at the first run hours later
+      const s = path.resolve(src), d = path.resolve(dest);
+      if (d === s || d.startsWith(s + path.sep)) throw new Error('PF_BACKUP_DIR must be outside the data directory');
+    }
+  }
+  get enabled() { return !!this.dest && this.everyHours > 0; }
+  start() {
+    if (!this.enabled || this.timer) return;
+    const ms = this.everyHours * 3600_000;
+    // the first run is due one interval after the newest existing snapshot (immediately if there is none or it is older)
+    const newest = listSnapshots(this.dest!).at(-1);
+    const m = newest?.match(/^pulseframe-(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)Z/);
+    const newestAt = m ? Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, +m[4]!, +m[5]!, +m[6]!) : 0;
+    const schedule = (delay: number) => {
+      this.nextAt = Date.now() + delay;
+      this.timer = setTimeout(() => { void this.runNow().finally(() => { if (this.timer) schedule(ms); }); }, delay);
+      this.timer.unref();
+    };
+    schedule(Math.min(ms, Math.max(1000, newestAt + ms - Date.now())));
+  }
+  /** Run a backup now (also used by the timer). Concurrent calls share one run. */
+  runNow(): Promise<void> {
+    if (!this.dest) return Promise.reject(new Error('no backup destination is configured (PF_BACKUP_DIR)'));
+    this.current ??= backupWithHistory(this.src, this.dest, this.keep).then(
+      () => { this.last = { at: Date.now(), ok: true, error: null }; },
+      (e) => { this.last = { at: Date.now(), ok: false, error: String(e instanceof Error ? e.message : e) }; this.log(`[backup] failed: ${this.last.error}`); },
+    ).finally(() => { this.current = null; });
+    return this.current;
+  }
+  status(): BackupStatus {
+    return { enabled: this.enabled, everyHours: this.everyHours, keep: this.keep, lastAt: this.last?.at ?? null, lastOk: this.last?.ok ?? null, lastError: this.last?.error ?? null, nextAt: this.timer ? this.nextAt : null, snapshots: this.dest ? listSnapshots(this.dest).length : 0, running: !!this.current };
+  }
+  async stop() { if (this.timer) clearTimeout(this.timer); this.timer = null; await this.current; }
+}

@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { RenderHost } from '@pulseframe/renderer';
 import type { ProviderAdapter } from '@pulseframe/providers';
 import { Auth } from './auth.ts';
+import { BackupScheduler } from './backup.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
 import { Derivatives } from './derive.ts';
@@ -14,10 +15,11 @@ import { Presence } from './presence.ts';
 import { Store } from './store.ts';
 
 export { loadConfig, type Config } from './config.ts';
-export interface RunningServer { url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; close(): Promise<void> }
+export interface RunningServer { url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; backup: BackupScheduler; close(): Promise<void> }
 
 export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
+  const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
   const store = new Store(cfg.dataDir);
   const auth = new Auth(cfg);
   const host = new RenderHost();
@@ -29,7 +31,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const governance = new Governance(store);
   auth.resolveGrant = (token) => governance.principalForToken(token);
   capabilities.governance = governance;
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, createMcp(store, auth, exporter, capabilities, presence, governance), governance);
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, createMcp(store, auth, exporter, capabilities, presence, governance), governance, backup);
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');
@@ -43,10 +45,12 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   await capabilities.recover();
   recoverAnalysisJobs(store);
   derivatives.recover();
+  backup.start();
   return {
-    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance,
+    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup,
     async close() {
       (app as any).browserExport?.stop();
+      await backup.stop();
       await capabilities.stop();
       await derivatives.stop();
       await new Promise((r) => server.close(r));

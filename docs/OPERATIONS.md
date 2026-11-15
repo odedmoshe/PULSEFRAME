@@ -12,6 +12,9 @@ This describes the one supported deployment profile: a single user, one machine,
 | `PF_EXTRA_ORIGINS` | none | Additional allowed browser origins (comma-separated). |
 | `PF_MAX_UPLOAD_BYTES` | see `config.ts` | Largest accepted upload. |
 | `PF_MAX_STORAGE_BYTES` | `0` (off) | Ceiling for the whole data directory. At the ceiling, uploads, imports and exports are refused with `507 storage_quota_exceeded`; editing continues. Free space by deleting projects and running the storage clean-up. |
+| `PF_BACKUP_DIR` | unset (off) | Directory for automatic backups; must be outside the data directory (the server refuses to start otherwise). |
+| `PF_BACKUP_EVERY_HOURS` | `24` | Hours between automatic backups when `PF_BACKUP_DIR` is set; `0` turns the schedule off ("Back up now" still works). |
+| `PF_BACKUP_KEEP` | `14` | Dated database snapshots to retain (at least 1). |
 | `PF_AGENT_RPM` | `0` (off) | Requests per minute allowed per agent credential, REST and MCP together. Over the limit the server answers `429 rate_limited` with `Retry-After`. Ten seconds' worth may be sent as a burst. The owner's browser session is never limited. Off by default: fast local scripts are normal for this tool. |
 | `PF_COMFYUI_URL`, `PF_COMFYUI_ALLOW_REMOTE`, `PF_COMFYUI_MODELS_DIR`, `PF_MODEL_HOSTS` | unset | Optional provider, see INTEGRATIONS.md. |
 | `NODE_USE_ENV_PROXY=1` | unset | Needed only behind an HTTPS proxy, for model downloads. |
@@ -47,6 +50,9 @@ sqlite3 .data/pulseframe.sqlite ".backup '/path/to/backup/pulseframe.sqlite'"
 ```bash
 rsync -a .data/blobs .data/out .data/tokens.json /path/to/backup/
 ```
+Automatic (tested by `apps/server/src/backup.test.ts`): start the server with `PF_BACKUP_DIR=/path/to/backup`. While the server runs it repeats the backup above every `PF_BACKUP_EVERY_HOURS` hours and also keeps `snapshots/pulseframe-<UTC time>.sqlite`, one database per run, deleting all but the newest `PF_BACKUP_KEEP`. The first run is due one interval after the newest existing snapshot (at once if there is none). Media and exports in the backup are never deleted by this, so every retained snapshot finds its files; the backup therefore only grows, and removing media nobody needs from it is manual. A failed run is logged, shown in the editor (Projects → Automatic backup) and in `GET /api/v1/backup`, and tried again at the next interval. The owner can start a run from that panel or with `POST /api/v1/backup`. It only runs while the server is running; nothing checks that the destination is a different disk.
+To go back to an older state: stop the server, copy the chosen snapshot over `pulseframe.sqlite` in the backup directory, and restore as below.
+
 Restore: stop the server, put the files back under `PF_DATA_DIR` (or point `PF_DATA_DIR` at the copy), start the server. Blobs are content-addressed and immutable, so an incremental copy of `blobs/` is safe.
 
 ### Moving or backing up one project
@@ -66,7 +72,7 @@ curl -s -b /tmp/pf.cookie -H "origin: http://127.0.0.1:8787" http://127.0.0.1:87
 - `GET /api/v1/storage` to see what is in use and what nothing refers to
 - `POST /api/v1/storage/gc` with `{}` for a dry run, `{"apply": true}` to remove unreferenced media
 
-Deleting a clip never deletes its media. Not built: an editor control for these, automatic backups, disk quota.
+Deleting a clip never deletes its media. Not built: an editor control for deleting media, verification of a backup after it is written, off-machine copies.
 
 **The whole-data-directory copy above has not been exercised by an automated test.** Tested instead: restoring a single project from its archive onto a second server with an empty data directory (`pnpm soak`), and reopening a data directory after a restart, replaying a project from its operation log, and recovering interrupted export jobs (`store.test.ts`, Phase 0 and Phase 4 proofs).
 

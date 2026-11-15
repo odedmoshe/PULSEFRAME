@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T07:30:59.865Z",
+  "ranAt": "2026-11-15T08:40:43.767Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Owner-facing controls in headless Chromium.",
-  "passed": 7,
-  "total": 7,
+  "passed": 8,
+  "total": 8,
   "checks": [
     {
       "name": "creating a grant in the editor shows its token once with the MCP endpoint; the default mode is \"propose\"; the token sees only this project, cannot commit an edit directly, and cannot read another project",
@@ -37,6 +37,16 @@
       "ok": true,
       "detail": {
         "loops": 2
+      }
+    },
+    {
+      "name": "project manager: the automatic backup panel shows the schedule and the snapshots present; \"Back up now\" writes a new dated snapshot that is on disk",
+      "ok": true,
+      "detail": {
+        "backupShown": true,
+        "backupTwo": true,
+        "backupOnDisk": true,
+        "backupLast": "11/15/2026, 8:40:43 AM"
       }
     },
     {

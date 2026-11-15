@@ -1,3 +1,4 @@
+import type { BackupScheduler } from './backup.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -61,7 +62,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 /** Policy of every non-page response (JSON, media, exports): nothing may load or run if it is ever opened as a document. */
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
-export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance) {
+export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler) {
   const gov = governance ?? new Governance(store);
   const app = new Hono<Env>();
   const body = async <S extends z.ZodType>(c: Context, schema: S): Promise<z.infer<S>> => {
@@ -177,6 +178,15 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return c.json({ project: p.doc, revision: p.revision });
   });
   app.post('/api/v1/projects/:id/delete', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ confirmName: z.string() }).strict()); return c.json(deleteProject(store, p, c.req.param('id'), b.confirmName)); });
+  // Automatic backups: status for anyone who may observe; running one now is the owner's action (it writes outside the data directory).
+  app.get('/api/v1/backup', (c) => { need(c, 'observe'); return c.json(backup?.status() ?? { enabled: false, everyHours: 0, keep: 0, lastAt: null, lastOk: null, lastError: null, nextAt: null, snapshots: 0, running: false }); });
+  app.post('/api/v1/backup', async (c) => {
+    if (need(c, 'observe').kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+    if (!cfg.backupDir || !backup) throw new ApiError(409, 'backup_not_configured', 'no backup destination is configured; set PF_BACKUP_DIR and restart the server');
+    await backup.runNow();
+    const st = backup.status();
+    return c.json(st, st.lastOk ? 200 : 500);
+  });
   app.get('/api/v1/storage', (c) => { const p = need(c, 'observe'); const rep = storageReport(store, p, Date.now(), cfg.maxStorageBytes); const { hashes: _h, ...unref } = rep.unreferenced; return c.json({ ...rep, unreferenced: unref }); });
   app.post('/api/v1/storage/gc', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ apply: z.boolean().optional() }).strict()); return c.json(collectGarbage(store, p, b.apply === true)); });
   app.get('/api/v1/projects/:id/archive', (c) => {

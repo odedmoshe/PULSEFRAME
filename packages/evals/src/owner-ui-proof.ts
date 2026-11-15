@@ -24,7 +24,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   const tone = path.join(art, 'tone.wav');
   execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=f=440:r=48000:d=8', '-ac', '2', '-c:a', 'pcm_s16le', tone]);
-  const s = await startServer({ port: 8807, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 8807, dataDir: path.join(art, 'data'), backupDir: path.join(art, 'backup'), backupEveryHours: 24, backupKeep: 3 });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown, headers: Record<string, string> = h) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { connection: 'close', ...headers, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -98,6 +98,15 @@ async function main() {
     await page.getByTestId('project-delete-apply').click();
     const gone = await until(async () => (await call(`/projects/${other}`)).status === 404);
     await page.waitForFunction((n) => document.querySelectorAll('[data-testid=project-row]').length === n - 1, rows0);
+    // automatic backup panel: the first scheduled run has happened (no snapshot existed), "Back up now" adds a second one
+    await page.getByTestId('backup-snapshots').waitFor();
+    const backupShown = await until(async () => fs.existsSync(path.join(art, 'backup', 'snapshots')) && fs.readdirSync(path.join(art, 'backup', 'snapshots')).length === 1, 5000); // the first scheduled run (the panel may have loaded before it finished)
+    await sleep(1100); // snapshot names have one-second resolution
+    await page.getByTestId('backup-now').click();
+    const backupTwo = await until(async () => (await page.getByTestId('backup-snapshots').textContent())?.trim() === '2 / 3', 10000);
+    const backupOnDisk = fs.readdirSync(path.join(art, 'backup', 'snapshots')).filter((n) => n.endsWith('.sqlite')).length === 2 && fs.existsSync(path.join(art, 'backup', 'pulseframe.sqlite'));
+    const backupLast = (await page.getByTestId('backup-last').textContent()) ?? '';
+    check('project manager: the automatic backup panel shows the schedule and the snapshots present; "Back up now" writes a new dated snapshot that is on disk', backupShown && backupTwo && backupOnDisk && backupLast.length > 4 && (await page.getByTestId('backup-last-error').count()) === 0, { backupShown, backupTwo, backupOnDisk, backupLast });
     await page.getByTestId('storage-gc-check').click();
     await page.getByTestId('storage-gc-dry').waitFor();
     await page.screenshot({ path: path.join(art, 'projects-dialog.png') });
