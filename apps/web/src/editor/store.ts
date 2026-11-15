@@ -66,7 +66,7 @@ const readTargets = (projectId: string): { video: string | null; audio: string |
 };
 /** Drag-and-drop type of a library file dragged onto the timeline (the payload is the asset id). */
 export const ASSET_DRAG_TYPE = 'application/x-pulseframe-asset';
-export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver'] as const;
+export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver', 'custom'] as const;
 export type Workspace = (typeof WORKSPACES)[number];
 const WS_KEY = 'pf.workspace.v1';
 const readWorkspace = (): Workspace => { try { const v = localStorage.getItem(WS_KEY); return (WORKSPACES as readonly string[]).includes(v ?? '') ? (v as Workspace) : 'pro'; } catch { return 'pro'; } };

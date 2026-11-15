@@ -303,11 +303,21 @@ const WORKSPACE_TABS: Record<Workspace, readonly InspectorTab[]> = {
   // Motion and Color both use the clip panel, each showing its own part of it (see `clipFocus`).
   motion: ['clip'],
   color: ['clip'],
+  custom: INSPECTOR_TABS, // replaced by the user's own choice (see `customTabs`)
   captions: ['captions', 'speech', 'clip'],
   sound: ['sound', 'clip'],
   deliver: ['deliver', 'review'],
 };
 
+const CUSTOM_TABS_KEY = 'pf.workspace.custom.v1';
+function loadCustomTabs(): InspectorTab[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(CUSTOM_TABS_KEY) ?? 'null');
+    const ok = Array.isArray(v) ? INSPECTOR_TABS.filter((x) => x !== 'all' && v.includes(x)) : [];
+    if (ok.length) return ok;
+  } catch { /* fall through */ }
+  return ['clip', 'sound', 'deliver'];
+}
 function loadTab(): InspectorTab {
   try {
     const v = localStorage.getItem(TAB_KEY);
@@ -326,7 +336,16 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     try { localStorage.setItem(TAB_KEY, next); } catch { /* ignore */ }
   };
   // The workspace narrows the tabs on offer. A tab that is not offered is replaced by the workspace's first one (only what is shown changes: nothing in the project does).
-  const tabs = WORKSPACE_TABS[state.workspace];
+  // The custom workspace offers the panels the user ticked (kept in this browser), in the usual order; at least one.
+  const [custom, setCustom] = useState<InspectorTab[]>(loadCustomTabs);
+  const toggleCustom = (id: InspectorTab) => {
+    const next = INSPECTOR_TABS.filter((x) => x !== 'all' && (x === id ? !custom.includes(x) : custom.includes(x)));
+    if (!next.length) return; // the last panel stays
+    setCustom(next);
+    try { localStorage.setItem(CUSTOM_TABS_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+    if (!next.includes(tab)) setTab(next[0]!);
+  };
+  const tabs: readonly InspectorTab[] = state.workspace === 'custom' ? custom : WORKSPACE_TABS[state.workspace];
   const lastWs = useRef(state.workspace);
   useEffect(() => {
     if (lastWs.current !== state.workspace) { lastWs.current = state.workspace; setTab(tabs[0]!); }
@@ -362,6 +381,17 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   return (
     <aside className="inspector" aria-label={t('inspector')}>
       <h2>{t('inspector')}</h2>
+      {state.workspace === 'custom' && (
+        <fieldset className="custom-panels" data-testid="custom-panels">
+          <legend>{t('workspace.custom.choose')}</legend>
+          {INSPECTOR_TABS.filter((x) => x !== 'all').map((id) => (
+            <label key={id} className="check">
+              <input type="checkbox" checked={custom.includes(id)} disabled={custom.length === 1 && custom.includes(id)} data-testid={`custom-panel-${id}`} onChange={() => toggleCustom(id)} />
+              {t(`inspector.tab.${id}` as Key)}
+            </label>
+          ))}
+        </fieldset>
+      )}
       <div className="inspector-tabs" role="tablist" aria-label={t('inspector')} onKeyDown={onTabKey}>
         {tabs.map((id) => (
           <button key={id} type="button" role="tab" id={`inspector-tab-${id}`} data-testid={`inspector-tab-${id}`}

@@ -790,6 +790,20 @@ async function main() {
     const proParts = await parts();
     check('workspaces Motion and Color: both offer the clip panel only; Motion shows position/size, speed and entrances without the look controls; Color shows the look controls without them; Pro shows all of it',
       JSON.stringify(motion) === JSON.stringify({ tabs: ['clip'], transform: 1, speed: 1, animate: 1, look: 0, analysis: 0 }) && JSON.stringify(color) === JSON.stringify({ tabs: ['clip'], transform: 0, speed: 0, animate: 0, look: 1, analysis: 0 }) && proParts.transform === 1 && proParts.look === 1 && proParts.analysis === 1 && proParts.tabs.length === 8, { motion, color, proParts });
+    // the custom workspace: the user's own choice of panels, kept across a reload
+    await page.getByTestId('workspace-switch').selectOption('custom');
+    const customDefault = await tabsShown();
+    await page.getByTestId('custom-panel-captions').check();
+    await page.getByTestId('custom-panel-sound').uncheck();
+    const customChosen = await tabsShown();
+    await page.reload();
+    await page.getByTestId('timecode').waitFor();
+    const customKept = { ws: await page.getByTestId('workspace-switch').inputValue(), tabs: await tabsShown() };
+    await page.getByTestId('custom-panel-clip').uncheck();
+    await page.getByTestId('custom-panel-deliver').uncheck();
+    const lastLocked = await page.getByTestId('custom-panel-captions').isDisabled();
+    await page.getByTestId('custom-panel-clip').check(); await page.getByTestId('custom-panel-deliver').check(); await page.getByTestId('custom-panel-sound').check(); await page.getByTestId('custom-panel-captions').uncheck();
+    check('custom workspace: starts with clip, sound and deliver; ticking and unticking panels changes the tabs on offer; the choice survives a reload; the last remaining panel cannot be unticked', JSON.stringify(customDefault) === JSON.stringify(['clip', 'sound', 'deliver']) && JSON.stringify(customChosen) === JSON.stringify(['clip', 'captions', 'deliver']) && customKept.ws === 'custom' && JSON.stringify(customKept.tabs) === JSON.stringify(['clip', 'captions', 'deliver']) && lastLocked, { customDefault, customChosen, customKept, lastLocked });
     await page.getByTestId('workspace-switch').selectOption('pro');
     const back = await tabsShown();
     const wa = await getDoc();

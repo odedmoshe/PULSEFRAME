@@ -257,3 +257,4 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .scope-stats { display: grid; grid-template-columns: auto auto; gap: 2px 10px; margin: 4px 0; font-size: var(--pf-fs-sm); }
 .scope-stats dd { margin: 0; font-family: var(--pf-mono); }
 .scopes .scope.vec { max-inline-size: 128px; }
+.custom-panels { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0 0 6px; padding: 4px 8px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); font-size: var(--pf-fs-sm); }
