@@ -32,13 +32,18 @@ export const AssetSchema = z
     duration: RationalTimeSchema,
     video: z
       .object({ width: z.number().int().positive(), height: z.number().int().positive(), frameRate: RateSchema, codec: z.string(), rotation: z.number(), frameCount: z.number().int().nonnegative().nullable(),
-        /** Timestamp of the first video frame in the file when it is not 0 (remuxed files, Matroska/TS, B-frames without an edit list). The picture is placed that much later than the start of the sound. */
+        /** When the first video frame does not sit at the file's own start (see Asset.timeOrigin): how much later it starts (remuxed files, Matroska/TS, B-frames without an edit list). */
         startTime: RationalTimeSchema.optional() })
       .strict()
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string(),
-      /** Timestamp of the first audio sample in the file when it is not 0: the sound starts that much after (or before) the file's time zero. */
+      /** When the first audio sample does not sit at the file's own start (see Asset.timeOrigin): how much later it starts. */
       startTime: RationalTimeSchema.optional() }).strict().optional(),
+    /**
+     * The file's own start time when it is not 0 (MPEG-TS streams typically start around 1.4 s). Players and this editor treat
+     * it as time zero: stream start times above are measured from it. Decoders that see raw timestamps add it back.
+     */
+    timeOrigin: RationalTimeSchema.optional(),
     image: z.object({ width: z.number().int().positive(), height: z.number().int().positive(), codec: z.string(), hasAlpha: z.boolean() }).strict().optional(),
     /**
      * Present when the stored media is a conformed copy (SPEC §7): the original could not be edited directly
@@ -48,7 +53,7 @@ export const AssetSchema = z
       .object({
         originalContentHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
         originalByteSize: z.number().int().nonnegative(),
-        reasons: z.array(z.enum(['variable-frame-rate', 'rotation', 'codec'])).min(1),
+        reasons: z.array(z.enum(['variable-frame-rate', 'rotation', 'codec', 'pixel-aspect'])).min(1),
         original: z.object({ codec: z.string(), width: z.number().int(), height: z.number().int(), avgFrameRate: z.string(), rFrameRate: z.string(), rotation: z.number(), frameCount: z.number().int().nullable(), durationSeconds: z.number() }).strict(),
         /** How source frames map to conformed frames. */
         frameMapping: z.enum(['identity', 'cfr-nearest-timestamp']),

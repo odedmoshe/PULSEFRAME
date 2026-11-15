@@ -9,7 +9,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Asset } from '@pulseframe/core';
-import { ffprobe } from './ingest.ts';
+import { countVideoPackets, ffprobe } from './ingest.ts';
 import type { Store } from './store.ts';
 
 export type DerivativeKind = 'thumbnails' | 'waveform' | 'proxy';
@@ -172,10 +172,12 @@ export class Derivatives {
     const v = streams.find((s) => s.codec_type === 'video' && s.disposition?.attached_pic !== 1);
     const a = streams.find((s) => s.codec_type === 'audio');
     const isImage = v && (probe.format?.format_name ?? '').split(',').some((f: string) => /image2|_pipe$/.test(f));
-    if (kind === 'waveform') return a ? this.waveform(src) : { status: 'not-applicable' };
+    const origin = Number.isFinite(Number(probe.format?.start_time)) ? Number(probe.format.start_time) : 0; // the file's own start (see Asset.timeOrigin)
+    if (kind === 'waveform') return a ? this.waveform(src, origin) : { status: 'not-applicable' };
     if (!v || isImage) return { status: 'not-applicable' };
-    const frameCount = Number(v.nb_frames);
-    if (!Number.isInteger(frameCount) || frameCount < 1) throw new Error('source does not state a frame count (nb_frames)');
+    // Matroska, WebM and MPEG-TS do not state a frame count: count the packets, as ingest does.
+    const frameCount = Number(v.nb_frames) || (await countVideoPackets(src)) || 0;
+    if (!Number.isInteger(frameCount) || frameCount < 1) throw new Error('the number of frames in the source could not be determined');
     const m = /^(\d+)\/(\d+)$/.exec(String(v.r_frame_rate));
     if (!m || +m[1]! <= 0 || +m[2]! <= 0) throw new Error('source has no usable frame rate');
     const info = { width: Number(v.width), height: Number(v.height), rate: { num: +m[1]!, den: +m[2]! }, rateText: String(v.r_frame_rate), frameCount };
@@ -205,7 +207,7 @@ export class Derivatives {
    * The PCM is streamed; only the level-0 (256-sample) min/max pairs are kept. Levels 1024/4096 are exact
    * min/max folds of level 0 (their bucket sizes are multiples of 256).
    */
-  private async waveform(src: string): Promise<Outcome> {
+  private async waveform(src: string, origin = 0): Promise<Outcome> {
     const base = BUCKET_SIZES[0];
     const mins: number[] = [];
     const maxs: number[] = [];
@@ -223,7 +225,7 @@ export class Derivatives {
       }
       total += usable / 2;
     };
-    await this.ff([...this.input(src), '-vn', '-map', '0:a:0', '-af', `aresample=${WAVEFORM_SAMPLE_RATE}:first_pts=0` /* the waveform is drawn on the file's own clock, also when its sound starts late */, '-ac', '1', '-ar', String(WAVEFORM_SAMPLE_RATE), '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1'], onData);
+    await this.ff(['-copyts', ...this.input(src), '-vn', '-map', '0:a:0', '-af', `aresample=${WAVEFORM_SAMPLE_RATE}:first_pts=${Math.round(origin * WAVEFORM_SAMPLE_RATE)}` /* the waveform is drawn from the file's own start, also when its sound starts late */, '-ac', '1', '-ar', String(WAVEFORM_SAMPLE_RATE), '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1'], onData);
     if (inBucket > 0) { mins.push(lo); maxs.push(hi); }
     if (total === 0) throw new Error('no audio samples decoded');
     const levels: { samplesPerBucket: number; buckets: number; byteOffset: number }[] = [];

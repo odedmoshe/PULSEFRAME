@@ -32,9 +32,14 @@ export const heavy = limiter(2, 16);
 
 export interface SilenceOptions { thresholdDb: number; minSeconds: number }
 
-export function detectSilences(file: string, opts: SilenceOptions): Promise<{ start: T.RationalTime; end: T.RationalTime }[]> {
+/**
+ * Every reader below takes `origin`: the file's own start time (Asset.timeOrigin, 0 for most files). ffmpeg is run with -copyts so
+ * it reports the file's raw timestamps, and `origin` is subtracted here. Left to itself ffmpeg shifts timestamps by an amount that
+ * depends on which streams are being decoded, which made picture and sound disagree for MPEG-TS files.
+ */
+export function detectSilences(file: string, opts: SilenceOptions, origin = 0): Promise<{ start: T.RationalTime; end: T.RationalTime }[]> {
   return new Promise((resolve, reject) => {
-    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'info', '-protocol_whitelist', 'file', '-i', file, '-map', '0:a:0', '-af', `silencedetect=noise=${opts.thresholdDb}dB:d=${opts.minSeconds}`, '-f', 'null', '-'], { stdio: ['ignore', 'ignore', 'pipe'], timeout: ANALYSIS_TIMEOUT_MS, killSignal: 'SIGKILL' });
+    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'info', '-protocol_whitelist', 'file', '-copyts', '-i', file, '-map', '0:a:0', '-af', `silencedetect=noise=${opts.thresholdDb}dB:d=${opts.minSeconds}`, '-f', 'null', '-'], { stdio: ['ignore', 'ignore', 'pipe'], timeout: ANALYSIS_TIMEOUT_MS, killSignal: 'SIGKILL' });
     let err = '';
     p.stderr.on('data', (d) => { err += d; if (err.length > 8_000_000) p.kill(); });
     p.on('error', (e) => reject(new ApiError(503, 'analysis_unavailable', `ffmpeg could not be started: ${e.message}`)));
@@ -46,7 +51,8 @@ export function detectSilences(file: string, opts: SilenceOptions): Promise<{ st
         if (m[1] === 'start') start = m[2]!;
         else if (start !== null) {
           // ffmpeg prints decimal seconds; they become exact microsecond rationals at this boundary.
-          const s = T.max(T.ZERO, T.fromSeconds(start)), e = T.fromSeconds(m[2]!);
+          const rel = (x: string) => (origin ? (Number(x) - origin).toFixed(6) : x);
+          const s = T.max(T.ZERO, T.fromSeconds(rel(start))), e = T.fromSeconds(rel(m[2]!));
           if (T.lt(s, e)) out.push({ start: s, end: e });
           start = null;
         }
@@ -61,9 +67,9 @@ export function detectSilences(file: string, opts: SilenceOptions): Promise<{ st
  * Hard picture cuts, from ffmpeg's scene-change score (difference between consecutive frames).
  * Returns the source time of the first frame of each new shot. Dissolves and fades are gradual and are NOT found by this method.
  */
-export function detectScenes(file: string, threshold: number, rate: { num: number; den: number }): Promise<T.RationalTime[]> {
+export function detectScenes(file: string, threshold: number, rate: { num: number; den: number }, origin = 0): Promise<T.RationalTime[]> {
   return new Promise((resolve, reject) => {
-    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'info', '-protocol_whitelist', 'file', '-i', file, '-map', '0:v:0', '-vf', `select='gt(scene,${threshold})',showinfo`, '-an', '-f', 'null', '-'], { stdio: ['ignore', 'ignore', 'pipe'], timeout: ANALYSIS_TIMEOUT_MS, killSignal: 'SIGKILL' });
+    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'info', '-protocol_whitelist', 'file', '-copyts', '-i', file, '-map', '0:v:0', '-vf', `select='gt(scene,${threshold})',showinfo`, '-an', '-f', 'null', '-'], { stdio: ['ignore', 'ignore', 'pipe'], timeout: ANALYSIS_TIMEOUT_MS, killSignal: 'SIGKILL' });
     let err = '';
     p.stderr.on('data', (d) => { err += d; if (err.length > 16_000_000) p.kill(); });
     p.on('error', (e) => reject(new ApiError(503, 'analysis_unavailable', `ffmpeg could not be started: ${e.message}`)));
@@ -71,7 +77,7 @@ export function detectScenes(file: string, threshold: number, rate: { num: numbe
       if (code !== 0) return reject(new ApiError(422, 'analysis_failed', 'the picture of this file could not be analysed', { tail: err.slice(-400) }));
       const frames = new Set<number>();
       // Decimal seconds become exact frame times at this boundary: the cut is the nearest source frame.
-      for (const m of err.matchAll(/pts_time:(-?[\d.]+)/g)) frames.add(Math.round((Number(m[1]) * rate.num) / rate.den));
+      for (const m of err.matchAll(/pts_time:(-?[\d.]+)/g)) frames.add(Math.round(((Number(m[1]) - origin) * rate.num) / rate.den));
       resolve([...frames].filter((f) => f > 0).sort((a, b) => a - b).map((f) => T.frameTime(f, rate)));
     });
   });
@@ -80,9 +86,9 @@ export function detectScenes(file: string, threshold: number, rate: { num: numbe
 /** Longest stretch of audio the beat tracker reads (it holds the mono signal in memory). */
 export const BEAT_MAX_SECONDS = 1200;
 /** Beat grid of a file's first audio stream (mono mix-down at 22.05 kHz, see beats.ts). Limited to BEAT_MAX_SECONDS of audio; the caller records when that cut the file short. */
-export function detectBeatsOfFile(file: string): Promise<BeatResult> {
+export function detectBeatsOfFile(file: string, origin = 0): Promise<BeatResult> {
   return new Promise((resolve, reject) => {
-    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', file, '-map', '0:a:0', '-t', String(BEAT_MAX_SECONDS), '-af', `aresample=${BEAT_SR}:first_pts=0` /* beat times on the file's own clock, also when its sound starts late */, '-ac', '1', '-ar', String(BEAT_SR), '-f', 'f32le', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'], timeout: ANALYSIS_TIMEOUT_MS, killSignal: 'SIGKILL' });
+    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-copyts', '-i', file, '-map', '0:a:0', '-af', `aresample=${BEAT_SR}:first_pts=${Math.round(origin * BEAT_SR)},atrim=end_sample=${BEAT_MAX_SECONDS * BEAT_SR},asetpts=PTS-STARTPTS` /* beat times on the file's own clock, also when its sound starts late */, '-ac', '1', '-ar', String(BEAT_SR), '-f', 'f32le', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'], timeout: ANALYSIS_TIMEOUT_MS, killSignal: 'SIGKILL' });
     const chunks: Buffer[] = [];
     p.stdout.on('data', (d) => chunks.push(d));
     p.on('error', (e) => reject(new ApiError(503, 'analysis_unavailable', `ffmpeg could not be started: ${e.message}`)));

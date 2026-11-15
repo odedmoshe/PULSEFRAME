@@ -13,7 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
+import { timeOriginSeconds, findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
@@ -270,7 +270,7 @@ export class Exporter {
 
   /** Sample-exact audio mix of the snapshot as a WAV file (separate stream from video), following the shared audio plan. */
   private renderAudio(doc: ProjectDocument, firstSample: number, totalSamples: number, outFile: string, isCanceled: () => boolean) {
-    return renderMix(audioPlan(doc), (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled);
+    return renderMix(audioPlan(doc), (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled, (assetId) => timeOriginSeconds(doc.assets[assetId]));
   }
 
   private async run(jobId: string) {

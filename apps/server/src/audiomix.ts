@@ -76,7 +76,7 @@ export function normalisationGain(m: Loudness, target: number, ceiling: number):
 }
 
 /** Mix timeline samples [firstSample, firstSample + totalSamples) of the plan into a raw float stereo file. */
-export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) => string, firstSample: number, totalSamples: number, rawFile: string, isCanceled: () => boolean = () => false): Promise<{ clips: number; peak: number }> {
+export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) => string, firstSample: number, totalSamples: number, rawFile: string, isCanceled: () => boolean = () => false, originOf: (assetId: string) => number = () => 0): Promise<{ clips: number; peak: number }> {
   const end = firstSample + totalSamples;
   const active = plan.clips.filter((c) => c.at < end && c.at + c.length > firstSample);
   const readers = new Map<PlannedAudioClip, PcmReader>();
@@ -93,10 +93,10 @@ export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) =>
         let r = readers.get(clip);
         if (!r) {
           // Start reading at the first clip-local sample this export needs; positions are absolute sample indices.
-          // first_pts=0 puts the decoded sound on the file's own clock: silence is inserted before a sound stream that starts late,
+          // -copyts keeps the file's raw timestamps and first_pts=<origin> starts the decoded sound at the file's own start: silence is inserted before a sound stream that starts late,
           // so sample positions mean file time (as in the preview), not "samples since the first one decoded".
           const skip = from - clip.at;
-          const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate}:first_pts=0,aformat=sample_fmts=flt:channel_layouts=stereo,atrim=start_sample=${clip.source + Math.round(skip * clip.speed)}:end_sample=${clip.source + Math.round(clip.length * clip.speed)},asetpts=PTS-STARTPTS${clip.speed === 1 ? '' : `,asetrate=${Math.round(plan.sampleRate * clip.speed)},aresample=${plan.sampleRate}`}`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
+          const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-copyts', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate}:first_pts=${Math.round(originOf(clip.assetId) * plan.sampleRate)},aformat=sample_fmts=flt:channel_layouts=stereo,atrim=start_sample=${clip.source + Math.round(skip * clip.speed)}:end_sample=${clip.source + Math.round(clip.length * clip.speed)},asetpts=PTS-STARTPTS${clip.speed === 1 ? '' : `,asetrate=${Math.round(plan.sampleRate * clip.speed)},aresample=${plan.sampleRate}`}`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
           r = new PcmReader(child);
           readers.set(clip, r);
         }
@@ -122,10 +122,10 @@ const run = (args: string[]) => new Promise<void>((resolve, reject) => {
 });
 
 /** Full export mix: plan -> raw float -> (optional loudness normalisation) -> 16-bit WAV with exactly `totalSamples` frames. */
-export async function renderMix(plan: AudioPlan, blobPathOf: (assetId: string) => string, firstSample: number, totalSamples: number, outFile: string, isCanceled: () => boolean = () => false): Promise<MixResult> {
+export async function renderMix(plan: AudioPlan, blobPathOf: (assetId: string) => string, firstSample: number, totalSamples: number, outFile: string, isCanceled: () => boolean = () => false, originOf: (assetId: string) => number = () => 0): Promise<MixResult> {
   const raw = `${outFile}.f32`;
   try {
-    const { clips, peak } = await mixToRaw(plan, blobPathOf, firstSample, totalSamples, raw, isCanceled);
+    const { clips, peak } = await mixToRaw(plan, blobPathOf, firstSample, totalSamples, raw, isCanceled, originOf);
     const mixPeakDbfs = peak > 0 ? Number((20 * Math.log10(peak)).toFixed(2)) : null;
     let gainDb = 0;
     let loudness: MixResult['loudness'] = null;

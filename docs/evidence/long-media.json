@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T05:12:29.948Z",
+  "ranAt": "2026-11-15T05:51:32.156Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,30 +13,30 @@
   "measurements": {
     "minutes": 20,
     "fileMB": 37.9,
-    "generateSeconds": 71,
+    "generateSeconds": 70.1,
     "ingestSeconds": 0.4,
     "analysis": {
       "beats": {
         "status": "succeeded",
-        "seconds": 12.7
+        "seconds": 10.8
       },
       "scenes": {
         "status": "succeeded",
-        "seconds": 15.8
+        "seconds": 14.6
       }
     },
     "editsDuringAnalysis": {
-      "count": 44,
-      "medianMs": 12,
-      "p95Ms": 19,
-      "maxMs": 21
+      "count": 38,
+      "medianMs": 14,
+      "p95Ms": 20,
+      "maxMs": 25
     },
     "timeline": {
       "shots": 20,
-      "splitMs": 25,
-      "timelineQueryMs": 51,
+      "splitMs": 24,
+      "timelineQueryMs": 55,
       "beatMarkers": 2000,
-      "userMarkers": 44
+      "userMarkers": 38
     },
     "editor": {
       "openSeconds": 0.7,
@@ -59,7 +59,7 @@
       "name": "scene job: finishes and finds all 19 cuts on the exact frames, no false cuts",
       "ok": true,
       "detail": {
-        "seconds": 15.8,
+        "seconds": 14.6,
         "found": 19,
         "firstWrong": null
       }
@@ -68,7 +68,7 @@
       "name": "beat job: finishes with a tempo within 1 BPM of 120 and a beat count within 2% of 2400",
       "ok": true,
       "detail": {
-        "seconds": 12.7,
+        "seconds": 10.8,
         "bpm": 120.19,
         "count": 2399,
         "confidence": 0.992
@@ -78,10 +78,10 @@
       "name": "edits made while both jobs ran all succeeded and stayed prompt (median under 100 ms, worst under 2 s)",
       "ok": true,
       "detail": {
-        "count": 44,
-        "medianMs": 12,
-        "p95Ms": 19,
-        "maxMs": 21
+        "count": 38,
+        "medianMs": 14,
+        "p95Ms": 20,
+        "maxMs": 25
       }
     },
     {
@@ -89,10 +89,10 @@
       "ok": true,
       "detail": {
         "shots": 20,
-        "splitMs": 25,
-        "timelineQueryMs": 51,
+        "splitMs": 24,
+        "timelineQueryMs": 55,
         "beatMarkers": 2000,
-        "userMarkers": 44
+        "userMarkers": 38
       }
     },
     {

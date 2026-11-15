@@ -170,7 +170,10 @@ export class Player {
           const speed = c.speed;
           const srcFrom = sourceIn + Math.max(0, t0 - start) * speed;
           const srcTo = sourceIn + (end - start) * speed;
-          for await (const b of opened.sink.buffers(srcFrom, srcTo)) {
+          // The decoder reports the file's raw timestamps; source times here are measured from the file's own start (asset.timeOrigin).
+          const origin = doc.assets[c.assetId]?.timeOrigin ? T.toSeconds(doc.assets[c.assetId]!.timeOrigin!) : 0;
+          for await (const raw of opened.sink.buffers(srcFrom + origin, srcTo + origin)) {
+            const b = { buffer: raw.buffer, duration: raw.duration, timestamp: raw.timestamp - origin };
             if (gen !== this.generation) break;
             // Portion of this buffer inside [srcFrom, srcTo), then its position on the playback clock.
             const from = Math.max(b.timestamp, srcFrom);

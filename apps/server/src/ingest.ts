@@ -16,6 +16,15 @@ export async function ffprobe(file: string): Promise<any> {
   const { stdout } = await exec('ffprobe', ['-v', 'error', '-protocol_whitelist', 'file', '-print_format', 'json', '-show_format', '-show_streams', file], { timeout: 30_000, maxBuffer: 8 << 20 });
   return JSON.parse(stdout);
 }
+/** Number of video packets in the first video stream, read without decoding (null when it cannot be determined). */
+export async function countVideoPackets(file: string): Promise<number | null> {
+  try {
+    const { stdout } = await exec('ffprobe', ['-v', 'error', '-protocol_whitelist', 'file', '-select_streams', 'v:0', '-count_packets', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', file], { timeout: 120_000, maxBuffer: 1 << 20 });
+    // MPEG-TS lists the stream once per programme as well, so the value can be printed more than once: take the first.
+    const n = Number((stdout.trim().split(/\s+/)[0] ?? '').replace(/,/g, ''));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  } catch { return null; }
+}
 const parseRate = (s: string | undefined) => {
   const m = /^(\d+)\/(\d+)$/.exec(s ?? '');
   return m && +m[1]! > 0 && +m[2]! > 0 ? { num: +m[1]!, den: +m[2]! } : null;
@@ -23,11 +32,11 @@ const parseRate = (s: string | undefined) => {
 const MIME: Record<string, string> = { mp4: 'video/mp4', webm: 'video/webm', wav: 'audio/wav', mp3: 'audio/mpeg', ogg: 'audio/ogg', flac: 'audio/flac', m4a: 'audio/mp4' };
 
 const ALPHA_PIX = /^(rgba|bgra|argb|abgr|ya\d|yuva|gbrap|pal8|rgba64|ya16)/;
-export type MediaMeta = Pick<Asset, 'kind' | 'container' | 'mimeType' | 'duration' | 'video' | 'audio' | 'image'>;
+export type MediaMeta = Pick<Asset, 'kind' | 'container' | 'mimeType' | 'duration' | 'video' | 'audio' | 'image' | 'timeOrigin'>;
 /** Video codecs the editor decodes directly (WebCodecs, measured in docs/CAPABILITIES.md). Anything else is conformed. */
 const EDITABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1']);
 export class NeedsConform extends Error {
-  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }) { super('needs conform'); }
+  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }) { super('needs conform'); }
 }
 const STANDARD_RATES = [[24000, 1001], [24, 1], [25, 1], [30000, 1001], [30, 1], [50, 1], [60000, 1001], [60, 1]] as const;
 /** Probe a local file and describe it as asset metadata. Used for uploads and for provider outputs alike. */
@@ -54,16 +63,24 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
   if (v && formats.some((f) => /image2|_pipe$/.test(f))) throw new ApiError(415, 'unsupported_media', `still image format ${v.codec_name} is not supported yet`);
   const container = formats.includes('mp4') ? 'mp4' : formats.includes('webm') ? 'webm' : (formats[0] ?? 'unknown');
   let duration = T.fromSeconds(String(Number(probe.format?.duration ?? (v ?? a).duration ?? 0).toFixed(6)));
+  // The container's own start time. Players (and ffmpeg) treat it as time zero; MPEG-TS files typically start around 1.4 s.
+  // Stream start times below are measured from it, so only the offsets BETWEEN picture and sound are kept.
+  const originRaw = Number(probe.format?.start_time ?? 0);
+  const origin = Number.isFinite(originRaw) ? originRaw : 0;
   let video: Asset['video'];
   if (v) {
     const rate = parseRate(v.avg_frame_rate) ?? parseRate(v.r_frame_rate);
     if (!rate) throw new ApiError(415, 'unsupported_media', 'video stream has no usable frame rate');
-    const frameCount = v.nb_frames ? Number(v.nb_frames) : null;
+    // Matroska, WebM and MPEG-TS do not state the number of frames; count the packets (no decoding) so the length and the last frame are exact.
+    const frameCount = v.nb_frames ? Number(v.nb_frames) : await countVideoPackets(file);
     const rotation = Number(v.side_data_list?.find((s: any) => s.rotation !== undefined)?.rotation ?? 0);
     const reasons: NeedsConform['reasons'] = [];
     if (v.avg_frame_rate !== v.r_frame_rate) reasons.push('variable-frame-rate');
     if (rotation % 360 !== 0) reasons.push('rotation');
     if (!EDITABLE_VIDEO.has(v.codec_name)) reasons.push('codec');
+    // Non-square pixels (anamorphic DV/HDV/broadcast material): the stored width is not the shown width. The conformed copy has square pixels.
+    const [sarN, sarD] = String(v.sample_aspect_ratio ?? '1:1').split(':').map(Number);
+    if (sarN! > 0 && sarD! > 0 && Math.abs(sarN! / sarD! - 1) > 0.005) reasons.push('pixel-aspect');
     if (reasons.length) {
       // Constant target rate: the standard rate nearest the average rate (a documented choice, not a guess per frame).
       const avg = rate.num / rate.den;
@@ -71,18 +88,18 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
       throw new NeedsConform(reasons, { codec: v.codec_name, width: v.width, height: v.height, avgFrameRate: v.avg_frame_rate, rFrameRate: v.r_frame_rate, rotation, frameCount, durationSeconds: Number(probe.format?.duration ?? 0) }, reasons.includes('variable-frame-rate') ? { num, den } : rate);
     }
     // Where the picture starts in the file. Not 0 after many remuxes, in Matroska/TS, or with B-frames and no edit list.
-    const start = Number(v.start_time ?? 0);
+    const start = Number(v.start_time ?? 0) - origin;
     const startTime = Number.isFinite(start) && Math.abs(start) > 1e-6 ? T.fromSeconds(start.toFixed(6)) : undefined;
     const startFrames = startTime ? startOffsetFrames({ frameRate: rate, startTime }) : 0;
     // Exact duration from frame count when the container states it (plus the frames the picture starts late); otherwise the decimal container duration.
     if (frameCount) duration = T.frameTime(frameCount + Math.max(0, startFrames), rate);
     video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount, ...(startTime ? { startTime } : {}) };
   }
-  const aStart = a ? Number(a.start_time ?? 0) : 0;
+  const aStart = a ? Number(a.start_time ?? 0) - origin : 0;
   const audio = a ? { sampleRate: Number(a.sample_rate), channels: Number(a.channels), codec: String(a.codec_name), ...(Number.isFinite(aStart) && Math.abs(aStart) > 1e-6 ? { startTime: T.fromSeconds(aStart.toFixed(6)) } : {}) } : undefined;
   if (!T.lt(T.ZERO, duration)) throw new ApiError(415, 'unsupported_media', 'media has zero duration');
   const mimeType = (v ? MIME[container] : MIME[container === 'mp4' ? 'm4a' : container]) ?? 'application/octet-stream';
-  return { kind: v ? 'video' : 'audio', container, mimeType, duration, video, audio };
+  return { kind: v ? 'video' : 'audio', container, mimeType, duration, video, audio, ...(Math.abs(origin) > 1e-6 ? { timeOrigin: T.fromSeconds(origin.toFixed(6)) } : {}) };
 }
 
 /** Self-contained containers ffprobe may report for an upload (names as ffmpeg prints them). */
@@ -116,7 +133,7 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
       try {
         await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-protocol_whitelist', 'file', '-i', tmp,
           '-map', '0:v:0', '-map', '0:a:0?', '-fps_mode', 'cfr', '-r', `${e.targetRate.num}/${e.targetRate.den}`,
-          '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-bf', '2',
+          '-vf', 'scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-bf', '2',
           '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out], { timeout: 30 * 60_000, maxBuffer: 8 << 20 });
         const conformed = await describeMedia(out);
         const cHash = createHash('sha256');

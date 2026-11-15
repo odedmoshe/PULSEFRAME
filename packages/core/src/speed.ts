@@ -13,6 +13,8 @@ import type { Clip, MediaClip } from './schema.ts';
  */
 export const startOffsetFrames = (video: { frameRate: { num: number; den: number }; startTime?: T.RationalTime }): number =>
   video.startTime ? Math.round((T.toSeconds(video.startTime) * video.frameRate.num) / video.frameRate.den) : 0;
+/** The file's own start time in seconds (0 for most files; see Asset.timeOrigin). Raw timestamps minus this are the asset's times. */
+export const timeOriginSeconds = (asset: { timeOrigin?: T.RationalTime } | undefined): number => (asset?.timeOrigin ? T.toSeconds(asset.timeOrigin) : 0);
 /** A freeze-frame clip shows one source picture for its whole length: it covers no stretch of source time. */
 export const isFreeze = (c: Clip): boolean => c.type === 'media' && c.freeze === true;
 export interface Speed { num: number; den: number }

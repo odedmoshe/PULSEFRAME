@@ -6,7 +6,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { timeOriginSeconds, describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -554,7 +554,7 @@ export async function findSilences(store: Store, projectId: string, a: z.infer<t
   if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio');
   const opts = { thresholdDb: a.thresholdDb ?? -35, minSeconds: a.minSeconds ?? 0.5 };
   const keepSeconds = a.keepSeconds ?? 0.1;
-  const source = await heavy(() => detectSilences(store.blobPath(asset.contentHash), opts));
+  const source = await heavy(() => detectSilences(store.blobPath(asset.contentHash), opts, timeOriginSeconds(asset)));
   const candidates = sourceRangesToTimeline(p.doc, a.assetId, source, T.fromSeconds(keepSeconds.toFixed(6)));
   const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
   return {
@@ -588,7 +588,7 @@ export async function programmeLoudness(store: Store, projectId: string) {
   const raw = path.join(store.tmpDir, `loud_${projectId}_${p.revision}_${Date.now()}.f32`);
   return heavy(async () => {
   try {
-    const { clips, peak } = await mixToRaw(plan, (assetId) => store.blobPath(p.doc.assets[assetId]!.contentHash), 0, plan.totalSamples, raw);
+    const { clips, peak } = await mixToRaw(plan, (assetId) => store.blobPath(p.doc.assets[assetId]!.contentHash), 0, plan.totalSamples, raw, undefined, (assetId) => timeOriginSeconds(p.doc.assets[assetId]));
     const m = await measureLoudness(raw, plan.sampleRate);
     const target = p.doc.settings.loudness ?? null;
     const g = target ? normalisationGain(m, target.target, target.truePeak) : null;
@@ -647,9 +647,9 @@ async function measureAndAttach(store: Store, actor: string, projectId: string, 
   let args: Record<string, unknown>;
   if (a.kind === 'scenes') {
     const threshold = a.threshold ?? 0.3;
-    args = { method: 'ffmpeg scene score (hard cuts only; dissolves are not detected)', params: { threshold }, times: await heavy(() => detectScenes(file, threshold, asset.video!.frameRate)) };
+    args = { method: 'ffmpeg scene score (hard cuts only; dissolves are not detected)', params: { threshold }, times: await heavy(() => detectScenes(file, threshold, asset.video!.frameRate, timeOriginSeconds(asset))) };
   } else {
-    const r = await heavy(() => detectBeatsOfFile(file));
+    const r = await heavy(() => detectBeatsOfFile(file, timeOriginSeconds(asset)));
     // The tracker reads at most the first 20 minutes of audio; say so in the stored result instead of leaving the rest silently without beats.
     const partial = T.toSeconds(asset.duration) > BEAT_MAX_SECONDS + 1;
     args = { method: `spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse${partial ? `; ONLY THE FIRST ${BEAT_MAX_SECONDS / 60} MINUTES were analysed` : ''}`, params: { sampleRate: 22050, hop: 256, ...(partial ? { analysedSeconds: BEAT_MAX_SECONDS } : {}) }, times: r.beats.filter((s) => s <= T.toSeconds(asset.duration)).map((s) => T.fromSeconds(s.toFixed(3))), bpm: r.bpm, confidence: r.confidence };

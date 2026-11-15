@@ -3,7 +3,7 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { findClip, fingerprint, planRecipe, RecipeError, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
+import { timeOriginSeconds, findClip, fingerprint, planRecipe, RecipeError, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { detectSilences, heavy } from './analysis.ts';
 import type { Governance } from './governance.ts';
@@ -21,7 +21,7 @@ async function context(store: Store, projectId: string, recipeId: string, params
   const ctx: PlanContext = { protectedRanges };
   if (recipeId === 'tidy-speech' && typeof params?.assetId === 'string') {
     const asset = store.getProject(projectId).doc.assets[params.assetId];
-    if (asset?.audio) ctx.silences = { [params.assetId]: await heavy(() => detectSilences(store.blobPath(asset.contentHash), { thresholdDb: -35, minSeconds: 0.5 })) };
+    if (asset?.audio) ctx.silences = { [params.assetId]: await heavy(() => detectSilences(store.blobPath(asset.contentHash), { thresholdDb: -35, minSeconds: 0.5 }, timeOriginSeconds(asset))) };
   }
   return ctx;
 }

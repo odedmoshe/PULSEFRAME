@@ -73,6 +73,35 @@ describe('conform route (SPEC §7)', () => {
     const wrong = Array.from({ length: 60 }, (_, k) => readBarcode(raw.subarray(k * 691200, (k + 1) * 691200), 640, 3, { x: 0, y: 0, w: 640, h: 360 })).filter((v, k) => v !== k);
     expect(wrong).toEqual([]);
   }, 60_000);
+  it('non-square pixels: conformed to square pixels at the shown width; frames map 1:1 and read correctly at full frame', async () => {
+    const sar = path.join(dir, 'sar.mp4');
+    ff(['-i', base, '-vf', 'scale=480:360,setsar=4/3', '-c:v', 'libx264', '-crf', '14', '-c:a', 'copy', sar]);
+    const a = await upload(sar);
+    expect(a.conform).toMatchObject({ reasons: ['pixel-aspect'], frameMapping: 'identity', original: { width: 480, height: 360 } });
+    expect(a.video).toMatchObject({ width: 640, height: 360, frameCount: 60, codec: 'h264' });
+    const raw = execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-i', store.blobPath(a.contentHash), '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 30 });
+    const fb = 640 * 360 * 3;
+    expect([0, 17, 59].map((i) => readBarcode(raw.subarray(i * fb, (i + 1) * fb), 640, 3, { x: 0, y: 0, w: 640, h: 360 }))).toEqual([0, 17, 59]);
+  }, 60_000);
+  it('container start time: an MPEG-TS file (streams start around 1.4 s) records its origin; stream starts are measured from it, and frames are counted', async () => {
+    const ts = path.join(dir, 'c.ts');
+    ff(['-i', base, '-c', 'copy', ts]);
+    const a = await upload(ts);
+    expect(a.conform).toBeUndefined();
+    expect(a.timeOrigin).toBeDefined();
+    const origin = Number(a.timeOrigin!.value) / a.timeOrigin!.timescale;
+    expect(origin).toBeGreaterThan(1);
+    const rel = (t?: { value: string; timescale: number }) => (t ? Number(t.value) / t.timescale : 0);
+    expect(Math.min(rel(a.video!.startTime), rel(a.audio!.startTime))).toBe(0); // the earlier stream defines time zero
+    expect(Math.max(rel(a.video!.startTime), rel(a.audio!.startTime))).toBeLessThan(0.1); // only the offset between the streams is kept
+    expect(a.video!.frameCount).toBe(60); // MPEG-TS does not state it; counted from packets
+  }, 60_000);
+  it('a file that starts at 0 records no origin and no stream offsets (nothing changes for ordinary files)', async () => {
+    const a = await upload(base);
+    expect(a.timeOrigin).toBeUndefined();
+    expect(a.video!.startTime).toBeUndefined();
+    expect(a.audio!.startTime).toBeUndefined();
+  });
   it('non-media bytes are still rejected with a typed error', async () => {
     const junk = path.join(dir, 'junk.mp4');
     fs.writeFileSync(junk, Buffer.alloc(5000, 7));
