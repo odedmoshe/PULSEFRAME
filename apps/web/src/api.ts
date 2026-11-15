@@ -51,7 +51,20 @@ export function writeSnapBeats(on: boolean): void {
   try { globalThis.localStorage?.setItem(SNAP_BEATS_KEY, on ? '1' : '0'); } catch { /* storage unavailable */ }
 }
 
+export interface ProjectListItem { id: string; name: string; revision: number; updatedAt?: string }
+export interface StorageReport { projects: number; databaseBytes: number; media: { files: number; bytes: number }; exportsBytes: number; unreferenced: { files: number; bytes: number; tooNewToJudge?: number }; rule: string }
+export interface GcResult { applied: boolean; wouldRemove?: { files: number; bytes: number }; removed?: { files: number; bytes: number }; note?: string }
+export type GrantMode = 'observe' | 'propose' | 'edit' | 'autopilot';
+export interface GrantItem { id: string; name: string; mode: GrantMode; projectIds: string[] | null; trackIds: string[] | null; range: unknown; budgetCents: number; expiresAt: string | null; revokedAt: string | null; createdAt: string }
+
 export const api = {
+  listProjectsFull: () => call<{ projects: ProjectListItem[] }>('/projects'),
+  deleteProject: (id: string, confirmName: string) => call<unknown>(`/projects/${encodeURIComponent(id)}/delete`, json({ confirmName })),
+  storage: () => call<StorageReport>('/storage'),
+  storageGc: (apply: boolean) => call<GcResult>('/storage/gc', json(apply ? { apply: true } : {})),
+  listGrants: () => call<{ grants: GrantItem[] }>('/grants'),
+  createGrant: (body: { name: string; mode: GrantMode; projectIds?: string[]; budgetCents?: number }) => call<{ grant: GrantItem; token: string }>('/grants', json(body)),
+  revokeGrant: (id: string) => call<{ grant: GrantItem }>(`/grants/${encodeURIComponent(id)}/revoke`, json({})),
   analyzeAsset: (id: string, assetId: string, body: { kind: 'scenes' | 'beats'; threshold?: number }) =>
     call<AnalyzeResult>(`/projects/${id}/assets/${assetId}/analyze`, json(body)),
   session: () => call<{ actor: string }>('/session', { headers: ownerKeyHeader() }),

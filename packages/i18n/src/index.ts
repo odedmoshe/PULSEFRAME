@@ -88,6 +88,18 @@ export const he = {
   'recipes.needs.beat-montage': 'ניתוח פעימות של קובץ המוזיקה', 'recipes.needs.social-pack': 'אין דרישות; כתוביות דורשות תמלול', 'recipes.needs.tidy-speech': 'מדידת שקטים (השרת מבצע אותה בעת התכנון)',
   'recipes.runs': 'הפעלות קודמות', 'recipes.runs.none': 'עדיין לא הופעל מתכון', 'recipes.regenerate': 'יצירה מחדש', 'recipes.regenerating': 'יוצר מחדש…', 'recipes.replaced': 'הוחלפו', 'recipes.kept': 'נשארו כי נערכו ידנית',
   'analysis.outside': 'הסמן מחוץ לקליפ', 'analysis.nothingToRemove': 'אין מה להסיר', 'snap.beats': 'הצמדה לפעימות וחיתוכים', 'timeline.markers.truncated': 'מוצגים 3000 הסמנים הראשונים בלבד',
+  'op.set_audio_crossfade': 'מעבר חלק בין קליפים',
+  'sound.crossfade': 'מעבר חלק (שניות)', 'sound.crossfade.apply': 'החלת מעבר חלק', 'sound.crossfade.hint': 'נכנס בפייד מהקליפ שנגמר היכן שהקליפ הזה מתחיל. 0 מסיר אותו.',
+  'projects.open': 'פרויקטים', 'projects.title': 'פרויקטים', 'projects.close': 'סגירה', 'projects.loading': 'טוען…', 'projects.empty': 'אין פרויקטים', 'projects.current': 'הפרויקט הנוכחי',
+  'projects.openBtn': 'פתיחה', 'projects.new': 'פרויקט חדש', 'projects.new.name': 'שם הפרויקט', 'projects.new.create': 'יצירה ופתיחה', 'projects.revision': 'גרסה',
+  'projects.delete': 'מחיקה', 'projects.delete.warn': 'המחיקה סופית: ההיסטוריה והייצואים של הפרויקט יימחקו. כדי לשמור עותק, הורידו קודם את הארכיון.', 'projects.delete.archive': 'הורדת ארכיון', 'projects.delete.type': 'הקלידו את שם הפרויקט במדויק כדי לאשר', 'projects.delete.apply': 'מחיקה סופית', 'projects.delete.cancel': 'ביטול',
+  'storage.title': 'אחסון', 'storage.projects': 'פרויקטים', 'storage.database': 'מסד נתונים', 'storage.media': 'קבצי מדיה', 'storage.exports': 'ייצואים', 'storage.unreferenced': 'מדיה שאינה בשימוש', 'storage.tooNew': 'חדשים מכדי להחליט', 'storage.rule': 'כלל', 'storage.check': 'בדיקה מה אפשר להסיר', 'storage.wouldRemove': 'ניתן להסיר', 'storage.apply': 'הסרת מדיה שאינה בשימוש', 'storage.removed': 'הוסרו', 'storage.files': 'קבצים',
+  'access.title': 'גישת סוכנים', 'access.intro': 'סוכן חיצוני מתחבר עם אסימון גישה. כאן קובעים מה מותר לו, ואפשר לבטל בכל רגע.', 'access.empty': 'אין הרשאות סוכנים', 'access.revoke': 'ביטול הרשאה',
+  'access.mode.observe': 'צפייה', 'access.mode.propose': 'הצעות', 'access.mode.edit': 'עריכה', 'access.mode.autopilot': 'טייס אוטומטי',
+  'access.mode.observe.hint': 'רואה את הפרויקט בלבד, לא משנה דבר.', 'access.mode.propose.hint': 'מציע שינויים; שום דבר לא משתנה עד שתאשרו.', 'access.mode.edit.hint': 'עורך ישירות; אפשר לבטל בכל שלב.', 'access.mode.autopilot.hint': 'פועל באופן עצמאי, כולל פעולות בתקציב מוגדר.',
+  'access.scope.this': 'פרויקט זה בלבד', 'access.scope.project': 'פרויקט מסוים', 'access.scope.all': 'כל הפרויקטים', 'access.status.active': 'פעילה', 'access.status.revoked': 'בוטלה', 'access.status.expired': 'פגה',
+  'access.create': 'הרשאה חדשה', 'access.name': 'שם', 'access.mode': 'רמת גישה', 'access.thisProject': 'הגבלה לפרויקט זה', 'access.budget': 'תקציב (יחידות מטבע שלמות)', 'access.budget.hint': 'בגרסה זו שום דבר עדיין לא עולה כסף.', 'access.createBtn': 'יצירת הרשאה',
+  'access.token.title': 'אסימון הגישה', 'access.token.once': 'האסימון מוצג פעם אחת בלבד ולא יוצג שוב. העתיקו אותו עכשיו.', 'access.token.copy': 'העתקה', 'access.token.copied': 'הועתק', 'access.token.endpoint': 'כתובת MCP', 'access.token.usage': 'שולחים את האסימון בכותרת Authorization: Bearer …', 'access.token.dismiss': 'סיימתי, הסתרת האסימון',
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -177,6 +189,18 @@ export const en: Record<keyof typeof he, string> = {
   'recipes.needs.beat-montage': 'Beat analysis of the music file', 'recipes.needs.social-pack': 'Nothing; captions need a transcript', 'recipes.needs.tidy-speech': 'Silence measurement (done by the server when planned)',
   'recipes.runs': 'Previous runs', 'recipes.runs.none': 'No recipe has been applied yet', 'recipes.regenerate': 'Regenerate', 'recipes.regenerating': 'Regenerating…', 'recipes.replaced': 'Replaced', 'recipes.kept': 'Kept because edited by hand',
   'analysis.outside': 'The playhead is outside the clip', 'analysis.nothingToRemove': 'Nothing to remove', 'snap.beats': 'Snap to beats and cuts', 'timeline.markers.truncated': 'Only the first 3000 markers are shown',
+  'op.set_audio_crossfade': 'Audio crossfade',
+  'sound.crossfade': 'Crossfade (seconds)', 'sound.crossfade.apply': 'Apply crossfade', 'sound.crossfade.hint': 'Fades in from the clip that ends where this one starts. 0 removes it.',
+  'projects.open': 'Projects', 'projects.title': 'Projects', 'projects.close': 'Close', 'projects.loading': 'Loading…', 'projects.empty': 'No projects', 'projects.current': 'Current project',
+  'projects.openBtn': 'Open', 'projects.new': 'New project', 'projects.new.name': 'Project name', 'projects.new.create': 'Create and open', 'projects.revision': 'Revision',
+  'projects.delete': 'Delete', 'projects.delete.warn': 'Deleting is permanent: the project history and exports are removed. Download the archive first to keep a copy.', 'projects.delete.archive': 'Download archive', 'projects.delete.type': 'Type the exact project name to confirm', 'projects.delete.apply': 'Delete permanently', 'projects.delete.cancel': 'Cancel',
+  'storage.title': 'Storage', 'storage.projects': 'Projects', 'storage.database': 'Database', 'storage.media': 'Media files', 'storage.exports': 'Exports', 'storage.unreferenced': 'Unused media', 'storage.tooNew': 'too new to judge', 'storage.rule': 'Rule', 'storage.check': 'Check what can be removed', 'storage.wouldRemove': 'Can be removed', 'storage.apply': 'Remove unused media', 'storage.removed': 'Removed', 'storage.files': 'files',
+  'access.title': 'Agent access', 'access.intro': 'An outside agent connects with an access token. Here you decide what it may do, and you can revoke it at any time.', 'access.empty': 'No agent grants', 'access.revoke': 'Revoke',
+  'access.mode.observe': 'Observe', 'access.mode.propose': 'Propose', 'access.mode.edit': 'Edit', 'access.mode.autopilot': 'Autopilot',
+  'access.mode.observe.hint': 'Can see the project, changes nothing.', 'access.mode.propose.hint': 'Suggests changes; nothing changes until you accept.', 'access.mode.edit.hint': 'Edits directly; every change can be undone.', 'access.mode.autopilot.hint': 'Works on its own, including actions within a set budget.',
+  'access.scope.this': 'This project only', 'access.scope.project': 'Specific projects', 'access.scope.all': 'All projects', 'access.status.active': 'Active', 'access.status.revoked': 'Revoked', 'access.status.expired': 'Expired',
+  'access.create': 'New grant', 'access.name': 'Name', 'access.mode': 'Access level', 'access.thisProject': 'Limit to this project', 'access.budget': 'Budget (whole currency units)', 'access.budget.hint': 'Nothing in this build costs money yet.', 'access.createBtn': 'Create grant',
+  'access.token.title': 'Access token', 'access.token.once': 'This token is shown once and will not be shown again. Copy it now.', 'access.token.copy': 'Copy', 'access.token.copied': 'Copied', 'access.token.endpoint': 'MCP endpoint', 'access.token.usage': 'Send the token as the header Authorization: Bearer …', 'access.token.dismiss': 'Done, hide the token',
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
