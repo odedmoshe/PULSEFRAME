@@ -3,8 +3,9 @@
  *  - every exported frame of a 2× and a 0.5× clip shows the source frame the mapping predicts (frame barcode),
  *  - the same in the editor preview and in still renders (one evaluator),
  *  - sound is resampled with the picture: length and pitch measured on the exported mix,
- *  - captions and source-linked markers follow the speed; split and undo behave.
- * Not covered: pitch-preserving time stretch (not implemented; sound is varispeed), speed ramps, real footage.
+ *  - captions and source-linked markers follow the speed; split and undo behave,
+ *  - freeze frame: held picture, inserted time and silent hold checked on exported frames and sound.
+ * Not covered: pitch-preserving time stretch (not implemented; sound is varispeed), speed ramps, reverse, real footage.
  *   pnpm build && pnpm proof:speed
  */
 import { execFileSync } from 'node:child_process';
@@ -114,6 +115,27 @@ async function main() {
     d = await doc(pid);
     check('undo: speed change and split were one transaction, so one undo returns to the single 1.5× clip of 80 frames', clipsOf(d, 'video').length === 1 && clipsOf(d, 'video')[0].speed.num === 3 && T.frameIndexAt(clipsOf(d, 'video')[0].duration, R) === 80);
 
+    console.log('\n# freeze frame');
+    const fp = (await call('/projects', { name: 'freeze', width: W, height: H })).body.project.id;
+    const fa = await upload(fp, fixture.file);
+    const fclip = (await txs(fp, [{ op: 'add_clip', args: { assetId: fa.assetId, start: f(0) } }, { op: 'add_text', args: { text: 'T', start: f(30), duration: f(30), style: { sizeFrac: 0.03 } } }])).results[0].output.clipId as string;
+    const fz = await txs(fp, [{ op: 'freeze_frame', args: { clipId: fclip, at: f(45), duration: f(30) } }]);
+    const fd = await doc(fp);
+    const frozen = await exportedFrames(fp);
+    const want = (i: number) => (i < 45 ? i : i < 75 ? 45 : i - 30);
+    const frozenBad = frozen.map((g, i) => (g === want(i) ? -1 : i)).filter((i) => i >= 0);
+    const titleClip = fd.sequences.seq_main.tracks.find((t: any) => t.kind === 'text').clips[0];
+    check('freeze_frame at timeline frame 45 for 30 frames: the export has 150 frames — 0..44 play, 45..74 all show source frame 45, 75..149 continue from 45 — every frame read from its barcode; a title crossing the point stays up through the hold', frozen.length === 150 && frozenBad.length === 0 && T.frameIndexAt(titleClip.duration, R) === 60 && clipsOf(fd, 'video').filter((c: any) => c.freeze).length === 1, { revision: fz.revision, frames: frozen.length, mismatched: frozenBad.slice(0, 8), around: frozen.slice(43, 47).concat(frozen.slice(73, 77)) });
+    // sound: the fixture beeps at each whole source second; with a 1 s hold inserted at 1.5 s the beeps of source 2 s and 3 s are heard at 3 s and 4 s, and the hold itself is silent
+    const fpcm = await mixPcm(fp);
+    const peakIn = (a: number, b: number) => { let m = 0; for (let i = Math.floor(a * SR); i < Math.floor(b * SR) && i < fpcm.length; i++) m = Math.max(m, Math.abs(fpcm[i]!)); return Number(m.toFixed(3)); };
+    const sound = { seconds: Number((fpcm.length / SR).toFixed(3)), beepAt1: peakIn(1.0, 1.05), holdPeak: peakIn(1.5, 2.5), beepAt3: peakIn(3.0, 3.05), noBeepAt2: peakIn(2.0, 2.05), beepAt4: peakIn(4.0, 4.05) };
+    measurements.freezeSound = sound;
+    check('sound around the hold: 5 s in total, silent during the held second, and the later beeps arrive exactly one second later than before', Math.abs(sound.seconds - 5) < 0.02 && sound.beepAt1 > 0.1 && sound.holdPeak < 0.005 && sound.noBeepAt2 < 0.005 && sound.beepAt3 > 0.1 && sound.beepAt4 > 0.1, sound);
+    await call(`/projects/${fp}/undo`, {});
+    const fundo = await doc(fp);
+    check('one undo removes the hold and rejoins nothing by hand: the timeline is the single 120-frame clip again', clipsOf(fundo, 'video').length === 1 && T.frameIndexAt(clipsOf(fundo, 'video')[0].duration, R) === 120 && clipsOf(fundo, 'audio').length === 1);
+
     console.log('\n# sound: resampled with the picture');
     const ap = (await call('/projects', { name: 'speed-audio', width: W, height: H })).body.project.id;
     const ta = await upload(ap, toneFile);
@@ -178,8 +200,27 @@ async function main() {
     await page.getByTestId('clip-speed').fill('0.75');
     await page.getByTestId('clip-speed').press('Enter');
     for (let i = 0; i < 100; i++) { ed = await doc(ep); if (clipsOf(ed, 'video')[0].speed?.den === 4) break; await sleep(100); }
+    const at075 = ed;
+    const docAt075 = async () => at075;
+    const ratio34Frames = T.frameIndexAt(clipsOf(at075, 'video')[0].duration, R);
+    // freeze frame from the Inspector: speed back to 1, playhead to frame 30, hold for 0.5 s
+    await page.getByTestId('clip-speed-1').click();
+    for (let i = 0; i < 100; i++) { ed = await doc(ep); if (!clipsOf(ed, 'video')[0].speed) break; await sleep(100); }
+    await page.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, (30 / 30) * 90 + 0.5);
+    await page.getByTestId('freeze-seconds').fill('0.5');
+    await page.getByTestId('freeze-apply').click();
+    let withHold: any;
+    for (let i = 0; i < 100; i++) { withHold = await doc(ep); if (clipsOf(withHold, 'video').length === 3) break; await sleep(100); }
+    await page.locator('.clip[data-freeze=true]').first().waitFor({ timeout: 8000 }).catch(() => {}); // the server has the hold; wait until the page shows it
+    const holdEl = await page.locator('.clip[data-freeze=true]').count();
+    const holdClip = clipsOf(withHold, 'video').find((c: any) => c.freeze);
+    const uiFreeze = { clips: clipsOf(withHold, 'video').length, holdStart: holdClip ? T.frameIndexAt(holdClip.start, R) : null, holdFrames: holdClip ? T.frameIndexAt(holdClip.duration, R) : null, marked: holdEl };
+    await page.keyboard.press('Control+z');
+    for (let i = 0; i < 100; i++) { ed = await doc(ep); if (clipsOf(ed, 'video').length === 1) break; await sleep(100); }
     await page.screenshot({ path: path.join(art, 'editor-speed.png') });
-    check('preview: five seeks on the 2× clip each paint source frame 2×target; typing 0.75 stores the exact ratio 3/4 (160 frames); no page errors', wrong.length === 0 && clipsOf(ed, 'video')[0].speed?.num === 3 && T.frameIndexAt(clipsOf(ed, 'video')[0].duration, R) === 160 && errors.length === 0, { wrong, errors: errors.slice(0, 3) });
+    const ratio34 = clipsOf(await docAt075(), 'video')[0];
+    check('preview: five seeks on the 2× clip each paint source frame 2×target; typing 0.75 stores the exact ratio 3/4 (160 frames)', wrong.length === 0 && ratio34?.speed?.num === 3 && ratio34?.speed?.den === 4 && ratio34Frames === 160, { wrong });
+    check('Inspector: "Freeze frame" at the playhead (frame 30, 0.5 s) makes three picture clips with a 15-frame hold starting at frame 30, marked on the timeline; Ctrl+Z restores the single clip; no page errors in the editor', uiFreeze.clips === 3 && uiFreeze.holdStart === 30 && uiFreeze.holdFrames === 15 && uiFreeze.marked === 1 && clipsOf(ed, 'video').length === 1 && errors.length === 0, { uiFreeze, errors: errors.slice(0, 3) });
     await page.close();
   } catch (e) {
     console.error(e);

@@ -127,6 +127,8 @@ export const MediaClipSchema = z
     gain: z.number().min(0).max(8).describe('Linear audio gain'),
     /** Playback speed as an exact ratio (absent = 1). The clip shows duration × speed of source. Sound is resampled with it (pitch follows speed). */
     speed: z.object({ num: z.number().int().min(1).max(8000), den: z.number().int().min(1).max(8000) }).strict().optional(),
+    /** Freeze frame: the clip holds the single source picture at `sourceIn` for its whole length. Video tracks only; it has no sound. */
+    freeze: z.literal(true).optional(),
     linkGroupId: Id.nullable(),
     /** Audio clips: linear fades at the clip edges (durations). */
     fadeIn: RationalTimeSchema.optional(),

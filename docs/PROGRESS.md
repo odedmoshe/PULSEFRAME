@@ -313,6 +313,14 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 **Regression note (after checkpoints 13o–13s)**
 - Full run: 281 unit tests; phase0 54, phase3 27, phase4 19, phase5 33, phase6 35, phase7 31, phase8 20, phase9 12, phase11 12, browser-export 23, editor-interactions 15, owner-ui 7, speed 12, soak 7, accessibility audit clean. **Phase 12 failed once (12/13)** in that run: the check measured the preview canvas before its first paint and read the browser's default 300×150 (ratio 2). The proof now waits for the first painted frame; three further runs passed 13/13. This was a race in the proof, present since the check was written, not a change in the product — but it means earlier Phase 12 passes depended on timing.
 
+**Checkpoint 13t — freeze frame**
+- `freeze_frame {clipId, at, duration}` (registered op): holds the picture a video clip shows at a timeline frame for the given time. Time is inserted across the whole sequence: clips from that point on move later; media clips crossing it are split (linked picture and sound stay paired; sound is silent during the hold); titles and manual captions crossing it stay on screen through it; refused if any track is locked. The hold is a new clip (`freeze: true`) with the picture's transform and effect values of that moment; it can be trimmed to any length and has no speed.
+- The shared time mapping treats a hold as covering no stretch of source, so every consumer (frame selection, trims, captions, markers, audio plan, preflight) needed no special case.
+- Editor: "Freeze frame" with a duration field in the clip Inspector; held clips are marked ❄ on the timeline.
+- Verified: `speed.test.ts` (6, incl. split, relinking, titles, trimming the hold, refusals, holding the first frame) and `pnpm proof:speed` (now 16): all 150 exported frames read from their barcodes (play, 30 identical frames, continue), the mix is silent during the hold and later beeps arrive exactly one second later, one undo restores the single clip, and the Inspector control produces the same structure.
+- Full regression with this change: 282 unit tests; phase0 54, phase3 27, phase4 19, phase5 33, phase6 35, phase7 31, phase8 20, phase9 12, phase11 12, phase12 13, browser-export 23, editor-interactions 15, owner-ui 7, soak 7, accessibility audit clean. The speed proof failed its new Inspector check once in that run (15/16): the proof counted the ❄ marker before the page had re-rendered. It now waits for the page; four further runs passed 16/16.
+- Limits: the hold always inserts time (no "replace the rest of the clip with a still", no freeze at the end without inserting); music crossing the point is cut and resumes after the hold, like all other sound; preview playback across a hold was not measured (export was); transcript-driven captions do not show during a hold (it has no speech); no reverse, no speed ramps.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -336,7 +344,7 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 
 Unblocked (no decision needed), roughly by value:
 1. Editor: J/K/L, source viewer, workspaces, marquee selection (Phase 3 carry-over; markers and multi-select are done).
-2. Speed ramps, reverse, freeze frame, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed and linear volume keys are done).
+2. Speed ramps, reverse, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed, freeze frame and linear volume keys are done).
 4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
@@ -357,8 +365,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 281 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+Expect 282 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

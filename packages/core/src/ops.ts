@@ -11,11 +11,11 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { sourceEnd, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
+import { sourceAt, sourceEnd, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
-import { sampleKeyframes, shiftKeyframes } from './animation.ts';
+import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
@@ -351,6 +351,7 @@ defineOp({
   apply(d, a) {
     const f = mustClip(d, a.clipId);
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have a speed', { clipId: a.clipId });
+    if (f.clip.freeze) throw new OpError('incompatible', 'a freeze frame has no speed', { clipId: a.clipId }, 'Trim it to change how long the picture is held.');
     const rate = d.settings.frameRate;
     const speed = speedFromNumber(a.speed);
     const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
@@ -524,6 +525,67 @@ defineOp({
   },
 });
 
+defineOp({
+  name: 'freeze_frame',
+  version: 1,
+  description: 'Hold the picture a video clip shows at a frame-aligned timeline time for a given duration. Time is inserted there across the whole sequence: everything from that point on moves later by the duration (clips that cross the point are split, their sound is silent during the hold; titles and captions that cross it stay on screen through it). The held picture is a new clip that can be trimmed like any other.',
+  args: z.object({ clipId: z.string(), at: RT, duration: RT }).strict(),
+  apply(d, a, ctx) {
+    const f = mustClip(d, a.clipId);
+    const src = f.clip;
+    const asset = src.type === 'media' ? d.assets[src.assetId] : undefined;
+    if (src.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'a freeze frame needs a video clip on a video track', { clipId: a.clipId });
+    if (src.freeze) throw new OpError('incompatible', 'this clip is already a freeze frame', { clipId: a.clipId }, 'Trim it to make the hold longer or shorter.');
+    assertAligned(d, a.at, 'at');
+    assertAligned(d, a.duration, 'duration');
+    if (!T.lt(T.ZERO, a.duration)) throw new OpError('invalid_args', 'duration must be positive');
+    if (T.lt(a.at, src.start) || !T.lt(a.at, clipEnd(src))) throw new OpError('out_of_bounds', 'the frame to hold must lie inside the clip', { clipId: src.id, start: src.start, end: clipEnd(src) });
+    for (const t of f.seq.tracks) if (t.locked) throw new OpError('track_locked', `track ${t.id} is locked, so time cannot be inserted without tracks going out of sync`, { trackId: t.id }, 'Unlock the track first.');
+    // what the hold shows, captured before anything moves
+    const local = T.sub(a.at, src.start);
+    const held: MediaClip = {
+      id: ctx.newId('clp'), type: 'media', assetId: src.assetId, start: a.at, duration: a.duration, sourceIn: sourceAt(src, a.at), gain: 1, linkGroupId: null, freeze: true,
+      transform: { ...transformAt(src, a.at) },
+      ...(src.effects ? { effects: src.effects.map((fx) => { const { keyframes: _k, ...rest } = fx; return { ...structuredClone(rest), id: ctx.newId('fx'), params: { ...effectParamsAt(fx, local) } }; }) } : {}),
+      ...(src.blend ? { blend: src.blend } : {}), ...(src.mask ? { mask: structuredClone(src.mask) } : {}),
+    };
+    const affected = new Set<string>([held.id]);
+    const created: string[] = [held.id];
+    const relink = new Map<string, string>();
+    for (const track of f.seq.tracks) {
+      for (const clip of [...track.clips]) {
+        const end = clipEnd(clip);
+        if (!T.lt(a.at, end)) continue; // entirely before the point
+        affected.add(clip.id);
+        if (!T.lt(clip.start, a.at)) { clip.start = T.add(clip.start, a.duration); continue; } // at or after: moves later
+        if (clip.type !== 'media') { clip.duration = T.add(clip.duration, a.duration); continue; } // titles and captions stay up through the hold
+        // a media clip crossing the point: split, right half moves later
+        const left = T.sub(a.at, clip.start);
+        const right: MediaClip = structuredClone(clip);
+        right.id = ctx.newId('clp');
+        copyOverrides(d, clip.id, right.id);
+        right.start = T.add(a.at, a.duration);
+        right.duration = T.sub(clip.duration, left);
+        shiftKeyframes(right, left);
+        delete right.transition;
+        delete right.fadeIn;
+        delete clip.fadeOut;
+        right.sourceIn = T.add(right.sourceIn, toSourceSpan(right, left));
+        if (right.linkGroupId) { if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk')); right.linkGroupId = relink.get(right.linkGroupId)!; }
+        clip.duration = left;
+        clampFades(clip);
+        clampFades(right);
+        track.clips.push(right);
+        created.push(right.id);
+        affected.add(right.id);
+      }
+    }
+    copyOverrides(d, src.id, held.id);
+    f.track.clips.push(held);
+    for (const track of f.seq.tracks) sortClips(track);
+    return { affectedIds: [...affected], summary: `Freeze frame at ${fmt(a.at)} for ${fmt(a.duration)}`, output: { freezeClipId: held.id, createdClipIds: created } };
+  },
+});
 defineOp({
   name: 'move_clips',
   version: 1,

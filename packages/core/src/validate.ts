@@ -90,6 +90,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if (tr.kind === 'text') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on text track`, ids: [c.id, tr.id] });
         if (tr.kind === 'video' && !asset.video && !(asset.kind === 'image' && asset.image)) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
         if (tr.kind === 'audio' && !asset.audio) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no audio for audio track`, ids: [c.id, tr.id] });
+        if (c.freeze && (tr.kind !== 'video' || !asset.video)) issues.push({ code: 'incompatible_track', message: `clip ${c.id}: a freeze frame needs a video asset on a video track`, ids: [c.id] });
         if (c.volume) {
           if (tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: volume automation belongs to clips on audio tracks`, ids: [c.id] });
           if (c.volume.some((k, i) => !T.isFrameAligned(k.time, doc.settings.frameRate) || (i > 0 && !T.lt(c.volume![i - 1]!.time, k.time)))) issues.push({ code: 'volume_keys', message: `clip ${c.id}: volume keys must be frame-aligned and strictly ascending`, ids: [c.id] });

@@ -7,15 +7,17 @@
 import * as T from '@pulseframe/time';
 import type { Clip, MediaClip } from './schema.ts';
 
+/** A freeze-frame clip shows one source picture for its whole length: it covers no stretch of source time. */
+export const isFreeze = (c: Clip): boolean => c.type === 'media' && c.freeze === true;
 export interface Speed { num: number; den: number }
 export const UNIT_SPEED: Speed = { num: 1, den: 1 };
 export const speedOf = (c: Clip): Speed => (c.type === 'media' && c.speed ? c.speed : UNIT_SPEED);
 export const speedValue = (c: Clip): number => { const s = speedOf(c); return s.num / s.den; };
 const mul = (t: T.RationalTime, num: number, den: number): T.RationalTime => (num === den ? t : T.normalize({ value: (BigInt(t.value) * BigInt(num)).toString(), timescale: t.timescale * den }));
 /** Timeline duration -> source duration for this clip. */
-export const toSourceSpan = (c: Clip, timelineDuration: T.RationalTime): T.RationalTime => { const s = speedOf(c); return mul(timelineDuration, s.num, s.den); };
+export const toSourceSpan = (c: Clip, timelineDuration: T.RationalTime): T.RationalTime => { if (isFreeze(c)) return T.ZERO; const s = speedOf(c); return mul(timelineDuration, s.num, s.den); };
 /** Source duration -> timeline duration for this clip. */
-export const toTimelineSpan = (c: Clip, sourceDuration: T.RationalTime): T.RationalTime => { const s = speedOf(c); return mul(sourceDuration, s.den, s.num); };
+export const toTimelineSpan = (c: Clip, sourceDuration: T.RationalTime): T.RationalTime => { if (isFreeze(c)) return T.ZERO; const s = speedOf(c); return mul(sourceDuration, s.den, s.num); };
 /** Source time shown at the end of the clip. */
 export const sourceEnd = (c: MediaClip): T.RationalTime => T.add(c.sourceIn, toSourceSpan(c, c.duration));
 /** Source time shown at timeline time `t` (no clamping). */

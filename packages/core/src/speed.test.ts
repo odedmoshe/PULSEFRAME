@@ -72,6 +72,45 @@ describe('clip speed', () => {
     expect(sourceRangesToTimeline(fast, assetId, [{ start: T.rt(2, 1), end: T.rt(4, 1) }])).toEqual([{ start: f(30), end: f(60) }]);
     expect(T.eq(sequenceDuration(fast), f(120))).toBe(true);
   });
+  it('freeze_frame holds one picture, inserts time across the sequence, splits crossing media (linked sound included) and keeps titles up through the hold', () => {
+    const { doc, clipId } = project(); // 8 s clip: frames 0..240 with linked sound
+    let d = tx(doc, [{ op: 'add_text', args: { text: 'title', start: f(30), duration: f(60) } }, { op: 'add_text', args: { text: 'later', start: f(120), duration: f(30) } }]).doc;
+    const [title, later] = Object.values(d.sequences)[0]!.tracks.flatMap((t) => t.clips).filter((c) => c.type === 'text').map((c) => c.id) as [string, string];
+    const r = tx(d, [{ op: 'freeze_frame', args: { clipId, at: f(45), duration: f(30) } }]);
+    d = r.doc;
+    expect(validateProject(d)).toEqual([]);
+    const held = media(d, r.results[0]!.output!.freezeClipId as string);
+    expect(held.freeze).toBe(true);
+    expect([T.frameIndexAt(held.start, R), T.frameIndexAt(held.duration, R)]).toEqual([45, 30]);
+    expect(T.eq(held.sourceIn, T.rt(3, 2))).toBe(true); // source 1.5 s = the frame shown at timeline frame 45
+    expect(T.eq(sourceAt(held, f(60)), held.sourceIn)).toBe(true); // every moment of the hold shows the same picture
+    expect(T.eq(sourceEnd(held), held.sourceIn)).toBe(true);
+    expect(held.linkGroupId).toBeNull();
+    // the original is split: left 0..45, right 75..270 continuing from source 1.5 s; sound likewise, still linked pairwise
+    const left = media(d, clipId);
+    expect(T.frameIndexAt(left.duration, R)).toBe(45);
+    const rights = Object.values(d.sequences)[0]!.tracks.flatMap((t) => t.clips).filter((c): c is MediaClip => c.type === 'media' && T.frameIndexAt(c.start, R) === 75);
+    expect(rights).toHaveLength(2);
+    for (const c of rights) { expect(T.eq(c.sourceIn, T.rt(3, 2))).toBe(true); expect(T.frameIndexAt(c.duration, R)).toBe(195); }
+    expect(rights[0]!.linkGroupId).toBe(rights[1]!.linkGroupId);
+    expect(rights[0]!.linkGroupId).not.toBe(left.linkGroupId);
+    // a title crossing the point stays up through the hold; one after it moves later
+    expect([T.frameIndexAt(findClip(d, title)!.clip.start, R), T.frameIndexAt(findClip(d, title)!.clip.duration, R)]).toEqual([30, 90]);
+    expect(T.frameIndexAt(findClip(d, later)!.clip.start, R)).toBe(150);
+    expect(T.eq(sequenceDuration(d), f(270))).toBe(true);
+    // the hold can be trimmed freely (it reads no stretch of source) but has no speed, and cannot be frozen again
+    const longer = tx(tx(d, [{ op: 'move_clips', args: { clipIds: rights.map((c) => c.id), delta: f(30) } }]).doc, [{ op: 'trim_clip', args: { clipId: held.id, edge: 'end', to: f(105) } }]).doc;
+    expect(validateProject(longer)).toEqual([]);
+    expect(T.eq(media(longer, held.id).sourceIn, T.rt(3, 2))).toBe(true);
+    expect(() => tx(d, [{ op: 'set_clip_speed', args: { clipId: held.id, speed: 2 } }])).toThrow(OpError);
+    expect(() => tx(d, [{ op: 'freeze_frame', args: { clipId: held.id, at: f(50), duration: f(10) } }])).toThrow(OpError);
+    expect(() => tx(doc, [{ op: 'freeze_frame', args: { clipId, at: f(240), duration: f(10) } }])).toThrow(OpError); // outside the clip
+    expect(() => tx(doc, [{ op: 'freeze_frame', args: { clipId, at: f(10), duration: f(0) } }])).toThrow(OpError);
+    // holding the very first frame needs no split
+    const first = tx(doc, [{ op: 'freeze_frame', args: { clipId, at: f(0), duration: f(15) } }]).doc;
+    expect(validateProject(first)).toEqual([]);
+    expect(T.frameIndexAt(media(first, clipId).start, R)).toBe(15);
+  });
   it('property: any speed keeps the project valid, never reads past the source, and maps round-trip', () => {
     fc.assert(fc.property(fc.integer({ min: 100, max: 8000 }), fc.integer({ min: 0, max: 200 }), (milli, trim) => {
       const { doc, clipId } = project();

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T04:18:13.405Z",
+  "ranAt": "2026-11-15T04:31:36.125Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,9 +8,17 @@
     "gpu": "none"
   },
   "scope": "Clip speed on synthetic fixtures (frame-barcode video, sine tone). Sound is varispeed; pitch-preserving stretch and speed ramps are not implemented. Preview playback audio at speed is not measured here.",
-  "passed": 12,
-  "total": 12,
+  "passed": 16,
+  "total": 16,
   "measurements": {
+    "freezeSound": {
+      "seconds": 5,
+      "beepAt1": 0.709,
+      "holdPeak": 0,
+      "beepAt3": 0.709,
+      "noBeepAt2": 0,
+      "beepAt4": 0.715
+    },
     "audio": {
       "method": "zero crossings of the exported WAV mix; 440 Hz source tone of 4 s",
       "rows": [
@@ -119,6 +127,41 @@
       "ok": true
     },
     {
+      "name": "freeze_frame at timeline frame 45 for 30 frames: the export has 150 frames — 0..44 play, 45..74 all show source frame 45, 75..149 continue from 45 — every frame read from its barcode; a title crossing the point stays up through the hold",
+      "ok": true,
+      "detail": {
+        "revision": 3,
+        "frames": 150,
+        "mismatched": [],
+        "around": [
+          43,
+          44,
+          45,
+          45,
+          45,
+          45,
+          45,
+          46
+        ]
+      }
+    },
+    {
+      "name": "sound around the hold: 5 s in total, silent during the held second, and the later beeps arrive exactly one second later than before",
+      "ok": true,
+      "detail": {
+        "seconds": 5,
+        "beepAt1": 0.709,
+        "holdPeak": 0,
+        "beepAt3": 0.709,
+        "noBeepAt2": 0,
+        "beepAt4": 0.715
+      }
+    },
+    {
+      "name": "one undo removes the hold and rejoins nothing by hand: the timeline is the single 120-frame clip again",
+      "ok": true
+    },
+    {
       "name": "exported sound of a 440 Hz tone at 1×, 2×, 0.5×, 1.25×: pitch within 0.5 Hz of 440×speed and length within one frame of 4/speed (varispeed: pitch follows speed)",
       "ok": true,
       "detail": [
@@ -191,10 +234,22 @@
       }
     },
     {
-      "name": "preview: five seeks on the 2× clip each paint source frame 2×target; typing 0.75 stores the exact ratio 3/4 (160 frames); no page errors",
+      "name": "preview: five seeks on the 2× clip each paint source frame 2×target; typing 0.75 stores the exact ratio 3/4 (160 frames)",
       "ok": true,
       "detail": {
-        "wrong": [],
+        "wrong": []
+      }
+    },
+    {
+      "name": "Inspector: \"Freeze frame\" at the playhead (frame 30, 0.5 s) makes three picture clips with a 15-frame hold starting at frame 30, marked on the timeline; Ctrl+Z restores the single clip; no page errors in the editor",
+      "ok": true,
+      "detail": {
+        "uiFreeze": {
+          "clips": 3,
+          "holdStart": 30,
+          "holdFrames": 15,
+          "marked": 1
+        },
         "errors": []
       }
     }

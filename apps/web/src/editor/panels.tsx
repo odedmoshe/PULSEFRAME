@@ -169,6 +169,30 @@ function SpeedField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   );
 }
 
+/** Freeze frame: hold the picture at the playhead for a chosen time. Everything after it moves later (one transaction). */
+function FreezeField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
+  const { editor, t } = useEditorState();
+  const [secs, setSecs] = useState('1');
+  const n = Number(secs);
+  const valid = secs !== '' && Number.isFinite(n) && n > 0 && n <= 600;
+  const inside = T.lte(clip.start, editor.playhead) && T.lt(editor.playhead, T.add(clip.start, clip.duration));
+  const run = () => {
+    const at = editor.playhead; // read when used, not at the last render
+    if (!valid || !T.lte(clip.start, at) || !T.lt(at, T.add(clip.start, clip.duration))) return;
+    const frames = Math.max(1, Math.round((n * editor.rate.num) / editor.rate.den));
+    void editor.commit([{ op: 'freeze_frame', args: { clipId: clip.id, at, duration: T.frameTime(frames, editor.rate) } }], 'Freeze frame');
+  };
+  return (
+    <div className="fields" data-testid="freeze-field">
+      <label>{t('freeze.seconds')}
+        <input type="number" dir="ltr" min={0.1} max={600} step={0.1} value={secs} data-testid="freeze-seconds" onChange={(e) => setSecs(e.target.value)} />
+      </label>
+      <button type="button" className="ghost" disabled={!valid || !inside} data-testid="freeze-apply" onClick={run}>{t('freeze.apply')}</button>
+      <p className="muted">{t('freeze.hint')}</p>
+    </div>
+  );
+}
+
 const TRANSFORM_FIELDS: { prop: 'x' | 'y' | 'scale' | 'rotation' | 'opacity'; label: Key; min: number; max: number; step: number }[] = [
   { prop: 'x', label: 'transform.x', min: -0.6, max: 0.6, step: 0.01 },
   { prop: 'y', label: 'text.y', min: -0.6, max: 0.6, step: 0.01 },
@@ -364,7 +388,9 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
           </label>
         </>
       )}
-      {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && <SpeedField clip={clip} />}
+      {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedField clip={clip} />}
+      {clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video && <FreezeField clip={clip} />}
+      {clip.type === 'media' && clip.freeze && <p className="muted" data-testid="freeze-note">{t('freeze.note')}</p>}
       {/* Values shown are the ones rendered at the playhead. Editing an animated property writes a keyframe there. */}
       {variantId ? (
         <div className="transform-scope" data-testid="transform-scope" data-scope="format">
