@@ -3293,7 +3293,7 @@
     "qualityLadderReportOnly": {
       "high": {
         "bytes": 498424,
-        "wallSeconds": 2.836,
+        "wallSeconds": 2.6,
         "psnr": {
           "min": 36.7831,
           "median": 39.2807,
@@ -3309,7 +3309,7 @@
       },
       "mp4-standard": {
         "bytes": 326088,
-        "wallSeconds": 2.796,
+        "wallSeconds": 2.641,
         "psnr": {
           "min": 35.7055,
           "median": 37.8109,
@@ -3323,7 +3323,7 @@
       },
       "mp4-draft": {
         "bytes": 180200,
-        "wallSeconds": 2.596,
+        "wallSeconds": 2.634,
         "psnr": {
           "min": 32.0091,
           "median": 33.6122,
@@ -3337,7 +3337,7 @@
       },
       "webm-vp9-standard": {
         "bytes": 404210,
-        "wallSeconds": 3.44,
+        "wallSeconds": 3.667,
         "psnr": {
           "min": 35.6529,
           "median": 37.4064,
@@ -3843,5 +3843,5 @@
     "Test 1 (i) and (ii) are both strict; the paused preview decodes the original media (data-source=original), playback uses the proxy.",
     "Small-text (14.4 px) regional PSNR in Test 2 is report+warning only; the pass/fail criterion is textSizeEnvelope."
   ],
-  "runtimeSeconds": 101.2
+  "runtimeSeconds": 96.7
 }

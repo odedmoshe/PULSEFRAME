@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T21:31:13.860Z",
+  "ranAt": "2026-11-15T22:27:29.768Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -12,7 +12,7 @@
     "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
     "exportWithLooks": {
       "frames": 30,
-      "wallMs": 1098,
+      "wallMs": 1124,
       "minPsnrDb": 42.16,
       "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
     },
@@ -275,7 +275,7 @@
       "ok": true,
       "detail": {
         "frames": 30,
-        "wallMs": 1098,
+        "wallMs": 1124,
         "minPsnrDb": 42.16,
         "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
       }

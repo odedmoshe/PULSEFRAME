@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T21:33:36.512Z",
+  "ranAt": "2026-11-15T22:29:52.557Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -160,7 +160,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
         "keys": [
           [
             40,
@@ -268,7 +268,7 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.01,
+        "fwd2": 1.99,
         "sh2": "◀◀ ×1",
         "back1": -1,
         "sh3": "◀◀ ×2",
@@ -284,9 +284,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.02,
+        "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.99,
+        "shuttleSpeed": 1.98,
         "staysPaused": true
       }
     },
@@ -314,30 +314,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_6916bd1a780",
-          "clp_6916bd1a781"
+          "clp_3a93396f200",
+          "clp_3a93396f201"
         ],
         "afterAB": [
-          "clp_6916bd1a780",
-          "clp_6916bd1a781"
+          "clp_3a93396f200",
+          "clp_3a93396f201"
         ],
         "afterAdd": [
-          "clp_6916bd1a780",
-          "clp_6916bd1a781",
-          "clp_6916bd1a782"
+          "clp_3a93396f200",
+          "clp_3a93396f201",
+          "clp_3a93396f202"
         ],
         "midEscape": [
-          "clp_6916bd1a781"
+          "clp_3a93396f201"
         ],
         "afterEscape": [
-          "clp_6916bd1a780",
-          "clp_6916bd1a781",
-          "clp_6916bd1a782"
+          "clp_3a93396f200",
+          "clp_3a93396f201",
+          "clp_3a93396f202"
         ],
         "afterEscapeUp": [
-          "clp_6916bd1a780",
-          "clp_6916bd1a781",
-          "clp_6916bd1a782"
+          "clp_3a93396f200",
+          "clp_3a93396f201",
+          "clp_3a93396f202"
         ]
       }
     },

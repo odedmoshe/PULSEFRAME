@@ -857,6 +857,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified here: `pnpm proof:phase3` 52/52 (custom workspace), `refusal-wording.test.ts`, `pnpm proof:speed` 19/19 (the refusal in the Hebrew interface is Hebrew throughout), 465 unit tests.
 - Not done: the remaining refusal texts (most of about two hundred) and all hints stay English; messages reported by export jobs and analysis are not covered.
 
+**Regression after checkpoint 16y — all passing (one run on this CPU profile)**
+- proof 54 · phase3 52 · phase4 20 · phase5 34 · phase6 37 · phase7 31 · phase8 21 · phase9 14 · phase11 12 · phase12 20 · browser-export 23 · editor-interactions 24 · owner-ui 9 · speed 19 · pitch 12 · reverse-sound 7 · soak 7 · start-offset 4 · projects 2 · long 6 · render-fuzz 2 · images 3 · parity pass · seek 5 files pass · inputs 4/4 (30 correct + 1 noted) · accessibility audit no findings · 465 unit tests.
+- Demo material for the owner: `docs/demo/` (four screenshots of the Hebrew editor on a synthetic demo project and a 12-second export of it). There is no hosted site: the local profile binds to loopback and refuses any other Host or Origin (ADR-0002), so it is seen by running it (`pnpm install && pnpm build && pnpm start`, then the printed owner link).
+- Unblocked work left: none of substance. Everything remaining needs an owner decision or resource (`docs/BLOCKERS.md`).
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
