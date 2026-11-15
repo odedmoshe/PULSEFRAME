@@ -255,6 +255,17 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Limits: timeline markers only (no clip markers, no ranges, no chapter export); they stay at their time when clips are cut or moved; a grant limited to tracks or a time range cannot change markers (same rule as other non-clip data).
 - Bug found while looking at the screenshot, fixed before commit: marker names were invisible because an existing ruler style applied to them; the proof now also saves `editor-markers.png`, but **no automated check asserts the name is visible** (the accessible name was correct throughout).
 
+**Checkpoint 13l — volume automation, and three editor defects found by its proof**
+- Volume automation: a sound clip can carry level keys (`volume`, clip-local frame-aligned times, 0–4, straight lines between keys, held outside). `set_volume_keyframe` and `delete_volume_keyframe` (one key, or all) are registered ops. The keys become a third envelope in the shared audio plan, applied by the server mixer and by the WebAudio chain (preview and browser export) on top of gain, fades and ducking; they stay attached to the sound on trims and splits.
+- Sound tab: "level at the playhead" field (shows the interpolated level, typing writes a key there), add / remove-this-key / clear-all.
+- Verified: `audio.test.ts` (plan envelope, mixer values, trim, delete, refusals); `pnpm proof:phase8` (now 20): exported level at five points within 0.006 of the expected line, incl. a boost above 1, the same levels 1.5 s earlier after a start trim, plain level after clearing; `/selftest.html` compares the WebAudio chain with the reference mixer on a clip that has a volume envelope; one editor check in `pnpm proof:editor-interactions` (now 14).
+- Limits: linear segments only (no curves/easing), no drawing on the clip in the timeline, no track-level automation; preview playback level was not measured separately (the shared chain is compared with the reference in the self-test).
+- **Defects found while proving this, all in the editor, all fixed:**
+  1. Two quick edits to the same item (name a marker, then pick its colour; a key, then another) were both sent with the same base revision, and the server correctly refused the second as a conflict — with the user's own first edit. The editor now runs its own commits and undo/redo one after another (`apps/web/src/editor/store.ts`); conflicts with other participants are detected as before (Phase 3 and 5 conflict checks pass).
+  2. A number field whose value follows the playhead re-committed its old text on blur after the playhead had moved, writing a stray volume key. Number fields in the Sound tab now commit only text typed since the last commit.
+  3. The volume handlers used the playhead position of the last render; typing straight after a seek could write the key at the previous position. They read the live playhead now.
+- The same check exposed two places where the proof itself raced the page (it waited for the server, then acted on a panel that had not caught up). Those steps now wait for what the panel shows. **Open, same class as (3), not fixed:** the Look panel's effect-key button and slider decide "write a key" vs "change the static value" and the key time from their last render; a very fast action right after a seek or an edit can take the wrong branch. Markers checkpoint 13k was verified with only one run of this proof before these fixes; with the fixes it passed 8 runs in a row.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -278,7 +289,8 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 
 Unblocked (no decision needed), roughly by value:
 1. Editor: multi-select drag, J/K/L, source viewer, workspaces (Phase 3 carry-over; markers are done).
-2. Volume automation curves; speed ramps, reverse, freeze frame, pitch-preserving stretch (Phases 7–8 carry-over; constant speed is done).
+2. Speed ramps, reverse, freeze frame, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed and linear volume keys are done).
+3. Editor handlers that act on render-time state (Look panel effect keys): read live state at commit time.
 4. Disk quota; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; MCP resources/prompts; activity log dialog; dialogs and transient states in the accessibility audit.
@@ -299,8 +311,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 268 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 31 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 19 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 13 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+Expect 269 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 31 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 14 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

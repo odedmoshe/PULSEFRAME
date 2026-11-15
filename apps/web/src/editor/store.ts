@@ -215,7 +215,20 @@ export class Editor {
 
   // ---------- persistent edits ----------
   /** One call = one transaction = one undo step. Uses baseRevision so unrelated concurrent edits do not conflict. */
-  async commit(ops: OpCall[], label?: string): Promise<CommitResult | null> {
+  /**
+   * This editor's own writes run one after another. Without this, two quick edits (name a marker, then pick its colour)
+   * were both sent with the same base revision and the second was refused as a conflict with the user's own first edit.
+   * Each queued write reads the revision only when its turn comes; conflicts with OTHER participants are still detected.
+   */
+  private writes: Promise<unknown> = Promise.resolve();
+  private enqueue<R>(fn: () => Promise<R>): Promise<R> {
+    const p = this.writes.then(fn, fn);
+    this.writes = p.catch(() => undefined);
+    return p;
+  }
+  commit(ops: OpCall[], label?: string): Promise<CommitResult | null> { return this.enqueue(() => this.commitNow(ops, label)); }
+  history(mode: 'undo' | 'redo'): Promise<void> { return this.enqueue(() => this.historyNow(mode)); }
+  private async commitNow(ops: OpCall[], label?: string): Promise<CommitResult | null> {
     const { doc, revision } = this.state;
     if (!doc) return null;
     this.set({ save: 'save.saving', error: null });
@@ -235,7 +248,7 @@ export class Editor {
       return null;
     }
   }
-  async history(mode: 'undo' | 'redo') {
+  private async historyNow(mode: 'undo' | 'redo'): Promise<void> {
     const { doc } = this.state;
     if (!doc) return;
     this.set({ error: null });

@@ -42,6 +42,7 @@ export function transformAt(clip: Clip, time: T.RationalTime): Transform {
 /** Shift every key by -delta (used when the clip start moves relative to its content: trim-start and the right half of a split). */
 export function shiftKeyframes(clip: Clip, delta: T.RationalTime): void {
   if (clip.keyframes) for (const p of ANIMATABLE) { const keys = clip.keyframes[p]; if (keys) clip.keyframes[p] = keys.map((k) => ({ ...k, time: T.sub(k.time, delta) })); }
+  if (clip.type === 'media' && clip.volume) clip.volume = clip.volume.map((k) => ({ ...k, time: T.sub(k.time, delta) }));
   // Effect parameter animation is attached to the content in the same way.
   for (const fx of clip.effects ?? []) if (fx.keyframes) for (const p of Object.keys(fx.keyframes)) fx.keyframes[p] = fx.keyframes[p]!.map((k) => ({ ...k, time: T.sub(k.time, delta) }));
 }

@@ -1,6 +1,6 @@
 /**
  * WebAudio realisation of one planned audio clip (packages/engine/src/audio.ts), shared by preview and browser export.
- * chain: source(s) -> clip gain -> fade envelope -> duck envelope -> left/right balance -> destination
+ * chain: source(s) -> clip gain -> [volume automation] -> fade envelope -> duck envelope -> left/right balance -> destination
  * Envelopes use exact linear ramps between the plan's points, so they match the server's reference mixer.
  */
 import { envAt, panGains, type EnvPoint, type PlannedAudioClip } from '@pulseframe/engine';
@@ -27,7 +27,11 @@ export function plannedClipInput(ctx: BaseAudioContext, clip: PlannedAudioClip, 
   const duck = ctx.createGain();
   automate(fade.gain, clip.fade, sampleRate, timeOfLocalZero, fromLocal);
   automate(duck.gain, clip.duck, sampleRate, timeOfLocalZero, fromLocal);
-  input.connect(fade).connect(duck);
+  if (clip.vol) {
+    const vol = ctx.createGain();
+    automate(vol.gain, clip.vol, sampleRate, timeOfLocalZero, fromLocal);
+    input.connect(vol).connect(fade).connect(duck);
+  } else input.connect(fade).connect(duck);
   if (clip.pan === 0) duck.connect(destination);
   else {
     const [gl, gr] = panGains(clip.pan);

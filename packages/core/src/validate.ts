@@ -90,6 +90,10 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if (tr.kind === 'text') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on text track`, ids: [c.id, tr.id] });
         if (tr.kind === 'video' && !asset.video && !(asset.kind === 'image' && asset.image)) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
         if (tr.kind === 'audio' && !asset.audio) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no audio for audio track`, ids: [c.id, tr.id] });
+        if (c.volume) {
+          if (tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: volume automation belongs to clips on audio tracks`, ids: [c.id] });
+          if (c.volume.some((k, i) => !T.isFrameAligned(k.time, doc.settings.frameRate) || (i > 0 && !T.lt(c.volume![i - 1]!.time, k.time)))) issues.push({ code: 'volume_keys', message: `clip ${c.id}: volume keys must be frame-aligned and strictly ascending`, ids: [c.id] });
+        }
         if ((c.fadeIn || c.fadeOut) && tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: audio fades belong to clips on audio tracks`, ids: [c.id] });
         if ((c.fadeIn && T.isNegative(c.fadeIn)) || (c.fadeOut && T.isNegative(c.fadeOut)) || T.lt(c.duration, T.add(c.fadeIn ?? T.ZERO, c.fadeOut ?? T.ZERO))) issues.push({ code: 'fade_out_of_bounds', message: `clip ${c.id}: fades are negative or longer than the clip`, ids: [c.id] });
         if (T.isNegative(c.sourceIn)) issues.push({ code: 'source_out_of_bounds', message: `clip ${c.id} sourceIn < 0`, ids: [c.id] });

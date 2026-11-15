@@ -369,6 +369,42 @@ defineOp({
   },
 });
 
+const volumeTarget = (d: ProjectDocument, clipId: string) => {
+  const f = mustClip(d, clipId);
+  if (f.clip.type !== 'media' || f.track.kind !== 'audio') throw new OpError('incompatible', 'volume automation applies to clips on audio tracks', { clipId }, 'For a video clip, use its linked sound clip.');
+  return f.clip;
+};
+defineOp({
+  name: 'set_volume_keyframe',
+  version: 1,
+  description: 'Volume automation: set the level of a sound clip at a clip-local, frame-aligned time (0 = silent, 1 = unchanged, up to 4). The level moves in a straight line between keys and holds before the first and after the last. It multiplies the clip gain, fades and ducking.',
+  args: z.object({ clipId: z.string(), time: RT.describe('Offset from the clip start (frame-aligned)'), value: z.number().min(0).max(4) }).strict(),
+  apply(d, a) {
+    const clip = volumeTarget(d, a.clipId);
+    assertAligned(d, a.time, 'time');
+    if (T.isNegative(a.time) || T.lt(clip.duration, a.time)) throw new OpError('out_of_bounds', 'the key must lie inside the clip', { duration: clip.duration });
+    const keys = (clip.volume ?? []).filter((k) => !T.eq(k.time, a.time));
+    keys.push({ time: a.time, value: a.value });
+    keys.sort((x, y) => T.cmp(x.time, y.time));
+    clip.volume = keys;
+    return { affectedIds: [clip.id], summary: `Volume ${a.value} at +${fmt(a.time)}`, output: { keyframeCount: keys.length } };
+  },
+});
+defineOp({
+  name: 'delete_volume_keyframe',
+  version: 1,
+  description: 'Remove the volume key at exactly this clip-local time, or every volume key of the clip when no time is given.',
+  args: z.object({ clipId: z.string(), time: RT.optional() }).strict(),
+  apply(d, a) {
+    const clip = volumeTarget(d, a.clipId);
+    const before = clip.volume?.length ?? 0;
+    const keys = a.time ? (clip.volume ?? []).filter((k) => !T.eq(k.time, a.time!)) : [];
+    if (a.time && keys.length === before) throw new OpError('not_found', 'there is no volume key at this time', { clipId: clip.id, time: a.time });
+    if (keys.length) clip.volume = keys; else delete clip.volume;
+    return { affectedIds: [clip.id], summary: `Removed ${before - keys.length} volume key(s)`, output: { keyframeCount: keys.length } };
+  },
+});
+
 defineOp({
   name: 'set_clip_gain',
   version: 1,

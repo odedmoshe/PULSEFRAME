@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T03:04:26.358Z",
+  "ranAt": "2026-11-15T03:25:59.853Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 13,
-  "total": 13,
+  "passed": 14,
+  "total": 14,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -117,6 +117,19 @@
           22
         ],
         "landedAt": 300
+      }
+    },
+    {
+      "name": "Sound tab: typing a level writes a volume key at the playhead; between two keys the field shows the interpolated level (0.85 halfway between 0.5 and 1.2); \"remove this key\" removes only that key",
+      "ok": true,
+      "detail": {
+        "midShown": "0.85",
+        "keys": [
+          [
+            30,
+            0.5
+          ]
+        ]
       }
     },
     {

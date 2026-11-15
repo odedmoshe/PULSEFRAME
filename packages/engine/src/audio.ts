@@ -23,6 +23,8 @@ export interface PlannedAudioClip {
   /** Clip-local envelopes; always start at s=0 and end at s=length. */
   fade: EnvPoint[];
   duck: EnvPoint[];
+  /** Volume automation of the clip, same shape as the other envelopes. Absent = no automation. */
+  vol?: EnvPoint[];
 }
 export interface AudioPlan { sampleRate: number; totalSamples: number; clips: PlannedAudioClip[]; loudness: { target: number; truePeak: number } | null }
 
@@ -109,7 +111,8 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId)
       const fade: EnvPoint[] = [];
       if (fin > 0) fade.push({ s: 0, g: 0 }, { s: fin, g: 1 }); else fade.push({ s: 0, g: 1 });
       if (fout > 0) fade.push({ s: length - fout, g: 1 }, { s: length, g: 0 }); else fade.push({ s: length, g: 1 });
-      clips.push({ clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
+      const vol = c.volume?.length ? sliceEnv(c.volume.map((k) => ({ s: T.nearestSampleIndex(k.time, sr), g: k.value })), 0, length) : undefined;
+      clips.push({ ...(vol ? { vol } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
     }
   }
   return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null };
@@ -124,7 +127,8 @@ export function mixClip(out: Float32Array, outStart: number, clip: PlannedAudioC
   const [gl, gr] = panGains(clip.pan);
   const frames = pcm.length >> 1;
   const outFrames = out.length >> 1;
-  let fi = 0, di = 0; // envelope segment cursors (samples only move forward)
+  let fi = 0, di = 0, vi = 0; // envelope segment cursors (samples only move forward)
+  const vol = clip.vol;
   for (let i = 0; i < frames; i++) {
     const local = clipOffset + i;
     const o = clip.at + local - outStart;
@@ -135,7 +139,13 @@ export function mixClip(out: Float32Array, outStart: number, clip: PlannedAudioC
     const fa = clip.fade[fi]!, fb = clip.fade[fi + 1] ?? fa, da = clip.duck[di]!, db = clip.duck[di + 1] ?? da;
     const fg = fb.s === fa.s ? fb.g : fa.g + ((fb.g - fa.g) * Math.min(Math.max(local - fa.s, 0), fb.s - fa.s)) / (fb.s - fa.s);
     const dg = db.s === da.s ? db.g : da.g + ((db.g - da.g) * Math.min(Math.max(local - da.s, 0), db.s - da.s)) / (db.s - da.s);
-    const g = clip.gain * fg * dg;
+    let vg = 1;
+    if (vol) {
+      while (vi < vol.length - 2 && local > vol[vi + 1]!.s) vi++;
+      const va = vol[vi]!, vb = vol[vi + 1] ?? va;
+      vg = vb.s === va.s ? vb.g : va.g + ((vb.g - va.g) * Math.min(Math.max(local - va.s, 0), vb.s - va.s)) / (vb.s - va.s);
+    }
+    const g = clip.gain * fg * dg * vg;
     out[o * 2] = out[o * 2]! + pcm[i * 2]! * g * gl;
     out[o * 2 + 1] = out[o * 2 + 1]! + pcm[i * 2 + 1]! * g * gr;
   }

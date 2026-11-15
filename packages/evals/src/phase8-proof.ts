@@ -152,6 +152,25 @@ async function main() {
     const xErr = Math.max(...xPts.map(([t, g]) => Math.abs(tone(soft.pcm, 0, 440, t + 0.025 - 0.025) - g)));
     check('crossfade between two clips of one continuous tone at different levels: without it the level steps at the cut; with it the level moves linearly from the first clip\'s level to the second\'s over the crossfade, with no dip (5 points within 1.5%)', Math.abs(xa(hard, 2.9) - 0.5) < 0.003 && Math.abs(xa(hard, 3.05) - 0.25) < 0.003 && xErr < 0.0075 + 0.012 && soft.pcm.length === hard.pcm.length, { hardCut: [xa(hard, 2.9), xa(hard, 3.05)], crossfade: xPts.map(([t]) => xa(soft, t)), expected: xPts.map(([, g]) => g), maxError: r3(xErr) });
 
+    console.log('\n# volume automation');
+    const vp = (await call('/projects', { name: 'phase8-volume', width: 640, height: 360 })).body.project.id;
+    const vm = await upload(vp, musicFile);
+    const vc0 = (await txs(vp, [{ op: 'add_clip', args: { assetId: vm.assetId, start: f(0) } }])).results[0].output;
+    const vClip = vc0.audioClipId ?? vc0.clipId;
+    await txs(vp, [{ op: 'set_volume_keyframe', args: { clipId: vClip, time: f(30), value: 1 } }, { op: 'set_volume_keyframe', args: { clipId: vClip, time: f(90), value: 0.2 } }, { op: 'set_volume_keyframe', args: { clipId: vClip, time: f(120), value: 1.5 } }]);
+    const vw = await wav(vp);
+    // level of the 0.5-amplitude tone at window centres: held before the first key, straight lines between, held after the last
+    const vPts: [number, number][] = [[0.5, 0.5], [2, 0.3], [3, 0.1], [3.5, 0.425], [5, 0.75]];
+    const vGot = vPts.map(([t]) => r3(tone(vw.pcm, 0, 440, t - 0.025)));
+    // cut 1.5 s off the start: the automation must stay attached to the sound, so the same levels are heard 1.5 s earlier
+    await txs(vp, [{ op: 'trim_clip', args: { clipId: vClip, edge: 'start', to: f(45) } }, { op: 'move_clip', args: { clipId: vClip, start: f(0) } }]);
+    const vw2 = await wav(vp);
+    const vGot2 = vPts.slice(1).map(([t]) => r3(tone(vw2.pcm, 0, 440, t - 1.5 - 0.025)));
+    await txs(vp, [{ op: 'delete_volume_keyframe', args: { clipId: vClip } }]);
+    const vw3 = await wav(vp);
+    measurements.volumeAutomation = { keys: '1.0 at 1 s, 0.2 at 3 s, 1.5 at 4 s on a 0.5-amplitude tone', expected: vPts.map(([, g]) => g), exported: vGot, afterTrimAndMove: vGot2, afterClearing: r3(tone(vw3.pcm, 0, 440, 1.475)) };
+    check('volume automation in the exported mix: level held before the first key, straight lines between keys (also above 1), held after the last — 5 points within 0.006; after a start trim the same levels are heard earlier; clearing the keys restores the plain level', vGot.every((g, i) => Math.abs(g - vPts[i]![1]) < 0.006) && vGot2.every((g, i) => Math.abs(g - vPts[i + 1]![1]) < 0.006) && Math.abs(tone(vw3.pcm, 0, 440, 1.475) - 0.5) < 0.003, measurements.volumeAutomation);
+
     console.log('\n# long mix stays bounded and exact');
     const lp = (await call('/projects', { name: 'phase8-long', width: 640, height: 360 })).body.project.id;
     const lm = await upload(lp, musicFile);

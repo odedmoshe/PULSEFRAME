@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
-import type { ProjectDocument } from '@pulseframe/core';
+import type { Clip, ProjectDocument } from '@pulseframe/core';
 import { api, type LoudnessResult } from '../api.ts';
 import { useEditorState } from './store.ts';
 
@@ -30,13 +30,55 @@ function CommitSlider({ label, value, min, max, step, display, onCommit, testid 
 
 function NumberCommit({ label, value, min, max, step, onCommit, testid }: { label: string; value: number; min: number; max?: number; step: number; onCommit: (v: number) => void; testid: string }) {
   const [v, setV] = useState(String(value));
-  useEffect(() => setV(String(value)), [value]);
-  const commit = () => { const n = Number(v); if (v === '' || !Number.isFinite(n)) { setV(String(value)); return; } if (n !== value) onCommit(n); };
+  // Only text the user typed since the last commit is ever committed. Without this, a field whose value follows the
+  // playhead re-committed its old text on blur after the playhead had moved (a stray volume key at the new position).
+  const dirty = useRef(false);
+  useEffect(() => { setV(String(value)); dirty.current = false; }, [value]);
+  const commit = () => {
+    if (!dirty.current) { setV(String(value)); return; }
+    dirty.current = false;
+    const n = Number(v);
+    if (v === '' || !Number.isFinite(n)) { setV(String(value)); return; }
+    if (n !== value) onCommit(n);
+  };
   return (
     <label>{label}
       <input type="number" dir="ltr" min={min} max={max} step={step} value={v} data-testid={testid}
-        onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); }} />
+        onChange={(e) => { dirty.current = true; setV(e.target.value); }} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); }} />
     </label>
+  );
+}
+
+/** Volume automation of the selected sound clip: the level at the playhead, written as a key there. */
+function VolumeKeys({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
+  const { editor, t } = useEditorState();
+  const local = T.sub(editor.playhead, clip.start);
+  const inside = !T.isNegative(local) && T.lte(local, clip.duration);
+  const keys = clip.volume ?? [];
+  const here = keys.find((k) => T.eq(k.time, local));
+  // Same rule as the mixer: held outside the keys, straight line between them.
+  const now = (() => {
+    if (!keys.length) return 1;
+    if (T.lte(local, keys[0]!.time)) return keys[0]!.value;
+    const last = keys[keys.length - 1]!;
+    if (T.lte(last.time, local)) return last.value;
+    const i = keys.findIndex((k) => T.lt(local, k.time));
+    const a = keys[i - 1]!, b = keys[i]!;
+    return a.value + ((b.value - a.value) * T.toSeconds(T.sub(local, a.time))) / T.toSeconds(T.sub(b.time, a.time));
+  })();
+  // Handlers read the playhead when they run, not the position of the last render: a seek may not have re-rendered this panel yet.
+  const liveLocal = () => { const at = T.sub(editor.playhead, clip.start); return !T.isNegative(at) && T.lte(at, clip.duration) ? at : null; };
+  const set = (v: number) => { const at = liveLocal(); if (at) void editor.commit([{ op: 'set_volume_keyframe', args: { clipId: clip.id, time: at, value: Math.min(4, Math.max(0, v)) } }], 'Volume key'); };
+  return (
+    <div className="fields" data-testid="volume-keys">
+      <NumberCommit label={`${t('sound.volume.level')}${here ? ' ◆' : ''}`} value={+now.toFixed(3)} min={0} max={4} step={0.05} testid="volume-level" onCommit={(v) => set(v)} />
+      <div className="row">
+        <button type="button" className="ghost" disabled={!inside || !!here} data-testid="volume-key-add" onClick={() => set(now)}>◆ {t('sound.volume.add')}</button>
+        <button type="button" className="ghost" disabled={!here} data-testid="volume-key-remove" onClick={() => { const at = liveLocal(); if (at) void editor.commit([{ op: 'delete_volume_keyframe', args: { clipId: clip.id, time: at } }], 'Remove volume key'); }}>{t('sound.volume.remove')}</button>
+        <button type="button" className="ghost" disabled={!keys.length} data-testid="volume-key-clear" onClick={() => void editor.commit([{ op: 'delete_volume_keyframe', args: { clipId: clip.id } }], 'Clear volume keys')}>{t('sound.volume.clear')}</button>
+      </div>
+      <p className="muted" data-testid="volume-key-count">{t('sound.volume.hint')} <bdi>({keys.length})</bdi></p>
+    </div>
   );
 }
 
@@ -145,6 +187,7 @@ export function SoundPanel() {
           <h3>{t('sound.clip')}</h3>
           <NumberCommit key={`in:${clip.id}`} label={t('sound.fadeIn')} value={fadeSeconds(clip.fadeIn)} min={0} step={0.1} testid="sound-fade-in" onCommit={(v) => setFade('fadeIn', v)} />
           <NumberCommit key={`out:${clip.id}`} label={t('sound.fadeOut')} value={fadeSeconds(clip.fadeOut)} min={0} step={0.1} testid="sound-fade-out" onCommit={(v) => setFade('fadeOut', v)} />
+          <VolumeKeys key={`vol:${clip.id}`} clip={clip} />
           <div className="fields" key={`xf:${clip.id}`}>
             <label>{t('sound.crossfade')}
               <input type="number" dir="ltr" min={0} step={0.1} value={xf} data-testid="sound-crossfade" onChange={(e) => setXf(e.target.value)} />

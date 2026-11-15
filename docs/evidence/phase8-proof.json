@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T03:02:38.814Z",
+  "ranAt": "2026-11-15T03:24:37.520Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -9,12 +9,36 @@
   },
   "scope": "Synthetic sine signals. Real speech/music, perceptual quality, EQ/dynamics, SFX, recording and voice providers are not exercised.",
   "measurements": {
+    "volumeAutomation": {
+      "keys": "1.0 at 1 s, 0.2 at 3 s, 1.5 at 4 s on a 0.5-amplitude tone",
+      "expected": [
+        0.5,
+        0.3,
+        0.1,
+        0.425,
+        0.75
+      ],
+      "exported": [
+        0.5,
+        0.3,
+        0.1053,
+        0.425,
+        0.75
+      ],
+      "afterTrimAndMove": [
+        0.3,
+        0.1053,
+        0.425,
+        0.75
+      ],
+      "afterClearing": 0.5
+    },
     "longMix": {
       "seconds": 320,
       "clips": 40,
-      "wallMs": 9722,
-      "realtimeFactor": 32.915,
-      "serverRssGrowthMb": 242,
+      "wallMs": 6490,
+      "realtimeFactor": 49.3066,
+      "serverRssGrowthMb": 311,
       "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
     },
     "browserAudioChain": {
@@ -47,8 +71,8 @@
       "note": "peak of 50 ms windows at the output stage during real-time playback in headless Chromium; a window spans part of a ramp, so ramps carry about ±0.02 of inherent error"
     }
   },
-  "passed": 19,
-  "total": 19,
+  "passed": 20,
+  "total": 20,
   "checks": [
     {
       "name": "baseline: exported amplitude equals the source amplitude (0.5) on both channels, exact length",
@@ -196,14 +220,42 @@
       }
     },
     {
+      "name": "volume automation in the exported mix: level held before the first key, straight lines between keys (also above 1), held after the last — 5 points within 0.006; after a start trim the same levels are heard earlier; clearing the keys restores the plain level",
+      "ok": true,
+      "detail": {
+        "keys": "1.0 at 1 s, 0.2 at 3 s, 1.5 at 4 s on a 0.5-amplitude tone",
+        "expected": [
+          0.5,
+          0.3,
+          0.1,
+          0.425,
+          0.75
+        ],
+        "exported": [
+          0.5,
+          0.3,
+          0.1053,
+          0.425,
+          0.75
+        ],
+        "afterTrimAndMove": [
+          0.3,
+          0.1053,
+          0.425,
+          0.75
+        ],
+        "afterClearing": 0.5
+      }
+    },
+    {
       "name": "320 s mix of 40 back-to-back clips: exact length, and the tone is continuous across every one of the 39 joins (no gap, overlap or drift)",
       "ok": true,
       "detail": {
         "seconds": 320,
         "clips": 40,
-        "wallMs": 9722,
-        "realtimeFactor": 32.915,
-        "serverRssGrowthMb": 242,
+        "wallMs": 6490,
+        "realtimeFactor": 49.3066,
+        "serverRssGrowthMb": 311,
         "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
       }
     },

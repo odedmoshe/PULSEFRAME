@@ -95,6 +95,37 @@ describe('audio plan', () => {
     const second = (whole.results[0]!.output!.audioClipId ?? whole.results[0]!.output!.clipId) as string;
     expect(() => tx(whole.doc, [{ op: 'set_audio_crossfade', args: { clipId: second, duration: f(15) } }])).toThrow(/unused source/);
   });
+  it('volume automation: keys become a clip-local envelope (held outside, straight lines between), follow a start trim, and the mixer applies it on top of gain and fades', () => {
+    const p = project();
+    let d = tx(p.doc, [
+      { op: 'set_volume_keyframe', args: { clipId: p.mc, time: f(30), value: 1 } },
+      { op: 'set_volume_keyframe', args: { clipId: p.mc, time: f(90), value: 0.25 } },
+      { op: 'set_clip_gain', args: { clipId: p.mc, gain: 0.5 } },
+    ]).doc;
+    expect(validateProject(d)).toEqual([]);
+    let m = audioPlan(d).clips.find((c) => c.clipId === p.mc)!;
+    expect(m.vol!.map((x) => [x.s, x.g])).toEqual([[0, 1], [48000, 1], [144000, 0.25], [m.length, 0.25]]);
+    expect(envAt(m.vol!, 96000)).toBeCloseTo(0.625, 9); // halfway down the ramp
+    const pcm = new Float32Array(m.length * 2).fill(1);
+    const out = new Float32Array(m.length * 2);
+    mixClip(out, 0, m, pcm, 0);
+    expect(out[10 * 2]).toBeCloseTo(0.5, 6);
+    expect(out[96000 * 2]).toBeCloseTo(0.5 * 0.625, 6);
+    expect(out[200000 * 2]).toBeCloseTo(0.5 * 0.25, 6);
+    // trimming 2 s off the start keeps the automation attached to the sound: the ramp is now 1 s in
+    d = tx(d, [{ op: 'trim_clip', args: { clipId: p.mc, edge: 'start', to: f(60) } }]).doc;
+    m = audioPlan(d).clips.find((c) => c.clipId === p.mc)!;
+    expect(envAt(m.vol!, 0)).toBeCloseTo(0.625, 9);
+    expect(envAt(m.vol!, 48000)).toBeCloseTo(0.25, 9);
+    // removing one key, then all
+    d = tx(d, [{ op: 'delete_volume_keyframe', args: { clipId: p.mc, time: f(30) } }]).doc;
+    expect((findClip(d, p.mc)!.clip as any).volume).toHaveLength(1);
+    d = tx(d, [{ op: 'delete_volume_keyframe', args: { clipId: p.mc } }]).doc;
+    expect((findClip(d, p.mc)!.clip as any).volume).toBeUndefined();
+    expect(audioPlan(d).clips.find((c) => c.clipId === p.mc)!.vol).toBeUndefined();
+    expect(() => tx(d, [{ op: 'set_volume_keyframe', args: { clipId: p.mc, time: T.rt(1, 7), value: 1 } }])).toThrow();
+    expect(() => tx(d, [{ op: 'set_volume_keyframe', args: { clipId: p.mc, time: f(100000), value: 1 } }])).toThrow();
+  });
   it('reference mixer: chunked mixing equals one-shot mixing, and equals the closed-form gain', () => {
     const clip: PlannedAudioClip = { clipId: 'c', trackId: 't', assetId: 'a', at: 100, length: 1000, source: 0, speed: 1, gain: 0.8, pan: 0.25, fade: [{ s: 0, g: 0 }, { s: 200, g: 1 }, { s: 700, g: 1 }, { s: 1000, g: 0 }], duck: [{ s: 0, g: 1 }, { s: 400, g: 1 }, { s: 500, g: 0.25 }, { s: 1000, g: 0.25 }] };
     const pcm = new Float32Array(2000).fill(1);

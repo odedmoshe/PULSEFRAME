@@ -130,6 +130,8 @@ export const MediaClipSchema = z
     linkGroupId: Id.nullable(),
     /** Audio clips: linear fades at the clip edges (durations). */
     fadeIn: RationalTimeSchema.optional(),
+    /** Volume automation: level multipliers (on top of `gain`) at clip-local, frame-aligned times; linear between keys, held before the first and after the last. Audio-track clips only. */
+    volume: z.array(z.object({ time: RationalTimeSchema, value: z.number().min(0).max(4) }).strict()).min(1).max(2000).optional(),
     fadeOut: RationalTimeSchema.optional(),
     mask: MaskSchema.optional(),
     transition: TransitionSchema.optional(),

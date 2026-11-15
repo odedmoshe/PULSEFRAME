@@ -62,6 +62,7 @@ async function main() {
     await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
+    page.on('response', (r) => { if (r.status() === 409) void r.text().then((b) => console.log('  409:', r.request().method(), new URL(r.url()).pathname, (r.request().postData() ?? '').slice(0, 300), b.slice(0, 300))).catch(() => {}); });
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     await page.goto(`${s.ownerUrl}&project=${pid}`);
     await page.getByTestId('deliver-panel').waitFor();
@@ -188,6 +189,8 @@ async function main() {
     await until((x2) => clipOf(x2, picClip).effects?.length === 1);
     await page.locator('[data-testid=effect-key][data-param=radius]').click();
     const firstKey = await until((x2) => clipOf(x2, picClip).effects?.[0]?.keyframes?.radius?.length === 1);
+    // The panel decides between "change the static value" and "write a key" from what it currently shows, so wait until it shows the parameter as animated (a person would see the ◆ too).
+    await page.getByTestId('effect-animated').first().waitFor({ timeout: 8000 }).catch(() => {});
     await page.mouse.click(px0 + 60, rb.y + rb.height / 2); // 20 frames later
     await page.locator('[data-testid=effect-param][data-param=radius]').fill('0.1');
     await page.locator('[data-testid=effect-param][data-param=radius]').dispatchEvent('pointerup');
@@ -209,6 +212,27 @@ async function main() {
     await page.keyboard.press('Control+z');
     const restored = await until((x2) => !!clipOf(x2, picClip));
     check('cut then paste moves the clip in one transaction (effects and keyframes come along); nothing is committed by the cut itself; one undo puts it back', pending === 1 && r2 === r1 && moved && !!landed && landed.effects?.[0]?.keyframes?.radius?.length === 2 && r3b === r1 + 1 && restored, { pending, revisions: [r1, r2, r3b], landedAt: landed ? fr(landed.start) : null });
+
+    console.log('\n# volume automation in the Sound tab');
+    await page.locator(`.clip[data-clip-id="${musicClip}"]`).click({ position: { x: 5, y: 5 } });
+    const volKeys = (d: any) => (clipOf(d, musicClip).volume ?? []).map((k: any) => [fr(k.time), k.value]);
+    const setLevelAt = async (frame: number, v: string) => { await page.mouse.click(rb.x + frame * 3 + 0.5, rb.y + 5); await page.getByTestId('volume-level').fill(v); // typed straight after the seek, on purpose: the key must land at the new playhead
+      await page.getByTestId('volume-level').press('Enter'); };
+    // The server having the key is not enough: the next step types into the panel, so wait until the panel shows it (as a person would).
+    const panelKeys = (n: number) => page.waitForFunction((k) => document.querySelector('[data-testid=volume-key-count]')?.textContent?.includes(`(${k})`), n, { timeout: 8000 }).catch(() => {});
+    await setLevelAt(30, '0.5');
+    const vk1 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[30, 0.5]]));
+    await panelKeys(1);
+    await setLevelAt(90, '1.2');
+    const vk2 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[30, 0.5], [90, 1.2]]));
+    await panelKeys(2);
+    await page.mouse.click(rb.x + 60 * 3 + 0.5, rb.y + 5);
+    await page.waitForFunction(() => (document.querySelector('[data-testid=volume-level]') as HTMLInputElement)?.value === '0.85', undefined, { timeout: 5000 }).catch(() => {});
+    const midShown = await page.getByTestId('volume-level').inputValue();
+    await page.mouse.click(rb.x + 90 * 3 + 0.5, rb.y + 5);
+    await page.getByTestId('volume-key-remove').click();
+    const vk3 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[30, 0.5]]));
+    check('Sound tab: typing a level writes a volume key at the playhead; between two keys the field shows the interpolated level (0.85 halfway between 0.5 and 1.2); "remove this key" removes only that key', vk1 && vk2 && midShown === '0.85' && vk3, { midShown, keys: volKeys(await doc()) });
 
     console.log('\n# markers');
     const markersOf = (d: any) => Object.values(d.markers ?? {}).sort((x: any, y: any) => fr(x.time) - fr(y.time)) as any[];
