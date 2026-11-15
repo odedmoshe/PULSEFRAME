@@ -66,6 +66,26 @@ describe('linked format variants', () => {
     d = tx(d, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, hidden: false, transform: null } }]).doc;
     expect(d.variants[variantId]!.overrides).toEqual({});
   });
+  it('duplicate_clips copies everything on a clip, keeps pairs linked to each other, and finds a free place', () => {
+    const { doc, clipId, titleId, variantId } = project();
+    let d = tx(doc, [{ op: 'add_effect', args: { clipId, type: 'color.sepia' } }, { op: 'set_keyframe', args: { clipId, property: 'x', time: f(10), value: 0.2 } }, { op: 'set_variant_override', args: { variantId, clipId, transform: { scale: 1.3 } } }, { op: 'trim_clip', args: { clipId, edge: 'end', to: f(60) } }]).doc;
+    const audioId = d.sequences[d.mainSequenceId]!.tracks.find((t) => t.kind === 'audio')!.clips[0]!.id;
+    const r = tx(d, [{ op: 'duplicate_clips', args: { clipIds: [clipId, audioId], at: f(90) } }]);
+    const [v2, a2] = (r.results[0]!.output!.createdClipIds as string[]).map((id) => findClip(r.doc, id)!);
+    const orig = findClip(r.doc, clipId)!.clip as any;
+    expect(v2!.clip).toMatchObject({ start: f(90), duration: f(60), effects: [{ type: 'color.sepia' }], keyframes: orig.keyframes });
+    expect((v2!.clip as any).linkGroupId).toBe((a2!.clip as any).linkGroupId);
+    expect((v2!.clip as any).linkGroupId).not.toBe(orig.linkGroupId);
+    expect(r.doc.variants[variantId]!.overrides[v2!.clip.id]).toEqual({ transform: { scale: 1.3 } });
+    expect(validateProject(r.doc)).toEqual([]);
+    // no room on the same track -> a compatible track is used or made; nothing overlaps
+    const again = tx(r.doc, [{ op: 'duplicate_clips', args: { clipIds: [clipId], offset: f(10) } }]);
+    expect(validateProject(again.doc)).toEqual([]);
+    expect(findClip(again.doc, (again.results[0]!.output!.createdClipIds as string[])[0]!)!.track.id).not.toBe(findClip(again.doc, clipId)!.track.id);
+    expect((findClip(again.doc, (again.results[0]!.output!.createdClipIds as string[])[0]!)!.clip as any).linkGroupId).toBeNull();
+    expect(code(() => tx(d, [{ op: 'duplicate_clips', args: { clipIds: [titleId] } }]))).toBe('invalid_args');
+    expect(code(() => tx(d, [{ op: 'duplicate_clips', args: { clipIds: [titleId], offset: f(-500) } }]))).toBe('out_of_bounds');
+  });
   it('a variant is one undoable entity; bad input is refused', () => {
     const { doc, titleId, variantId } = project();
     const r = tx(doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, transform: { x: 0.1 } } }]);

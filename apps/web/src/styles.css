@@ -179,3 +179,5 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .recipe-steps, .recipe-basis, .recipe-runs { margin: 0; padding-inline-start: 20px; }
 .recipe-runs { list-style: none; padding: 0; display: grid; gap: 8px; }
 .recipe-runs > li { display: grid; gap: 4px; padding: 6px; border-inline-start: 3px solid var(--pf-border); }
+
+.transform-scope { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--border, currentColor); border-radius: 6px; }

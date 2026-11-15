@@ -310,7 +310,10 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
   const { editor, t } = useEditorState();
   const [text, setText] = useState(clip.type === 'text' ? clip.text : '');
   useEffect(() => { if (clip.type === 'text') setText(clip.text); }, [clip]);
-  const now = editor.transformNow(clip);
+  const variantId = editor.getState().viewVariantId;
+  const viewClip = variantId ? editor.viewDoc?.sequences[editor.viewDoc.mainSequenceId]?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clip.id) ?? clip : clip;
+  const hasOverride = !!(variantId && editor.doc?.variants?.[variantId]?.overrides[clip.id]?.transform);
+  const now = editor.transformNow(variantId ? viewClip : clip);
   const inside = editor.playheadInsideSelection;
   const on = editor.playheadOnSelection;
   const sizeCommit = (v: number) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: v } } }], 'Text size');
@@ -333,9 +336,16 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
         </>
       )}
       {/* Values shown are the ones rendered at the playhead. Editing an animated property writes a keyframe there. */}
+      {variantId ? (
+        <div className="transform-scope" data-testid="transform-scope" data-scope="format">
+          <span className="muted">{t('transform.scopeFormat')}</span>
+          <button className="ghost" disabled={!hasOverride} data-testid="transform-reset-format"
+            onClick={() => void editor.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, transform: null } }], 'Reset format transform')}>{t('transform.resetFormat')}</button>
+        </div>
+      ) : <span hidden data-testid="transform-scope" data-scope="master" />}
       {TRANSFORM_FIELDS.map((fld) => {
-        const animated = !!clip.keyframes?.[fld.prop]?.length;
-        const commit = (v: number) => on && v !== now[fld.prop] && void editor.setTransformAtPlayhead(clip, { [fld.prop]: v });
+        const animated = !!viewClip.keyframes?.[fld.prop]?.length;
+        const commit = (v: number) => on && v !== now[fld.prop] && void editor.setTransformForView(clip, { [fld.prop]: v });
         return (
           <label key={`${fld.prop}:${now[fld.prop]}`}>
             <span>{t(fld.label)} {animated && <em className="animated" title={t('keyframes.animated')}>◆</em>} <bdi className="val">{+now[fld.prop].toFixed(3)}</bdi></span>
@@ -345,8 +355,8 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
         );
       })}
       <div className="row">
-        <button className="ghost" disabled={!on} onClick={() => run(editor, 'keyframe.add')} data-testid="keyframe-add">◆ {t('cmd.keyframeAdd')} {hint(keymap, 'keyframe.add')}</button>
-        <button className="ghost" disabled={!on || !clip.keyframes} onClick={() => run(editor, 'keyframe.remove')}>{t('cmd.keyframeRemove')} {hint(keymap, 'keyframe.remove')}</button>
+        <button className="ghost" disabled={!on || !!variantId} title={variantId ? t('transform.keyframesMasterOnly') : undefined} onClick={() => run(editor, 'keyframe.add')} data-testid="keyframe-add">◆ {t('cmd.keyframeAdd')} {hint(keymap, 'keyframe.add')}</button>
+        <button className="ghost" disabled={!on || !clip.keyframes || !!variantId} title={variantId ? t('transform.keyframesMasterOnly') : undefined} onClick={() => run(editor, 'keyframe.remove')}>{t('cmd.keyframeRemove')} {hint(keymap, 'keyframe.remove')}</button>
       </div>
       <dl>
         <dt>{t('clip.start')}</dt><dd><bdi>{T.toSeconds(clip.start).toFixed(3)}s</bdi></dd>

@@ -149,6 +149,36 @@ async function main() {
     }
     await page.screenshot({ path: path.join(art, 'editor.png') });
     check('"export all formats" lists one job per format and each finishes with a download of the right size', links.length === 2 && JSON.stringify(sizes.sort()) === JSON.stringify(['360x360', '360x640']), { sizes });
+    console.log('\n# copy / paste / duplicate; Inspector values follow the viewed format');
+    await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
+    const srcClip = clipOf(await doc(), picClip);
+    await page.keyboard.press('Control+c');
+    await page.mouse.click(rb.x + 600, rb.y + rb.height / 2); // playhead to 6.67 s = frame 200 (90 px/s)
+    const countVideo = async () => (await doc()).sequences.seq_main.tracks.filter((t: any) => t.kind === 'video').flatMap((t: any) => t.clips).length;
+    const v0 = await countVideo();
+    await page.keyboard.press('Control+v');
+    const pasted = await until((x2) => x2.sequences.seq_main.tracks.filter((t: any) => t.kind === 'video').flatMap((t: any) => t.clips).length === v0 + 1);
+    const copies = (await doc()).sequences.seq_main.tracks.filter((t: any) => t.kind === 'video').flatMap((t: any) => t.clips).filter((c: any) => c.id !== picClip && c.assetId === srcClip.assetId);
+    const paste = copies.find((c: any) => fr(c.start) === 200);
+    await page.keyboard.press('Control+d');
+    const duplicated = await until((x2) => x2.sequences.seq_main.tracks.filter((t: any) => t.kind === 'video').flatMap((t: any) => t.clips).length === v0 + 2);
+    check('Ctrl+C then Ctrl+V pastes a full copy at the playhead (same source, trim and length) and selects it; Ctrl+D duplicates the selection right after itself', pasted && !!paste && fr(paste.duration) === fr(srcClip.duration) && fr(paste.sourceIn) === fr(srcClip.sourceIn) && duplicated, { pastedAtFrame: paste ? fr(paste.start) : null });
+    await page.getByTestId('format-switch').selectOption(tall);
+    await page.locator(`.clip[data-clip-id="${title}"]`).click();
+    await page.mouse.click(rb.x + 30, rb.y + rb.height / 2); // playhead inside the title: the sliders are enabled only while the clip is on screen
+    await page.locator('[data-testid=transform-scope][data-scope=format]').waitFor();
+    const masterScale = clipOf(await doc(), title).transform.scale;
+    await page.getByTestId('transform-scale').fill('1.5');
+    await page.getByTestId('transform-scale').dispatchEvent('pointerup');
+    const sliderOverride = await until((x2) => x2.variants[tall].overrides[title]?.transform?.scale === 1.5);
+    const masterKept = clipOf(await doc(), title).transform.scale === masterScale;
+    const kfDisabled = await page.getByTestId('keyframe-add').isDisabled();
+    await page.getByTestId('transform-reset-format').click();
+    const resetOk = await until((x2) => !x2.variants[tall].overrides[title]);
+    await page.getByTestId('format-switch').selectOption('');
+    const scopeMaster = (await page.locator('[data-testid=transform-scope]').getAttribute('data-scope')) === 'master';
+    check('while a format is viewed, the Inspector scale slider writes a format-only override (master unchanged), keyframe buttons are disabled, and "reset to master" removes the override; back on the master the controls edit the master again', sliderOverride && masterKept && kfDisabled && resetOk && scopeMaster, { sliderOverride, masterKept, kfDisabled, resetOk, scopeMaster });
+
     console.log('\n# project archive from the editor');
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('archive-download').click()]);
     const arcFile = path.join(art, 'project.tar');

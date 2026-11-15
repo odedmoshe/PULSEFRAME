@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T01:36:38.723Z",
+  "ranAt": "2026-11-15T02:05:35.393Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Synthetic transcript on a beep fixture. Speech recognition, forced alignment and real speech are not exercised.",
-  "passed": 33,
-  "total": 33,
+  "passed": 35,
+  "total": 35,
   "checks": [
     {
       "name": "no transcript: the panel says so and offers import; it does not invent text",
@@ -307,6 +307,34 @@
       "name": "editor: entrance preset writes keyframes on the selected title; font picker changes its family; no uncaught errors",
       "ok": true,
       "detail": []
+    },
+    {
+      "name": "\"sidecar\" export: the picture has no captions while the default export has them burned in; the subtitle file is timed to the exported range (cues shifted by the 1 s range start and clipped at its end)",
+      "ok": true,
+      "detail": {
+        "burnedLit": 779,
+        "cleanLit": 0,
+        "cues": [
+          [
+            0,
+            3,
+            "שלום עולם Hello 2026"
+          ],
+          [
+            3,
+            4,
+            "בדיקה כתוביות PULSEFRAME סוף"
+          ]
+        ]
+      }
+    },
+    {
+      "name": "animated GIF export: 30 frames at 320×180, looping, each frame close to the still of the same frame (256-colour palette), and the plan warns that a GIF is silent",
+      "ok": true,
+      "detail": {
+        "psnrDb": 38.1,
+        "bytes": 61603
+      }
     },
     {
       "name": "agent reads the transcript, deletes one word by id, and reads back captions without that word",

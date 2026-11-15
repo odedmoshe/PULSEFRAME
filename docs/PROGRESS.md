@@ -210,6 +210,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - The early stop itself did not recur in four further runs; its cause is not known. If it recurs it will now be visible.
 - Consequence for earlier evidence: every "PASSED n/n" for those proofs in this document was read together with its check count at the time (27, 19, 24/30, 23), so none of the recorded results came from a truncated run; but the count is what made that checkable, not the word PASSED.
 
+**Checkpoint 13f — carry-over items closed**
+- Export: animated GIF (one palette for the whole clip, ordered dither; the plan warns that it is silent and when it will be large) and a `captions` option: `burned` (as before), `sidecar-srt` / `sidecar-vtt` (clean picture plus a subtitle file fixed at job creation, shifted and clipped to the exported range, `GET /jobs/{id}/captions`), `none`. Verified in `pnpm proof:phase6` (now 35 checks): clean vs burned picture, cue times for a range, GIF frame count/size and PSNR 38.1 dB against the still of one frame.
+- `duplicate_clips` op: copies everything on a clip (trim, keyframes, effects, mask, fades, per-format overrides), keeps picture+sound pairs linked to each other, finds a free track. Editor: Ctrl+C / Ctrl+V (paste at the playhead) / Ctrl+D. No cut command yet.
+- The Inspector's transform sliders now follow the viewed format (format-only override, reset to master, keyframe buttons disabled there), which removes the inconsistency noted in checkpoint 12a. Verified in `pnpm proof:editor-interactions` (now 10 checks).
+- Still open from earlier phases (unchanged): source viewer, minimap, loop playback, J/K/L, markers, multi-select drag, workspaces; resumable upload, URL import, recorder, HDR, OPFS/offline; streaming export target, checkpoint/resume; MCP Tasks/resources/prompts, OAuth, grants/approvals management UI; keyframed effect parameters, speed changes; audio crossfades and volume automation; per-format caption style; media garbage collection.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 

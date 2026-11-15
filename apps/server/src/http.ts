@@ -441,6 +441,13 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
     return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), j.output.mimeType ?? 'video/mp4', `pulseframe-${j.id}${path.extname(j.output.file)}`);
   });
+  app.get('/api/v1/jobs/:jobId/captions', (c) => {
+    need(c, 'observe');
+    const j = store.getJob(c.req.param('jobId'));
+    if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
+    if (!j.output?.captions) throw new ApiError(404, 'not_found', 'this export has no caption file');
+    return sendBlob(c, path.join(store.outDir, path.basename(j.output.captions.file)), j.output.captions.format === 'vtt' ? 'text/vtt' : 'application/x-subrip', `pulseframe-${j.id}.${j.output.captions.format}`);
+  });
   // ----- browser export route: the tab renders and encodes; the server holds the durable job and a tab lease -----
   const browserExport = registerBrowserExportRoutes(app, store, exporter);
   (app as any).browserExport = browserExport;

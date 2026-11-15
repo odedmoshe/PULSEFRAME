@@ -29,7 +29,7 @@ const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ n
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
-const ff = (args: string[]) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', ...args], { maxBuffer: 1 << 30 });
+const ff = (args: string[], input?: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', ...args], { maxBuffer: 1 << 30, input });
 const W = 640, H = 360;
 const WORDS = ['שלום', 'עולם', 'Hello', '2026', 'בדיקה', 'כתוביות', 'PULSEFRAME', 'סוף'];
 const HIGHLIGHT = [0x3d, 0xe0, 0xc8];
@@ -300,6 +300,33 @@ async function main() {
     await page2.screenshot({ path: path.join(art, 'editor-phase6b.png'), fullPage: false });
     check('editor: entrance preset writes keyframes on the selected title; font picker changes its family; no uncaught errors', errors2.length === 0, errors2.slice(0, 4));
     await page2.close();
+
+    console.log('\n# clean picture with a subtitle file; animated GIF');
+    const cp = (await call('/projects', { name: 'phase6-sidecar', width: W, height: H })).body.project.id;
+    const cu: any = await (await fetch(`${s.url}/api/v1/projects/${cp}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'speech.mp4' }, body: fs.readFileSync(fixture.file) })).json();
+    await call(`/projects/${cp}/transactions`, { ops: [
+      { op: 'add_clip', args: { assetId: cu.assetId, start: f(0) } },
+      { op: 'set_transcript', args: { assetId: cu.assetId, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(4, 1), text: WORDS.slice(0, 4).join(' '), words: [0, 1, 2, 3].map(word) }, { start: T.rt(4, 1), duration: T.rt(4, 1), text: WORDS.slice(4).join(' '), words: [4, 5, 6, 7].map(word) }] } },
+      { op: 'add_caption_track', args: { mode: 'transcript', style: { preset: 'karaoke', sizeFrac: 0.07 } } },
+    ] });
+    const range = { startFrame: 30, endFrame: 150 }; // 1 s .. 5 s
+    const runExport = async (options: Record<string, unknown>, name: string) => { const j = await waitJob((await call(`/projects/${cp}/exports`, options)).body.jobId); const file = path.join(art, name); fs.writeFileSync(file, (await call(`/jobs/${j.id}/output`)).body); return { j, file }; };
+    const burned = await runExport({ range, quality: 'draft' }, 'burned.mp4');
+    const clean = await runExport({ range, quality: 'draft', captions: 'sidecar-srt' }, 'clean.mp4');
+    const litOf = (file: string) => { const rgb = ff(['-i', file, '-vf', 'select=eq(n\\,45)', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']); return lit(Buffer.from(rgb)); };
+    const side = await call(`/jobs/${clean.j.id}/captions`);
+    const sideCues = parseSubtitles(side.body.toString('utf8')).cues.map((q) => [T.toSeconds(q.start), T.toSeconds(q.end), q.text]);
+    const noSide = await call(`/jobs/${burned.j.id}/captions`);
+    check('"sidecar" export: the picture has no captions while the default export has them burned in; the subtitle file is timed to the exported range (cues shifted by the 1 s range start and clipped at its end)', litOf(burned.file) > 50 && litOf(clean.file) === 0 && clean.j.output.captions.cues === 2 && JSON.stringify(sideCues) === JSON.stringify([[0, 3, WORDS.slice(0, 4).join(' ')], [3, 4, WORDS.slice(4).join(' ')]]) && noSide.status === 404, { burnedLit: litOf(burned.file), cleanLit: litOf(clean.file), cues: sideCues });
+    const gifPlan = (await call(`/projects/${cp}/exports/plan`, { format: 'gif', range: { startFrame: 0, endFrame: 30 }, scale: 0.5 })).body;
+    const gif = await runExport({ format: 'gif', range: { startFrame: 0, endFrame: 30 }, scale: 0.5 }, 'clip.gif');
+    const gp = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-count_packets', gif.file], { encoding: 'utf8' })).streams[0];
+    const gifFrame = ff(['-i', gif.file, '-vf', 'select=eq(n\\,20)', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+    const refPng = (await call(`/projects/${cp}/frame?index=20`)).body as Buffer;
+    const refSmall = ff(['-f', 'image2pipe', '-i', '-', '-vf', 'scale=320:180', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], refPng);
+    let se = 0; for (let i = 0; i < refSmall.length; i++) { const dd = gifFrame[i]! - refSmall[i]!; se += dd * dd; }
+    const gifPsnr = 10 * Math.log10((255 * 255) / (se / refSmall.length));
+    check('animated GIF export: 30 frames at 320×180, looping, each frame close to the still of the same frame (256-colour palette), and the plan warns that a GIF is silent', gif.j.status === 'succeeded' && gp.codec_name === 'gif' && Number(gp.nb_read_packets) === 30 && gp.width === 320 && gp.height === 180 && gifPsnr > 22 && gifPlan.warnings.some((w: any) => w.code === 'gif_has_no_sound'), { psnrDb: Number(gifPsnr.toFixed(1)), bytes: fs.statSync(gif.file).size });
 
     console.log('\n# agent (MCP)');
     const c = new Client({ name: 'phase6-script', version: '0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });

@@ -13,9 +13,9 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
+import { findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
-import { audioPlan } from '@pulseframe/engine';
+import { audioPlan, captionCues } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
 import { limiter } from './analysis.ts';
 
@@ -27,7 +27,8 @@ const exec = promisify(execFile);
 
 export const ExportOptionsSchema = z
   .object({
-    format: z.enum(['mp4-h264-aac', 'webm-vp9-opus', 'wav', 'png']).default('mp4-h264-aac').describe('Container/codecs. wav = audio only; png = one still frame'),
+    format: z.enum(['mp4-h264-aac', 'webm-vp9-opus', 'gif', 'wav', 'png']).default('mp4-h264-aac').describe('Container/codecs. gif = animated picture without sound; wav = audio only; png = one still frame'),
+    captions: z.enum(['burned', 'sidecar-srt', 'sidecar-vtt', 'none']).default('burned').describe('burned = captions drawn into the picture (as previewed); sidecar-* = clean picture plus a subtitle file timed to this export; none = clean picture, no file'),
     quality: z.enum(['draft', 'standard', 'high']).default('high'),
     scale: z.union([z.literal(1), z.literal(0.5), z.literal(0.25)]).default(1).describe('Output size relative to the project size (rounded to even dimensions)'),
     range: z.object({ startFrame: z.number().int().nonnegative(), endFrame: z.number().int().positive() }).strict().optional().describe('Half-open frame range [startFrame, endFrame); default is the whole sequence'),
@@ -36,6 +37,23 @@ export const ExportOptionsSchema = z
   })
   .strict();
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
+const hideCaptions = (doc: ProjectDocument): ProjectDocument => ({ ...doc, sequences: Object.fromEntries(Object.entries(doc.sequences).map(([id, s]) => [id, { ...s, tracks: s.tracks.map((t) => (t.kind === 'caption' ? { ...t, hidden: true } : t)) }])) });
+/** Subtitle file for an export: the first caption track as it plays, shifted and clipped to the exported range. */
+function captionSidecar(doc: ProjectDocument, manifest: Manifest): { format: 'srt' | 'vtt'; text: string; cues: number } | null {
+  const want = manifest.options.captions;
+  if (want !== 'sidecar-srt' && want !== 'sidecar-vtt') return null;
+  const seq = doc.sequences[doc.mainSequenceId]!;
+  const track = seq.tracks.find((t) => t.kind === 'caption');
+  if (!track) return null;
+  const rate = manifest.output.frameRate;
+  const from = T.frameTime(manifest.output.firstFrame, rate), to = T.frameTime(manifest.output.firstFrame + manifest.output.frames, rate);
+  const cues = captionCues(doc, seq, track)
+    .map((c) => ({ start: T.max(c.start, from), end: T.min(c.end, to), text: c.text }))
+    .filter((c) => T.lt(c.start, c.end))
+    .map((c) => ({ start: T.sub(c.start, from), end: T.sub(c.end, from), text: c.text }));
+  const format = want === 'sidecar-srt' ? 'srt' : 'vtt';
+  return { format, text: format === 'srt' ? serializeSrt(cues) : serializeVtt(cues), cues: cues.length };
+}
 /** The document to render: the master, or the master projected into one of its linked formats. */
 export function variantDoc(doc: ProjectDocument, variantId?: string): ProjectDocument {
   if (!variantId) return doc;
@@ -134,6 +152,12 @@ export class Exporter {
     for (const fam of families) if (!ENGINE.fontFamilies.includes(fam)) blockers.push({ code: 'missing_font', message: `font "${fam}" is not bundled with the renderer; text would silently fall back`, ids: [] });
     const fonts = [...families].filter((f) => ENGINE.fontFamilies.includes(f)).map((family) => ({ family, files: this.fontFiles(family) }));
     if (fonts.some((f) => f.files.length === 0)) blockers.push({ code: 'renderer_unavailable', message: 'the web bundle with the render page and fonts has not been built (run `pnpm build`)', ids: [] });
+    if (options.format === 'gif') {
+      const seq0 = doc.sequences[doc.mainSequenceId]!;
+      if (seq0.tracks.some((t) => t.kind === 'audio' && !t.muted && t.clips.length > 0)) warnings.push({ code: 'gif_has_no_sound', message: 'GIF cannot carry sound; the export will be silent', ids: [] });
+      if (outWidth * outHeight * Math.max(0, frames) > 640 * 360 * 600) warnings.push({ code: 'gif_large', message: 'this GIF will be large and limited to 256 colours per frame; consider a shorter range or scale 0.5', ids: [] });
+    }
+    if (options.captions.startsWith('sidecar') && !doc.sequences[doc.mainSequenceId]!.tracks.some((t) => t.kind === 'caption')) warnings.push({ code: 'no_captions', message: 'a caption file was requested but the project has no caption track; none will be written', ids: [] });
     if (options.format === 'webm-vp9-opus' && doc.settings.sampleRate !== 48000) warnings.push({ code: 'resampled_audio', message: 'Opus is encoded at 48 kHz; audio will be resampled', ids: [] });
     const effects = [...fxUsed].map(([type, clips]) => ({ type, version: findEffect(type)?.version ?? 0, clips }));
     for (const fx of effects) if (fx.version === 0) blockers.push({ code: 'unknown_effect', message: `effect "${fx.type}" is not available in this renderer; exporting would silently drop it`, ids: [] });
@@ -165,7 +189,12 @@ export class Exporter {
     const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, 'Fix the listed blockers (relink media, change the font or the range) and try again.');
     // A variant export snapshots the PROJECTED document, so the job renders exactly what was planned even if the variant changes later.
-    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot: variantDoc(p.doc, manifest.options.variantId), manifest, warnings, retryOf: retryOf?.id ?? null });
+    // Snapshot what will be rendered. For a clean picture, caption tracks are hidden in the snapshot; a requested subtitle file
+    // is fixed now from the same document, so later edits cannot change it.
+    const resolved = retryOf ? p.doc : variantDoc(p.doc, manifest.options.variantId);
+    const snapshot = retryOf || manifest.options.captions === 'burned' ? resolved : hideCaptions(resolved);
+    const sidecar = retryOf ? retryOf.input.sidecar ?? null : captionSidecar(resolved, manifest);
+    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot, sidecar, manifest, warnings, retryOf: retryOf?.id ?? null });
     this.enqueue(job);
     return job;
   }
@@ -267,7 +296,7 @@ export class Exporter {
         if (!ok) throw new ApiError(422, 'render_blocked', `source media ${a.id} is no longer available`, { blockers: [{ code: 'missing_media', ids: [a.id] }] });
       }
       const { frameRate, sampleRate } = output;
-      const ext = { 'mp4-h264-aac': 'mp4', 'webm-vp9-opus': 'webm', wav: 'wav', png: 'png' }[options.format];
+      const ext = { 'mp4-h264-aac': 'mp4', 'webm-vp9-opus': 'webm', gif: 'gif', wav: 'wav', png: 'png' }[options.format];
       const partial = path.join(work, `out.${ext}`);
       const final = path.join(this.store.outDir, `${jobId}.${ext}`);
       const firstSample = T.nearestSampleIndex(T.frameTime(output.firstFrame, frameRate), sampleRate);
@@ -285,10 +314,13 @@ export class Exporter {
         if (validation.codec !== 'png' || validation.width !== output.width || validation.height !== output.height) throw new Error(`export failed validation: ${JSON.stringify(validation)}`);
       } else {
         const wav = options.format === 'wav' ? partial : path.join(work, 'mix.wav');
-        this.store.updateJob(jobId, { stage: 'rendering audio' });
-        audioMix = await this.renderAudio(doc, firstSample, totalSamples, wav, canceled);
-        audioClips = audioMix.clips;
-        if (canceled()) throw new Error('canceled');
+        const gif = options.format === 'gif';
+        if (!gif) {
+          this.store.updateJob(jobId, { stage: 'rendering audio' });
+          audioMix = await this.renderAudio(doc, firstSample, totalSamples, wav, canceled);
+          audioClips = audioMix.clips;
+          if (canceled()) throw new Error('canceled');
+        }
         if (options.format === 'wav') {
           const p = await ffprobe(partial);
           const a = p.streams.find((x: any) => x.codec_type === 'audio');
@@ -299,8 +331,13 @@ export class Exporter {
           token = opened.token;
           const s = opened.session;
           const mp4 = options.format === 'mp4-h264-aac';
-          const crf = String(CRF[options.format][options.quality]);
-          const ff = spawn('ffmpeg', [
+          const crf = gif ? '' : String(CRF[options.format as 'mp4-h264-aac' | 'webm-vp9-opus'][options.quality]);
+          const ff = spawn('ffmpeg', gif ? [
+            '-hide_banner', '-v', 'error', '-y',
+            '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${output.width}x${output.height}`, '-framerate', `${frameRate.num}/${frameRate.den}`, '-i', 'pipe:0',
+            // One palette for the whole clip, then ordered dithering: stable colours from frame to frame.
+            '-filter_complex', '[0:v]split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=4', '-loop', '0', '-f', 'gif', partial,
+          ] : [
             '-hide_banner', '-v', 'error', '-y',
             '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${output.width}x${output.height}`, '-framerate', `${frameRate.num}/${frameRate.den}`, '-i', 'pipe:0',
             '-i', wav, '-map', '0:v:0', '-map', '1:a:0',
@@ -333,18 +370,24 @@ export class Exporter {
           // WebM does not store a frame count; count packets for it.
           const frames = v?.nb_frames ? Number(v.nb_frames) : Number((await exec('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-count_packets', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', partial], { timeout: 120_000 })).stdout.trim());
           validation = { videoCodec: v?.codec_name, audioCodec: a?.codec_name, frames, expectedFrames: s.totalFrames, width: v?.width, height: v?.height, frameRate: v?.r_frame_rate, pixFmt: v?.pix_fmt, colorSpace: v?.color_space, audioSampleRate: Number(a?.sample_rate), durationSeconds: Number(probe.format.duration) };
-          if (validation.videoCodec !== (mp4 ? 'h264' : 'vp9') || validation.audioCodec !== (mp4 ? 'aac' : 'opus') || frames !== s.totalFrames || v.width !== output.width || v.height !== output.height)
+          if (validation.videoCodec !== (gif ? 'gif' : mp4 ? 'h264' : 'vp9') || (!gif && validation.audioCodec !== (mp4 ? 'aac' : 'opus')) || frames !== s.totalFrames || v.width !== output.width || v.height !== output.height)
             throw new Error(`export failed validation: ${JSON.stringify(validation)}`);
         }
       }
       if (canceled()) throw new Error('canceled');
       fs.renameSync(partial, final);
+      let captionsOut: { file: string; format: string; cues: number } | null = null;
+      if (job.input.sidecar) {
+        const file = `${jobId}.captions.${job.input.sidecar.format}`;
+        fs.writeFileSync(path.join(this.store.outDir, file), job.input.sidecar.text);
+        captionsOut = { file, format: job.input.sidecar.format, cues: job.input.sidecar.cues };
+      }
       const wall = (Date.now() - started) / 1000;
       const bytes = fs.statSync(final).size;
       this.store.updateJob(jobId, {
         status: 'succeeded', stage: null,
         output: {
-          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', wav: 'audio/wav', png: 'image/png' }[ext], bytes, revision: job.input.revision, route: 'server-software-canvas2d', options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output },
+          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, bytes, revision: job.input.revision, route: 'server-software-canvas2d', options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output },
           estimate: { ...manifest.estimate, actualBytes: bytes }, audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });

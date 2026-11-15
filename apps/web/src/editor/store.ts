@@ -45,6 +45,8 @@ export interface EditorState {
   viewVariantId: string | null;
   /** Show the safe-area guide over the preview (personal setting, default on). */
   safeAreaOn: boolean;
+  /** Clip ids remembered by Copy (session state only). */
+  clipboard: string[];
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
@@ -55,7 +57,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], viewVariantId: null, safeAreaOn: readSafeArea(),
+    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], viewVariantId: null, safeAreaOn: readSafeArea(), clipboard: [],
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -330,6 +332,29 @@ export class Editor {
     const transform: Record<string, number> = {};
     for (const [p, raw] of Object.entries(values)) transform[p] = Math.round((raw as number) * 1e4) / 1e4;
     return Object.keys(transform).length ? this.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, transform } }], label) : Promise.resolve(null);
+  }
+  /** Remember the selected clips for Paste. */
+  copySelection() { if (this.state.selection.length) this.set({ clipboard: [...this.state.selection] }); }
+  /** Copied clip ids that still exist in the document. */
+  get clipboardLive(): string[] { const d = this.state.doc; return d ? this.state.clipboard.filter((id) => findClip(d, id)) : []; }
+  private async duplicate(clipIds: string[], at: T.RationalTime, label: string) {
+    const r = await this.commit([{ op: 'duplicate_clips', args: { clipIds, at } }], label);
+    const created = r?.results[0]?.output?.createdClipIds;
+    if (Array.isArray(created) && created.length) this.set({ selection: created as string[], ...(this.following ? {} : { followAgent: false }) });
+    return r;
+  }
+  pasteClipboard() {
+    const ids = this.clipboardLive;
+    if (!ids.length) { this.set({ error: this.t('clipboard.gone') }); return Promise.resolve(null); }
+    return this.duplicate(ids, this.playhead, 'Paste');
+  }
+  duplicateSelection() {
+    const doc = this.state.doc;
+    if (!doc) return Promise.resolve(null);
+    const clips = this.state.selection.map((id) => findClip(doc, id)?.clip).filter((c): c is Clip => !!c);
+    if (!clips.length) return Promise.resolve(null);
+    const end = clips.reduce((m, c) => T.max(m, clipEnd(c)), clips[0]!.start);
+    return this.duplicate(clips.map((c) => c.id), T.snapToFrame(end, this.rate), 'Duplicate');
   }
   /** The selected clip's transform as rendered at the playhead (keyframes applied). */
   transformNow(clip: Clip) { return transformAt(clip, T.max(clip.start, T.min(this.playhead, clipEnd(clip)))); }
