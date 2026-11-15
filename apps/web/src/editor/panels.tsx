@@ -226,7 +226,9 @@ function RampField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   const [to, setTo] = useState('2');
   const [steps, setSteps] = useState('8');
   const a = Number(from), b = Number(to), n = Math.round(Number(steps));
-  const ok = a >= 0.1 && a <= 8 && b >= 0.1 && b <= 8 && a !== b && n >= 2 && n <= 24 && !clip.keyframes && !clip.volume && !clip.transition && !clip.reverse;
+  const range = a >= 0.1 && a <= 8 && b >= 0.1 && b <= 8 && a !== b;
+  const ok = range && n >= 2 && n <= 24 && !clip.keyframes && !clip.volume && !clip.transition && !clip.reverse && !clip.speedEnd;
+  const smoothOk = range && !clip.transition && !clip.reverse && !clip.freeze && !clip.keepPitch;
   return (
     <fieldset className="ramp" data-testid="ramp">
       <legend>{t('ramp.title')}</legend>
@@ -235,8 +237,18 @@ function RampField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
         <label>{t('ramp.to')}<input type="number" dir="ltr" min={0.1} max={8} step={0.05} value={to} onChange={(e) => setTo(e.target.value)} data-testid="ramp-to" /></label>
         <label>{t('ramp.steps')}<input type="number" dir="ltr" min={2} max={24} step={1} value={steps} onChange={(e) => setSteps(e.target.value)} data-testid="ramp-steps" /></label>
       </div>
+      {clip.speedEnd && (
+        <p className="row" data-testid="ramp-state">
+          <span>{t('ramp.now')}: <bdi dir="ltr">{+speedValue(clip).toFixed(3)}× → {+(clip.speedEnd.num / clip.speedEnd.den).toFixed(3)}×</bdi></span>
+          <button type="button" className="ghost" data-testid="ramp-clear" onClick={() => void editor.commit([{ op: 'set_clip_speed', args: { clipId: clip.id, speed: +speedValue(clip).toFixed(3) } }], 'Clip speed')}>{t('ramp.clear')}</button>
+        </p>
+      )}
+      <div className="row">
+        <button type="button" className="primary" disabled={!smoothOk} data-testid="ramp-smooth" onClick={() => void editor.commit([{ op: 'set_clip_speed_ramp', args: { clipId: clip.id, from: a, to: b } }], 'Gradual speed change')}>{t('ramp.smooth')}</button>
+        <button type="button" className="ghost" disabled={!ok} data-testid="ramp-apply" onClick={() => void editor.commit([{ op: 'speed_ramp', args: { clipId: clip.id, from: a, to: b, steps: n } }], 'Speed ramp')}>{t('ramp.apply')}</button>
+      </div>
+      <p className="muted">{t('ramp.smoothNote')}</p>
       <p className="muted">{t('ramp.note')}</p>
-      <button type="button" className="ghost" disabled={!ok} data-testid="ramp-apply" onClick={() => void editor.commit([{ op: 'speed_ramp', args: { clipId: clip.id, from: a, to: b, steps: n } }], 'Speed ramp')}>{t('ramp.apply')}</button>
     </fieldset>
   );
 }

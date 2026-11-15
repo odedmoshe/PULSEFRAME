@@ -1,5 +1,5 @@
 /**
- * Clip speed with "keep pitch", on the three routes: server export, browser export and editor preview.
+ * Clip speed with "keep pitch", and a continuous speed ramp, on the three routes: server export, browser export and editor preview.
  * Fixture: 4 s of frame-barcode video with a 100 ms, 1 kHz beep at each second. At half speed with the pitch kept, the beeps
  * must start at 0, 2, 4 and 6 s and still be 1 kHz (plain speed change would make them 500 Hz); at double speed, at 0, 0.5,
  * 1 and 1.5 s and still 1 kHz (not 2 kHz).
@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
-import { generateBarcodeFixture } from '@pulseframe/fixtures';
+import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -41,6 +41,8 @@ function beeps(x: Float32Array) {
   if (start >= 0) close(start, last + 1);
   return out;
 }
+
+const codesOf = (file: string) => { const raw = ff(['-i', file, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']); const fb = W * H * 3; return Array.from({ length: Math.floor(raw.length / fb) }, (_, i) => readBarcode(raw.subarray(i * fb, (i + 1) * fb), W, 3, { x: 0, y: 0, w: W, h: H })); };
 
 async function main() {
   fs.rmSync(art, { recursive: true, force: true });
@@ -145,6 +147,72 @@ async function main() {
     await tx(pid, [{ op: 'set_clip_reverse', args: { clipId, reverse: false } }, { op: 'set_clip_speed', args: { clipId, speed: 1 } }]);
     const atOne = beeps(pcmOf(await exportTo(pid, 'one-kept.wav', { format: 'wav' })));
     check('a clip without sound is refused, setting the same value twice is refused, and at speed 1 the option changes nothing (beeps at 0, 1, 2, 3 s, 1 kHz, 100 ms)', bad.status >= 400 && twice.status >= 400 && starts(atOne, [0, 1, 2, 3], 0.003) && pitched(atOne, 1000, 15) && atOne.every((b) => Math.abs(b.end - b.start - 0.1) < 0.005), { bad: bad.body?.error?.code, twice: twice.body?.error?.code, atOne });
+
+    console.log('# continuous speed ramp (0.5× → 2× over the clip)');
+    // 4 s of source at an average speed of 1.25: 3.2 s (96 frames). After τ seconds, 0.5·τ + 1.5·τ²/6.4 seconds of source have played.
+    const rp = (await call('/projects', { name: 'smooth ramp', width: W, height: H })).body.project.id;
+    const rup: any = await (await fetch(`${s.url}/api/v1/projects/${rp}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
+    const radd = await tx(rp, [{ op: 'add_clip', args: { assetId: rup.assetId, start: f(0) } }]);
+    const rclip = radd.results[0].output.clipId as string;
+    const ramped = await tx(rp, [{ op: 'set_clip_speed_ramp', args: { clipId: rclip, from: 0.5, to: 2 } }]);
+    const srcAfter = (t: number) => 0.5 * t + (1.5 * t * t) / 6.4;
+    const wantFrames = Array.from({ length: 96 }, (_, i) => Math.floor(srcAfter(i / 30) * 30 + 1e-9));
+    const speedAt = (t: number) => 0.5 + (1.5 * t) / 3.2;
+    const wantBeeps = [0, 1, 2, 3].map((sec) => (-0.5 + Math.sqrt(0.25 + (4 * 1.5 * sec) / 6.4)) / (2 * 1.5 / 6.4)); // when source second `sec` is reached
+    const rampFile = await exportTo(rp, 'ramp.mp4');
+    const gotFrames = codesOf(rampFile), gotBeeps = beeps(pcmOf(rampFile));
+    const wrongFrames = gotFrames.map((g, i) => (g === wantFrames[i] ? -1 : i)).filter((i) => i >= 0);
+    const pitchOk = (b: ReturnType<typeof beeps>) => b.every((x) => Math.abs(x.hz / (1000 * speedAt((x.start + x.end) / 2)) - 1) < 0.05);
+    measurements.ramp = { clips: (await call(`/projects/${rp}`)).body.project.sequences.seq_main.tracks.map((t: any) => t.clips.length), durationFrames: ramped.results[0].output.durationFrames, wantBeepStarts: wantBeeps.map((x) => Number(x.toFixed(3))), server: gotBeeps, wrongFrames: wrongFrames.slice(0, 5), firstFrames: gotFrames.slice(0, 6), lastFrames: gotFrames.slice(-3) };
+    check('smooth ramp, server export: still one picture clip and one sound clip; 96 frames, each showing exactly the source frame the ramp formula gives (never going back, ending on 118–119); the four beeps start where the formula puts them (±5 ms) and each has the pitch of the speed at that moment (1 kHz × speed, within 5 %)',
+      JSON.stringify((measurements.ramp as any).clips.filter((n: number) => n > 0)) === '[1,1]' && gotFrames.length === 96 && wrongFrames.length === 0 && gotFrames.every((g, i) => i === 0 || g >= gotFrames[i - 1]!) && gotFrames[95]! >= 118
+      && gotBeeps.length === 4 && gotBeeps.every((b, i) => Math.abs(b.start - wantBeeps[i]!) <= 0.005) && pitchOk(gotBeeps), measurements.ramp);
+    const rpart = pcmOf(await exportTo(rp, 'ramp-range.wav', { format: 'wav', range: { startFrame: 30, endFrame: 90 } }));
+    const rwhole = pcmOf(await exportTo(rp, 'ramp-full.wav', { format: 'wav' }));
+    let rdiff = 0;
+    for (let i = 0; i < rpart.length; i++) rdiff = Math.max(rdiff, Math.abs(rpart[i]! - rwhole[SR + i]!));
+    check('a frame range of the ramped clip is the same sound as that range of the full export', rpart.length === 2 * SR && rdiff <= 2 / 32768, { maxDifference: Number(rdiff.toExponential(2)) });
+
+    let rbFrames: number[] = [], rbBeeps: ReturnType<typeof beeps> = [], rbNote = '';
+    const rbp = await browser.newPage();
+    await rbp.goto(`${s.url}/browser-export.html?key=${s.auth.tokens.owner}`);
+    await rbp.evaluate(() => (window as any).__pfBrowserExport.ready);
+    const rr: any = await rbp.evaluate((p) => (window as any).__pfBrowserExport.tryRun(p, { quality: 'high' }), rp);
+    if (rr.ok) { const bf = path.join(art, `ramp-browser.${rr.result.container}`); fs.writeFileSync(bf, Buffer.from(rr.result.base64, 'base64')); rbFrames = codesOf(bf); rbBeeps = beeps(pcmOf(bf)); rbNote = `${rr.result.container}/${rr.result.audioCodec}`; }
+    else rbNote = `browser export did not run: ${JSON.stringify(rr).slice(0, 200)}`;
+    await rbp.close();
+    check('smooth ramp, browser export: the same 96 frames, beeps within one frame of the formula and at the pitch of the speed at that moment (within 5 %)', JSON.stringify(rbFrames) === JSON.stringify(wantFrames) && rbBeeps.length === 4 && rbBeeps.every((b, i) => Math.abs(b.start - wantBeeps[i]!) <= 1 / 30) && pitchOk(rbBeeps), { note: rbNote, beeps: rbBeeps, frames: rbFrames.length });
+
+    const rpage = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+    const rerrors: string[] = [];
+    rpage.on('pageerror', (e) => rerrors.push(String(e)));
+    await rpage.addInitScript(() => { (window as any).__pfAudioTap = true; try { localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+    await rpage.goto(`${s.ownerUrl}&project=${rp}`);
+    await rpage.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame === '0', undefined, { timeout: 30000 });
+    const seen: Record<number, number> = {};
+    for (const target of [1, 30, 60, 95]) {
+      await rpage.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const q = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: q.left + x, clientY: q.top + 5, bubbles: true })); }, (target / 30) * 90 + 0.5);
+      await rpage.waitForFunction((t) => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, target, { timeout: 15000 }).catch(() => {});
+      const shot = await rpage.evaluate(() => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; return { w: cv.width, data: Array.from(cv.getContext('2d')!.getImageData(0, Math.round(cv.height / 12), cv.width, 1).data.filter((_, i) => i % 4 !== 3)) }; });
+      seen[target] = readBarcode(Uint8Array.from(shot.data), shot.w, 3, { x: 0, y: 0, w: shot.w, h: 0 });
+    }
+    await rpage.evaluate(() => { const el = document.querySelector('[data-testid=ruler]')!; const q = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: q.left + 0.5, clientY: q.top + 5, bubbles: true })); });
+    await rpage.locator(`.clip[data-clip-id="${rclip}"]`).click();
+    const marked = await rpage.locator(`.clip[data-clip-id="${rclip}"]`).getAttribute('data-ramp');
+    const stateText = ((await rpage.getByTestId('ramp-state').textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ');
+    await rpage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await rpage.getByTestId('play').click();
+    await rpage.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 60000 }).catch(() => {});
+    const rsync = await rpage.evaluate(() => (window as any).__pfSync());
+    const ronsets: number[] = (rsync.audioOnsetsTimelineSeconds ?? []).map((x: number) => Number(x.toFixed(3)));
+    const rheard = wantBeeps.map((w) => ronsets.find((o) => Math.abs(o - w) <= 0.05) ?? null);
+    // "back to one speed" in the Inspector
+    await rpage.getByTestId('ramp-clear').click();
+    let cleared = false;
+    for (let i = 0; i < 80 && !cleared; i++) { const c = (await call(`/projects/${rp}`)).body.project.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((x: any) => x.id === rclip); cleared = !c.speedEnd && c.speed?.num === 1 && c.speed?.den === 2; if (!cleared) await sleep(100); }
+    await rpage.close();
+    check('smooth ramp, editor: paused frames 1, 30, 60 and 95 show the source frames of the formula; played on the audio clock a beep starts within 50 ms of each expected time; the clip is marked and the Inspector states 0.5× → 2×; "back to one speed" leaves 0.5×; no page errors',
+      [1, 30, 60, 95].every((t) => seen[t] === wantFrames[t]) && rsync.clock === 'audio' && rheard.every((x) => x !== null) && marked === 'true' && /0\.5× → 2×/.test(stateText) && cleared && rerrors.length === 0, { seen, want: [1, 30, 60, 95].map((t) => wantFrames[t]), onsets: ronsets, heard: rheard, stateText, errors: rerrors.slice(0, 3) });
   } catch (e) {
     console.error(e);
     check('run completed', false, String(e).slice(0, 600));
@@ -152,7 +220,7 @@ async function main() {
     await browser.close();
     await s.close();
     const failed = checks.filter((x) => !x.ok);
-    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'One synthetic 4-second fixture (frame barcode with a 100 ms, 1 kHz beep each second) at half and double speed with the pitch kept. Beep times and frequencies are measured from the exported sound; in the preview only beep onsets are measured (not the frequency). No speech, no music, no listening test: this shows timing and pitch are right, not that it sounds good.', passed: checks.length - failed.length, total: checks.length, checks, measurements };
+    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'One synthetic 4-second fixture (frame barcode with a 100 ms, 1 kHz beep each second) at half and double speed with the pitch kept. Beep times and frequencies are measured from the exported sound; in the preview only beep onsets are measured (not the frequency). A continuous ramp 0.5× → 2× on the same fixture: every exported frame against the ramp formula, beep times and pitch. No speech, no music, no listening test: this shows timing and pitch are right, not that it sounds good.', passed: checks.length - failed.length, total: checks.length, checks, measurements };
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     fs.writeFileSync(path.join(root, 'docs/evidence/pitch-proof.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(`\nPitch proof ${report.result}: ${report.passed}/${report.total}`);

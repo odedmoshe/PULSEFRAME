@@ -1,14 +1,14 @@
 {
-  "ranAt": "2026-11-15T20:01:59.934Z",
+  "ranAt": "2026-11-15T20:16:02.646Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
-  "scope": "One synthetic 4-second fixture (frame barcode with a 100 ms, 1 kHz beep each second) at half and double speed with the pitch kept. Beep times and frequencies are measured from the exported sound; in the preview only beep onsets are measured (not the frequency). No speech, no music, no listening test: this shows timing and pitch are right, not that it sounds good.",
-  "passed": 6,
-  "total": 6,
+  "scope": "One synthetic 4-second fixture (frame barcode with a 100 ms, 1 kHz beep each second) at half and double speed with the pitch kept. Beep times and frequencies are measured from the exported sound; in the preview only beep onsets are measured (not the frequency). A continuous ramp 0.5× → 2× on the same fixture: every exported frame against the ramp formula, beep times and pitch. No speech, no music, no listening test: this shows timing and pitch are right, not that it sounds good.",
+  "passed": 10,
+  "total": 10,
   "checks": [
     {
       "name": "half speed, server export: without the option the beeps are 500 Hz; with \"keep pitch\" (set through the picture clip, stored on its linked sound) they start at 0, 2, 4 and 6 s within 25 ms, are still 1 kHz (±50 Hz) and last about twice as long",
@@ -196,6 +196,129 @@
           }
         ]
       }
+    },
+    {
+      "name": "smooth ramp, server export: still one picture clip and one sound clip; 96 frames, each showing exactly the source frame the ramp formula gives (never going back, ending on 118–119); the four beeps start where the formula puts them (±5 ms) and each has the pitch of the speed at that moment (1 kHz × speed, within 5 %)",
+      "ok": true,
+      "detail": {
+        "clips": [
+          1,
+          0,
+          1
+        ],
+        "durationFrames": 96,
+        "wantBeepStarts": [
+          0,
+          1.258,
+          2.043,
+          2.667
+        ],
+        "server": [
+          {
+            "start": 0,
+            "end": 0.1841,
+            "hz": 543.4
+          },
+          {
+            "start": 1.2581,
+            "end": 1.3481,
+            "hz": 1111.5
+          },
+          {
+            "start": 2.0432,
+            "end": 2.111,
+            "hz": 1474.7
+          },
+          {
+            "start": 2.6667,
+            "end": 2.7234,
+            "hz": 1763.6
+          }
+        ],
+        "wrongFrames": [],
+        "firstFrames": [
+          0,
+          0,
+          1,
+          1,
+          2,
+          2
+        ],
+        "lastFrames": [
+          114,
+          116,
+          118
+        ]
+      }
+    },
+    {
+      "name": "a frame range of the ramped clip is the same sound as that range of the full export",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "smooth ramp, browser export: the same 96 frames, beeps within one frame of the formula and at the pitch of the speed at that moment (within 5 %)",
+      "ok": true,
+      "detail": {
+        "note": "mp4/opus",
+        "beeps": [
+          {
+            "start": 0.0001,
+            "end": 0.1841,
+            "hz": 543.5
+          },
+          {
+            "start": 1.2581,
+            "end": 1.3481,
+            "hz": 1111.5
+          },
+          {
+            "start": 2.0432,
+            "end": 2.111,
+            "hz": 1474.7
+          },
+          {
+            "start": 2.6667,
+            "end": 2.7234,
+            "hz": 1763.6
+          }
+        ],
+        "frames": 96
+      }
+    },
+    {
+      "name": "smooth ramp, editor: paused frames 1, 30, 60 and 95 show the source frames of the formula; played on the audio clock a beep starts within 50 ms of each expected time; the clip is marked and the Inspector states 0.5× → 2×; \"back to one speed\" leaves 0.5×; no page errors",
+      "ok": true,
+      "detail": {
+        "seen": {
+          "1": 0,
+          "30": 22,
+          "60": 58,
+          "95": 118
+        },
+        "want": [
+          0,
+          22,
+          58,
+          118
+        ],
+        "onsets": [
+          0,
+          1.258,
+          2.043,
+          2.667
+        ],
+        "heard": [
+          0,
+          1.258,
+          2.043,
+          2.667
+        ],
+        "stateText": "עכשיו: 0.5× → 2×חזרה למהירות אחת",
+        "errors": []
+      }
     }
   ],
   "measurements": {
@@ -333,6 +456,56 @@
           "end": 2,
           "hz": 1006
         }
+      ]
+    },
+    "ramp": {
+      "clips": [
+        1,
+        0,
+        1
+      ],
+      "durationFrames": 96,
+      "wantBeepStarts": [
+        0,
+        1.258,
+        2.043,
+        2.667
+      ],
+      "server": [
+        {
+          "start": 0,
+          "end": 0.1841,
+          "hz": 543.4
+        },
+        {
+          "start": 1.2581,
+          "end": 1.3481,
+          "hz": 1111.5
+        },
+        {
+          "start": 2.0432,
+          "end": 2.111,
+          "hz": 1474.7
+        },
+        {
+          "start": 2.6667,
+          "end": 2.7234,
+          "hz": 1763.6
+        }
+      ],
+      "wrongFrames": [],
+      "firstFrames": [
+        0,
+        0,
+        1,
+        1,
+        2,
+        2
+      ],
+      "lastFrames": [
+        114,
+        116,
+        118
       ]
     }
   }

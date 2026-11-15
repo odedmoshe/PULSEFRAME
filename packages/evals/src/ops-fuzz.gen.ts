@@ -141,6 +141,7 @@ export function createFuzz(seed: number) {
       () => ({ op: 'unlink_clip', args: { clipId: any() } }),
       () => ({ op: 'set_clip_reverse', args: { clipId: any(), reverse: rnd() < 0.75 } }),
       () => ({ op: 'set_clip_pitch', args: { clipId: any(), keepPitch: rnd() < 0.7 } }),
+      () => ({ op: 'set_clip_speed_ramp', args: { clipId: any(), from: pick([0.5, 1, 1.5, 2]), to: pick([0.25, 0.75, 1, 3]) } }),
       () => ({ op: 'slip_clip', args: { clipId: any(), by: rnd() < 0.5 ? f(1 + int(40)) : T.sub(T.ZERO, f(1 + int(40))), ...(rnd() < 0.2 ? { includeLinked: false } : {}) } }),
       () => ({ op: 'close_gaps', args: rnd() < 0.7 ? {} : { from: f(int(200)), to: f(200 + int(300)) } }),
       () => ({ op: 'insert_gap', args: { at: f(int(400)), duration: rnd() < 0.1 ? f(0) : f(1 + int(90)) } }),

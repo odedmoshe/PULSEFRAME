@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, PitchStretcher } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, PitchStretcher, RampResampler } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
@@ -178,11 +178,14 @@ export class Player {
           const gain = plannedClipInput(this.actx!, c, plan.sampleRate, master!, originClock + (start - t0), fromLocal);
           // Source seconds advance `speed` times as fast as the playback clock (varispeed: pitch follows speed, as in export).
           const speed = c.speed;
-          const srcFrom = sourceIn + Math.max(0, t0 - start) * speed;
-          const srcTo = sourceIn + (end - start) * speed;
+          // A continuous speed ramp: after x seconds of the clip, speed·x + (speedEnd − speed)·x²/(2·length) seconds of source have played.
+          const ramp = c.speedEnd !== undefined;
+          const srcAfter = (x: number) => (ramp ? speed * x + ((c.speedEnd! - speed) * x * x) / (2 * (end - start)) : x * speed);
+          const srcFrom = sourceIn + srcAfter(Math.max(0, t0 - start));
+          const srcTo = sourceIn + srcAfter(end - start) + (ramp ? 4 / plan.sampleRate : 0); // the resampler reads a few frames past the last position
           // The decoder reports the file's raw timestamps; source times here are measured from the file's own start as this reader sees it.
           const origin = opened.origin;
-          if (c.keepPitch) {
+          if (c.keepPitch || ramp) {
             // Keep the pitch: the source is read at normal rate in playing order (backwards in windows for a reversed clip), run
             // through the shared stretcher, and its output is scheduled piece after piece at normal rate. The stretcher starts at
             // the playhead here, where export starts it at the clip's start: the two can differ by a few milliseconds of alignment.
@@ -211,7 +214,8 @@ export class Player {
                 hi = lo;
               }
             }
-            let stretcher: PitchStretcher | null = null;
+            // (a ramped clip takes the same route, with the ramp resampler in place of the stretcher: its pitch glides with the speed)
+            let stretcher: PitchStretcher | RampResampler | null = null;
             let outPos = 0; // output frames scheduled so far
             const emit = (out: Float32Array, sr: number) => {
               const room = Math.max(0, Math.round((end - playFrom) * sr) - outPos); // never past the end of the clip
@@ -235,7 +239,7 @@ export class Player {
             let rateOfSource = 0;
             for await (const ch of chunks()) {
               if (gen !== this.generation) break;
-              stretcher ??= new PitchStretcher(speed, ch.sr);
+              stretcher ??= ramp ? new RampResampler(speed, c.speedEnd!, Math.round((end - start) * ch.sr), Math.round((playFrom - start) * ch.sr)) : new PitchStretcher(speed, ch.sr);
               rateOfSource = ch.sr;
               emit(stretcher.push(ch.data), ch.sr);
               const ahead = startAt + outPos / ch.sr - now();

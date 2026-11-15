@@ -14,7 +14,7 @@
 import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Input, Mp4OutputFormat, Output, Quality, UrlSource, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, stretchKeepingPitch } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, RampResampler, stretchKeepingPitch } from '@pulseframe/engine';
 import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
@@ -150,10 +150,11 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
     const input = plannedClipInput(ctx, c, rate, ctx.destination, (c.at - firstSample) / rate, s0 - c.at);
     // the stretch of source this clip needs, in source seconds, and the output time at which it starts
     const srcFrom = (c.source + (s0 - c.at) * c.speed) / rate, srcTo = (c.source + (s1 - c.at) * c.speed) / rate, outFrom = (s0 - firstSample) / rate;
-    if (c.keepPitch) {
+    if (c.keepPitch || c.speedEnd !== undefined) {
       // Keep the pitch: the clip's whole stretch of source is rendered at normal rate (in playing order), run through the
       // shared stretcher from the start of the clip as the server mix does, and the part this export needs is placed at normal rate.
-      const srcFrames = Math.max(1, Math.round(c.length * c.speed));
+      // (the same route serves a continuous speed ramp, with the ramp resampler in place of the stretcher)
+      const srcFrames = c.speedEnd !== undefined ? RampResampler.sourceFrames(c.speed, c.speedEnd, c.length) : Math.max(1, Math.round(c.length * c.speed));
       const S0 = c.source / rate, S1 = (c.source + srcFrames) / rate;
       const pre = new OfflineAudioContext(2, srcFrames, rate);
       for (const p of pieces) {
@@ -169,7 +170,7 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
       const l = plain.getChannelData(0), r = plain.getChannelData(1);
       const inter = new Float32Array(srcFrames * 2);
       for (let i = 0; i < srcFrames; i++) { inter[i * 2] = l[i]!; inter[i * 2 + 1] = r[i]!; }
-      const stretched = stretchKeepingPitch(inter, c.speed, rate, c.length);
+      const stretched = c.speedEnd !== undefined ? (() => { const rr = new RampResampler(c.speed, c.speedEnd!, c.length); const a = rr.push(inter), b = rr.finish(); const o = new Float32Array(c.length * 2); o.set(a.subarray(0, o.length)); o.set(b.subarray(0, Math.max(0, o.length - a.length)), a.length); return o; })() : stretchKeepingPitch(inter, c.speed, rate, c.length);
       const n = s1 - s0, off = s0 - c.at;
       const buf = ctx.createBuffer(2, n, rate);
       const bl = buf.getChannelData(0), br = buf.getChannelData(1);

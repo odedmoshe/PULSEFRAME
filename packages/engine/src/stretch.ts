@@ -116,3 +116,61 @@ export function stretchKeepingPitch(source: Float32Array, speed: number, sampleR
   if (a.length < out.length) out.set(b.subarray(0, Math.min(b.length, out.length - a.length)), a.length);
   return out;
 }
+
+/** Source frames played in the first `n` output frames of a ramped clip of `total` output frames: v0·n + (v1 − v0)·n²/(2·total). */
+export const rampSourceFrames = (v0: number, v1: number, total: number, n: number): number => v0 * n + ((v1 - v0) * n * n) / (2 * total);
+
+/**
+ * Variable-rate resampler for a clip whose speed changes evenly from `v0` to `v1` over `total` output frames (a continuous
+ * speed ramp): output frame n is the source at position rampSourceFrames(n), read with a four-point cubic. The pitch glides
+ * with the speed, as with a constant speed change. Same stream interface as PitchStretcher (interleaved stereo in and out),
+ * and the same output whatever sizes the input arrives in.
+ * `startFrame`: the first output frame wanted; the source given must then begin at source frame floor(position of that frame).
+ * Limit: no low-pass filter before reading faster than normal, so speeds well above 1 can alias high frequencies.
+ */
+export class RampResampler {
+  private input = new Float32Array(0);
+  private base: number;   // absolute source frame of input[0]
+  private have: number;   // absolute source frame after the last one received
+  private n: number;      // next output frame
+  private ended = false;
+  constructor(readonly v0: number, readonly v1: number, readonly total: number, startFrame = 0) {
+    this.n = startFrame;
+    this.base = Math.floor(rampSourceFrames(v0, v1, total, startFrame));
+    this.have = this.base;
+  }
+  /** Source frames needed in all for a clip read from its start (what a caller should feed before finish()). */
+  static sourceFrames(v0: number, v1: number, total: number): number { return Math.ceil(rampSourceFrames(v0, v1, total, total)) + 3; }
+  push(chunk: Float32Array): Float32Array {
+    if (chunk.length) {
+      const merged = new Float32Array(this.input.length + chunk.length);
+      merged.set(this.input);
+      merged.set(chunk, this.input.length);
+      this.input = merged;
+      this.have += chunk.length >> 1;
+    }
+    return this.run();
+  }
+  finish(): Float32Array { this.ended = true; return this.run(); }
+  private at(frame: number, ch: number): number {
+    const i = (frame - this.base) * 2 + ch;
+    return i >= 0 && i < this.input.length ? this.input[i]! : 0;
+  }
+  private run(): Float32Array {
+    const out: number[] = [];
+    while (this.n < this.total) {
+      const pos = rampSourceFrames(this.v0, this.v1, this.total, this.n);
+      const i = Math.floor(pos), f = pos - i;
+      if (!this.ended && i + 2 >= this.have) break; // the four points around this position have not all arrived
+      for (let ch = 0; ch < 2; ch++) {
+        const a = this.at(i - 1, ch), b = this.at(i, ch), c = this.at(i + 1, ch), d = this.at(i + 2, ch);
+        // Catmull-Rom through b and c
+        out.push(b + 0.5 * f * (c - a + f * (2 * a - 5 * b + 4 * c - d + f * (3 * (b - c) + d - a))));
+      }
+      this.n++;
+    }
+    const keepFrom = Math.floor(rampSourceFrames(this.v0, this.v1, this.total, Math.min(this.n, this.total))) - 1;
+    if (keepFrom - this.base > 1 << 15) { this.input = this.input.slice((keepFrom - this.base) * 2); this.base = keepFrom; }
+    return Float32Array.from(out);
+  }
+}

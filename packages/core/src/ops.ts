@@ -11,7 +11,7 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { handleAfterEnd, pictureSourceAt, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
+import { handleAfterEnd, isRamped, pictureSourceAt, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
@@ -131,6 +131,15 @@ function clampFades(clip: Clip) {
 const fmt = (t: T.RationalTime) => `${T.toSeconds(t).toFixed(3)}s`;
 
 // ---------- operations ----------
+/** Refuse an edit that a clip with a continuous speed ramp cannot take (see speed.ts isRamped). */
+const refuseRamped = (clip: Clip, action: string) => {
+  if (isRamped(clip)) throw new OpError('incompatible', `this clip changes speed gradually over its length, so it cannot be ${action}`, { clipId: clip.id }, 'Give it one speed first (set_clip_speed), make the edit, then apply the gradual change again.');
+};
+/** `sourceInOfPart` for operations that divide or shorten clips; a ramped clip can only be taken whole. */
+const partIn = (c: MediaClip, fromOffset: T.RationalTime, length: T.RationalTime): T.RationalTime => {
+  if (!(T.isZero(fromOffset) && T.eq(length, c.duration))) refuseRamped(c, 'divided or trimmed');
+  return sourceInOfPart(c, fromOffset, length);
+};
 defineOp({
   name: 'rename_project',
   version: 1,
@@ -458,7 +467,7 @@ defineOp({
 defineOp({
   name: 'set_clip_speed',
   version: 1,
-  description: 'Play a clip faster or slower (0.1–8; 0.5 = half speed / slow motion, 2 = double speed). The clip keeps showing the same stretch of source, so its length on the timeline changes (rounded down to a whole frame); nothing else moves. Linked picture and sound change together. Sound is resampled with the picture, so its pitch rises and falls with the speed.',
+  description: 'Play a clip faster or slower (0.1–8; 0.5 = half speed / slow motion, 2 = double speed). The clip keeps showing the same stretch of source, so its length on the timeline changes (rounded down to a whole frame); nothing else moves. Linked picture and sound change together. A clip that changed speed gradually (set_clip_speed_ramp) gets this one speed instead. Sound is resampled with the picture, so its pitch rises and falls with the speed.',
   args: z.object({ clipId: z.string(), speed: z.number().min(0.1).max(8), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
@@ -470,6 +479,7 @@ defineOp({
     for (const { track, clip } of targets) {
       if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
       const span = toSourceSpan(clip, clip.duration); // source shown now; stays the same
+      delete clip.speedEnd; // one speed from here on: a gradual change, if there was one, ends
       if (speed.num === speed.den) delete clip.speed; else clip.speed = speed;
       const frames = Math.max(1, T.frameIndexAt(toTimelineSpan(clip, span), rate));
       const duration = T.frameTime(frames, rate);
@@ -479,6 +489,41 @@ defineOp({
       if (clip.transition && clip.transition.frames > frames) clip.transition = { ...clip.transition, frames };
     }
     return { affectedIds: targets.map((t) => t.clip.id), summary: `Speed ${a.speed}×`, output: { speed, durationFrames: T.frameIndexAt((targets[0]!.clip).duration, rate) } };
+  },
+});
+
+defineOp({
+  name: 'set_clip_speed_ramp',
+  version: 1,
+  description: 'Change a clip\'s speed gradually and continuously over its length, from `from` at its start to `to` at its end (each 0.1–8), for example 1 → 0.25 to ease into slow motion. The clip stays one clip and keeps showing the same stretch of source (its new length is that stretch divided by the average of the two speeds, rounded down to a whole frame; nothing else moves). Linked picture and sound change together; the sound\'s pitch glides with the speed. While it has a gradual change a clip cannot be trimmed, divided, slipped, reversed, frozen, given a transition or set to keep its pitch: give it one speed first (set_clip_speed). `speed_ramp` is the older stepped variant, which divides the clip into steps of constant speed.',
+  args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
+    const rate = d.settings.frameRate;
+    const v0 = speedFromNumber(a.from), v1 = speedFromNumber(a.to);
+    if (v0.num * v1.den === v1.num * v0.den) throw new OpError('invalid_args', 'from and to are the same speed', {}, 'Use set_clip_speed for one speed.');
+    const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
+    for (const { track, clip } of targets) {
+      if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
+      if (clip.freeze || clip.reverse) throw new OpError('incompatible', 'a freeze frame or a clip that plays backwards cannot change speed gradually', { clipId: clip.id });
+      if (clip.keepPitch) throw new OpError('incompatible', 'this sound is set to keep its pitch, which works at one speed only', { clipId: clip.id }, 'Turn that off first (set_clip_pitch keepPitch=false).');
+      const i = track.clips.indexOf(clip), next = track.clips[i + 1];
+      if (clip.transition || (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip)))) throw new OpError('incompatible', 'remove the transition at this clip first', { clipId: clip.id });
+      const span = toSourceSpan(clip, clip.duration); // source shown now (whatever its speed was); the ramp shows at most this
+      // length = span ÷ average speed, down to a whole frame: (v0 + v1)/2 = (n0·d1 + n1·d0)/(2·d0·d1)
+      const length = T.normalize({ value: (BigInt(span.value) * BigInt(2 * v0.den * v1.den)).toString(), timescale: span.timescale * (v0.num * v1.den + v1.num * v0.den) });
+      const frames = Math.max(1, T.frameIndexAt(length, rate));
+      const duration = T.frameTime(frames, rate);
+      assertFree(track, clip.start, T.add(clip.start, duration), new Set([clip.id]));
+      if (v0.num === v0.den) delete clip.speed; else clip.speed = v0;
+      clip.speedEnd = v1;
+      clip.duration = duration;
+      // The length is at least one frame; for a stretch shorter than that frame needs, the ramp would read past the end of the file.
+      if (T.lt(d.assets[clip.assetId]!.duration, sourceEnd(clip))) throw new OpError('out_of_bounds', 'the clip is too short for this change of speed at the end of its source', { clipId: clip.id });
+      clampFades(clip);
+    }
+    return { affectedIds: targets.map((t) => t.clip.id), summary: `Speed ${a.from}× → ${a.to}×, gradually`, output: { from: v0, to: v1, durationFrames: T.frameIndexAt(targets[0]!.clip.duration, rate) } };
   },
 });
 
@@ -501,6 +546,7 @@ defineOp({
     for (const { clip } of targets) {
       if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
       if (clip.freeze || clip.reverse) throw new OpError('incompatible', 'a freeze frame or a reversed clip cannot be ramped', { clipId: clip.id });
+      refuseRamped(clip, 'divided into steps');
       if (clip.keyframes || clip.volume || clip.transition || clip.effects?.some((e) => e.keyframes)) throw new OpError('incompatible', 'remove keyframes, volume keys and the transition first: they would not survive the division into steps', { clipId: clip.id });
     }
     // One plan for all targets (they share place and length): the timeline length of each step in whole frames.
@@ -625,13 +671,14 @@ defineOp({
     assertAligned(d, a.to, 'to');
     const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
     for (const { track, clip } of targets) {
+      refuseRamped(clip, 'trimmed');
       const end = clipEnd(clip);
       if (a.edge === 'end') {
         if (!T.lt(clip.start, a.to)) throw new OpError('out_of_bounds', 'trim would leave an empty clip', { clipId: clip.id });
         const duration = T.sub(a.to, clip.start);
         if (clip.type === 'media' && clip.reverse) {
           // a reversed clip shows the earliest material at its end: a longer clip reaches further back into the source
-          const sourceIn = sourceInOfPart(clip, T.ZERO, duration);
+          const sourceIn = partIn(clip, T.ZERO, duration);
           if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'not enough source material before the stretch this reversed clip shows', { clipId: clip.id, maxEnd: T.add(clipEnd(clip), toTimelineSpan(clip, clip.sourceIn)) }, 'Extend no further than maxEnd.');
           clip.sourceIn = sourceIn;
         } else if (clip.type === 'media') {
@@ -679,6 +726,7 @@ defineOp({
     const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
     for (const { clip } of targets) {
       if (clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be slipped', { clipId: clip.id });
+      refuseRamped(clip, 'slipped');
       const asset = d.assets[clip.assetId]!;
       if (asset.kind === 'image') throw new OpError('incompatible', 'a still picture has no other part to show', { clipId: clip.id });
       const sourceIn = T.add(clip.sourceIn, toSourceSpan(clip, a.by));
@@ -742,6 +790,7 @@ defineOp({
     const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...linked(d, f.clip)].filter((t) => t.track.kind === 'audio' && !!d.assets[t.clip.assetId]?.audio);
     if (!targets.length) throw new OpError('incompatible', 'this clip has no sound clip', { clipId: a.clipId }, 'Give the sound clip, or a picture clip that is linked to one.');
     if (targets.every((t) => !!t.clip.keepPitch === a.keepPitch)) throw new OpError('invalid_args', `the sound already ${a.keepPitch ? 'keeps its pitch' : 'follows the speed'}`, { clipId: a.clipId });
+    if (a.keepPitch) for (const { clip } of targets) refuseRamped(clip, 'stretched at one speed to keep its pitch');
     for (const { clip } of targets) { if (a.keepPitch) clip.keepPitch = true; else delete clip.keepPitch; }
     return { affectedIds: targets.map((t) => t.clip.id), summary: a.keepPitch ? 'Sound keeps its pitch at other speeds' : 'Sound pitch follows the speed', output: { clipIds: targets.map((t) => t.clip.id) } };
   },
@@ -762,6 +811,7 @@ defineOp({
       const asset = d.assets[clip.assetId];
       if (!asset || asset.kind === 'image' || (track.kind === 'video' ? !asset.video : track.kind === 'audio' ? !asset.audio : true)) throw new OpError('incompatible', 'only a video clip on a video track or a sound clip on a sound track can play backwards', { clipId: clip.id });
       if (clip.freeze) throw new OpError('incompatible', 'a freeze frame has no direction', { clipId: clip.id });
+      refuseRamped(clip, 'played backwards');
       if (!!clip.reverse === a.reverse) continue;
       // What plays on past this clip's end (a picture transition, or the tail of a sound crossfade) lies on the other side of the stretch after a change of direction.
       const i = track.clips.indexOf(clip);
@@ -810,7 +860,7 @@ defineOp({
       if (clip.type === 'caption') { delete clip.words; delete (right as typeof clip).words; }
       if (right.type === 'media') delete right.transition; // the transition belongs to the original cut point
       if (right.type === 'media' && clip.type === 'media') { delete right.fadeIn; delete clip.fadeOut; } // fades stay on the outer edges
-      if (right.type === 'media' && clip.type === 'media') { right.sourceIn = sourceInOfPart(clip, left, right.duration); clip.sourceIn = sourceInOfPart(clip, T.ZERO, left); if (right.linkGroupId) right.linkGroupId = newLink; }
+      if (right.type === 'media' && clip.type === 'media') { right.sourceIn = partIn(clip, left, right.duration); clip.sourceIn = partIn(clip, T.ZERO, left); if (right.linkGroupId) right.linkGroupId = newLink; }
       clip.duration = left;
       clampFades(clip);
       clampFades(right);
@@ -833,6 +883,7 @@ defineOp({
     const asset = src.type === 'media' ? d.assets[src.assetId] : undefined;
     if (src.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'a freeze frame needs a video clip on a video track', { clipId: a.clipId });
     if (src.freeze) throw new OpError('incompatible', 'this clip is already a freeze frame', { clipId: a.clipId }, 'Trim it to make the hold longer or shorter.');
+    refuseRamped(src, 'held on a freeze frame');
     assertAligned(d, a.at, 'at');
     assertAligned(d, a.duration, 'duration');
     if (!T.lt(T.ZERO, a.duration)) throw new OpError('invalid_args', 'duration must be positive');
@@ -867,8 +918,8 @@ defineOp({
         delete right.transition;
         delete right.fadeIn;
         delete clip.fadeOut;
-        right.sourceIn = sourceInOfPart(clip, left, right.duration);
-        clip.sourceIn = sourceInOfPart(clip, T.ZERO, left);
+        right.sourceIn = partIn(clip, left, right.duration);
+        clip.sourceIn = partIn(clip, T.ZERO, left);
         if (right.linkGroupId) { if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk')); right.linkGroupId = relink.get(right.linkGroupId)!; }
         clip.duration = left;
         clampFades(clip);
@@ -1331,6 +1382,7 @@ defineOp({
     const prev = track.clips.find((c) => c.type === 'media' && c.id !== clip.id && T.eq(T.sub(clipEnd(c), c.fadeOut ?? T.ZERO), clip.start) && T.lte(c.start, clip.start)) as MediaClip | undefined;
     if (prev?.reverse && !T.isZero(a.duration)) throw new OpError('incompatible', 'a crossfade out of a clip that plays backwards is not supported yet', { clipId: clip.id, previousClipId: prev.id });
     if (!prev) throw new OpError('not_found', 'no audio clip ends where this one starts on the same track', { clipId: clip.id }, 'Move the clips so they touch, then crossfade.');
+    if (!T.isZero(a.duration)) { refuseRamped(clip, 'crossfaded'); refuseRamped(prev, 'crossfaded'); }
     const base = T.sub(prev.duration, prev.fadeOut ?? T.ZERO); // length without any existing crossfade tail
     const asset = d.assets[prev.assetId]!;
     const handle = toTimelineSpan(prev, T.sub(asset.duration, T.add(prev.sourceIn, toSourceSpan(prev, base)))); // unused source after the clip, in timeline time at its speed
@@ -1352,6 +1404,7 @@ defineOp({
     if (clip.type !== 'media' || track.kind !== 'audio') throw new OpError('incompatible', 'fit_music applies to a sound clip on a sound track', { clipId: a.clipId });
     if (clip.linkGroupId) throw new OpError('incompatible', 'this sound is linked to a picture; detach it first if it should be fitted on its own', { clipId: clip.id }, 'Use unlink_clip.');
     if (clip.reverse) throw new OpError('incompatible', 'a clip that plays backwards cannot be fitted to beats', { clipId: clip.id });
+    refuseRamped(clip, 'fitted to the picture');
     const rate = d.settings.frameRate;
     if (a.to) assertAligned(d, a.to, 'to');
     if (a.fadeOut) assertAligned(d, a.fadeOut, 'fadeOut');
@@ -1575,6 +1628,8 @@ defineOp({
     const own = T.frameIndexAt(clip.duration, rate);
     if (frames > own) throw new OpError('out_of_bounds', `the transition (${frames} frames) is longer than the clip (${own} frames)`, { maxFrames: own }, 'Use at most maxFrames.');
     const prev = previousAdjacent(track, clip);
+    refuseRamped(clip, 'given a transition');
+    if (prev) refuseRamped(prev, 'followed by a transition');
     if (prev) {
       const asset = d.assets[prev.assetId]!;
       if (asset.kind !== 'image') {
@@ -1822,7 +1877,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
         }
         if (right.type === 'media' && hasLeft) delete right.transition;
         if (right.type === 'media') delete right.fadeIn;
-        if (right.type === 'media' && clip.type === 'media') right.sourceIn = sourceInOfPart(clip, delta, T.sub(cEnd, end));
+        if (right.type === 'media' && clip.type === 'media') right.sourceIn = partIn(clip, delta, T.sub(cEnd, end));
         if (right.type === 'caption') delete right.words;
         shiftKeyframes(right, delta);
         right.start = ripple ? start : end;
@@ -1831,7 +1886,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
       }
       if (hasLeft) {
         if (clip.type === 'media') delete clip.fadeOut;
-        if (clip.type === 'media') clip.sourceIn = sourceInOfPart(clip, T.ZERO, T.sub(start, clip.start));
+        if (clip.type === 'media') clip.sourceIn = partIn(clip, T.ZERO, T.sub(start, clip.start));
         clip.duration = T.sub(start, clip.start);
         clampFades(clip);
         if (clip.type === 'caption') delete clip.words;
@@ -1896,13 +1951,13 @@ function openGap(d: ProjectDocument, at: T.RationalTime, len: T.RationalTime, tr
         if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk'));
         right.linkGroupId = relink.get(right.linkGroupId)!;
       }
-      if (right.type === 'media' && clip.type === 'media') { delete right.transition; delete right.fadeIn; right.sourceIn = sourceInOfPart(clip, delta, T.sub(cEnd, at)); }
+      if (right.type === 'media' && clip.type === 'media') { delete right.transition; delete right.fadeIn; right.sourceIn = partIn(clip, delta, T.sub(cEnd, at)); }
       if (right.type === 'caption') delete right.words;
       shiftKeyframes(right, delta);
       right.start = T.add(at, len);
       right.duration = T.sub(cEnd, at);
       clampFades(right);
-      if (clip.type === 'media') { delete clip.fadeOut; clip.sourceIn = sourceInOfPart(clip, T.ZERO, delta); }
+      if (clip.type === 'media') { delete clip.fadeOut; clip.sourceIn = partIn(clip, T.ZERO, delta); }
       clip.duration = delta;
       clampFades(clip);
       if (clip.type === 'caption') delete clip.words;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PitchStretcher, stretchKeepingPitch } from './stretch.ts';
+import { PitchStretcher, RampResampler, rampSourceFrames, stretchKeepingPitch } from './stretch.ts';
 
 const SR = 48000;
 const tone = (hz: number, seconds: number, amp = 0.5) => { const n = Math.round(seconds * SR), x = new Float32Array(n * 2); for (let i = 0; i < n; i++) { const v = amp * Math.sin((2 * Math.PI * hz * i) / SR); x[i * 2] = v; x[i * 2 + 1] = v; } return x; };
@@ -62,5 +62,46 @@ describe('pitch-keeping time stretch', () => {
     for (let i = 0; i < 60; i++) produced += s.push(chunk).length / 2;
     expect((s as unknown as { input: Float32Array }).input.length / 2).toBeLessThan(3 * SR); // a minute went through; at most a few seconds are held
     expect(Math.abs(produced / SR - 30)).toBeLessThan(0.2);
+  });
+});
+
+describe('ramp resampler (continuous speed change)', () => {
+  const run = (src: Float32Array, v0: number, v1: number, total: number, size = src.length, start = 0, offset = 0) => {
+    const r = new RampResampler(v0, v1, total, start);
+    const parts: Float32Array[] = [];
+    for (let i = offset * 2; i < src.length; i += size * 2) parts.push(r.push(src.subarray(i, Math.min(src.length, i + size * 2))));
+    parts.push(r.finish());
+    const o = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
+    let at = 0;
+    for (const p of parts) { o.set(p, at); at += p.length; }
+    return o;
+  };
+  it('a 440 Hz tone ramped 1× → 2× over three seconds glides from 440 to 880 Hz; the level stays; the length is exact', () => {
+    const total = 3 * SR;
+    const src = tone(440, 5);
+    const out = run(src, 1, 2, total);
+    expect(out.length).toBe(total * 2);
+    expect(Math.abs(hzOf(out, 0, 0.1) - 440 * 1.017)).toBeLessThan(12);   // average speed over the first 0.1 s is 1.017
+    expect(Math.abs(hzOf(out, 1.45, 1.55) - 660)).toBeLessThan(12);       // half way: 1.5×
+    expect(Math.abs(hzOf(out, 2.9, 3) - 440 * 1.983)).toBeLessThan(12);
+    expect(Math.abs(rms(out, 0.1, 2.9) / rms(src, 0.1, 4) - 1)).toBeLessThan(0.02);
+    expect(rampSourceFrames(1, 2, total, total)).toBe(1.5 * total); // source used = average speed × length
+  });
+  it('at one speed it is a plain resampler; the same output whatever sizes the source arrives in, and when started part-way', () => {
+    const src = tone(300, 3);
+    for (let i = 0; i < src.length; i++) src[i] = src[i]! + 0.2 * Math.sin(i * 0.37) * Math.sin(i * 0.011);
+    const same = run(src, 1, 1, 2 * SR);
+    expect(same.every((v, i) => Math.abs(v - src[i]!) < 1e-6)).toBe(true);
+    const total = Math.round(2.2 * SR);
+    const whole = run(src, 0.5, 1.5, total);
+    for (const size of [1, 777, 4096]) expect(run(src, 0.5, 1.5, total, size).every((v, i) => v === whole[i]), `chunks of ${size}`).toBe(true);
+    // started at output frame 30000: the source handed over begins at floor(position of that frame)
+    const start = 30000, first = Math.floor(rampSourceFrames(0.5, 1.5, total, start));
+    const tail = run(src, 0.5, 1.5, total, 4096, start, first);
+    expect(tail.length).toBe((total - start) * 2);
+    // the very first frames lack the one source frame before the start (taken as silence); after that it is the same sound
+    let worst = 0;
+    for (let i = 8; i < tail.length; i++) worst = Math.max(worst, Math.abs(tail[i]! - whole[start * 2 + i]!));
+    expect(worst).toBeLessThan(1e-6);
   });
 });
