@@ -232,3 +232,24 @@ describe('fit_music', () => {
   });
 });
 
+describe('link_clips', () => {
+  it('relinks a detached picture and sound so they edit together again; mismatched or already linked clips are refused', () => {
+    const { doc, videoId, audioId, titleId } = project();
+    const apart = tx(doc, [{ op: 'unlink_clip', args: { clipId: videoId } }]).doc;
+    const r = tx(apart, [{ op: 'link_clips', args: { clipIds: [videoId, audioId] } }]);
+    const v = findClip(r.doc, videoId)!.clip as any, a = findClip(r.doc, audioId)!.clip as any;
+    expect(v.linkGroupId).toBe(a.linkGroupId);
+    expect(v.linkGroupId).toBeTruthy();
+    expect(validateProject(r.doc)).toEqual([]);
+    const trimmed = tx(r.doc, [{ op: 'trim_clip', args: { clipId: videoId, edge: 'end', to: f(100) } }]).doc;
+    expect(fi(findClip(trimmed, audioId)!.clip.duration)).toBe(100); // they move together again
+    expect(code(() => tx(doc, [{ op: 'link_clips', args: { clipIds: [videoId, audioId] } }]))).toBe('incompatible'); // already linked
+    const uneven = tx(apart, [{ op: 'trim_clip', args: { clipId: audioId, edge: 'end', to: f(200) } }]).doc;
+    expect(code(() => tx(uneven, [{ op: 'link_clips', args: { clipIds: [videoId, audioId] } }]))).toBe('incompatible');
+    expect(code(() => tx(apart, [{ op: 'link_clips', args: { clipIds: [videoId, titleId] } }]))).toBe('incompatible');
+    expect(code(() => tx(apart, [{ op: 'link_clips', args: { clipIds: [videoId, videoId] } }]))).toBe('invalid_args');
+    const reversedOne = tx(apart, [{ op: 'set_clip_reverse', args: { clipId: videoId, reverse: true } }]).doc;
+    expect(code(() => tx(reversedOne, [{ op: 'link_clips', args: { clipIds: [videoId, audioId] } }]))).toBe('incompatible');
+  });
+});
+

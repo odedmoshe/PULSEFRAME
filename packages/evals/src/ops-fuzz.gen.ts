@@ -125,6 +125,12 @@ export function createFuzz(seed: number) {
       () => ({ op: 'remove_track', args: { trackId: trackId() } }),
       () => ({ op: 'speed_ramp', args: { clipId: any(), from: pick([0.5, 1, 2]), to: pick([0.25, 1, 3]), steps: 2 + int(5) } }),
       () => ({ op: 'fit_music', args: { clipId: any(), ...(rnd() < 0.3 ? { to: fr() } : {}) } }),
+      () => {
+        // prefer a pair that can really be linked (a detached picture and sound that still cover the same stretch); otherwise any two clips
+        const all = tracks.flatMap((t) => t.clips.filter((c) => c.type === 'media' && !c.linkGroupId).map((c) => ({ c, t: t.id })));
+        for (const x of all) { const y = all.find((z) => z.t !== x.t && T.eq(z.c.start, x.c.start) && T.eq(z.c.duration, x.c.duration)); if (y && rnd() < 0.8) return { op: 'link_clips', args: { clipIds: [x.c.id, y.c.id] } }; }
+        return { op: 'link_clips', args: { clipIds: [any(), any()] } };
+      },
       () => ({ op: 'unlink_clip', args: { clipId: any() } }),
       () => ({ op: 'set_clip_reverse', args: { clipId: any(), reverse: rnd() < 0.75 } }),
       () => ({ op: 'slip_clip', args: { clipId: any(), by: rnd() < 0.5 ? f(1 + int(40)) : T.sub(T.ZERO, f(1 + int(40))), ...(rnd() < 0.2 ? { includeLinked: false } : {}) } }),

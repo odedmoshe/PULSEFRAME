@@ -377,6 +377,21 @@ async function main() {
     const unrolled = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9)];
     check('roll by keyboard: the cut before the selected clip moves two frames later (the earlier clip plays two frames more, the selected clip starts two frames later with the same picture at every other frame), the timeline keeps its length, and rolling back restores it', JSON.stringify(rolled) === JSON.stringify([30 + k - 1, 30 + k, 30 + k + 1, 75, 82, 110]) && lenRolled === endOf(rollB.project) && JSON.stringify(unrolled) === JSON.stringify([30 + k - 1, 73, 82]) && rollA.revision === rollB.revision + 4, { rolled, unrolled, lengths: [endOf(rollB.project), lenRolled], revisions: [rollB.revision, rollA.revision] });
 
+    console.log('\n# slide');
+    const sdB = await getDoc();
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+Shift+BracketRight', 3);
+    let sdA = await getDoc();
+    for (let i = 0; i < 50 && sdA.revision < sdB.revision + 3; i++) { await new Promise((r) => setTimeout(r, 100)); sdA = await getDoc(); }
+    // before: … 39 | 73…82 | 110…  after sliding three frames later: … 39 40 41 42 | 73…82 | 113…
+    const slid = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 2), await stillCode(atFrame + 3), await stillCode(atFrame + 12), await stillCode(atFrame + 13)];
+    const lenSlid = endOf(sdA.project);
+    await key('Control+Shift+BracketLeft', 3);
+    for (let i = 0; i < 50 && sdA.revision < sdB.revision + 6; i++) { await new Promise((r) => setTimeout(r, 100)); sdA = await getDoc(); }
+    const unslid = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    check('slide by keyboard: three presses move the selected clip three frames later between its neighbours (same ten pictures; the clip before it plays three frames more, the clip after it starts three frames later), the timeline keeps its length, and sliding back restores it', JSON.stringify(slid) === JSON.stringify([30 + k - 1, 30 + k, 30 + k + 2, 73, 82, 113]) && lenSlid === endOf(sdB.project) && JSON.stringify(unslid) === JSON.stringify([30 + k - 1, 73, 82, 110]) && sdA.revision === sdB.revision + 6, { slid, unslid, lengths: [endOf(sdB.project), lenSlid], revisions: [sdB.revision, sdA.revision] });
+
     console.log('\n# reverse');
     const rb0 = await getDoc();
     await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click(); // the clip showing source 73–82 at atFrame..atFrame+9
