@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T16:44:31.268Z",
+  "ranAt": "2026-11-15T17:03:22.879Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -10,8 +10,8 @@
   "passed": 4,
   "total": 4,
   "tally": {
-    "exports-correctly": 29,
-    "exports-with-noted-difference": 2
+    "exports-correctly": 30,
+    "exports-with-noted-difference": 1
   },
   "rows": [
     {
@@ -323,7 +323,7 @@
           "got": [
             0,
             1,
-            1.997,
+            2,
             3
           ]
         },
@@ -3365,15 +3365,11 @@
       "picture": {
         "exportedFrames": 121,
         "referenceFrames": 121,
-        "wrongFrames": 1,
-        "firstWrong": {
-          "at": 1,
-          "shows": 1,
-          "reference": 0
-        },
+        "wrongFrames": 0,
+        "firstWrong": null,
         "first4": [
           0,
-          1,
+          0,
           1,
           2
         ],
@@ -3388,7 +3384,6 @@
         "framesCompared": 4,
         "worstChannelDifference": 5
       },
-      "noted": "conformed copy differs from the reference in 1 of the first 5 frames (which early frame is repeated): export [0,1,1,2], reference [0,0,1,2]",
       "sound": {
         "reference": [
           0.023,
@@ -3424,13 +3419,12 @@
         ]
       },
       "avSkewSeconds": [
-        0.023,
         -0.01,
         -0.01,
         -0.01
       ],
       "designedSkewSeconds": 0,
-      "outcome": "exports-with-noted-difference",
+      "outcome": "exports-correctly",
       "browser": {
         "asset": {
           "kind": "video",
@@ -3569,15 +3563,11 @@
         "picture": {
           "exportedFrames": 121,
           "referenceFrames": 121,
-          "wrongFrames": 1,
-          "firstWrong": {
-            "at": 1,
-            "shows": 1,
-            "reference": 0
-          },
+          "wrongFrames": 0,
+          "firstWrong": null,
           "first4": [
             0,
-            1,
+            0,
             1,
             2
           ],
@@ -3592,7 +3582,6 @@
           "framesCompared": 4,
           "worstChannelDifference": 7
         },
-        "noted": "conformed copy differs from the reference in 1 of the first 5 frames (which early frame is repeated): export [0,1,1,2], reference [0,0,1,2]",
         "_refOnsets": [
           0.023,
           1.023,
@@ -3634,20 +3623,19 @@
           ]
         },
         "avSkewSeconds": [
-          0.023,
           -0.01,
           -0.01,
           -0.01
         ],
         "designedSkewSeconds": 0,
-        "outcome": "noted-difference",
+        "outcome": "correct",
         "codecs": "mp4/avc/opus"
       },
       "preview": {
         "frames": {
           "seen": {
             "0": 0,
-            "1": 1,
+            "1": 0,
             "2": 1,
             "45": 44,
             "100": 99,
@@ -3662,7 +3650,6 @@
             "120": 119
           }
         },
-        "noted": "conformed copy differs from the reference at frame 1 (which early frame is repeated)",
         "sound": {
           "clock": "audio",
           "reference": [
@@ -3681,7 +3668,7 @@
         "notices": [
           "converted"
         ],
-        "outcome": "noted-difference"
+        "outcome": "correct"
       }
     },
     {

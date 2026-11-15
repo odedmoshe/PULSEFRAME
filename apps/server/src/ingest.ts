@@ -203,10 +203,12 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
       const out = `${tmp}.conform.mp4`;
       try {
         await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-protocol_whitelist', 'file', '-i', tmp,
-          '-map', '0:v:0', '-map', '0:a:0?', '-fps_mode', 'cfr', '-r', `${e.targetRate.num}/${e.targetRate.den}`,
+          '-map', '0:v:0', '-map', '0:a:0?',
           // out_color_matrix converts the pixel data to BT.709 (the source's own matrix, or BT.601 when it states none, is the input);
           // without it the copy would merely be labelled BT.709 and untagged / standard-definition sources would shift in colour.
-          '-vf', 'scale=trunc(iw*sar/2)*2:trunc(ih/2)*2:out_color_matrix=bt709:out_range=tv,setsar=1,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-bf', '2',
+          // Constant rate by the fps filter: each source frame goes to the nearest slot and a gap is filled by HOLDING THE PREVIOUS frame,
+          // as players do. (The encoder-side `-fps_mode cfr -r` filled a gap with the frame that follows it, which showed a picture one frame early.)
+          '-vf', `fps=${e.targetRate.num}/${e.targetRate.den},scale=trunc(iw*sar/2)*2:trunc(ih/2)*2:out_color_matrix=bt709:out_range=tv,setsar=1,format=yuv420p`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-bf', '2',
           '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out], { timeout: 30 * 60_000, maxBuffer: 8 << 20 });
         const conformed = await describeMedia(out);
         const cHash = createHash('sha256');
