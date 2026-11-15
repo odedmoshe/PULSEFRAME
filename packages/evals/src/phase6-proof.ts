@@ -263,6 +263,16 @@ async function main() {
     check('later caption presets, measured on the frame where a word in the middle of the phrase is being spoken: "reveal" shows fewer text pixels than the whole phrase and never more than it later on; "underline" shows the whole phrase plus a bar in the highlight colour; "dim ahead" shows fewer full-white pixels than the whole phrase and faint ones in their place; the whole phrase itself has no highlight colour',
       all.white > 200 && all.accent === 0 && revealMid.white > 0 && revealMid.white < all.white * 0.95 && revealLate.white >= revealMid.white && revealLate.white <= classicLate.white
       && under.accent > 20 && Math.abs(under.white - all.white) <= all.white * 0.03 && dim.white < all.white * 0.95 && dim.faint > all.faint + 50 && dim.accent === 0, presetMeasures);
+    // word entrance: frame 118 is 33 ms after "כתוביות" starts, frame 123 is 200 ms after it (both entrances are over by then)
+    const entranceShot = async (wordEntrance: string, frame: number) => {
+      await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_caption_style', args: { trackId: capTrack, style: { preset: 'classic', wordEntrance, color: '#FFFFFF', highlightColor: '#FF00FF', background: '#000000', stroke: null } } }] });
+      const file = await still(pid, frame, `entrance-${wordEntrance}-${frame}`);
+      return { ...capPixels(file), sha: crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 12) };
+    };
+    const e = { none118: await entranceShot('none', 118), fade118: await entranceShot('fade', 118), pop118: await entranceShot('pop', 118), none123: await entranceShot('none', 123), fade123: await entranceShot('fade', 123), pop123: await entranceShot('pop', 123) };
+    check('word entrance, measured: 33 ms after a word starts, "fade" shows fewer full-white pixels than the plain frame and "pop" a different picture with more of them (the word is drawn larger); 200 ms after it both give exactly the plain frame',
+      e.fade118.white < e.none118.white * 0.9 && e.pop118.sha !== e.none118.sha && e.pop118.white > e.none118.white && e.fade123.sha === e.none123.sha && e.pop123.sha === e.none123.sha, e);
+    await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_caption_style', args: { trackId: capTrack, style: { wordEntrance: 'none' } } }] });
     await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_caption_style', args: { trackId: capTrack, style: { preset: 'karaoke', color: '#FFFFFF', highlightColor: '#3DE0C8', background: '#000000B3' } } }] });
     check('caption renders match the committed baselines (SSIM ≥ 0.995), or were written on first run', Object.values(golden).every((g) => g === 'baseline written' || (typeof g === 'number' && g >= 0.995)), golden);
 

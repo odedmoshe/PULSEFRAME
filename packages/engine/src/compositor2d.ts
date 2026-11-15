@@ -98,7 +98,7 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
   if (s.preset === 'word-pop' && words.some((w) => w.state !== 'plain')) {
     // One word at a time: the word being spoken, else the last one spoken (held through pauses).
     const cur = words.find((w) => w.state === 'current') ?? [...words].reverse().find((w) => w.state === 'past');
-    words = cur ? [{ text: cur.text, state: 'current' }] : [];
+    words = cur ? [{ text: cur.text, state: 'current', ...(cur.since !== undefined ? { since: cur.since } : {}) }] : [];
   }
   if (words.length === 0) return;
   const px = s.sizeFrac * g.height * (s.preset === 'word-pop' ? 1.35 : 1);
@@ -135,6 +135,15 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
       // reveal: a word that has not been spoken yet is not drawn; its place is kept, so the line does not move as words arrive
       if (s.preset === 'reveal' && w.state === 'future') { x += widths[i]! + space; continue; }
       if (s.preset === 'dim-ahead' && w.state === 'future') ctx.globalAlpha = 0.4; // outline and fill both
+      // word entrance: the word that has just started fades in, or starts larger and settles
+      const entering = w.since !== undefined && s.wordEntrance && s.wordEntrance !== 'none';
+      if (entering && s.wordEntrance === 'fade') ctx.globalAlpha *= Math.min(1, w.since! / 0.15);
+      if (entering && s.wordEntrance === 'pop' && w.since! < 0.12) {
+        const k = 1 + 0.3 * (1 - w.since! / 0.12) ** 2, cx = x + widths[i]! / 2, cy = baseline - px * 0.35;
+        ctx.save();
+        ctx.translate(cx, cy); ctx.scale(k, k); ctx.translate(-cx, -cy);
+      }
+      const popped = entering && s.wordEntrance === 'pop' && w.since! < 0.12;
       if (s.preset === 'box-highlight' && w.state === 'current') {
         ctx.fillStyle = s.highlightColor;
         ctx.beginPath();
@@ -154,6 +163,7 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
         ctx.fillStyle = s.highlightColor;
         ctx.fillRect(x, baseline + px * 0.14, widths[i]!, Math.max(2, px * 0.1));
       }
+      if (popped) ctx.restore();
       x += widths[i]! + space;
     }
   });

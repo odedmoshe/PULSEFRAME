@@ -279,6 +279,11 @@ export function CaptionControls({ editor }: { editor: Editor }) {
               {CAPTION_PRESETS.map((p) => <option key={p} value={p}>{t(`caption.preset.${p}` as Key)}</option>)}
             </select>
           </label>
+          <label>{t('caption.entrance')}
+            <select value={style.wordEntrance ?? 'none'} onChange={(e) => setStyle({ wordEntrance: e.target.value })} data-testid="caption-entrance">
+              {(['none', 'fade', 'pop'] as const).map((p) => <option key={p} value={p}>{t(`caption.entrance.${p}` as Key)}</option>)}
+            </select>
+          </label>
           <label>{t('font.family')}
             <select value={style.fontFamily} onChange={(e) => setStyle({ fontFamily: e.target.value })} data-testid="caption-font">
               {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}

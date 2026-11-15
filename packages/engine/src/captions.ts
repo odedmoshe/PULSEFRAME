@@ -15,7 +15,8 @@ export interface CaptionLayer {
   sourceId: string;
   style: CaptionStyle;
   /** Words of the page being shown, in reading (logical) order. `plain` = no per-word timing available. */
-  words: { text: string; state: WordState }[];
+  /** `since`: seconds since the word started being spoken (only for words that have started less than a second ago, and only when the style animates word entrances). */
+  words: { text: string; state: WordState; since?: number }[];
 }
 
 const tokens = (text: string) => text.split(/\s+/).filter(Boolean);
@@ -124,7 +125,8 @@ function transcriptLayer(doc: ProjectDocument, seq: Sequence, track: Track, time
       words: page.map((i) => {
         const w = heard[i]!;
         const state: WordState = !timed ? 'plain' : T.lt(st, w.start) ? 'future' : T.lt(st, T.add(w.start, w.duration)) ? 'current' : 'past';
-        return { text: w.text, state };
+        const since = timed && state !== 'future' && cfg.style.wordEntrance && cfg.style.wordEntrance !== 'none' ? T.toSeconds(T.sub(st, w.start)) : 1;
+        return { text: w.text, state, ...(since < 1 ? { since: Number(since.toFixed(4)) } : {}) };
       }),
     };
   }

@@ -181,6 +181,8 @@ export const CaptionStyleSchema = z
     maxLines: z.number().int().min(1).max(4),
     maxCharsPerLine: z.number().int().min(6).max(80).describe('Reading-width guide; configurable per language and style, not a universal rule'),
     direction: z.enum(['auto', 'rtl', 'ltr']),
+    /** How a word comes in when it starts being spoken (needs word timing): fade = fades in over 0.15 s, pop = starts a little larger and settles in 0.12 s. Absent or none = it is simply there. */
+    wordEntrance: z.enum(['none', 'fade', 'pop']).optional(),
   })
   .strict();
 export const DEFAULT_CAPTION_STYLE = {

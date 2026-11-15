@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T20:40:15.736Z",
+  "ranAt": "2026-11-15T21:07:53.548Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Synthetic transcript on a beep fixture. Speech recognition, forced alignment and real speech are not exercised.",
-  "passed": 36,
-  "total": 36,
+  "passed": 37,
+  "total": 37,
   "checks": [
     {
       "name": "no transcript: the panel says so and offers import; it does not invent text",
@@ -256,6 +256,48 @@
           "white": 766,
           "faint": 1809,
           "accent": 0
+        }
+      }
+    },
+    {
+      "name": "word entrance, measured: 33 ms after a word starts, \"fade\" shows fewer full-white pixels than the plain frame and \"pop\" a different picture with more of them (the word is drawn larger); 200 ms after it both give exactly the plain frame",
+      "ok": true,
+      "detail": {
+        "none118": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0,
+          "sha": "99ea3c413445"
+        },
+        "fade118": {
+          "white": 1698,
+          "faint": 347,
+          "accent": 0,
+          "sha": "ee63bedd62da"
+        },
+        "pop118": {
+          "white": 2320,
+          "faint": 467,
+          "accent": 0,
+          "sha": "64e0f086ab1a"
+        },
+        "none123": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0,
+          "sha": "28c342604854"
+        },
+        "fade123": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0,
+          "sha": "28c342604854"
+        },
+        "pop123": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0,
+          "sha": "28c342604854"
         }
       }
     },
