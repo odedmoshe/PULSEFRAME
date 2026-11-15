@@ -7,6 +7,7 @@ import { ClipVisuals } from '../ClipVisuals.tsx';
 import { useEditorState } from './store.ts';
 import { useTimelineDrag } from './TimelineDrag.tsx';
 import { useMarquee } from './TimelineMarquee.tsx';
+import { InlineRename } from './InlineRename.tsx';
 
 const MAX_MARKERS = 3000;
 
@@ -59,6 +60,12 @@ export function Timeline() {
         <input type="checkbox" checked={snapBeats} data-testid="snap-beats" onChange={(e) => { setSnapBeats(e.target.checked); writeSnapBeats(e.target.checked); }} />
         {t('snap.beats')}
       </label>
+      <span className="tl-add-track" role="group" aria-label={t('track.add')}>
+        <span className="muted">{t('track.add')}:</span>
+        {(['video', 'audio', 'text'] as const).map((k) => (
+          <button key={k} type="button" className="ghost" disabled={!doc} data-testid={`add-track-${k}`} onClick={() => void editor.commit([{ op: 'add_track', args: { kind: k } }], 'Add track')}>{t(`track.${k}` as Key)}</button>
+        ))}
+      </span>
       {here && <MarkerBar marker={here} />}
       <div className="tl-scroll" {...containerProps}>
         <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}>
@@ -88,6 +95,7 @@ export function Timeline() {
               <span className="track-head">
                 <span className="track-name" dir="auto" title={tr.name}>{tr.kind === 'caption' ? `${t('track.caption')}${tr.caption?.mode === 'transcript' ? ' ✦' : ''}` : tr.name}</span>
                 <span className="track-buttons">
+                  {tr.kind !== 'caption' && <InlineRename value={tr.name} label={`${t('track.rename')}: ${tr.name}`} testid="track-rename" onCommit={(name) => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, name } }], 'Rename track')} />}
                   <button type="button" className="track-btn" aria-pressed={tr.locked} data-testid="track-lock" aria-label={`${t(tr.locked ? 'track.unlock' : 'track.lock')}: ${tr.name}`} title={t(tr.locked ? 'track.unlock' : 'track.lock')}
                     onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, locked: !tr.locked } }], 'Lock track')}>{tr.locked ? '🔒' : '🔓'}</button>
                   {tr.kind === 'audio' ? (

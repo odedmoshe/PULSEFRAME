@@ -14,6 +14,7 @@ import { SoundPanel } from './SoundPanel.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
 import { SourceViewer } from './SourceViewer.tsx';
+import { InlineRename } from './InlineRename.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -101,7 +102,8 @@ export function Library() {
       <ul className="assets">
         {doc && Object.values(doc.assets).map((a) => (
           <li key={a.id}>
-            <span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
+            <span className="asset-name-row"><span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
+              <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
             <span className="muted"><bdi>{a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : `${T.toSeconds(a.duration).toFixed(2)}s${a.video ? ` · ${a.video.width}×${a.video.height}` : ''}`}</bdi></span>
             {assetNotices(a).map((n) => (
               <span key={n.code} className="asset-notice" data-testid="asset-notice" data-code={n.code}>

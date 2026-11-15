@@ -447,6 +447,29 @@ async function main() {
     for (let i = 0; i < 50 && ta.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.locked !== false; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
     check('track buttons: hiding a picture track removes its picture from the server still and marks the track; showing it restores the same frame; locking marks the track and an edit to its clips is refused (API and Delete key in the editor); unlocking clears it', hiddenFlag === true && levelHidden < levelShown * 0.5 && offMark === 'true' && litBefore === litAfter && lockMark === 'true' && refused?.error?.code === 'track_locked' && stillThere && ta.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.locked === false, { hiddenFlag, levelHidden: +levelHidden.toFixed(1), levelShown: +levelShown.toFixed(1), offMark, lockMark, refused: refused?.error?.code, stillThere });
 
+    console.log('\n# add and rename tracks, rename a library file');
+    const nb = await getDoc();
+    await page.getByTestId('add-track-text').click();
+    let na = await getDoc();
+    for (let i = 0; i < 50 && na.revision === nb.revision; i++) { await new Promise((r) => setTimeout(r, 100)); na = await getDoc(); }
+    const addedTrack = na.project.sequences.seq_main!.tracks.find((tr) => !nb.project.sequences.seq_main!.tracks.some((o) => o.id === tr.id));
+    await page.locator(`.track[data-track-id="${vTrk.id}"]`).getByTestId('track-rename').click();
+    await page.getByTestId('track-rename-input').fill('ראשי Main');
+    await page.keyboard.press('Enter');
+    for (let i = 0; i < 50 && na.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.name !== 'ראשי Main'; i++) { await new Promise((r) => setTimeout(r, 100)); na = await getDoc(); }
+    const focusOnRename = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'track-rename');
+    // Escape leaves the name alone
+    await page.locator(`.track[data-track-id="${vTrk.id}"]`).getByTestId('track-rename').click();
+    await page.getByTestId('track-rename-input').fill('discard me');
+    await page.keyboard.press('Escape');
+    await page.getByTestId(`rename-${assetId}`).click();
+    await page.getByTestId(`rename-${assetId}-input`).fill('ראיון.mp4');
+    await page.keyboard.press('Enter');
+    for (let i = 0; i < 50 && na.project.assets[assetId]!.name !== 'ראיון.mp4'; i++) { await new Promise((r) => setTimeout(r, 100)); na = await getDoc(); }
+    await new Promise((r) => setTimeout(r, 300));
+    na = await getDoc();
+    check('editor: a track is added from the timeline; a track and a library file are renamed in place (Hebrew + Latin), Enter commits and focus returns to the rename button, Escape discards; three transactions in all', !!addedTrack && addedTrack.kind === 'text' && na.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.name === 'ראשי Main' && na.project.assets[assetId]!.name === 'ראיון.mp4' && focusOnRename && na.revision === nb.revision + 3, { added: addedTrack?.kind, trackName: na.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.name, assetName: na.project.assets[assetId]!.name, focusOnRename, revisions: [nb.revision, na.revision] });
+
     console.log('\n# close gaps');
     const gb = await getDoc();
     const gEnd = endOf(gb.project);

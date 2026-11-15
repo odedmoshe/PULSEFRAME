@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T14:26:04.280Z",
+  "ranAt": "2026-11-15T14:46:46.196Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -10,7 +10,7 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 160,
+      "controls": 167,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -27,7 +27,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 160,
+          "controls": 167,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -36,7 +36,7 @@
         },
         {
           "state": "format-view",
-          "controls": 155,
+          "controls": 162,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -46,7 +46,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 166,
+          "controls": 173,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -60,7 +60,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 171,
+          "controls": 178,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -69,12 +69,12 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_cf8e7be76a0]",
+          "focusAfterClose": "button[data-testid=view-ast_11a752918b0]",
           "focusReturned": true
         },
         {
           "state": "command-palette",
-          "controls": 163,
+          "controls": 170,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -92,7 +92,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 160,
+      "controls": 167,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -109,7 +109,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 160,
+          "controls": 167,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -118,7 +118,7 @@
         },
         {
           "state": "format-view",
-          "controls": 155,
+          "controls": 162,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -128,7 +128,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 166,
+          "controls": 173,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -142,7 +142,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 171,
+          "controls": 178,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -151,12 +151,12 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_cf8e7be76a0]",
+          "focusAfterClose": "button[data-testid=view-ast_11a752918b0]",
           "focusReturned": true
         },
         {
           "state": "command-palette",
-          "controls": 163,
+          "controls": 170,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],

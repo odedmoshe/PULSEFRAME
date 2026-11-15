@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T14:34:20.172Z",
+  "ranAt": "2026-11-15T14:46:43.946Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 1,
-        "editor-en": 1,
-        "palette-en": 1
+        "editor-he": "baseline written",
+        "editor-en": "baseline written",
+        "palette-en": "baseline written"
       }
     },
     {
@@ -337,6 +337,20 @@
       }
     },
     {
+      "name": "editor: a track is added from the timeline; a track and a library file are renamed in place (Hebrew + Latin), Enter commits and focus returns to the rename button, Escape discards; three transactions in all",
+      "ok": true,
+      "detail": {
+        "added": "text",
+        "trackName": "ראשי Main",
+        "assetName": "ראיון.mp4",
+        "focusOnRename": true,
+        "revisions": [
+          29,
+          32
+        ]
+      }
+    },
+    {
       "name": "\"close empty gaps\" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost",
       "ok": true,
       "detail": {
@@ -346,8 +360,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          29,
-          31
+          32,
+          34
         ]
       }
     },

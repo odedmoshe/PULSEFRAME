@@ -226,3 +226,11 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .track-btn:focus-visible { outline: 2px solid var(--pf-focus, var(--pf-accent)); outline-offset: 1px; }
 .track.locked .clip { cursor: not-allowed; filter: saturate(0.5); }
 .track.off .clip { opacity: 0.45; }
+.track-head { height: 42px; }
+.track-buttons .track-btn { inline-size: 17px; }
+.inline-rename-input { inline-size: 100%; min-inline-size: 52px; font-size: 11px; padding: 1px 3px; }
+.track-head .inline-rename-input { position: absolute; inset-inline-start: 0; top: 10px; inline-size: 120px; z-index: 6; }
+.asset-name-row { display: flex; align-items: center; gap: 4px; min-inline-size: 0; }
+.asset-name-row .asset-name { flex: 1; min-inline-size: 0; }
+.tl-add-track { position: absolute; top: 0; right: 250px; z-index: 3; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; background: var(--pf-surface); opacity: .95; padding: 2px 4px; }
+.tl-add-track button { padding: 1px 6px; font-size: 11px; }
