@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T16:27:58.782Z",
+  "ranAt": "2026-11-15T16:53:04.207Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": "baseline written",
-        "editor-en": "baseline written",
-        "palette-en": "baseline written"
+        "editor-he": 1,
+        "editor-en": 1,
+        "palette-en": 1
       }
     },
     {
@@ -467,37 +467,37 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 29,
+        "differentSourceFrames": 28,
         "firstFrames": [
           {
-            "frame": 1,
+            "frame": 3,
             "quality": "draft",
-            "code": 1
+            "code": 3
           },
           {
-            "frame": 7,
+            "frame": 6,
             "quality": "draft",
-            "code": 7
+            "code": 6
           },
           {
-            "frame": 10,
+            "frame": 9,
             "quality": "draft",
-            "code": 10
+            "code": 9
           },
           {
-            "frame": 13,
+            "frame": 12,
             "quality": "draft",
-            "code": 13
+            "code": 12
           },
           {
-            "frame": 17,
+            "frame": 15,
             "quality": "draft",
-            "code": 17
+            "code": 15
           },
           {
-            "frame": 20,
+            "frame": 18,
             "quality": "draft",
-            "code": 20
+            "code": 18
           }
         ],
         "mismatches": []
