@@ -75,7 +75,8 @@ export class Auth {
    * It stops a runaway agent loop from starving the editor; it is not an abuse defence for a public service.
    */
   private throttle(p: Principal): Principal {
-    const perMinute = this.cfg.agentRequestsPerMinute;
+    // a grant's own budget, when the owner set one, replaces the server-wide setting for that credential
+    const perMinute = p.grant?.requestsPerMinute ?? this.cfg.agentRequestsPerMinute;
     if (!perMinute || p.kind !== 'agent') return p;
     const key = p.grant?.id ?? p.actor;
     const capacity = Math.max(1, perMinute / 6), perMs = perMinute / 60_000, now = this.now();

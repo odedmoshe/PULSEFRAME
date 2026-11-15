@@ -489,6 +489,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - `PF_SECURE_COOKIE=1` adds `Secure` to the owner session cookie, for use behind a TLS-terminating proxy together with the public origin in `PF_EXTRA_ORIGINS`. Off by default (loopback HTTP).
 - Verified here: `apps/server/src/session.test.ts` (attributes with and without the option; session issued to a listed https origin, refused to an unlisted one; the cookie is refused from another origin). No proxy deployment was run; the server still binds to loopback only.
 
+**Checkpoint 14r — request budget per agent grant**
+- A grant can carry `requestsPerMinute` (REST and MCP together); when set it replaces the server-wide `PF_AGENT_RPM` for that credential, and it applies even when the server-wide limit is off. Stored with the grant's other constraints (no schema migration; older grants read as "no own budget").
+- Verified here: `ratelimit.test.ts` (new test: own budget enforced and refilled on a server with no global limit; a grant without one is unlimited there; a larger own budget is not held to the global 60/min; 0 refused). 394 unit tests.
+- Not done: a field for it in the editor's grant form (REST only for now); export quotas per grant.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -517,7 +522,7 @@ Unblocked (no decision needed), roughly by value:
 4. Per-format caption text and line breaks (per-format caption style and per-format title wording/style exist); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 5. Approvals list UI; activity log dialog; MCP resource change notifications; remaining transient states in the accessibility audit (confirmation forms, error and busy states).
 6. Inputs: a colour choice for untagged files (the editor now says when colours are a guess); HDR; the AVI one-frame difference; sound longer than the picture; frames during playback; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
-7. Per-grant request limits and export quotas (a global opt-in limit exists). A `Secure` cookie option exists; a real TLS proxy deployment is untested.
+7. Export quotas per grant; a field for the per-grant request budget in the editor's grant form (the budget itself exists over REST). A `Secure` cookie option exists; a real TLS proxy deployment is untested.
 8. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
 Blocked on an owner decision or resource (see docs/BLOCKERS.md):
@@ -533,7 +538,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 393 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 394 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 20 · `pnpm proof:owner-ui` 8 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:projects` 2 (15 project settings; 7 of them also on the browser export and the preview) · `pnpm conformance:render-fuzz` 2 (10 random sessions; about twelve minutes) · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.

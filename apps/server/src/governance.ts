@@ -18,10 +18,11 @@ export const GrantInput = z
     trackIds: z.array(z.string()).max(200).nullable().default(null).describe('Only clips on these tracks may be changed'),
     range: z.object({ start: RationalTimeSchema, end: RationalTimeSchema }).strict().nullable().default(null).describe('Only clips lying fully inside this sequence time range may be changed'),
     budgetCents: z.number().int().nonnegative().default(0),
+    requestsPerMinute: z.number().int().min(1).max(100000).nullable().default(null).describe('Request budget for this credential (REST and MCP together); null = the server-wide setting'),
     expiresInSeconds: z.number().int().positive().max(365 * 86400).optional(),
   })
   .strict();
-export interface Grant { id: string; name: string; mode: Mode; projectIds: string[] | null; trackIds: string[] | null; range: { start: T.RationalTime; end: T.RationalTime } | null; budgetCents: number; expiresAt: string | null; revokedAt: string | null; createdAt: string; createdBy: string }
+export interface Grant { id: string; name: string; mode: Mode; projectIds: string[] | null; trackIds: string[] | null; range: { start: T.RationalTime; end: T.RationalTime } | null; budgetCents: number; requestsPerMinute: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string; createdBy: string }
 export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: ('observe' | 'edit')[]; mode?: Mode; grant?: Grant }
 
 const now = () => new Date().toISOString();
@@ -45,7 +46,7 @@ export class Governance {
   }
 
   // ---------- grants ----------
-  private grantRow = (r: any): Grant => ({ id: r.id, name: r.name, mode: r.mode, ...JSON.parse(r.constraints), budgetCents: r.budget_cents, expiresAt: r.expires_at, revokedAt: r.revoked_at, createdAt: r.created_at, createdBy: r.created_by });
+  private grantRow = (r: any): Grant => ({ id: r.id, name: r.name, mode: r.mode, requestsPerMinute: null, ...JSON.parse(r.constraints), budgetCents: r.budget_cents, expiresAt: r.expires_at, revokedAt: r.revoked_at, createdAt: r.created_at, createdBy: r.created_by });
   /** The token is returned once and only its hash is stored. */
   createGrant(raw: unknown, by: Principal): { grant: Grant; token: string } {
     if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can create agent grants');
@@ -57,7 +58,7 @@ export class Governance {
     const token = `pfg_${randomBytes(24).toString('base64url')}`;
     const expiresAt = g.expiresInSeconds ? new Date(this.clock() + g.expiresInSeconds * 1000).toISOString() : null;
     this.store.db.prepare('INSERT INTO grants (id, name, token_hash, mode, constraints, budget_cents, expires_at, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?)')
-      .run(id, g.name, sha(token), g.mode, JSON.stringify({ projectIds: g.projectIds, trackIds: g.trackIds, range: g.range }), g.budgetCents, expiresAt, now(), by.actor);
+      .run(id, g.name, sha(token), g.mode, JSON.stringify({ projectIds: g.projectIds, trackIds: g.trackIds, range: g.range, requestsPerMinute: g.requestsPerMinute }), g.budgetCents, expiresAt, now(), by.actor);
     return { grant: this.getGrant(id), token };
   }
   getGrant(id: string): Grant {
