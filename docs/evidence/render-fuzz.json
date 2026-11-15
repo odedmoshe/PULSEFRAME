@@ -1,0 +1,301 @@
+{
+  "ranAt": "2026-11-15T08:18:14.381Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "gpu": "none"
+  },
+  "scope": "10 random sessions of 160 steps each, at five frame rates, on synthetic media. Checks that rendering succeeds and has the right shape (frame count, rate, clean decode, equal picture and sound length); it does NOT check that the pictures or the sound are the right ones.",
+  "passed": 1,
+  "total": 1,
+  "rows": [
+    {
+      "seed": 1,
+      "rate": "25/1",
+      "session": {
+        "accepted": 79,
+        "refused": 81,
+        "clips": 9,
+        "frames": 324,
+        "seconds": 12.96,
+        "formats": 0,
+        "effects": 2,
+        "freezes": 0,
+        "sped": 4,
+        "transitions": 0
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 3
+      },
+      "export": {
+        "frames": 324,
+        "rate": "25/1",
+        "videoSeconds": 12.96,
+        "audioSeconds": 12.96,
+        "bytes": 62227
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 2,
+      "rate": "24000/1001",
+      "session": {
+        "accepted": 77,
+        "refused": 83,
+        "clips": 18,
+        "frames": 465,
+        "seconds": 19.39,
+        "formats": 0,
+        "effects": 0,
+        "freezes": 3,
+        "sped": 2,
+        "transitions": 0
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 4
+      },
+      "export": {
+        "frames": 465,
+        "rate": "24000/1001",
+        "videoSeconds": 19.394,
+        "audioSeconds": 19.394,
+        "bytes": 200051
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 3,
+      "rate": "30000/1001",
+      "session": {
+        "accepted": 91,
+        "refused": 69,
+        "clips": 14,
+        "frames": 366,
+        "seconds": 12.21,
+        "formats": 2,
+        "effects": 1,
+        "freezes": 1,
+        "sped": 0,
+        "transitions": 1
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 5
+      },
+      "export": {
+        "frames": 366,
+        "rate": "30000/1001",
+        "videoSeconds": 12.212,
+        "audioSeconds": 12.212,
+        "bytes": 128120
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 4,
+      "rate": "60/1",
+      "session": {
+        "accepted": 91,
+        "refused": 69,
+        "clips": 17,
+        "frames": 436,
+        "seconds": 7.27,
+        "formats": 1,
+        "effects": 0,
+        "freezes": 3,
+        "sped": 4,
+        "transitions": 0
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 3
+      },
+      "export": {
+        "frames": 436,
+        "rate": "60/1",
+        "videoSeconds": 7.267,
+        "audioSeconds": 7.266,
+        "bytes": 103433
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 5,
+      "rate": "30/1",
+      "session": {
+        "accepted": 69,
+        "refused": 91,
+        "clips": 3,
+        "frames": 344,
+        "seconds": 11.47,
+        "formats": 0,
+        "effects": 0,
+        "freezes": 0,
+        "sped": 0,
+        "transitions": 0
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 2
+      },
+      "export": {
+        "frames": 344,
+        "rate": "30/1",
+        "videoSeconds": 11.467,
+        "audioSeconds": 11.466,
+        "bytes": 26976
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 6,
+      "rate": "25/1",
+      "session": {
+        "accepted": 73,
+        "refused": 87,
+        "clips": 12,
+        "frames": 252,
+        "seconds": 10.08,
+        "formats": 0,
+        "effects": 1,
+        "freezes": 1,
+        "sped": 0,
+        "transitions": 0
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 2
+      },
+      "export": {
+        "frames": 252,
+        "rate": "25/1",
+        "videoSeconds": 10.08,
+        "audioSeconds": 10.08,
+        "bytes": 44148
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 7,
+      "rate": "24000/1001",
+      "session": {
+        "accepted": 96,
+        "refused": 64,
+        "clips": 17,
+        "frames": 395,
+        "seconds": 16.47,
+        "formats": 2,
+        "effects": 1,
+        "freezes": 2,
+        "sped": 3,
+        "transitions": 0
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 6
+      },
+      "export": {
+        "frames": 395,
+        "rate": "24000/1001",
+        "videoSeconds": 16.475,
+        "audioSeconds": 16.475,
+        "bytes": 321297
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 8,
+      "rate": "30000/1001",
+      "session": {
+        "accepted": 79,
+        "refused": 81,
+        "clips": 23,
+        "frames": 444,
+        "seconds": 14.81,
+        "formats": 0,
+        "effects": 0,
+        "freezes": 1,
+        "sped": 4,
+        "transitions": 0
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 5
+      },
+      "export": {
+        "frames": 444,
+        "rate": "30000/1001",
+        "videoSeconds": 14.815,
+        "audioSeconds": 14.815,
+        "bytes": 118865
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 9,
+      "rate": "60/1",
+      "session": {
+        "accepted": 68,
+        "refused": 92,
+        "clips": 11,
+        "frames": 451,
+        "seconds": 7.52,
+        "formats": 2,
+        "effects": 0,
+        "freezes": 0,
+        "sped": 1,
+        "transitions": 0
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 2
+      },
+      "export": {
+        "frames": 451,
+        "rate": "60/1",
+        "videoSeconds": 7.517,
+        "audioSeconds": 7.516,
+        "bytes": 54024
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 10,
+      "rate": "30/1",
+      "session": {
+        "accepted": 89,
+        "refused": 71,
+        "clips": 22,
+        "frames": 475,
+        "seconds": 15.83,
+        "formats": 0,
+        "effects": 2,
+        "freezes": 2,
+        "sped": 2,
+        "transitions": 1
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 2
+      },
+      "export": {
+        "frames": 475,
+        "rate": "30/1",
+        "videoSeconds": 15.833,
+        "audioSeconds": 15.833,
+        "bytes": 143436
+      },
+      "outcome": "renders"
+    }
+  ],
+  "checks": [
+    {
+      "name": "every project produced by a random editing session renders: stills, picture+sound export with exactly the timeline's frames, sound-only export, preflight, linked formats (10 of 10 sessions rendered; 0 had an empty timeline)",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}
