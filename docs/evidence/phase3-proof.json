@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T16:19:46.499Z",
+  "ranAt": "2026-11-15T16:27:58.782Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 1,
-        "editor-en": 1,
-        "palette-en": 1
+        "editor-he": "baseline written",
+        "editor-en": "baseline written",
+        "palette-en": "baseline written"
       }
     },
     {
@@ -298,6 +298,34 @@
       }
     },
     {
+      "name": "slide by keyboard: three presses move the selected clip three frames later between its neighbours (same ten pictures; the clip before it plays three frames more, the clip after it starts three frames later), the timeline keeps its length, and sliding back restores it",
+      "ok": true,
+      "detail": {
+        "slid": [
+          39,
+          40,
+          42,
+          73,
+          82,
+          113
+        ],
+        "unslid": [
+          39,
+          73,
+          82,
+          110
+        ],
+        "lengths": [
+          223,
+          223
+        ],
+        "revisions": [
+          26,
+          32
+        ]
+      }
+    },
+    {
       "name": "\"play backwards\" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, an exported file of that stretch shows the same twelve frames in the same order, the clip is marked on the timeline, and unchecking restores 73…82",
       "ok": true,
       "detail": {
@@ -372,8 +400,8 @@
         "assetName": "ראיון.mp4",
         "focusOnRename": true,
         "revisions": [
-          33,
-          36
+          39,
+          42
         ]
       }
     },
@@ -388,8 +416,8 @@
         "emptyBefore": 1,
         "emptyCmd": "track.removeEmpty",
         "revisions": [
-          36,
-          39
+          42,
+          45
         ]
       }
     },
@@ -408,9 +436,9 @@
       "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
       "ok": true,
       "detail": {
-        "revision": 42,
-        "allRows": 42,
-        "firstRev": "42",
+        "revision": 48,
+        "allRows": 48,
+        "firstRev": "48",
         "rawNames": 0,
         "agentRows": 1,
         "agentOnly": true,
@@ -428,8 +456,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          42,
-          44
+          48,
+          50
         ]
       }
     },
@@ -462,14 +490,14 @@
             "code": 14
           },
           {
-            "frame": 18,
+            "frame": 17,
             "quality": "draft",
-            "code": 18
+            "code": 17
           },
           {
-            "frame": 21,
+            "frame": 20,
             "quality": "draft",
-            "code": 21
+            "code": 20
           }
         ],
         "mismatches": []
