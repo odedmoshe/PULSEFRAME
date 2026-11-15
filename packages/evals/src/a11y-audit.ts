@@ -177,6 +177,21 @@ async function main() {
       await auditState('locked-track', { lockedTracksShown: await page.locator('.track[data-locked=true]').count(), pressedLockButtons: await page.locator('[data-testid=track-lock][aria-pressed=true]').count() });
       await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_track', args: { trackId: (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json() as any).project.sequences.seq_main.tracks.find((t: any) => t.locked).id, locked: false } }] });
       await page.waitForFunction(() => !document.querySelector('.track[data-locked=true]'), undefined, { timeout: 8000 }).catch(() => {});
+      // an upload in progress, then the error bar: a file that is not media is sent, the request is held while the busy state is audited, then the server refuses it
+      let release: () => void = () => {};
+      const held = new Promise<void>((r) => { release = r; });
+      const hold = async (route: any) => { if (route.request().method() === 'POST') await held; await route.continue(); };
+      await page.route('**/api/v1/projects/*/assets', hold);
+      await page.getByTestId('file-input').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not a media file') });
+      await page.waitForFunction(() => (document.querySelector('[data-testid=file-input]') as HTMLInputElement | null)?.disabled === true, undefined, { timeout: 5000 }).catch(() => {});
+      await auditState('upload-busy', { shown: await page.getByTestId('file-input').isDisabled() });
+      release();
+      await page.locator('.error[role=alert]').waitFor({ timeout: 10000 }).catch(() => {});
+      await page.unroute('**/api/v1/projects/*/assets', hold);
+      const errShown = (await page.locator('.error[role=alert]').count()) === 1;
+      await auditState('error-bar', { shown: errShown, text: errShown ? ((await page.locator('.error[role=alert]').textContent()) ?? '').slice(0, 120) : '' });
+      if (errShown) await page.locator('.error[role=alert] button').click();
+      Object.assign(states.at(-1), { closed: (await page.locator('.error[role=alert]').count()) === 0 });
       // source viewer dialog
       const sv = await dialogBehaviour('source-viewer', async () => { await page.getByTestId(`view-${up.assetId}`).click(); }, `[data-testid="view-${up.assetId}"]`);
       await auditState('source-viewer', { startsInside: sv.startsInside, tabStepsThatLeftTheDialog: sv.tabStepsThatLeftTheDialog }, true);

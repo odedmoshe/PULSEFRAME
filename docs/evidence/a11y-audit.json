@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T17:05:06.561Z",
+  "ranAt": "2026-11-15T17:30:33.297Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -79,6 +79,26 @@
           "pressedLockButtons": 1
         },
         {
+          "state": "upload-busy",
+          "controls": 176,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "error-bar",
+          "controls": 177,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "הקובץ אינו נתמך: file is not media ffprobe can read×",
+          "closed": true
+        },
+        {
           "state": "source-viewer",
           "controls": 187,
           "unnamed": [],
@@ -89,7 +109,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_719db746430]",
+          "focusAfterClose": "button[data-testid=view-ast_38d550b42c0]",
           "focusReturned": true
         },
         {
@@ -195,6 +215,26 @@
           "pressedLockButtons": 1
         },
         {
+          "state": "upload-busy",
+          "controls": 176,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "error-bar",
+          "controls": 177,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Unsupported file: file is not media ffprobe can read×",
+          "closed": true
+        },
+        {
           "state": "source-viewer",
           "controls": 187,
           "unnamed": [],
@@ -205,7 +245,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_719db746430]",
+          "focusAfterClose": "button[data-testid=view-ast_38d550b42c0]",
           "focusReturned": true
         },
         {

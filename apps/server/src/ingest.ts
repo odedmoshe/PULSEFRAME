@@ -74,7 +74,7 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
   try {
     probe = await ffprobe(file);
   } catch {
-    throw new ApiError(415, 'unsupported_media', 'file is not media ffprobe can read', {}, 'Supported: MP4/WebM video, common audio files, PNG/JPEG/WebP stills.');
+    throw new ApiError(415, 'unsupported_media', 'the file could not be read as video, sound or a picture', {}, 'Supported: MP4/WebM video, common audio files, PNG/JPEG/WebP stills.');
   }
   const streams: any[] = probe.streams ?? [];
   const v = streams.find((s) => s.codec_type === 'video' && s.disposition?.attached_pic !== 1);
