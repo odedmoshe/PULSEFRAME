@@ -137,6 +137,7 @@ async function main() {
         const shown = Array.from({ length: raw.length / fb }, (_, i) => readBarcode(raw.subarray(i * fb, (i + 1) * fb), W, 3, { x: 0, y: 0, w: W, h: H }));
         const ref = pictureTruth(c.file);
         const truth = ref.frames;
+        row._refFrames = truth;
         const n = Math.min(shown.length, truth.length);
         const bad = Array.from({ length: n }, (_, i) => i).filter((i) => shown[i] !== truth[i]);
         row.picture = { exportedFrames: shown.length, referenceFrames: truth.length, wrongFrames: bad.length, firstWrong: bad.length ? { at: bad[0], shows: shown[bad[0]!], reference: truth[bad[0]!] } : null, first4: shown.slice(0, 4), referenceFirst4: truth.slice(0, 4) };
@@ -159,6 +160,7 @@ async function main() {
       {
         const got = onsetsOf(out);
         const truth = (row.asset.audio ? soundTruth(c.file) : []).filter((t) => t < clipSeconds - 0.01);
+        row._refOnsets = truth;
         row.sound = { reference: truth, got, designed: c.sound };
         if (got.length !== truth.length || got.some((g, i) => Math.abs(g - truth[i]!) > 0.012)) problems.push('sound');
         // level per stereo channel at the second beep the clip contains: export vs a direct decode of the input (same down-mix rule)
@@ -185,7 +187,8 @@ async function main() {
   };
   const rows: any[] = [];
   const browser = process.env.PF_MATRIX_BROWSER === '0' ? null : await chromium.launch();
-  const page = browser ? await browser.newPage() : null;
+  const context = browser ? await browser.newContext({ viewport: { width: 1500, height: 950 } }) : null;
+  const page = context ? await context.newPage() : null;
   if (page) { await page.goto(`${s.url}/browser-export.html?key=${s.auth.tokens.owner}`); await page.evaluate(() => (window as any).__pfBrowserExport.ready); }
   try {
     for (const c of cases) {
@@ -222,9 +225,56 @@ async function main() {
           rb.codecs = `${r.result.container}/${r.result.videoCodec}/${r.result.audioCodec}`;
         }
       }
+      // --- the same project in the editor preview: paused frames, then the sound of one playback on the audio clock
+      if (browser && process.env.PF_MATRIX_PREVIEW !== '0') {
+        const rp: any = {};
+        row.preview = rp;
+        const ep = await context!.newPage();
+        const errs: string[] = [];
+        ep.on('pageerror', (e) => errs.push(String(e)));
+        try {
+          await ep.addInitScript(() => { (window as any).__pfAudioTap = true; });
+          await ep.goto(`${s.url}/?project=${pid}`);
+          await ep.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame === '0', undefined, { timeout: 30000 });
+          const problemsP: string[] = [];
+          if (c.picture && row._refFrames) {
+            const ref: number[] = row._refFrames;
+            const lastFrame = Math.min(ref.length, Math.round(row.asset.seconds * 30)) - 1;
+            const seen: Record<number, number> = {}, want: Record<number, number> = {};
+            for (const target of [0, 1, 2, 45, 100, lastFrame]) {
+              await ep.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, (target / 30) * 90 + 0.5);
+              await ep.waitForFunction((t) => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, target, { timeout: 15000 }).catch(() => {});
+              const shot = await ep.evaluate(() => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; return { w: cv.width, data: Array.from(cv.getContext('2d')!.getImageData(0, Math.round(cv.height / 12), cv.width, 1).data.filter((_, i) => i % 4 !== 3)) }; });
+              seen[target] = readBarcode(Uint8Array.from(shot.data), shot.w, 3, { x: 0, y: 0, w: shot.w, h: 0 });
+              want[target] = ref[target]!;
+            }
+            rp.frames = { seen, reference: want };
+            const wrong = Object.keys(want).filter((k) => seen[Number(k)] !== want[Number(k)]);
+            // a conformed copy may repeat a different one of its first frames than the reference (noted on the export routes too)
+            if (wrong.length && row.asset.conformed && wrong.every((k) => Number(k) < 5) && wrong.length <= 2) rp.noted = `conformed copy differs from the reference at frame ${wrong.join(', ')} (which early frame is repeated)`;
+            else if (wrong.length) problemsP.push('picture');
+          }
+          if (row._refOnsets) {
+            await ep.keyboard.press('Home').catch(() => {});
+            await ep.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, 0.5);
+            await ep.getByTestId('play').click();
+            await ep.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 40000 }).catch(() => {});
+            const sync = await ep.evaluate(() => (window as any).__pfSync());
+            const got = (sync.audioOnsetsTimelineSeconds ?? []).map((x: number) => Number(x.toFixed(3)));
+            const ref: number[] = (row._refOnsets as number[]).filter((t) => t < row.asset.seconds - 0.35); // the tap needs the beep to be fully inside the playback
+            rp.sound = { clock: sync.clock, reference: ref, got };
+            if (sync.clock !== 'audio') rp.note = 'no audio clock in this browser session: sound not measured';
+            else if (got.length < ref.length || ref.some((t, i) => Math.abs((got[i] ?? 99) - t) > 1 / 30)) problemsP.push('sound');
+          }
+          if (errs.length) { problemsP.push('page error'); rp.errors = errs.slice(0, 2); }
+          rp.outcome = problemsP.length ? `WRONG (${problemsP.join(', ')})` : rp.noted ? 'noted-difference' : 'correct';
+        } catch (e) { rp.outcome = 'PREVIEW-FAILED'; rp.detail = String(e).slice(0, 160); }
+        finally { await ep.close(); }
+      }
     }
     for (const r of rows) console.log(`${String(r.outcome).padEnd(34)} ${r.case}${r.asset?.conformed ? '  [conformed]' : ''}${r.noted ? `  — ${r.noted}` : ''}${r.detail ? `  — ${r.detail}` : ''}${/^ACCEPTED/.test(String(r.outcome)) ? `  — asset ${JSON.stringify(r.asset)} picture ${JSON.stringify(r.picture)} colour ${JSON.stringify(r.colour)} sound ${JSON.stringify(r.sound)} level ${JSON.stringify(r.level)} skew ${JSON.stringify(r.avSkewSeconds)}` : ''}`);
     if (page) { console.log('\nbrowser export route:'); for (const r of rows) if (r.browser) console.log(`  ${String(r.browser.outcome).padEnd(40)} ${r.case}${r.browser.detail ? `  — ${r.browser.detail}` : ''}${/^WRONG/.test(String(r.browser.outcome)) ? `  — picture ${JSON.stringify(r.browser.picture)} colour ${JSON.stringify(r.browser.colour)} sound ${JSON.stringify(r.browser.sound)} level ${JSON.stringify(r.browser.level)} skew ${JSON.stringify(r.browser.avSkewSeconds)}` : ''}${r.browser.noted ? `  — ${r.browser.noted}` : ''}`); }
+    if (rows.some((r) => r.preview)) { console.log('\neditor preview:'); for (const r of rows) if (r.preview) console.log(`  ${String(r.preview.outcome).padEnd(40)} ${r.case}${r.preview.outcome !== 'correct' ? `  — ${JSON.stringify({ frames: r.preview.frames, sound: r.preview.sound, detail: r.preview.detail, errors: r.preview.errors })}` : ''}${r.preview.noted ? `  — ${r.preview.noted}` : ''}${r.preview.note ? `  — ${r.preview.note}` : ''}`); }
     console.log('colour worst difference (of 255) per picture file:', JSON.stringify(Object.fromEntries(rows.filter((r) => r.colour).map((r) => [r.case.slice(0, 28), r.colour.worstChannelDifference]))));
     console.log('level difference in dB [L, R] per file:', JSON.stringify(Object.fromEntries(rows.filter((r) => r.level).map((r) => [r.case.slice(0, 28), r.level.differenceDb]))));
     const defects = rows.filter((r) => /^ACCEPTED/.test(r.outcome) || r.outcome === 'accepted-but-cannot-be-placed');
@@ -232,6 +282,8 @@ async function main() {
     const notBuilt = rows.filter((r) => r.outcome === 'fixture-not-built');
     check(`no file is accepted at ingest and then fails or comes out wrong (${rows.length - notBuilt.length} files tried)`, defects.length === 0, defects.map((r) => ({ case: r.case, outcome: r.outcome, detail: r.detail, picture: r.picture, sound: r.sound })));
     if (page) check(`the browser export route gives the same result as the reference for every file the server route exports (${rows.filter((r) => r.browser).length} files)`, browserBad.length === 0, browserBad.map((r) => ({ case: r.case, outcome: r.browser.outcome, detail: r.browser.detail, sound: r.browser.sound, level: r.browser.level, colour: r.browser.colour })));
+    const previewRows = rows.filter((r) => r.preview);
+    if (previewRows.length) check(`the editor preview shows the reference frames when paused and plays the sound at the reference times (within one frame) for every file (${previewRows.length} files)`, previewRows.every((r) => ['correct', 'noted-difference'].includes(r.preview.outcome)), previewRows.filter((r) => !['correct', 'noted-difference'].includes(r.preview.outcome)).map((r) => ({ case: r.case, ...r.preview })));
     const refused = rows.filter((r) => r.outcome === 'refused-at-ingest');
     check(`every refusal at ingest is a typed error (${refused.length} refusal(s) in this run${refused.length ? '' : ' — nothing was refused, so this check proves nothing here'})`, refused.every((r) => /^[a-z_]+: /.test(r.detail)), refused.map((r) => ({ case: r.case, detail: r.detail })));
     if (notBuilt.length) console.log(`note: ${notBuilt.length} fixture(s) could not be built by this ffmpeg and were not tried: ${notBuilt.map((r) => r.case).join('; ')}`);
@@ -241,10 +293,11 @@ async function main() {
   } finally {
     await browser?.close();
     await s.close();
+    for (const r of rows) { delete r._refFrames; delete r._refOnsets; }
     const failed = checks.filter((x) => !x.ok);
     const tally: Record<string, number> = {};
     for (const r of rows) tally[String(r.outcome).replace(/ \(.*\)$/, '')] = (tally[String(r.outcome).replace(/ \(.*\)$/, '')] ?? 0) + 1;
-    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'Synthetic variants of one 4-second barcode fixture, server export route and browser export route (the editor preview is not exercised here). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms), by staying within about a frame of the picture, and by the peak level of each stereo channel at one beep (±1.5 dB against a direct decode of the input; a mono source is expected at full level in both channels; for more than two channels the reference uses the same down-mix rule as the product, so those coefficients are not independently verified). Picture is checked by frame identity and by the background colour of four frames (worst channel difference ≤ 12 of 255 against a direct decode of the input).', passed: checks.length - failed.length, total: checks.length, tally, rows, checks };
+    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'Synthetic variants of one 4-second barcode fixture, server export route, browser export route, and the editor preview (six paused frames per picture file and the sound onsets of one playback on the audio clock, within one frame; preview colour and level are not measured). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms), by staying within about a frame of the picture, and by the peak level of each stereo channel at one beep (±1.5 dB against a direct decode of the input; a mono source is expected at full level in both channels; for more than two channels the reference uses the same down-mix rule as the product, so those coefficients are not independently verified). Picture is checked by frame identity and by the background colour of four frames (worst channel difference ≤ 12 of 255 against a direct decode of the input).', passed: checks.length - failed.length, total: checks.length, tally, rows, checks };
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     fs.writeFileSync(path.join(root, 'docs/evidence/input-matrix.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(`\nInput matrix ${report.result}: ${report.passed}/${report.total}  ${JSON.stringify(tally)}`);
