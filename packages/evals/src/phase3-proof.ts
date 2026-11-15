@@ -714,6 +714,20 @@ async function main() {
     await page.reload();
     await page.getByTestId('timecode').waitFor();
     const afterReload = { ws: await page.getByTestId('workspace-switch').inputValue(), tabs: await tabsShown() };
+    // Motion and Color: the clip panel, each with its own part of it (a picture clip is selected first)
+    await page.getByTestId('workspace-switch').selectOption('pro');
+    const wsClip = (await getDoc()).project.sequences.seq_main!.tracks.find((tr) => tr.kind === 'video')!.clips[0]!;
+    await page.locator(`.clip[data-clip-id="${wsClip.id}"]`).click();
+    const parts = async () => ({ tabs: await tabsShown(), transform: await page.getByTestId('transform-x').count(), speed: await page.getByTestId('speed-field').count(), animate: await page.getByTestId('animate-controls').count(), look: await page.getByTestId('look-panel').count(), analysis: await page.getByTestId('analysis-panel').count() });
+    await page.getByTestId('workspace-switch').selectOption('motion');
+    const motion = await parts();
+    await page.getByTestId('workspace-switch').selectOption('color');
+    const color = await parts();
+    await page.getByTestId('workspace-switch').selectOption('pro');
+    await page.getByTestId('inspector-tab-clip').click();
+    const proParts = await parts();
+    check('workspaces Motion and Color: both offer the clip panel only; Motion shows position/size, speed and entrances without the look controls; Color shows the look controls without them; Pro shows all of it',
+      JSON.stringify(motion) === JSON.stringify({ tabs: ['clip'], transform: 1, speed: 1, animate: 1, look: 0, analysis: 0 }) && JSON.stringify(color) === JSON.stringify({ tabs: ['clip'], transform: 0, speed: 0, animate: 0, look: 1, analysis: 0 }) && proParts.transform === 1 && proParts.look === 1 && proParts.analysis === 1 && proParts.tabs.length === 8, { motion, color, proParts });
     await page.getByTestId('workspace-switch').selectOption('pro');
     const back = await tabsShown();
     const wa = await getDoc();

@@ -60,7 +60,7 @@ export interface EditorState {
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
-export const WORKSPACES = ['pro', 'quick', 'captions', 'sound', 'deliver'] as const;
+export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver'] as const;
 export type Workspace = (typeof WORKSPACES)[number];
 const WS_KEY = 'pf.workspace.v1';
 const readWorkspace = (): Workspace => { try { const v = localStorage.getItem(WS_KEY); return (WORKSPACES as readonly string[]).includes(v ?? '') ? (v as Workspace) : 'pro'; } catch { return 'pro'; } };

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T20:37:10.886Z",
+  "ranAt": "2026-11-15T21:11:55.250Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -564,7 +564,7 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 30,
+        "differentSourceFrames": 29,
         "firstFrames": [
           {
             "frame": 4,
@@ -587,17 +587,60 @@
             "code": 13
           },
           {
-            "frame": 17,
+            "frame": 16,
             "quality": "draft",
-            "code": 17
+            "code": 16
           },
           {
-            "frame": 20,
+            "frame": 19,
             "quality": "draft",
-            "code": 20
+            "code": 19
           }
         ],
         "mismatches": []
+      }
+    },
+    {
+      "name": "workspaces Motion and Color: both offer the clip panel only; Motion shows position/size, speed and entrances without the look controls; Color shows the look controls without them; Pro shows all of it",
+      "ok": true,
+      "detail": {
+        "motion": {
+          "tabs": [
+            "clip"
+          ],
+          "transform": 1,
+          "speed": 1,
+          "animate": 1,
+          "look": 0,
+          "analysis": 0
+        },
+        "color": {
+          "tabs": [
+            "clip"
+          ],
+          "transform": 0,
+          "speed": 0,
+          "animate": 0,
+          "look": 1,
+          "analysis": 0
+        },
+        "proParts": {
+          "tabs": [
+            "clip",
+            "speech",
+            "captions",
+            "sound",
+            "review",
+            "deliver",
+            "recipes",
+            "all"
+          ],
+          "transform": 1,
+          "speed": 1,
+          "animate": 1,
+          "look": 1,
+          "analysis": 1
+        }
       }
     },
     {

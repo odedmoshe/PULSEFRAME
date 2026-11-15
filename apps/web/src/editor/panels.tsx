@@ -291,6 +291,9 @@ const TAB_KEY = 'pf.inspector.tab.v1';
 const WORKSPACE_TABS: Record<Workspace, readonly InspectorTab[]> = {
   pro: INSPECTOR_TABS,
   quick: ['recipes', 'speech', 'captions', 'deliver'],
+  // Motion and Color both use the clip panel, each showing its own part of it (see `clipFocus`).
+  motion: ['clip'],
+  color: ['clip'],
   captions: ['captions', 'speech', 'clip'],
   sound: ['sound', 'clip'],
   deliver: ['deliver', 'review'],
@@ -337,6 +340,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     document.getElementById(`inspector-tab-${INSPECTOR_TABS[n]}`)?.focus();
   };
   const show = (id: InspectorTab) => tab === 'all' || tab === id;
+  const clipFocus: 'all' | 'motion' | 'color' = state.workspace === 'motion' ? 'motion' : state.workspace === 'color' ? 'color' : 'all';
   const open = state.proposals.length + state.approvals.length;
   const panelProps = (id: Exclude<InspectorTab, 'all'>) => ({
     role: 'tabpanel' as const,
@@ -362,10 +366,13 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         ))}
       </div>
       <div {...panelProps('clip')}>
-        {!sel ? <p className="muted">{t('inspector.none')}</p> : <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
-        {sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}
-        {sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} />}
-        {sel && state.selection.length === 1 && sel.clip.type === 'media' && <AnalysisPanel key={`analysis:${sel.clip.id}`} />}
+        {/* Motion shows position, size, keyframes, speed and entrances; Color shows effects, blend, mask and transition; the others show all of it. */}
+        {clipFocus !== 'all' && <p className="muted" data-testid="clip-focus-note">{t(clipFocus === 'motion' ? 'workspace.motion.note' : 'workspace.color.note')}</p>}
+        {!sel ? <p className="muted">{t('inspector.none')}</p> : clipFocus !== 'color' && <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
+        {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}
+        {clipFocus !== 'motion' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} />}
+        {clipFocus === 'color' && sel && !(state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video')) && <p className="muted" data-testid="color-none">{t('workspace.color.none')}</p>}
+        {clipFocus === 'all' && sel && state.selection.length === 1 && sel.clip.type === 'media' && <AnalysisPanel key={`analysis:${sel.clip.id}`} />}
       </div>
       <div {...panelProps('speech')}>
         <h2>{t('transcript')}</h2>
