@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T22:36:06.462Z",
+  "ranAt": "2026-11-15T00:29:07.358Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -13,7 +13,7 @@
     "size": "640x360",
     "fps": "30/1",
     "bytes": 7730745,
-    "generateSeconds": 62.1
+    "generateSeconds": 64.6
   },
   "edit": {
     "removedFrames": 1121,
@@ -25,9 +25,9 @@
     "realtimeFactor": 3.45,
     "frames": 16879,
     "renderStageMs": {
-      "draw": 30241,
-      "readback": 11499,
-      "upload": 114939
+      "draw": 30221,
+      "readback": 10941,
+      "upload": 112150
     },
     "bytes": 7912628
   },

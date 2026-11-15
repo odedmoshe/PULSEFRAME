@@ -35,6 +35,11 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     for (const tr of seq.tracks) {
       uniq(tr.id);
       if ((tr.kind === 'caption') !== !!tr.caption) issues.push({ code: 'caption_config', message: `track ${tr.id}: caption settings must exist exactly on caption tracks`, ids: [tr.id] });
+      if (tr.audio && tr.kind !== 'audio') issues.push({ code: 'audio_config', message: `track ${tr.id}: audio settings belong to audio tracks`, ids: [tr.id] });
+      for (const src of tr.audio?.duck?.sourceTrackIds ?? []) {
+        const st = seq.tracks.find((t) => t.id === src);
+        if (!st || st.kind !== 'audio' || st.id === tr.id) issues.push({ code: 'duck_source', message: `track ${tr.id} ducks under ${src}, which is missing, not an audio track, or itself`, ids: [tr.id] });
+      }
       if (tr.caption?.linkedTrackId) {
         const linked = seq.tracks.find((t) => t.id === tr.caption!.linkedTrackId);
         if (!linked || (linked.kind !== 'audio' && linked.kind !== 'video')) issues.push({ code: 'caption_link', message: `caption track ${tr.id} is linked to a missing or non-media track`, ids: [tr.id] });
@@ -80,6 +85,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if (tr.kind === 'text') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on text track`, ids: [c.id, tr.id] });
         if (tr.kind === 'video' && !asset.video && !(asset.kind === 'image' && asset.image)) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
         if (tr.kind === 'audio' && !asset.audio) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no audio for audio track`, ids: [c.id, tr.id] });
+        if ((c.fadeIn || c.fadeOut) && tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: audio fades belong to clips on audio tracks`, ids: [c.id] });
+        if ((c.fadeIn && T.isNegative(c.fadeIn)) || (c.fadeOut && T.isNegative(c.fadeOut)) || T.lt(c.duration, T.add(c.fadeIn ?? T.ZERO, c.fadeOut ?? T.ZERO))) issues.push({ code: 'fade_out_of_bounds', message: `clip ${c.id}: fades are negative or longer than the clip`, ids: [c.id] });
         if (T.isNegative(c.sourceIn)) issues.push({ code: 'source_out_of_bounds', message: `clip ${c.id} sourceIn < 0`, ids: [c.id] });
         if (asset.kind !== 'image' && T.lt(asset.duration, T.add(c.sourceIn, c.duration)))
           issues.push({ code: 'source_out_of_bounds', message: `clip ${c.id} reads past the end of asset ${asset.id}`, ids: [c.id, asset.id] });

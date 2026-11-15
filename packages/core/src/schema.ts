@@ -57,6 +57,8 @@ export const AssetSchema = z
         origin: z.enum(['upload', 'fixture', 'generated', 'derived']),
         importedAt: z.string(),
         importedBy: z.string(),
+        /** Present for built-in synthesised sounds: which formula made this file. */
+        procedural: z.object({ id: z.string(), version: z.number().int(), generator: z.string() }).strict().optional(),
         /** Present for provider outputs (SPEC §25, Amendment A1 FF-08): enough to recreate the recipe and trace lineage. */
         derived: z
           .object({ jobId: z.string(), capabilityId: z.string(), capabilityVersion: z.string(), graphDigest: z.string(), params: z.record(z.string(), z.unknown()), sourceAssetIds: z.array(z.string()), outputName: z.string(), outputRole: z.string(), encoding: z.string(), provider: z.record(z.string(), z.unknown()) })
@@ -124,6 +126,9 @@ export const MediaClipSchema = z
     sourceIn: RationalTimeSchema.describe('Source time shown at the clip start (speed is 1 in schema v1)'),
     gain: z.number().min(0).max(8).describe('Linear audio gain'),
     linkGroupId: Id.nullable(),
+    /** Audio clips: linear fades at the clip edges (durations). */
+    fadeIn: RationalTimeSchema.optional(),
+    fadeOut: RationalTimeSchema.optional(),
     mask: MaskSchema.optional(),
     transition: TransitionSchema.optional(),
   })
@@ -196,6 +201,16 @@ export const TrackSchema = z
     id: Id, kind: z.enum(['video', 'audio', 'text', 'caption']), name: z.string().max(128), locked: z.boolean(), muted: z.boolean(), hidden: z.boolean(), clips: z.array(ClipSchema),
     /** Caption tracks only. transcript mode shows the transcript of whatever is playing on the linked track; manual mode shows this track's own cues. */
     caption: z.object({ mode: z.enum(['manual', 'transcript']), linkedTrackId: Id.nullable(), style: CaptionStyleSchema }).strict().optional(),
+    /** Audio tracks only. Absent = unity gain, centred, no ducking. */
+    audio: z
+      .object({
+        gain: z.number().min(0).max(4).describe('Linear track gain'),
+        pan: z.number().min(-1).max(1).describe('-1 left, 0 centre, 1 right (balance: the opposite channel is attenuated)'),
+        /** Lower this track while the source tracks have speech (their transcript phrases) or, without a transcript, any clip. */
+        duck: z.object({ sourceTrackIds: z.array(Id).min(1).max(8), reductionDb: z.number().min(1).max(40), attackMs: z.number().int().min(0).max(2000), releaseMs: z.number().int().min(0).max(5000) }).strict().nullable(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const SequenceSchema = z.object({ id: Id, name: z.string().max(128), tracks: z.array(TrackSchema).describe('Bottom-most layer first') }).strict();
@@ -206,7 +221,9 @@ export const ProjectSchema = z
     id: Id,
     name: z.string().min(1).max(200),
     settings: z
-      .object({ width: z.number().int().min(16).max(8192), height: z.number().int().min(16).max(8192), frameRate: RateSchema, sampleRate: z.number().int().min(8000).max(192000), background: Color })
+      .object({ width: z.number().int().min(16).max(8192), height: z.number().int().min(16).max(8192), frameRate: RateSchema, sampleRate: z.number().int().min(8000).max(192000), background: Color,
+        /** Export loudness: one static gain so the whole programme measures `target` LUFS (integrated), lowered if needed to keep true peak under `truePeak` dBTP. Absent = no normalisation. */
+        loudness: z.object({ target: z.number().min(-40).max(-5), truePeak: z.number().min(-9).max(0) }).strict().optional() })
       .strict(),
     assets: z.record(Id, AssetSchema),
     sequences: z.record(Id, SequenceSchema),

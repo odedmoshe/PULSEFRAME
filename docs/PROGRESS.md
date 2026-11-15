@@ -25,7 +25,8 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | Phase 5 — Complete agent surface | **Gate criteria met, verified-here**; scope items open (below) | `pnpm proof:phase5` 22/22 (`docs/evidence/phase5-proof.json`); `governance.test.ts` |
 | Phase 6 — Typography and captions | **Partly met, verified-here on a synthetic transcript.** Gate has three parts: Hebrew/mixed-script golden tests pass (6 renders, small set); transcript removal preserves sync (frame- and sample-checked); **timing corpus not reported — no speech recognition exists here (B-7)** | `pnpm proof:phase6` 33/33 (`docs/evidence/phase6-proof.json`); `captions.test.ts` in core and engine; `subtitles.test.ts` |
 | Phase 7 — Motion and creative catalog | **First batch verified-here (Canvas2D look system).** Gate ("every shipped entry has working preview/export and reviewed visual fixtures") holds for the 12 effects, 17 blend modes, 2 mask shapes and 12 transitions that exist; most of the phase scope is not built | `pnpm proof:phase7` 30/30 (`docs/evidence/phase7-proof.json`), `effects.test.ts`, `look.test.ts`, `/lab.html` |
-| Phases 8–13, G2–G3 | Not started | — |
+| Phase 8 — Sound and voice | **First batch verified-here.** Gate parts: PCM/DSP and loudness tests pass (synthetic signals); sounds are actual assets (7 synthesised); **voice/narration/cloning not built — needs a provider or model decision (B-8)** | `pnpm proof:phase8` 17/17 (`docs/evidence/phase8-proof.json`), `audio.test.ts`, `/selftest.html` |
+| Phases 9–13, G2–G3 | Not started | — |
 
 ## Completed and verified-here
 
@@ -132,8 +133,19 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Editor: effect list with controls generated from the schemas, bypass/reorder/remove, blend, mask and transition controls. `/lab.html`: 134 tiles for every entry in 16:9 and 9:16, default and extreme, transitions in 5 steps; looked at once by the lead (not a design review).
 - **Not built (Phase 7 scope):** GPU compositor and every shader family (distortion, glitch, film, lens, kaleidoscope…), chroma key and mattes, polygon/text masks, tracked masks, keyframed effect parameters, adjustment layers, speed ramps/velocity, motion blur, graph editor, layouts, hover preview/favourites/user presets, Lab export-pairing and loops, audio crossfade in transitions. Performance of heavy looks at 1080p+ is unmeasured. Catalog targets (Appendix A) are far away: 12 effects, 12 transitions.
 
+**Checkpoint 8a — sound**
+- One audio plan (`packages/engine/src/audio.ts`) describes every clip in integer samples with its gain, balance, fade envelope and ducking envelope. The server export, the preview and the browser export all consume it.
+- Server export audio is now a streaming reference mixer (`apps/server/src/audiomix.ts`): one decoder process per clip, mixed in one-second chunks, so memory does not grow with programme length; the previous ffmpeg filter graph is gone. Existing audio proofs (Phase 0, Phase 4, 10-minute sync) still pass unchanged.
+- Ops: `set_clip_fades`, `set_track_audio` (gain, pan, mute), `set_ducking`, `set_loudness_target`. Fades stay on the outer edges through splits and cuts and are clamped when a clip gets shorter.
+- Ducking lowers a track under speech on other tracks: transcript phrases where a transcript exists, otherwise the whole clip. It is range-based, not a signal-following compressor.
+- Loudness: EBU R128 measurement of the real mix (`POST …/analysis/loudness`, MCP `measure_loudness`); export applies **one static gain** toward the target and never exceeds the true-peak ceiling; no compression or limiting. Clipping of an un-normalised mix is reported in the job result. Browser export refuses projects with a loudness target (it cannot measure) instead of exporting at a different level.
+- Built-in sound effects: 7 sounds synthesised by formula (no third-party content), stored as normal content-addressed assets with their recipe in provenance (`POST …/sfx`, MCP `add_sound_effect`).
+- Measured (synthetic sines, this CPU profile, one run each): gain −6.0206 dB for 0.5; fades and ducking at 17 points with error below 0.001; ducked level −12.0001 dB; normalised export −16.0 LUFS for a −16 target; 320 s / 40-clip mix continuous across all 39 joins, 47× realtime; WebAudio chain vs reference mixer max error 6.9e-7 of full scale, also when starting mid-clip.
+- Editor: Sound tab (track volume in dB, pan, mute, ducking source, clip fades, loudness target, measure, level meter). The meter and audible preview of fades/ducking were **not** verified during live playback — only the WebAudio chain offline and the controls' effect on the document.
+- **Not built (Phase 8 scope):** EQ, compressor/limiter, noise reduction, de-esser, audio keyframes (volume automation), crossfades between clips, voice recording, narration/TTS, voice cloning (needs provider + consent flow), stems, licensed SFX/music library, real-speech and real-music tests.
+
 ## In progress
-- Phase 7b candidates without a GPU: keyframed effect parameters, adjustment layers, speed changes. Then Phase 8 (sound).
+- Phase 9 analysis without models where possible (scene/shot detection, beat detection by signal analysis), then the model-dependent parts stay blocked.
 
 ## Blocked / unverified (with what would unblock)
 
@@ -145,6 +157,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | Preview A/V sync; preview/export parity across many frames; long media; real camera/phone footage; other browsers; other MCP hosts | unverified | Phases 2–4 gates | Scheduled in Phase 2/4 below; other browsers are not installed here (Chromium only) |
 | Worker lease / prewarm / budgets (FF-07) | not started | G3, Phase 10 | Phase 5 scopes + Phase 10 |
 | Speech recognition, forced alignment, timing corpus (B-7) | blocked on an owner decision | Phase 6 gate (timing corpus), R-16.2, R-C.10 | Authorise a local ASR model download (size/licence to approve) or supply a provider credential |
+| Narration / TTS / voice cloning (B-8) | blocked on an owner decision | Phase 8 gate (voice), R-17.x | A provider credential or an approved local model, plus the consent/verification flow the chosen provider requires |
 | No pull request | deferred by owner | — | Branch organisation later |
 
 ## Dependency-aware task list (next first)
@@ -156,7 +169,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
 
 ## Next executable action
-`pnpm install && pnpm build && pnpm test` (expect 228 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
+`pnpm install && pnpm build && pnpm test` (expect 233 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:phase8` (17/17), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
 
 ## Agent / model summary
 
@@ -179,6 +192,8 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | 5 | Lead | export options/manifest/cancel/retry, full-quality preview, governance (grants, pause, proposals, approvals, budget), integration, proofs | as above | as above | — |
 | 5 | `pf-implementer` ×3 | parity suite (90,457 + 99,731 tok on resume); browser export route (168,016 tok · 510 s); OpenAPI update | `sonnet` | not observable | as listed |
 | 6 | Lead | transcript/caption model, ops, evaluation, bidi caption layout, REST/MCP, proof | as above | as above | — |
+| 8 | Lead | audio plan, streaming mixer, loudness, ducking, SFX, self-test page, proof | as above | as above | — |
+| 8 | `pf-implementer` | Sound tab + meter (55,487 tok · 98 s) | `sonnet` | not observable | as listed |
 | 7 | Lead | effect/blend/mask/transition registry, ops, evaluator, compositor, proof | as above | as above | — |
 | 7 | `pf-implementer` ×2 | Inspector tabs (20,231 tok · 35 s); look panel + Lab page (73,450 tok · 140 s) | `sonnet` | not observable | as listed |
 | 6 | `pf-implementer` ×3 | subtitle codec (45,369 tok · 158 s); transcript/caption editor UI (60,659 tok · 92 s); silence + animation UI (46,726 tok · 62 s) | `sonnet` | not observable | as listed |

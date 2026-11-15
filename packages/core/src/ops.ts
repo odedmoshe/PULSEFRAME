@@ -118,6 +118,14 @@ const linked = (d: ProjectDocument, clip: Clip) => {
   for (const l of out) if (l.track.locked) throw new OpError('track_locked', `linked clip ${l.clip.id} is on locked track ${l.track.id}`, { trackId: l.track.id, clipId: l.clip.id }, 'Unlock the track or pass includeLinked=false.');
   return out;
 };
+/** After a clip gets shorter, keep its audio fades inside it (fade-in first, then whatever room is left for the fade-out). */
+function clampFades(clip: Clip) {
+  if (clip.type !== 'media' || (!clip.fadeIn && !clip.fadeOut)) return;
+  const fin = T.min(clip.fadeIn ?? T.ZERO, clip.duration);
+  const fout = T.min(clip.fadeOut ?? T.ZERO, T.sub(clip.duration, fin));
+  if (T.isZero(fin)) delete clip.fadeIn; else clip.fadeIn = fin;
+  if (T.isZero(fout)) delete clip.fadeOut; else clip.fadeOut = fout;
+}
 const fmt = (t: T.RationalTime) => `${T.toSeconds(t).toFixed(3)}s`;
 
 // ---------- operations ----------
@@ -396,6 +404,7 @@ defineOp({
         }
         assertFree(track, clip.start, a.to, new Set([clip.id]));
         clip.duration = duration;
+        clampFades(clip);
       } else {
         if (!T.lt(a.to, end) || T.isNegative(a.to)) throw new OpError('out_of_bounds', 'trim would leave an empty clip or start before 0', { clipId: clip.id });
         const delta = T.sub(a.to, clip.start);
@@ -408,6 +417,7 @@ defineOp({
         shiftKeyframes(clip, delta); // the animation stays attached to the content, not to the moved edge
         clip.start = a.to;
         clip.duration = T.sub(end, a.to);
+        clampFades(clip);
         sortClips(track);
       }
     }
@@ -436,8 +446,11 @@ defineOp({
       shiftKeyframes(right, left);
       if (clip.type === 'caption') { delete clip.words; delete (right as typeof clip).words; }
       if (right.type === 'media') delete right.transition; // the transition belongs to the original cut point
+      if (right.type === 'media' && clip.type === 'media') { delete right.fadeIn; delete clip.fadeOut; } // fades stay on the outer edges
       if (right.type === 'media') { right.sourceIn = T.add(right.sourceIn, left); if (right.linkGroupId) right.linkGroupId = newLink; }
       clip.duration = left;
+      clampFades(clip);
+      clampFades(right);
       track.clips.push(right);
       sortClips(track);
       created.push(right.id);
@@ -523,6 +536,73 @@ defineOp({
   },
 });
 
+
+
+// ---------- sound (SPEC §10) ----------
+const audioTrack = (seq: Sequence, trackId: string) => {
+  const t = mustTrack(seq, trackId);
+  if (t.kind !== 'audio') throw new OpError('incompatible', `track ${trackId} is not an audio track`, { trackId });
+  return t;
+};
+const DEFAULT_TRACK_AUDIO = { gain: 1, pan: 0, duck: null } as const;
+defineOp({
+  name: 'set_clip_fades',
+  version: 1,
+  description: 'Set linear fade-in and/or fade-out lengths on an audio clip (0 removes a fade). Together they cannot exceed the clip length. Linked picture is not affected.',
+  args: z.object({ clipId: z.string(), fadeIn: RT.optional(), fadeOut: RT.optional() }).strict(),
+  apply(d, a) {
+    const { clip, track } = mustClip(d, a.clipId);
+    if (clip.type !== 'media' || track.kind !== 'audio') throw new OpError('incompatible', 'fades apply to clips on audio tracks', { clipId: a.clipId }, 'Use the audioClipId returned by add_clip, or get_timeline.');
+    const fin = a.fadeIn ?? clip.fadeIn ?? T.ZERO, fout = a.fadeOut ?? clip.fadeOut ?? T.ZERO;
+    if (T.isNegative(fin) || T.isNegative(fout) || T.lt(clip.duration, T.add(fin, fout))) throw new OpError('out_of_bounds', 'fades must be non-negative and fit inside the clip', { clipDuration: clip.duration });
+    if (T.isZero(fin)) delete clip.fadeIn; else clip.fadeIn = fin;
+    if (T.isZero(fout)) delete clip.fadeOut; else clip.fadeOut = fout;
+    return { affectedIds: [clip.id], summary: `Fades: in ${fmt(fin)}, out ${fmt(fout)}` };
+  },
+});
+defineOp({
+  name: 'set_track_audio',
+  version: 1,
+  description: 'Set an audio track\'s volume (linear gain, 1 = unchanged), pan (-1 left … 1 right) and/or mute.',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string(), gain: z.number().min(0).max(4).optional(), pan: z.number().min(-1).max(1).optional(), muted: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    const t = audioTrack(seqOf(d, a.sequenceId), a.trackId);
+    if (a.gain !== undefined || a.pan !== undefined) t.audio = { ...(t.audio ?? DEFAULT_TRACK_AUDIO), ...(a.gain !== undefined ? { gain: a.gain } : {}), ...(a.pan !== undefined ? { pan: a.pan } : {}) };
+    if (a.muted !== undefined) t.muted = a.muted;
+    return { affectedIds: [t.id], summary: `Track ${t.name}: gain ${(t.audio?.gain ?? 1).toFixed(2)}, pan ${(t.audio?.pan ?? 0).toFixed(2)}${t.muted ? ', muted' : ''}` };
+  },
+});
+defineOp({
+  name: 'set_ducking',
+  version: 1,
+  description: 'Automatically lower an audio track (e.g. music) while other tracks carry speech. Speech = the transcript phrases of the clips on the source tracks; a clip without a transcript counts as speech for its whole length. sourceTrackIds=null turns ducking off.',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string(), sourceTrackIds: z.array(z.string()).min(1).max(8).nullable(), reductionDb: z.number().min(1).max(40).optional(), attackMs: z.number().int().min(0).max(2000).optional(), releaseMs: z.number().int().min(0).max(5000).optional() }).strict(),
+  apply(d, a) {
+    const seq = seqOf(d, a.sequenceId);
+    const t = audioTrack(seq, a.trackId);
+    if (a.sourceTrackIds === null) {
+      if (t.audio) t.audio = { ...t.audio, duck: null };
+      return { affectedIds: [t.id], summary: `Ducking off on ${t.name}` };
+    }
+    for (const id of a.sourceTrackIds) {
+      const st = seq.tracks.find((x) => x.id === id);
+      if (!st || st.kind !== 'audio' || st.id === t.id) throw new OpError('invalid_args', `source track ${id} must be another audio track`, { sourceTrackId: id });
+    }
+    const prev = t.audio?.duck;
+    t.audio = { ...(t.audio ?? DEFAULT_TRACK_AUDIO), duck: { sourceTrackIds: a.sourceTrackIds, reductionDb: a.reductionDb ?? prev?.reductionDb ?? 12, attackMs: a.attackMs ?? prev?.attackMs ?? 150, releaseMs: a.releaseMs ?? prev?.releaseMs ?? 400 } };
+    return { affectedIds: [t.id], summary: `Ducking ${t.name} by ${t.audio.duck!.reductionDb} dB under speech` };
+  },
+});
+defineOp({
+  name: 'set_loudness_target',
+  version: 1,
+  description: 'Set (or clear with target=null) the export loudness target in LUFS, e.g. -14 for social platforms, -16 for podcasts, -23 for EBU broadcast. Export then applies ONE static gain to the whole mix and keeps true peak under the ceiling; it does not compress dynamics.',
+  args: z.object({ target: z.number().min(-40).max(-5).nullable(), truePeak: z.number().min(-9).max(0).optional() }).strict(),
+  apply(d, a) {
+    if (a.target === null) delete d.settings.loudness; else d.settings.loudness = { target: a.target, truePeak: a.truePeak ?? d.settings.loudness?.truePeak ?? -1 };
+    return { affectedIds: [d.id], summary: a.target === null ? 'Loudness normalisation off' : `Loudness target ${a.target} LUFS` };
+  },
+});
 
 // ---------- effects, blend, mask, transitions (SPEC §8, §13) ----------
 const pictureClip = (d: ProjectDocument, clipId: string) => {
@@ -874,14 +954,18 @@ function cutRange(seq: Sequence, start: T.RationalTime, end: T.RationalTime, tra
           }
         }
         if (right.type === 'media' && hasLeft) delete right.transition;
+        if (right.type === 'media') delete right.fadeIn;
         if (right.type === 'media') right.sourceIn = T.add(right.sourceIn, delta);
         if (right.type === 'caption') delete right.words;
         shiftKeyframes(right, delta);
         right.start = ripple ? start : end;
         right.duration = T.sub(cEnd, end);
+        clampFades(right);
       }
       if (hasLeft) {
+        if (clip.type === 'media') delete clip.fadeOut;
         clip.duration = T.sub(start, clip.start);
+        clampFades(clip);
         if (clip.type === 'caption') delete clip.words;
         next.push(clip);
       }

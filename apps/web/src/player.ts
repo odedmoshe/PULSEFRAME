@@ -5,7 +5,8 @@
  */
 import * as T from '@pulseframe/time';
 import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
-import { drawGraph, evaluate } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate } from '@pulseframe/engine';
+import { plannedClipInput } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
 export class Player {
@@ -26,6 +27,8 @@ export class Player {
   private onsets: number[] = [];
   private tap: AudioWorkletNode | null = null;
   private tapLoaded = false;
+  private analyser: AnalyserNode | null = null;
+  private meterBuf: Float32Array | null = null;
   private origin = { clock: 0, frame: 0 };
   /** Index of the frame most recently painted, for tests and the UI. */
   painted = -1;
@@ -101,7 +104,7 @@ export class Player {
     this.actx ??= new AudioContext({ sampleRate: doc.settings.sampleRate, latencyHint: 'interactive' });
     await Promise.race([this.actx.resume(), new Promise((r) => setTimeout(r, 300))]);
     const audioOk = this.actx.state === 'running';
-    const clips = doc.sequences[doc.mainSequenceId]!.tracks.filter((t) => t.kind === 'audio' && !t.muted).flatMap((t) => t.clips);
+    const plan = audioPlan(doc);
     if (audioOk && (globalThis as any).__pfAudioTap && !this.tapLoaded) {
       // AudioWorklet tap: sample-accurate (currentFrame), unlike ScriptProcessor whose callbacks lag by a block.
       const code = `registerProcessor('pf-onset-tap', class extends AudioWorkletProcessor {
@@ -133,6 +136,14 @@ export class Player {
     const master = audioOk ? this.actx!.createGain() : null;
     master?.connect(this.actx!.destination);
     this.onsets = [];
+    if (master) {
+      // Level meter tap (observation only; the analyser has no output so it does not change what is heard).
+      const an = this.actx!.createAnalyser();
+      an.fftSize = 2048;
+      master.connect(an);
+      this.analyser = an;
+      this.meterBuf = new Float32Array(an.fftSize);
+    }
     if (master && (globalThis as any).__pfAudioTap) {
       const tap = new AudioWorkletNode(this.actx!, 'pf-onset-tap', { numberOfOutputs: 0 });
       tap.port.onmessage = (e) => this.onsets.push(+((e.data as number) - originClock + t0).toFixed(5));
@@ -140,21 +151,20 @@ export class Player {
       this.tap = tap;
     }
     if (audioOk)
-      for (const c of clips) {
-        if (c.type !== 'media' || c.gain <= 0) continue;
-        const start = T.toSeconds(c.start);
-        const end = start + T.toSeconds(c.duration);
+      for (const c of plan.clips) {
+        // Clip timing comes from the shared audio plan (integer samples), the same numbers export uses.
+        const start = c.at / plan.sampleRate;
+        const end = start + c.length / plan.sampleRate;
         if (end <= t0) continue;
-        const sourceIn = T.toSeconds(c.sourceIn);
+        const sourceIn = c.source / plan.sampleRate;
         // One pump per audible clip: decode forward from the playhead and schedule buffers a bounded time ahead.
         void (async () => {
           const opened = await this.pool.openAudio(c.assetId).catch(() => null);
           if (!opened) return;
           if (gen !== this.generation) return opened.dispose();
           try {
-          const gain = this.actx!.createGain();
-          gain.gain.value = c.gain;
-          gain.connect(master!);
+          const fromLocal = Math.max(0, Math.round((t0 - start) * plan.sampleRate));
+          const gain = plannedClipInput(this.actx!, c, plan.sampleRate, master!, originClock + (start - t0), fromLocal);
           const srcFrom = sourceIn + Math.max(0, t0 - start);
           const srcTo = sourceIn + (end - start);
           for await (const b of opened.sink.buffers(srcFrom, srcTo)) {
@@ -198,11 +208,20 @@ export class Player {
     this.playing = false;
     this.generation++;
     cancelAnimationFrame(this.raf);
+    if (this.analyser) { this.analyser.disconnect(); this.analyser = null; }
     if (this.tap) { this.tap.port.onmessage = null; this.tap.disconnect(); this.tap = null; }
     for (const n of this.nodes) { try { n.stop(); } catch { /* already stopped */ } n.disconnect(); }
     this.nodes = [];
     if (this.doc) this.request(this.frame); // repaint the paused frame at full quality
     this.onTick();
+  }
+  /** Current sample peak of the master mix in dBFS (-Infinity for silence); null when not playing or no audio output. */
+  peakDb(): number | null {
+    if (!this.playing || !this.analyser || !this.meterBuf) return null;
+    this.analyser.getFloatTimeDomainData(this.meterBuf as Float32Array<ArrayBuffer>);
+    let p = 0;
+    for (let i = 0; i < this.meterBuf.length; i++) { const a = Math.abs(this.meterBuf[i]!); if (a > p) p = a; }
+    return p > 0 ? 20 * Math.log10(p) : -Infinity;
   }
   /** Measured, not estimated. `clock` says which timebase the numbers refer to. */
   syncStats() {

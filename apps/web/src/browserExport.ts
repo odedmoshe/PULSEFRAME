@@ -14,7 +14,8 @@
 import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { drawGraph, evaluate } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate } from '@pulseframe/engine';
+import { plannedClipInput } from './audioGraph.ts';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
 
@@ -113,25 +114,17 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
     }
     return d;
   };
-  for (const tr of seq.tracks) {
-    if (tr.kind !== 'audio' || tr.muted) continue;
-    for (const c of tr.clips) {
-      if (c.type !== 'media' || c.gain <= 0 || !doc.assets[c.assetId]?.audio) continue;
-      const clipStart = T.nearestSampleIndex(c.start, rate);
-      const clipEnd = T.nearestSampleIndex(T.add(c.start, c.duration), rate);
-      const s0 = Math.max(clipStart, firstSample);
-      const s1 = Math.min(clipEnd, firstSample + totalSamples);
-      if (s1 <= s0) continue;
-      stopped();
-      const buf = await decode(c.assetId);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const gain = ctx.createGain();
-      gain.gain.value = c.gain;
-      src.connect(gain).connect(ctx.destination);
-      const offset = (T.nearestSampleIndex(c.sourceIn, rate) + (s0 - clipStart)) / rate;
-      src.start((s0 - firstSample) / rate, offset, (s1 - s0) / rate);
-    }
+  // Same audio plan as the server export and the preview: gain, pan, fades and ducking mean the same thing on every route.
+  for (const c of audioPlan(doc).clips) {
+    const s0 = Math.max(c.at, firstSample);
+    const s1 = Math.min(c.at + c.length, firstSample + totalSamples);
+    if (s1 <= s0) continue;
+    stopped();
+    const buf = await decode(c.assetId);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(plannedClipInput(ctx, c, rate, ctx.destination, (c.at - firstSample) / rate, s0 - c.at));
+    src.start((s0 - firstSample) / rate, (c.source + (s0 - c.at)) / rate, (s1 - s0) / rate);
   }
   stopped();
   return ctx.startRendering();

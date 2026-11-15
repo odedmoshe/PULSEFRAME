@@ -7,7 +7,8 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type ProjectDocument } from '@pulseframe/core';
-import { captionCues } from '@pulseframe/engine';
+import { audioPlan, captionCues } from '@pulseframe/engine';
+import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
@@ -16,6 +17,7 @@ import type { Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
 import { detectSilences } from './analysis.ts';
+import { makeSfx, SFX } from './sfx.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import type { Presence } from './presence.ts';
@@ -60,6 +62,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
 
   app.onError((e, c) => {
     if (e instanceof ApiError) return c.json(e.toJSON(), e.status as any);
+    // The client went away while sending its request body (e.g. the render worker was stopped by a cancel). Not a server fault.
+    if ((e as { code?: string }).code === 'ECONNRESET') return c.json({ error: { code: 'client_disconnected', message: 'the client closed the connection before the request was complete' } }, 400);
     console.error(e);
     return c.json({ error: { code: 'internal_error', message: 'unexpected server error' } }, 500);
   });
@@ -165,6 +169,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     return c.json(await findSilences(store, c.req.param('id'), await body(c, SilenceBody)));
   });
+  app.post('/api/v1/projects/:id/analysis/loudness', async (c) => { need(c, 'observe'); return c.json(await programmeLoudness(store, c.req.param('id'))); });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
 
   // ----- edits: one command path for UI, REST and (via store.commit) MCP -----
@@ -309,6 +314,13 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // Thumbnails, waveform peaks and a proxy are produced progressively in the background; editing does not wait for them.
     derivatives.ensure(store.getProject(projectId).doc.assets[assetId]!);
     return c.json({ assetId, revision: r.revision, deduplicated: r.results[0]!.output!.deduplicated, asset: store.getProject(projectId).doc.assets[assetId] }, 201);
+  });
+  app.post('/api/v1/projects/:id/sfx', async (c) => {
+    const p = need(c, 'edit');
+    const projectId = c.req.param('id');
+    store.getProject(projectId);
+    gov.assertMayAct(p, projectId, 'edit');
+    return c.json(await addSfx(store, gov, p, projectId, await body(c, SfxBody)), 201);
   });
   app.get('/api/v1/projects/:id/assets/:assetId/content', (c) => {
     need(c, 'observe');
@@ -457,6 +469,42 @@ export const catalog = () => ({
   ...describeCatalog(),
   captionPresets: [...CAPTION_PRESETS],
   clipMotions: CLIP_MOTIONS.filter((m) => m !== 'none'),
+  soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, source: 'synthesised by formula in this build; no third-party content' })),
   fonts: FONT_CATALOG,
   note: 'This is the complete list for this build; anything not listed here does not exist. All entries render through the same Canvas2D compositor in preview and export.',
 });
+
+/** Mix the current timeline exactly as export would and measure it (EBU R128). Read-only. */
+export async function programmeLoudness(store: Store, projectId: string) {
+  const p = store.getProject(projectId);
+  const plan = audioPlan(p.doc);
+  if (plan.totalSamples === 0 || plan.clips.length === 0) return { revision: p.revision, integratedLufs: null, truePeakDbtp: null, rangeLu: null, clips: 0, note: 'The timeline has no audible sound.' };
+  if (plan.totalSamples > plan.sampleRate * 3600) throw new ApiError(422, 'too_long', 'loudness measurement is limited to one hour of programme');
+  const raw = path.join(store.tmpDir, `loud_${projectId}_${p.revision}_${Date.now()}.f32`);
+  try {
+    const { clips, peak } = await mixToRaw(plan, (assetId) => store.blobPath(p.doc.assets[assetId]!.contentHash), 0, plan.totalSamples, raw);
+    const m = await measureLoudness(raw, plan.sampleRate);
+    const target = p.doc.settings.loudness ?? null;
+    const g = target ? normalisationGain(m, target.target, target.truePeak) : null;
+    return {
+      revision: p.revision, clips, seconds: Number((plan.totalSamples / plan.sampleRate).toFixed(3)), ...m,
+      mixPeakDbfs: peak > 0 ? Number((20 * Math.log10(peak)).toFixed(2)) : null, wouldClipWithoutNormalisation: peak > 1,
+      target, exportWouldApplyGainDb: g ? Number(g.gainDb.toFixed(2)) : 0, limitedByPeak: g?.limitedByPeak ?? false,
+      method: 'ffmpeg ebur128 (EBU R128 / ITU-R BS.1770) on the same mix export renders',
+    };
+  } finally {
+    fs.rmSync(raw, { force: true });
+  }
+}
+
+export const SfxBody = z.object({ sfxId: z.string(), start: RationalTimeSchema.optional().describe('Place it on the timeline at this frame-aligned time (omit to only add it to the media library)'), trackId: z.string().optional() }).strict();
+/** Synthesise a built-in sound effect, attach it as a normal asset, and optionally place it. Goes through governance like any edit. */
+export async function addSfx(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof SfxBody>) {
+  gov.assertMayAct(principal, projectId, 'edit'); // same rule as uploading media: needs edit rights and agents must not be paused
+  const asset = await makeSfx(store, a.sfxId, principal.actor);
+  const imp = store.commit({ projectId, actor: principal.actor, label: `Add sound ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
+  const assetId = imp.results[0]!.output!.assetId as string;
+  if (!a.start) return { assetId, revision: imp.revision, placed: null };
+  const placed = gov.commitAs(principal, { projectId, ops: [{ op: 'add_clip', args: { assetId, start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}) } }], label: `Place sound ${asset.name}` }) as { revision?: number; results?: { output?: Record<string, unknown> }[]; proposal?: unknown };
+  return { assetId, revision: placed.revision ?? imp.revision, placed: placed.results?.[0]?.output ?? null, ...(placed.proposal ? { proposal: placed.proposal } : {}) };
+}

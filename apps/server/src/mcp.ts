@@ -14,7 +14,7 @@ import { ExportOptionsSchema, type Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import type { Presence } from './presence.ts';
 import { describeMoment } from '@pulseframe/engine';
-import { catalog, exportCaptions, findSilences, jobView, SilenceBody } from './http.ts';
+import { addSfx, catalog, exportCaptions, findSilences, jobView, programmeLoudness, SfxBody, SilenceBody } from './http.ts';
 import { ApiError, type Store } from './store.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
@@ -78,6 +78,8 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     server.registerTool('export_captions', { description: 'A caption track as it plays on the timeline, as SRT, WebVTT or ASS text (frame-snapped; words that were cut out are omitted).', inputSchema: z.object({ projectId: pid, trackId: z.string().optional(), format: z.enum(['srt', 'vtt', 'ass']).optional() }), annotations: ro }, ({ projectId, trackId, format }) =>
       run('observe', () => { const p = read(projectId); const o = exportCaptions(p.doc, trackId, format ?? 'srt'); return { revision: p.revision, format: o.format, trackId: o.trackId, cues: o.cues, text: o.text }; }));
     server.registerTool('list_catalog', { description: 'Every effect (with parameter schema and defaults), transition, blend mode, mask shape, caption preset, clip motion and font available in this build. Use the ids with add_effect, set_transition, set_clip_blend, set_clip_mask, animate_clip, set_caption_style, update_text.', inputSchema: z.object({}), annotations: ro }, () => run('observe', () => catalog()));
+    server.registerTool('add_sound_effect', { description: 'Add one of the built-in synthesised sound effects (see list_catalog → soundEffects) to the project as a normal audio asset, and optionally place it on the timeline at a frame-aligned time.', inputSchema: z.object({ projectId: pid, ...SfxBody.shape }) }, ({ projectId, ...a }) => run('edit', () => { read(projectId); return addSfx(store, gov, principal, projectId, a); }));
+    server.registerTool('measure_loudness', { description: 'Mix the current timeline exactly as export would and measure it: integrated loudness (LUFS), true peak, loudness range, whether it would clip, and the gain export would apply for the project loudness target. Use after changing volumes, fades or ducking.', inputSchema: z.object({ projectId: pid }), annotations: ro }, ({ projectId }) => run('observe', () => { read(projectId); return programmeLoudness(store, projectId); }));
     server.registerTool('find_silences', { description: 'Measure silent stretches in a media asset and return the timeline cuts that would remove them (with the ops to apply). Read-only: review the candidates, then apply the returned ops in one apply_transaction with expectedRevision, or propose them.', inputSchema: z.object({ projectId: pid, ...SilenceBody.shape }), annotations: ro }, ({ projectId, ...a }) =>
       run('observe', () => { read(projectId); return findSilences(store, projectId, a); }));
     server.registerTool('render_contact_sheet', { description: 'Render several exact frames of the current revision as small stills (same compositor as export) to inspect an edit at a glance. At most 12 frames per call; each image is labelled with its frame index in the text part.', inputSchema: z.object({ projectId: pid, frames: z.array(z.number().int().min(0)).min(1).max(12) }), annotations: ro }, ({ projectId, frames }) =>

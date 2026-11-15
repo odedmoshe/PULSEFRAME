@@ -15,6 +15,8 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { findEffect, findFont, FONT_CATALOG, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
+import { audioPlan } from '@pulseframe/engine';
+import { renderMix, type MixResult } from './audiomix.ts';
 import { ffprobe } from './ingest.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
@@ -224,31 +226,9 @@ export class Exporter {
     if (s.jobId) this.store.updateJob(s.jobId, { stage: `rendering ${s.nextFrame}/${s.totalFrames}` });
   }
 
-  /** Sample-exact audio mix of the snapshot as a WAV file (separate stream from video). */
-  private async renderAudio(doc: ProjectDocument, firstSample: number, totalSamples: number, outFile: string) {
-    const sr = doc.settings.sampleRate;
-    const seq = doc.sequences[doc.mainSequenceId]!;
-    const clips = seq.tracks.filter((t) => t.kind === 'audio' && !t.muted).flatMap((t) => t.clips).filter((c) => c.type === 'media' && c.gain > 0 && doc.assets[c.assetId]?.audio);
-    const args = ['-hide_banner', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe'];
-    const filters: string[] = [];
-    clips.forEach((c, i) => {
-      if (c.type !== 'media') return;
-      args.push('-i', this.store.blobPath(doc.assets[c.assetId]!.contentHash));
-      // Positions are rounded from absolute times, never accumulated (SPEC §5).
-      const at = T.nearestSampleIndex(c.start, sr);
-      const len = T.nearestSampleIndex(T.add(c.start, c.duration), sr) - at;
-      const src = T.nearestSampleIndex(c.sourceIn, sr);
-      filters.push(`[${i}:a:0]aresample=${sr},aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=start_sample=${src}:end_sample=${src + len},asetpts=PTS-STARTPTS,volume=${c.gain.toFixed(6)},adelay=delays=${at}S:all=1[c${i}]`);
-    });
-    // Mix on the full timeline, then cut the exported range by absolute sample positions.
-    const endSample = firstSample + totalSamples;
-    const tail = `apad=whole_len=${endSample},atrim=start_sample=${firstSample}:end_sample=${endSample},asetpts=PTS-STARTPTS[out]`;
-    if (clips.length === 0) filters.push(`anullsrc=r=${sr}:cl=stereo,atrim=end_sample=${totalSamples}[out]`);
-    else if (clips.length === 1) filters.push(`[c0]${tail}`);
-    else filters.push(`${clips.map((_, i) => `[c${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,${tail}`);
-    args.push('-filter_complex', filters.join(';'), '-map', '[out]', '-ar', String(sr), '-ac', '2', '-c:a', 'pcm_s16le', '-f', 'wav', outFile);
-    await exec('ffmpeg', args, { timeout: 600_000, maxBuffer: 8 << 20 });
-    return clips.length;
+  /** Sample-exact audio mix of the snapshot as a WAV file (separate stream from video), following the shared audio plan. */
+  private renderAudio(doc: ProjectDocument, firstSample: number, totalSamples: number, outFile: string, isCanceled: () => boolean) {
+    return renderMix(audioPlan(doc), (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled);
   }
 
   private async run(jobId: string) {
@@ -280,6 +260,7 @@ export class Exporter {
       const firstSample = T.nearestSampleIndex(T.frameTime(output.firstFrame, frameRate), sampleRate);
       const totalSamples = T.nearestSampleIndex(T.frameTime(output.firstFrame + output.frames, frameRate), sampleRate) - firstSample;
       let audioClips = 0;
+      let audioMix: MixResult | null = null;
       let renderStageMs: unknown = null;
       let validation: Record<string, unknown>;
 
@@ -292,7 +273,8 @@ export class Exporter {
       } else {
         const wav = options.format === 'wav' ? partial : path.join(work, 'mix.wav');
         this.store.updateJob(jobId, { stage: 'rendering audio' });
-        audioClips = await this.renderAudio(doc, firstSample, totalSamples, wav);
+        audioMix = await this.renderAudio(doc, firstSample, totalSamples, wav, canceled);
+        audioClips = audioMix.clips;
         if (canceled()) throw new Error('canceled');
         if (options.format === 'wav') {
           const p = await ffprobe(partial);
@@ -350,7 +332,7 @@ export class Exporter {
         status: 'succeeded', stage: null,
         output: {
           file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', wav: 'audio/wav', png: 'image/png' }[ext], bytes, revision: job.input.revision, route: 'server-software-canvas2d', options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output },
-          estimate: { ...manifest.estimate, actualBytes: bytes }, audioClipsMixed: audioClips, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
+          estimate: { ...manifest.estimate, actualBytes: bytes }, audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });
     } catch (e: any) {

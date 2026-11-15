@@ -1,0 +1,223 @@
+{
+  "ranAt": "2026-11-15T00:22:56.066Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Synthetic sine signals. Real speech/music, perceptual quality, EQ/dynamics, SFX, recording and voice providers are not exercised.",
+  "measurements": {
+    "longMix": {
+      "seconds": 320,
+      "clips": 40,
+      "wallMs": 6602,
+      "realtimeFactor": 48.4702,
+      "serverRssGrowthMb": 232,
+      "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
+    },
+    "browserAudioChain": {
+      "samples": 60000,
+      "maxAbsError": 6.854534149169922e-7,
+      "worstSample": 44542,
+      "maxAbsErrorMidClipStart": 6.854534149169922e-7
+    }
+  },
+  "passed": 17,
+  "total": 17,
+  "checks": [
+    {
+      "name": "baseline: exported amplitude equals the source amplitude (0.5) on both channels, exact length",
+      "ok": true,
+      "detail": {
+        "amplitude": 0.5,
+        "samples": 384000
+      }
+    },
+    {
+      "name": "track gain 0.5 lowers the level by 6.02 dB",
+      "ok": true,
+      "detail": {
+        "changeDb": -6.0206
+      }
+    },
+    {
+      "name": "pan: fully left silences the right channel and keeps the left; pan +0.5 halves the left and keeps the right",
+      "ok": true,
+      "detail": {
+        "left": [
+          0.5,
+          0
+        ],
+        "right": [
+          0.25,
+          0.5
+        ]
+      }
+    },
+    {
+      "name": "fades are linear: 1 s fade-in and 2 s fade-out measured at 8 points, each within 1% of the expected gain; first and last samples are silent",
+      "ok": true,
+      "detail": {
+        "maxError": 0,
+        "measured": [
+          0.25,
+          0.5,
+          0.75,
+          1,
+          1,
+          0.75,
+          0.5,
+          0.25
+        ]
+      }
+    },
+    {
+      "name": "ducking: music is exactly 12 dB down while the phrase is spoken, the 100 ms attack ends when speech starts, the 300 ms release starts when it ends (9 points within 1.5%); the voice itself is untouched",
+      "ok": true,
+      "detail": {
+        "maxError": 0,
+        "duckedDb": -12.0001,
+        "measured": [
+          1,
+          1,
+          0.6256,
+          0.2512,
+          0.2512,
+          0.2512,
+          0.6256,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "name": "ducking follows the edit: moving the voice 2 s later moves the dip; muting the voice track removes it",
+      "ok": true,
+      "detail": {
+        "at3s": 1,
+        "at5s": 0.2512
+      }
+    },
+    {
+      "name": "loudness target -16 LUFS: export measures the mix, applies one static gain, and an independent measurement of the exported file is within 0.2 LU of the target with true peak under the ceiling",
+      "ok": true,
+      "detail": {
+        "before": -7.7,
+        "appliedGainDb": -8.3,
+        "exported": {
+          "lufs": -16,
+          "peak": -14.3
+        }
+      }
+    },
+    {
+      "name": "loudness sense reports the same measurement and the gain export will apply, without editing",
+      "ok": true,
+      "detail": {
+        "integratedLufs": -7.7,
+        "truePeakDbtp": -6,
+        "rangeLu": 3.1,
+        "exportWouldApplyGainDb": -8.3
+      }
+    },
+    {
+      "name": "an unreachable target is limited by the true-peak ceiling instead of clipping: reported as such, and the exported peak stays at or under the -9 dBTP ceiling",
+      "ok": true,
+      "detail": {
+        "appliedGainDb": -3,
+        "exported": {
+          "lufs": -10.7,
+          "peak": -9
+        }
+      }
+    },
+    {
+      "name": "without a target, a mix that exceeds full scale is reported as clipped with its peak",
+      "ok": true,
+      "detail": {
+        "mixPeakDbfs": 6.02,
+        "clipped": true,
+        "loudness": null
+      }
+    },
+    {
+      "name": "browser export refuses a project with a loudness target (it cannot measure) and says to use the server route; undo restores the previous setting",
+      "ok": true,
+      "detail": "this project has a loudness target; the browser export route cannot measure and normalise loudness"
+    },
+    {
+      "name": "320 s mix of 40 back-to-back clips: exact length, and the tone is continuous across every one of the 39 joins (no gap, overlap or drift)",
+      "ok": true,
+      "detail": {
+        "seconds": 320,
+        "clips": 40,
+        "wallMs": 6602,
+        "realtimeFactor": 48.4702,
+        "serverRssGrowthMb": 232,
+        "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
+      }
+    },
+    {
+      "name": "in real WebAudio, gain + fades + ducking + balance from the shared plan match the reference mixer to better than 1e-4 of full scale, also when playback starts in the middle of a clip",
+      "ok": true,
+      "detail": {
+        "samples": 60000,
+        "maxAbsError": 6.854534149169922e-7,
+        "worstSample": 44542,
+        "maxAbsErrorMidClipStart": 6.854534149169922e-7
+      }
+    },
+    {
+      "name": "all 7 built-in sounds are synthesised, stored as content-addressed audio assets with their recipe in provenance, placed as clips, audible in the export at their positions and silent elsewhere; adding the same sound twice reuses the asset",
+      "ok": true,
+      "detail": {
+        "ids": [
+          "sfx.click",
+          "sfx.pop",
+          "sfx.beep",
+          "sfx.ding",
+          "sfx.impact",
+          "sfx.whoosh",
+          "sfx.riser"
+        ],
+        "heard": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    },
+    {
+      "name": "an unknown sound is refused with the list of available ones",
+      "ok": true
+    },
+    {
+      "name": "editor Sound tab: volume in dB, mute, ducking source, loudness target, measured loudness shown, fade-in on the selected clip — each lands in the document; no page errors",
+      "ok": true,
+      "detail": {
+        "gainOk": true,
+        "muteOk": true,
+        "duckOk": true,
+        "targetOk": true,
+        "shownLufs": -12.7,
+        "apiLufs": -12.7,
+        "fadeOk": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "agent measures loudness, turns ducking off, measures again and sees the programme get louder",
+      "ok": true,
+      "detail": {
+        "before": -12.8,
+        "after": -11.8
+      }
+    }
+  ]
+}

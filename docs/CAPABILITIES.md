@@ -74,7 +74,11 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Speech recognition, forced alignment, filler detection, translation | not built | Blocked on B-7 |
 | Look system: 12 effects, 17 blend modes, rect/ellipse masks (feather, invert), 12 transitions, one Canvas2D implementation for preview and export | tested | `docs/evidence/phase7-proof.json` (30 checks, pixel arithmetic), `effects.test.ts`, `look.test.ts`; `/lab.html`. One synthetic fixture; 1080p+ cost unmeasured |
 | Catalog discovery (`GET /api/v1/catalog`, MCP `list_catalog`) and generated effect inspectors | tested | `phase7-proof.json` |
-| GPU compositor, shader effect families, keying, keyframed effect parameters, speed ramps, audio DSP, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
+| Sound: track gain/pan/mute, clip fades, speech ducking, one audio plan shared by server export, preview and browser export | tested (synthetic signals) | `docs/evidence/phase8-proof.json` (17 checks), `audio.test.ts`, `/selftest.html`. Live preview of fades/ducking not measured |
+| Loudness: EBU R128 measurement and static-gain normalisation with true-peak ceiling (server export only) | tested (synthetic) | `phase8-proof.json`: −16.0 LUFS for a −16 target; ceiling respected. No compressor/limiter |
+| Built-in synthesised sound effects (7) as real assets | tested | `phase8-proof.json` |
+| Narration, TTS, voice cloning, EQ/dynamics, noise reduction, recording | not built | Voice blocked on B-8 |
+| GPU compositor, shader effect families, keying, keyframed effect parameters, speed ramps, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface
 

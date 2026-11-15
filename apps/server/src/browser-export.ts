@@ -133,6 +133,8 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     const projectId = c.req.param('id')!;
     const { doc, revision } = store.getProject(projectId);
     const { manifest, blockers, warnings } = exporter.plan(doc, revision, rawOptions);
+    // Loudness normalisation needs the R128 measurement pass, which only the server route has. Refuse rather than export at a different level.
+    if (doc.settings.loudness) throw new ApiError(409, 'unsupported_in_browser_export', 'this project has a loudness target; the browser export route cannot measure and normalise loudness', { loudness: doc.settings.loudness }, 'Use the server export, or clear the loudness target.');
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, 'Fix the listed blockers (relink media, change the font or the range) and try again.');
     if (!BROWSER_FORMATS.includes(manifest.options.format)) throw new ApiError(422, 'browser_route_unsupported_format', `the browser route exports ${BROWSER_FORMATS.join(' or ')}, not ${manifest.options.format}`, { supported: BROWSER_FORMATS });
     const expiresAt = clock() + leaseMs;

@@ -7,6 +7,7 @@ import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
 import { LookPanel } from './LookPanel.tsx';
+import { SoundPanel } from './SoundPanel.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -129,7 +130,7 @@ const TRANSFORM_FIELDS: { prop: 'x' | 'y' | 'scale' | 'rotation' | 'opacity'; la
   { prop: 'opacity', label: 'transform.opacity', min: 0, max: 1, step: 0.05 },
 ];
 
-const INSPECTOR_TABS = ['clip', 'speech', 'captions', 'review', 'all'] as const;
+const INSPECTOR_TABS = ['clip', 'speech', 'captions', 'sound', 'review', 'all'] as const;
 type InspectorTab = (typeof INSPECTOR_TABS)[number];
 const TAB_KEY = 'pf.inspector.tab.v1';
 
@@ -203,6 +204,10 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       <div {...panelProps('captions')}>
         <h2>{t('captions')}</h2>
         <CaptionControls editor={editor} />
+      </div>
+      <div {...panelProps('sound')}>
+        <h2>{t('inspector.tab.sound')}</h2>
+        <SoundPanel />
       </div>
       <div {...panelProps('review')}>
       <h2>{t('proposals')}</h2>
