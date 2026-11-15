@@ -25,7 +25,7 @@ const W = 640, H = 360;
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
 
-interface Case { name: string; file: string; make: string[] | null; picture: boolean; sound: number[] | null; note?: string; /** Seconds by which the file's own sound is ahead (−) or behind (+) its picture, by construction. */ skew?: number; /** The file does not say how its colours are encoded, so readers legitimately disagree; a colour difference is reported, not failed. */ ambiguousColour?: boolean; /** Notices the editor's library must show for this file (default: none). */ notices?: string[] }
+interface Case { name: string; /** The picture stream is shorter than the sound: after it ends the last picture must be held to the end of the clip. */ shortPicture?: boolean; file: string; make: string[] | null; picture: boolean; sound: number[] | null; note?: string; /** Seconds by which the file's own sound is ahead (−) or behind (+) its picture, by construction. */ skew?: number; /** The file does not say how its colours are encoded, so readers legitimately disagree; a colour difference is reported, not failed. */ ambiguousColour?: boolean; /** Notices the editor's library must show for this file (default: none). */ notices?: string[] }
 
 async function main() {
   fs.rmSync(art, { recursive: true, force: true });
@@ -42,6 +42,7 @@ async function main() {
     { name: 'mp3 in MP4', file: p('a-mp3.mp4'), make: ['-i', base, ...V, ...A, '-c:a', 'libmp3lame', '-b:a', '160k'], picture: true, sound: BEEPS },
     { name: 'no sound stream', file: p('a-none.mp4'), make: ['-i', base, ...V, '-an'], picture: true, sound: [] },
     { name: 'sound 2 s shorter than picture', file: p('a-short.mp4'), make: ['-i', base, ...V, ...A, '-c:a', 'aac', '-t', '4', '-af', 'atrim=0:2'], picture: true, sound: [0, 1] },
+    { name: 'picture 2 s shorter than sound', file: p('a-long.mp4'), make: ['-t', '2', '-i', base, '-i', base, '-map', '0:v', '-map', '1:a', '-c', 'copy'], picture: true, sound: BEEPS, shortPicture: true, note: 'the picture stream ends 2 s before the sound: the last picture is held while the sound continues' },
     { name: 'sound starts 0.1 s before time 0 (negative start)', file: p('a-neg.mkv'), make: ['-i', base, '-itsoffset', '-0.1', '-i', base, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-avoid_negative_ts', 'disabled'], picture: true, sound: [0.9, 1.9, 2.9], skew: -0.1, note: 'built with its sound 0.1 s ahead of its picture, so its first beep lies before time 0 and is not presented; the export must keep exactly that relation', notices: ['sound-offset'] },
     // --- containers (same streams)
     { name: 'MOV container', file: p('c.mov'), make: ['-i', base, '-c', 'copy'], picture: true, sound: BEEPS },
@@ -144,7 +145,7 @@ async function main() {
         // the export may be a frame or two shorter or longer than the reference at the very end (container duration rounding), never elsewhere
         // colour: the plain background of four source frames with different hues, export vs a direct decode of the input
         const diffs: number[] = [];
-        for (const code of [10, 45, 70, 100]) {
+        for (const code of c.shortPicture ? [10, 25, 45, 58] : [10, 45, 70, 100]) {
           const at = shown.indexOf(code), want = ref.colourOf(code);
           if (at < 0 || !want) continue;
           const got = pixelAt(raw, at);
@@ -155,6 +156,13 @@ async function main() {
         else if (Math.max(...diffs) > 12) { if (c.ambiguousColour) row.noted = `the file carries no colour tags: shown as the browser reads it, ${Math.max(...diffs)} of 255 away from the BT.601 reading used by the reference`; else problems.push('colour'); }
         const earlyOnly = bad.length > 0 && bad.length <= 2 && bad.every((i) => i < 5);
         if (earlyOnly && row.asset.conformed) row.noted = `conformed copy differs from the reference in ${bad.length} of the first 5 frames (which early frame is repeated): export ${JSON.stringify(shown.slice(0, 4))}, reference ${JSON.stringify(truth.slice(0, 4))}`;
+        else if (c.shortPicture) {
+          // the reference covers only the frames the file has; after them the export must hold the last picture up to the end of the sound
+          const tail = shown.slice(truth.length);
+          row.picture.tail = { frames: tail.length, distinct: [...new Set(tail)], lastReference: truth[truth.length - 1] };
+          const expectFrames = Math.round(clipSeconds * 30);
+          if (bad.length || n < 50 || Math.abs(shown.length - expectFrames) > 2 || tail.length < 50 || tail.some((x) => x !== truth[truth.length - 1])) problems.push('picture');
+        }
         else if (bad.length || Math.abs(shown.length - truth.length) > 2 || n < 100) problems.push('picture');
       }
       {
@@ -191,7 +199,9 @@ async function main() {
   const page = context ? await context.newPage() : null;
   if (page) { await page.goto(`${s.url}/browser-export.html?key=${s.auth.tokens.owner}`); await page.evaluate(() => (window as any).__pfBrowserExport.ready); }
   try {
+    const only = process.env.PF_MATRIX_ONLY ? new RegExp(process.env.PF_MATRIX_ONLY, 'i') : null; // development aid: run the matching cases only (the checks then fail on the count, by design)
     for (const c of cases) {
+      if (only && !only.test(c.name)) continue;
       const row: any = { case: c.name };
       rows.push(row);
       const made = c.make ? ffq([...c.make, c.file]) : null;
@@ -246,7 +256,7 @@ async function main() {
               await ep.waitForFunction((t) => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, target, { timeout: 15000 }).catch(() => {});
               const shot = await ep.evaluate(() => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; return { w: cv.width, data: Array.from(cv.getContext('2d')!.getImageData(0, Math.round(cv.height / 12), cv.width, 1).data.filter((_, i) => i % 4 !== 3)) }; });
               seen[target] = readBarcode(Uint8Array.from(shot.data), shot.w, 3, { x: 0, y: 0, w: shot.w, h: 0 });
-              want[target] = ref[target]!;
+              want[target] = ref[Math.min(target, ref.length - 1)]!; // past the end of a short picture stream the last picture is held
             }
             rp.frames = { seen, reference: want };
             const wrong = Object.keys(want).filter((k) => seen[Number(k)] !== want[Number(k)]);

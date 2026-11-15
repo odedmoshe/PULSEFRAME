@@ -135,6 +135,14 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
     const startFrames = startTime ? startOffsetFrames({ frameRate: rate, startTime }) : 0;
     // Exact duration from frame count when the container states it (plus the frames the picture starts late); otherwise the decimal container duration.
     if (frameCount) duration = T.frameTime(frameCount + Math.max(0, startFrames), rate);
+    // Sound that runs on after the last picture (by a whole frame or more) is part of the file: the asset is as long as its sound,
+    // in whole frames, and the last picture is held under it (as players do). Without this the tail of the sound was silently dropped.
+    if (frameCount && a) {
+      const aLen = Number(a.duration);
+      const soundEnd = Number.isFinite(aLen) && aLen > 0 ? Number(a.start_time ?? 0) - origin + aLen : Number(probe.format?.duration ?? 0);
+      const soundFrames = Math.floor((soundEnd * rate.num) / rate.den + 1e-6);
+      if (Number.isFinite(soundFrames) && soundFrames > frameCount + Math.max(0, startFrames)) duration = T.frameTime(soundFrames, rate);
+    }
     // No statement of how colours are encoded (matrix). Decoders then guess, and they do not all guess alike.
     const untagged = !v.color_space || v.color_space === 'unknown';
     video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount, ...(startTime ? { startTime } : {}), ...(untagged ? { untaggedColour: true as const } : {}) };

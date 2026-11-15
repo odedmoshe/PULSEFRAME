@@ -27,6 +27,24 @@ describe('conform route (SPEC §7)', () => {
     expect(a.conform).toBeUndefined();
     expect(a.video).toMatchObject({ codec: 'h264', frameCount: 60, rotation: 0 });
   });
+  it('sound that runs on after the last picture is kept: the asset is as long as its sound in whole frames; a file whose sound ends with its picture is unchanged', async () => {
+    const a0 = await upload(base); // 60 frames at 30 fps with 2 s of sound
+    expect(Number(a0.duration.value) / a0.duration.timescale).toBe(2);
+    const longSound = path.join(dir, 'long-sound.mp4');
+    ff(['-t', '1', '-i', base, '-i', base, '-map', '0:v', '-map', '1:a', '-c', 'copy', longSound]); // picture cut to about 1 s, sound 2 s
+    const a = await upload(longSound);
+    expect(a.conform).toBeUndefined();
+    const frames = a.video!.frameCount!;
+    expect(frames).toBeGreaterThan(25); expect(frames).toBeLessThan(36); // the picture stream itself is still about 1 s
+    const seconds = Number(a.duration.value) / a.duration.timescale;
+    expect(seconds).toBeGreaterThan(1.9); expect(seconds).toBeLessThanOrEqual(2.05);
+    expect(Number.isInteger(Number((seconds * 30).toFixed(6)))).toBe(true); // whole frames
+    // the other way round (sound shorter than the picture) keeps the picture length
+    const shortSound = path.join(dir, 'short-sound.mp4');
+    ff(['-i', base, '-map', '0:v', '-c:v', 'copy', '-map', '0:a', '-c:a', 'aac', '-af', 'atrim=0:1', shortSound]);
+    const b = await upload(shortSound);
+    expect(Number(b.duration.value) / b.duration.timescale).toBe(2);
+  }, 60_000);
   it('rotation metadata: conformed upright with swapped dimensions; original bytes kept; frames map 1:1', async () => {
     const rot = path.join(dir, 'rot.mp4');
     ff(['-display_rotation', '90', '-i', base, '-c', 'copy', rot]);
