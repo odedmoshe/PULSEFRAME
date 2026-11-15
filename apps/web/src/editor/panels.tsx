@@ -11,7 +11,7 @@ import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
-import { ProjectsDialog } from './ProjectsDialog.tsx';
+import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
@@ -247,7 +247,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     document.getElementById(`inspector-tab-${INSPECTOR_TABS[n]}`)?.focus();
   };
   const show = (id: InspectorTab) => tab === 'all' || tab === id;
-  const open = state.proposals.length;
+  const open = state.proposals.length + state.approvals.length;
   const panelProps = (id: Exclude<InspectorTab, 'all'>) => ({
     role: 'tabpanel' as const,
     id: `inspector-panel-${id}`,
@@ -320,6 +320,30 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
             </li>
           ))}
         </ul>
+      )}
+      {state.approvals.length > 0 && (
+        <>
+          <h2>{t('approvals')}</h2>
+          <ul className="proposals" data-testid="approvals">
+            {state.approvals.map((a) => (
+              <li key={a.id} data-approval-id={a.id}>
+                <span className="muted">{t('proposal.from')} <bdi>{a.requestedBy}</bdi></span>
+                {a.kind === 'model-download' ? (
+                  <>
+                    <strong>{t('approval.modelDownload')}: <bdi dir="ltr">{a.action.capabilityId}</bdi></strong>
+                    <span data-testid="approval-size">{t('approval.size')}: <bdi dir="ltr">{formatBytes(a.action.bytes ?? 0)}</bdi> · {(a.action.models ?? []).length} {t('storage.files')}</span>
+                    <span className="muted" dir="ltr">{(a.action.models ?? []).map((m) => m.path).join(', ')}</span>
+                  </>
+                ) : <strong><bdi dir="ltr">{a.kind}</bdi></strong>}
+                <span className="muted">{t('approval.expires')}: <bdi dir="ltr">{new Date(a.expiresAt).toLocaleTimeString()}</bdi></span>
+                <span className="row">
+                  <button className="primary" onClick={() => void editor.decideApproval(a.id, 'approve')} data-testid="approval-approve">{t('approval.approve')}</button>
+                  <button className="ghost" onClick={() => void editor.decideApproval(a.id, 'reject')} data-testid="approval-reject">{t('proposal.reject')}</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       <h2>{t('activity')}</h2>
       <label className="check"><input type="checkbox" checked={state.followAgent} onChange={(e) => editor.set({ followAgent: e.target.checked })} data-testid="follow-agent" /> {t('follow.agent')}</label>

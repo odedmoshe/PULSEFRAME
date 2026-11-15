@@ -223,6 +223,19 @@ async function main() {
     const reApprove = await rest(`/projects/${pid}/approvals/${ask.body.approval?.id}/approve`, {});
     const direct = await rest(`/projects/${pid}/capabilities/comfy.image.remove-background/models/download`, { confirmBytes: 444473596 }, bearer(editor.token));
     check('approvals: an agent can request a model download but cannot approve it or start it; a rejected request cannot be reused', ask.status === 201 && ask.body.approval.status === 'pending' && ask.body.approval.action.bytes === 444473596 && selfApprove.status === 403 && rejected.body.approval.status === 'rejected' && reApprove.status === 409 && direct.status === 403, { action: ask.body.approval?.action?.bytes });
+    // The same in the editor: the owner sees the request with its size and decides there.
+    const ask2 = await rest(`/projects/${pid}/capabilities/comfy.image.remove-background/models/request`, {}, bearer(editor.token));
+    const item = page.locator(`[data-approval-id="${ask2.body.approval?.id}"]`);
+    await item.waitFor({ timeout: 10000 });
+    const sizeText = (await item.getByTestId('approval-size').textContent()) ?? '';
+    const itemText = (await item.textContent()) ?? '';
+    await item.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(root, 'docs/evidence/phase5-approval-request-he.png') });
+    await item.getByTestId('approval-reject').click();
+    await item.waitFor({ state: 'detached', timeout: 10000 });
+    const afterUi = (await rest(`/projects/${pid}/approvals`)).body.approvals.find((a: any) => a.id === ask2.body.approval?.id);
+    const noJob = (s.store.db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE project_id = ? AND type LIKE '%download%'").get(pid) as { n: number }).n;
+    check('the editor lists an agent\'s model-download request with the capability, the download size and who asked; rejecting it there closes the request and starts no download', /423\.9 MB/.test(sizeText) && /comfy\.image\.remove-background/.test(itemText) && afterUi?.status === 'rejected' && noJob === 0, { sizeText, status: afterUi?.status, noJob });
     // Project-limited grants and jobs addressed by id.
     const upOther: any = await (await fetch(`${origin}/api/v1/projects/${other}/assets`, { method: 'POST', headers: { ...owner, 'x-filename': 'fixture.mp4', connection: 'close' }, body: fs.readFileSync(fixture.file) })).json();
     await rest(`/projects/${other}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: upOther.assetId, start: f(0) } }] });

@@ -244,6 +244,7 @@ export class Governance {
     const a = this.getApproval(id);
     if (a.status !== 'pending') throw new ApiError(409, 'approval_closed', `approval is ${a.status}`, { status: a.status });
     this.store.db.prepare("UPDATE approvals SET status = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'pending'").run(decision === 'approve' ? 'approved' : 'rejected', by.actor, now(), id);
+    this.store.events.emit('approval', { projectId: a.projectId, id, status: decision === 'approve' ? 'approved' : 'rejected' });
     return this.getApproval(id);
   }
   /** Use an approval exactly once, and only for the exact action that was approved. */

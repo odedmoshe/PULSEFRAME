@@ -8,7 +8,7 @@ import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectVariant, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { createT, dirOf, type Key, type Lang } from '@pulseframe/i18n';
-import { api, ApiFailure, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
+import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
 import { Player } from '../player.ts';
@@ -39,6 +39,8 @@ export interface EditorState {
   /** Owner control: agents may not mutate this project while true (enforced by the server). */
   agentsPaused: boolean;
   proposals: Proposal[];
+  /** Requests waiting for the owner's decision (pending only). */
+  approvals: Approval[];
   /** Timeline zoom in pixels per second. */
   pxPerSecond: number;
   /** Linked format being viewed (session state, never stored in the project). null = master. */
@@ -59,7 +61,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], viewVariantId: null, safeAreaOn: readSafeArea(), clipboard: [], cutPending: [],
+    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), clipboard: [], cutPending: [],
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -197,6 +199,9 @@ export class Editor {
     });
     const refreshProposals = () => void api.proposals(projectId).then((r) => this.set({ proposals: r.proposals })).catch(() => {});
     es.addEventListener('proposal', refreshProposals);
+    const refreshApprovals = () => void api.approvals(projectId).then((r) => this.set({ approvals: r.approvals.filter((a) => a.status === 'pending') })).catch(() => {});
+    es.addEventListener('approval', refreshApprovals);
+    refreshApprovals();
     es.addEventListener('control', (m) => this.set({ agentsPaused: !!JSON.parse((m as MessageEvent).data).agentsPaused }));
     refreshProposals();
     void api.controls(projectId).then((c) => this.set({ agentsPaused: c.agentsPaused })).catch(() => {});
@@ -306,6 +311,13 @@ export class Editor {
   }
   /** Pause Agent / Take Over: the server refuses agent mutations until the owner resumes. */
   setAgentsPaused(paused: boolean) { const d = this.state.doc; if (d) api.setPaused(d.id, paused).then((r) => this.set({ agentsPaused: r.agentsPaused })).catch(this.fail); }
+  /** The owner's decision on an agent's request. Approving a model download starts it for exactly the bytes that were shown. */
+  async decideApproval(approvalId: string, decision: 'approve' | 'reject') {
+    const d = this.state.doc;
+    if (!d) return;
+    try { await api.decideApproval(d.id, approvalId, decision); } catch (e) { this.fail(e); }
+    this.set({ approvals: (await api.approvals(d.id).catch(() => ({ approvals: this.state.approvals }))).approvals.filter((a) => a.status === 'pending') });
+  }
   async decideProposal(proposalId: string, decision: 'accept' | 'reject') {
     const d = this.state.doc;
     if (!d) return;
