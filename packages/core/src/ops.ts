@@ -491,6 +491,31 @@ defineOp({
 });
 
 defineOp({
+  name: 'slip_clip',
+  version: 1,
+  description: 'Slip a clip: keep its place and length on the timeline but show a different stretch of its source. `by` is a frame-aligned timeline amount; positive shows later source, negative earlier. Linked picture and sound slip together. Fails if the source has no material that far.',
+  args: z.object({ clipId: z.string(), by: RT, includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    assertAligned(d, a.by, 'by');
+    if (T.eq(a.by, T.ZERO)) throw new OpError('invalid_args', 'by must not be zero');
+    const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
+    for (const { clip } of targets) {
+      if (clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be slipped', { clipId: clip.id });
+      const asset = d.assets[clip.assetId]!;
+      if (asset.kind === 'image') throw new OpError('incompatible', 'a still picture has no other part to show', { clipId: clip.id });
+      const sourceIn = T.add(clip.sourceIn, toSourceSpan(clip, a.by));
+      const used = clip.freeze ? T.ZERO : toSourceSpan(clip, clip.duration);
+      const room = { earlier: toTimelineSpan(clip, clip.sourceIn), later: toTimelineSpan(clip, T.sub(T.sub(asset.duration, clip.sourceIn), used)) };
+      if (T.isNegative(sourceIn) || T.lt(asset.duration, T.add(sourceIn, used)) || (clip.freeze && !T.lt(sourceIn, asset.duration)))
+        throw new OpError('out_of_bounds', 'the source has no material that far', { clipId: clip.id, maxEarlier: room.earlier, maxLater: room.later }, 'Slip by at most maxEarlier backwards or maxLater forwards.');
+      clip.sourceIn = sourceIn;
+    }
+    return { affectedIds: targets.map((t) => t.clip.id), summary: `Slipped clip by ${fmt(a.by)}`, output: { sourceIn: (f.clip as Extract<Clip, { type: 'media' }>).sourceIn } };
+  },
+});
+
+defineOp({
   name: 'split_clip',
   version: 1,
   description: 'Split a clip at a frame-aligned timeline time strictly inside it. Linked clips are split too and the right-hand halves stay linked to each other.',

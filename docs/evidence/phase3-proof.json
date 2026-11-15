@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T10:00:17.082Z",
+  "ranAt": "2026-11-15T10:02:34.212Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -250,6 +250,23 @@
         "revisions": [
           17,
           18
+        ]
+      }
+    },
+    {
+      "name": "slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged",
+      "ok": true,
+      "detail": {
+        "slipShown": [
+          39,
+          73,
+          82,
+          110
+        ],
+        "sourceIn": 73,
+        "revisions": [
+          18,
+          22
         ]
       }
     },

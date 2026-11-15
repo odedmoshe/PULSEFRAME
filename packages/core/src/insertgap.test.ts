@@ -109,3 +109,34 @@ describe('insert_gap (ripple insert) and markers under ripple edits', () => {
     expect(far.sequences).toEqual(doc.sequences);
   });
 });
+
+describe('slip_clip', () => {
+  it('shows a different stretch of the source without moving or resizing the clip; linked sound follows; limits are the ends of the source', () => {
+    const { doc, videoId, audioId, titleId } = project(); // 240-frame source
+    let d = tx(doc, [{ op: 'trim_clip', args: { clipId: videoId, edge: 'start', to: f(60) } }, { op: 'trim_clip', args: { clipId: videoId, edge: 'end', to: f(160) } }]).doc; // shows source 60..159 at 60..159
+    const v = () => findClip(d, videoId)!.clip as any, a = () => findClip(d, audioId)!.clip as any;
+    expect([fi(v().start), fi(v().duration), fi(v().sourceIn), fi(a().sourceIn)]).toEqual([60, 100, 60, 60]);
+    d = tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: f(25) } }]).doc;
+    expect([fi(v().start), fi(v().duration), fi(v().sourceIn), fi(a().start), fi(a().duration), fi(a().sourceIn)]).toEqual([60, 100, 85, 60, 100, 85]);
+    expect(fi(sourceAt(v(), f(60)))).toBe(85);
+    d = tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: T.sub(T.ZERO, f(85)) } }]).doc; // back to the very start of the source
+    expect(fi(v().sourceIn)).toBe(0);
+    expect(code(() => tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: T.sub(T.ZERO, f(1)) } }]))).toBe('out_of_bounds');
+    d = tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: f(140) } }]).doc; // the last 100 frames of the source
+    expect(fi(v().sourceIn)).toBe(140);
+    expect(code(() => tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: f(1) } }]))).toBe('out_of_bounds');
+    // picture only
+    d = tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: T.sub(T.ZERO, f(10)), includeLinked: false } }]).doc;
+    expect([fi(v().sourceIn), fi(a().sourceIn)]).toEqual([130, 140]);
+    // at double speed 10 timeline frames are 20 source frames
+    d = tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: T.sub(T.ZERO, f(100)) } }]).doc; // picture 30, sound 40
+    d = tx(d, [{ op: 'set_clip_speed', args: { clipId: videoId, speed: 2 } }]).doc;
+    const before = fi(v().sourceIn);
+    d = tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: f(10) } }]).doc;
+    expect(fi(v().sourceIn) - before).toBe(20);
+    expect(validateProject(d)).toEqual([]);
+    expect(code(() => tx(d, [{ op: 'slip_clip', args: { clipId: titleId, by: f(5) } }]))).toBe('incompatible');
+    expect(code(() => tx(d, [{ op: 'slip_clip', args: { clipId: videoId, by: f(0) } }]))).toBe('invalid_args');
+    expect(code(() => tx(d, [{ op: 'slip_clip', args: { clipId: 'clp_none', by: f(5) } }]))).toBe('not_found');
+  });
+});

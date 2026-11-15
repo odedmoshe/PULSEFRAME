@@ -350,6 +350,18 @@ async function main() {
     const oShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10), await stillCode(atFrame + 19), await stillCode(atFrame + 20)];
     const overlaps = oa.project.sequences.seq_main!.tracks.some((tr) => [...tr.clips].sort((a, b) => T.cmp(a.start, b.start)).some((c, i, arr) => i > 0 && T.lt(c.start, T.add(arr[i - 1]!.start, arr[i - 1]!.duration))));
     check('"overwrite at the playhead" replaces exactly the range\'s length on the picture and sound tracks in one transaction: the timeline keeps its length, nothing later moves, and it shows the new frames 60–69 followed by what was already there (110–119, then the continuation)', oa.revision === ob.revision + 1 && endOf(oa.project) === endOf(ob.project) && !overlaps && JSON.stringify(oShown) === JSON.stringify([30 + k - 1, 60, 69, 110, 119, 30 + k]), { oShown, lengths: [endOf(ob.project), endOf(oa.project)], overlaps, revisions: [ob.revision, oa.revision] });
+
+    console.log('\n# slip');
+    const sb = await getDoc();
+    const slipClip = sb.project.sequences.seq_main!.tracks.filter((tr) => tr.kind === 'video').flatMap((tr) => tr.clips).find((c) => T.frameIndexAt(c.start, R) === atFrame)!;
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    for (let i = 0; i < 3; i++) await key('Control+Alt+ArrowRight');
+    await key('Control+Alt+Shift+ArrowRight');
+    let sa = await getDoc();
+    for (let i = 0; i < 50 && sa.revision < sb.revision + 4; i++) { await new Promise((r) => setTimeout(r, 100)); sa = await getDoc(); }
+    const slipped = sa.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === slipClip.id) as any;
+    const slipShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    check('slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged', sa.revision === sb.revision + 4 && T.eq(slipped.start, slipClip.start) && T.eq(slipped.duration, slipClip.duration) && T.frameIndexAt(slipped.sourceIn, R) === 73 && JSON.stringify(slipShown) === JSON.stringify([30 + k - 1, 73, 82, 110]), { slipShown, sourceIn: T.frameIndexAt(slipped.sourceIn, R), revisions: [sb.revision, sa.revision] });
     check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.

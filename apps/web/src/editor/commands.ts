@@ -21,6 +21,14 @@ export interface Command {
 const sel = (e: Editor) => e.selected?.clip;
 /** Selected clips that still exist, read when the command runs. */
 const selectedClips = (e: Editor) => { const doc = e.doc; return doc ? e.getState().selection.map((id) => findClip(doc, id)?.clip).filter((c): c is Clip => !!c) : []; };
+/** Slip: the selected clip stays where it is and shows source material `frames` later (or earlier). A refusal (no material that far) is shown like any other. */
+const canSlip = (e: Editor) => { const c = sel(e); return !!c && c.type === 'media' && e.getState().selection.length === 1 && e.doc?.assets[c.assetId]?.kind !== 'image'; };
+const slip = (frames: number) => (e: Editor) => {
+  const c = sel(e);
+  if (!c) return;
+  const by = T.frameTime(Math.abs(frames), e.rate);
+  return e.commit([{ op: 'slip_clip', args: { clipId: c.id, by: frames < 0 ? T.sub(T.ZERO, by) : by } }], 'Slip clip');
+};
 const nudge = (frames: number) => (e: Editor) => {
   const clips = selectedClips(e);
   if (!clips.length) return;
@@ -109,6 +117,10 @@ export const COMMANDS: Command[] = [
   { id: 'edit.nudgeRight', label: 'cmd.nudgeRight', group: 'edit', keys: ['Alt+ArrowRight'], enabled: (e) => !!sel(e), run: nudge(1) },
   { id: 'edit.nudgeLeft10', label: 'cmd.nudgeLeft10', group: 'edit', keys: ['Alt+Shift+ArrowLeft'], enabled: (e) => !!sel(e), run: nudge(-10) },
   { id: 'edit.nudgeRight10', label: 'cmd.nudgeRight10', group: 'edit', keys: ['Alt+Shift+ArrowRight'], enabled: (e) => !!sel(e), run: nudge(10) },
+  { id: 'edit.slipLater', label: 'cmd.slipLater', group: 'edit', keys: ['Mod+Alt+ArrowRight'], enabled: canSlip, run: slip(1) },
+  { id: 'edit.slipEarlier', label: 'cmd.slipEarlier', group: 'edit', keys: ['Mod+Alt+ArrowLeft'], enabled: canSlip, run: slip(-1) },
+  { id: 'edit.slipLater10', label: 'cmd.slipLater10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowRight'], enabled: canSlip, run: slip(10) },
+  { id: 'edit.slipEarlier10', label: 'cmd.slipEarlier10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowLeft'], enabled: canSlip, run: slip(-10) },
   { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },
   { id: 'edit.selectNext', label: 'cmd.selectNext', group: 'edit', keys: ['Alt+ArrowDown'], run: selectAdjacent(1) },
   { id: 'edit.selectPrev', label: 'cmd.selectPrev', group: 'edit', keys: ['Alt+ArrowUp'], run: selectAdjacent(-1) },
