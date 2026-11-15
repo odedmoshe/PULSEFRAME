@@ -15,6 +15,7 @@ import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
 import { SourceViewer } from './SourceViewer.tsx';
 import { InlineRename } from './InlineRename.tsx';
+import { ActivityDialog } from './ActivityDialog.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -251,6 +252,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   const { editor, state, t } = useEditorState();
   const sel = editor.selected;
   const [tab, setTabState] = useState<InspectorTab>(loadTab);
+  const [activityOpen, setActivityOpen] = useState(false);
   const setTab = (next: InspectorTab) => {
     setTabState(next);
     try { localStorage.setItem(TAB_KEY, next); } catch { /* ignore */ }
@@ -378,6 +380,8 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         </>
       )}
       <h2>{t('activity')}</h2>
+      <button type="button" className="ghost" data-testid="activity-open" onClick={() => setActivityOpen(true)}>{t('activity.all')}</button>
+      {activityOpen && <ActivityDialog onClose={() => { setActivityOpen(false); setTimeout(() => document.querySelector<HTMLElement>('[data-testid=activity-open]')?.focus(), 0); }} />}
       <label className="check"><input type="checkbox" checked={state.followAgent} onChange={(e) => editor.set({ followAgent: e.target.checked })} data-testid="follow-agent" /> {t('follow.agent')}</label>
       <ol className="activity" data-testid="activity" aria-live="polite">
         {state.activity.length === 0 && <li className="muted">{t('activity.empty')}</li>}
