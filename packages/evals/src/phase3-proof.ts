@@ -423,6 +423,32 @@ async function main() {
     for (let i = 0; i < 50 && endOf(dgA.project) !== lastFrame; i++) { await new Promise((r) => setTimeout(r, 100)); dgA = await getDoc(); }
     check('dragging a file from the library onto a picture track puts it on that track at the frame under the pointer (within one frame), with its linked sound, in one transaction; the drop marker goes away; undo removes it', !!droppedInfo && Math.abs(droppedInfo.frame - dropFrame) <= 1 && droppedInfo.asset && droppedInfo.linked && droppedInfo.lineGone && endOf(dgA.project) === lastFrame, { dropFrame, droppedInfo });
 
+    console.log('\n# drop a file from the computer onto the timeline');
+    const osB = await getDoc();
+    const osFrame = endOf(osB.project) + 20;
+    const osFile = await generateBarcodeFixture({ out: path.join(art, 'dropped.mp4'), frames: 45 }); // different bytes from the file already in the library
+    const osBytes = fs.readFileSync(osFile.file).toString('base64');
+    await page.evaluate(async ({ b64, x, y, trackId }) => {
+      const bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const dt = new DataTransfer();
+      dt.items.add(new File([bytes], 'dropped.mp4', { type: 'video/mp4' }));
+      const track = document.querySelector(`.track[data-track-id="${trackId}"]`)!;
+      for (const type of ['dragover', 'drop']) track.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, dataTransfer: dt }));
+    }, { b64: osBytes, x: rulerBox.x + osFrame * 3, y: v1Box.y + v1Box.height / 2, trackId: v1.id });
+    let osA = await getDoc();
+    for (let i = 0; i < 150 && Object.keys(osA.project.assets).length === Object.keys(osB.project.assets).length + 0 && endOf(osA.project) === endOf(osB.project); i++) { await new Promise((r) => setTimeout(r, 100)); osA = await getDoc(); }
+    for (let i = 0; i < 100 && endOf(osA.project) === endOf(osB.project); i++) { await new Promise((r) => setTimeout(r, 100)); osA = await getDoc(); }
+    const newAsset = Object.values(osA.project.assets).find((a) => !osB.project.assets[a.id]);
+    const osClip = osA.project.sequences.seq_main!.tracks.find((tr) => tr.id === v1.id)!.clips.find((c: any) => c.assetId === newAsset?.id) as any;
+    const osInfo = { imported: newAsset?.name, clipFrame: osClip ? T.frameIndexAt(osClip.start, R) : null, wanted: osFrame };
+    // put the project back: undo the placement, then remove the imported file
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && endOf(osA.project) !== endOf(osB.project); i++) { await new Promise((r) => setTimeout(r, 100)); osA = await getDoc(); }
+    if (newAsset) await post([{ op: 'remove_asset', args: { assetId: newAsset.id } }]);
+    check('a file dropped from the computer onto a picture track is imported into the library and placed on that track at the frame under the pointer (within one frame)', osInfo.imported === 'dropped.mp4' && osInfo.clipFrame !== null && Math.abs(osInfo.clipFrame - osFrame) <= 1, osInfo);
+
     console.log('\n# slip');
     const sb = await getDoc();
     const slipClip = sb.project.sequences.seq_main!.tracks.filter((tr) => tr.kind === 'video').flatMap((tr) => tr.clips).find((c) => T.frameIndexAt(c.start, R) === atFrame)!;
@@ -676,7 +702,7 @@ async function main() {
     const closedH = (await page.getByTestId('activity-dialog').count()) === 0;
     await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open', undefined, { timeout: 3000 }).catch(() => {}); // focus is handed back just after the dialog is removed
     const focusH = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open');
-    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 4 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
+    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 5 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
 
     console.log('\n# close gaps');
     const gb = await getDoc();
@@ -728,8 +754,13 @@ async function main() {
     const quick = { tabs: await tabsShown(), panels: await panelsShown() };
     await page.getByTestId('workspace-switch').selectOption('sound');
     const sound = { tabs: await tabsShown(), panels: await panelsShown() };
+    // a target track chosen before the reload is still chosen after it
+    await page.getByTestId('track-target').first().click();
     await page.reload();
     await page.getByTestId('timecode').waitFor();
+    await page.getByTestId('track-target').first().waitFor();
+    const targetKept = await page.locator('[data-testid=track-target][aria-pressed=true]').count();
+    await page.locator('[data-testid=track-target][aria-pressed=true]').first().click().catch(() => {});
     const afterReload = { ws: await page.getByTestId('workspace-switch').inputValue(), tabs: await tabsShown() };
     // Motion and Color: the clip panel, each with its own part of it (a picture clip is selected first)
     await page.getByTestId('workspace-switch').selectOption('pro');
@@ -749,10 +780,11 @@ async function main() {
     let lumaSum = 0, lumaMax = 0, lumaMin = 255;
     for (let i = 0; i < scopeRgb.length; i += 3) { const l = 0.2126 * scopeRgb[i]! + 0.7152 * scopeRgb[i + 1]! + 0.0722 * scopeRgb[i + 2]!; lumaSum += l; lumaMax = Math.max(lumaMax, l); lumaMin = Math.min(lumaMin, l); }
     const stillMean = lumaSum / (scopeRgb.length / 3);
+    const vecInk = await page.getByTestId('scope-vectorscope').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 128, 128).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]! > 60) n++; return n; }).catch(() => 0);
     const histInk = await page.getByTestId('scope-histogram').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 256, 64).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; }).catch(() => 0);
     const waveInk = await page.getByTestId('scope-waveform').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 192, 96).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; }).catch(() => 0);
-    const scopeCheck = { frame: scope.frame, mean: Number(scope.mean), stillMean: Number(stillMean.toFixed(1)), min: Number(scope.min), max: Number(scope.max), stillMin: Math.round(lumaMin), stillMax: Math.round(lumaMax), histInk, waveInk };
-    check('Color workspace scopes: drawn (histogram and waveform both have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)', histInk > 20 && waveInk > 20 && Math.abs(scopeCheck.mean - scopeCheck.stillMean) <= 3 && Math.abs(scopeCheck.min - scopeCheck.stillMin) <= 12 && Math.abs(scopeCheck.max - scopeCheck.stillMax) <= 12, scopeCheck);
+    const scopeCheck = { frame: scope.frame, mean: Number(scope.mean), stillMean: Number(stillMean.toFixed(1)), min: Number(scope.min), max: Number(scope.max), stillMin: Math.round(lumaMin), stillMax: Math.round(lumaMax), histInk, waveInk, vecInk, saturation: Number(scope.saturation) };
+    check('Color workspace scopes: drawn (histogram, waveform and vectorscope all have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)', histInk > 20 && waveInk > 20 && vecInk > 3 && Number.isFinite(scopeCheck.saturation) && Math.abs(scopeCheck.mean - scopeCheck.stillMean) <= 3 && Math.abs(scopeCheck.min - scopeCheck.stillMin) <= 12 && Math.abs(scopeCheck.max - scopeCheck.stillMax) <= 12, scopeCheck);
     await page.getByTestId('workspace-switch').selectOption('pro');
     await page.getByTestId('inspector-tab-clip').click();
     const proParts = await parts();
@@ -761,7 +793,7 @@ async function main() {
     await page.getByTestId('workspace-switch').selectOption('pro');
     const back = await tabsShown();
     const wa = await getDoc();
-    check('workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload; Pro offers every panel again; the project is not changed by any of it', proTabs.length === 8 && JSON.stringify(quick.tabs) === JSON.stringify(['recipes', 'speech', 'captions', 'deliver']) && JSON.stringify(quick.panels) === JSON.stringify(['recipes']) && JSON.stringify(sound.tabs) === JSON.stringify(['sound', 'clip']) && JSON.stringify(sound.panels) === JSON.stringify(['sound']) && afterReload.ws === 'sound' && JSON.stringify(afterReload.tabs) === JSON.stringify(['sound', 'clip']) && back.length === 8 && wa.revision === wb.revision && JSON.stringify(wa.project) === JSON.stringify(wb.project), { proTabs: proTabs.length, quick, sound, afterReload, back: back.length });
+    check('workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload, and so does a chosen target track; Pro offers every panel again; the project is not changed by any of it', targetKept === 1 && proTabs.length === 8 && JSON.stringify(quick.tabs) === JSON.stringify(['recipes', 'speech', 'captions', 'deliver']) && JSON.stringify(quick.panels) === JSON.stringify(['recipes']) && JSON.stringify(sound.tabs) === JSON.stringify(['sound', 'clip']) && JSON.stringify(sound.panels) === JSON.stringify(['sound']) && afterReload.ws === 'sound' && JSON.stringify(afterReload.tabs) === JSON.stringify(['sound', 'clip']) && back.length === 8 && wa.revision === wb.revision && JSON.stringify(wa.project) === JSON.stringify(wb.project), { proTabs: proTabs.length, quick, sound, afterReload, back: back.length });
     check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.

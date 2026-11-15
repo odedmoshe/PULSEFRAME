@@ -97,7 +97,9 @@ export function Library() {
   const { doc, uploading } = state;
   const [viewing, setViewing] = useState<string | null>(null);
   return (
-    <aside className="library" aria-label={t('media')}>
+    <aside className="library" aria-label={t('media')} data-testid="library"
+      onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+      onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (!f) return; e.preventDefault(); if (!uploading && doc) void editor.importFile(f); }}>
       <h2>{t('media')}</h2>
       <label className="primary file">
         {uploading ? t('media.uploading') : t('media.import')}

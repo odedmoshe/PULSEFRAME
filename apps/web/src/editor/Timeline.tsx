@@ -77,9 +77,17 @@ export function Timeline() {
       {here && <MarkerBar marker={here} />}
       <div className="tl-scroll" {...containerProps}>
         <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}
-          onDragOver={(e) => { if (!e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; const at = dropPoint(e); if (!dropAt || dropAt.frame !== at.frame || dropAt.trackId !== at.trackId) setDropAt(at); }}
+          onDragOver={(e) => { if (!e.dataTransfer.types.includes(ASSET_DRAG_TYPE) && !e.dataTransfer.types.includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; const at = dropPoint(e); if (!dropAt || dropAt.frame !== at.frame || dropAt.trackId !== at.trackId) setDropAt(at); }}
           onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropAt(null); }}
-          onDrop={(e) => { const id = e.dataTransfer.getData(ASSET_DRAG_TYPE); if (!id) return; e.preventDefault(); const at = dropPoint(e); setDropAt(null); void editor.dropAsset(id, at.frame, at.trackId); }}>
+          onDrop={(e) => {
+            const id = e.dataTransfer.getData(ASSET_DRAG_TYPE), file = e.dataTransfer.files?.[0];
+            if (!id && !file) return;
+            e.preventDefault();
+            const at = dropPoint(e);
+            setDropAt(null);
+            // a library file is placed; a file from the computer is imported first and then placed (the first file only)
+            if (id) void editor.dropAsset(id, at.frame, at.trackId); else if (file) void editor.importFile(file, at);
+          }}>
           {dropAt && <div className="drop-line" data-testid="drop-line" data-frame={dropAt.frame} style={{ left: T.toSeconds(T.frameTime(dropAt.frame, rate)) * pps }} aria-hidden="true" />}
           {box && <div className="marquee" data-testid="marquee" aria-hidden="true" style={box} />}
           <div className="ruler" data-testid="ruler" onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.round(((x / pps) * rate.num) / rate.den)); }}>

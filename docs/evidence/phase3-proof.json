@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T21:28:05.187Z",
+  "ranAt": "2026-11-15T22:04:23.875Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -307,6 +307,15 @@
       }
     },
     {
+      "name": "a file dropped from the computer onto a picture track is imported into the library and placed on that track at the frame under the pointer (within one frame)",
+      "ok": true,
+      "detail": {
+        "imported": "dropped.mp4",
+        "clipFrame": 243,
+        "wanted": 243
+      }
+    },
+    {
       "name": "slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged",
       "ok": true,
       "detail": {
@@ -318,8 +327,8 @@
         ],
         "sourceIn": 73,
         "revisions": [
-          27,
-          31
+          31,
+          35
         ]
       }
     },
@@ -345,8 +354,8 @@
           223
         ],
         "revisions": [
-          31,
-          35
+          35,
+          39
         ]
       }
     },
@@ -401,8 +410,8 @@
           223
         ],
         "revisions": [
-          37,
-          43
+          41,
+          47
         ]
       }
     },
@@ -510,8 +519,8 @@
         "assetName": "ראיון.mp4",
         "focusOnRename": true,
         "revisions": [
-          52,
-          55
+          56,
+          59
         ]
       }
     },
@@ -526,8 +535,8 @@
         "emptyBefore": 1,
         "emptyCmd": "track.removeEmpty",
         "revisions": [
-          55,
-          58
+          59,
+          62
         ]
       }
     },
@@ -546,11 +555,11 @@
       "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
       "ok": true,
       "detail": {
-        "revision": 61,
-        "allRows": 61,
-        "firstRev": "61",
+        "revision": 65,
+        "allRows": 65,
+        "firstRev": "65",
         "rawNames": 0,
-        "agentRows": 4,
+        "agentRows": 5,
         "agentOnly": true,
         "closedH": true,
         "focusH": true
@@ -566,8 +575,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          61,
-          63
+          65,
+          67
         ]
       }
     },
@@ -614,7 +623,7 @@
       }
     },
     {
-      "name": "Color workspace scopes: drawn (histogram and waveform both have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)",
+      "name": "Color workspace scopes: drawn (histogram, waveform and vectorscope all have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)",
       "ok": true,
       "detail": {
         "frame": "0",
@@ -625,7 +634,9 @@
         "stillMin": 0,
         "stillMax": 255,
         "histInk": 306,
-        "waveInk": 1961
+        "waveInk": 1961,
+        "vecInk": 58,
+        "saturation": 10.6
       }
     },
     {
@@ -672,7 +683,7 @@
       }
     },
     {
-      "name": "workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload; Pro offers every panel again; the project is not changed by any of it",
+      "name": "workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload, and so does a chosen target track; Pro offers every panel again; the project is not changed by any of it",
       "ok": true,
       "detail": {
         "proTabs": 8,

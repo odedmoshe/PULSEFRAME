@@ -60,6 +60,10 @@ export interface EditorState {
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
+const TARGETS_KEY = 'pf.targets.v1';
+const readTargets = (projectId: string): { video: string | null; audio: string | null } => {
+  try { const v = JSON.parse(localStorage.getItem(`${TARGETS_KEY}.${projectId}`) ?? 'null'); return { video: typeof v?.video === 'string' ? v.video : null, audio: typeof v?.audio === 'string' ? v.audio : null }; } catch { return { video: null, audio: null }; }
+};
 /** Drag-and-drop type of a library file dragged onto the timeline (the payload is the asset id). */
 export const ASSET_DRAG_TYPE = 'application/x-pulseframe-asset';
 export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver'] as const;
@@ -140,7 +144,9 @@ export class Editor {
       // A document change that removes cut-pending clips cancels the cut.
       const cutAlive = this.state.cutPending.filter((id) => findClip(p.project, id));
       const cut = cutAlive.length === this.state.cutPending.length ? {} : { cutPending: [] as string[], clipboard: [] as string[] };
-      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId, ...cut });
+      // target tracks are remembered per project in this browser
+      const targets = this.state.doc?.id === p.project.id ? {} : { targets: readTargets(p.project.id) };
+      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId, ...cut, ...targets });
       const vd = this.viewDoc;
       if (vd) this.player?.setDoc(vd);
     }
@@ -284,7 +290,8 @@ export class Editor {
       this.fail(e instanceof ApiFailure && e.code === 'undo_conflict' ? new Error(this.t('undo.conflict')) : e);
     }
   }
-  async importFile(file: File) {
+  /** Import a file into the library; with `place`, also put it on the timeline there (a file dropped from the computer onto the timeline). */
+  async importFile(file: File, place?: { frame: number; trackId: string | null }) {
     const { doc } = this.state;
     if (!doc) return;
     this.set({ uploading: true, error: null });
@@ -293,6 +300,7 @@ export class Editor {
       // A conformed asset is not byte-identical to the local file, so only reuse the local file when it was stored as-is.
       if (!r.asset.conform) this.pool?.provideLocal(r.assetId, file);
       await this.load(doc.id);
+      if (place) await this.dropAsset(r.assetId, place.frame, place.trackId);
     } catch (e) {
       this.fail(e instanceof ApiFailure && e.code === 'unsupported_media' ? new Error(`${this.t('media.unsupported')}: ${e.message}`) : e);
     } finally {
@@ -300,7 +308,12 @@ export class Editor {
     }
   }
   /** Choose (or, given the current one, clear) the target track of its kind. */
-  toggleTarget(kind: 'video' | 'audio', trackId: string) { this.set({ targets: { ...this.state.targets, [kind]: this.state.targets[kind] === trackId ? null : trackId } }); }
+  toggleTarget(kind: 'video' | 'audio', trackId: string) {
+    const targets = { ...this.state.targets, [kind]: this.state.targets[kind] === trackId ? null : trackId };
+    const id = this.state.doc?.id;
+    if (id) try { localStorage.setItem(`${TARGETS_KEY}.${id}`, JSON.stringify(targets)); } catch { /* storage unavailable: the choice lasts for this visit */ }
+    this.set({ targets });
+  }
   /** The chosen target track of a kind, if it still exists and is not locked. */
   target(kind: 'video' | 'audio'): string | null {
     const d = this.state.doc, id = this.state.targets[kind];

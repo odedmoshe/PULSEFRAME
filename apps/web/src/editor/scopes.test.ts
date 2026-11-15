@@ -13,9 +13,15 @@ describe('scope analysis', () => {
     expect(wave[0 * 256 + 128]).toBe(1);      // and one grey
     expect(wave[3 * 256 + 255]).toBe(1);      // column 3: white
     expect(wave[3 * 256 + 54]).toBe(1);       // and red, whose BT.709 luma is 54
-    expect(stats).toEqual({ min: 0, max: 255, mean: Math.round(((0 + 0 + 255 + 255 + 128 * 3 + 54) / 8) * 10) / 10, crushedPct: 25, clippedPct: 25 });
+    expect(stats).toMatchObject({ min: 0, max: 255, mean: Math.round(((0 + 0 + 255 + 255 + 128 * 3 + 54) / 8) * 10) / 10, crushedPct: 25, clippedPct: 25 });
+    // vectorscope: the seven grey-scale pixels sit in the centre; pure red lies up (Cr at its maximum) and left of centre (Cb negative)
+    const { vec } = analyse(data, 4, 2);
+    expect(vec[64 * 128 + 64]).toBe(7);
+    const red = [...vec].findIndex((c, i) => c === 1 && i !== 64 * 128 + 64);
+    expect([Math.floor(red / 128), red % 128]).toEqual([1, 50]);
+    expect(stats.saturationPct).toBeCloseTo(((Math.hypot((0 - 54.2) / 1.8556, (255 - 54.2) / 1.5748) / 127.5) / 8) * 100, 0);
   });
   it('an empty picture gives zeros, not NaN', () => {
-    expect(analyse(new Uint8ClampedArray(0), 0, 0).stats).toEqual({ min: 0, max: 0, mean: 0, crushedPct: 0, clippedPct: 0 });
+    expect(analyse(new Uint8ClampedArray(0), 0, 0).stats).toEqual({ min: 0, max: 0, mean: 0, crushedPct: 0, clippedPct: 0, saturationPct: 0 });
   });
 });
