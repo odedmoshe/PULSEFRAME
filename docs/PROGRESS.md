@@ -521,7 +521,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - New op `insert_gap {at, duration, trackIds?}`: opens a frame-aligned gap; clips at or after the point move later on every track, a clip lying across it is split there (same rules as `split_clip`: halves stay linked pairs, source continues, keyframes shift), markers at or after the point move (when all tracks are included). A locked track makes it fail. Available to the editor, REST and MCP like every op.
 - Source viewer: "Insert at the playhead" commits `insert_gap` + `add_clip` as one transaction; "Add" still appends at the end.
 - Verified here: `insertgap.test.ts` (3: split/shift/link/source continuity/keyframes/markers; insert + one undo + closing with `cut_range`; refusals); the op is in the operations and store fuzz (90 tests in those files pass, including undo); 398 unit tests; `pnpm proof:phase3` 29/29 (new check: timeline rows and server stills show …39, then source 100–119, then 40… and the last frame 71; timeline 20 frames longer; one revision); `pnpm proof` 54; accessibility audit clean.
-- Known inconsistency, not changed: `cut_range` does not move markers, `insert_gap` does. Not done: overwrite (replace instead of push); insert onto chosen tracks from the editor; `conformance:render-fuzz` not rerun with the op in the generator.
+- Not done: overwrite (replace instead of push); insert onto chosen tracks from the editor; `conformance:render-fuzz` not rerun with the op in the generator.
+
+**Checkpoint 14x — markers under ripple cuts**
+- `cut_range` with ripple on every track (and the transcript word cut that uses it) now moves later markers earlier, like `insert_gap` moves them later. Markers on removed frames collapse onto the cut point; only one marker can sit on a frame, so a marker already there wins, otherwise the earliest, and the others are removed and listed in the op output (one undo restores them). Without ripple, or on chosen tracks only, markers stay.
+- Verified here: `insertgap.test.ts` (4 tests, including undo of dropped markers); 399 unit tests; phase4 19, phase6 35, phase9 12, phase11 12, editor-interactions 20.
+- Behaviour change to know: recipes that remove silences or words now also shift markers; before, markers kept their absolute times.
 
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
@@ -545,7 +550,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 Status words used here: **blocked** (cannot be implemented or verified without something external), **implemented, not runtime-qualified**, **verified on the current profile** (this CPU-only container), **verified on the target profile** (nothing yet: no target machine exists).
 
 Unblocked (no decision needed), roughly by value:
-1. Editor: workspaces; overwrite edit from the source viewer; make `cut_range` move markers like `insert_gap` does (Phase 3 carry-over; markers, multi-select, marquee, J/L shuttle, the source viewer and insert at the playhead are done).
+1. Editor: workspaces; overwrite edit from the source viewer (Phase 3 carry-over; markers, multi-select, marquee, J/L shuttle, the source viewer and insert at the playhead are done).
 2. Speed ramps, reverse, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed, freeze frame and linear volume keys are done).
 3. Pruning of media in the backup; content-hash verification of copied media (scheduled backups, snapshot retention and a read-back integrity check of the database copy are done).
 4. Per-format caption text and line breaks (per-format caption style and per-format title wording/style exist); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
@@ -567,7 +572,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 398 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 399 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 29 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 34 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 20 · `pnpm proof:owner-ui` 9 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:projects` 2 (15 project settings; 7 of them also on the browser export and the preview) · `pnpm conformance:render-fuzz` 2 (10 random sessions; about twelve minutes) · `pnpm conformance:inputs` 4 (30 shapes on the server export, the browser export and the editor preview: 28 correct and 2 noted; about ten minutes).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.

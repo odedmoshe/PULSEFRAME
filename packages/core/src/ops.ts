@@ -837,7 +837,7 @@ const markerAt = (d: ProjectDocument, sequenceId: string, time: T.RationalTime, 
 defineOp({
   name: 'add_marker',
   version: 1,
-  description: 'Put a named marker on the timeline at a frame-aligned time: a note, a to-do or a sync point for people and agents. Markers stay at their time; they do not move with clips. One marker per frame.',
+  description: 'Put a named marker on the timeline at a frame-aligned time: a note, a to-do or a sync point for people and agents. Markers stay at their time when clips are moved; they do move when time itself is inserted or removed on every track (insert_gap, cut_range with ripple). One marker per frame.',
   args: z.object({ time: RT, label: z.string().max(200).optional(), color: z.enum(MARKER_COLORS).optional() }).strict(),
   apply(d, a, ctx) {
     assertAligned(d, a.time, 'time');
@@ -1476,13 +1476,26 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
     track.clips = next;
     sortClips(track);
   }
-  return { removed, changed, created };
+  // Markers follow the timeline when time itself is removed from every track: later ones move earlier; those whose frame
+  // no longer exists (inside the range, or at its end) collapse onto the cut point, where only one marker can sit: an existing
+  // marker there stays, otherwise the earliest of them; the rest are removed (one undo brings them back).
+  const markersMoved: string[] = [], markersRemoved: string[] = [];
+  if (ripple && tracks.length === seq.tracks.length) {
+    let atCut = markerAt(d, seq.id, start);
+    const later = Object.values(d.markers ?? {}).filter((m) => m.sequenceId === seq.id && T.lt(start, m.time)).sort((a, b) => T.cmp(a.time, b.time));
+    for (const m of later) {
+      if (T.lt(end, m.time)) { m.time = T.sub(m.time, len); markersMoved.push(m.id); continue; }
+      if (atCut) { delete d.markers![m.id]; markersRemoved.push(m.id); continue; }
+      m.time = start; atCut = m; markersMoved.push(m.id);
+    }
+  }
+  return { removed, changed, created, markersMoved, markersRemoved };
 }
 
 defineOp({
   name: 'cut_range',
   version: 1,
-  description: 'Remove a frame-aligned time range from the timeline. By default every track is cut and later material moves earlier (ripple) so picture, sound and captions stay in sync. A locked track makes the cut fail rather than drift.',
+  description: 'Remove a frame-aligned time range from the timeline. By default every track is cut and later material moves earlier (ripple) so picture, sound and captions stay in sync; markers after the range move with it, and markers on removed frames collapse onto the cut point (one marker per frame: extra ones are dropped and listed in the output). A locked track makes the cut fail rather than drift.',
   args: z.object({ sequenceId: z.string().optional(), start: RT, end: RT, trackIds: z.array(z.string()).min(1).optional(), ripple: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
@@ -1491,7 +1504,7 @@ defineOp({
     if (T.isNegative(a.start) || !T.lt(a.start, a.end)) throw new OpError('invalid_args', 'need 0 <= start < end');
     const tracks = a.trackIds ? a.trackIds.map((id) => mustTrack(seq, id)) : seq.tracks;
     const r = cutRange(d, seq, a.start, a.end, tracks, a.ripple !== false, ctx);
-    return { affectedIds: [...new Set([...r.removed, ...r.changed, ...r.created])], summary: `Cut ${fmt(T.sub(a.end, a.start))} at ${fmt(a.start)}${a.ripple === false ? ' (gap left)' : ''}`, output: { removedClipIds: r.removed, createdClipIds: r.created } };
+    return { affectedIds: [...new Set([...r.removed, ...r.changed, ...r.created, ...r.markersMoved, ...r.markersRemoved])], summary: `Cut ${fmt(T.sub(a.end, a.start))} at ${fmt(a.start)}${a.ripple === false ? ' (gap left)' : ''}${r.markersRemoved.length ? `; ${r.markersRemoved.length} marker(s) on removed frames dropped` : ''}`, output: { removedClipIds: r.removed, createdClipIds: r.created, movedMarkerIds: r.markersMoved, removedMarkerIds: r.markersRemoved } };
   },
 });
 
@@ -1582,7 +1595,7 @@ defineOp({
     if (ranges.length === 0) throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId });
     ranges.sort((x, y) => T.cmp(y.start, x.start)); // latest first, so earlier ranges keep their times
     const affected = new Set<string>();
-    for (const r of ranges) { const c = cutRange(d, seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created]) affected.add(id); }
+    for (const r of ranges) { const c = cutRange(d, seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created, ...c.markersMoved, ...c.markersRemoved]) affected.add(id); }
     const text = picked.map((x) => x.w.text).join(' ');
     return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline`, output: { ranges: ranges.reverse(), words: picked.length } };
   },

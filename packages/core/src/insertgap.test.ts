@@ -27,7 +27,7 @@ function project() {
 const clips = (d: ProjectDocument) => d.sequences[d.mainSequenceId]!.tracks.flatMap((t) => t.clips.map((c) => ({ ...c, kind: t.kind })));
 const markerFrames = (d: ProjectDocument) => Object.values(d.markers ?? {}).map((m) => fi(m.time)).sort((a, b) => a - b);
 
-describe('insert_gap (ripple insert)', () => {
+describe('insert_gap (ripple insert) and markers under ripple edits', () => {
   it('splits clips lying across the point, moves later material and markers, keeps the source continuous and the halves linked', () => {
     const { doc, videoId, audioId, titleId } = project();
     const r = tx(doc, [{ op: 'set_keyframe', args: { clipId: videoId, property: 'opacity', time: f(120), value: 0.5 } }, { op: 'insert_gap', args: { at: f(100), duration: f(50) } }]);
@@ -66,6 +66,26 @@ describe('insert_gap (ripple insert)', () => {
     const closed = tx(r.doc, [{ op: 'cut_range', args: { start: f(100), end: f(150) } }]).doc;
     const v2 = clips(closed).filter((c) => c.kind === 'video').sort((a, b) => fi(a.start) - fi(b.start)) as any[];
     expect(v2.map((c) => [fi(c.start), fi(c.duration), fi(c.sourceIn)])).toEqual([[0, 100, 0], [100, 140, 100]]);
+  });
+  it('cut_range with ripple moves later markers earlier; markers on removed frames collapse onto the cut point, one survivor; without ripple or on chosen tracks they stay', () => {
+    const { doc } = project(); // markers at 30 and 150
+    let d = tx(doc, [{ op: 'add_marker', args: { time: f(60), label: 'in-a' } }, { op: 'add_marker', args: { time: f(70), label: 'in-b' } }, { op: 'add_marker', args: { time: f(90), label: 'at-end' } }]).doc;
+    const r = tx(d, [{ op: 'cut_range', args: { start: f(50), end: f(90) } }]);
+    const ms = Object.values(r.doc.markers!).map((m) => [fi(m.time), m.label]).sort((a: any, b: any) => a[0] - b[0]);
+    expect(ms).toEqual([[30, 'early'], [50, 'in-a'], [110, 'late']]); // in-b and at-end had no frame left and the cut point was taken by in-a
+    expect((r.results[0]!.output as any).removedMarkerIds.length).toBe(2);
+    expect(validateProject(r.doc)).toEqual([]);
+    const back = structuredClone(r.doc);
+    restoreEntities(back, diffEntities(d, r.doc).map((x) => ({ id: x.id, state: x.before })));
+    expect(back).toEqual(d); // undo brings the dropped markers back
+    // a marker already on the cut point wins
+    d = tx(d, [{ op: 'add_marker', args: { time: f(50), label: 'cut-point' } }]).doc;
+    const r2 = tx(d, [{ op: 'cut_range', args: { start: f(50), end: f(90) } }]).doc;
+    expect(Object.values(r2.markers!).map((m) => [fi(m.time), m.label]).sort((a: any, b: any) => a[0] - b[0])).toEqual([[30, 'early'], [50, 'cut-point'], [110, 'late']]);
+    // no ripple: time is not removed, markers stay
+    expect(markerFrames(tx(d, [{ op: 'cut_range', args: { start: f(50), end: f(90), ripple: false } }]).doc)).toEqual(markerFrames(d));
+    const textTrack = d.sequences[d.mainSequenceId]!.tracks.find((t) => t.kind === 'text')!.id;
+    expect(markerFrames(tx(d, [{ op: 'cut_range', args: { start: f(10), end: f(20), trackIds: [textTrack] } }]).doc)).toEqual(markerFrames(d));
   });
   it('at a cut point nothing is split; on chosen tracks only, markers stay; bad input and locked tracks are refused', () => {
     const { doc, videoId } = project();
