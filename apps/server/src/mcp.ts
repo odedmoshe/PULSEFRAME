@@ -18,6 +18,7 @@ import { addSfx, assertMayCancel, analysisView, analyzeAsset, AnalyzeBody, catal
 import { ApiError, type Store } from './store.ts';
 import { preflight } from './preflight.ts';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
+import { registerResourcesAndPrompts } from './mcpResources.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
 
@@ -42,6 +43,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     /** Reading a project still requires the grant to cover it. */
     const read = (projectId: string) => { gov.assertMayAct(principal, projectId, 'observe'); return store.getProject(projectId); };
     const pid = z.string().describe('Project id');
+    registerResourcesAndPrompts(server, { store, auth, gov, principal });
 
     server.registerTool('list_projects', { description: 'List projects with their current revision.', inputSchema: z.object({}), annotations: ro }, () => run('observe', () => ({ projects: store.listProjects().filter((x) => !principal.grant?.projectIds || principal.grant.projectIds.includes(x.id)) })));
     server.registerTool('get_summary', { description: 'Project settings, duration, assets and tracks at the current revision.', inputSchema: z.object({ projectId: pid }), annotations: ro }, ({ projectId }) =>

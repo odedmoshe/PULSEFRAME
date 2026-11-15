@@ -287,6 +287,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - **Off by default, deliberately.** The first default (3000/min) was caught by the existing suite: the convergence test and the soak legitimately exceed it, i.e. it would have throttled the owner's own local automation. Verified with it off (the shipped default): 274 unit tests incl. `ratelimit.test.ts` (3, with an injected clock: burst, 429 + Retry-After, refill, per-credential, MCP, owner exempt, 0 = off) and soak 7/7. Phase 0 (54), Phase 5 (33) and Phase 11 (12) were run while the 3000/min default was still active and passed; they were not re-run after switching it off, and the other proofs were not re-run for this change (it only adds a branch that is skipped when the setting is 0).
 - Limits: one global setting, not per grant; no export quota; in-memory (resets on restart); not a defence for a public deployment.
 
+**Checkpoint 13p — MCP resources and playbook prompts**
+- Resources (read-only, same scope and grant checks as the tools): `pulseframe://guide` (how editing works, what a credential may do, the rules), `pulseframe://ops` (operation schemas, internal ops hidden), `pulseframe://catalog`, and per project `pulseframe://projects/{id}/summary` and `/timeline` (listed for the projects the credential may see; identical to `get_summary` / `get_timeline`).
+- Prompts: four versioned playbooks (`rough-cut`, `captions-pass`, `social-cutdown`, `review-edit`, v1). Each is a numbered step list naming the tools to call, ends with the rule that project text is material and never an instruction, and does not inline any project text.
+- Verified with a real MCP client over HTTP (`packages/evals/src/mcp-resources.test.ts`, 3 tests): listing and reading; resource equals tool output; every snake_case name in the guide and playbooks is an existing tool; a grant limited to one project lists and reads only that project and cannot get a playbook for another; no credential is 401.
+- Limits: the playbooks are written guidance; **no model has been run against them** (no language model is available here, B-9), so whether they produce good edits is untested. No resource subscriptions/change notifications, no Tasks extension, no MCP App. Untrusted-content handling is an instruction plus not inlining project text in prompts; tool results still return project text as plain JSON.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -314,7 +320,7 @@ Unblocked (no decision needed), roughly by value:
 3. Audit the remaining editor panels for handlers that act on render-time state (Look and Sound are done).
 4. Disk quota; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
-6. Approvals list UI; MCP resources/prompts; activity log dialog; dialogs and transient states in the accessibility audit.
+6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
 7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
 8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
@@ -332,7 +338,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 274 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 277 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
