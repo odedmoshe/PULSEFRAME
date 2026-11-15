@@ -760,6 +760,9 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified here: `insertgap.test.ts` (new test), `pnpm proof:phase3` 46/46 (new check: overwrite onto a chosen picture and sound track, other tracks byte-identical, one transaction, the frame shows the new picture, undo restores), accessibility audit clean, 431 unit tests.
 - Not done: target choice for drag-and-drop from the library (it lands where it is dropped) and for paste.
 
+**Regression after checkpoint 16j — all passing (one run on this CPU profile)**
+- proof 54 · phase3 46 · phase4 20 · phase5 34 · phase6 36 · phase7 31 · phase8 20 · phase9 12 · phase11 12 · phase12 20 · browser-export 23 · editor-interactions 23 · owner-ui 9 · speed 19 · reverse-sound 7 · soak 7 · start-offset 4 · projects 2 · long 6 · render-fuzz 2 · images 3 · parity pass · seek 4 files pass · inputs 4/4 (30 correct + 1 noted) · accessibility audit no findings · 431 unit tests.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 

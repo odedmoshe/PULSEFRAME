@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T17:16:37.190Z",
+  "ranAt": "2026-11-15T18:44:02.804Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,33 +13,33 @@
   "measurements": {
     "minutes": 20,
     "fileMB": 37.9,
-    "generateSeconds": 63.6,
-    "ingestSeconds": 0.3,
+    "generateSeconds": 66.4,
+    "ingestSeconds": 0.4,
     "analysis": {
       "beats": {
         "status": "succeeded",
-        "seconds": 12.7
+        "seconds": 13.5
       },
       "scenes": {
         "status": "succeeded",
-        "seconds": 14.9
+        "seconds": 15.1
       }
     },
     "editsDuringAnalysis": {
-      "count": 41,
-      "medianMs": 12,
-      "p95Ms": 20,
+      "count": 40,
+      "medianMs": 10,
+      "p95Ms": 22,
       "maxMs": 23
     },
     "timeline": {
       "shots": 20,
-      "splitMs": 30,
-      "timelineQueryMs": 43,
+      "splitMs": 21,
+      "timelineQueryMs": 52,
       "beatMarkers": 2000,
-      "userMarkers": 41
+      "userMarkers": 40
     },
     "editor": {
-      "openSeconds": 0.7,
+      "openSeconds": 0.8,
       "seekToLastFrameSeconds": 0.3,
       "meanLevelOfMiddleRow": 111.2,
       "timecode": "00:19:59:29"
@@ -52,14 +52,14 @@
       "detail": {
         "seconds": 1200,
         "frames": 36000,
-        "ingestSeconds": 0.3
+        "ingestSeconds": 0.4
       }
     },
     {
       "name": "scene job: finishes and finds all 19 cuts on the exact frames, no false cuts",
       "ok": true,
       "detail": {
-        "seconds": 14.9,
+        "seconds": 15.1,
         "found": 19,
         "firstWrong": null
       }
@@ -68,7 +68,7 @@
       "name": "beat job: finishes with a tempo within 1 BPM of 120 and a beat count within 2% of 2400",
       "ok": true,
       "detail": {
-        "seconds": 12.7,
+        "seconds": 13.5,
         "bpm": 120.19,
         "count": 2399,
         "confidence": 0.992
@@ -78,9 +78,9 @@
       "name": "edits made while both jobs ran all succeeded and stayed prompt (median under 100 ms, worst under 2 s)",
       "ok": true,
       "detail": {
-        "count": 41,
-        "medianMs": 12,
-        "p95Ms": 20,
+        "count": 40,
+        "medianMs": 10,
+        "p95Ms": 22,
         "maxMs": 23
       }
     },
@@ -89,17 +89,17 @@
       "ok": true,
       "detail": {
         "shots": 20,
-        "splitMs": 30,
-        "timelineQueryMs": 43,
+        "splitMs": 21,
+        "timelineQueryMs": 52,
         "beatMarkers": 2000,
-        "userMarkers": 41
+        "userMarkers": 40
       }
     },
     {
       "name": "editor: opens the 20-minute project and paints the very last frame (35999) after a jump to the end, picture not black, no page errors",
       "ok": true,
       "detail": {
-        "openSeconds": 0.7,
+        "openSeconds": 0.8,
         "seekToLastFrameSeconds": 0.3,
         "meanLevelOfMiddleRow": 111.2,
         "timecode": "00:19:59:29",
