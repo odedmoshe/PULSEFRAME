@@ -243,6 +243,25 @@ async function main() {
     await cpage.locator('[data-testid=caption-reset-format]:not([disabled])').click();
     for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (!cdoc.variants[cv].captionStyle) break; await sleep(100); }
     check('editor: with a format selected, changing the caption position is stored for that format only (master stays "bottom"); "follow the master again" clears it; no page errors', formatPos === 'center' && masterPos === 'bottom' && !cdoc.variants[cv].captionStyle && cErrors.length === 0, { formatPos, masterPos, errors: cErrors.slice(0, 3) });
+    // cue wording per format, from the editor, checked on rendered frames (format `cv` is still selected)
+    const cueOf = (d: any) => d.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').clips[0];
+    const cueId = cueOf(cdoc).id as string;
+    const w0 = { master: (await still(cp, 10)).png, tall: (await still(cp, 10, cv)).png };
+    await cpage.locator(`.clip[data-clip-id="${cueId}"]`).click();
+    await cpage.getByTestId('cue-text').fill('HI');
+    await cpage.getByTestId('cue-text').blur();
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cdoc.variants[cv].overrides[cueId]?.text === 'HI') break; await sleep(100); }
+    const w1 = { master: (await still(cp, 10)).png, tall: (await still(cp, 10, cv)).png, masterText: cueOf(cdoc).text, bandTall: band(await still(cp, 10, cv)) };
+    await cpage.getByTestId('cue-format-reset').click();
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (!cdoc.variants[cv].overrides[cueId]) break; await sleep(100); }
+    const w2tall = (await still(cp, 10, cv)).png;
+    // and on the master view the same field edits the cue itself
+    await cpage.getByTestId('format-switch').selectOption('');
+    await cpage.waitForFunction(() => !document.querySelector('[data-testid=cue-format-note]'), undefined, { timeout: 5000 }).catch(() => {});
+    await cpage.getByTestId('cue-text').fill('HELLO AGAIN');
+    await cpage.getByTestId('cue-text').blur();
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cueOf(cdoc).text === 'HELLO AGAIN') break; await sleep(100); }
+    check('editor: a caption cue\'s text can be edited; with a format selected the new wording applies to that format only (its rendered frame changes, the master frame is byte-identical and the cue keeps its text), "back to the master text" restores the format\'s frame byte for byte, and on the master view the field edits the cue itself', w1.masterText === 'HELLO' && !w1.tall.equals(w0.tall) && w1.master.equals(w0.master) && w2tall.equals(w0.tall) && cueOf(cdoc).text === 'HELLO AGAIN' && cErrors.length === 0, { masterTextDuringOverride: w1.masterText, tallChanged: !w1.tall.equals(w0.tall), masterSame: w1.master.equals(w0.master), restored: w2tall.equals(w0.tall), finalText: cueOf(cdoc).text, errors: cErrors.slice(0, 3) });
     await cpage.close();
     await page.close();
   } catch (e) {

@@ -402,7 +402,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
   const variantId = editor.getState().viewVariantId;
   const viewClip = variantId ? editor.viewDoc?.sequences[editor.viewDoc.mainSequenceId]?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clip.id) ?? clip : clip;
   // While a format is viewed, the wording and size fields show and edit that format's own values (stored as a format-only override).
-  const shownText = viewClip.type === 'text' ? viewClip.text : '';
+  const shownText = viewClip.type === 'text' || viewClip.type === 'caption' ? viewClip.text : '';
   const [text, setText] = useState(shownText);
   useEffect(() => { setText(shownText); }, [shownText, clip.id, variantId]);
   const textOverride = variantId ? editor.doc?.variants?.[variantId]?.overrides[clip.id] : undefined;
@@ -416,7 +416,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
     : [{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: v } } }], 'Text size');
   const textCommit = () => {
     if (!text || text === shownText) return;
-    void editor.commit(variantId ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text } }] : [{ op: 'update_text', args: { clipId: clip.id, text } }], 'Edit text');
+    void editor.commit(variantId ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text } }] : [{ op: clip.type === 'caption' ? 'update_cue' : 'update_text', args: { clipId: clip.id, text } }], 'Edit text');
   };
   return (
     <div className="fields">
@@ -439,6 +439,18 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
           <label>{t('text.size')}
             <input type="range" min={0.02} max={0.2} step={0.005} key={`${variantId ?? 'master'}:${viewClip.type === 'text' ? viewClip.style.sizeFrac : 0}`} defaultValue={viewClip.type === 'text' ? viewClip.style.sizeFrac : 0.05} data-testid="text-size" onPointerUp={(e) => sizeCommit(Number(e.currentTarget.value))} onKeyUp={(e) => sizeCommit(Number(e.currentTarget.value))} />
           </label>
+        </>
+      )}
+      {clip.type === 'caption' && (
+        <>
+          <label>{t('cue.text')}
+            <textarea dir="auto" rows={2} value={text} data-testid="cue-text" onChange={(e) => setText(e.target.value)} onBlur={textCommit} />
+          </label>
+          {variantId && (
+            <p className="muted" data-testid="cue-format-note">{t(textOverride?.text !== undefined ? 'cue.formatOnly.set' : 'cue.formatOnly.hint')}
+              {textOverride?.text !== undefined && <> <button type="button" className="ghost" data-testid="cue-format-reset" onClick={() => void editor.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text: null } }], 'Reset format caption')}>{t('text.formatOnly.reset')}</button></>}
+            </p>
+          )}
         </>
       )}
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedField clip={clip} />}
