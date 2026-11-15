@@ -8,7 +8,7 @@ import { loadConfig, type Config } from './config.ts';
 import { Derivatives } from './derive.ts';
 import { Exporter } from './export.ts';
 import { Governance } from './governance.ts';
-import { createApp } from './http.ts';
+import { recoverAnalysisJobs, createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
 import { Presence } from './presence.ts';
 import { Store } from './store.ts';
@@ -41,6 +41,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
     else exporter.enqueue(job);
   }
   await capabilities.recover();
+  recoverAnalysisJobs(store);
   derivatives.recover();
   return {
     url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance,

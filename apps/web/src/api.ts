@@ -67,6 +67,17 @@ export const api = {
   revokeGrant: (id: string) => call<{ grant: GrantItem }>(`/grants/${encodeURIComponent(id)}/revoke`, json({})),
   analyzeAsset: (id: string, assetId: string, body: { kind: 'scenes' | 'beats'; threshold?: number }) =>
     call<AnalyzeResult>(`/projects/${id}/assets/${assetId}/analyze`, json(body)),
+  /** The same analysis as a background job (long media cannot time out a request). Resolves when the job has finished; a failed job rejects with its typed error. */
+  analyzeAssetJob: async (id: string, assetId: string, body: { kind: 'scenes' | 'beats'; threshold?: number }, onJob?: (jobId: string) => void) => {
+    const { jobId } = await call<{ jobId: string; status: string }>(`/projects/${id}/assets/${assetId}/analyze`, json({ ...body, background: true }));
+    onJob?.(jobId);
+    for (;;) {
+      const j = await call<{ status: string; error?: { code?: string; message?: string } | null }>(`/jobs/${jobId}`);
+      if (j.status === 'succeeded') return;
+      if (j.status === 'failed' || j.status === 'canceled') throw new ApiFailure(409, j.error?.code ?? j.status, j.error?.message ?? `analysis ${j.status}`);
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  },
   session: () => call<{ actor: string }>('/session', { headers: ownerKeyHeader() }),
   listProjects: () => call<{ projects: { id: string; name: string; revision: number }[] }>('/projects'),
   createProject: (name: string) => call<{ project: ProjectDocument; revision: number }>('/projects', json({ name })),

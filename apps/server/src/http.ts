@@ -223,7 +223,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
   app.post('/api/v1/projects/:id/assets/:assetId/analyze', async (c) => {
     const p = need(c, 'edit');
-    return c.json(await analyzeAsset(store, gov, p, c.req.param('id'), { assetId: c.req.param('assetId'), ...(await body(c, AnalyzeBody)) }));
+    const { background, ...b } = await body(c, AnalyzeBody.extend({ background: z.boolean().optional() }).strict());
+    if (background) { const j = startAnalysisJob(store, gov, p, c.req.param('id'), { assetId: c.req.param('assetId'), ...b }); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await analyzeAsset(store, gov, p, c.req.param('id'), { assetId: c.req.param('assetId'), ...b }));
   });
   app.get('/api/v1/projects/:id/assets/:assetId/analysis', (c) => {
     need(c, 'observe');
@@ -505,6 +507,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const j = store.getJob(c.req.param('jobId'));
     assertMayCancel(gov, p, j);
     if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
+    if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
   });
   app.get('/api/v1/jobs/:jobId/outputs/:index', (c) => {
@@ -621,28 +624,81 @@ export const analysisView = (a: Analysis) => ({
   ...(a.beats ? { beats: { ...a.beats.origin, bpm: a.beats.bpm, confidence: a.beats.confidence, count: a.beats.beats.length, beatSeconds: a.beats.beats.map(secs) } } : {}),
 });
 export const AnalyzeBody = z.object({ kind: z.enum(['scenes', 'beats']), overwrite: z.boolean().optional().describe('Required to replace a result that was corrected by hand'), threshold: z.number().min(0.05).max(0.9).optional().describe('scenes only: how different two frames must be to count as a cut (default 0.3; lower finds more)') }).strict();
-/** Measure scene cuts or beats from the source file and attach the result to the project as editable data. */
-export async function analyzeAsset(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
+/** Everything that can be refused before measuring starts: permissions, the asset, hand-made corrections, the right kind of media. */
+function checkAnalysis(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
   gov.assertMayAct(principal, projectId, 'edit');
   gov.assertUnrestricted(principal, 'change analysis data');
+  assertAnalysable(store, projectId, a);
+}
+function assertAnalysable(store: Store, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
   const p = store.getProject(projectId);
   const asset = p.doc.assets[a.assetId];
   if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
   const existing = a.kind === 'scenes' ? p.doc.analyses?.[a.assetId]?.scenes : p.doc.analyses?.[a.assetId]?.beats;
   if (existing?.origin.edited && !a.overwrite) throw new ApiError(409, 'would_discard_edits', 'this result was corrected by hand; analysing again would discard those corrections', { kind: a.kind }, 'Pass overwrite=true to replace it.');
+  if (a.kind === 'scenes' && !asset.video) throw new ApiError(422, 'no_video', 'this asset has no moving picture to analyse');
+  if (a.kind === 'beats' && !asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to analyse');
+  return asset;
+}
+/** Measure, then attach the result through a normal (internal) operation. Returns null when `abandoned()` says the caller no longer wants the result. */
+async function measureAndAttach(store: Store, actor: string, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }, abandoned: () => boolean = () => false) {
+  const asset = assertAnalysable(store, projectId, a);
   const file = store.blobPath(asset.contentHash);
   let args: Record<string, unknown>;
   if (a.kind === 'scenes') {
-    if (!asset.video) throw new ApiError(422, 'no_video', 'this asset has no moving picture to analyse');
     const threshold = a.threshold ?? 0.3;
     args = { method: 'ffmpeg scene score (hard cuts only; dissolves are not detected)', params: { threshold }, times: await heavy(() => detectScenes(file, threshold, asset.video!.frameRate)) };
   } else {
-    if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to analyse');
     const r = await heavy(() => detectBeatsOfFile(file));
-    args = { method: 'spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse', params: { sampleRate: 22050, hop: 256 }, times: r.beats.filter((s) => s <= T.toSeconds(asset.duration)).map((s) => T.fromSeconds(s.toFixed(4))), bpm: r.bpm, confidence: r.confidence };
+    args = { method: 'spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse', params: { sampleRate: 22050, hop: 256 }, times: r.beats.filter((s) => s <= T.toSeconds(asset.duration)).map((s) => T.fromSeconds(s.toFixed(3))), bpm: r.bpm, confidence: r.confidence };
   }
-  const r = store.commit({ projectId, actor: principal.actor, label: a.kind === 'scenes' ? 'Find scene cuts' : 'Find beats', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: a.assetId, kind: a.kind, createdAt: new Date().toISOString(), ...args } }] });
+  if (abandoned()) return null;
+  // Measuring can take a while: the asset may be gone, or the result corrected by hand, since it started.
+  assertAnalysable(store, projectId, a);
+  const r = store.commit({ projectId, actor, label: a.kind === 'scenes' ? 'Find scene cuts' : 'Find beats', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: a.assetId, kind: a.kind, createdAt: new Date().toISOString(), ...args } }] });
   return { revision: r.revision, summary: r.summary, ...analysisView(store.getProject(projectId).doc.analyses[a.assetId]!) };
+}
+/** Measure scene cuts or beats from the source file and attach the result to the project as editable data (inside the request). */
+export async function analyzeAsset(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
+  checkAnalysis(store, gov, principal, projectId, a);
+  return (await measureAndAttach(store, principal.actor, projectId, a))!;
+}
+
+/**
+ * The same analysis as a durable job, for media too long to measure inside one request. The job row survives a restart
+ * (it is measured again from the start); the result is attached exactly as in the synchronous path.
+ */
+export function startAnalysisJob(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }): JobRow {
+  checkAnalysis(store, gov, principal, projectId, a);
+  const job = store.createJob(projectId, 'analysis', principal.actor, { assetId: a.assetId, kind: a.kind, ...(a.threshold !== undefined ? { threshold: a.threshold } : {}), ...(a.overwrite ? { overwrite: true } : {}), projectRevision: store.getProject(projectId).revision });
+  void runAnalysisJob(store, job.id);
+  return store.getJob(job.id);
+}
+async function runAnalysisJob(store: Store, jobId: string) {
+  if (store.getJob(jobId).status !== 'queued') return;
+  store.updateJob(jobId, { status: 'running', stage: 'measuring' });
+  const j = store.getJob(jobId);
+  try {
+    const r = await measureAndAttach(store, j.actor, j.projectId, j.input, () => store.getJob(jobId).status === 'cancel-requested');
+    if (!r) { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled while measuring; the result was discarded' } }); return; }
+    store.updateJob(jobId, { status: 'succeeded', stage: null, output: { kind: j.input.kind, assetId: j.input.assetId, revision: r.revision, scenes: r.scenes ? { count: r.scenes.count } : undefined, beats: r.beats ? { count: r.beats.count, bpm: r.beats.bpm, confidence: r.beats.confidence } : undefined } });
+  } catch (e) {
+    if (!(e instanceof ApiError)) console.error(e);
+    store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'internal_error', message: 'analysis failed unexpectedly' } });
+  }
+}
+/** Analysis jobs that were queued or running when the process stopped are measured again. */
+export function recoverAnalysisJobs(store: Store): number {
+  const jobs = store.recoverJobs('analysis');
+  for (const j of jobs) void runAnalysisJob(store, j.id);
+  return jobs.length;
+}
+export function cancelAnalysisJob(store: Store, jobId: string, actor: string) {
+  const j = store.getJob(jobId);
+  if (['succeeded', 'failed', 'canceled'].includes(j.status)) return { jobId, status: j.status, outcome: 'already-finished' };
+  if (j.status === 'queued') { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: `canceled by ${actor} before it started` } }); return { jobId, status: 'canceled', outcome: 'removed-from-queue' }; }
+  store.updateJob(jobId, { status: 'cancel-requested' });
+  return { jobId, status: 'cancel-requested', outcome: 'result-will-be-discarded', note: 'the measurement in progress runs to its end; its result is not attached' };
 }
 
 /** Cancelling is an action: a paused agent may not do it, and an agent may only cancel jobs it started. The owner may cancel any job. */

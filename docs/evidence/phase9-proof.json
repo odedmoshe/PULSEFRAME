@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T04:27:21.668Z",
+  "ranAt": "2026-11-15T04:39:31.285Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -26,7 +26,7 @@
       ],
       "precision": 1,
       "recall": 1,
-      "analysisMs": 248,
+      "analysisMs": 228,
       "clipSeconds": 10,
       "note": "one synthetic clip with 5 hard cuts between very different pictures; H.264 with B-frames"
     },
@@ -42,60 +42,60 @@
           "bpmFound": 90.66,
           "bpmError": 0.66,
           "f1": 1,
-          "medianErrorMs": 5,
+          "medianErrorMs": 4.667,
           "p95ErrorMs": 10.667,
           "confidence": 0.787,
-          "analysisMs": 560
+          "analysisMs": 481
         },
         {
           "loop": "100",
           "bpmFound": 99.39,
           "bpmError": 0.61,
           "f1": 0.987,
-          "medianErrorMs": 5.2,
-          "p95ErrorMs": 10.3,
+          "medianErrorMs": 5,
+          "p95ErrorMs": 10,
           "confidence": 0.873,
-          "analysisMs": 477
+          "analysisMs": 297
         },
         {
           "loop": "120",
           "bpmFound": 120.19,
           "bpmError": 0.19,
           "f1": 0.989,
-          "medianErrorMs": 4.9,
-          "p95ErrorMs": 9.7,
+          "medianErrorMs": 5,
+          "p95ErrorMs": 10,
           "confidence": 0.986,
-          "analysisMs": 428
+          "analysisMs": 345
         },
         {
           "loop": "128",
           "bpmFound": 129.2,
           "bpmError": 1.2,
           "f1": 1,
-          "medianErrorMs": 5.65,
+          "medianErrorMs": 5.25,
           "p95ErrorMs": 10,
           "confidence": 0.814,
-          "analysisMs": 313
+          "analysisMs": 412
         },
         {
           "loop": "140",
           "bpmFound": 139.66,
           "bpmError": 0.34,
           "f1": 1,
-          "medianErrorMs": 4.2,
-          "p95ErrorMs": 9.829,
+          "medianErrorMs": 4,
+          "p95ErrorMs": 9.429,
           "confidence": 0.984,
-          "analysisMs": 395
+          "analysisMs": 437
         },
         {
           "loop": "drift-120-127",
           "bpmFound": 123.05,
           "bpmError": 0.45,
           "f1": 0.99,
-          "medianErrorMs": 4.393,
-          "p95ErrorMs": 9.776,
+          "medianErrorMs": 4.496,
+          "p95ErrorMs": 10.126,
           "confidence": 0.571,
-          "analysisMs": 345
+          "analysisMs": 376
         }
       ],
       "note": "24 s synthetic loops (kick with attack click on the beat, quieter hat off the beat, bass tone, noise). Not real music."
@@ -140,7 +140,7 @@
         ],
         "precision": 1,
         "recall": 1,
-        "analysisMs": 248,
+        "analysisMs": 228,
         "clipSeconds": 10,
         "note": "one synthetic clip with 5 hard cuts between very different pictures; H.264 with B-frames"
       }
@@ -162,60 +162,60 @@
           "bpmFound": 90.66,
           "bpmError": 0.66,
           "f1": 1,
-          "medianErrorMs": 5,
+          "medianErrorMs": 4.667,
           "p95ErrorMs": 10.667,
           "confidence": 0.787,
-          "analysisMs": 560
+          "analysisMs": 481
         },
         {
           "loop": "100",
           "bpmFound": 99.39,
           "bpmError": 0.61,
           "f1": 0.987,
-          "medianErrorMs": 5.2,
-          "p95ErrorMs": 10.3,
+          "medianErrorMs": 5,
+          "p95ErrorMs": 10,
           "confidence": 0.873,
-          "analysisMs": 477
+          "analysisMs": 297
         },
         {
           "loop": "120",
           "bpmFound": 120.19,
           "bpmError": 0.19,
           "f1": 0.989,
-          "medianErrorMs": 4.9,
-          "p95ErrorMs": 9.7,
+          "medianErrorMs": 5,
+          "p95ErrorMs": 10,
           "confidence": 0.986,
-          "analysisMs": 428
+          "analysisMs": 345
         },
         {
           "loop": "128",
           "bpmFound": 129.2,
           "bpmError": 1.2,
           "f1": 1,
-          "medianErrorMs": 5.65,
+          "medianErrorMs": 5.25,
           "p95ErrorMs": 10,
           "confidence": 0.814,
-          "analysisMs": 313
+          "analysisMs": 412
         },
         {
           "loop": "140",
           "bpmFound": 139.66,
           "bpmError": 0.34,
           "f1": 1,
-          "medianErrorMs": 4.2,
-          "p95ErrorMs": 9.829,
+          "medianErrorMs": 4,
+          "p95ErrorMs": 9.429,
           "confidence": 0.984,
-          "analysisMs": 395
+          "analysisMs": 437
         },
         {
           "loop": "drift-120-127",
           "bpmFound": 123.05,
           "bpmError": 0.45,
           "f1": 0.99,
-          "medianErrorMs": 4.393,
-          "p95ErrorMs": 9.776,
+          "medianErrorMs": 4.496,
+          "p95ErrorMs": 10.126,
           "confidence": 0.571,
-          "analysisMs": 345
+          "analysisMs": 376
         }
       ]
     },

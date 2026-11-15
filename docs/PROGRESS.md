@@ -328,6 +328,13 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Limits: the editor exposes only position and size per format (the op accepts any caption style field); no per-format caption **text** or line-breaking overrides; no per-format title text.
 - Known weakness of the proofs, seen three times this session (Phase 12, speed, editor-interactions): a check that polls the server and then reads the page can run before the page has re-rendered. Each instance found was fixed by waiting for the page; **other instances may exist**, so a single odd failure of a page-reading check should be re-run and inspected before it is believed either way.
 
+**Checkpoint 13v — analysis as a durable job**
+- `POST …/assets/{id}/analyze` with `background: true` (MCP `analyze_asset` likewise) returns a job id at once; the measurement runs in the background and the result is attached exactly as in the in-request path. Everything that can be refused up front (permissions, wrong kind of media, a hand-corrected result without `overwrite`) is refused before a job exists.
+- The job survives a restart (it is measured again from the start). Before attaching, the server re-checks that the asset still exists and that nobody corrected the result by hand meanwhile; if so the job fails with `would_discard_edits` instead of overwriting. Cancel: a queued job is removed; a running one runs to its end and its result is discarded (stated in the response).
+- The editor's "find scene cuts" / "find beats" buttons now use the job and wait for it, so long media cannot time out a request.
+- Verified: `analysisJobs.test.ts` (1 test, real ffmpeg on a 12 s click track): 202 + job, succeeded with ≥20 beats at 120 ± 2 BPM, identical beat times to the in-request path, cancel of queued and finished jobs, restart with one interrupted job (recovered and succeeded) and one queued job against a hand-corrected result (failed with the typed error). 284 unit tests; phase9 12, editor-interactions 15, phase11 12, phase5 33.
+- Limits: tested on 12 s of audio only — **no long file was analysed**, so the claim is about the mechanism, not about hour-long media; no progress percentage; a running measurement cannot be interrupted, only abandoned; the heavy-work limiter still applies (two at a time, short queue), so many simultaneous jobs fail fast with 429 rather than queueing durably; silence detection and loudness measurement are still in-request.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -355,7 +362,7 @@ Unblocked (no decision needed), roughly by value:
 4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 5. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
-7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
+7. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; test analysis on genuinely long media (analysis jobs exist, tested on short audio).
 8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
@@ -372,7 +379,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 283 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 284 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.

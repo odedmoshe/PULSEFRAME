@@ -46,7 +46,7 @@ export function AnalysisPanel() {
 
   const run = async (kind: Kind) => {
     setBusy(kind); setErr(null);
-    try { await api.analyzeAsset(doc.id, assetId, { kind }); }
+    try { await api.analyzeAssetJob(doc.id, assetId, { kind }); }
     catch (e) { setErr(e instanceof ApiFailure ? `${e.message}${e.code === 'no_video' ? ` (${t('analysis.noVideo')})` : e.code === 'no_audio' ? ` (${t('analysis.noAudio')})` : ''}` : e instanceof Error ? e.message : String(e)); }
     finally { setBusy(null); }
   };
