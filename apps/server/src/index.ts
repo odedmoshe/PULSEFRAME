@@ -55,7 +55,9 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       await backup.stop();
       await capabilities.stop();
       await derivatives.stop();
-      await new Promise((r) => server.close(r));
+      // Stop accepting, then drop connections that are still open (event streams of pages that were not closed, idle keep-alives):
+      // without this, shutdown waited for them indefinitely.
+      await new Promise((r) => { server.close(r); (server as unknown as { closeAllConnections?: () => void }).closeAllConnections?.(); });
       await host.close();
       store.close();
     },

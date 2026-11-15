@@ -130,6 +130,7 @@ async function main() {
 
     console.log('\n# cancel and retry from the editor');
     const browser = await chromium.launch();
+    try {
     const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
     await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     await page.goto(`${s.ownerUrl}&project=${big}`);
@@ -140,7 +141,7 @@ async function main() {
     await page.getByTestId('export-cancel').click();
     await page.getByTestId('export-canceled').waitFor({ timeout: 15_000 });
     check('editor: Cancel stops a running export and shows that it was canceled; Retry is offered', (await page.getByTestId('export-retry').count()) === 1 && (await page.getByTestId('export-download').count()) === 0);
-    await browser.close();
+    } finally { await browser.close(); } // always: a page left open keeps its event stream, which used to make shutdown wait forever after a failed step
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.
     console.error(e);
