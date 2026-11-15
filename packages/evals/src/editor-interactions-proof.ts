@@ -301,6 +301,21 @@ async function main() {
     check('multi-select: Ctrl+click adds a clip to the selection; dragging one moves both by the same 20 frames in one transaction and a third clip stays; Alt+→ nudges both; Ctrl+A selects all, Shift+click removes one; Delete removes the two selected in one transaction and one undo restores them', twoSelected === 2 && revDrag === rev0 + 1 && stillTwo === 2 && revNudge === rev0 + 2 && allSelected === 3 && revDelete === rev0 + 3 && revUndo === rev0 + 4 && mErrors.length === 0, { twoSelected, stillTwo, allSelected, revisions: [rev0, revDrag, revNudge, revDelete, revUndo], errors: mErrors.slice(0, 3) });
     await mpage.close();
 
+    console.log('\n# subtitle file in a legacy Hebrew encoding');
+    const HEB_CUE = 'שלום עולם, מה נשמע?';
+    const srtText = `1\r\n00:00:01,000 --> 00:00:02,000\r\n${HEB_CUE}\r\n\r\n2\r\n00:00:03,000 --> 00:00:04,000\r\nPULSEFRAME 2026\r\n`;
+    const cp1255 = Buffer.from([...srtText].map((ch) => { const c = ch.codePointAt(0)!; return c >= 0x05d0 && c <= 0x05ea ? c - 0x05d0 + 0xe0 : c; }));
+    const cuesOf = (d: any) => d.sequences.seq_main.tracks.filter((t: any) => t.kind === 'caption').flatMap((t: any) => t.clips).map((c: any) => c.text);
+    await page.getByTestId('captions-import').setInputFiles({ name: 'legacy.srt', mimeType: 'application/x-subrip', buffer: cp1255 });
+    const legacyIn = await until((x2) => cuesOf(x2).includes(HEB_CUE));
+    const note = await page.getByTestId('encoding-note').first().getAttribute('data-encoding').catch(() => null);
+    const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(srtText.replace(HEB_CUE, 'עוד שורה בעברית').replace('PULSEFRAME 2026', 'UTF-16 file').replace('00:00:01,000 --> 00:00:02,000', '00:00:05,000 --> 00:00:06,000').replace('00:00:03,000 --> 00:00:04,000', '00:00:07,000 --> 00:00:08,000'), 'utf16le')]); // its own times: cues may not overlap
+    await page.getByTestId('captions-import').setInputFiles({ name: 'wide.srt', mimeType: 'application/x-subrip', buffer: utf16 });
+    const wideIn = await until((x2) => cuesOf(x2).includes('עוד שורה בעברית') && cuesOf(x2).includes('UTF-16 file'));
+    await page.waitForFunction(() => !document.querySelector('[data-testid=encoding-note]'), undefined, { timeout: 5000 }).catch(() => {});
+    const noteAfterMarked = await page.getByTestId('encoding-note').count();
+    check('a Hebrew subtitle file saved as Windows-1255 is imported with its Hebrew text intact and the editor says it had to guess the encoding; a UTF-16 file with a byte-order mark is imported too, without that note', legacyIn && note === 'windows-1255' && wideIn && noteAfterMarked === 0, { note, cues: cuesOf(await doc()).slice(0, 6), noteAfterMarked });
+
     console.log('\n# project archive from the editor');
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('archive-download').click()]);
     const arcFile = path.join(art, 'project.tar');

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T06:28:11.469Z",
+  "ranAt": "2026-11-15T07:24:17.514Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 15,
-  "total": 15,
+  "passed": 16,
+  "total": 16,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -173,11 +173,25 @@
       }
     },
     {
+      "name": "a Hebrew subtitle file saved as Windows-1255 is imported with its Hebrew text intact and the editor says it had to guess the encoding; a UTF-16 file with a byte-order mark is imported too, without that note",
+      "ok": true,
+      "detail": {
+        "note": "windows-1255",
+        "cues": [
+          "שלום עולם, מה נשמע?",
+          "PULSEFRAME 2026",
+          "עוד שורה בעברית",
+          "UTF-16 file"
+        ],
+        "noteAfterMarked": 0
+      }
+    },
+    {
       "name": "download the project archive in the editor, import it back, and the editor opens a new project with the same content",
       "ok": true,
       "detail": {
         "file": "interactions.pulseframe.tar",
-        "bytes": 2792960
+        "bytes": 2794496
       }
     },
     {

@@ -418,6 +418,13 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified with these changes: 296 unit tests (`conform.test.ts` gained still conversion and orientation-tag tests); image matrix 3/3; input matrix 4/4; start-offset 4; phase0 54, phase3 27, phase4 19, phase6 35, phase12 15; accessibility audit clean. Other proofs were not re-run for this change (it touches still-image import only).
 - Not checked: colour profiles (ICC), wide gamut and HDR, CMYK beyond "looks like the RGB original at four points", EXIF orientation in formats other than JPEG, HEIC (the path exists; no HEIC fixture could be made here), animated pictures beyond their first frame, real photographs.
 
+**Checkpoint 14f — subtitle and transcript files in legacy encodings**
+- The parser was already well covered (byte-order mark, line endings, tags, bad timestamps). The gap was upstream of it: the editor read every subtitle or transcript file as UTF-8, so a Hebrew file saved as Windows-1255 or UTF-16 — common for older subtitle files — would have been imported as garbage, silently.
+- `apps/web/src/textDecode.ts`: a byte-order mark decides; then unmarked UTF-16 (alternating zero bytes); then strict UTF-8; then a legacy single-byte encoding — Windows-1255 when the high bytes form Hebrew runs, otherwise Windows-1252. When it had to guess, the editor says which encoding it used, next to the import button.
+- Verified: `textDecode.test.ts` (5: UTF-8 with and without mark, UTF-16 both orders marked and unmarked, Windows-1255 Hebrew, accented Latin not mistaken for Hebrew, empty file) and one end-to-end check in `pnpm proof:editor-interactions` (now 16; four consecutive runs): a Windows-1255 Hebrew SRT imports with its text intact and the note shown; a marked UTF-16 file imports without the note. 301 unit tests; phase6 35, phase12 15, accessibility audit clean.
+- The tests caught two flaws in the first version of the detector before it shipped: unmarked UTF-16 Latin text is also valid UTF-8 (so it must be tested first), and a short accented Latin line looked "mostly Hebrew" by byte ratio alone.
+- Limits: only these five encodings (no ISO-8859-8 visual-order Hebrew, no Arabic or Cyrillic code pages — those files would be read as Windows-1252 and look wrong, with the note shown); detection is a heuristic and the user cannot override it; imports through REST/MCP take text, so the caller decodes.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -462,8 +469,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 296 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
+Expect 301 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 16 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { decodeTextFile, type DecodedText } from '../textDecode.ts';
 import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from '@pulseframe/core';
 import { sourceAt, sourceEnd, timelineAt, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
@@ -19,7 +20,14 @@ function sourceToTimeline(clips: MediaClip[], s: T.RationalTime): T.RationalTime
   for (const c of clips) if (T.lte(c.sourceIn, s) && T.lt(s, sourceEnd(c))) return timelineAt(c, s);
   return null;
 }
-const readText = (file: File) => file.text();
+/** Subtitle and transcript files do not declare their encoding; older Hebrew files are often Windows-1255 or UTF-16. */
+const readText = async (file: File) => decodeTextFile(new Uint8Array(await file.arrayBuffer()));
+/** Says so when the encoding of an imported text file had to be guessed, so a wrong guess is not silent. */
+function EncodingNote({ info }: { info: DecodedText | null }) {
+  const { t } = useEditorState();
+  if (!info?.guessed) return null;
+  return <p className="muted" role="status" data-testid="encoding-note" data-encoding={info.encoding}>{t('import.encodingGuessed')} <bdi>{info.encoding}</bdi></p>;
+}
 
 export function TranscriptPanel() {
   const { editor, state, t } = useEditorState();
@@ -29,6 +37,7 @@ export function TranscriptPanel() {
   const assetId = selAsset ?? (doc ? Object.keys(doc.transcripts)[0] ?? null : null);
   const transcript = doc && assetId ? doc.transcripts[assetId] : undefined;
   const [lang, setLang] = useState<'he' | 'en'>('he');
+  const [decoded, setDecoded] = useState<DecodedText | null>(null);
   const [anchor, setAnchor] = useState<string | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ message: string; approx: boolean } | null>(null);
@@ -53,8 +62,9 @@ export function TranscriptPanel() {
           <label className="ghost file">
             {t('transcript.import')}
             <input type="file" accept=".srt,.vtt,text/vtt,application/x-subrip,text/plain" disabled={!selAsset} data-testid="transcript-import"
-              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && selAsset) void readText(f).then((content) => editor.commit([{ op: 'import_transcript', args: { assetId: selAsset, language: lang, content } }], 'Import transcript')).catch(editor.fail); }} />
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && selAsset) void readText(f).then((d) => { setDecoded(d); return editor.commit([{ op: 'import_transcript', args: { assetId: selAsset, language: lang, content: d.text } }], 'Import transcript'); }).catch(editor.fail); }} />
           </label>
+          <EncodingNote info={decoded} />
           {!selAsset && <p className="muted">{t('transcript.selectClip')}</p>}
         </div>
       </div>
@@ -220,6 +230,7 @@ function ColorField({ label, value, onCommit, testid }: { label: string; value: 
 export function CaptionControls({ editor }: { editor: Editor }) {
   const { state, t } = useEditorState();
   const { doc } = state;
+  const [decoded, setDecoded] = useState<DecodedText | null>(null);
   if (!doc) return null;
   const track = mainTracks(doc).find((x) => x.kind === 'caption' && x.caption);
   const hasTranscript = Object.keys(doc.transcripts).length > 0;
@@ -273,8 +284,9 @@ export function CaptionControls({ editor }: { editor: Editor }) {
       <label className="ghost file">
         {t('captions.import')}
         <input type="file" accept=".srt,.vtt,text/vtt,application/x-subrip,text/plain" data-testid="captions-import"
-          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readText(f).then((content) => editor.commit([{ op: 'import_captions', args: { content, ...(track?.caption?.mode === 'manual' ? { trackId: track.id } : {}) } }], 'Import captions')).catch(editor.fail); }} />
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readText(f).then((d) => { setDecoded(d); return editor.commit([{ op: 'import_captions', args: { content: d.text, ...(track?.caption?.mode === 'manual' ? { trackId: track.id } : {}) } }], 'Import captions'); }).catch(editor.fail); }} />
       </label>
+      <EncodingNote info={decoded} />
     </div>
   );
 }
