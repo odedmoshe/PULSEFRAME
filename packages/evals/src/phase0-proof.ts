@@ -95,7 +95,7 @@ async function main() {
   for (let i = 0; i < 100; i++) { der = (await (await rest(`/projects/${projectId}/assets/${asset.id}/derivatives`)).json()).derivatives; if (der.every((d: any) => d.status !== 'queued' && d.status !== 'running')) break; await new Promise((r) => setTimeout(r, 100)); }
   const proxy = der.find((d: any) => d.kind === 'proxy');
   check('ingest derivatives: thumbnails, waveform peaks and a frame-identical proxy are produced in the background', der.every((d: any) => d.status === 'ready') && proxy.meta.frameMapping === 'identity' && proxy.meta.proxy.frameCount === 120 && (await rest(`/projects/${projectId}/assets/${asset.id}/derivatives/thumbnails`)).headers.get('content-type') === 'image/jpeg', der.map((d: any) => `${d.kind}:${d.status}:${d.bytes}`));
-  await page.locator('.assets li button').first().click();
+  await page.locator('.assets li [data-testid^=add-]').first().click(); // the "add to timeline" button (not simply the first button: a rename button precedes it)
   await page.locator('[data-track-kind=video][data-clip-type=media]').first().waitFor();
   check('edit: add to timeline creates linked picture + audio clips', (await page.locator('[data-track-kind=video]').count()) === 1 && (await page.locator('[data-track-kind=audio]').count()) === 1);
 

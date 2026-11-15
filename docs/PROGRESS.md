@@ -623,6 +623,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - New op `move_track {trackId, toIndex}`. Undo needed a new tracked entity, the track order of a sequence, compared only over the tracks both states have, so adding or removing a track is still not an order change and an undo of a move still works after other tracks were added. Restoring it puts the named tracks back in their relative order in the slots they occupy.
 - Editor: "Move the selected clip's track up / down" in the command palette.
 - Verified here: `reverse.test.ts` "track order" (what is drawn on top changes; the diff is exactly the order entity; undo; undo after an unrelated track was added; refusals); the op is in the operations and store fuzz (the store fuzz undoes and redoes random histories); 413 unit tests; `pnpm proof:phase3` 40/40 (palette command, timeline rows follow, Ctrl+Z restores).
+- **Miss of mine, caught here:** `pnpm proof` (Phase 0) had been failing since checkpoint 15j and I had not rerun it after that change. It clicked "the first button" of a library entry, which became the rename button. The product was fine; the proof now clicks the add button by its test id and passes 54/54. A full regression follows.
 - A grant limited to certain tracks or a time range cannot reorder tracks (the order change falls outside it), by the existing rule for anything that is not a clip or a granted track.
 
 ## In progress
