@@ -11,7 +11,7 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { pictureSourceAt, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
+import { handleAfterEnd, pictureSourceAt, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
@@ -528,7 +528,7 @@ defineOp({
 defineOp({
   name: 'set_clip_reverse',
   version: 1,
-  description: 'Play a video clip backwards (reverse=true) or forwards again (false). It keeps its place, length and the stretch of source it shows; only the order of the pictures changes. Picture only: sound is not reversed, so a linked sound clip is unlinked and keeps playing forwards (mute or delete it if that is not wanted). Not for freeze frames, stills, or clips with a transition at either end.',
+  description: 'Play a video clip backwards (reverse=true) or forwards again (false). It keeps its place, length and the stretch of source it shows; only the order of the pictures changes. Picture only: sound is not reversed, so a linked sound clip is unlinked and keeps playing forwards (mute or delete it if that is not wanted). Not for freeze frames or stills. A transition into the next clip must still have enough spare source in the new direction.',
   args: z.object({ clipId: z.string(), reverse: z.boolean() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
@@ -536,10 +536,13 @@ defineOp({
     const asset = clip.type === 'media' ? d.assets[clip.assetId] : undefined;
     if (clip.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'only a video clip on a video track can play backwards', { clipId: a.clipId });
     if (clip.freeze) throw new OpError('incompatible', 'a freeze frame has no direction', { clipId: a.clipId });
+    // A transition into the NEXT clip plays this clip on past its end; after a change of direction that material lies on the other side of the stretch.
     const i = f.track.clips.indexOf(clip);
     const next = f.track.clips[i + 1];
-    if (clip.transition || (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip))))
-      throw new OpError('incompatible', 'remove the transition at this clip first; transitions next to a reversed clip are not supported yet', { clipId: a.clipId }, 'Use set_transition with type=null.');
+    if (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip))) {
+      const after = T.frameIndexAt(handleAfterEnd({ ...clip, ...(a.reverse ? { reverse: true as const } : { reverse: undefined }) }, asset.duration), d.settings.frameRate);
+      if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames in the new direction but only ${after} exist`, { clipId: a.clipId, nextClipId: next.id, maxFrames: after }, 'Shorten or remove that transition first, or slip this clip.');
+    }
     if (!!clip.reverse === a.reverse) throw new OpError('invalid_args', `the clip already plays ${a.reverse ? 'backwards' : 'forwards'}`, { clipId: a.clipId });
     const affected = [clip.id];
     let unlinked = 0;
@@ -1270,7 +1273,6 @@ defineOp({
     const { clip, track } = pictureClip(d, a.clipId);
     if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
     if (a.type === null) { delete clip.transition; return { affectedIds: [clip.id], summary: 'Removed transition' }; }
-    if (clip.reverse || previousAdjacent(track, clip)?.reverse) throw new OpError('incompatible', 'transitions next to a clip that plays backwards are not supported yet', { clipId: clip.id });
     const rate = d.settings.frameRate;
     const frames = a.frames ?? 15;
     const own = T.frameIndexAt(clip.duration, rate);
@@ -1279,7 +1281,7 @@ defineOp({
     if (prev) {
       const asset = d.assets[prev.assetId]!;
       if (asset.kind !== 'image') {
-        const handle = T.frameIndexAt(toTimelineSpan(prev, T.sub(asset.duration, sourceEnd(prev))), rate);
+        const handle = T.frameIndexAt(handleAfterEnd(prev, asset.duration), rate);
         if (handle < frames) throw new OpError('out_of_bounds', `the previous clip has only ${handle} unused source frames after its end; the transition needs ${frames}`, { maxFrames: handle, previousClipId: prev.id }, handle > 0 ? 'Use at most maxFrames, or trim the end of the previous clip to free more source.' : 'Trim the end of the previous clip to free source frames for the transition.');
       }
     }

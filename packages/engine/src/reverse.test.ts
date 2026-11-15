@@ -96,8 +96,31 @@ describe('reverse playback of a clip', () => {
     expect(shown(frozen, 20, 40)).toEqual(range(149, 130));
     expect(shown(frozen, 40, 55).every((x) => x === 129)).toBe(true);
     expect(shown(frozen, 55, 135)).toEqual(range(129, 50));
-    expect(code(() => tx(doc, [{ op: 'set_transition', args: { clipId, type: 'dissolve', frames: 10 } }]))).toBe('incompatible');
     const hold = (tx(doc, [{ op: 'freeze_frame', args: { clipId, at: f(40), duration: f(15) } }]).results[0]!.output as any).freezeClipId as string;
     expect(code(() => tx(frozen, [{ op: 'set_clip_reverse', args: { clipId: hold, reverse: true } }]))).not.toBe('ok');
+  });
+  it('transitions next to a reversed clip: the outgoing reversed clip keeps playing backwards into earlier source, and the spare-source rule looks on the right side', () => {
+    const { doc, clipId, assetId } = project(); // reversed, shows 149…50 at 20..119; 50 source frames lie before the stretch
+    let d = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(120), sourceIn: f(100), duration: f(30), withLinkedAudio: false } }]);
+    const nextId = (d.results[0]!.output as any).clipId as string;
+    const withTr = tx(d.doc, [{ op: 'set_transition', args: { clipId: nextId, type: 'dissolve', frames: 10 } }]).doc;
+    expect(validateProject(withTr)).toEqual([]);
+    // during the transition (timeline 120..129) the outgoing layer continues 49, 48, … and the incoming shows 100, 101, …
+    const layers = (t: number) => evaluate(withTr, f(t)).layers.filter((x) => x.kind === 'video').map((x: any) => [x.transition?.role ?? null, x.sourceFrameIndex]);
+    expect(layers(119)).toEqual([[null, 50]]);
+    expect(layers(120).sort()).toEqual([['in', 100], ['out', 49]].sort());
+    expect(layers(129).sort()).toEqual([['in', 109], ['out', 40]].sort());
+    expect(layers(130)).toEqual([[null, 110]]);
+    // only 50 spare frames exist before the stretch: 51 is refused, 50 is accepted
+    expect(code(() => tx(d.doc, [{ op: 'trim_clip', args: { clipId: nextId, edge: 'end', to: f(190) } }, { op: 'set_transition', args: { clipId: nextId, type: 'dissolve', frames: 51 } }]))).toBe('out_of_bounds');
+    expect(code(() => tx(d.doc, [{ op: 'trim_clip', args: { clipId: nextId, edge: 'end', to: f(190) } }, { op: 'set_transition', args: { clipId: nextId, type: 'dissolve', frames: 50 } }]))).toBe('ok');
+    // a transition AT the start of the reversed clip itself is fine too (it needs nothing from the reversed clip)
+    d = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(0), sourceIn: f(0), duration: f(20), withLinkedAudio: false } }, { op: 'set_transition', args: { clipId, type: 'dissolve', frames: 8 } }]);
+    expect(validateProject(d.doc)).toEqual([]);
+    // turning the outgoing clip forwards again needs spare source AFTER the stretch: the source is 240 long and the stretch ends at 150, so it is allowed;
+    // slip the stretch to the very end of the source first and it is refused
+    expect(code(() => tx(withTr, [{ op: 'set_clip_reverse', args: { clipId, reverse: false } }]))).toBe('ok');
+    const atEnd = tx(withTr, [{ op: 'slip_clip', args: { clipId, by: f(85) } }]).doc; // stretch 135..234, 5 frames after it
+    expect(code(() => tx(atEnd, [{ op: 'set_clip_reverse', args: { clipId, reverse: false } }]))).toBe('out_of_bounds');
   });
 });

@@ -55,4 +55,10 @@ export const sourceInOfPart = (c: MediaClip, fromOffset: T.RationalTime, length:
  */
 export const pictureSourceAt = (c: MediaClip, t: T.RationalTime, frame: T.RationalTime): T.RationalTime =>
   c.reverse ? sourceAt(c, T.sub(T.sub(T.add(T.add(c.start, c.start), c.duration), frame), t)) : sourceAt(c, t);
+/**
+ * Timeline time for which a clip could keep playing past its end before its source runs out (the "handle" a transition
+ * into the next clip uses). A forward clip continues into later source; a reversed clip continues into earlier source.
+ */
+export const handleAfterEnd = (c: MediaClip, assetDuration: T.RationalTime): T.RationalTime =>
+  c.reverse ? toTimelineSpan(c, c.sourceIn) : toTimelineSpan(c, T.sub(assetDuration, sourceEnd(c)));
 

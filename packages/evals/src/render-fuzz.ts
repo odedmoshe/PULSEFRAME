@@ -76,7 +76,7 @@ async function main() {
           const sorted = [...t.clips].sort((x: any, y: any) => T.cmp(x.start, y.start));
           for (let i = 1; i < sorted.length; i++) {
             if (!T.eq(T.add(sorted[i - 1].start, sorted[i - 1].duration), sorted[i].start)) continue;
-            const type = ['cross-dissolve', 'dip-to-black', 'wipe-left', 'slide-left'][(seed + i) % 4];
+            const type = ['dissolve', 'dip-black', 'wipe-left', 'push-left'][(seed + i) % 4];
             if ((await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_transition', args: { clipId: sorted[i].id, type, frames: 4 + ((seed + i) % 8) } }] })).status === 200) dressed++;
           }
           for (const [i, c] of sorted.entries()) {
@@ -158,6 +158,13 @@ async function main() {
         // First the middle of up to two clips with a time-mapping feature (reverse, speed, freeze), so these are compared whenever they exist.
         for (const c of vclips.filter((c: any) => c.reverse || c.speed || c.freeze).sort((x: any, y: any) => Number(!!y.reverse) - Number(!!x.reverse)).slice(0, 2)) {
           const i = Math.min(frames - 1, fIdx(c.start) + Math.floor(fIdx(c.duration) / 2));
+          if (stills.has(i)) continue;
+          const st = await stillOf(i);
+          if (level(st) > 0.6) stills.set(i, st);
+        }
+        // …and the middle of up to two transitions (the dressing step above adds them where two picture clips touch).
+        for (const c of vclips.filter((c: any) => c.transition).slice(0, 2)) {
+          const i = Math.min(frames - 1, fIdx(c.start) + Math.floor(c.transition.frames / 2));
           if (stills.has(i)) continue;
           const st = await stillOf(i);
           if (level(st) > 0.6) stills.set(i, st);
