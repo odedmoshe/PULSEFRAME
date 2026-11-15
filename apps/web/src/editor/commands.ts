@@ -121,6 +121,7 @@ export const COMMANDS: Command[] = [
   { id: 'edit.slipEarlier', label: 'cmd.slipEarlier', group: 'edit', keys: ['Mod+Alt+ArrowLeft'], enabled: canSlip, run: slip(-1) },
   { id: 'edit.slipLater10', label: 'cmd.slipLater10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowRight'], enabled: canSlip, run: slip(10) },
   { id: 'edit.slipEarlier10', label: 'cmd.slipEarlier10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowLeft'], enabled: canSlip, run: slip(-10) },
+  { id: 'edit.closeGaps', label: 'cmd.closeGaps', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: (e) => e.commit([{ op: 'close_gaps', args: {} }], 'Close gaps') },
   { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },
   { id: 'edit.selectNext', label: 'cmd.selectNext', group: 'edit', keys: ['Alt+ArrowDown'], run: selectAdjacent(1) },
   { id: 'edit.selectPrev', label: 'cmd.selectPrev', group: 'edit', keys: ['Alt+ArrowUp'], run: selectAdjacent(-1) },

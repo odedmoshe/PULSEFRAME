@@ -140,3 +140,31 @@ describe('slip_clip', () => {
     expect(code(() => tx(d, [{ op: 'slip_clip', args: { clipId: 'clp_none', by: f(5) } }]))).toBe('not_found');
   });
 });
+
+describe('close_gaps', () => {
+  it('removes time that is empty on every track, keeps gaps that another track covers, moves markers, and is undone in one step', () => {
+    const { doc, assetId, titleId } = project(); // picture+sound 0..240, title 0..60, markers 30 and 150
+    // second clip at 300..360 (gap 240..300 on every track), a title at 420..450 (gap 360..420), and the first title leaves 60..240 empty on the text track only
+    let d = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(300), duration: f(60) } }, { op: 'add_text', args: { text: 'late', start: f(420), duration: f(30) } }, { op: 'add_marker', args: { time: f(330), label: 'in second clip' } }, { op: 'add_marker', args: { time: f(270), label: 'in the gap' } }]).doc;
+    const r = tx(d, [{ op: 'close_gaps', args: {} }]);
+    expect(validateProject(r.doc)).toEqual([]);
+    expect((r.results[0]!.output as any).gaps.map((g: any) => [fi(g.start), fi(g.end)])).toEqual([[240, 300], [360, 420]]);
+    expect(fi(sequenceDuration(r.doc))).toBe(450 - 120);
+    const starts = (x: ProjectDocument, kind: string) => clips(x).filter((c) => c.kind === kind).map((c) => [fi(c.start), fi(c.duration)]).sort((a, b) => a[0]! - b[0]!);
+    expect(starts(r.doc, 'video')).toEqual([[0, 240], [240, 60]]);
+    expect(starts(r.doc, 'text')).toEqual([[0, 60], [300, 30]]); // the text-only gap 60..240 is under the picture and stays
+    expect(Object.values(r.doc.markers!).map((m) => [fi(m.time), m.label]).sort((a: any, b: any) => a[0] - b[0])).toEqual([[30, 'early'], [150, 'late'], [240, 'in the gap'], [270, 'in second clip']]);
+    expect(fi(findClip(r.doc, titleId)!.clip.start)).toBe(0);
+    const back = structuredClone(r.doc);
+    restoreEntities(back, diffEntities(d, r.doc).map((x) => ({ id: x.id, state: x.before })));
+    expect(back).toEqual(d);
+    // nothing left to close; a range limits the work; leading empty time counts
+    expect(code(() => tx(r.doc, [{ op: 'close_gaps', args: {} }]))).toBe('not_found');
+    const ranged = tx(d, [{ op: 'close_gaps', args: { from: f(250), to: f(290) } }]).doc;
+    expect(fi(sequenceDuration(ranged))).toBe(450 - 40);
+    d = tx(createProject({ id: 'prj_lead', name: 'lead', width: 640, height: 360 }), [{ op: 'add_text', args: { text: 'x', start: f(90), duration: f(30) } }]).doc;
+    expect(starts(tx(d, [{ op: 'close_gaps', args: {} }]).doc, 'text')).toEqual([[0, 30]]);
+    expect(code(() => tx(d, [{ op: 'close_gaps', args: { from: f(50), to: f(20) } }]))).toBe('invalid_args');
+  });
+});
+

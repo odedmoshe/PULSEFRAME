@@ -362,6 +362,23 @@ async function main() {
     const slipped = sa.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === slipClip.id) as any;
     const slipShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
     check('slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged', sa.revision === sb.revision + 4 && T.eq(slipped.start, slipClip.start) && T.eq(slipped.duration, slipClip.duration) && T.frameIndexAt(slipped.sourceIn, R) === 73 && JSON.stringify(slipShown) === JSON.stringify([30 + k - 1, 73, 82, 110]), { slipShown, sourceIn: T.frameIndexAt(slipped.sourceIn, R), revisions: [sb.revision, sa.revision] });
+
+    console.log('\n# close gaps');
+    const gb = await getDoc();
+    const gEnd = endOf(gb.project);
+    await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'add_text', args: { text: 'far', start: T.frameTime(gEnd + 90, R), duration: T.frameTime(30, R) } }] }) });
+    await page.waitForFunction((n) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) > n, gb.revision, { timeout: 8000 }).catch(() => {});
+    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    await key('Control+KeyK');
+    await page.getByTestId('palette-input').fill('close empty gaps');
+    const gapCmd = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    await key('Enter');
+    let ga = await getDoc();
+    /** Frames covered by at least one clip on any track. */
+    const covered = (d: ProjectDocument) => { const on = new Set<number>(); for (const tr of d.sequences.seq_main!.tracks) for (const c of tr.clips) for (let i = T.frameIndexAt(c.start, R), e = i + T.frameIndexAt(c.duration, R); i < e; i++) on.add(i); return on.size; };
+    const wantEnd = covered(gb.project) + 30; // everything that was covered, plus the late title
+    for (let i = 0; i < 50 && endOf(ga.project) !== wantEnd; i++) { await new Promise((r) => setTimeout(r, 100)); ga = await getDoc(); }
+    check('"close empty gaps" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost', gapCmd === 'edit.closeGaps' && endOf(ga.project) === wantEnd && covered(ga.project) === wantEnd && ga.revision === gb.revision + 2, { gapCmd, endBefore: gEnd, coveredBefore: covered(gb.project), endAfter: endOf(ga.project), coveredAfter: covered(ga.project), revisions: [gb.revision, ga.revision] });
     check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.

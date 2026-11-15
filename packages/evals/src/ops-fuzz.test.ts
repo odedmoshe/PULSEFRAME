@@ -5,7 +5,7 @@
  *  - a refusal is a typed OpError and leaves the document unchanged; nothing else may be thrown;
  *  - the document can be evaluated (picture graph, audio plan, timeline and summary queries, every linked format);
  *  - the entity diff of the step, applied backwards, restores the previous document exactly (the undo path).
- * Deterministic: seeds 1..PF_FUZZ_SEEDS (default 60), PF_FUZZ_STEPS steps each (default 70). A failure names seed, step and op.
+ * Deterministic: seeds 1..PF_FUZZ_SEEDS (default 60), PF_FUZZ_STEPS steps each (default 90). A failure names seed, step and op.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
@@ -14,7 +14,7 @@ import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
 
 const SEEDS = Math.max(1, Number(process.env.PF_FUZZ_SEEDS ?? 60));
-const STEPS = Math.max(1, Number(process.env.PF_FUZZ_STEPS ?? 70));
+const STEPS = Math.max(1, Number(process.env.PF_FUZZ_STEPS ?? 90));
 
 function run(seed: number) {
   const fz = createFuzz(seed);

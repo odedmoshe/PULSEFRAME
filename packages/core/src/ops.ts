@@ -13,7 +13,7 @@ import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { sourceAt, sourceEnd, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
-import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
+import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 
@@ -1590,6 +1590,35 @@ defineOp({
     const moved: string[] = [];
     if (!a.trackIds) for (const m of Object.values(d.markers ?? {})) if (m.sequenceId === seq.id && !T.lt(m.time, a.at)) { m.time = T.add(m.time, a.duration); moved.push(m.id); }
     return { affectedIds: [...new Set([...r.changed, ...r.created, ...moved])], summary: `Opened ${fmt(a.duration)} at ${fmt(a.at)}`, output: { createdClipIds: r.created, movedMarkerIds: moved } };
+  },
+});
+
+defineOp({
+  name: 'close_gaps',
+  version: 1,
+  description: 'Remove every stretch of time in which no track has a clip (empty time on all tracks at once), moving later material earlier so nothing else changes. Optionally only inside [from, to). A gap that exists on some tracks while another track has a clip there is not empty time and stays. Markers move as with cut_range.',
+  args: z.object({ sequenceId: z.string().optional(), from: RT.optional(), to: RT.optional() }).strict(),
+  apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
+    if (a.from) assertAligned(d, a.from, 'from');
+    if (a.to) assertAligned(d, a.to, 'to');
+    const lo = a.from ?? T.ZERO, hi = a.to ?? sequenceDuration(d, seq.id);
+    if (T.isNegative(lo) || !T.lt(lo, hi)) throw new OpError('invalid_args', 'need 0 <= from < to (to defaults to the end of the timeline)');
+    // occupied intervals over all tracks, merged
+    const spans = seq.tracks.flatMap((t) => t.clips.map((c) => ({ s: c.start, e: clipEnd(c) }))).sort((x, y) => T.cmp(x.s, y.s));
+    const gaps: { start: T.RationalTime; end: T.RationalTime }[] = [];
+    let cursor = lo;
+    for (const sp of spans) {
+      if (!T.lt(sp.s, hi)) break;
+      if (T.lt(cursor, sp.s)) gaps.push({ start: cursor, end: sp.s });
+      cursor = T.max(cursor, sp.e);
+    }
+    if (a.to && T.lt(cursor, hi) && spans.some((sp) => !T.lt(sp.s, hi))) gaps.push({ start: cursor, end: hi }); // empty time up to `to` only counts if something comes after it
+    if (gaps.length === 0) throw new OpError('not_found', 'there is no empty time to close', {}, 'A gap on one track under a clip on another track is not empty time; use move_clip for that.');
+    const affected = new Set<string>();
+    for (const g of gaps.reverse()) { const c = cutRange(d, seq, g.start, g.end, seq.tracks, true, ctx); for (const id of [...c.changed, ...c.markersMoved, ...c.markersRemoved]) affected.add(id); }
+    const total = gaps.reduce((n, g) => T.add(n, T.sub(g.end, g.start)), T.ZERO);
+    return { affectedIds: [...affected], summary: `Closed ${gaps.length} gap(s), ${fmt(total)} in all`, output: { gaps: gaps.reverse(), removed: total } };
   },
 });
 
