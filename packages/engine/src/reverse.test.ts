@@ -124,3 +124,43 @@ describe('reverse playback of a clip', () => {
     expect(code(() => tx(atEnd, [{ op: 'set_clip_reverse', args: { clipId, reverse: false } }]))).toBe('out_of_bounds');
   });
 });
+
+describe('track settings', () => {
+  it('hide, mute, lock, rename and remove a track; a hidden picture track is not drawn and a muted sound track is not mixed; a locked track refuses edits but can be unlocked; undo restores', () => {
+    const { fwd: doc, clipId, audioId } = project();
+    const tracks = (d: ProjectDocument) => d.sequences[d.mainSequenceId]!.tracks;
+    const vt = tracks(doc).find((t) => t.kind === 'video')!.id, at = tracks(doc).find((t) => t.kind === 'audio')!.id;
+    const hidden = tx(doc, [{ op: 'update_track', args: { trackId: vt, hidden: true, name: 'B-roll' } }]).doc;
+    expect(validateProject(hidden)).toEqual([]);
+    expect(evaluate(doc, f(30)).layers.filter((l) => l.kind === 'video').length).toBe(1);
+    expect(evaluate(hidden, f(30)).layers.filter((l) => l.kind === 'video').length).toBe(0);
+    expect(tracks(hidden).find((t) => t.id === vt)!.name).toBe('B-roll');
+    const muted = tx(doc, [{ op: 'update_track', args: { trackId: at, muted: true } }]).doc;
+    expect(evaluate(doc, f(30)).audio.length).toBe(1);
+    expect(evaluate(muted, f(30)).audio.length).toBe(0);
+    const locked = tx(doc, [{ op: 'update_track', args: { trackId: vt, locked: true } }]).doc;
+    expect(code(() => tx(locked, [{ op: 'move_clip', args: { clipId, start: f(40) } }]))).toBe('track_locked');
+    expect(code(() => tx(locked, [{ op: 'insert_gap', args: { at: f(30), duration: f(10) } }]))).toBe('track_locked');
+    expect(code(() => tx(locked, [{ op: 'remove_track', args: { trackId: vt } }]))).toBe('track_locked');
+    const unlocked = tx(locked, [{ op: 'update_track', args: { trackId: vt, locked: false } }]).doc;
+    expect(unlocked).toEqual(doc);
+    const back = structuredClone(hidden);
+    restoreEntities(back, diffEntities(doc, hidden).map((x) => ({ id: x.id, state: x.before })));
+    expect(back).toEqual(doc);
+    // wrong kind, nothing to change, unknown track
+    expect(code(() => tx(doc, [{ op: 'update_track', args: { trackId: at, hidden: true } }]))).toBe('incompatible');
+    expect(code(() => tx(doc, [{ op: 'update_track', args: { trackId: vt, muted: true } }]))).toBe('incompatible');
+    expect(code(() => tx(doc, [{ op: 'update_track', args: { trackId: vt } }]))).toBe('invalid_args');
+    expect(code(() => tx(doc, [{ op: 'update_track', args: { trackId: 'trk_none', locked: true } }]))).toBe('not_found');
+    // remove: only when empty; undo puts the track back in its place
+    expect(code(() => tx(doc, [{ op: 'remove_track', args: { trackId: vt } }]))).toBe('incompatible');
+    const emptied = tx(doc, [{ op: 'unlink_clip', args: { clipId } }, { op: 'delete_clip', args: { clipId: audioId } }]).doc;
+    const removed = tx(emptied, [{ op: 'remove_track', args: { trackId: at } }]).doc;
+    expect(tracks(removed).some((t) => t.id === at)).toBe(false);
+    expect(validateProject(removed)).toEqual([]);
+    const restored = structuredClone(removed);
+    restoreEntities(restored, diffEntities(emptied, removed).map((x) => ({ id: x.id, state: x.before })));
+    expect(restored).toEqual(emptied);
+  });
+});
+

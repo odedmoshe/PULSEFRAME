@@ -170,6 +170,42 @@ defineOp({
 });
 
 defineOp({
+  name: 'update_track',
+  version: 1,
+  description: 'Change a track: rename it, lock it (its clips cannot be changed, and edits that would move time on every track are refused until it is unlocked), hide it (picture, title and caption tracks: not drawn in preview, stills or export), or mute it (sound tracks: not heard). Works on a locked track, so it can be unlocked.',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string(), name: z.string().min(1).max(128).optional(), locked: z.boolean().optional(), hidden: z.boolean().optional(), muted: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    const seq = seqOf(d, a.sequenceId);
+    const t = seq.tracks.find((x) => x.id === a.trackId);
+    if (!t) throw new OpError('not_found', `track ${a.trackId} not found`, { trackId: a.trackId });
+    if (a.name === undefined && a.locked === undefined && a.hidden === undefined && a.muted === undefined) throw new OpError('invalid_args', 'nothing to change: give name, locked, hidden or muted');
+    if (a.hidden !== undefined && t.kind === 'audio') throw new OpError('incompatible', 'a sound track is muted, not hidden', { trackId: t.id }, 'Use muted.');
+    if (a.muted !== undefined && t.kind !== 'audio') throw new OpError('incompatible', 'only sound tracks can be muted; hide a picture, title or caption track instead', { trackId: t.id }, 'Use hidden.');
+    if (a.name !== undefined) t.name = a.name;
+    if (a.locked !== undefined) t.locked = a.locked;
+    if (a.hidden !== undefined) t.hidden = a.hidden;
+    if (a.muted !== undefined) t.muted = a.muted;
+    const flags = [t.locked ? 'locked' : null, t.hidden ? 'hidden' : null, t.muted ? 'muted' : null].filter(Boolean).join(', ');
+    return { affectedIds: [t.id], summary: `Track ${t.name}${flags ? `: ${flags}` : ': unlocked, shown'}` };
+  },
+});
+defineOp({
+  name: 'remove_track',
+  version: 1,
+  description: 'Remove an empty, unlocked track that nothing else refers to (not the speech source of a ducking setting, not the track a caption track follows). Delete or move its clips first.',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string() }).strict(),
+  apply(d, a) {
+    const seq = seqOf(d, a.sequenceId);
+    const t = mustTrack(seq, a.trackId);
+    if (t.clips.length) throw new OpError('incompatible', `track ${t.name} still has ${t.clips.length} clip(s)`, { trackId: t.id, clips: t.clips.length }, 'Delete or move its clips first.');
+    const user = seq.tracks.find((x) => x.id !== t.id && (x.audio?.duck?.sourceTrackIds.includes(t.id) || x.caption?.linkedTrackId === t.id));
+    if (user) throw new OpError('incompatible', `track ${user.name} refers to this track`, { trackId: t.id, usedBy: user.id }, 'Change that setting first.');
+    seq.tracks.splice(seq.tracks.indexOf(t), 1);
+    return { affectedIds: [t.id], summary: `Removed track ${t.name}` };
+  },
+});
+
+defineOp({
   name: 'add_clip',
   version: 1,
   description:

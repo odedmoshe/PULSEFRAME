@@ -106,6 +106,8 @@ export class Editor {
   get duration() { return this.state.doc ? sequenceDuration(this.state.doc) : T.ZERO; }
   /** Primary selected clip with its track (first of the selection). */
   get selected() { const id = this.state.selection[0]; return this.state.doc && id ? findClip(this.state.doc, id) : undefined; }
+  /** True when any selected clip sits on a locked track: editing commands are then inert (the server would refuse them anyway). */
+  get selectionLocked() { const d = this.state.doc; if (!d) return false; return this.state.selection.some((id) => findClip(d, id)?.track.locked); }
   /** True when the playhead is strictly inside the selected clip (split/trim are possible). */
   get playheadInsideSelection() { const s = this.selected; return !!s && T.lt(s.clip.start, this.playhead) && T.lt(this.playhead, clipEnd(s.clip)); }
   /** True when the playhead is on a frame the selected clip covers (keyframes can be set). */

@@ -84,8 +84,21 @@ export function Timeline() {
             })}
           </div>
           {doc && [...doc.sequences[doc.mainSequenceId]!.tracks].reverse().map((tr) => (
-            <div className={`track ${tr.kind}`} key={tr.id} role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`} data-track-id={tr.id}>
-              <span className="track-name">{tr.kind === 'caption' ? `${t('track.caption')}${tr.caption?.mode === 'transcript' ? ' ✦' : ''}` : tr.name}</span>
+            <div className={`track ${tr.kind}${tr.locked ? ' locked' : ''}${tr.hidden || tr.muted ? ' off' : ''}`} data-locked={tr.locked ? 'true' : undefined} data-off={tr.hidden || tr.muted ? 'true' : undefined} key={tr.id} role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`} data-track-id={tr.id}>
+              <span className="track-head">
+                <span className="track-name" dir="auto" title={tr.name}>{tr.kind === 'caption' ? `${t('track.caption')}${tr.caption?.mode === 'transcript' ? ' ✦' : ''}` : tr.name}</span>
+                <span className="track-buttons">
+                  <button type="button" className="track-btn" aria-pressed={tr.locked} data-testid="track-lock" aria-label={`${t(tr.locked ? 'track.unlock' : 'track.lock')}: ${tr.name}`} title={t(tr.locked ? 'track.unlock' : 'track.lock')}
+                    onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, locked: !tr.locked } }], 'Lock track')}>{tr.locked ? '🔒' : '🔓'}</button>
+                  {tr.kind === 'audio' ? (
+                    <button type="button" className="track-btn" aria-pressed={tr.muted} data-testid="track-mute" aria-label={`${t(tr.muted ? 'track.unmute' : 'track.mute')}: ${tr.name}`} title={t(tr.muted ? 'track.unmute' : 'track.mute')}
+                      onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, muted: !tr.muted } }], 'Mute track')}>{tr.muted ? '🔇' : '🔊'}</button>
+                  ) : (
+                    <button type="button" className="track-btn" aria-pressed={tr.hidden} data-testid="track-hide" aria-label={`${t(tr.hidden ? 'track.show' : 'track.hide')}: ${tr.name}`} title={t(tr.hidden ? 'track.show' : 'track.hide')}
+                      onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, hidden: !tr.hidden } }], 'Hide track')}>{tr.hidden ? '◌' : '◉'}</button>
+                  )}
+                </span>
+              </span>
               {ghost && tr.clips.some((c) => c.id === ghost.clipId) && (
                 <div className={`clip-ghost${ghost.invalid ? ' invalid' : ''}${ghost.snappedTo ? ' snapped' : ''}`} data-testid="clip-ghost" style={{ left: ghost.leftPx, width: ghost.widthPx }} />
               )}

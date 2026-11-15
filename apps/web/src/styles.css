@@ -218,3 +218,11 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .source-viewer .source-canvas { inline-size: 100%; max-block-size: 46vh; object-fit: contain; background: #000; border-radius: var(--pf-r-sm); }
 .source-viewer .source-canvas.sound-only { block-size: 48px; }
 .source-viewer input[type=range] { inline-size: 100%; }
+.track-head { position: absolute; left: -56px; width: 56px; top: 2px; height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.track-head .track-name { position: static; width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track-buttons { display: flex; gap: 2px; }
+.track-btn { inline-size: 22px; block-size: 18px; padding: 0; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--pf-text-muted); font-size: 11px; line-height: 1; cursor: pointer; }
+.track-btn[aria-pressed='true'] { border-color: var(--pf-border); background: var(--pf-surface-2, rgba(255,255,255,.08)); color: var(--pf-text); }
+.track-btn:focus-visible { outline: 2px solid var(--pf-focus, var(--pf-accent)); outline-offset: 1px; }
+.track.locked .clip { cursor: not-allowed; filter: saturate(0.5); }
+.track.off .clip { opacity: 0.45; }

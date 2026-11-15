@@ -413,6 +413,40 @@ async function main() {
     }
     check('"detach picture from sound" in the Inspector unlinks the selected picture clip and its sound clip in one transaction; the button is then no longer offered', !!lk && detached && partnerFree && oneRevision && buttonGone, { found: !!lk, detached, partnerFree, oneRevision, buttonGone });
 
+    console.log('\n# track lock and hide');
+    const tb = await getDoc();
+    const vTrk = tb.project.sequences.seq_main!.tracks.find((tr) => tr.clips.some((c) => c.id === slipClip.id))!;
+    const trackEl = page.locator(`.track[data-track-id="${vTrk.id}"]`);
+    const litBefore = await stillCode(atFrame);
+    await trackEl.getByTestId('track-hide').click();
+    let ta = await getDoc();
+    for (let i = 0; i < 50 && ta.revision === tb.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
+    const hiddenFlag = ta.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.hidden;
+    const hiddenPng = Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${atFrame}`, { headers: h })).arrayBuffer());
+    const hiddenRgb = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: hiddenPng, maxBuffer: 1 << 28 }).stdout;
+    // the fixture picture is bright in its middle; with the track hidden nothing of it is drawn there
+    const w3 = ta.project.settings.width, h3 = ta.project.settings.height;
+    const midLevel = (buf: Buffer) => { let sum = 0, n = 0; for (let y = Math.floor(h3 * 0.45); y < Math.floor(h3 * 0.55); y += 4) for (let x = Math.floor(w3 * 0.2); x < Math.floor(w3 * 0.8); x += 4) { const o = (y * w3 + x) * 3; sum += buf[o]! + buf[o + 1]! + buf[o + 2]!; n += 3; } return sum / n; };
+    const shownRgb = async () => spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${atFrame}`, { headers: h })).arrayBuffer()), maxBuffer: 1 << 28 }).stdout;
+    const levelHidden = midLevel(hiddenRgb);
+    const offMark = await trackEl.getAttribute('data-off');
+    await trackEl.getByTestId('track-hide').click();
+    for (let i = 0; i < 50 && ta.revision !== tb.revision + 2; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
+    const levelShown = midLevel(await shownRgb()), litAfter = await stillCode(atFrame);
+    // lock: an edit to a clip on the track is refused for everyone, the editor says so on the track, unlocking allows it again
+    await trackEl.getByTestId('track-lock').click();
+    for (let i = 0; i < 50 && ta.revision !== tb.revision + 3; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
+    const lockMark = await trackEl.getAttribute('data-locked');
+    const refused = await (await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'delete_clip', args: { clipId: slipClip.id } }] }) })).json() as any;
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Delete');
+    await new Promise((r) => setTimeout(r, 600));
+    const stillThere = (await getDoc()).project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).some((c) => c.id === slipClip.id);
+    await trackEl.getByTestId('track-lock').click();
+    for (let i = 0; i < 50 && ta.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.locked !== false; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
+    check('track buttons: hiding a picture track removes its picture from the server still and marks the track; showing it restores the same frame; locking marks the track and an edit to its clips is refused (API and Delete key in the editor); unlocking clears it', hiddenFlag === true && levelHidden < levelShown * 0.5 && offMark === 'true' && litBefore === litAfter && lockMark === 'true' && refused?.error?.code === 'track_locked' && stillThere && ta.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.locked === false, { hiddenFlag, levelHidden: +levelHidden.toFixed(1), levelShown: +levelShown.toFixed(1), offMark, lockMark, refused: refused?.error?.code, stillThere });
+
     console.log('\n# close gaps');
     const gb = await getDoc();
     const gEnd = endOf(gb.project);

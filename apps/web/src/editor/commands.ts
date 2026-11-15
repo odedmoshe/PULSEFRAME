@@ -175,3 +175,8 @@ export class Keymap {
 export function chordLabel(chord: string, mac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)): string {
   return chord.split('+').map((p) => (p === 'Mod' ? (mac ? '⌘' : 'Ctrl') : p.replace(/^Key|^Digit/, '').replace('ArrowLeft', '←').replace('ArrowRight', '→').replace('ArrowUp', '↑').replace('ArrowDown', '↓').replace('BracketLeft', '[').replace('BracketRight', ']').replace('Comma', ',').replace('Period', '.').replace('Equal', '=').replace('Minus', '-').replace('Backspace', '⌫').replace('Delete', 'Del').replace('Escape', 'Esc'))).join('+');
 }
+
+// Commands that change the selected clips do nothing while a selected clip is on a locked track.
+const CHANGES_SELECTION = new Set(['edit.split', 'edit.delete', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.add', 'keyframe.remove']);
+for (const c of COMMANDS) if (CHANGES_SELECTION.has(c.id)) { const was = c.enabled; c.enabled = (e) => !e.selectionLocked && (!was || was(e)); }
+

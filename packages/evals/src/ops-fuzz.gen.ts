@@ -116,6 +116,8 @@ export function createFuzz(seed: number) {
       () => ({ op: 'set_transition', args: { clipId: touchingVideo.length && rnd() < 0.85 ? pick(touchingVideo).c.id : videoId(), type: rnd() < 0.2 ? null : pick(['cross-dissolve', 'dip-to-black', 'wipe-left', 'slide-left']), frames: 1 + int(30) } }),
       () => ({ op: 'add_marker', args: { time: at(), label: pick(['', 'note', 'סמן']) } }),
       () => ({ op: 'update_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none', time: fr(), color: pick(['blue', 'green', 'yellow', 'red', 'purple'] as const) } }),
+      () => { const t = pick(tracks); return { op: 'update_track', args: { trackId: t.id, ...(rnd() < 0.4 ? { locked: rnd() < 0.25 } : rnd() < 0.5 ? (t.kind === 'audio' || rnd() < 0.1 ? { muted: rnd() < 0.4 } : { hidden: rnd() < 0.4 }) : { name: pick(['A', 'רצועה', 'B-roll']) }) } }; },
+      () => ({ op: 'remove_track', args: { trackId: trackId() } }),
       () => ({ op: 'unlink_clip', args: { clipId: any() } }),
       () => ({ op: 'set_clip_reverse', args: { clipId: any(), reverse: rnd() < 0.75 } }),
       () => ({ op: 'slip_clip', args: { clipId: any(), by: rnd() < 0.5 ? f(1 + int(40)) : T.sub(T.ZERO, f(1 + int(40))), ...(rnd() < 0.2 ? { includeLinked: false } : {}) } }),
