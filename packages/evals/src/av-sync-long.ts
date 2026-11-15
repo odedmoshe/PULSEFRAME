@@ -96,6 +96,11 @@ async function main() {
     fs.copyFileSync(path.join(art, 'av-sync-long.json'), path.join(root, 'docs/evidence/av-sync-long.json'));
     console.log(JSON.stringify({ pass: report.pass, export: report.export, sync: report.sync }, null, 1));
     if (!report.pass) process.exitCode = 1;
+  } catch (e) {
+    // A crash must never look like a pass: record it as a failed check so the report says FAILED.
+    console.error(e);
+    process.exitCode = 1;
+    throw e;
   } finally {
     await s.close();
     fs.rmSync(path.join(art, 'data'), { recursive: true, force: true });

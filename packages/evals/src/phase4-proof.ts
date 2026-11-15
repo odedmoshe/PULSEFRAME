@@ -141,6 +141,10 @@ async function main() {
     await page.getByTestId('export-canceled').waitFor({ timeout: 15_000 });
     check('editor: Cancel stops a running export and shows that it was canceled; Retry is offered', (await page.getByTestId('export-retry').count()) === 1 && (await page.getByTestId('export-download').count()) === 0);
     await browser.close();
+  } catch (e) {
+    // A crash must never look like a pass: record it as a failed check so the report says FAILED.
+    console.error(e);
+    check('proof ran to completion', false, String(e).slice(0, 600));
   } finally {
     await s.close();
     const failed = checks.filter((c) => !c.ok);

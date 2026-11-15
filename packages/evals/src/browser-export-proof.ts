@@ -246,6 +246,11 @@ async function main() {
     fs.writeFileSync(path.join(evidenceDir, 'browser-export-proof.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(`\n${report.result}: ${checks.length - failed.length}/${checks.length} checks. Evidence: docs/evidence/browser-export-proof.json`);
     if (failed.length) process.exitCode = 1;
+  } catch (e) {
+    // A crash must never look like a pass: record it as a failed check so the report says FAILED.
+    console.error(e);
+    process.exitCode = 1;
+    throw e;
   } finally {
     await browser.close().catch(() => {});
     await server.close().catch(() => {});

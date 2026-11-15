@@ -204,6 +204,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Tested: round trip into a different store, deterministic bytes, exact Content-Length, reuse of media already present; rejection of a flipped byte, an entry renamed to escape the blob directory, a truncated file and a non-archive, each leaving no project, blob or temp file behind (`archive.test.ts`); restore over HTTP onto a second server with an empty data directory where a rendered frame is byte-identical (`pnpm soak`); download and re-import through the editor (`pnpm proof:editor-interactions`, now 8/8).
 - Not included in an archive by design: edit history (the import starts a new one), derivatives, exports, grants. Not built: media garbage collection, disk quota, automatic backups. Archives are uncompressed and limited to four times the upload limit.
 
+**Test-harness defect found and fixed (2026-11-15)**
+- One run of `pnpm proof:phase3` stopped after 6 of its 27 checks and still printed "PASSED: 6/6": the older proofs (Phases 3, 4, 5, browser export, parity, long A/V sync, BiRefNet trial) wrote their report in a `finally` block without recording the crash. A report with that false "6/6 PASSED" was committed once (commit 9007e50) and replaced by a full 27/27 run in the next commit.
+- All of those proofs now record a crash as a failed check, so the result is FAILED with the error text. The newer proofs (Phase 6 onward) already did this.
+- The early stop itself did not recur in four further runs; its cause is not known. If it recurs it will now be visible.
+- Consequence for earlier evidence: every "PASSED n/n" for those proofs in this document was read together with its check count at the time (27, 19, 24/30, 23), so none of the recorded results came from a truncated run; but the count is what made that checkable, not the word PASSED.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 

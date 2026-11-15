@@ -236,6 +236,10 @@ async function main() {
     check('no uncaught errors in the editor page', pageErrors.length === 0, pageErrors.slice(0, 3));
     await browser.close();
     await Promise.all([A.c.close(), P.c.close(), S.c.close()]);
+  } catch (e) {
+    // A crash must never look like a pass: record it as a failed check so the report says FAILED.
+    console.error(e);
+    check('proof ran to completion', false, String(e).slice(0, 600));
   } finally {
     await s.close();
     const failed = checks.filter((c) => !c.ok);

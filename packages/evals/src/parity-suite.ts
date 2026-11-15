@@ -375,6 +375,11 @@ async function main() {
       frames: T2_FRAMES, exportVideoStream: { codec: high.video.codec_name, pix_fmt: high.video.pix_fmt, color_space: high.video.color_space, color_range: high.video.color_range },
       summary, worstFramesSavedAsPng: worstFrames, colour, temporal, qualityLadderReportOnly: ladder, rows,
     };
+  } catch (e) {
+    // A crash must never look like a pass: record it as a failed check so the report says FAILED.
+    console.error(e);
+    process.exitCode = 1;
+    throw e;
   } finally {
     await browser.close();
     await s.close();

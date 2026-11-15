@@ -118,6 +118,10 @@ async function main() {
     check('compositor honours the alpha: subject pixels visible, removed background shows the project background (black)', inside[0]! > 120 && outside.every((v) => v < 6), { inside, outside });
     const after = (await call('/capabilities')).body.capabilities.find((c: any) => c.id === CAP);
     check('after the run: executed is recorded for this CPU profile; quality review remains open, so it stays experimental', after.qualification.executed.status === 'pass' && /cpu/.test(after.qualification.hardwareQualified.evidence) && after.experimental === true && after.qualification.qualityReviewed.status === 'not_assessed');
+  } catch (e) {
+    // A crash must never look like a pass: record it as a failed check so the report says FAILED.
+    console.error(e);
+    check('proof ran to completion', false, String(e).slice(0, 600));
   } finally {
     await s.close();
     const failed = checks.filter((c) => !c.ok);

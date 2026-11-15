@@ -252,6 +252,10 @@ async function main() {
     check('activity feed is written in the interface language (Hebrew), not in server English', /[\u0590-\u05FF]/.test(feed ?? '') && !/Keyframe|Moved|Trimmed/.test(feed ?? ''), feed);
     check('visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run', Object.values(baselines).every((b) => b === 'baseline written' || (typeof b === 'number' && b >= 0.98)), baselines);
     check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
+  } catch (e) {
+    // A crash must never look like a pass: record it as a failed check so the report says FAILED.
+    console.error(e);
+    check('proof ran to completion', false, String(e).slice(0, 600));
   } finally {
     await browser.close();
     await s.close();
