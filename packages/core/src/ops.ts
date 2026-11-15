@@ -1330,7 +1330,7 @@ defineOp({
 defineOp({
   name: 'fit_music',
   version: 1,
-  description: 'Make a music clip end with the picture: its end is set to the last beat at or before the end of the picture and titles (or before `to`), or exactly there when the file has no beat analysis, and it fades out. If the music is shorter than the picture it ends on its own last usable beat and the output says by how much it falls short. The clip must not be linked to a picture.',
+  description: 'Make a music clip end with the picture: its end is set to the last beat at or before the end of the picture and titles (or before `to`) — the last bar start when the beat analysis has bar starts — or exactly there when the file has no beat analysis, and it fades out. If the music is shorter than the picture it ends on its own last usable beat and the output says by how much it falls short. The clip must not be linked to a picture.',
   args: z.object({ clipId: z.string(), to: RT.optional().describe('Timeline time to end at; default: the end of the last picture, title or caption clip'), fadeOut: RT.optional().describe('Fade-out length; default one second (at most half the clip)') }).strict(),
   apply(d, a) {
     const { clip, track, seq } = mustClip(d, a.clipId);
@@ -1349,7 +1349,14 @@ defineOp({
     const limit = T.min(target, maxEnd);
     // beats of the source at or after the clip's in-point, as timeline times of this clip (also past its current end)
     const beats = (d.analyses?.[clip.assetId]?.beats?.beats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
-    const end = beats.length ? beats.reduce((m, t) => T.max(m, t)) : limit;
+    const lastBeat = beats.length ? beats.reduce((m, t) => T.max(m, t)) : null;
+    // With bar starts in the analysis the music ends on the last bar start, which sounds finished where an arbitrary beat does not —
+    // unless that bar start lies more than one bar before the last usable beat (bars known for an earlier part of the file only).
+    const an = d.analyses?.[clip.assetId]?.beats;
+    const bars = (an?.downbeats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
+    const lastBar = bars.length ? bars.reduce((m, t) => T.max(m, t)) : null;
+    const onBar = !!lastBar && !!lastBeat && beats.filter((t) => T.lt(lastBar, t)).length < (an?.meter ?? 4);
+    const end = onBar ? lastBar! : lastBeat ?? limit;
     if (!T.lt(clip.start, end)) throw new OpError('out_of_bounds', 'nothing of the music would remain', { clipId: clip.id });
     assertFree(track, clip.start, end, new Set([clip.id]));
     clip.duration = T.sub(end, clip.start);
@@ -1358,7 +1365,7 @@ defineOp({
     if (T.isZero(fade)) delete clip.fadeOut; else clip.fadeOut = fade;
     clampFades(clip);
     const shortBy = T.lt(maxEnd, target) ? T.sub(target, end) : T.ZERO;
-    return { affectedIds: [clip.id], summary: `Music ends at ${fmt(end)}${beats.length ? ' (on a beat)' : ''}${T.isZero(shortBy) ? '' : `; ${fmt(shortBy)} short of the picture`}`, output: { end, onBeat: beats.length > 0, fadeOut: clip.fadeOut ?? T.ZERO, shortBy } };
+    return { affectedIds: [clip.id], summary: `Music ends at ${fmt(end)}${onBar ? ' (on the first beat of a bar)' : beats.length ? ' (on a beat)' : ''}${T.isZero(shortBy) ? '' : `; ${fmt(shortBy)} short of the picture`}`, output: { end, onBeat: beats.length > 0, onBar, fadeOut: clip.fadeOut ?? T.ZERO, shortBy } };
   },
 });
 defineOp({

@@ -251,6 +251,15 @@ describe('fit_music', () => {
     expect(fitted.results[0]!.output).toMatchObject({ onBeat: true });
     // an explicit end
     expect(fi(clipEnd(findClip(tx(analysed, [{ op: 'fit_music', args: { clipId, to: f(100) } }]).doc, clipId)!.clip))).toBe(78);
+    // with bar starts on every fourth beat (timeline 54, 150, 246): the music ends on the last bar start before the picture ends, 150, not on the last beat, 222
+    const attach = (downbeats: T.RationalTime[]) => tx(doc, [{ op: 'attach_analysis', args: { assetId: musicId, kind: 'beats', method: 'test', params: {}, createdAt: '2026-11-15T00:00:00Z', times: beats, bpm: 75, downbeats, meter: 4 } }], true).doc;
+    const onBar = tx(attach(beats.filter((_, k) => k % 4 === 0)), [{ op: 'fit_music', args: { clipId } }]);
+    expect(fi(clipEnd(findClip(onBar.doc, clipId)!.clip))).toBe(150);
+    expect(onBar.results[0]!.output).toMatchObject({ onBeat: true, onBar: true });
+    // bar starts known only near the beginning: more than a bar before the last beat, so the last beat is used
+    const early = tx(attach([beats[0]!]), [{ op: 'fit_music', args: { clipId } }]);
+    expect(fi(clipEnd(findClip(early.doc, clipId)!.clip))).toBe(222);
+    expect(early.results[0]!.output).toMatchObject({ onBeat: true, onBar: false });
   });
   it('music shorter than the picture ends on its own last beat and says how much is missing; refusals', () => {
     const { doc, musicId, clipId, } = withMusic();
