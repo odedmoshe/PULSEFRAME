@@ -189,6 +189,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Found by the soak: commits slow down with **project size** (not history length). Each commit copies, validates, diffs and stores the whole document. Replacing string-based entity comparison with a structural one (tested against the old one) cut the median at 708 clips from 36 ms to 20 ms; a small project in the same database after 2,600 revisions still commits in 5 ms. Remaining cost ≈ 2.2 ms per 100 clips on this machine. Replaying 2,631 operations takes about 8 s (history view of old revisions is slow on large projects).
 - Not done in Phase 13: playback/export soak, memory soak in the browser, failure injection beyond restart (disk full, killed ffmpeg mid-export is covered in Phase 4 only), packaging/installer, catalog completion, performance tuning on a target machine.
 
+**Checkpoint 13c — spending control wired before any paid provider exists**
+- Capability descriptors now declare a per-run cost (`cost.cents`, 0 for everything that runs locally). A capability with a cost reserves it against the caller's Autopilot budget before anything is dispatched; without a budget, the right mode or enough left, the job is closed as refused and nothing is submitted.
+- The ledger is settled in one place when a job ends: success settles the reserved amount; a cancel before the job ever started releases it; **any other ending (failed, canceled after starting, submission unknown) stays counted** until the owner releases it (`POST /jobs/{id}/budget/release`). Unit-tested (`governance.test.ts`).
+- **Not exercised end to end:** no priced capability exists, so the reservation call inside the capability job path has only been type-checked and read, not run. This must be proven with the first paid provider (Phase 10) before it is relied on. Costs are fixed per run; providers that bill by usage will need actual-cost reporting.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 

@@ -85,6 +85,8 @@ export const DescriptorSchema = z
         measuredProfiles: z.array(z.object({ device: z.string(), runtime: z.string(), workload: z.string(), peakDeviceMemoryBytes: z.number().nullable(), wallSeconds: z.number(), measuredAt: z.string() }).strict()),
       })
       .strict(),
+    /** What one run is expected to cost the user, in cents. Reserved against the caller's budget before submission. 0 = runs on the user's own machine. */
+    cost: z.object({ cents: z.number().int().nonnegative(), basis: z.string().max(200) }).strict().default({ cents: 0, basis: 'runs locally; no charge' }),
     egress: z.enum(['none', 'graph-defined']),
     languages: z.array(z.string()),
     limitations: z.array(z.string()),

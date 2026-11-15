@@ -181,6 +181,29 @@ describe('approvals', () => {
 });
 
 describe('budget ledger', () => {
+  it('money follows the job: success settles, a cancel before starting releases, any other end stays counted until the owner releases it', () => {
+    const { gov, store, pid } = setup();
+    const a = gov.principalForToken(gov.createGrant({ name: 'auto2', mode: 'autopilot', budgetCents: 100 }, user).token)!;
+    const mk = () => store.createJob(pid, 'capability', a.actor, {}).id;
+    const ok = mk(), early = mk(), failed = mk(), unknown = mk();
+    for (const j of [ok, early, failed, unknown]) gov.reserve(a, j, 20);
+    expect(gov.spend(a.grant!.id)).toEqual({ spentCents: 0, reservedCents: 80 });
+    store.updateJob(ok, { status: 'running', attempt: 1 });
+    expect(gov.ledgerFor(ok)!.state).toBe('reserved'); // not final yet
+    store.updateJob(ok, { status: 'succeeded' });
+    store.updateJob(early, { status: 'canceled' }); // never started (attempt 0)
+    store.updateJob(failed, { status: 'running', attempt: 1 });
+    store.updateJob(failed, { status: 'failed' });
+    store.updateJob(unknown, { status: 'submission-unknown' });
+    expect([ok, early, failed, unknown].map((j) => gov.ledgerFor(j)!.state)).toEqual(['settled', 'released', 'unknown', 'unknown']);
+    expect(gov.spend(a.grant!.id)).toEqual({ spentCents: 20, reservedCents: 40 }); // the two unresolved ones still count
+    expect(code(() => gov.reserve(a, mk(), 50))).toBe('402:budget_exceeded');
+    expect(code(() => gov.releaseUnknown(a, failed))).toBe('403:owner_required');
+    gov.releaseUnknown(user, failed);
+    expect(gov.spend(a.grant!.id)).toEqual({ spentCents: 20, reservedCents: 20 });
+    expect(code(() => gov.releaseUnknown(user, failed))).toBe('409:nothing_to_release');
+    gov.reserve(a, mk(), 50);
+  });
   it('reserves atomically, counts unknown outcomes conservatively, and releases or settles', () => {
     const { gov, agent } = setup();
     const a = gov.principalForToken(gov.createGrant({ name: 'auto', mode: 'autopilot', budgetCents: 100 }, user).token)!;

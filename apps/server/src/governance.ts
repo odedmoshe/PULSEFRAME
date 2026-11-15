@@ -31,6 +31,8 @@ const modeOf = (p: Principal): Mode => p.mode ?? (p.kind === 'user' ? 'autopilot
 
 export class Governance {
   constructor(private store: Store, private clock: () => number = Date.now) {
+    // Money follows the job: whenever a job with a reservation reaches a final state, the ledger is settled here, in one place.
+    store.events.on('job', (job: { id: string; status: string; attempt: number }) => this.settleFor(job));
     store.db.exec(`
       CREATE TABLE IF NOT EXISTS grants (id TEXT PRIMARY KEY, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, mode TEXT NOT NULL, constraints TEXT NOT NULL, budget_cents INTEGER NOT NULL, expires_at TEXT, revoked_at TEXT, created_at TEXT NOT NULL, created_by TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS project_controls (project_id TEXT PRIMARY KEY, agents_paused INTEGER NOT NULL, changed_at TEXT NOT NULL, changed_by TEXT NOT NULL);
@@ -269,6 +271,27 @@ export class Governance {
       if (spentCents + reservedCents + cents > g.budgetCents) throw new ApiError(402, 'budget_exceeded', `this would exceed the grant's budget`, { budgetCents: g.budgetCents, spentCents, reservedCents, requestedCents: cents }, 'Ask the owner for a larger budget or an approval.');
       this.store.db.prepare('INSERT INTO budget_ledger (job_id, grant_id, reserved_cents, state, created_at, updated_at) VALUES (?,?,?,?,?,?)').run(jobId, g.id, cents, 'reserved', now(), now());
     }).immediate();
+  }
+  /**
+   * Ledger outcome for a finished job. succeeded -> settled at the reserved amount. Canceled before it ever started -> released.
+   * Anything else (failed or canceled after starting, or submission unknown) -> unknown: the provider may have charged, so the
+   * amount stays counted against the budget until the owner releases it. Never optimistic about money.
+   */
+  private settleFor(job: { id: string; status: string; attempt: number }) {
+    const row = this.store.db.prepare("SELECT reserved_cents AS cents, state FROM budget_ledger WHERE job_id = ?").get(job.id) as { cents: number; state: string } | undefined;
+    if (!row || row.state !== 'reserved') return;
+    if (job.status === 'succeeded') this.resolve(job.id, 'settled', row.cents);
+    else if (job.status === 'canceled' && job.attempt === 0) this.resolve(job.id, 'released');
+    else if (['failed', 'canceled', 'submission-unknown'].includes(job.status)) this.resolve(job.id, 'unknown');
+  }
+  /** The owner confirms that an unresolved reservation was not charged (e.g. after checking the provider's billing). */
+  releaseUnknown(by: Principal, jobId: string) {
+    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the owner can release a reservation');
+    const r = this.store.db.prepare("UPDATE budget_ledger SET state = 'released', updated_at = ? WHERE job_id = ? AND state = 'unknown'").run(now(), jobId);
+    if (r.changes !== 1) throw new ApiError(409, 'nothing_to_release', 'this job has no unresolved reservation');
+  }
+  ledgerFor(jobId: string) {
+    return (this.store.db.prepare('SELECT reserved_cents AS reservedCents, actual_cents AS actualCents, state FROM budget_ledger WHERE job_id = ?').get(jobId) as { reservedCents: number; actualCents: number | null; state: string } | undefined) ?? null;
   }
   /** settled = actual cost known; released = nothing was charged; unknown = submission outcome unknown, stays counted until resolved. */
   resolve(jobId: string, state: 'settled' | 'released' | 'unknown', actualCents?: number) {

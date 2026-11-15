@@ -16,6 +16,7 @@ import type { Config } from './config.ts';
 import { describeMedia, ffprobe } from './ingest.ts';
 import { ModelStore, type ModelStatus } from './models.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import type { Principal } from './auth.ts';
 
 const TYPE = 'capability';
 /**
@@ -35,7 +36,7 @@ export class Capabilities {
   private stopped = false;
   readonly models: ModelStore;
   /** Set by the server so job results respect Pause Agent. */
-  governance: { isPaused(projectId: string): boolean } | null = null;
+  governance: { isPaused(projectId: string): boolean; reserve(p: Principal, jobId: string, cents: number): void } | null = null;
 
   constructor(private store: Store, private cfg: Config, adapter?: ProviderAdapter) {
     this.models = new ModelStore(cfg.comfyuiModelsDir, cfg.modelHosts);
@@ -135,7 +136,7 @@ export class Capabilities {
   }
 
   /** The single entry point used by UI, REST and MCP. */
-  start(req: { projectId: string; capabilityId: string; params: Record<string, unknown>; actor: string; idempotencyKey?: string; attach?: { start: unknown; duration?: unknown; trackId?: string }; dependsOn?: string[] }): JobRow {
+  start(req: { projectId: string; capabilityId: string; params: Record<string, unknown>; actor: string; principal?: Principal; idempotencyKey?: string; attach?: { start: unknown; duration?: unknown; trackId?: string }; dependsOn?: string[] }): JobRow {
     const d = this.descriptor(req.capabilityId);
     if (req.idempotencyKey) {
       const prior = this.store.findJobByKey(TYPE, req.actor, req.idempotencyKey);
@@ -173,6 +174,17 @@ export class Capabilities {
       // Stale-result protection (SPEC §20, FFG-09): remember the version of everything the placement depends on.
       preconditions: [...new Set([...(req.dependsOn ?? []), ...(req.attach?.trackId ? [req.attach.trackId] : [])])].map((entityId) => ({ entityId, version: this.store.entityVersion(req.projectId, entityId)?.revision ?? 0 })),
     });
+    // Paid capabilities: reserve the declared cost against the caller's budget BEFORE anything is dispatched.
+    // No budget, wrong mode or not enough left -> the job is closed as refused and nothing is submitted.
+    if (d.cost.cents > 0) {
+      try {
+        if (!req.principal || !this.governance) throw new ApiError(403, 'insufficient_scope', 'paid work needs an identified caller with a budget');
+        this.governance.reserve(req.principal, job.id, d.cost.cents);
+      } catch (e) {
+        this.store.updateJob(job.id, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'budget_error', message: String(e) } });
+        throw e;
+      }
+    }
     void this.run(job.id);
     return job;
   }

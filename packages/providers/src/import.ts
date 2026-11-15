@@ -61,6 +61,7 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
   const classes = [...new Set(Object.values(graph).map((n) => n.class_type))].sort();
   const draft: CapabilityDescriptor = {
     id: meta.id, version: '0.0.1', provider: 'comfyui', state: 'draft',
+    cost: { cents: 0, basis: 'not declared; a reviewer must state the cost before publishing' },
     title: { he: meta.title, en: meta.title }, description: { he: '', en: '' },
     source: { repository: meta.sourceRepository ?? null, commit: meta.sourceCommit ?? null, notices: null },
     graph, graphDigest: graphDigest(graph), inputs, outputs,

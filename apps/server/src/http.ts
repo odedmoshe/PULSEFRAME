@@ -408,6 +408,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = store.getProject(c.req.param('id'));
     return c.json(exporter.plan(p.doc, p.revision, await c.req.json().catch(() => ({}))));
   });
+  app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); gov.releaseUnknown(p, c.req.param('jobId')); return c.json({ jobId: c.req.param('jobId'), ledger: gov.ledgerFor(c.req.param('jobId')) }); });
   app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); gov.assertMayAct(pr, store.getJob(c.req.param('jobId')).projectId, 'job'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => { need(c, 'observe'); return c.json(jobView(store.getJob(c.req.param('jobId')))); });
   app.get('/api/v1/jobs/:jobId/output', (c) => {
@@ -429,7 +430,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(p, c.req.param('id'), 'job');
     gov.assertUnrestricted(p, 'run provider jobs (their results are added to the library and may be placed on any track)');
     const b = await body(c, RunBody);
-    const job = capabilities.start({ projectId: c.req.param('id'), capabilityId: c.req.param('capabilityId'), params: b.params, idempotencyKey: b.idempotencyKey, attach: b.attach, dependsOn: b.dependsOn, actor: p.actor });
+    const job = capabilities.start({ projectId: c.req.param('id'), capabilityId: c.req.param('capabilityId'), params: b.params, idempotencyKey: b.idempotencyKey, attach: b.attach, dependsOn: b.dependsOn, actor: p.actor, principal: p });
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
   // Model downloads are a deliberate human action: not exposed as an MCP tool, and bound to the exact byte count shown.
