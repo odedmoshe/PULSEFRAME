@@ -27,6 +27,7 @@ export function deleteProject(store: Store, by: Principal, projectId: string, co
     store.db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
   })();
   for (const f of outputs) fs.rmSync(path.join(store.outDir, path.basename(f)), { force: true });
+  store.events.emit('projects', { projectId, change: 'deleted' });
   return { deleted: { id: projectId, name: doc.name }, exportsRemoved: outputs.length, note: 'Media files are kept until storage clean-up is run, because other projects may use the same files.' };
 }
 

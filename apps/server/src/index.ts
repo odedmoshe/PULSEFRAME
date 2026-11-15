@@ -31,7 +31,8 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const governance = new Governance(store);
   auth.resolveGrant = (token) => governance.principalForToken(token);
   capabilities.governance = governance;
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, createMcp(store, auth, exporter, capabilities, presence, governance), governance, backup);
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance);
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup);
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');
@@ -50,6 +51,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
     url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup,
     async close() {
       (app as any).browserExport?.stop();
+      await mcp.close();
       await backup.stop();
       await capabilities.stop();
       await derivatives.stop();

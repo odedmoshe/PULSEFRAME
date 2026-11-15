@@ -105,6 +105,7 @@ export class Store {
     const doc = createProject({ id: id('prj'), ...opts });
     const json = JSON.stringify(doc);
     this.db.prepare('INSERT INTO projects (id, revision, doc, initial_doc, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?)').run(doc.id, json, json, now(), now());
+    this.events.emit('projects', { projectId: doc.id, change: 'created' }); // the set of projects changed (not part of any project's history)
     return { doc, revision: 0 };
   }
   /** Create a project from an existing document (archive import). It gets a new id and starts its own history at revision 0. */
@@ -112,6 +113,7 @@ export class Store {
     const doc = { ...source, id: id('prj') };
     const json = JSON.stringify(doc);
     this.db.prepare('INSERT INTO projects (id, revision, doc, initial_doc, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?)').run(doc.id, json, json, now(), now());
+    this.events.emit('projects', { projectId: doc.id, change: 'created' }); // the set of projects changed (not part of any project's history)
     return { doc, revision: 0 };
   }
   listProjects() {

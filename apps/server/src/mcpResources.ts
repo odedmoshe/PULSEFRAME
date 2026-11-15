@@ -86,6 +86,8 @@ const PLAYBOOKS: { name: string; title: string; description: string; extra?: Rec
   },
 ];
 
+/** The per-project resources (pulseframe://projects/{id}/<kind>); a commit to a project updates all of them. */
+export const PROJECT_RESOURCE_KINDS = ['summary', 'timeline'] as const;
 export function registerResourcesAndPrompts(server: McpServer, deps: { store: Store; auth: Auth; gov: Governance; principal: Principal }) {
   const { store, auth, gov, principal } = deps;
   const json = (uri: URL, data: unknown) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(data) }] });
