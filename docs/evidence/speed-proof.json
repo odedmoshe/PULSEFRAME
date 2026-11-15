@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T14:39:05.369Z",
+  "ranAt": "2026-11-15T16:14:30.217Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Clip speed on synthetic fixtures (frame-barcode video, sine tone). Sound is varispeed; pitch-preserving stretch and speed ramps are not implemented. Preview playback audio at speed is not measured here.",
-  "passed": 16,
-  "total": 16,
+  "passed": 18,
+  "total": 18,
   "measurements": {
     "freezeSound": {
       "seconds": 5,
@@ -159,6 +159,39 @@
     },
     {
       "name": "one undo removes the hold and rejoins nothing by hand: the timeline is the single 120-frame clip again",
+      "ok": true
+    },
+    {
+      "name": "speed ramp 0.5× → 2× in four steps: one transaction makes four linked picture+sound steps (0.5, 1, 1.5, 2); the export has exactly the planned number of frames, every frame is the one the steps call for (read from its barcode), the picture never goes back, and the last frames reach the end of the source",
+      "ok": true,
+      "detail": {
+        "speeds": [
+          0.5,
+          1,
+          1.5,
+          2
+        ],
+        "frames": 125,
+        "planned": 125,
+        "mismatched": [],
+        "first": [
+          0,
+          0,
+          1,
+          1,
+          2,
+          2
+        ],
+        "last": [
+          112,
+          114,
+          116,
+          118
+        ]
+      }
+    },
+    {
+      "name": "one undo of the ramp restores the single 120-frame clip",
       "ok": true
     },
     {

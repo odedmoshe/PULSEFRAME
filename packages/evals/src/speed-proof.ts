@@ -136,6 +136,23 @@ async function main() {
     const fundo = await doc(fp);
     check('one undo removes the hold and rejoins nothing by hand: the timeline is the single 120-frame clip again', clipsOf(fundo, 'video').length === 1 && T.frameIndexAt(clipsOf(fundo, 'video')[0].duration, R) === 120 && clipsOf(fundo, 'audio').length === 1);
 
+    console.log('\n# speed ramp');
+    const rp = (await call('/projects', { name: 'ramp', width: W, height: H })).body.project.id;
+    const ra: any = await (await fetch(`${s.url}/api/v1/projects/${rp}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'barcode.mp4' }, body: fs.readFileSync(fixture.file) })).json();
+    const rc = (await txs(rp, [{ op: 'add_clip', args: { assetId: ra.assetId, start: f(0) } }])).results[0].output.clipId as string;
+    const ramp = await txs(rp, [{ op: 'speed_ramp', args: { clipId: rc, from: 0.5, to: 2, steps: 4 } }]);
+    const rampOut = ramp.results[0].output;
+    const rd = await doc(rp);
+    const rampFrames = await exportedFrames(rp);
+    // expected by arithmetic from the steps as stored: each step shows floor(sourceIn + i × speed) for its frames
+    const expectRamp: number[] = [];
+    for (const c of clipsOf(rd, 'video')) { const sp = c.speed ? c.speed.num / c.speed.den : 1, n = T.frameIndexAt(c.duration, R), in0 = T.toSeconds(c.sourceIn) * 30; for (let i = 0; i < n; i++) expectRamp.push(Math.floor(in0 + i * sp + 1e-9)); }
+    const rampBad = rampFrames.map((g, i) => (g === expectRamp[i] ? -1 : i)).filter((i) => i >= 0);
+    check('speed ramp 0.5× → 2× in four steps: one transaction makes four linked picture+sound steps (0.5, 1, 1.5, 2); the export has exactly the planned number of frames, every frame is the one the steps call for (read from its barcode), the picture never goes back, and the last frames reach the end of the source', JSON.stringify(rampOut.speeds) === JSON.stringify([0.5, 1, 1.5, 2]) && clipsOf(rd, 'video').length === 4 && clipsOf(rd, 'audio').length === 4 && rampFrames.length === rampOut.durationFrames && rampBad.length === 0 && rampFrames.every((g, i) => i === 0 || g >= rampFrames[i - 1]!) && rampFrames.at(-1)! >= 112, { speeds: rampOut.speeds, frames: rampFrames.length, planned: rampOut.durationFrames, mismatched: rampBad.slice(0, 6), first: rampFrames.slice(0, 6), last: rampFrames.slice(-4) });
+    await call(`/projects/${rp}/undo`, {});
+    const rundo = await doc(rp);
+    check('one undo of the ramp restores the single 120-frame clip', clipsOf(rundo, 'video').length === 1 && T.frameIndexAt(clipsOf(rundo, 'video')[0].duration, R) === 120 && !clipsOf(rundo, 'video')[0].speed);
+
     console.log('\n# sound: resampled with the picture');
     const ap = (await call('/projects', { name: 'speed-audio', width: W, height: H })).body.project.id;
     const ta = await upload(ap, toneFile);

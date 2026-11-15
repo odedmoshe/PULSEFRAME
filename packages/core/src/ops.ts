@@ -486,6 +486,61 @@ const volumeTarget = (d: ProjectDocument, clipId: string) => {
   return f.clip;
 };
 defineOp({
+  name: 'speed_ramp',
+  version: 1,
+  description: 'Change a clip\'s speed gradually from one value to another over its length. The clip is replaced by `steps` consecutive clips (and the same for its linked sound), each at a constant speed between `from` and `to`, playing the source on without gaps or repeats; a stepped ramp keeps every time exact. The ramp plays the same stretch of source as before (to within the rounding of each step to whole frames), so its length on the timeline changes; nothing else moves, and it is refused if the new length would run into the next clip. Not for clips with keyframes, volume keys or a transition, freeze frames, reversed clips or stills. One undo restores the single clip.',
+  args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), steps: z.number().int().min(2).max(24).optional().describe('Default 8'), includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a, ctx) {
+    const f = mustClip(d, a.clipId);
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
+    const rate = d.settings.frameRate;
+    const steps = a.steps ?? 8;
+    const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
+    for (const { clip } of targets) {
+      if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
+      if (clip.freeze || clip.reverse) throw new OpError('incompatible', 'a freeze frame or a reversed clip cannot be ramped', { clipId: clip.id });
+      if (clip.keyframes || clip.volume || clip.transition || clip.effects?.some((e) => e.keyframes)) throw new OpError('incompatible', 'remove keyframes, volume keys and the transition first: they would not survive the division into steps', { clipId: clip.id });
+    }
+    // One plan for all targets (they share place and length): the timeline length of each step in whole frames.
+    const lead = targets[0]!.clip;
+    const span = toSourceSpan(lead, lead.duration); // source shown now
+    const speeds = Array.from({ length: steps }, (_, k) => speedFromNumber(Number((a.from + ((a.to - a.from) * k) / (steps - 1)).toFixed(3))));
+    const part = T.normalize({ value: span.value, timescale: span.timescale * steps }); // an equal share of the source for each step
+    const frames = speeds.map((sp) => Math.max(1, T.frameIndexAt(T.normalize({ value: (BigInt(part.value) * BigInt(sp.den)).toString(), timescale: part.timescale * sp.num }), rate)));
+    const total = frames.reduce((n, x) => n + x, 0);
+    const newEnd = T.add(lead.start, T.frameTime(total, rate));
+    const created: string[] = [];
+    const links = targets.length > 1 ? speeds.map(() => ctx.newId('lnk')) : null;
+    for (const { track, clip } of targets) {
+      assertFree(track, clip.start, newEnd, new Set([clip.id]));
+      const asset = d.assets[clip.assetId]!;
+      let start = clip.start, sourceIn = clip.sourceIn;
+      const parts: MediaClip[] = [];
+      for (let k = 0; k < steps; k++) {
+        const sp = speeds[k]!;
+        const duration = T.frameTime(frames[k]!, rate);
+        const p: MediaClip = structuredClone(clip);
+        p.id = k === 0 ? clip.id : ctx.newId('clp'); // the first step keeps the clip's id, so references to it stay valid
+        p.start = start; p.duration = duration; p.sourceIn = sourceIn;
+        if (sp.num === sp.den) delete p.speed; else p.speed = sp;
+        p.linkGroupId = links ? links[k]! : null;
+        if (k > 0) delete p.fadeIn;
+        if (k < steps - 1) delete p.fadeOut;
+        clampFades(p);
+        const used = toSourceSpan(p, duration);
+        if (T.lt(asset.duration, T.add(sourceIn, used))) throw new OpError('out_of_bounds', 'the ramp would read past the end of the source', { clipId: clip.id });
+        if (k > 0) { copyOverrides(d, clip.id, p.id); created.push(p.id); }
+        parts.push(p);
+        start = T.add(start, duration); sourceIn = T.add(sourceIn, used);
+      }
+      track.clips.splice(track.clips.indexOf(clip), 1, ...parts);
+      sortClips(track);
+    }
+    return { affectedIds: [...targets.map((t) => t.clip.id), ...created], summary: `Speed ramp ${a.from}× → ${a.to}× in ${steps} steps`, output: { createdClipIds: created, steps, durationFrames: total, speeds: speeds.map((sp) => Number((sp.num / sp.den).toFixed(3))) } };
+  },
+});
+
+defineOp({
   name: 'set_volume_keyframe',
   version: 1,
   description: 'Volume automation: set the level of a sound clip at a clip-local, frame-aligned time (0 = silent, 1 = unchanged, up to 4). The level moves in a straight line between keys and holds before the first and after the last. It multiplies the clip gain, fades and ducking.',

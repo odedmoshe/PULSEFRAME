@@ -11,7 +11,7 @@ A browser-based video editor with a Hebrew-first interface and full agent access
 
 ## What works today (see the linked evidence for limits)
 - Import, timeline editing with exact rational time, keyframes, undo/redo per actor, live multi-client updates; multi-select, markers, copy/paste
-- Clip speed (0.1–8×, sound pitch follows speed), freeze frame, reverse playback (picture and sound)
+- Clip speed (0.1–8×, sound pitch follows speed), freeze frame, reverse playback (picture and sound), stepped speed ramps
 - Source viewer with in/out marks; insert, overwrite, slip, ripple insert, close gaps, detach picture from sound; marquee selection; J/L shuttle
 - Tracks: add, rename, lock, hide, mute; project frame size and background can be changed; library files can be renamed and removed
 - Media input: MP4, MOV, Matroska, WebM, MPEG-TS, AVI; common sound formats; files with shifted timestamps, non-square pixels or unusual pixel formats are handled or converted at import (tested with synthetic files only — see `docs/evidence/input-matrix.json`)

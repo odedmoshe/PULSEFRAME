@@ -205,6 +205,28 @@ function SpeedField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
 }
 
 /** Freeze frame: hold the picture at the playhead for a chosen time. Everything after it moves later (one transaction). */
+/** A gradual speed change over the selected clip, as consecutive steps of constant speed (see the `speed_ramp` op). */
+function RampField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
+  const { editor, t } = useEditorState();
+  const [from, setFrom] = useState('1');
+  const [to, setTo] = useState('2');
+  const [steps, setSteps] = useState('8');
+  const a = Number(from), b = Number(to), n = Math.round(Number(steps));
+  const ok = a >= 0.1 && a <= 8 && b >= 0.1 && b <= 8 && a !== b && n >= 2 && n <= 24 && !clip.keyframes && !clip.volume && !clip.transition && !clip.reverse;
+  return (
+    <fieldset className="ramp" data-testid="ramp">
+      <legend>{t('ramp.title')}</legend>
+      <div className="row">
+        <label>{t('ramp.from')}<input type="number" dir="ltr" min={0.1} max={8} step={0.05} value={from} onChange={(e) => setFrom(e.target.value)} data-testid="ramp-from" /></label>
+        <label>{t('ramp.to')}<input type="number" dir="ltr" min={0.1} max={8} step={0.05} value={to} onChange={(e) => setTo(e.target.value)} data-testid="ramp-to" /></label>
+        <label>{t('ramp.steps')}<input type="number" dir="ltr" min={2} max={24} step={1} value={steps} onChange={(e) => setSteps(e.target.value)} data-testid="ramp-steps" /></label>
+      </div>
+      <p className="muted">{t('ramp.note')}</p>
+      <button type="button" className="ghost" disabled={!ok} data-testid="ramp-apply" onClick={() => void editor.commit([{ op: 'speed_ramp', args: { clipId: clip.id, from: a, to: b, steps: n } }], 'Speed ramp')}>{t('ramp.apply')}</button>
+    </fieldset>
+  );
+}
+
 function FreezeField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   const { editor, t } = useEditorState();
   const [secs, setSecs] = useState('1');
@@ -494,6 +516,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
         </>
       )}
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedField clip={clip} />}
+      {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <RampField clip={clip} />}
       {clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video && <FreezeField clip={clip} />}
       {clip.type === 'media' && !variantId && !clip.freeze && (editor.selected?.track.kind === 'video' ? !!editor.doc?.assets[clip.assetId]?.video : editor.selected?.track.kind === 'audio' && !!editor.doc?.assets[clip.assetId]?.audio) && (
         <>
