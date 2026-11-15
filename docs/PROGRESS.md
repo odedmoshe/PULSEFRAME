@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-14, checkpoint 5 (Phase 4 and Phase 5 gate criteria met on the CPU profile; Phase 6 next).
+Last updated: 2026-11-15, checkpoint 13f. Phases 0–5 gate criteria met on the CPU profile; Phases 6–9, 11 and 12 partly met (each row says which gate parts); Phase 10 not started (needs providers); Phase 13 partly done (security review, accessibility audit, soak, archive). **The g0 and BiRefNet proofs were last run before the owner-session change and have not been re-run since** (they need a running ComfyUI; the code path for obtaining a session in them was updated but is untested).
 
 Status words: **verified-here** = checked on the current CPU profile · **implemented, not qualified** = code exists, needs a runtime/target we lack ·
 **blocked** · **not started**. Nothing is "verified on target profile" yet: no GPU reference machine exists.
@@ -13,7 +13,7 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 
 | Milestone | State | Evidence |
 |---|---|---|
-| Phase 0 — Readiness and spike | **Gate met, verified-here** | `pnpm proof` (now 47 checks), probe, ADR-0001…0007 |
+| Phase 0 — Readiness and spike | **Gate met, verified-here** | `pnpm proof` (now 54 checks), probe, ADR-0001…0007 |
 | Phase 1 — Authoritative core | **Gate met, verified-here** | 69 unit/property/integration tests; convergence 15 seeds × 40 steps (60 seeds also run once); proof 47/47 |
 | A1 · G0 — provider path on a model-free workflow, attachment, stale-result | **Verified-here (model-free)** | `pnpm proof:g0` 35/35 against real ComfyUI on CPU |
 | A1 · G0 — media-input workflow with source staging (model-free blur) | **Verified-here** | `pnpm proof:g0` now 39/39 |
@@ -29,7 +29,8 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | Phase 9 — Analysis intelligence | **Model-free part verified-here on synthetic corpora** (scene cuts, beats: corpus results reported, confidence and manual correction, stored as source-linked editable data, fully local). **Everything model-based is not built** (reframe, segmentation, pose/tracking, depth, semantic search) | `pnpm proof:phase9` 12/12 (`docs/evidence/phase9-proof.json`), `beats.test.ts` |
 | Phase 12 — Delivery ecosystems | **Provider-free part verified-here.** Gate parts: variant overrides survive master changes (yes); preflight catches faults (the eight kinds it checks); **publishing flows, thumbnails/metadata, provenance, MCP App not built** | `pnpm proof:phase12` 13/13 (`docs/evidence/phase12-proof.json`), `variants.test.ts` |
 | Phase 11 — Director and recipes | **Rule-based recipes verified-here** (editable, grounded in project data, alternatives, whole-task undo, hand edits survive regeneration). **The natural-language Director and every generative recipe are not built** (need a language model / providers: B-9) | `pnpm proof:phase11` 11/11 (`docs/evidence/phase11-proof.json`) |
-| Phases 10, 13, G2–G3 | Not started (10 needs providers) | — |
+| Phase 13 — Release qualification | **Started.** Done here: independent security review with fixes, heuristic accessibility audit, 3,000-edit soak with replay/restart, project archive restore, verification of previously unexercised editor interactions. Not done: catalog completion, performance tuning on a target machine, packaging, browser/playback soak, real-media corpora | `docs/evidence/soak.json`, `a11y-audit.json`, `editor-interactions-proof.json`, ADR-0002 amendment |
+| Phase 10, G2–G3 | Not started (needs providers and a GPU) | — |
 
 ## Completed and verified-here
 
@@ -227,7 +228,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | GPU compositor, GPU/VRAM qualification, Appendix C2 performance targets | implementation can proceed; execution cannot be verified (B-1) | Phases 2, 4, 7, 13; FF-06 | A GPU reference machine |
 | Browser MP4+AAC export | blocked here (B-2) | Phase 4 browser route | A Chrome build with AAC WebCodecs encode |
 | Preview A/V sync; preview/export parity across many frames; long media; real camera/phone footage; other browsers; other MCP hosts | unverified | Phases 2–4 gates | Scheduled in Phase 2/4 below; other browsers are not installed here (Chromium only) |
-| Worker lease / prewarm / budgets (FF-07) | not started | G3, Phase 10 | Phase 5 scopes + Phase 10 |
+| Worker lease / prewarm (FF-07) | not started; budget reservation is wired but never run with a priced capability | G3, Phase 10 | A provider |
 | Speech recognition, forced alignment, timing corpus (B-7) | blocked on an owner decision | Phase 6 gate (timing corpus), R-16.2, R-C.10 | Authorise a local ASR model download (size/licence to approve) or supply a provider credential |
 | Narration / TTS / voice cloning (B-8) | blocked on an owner decision | Phase 8 gate (voice), R-17.x | A provider credential or an approved local model, plus the consent/verification flow the chosen provider requires |
 | Natural-language Director, Prompt-to-Draft and other language-model features (B-9) | blocked on an owner decision | Phase 11 gate (Director), R-23.x | A language-model provider credential and spending limit. External agents can already drive the editor through MCP |
@@ -235,14 +236,36 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 
 ## Dependency-aware task list (next first)
 
-1. **Inspector tabs/workspaces** (worker): the single Inspector column now holds properties, animation, transcript, silences, captions, proposals and activity.
-2. **Phase 6b** (worker): text animation presets, and text animation presets as catalog entries rendered by the compositor; font catalog with licence/coverage manifest (only fonts whose files and licences can be verified from npm packages here).
-3. **Phase 6c** (blocked on a decision): ASR/alignment — local model download (size and licence to be approved; the 1 GB trial grant is used up) or a provider credential. Until then captions are manual/imported.
-4. Phase 7 effects/transitions/Lab → needs a GPU compositor decision (B-1); Canvas2D-feasible subset first.
-5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
+Status words used here: **blocked** (cannot be implemented or verified without something external), **implemented, not runtime-qualified**, **verified on the current profile** (this CPU-only container), **verified on the target profile** (nothing yet: no target machine exists).
+
+Unblocked (no decision needed), roughly by value:
+1. Editor: cut command, multi-select drag, loop playback, J/K/L, markers, source viewer, workspaces (Phase 3 carry-over).
+2. Keyframed effect parameters; speed changes with audio; audio crossfades and volume automation (Phases 7–8 carry-over).
+3. Live-playback measurement of fades and ducking (only the offline chain is measured today).
+4. Media garbage collection and disk quota; whole-data-directory restore test; automatic backups.
+5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
+6. Grants and approvals management UI; MCP resources/prompts; activity log dialog.
+7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
+8. Browser-side security review (XSS, content security policy); per-credential rate limits and export quotas.
+9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
+
+Blocked on an owner decision or resource (see docs/BLOCKERS.md):
+- B-1 GPU reference machine → GPU compositor, shader effect families, performance targets, GPU qualification of any model workflow.
+- B-4 model downloads/quality review → every model-based analysis (reframe, tracking, segmentation, depth) and generative workflow.
+- B-7 speech recognition → automatic transcripts, alignment, timing corpus, filler detection.
+- B-8 voice provider/model → narration, TTS, cloning, dubbing.
+- B-9 language model → built-in Director, Prompt-to-Draft, Long-to-Shorts.
+- Paid providers → Phase 10; the budget path must be exercised end to end with the first one.
+- Other browsers, real camera/phone footage, real speech and music, a screen reader: not available in this environment.
 
 ## Next executable action
-`pnpm install && pnpm build && pnpm test` (expect 247 tests), then `pnpm proof` (54/54), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (30/30), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:phase8` (17/17), `pnpm proof:phase9` (12/12), `pnpm proof:phase11` (11/11), `pnpm proof:phase12` (13/13), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
+```bash
+pnpm install && pnpm build && pnpm test
+```
+Expect 256 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 30 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 30 · `pnpm proof:phase8` 17 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 10 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
+Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 
 ## Agent / model summary
 
