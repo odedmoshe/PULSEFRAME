@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T02:25:53.046Z",
+  "ranAt": "2026-11-15T02:39:43.617Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -10,7 +10,7 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 123,
+      "controls": 129,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -29,7 +29,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 123,
+      "controls": 129,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
