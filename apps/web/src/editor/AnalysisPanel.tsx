@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { sourceAt, sourceEnd } from '@pulseframe/core';
+import { findClip, sourceAt, sourceEnd } from '@pulseframe/core';
 import * as T from '@pulseframe/time';
 import type { Clip } from '@pulseframe/core';
 import { api, ApiFailure } from '../api.ts';
@@ -50,11 +50,18 @@ export function AnalysisPanel() {
     catch (e) { setErr(e instanceof ApiFailure ? `${e.message}${e.code === 'no_video' ? ` (${t('analysis.noVideo')})` : e.code === 'no_audio' ? ` (${t('analysis.noAudio')})` : ''}` : e instanceof Error ? e.message : String(e)); }
     finally { setBusy(null); }
   };
-  const add = (kind: Kind) => { if (srcNow) void editor.commit([{ op: 'edit_analysis', args: { assetId, kind, add: [srcNow] } }], 'Edit analysis'); };
+  // Handlers read the playhead when they run (a seek may not have re-rendered this panel yet), and "which point is
+  // nearest" is decided from the document as it is when the edit's turn comes.
+  const liveSrc = () => { const c = editor.doc ? findClip(editor.doc, clip.id)?.clip : undefined; const at = editor.playhead; return c && c.type === 'media' && T.lte(c.start, at) && T.lt(at, T.add(c.start, c.duration)) ? sourceAt(c, at) : null; };
+  const add = (kind: Kind) => { const at = liveSrc(); if (at) void editor.commit([{ op: 'edit_analysis', args: { assetId, kind, add: [at] } }], 'Edit analysis'); };
   const remove = (kind: Kind) => {
-    if (!srcNow) return;
-    const n = nearest(kind === 'scenes' ? scenes?.cuts ?? [] : beats?.beats ?? [], srcNow);
-    if (n) void editor.commit([{ op: 'edit_analysis', args: { assetId, kind, remove: [n] } }], 'Edit analysis');
+    const at = liveSrc();
+    if (!at) return;
+    void editor.commit(() => {
+      const cur = editor.doc?.analyses?.[assetId];
+      const n = nearest(kind === 'scenes' ? cur?.scenes?.cuts ?? [] : cur?.beats?.beats ?? [], at);
+      return n ? [{ op: 'edit_analysis', args: { assetId, kind, remove: [n] } }] : null;
+    }, 'Edit analysis');
   };
 
   const conf = beats?.confidence ?? null;

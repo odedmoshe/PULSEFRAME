@@ -293,6 +293,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified with a real MCP client over HTTP (`packages/evals/src/mcp-resources.test.ts`, 3 tests): listing and reading; resource equals tool output; every snake_case name in the guide and playbooks is an existing tool; a grant limited to one project lists and reads only that project and cannot get a playbook for another; no credential is 401.
 - Limits: the playbooks are written guidance; **no model has been run against them** (no language model is available here, B-9), so whether they produce good edits is untested. No resource subscriptions/change notifications, no Tasks extension, no MCP App. Untrusted-content handling is an instruction plus not inlining project text in prompts; tool results still return project text as plain JSON.
 
+**Checkpoint 13q — audit of editor handlers that acted on render-time state**
+- Read every editor panel for handlers that commit using the playhead or document captured at the last render (the defect class from checkpoint 13l). Found and fixed two more: the Inspector's transform sliders (they chose "write a keyframe" vs "change the static value" from the clip object of the last render) and the Analysis panel's "add / remove point at the playhead". Both now read the playhead when used and decide from the document when the edit's turn comes.
+- Panels read and found not affected: Transcript (clicks carry their own word ids), Deliver, Recipes, Projects, Access, canvas handles (commit through the same transform path, now fixed).
+- Verified: phase0 54, phase3 27, phase7 31, phase9 12, phase12 13, editor-interactions 15, 277 unit tests. **No new check reproduces these two specific races** (they need sub-frame timing); the fix is by construction and the existing checks show no regression.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -317,7 +322,6 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 Unblocked (no decision needed), roughly by value:
 1. Editor: J/K/L, source viewer, workspaces, marquee selection (Phase 3 carry-over; markers and multi-select are done).
 2. Speed ramps, reverse, freeze frame, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed and linear volume keys are done).
-3. Audit the remaining editor panels for handlers that act on render-time state (Look and Sound are done).
 4. Disk quota; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.

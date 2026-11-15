@@ -348,16 +348,23 @@ export class Editor {
    * at the playhead; a static property is set directly. One transaction either way.
    */
   setTransformAtPlayhead(clip: Clip, values: Partial<Record<'x' | 'y' | 'scale' | 'rotation' | 'opacity', number>>, label = 'Transform') {
-    const local = T.sub(this.playhead, clip.start);
-    const ops: OpCall[] = [];
-    const still: Record<string, number> = {};
-    for (const [p, raw] of Object.entries(values)) {
-      const v = Math.round((raw as number) * 1e4) / 1e4; // pointer precision is not meaningful beyond this
-      if (clip.keyframes?.[p as 'x']?.length) ops.push({ op: 'set_keyframe', args: { clipId: clip.id, property: p, time: local, value: v } });
-      else still[p] = v as number;
-    }
-    if (Object.keys(still).length) ops.push({ op: 'set_clip_transform', args: { clipId: clip.id, transform: still } });
-    return ops.length ? this.commit(ops, label) : Promise.resolve(null);
+    const playhead = this.playhead; // where the user is now
+    // "Write a key" vs "change the static value" is decided when this edit's turn comes, from the clip as it is then:
+    // the clip object handed in may predate the user's own earlier, still queued edits (e.g. the first keyframe).
+    return this.commit(() => {
+      const cur = this.state.doc ? findClip(this.state.doc, clip.id)?.clip : undefined;
+      if (!cur) return null;
+      const local = T.sub(playhead, cur.start);
+      const ops: OpCall[] = [];
+      const still: Record<string, number> = {};
+      for (const [p, raw] of Object.entries(values)) {
+        const v = Math.round((raw as number) * 1e4) / 1e4; // pointer precision is not meaningful beyond this
+        if (cur.keyframes?.[p as 'x']?.length) ops.push({ op: 'set_keyframe', args: { clipId: cur.id, property: p, time: local, value: v } });
+        else still[p] = v as number;
+      }
+      if (Object.keys(still).length) ops.push({ op: 'set_clip_transform', args: { clipId: cur.id, transform: still } });
+      return ops;
+    }, label);
   }
   /**
    * Canvas edits: while a format is viewed they become a per-format override (master untouched); otherwise a normal transform edit.
