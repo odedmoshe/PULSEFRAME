@@ -51,7 +51,32 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
 }
 /** Track position is ordering metadata: unrelated track insertions must not count as a change to this track. */
 const comparable = (s: EntityState | null | undefined) => (s ? canonical(s.kind === 'track' ? { ...s, index: 0 } : s) : 'null');
-export const sameEntity = (a: EntityState | null | undefined, b: EntityState | null | undefined) => comparable(a) === comparable(b);
+/**
+ * Structural equality with the same meaning as comparing `canonical()` strings (key order ignored, equal instants equal,
+ * undefined properties ignored), but without building strings: this runs for every entity on every commit.
+ */
+function same(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  const aa = Array.isArray(a), ba = Array.isArray(b);
+  if (aa !== ba) return false;
+  if (aa) { const x = a as unknown[], y = b as unknown[]; if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!same(x[i], y[i])) return false; return true; }
+  if (T.isRationalTime(a) && T.isRationalTime(b)) return T.eq(a, b);
+  const x = a as Record<string, unknown>, y = b as Record<string, unknown>;
+  let n = 0;
+  for (const k in x) { if (x[k] === undefined) continue; n++; if (!same(x[k], y[k])) return false; }
+  for (const k in y) if (y[k] !== undefined) n--;
+  return n === 0;
+}
+export function sameEntity(a: EntityState | null | undefined, b: EntityState | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  if (a.kind !== b.kind) return false;
+  // Track position is ordering metadata (see `comparable`).
+  if (a.kind === 'track' && b.kind === 'track') return a.sequenceId === b.sequenceId && same(a.track, b.track);
+  return same(a, b);
+}
+/** The slower string form of the same comparison; kept as the reference the fast path is tested against. */
+export const sameEntityCanonical = (a: EntityState | null | undefined, b: EntityState | null | undefined) => comparable(a) === comparable(b);
 
 export function diffEntities(before: ProjectDocument, after: ProjectDocument): EntityChange[] {
   const a = entityMap(before);

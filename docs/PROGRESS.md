@@ -183,8 +183,14 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Six regression checks added to `pnpm proof:phase5` (30/30) and one to `pnpm proof` (54/54); `analysis.test.ts` covers the limiter.
 - This was one review by one reviewer reading code; it is not a penetration test, and the browser side (XSS, content security policy) was not reviewed.
 
+**Checkpoint 13b — accessibility audit and soak**
+- `pnpm audit:a11y` (`docs/evidence/a11y-audit.json`): automated heuristic audit of the editor with every Inspector panel shown and one clip selected, in Hebrew (RTL) and English (LTR): 121 visible controls, all with an accessible name; no text below WCAG contrast thresholds; tab semantics complete; a visible focus indicator on each of the 51 elements reached by Tab; `lang`/`dir` set. The audit first plants three known defects (unnamed button, low-contrast text, removed focus ring) and fails unless it detects them. **This is not a WCAG conformance claim:** no screen reader, no user testing, no check of dialogs/palette states, canvas content, drag operations by keyboard, or reduced-motion behaviour beyond the setting being honoured in tests.
+- `pnpm soak` (`docs/evidence/soak.json`): 3,000 pseudo-random mixed transactions by two actors over REST (2,641 committed, 359 correctly refused, 0 server errors), document valid at all 30 checkpoints; full op-log replay equals the live document; reopen after restart identical with undo history intact; SQLite integrity ok.
+- Found by the soak: commits slow down with **project size** (not history length). Each commit copies, validates, diffs and stores the whole document. Replacing string-based entity comparison with a structural one (tested against the old one) cut the median at 708 clips from 36 ms to 20 ms; a small project in the same database after 2,600 revisions still commits in 5 ms. Remaining cost ≈ 2.2 ms per 100 clips on this machine. Replaying 2,631 operations takes about 8 s (history view of old revisions is slow on large projects).
+- Not done in Phase 13: playback/export soak, memory soak in the browser, failure injection beyond restart (disk full, killed ffmpeg mid-export is covered in Phase 4 only), packaging/installer, catalog completion, performance tuning on a target machine.
+
 ## In progress
-- Phase 13: accessibility audit of the editor, then soak/failure tests. Phase 10 stays blocked on providers.
+- Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
 ## Blocked / unverified (with what would unblock)
 

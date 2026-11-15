@@ -1,0 +1,50 @@
+{
+  "ranAt": "2026-11-15T01:41:14.189Z",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "browser": "153.0.8010.12"
+  },
+  "scope": "Automated heuristic audit of the editor with all Inspector panels shown and one clip selected. Not a WCAG conformance claim; no screen-reader or user testing.",
+  "runs": [
+    {
+      "lang": "he",
+      "dir": "rtl",
+      "title": "PULSEFRAME Studio",
+      "controls": 121,
+      "unnamed": [],
+      "lowContrast": [],
+      "tabIssues": [],
+      "uiLanguage": "he",
+      "focus": {
+        "reached": 51,
+        "missing": []
+      },
+      "plantedDefectsDetected": {
+        "unnamed": true,
+        "contrast": true,
+        "focus": true
+      }
+    },
+    {
+      "lang": "en",
+      "dir": "ltr",
+      "title": "PULSEFRAME Studio",
+      "controls": 121,
+      "unnamed": [],
+      "lowContrast": [],
+      "tabIssues": [],
+      "uiLanguage": "en",
+      "focus": {
+        "reached": 51,
+        "missing": []
+      },
+      "plantedDefectsDetected": {
+        "unnamed": true,
+        "contrast": true,
+        "focus": true
+      }
+    }
+  ],
+  "findings": 0,
+  "result": "NO FINDINGS (heuristic)"
+}

@@ -32,7 +32,8 @@
     "proof:phase9": "tsx packages/evals/src/phase9-proof.ts",
     "proof:phase12": "tsx packages/evals/src/phase12-proof.ts",
     "proof:phase11": "tsx packages/evals/src/phase11-proof.ts",
-    "audit:a11y": "tsx packages/evals/src/a11y-audit.ts"
+    "audit:a11y": "tsx packages/evals/src/a11y-audit.ts",
+    "soak": "tsx packages/evals/src/soak.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

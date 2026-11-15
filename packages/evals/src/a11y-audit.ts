@@ -105,15 +105,28 @@ async function main() {
     for (const lang of ['he', 'en'] as const) {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
+      await page.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate
       await page.goto(`${s.ownerUrl}&project=${pid}`);
       await page.getByTestId('timecode').waitFor();
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
       await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
       await page.waitForTimeout(300);
+      // Sensitivity check: plant three known defects and require the audit to report each, then remove them.
+      await page.evaluate(() => {
+        const host = document.createElement('div');
+        host.id = 'pf-a11y-planted';
+        host.innerHTML = '<button id="planted-unnamed"></button><p id="planted-contrast" style="color:#3a3f47;background:#30343b">low contrast text</p><button id="planted-nofocus" style="outline:none;box-shadow:none">no focus ring</button>';
+        document.body.prepend(host);
+      });
+      const planted = await page.evaluate(auditInPage);
+      const plantedFocus = await focusAudit(page, 4);
+      const sensitivity = { unnamed: planted.unnamed.some((x: string) => x.includes('planted-unnamed')), contrast: planted.lowContrast.some((x: { el: string }) => x.el.includes('planted-contrast')), focus: plantedFocus.missing.some((x: string) => x.startsWith('button')) };
+      await page.evaluate(() => document.getElementById('pf-a11y-planted')?.remove());
+      if (!sensitivity.unnamed || !sensitivity.contrast || !sensitivity.focus) throw new Error(`the audit failed to detect planted defects: ${JSON.stringify(sensitivity)}`);
       const found = await page.evaluate(auditInPage);
       const focus = await focusAudit(page, 60);
       await page.screenshot({ path: path.join(art, `editor-${lang}.png`), fullPage: false });
-      report.runs.push({ ...found, uiLanguage: lang, focus });
+      report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
       await page.close();
     }

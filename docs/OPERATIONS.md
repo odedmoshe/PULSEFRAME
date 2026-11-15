@@ -60,6 +60,8 @@ All proofs start their own server on their own port and data directory under `.a
 | `pnpm proof:phase9` | scene cuts and beats on synthetic corpora |
 | `pnpm proof:phase11` | recipes |
 | `pnpm proof:phase12` | linked formats, preflight |
+| `pnpm audit:a11y` | heuristic accessibility audit (he + en) |
+| `pnpm soak` | 3,000-transaction session, replay, restart |
 | `pnpm conformance:seek`, `pnpm conformance:avsync` | seek accuracy, 10-minute A/V sync |
 | `pnpm proof:g0`, `pnpm trial:birefnet` | provider path; need a running ComfyUI (exit 2 = not available) |
 
