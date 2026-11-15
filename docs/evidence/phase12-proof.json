@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T14:07:16.010Z",
+  "ranAt": "2026-11-15T14:25:55.632Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -36,8 +36,8 @@
       }
     }
   },
-  "passed": 16,
-  "total": 16,
+  "passed": 17,
+  "total": 17,
   "checks": [
     {
       "name": "catalog offers format profiles; a 9:16 variant renders at its own size; \"cover\" fills the frame with the centre of the picture, \"contain\" shows the whole picture with bars",
@@ -188,6 +188,22 @@
         ],
         "target": -14,
         "errors": []
+      }
+    },
+    {
+      "name": "editor: the project frame form refuses an odd size, changes size and background in one transaction (the server still is 480×480 with the new colour in its corners), Ctrl+Z restores the old frame; a library file in use cannot be removed, an unused one is removed from the library",
+      "ok": true,
+      "detail": {
+        "oddBlocked": true,
+        "size": "480x480",
+        "corner": [
+          32,
+          64,
+          96
+        ],
+        "restored": 640,
+        "usedDisabled": true,
+        "removed": true
       }
     },
     {

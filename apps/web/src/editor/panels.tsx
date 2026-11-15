@@ -114,6 +114,9 @@ export function Library() {
             ))}
             <button className="ghost" onClick={() => void editor.addAsset(a.id)} data-testid={`add-${a.id}`}>{t('media.add')}</button>
             {a.kind !== 'image' && <button className="ghost" onClick={() => setViewing(a.id)} data-testid={`view-${a.id}`}>{t('source.open')}</button>}
+            {(() => { const used = doc.sequences[doc.mainSequenceId]!.tracks.some((tr) => tr.clips.some((c) => c.type === 'media' && c.assetId === a.id)); return (
+              <button className="ghost danger" disabled={used} title={used ? t('media.remove.used') : undefined} onClick={() => void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file')} data-testid={`remove-${a.id}`}>{t('media.remove')}</button>
+            ); })()}
           </li>
         ))}
       </ul>

@@ -158,6 +158,51 @@ defineOp({
 });
 
 defineOp({
+  name: 'set_project_format',
+  version: 1,
+  description: 'Change the master frame of the project: its size (even numbers; clips keep their relative position and scale, so the layout follows), the background colour, and whether pictures fill the frame (cover) or fit inside it (contain). Linked formats keep their own size. The frame rate cannot be changed after material is on the timeline.',
+  args: z.object({ width: z.number().int().min(16).max(8192).optional(), height: z.number().int().min(16).max(8192).optional(), background: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), fit: z.enum(['contain', 'cover']).optional() }).strict(),
+  apply(d, a) {
+    if (a.width === undefined && a.height === undefined && a.background === undefined && a.fit === undefined) throw new OpError('invalid_args', 'nothing to change: give width, height, background or fit');
+    const width = a.width ?? d.settings.width, height = a.height ?? d.settings.height;
+    if (width % 2 || height % 2) throw new OpError('invalid_args', 'width and height must be even (video encoders require it)', { width, height });
+    d.settings.width = width; d.settings.height = height;
+    if (a.background !== undefined) d.settings.background = a.background;
+    if (a.fit !== undefined) { if (a.fit === 'contain') delete d.settings.fit; else d.settings.fit = a.fit; }
+    return { affectedIds: [d.id], summary: `Project frame ${width}×${height}, background ${d.settings.background}, ${d.settings.fit ?? 'contain'}` };
+  },
+});
+defineOp({
+  name: 'rename_asset',
+  version: 1,
+  description: 'Change the name a library file is shown by. The stored file is not touched.',
+  args: z.object({ assetId: z.string(), name: z.string().min(1).max(255) }).strict(),
+  apply(d, a) {
+    const asset = d.assets[a.assetId];
+    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    asset.name = a.name;
+    return { affectedIds: [asset.id], summary: `Renamed library file to "${a.name.slice(0, 60)}"` };
+  },
+});
+defineOp({
+  name: 'remove_asset',
+  version: 1,
+  description: 'Remove a file from the project library, together with its transcript and analysis results. Refused while any clip uses it. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  args: z.object({ assetId: z.string() }).strict(),
+  apply(d, a) {
+    const asset = d.assets[a.assetId];
+    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    const users = Object.values(d.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'media' && c.assetId === asset.id).map((c) => c.id);
+    if (users.length) throw new OpError('incompatible', `${users.length} clip(s) on the timeline still use this file`, { assetId: asset.id, clipIds: users.slice(0, 50) }, 'Delete those clips first.');
+    const affected = [asset.id];
+    if (d.transcripts?.[asset.id]) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
+    if (d.analyses?.[asset.id]) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
+    delete d.assets[asset.id];
+    return { affectedIds: affected, summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
+  },
+});
+
+defineOp({
   name: 'add_track',
   version: 1,
   description: 'Add an empty track. Picture tracks stack bottom-to-top in list order; audio tracks mix.',

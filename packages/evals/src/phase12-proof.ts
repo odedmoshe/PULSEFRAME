@@ -225,6 +225,31 @@ async function main() {
     let target: number | undefined;
     for (let i = 0; i < 80 && target === undefined; i++) { target = (await call(`/projects/${pid}`)).body.project.settings.loudness?.target; await sleep(100); }
     check('editor: choosing a format changes the preview to its shape with a format badge and the safe-area guide; a profile button adds a format; preflight lists issues for the viewed format and its fix button applies the fix', Math.abs(masterRatio - 640 / 360) < 0.01 && Math.abs(variantRatio - 360 / 640) < 0.01 && variantsAfter === variantsBefore + 1 && shownCodes.includes('no_loudness_target') && hadFix && target === -14 && errors.length === 0, { masterRatio: Number(masterRatio.toFixed(3)), variantRatio: Number(variantRatio.toFixed(3)), shownCodes, target, errors: errors.slice(0, 3) });
+    // project frame and library entries from the editor
+    await page.getByTestId('format-switch').selectOption('');
+    const pf0 = (await call(`/projects/${pid}`)).body;
+    await page.getByTestId('frame-width').fill('481');
+    const oddBlocked = await page.getByTestId('frame-apply').isDisabled() && (await page.getByTestId('frame-error').count()) === 1;
+    await page.getByTestId('frame-width').fill('480');
+    await page.getByTestId('frame-height').fill('480');
+    await page.getByTestId('frame-background').fill('#204060');
+    await page.getByTestId('frame-apply').click();
+    let pf1: any = pf0;
+    for (let i = 0; i < 80; i++) { pf1 = (await call(`/projects/${pid}`)).body; if (pf1.project.settings.width === 480) break; await sleep(100); }
+    const sq480 = await still(pid, 20);
+    const corner = px(sq480, 2, 2); // the 16:9 picture is fitted inside the square frame, so the corners are background
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Control+KeyZ');
+    let pf2: any = pf1;
+    for (let i = 0; i < 80; i++) { pf2 = (await call(`/projects/${pid}`)).body; if (pf2.project.settings.width === pf0.project.settings.width) break; await sleep(100); }
+    const usedAsset = Object.keys(pf2.project.assets)[0]!;
+    const usedDisabled = await page.getByTestId(`remove-${usedAsset}`).isDisabled();
+    const extra: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { authorization: `Bearer ${s.auth.tokens.agent}`, 'x-filename': 'unused.png' }, body: fs.readFileSync(path.join(root, 'docs/evidence/baselines/phase3-palette-en.png')) })).json();
+    await page.getByTestId(`remove-${extra.assetId}`).waitFor({ timeout: 10000 });
+    await page.getByTestId(`remove-${extra.assetId}`).click();
+    let pf3: any = pf2;
+    for (let i = 0; i < 80; i++) { pf3 = (await call(`/projects/${pid}`)).body; if (!pf3.project.assets[extra.assetId]) break; await sleep(100); }
+    check('editor: the project frame form refuses an odd size, changes size and background in one transaction (the server still is 480×480 with the new colour in its corners), Ctrl+Z restores the old frame; a library file in use cannot be removed, an unused one is removed from the library', oddBlocked && pf1.revision === pf0.revision + 1 && sq480.w === 480 && sq480.h === 480 && Math.abs(corner[0]! - 0x20) <= 2 && Math.abs(corner[1]! - 0x40) <= 2 && Math.abs(corner[2]! - 0x60) <= 2 && pf2.project.settings.width === pf0.project.settings.width && pf2.project.settings.background === pf0.project.settings.background && usedDisabled && !!extra.assetId && !pf3.project.assets[extra.assetId], { oddBlocked, size: `${sq480.w}x${sq480.h}`, corner, restored: pf2.project.settings.width, usedDisabled, removed: !pf3.project.assets[extra.assetId] });
     // captions per format from the editor: while a format is viewed, position/size edits go to that format only
     const cpage = await page.context().newPage();
     await cpage.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });

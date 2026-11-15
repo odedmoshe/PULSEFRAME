@@ -164,3 +164,41 @@ describe('track settings', () => {
   });
 });
 
+describe('project frame and library entries', () => {
+  it('the project frame size, background and fit can be changed and undone; clips keep their relative layout; odd sizes are refused', () => {
+    const { fwd: doc } = project();
+    const r = tx(doc, [{ op: 'set_project_format', args: { width: 1080, height: 1920, background: '#102030', fit: 'cover' } }]).doc;
+    expect(validateProject(r)).toEqual([]);
+    const g0 = evaluate(doc, f(30)), g1 = evaluate(r, f(30));
+    expect([g0.width, g0.height, g0.background, g0.fit]).toEqual([640, 360, '#000000', 'contain']);
+    expect([g1.width, g1.height, g1.background, g1.fit]).toEqual([1080, 1920, '#102030', 'cover']);
+    expect((g1.layers[0] as any).transform).toEqual((g0.layers[0] as any).transform); // positions are fractions of the frame
+    expect((g1.layers[0] as any).sourceFrameIndex).toBe((g0.layers[0] as any).sourceFrameIndex);
+    const back = structuredClone(r);
+    restoreEntities(back, diffEntities(doc, r).map((x) => ({ id: x.id, state: x.before })));
+    expect(back).toEqual(doc);
+    expect(tx(r, [{ op: 'set_project_format', args: { fit: 'contain' } }]).doc.settings.fit).toBeUndefined();
+    expect(code(() => tx(doc, [{ op: 'set_project_format', args: { width: 641 } }]))).toBe('invalid_args');
+    expect(code(() => tx(doc, [{ op: 'set_project_format', args: {} }]))).toBe('invalid_args');
+    expect(code(() => tx(doc, [{ op: 'set_project_format', args: { background: 'red' } }]))).toBe('invalid_args');
+  });
+  it('a library file can be renamed, and removed once no clip uses it (its transcript and analysis go with it); undo brings all of it back', () => {
+    const { fwd: doc, clipId, audioId, assetId } = project();
+    const named = tx(doc, [{ op: 'rename_asset', args: { assetId, name: 'ראיון 1.mp4' } }]).doc;
+    expect(named.assets[assetId]!.name).toBe('ראיון 1.mp4');
+    expect(code(() => tx(doc, [{ op: 'remove_asset', args: { assetId } }]))).toBe('incompatible');
+    let d = tx(doc, [{ op: 'attach_analysis', args: { assetId, kind: 'scenes', method: 'test', params: {}, createdAt: '2026-11-15T00:00:00Z', times: [f(30)] } }], true).doc;
+    d = tx(d, [{ op: 'delete_clip', args: { clipId } }]).doc; // the linked sound clip goes with it
+    expect(findClip(d, audioId)).toBeUndefined();
+    expect(d.analyses[assetId]).toBeDefined();
+    const removed = tx(d, [{ op: 'remove_asset', args: { assetId } }]).doc;
+    expect([removed.assets[assetId], removed.analyses[assetId]]).toEqual([undefined, undefined]);
+    expect(validateProject(removed)).toEqual([]);
+    const back = structuredClone(removed);
+    restoreEntities(back, diffEntities(d, removed).map((x) => ({ id: x.id, state: x.before })));
+    expect(back).toEqual(d);
+    expect(code(() => tx(removed, [{ op: 'remove_asset', args: { assetId } }]))).toBe('not_found');
+    expect(code(() => tx(removed, [{ op: 'add_clip', args: { assetId, start: f(0) } }]))).toBe('not_found');
+  });
+});
+

@@ -8,6 +8,42 @@ interface BatchJob { jobId: string; variantId: string; status: string; stage: st
 const ACTIVE = ['queued', 'running', 'cancel-requested'];
 
 /** Linked formats, creative preflight and export of one or all formats (SPEC §19.8, §19.14). */
+/** The master frame of the project: size, background and fill. One transaction; linked formats keep their own size. */
+function ProjectFrame() {
+  const { editor, state, t } = useEditorState();
+  const st = state.doc?.settings;
+  const [w, setW] = useState(String(st?.width ?? ''));
+  const [h, setH] = useState(String(st?.height ?? ''));
+  const [bg, setBg] = useState(st?.background.slice(0, 7) ?? '#000000');
+  const [fit, setFit] = useState<'contain' | 'cover'>(st?.fit ?? 'contain');
+  useEffect(() => { if (st) { setW(String(st.width)); setH(String(st.height)); setBg(st.background.slice(0, 7)); setFit(st.fit ?? 'contain'); } }, [st?.width, st?.height, st?.background, st?.fit]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!st) return null;
+  const width = Math.round(Number(w)), height = Math.round(Number(h));
+  const sizeOk = Number.isFinite(width) && Number.isFinite(height) && width >= 16 && height >= 16 && width <= 8192 && height <= 8192 && width % 2 === 0 && height % 2 === 0;
+  const changed = width !== st.width || height !== st.height || bg.toLowerCase() !== st.background.slice(0, 7).toLowerCase() || fit !== (st.fit ?? 'contain');
+  const apply = () => void editor.commit([{ op: 'set_project_format', args: { ...(width !== st.width ? { width } : {}), ...(height !== st.height ? { height } : {}), ...(bg.toLowerCase() !== st.background.slice(0, 7).toLowerCase() ? { background: bg } : {}), ...(fit !== (st.fit ?? 'contain') ? { fit } : {}) } }], 'Project frame');
+  return (
+    <section aria-labelledby="deliver-frame-h" data-testid="project-frame">
+      <h3 id="deliver-frame-h">{t('frame.title')}</h3>
+      <form className="fields" onSubmit={(e) => { e.preventDefault(); if (sizeOk && changed) apply(); }}>
+        <div className="row">
+          <label>{t('frame.width')}<input type="number" dir="ltr" min={16} max={8192} step={2} value={w} onChange={(e) => setW(e.target.value)} data-testid="frame-width" /></label>
+          <label>{t('frame.height')}<input type="number" dir="ltr" min={16} max={8192} step={2} value={h} onChange={(e) => setH(e.target.value)} data-testid="frame-height" /></label>
+        </div>
+        <label>{t('frame.background')}<input type="color" value={bg} onChange={(e) => setBg(e.target.value)} data-testid="frame-background" /></label>
+        <label>{t('frame.fit')}
+          <select value={fit} onChange={(e) => setFit(e.target.value as 'contain' | 'cover')} data-testid="frame-fit">
+            <option value="contain">{t('frame.fit.contain')}</option>
+            <option value="cover">{t('frame.fit.cover')}</option>
+          </select>
+        </label>
+        {!sizeOk && <p className="muted danger" role="alert" data-testid="frame-error">{t('frame.even')}</p>}
+        <button type="submit" className="ghost" disabled={!sizeOk || !changed} data-testid="frame-apply">{t('frame.apply')}</button>
+      </form>
+    </section>
+  );
+}
+
 export function DeliverPanel() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const { editor, state, t } = useEditorState();
@@ -69,6 +105,7 @@ export function DeliverPanel() {
 
   return (
     <div className="deliver" data-testid="deliver-panel">
+      <ProjectFrame />
       <section aria-labelledby="deliver-formats-h">
         <h3 id="deliver-formats-h">{t('deliver.formats')}</h3>
         <p className="muted">{t('deliver.formats.note')}</p>
