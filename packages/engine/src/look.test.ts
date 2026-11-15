@@ -64,3 +64,20 @@ describe('look evaluation', () => {
     expect(evaluate(r.doc, f(5))).toEqual(plain);
   });
 });
+
+describe('colour matrix for sources read with the wrong YCbCr matrix', () => {
+  it('BT.709-decoded pixels re-read as BT.601: greys are unchanged, and a colour round-trips through the two matrices', async () => {
+    const { BT709_AS_BT601: m } = await import('./look.ts');
+    for (let r = 0; r < 3; r++) expect(m[r * 3]! + m[r * 3 + 1]! + m[r * 3 + 2]!).toBeCloseTo(1, 9); // rows sum to 1: grey stays grey
+    // Independent arithmetic: take a colour, encode to YCbCr with BT.601, decode with BT.709 (what the browser shows), then correct.
+    const enc = (kr: number, kb: number, [r, g, b]: number[]) => { const y = kr * r! + (1 - kr - kb) * g! + kb * b!; return [y, (b! - y) / (2 * (1 - kb)), (r! - y) / (2 * (1 - kr))]; };
+    const dec = (kr: number, kb: number, [y, cb, cr]: number[]) => { const r = y! + 2 * (1 - kr) * cr!, b = y! + 2 * (1 - kb) * cb!; return [r, (y! - kr * r - kb * b) / (1 - kr - kb), b]; };
+    for (const colour of [[200, 40, 30], [20, 180, 60], [30, 50, 220], [128, 128, 128], [250, 240, 10]]) {
+      const shown = dec(0.2126, 0.0722, enc(0.299, 0.114, colour)); // wrong reading
+      const fixed = [0, 1, 2].map((i) => m[i * 3]! * shown[0]! + m[i * 3 + 1]! * shown[1]! + m[i * 3 + 2]! * shown[2]!);
+      fixed.forEach((v, i) => expect(v).toBeCloseTo(colour[i]!, 6));
+      if (colour[0] !== colour[1]) expect(Math.max(...shown.map((v, i) => Math.abs(v - colour[i]!)))).toBeGreaterThan(3); // the wrong reading really differs
+    }
+  });
+});
+

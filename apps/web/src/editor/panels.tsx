@@ -114,6 +114,14 @@ export function Library() {
                   : n.code === 'picture-starts-late' ? `${t('notice.pictureLate')} (${n.frames})`
                   : n.code === 'sound-offset' ? `${n.seconds > 0 ? t('notice.soundLate') : t('notice.soundEarly')} (${Math.abs(n.seconds).toFixed(2)}s)`
                   : t('notice.colourUntagged')}
+                {n.code === 'colour-untagged' && (
+                  <label className="notice-choice">{t('notice.colourReadAs')}{' '}
+                    <select value={n.readAs} data-testid={`colour-read-${a.id}`} onChange={(e) => void editor.commit([{ op: 'set_asset_colour', args: { assetId: a.id, readAs: e.target.value } }], 'Colour reading')}>
+                      <option value="auto">{t('notice.colourReadAs.auto')}</option>
+                      <option value="bt601">{t('notice.colourReadAs.bt601')}</option>
+                    </select>
+                  </label>
+                )}
               </span>
             ))}
             <button className="ghost" onClick={() => void editor.addAsset(a.id)} data-testid={`add-${a.id}`}>{t('media.add')}</button>

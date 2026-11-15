@@ -20,7 +20,8 @@ describe('asset notices', () => {
     expect(assetNotices(base({ video: { ...base().video!, startTime: T.fromSeconds('0.5') } }))).toEqual([{ code: 'picture-starts-late', frames: 15 }]);
     expect(assetNotices(base({ audio: { ...base().audio!, startTime: T.fromSeconds('0.478') } }))).toEqual([{ code: 'sound-offset', seconds: 0.478 }]);
     expect(assetNotices(base({ audio: { ...base().audio!, startTime: T.fromSeconds('-0.121') } }))).toEqual([{ code: 'sound-offset', seconds: -0.121 }]);
-    expect(assetNotices(base({ video: { ...base().video!, untaggedColour: true } }))).toEqual([{ code: 'colour-untagged' }]);
+    expect(assetNotices(base({ video: { ...base().video!, untaggedColour: true } }))).toEqual([{ code: 'colour-untagged', readAs: 'auto' }]);
+    expect(assetNotices(base({ video: { ...base().video!, untaggedColour: true, readColourAs: 'bt601' } }))).toEqual([{ code: 'colour-untagged', readAs: 'bt601' }]);
     // a converted copy is tagged by the conversion; the notice then is "converted", not "untagged"
     expect(assetNotices(base({ conform, video: { ...base().video!, untaggedColour: true } })).map((n) => n.code)).toEqual(['converted']);
   });

@@ -185,6 +185,19 @@ defineOp({
   },
 });
 defineOp({
+  name: 'set_asset_colour',
+  version: 1,
+  description: 'For a video file that does not say how its colours are encoded (the library shows a note): choose how to read them. bt601 = standard-definition material (the reading most other players use for it); auto = as the browser reads it (BT.709). The choice applies to every clip of the file, in preview, stills and export.',
+  args: z.object({ assetId: z.string(), readAs: z.enum(['auto', 'bt601']) }).strict(),
+  apply(d, a) {
+    const asset = d.assets[a.assetId];
+    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    if (!asset.video?.untaggedColour || asset.conform) throw new OpError('incompatible', 'this file states how its colours are encoded (or was converted at import), so there is nothing to choose', { assetId: asset.id });
+    if (a.readAs === 'bt601') asset.video.readColourAs = 'bt601'; else delete asset.video.readColourAs;
+    return { affectedIds: [asset.id], summary: `Colours of "${asset.name.slice(0, 40)}" read as ${a.readAs === 'bt601' ? 'BT.601' : 'the browser reads them (BT.709)'}` };
+  },
+});
+defineOp({
   name: 'remove_asset',
   version: 1,
   description: 'Remove a file from the project library, together with its transcript and analysis results. Refused while any clip uses it. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',

@@ -18,7 +18,7 @@ const ASSETS = [
   { kind: 'video' as const, name: 'v.mp4', contentHash: `sha256:${'1'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(8, 1), video: { width: 640, height: 360, frameRate: SRC, codec: 'h264', rotation: 0, frameCount: 240 }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: prov },
   { kind: 'audio' as const, name: 'm.wav', contentHash: `sha256:${'2'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(10, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm' }, provenance: prov },
   { kind: 'image' as const, name: 'p.png', contentHash: `sha256:${'3'.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 800, height: 600, codec: 'png', hasAlpha: false }, provenance: prov },
-  { kind: 'video' as const, name: 'late.mkv', contentHash: `sha256:${'4'.repeat(64)}`, byteSize: 1, container: 'matroska', mimeType: 'video/x-matroska', duration: T.frameTime(135, SRC), video: { width: 640, height: 360, frameRate: SRC, codec: 'h264', rotation: 0, frameCount: 120, startTime: T.fromSeconds('0.5') }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: prov },
+  { kind: 'video' as const, name: 'late.mkv', contentHash: `sha256:${'4'.repeat(64)}`, byteSize: 1, container: 'matroska', mimeType: 'video/x-matroska', duration: T.frameTime(135, SRC), video: { width: 640, height: 360, frameRate: SRC, codec: 'h264', rotation: 0, frameCount: 120, startTime: T.fromSeconds('0.5'), untaggedColour: true as const }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: prov },
 ];
 
 /** `setup(assetIds)` returns the operations that add analysis data and a transcript; `gen(doc)` returns the next random call. */
@@ -118,6 +118,7 @@ export function createFuzz(seed: number) {
       () => ({ op: 'update_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none', time: fr(), color: pick(['blue', 'green', 'yellow', 'red', 'purple'] as const) } }),
       () => { const t = pick(tracks); return { op: 'update_track', args: { trackId: t.id, ...(rnd() < 0.4 ? { locked: rnd() < 0.25 } : rnd() < 0.5 ? (t.kind === 'audio' || rnd() < 0.1 ? { muted: rnd() < 0.4 } : { hidden: rnd() < 0.4 }) : { name: pick(['A', 'רצועה', 'B-roll']) }) } }; },
       () => ({ op: 'set_project_format', args: pick([{ background: '#203040' }, { fit: pick(['contain', 'cover'] as const) }, { width: 640, height: 360 }, { width: 641 }]) }),
+      () => ({ op: 'set_asset_colour', args: { assetId: pick(assetIds), readAs: pick(['auto', 'bt601'] as const) } }),
       () => ({ op: 'rename_asset', args: { assetId: pick(assetIds), name: pick(['a.mp4', 'קובץ', 'x']) } }),
       () => ({ op: 'remove_asset', args: { assetId: pick(assetIds) } }),
       () => ({ op: 'move_track', args: { trackId: trackId(), toIndex: int(tracks.length + 1) } }),

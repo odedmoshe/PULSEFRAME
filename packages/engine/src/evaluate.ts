@@ -29,6 +29,8 @@ export interface VideoLayer extends LayerLook {
   sourceFrameIndex: number;
   /** Mid-frame time in seconds, measured from the first frame of the stream: safe to hand to float-second decoder APIs without boundary ambiguity. The decoder adds its own file's first timestamp. */
   sourceSeekSeconds: number;
+  /** Colour correction for a source the decoder read with the wrong matrix: 'bt709-as-bt601' re-reads BT.709-decoded pixels as BT.601. */
+  colourFix?: 'bt709-as-bt601';
   sourceWidth: number;
   sourceHeight: number;
   transform: Transform;
@@ -75,6 +77,7 @@ function pictureLayer(doc: ProjectDocument, track: Track, clip: Extract<Clip, { 
   return {
     kind: 'video', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime, sourceFrameIndex: idx,
     sourceSeekSeconds: ((idx + 0.5) * rate.den) / rate.num,
+    ...(asset.video.untaggedColour && asset.video.readColourAs === 'bt601' && !asset.conform ? { colourFix: 'bt709-as-bt601' as const } : {}),
     sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: transformAt(clip, time), ...look(clip, time),
   };
 }
@@ -127,7 +130,7 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
     time: g.time,
     seconds: T.toSeconds(g.time),
     frameIndex: g.frameIndex,
-    layers: g.layers.map((l) => (l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
+    layers: g.layers.map((l) => (l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...(l.colourFix ? { colourFix: l.colourFix } : {}), ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
     audio: g.audio,
   };
 }

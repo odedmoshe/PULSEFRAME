@@ -7,7 +7,7 @@
  */
 import type { Layer, PictureLayer, RenderGraph, TextLayer } from './evaluate.ts';
 import { visualOrder, wrapWords, type CaptionLayer } from './captions.ts';
-import { applyEffects, applyMask, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
+import { applyColourMatrix, applyEffects, applyMask, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Something that can paint a decoded source frame into a rectangle. */
@@ -173,13 +173,15 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
     const w = layer.kind === 'text' ? g.width : layer.sourceWidth * fit;
     const h = layer.kind === 'text' ? g.height : layer.sourceHeight * fit;
     const place = (c: Ctx2D) => (layer.kind === 'text' ? drawText(c, g, layer) : withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h)));
-    const hasLook = !!(layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
+    const colourFix = layer.kind === 'video' ? layer.colourFix : undefined;
+    const hasLook = !!(colourFix || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
     if (!hasLook) return place(ctx); // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
     const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, box };
     let buf = scratch(1, g.width, g.height);
     place(buf.ctx);
+    if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
     if (layer.effects?.length) buf = applyEffects(buf, layer.effects, env);
     if (layer.mask) applyMask(buf, layer.mask, env);
     if (layer.transition?.role === 'out') {

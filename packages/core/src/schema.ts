@@ -35,7 +35,9 @@ export const AssetSchema = z
         /** When the first video frame does not sit at the file's own start (see Asset.timeOrigin): how much later it starts (remuxed files, Matroska/TS, B-frames without an edit list). */
         startTime: RationalTimeSchema.optional(),
         /** True when the file does not say how its colours are encoded. It is then shown as the browser reads it (BT.709 in Chromium), which for standard-definition material differs slightly from the BT.601 reading other players use. */
-        untaggedColour: z.literal(true).optional() })
+        untaggedColour: z.literal(true).optional(),
+        /** The owner's choice for a file with `untaggedColour`: read its colours as BT.601 (standard-definition material) instead of the browser's BT.709 reading. Applied as a colour correction in the compositor, so preview, stills and export agree. */
+        readColourAs: z.literal('bt601').optional() })
       .strict()
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string(),
