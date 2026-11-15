@@ -50,8 +50,10 @@ export function ClipVisuals(props: {
   widthPx: number;
   heightPx: number;
   refreshKey: number;
+  /** The clip plays its source backwards: thumbnails run in the order the clip shows them. */
+  reverse?: boolean;
 }) {
-  const { projectId, asset, kind, sourceIn, duration, widthPx, heightPx, refreshKey } = props;
+  const { projectId, asset, kind, sourceIn, duration, widthPx, heightPx, refreshKey, reverse } = props;
   const want = kind === 'video' ? 'thumbnails' : 'waveform';
   const applicable = asset.kind !== 'image' && (kind === 'video' ? asset.kind === 'video' && !!asset.video : !!asset.audio);
   const [layer, setLayer] = useState<LayerState>('none');
@@ -123,7 +125,7 @@ export function ClipVisuals(props: {
         const tw = (heightPx * m.tileWidth) / m.tileHeight; // display tile width in CSS px
         const slots = Math.ceil(widthPx / tw);
         for (let j = 0; j < slots; j++) {
-          const i = thumbnailIndexForSlot({ sourceIn, duration, widthPx, slotCentrePx: j * tw + tw / 2, frameRate: rate, frameIndices: m.frameIndices });
+          const i = thumbnailIndexForSlot({ sourceIn, duration, widthPx, slotCentrePx: reverse ? Math.max(0, widthPx - (j * tw + tw / 2)) : j * tw + tw / 2, frameRate: rate, frameIndices: m.frameIndices });
           ctx.drawImage(entry.bitmap, (i % m.columns) * m.tileWidth, Math.floor(i / m.columns) * m.tileHeight, m.tileWidth, m.tileHeight, j * tw * dpr, 0, tw * dpr, H);
         }
       } else if (entry.kind === 'waveform' && want === 'waveform') {
@@ -148,7 +150,7 @@ export function ClipVisuals(props: {
       // A bitmap closed by eviction mid-draw: reload instead of showing anything invented.
       setReload((n) => n + 1);
     }
-  }, [layer, loaded, widthPx, heightPx, sourceIn.value, sourceIn.timescale, duration.value, duration.timescale, asset.video?.frameRate.num, asset.video?.frameRate.den, want]);
+  }, [layer, loaded, widthPx, heightPx, sourceIn.value, sourceIn.timescale, duration.value, duration.timescale, asset.video?.frameRate.num, asset.video?.frameRate.den, want, reverse]);
 
   if (!applicable || layer === 'none') return null;
   const state = layer === 'ready' ? 'ready' : layer === 'failed' ? 'failed' : 'processing';

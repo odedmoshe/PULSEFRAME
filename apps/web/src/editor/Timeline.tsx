@@ -97,7 +97,7 @@ export function Timeline() {
                     style={{ left: T.toSeconds(c.start) * pps, width }} onClick={(e) => editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace')} aria-pressed={selection.includes(c.id)}
                     aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
-                      <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={34} refreshKey={derivativeTick} />
+                      <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={34} refreshKey={derivativeTick} reverse={c.type === 'media' && !!c.reverse} />
                     )}
                     <span dir="auto" className="clip-label">{c.type === 'media' && c.freeze ? '❄ ' : ''}{c.type === 'media' && c.reverse ? '◀ ' : ''}{clipLabel(doc, c)}</span>
                     {c.keyframes && [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.toSeconds(k.time))))].filter((s) => s >= 0 && s <= T.toSeconds(c.duration)).map((s) => (
