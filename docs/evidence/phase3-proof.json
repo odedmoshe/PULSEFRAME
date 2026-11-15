@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T15:35:24.803Z",
+  "ranAt": "2026-11-15T16:05:26.890Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -378,6 +378,20 @@
       }
     },
     {
+      "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
+      "ok": true,
+      "detail": {
+        "revision": 38,
+        "allRows": 38,
+        "firstRev": "38",
+        "rawNames": 0,
+        "agentRows": 1,
+        "agentOnly": true,
+        "closedH": true,
+        "focusH": true
+      }
+    },
+    {
       "name": "\"close empty gaps\" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost",
       "ok": true,
       "detail": {
@@ -387,8 +401,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          37,
-          39
+          38,
+          40
         ]
       }
     },
@@ -401,34 +415,34 @@
         "differentSourceFrames": 29,
         "firstFrames": [
           {
-            "frame": 3,
+            "frame": 4,
             "quality": "draft",
-            "code": 3
+            "code": 4
           },
           {
-            "frame": 6,
+            "frame": 7,
             "quality": "draft",
-            "code": 6
+            "code": 7
           },
           {
-            "frame": 9,
+            "frame": 10,
             "quality": "draft",
-            "code": 9
+            "code": 10
           },
           {
-            "frame": 12,
+            "frame": 13,
             "quality": "draft",
-            "code": 12
+            "code": 13
           },
           {
-            "frame": 15,
+            "frame": 16,
             "quality": "draft",
-            "code": 15
+            "code": 16
           },
           {
-            "frame": 18,
+            "frame": 19,
             "quality": "draft",
-            "code": 18
+            "code": 19
           }
         ],
         "mismatches": []

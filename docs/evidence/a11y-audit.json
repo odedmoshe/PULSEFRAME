@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T15:37:44.575Z",
+  "ranAt": "2026-11-15T16:05:29.639Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -10,7 +10,7 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 170,
+      "controls": 172,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -27,7 +27,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 170,
+          "controls": 172,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -36,7 +36,7 @@
         },
         {
           "state": "format-view",
-          "controls": 165,
+          "controls": 167,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -46,7 +46,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 176,
+          "controls": 178,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -60,7 +60,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 181,
+          "controls": 183,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -69,12 +69,26 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_5677f26cac0]",
+          "focusAfterClose": "button[data-testid=view-ast_412b61bd240]",
+          "focusReturned": true
+        },
+        {
+          "state": "activity-dialog",
+          "controls": 174,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "startsInside": true,
+          "tabStepsThatLeftTheDialog": 0,
+          "openUntilEscape": true,
+          "closed": true,
+          "focusAfterClose": "button[data-testid=activity-open]",
           "focusReturned": true
         },
         {
           "state": "command-palette",
-          "controls": 173,
+          "controls": 175,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -92,7 +106,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 170,
+      "controls": 172,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -109,7 +123,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 170,
+          "controls": 172,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -118,7 +132,7 @@
         },
         {
           "state": "format-view",
-          "controls": 165,
+          "controls": 167,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -128,7 +142,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 176,
+          "controls": 178,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -142,7 +156,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 181,
+          "controls": 183,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -151,12 +165,26 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_5677f26cac0]",
+          "focusAfterClose": "button[data-testid=view-ast_412b61bd240]",
+          "focusReturned": true
+        },
+        {
+          "state": "activity-dialog",
+          "controls": 174,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "startsInside": true,
+          "tabStepsThatLeftTheDialog": 0,
+          "openUntilEscape": true,
+          "closed": true,
+          "focusAfterClose": "button[data-testid=activity-open]",
           "focusReturned": true
         },
         {
           "state": "command-palette",
-          "controls": 173,
+          "controls": 175,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],

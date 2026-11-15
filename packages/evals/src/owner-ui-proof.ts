@@ -71,13 +71,15 @@ async function main() {
     check('after dismissing, the token is no longer shown; revoking the grant in the editor stops the token immediately', tokenGone && revoked);
     await page.getByTestId('grant-name').fill('limited');
     await page.getByTestId('grant-rpm').fill('12');
+    await page.getByTestId('grant-epd').fill('3');
     await page.getByTestId('grant-create').click();
     await page.getByTestId('grant-token').waitFor();
     const slow = { authorization: `Bearer ${await page.getByTestId('grant-token').inputValue()}` };
     const rpmShown = await page.getByTestId('grant-rpm-shown').textContent();
+    const epdShown = await page.getByTestId('grant-epd-shown').textContent();
     const burst = [(await call('/projects', undefined, slow)).status, (await call('/projects', undefined, slow)).status, (await call('/projects', undefined, slow)).status];
     await page.getByTestId('grant-token-dismiss').click();
-    check('a grant created with "requests per minute" 12 shows that limit in the list, and its token is answered 429 on the third request in a row (two allowed at once)', rpmShown === '12' && JSON.stringify(burst) === '[200,200,429]', { rpmShown, burst });
+    check('a grant created with "requests per minute" 12 and "exports per 24 hours" 3 shows both limits in the list, and its token is answered 429 on the third request in a row (two allowed at once)', rpmShown === '12' && epdShown === '3' && JSON.stringify(burst) === '[200,200,429]', { rpmShown, epdShown, burst });
 
     console.log('\n# crossfade control and loop playback');
     await page.locator(`.clip[data-clip-id="${right}"]`).click();
