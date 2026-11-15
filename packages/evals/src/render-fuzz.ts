@@ -1,13 +1,14 @@
 /**
  * Render fuzz: random editing sessions (the generator of ops-fuzz) on a live server with real media, then every
  * resulting project must render — an export that succeeds, decodes without errors and has exactly the timeline's frames,
- * stills at three frames, a sound-only export, and a preflight report. A project the editor accepts must be exportable.
+ * stills at three frames, a sound-only export, and a preflight report — and the same picture on three routes: at three frames the paused editor preview must equal the server still, and the exported frame must be close to it. A project the editor accepts must be exportable.
  *   pnpm build && pnpm conformance:render-fuzz        (PF_RENDER_FUZZ_SEEDS=10, PF_RENDER_FUZZ_STEPS=160 by default; about ten minutes)
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
@@ -43,6 +44,9 @@ async function main() {
   };
   const waitJob = async (id: string) => { for (;;) { const j = (await call(`/jobs/${id}`)).body; if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j; await sleep(100); } };
   const rows: any[] = [];
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+  { const k = await context.newPage(); await k.goto(s.ownerUrl); await k.waitForTimeout(400); await k.close(); } // owner session cookie for the editor pages
   try {
     for (let seed = 1; seed <= SEEDS; seed++) {
       const fz = createFuzz(seed);
@@ -97,7 +101,7 @@ async function main() {
       // 2. stills at the first, a middle and the last frame
       for (const i of [0, Math.floor(frames / 2), frames - 1]) { const st = await call(`/projects/${pid}/frame?index=${i}`); if (st.status !== 200) problems.push(`still ${i}: ${st.body?.error?.code ?? st.status}`); }
       // 3. picture + sound export: succeeds, decodes without errors, has exactly the timeline's frames
-      const started = await call(`/projects/${pid}/exports`, { quality: 'draft' });
+      const started = await call(`/projects/${pid}/exports`, { quality: 'high' });
       if (started.status >= 400) problems.push(`export refused: ${started.body?.error?.code}`);
       else {
         const job = await waitJob(started.body.jobId);
@@ -115,7 +119,7 @@ async function main() {
           const [rn, rd] = String(vs?.r_frame_rate).split('/').map(Number);
           if (rn! * rate.den !== rd! * rate.num) problems.push(`frame rate ${vs?.r_frame_rate}`);
           if (as && Math.abs(Number(as.duration) - Number(vs.duration)) > rate.den / rate.num + 0.03) problems.push(`picture ${vs.duration}s and sound ${as.duration}s differ in length`);
-          fs.rmSync(out);
+          row._export = out;
         }
       }
       // 4. sound-only export
@@ -124,20 +128,67 @@ async function main() {
       else problems.push(`sound export refused: ${wj.body?.error?.code}`);
       // 5. every linked format renders a still
       for (const v of Object.keys(d.variants ?? {})) { const st = await call(`/projects/${pid}/frame?index=${Math.floor(frames / 2)}&variant=${v}`); if (st.status !== 200) problems.push(`format ${v} still: ${st.body?.error?.code ?? st.status}`); }
+      // 6. one picture on three routes: the server still, the same frame of the export, and the paused editor preview
+      if (row._export && !problems.length) {
+        const W = 640, H = 360, n = W * H * 3;
+        // Frames that actually contain a picture: a black frame agrees with itself on every route and proves nothing.
+        const level = (buf: Buffer) => { let sum = 0; for (let k = 0; k < buf.length; k += 97) sum += buf[k]!; return sum / Math.ceil(buf.length / 97); };
+        const stillOf = async (i: number) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: (await call(`/projects/${pid}/frame?index=${i}`)).body as Buffer, maxBuffer: 1 << 28 });
+        const stills = new Map<number, Buffer>();
+        for (const q of [0.5, 0.2, 0.8, 0.35, 0.65, 0.1, 0.9, 0.05, 0.95, 0.27, 0.43, 0.58, 0.73]) {
+          const i = Math.min(frames - 1, Math.floor(frames * q));
+          if (stills.has(i)) continue;
+          const st = await stillOf(i);
+          if (level(st) > 0.6) stills.set(i, st); // anything but a black frame: titles on black count
+          if (stills.size >= 3) break;
+        }
+        const targets = [...stills.keys()];
+        row.pictureFramesCompared = targets.length;
+        const ep = await context.newPage();
+        const errs: string[] = [];
+        ep.on('pageerror', (e) => errs.push(String(e)));
+        const parity: any[] = [];
+        try {
+          await ep.goto(`${s.url}/?project=${pid}`);
+          await ep.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame === '0', undefined, { timeout: 30000 });
+          for (const i of targets) {
+            const still = stills.get(i)!;
+            const exported = execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-i', row._export, '-vf', `select=eq(n\\,${i})`, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 28 });
+            await ep.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, ((i * rate.den) / rate.num) * 90 + 0.5);
+            const painted = await ep.waitForFunction((t) => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, i, { timeout: 20000 }).then(() => true, () => false);
+            const b64 = await ep.evaluate(() => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; const d = cv.getContext('2d')!.getImageData(0, 0, cv.width, cv.height).data; const out = new Uint8Array((d.length / 4) * 3); for (let p = 0, q = 0; p < d.length; p += 4) { out[q++] = d[p]!; out[q++] = d[p + 1]!; out[q++] = d[p + 2]!; } let str = ''; for (let k = 0; k < out.length; k += 0x8000) str += String.fromCharCode(...out.subarray(k, k + 0x8000)); return { w: cv.width, h: cv.height, data: btoa(str) }; });
+            const preview = Buffer.from(b64.data, 'base64');
+            const mad = (x: Buffer, y: Buffer) => { if (x.length !== n || y.length !== n) return 999; let sum = 0; for (let k = 0; k < n; k++) sum += Math.abs(x[k]! - y[k]!); return Number((sum / n).toFixed(2)); };
+            const worst = (x: Buffer, y: Buffer) => { if (x.length !== n || y.length !== n) return 999; let m = 0; for (let k = 0; k < n; k++) { const dd = Math.abs(x[k]! - y[k]!); if (dd > m) m = dd; } return m; };
+            parity.push({ frame: i, stillMeanLevel: Number(level(still).toFixed(1)), painted, previewSize: `${b64.w}x${b64.h}`, previewVsStill: { mean: mad(preview, still), worst: worst(preview, still) }, exportVsStill: { mean: mad(exported, still) } });
+          }
+        } catch (e) { problems.push(`parity check did not run: ${String(e).slice(0, 140)}`); }
+        finally { await ep.close(); fs.rmSync(row._export, { force: true }); }
+        row.parity = parity;
+        // the preview and the still are the same code and both lossless: they must agree almost exactly; the export is lossy H.264
+        if (parity.some((p) => !p.painted)) problems.push('preview did not paint a requested frame');
+        if (parity.some((p) => p.previewVsStill.mean > 0.5)) problems.push(`preview differs from the server still (mean difference ${Math.max(...parity.map((p) => p.previewVsStill.mean))} of 255)`);
+        if (parity.some((p) => p.exportVsStill.mean > 6)) problems.push(`exported frame differs from the server still (mean difference ${Math.max(...parity.map((p) => p.exportVsStill.mean))} of 255)`);
+        if (errs.length) problems.push(`page error in the editor: ${errs[0]!.slice(0, 120)}`);
+      }
+      delete row._export;
       row.outcome = problems.length ? `FAILED (${problems.length})` : 'renders';
       if (problems.length) { row.problems = problems; row.ops = ops; }
-      console.log(`seed ${String(seed).padStart(2)} ${row.rate.padEnd(11)} ${String(row.outcome).padEnd(12)} ${JSON.stringify(row.session)}${problems.length ? `\n     ${problems.join('\n     ')}` : ''}`);
+      console.log(`seed ${String(seed).padStart(2)} ${row.rate.padEnd(11)} ${String(row.outcome).padEnd(12)} ${JSON.stringify(row.session)}${row.parity ? `\n     parity (frame: preview≈still mean/worst, export≈still mean): ${row.parity.map((p: any) => `${p.frame}: ${p.previewVsStill.mean}/${p.previewVsStill.worst}, ${p.exportVsStill.mean}`).join('  ')}` : ''}${problems.length ? `\n     ${problems.join('\n     ')}` : ''}`);
     }
     const bad = rows.filter((r) => /^FAILED/.test(String(r.outcome)));
     const rendered = rows.filter((r) => r.outcome === 'renders');
+    const compared = rendered.reduce((k, r) => k + (r.pictureFramesCompared ?? 0), 0);
     check(`every project produced by a random editing session renders: stills, picture+sound export with exactly the timeline's frames, sound-only export, preflight, linked formats (${rendered.length} of ${rows.length} sessions rendered; ${rows.length - rendered.length - bad.length} had an empty timeline)`, bad.length === 0 && rendered.length > 0, bad.map((r) => ({ seed: r.seed, rate: r.rate, problems: r.problems, session: r.session })));
+    check(`on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (${compared} frames compared in ${rendered.filter((r) => r.pictureFramesCompared).length} projects)`, compared >= rendered.length && bad.length === 0, rendered.map((r) => ({ seed: r.seed, frames: (r.parity ?? []).map((p: any) => ({ frame: p.frame, level: p.stillMeanLevel, preview: p.previewVsStill, export: p.exportVsStill.mean })) })));
   } catch (e) {
     console.error(e);
     check('run completed', false, String(e).slice(0, 600));
   } finally {
+    await browser.close();
     await s.close();
     const failed = checks.filter((x) => !x.ok);
-    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: `${SEEDS} random sessions of ${STEPS} steps each, at five frame rates, on synthetic media. Checks that rendering succeeds and has the right shape (frame count, rate, clean decode, equal picture and sound length); it does NOT check that the pictures or the sound are the right ones.`, passed: checks.length - failed.length, total: checks.length, rows, checks };
+    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: `${SEEDS} random sessions of ${STEPS} steps each, at five frame rates, on synthetic media. Checks that rendering succeeds and has the right shape (frame count, rate, clean decode, equal picture and sound length); it checks that the preview, the server still and the export AGREE on the picture at three frames per project; it does NOT check against an independent reference that the picture or the sound is the right one.`, passed: checks.length - failed.length, total: checks.length, rows, checks };
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     fs.writeFileSync(path.join(root, 'docs/evidence/render-fuzz.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(`\nRender fuzz ${report.result}: ${report.passed}/${report.total}`);
