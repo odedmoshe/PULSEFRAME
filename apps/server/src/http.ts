@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { timeOriginSeconds, describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -224,7 +224,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/projects/:id/captions', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
-    const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt');
+    const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt', c.req.query('variant'));
     return c.body(out.text, 200, { 'content-type': `${out.mime}; charset=utf-8`, 'content-disposition': `attachment; filename="captions.${out.format}"`, 'x-pulseframe-revision': String(p.revision), 'x-pulseframe-cues': String(out.cues) });
   });
   app.post('/api/v1/projects/:id/analysis/silences', async (c) => {
@@ -551,8 +551,11 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
 }
 
 /** Serialize one caption track (default: the first) as it plays on the timeline. */
-export function exportCaptions(doc: ProjectDocument, trackId: string | undefined, format: string) {
+export function exportCaptions(master: ProjectDocument, trackId: string | undefined, format: string, variantId?: string) {
   if (format !== 'srt' && format !== 'vtt' && format !== 'ass') throw new ApiError(400, 'invalid_args', 'format must be srt, vtt or ass');
+  if (variantId && !master.variants?.[variantId]) throw new ApiError(404, 'not_found', `format ${variantId} not found`, { variantId });
+  // A linked format has its own caption style, hidden or reworded cues and reworded transcript phrases.
+  const doc = variantId ? projectVariant(master, variantId) : master;
   const seq = doc.sequences[doc.mainSequenceId]!;
   const track = trackId ? seq.tracks.find((t) => t.id === trackId && t.kind === 'caption') : seq.tracks.find((t) => t.kind === 'caption');
   if (!track) throw new ApiError(404, 'not_found', trackId ? `caption track ${trackId} not found` : 'the project has no caption track');

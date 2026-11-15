@@ -139,6 +139,8 @@ export function createFuzz(seed: number) {
       () => ({ op: 'remove_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none' } }),
       () => ({ op: 'add_variant', args: pick([{ profileId: 'vertical-9x16' }, { width: 360, height: 360, name: 'sq' }, { width: 361, height: 640 }]) }),
       () => ({ op: 'set_variant_override', args: { variantId: variants.length ? pick(variants) : 'var_none', clipId: any(), ...(rnd() < 0.5 ? { transform: rnd() < 0.15 ? null : { x: Number((rnd() - 0.5).toFixed(2)), scale: 1.3 } } : rnd() < 0.5 ? { hidden: rnd() < 0.7 } : { text: rnd() < 0.2 ? null : 'קצר short', textStyle: rnd() < 0.2 ? null : { sizeFrac: 0.1 } }) } }),
+      () => { const segs = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.map((sg) => ({ assetId: t.assetId, segmentId: sg.id }))); const sg = segs.length && rnd() < 0.9 ? pick(segs) : { assetId: 'ast_none', segmentId: 'seg_none' };
+        return { op: 'set_variant_phrase_text', args: { variantId: variants.length ? pick(variants) : 'var_none', ...sg, text: rnd() < 0.25 ? null : 'קצר short' } }; },
       () => ({ op: 'update_variant', args: { variantId: variants.length ? pick(variants) : 'var_none', ...(rnd() < 0.5 ? { captionStyle: rnd() < 0.3 ? null : { sizeFrac: 0.08, position: 'top' } } : { fit: pick(['contain', 'cover'] as const) }) } }),
       () => ({ op: 'remove_variant', args: { variantId: variants.length ? pick(variants) : 'var_none' } }),
       () => ({ op: 'add_caption_track', args: { mode: pick(['manual', 'transcript'] as const) } }),

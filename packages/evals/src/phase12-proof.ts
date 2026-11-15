@@ -316,6 +316,45 @@ async function main() {
     for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cdoc.variants[cv].overrides[merged.id]?.hidden) break; await sleep(100); }
     const afterHide = { master: (await still(cp, 10)).png, tall: band(await still(cp, 10, cv)) };
     check('editor: "merge with the next caption" joins two cues into one covering both; "hide this caption in this format" removes it from that format\'s frame only (the master frame is byte-identical)', capTrack0().clips.length === 1 && /HELLO AGAIN/.test(merged.text) && /שורה שנייה/.test(merged.text) && Number(merged.duration.value) / merged.duration.timescale === 5 && beforeHide.tall.top >= 0 && afterHide.tall.top < 0 && afterHide.master.equals(beforeHide.master) && cErrors.length === 0, { text: merged.text, duration: merged.duration, tallBefore: beforeHide.tall.top, tallAfter: afterHide.tall.top, masterSame: afterHide.master.equals(beforeHide.master), errors: cErrors.slice(0, 3) });
+    // transcript phrases worded per format: from the editor, checked on rendered frames and on the subtitle file
+    console.log('\n# transcript phrase wording per format');
+    const wp = (await call('/projects', { name: 'phase12-phrases', width: 640, height: 360 })).body.project.id;
+    const wu: any = await (await fetch(`${s.url}/api/v1/projects/${wp}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
+    const longText = 'a long line for wide frames';
+    const wr = await txs(wp, [
+      { op: 'add_clip', args: { assetId: wu.assetId, start: f(0) } },
+      { op: 'set_transcript', args: { assetId: wu.assetId, language: 'en', segments: [{ start: f(0), duration: f(60), text: longText, words: longText.split(' ').map((text, i) => ({ text, start: f(i * 10), duration: f(10) })) }, { start: f(60), duration: f(60), text: 'second phrase' }] } },
+      { op: 'add_caption_track', args: { mode: 'transcript', style: { preset: 'classic', sizeFrac: 0.06, position: 'bottom', color: '#FFFFFF', stroke: null, background: null } } },
+      { op: 'add_variant', args: { name: 'Tall', width: 360, height: 640 } },
+    ]);
+    const wv = wr.results[3].output.variantId as string, wseg = wr.results[1].output.segmentIds[0] as string;
+    const srt = async (variant?: string) => String((await call(`/projects/${wp}/captions?format=srt${variant ? `&variant=${variant}` : ''}`)).body);
+    const p0 = { master: (await still(wp, 10)).png, tall: (await still(wp, 10, wv)).png, srtMaster: await srt(), srtTall: await srt(wv) };
+    const wpage = await page.context().newPage();
+    await wpage.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+    const wErrors: string[] = [];
+    wpage.on('pageerror', (e) => wErrors.push(String(e)));
+    await wpage.goto(`${s.url}/?project=${wp}`);
+    await wpage.getByTestId('transcript-panel').waitFor();
+    await wpage.getByTestId('format-switch').selectOption(wv);
+    await wpage.getByTestId('format-badge').waitFor();
+    await wpage.getByTestId('transcript-edit').first().click();
+    const noteShown = (await wpage.getByTestId('transcript-format-note').count()) === 1;
+    await wpage.getByTestId('transcript-textarea').fill('SHORT');
+    await wpage.getByTestId('transcript-save').click();
+    let wdoc: any;
+    for (let i = 0; i < 80; i++) { wdoc = (await call(`/projects/${wp}`)).body.project; if (wdoc.variants[wv].phraseText?.[wseg] === 'SHORT') break; await sleep(100); }
+    await wpage.getByTestId('transcript-format-text').waitFor({ timeout: 5000 }).catch(() => {});
+    const p1 = { master: (await still(wp, 10)).png, tall: (await still(wp, 10, wv)).png, srtMaster: await srt(), srtTall: await srt(wv), stored: wdoc.variants[wv].phraseText?.[wseg], masterSeg: wdoc.transcripts[wu.assetId].segments[0], panelText: await wpage.getByTestId('transcript-format-text').textContent().catch(() => null) };
+    await wpage.getByTestId('transcript-format-reset').click();
+    for (let i = 0; i < 80; i++) { wdoc = (await call(`/projects/${wp}`)).body.project; if (!wdoc.variants[wv].phraseText) break; await sleep(100); }
+    const p2 = { tall: (await still(wp, 10, wv)).png, srtTall: await srt(wv) };
+    const badVariant = await call(`/projects/${wp}/captions?variant=var_none`);
+    check('transcript phrase wording per format: edited in the editor while a format is viewed, it is stored for that format only; that format\'s frame and subtitle file show the new wording while the master frame is byte-identical and the master subtitle file and transcript (text and word timing) are unchanged; "back to the master wording" restores the format\'s frame and file exactly; an unknown format is refused',
+      noteShown && p1.stored === 'SHORT' && p1.panelText === 'SHORT' && sha(p1.master) === sha(p0.master) && sha(p1.tall) !== sha(p0.tall) && p1.srtMaster === p0.srtMaster && /a long line/.test(p0.srtTall) && /SHORT/.test(p1.srtTall) && !/long line/.test(p1.srtTall) && /second phrase/.test(p1.srtTall)
+      && p1.masterSeg.text === longText && p1.masterSeg.words.length === 6 && !wdoc.variants[wv].phraseText && sha(p2.tall) === sha(p0.tall) && p2.srtTall === p0.srtTall && badVariant.status === 404 && wErrors.length === 0,
+      { noteShown, stored: p1.stored, panelText: p1.panelText, masterSame: sha(p1.master) === sha(p0.master), tallChanged: sha(p1.tall) !== sha(p0.tall), srtTall: p1.srtTall.slice(0, 120), restored: sha(p2.tall) === sha(p0.tall), badVariant: badVariant.status, errors: wErrors.slice(0, 3) });
+    await wpage.close();
     await cpage.close();
     await page.close();
   } catch (e) {

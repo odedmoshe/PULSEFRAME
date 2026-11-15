@@ -239,6 +239,8 @@ export const VariantSchema = z
     /** Caption style fields that differ in this format (e.g. size, position); everything else follows the master caption style. */
     captionStyle: CaptionStyleSchema.partial().optional(),
     overrides: z.record(z.string(), VariantOverrideSchema),
+    /** Transcript phrases (by segment id) worded differently in this format. Such a phrase is shown as phrase-timed text there: the word timing describes the master wording. */
+    phraseText: z.record(Id, z.string().min(1).max(4000)).optional(),
   })
   .strict();
 

@@ -1186,6 +1186,22 @@ defineOp({
   },
 });
 
+defineOp({
+  name: 'set_variant_phrase_text',
+  version: 1,
+  description: 'Word one transcript phrase differently in one format (for example a shorter line for a narrow frame). The master transcript and the other formats keep their wording. In that format the phrase is shown as phrase-timed text: word highlighting and the hiding of cut-out words do not apply to it. text: null returns the phrase to the master wording.',
+  args: z.object({ variantId: z.string(), assetId: z.string(), segmentId: z.string(), text: z.string().min(1).max(4000).nullable() }).strict(),
+  apply(d, a) {
+    const v = mustVariant(d, a.variantId);
+    const seg = d.transcripts[a.assetId]?.segments.find((s) => s.id === a.segmentId);
+    if (!seg) throw new OpError('not_found', `phrase ${a.segmentId} not found in the transcript of ${a.assetId}`, { segmentId: a.segmentId });
+    const next = { ...(v.phraseText ?? {}) };
+    if (a.text === null || a.text === seg.text) delete next[a.segmentId]; else next[a.segmentId] = a.text;
+    if (Object.keys(next).length) v.phraseText = next; else delete v.phraseText;
+    return { affectedIds: [v.id], summary: `Format ${v.name}: phrase ${next[a.segmentId] !== undefined ? 'reworded' : 'back to the master wording'}`, output: { text: next[a.segmentId] ?? null } };
+  },
+});
+
 // ---------- analysis results and edits that use them (SPEC §19) ----------
 const TimeList = z.array(RT).max(50000);
 const sortedUnique = (list: T.RationalTime[]) => list.slice().sort(T.cmp).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));

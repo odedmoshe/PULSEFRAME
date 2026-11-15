@@ -154,6 +154,25 @@ describe('linked format variants', () => {
     const cleared = tx(d, [{ op: 'set_variant_override', args: { variantId, clipId: cueId, text: null } }]).doc;
     expect(cleared.variants[variantId]!.overrides[cueId]).toBeUndefined();
   });
+  it('a transcript phrase can be worded differently in one format; the master and its word timing are untouched; null or the master wording clears it', () => {
+    const { doc, variantId } = project();
+    const assetId = Object.keys(doc.assets)[0]!;
+    const r = tx(doc, [{ op: 'set_transcript', args: { assetId, language: 'en', segments: [{ start: f(0), duration: f(60), text: 'a long line for wide frames', words: [{ text: 'a', start: f(0), duration: f(10) }, { text: 'long', start: f(10), duration: f(10) }, { text: 'line', start: f(20), duration: f(10) }, { text: 'for', start: f(30), duration: f(10) }, { text: 'wide', start: f(40), duration: f(10) }, { text: 'frames', start: f(50), duration: f(10) }] }, { start: f(60), duration: f(30), text: 'second' }] } }]);
+    const [segId, seg2] = r.results[0]!.output!.segmentIds as string[];
+    const d = tx(r.doc, [{ op: 'set_variant_phrase_text', args: { variantId, assetId, segmentId: segId!, text: 'short line' } }]).doc;
+    expect(validateProject(d)).toEqual([]);
+    const master = d.transcripts[assetId]!.segments[0]!;
+    expect([master.text, master.words.length, master.timing]).toEqual(['a long line for wide frames', 6, 'word']);
+    const pv = projectVariant(d, variantId).transcripts[assetId]!.segments;
+    expect([pv[0]!.text, pv[0]!.words.length, pv[0]!.timing, pv[1]!.text]).toEqual(['short line', 0, 'segment', 'second']);
+    expect(tx(d, [{ op: 'set_variant_phrase_text', args: { variantId, assetId, segmentId: segId!, text: null } }]).doc.variants[variantId]!.phraseText).toBeUndefined();
+    expect(tx(d, [{ op: 'set_variant_phrase_text', args: { variantId, assetId, segmentId: segId!, text: 'a long line for wide frames' } }]).doc.variants[variantId]!.phraseText).toBeUndefined();
+    const two = tx(d, [{ op: 'set_variant_phrase_text', args: { variantId, assetId, segmentId: seg2!, text: '2nd' } }]).doc;
+    expect(Object.keys(tx(two, [{ op: 'set_variant_phrase_text', args: { variantId, assetId, segmentId: segId!, text: null } }]).doc.variants[variantId]!.phraseText!)).toEqual([seg2]);
+    expect(code(() => tx(d, [{ op: 'set_variant_phrase_text', args: { variantId, assetId, segmentId: 'seg_none', text: 'x' } }]))).toBe('not_found');
+    expect(code(() => tx(d, [{ op: 'set_variant_phrase_text', args: { variantId: 'var_x', assetId, segmentId: segId!, text: 'x' } }]))).toBe('not_found');
+    expect(code(() => tx(d, [{ op: 'set_variant_phrase_text', args: { variantId, assetId, segmentId: segId!, text: '' } }]))).toBe('invalid_args');
+  });
   it('a variant is one undoable entity; bad input is refused', () => {
     const { doc, titleId, variantId } = project();
     const r = tx(doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, transform: { x: 0.1 } } }]);

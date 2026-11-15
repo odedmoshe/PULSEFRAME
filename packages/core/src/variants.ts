@@ -40,5 +40,12 @@ export function projectVariant(doc: ProjectDocument, variantId: string): Project
         if (c.keyframes) { for (const p of ANIMATABLE) if (o[p] !== undefined) delete c.keyframes[p]; if (Object.keys(c.keyframes).length === 0) delete c.keyframes; }
       }
     }
+  if (v.phraseText)
+    for (const tr of Object.values(out.transcripts ?? {}))
+      for (const seg of tr.segments) {
+        const text = v.phraseText[seg.id];
+        if (text === undefined) continue;
+        seg.text = text; seg.words = []; seg.timing = 'segment'; // the word timing described the master wording
+      }
   return out;
 }

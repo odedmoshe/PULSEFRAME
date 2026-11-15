@@ -49,6 +49,7 @@ export function TranscriptPanel() {
   const rate = editor.rate;
 
   if (!doc) return null;
+  const viewed = state.viewVariantId ? doc.variants[state.viewVariantId] : undefined;
   if (!transcript) {
     return (
       <div className="transcript" data-testid="transcript-panel" data-state="empty">
@@ -106,7 +107,13 @@ export function TranscriptPanel() {
       <ol className="phrases">
         {transcript.segments.map((s) => (
           <Phrase key={s.id} seg={s} editing={editing === s.id} onEdit={(on) => setEditing(on ? s.id : null)}
-            onSave={async (text) => { const r = await editor.commit([{ op: 'correct_transcript', args: { assetId: assetId!, segmentId: s.id, text } }], 'Correct transcript'); if (r) setEditing(null); }}
+            formatName={viewed?.name} formatText={viewed?.phraseText?.[s.id]}
+            onResetFormat={() => void editor.commit([{ op: 'set_variant_phrase_text', args: { variantId: viewed!.id, assetId: assetId!, segmentId: s.id, text: null } }], 'Phrase wording (format)')}
+            onSave={async (text) => {
+              // While a format is viewed, a wording change belongs to that format only; the transcript itself is corrected in the master view.
+              const r = await editor.commit(viewed ? [{ op: 'set_variant_phrase_text', args: { variantId: viewed.id, assetId: assetId!, segmentId: s.id, text } }] : [{ op: 'correct_transcript', args: { assetId: assetId!, segmentId: s.id, text } }], viewed ? 'Phrase wording (format)' : 'Correct transcript');
+              if (r) setEditing(null);
+            }}
             renderWord={(w) => {
               const mid = T.add(w.start, half(w.duration));
               const onTimeline = sourceToTimeline(clips, mid) !== null;
@@ -124,28 +131,36 @@ export function TranscriptPanel() {
   );
 }
 
-function Phrase({ seg, editing, onEdit, onSave, renderWord }: { seg: Segment; editing: boolean; onEdit: (on: boolean) => void; onSave: (text: string) => Promise<void>; renderWord: (w: Segment['words'][number]) => React.ReactNode }) {
+function Phrase({ seg, editing, onEdit, onSave, renderWord, formatName, formatText, onResetFormat }: { seg: Segment; editing: boolean; onEdit: (on: boolean) => void; onSave: (text: string) => Promise<void>; renderWord: (w: Segment['words'][number]) => React.ReactNode; formatName?: string; formatText?: string; onResetFormat: () => void }) {
   const { t } = useEditorState();
-  const [text, setText] = useState(seg.text);
-  useEffect(() => { if (editing) setText(seg.text); }, [editing, seg.text]);
+  const shown = formatText ?? seg.text; // what this view shows: the format's wording when it has one
+  const [text, setText] = useState(shown);
+  useEffect(() => { if (editing) setText(shown); }, [editing, shown]);
   return (
-    <li className="phrase" data-segment-id={seg.id} onDoubleClick={() => !editing && onEdit(true)}>
+    <li className="phrase" data-segment-id={seg.id} data-format-worded={formatText !== undefined ? 'true' : undefined} onDoubleClick={() => !editing && onEdit(true)}>
       {editing ? (
         <div className="fields">
+          {formatName && <p className="muted" data-testid="transcript-format-note">{t('transcript.formatOnly')} <bdi>{formatName}</bdi></p>}
           <textarea dir="auto" rows={3} value={text} autoFocus aria-label={t('transcript.edit')} data-testid="transcript-textarea" onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Escape') onEdit(false); }} />
           <div className="row">
-            <button className="primary" disabled={!text.trim() || text === seg.text} onClick={() => void onSave(text.trim())} data-testid="transcript-save">{t('transcript.save')}</button>
+            <button className="primary" disabled={!text.trim() || text === shown} onClick={() => void onSave(text.trim())} data-testid="transcript-save">{t('transcript.save')}</button>
             <button className="ghost" onClick={() => onEdit(false)}>{t('transcript.cancel')}</button>
           </div>
         </div>
       ) : (
         <>
           <div className="phrase-text" dir="auto">
-            {seg.words.length === 0 ? <span className="block">{seg.text}</span> : seg.words.flatMap((w, i) => [i > 0 ? ' ' : null, renderWord(w)])}
+            {formatText !== undefined ? <span className="block" data-testid="transcript-format-text">{formatText}</span> : seg.words.length === 0 ? <span className="block">{seg.text}</span> : seg.words.flatMap((w, i) => [i > 0 ? ' ' : null, renderWord(w)])}
           </div>
-          {seg.timing !== 'word' && <span className="badge" data-testid="transcript-timing" data-timing={seg.timing}>{t(seg.timing === 'approximate' ? 'transcript.approx' : 'transcript.segmentOnly')}</span>}
-          <button type="button" className="ghost small" onClick={() => onEdit(true)} data-testid="transcript-edit" aria-label={`${t('transcript.edit')}: ${seg.text.slice(0, 30)}`}>✎</button>
+          {formatText !== undefined && (
+            <span className="transform-scope" data-testid="transcript-format-scope" data-scope="format">
+              <span className="badge">{t('transcript.formatWorded')}</span>
+              <button type="button" className="ghost small" data-testid="transcript-format-reset" onClick={onResetFormat} aria-label={`${t('transcript.formatReset')}: ${seg.text.slice(0, 30)}`}>{t('transcript.formatReset')}</button>
+            </span>
+          )}
+          {formatText === undefined && seg.timing !== 'word' && <span className="badge" data-testid="transcript-timing" data-timing={seg.timing}>{t(seg.timing === 'approximate' ? 'transcript.approx' : 'transcript.segmentOnly')}</span>}
+          <button type="button" className="ghost small" onClick={() => onEdit(true)} data-testid="transcript-edit" aria-label={`${t('transcript.edit')}: ${shown.slice(0, 30)}`}>✎</button>
         </>
       )}
     </li>
