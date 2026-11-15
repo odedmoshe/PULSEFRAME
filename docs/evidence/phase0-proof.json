@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T01:49:53.423Z",
+  "ranAt": "2026-11-15T02:07:29.168Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -30,24 +30,26 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 18.5,
-      "requestToVisibleInEditorMs": 47.9,
+      "requestToCommitMs": 17.1,
+      "requestToVisibleInEditorMs": 41,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 5.84,
-      "p95": 8.58,
-      "max": 10.58
+      "median": 6.73,
+      "p95": 8.98,
+      "max": 12.56
     },
     "export": {
-      "file": "job_N3OFlGXYR3I.mp4",
+      "file": "job_SBwJWO106ZM.mp4",
       "mimeType": "video/mp4",
+      "captions": null,
       "bytes": 107979,
       "revision": 45,
       "route": "server-software-canvas2d",
       "options": {
         "format": "mp4-h264-aac",
+        "captions": "burned",
         "quality": "high",
         "scale": 1
       },
@@ -66,7 +68,7 @@
         },
         "assets": [
           {
-            "id": "ast_09772da51d0",
+            "id": "ast_3bb28c02b10",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -133,13 +135,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 604,
-        "readback": 654,
-        "upload": 4982
+        "draw": 620,
+        "readback": 686,
+        "upload": 5059
       },
-      "wallSeconds": 7.287,
-      "realtimeFactor": 0.4803073967339097,
-      "uiWallSeconds": 7.508
+      "wallSeconds": 7.451,
+      "realtimeFactor": 0.4697356059589317,
+      "uiWallSeconds": 7.981
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -171,10 +173,10 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_09772da51d0": "original"
+        "ast_3bb28c02b10": "original"
       },
       "sourcesUsed": {
-        "ast_09772da51d0": [
+        "ast_3bb28c02b10": [
           "original"
         ]
       },
@@ -182,7 +184,7 @@
       "disposed": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_09772da51d0/content:206"
+        "ast_3bb28c02b10/content:206"
       ]
     },
     "previewSync": {
@@ -323,7 +325,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 75
+        "count": 76
       }
     },
     {
@@ -331,7 +333,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_4c8eac5b441",
+          "id": "clp_15d0bc74211",
           "start": {
             "value": "2",
             "timescale": 1
@@ -351,8 +353,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 18.5,
-        "requestToVisibleInEditorMs": 47.9,
+        "requestToCommitMs": 17.1,
+        "requestToVisibleInEditorMs": 41,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -366,11 +368,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_585a9d905f0"
+          "selected": "clip-clp_fd0530b27e0"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_585a9d905f0"
+          "selected": "clip-clp_fd0530b27e0"
         }
       }
     },
@@ -416,7 +418,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_585a9d905f0",
+          "entityId": "clp_fd0530b27e0",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -553,10 +555,10 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_09772da51d0": "original"
+            "ast_3bb28c02b10": "original"
           },
           "sourcesUsed": {
-            "ast_09772da51d0": [
+            "ast_3bb28c02b10": [
               "original"
             ]
           },
@@ -564,7 +566,7 @@
           "disposed": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_09772da51d0/content:206"
+            "ast_3bb28c02b10/content:206"
           ]
         }
       }
@@ -613,7 +615,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_09772da51d0": [
+          "ast_3bb28c02b10": [
             "original",
             "proxy"
           ]
