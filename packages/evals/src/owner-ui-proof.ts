@@ -47,7 +47,7 @@ async function main() {
     await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
-    page.on('console', (m) => m.type() === 'error' && !/status of 4\d\d/.test(m.text()) && errors.push(m.text()));
+    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     await page.goto(`${s.ownerUrl}&project=${pid}`);
     await page.getByTestId('access-panel').waitFor();
 

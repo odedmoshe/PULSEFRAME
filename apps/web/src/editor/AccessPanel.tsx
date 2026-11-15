@@ -22,7 +22,8 @@ export function AccessPanel() {
   const load = async () => {
     try { setGrants((await api.listGrants()).grants); } catch (e) { setErr(describeError(e)); setGrants([]); }
   };
-  useEffect(() => { void load(); }, []);
+  // Wait until the project is loaded: by then the owner session exists. Asking earlier gets a 401.
+  useEffect(() => { if (projectId) void load(); }, [projectId]);
 
   const statusOf = (g: GrantItem): 'active' | 'revoked' | 'expired' =>
     g.revokedAt ? 'revoked' : g.expiresAt && Date.parse(g.expiresAt) <= Date.now() ? 'expired' : 'active';
