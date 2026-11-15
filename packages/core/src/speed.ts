@@ -39,3 +39,20 @@ export function speedFromNumber(x: number): Speed {
   const k = g(num, den);
   return { num: num / k, den: den / k };
 }
+
+/** True for a clip that plays its source backwards. */
+export const isReverse = (c: Clip): boolean => c.type === 'media' && c.reverse === true;
+/**
+ * `sourceIn` of the part of a clip that covers timeline offsets [fromOffset, fromOffset + length) of it, as the clip is now.
+ * Forward: the stretch starts `fromOffset` later. Reversed: the clip shows the END of its stretch first, so the part's stretch
+ * starts where the material shown at the part's last frame is. Call it before changing the clip.
+ */
+export const sourceInOfPart = (c: MediaClip, fromOffset: T.RationalTime, length: T.RationalTime): T.RationalTime =>
+  c.reverse ? T.add(c.sourceIn, toSourceSpan(c, T.sub(T.sub(c.duration, fromOffset), length))) : T.add(c.sourceIn, toSourceSpan(c, fromOffset));
+/**
+ * Source time of the PICTURE a clip shows at timeline time `t`. Same as `sourceAt` for a forward clip. A reversed clip shows,
+ * at its i-th frame, what the forward clip shows at its i-th frame from the end; `frame` is the length of one project frame.
+ */
+export const pictureSourceAt = (c: MediaClip, t: T.RationalTime, frame: T.RationalTime): T.RationalTime =>
+  c.reverse ? sourceAt(c, T.sub(T.sub(T.add(T.add(c.start, c.start), c.duration), frame), t)) : sourceAt(c, t);
+

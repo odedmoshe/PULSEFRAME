@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T12:58:55.771Z",
+  "ranAt": "2026-11-15T13:44:38.183Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -271,6 +271,33 @@
       }
     },
     {
+      "name": "\"play backwards\" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, the clip is marked on the timeline, and unchecking restores 73…82",
+      "ok": true,
+      "detail": {
+        "revShown": [
+          39,
+          82,
+          81,
+          80,
+          79,
+          78,
+          77,
+          76,
+          75,
+          74,
+          73,
+          110
+        ],
+        "previewFrame": 173,
+        "previewCode": 80,
+        "marked": "true",
+        "fwdAgain": [
+          73,
+          82
+        ]
+      }
+    },
+    {
       "name": "\"close empty gaps\" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost",
       "ok": true,
       "detail": {
@@ -280,8 +307,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          22,
-          24
+          24,
+          26
         ]
       }
     },
@@ -294,24 +321,24 @@
         "differentSourceFrames": 29,
         "firstFrames": [
           {
-            "frame": 3,
+            "frame": 4,
             "quality": "draft",
-            "code": 3
+            "code": 4
           },
           {
-            "frame": 6,
+            "frame": 7,
             "quality": "draft",
-            "code": 6
+            "code": 7
           },
           {
-            "frame": 9,
+            "frame": 10,
             "quality": "draft",
-            "code": 9
+            "code": 10
           },
           {
-            "frame": 12,
+            "frame": 13,
             "quality": "draft",
-            "code": 12
+            "code": 13
           },
           {
             "frame": 16,
@@ -319,9 +346,9 @@
             "code": 16
           },
           {
-            "frame": 18,
+            "frame": 19,
             "quality": "draft",
-            "code": 18
+            "code": 19
           }
         ],
         "mismatches": []

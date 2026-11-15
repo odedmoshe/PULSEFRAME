@@ -82,7 +82,7 @@ export function wrapWords(widths: number[], spaceWidth: number, maxWidth: number
 }
 
 const activeMedia = (track: Track, time: T.RationalTime) => {
-  for (const c of track.clips) if (c.type === 'media' && !T.lt(time, c.start) && T.lt(time, T.add(c.start, c.duration))) return c;
+  for (const c of track.clips) if (c.type === 'media' && !c.reverse && !T.lt(time, c.start) && T.lt(time, T.add(c.start, c.duration))) return c;
   return null;
 };
 
@@ -108,7 +108,7 @@ function transcriptLayer(doc: ProjectDocument, seq: Sequence, track: Track, time
       return { kind: 'caption', trackId: track.id, sourceId: seg.id, style: cfg.style, words: page.map((i) => ({ text: words[i]!, state: 'plain' })) };
     }
     // Hide words whose audio is no longer on the linked track (cut out), so the caption shows what is heard.
-    const used = src.clips.filter((c) => c.type === 'media' && c.assetId === clip.assetId) as Extract<Track['clips'][number], { type: 'media' }>[];
+    const used = src.clips.filter((c) => c.type === 'media' && !c.reverse && c.assetId === clip.assetId) as Extract<Track['clips'][number], { type: 'media' }>[];
     const heard = seg.words.filter((w) => {
       const mid = T.add(w.start, { value: w.duration.value, timescale: w.duration.timescale * 2 });
       return used.some((c) => !T.lt(mid, c.sourceIn) && T.lt(mid, sourceEnd(c)));
@@ -170,7 +170,7 @@ export function captionCues(doc: ProjectDocument, seq: Sequence, track: Track): 
   const covered: { start: T.RationalTime; end: T.RationalTime }[] = [];
   for (const src of sources) {
     for (const clip of src.clips) {
-      if (clip.type !== 'media') continue;
+      if (clip.type !== 'media' || clip.reverse) continue; // a reversed clip plays no speech
       const transcript = doc.transcripts?.[clip.assetId];
       const cEnd = T.add(clip.start, clip.duration);
       if (!transcript || covered.some((r) => T.lt(clip.start, r.end) && T.lt(r.start, cEnd))) continue;
@@ -183,7 +183,7 @@ export function captionCues(doc: ProjectDocument, seq: Sequence, track: Track): 
         if (seg.words.length === 0) { push(toTimeline(seg.start), toTimeline(segEnd), seg.text); continue; }
         const mid = (w: { start: T.RationalTime; duration: T.RationalTime }) => T.add(w.start, { value: w.duration.value, timescale: w.duration.timescale * 2 });
         // Same rule as the renderer: a phrase shows every word still heard somewhere on this track.
-        const used = src.clips.filter((c) => c.type === 'media' && c.assetId === clip.assetId) as typeof clip[];
+        const used = src.clips.filter((c) => c.type === 'media' && !c.reverse && c.assetId === clip.assetId) as typeof clip[];
         const here = seg.words.filter((w) => used.some((c) => !T.lt(mid(w), c.sourceIn) && T.lt(mid(w), sourceEnd(c))));
         const pages = captionPages(here.map((w) => w.text), capacity);
         pages.forEach((p, pi) => {

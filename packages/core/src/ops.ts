@@ -11,7 +11,7 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { sourceAt, sourceEnd, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
+import { pictureSourceAt, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
@@ -462,7 +462,12 @@ defineOp({
       if (a.edge === 'end') {
         if (!T.lt(clip.start, a.to)) throw new OpError('out_of_bounds', 'trim would leave an empty clip', { clipId: clip.id });
         const duration = T.sub(a.to, clip.start);
-        if (clip.type === 'media') {
+        if (clip.type === 'media' && clip.reverse) {
+          // a reversed clip shows the earliest material at its end: a longer clip reaches further back into the source
+          const sourceIn = sourceInOfPart(clip, T.ZERO, duration);
+          if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'not enough source material before the stretch this reversed clip shows', { clipId: clip.id, maxEnd: T.add(clipEnd(clip), toTimelineSpan(clip, clip.sourceIn)) }, 'Extend no further than maxEnd.');
+          clip.sourceIn = sourceIn;
+        } else if (clip.type === 'media') {
           const asset = d.assets[clip.assetId]!;
           if (asset.kind !== 'image' && T.lt(asset.duration, T.add(clip.sourceIn, toSourceSpan(clip, duration))))
             throw new OpError('out_of_bounds', 'not enough source material after the clip end', { clipId: clip.id, maxEnd: T.add(clip.start, toTimelineSpan(clip, T.sub(asset.duration, clip.sourceIn))) }, 'Extend no further than maxEnd.');
@@ -473,7 +478,12 @@ defineOp({
       } else {
         if (!T.lt(a.to, end) || T.isNegative(a.to)) throw new OpError('out_of_bounds', 'trim would leave an empty clip or start before 0', { clipId: clip.id });
         const delta = T.sub(a.to, clip.start);
-        if (clip.type === 'media') {
+        if (clip.type === 'media' && clip.reverse) {
+          // a reversed clip shows the latest material at its start: an earlier start reaches further on into the source; sourceIn stays
+          const asset = d.assets[clip.assetId]!;
+          if (T.lt(asset.duration, T.add(clip.sourceIn, toSourceSpan(clip, T.sub(end, a.to)))))
+            throw new OpError('out_of_bounds', 'not enough source material after the stretch this reversed clip shows', { clipId: clip.id, minStart: T.sub(clip.start, toTimelineSpan(clip, T.sub(asset.duration, sourceEnd(clip)))) }, 'Extend no earlier than minStart.');
+        } else if (clip.type === 'media') {
           const sourceIn = T.add(clip.sourceIn, toSourceSpan(clip, delta));
           if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'not enough source material before the clip start', { clipId: clip.id, minStart: T.sub(clip.start, toTimelineSpan(clip, clip.sourceIn)) }, 'Extend no earlier than minStart.');
           clip.sourceIn = sourceIn;
@@ -516,6 +526,33 @@ defineOp({
 });
 
 defineOp({
+  name: 'set_clip_reverse',
+  version: 1,
+  description: 'Play a video clip backwards (reverse=true) or forwards again (false). It keeps its place, length and the stretch of source it shows; only the order of the pictures changes. Picture only: sound is not reversed, so a linked sound clip is unlinked and keeps playing forwards (mute or delete it if that is not wanted). Not for freeze frames, stills, or clips with a transition at either end.',
+  args: z.object({ clipId: z.string(), reverse: z.boolean() }).strict(),
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    const clip = f.clip;
+    const asset = clip.type === 'media' ? d.assets[clip.assetId] : undefined;
+    if (clip.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'only a video clip on a video track can play backwards', { clipId: a.clipId });
+    if (clip.freeze) throw new OpError('incompatible', 'a freeze frame has no direction', { clipId: a.clipId });
+    const i = f.track.clips.indexOf(clip);
+    const next = f.track.clips[i + 1];
+    if (clip.transition || (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip))))
+      throw new OpError('incompatible', 'remove the transition at this clip first; transitions next to a reversed clip are not supported yet', { clipId: a.clipId }, 'Use set_transition with type=null.');
+    if (!!clip.reverse === a.reverse) throw new OpError('invalid_args', `the clip already plays ${a.reverse ? 'backwards' : 'forwards'}`, { clipId: a.clipId });
+    const affected = [clip.id];
+    let unlinked = 0;
+    if (a.reverse) {
+      const others = linked(d, clip);
+      if (clip.linkGroupId) { clip.linkGroupId = null; if (others.length === 1) { others[0]!.clip.linkGroupId = null; } for (const o of others) { affected.push(o.clip.id); unlinked++; } }
+      clip.reverse = true;
+    } else delete clip.reverse;
+    return { affectedIds: affected, summary: a.reverse ? `Clip plays backwards${unlinked ? '; its sound was unlinked and still plays forwards' : ''}` : 'Clip plays forwards', output: { unlinkedClipIds: affected.slice(1) } };
+  },
+});
+
+defineOp({
   name: 'split_clip',
   version: 1,
   description: 'Split a clip at a frame-aligned timeline time strictly inside it. Linked clips are split too and the right-hand halves stay linked to each other.',
@@ -538,7 +575,7 @@ defineOp({
       if (clip.type === 'caption') { delete clip.words; delete (right as typeof clip).words; }
       if (right.type === 'media') delete right.transition; // the transition belongs to the original cut point
       if (right.type === 'media' && clip.type === 'media') { delete right.fadeIn; delete clip.fadeOut; } // fades stay on the outer edges
-      if (right.type === 'media') { right.sourceIn = T.add(right.sourceIn, toSourceSpan(right, left)); if (right.linkGroupId) right.linkGroupId = newLink; }
+      if (right.type === 'media' && clip.type === 'media') { right.sourceIn = sourceInOfPart(clip, left, right.duration); clip.sourceIn = sourceInOfPart(clip, T.ZERO, left); if (right.linkGroupId) right.linkGroupId = newLink; }
       clip.duration = left;
       clampFades(clip);
       clampFades(right);
@@ -569,7 +606,7 @@ defineOp({
     // what the hold shows, captured before anything moves
     const local = T.sub(a.at, src.start);
     const held: MediaClip = {
-      id: ctx.newId('clp'), type: 'media', assetId: src.assetId, start: a.at, duration: a.duration, sourceIn: sourceAt(src, a.at), gain: 1, linkGroupId: null, freeze: true,
+      id: ctx.newId('clp'), type: 'media', assetId: src.assetId, start: a.at, duration: a.duration, sourceIn: pictureSourceAt(src, a.at, T.frameTime(1, d.settings.frameRate)), gain: 1, linkGroupId: null, freeze: true,
       transform: { ...transformAt(src, a.at) },
       ...(src.effects ? { effects: src.effects.map((fx) => { const { keyframes: _k, ...rest } = fx; return { ...structuredClone(rest), id: ctx.newId('fx'), params: { ...effectParamsAt(fx, local) } }; }) } : {}),
       ...(src.blend ? { blend: src.blend } : {}), ...(src.mask ? { mask: structuredClone(src.mask) } : {}),
@@ -595,7 +632,8 @@ defineOp({
         delete right.transition;
         delete right.fadeIn;
         delete clip.fadeOut;
-        right.sourceIn = T.add(right.sourceIn, toSourceSpan(right, left));
+        right.sourceIn = sourceInOfPart(clip, left, right.duration);
+        clip.sourceIn = sourceInOfPart(clip, T.ZERO, left);
         if (right.linkGroupId) { if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk')); right.linkGroupId = relink.get(right.linkGroupId)!; }
         clip.duration = left;
         clampFades(clip);
@@ -983,6 +1021,7 @@ defineOp({
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have scenes', { clipId: a.clipId });
     const cuts = d.analyses[f.clip.assetId]?.scenes?.cuts;
     if (!cuts) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
+    if (f.clip.reverse) throw new OpError('incompatible', 'scene cuts cannot be applied to a clip that plays backwards', { clipId: a.clipId }, 'Split it before reversing, or split by hand.');
     const rate = d.settings.frameRate;
     const clip = f.clip;
     const points = sortedUnique(cuts.filter((t) => T.lt(clip.sourceIn, t) && T.lt(t, sourceEnd(clip))).map((t) => T.snapToFrame(timelineAt(clip, t), rate))).filter((t) => T.lt(clip.start, t) && T.lt(t, clipEnd(clip)));
@@ -1231,6 +1270,7 @@ defineOp({
     const { clip, track } = pictureClip(d, a.clipId);
     if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
     if (a.type === null) { delete clip.transition; return { affectedIds: [clip.id], summary: 'Removed transition' }; }
+    if (clip.reverse || previousAdjacent(track, clip)?.reverse) throw new OpError('incompatible', 'transitions next to a clip that plays backwards are not supported yet', { clipId: clip.id });
     const rate = d.settings.frameRate;
     const frames = a.frames ?? 15;
     const own = T.frameIndexAt(clip.duration, rate);
@@ -1483,7 +1523,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
         }
         if (right.type === 'media' && hasLeft) delete right.transition;
         if (right.type === 'media') delete right.fadeIn;
-        if (right.type === 'media') right.sourceIn = T.add(right.sourceIn, toSourceSpan(right, delta));
+        if (right.type === 'media' && clip.type === 'media') right.sourceIn = sourceInOfPart(clip, delta, T.sub(cEnd, end));
         if (right.type === 'caption') delete right.words;
         shiftKeyframes(right, delta);
         right.start = ripple ? start : end;
@@ -1492,6 +1532,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
       }
       if (hasLeft) {
         if (clip.type === 'media') delete clip.fadeOut;
+        if (clip.type === 'media') clip.sourceIn = sourceInOfPart(clip, T.ZERO, T.sub(start, clip.start));
         clip.duration = T.sub(start, clip.start);
         clampFades(clip);
         if (clip.type === 'caption') delete clip.words;
@@ -1556,13 +1597,13 @@ function openGap(d: ProjectDocument, at: T.RationalTime, len: T.RationalTime, tr
         if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk'));
         right.linkGroupId = relink.get(right.linkGroupId)!;
       }
-      if (right.type === 'media') { delete right.transition; delete right.fadeIn; right.sourceIn = T.add(right.sourceIn, toSourceSpan(right, delta)); }
+      if (right.type === 'media' && clip.type === 'media') { delete right.transition; delete right.fadeIn; right.sourceIn = sourceInOfPart(clip, delta, T.sub(cEnd, at)); }
       if (right.type === 'caption') delete right.words;
       shiftKeyframes(right, delta);
       right.start = T.add(at, len);
       right.duration = T.sub(cEnd, at);
       clampFades(right);
-      if (clip.type === 'media') delete clip.fadeOut;
+      if (clip.type === 'media') { delete clip.fadeOut; clip.sourceIn = sourceInOfPart(clip, T.ZERO, delta); }
       clip.duration = delta;
       clampFades(clip);
       if (clip.type === 'caption') delete clip.words;
@@ -1642,7 +1683,7 @@ defineOp({
     const ranges: { start: T.RationalTime; end: T.RationalTime }[] = [];
     for (const track of seq.tracks)
       for (const c of track.clips) {
-        if (c.type !== 'media' || c.assetId !== a.assetId) continue;
+        if (c.type !== 'media' || c.assetId !== a.assetId || c.reverse) continue; // a reversed clip does not play the words
         const from = T.max(c.sourceIn, srcStart), to = T.min(sourceEnd(c), srcEnd);
         if (!T.lt(from, to)) continue;
         const start = T.snapToFrame(timelineAt(c, from), rate), end = T.snapToFrame(timelineAt(c, to), rate);

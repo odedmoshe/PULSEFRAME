@@ -363,6 +363,29 @@ async function main() {
     const slipShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
     check('slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged', sa.revision === sb.revision + 4 && T.eq(slipped.start, slipClip.start) && T.eq(slipped.duration, slipClip.duration) && T.frameIndexAt(slipped.sourceIn, R) === 73 && JSON.stringify(slipShown) === JSON.stringify([30 + k - 1, 73, 82, 110]), { slipShown, sourceIn: T.frameIndexAt(slipped.sourceIn, R), revisions: [sb.revision, sa.revision] });
 
+    console.log('\n# reverse');
+    const rb0 = await getDoc();
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click(); // the clip showing source 73–82 at atFrame..atFrame+9
+    await page.getByTestId('reverse-toggle').click();
+    let ra = await getDoc();
+    for (let i = 0; i < 50 && ra.revision === rb0.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ra = await getDoc(); }
+    const revShown: number[] = []; for (let i = -1; i <= 10; i++) revShown.push(await stillCode(atFrame + i));
+    const revClip = ra.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === slipClip.id) as any;
+    // the paused preview draws the same frame as the still (focus first leaves the checkbox: shortcuts are off while a field has focus)
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Home');
+    for (let i = 0; i < Math.floor((atFrame + 2) / 10); i++) await page.keyboard.press('Shift+ArrowRight');
+    for (let i = 0; i < (atFrame + 2) % 10; i++) await page.keyboard.press('ArrowRight');
+    await page.waitForFunction((t) => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, atFrame + 2, { timeout: 15000 }).catch(() => {});
+    const previewFrame = Number(await page.getByTestId('preview').getAttribute('data-frame'));
+    const previewCode = await page.evaluate(() => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; const ph = (cv.width * 360) / 640, py = (cv.height - ph) / 2; const row = cv.getContext('2d')!.getImageData(0, Math.round(py + ph / 12), cv.width, 1).data; return { w: cv.width, data: Array.from(row.filter((_, k) => k % 4 !== 3)) }; }).then((x) => readBarcode(Uint8Array.from(x.data), x.w, 3, { x: 0, y: 0, w: x.w, h: 0 }));
+    const marked = await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).getAttribute('data-reverse');
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.getByTestId('reverse-toggle').click();
+    for (let i = 0; i < 50 && ra.revision !== rb0.revision + 2; i++) { await new Promise((r) => setTimeout(r, 100)); ra = await getDoc(); }
+    const fwdAgain = [await stillCode(atFrame), await stillCode(atFrame + 9)];
+    check('"play backwards" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, the clip is marked on the timeline, and unchecking restores 73…82', JSON.stringify(revShown) === JSON.stringify([30 + k - 1, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 110]) && revClip.reverse === true && T.eq(revClip.start, slipClip.start) && T.eq(revClip.duration, slipClip.duration) && previewFrame === atFrame + 2 && previewCode === 80 && marked === 'true' && JSON.stringify(fwdAgain) === JSON.stringify([73, 82]), { revShown, previewFrame, previewCode, marked, fwdAgain });
+
     console.log('\n# close gaps');
     const gb = await getDoc();
     const gEnd = endOf(gb.project);

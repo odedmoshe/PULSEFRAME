@@ -13,7 +13,7 @@ type Segment = Transcript['segments'][number];
 
 const mainTracks = (doc: ProjectDocument) => doc.sequences[doc.mainSequenceId]?.tracks ?? [];
 const mediaClipsOf = (doc: ProjectDocument, assetId: string): MediaClip[] =>
-  mainTracks(doc).flatMap((tr) => (tr.kind === 'video' || tr.kind === 'audio' ? tr.clips : [])).filter((c): c is MediaClip => c.type === 'media' && c.assetId === assetId);
+  mainTracks(doc).flatMap((tr) => (tr.kind === 'video' || tr.kind === 'audio' ? tr.clips : [])).filter((c): c is MediaClip => c.type === 'media' && c.assetId === assetId && !c.reverse);
 const half = (d: T.RationalTime) => T.rt(BigInt(d.value), d.timescale * 2);
 /** Timeline time of a source time, or null when no clip of the asset shows it. */
 function sourceToTimeline(clips: MediaClip[], s: T.RationalTime): T.RationalTime | null {
