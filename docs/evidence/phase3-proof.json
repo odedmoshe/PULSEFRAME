@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T02:35:51.687Z",
+  "ranAt": "2026-11-15T02:49:19.331Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": "baseline written",
-        "editor-en": "baseline written",
-        "palette-en": "baseline written"
+        "editor-he": 1,
+        "editor-en": 1,
+        "palette-en": 1
       }
     },
     {
