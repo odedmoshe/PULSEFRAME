@@ -1224,6 +1224,40 @@ defineOp({
   },
 });
 defineOp({
+  name: 'fit_music',
+  version: 1,
+  description: 'Make a music clip end with the picture: its end is set to the last beat at or before the end of the picture and titles (or before `to`), or exactly there when the file has no beat analysis, and it fades out. If the music is shorter than the picture it ends on its own last usable beat and the output says by how much it falls short. The clip must not be linked to a picture.',
+  args: z.object({ clipId: z.string(), to: RT.optional().describe('Timeline time to end at; default: the end of the last picture, title or caption clip'), fadeOut: RT.optional().describe('Fade-out length; default one second (at most half the clip)') }).strict(),
+  apply(d, a) {
+    const { clip, track, seq } = mustClip(d, a.clipId);
+    if (clip.type !== 'media' || track.kind !== 'audio') throw new OpError('incompatible', 'fit_music applies to a sound clip on a sound track', { clipId: a.clipId });
+    if (clip.linkGroupId) throw new OpError('incompatible', 'this sound is linked to a picture; detach it first if it should be fitted on its own', { clipId: clip.id }, 'Use unlink_clip.');
+    if (clip.reverse) throw new OpError('incompatible', 'a clip that plays backwards cannot be fitted to beats', { clipId: clip.id });
+    const rate = d.settings.frameRate;
+    if (a.to) assertAligned(d, a.to, 'to');
+    if (a.fadeOut) assertAligned(d, a.fadeOut, 'fadeOut');
+    const pictureEnd = seq.tracks.filter((t) => t.kind !== 'audio').flatMap((t) => t.clips).reduce((m, c) => T.max(m, clipEnd(c)), T.ZERO);
+    const target = a.to ?? pictureEnd;
+    if (!T.lt(clip.start, target)) throw new OpError('out_of_bounds', a.to ? 'the end must lie after the start of the music' : 'there is no picture, title or caption after the start of this music to fit it to', { clipStart: clip.start, target });
+    const asset = d.assets[clip.assetId]!;
+    const frame = (t: T.RationalTime) => T.frameTime(T.frameIndexAt(t, rate), rate); // down to a whole frame
+    const maxEnd = frame(T.add(clip.start, toTimelineSpan(clip, T.sub(asset.duration, clip.sourceIn))));
+    const limit = T.min(target, maxEnd);
+    // beats of the source at or after the clip's in-point, as timeline times of this clip (also past its current end)
+    const beats = (d.analyses?.[clip.assetId]?.beats?.beats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
+    const end = beats.length ? beats.reduce((m, t) => T.max(m, t)) : limit;
+    if (!T.lt(clip.start, end)) throw new OpError('out_of_bounds', 'nothing of the music would remain', { clipId: clip.id });
+    assertFree(track, clip.start, end, new Set([clip.id]));
+    clip.duration = T.sub(end, clip.start);
+    const half = frame(T.rt(BigInt(clip.duration.value), clip.duration.timescale * 2));
+    const fade = T.min(a.fadeOut ?? T.frameTime(Math.round(rate.num / rate.den), rate), half);
+    if (T.isZero(fade)) delete clip.fadeOut; else clip.fadeOut = fade;
+    clampFades(clip);
+    const shortBy = T.lt(maxEnd, target) ? T.sub(target, end) : T.ZERO;
+    return { affectedIds: [clip.id], summary: `Music ends at ${fmt(end)}${beats.length ? ' (on a beat)' : ''}${T.isZero(shortBy) ? '' : `; ${fmt(shortBy)} short of the picture`}`, output: { end, onBeat: beats.length > 0, fadeOut: clip.fadeOut ?? T.ZERO, shortBy } };
+  },
+});
+defineOp({
   name: 'set_track_audio',
   version: 1,
   description: 'Set an audio track\'s volume (linear gain, 1 = unchanged), pan (-1 left … 1 right) and/or mute.',

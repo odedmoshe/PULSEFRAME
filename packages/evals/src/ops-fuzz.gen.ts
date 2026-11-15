@@ -123,6 +123,7 @@ export function createFuzz(seed: number) {
       () => ({ op: 'remove_asset', args: { assetId: pick(assetIds) } }),
       () => ({ op: 'move_track', args: { trackId: trackId(), toIndex: int(tracks.length + 1) } }),
       () => ({ op: 'remove_track', args: { trackId: trackId() } }),
+      () => ({ op: 'fit_music', args: { clipId: any(), ...(rnd() < 0.3 ? { to: fr() } : {}) } }),
       () => ({ op: 'unlink_clip', args: { clipId: any() } }),
       () => ({ op: 'set_clip_reverse', args: { clipId: any(), reverse: rnd() < 0.75 } }),
       () => ({ op: 'slip_clip', args: { clipId: any(), by: rnd() < 0.5 ? f(1 + int(40)) : T.sub(T.ZERO, f(1 + int(40))), ...(rnd() < 0.2 ? { includeLinked: false } : {}) } }),
