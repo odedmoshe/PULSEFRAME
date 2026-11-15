@@ -72,6 +72,45 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
   return r;
 }
 
+export interface VerifyResult { dir: string; databases: { file: string; ok: boolean; projects: number | null; error?: string }[]; mediaChecked: number; mediaDamaged: string[]; mediaMissing: string[]; ok: boolean }
+
+/**
+ * Check an existing backup without changing it: every database in it (the current one and each dated snapshot) must open and
+ * pass SQLite's integrity check; every stored media file must match the content hash it is named by; and every media file the
+ * current database refers to must be present. This re-reads all media, so it takes as long as hashing the whole backup.
+ */
+export async function verifyBackup(dir: string): Promise<VerifyResult> {
+  const main = path.join(dir, 'pulseframe.sqlite');
+  if (!fs.existsSync(main)) throw new Error(`${dir} is not a PULSEFRAME backup (no pulseframe.sqlite)`);
+  const r: VerifyResult = { dir: path.resolve(dir), databases: [], mediaChecked: 0, mediaDamaged: [], mediaMissing: [], ok: false };
+  const referenced = new Set<string>();
+  for (const file of [main, ...listSnapshots(dir).map((n) => path.join(dir, 'snapshots', n))]) {
+    const rel = path.relative(dir, file);
+    try {
+      const db = new Database(file, { readonly: true, fileMustExist: true });
+      try {
+        const verdict = db.pragma('integrity_check', { simple: true });
+        if (verdict !== 'ok') throw new Error(`integrity check: ${String(verdict).slice(0, 160)}`);
+        const projects = (db.prepare('SELECT COUNT(*) AS n FROM projects').get() as { n: number }).n;
+        if (file === main) for (const row of db.prepare('SELECT hash FROM blobs').all() as { hash: string }[]) referenced.add(row.hash.replace(/^sha256:/, ''));
+        r.databases.push({ file: rel, ok: true, projects });
+      } finally { db.close(); }
+    } catch (e) { r.databases.push({ file: rel, ok: false, projects: null, error: String(e instanceof Error ? e.message : e).slice(0, 200) }); }
+  }
+  const blobs = path.join(dir, 'blobs');
+  const present = new Set<string>();
+  if (fs.existsSync(blobs))
+    for (const e of fs.readdirSync(blobs, { withFileTypes: true })) {
+      if (!e.isFile() || !/^[0-9a-f]{64}$/.test(e.name)) continue;
+      present.add(e.name);
+      r.mediaChecked++;
+      if ((await sha256File(path.join(blobs, e.name))) !== e.name) r.mediaDamaged.push(e.name);
+    }
+  for (const h of referenced) if (!present.has(h)) r.mediaMissing.push(h);
+  r.ok = r.databases.every((d) => d.ok) && r.mediaDamaged.length === 0 && r.mediaMissing.length === 0;
+  return r;
+}
+
 /** Name of a dated database snapshot; sorts by time. */
 const snapName = (at: number) => `pulseframe-${new Date(at).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')}.sqlite`;
 const SNAP_RE = /^pulseframe-\d{8}T\d{6}Z\.sqlite$/;

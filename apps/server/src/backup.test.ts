@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
-import { backupDataDir, backupWithHistory, BackupScheduler, listSnapshots } from './backup.ts';
+import { backupDataDir, backupWithHistory, BackupScheduler, listSnapshots, verifyBackup } from './backup.ts';
 import { startServer } from './index.ts';
 
 const dirs: string[] = [];
@@ -116,6 +116,31 @@ describe('backup of a running server and restore', () => {
         const db = new Database(path.join(dest, 'snapshots', n), { readonly: true });
         try { expect(db.pragma('integrity_check', { simple: true })).toBe('ok'); expect(JSON.stringify(db.prepare('select * from projects').all())).toContain(`m${i + 2}`); expect(JSON.stringify(db.prepare('select * from projects').all())).not.toContain(`m${i + 3}`); } finally { db.close(); }
       }
+      // verifying the backup: clean now; a flipped byte in a media file and a truncated snapshot are both reported, and nothing is changed
+      const upv: any = await (await fetch(`${a.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'tone.wav' }, body: new Uint8Array(wav()) })).json();
+      expect(typeof upv.assetId).toBe('string');
+      await backupWithHistory(src, dest, 4, t0 + 5 * 3600_000); // keep four, so the three snapshots checked below stay
+      const clean = await verifyBackup(dest);
+      expect(clean).toMatchObject({ ok: true, mediaDamaged: [], mediaMissing: [] });
+      expect(clean.databases.length).toBe(5); // the current database and four snapshots
+      expect(clean.mediaChecked).toBeGreaterThan(0);
+      const blob = fs.readdirSync(path.join(dest, 'blobs')).find((n) => /^[0-9a-f]{64}$/.test(n))!;
+      const good = fs.readFileSync(path.join(dest, 'blobs', blob));
+      const flipped = Buffer.from(good); flipped[10] = flipped[10]! ^ 0xff;
+      fs.writeFileSync(path.join(dest, 'blobs', blob), flipped);
+      const snap = listSnapshots(dest)[0]!;
+      const snapBytes = fs.readFileSync(path.join(dest, 'snapshots', snap));
+      fs.writeFileSync(path.join(dest, 'snapshots', snap), snapBytes.subarray(0, 2000));
+      const dirty = await verifyBackup(dest);
+      expect(dirty.ok).toBe(false);
+      expect(dirty.mediaDamaged).toEqual([blob]);
+      expect(dirty.databases.filter((d) => !d.ok).map((d) => d.file)).toEqual([path.join('snapshots', snap)]);
+      fs.rmSync(path.join(dest, 'blobs', blob));
+      expect((await verifyBackup(dest)).mediaMissing).toEqual([blob]);
+      fs.writeFileSync(path.join(dest, 'blobs', blob), good);
+      fs.writeFileSync(path.join(dest, 'snapshots', snap), snapBytes);
+      expect((await verifyBackup(dest)).ok).toBe(true);
+      await expect(verifyBackup(tmp('pf-bk-none-'))).rejects.toThrow(/not a PULSEFRAME backup/);
       // going back: the oldest retained snapshot over the copy's database starts as a working server at that revision
       fs.copyFileSync(path.join(dest, 'snapshots', 'pulseframe-20260101T050000Z.sqlite'), path.join(dest, 'pulseframe.sqlite'));
       b = await startServer({ port: 8965, dataDir: dest });
