@@ -192,6 +192,10 @@ function SpeedField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   const [v, setV] = useState(String(value));
   useEffect(() => setV(String(value)), [value, clip.id]);
   const set = (n: number) => { if (n !== value) void editor.commit([{ op: 'set_clip_speed', args: { clipId: clip.id, speed: n } }], 'Clip speed'); };
+  // The sound this clip's speed applies to: the clip itself on a sound track, and the sound clips linked to it.
+  const doc = editor.doc;
+  const sound = doc ? doc.sequences[doc.mainSequenceId]!.tracks.filter((tr) => tr.kind === 'audio').flatMap((tr) => tr.clips)
+    .filter((c): c is Extract<Clip, { type: 'media' }> => c.type === 'media' && (c.id === clip.id || (!!clip.linkGroupId && c.linkGroupId === clip.linkGroupId)) && !!doc.assets[c.assetId]?.audio) : [];
   const commit = () => { const n = Number(v); if (v === '' || !Number.isFinite(n) || n < 0.1 || n > 8) { setV(String(value)); return; } set(Math.round(n * 1000) / 1000); };
   return (
     <div className="fields" data-testid="speed-field">
@@ -203,6 +207,13 @@ function SpeedField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
         {[0.25, 0.5, 1, 2, 4].map((p) => <button key={p} className="ghost" aria-pressed={value === p} data-testid={`clip-speed-${p}`} onClick={() => set(p)}><bdi>{p}×</bdi></button>)}
       </div>
       <p className="muted">{t('speed.hint')}</p>
+      {sound.length > 0 && (
+        <label className="check">
+          <input type="checkbox" checked={sound.every((c) => !!c.keepPitch)} data-testid="clip-keep-pitch"
+            onChange={(e) => void editor.commit([{ op: 'set_clip_pitch', args: { clipId: clip.id, keepPitch: e.target.checked } }], 'Keep pitch')} />
+          {t('speed.keepPitch')}
+        </label>
+      )}
     </div>
   );
 }

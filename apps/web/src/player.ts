@@ -5,8 +5,8 @@
  */
 import * as T from '@pulseframe/time';
 import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate } from '@pulseframe/engine';
-import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
+import { audioPlan, drawGraph, evaluate, PitchStretcher } from '@pulseframe/engine';
+import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
 export class Player {
@@ -182,6 +182,68 @@ export class Player {
           const srcTo = sourceIn + (end - start) * speed;
           // The decoder reports the file's raw timestamps; source times here are measured from the file's own start as this reader sees it.
           const origin = opened.origin;
+          if (c.keepPitch) {
+            // Keep the pitch: the source is read at normal rate in playing order (backwards in windows for a reversed clip), run
+            // through the shared stretcher, and its output is scheduled piece after piece at normal rate. The stretcher starts at
+            // the playhead here, where export starts it at the clip's start: the two can differ by a few milliseconds of alignment.
+            const playFrom = Math.max(start, t0);
+            const startAt = originClock + (playFrom - t0);
+            const pool = this;
+            async function* chunks(): AsyncGenerator<{ sr: number; data: Float32Array }> {
+              if (!c.reverse) {
+                for await (const raw of opened!.sink.buffers(srcFrom + origin, srcTo + origin)) {
+                  const ts = raw.timestamp - origin, from = Math.max(ts, srcFrom), to = Math.min(ts + raw.duration, srcTo);
+                  if (to > from) yield interleaved(raw.buffer, from - ts, to - ts, false);
+                }
+                return;
+              }
+              const S1 = sourceIn + (end - start) * speed;
+              let hi = S1 - Math.max(0, t0 - start) * speed;
+              const WINDOW = 2 * speed;
+              while (hi > sourceIn + 1e-6 && gen === pool.generation) {
+                const lo = Math.max(sourceIn, hi - WINDOW);
+                const got: { buffer: AudioBuffer; duration: number; timestamp: number }[] = [];
+                for await (const raw of opened!.sink.buffers(lo + origin, hi + origin)) { if (gen !== pool.generation) break; got.push({ buffer: raw.buffer, duration: raw.duration, timestamp: raw.timestamp - origin }); }
+                for (const b of got.reverse()) {
+                  const from = Math.max(b.timestamp, lo), to = Math.min(b.timestamp + b.duration, hi);
+                  if (to > from) yield interleaved(b.buffer, from - b.timestamp, to - b.timestamp, true);
+                }
+                hi = lo;
+              }
+            }
+            let stretcher: PitchStretcher | null = null;
+            let outPos = 0; // output frames scheduled so far
+            const emit = (out: Float32Array, sr: number) => {
+              const room = Math.max(0, Math.round((end - playFrom) * sr) - outPos); // never past the end of the clip
+              const frames = Math.min(out.length >> 1, room);
+              if (frames <= 0) return;
+              const when = startAt + outPos / sr;
+              outPos += frames;
+              const late = Math.max(0, now() - when);
+              if (frames / sr - late <= 0) return;
+              const buf = this.actx!.createBuffer(2, frames, sr);
+              const l = buf.getChannelData(0), r = buf.getChannelData(1);
+              for (let i = 0; i < frames; i++) { l[i] = out[i * 2]!; r[i] = out[i * 2 + 1]!; }
+              const node = this.actx!.createBufferSource();
+              node.buffer = buf;
+              node.connect(gain);
+              node.start(Math.max(when, now()), late);
+              this.nodes.push(node);
+              node.onended = () => { const i = this.nodes.indexOf(node); if (i >= 0) this.nodes.splice(i, 1); node.disconnect(); };
+              this.scheduledAheadMax = Math.max(this.scheduledAheadMax, when - now());
+            };
+            let rateOfSource = 0;
+            for await (const ch of chunks()) {
+              if (gen !== this.generation) break;
+              stretcher ??= new PitchStretcher(speed, ch.sr);
+              rateOfSource = ch.sr;
+              emit(stretcher.push(ch.data), ch.sr);
+              const ahead = startAt + outPos / ch.sr - now();
+              if (ahead > Player.AUDIO_LOOKAHEAD) await new Promise((r) => setTimeout(r, (ahead - Player.AUDIO_LOOKAHEAD) * 1000));
+            }
+            if (stretcher && gen === this.generation) emit(stretcher.finish(), rateOfSource);
+            return;
+          }
           if (c.reverse) {
             // Backwards: clip-local time x plays source S1 − x·speed. The decoder only runs forwards, so the remaining stretch is
             // taken in windows from its end towards its start; each window is decoded, then its buffers are scheduled last-first, reversed.

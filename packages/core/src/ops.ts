@@ -732,6 +732,21 @@ defineOp({
 });
 
 defineOp({
+  name: 'set_clip_pitch',
+  version: 1,
+  description: 'Choose what a speed change does to the pitch of a clip\'s sound: keepPitch=true keeps the pitch (the sound is stretched or tightened instead), false lets the pitch rise and fall with the speed (the default). Give a sound clip, or a picture clip to set its linked sound. It has an audible effect only while the clip\'s speed is not 1. Keeping the pitch is meant for speech and music between about half and double speed.',
+  args: z.object({ clipId: z.string(), keepPitch: z.boolean() }).strict(),
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have sound to stretch', { clipId: a.clipId });
+    const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...linked(d, f.clip)].filter((t) => t.track.kind === 'audio' && !!d.assets[t.clip.assetId]?.audio);
+    if (!targets.length) throw new OpError('incompatible', 'this clip has no sound clip', { clipId: a.clipId }, 'Give the sound clip, or a picture clip that is linked to one.');
+    if (targets.every((t) => !!t.clip.keepPitch === a.keepPitch)) throw new OpError('invalid_args', `the sound already ${a.keepPitch ? 'keeps its pitch' : 'follows the speed'}`, { clipId: a.clipId });
+    for (const { clip } of targets) { if (a.keepPitch) clip.keepPitch = true; else delete clip.keepPitch; }
+    return { affectedIds: targets.map((t) => t.clip.id), summary: a.keepPitch ? 'Sound keeps its pitch at other speeds' : 'Sound pitch follows the speed', output: { clipIds: targets.map((t) => t.clip.id) } };
+  },
+});
+defineOp({
   name: 'set_clip_reverse',
   version: 1,
   description: 'Play a clip backwards (reverse=true) or forwards again (false): a video clip on a video track, a sound clip on a sound track, or both when they are linked (they reverse together unless includeLinked=false, which also unlinks them). The clip keeps its place, length and the stretch of source it uses; only the order changes. Not for freeze frames or stills. A transition or crossfade into the next clip must still have enough spare source in the new direction.',

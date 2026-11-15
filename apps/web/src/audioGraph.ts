@@ -53,3 +53,14 @@ export function reversedBuffer(ctx: BaseAudioContext, b: AudioBuffer): AudioBuff
   for (let ch = 0; ch < b.numberOfChannels; ch++) { const src = b.getChannelData(ch), dst = out.getChannelData(ch); for (let i = 0, n = src.length; i < n; i++) dst[i] = src[n - 1 - i]!; }
   return out;
 }
+
+/** Seconds [from, to) of a decoded buffer as interleaved stereo float at the buffer's own rate (a mono buffer fills both sides), optionally backwards. */
+export function interleaved(buffer: AudioBuffer, from: number, to: number, backwards: boolean): { sr: number; data: Float32Array } {
+  const sr = buffer.sampleRate;
+  const a = Math.max(0, Math.round(from * sr)), b = Math.min(buffer.length, Math.round(to * sr));
+  const n = Math.max(0, b - a);
+  const l = buffer.getChannelData(0), r = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : l;
+  const data = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) { const k = backwards ? b - 1 - i : a + i; data[i * 2] = l[k]!; data[i * 2 + 1] = r[k]!; }
+  return { sr, data };
+}

@@ -6,7 +6,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import fs from 'node:fs';
 import type { Readable } from 'node:stream';
-import { mixClip, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
+import { mixClip, PitchStretcher, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
 import { ApiError } from './store.ts';
 
 const CHUNK = 48_000; // frames per mixing step
@@ -67,6 +67,46 @@ export function measureLoudness(rawFile: string, sampleRate: number): Promise<Lo
   });
 }
 
+/**
+ * A clip that keeps its pitch at another speed: its stretch of source is read at normal rate from the START of the clip and
+ * run through the shared stretcher; output before the first frame this export needs is produced and dropped. Starting at the
+ * clip's start every time is what makes a range export sound exactly like the same range of the full export.
+ */
+class StretchReader {
+  private stretcher: PitchStretcher;
+  private ready: Float32Array[] = [];
+  private size = 0; // frames ready
+  private left: number; // source frames still to read
+  private done = false;
+  constructor(private source: PcmReader, speed: number, sampleRate: number, sourceFrames: number, private skip: number) {
+    this.stretcher = new PitchStretcher(speed, sampleRate);
+    this.left = sourceFrames;
+  }
+  private add(out: Float32Array) {
+    let frames = out.length >> 1;
+    if (this.skip > 0) { const drop = Math.min(this.skip, frames); this.skip -= drop; out = out.subarray(drop * 2); frames -= drop; }
+    if (frames > 0) { this.ready.push(out); this.size += frames; }
+  }
+  async read(frames: number): Promise<Float32Array> {
+    while (this.size < frames && !this.done) {
+      if (this.left > 0) { const n = Math.min(this.left, 16384); this.left -= n; this.add(this.stretcher.push(await this.source.read(n))); }
+      else { this.add(this.stretcher.finish()); this.done = true; }
+    }
+    const out = new Float32Array(frames * 2); // short of sound at the very end: silence
+    let filled = 0;
+    while (filled < out.length && this.ready.length) {
+      const c = this.ready[0]!;
+      const take = Math.min(c.length, out.length - filled);
+      out.set(c.subarray(0, take), filled);
+      filled += take;
+      if (take === c.length) this.ready.shift(); else this.ready[0] = c.subarray(take);
+    }
+    this.size -= filled >> 1;
+    return out;
+  }
+  close() { this.source.close(); }
+}
+
 /** The single static gain export applies for a loudness target: reach the target, but never push true peak above the ceiling. */
 export function normalisationGain(m: Loudness, target: number, ceiling: number): { gainDb: number; limitedByPeak: boolean } {
   if (m.integratedLufs === null) return { gainDb: 0, limitedByPeak: false };
@@ -79,7 +119,7 @@ export function normalisationGain(m: Loudness, target: number, ceiling: number):
 export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) => string, firstSample: number, totalSamples: number, rawFile: string, isCanceled: () => boolean = () => false, originOf: (assetId: string) => number = () => 0, monoOf: (assetId: string) => boolean = () => false): Promise<{ clips: number; peak: number }> {
   const end = firstSample + totalSamples;
   const active = plan.clips.filter((c) => c.at < end && c.at + c.length > firstSample);
-  const readers = new Map<PlannedAudioClip, PcmReader>();
+  const readers = new Map<PlannedAudioClip, PcmReader | StretchReader>();
   const fd = fs.openSync(rawFile, 'w');
   let peak = 0;
   try {
@@ -98,9 +138,10 @@ export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) =>
           // -copyts keeps the file's raw timestamps and first_pts=<origin> starts the decoded sound at the file's own start: silence is inserted before a sound stream that starts late,
           // so sample positions mean file time (as in the preview), not "samples since the first one decoded".
           // A reversed clip: the part of its stretch this export needs is the EARLY part of the source (what is heard last), read whole and reversed by ffmpeg (held in memory for the length of the clip).
-          const skip = from - clip.at;
-          const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-copyts', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate}:first_pts=${Math.round(originOf(clip.assetId) * plan.sampleRate)},${monoOf(clip.assetId) ? 'pan=stereo|c0=c0|c1=c0,' : ''}aformat=sample_fmts=flt:channel_layouts=stereo,${clip.reverse ? `atrim=start_sample=${clip.source}:end_sample=${clip.source + Math.round((clip.length - skip) * clip.speed)},asetpts=PTS-STARTPTS,areverse` : `atrim=start_sample=${clip.source + Math.round(skip * clip.speed)}:end_sample=${clip.source + Math.round(clip.length * clip.speed)},asetpts=PTS-STARTPTS`}${clip.speed === 1 ? '' : `,asetrate=${Math.round(plan.sampleRate * clip.speed)},aresample=${plan.sampleRate}`}`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
-          r = new PcmReader(child);
+          // A clip that keeps its pitch is read from its start at normal rate; the stretcher does the speed change (see StretchReader).
+          const skip = clip.keepPitch ? 0 : from - clip.at;
+          const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-copyts', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate}:first_pts=${Math.round(originOf(clip.assetId) * plan.sampleRate)},${monoOf(clip.assetId) ? 'pan=stereo|c0=c0|c1=c0,' : ''}aformat=sample_fmts=flt:channel_layouts=stereo,${clip.reverse ? `atrim=start_sample=${clip.source}:end_sample=${clip.source + Math.round((clip.length - skip) * clip.speed)},asetpts=PTS-STARTPTS,areverse` : `atrim=start_sample=${clip.source + Math.round(skip * clip.speed)}:end_sample=${clip.source + Math.round(clip.length * clip.speed)},asetpts=PTS-STARTPTS`}${clip.speed === 1 || clip.keepPitch ? '' : `,asetrate=${Math.round(plan.sampleRate * clip.speed)},aresample=${plan.sampleRate}`}`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
+          r = clip.keepPitch ? new StretchReader(new PcmReader(child), clip.speed, plan.sampleRate, Math.round(clip.length * clip.speed), from - clip.at) : new PcmReader(child);
           readers.set(clip, r);
         }
         mixClip(out, a, clip, await r.read(to - from), from - clip.at);

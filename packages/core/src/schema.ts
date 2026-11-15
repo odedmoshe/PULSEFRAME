@@ -146,6 +146,8 @@ export const MediaClipSchema = z
     freeze: z.literal(true).optional(),
     /** Reverse: the clip plays its stretch of source backwards (picture on a video track, sound on an audio track; linked clips reverse together). `sourceIn` is still the earliest source time of the stretch. */
     reverse: z.literal(true).optional(),
+    /** Sound clips: when the clip's speed is not 1, keep the pitch of the sound instead of letting it rise and fall with the speed. */
+    keepPitch: z.literal(true).optional(),
     linkGroupId: Id.nullable(),
     /** Audio clips: linear fades at the clip edges (durations). */
     fadeIn: RationalTimeSchema.optional(),

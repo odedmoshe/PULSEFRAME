@@ -14,7 +14,7 @@
 import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Input, Mp4OutputFormat, Output, Quality, UrlSource, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, stretchKeepingPitch } from '@pulseframe/engine';
 import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
@@ -150,6 +150,36 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
     const input = plannedClipInput(ctx, c, rate, ctx.destination, (c.at - firstSample) / rate, s0 - c.at);
     // the stretch of source this clip needs, in source seconds, and the output time at which it starts
     const srcFrom = (c.source + (s0 - c.at) * c.speed) / rate, srcTo = (c.source + (s1 - c.at) * c.speed) / rate, outFrom = (s0 - firstSample) / rate;
+    if (c.keepPitch) {
+      // Keep the pitch: the clip's whole stretch of source is rendered at normal rate (in playing order), run through the
+      // shared stretcher from the start of the clip as the server mix does, and the part this export needs is placed at normal rate.
+      const srcFrames = Math.max(1, Math.round(c.length * c.speed));
+      const S0 = c.source / rate, S1 = (c.source + srcFrames) / rate;
+      const pre = new OfflineAudioContext(2, srcFrames, rate);
+      for (const p of pieces) {
+        const from = Math.max(p.at, S0), to = Math.min(p.at + p.duration, S1);
+        if (to <= from) continue;
+        const node = pre.createBufferSource();
+        node.buffer = c.reverse ? reversedBuffer(pre, p.buffer) : p.buffer;
+        node.connect(pre.destination);
+        if (c.reverse) node.start(S1 - to, p.at + p.duration - to, to - from);
+        else node.start(from - S0, from - p.at, to - from);
+      }
+      const plain = await pre.startRendering();
+      const l = plain.getChannelData(0), r = plain.getChannelData(1);
+      const inter = new Float32Array(srcFrames * 2);
+      for (let i = 0; i < srcFrames; i++) { inter[i * 2] = l[i]!; inter[i * 2 + 1] = r[i]!; }
+      const stretched = stretchKeepingPitch(inter, c.speed, rate, c.length);
+      const n = s1 - s0, off = s0 - c.at;
+      const buf = ctx.createBuffer(2, n, rate);
+      const bl = buf.getChannelData(0), br = buf.getChannelData(1);
+      for (let i = 0; i < n; i++) { bl[i] = stretched[(off + i) * 2]!; br[i] = stretched[(off + i) * 2 + 1]!; }
+      const node = ctx.createBufferSource();
+      node.buffer = buf;
+      node.connect(input);
+      node.start(outFrom);
+      continue;
+    }
     if (c.reverse) {
       // The clip plays its stretch [S0, S1) backwards: clip-local output time x shows source S1 − x·speed.
       const S1 = (c.source + c.length * c.speed) / rate;

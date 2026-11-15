@@ -109,7 +109,14 @@ export function createFuzz(seed: number) {
       () => ({ op: 'add_effect', args: { clipId: videoClips.length ? pick(videoClips).c.id : any(), type: pick(EFFECTS) } }),
       () => { const { clipId, fx } = fxPick(); return { op: 'update_effect', args: { clipId, effectId: fx?.id ?? 'fx_none', enabled: rnd() < 0.5, ...(rnd() < 0.3 ? { index: 0 } : {}) } }; },
       () => { const { clipId, fx } = fxPick(); const params = fx ? animatableParams(fx.type) : []; return { op: 'set_effect_keyframe', args: { clipId, effectId: fx?.id ?? 'fx_none', param: params.length ? pick(params) : 'amount', time: local(), value: Number((rnd() * 0.1).toFixed(3)) } }; },
-      () => { const { clipId, fx } = fxPick(); const keys = Object.entries(fx?.keyframes ?? {}).flatMap(([p, ks]) => ks.map((k) => ({ param: p, time: k.time }))); const k = keys.length ? pick(keys) : { param: 'amount', time: local() }; return { op: 'delete_effect_keyframe', args: { clipId, effectId: fx?.id ?? 'fx_none', ...k } }; },
+      () => { const { clipId, fx } = fxPick(); const params = fx ? animatableParams(fx.type) : []; return { op: 'set_effect_keyframe', args: { clipId, effectId: fx?.id ?? 'fx_none', param: params.length ? pick(params) : 'amount', time: local(), value: Number((rnd() * 0.1).toFixed(3)) } }; }, // twice: keys must exist often enough for delete_effect_keyframe to be accepted in a run
+      () => {
+        // prefer an effect that has keys (when the project has one), so this is not refused almost every time
+        const keyed = withFx.flatMap((x) => (x.c.effects ?? []).filter((e) => e.keyframes && Object.keys(e.keyframes).length).map((fx) => ({ clipId: x.c.id, fx })));
+        const { clipId, fx } = keyed.length ? pick(keyed) : fxPick();
+        const keys = Object.entries(fx?.keyframes ?? {}).flatMap(([p, ks]) => ks.map((k) => ({ param: p, time: k.time }))); const k = keys.length ? pick(keys) : { param: 'amount', time: local() };
+        return { op: 'delete_effect_keyframe', args: { clipId, effectId: fx?.id ?? 'fx_none', ...k } };
+      },
       () => { const { clipId, fx } = fxPick(); return { op: 'remove_effect', args: { clipId, effectId: fx?.id ?? 'fx_none' } }; },
       () => ({ op: 'set_clip_blend', args: { clipId: any(), mode: pick(['normal', 'multiply', 'screen', 'overlay', 'soft-light'] as const) } }),
       () => ({ op: 'set_clip_mask', args: { clipId: mediaId(), mask: rnd() < 0.3 ? null : { shape: pick(['rect', 'ellipse'] as const), x: 0, y: 0, width: 0.6, height: 0.5, feather: 0.05, invert: rnd() < 0.3 } } }),
@@ -133,6 +140,7 @@ export function createFuzz(seed: number) {
       },
       () => ({ op: 'unlink_clip', args: { clipId: any() } }),
       () => ({ op: 'set_clip_reverse', args: { clipId: any(), reverse: rnd() < 0.75 } }),
+      () => ({ op: 'set_clip_pitch', args: { clipId: any(), keepPitch: rnd() < 0.7 } }),
       () => ({ op: 'slip_clip', args: { clipId: any(), by: rnd() < 0.5 ? f(1 + int(40)) : T.sub(T.ZERO, f(1 + int(40))), ...(rnd() < 0.2 ? { includeLinked: false } : {}) } }),
       () => ({ op: 'close_gaps', args: rnd() < 0.7 ? {} : { from: f(int(200)), to: f(200 + int(300)) } }),
       () => ({ op: 'insert_gap', args: { at: f(int(400)), duration: rnd() < 0.1 ? f(0) : f(1 + int(90)) } }),
