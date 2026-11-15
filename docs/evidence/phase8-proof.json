@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:29:31.911Z",
+  "ranAt": "2026-11-15T12:05:08.328Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -36,9 +36,9 @@
     "longMix": {
       "seconds": 320,
       "clips": 40,
-      "wallMs": 6512,
-      "realtimeFactor": 49.14,
-      "serverRssGrowthMb": 280,
+      "wallMs": 7511,
+      "realtimeFactor": 42.6042,
+      "serverRssGrowthMb": 316,
       "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
     },
     "browserAudioChain": {
@@ -60,14 +60,14 @@
         0.25
       ],
       "measured": [
-        0.2645,
+        0.2543,
         0.5,
         0.1256,
-        0.349,
+        0.3234,
         0.5,
-        0.2549
+        0.26
       ],
-      "maxAbsError": 0.0362,
+      "maxAbsError": 0.0106,
       "note": "peak of 50 ms windows at the output stage during real-time playback in headless Chromium; a window spans part of a ramp, so ramps carry about ±0.02 of inherent error"
     }
   },
@@ -253,9 +253,9 @@
       "detail": {
         "seconds": 320,
         "clips": 40,
-        "wallMs": 6512,
-        "realtimeFactor": 49.14,
-        "serverRssGrowthMb": 280,
+        "wallMs": 7511,
+        "realtimeFactor": 42.6042,
+        "serverRssGrowthMb": 316,
         "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
       }
     },
@@ -327,14 +327,14 @@
           0.25
         ],
         "measured": [
-          0.2645,
+          0.2543,
           0.5,
           0.1256,
-          0.349,
+          0.3234,
           0.5,
-          0.2549
+          0.26
         ],
-        "maxAbsError": 0.0362,
+        "maxAbsError": 0.0106,
         "note": "peak of 50 ms windows at the output stage during real-time playback in headless Chromium; a window spans part of a ramp, so ramps carry about ±0.02 of inherent error"
       }
     },
