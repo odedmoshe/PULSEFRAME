@@ -11,7 +11,7 @@ A browser-based video editor with a Hebrew-first interface and full agent access
 
 ## What works today (see the linked evidence for limits)
 - Import, timeline editing with exact rational time, keyframes, undo/redo per actor, live multi-client updates; multi-select, markers, copy/paste
-- Clip speed (0.1–8×, sound pitch follows speed), freeze frame, reverse playback (picture only)
+- Clip speed (0.1–8×, sound pitch follows speed), freeze frame, reverse playback (picture and sound)
 - Source viewer with in/out marks; insert, overwrite, slip, ripple insert, close gaps, detach picture from sound; marquee selection; J/L shuttle
 - Tracks: add, rename, lock, hide, mute; project frame size and background can be changed; library files can be renamed and removed
 - Media input: MP4, MOV, Matroska, WebM, MPEG-TS, AVI; common sound formats; files with shifted timestamps, non-square pixels or unusual pixel formats are handled or converted at import (tested with synthetic files only — see `docs/evidence/input-matrix.json`)
@@ -23,7 +23,7 @@ A browser-based video editor with a Hebrew-first interface and full agent access
 - Model-free analysis: silence, scene cuts, beats
 - Linked output formats (9:16, 1:1, 4:5, 16:9) with per-format overrides (position, title and caption wording), safe-area guides, preflight
 - Rule-based recipes (beat montage, social pack, tidy speech)
-- Agents: MCP tools generated from the same operation registry, plus resources (guide, operation schemas, per-project views) and playbook prompts; permission modes (observe / propose / edit), pause, proposals with review
+- Agents: MCP tools generated from the same operation registry, plus resources (guide, operation schemas, per-project views) and playbook prompts; permission modes (observe / propose / edit), pause, proposals with review, change notifications, per-grant request and export limits
 - Optional local ComfyUI provider path (one experimental matting workflow; nothing is qualified on a GPU)
 
 ## Requirements
