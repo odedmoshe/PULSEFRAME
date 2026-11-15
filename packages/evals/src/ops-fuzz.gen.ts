@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import type { OpCall, ProjectDocument } from '@pulseframe/core';
+import { animatableParams, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -68,10 +68,22 @@ export function createFuzz(seed: number) {
     const at = () => { if (!clips.length || rnd() < 0.4) return fr(); const c = pick(clips).c; const a0 = T.frameIndexAt(c.start, rate), len = Math.max(1, T.frameIndexAt(c.duration, rate)); return f(a0 + pick([0, len, int(len), int(len), int(len)])); };
     /** An existing transform keyframe, when there is one. */
     const keyed = clips.flatMap((x) => Object.entries(x.c.keyframes ?? {}).flatMap(([p, ks]) => (ks ?? []).map((k) => ({ clipId: x.c.id, property: p, time: k.time }))));
+    // Situations some operations need, so they are not refused almost every time:
+    /** clips that start exactly where another clip on the same track ends (transitions, crossfades) */
+    const touching = clips.filter((x) => x.t.clips.some((o) => o.id !== x.c.id && T.eq(T.add(o.start, o.duration), x.c.start)));
+    const touchingAudio = touching.filter((x) => x.t.kind === 'audio');
+    const touchingVideo = touching.filter((x) => x.t.kind === 'video');
+    /** real video clips (not stills, not holds) and clips of the asset that has scene analysis and a transcript */
+    const movingVideo = videoClips.filter((x) => x.c.type === 'media' && !x.c.freeze && doc.assets[x.c.assetId]?.kind === 'video');
+    const ofVid = movingVideo.filter((x) => x.c.type === 'media' && x.c.assetId === vid);
+    const volumeKeyed = audioClips.filter((x) => x.c.type === 'media' && x.c.volume?.length);
+    const fxPick = () => { const x = withFx.length ? pick(withFx).c : null; const fx = x?.effects?.length ? pick(x.effects) : undefined; return { clipId: x?.id ?? any(), fx }; };
+    const wordList = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((sg) => (sg.words ?? []).map((w) => w.id)));
     const words = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((s) => (s.words ?? []).map((w) => w.id)));
     const menu: (() => OpCall)[] = [
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), ...(rnd() < 0.5 ? { duration: dur() } : {}), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(120), SRC) } : {}) } }),
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), trackId: trackId() } }),
+      () => { const x = media.length ? pick(media) : null; return { op: 'add_clip', args: { assetId: x && x.c.type === 'media' ? x.c.assetId : pick(assetIds), start: x ? T.add(x.c.start, x.c.duration) : fr(), ...(x ? { trackId: x.t.id } : {}), duration: f(10 + int(60)), sourceIn: T.frameTime(int(60), SRC) } }; },
       () => ({ op: 'add_text', args: { text: pick(['שלום', 'Hello עולם 123', 'בְּרֵאשִׁית']), start: fr(), duration: dur() } }),
       () => ({ op: 'add_track', args: { kind: pick(['video', 'audio', 'text'] as const) } }),
       () => ({ op: 'move_clip', args: { clipId: any(), start: fr(), ...(rnd() < 0.2 ? { trackId: trackId() } : {}) } }),
@@ -82,37 +94,39 @@ export function createFuzz(seed: number) {
       () => ({ op: 'duplicate_clips', args: { clipIds: [any()], ...(rnd() < 0.5 ? { at: fr() } : {}) } }),
       () => { const a = int(300); return { op: 'cut_range', args: { start: f(a), end: f(a + 1 + int(60)), ...(rnd() < 0.3 ? { ripple: false } : {}) } }; },
       () => ({ op: 'set_clip_speed', args: { clipId: mediaId(), speed: pick([0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3.337, 8]) } }),
-      () => { const x = videoClips.length ? pick(videoClips).c : null; return { op: 'freeze_frame', args: { clipId: x?.id ?? 'clp_none', at: x && rnd() < 0.8 ? f(T.frameIndexAt(x.start, rate) + int(Math.max(1, T.frameIndexAt(x.duration, rate)))) : fr(), duration: f(1 + int(45)) } }; },
-      () => ({ op: 'set_clip_fades', args: { clipId: audioId(), fadeIn: T.rt(int(3000), 1000), fadeOut: T.rt(int(3000), 1000) } }),
-      () => ({ op: 'set_audio_crossfade', args: { clipId: audioId(), duration: f(int(40)) } }),
+      () => { const x = movingVideo.length ? pick(movingVideo).c : videoClips.length ? pick(videoClips).c : null; return { op: 'freeze_frame', args: { clipId: x?.id ?? 'clp_none', at: x && rnd() < 0.8 ? f(T.frameIndexAt(x.start, rate) + int(Math.max(1, T.frameIndexAt(x.duration, rate)))) : fr(), duration: f(1 + int(45)) } }; },
+      () => ({ op: 'set_clip_fades', args: { clipId: audioId(), fadeIn: T.rt(int(1500), 1000), fadeOut: T.rt(int(1500), 1000) } }),
+      () => ({ op: 'set_audio_crossfade', args: { clipId: touchingAudio.length && rnd() < 0.85 ? pick(touchingAudio).c.id : audioId(), duration: f(int(rnd() < 0.7 ? 12 : 40)) } }),
       () => ({ op: 'set_clip_gain', args: { clipId: mediaId(), gain: Number((rnd() * 2).toFixed(2)) } }),
       () => ({ op: 'set_volume_keyframe', args: { clipId: audioId(), time: local(), value: Number((rnd() * 2).toFixed(2)) } }),
-      () => ({ op: 'delete_volume_keyframe', args: { clipId: audioId(), ...(rnd() < 0.5 ? { time: local() } : {}) } }),
+      () => { const x = volumeKeyed.length && rnd() < 0.8 ? pick(volumeKeyed).c : null; return { op: 'delete_volume_keyframe', args: { clipId: x?.id ?? audioId(), ...(rnd() < 0.6 ? { time: x && x.type === 'media' && x.volume ? pick(x.volume).time : local() } : {}) } }; },
       () => ({ op: 'set_keyframe', args: { clipId: any(), property: pick(['x', 'y', 'scale', 'rotation', 'opacity'] as const), time: local(), value: Number((rnd() * 0.8 + 0.1).toFixed(3)), easing: pick(['linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out'] as const) } }),
       () => (keyed.length && rnd() < 0.8 ? { op: 'delete_keyframe', args: pick(keyed) } : { op: 'delete_keyframe', args: { clipId: any(), property: pick(['x', 'y', 'scale', 'rotation', 'opacity'] as const), time: local() } }),
       () => ({ op: 'clear_keyframes', args: { clipId: any() } }),
       () => ({ op: 'set_clip_transform', args: { clipId: any(), transform: { x: Number((rnd() - 0.5).toFixed(3)), scale: Number((0.2 + rnd() * 2).toFixed(3)) } } }),
       () => ({ op: 'animate_clip', args: { clipId: any(), in: pick(['none', 'fade', 'pop', 'slide-up', 'slide-down'] as const), out: pick(['none', 'fade', 'pop'] as const), inFrames: 1 + int(30), outFrames: 1 + int(30) } }),
       () => ({ op: 'add_effect', args: { clipId: any(), type: pick(EFFECTS) } }),
-      () => { const x = withFx.length ? pick(withFx).c : null; return { op: 'update_effect', args: { clipId: x?.id ?? any(), effectId: x?.effects?.[0]?.id ?? 'fx_none', enabled: rnd() < 0.5, ...(rnd() < 0.5 ? { index: int(3) } : {}) } }; },
-      () => { const x = withFx.length ? pick(withFx).c : null; const fx = x?.effects?.[0]; return { op: 'set_effect_keyframe', args: { clipId: x?.id ?? any(), effectId: fx?.id ?? 'fx_none', param: fx?.type === 'blur.gaussian' ? 'radius' : fx?.type === 'color.brightness' ? 'amount' : 'amount', time: local(), value: Number((rnd() * 0.1).toFixed(3)) } }; },
-      () => { const x = withFx.length ? pick(withFx).c : null; return { op: 'remove_effect', args: { clipId: x?.id ?? any(), effectId: x?.effects?.[0]?.id ?? 'fx_none' } }; },
+      () => ({ op: 'add_effect', args: { clipId: videoClips.length ? pick(videoClips).c.id : any(), type: pick(EFFECTS) } }),
+      () => { const { clipId, fx } = fxPick(); return { op: 'update_effect', args: { clipId, effectId: fx?.id ?? 'fx_none', enabled: rnd() < 0.5, ...(rnd() < 0.3 ? { index: 0 } : {}) } }; },
+      () => { const { clipId, fx } = fxPick(); const params = fx ? animatableParams(fx.type) : []; return { op: 'set_effect_keyframe', args: { clipId, effectId: fx?.id ?? 'fx_none', param: params.length ? pick(params) : 'amount', time: local(), value: Number((rnd() * 0.1).toFixed(3)) } }; },
+      () => { const { clipId, fx } = fxPick(); const keys = Object.entries(fx?.keyframes ?? {}).flatMap(([p, ks]) => ks.map((k) => ({ param: p, time: k.time }))); const k = keys.length ? pick(keys) : { param: 'amount', time: local() }; return { op: 'delete_effect_keyframe', args: { clipId, effectId: fx?.id ?? 'fx_none', ...k } }; },
+      () => { const { clipId, fx } = fxPick(); return { op: 'remove_effect', args: { clipId, effectId: fx?.id ?? 'fx_none' } }; },
       () => ({ op: 'set_clip_blend', args: { clipId: any(), mode: pick(['normal', 'multiply', 'screen', 'overlay', 'soft-light'] as const) } }),
       () => ({ op: 'set_clip_mask', args: { clipId: mediaId(), mask: rnd() < 0.3 ? null : { shape: pick(['rect', 'ellipse'] as const), x: 0, y: 0, width: 0.6, height: 0.5, feather: 0.05, invert: rnd() < 0.3 } } }),
-      () => ({ op: 'set_transition', args: { clipId: videoId(), type: rnd() < 0.2 ? null : pick(['cross-dissolve', 'dip-to-black', 'wipe-left', 'slide-left']), frames: 1 + int(30) } }),
+      () => ({ op: 'set_transition', args: { clipId: touchingVideo.length && rnd() < 0.85 ? pick(touchingVideo).c.id : videoId(), type: rnd() < 0.2 ? null : pick(['cross-dissolve', 'dip-to-black', 'wipe-left', 'slide-left']), frames: 1 + int(30) } }),
       () => ({ op: 'add_marker', args: { time: at(), label: pick(['', 'note', 'סמן']) } }),
       () => ({ op: 'update_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none', time: fr(), color: pick(['blue', 'green', 'yellow', 'red', 'purple'] as const) } }),
       () => ({ op: 'remove_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none' } }),
       () => ({ op: 'add_variant', args: pick([{ profileId: 'vertical-9x16' }, { width: 360, height: 360, name: 'sq' }, { width: 361, height: 640 }]) }),
-      () => ({ op: 'set_variant_override', args: { variantId: variants.length ? pick(variants) : 'var_none', clipId: any(), ...(rnd() < 0.5 ? { transform: rnd() < 0.2 ? null : { x: 0.1, scale: 1.3 } } : { hidden: rnd() < 0.5 }) } }),
+      () => ({ op: 'set_variant_override', args: { variantId: variants.length ? pick(variants) : 'var_none', clipId: any(), ...(rnd() < 0.6 ? { transform: rnd() < 0.15 ? null : { x: Number((rnd() - 0.5).toFixed(2)), scale: 1.3 } } : { hidden: rnd() < 0.7 }) } }),
       () => ({ op: 'update_variant', args: { variantId: variants.length ? pick(variants) : 'var_none', ...(rnd() < 0.5 ? { captionStyle: rnd() < 0.3 ? null : { sizeFrac: 0.08, position: 'top' } } : { fit: pick(['contain', 'cover'] as const) }) } }),
       () => ({ op: 'remove_variant', args: { variantId: variants.length ? pick(variants) : 'var_none' } }),
       () => ({ op: 'add_caption_track', args: { mode: pick(['manual', 'transcript'] as const) } }),
       () => ({ op: 'add_cue', args: { start: at(), duration: dur(), text: pick(['שלום', 'line one\nline two', 'x']) } }),
       () => ({ op: 'update_cue', args: { clipId: cueId(), text: 'עודכן' } }),
       () => ({ op: 'merge_cues', args: { clipId: cueId() } }),
-      () => ({ op: 'split_at_scenes', args: { clipId: videoId() } }),
-      () => ({ op: 'delete_transcript_range', args: { assetId: vid, fromWordId: words.length ? pick(words) : 'w_none', toWordId: words.length ? pick(words) : 'w_none' } }),
+      () => ({ op: 'split_at_scenes', args: { clipId: ofVid.length && rnd() < 0.85 ? pick(ofVid).c.id : videoId() } }),
+      () => { if (!wordList.length) return { op: 'delete_transcript_range', args: { assetId: vid, fromWordId: 'w_none', toWordId: 'w_none' } }; const a0 = int(wordList.length), b0 = Math.min(wordList.length - 1, a0 + int(2)); return { op: 'delete_transcript_range', args: { assetId: vid, fromWordId: wordList[a0]!, toWordId: wordList[b0]! } }; },
       () => ({ op: 'set_track_audio', args: { trackId: audioTracks.length ? pick(audioTracks).id : trackId(), gain: Number((rnd() * 2).toFixed(2)), pan: Number((rnd() * 2 - 1).toFixed(2)) } }),
       () => ({ op: 'set_ducking', args: { trackId: audioTracks.length ? pick(audioTracks).id : trackId(), sourceTrackIds: rnd() < 0.2 ? null : [audioTracks.length ? pick(audioTracks).id : trackId()] } }),
       () => ({ op: 'set_loudness_target', args: { target: pick([null, -14, -16, -23]) } }),

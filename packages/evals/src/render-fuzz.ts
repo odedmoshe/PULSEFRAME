@@ -63,11 +63,31 @@ async function main() {
         else if (r.status >= 500) throw new Error(`seed ${seed} step ${step}: server error on ${JSON.stringify(op).slice(0, 200)}: ${JSON.stringify(r.body).slice(0, 200)}`);
         else refused++;
       }
+      // Dressing: transitions rarely survive a random session, so before rendering try one on every picture clip that
+      // touches the clip before it, and put an effect, a mask and a blend mode on some clips. Refusals are fine.
+      {
+        const d0 = await doc();
+        let dressed = 0;
+        for (const t of d0.sequences.seq_main.tracks.filter((x: any) => x.kind === 'video')) {
+          const sorted = [...t.clips].sort((x: any, y: any) => T.cmp(x.start, y.start));
+          for (let i = 1; i < sorted.length; i++) {
+            if (!T.eq(T.add(sorted[i - 1].start, sorted[i - 1].duration), sorted[i].start)) continue;
+            const type = ['cross-dissolve', 'dip-to-black', 'wipe-left', 'slide-left'][(seed + i) % 4];
+            if ((await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_transition', args: { clipId: sorted[i].id, type, frames: 4 + ((seed + i) % 8) } }] })).status === 200) dressed++;
+          }
+          for (const [i, c] of sorted.entries()) {
+            if (i % 3 === 0) await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_effect', args: { clipId: c.id, type: ['blur.gaussian', 'color.grayscale', 'stylize.vignette'][(seed + i) % 3] } }] });
+            if (i % 4 === 1 && c.type === 'media') await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_clip_mask', args: { clipId: c.id, mask: { shape: 'ellipse', x: 0, y: 0, width: 0.7, height: 0.7, feather: 0.1, invert: false } } }] });
+            if (i % 5 === 2) await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_clip_blend', args: { clipId: c.id, mode: 'screen' } }] });
+          }
+        }
+        row.dressing = { transitionsAdded: dressed };
+      }
       const d = await doc();
       const tl = (await call(`/projects/${pid}/timeline`)).body;
       const frames = T.frameIndexAt(tl.duration, rate);
       const clips = d.sequences.seq_main.tracks.flatMap((t: any) => t.clips);
-      row.session = { accepted, refused, clips: clips.length, frames, seconds: Number(T.toSeconds(tl.duration).toFixed(2)), formats: Object.keys(d.variants ?? {}).length, effects: clips.reduce((n: number, c: any) => n + (c.effects?.length ?? 0), 0), freezes: clips.filter((c: any) => c.freeze).length, sped: clips.filter((c: any) => c.speed).length, transitions: clips.filter((c: any) => c.transition).length };
+      row.session = { accepted, refused, clips: clips.length, frames, seconds: Number(T.toSeconds(tl.duration).toFixed(2)), formats: Object.keys(d.variants ?? {}).length, effects: clips.reduce((n: number, c: any) => n + (c.effects?.length ?? 0), 0), freezes: clips.filter((c: any) => c.freeze).length, sped: clips.filter((c: any) => c.speed).length, transitions: clips.filter((c: any) => c.transition).length, masks: clips.filter((c: any) => c.mask).length, blends: clips.filter((c: any) => c.blend && c.blend !== 'normal').length, captions: clips.filter((c: any) => c.type === 'caption').length, titles: clips.filter((c: any) => c.type === 'text').length };
       const problems: string[] = [];
       if (frames < 1) { row.outcome = 'empty-timeline (nothing to render)'; continue; }
       // 1. preflight answers

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T08:18:14.381Z",
+  "ranAt": "2026-11-15T08:28:30.874Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,280 +13,350 @@
     {
       "seed": 1,
       "rate": "25/1",
+      "dressing": {
+        "transitionsAdded": 1
+      },
       "session": {
-        "accepted": 79,
-        "refused": 81,
-        "clips": 9,
-        "frames": 324,
-        "seconds": 12.96,
+        "accepted": 80,
+        "refused": 80,
+        "clips": 16,
+        "frames": 367,
+        "seconds": 14.68,
         "formats": 0,
-        "effects": 2,
+        "effects": 6,
         "freezes": 0,
-        "sped": 4,
-        "transitions": 0
+        "sped": 0,
+        "transitions": 1,
+        "masks": 1,
+        "blends": 1,
+        "captions": 2,
+        "titles": 2
       },
       "preflight": {
         "blockers": 0,
         "warnings": 3
       },
       "export": {
-        "frames": 324,
+        "frames": 367,
         "rate": "25/1",
-        "videoSeconds": 12.96,
-        "audioSeconds": 12.96,
-        "bytes": 62227
+        "videoSeconds": 14.68,
+        "audioSeconds": 14.68,
+        "bytes": 294329
       },
       "outcome": "renders"
     },
     {
       "seed": 2,
       "rate": "24000/1001",
+      "dressing": {
+        "transitionsAdded": 0
+      },
       "session": {
-        "accepted": 77,
-        "refused": 83,
-        "clips": 18,
-        "frames": 465,
-        "seconds": 19.39,
-        "formats": 0,
+        "accepted": 85,
+        "refused": 75,
+        "clips": 4,
+        "frames": 283,
+        "seconds": 11.8,
+        "formats": 1,
         "effects": 0,
-        "freezes": 3,
-        "sped": 2,
-        "transitions": 0
+        "freezes": 0,
+        "sped": 1,
+        "transitions": 0,
+        "masks": 0,
+        "blends": 0,
+        "captions": 1,
+        "titles": 0
       },
       "preflight": {
         "blockers": 0,
-        "warnings": 4
+        "warnings": 2
       },
       "export": {
-        "frames": 465,
+        "frames": 283,
         "rate": "24000/1001",
-        "videoSeconds": 19.394,
-        "audioSeconds": 19.394,
-        "bytes": 200051
+        "videoSeconds": 11.803,
+        "audioSeconds": 11.803,
+        "bytes": 103748
       },
       "outcome": "renders"
     },
     {
       "seed": 3,
       "rate": "30000/1001",
+      "dressing": {
+        "transitionsAdded": 0
+      },
       "session": {
-        "accepted": 91,
-        "refused": 69,
-        "clips": 14,
-        "frames": 366,
-        "seconds": 12.21,
-        "formats": 2,
-        "effects": 1,
-        "freezes": 1,
-        "sped": 0,
-        "transitions": 1
-      },
-      "preflight": {
-        "blockers": 0,
-        "warnings": 5
-      },
-      "export": {
-        "frames": 366,
-        "rate": "30000/1001",
-        "videoSeconds": 12.212,
-        "audioSeconds": 12.212,
-        "bytes": 128120
-      },
-      "outcome": "renders"
-    },
-    {
-      "seed": 4,
-      "rate": "60/1",
-      "session": {
-        "accepted": 91,
-        "refused": 69,
-        "clips": 17,
-        "frames": 436,
-        "seconds": 7.27,
+        "accepted": 78,
+        "refused": 82,
+        "clips": 10,
+        "frames": 412,
+        "seconds": 13.75,
         "formats": 1,
-        "effects": 0,
-        "freezes": 3,
-        "sped": 4,
-        "transitions": 0
+        "effects": 1,
+        "freezes": 0,
+        "sped": 1,
+        "transitions": 0,
+        "masks": 0,
+        "blends": 0,
+        "captions": 0,
+        "titles": 5
       },
       "preflight": {
         "blockers": 0,
         "warnings": 3
       },
       "export": {
-        "frames": 436,
+        "frames": 412,
+        "rate": "30000/1001",
+        "videoSeconds": 13.747,
+        "audioSeconds": 13.747,
+        "bytes": 252248
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 4,
+      "rate": "60/1",
+      "dressing": {
+        "transitionsAdded": 2
+      },
+      "session": {
+        "accepted": 99,
+        "refused": 61,
+        "clips": 32,
+        "frames": 363,
+        "seconds": 6.05,
+        "formats": 0,
+        "effects": 6,
+        "freezes": 3,
+        "sped": 0,
+        "transitions": 2,
+        "masks": 4,
+        "blends": 2,
+        "captions": 1,
+        "titles": 8
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 2
+      },
+      "export": {
+        "frames": 363,
         "rate": "60/1",
-        "videoSeconds": 7.267,
-        "audioSeconds": 7.266,
-        "bytes": 103433
+        "videoSeconds": 6.05,
+        "audioSeconds": 6.05,
+        "bytes": 86369
       },
       "outcome": "renders"
     },
     {
       "seed": 5,
       "rate": "30/1",
+      "dressing": {
+        "transitionsAdded": 0
+      },
       "session": {
-        "accepted": 69,
-        "refused": 91,
-        "clips": 3,
-        "frames": 344,
-        "seconds": 11.47,
-        "formats": 0,
-        "effects": 0,
-        "freezes": 0,
-        "sped": 0,
-        "transitions": 0
-      },
-      "preflight": {
-        "blockers": 0,
-        "warnings": 2
-      },
-      "export": {
-        "frames": 344,
-        "rate": "30/1",
-        "videoSeconds": 11.467,
-        "audioSeconds": 11.466,
-        "bytes": 26976
-      },
-      "outcome": "renders"
-    },
-    {
-      "seed": 6,
-      "rate": "25/1",
-      "session": {
-        "accepted": 73,
-        "refused": 87,
+        "accepted": 87,
+        "refused": 73,
         "clips": 12,
-        "frames": 252,
-        "seconds": 10.08,
+        "frames": 546,
+        "seconds": 18.2,
         "formats": 0,
-        "effects": 1,
+        "effects": 6,
         "freezes": 1,
         "sped": 0,
-        "transitions": 0
-      },
-      "preflight": {
-        "blockers": 0,
-        "warnings": 2
-      },
-      "export": {
-        "frames": 252,
-        "rate": "25/1",
-        "videoSeconds": 10.08,
-        "audioSeconds": 10.08,
-        "bytes": 44148
-      },
-      "outcome": "renders"
-    },
-    {
-      "seed": 7,
-      "rate": "24000/1001",
-      "session": {
-        "accepted": 96,
-        "refused": 64,
-        "clips": 17,
-        "frames": 395,
-        "seconds": 16.47,
-        "formats": 2,
-        "effects": 1,
-        "freezes": 2,
-        "sped": 3,
-        "transitions": 0
-      },
-      "preflight": {
-        "blockers": 0,
-        "warnings": 6
-      },
-      "export": {
-        "frames": 395,
-        "rate": "24000/1001",
-        "videoSeconds": 16.475,
-        "audioSeconds": 16.475,
-        "bytes": 321297
-      },
-      "outcome": "renders"
-    },
-    {
-      "seed": 8,
-      "rate": "30000/1001",
-      "session": {
-        "accepted": 79,
-        "refused": 81,
-        "clips": 23,
-        "frames": 444,
-        "seconds": 14.81,
-        "formats": 0,
-        "effects": 0,
-        "freezes": 1,
-        "sped": 4,
-        "transitions": 0
+        "transitions": 0,
+        "masks": 2,
+        "blends": 1,
+        "captions": 1,
+        "titles": 6
       },
       "preflight": {
         "blockers": 0,
         "warnings": 5
       },
       "export": {
-        "frames": 444,
+        "frames": 546,
+        "rate": "30/1",
+        "videoSeconds": 18.2,
+        "audioSeconds": 18.2,
+        "bytes": 170778
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 6,
+      "rate": "25/1",
+      "dressing": {
+        "transitionsAdded": 0
+      },
+      "session": {
+        "accepted": 87,
+        "refused": 73,
+        "clips": 8,
+        "frames": 369,
+        "seconds": 14.76,
+        "formats": 0,
+        "effects": 1,
+        "freezes": 0,
+        "sped": 1,
+        "transitions": 0,
+        "masks": 0,
+        "blends": 1,
+        "captions": 1,
+        "titles": 6
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 1
+      },
+      "export": {
+        "frames": 369,
+        "rate": "25/1",
+        "videoSeconds": 14.76,
+        "audioSeconds": 14.76,
+        "bytes": 118199
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 7,
+      "rate": "24000/1001",
+      "dressing": {
+        "transitionsAdded": 0
+      },
+      "session": {
+        "accepted": 102,
+        "refused": 58,
+        "clips": 25,
+        "frames": 654,
+        "seconds": 27.28,
+        "formats": 1,
+        "effects": 4,
+        "freezes": 2,
+        "sped": 9,
+        "transitions": 0,
+        "masks": 4,
+        "blends": 1,
+        "captions": 2,
+        "titles": 7
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 6
+      },
+      "export": {
+        "frames": 654,
+        "rate": "24000/1001",
+        "videoSeconds": 27.277,
+        "audioSeconds": 27.277,
+        "bytes": 211114
+      },
+      "outcome": "renders"
+    },
+    {
+      "seed": 8,
+      "rate": "30000/1001",
+      "dressing": {
+        "transitionsAdded": 0
+      },
+      "session": {
+        "accepted": 78,
+        "refused": 82,
+        "clips": 17,
+        "frames": 452,
+        "seconds": 15.08,
+        "formats": 0,
+        "effects": 0,
+        "freezes": 0,
+        "sped": 1,
+        "transitions": 0,
+        "masks": 0,
+        "blends": 0,
+        "captions": 4,
+        "titles": 6
+      },
+      "preflight": {
+        "blockers": 0,
+        "warnings": 6
+      },
+      "export": {
+        "frames": 452,
         "rate": "30000/1001",
-        "videoSeconds": 14.815,
-        "audioSeconds": 14.815,
-        "bytes": 118865
+        "videoSeconds": 15.082,
+        "audioSeconds": 15.082,
+        "bytes": 293861
       },
       "outcome": "renders"
     },
     {
       "seed": 9,
       "rate": "60/1",
+      "dressing": {
+        "transitionsAdded": 0
+      },
       "session": {
-        "accepted": 68,
-        "refused": 92,
-        "clips": 11,
-        "frames": 451,
-        "seconds": 7.52,
-        "formats": 2,
-        "effects": 0,
+        "accepted": 73,
+        "refused": 87,
+        "clips": 8,
+        "frames": 409,
+        "seconds": 6.82,
+        "formats": 0,
+        "effects": 2,
         "freezes": 0,
-        "sped": 1,
-        "transitions": 0
+        "sped": 2,
+        "transitions": 0,
+        "masks": 0,
+        "blends": 0,
+        "captions": 1,
+        "titles": 1
       },
       "preflight": {
         "blockers": 0,
-        "warnings": 2
+        "warnings": 1
       },
       "export": {
-        "frames": 451,
+        "frames": 409,
         "rate": "60/1",
-        "videoSeconds": 7.517,
-        "audioSeconds": 7.516,
-        "bytes": 54024
+        "videoSeconds": 6.817,
+        "audioSeconds": 6.816,
+        "bytes": 103785
       },
       "outcome": "renders"
     },
     {
       "seed": 10,
       "rate": "30/1",
+      "dressing": {
+        "transitionsAdded": 0
+      },
       "session": {
-        "accepted": 89,
-        "refused": 71,
-        "clips": 22,
-        "frames": 475,
-        "seconds": 15.83,
+        "accepted": 86,
+        "refused": 74,
+        "clips": 52,
+        "frames": 460,
+        "seconds": 15.33,
         "formats": 0,
-        "effects": 2,
-        "freezes": 2,
-        "sped": 2,
-        "transitions": 1
+        "effects": 13,
+        "freezes": 5,
+        "sped": 4,
+        "transitions": 0,
+        "masks": 8,
+        "blends": 10,
+        "captions": 1,
+        "titles": 2
       },
       "preflight": {
         "blockers": 0,
-        "warnings": 2
+        "warnings": 4
       },
       "export": {
-        "frames": 475,
+        "frames": 460,
         "rate": "30/1",
-        "videoSeconds": 15.833,
-        "audioSeconds": 15.833,
-        "bytes": 143436
+        "videoSeconds": 15.333,
+        "audioSeconds": 15.333,
+        "bytes": 172438
       },
       "outcome": "renders"
     }

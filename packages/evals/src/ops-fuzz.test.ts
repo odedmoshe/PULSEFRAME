@@ -80,6 +80,7 @@ describe('fuzz: all editing operations, five frame rates', () => {
   it('the fuzz exercised every operation it knows, and each was accepted at least once', () => {
     const never = Object.entries(total.byOp).filter(([, [a]]) => a === 0).map(([k]) => k);
     console.log(`fuzz totals: ${total.accepted} accepted, ${total.refused} refused over ${SEEDS} seeds × ${STEPS} steps; never accepted: ${never.join(', ') || 'none'}`);
+    console.log(`fuzz per operation (accepted/attempted): ${Object.entries(total.byOp).sort((x, y) => x[1][0] / (x[1][0] + x[1][1]) - y[1][0] / (y[1][0] + y[1][1])).map(([k, [ok, no]]) => `${k} ${ok}/${ok + no}`).join(', ')}`);
     expect(Object.keys(total.byOp).length).toBeGreaterThanOrEqual(40);
     if (SEEDS >= 40) expect(never).toEqual([]);
   });
