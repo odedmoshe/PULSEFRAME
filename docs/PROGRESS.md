@@ -602,6 +602,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - New ops: `set_project_format {width?, height?, background?, fit?}` (even sizes; clips keep their relative layout; the frame rate stays fixed), `rename_asset`, `remove_asset` (refused while a clip uses the file; its transcript and analysis go with it; the stored media stays until storage clean-up, so undo restores the entry).
 - Editor: "Project frame" form at the top of the Deliver panel; "Remove from library" on each library file (disabled while in use).
 - Verified here: `reverse.test.ts` (2 new tests: frame change in the evaluator, layout fractions unchanged, undo, refusals; rename, remove with analysis, undo, refusals); all three in the fuzz suites; 411 unit tests; `pnpm proof:phase12` 17/17 (editor: odd size blocked, 480×480 with the new background colour in the corners of the server still, Ctrl+Z restores, in-use file cannot be removed, unused one is removed); proof 54, phase3 37 (baselines refreshed for the new library button), phase5 34, owner-ui 9, editor-interactions 20; accessibility audit clean.
+- `conformance:render-fuzz` rerun with the ops of 15g–15i in the generator: 2/2, 10 of 10 sessions rendered, 44 frames in 9 projects (transition 10, reverse 8, effect 20, mask 16, keyframes 6, blend 5, freeze 4, speed 2).
 - Not done: changing frame rate or sample rate of an existing project; rename has no editor control; removing a file does not cancel analysis jobs already running for it (their result is refused when it arrives; not tested).
 
 ## In progress
