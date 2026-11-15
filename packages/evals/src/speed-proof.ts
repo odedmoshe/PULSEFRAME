@@ -258,7 +258,7 @@ async function main() {
       unchanged: JSON.stringify(clipsOf(await doc(ep), 'video')) === beforeRefusal,
     };
     await hp.screenshot({ path: path.join(art, 'refusal-he.png') });
-    check('a refused edit in the Hebrew interface: the error bar opens with a Hebrew headline for the kind of refusal, followed by the server\'s own (English) detail laid out left to right; nothing changed', !!refusal.headline && /[֐-׿]/.test(refusal.headline) && !!refusal.detail && /[a-z]/.test(refusal.detail) && refusal.detailDir === 'ltr' && refusal.pageDir === 'rtl' && refusal.unchanged, refusal);
+    check('a refused edit in the Hebrew interface: the error bar opens with a Hebrew headline for the kind of refusal, followed by the detail in Hebrew as well (this refusal is one of the common ones worded in Hebrew); nothing changed', !!refusal.headline && /[\u0590-\u05FF]/.test(refusal.headline) && !!refusal.detail && /[\u0590-\u05FF]/.test(refusal.detail) && !/[a-z]{3}/.test(refusal.detail) && refusal.detailDir === 'rtl' && refusal.pageDir === 'rtl' && refusal.unchanged, refusal);
     await hp.close();
   } catch (e) {
     console.error(e);

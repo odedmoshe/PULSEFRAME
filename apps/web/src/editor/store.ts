@@ -7,7 +7,7 @@
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectVariant, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { createT, dictionaries, dirOf, type Key, type Lang } from '@pulseframe/i18n';
+import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
@@ -134,7 +134,9 @@ export class Editor {
     console.error(e);
     // A refusal from the server carries a code: its headline is shown in the interface language, followed by the server's own detail.
     const headline = e instanceof ApiFailure ? (dictionaries[this.state.lang] as Record<string, string>)[`error.code.${e.code}`] : undefined;
-    this.set({ error: headline && e instanceof Error ? `${headline}: ${e.message}` : e instanceof Error ? e.message : String(e), errorHeadline: headline ?? null });
+    // The detail: in the interface language when it is one of the common refusals, else as the server wrote it.
+    const detail = e instanceof ApiFailure ? translateRefusal(this.state.lang, e.message) ?? e.message : e instanceof Error ? e.message : String(e);
+    this.set({ error: headline ? `${headline}: ${detail}` : detail, errorHeadline: headline ?? null });
   };
   async load(projectId: string) {
     const p = await api.getProject(projectId);
