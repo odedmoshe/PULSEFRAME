@@ -363,6 +363,20 @@ async function main() {
     const slipShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
     check('slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged', sa.revision === sb.revision + 4 && T.eq(slipped.start, slipClip.start) && T.eq(slipped.duration, slipClip.duration) && T.frameIndexAt(slipped.sourceIn, R) === 73 && JSON.stringify(slipShown) === JSON.stringify([30 + k - 1, 73, 82, 110]), { slipShown, sourceIn: T.frameIndexAt(slipped.sourceIn, R), revisions: [sb.revision, sa.revision] });
 
+    console.log('\n# roll');
+    const rollB = await getDoc();
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+BracketRight', 2);
+    let rollA = await getDoc();
+    for (let i = 0; i < 50 && rollA.revision < rollB.revision + 2; i++) { await new Promise((r) => setTimeout(r, 100)); rollA = await getDoc(); }
+    const rolled = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 1), await stillCode(atFrame + 2), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    const lenRolled = endOf(rollA.project);
+    await key('Control+BracketLeft', 2);
+    for (let i = 0; i < 50 && rollA.revision < rollB.revision + 4; i++) { await new Promise((r) => setTimeout(r, 100)); rollA = await getDoc(); }
+    const unrolled = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9)];
+    check('roll by keyboard: the cut before the selected clip moves two frames later (the earlier clip plays two frames more, the selected clip starts two frames later with the same picture at every other frame), the timeline keeps its length, and rolling back restores it', JSON.stringify(rolled) === JSON.stringify([30 + k - 1, 30 + k, 30 + k + 1, 75, 82, 110]) && lenRolled === endOf(rollB.project) && JSON.stringify(unrolled) === JSON.stringify([30 + k - 1, 73, 82]) && rollA.revision === rollB.revision + 4, { rolled, unrolled, lengths: [endOf(rollB.project), lenRolled], revisions: [rollB.revision, rollA.revision] });
+
     console.log('\n# reverse');
     const rb0 = await getDoc();
     await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click(); // the clip showing source 73–82 at atFrame..atFrame+9

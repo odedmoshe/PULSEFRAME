@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import type { Key } from '@pulseframe/i18n';
-import { findClip, type Clip } from '@pulseframe/core';
+import { findClip, type Clip, clipEnd } from '@pulseframe/core';
 import type { Editor } from './store.ts';
 
 export interface Command {
@@ -44,13 +44,29 @@ const trackMove = (e: Editor, by: number): { trackId: string; toIndex: number } 
   const i = tracks.findIndex((t) => t.id === s.track.id), to = i + by;
   return i < 0 || to < 0 || to >= tracks.length ? null : { trackId: s.track.id, toIndex: to };
 };
+/**
+ * The two trims that move the cut at the START of the selected clip by `frames`: the clip before it (ending exactly where this
+ * one starts, on the same track) gets longer or shorter by the same amount. Order matters: free the frames first, then take them.
+ * Null when there is no such neighbour or a clip would vanish. The server refuses it if either clip lacks the source material.
+ */
+const rollOps = (e: Editor, frames: number): { op: string; args: unknown }[] | null => {
+  const s = e.selected;
+  if (!s || e.getState().selection.length !== 1) return null;
+  const prev = s.track.clips.find((c) => c.id !== s.clip.id && T.eq(clipEnd(c), s.clip.start));
+  if (!prev) return null;
+  const cut = T.frameIndexAt(s.clip.start, e.rate) + frames;
+  if (cut <= T.frameIndexAt(prev.start, e.rate) || cut >= T.frameIndexAt(clipEnd(s.clip), e.rate)) return null;
+  const to = T.frameTime(cut, e.rate);
+  const a = { op: 'trim_clip', args: { clipId: s.clip.id, edge: 'start', to } }, b = { op: 'trim_clip', args: { clipId: prev.id, edge: 'end', to } };
+  return frames > 0 ? [a, b] : [b, a];
+};
 const nudge = (frames: number) => (e: Editor) => {
   const clips = selectedClips(e);
   if (!clips.length) return;
   if (clips.length === 1) {
-    const target = T.frameIndexAt(clips[0]!.start, e.rate) + frames;
-    if (target >= 0) return e.commit([{ op: 'move_clip', args: { clipId: clips[0]!.id, start: T.frameTime(target, e.rate) } }], 'Nudge clip');
-    return;
+    // The new start is worked out when the commit runs: a second press before the first has landed must move one more frame, not the same frame again.
+    const id = clips[0]!.id;
+    return e.commit(() => { const now = e.doc ? findClip(e.doc, id)?.clip : undefined; if (!now) return null; const target = T.frameIndexAt(now.start, e.rate) + frames; return target >= 0 ? [{ op: 'move_clip', args: { clipId: id, start: T.frameTime(target, e.rate) } }] : null; }, 'Nudge clip');
   }
   return e.commit([{ op: 'move_clips', args: { clipIds: clips.map((c) => c.id), delta: T.frameTime(frames, e.rate) } }], 'Nudge clips');
 };
@@ -132,13 +148,16 @@ export const COMMANDS: Command[] = [
   { id: 'edit.nudgeRight', label: 'cmd.nudgeRight', group: 'edit', keys: ['Alt+ArrowRight'], enabled: (e) => !!sel(e), run: nudge(1) },
   { id: 'edit.nudgeLeft10', label: 'cmd.nudgeLeft10', group: 'edit', keys: ['Alt+Shift+ArrowLeft'], enabled: (e) => !!sel(e), run: nudge(-10) },
   { id: 'edit.nudgeRight10', label: 'cmd.nudgeRight10', group: 'edit', keys: ['Alt+Shift+ArrowRight'], enabled: (e) => !!sel(e), run: nudge(10) },
+  // Roll: move the cut between the selected clip and the clip before it, without moving anything else (one transaction of two trims).
+  { id: 'edit.rollLater', label: 'cmd.rollLater', group: 'edit', keys: ['Mod+BracketRight'], enabled: (e) => !!rollOps(e, 1), run: (e) => e.commit(() => rollOps(e, 1), 'Roll cut') }, // computed when the commit runs, so repeated presses each move one more frame
+  { id: 'edit.rollEarlier', label: 'cmd.rollEarlier', group: 'edit', keys: ['Mod+BracketLeft'], enabled: (e) => !!rollOps(e, -1), run: (e) => e.commit(() => rollOps(e, -1), 'Roll cut') }, // computed when the commit runs, so repeated presses each move one more frame
   { id: 'edit.slipLater', label: 'cmd.slipLater', group: 'edit', keys: ['Mod+Alt+ArrowRight'], enabled: canSlip, run: slip(1) },
   { id: 'edit.slipEarlier', label: 'cmd.slipEarlier', group: 'edit', keys: ['Mod+Alt+ArrowLeft'], enabled: canSlip, run: slip(-1) },
   { id: 'edit.slipLater10', label: 'cmd.slipLater10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowRight'], enabled: canSlip, run: slip(10) },
   { id: 'edit.slipEarlier10', label: 'cmd.slipEarlier10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowLeft'], enabled: canSlip, run: slip(-10) },
   // The timeline lists tracks top-down in reverse list order (the last track is drawn on top and shown first), so "up" on screen is a higher index.
-  { id: 'track.moveUp', label: 'cmd.trackUp', group: 'edit', keys: [], enabled: (e) => trackMove(e, 1) !== null, run: (e) => { const m = trackMove(e, 1); return m ? e.commit([{ op: 'move_track', args: m }], 'Move track') : undefined; } },
-  { id: 'track.moveDown', label: 'cmd.trackDown', group: 'edit', keys: [], enabled: (e) => trackMove(e, -1) !== null, run: (e) => { const m = trackMove(e, -1); return m ? e.commit([{ op: 'move_track', args: m }], 'Move track') : undefined; } },
+  { id: 'track.moveUp', label: 'cmd.trackUp', group: 'edit', keys: [], enabled: (e) => trackMove(e, 1) !== null, run: (e) => e.commit(() => { const m = trackMove(e, 1); return m ? [{ op: 'move_track', args: m }] : null; }, 'Move track') },
+  { id: 'track.moveDown', label: 'cmd.trackDown', group: 'edit', keys: [], enabled: (e) => trackMove(e, -1) !== null, run: (e) => e.commit(() => { const m = trackMove(e, -1); return m ? [{ op: 'move_track', args: m }] : null; }, 'Move track') },
   { id: 'track.removeEmpty', label: 'cmd.removeEmptyTracks', group: 'edit', keys: [], enabled: (e) => emptyTracks(e).length > 0, run: (e) => e.commit(emptyTracks(e).map((id) => ({ op: 'remove_track', args: { trackId: id } })), 'Remove empty tracks') },
   { id: 'edit.closeGaps', label: 'cmd.closeGaps', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: (e) => e.commit([{ op: 'close_gaps', args: {} }], 'Close gaps') },
   { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },
@@ -196,6 +215,6 @@ export function chordLabel(chord: string, mac = typeof navigator !== 'undefined'
 }
 
 // Commands that change the selected clips do nothing while a selected clip is on a locked track.
-const CHANGES_SELECTION = new Set(['edit.split', 'edit.delete', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.add', 'keyframe.remove']);
+const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.split', 'edit.delete', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.add', 'keyframe.remove']);
 for (const c of COMMANDS) if (CHANGES_SELECTION.has(c.id)) { const was = c.enabled; c.enabled = (e) => !e.selectionLocked && (!was || was(e)); }
 
