@@ -20,6 +20,7 @@ export class Player {
   clock: 'audio' | 'monotonic' = 'monotonic';
   /** Shuttle speed in multiples of real time (negative = backwards); 0 when not shuttling. Normal playback is not a shuttle. */
   shuttleRate = 0;
+  private starting = false;
   static readonly SHUTTLE_MAX = 8;
   private busy = false;
   private want: number | null = null;
@@ -52,11 +53,15 @@ export class Player {
     return this.doc ? T.frameCount(sequenceDuration(this.doc), this.doc.settings.frameRate) : 0;
   }
   setDoc(doc: ProjectDocument) {
+    // A change to the project (the user's own edit or another participant's) must not stop playback:
+    // stop the old schedule (its sound was planned from the old document) and continue from the same frame at the same speed.
+    const resume = this.playing ? (this.shuttleRate || 1) : this.starting ? 1 : 0; // `starting`: play() was asked for and is still waiting for the audio device
     this.doc = doc;
     if (this.playing) this.pause();
     this.frame = Math.min(this.frame, Math.max(0, this.frameCount - 1));
     this.painted = -1;
     this.request(this.frame);
+    if (resume && this.frame < this.frameCount - 1) this.shuttle(resume);
   }
   seek(frame: number) {
     if (this.playing) this.pause();
@@ -107,6 +112,7 @@ export class Player {
     if (!this.doc || this.playing || this.frameCount === 0) return;
     const doc = this.doc;
     const rate = doc.settings.frameRate;
+    this.starting = true;
     if (this.frame >= this.frameCount - 1) this.frame = 0;
     const startFrame = this.frame;
     const t0 = T.toSeconds(T.frameTime(startFrame, rate));
@@ -119,7 +125,8 @@ export class Player {
       await this.actx!.audioWorklet.addModule('/pf-onset-tap.js'); // static file: see apps/web/public (no blob: scripts, so the content security policy can stay strict)
       this.tapLoaded = true;
     }
-    if (this.doc !== doc) return;
+    if (this.doc !== doc) return; // the project changed while waiting: setDoc has already started playback again with the new one
+    this.starting = false;
     this.playing = true;
     const gen = ++this.generation;
     this.clock = audioOk ? 'audio' : 'monotonic';
@@ -246,6 +253,7 @@ export class Player {
   }
   pause() {
     this.playing = false;
+    this.starting = false;
     this.shuttleRate = 0;
     this.generation++;
     cancelAnimationFrame(this.raf);

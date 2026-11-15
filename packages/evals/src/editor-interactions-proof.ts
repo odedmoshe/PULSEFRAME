@@ -290,6 +290,32 @@ async function main() {
     const atStart = await tcFrame(), shEnd = await shuttleText();
     check('shuttle: L plays, L again goes to 2× (indicator shown, measured speed about 2×); J goes backwards at 1× and J again at 2×; Space stops and the frame holds; shuttling backwards stops at the first frame', sh0 === '' && /▶▶ ×2/.test(sh1) && fwd2 > 1.5 && fwd2 < 2.5 && /◀◀ ×1/.test(sh2) && back1 < -0.6 && back1 > -1.4 && /◀◀ ×2/.test(sh3) && sh4 === '' && still && pausedIcon && atStart === 0 && shEnd === '', { sh0, sh1, fwd2: +fwd2.toFixed(2), sh2, back1: +back1.toFixed(2), sh3, sh4, still, pausedIcon, atStart, shEnd });
 
+    console.log('\n# playback continues when the project changes');
+    await page.mouse.click(rb.x + 30.5, rb.y + 5); // frame 10
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.textContent === '❚❚', undefined, { timeout: 5000 });
+    const revPlay0 = (await call(`/projects/${pid}`)).body.revision;
+    await txs(pid, [{ op: 'add_marker', args: { time: f(300), label: 'while playing' } }]); // another participant edits during playback
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 3, undefined, { timeout: 8000 });
+    await sleep(500);
+    const keptPlaying = (await page.getByTestId('play').textContent()) === '❚❚';
+    const playSpeed = await speedOver(800);
+    await page.keyboard.press('l'); // 2×
+    await page.getByTestId('shuttle').waitFor();
+    await txs(pid, [{ op: 'add_marker', args: { time: f(330), label: 'while shuttling' } }]);
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 4, undefined, { timeout: 8000 });
+    await sleep(300);
+    const keptShuttle = await shuttleText();
+    const shuttleSpeed = await speedOver(600);
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Home');
+    // a change while paused must not start playback
+    await txs(pid, [{ op: 'add_marker', args: { time: f(345) } }]);
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 5, undefined, { timeout: 8000 });
+    await sleep(300);
+    const staysPaused = (await page.getByTestId('play').textContent()) === '▶' && (await tcFrame()) === 0;
+    check('a project change by another participant during playback does not stop it (normal speed and 2× shuttle both continue at their speed); a change while paused does not start it', keptPlaying && playSpeed > 0.8 && playSpeed < 1.2 && /▶▶ ×2/.test(keptShuttle) && shuttleSpeed > 1.5 && shuttleSpeed < 2.5 && staysPaused && (await call(`/projects/${pid}`)).body.revision === revPlay0 + 3, { keptPlaying, playSpeed: +playSpeed.toFixed(2), keptShuttle, shuttleSpeed: +shuttleSpeed.toFixed(2), staysPaused });
+
     console.log('\n# multi-select: move, nudge and delete several clips together');
     const mp = (await call('/projects', { name: 'multi', width: 640, height: 360 })).body.project.id;
     const mpic = await upload(mp, picFile);

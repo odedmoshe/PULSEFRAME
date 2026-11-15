@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T08:48:52.249Z",
+  "ranAt": "2026-11-15T08:51:30.739Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 17,
-  "total": 17,
+  "passed": 18,
+  "total": 18,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -161,7 +161,7 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.01,
+        "fwd2": 2.02,
         "sh2": "◀◀ ×1",
         "back1": -1,
         "sh3": "◀◀ ×2",
@@ -170,6 +170,17 @@
         "pausedIcon": true,
         "atStart": 0,
         "shEnd": ""
+      }
+    },
+    {
+      "name": "a project change by another participant during playback does not stop it (normal speed and 2× shuttle both continue at their speed); a change while paused does not start it",
+      "ok": true,
+      "detail": {
+        "keptPlaying": true,
+        "playSpeed": 0.98,
+        "keptShuttle": "▶▶ ×2",
+        "shuttleSpeed": 2.02,
+        "staysPaused": true
       }
     },
     {
@@ -208,7 +219,7 @@
       "ok": true,
       "detail": {
         "file": "interactions.pulseframe.tar",
-        "bytes": 2794496
+        "bytes": 2795008
       }
     },
     {
