@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T17:29:42.637Z",
+  "ranAt": "2026-11-15T17:35:26.965Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 22,
-  "total": 22,
+  "passed": 23,
+  "total": 23,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -149,6 +149,27 @@
       }
     },
     {
+      "name": "volume line: the key is drawn at its frame; dragging it changes time and level in one edit (30→40, 0.5→1.5); a double-click on the line adds a key at the level there; arrow keys nudge the focused key without moving the playhead; Delete removes the key, not the clip; the key is named for assistive technology; a drag on the line moves the clip",
+      "ok": true,
+      "detail": {
+        "handleAt": true,
+        "vl1": true,
+        "vl2": true,
+        "vl3": true,
+        "vl4": true,
+        "vl5": true,
+        "tcBefore": "00:00:03:00",
+        "tcAfter": "00:00:03:00",
+        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
+        "keys": [
+          [
+            40,
+            1.5
+          ]
+        ]
+      }
+    },
+    {
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
@@ -192,9 +213,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2,
+        "fwd2": 1.99,
         "sh2": "◀◀ ×1",
-        "back1": -0.99,
+        "back1": -1,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -238,30 +259,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_31ad3e6fda0",
-          "clp_31ad3e6fda1"
+          "clp_32933cd0400",
+          "clp_32933cd0401"
         ],
         "afterAB": [
-          "clp_31ad3e6fda0",
-          "clp_31ad3e6fda1"
+          "clp_32933cd0400",
+          "clp_32933cd0401"
         ],
         "afterAdd": [
-          "clp_31ad3e6fda0",
-          "clp_31ad3e6fda1",
-          "clp_31ad3e6fda2"
+          "clp_32933cd0400",
+          "clp_32933cd0401",
+          "clp_32933cd0402"
         ],
         "midEscape": [
-          "clp_31ad3e6fda1"
+          "clp_32933cd0401"
         ],
         "afterEscape": [
-          "clp_31ad3e6fda0",
-          "clp_31ad3e6fda1",
-          "clp_31ad3e6fda2"
+          "clp_32933cd0400",
+          "clp_32933cd0401",
+          "clp_32933cd0402"
         ],
         "afterEscapeUp": [
-          "clp_31ad3e6fda0",
-          "clp_31ad3e6fda1",
-          "clp_31ad3e6fda2"
+          "clp_32933cd0400",
+          "clp_32933cd0401",
+          "clp_32933cd0402"
         ]
       }
     },

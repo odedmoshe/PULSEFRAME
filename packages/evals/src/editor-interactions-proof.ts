@@ -258,6 +258,52 @@ async function main() {
     const vk3 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[30, 0.5]]));
     check('Sound tab: typing a level writes a volume key at the playhead; between two keys the field shows the interpolated level (0.85 halfway between 0.5 and 1.2); "remove this key" removes only that key', vk1 && vk2 && midShown === '0.85' && vk3, { midShown, keys: volKeys(await doc()) });
 
+    console.log('\n# volume line on the clip');
+    const vline = page.getByTestId(`volume-line-${musicClip}`), vkeysEl = page.getByTestId('volume-line-key');
+    await vkeysEl.first().waitFor({ timeout: 5000 });
+    const lineBox = (await vline.boundingBox())!;
+    const k0 = (await vkeysEl.first().boundingBox())!;
+    const handleAt = Math.abs(k0.x + k0.width / 2 - (lineBox.x + 30 * 3)) < 1.5; // the key at clip frame 30 sits 90 px into the clip
+    const tcBefore = (await page.getByTestId('timecode').textContent()) ?? '';
+    // drag the handle 30 px right (10 frames) and 13 px up (+1.0 on the 0..2 scale)
+    await page.mouse.move(k0.x + k0.width / 2, k0.y + k0.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(k0.x + k0.width / 2 + 15, k0.y + k0.height / 2 - 6, { steps: 3 });
+    await page.mouse.move(k0.x + k0.width / 2 + 30, k0.y + k0.height / 2 - 13, { steps: 3 });
+    await page.mouse.up();
+    const vl1 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[40, 1.5]]));
+    // double-click on the line at clip frame 80 (the level there is held at 1.5): a key appears
+    await page.waitForFunction(() => document.querySelector('[data-testid=volume-line-key]')?.getAttribute('data-frame') === '40', undefined, { timeout: 5000 }).catch(() => {});
+    await page.mouse.dblclick(lineBox.x + 80 * 3, lineBox.y + 10.5);
+    const vl2 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[40, 1.5], [80, 1.5]]));
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=volume-line-key]').length === 2, undefined, { timeout: 5000 }).catch(() => {});
+    // keyboard on the handle: down twice, left once; the playhead and the clip are not affected
+    await vkeysEl.nth(1).focus();
+    await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
+    const vl3a = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[40, 1.5], [80, 1.4]]));
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=volume-line-key]')[1]?.getAttribute('data-value') === '1.4', undefined, { timeout: 5000 }).catch(() => {});
+    await vkeysEl.nth(1).focus();
+    await page.keyboard.press('ArrowLeft');
+    const vl3 = vl3a && await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[40, 1.5], [79, 1.4]]));
+    const namedKey = (await vkeysEl.nth(1).getAttribute('aria-label')) ?? '';
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=volume-line-key]')[1]?.getAttribute('data-frame') === '79', undefined, { timeout: 5000 }).catch(() => {});
+    await vkeysEl.nth(1).focus();
+    await page.keyboard.press('Delete');
+    const vl4 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[40, 1.5]])) && !!clipOf(await doc(), musicClip);
+    const tcAfter = (await page.getByTestId('timecode').textContent()) ?? '';
+    // a drag that starts on the line moves the clip, as a drag on the clip does (then undone)
+    const startWas = fr(clipOf(await doc(), musicClip).start);
+    await page.mouse.move(lineBox.x + 200, lineBox.y + 10.5);
+    await page.mouse.down();
+    await page.mouse.move(lineBox.x + 215, lineBox.y + 10.5, { steps: 3 });
+    await page.mouse.move(lineBox.x + 230, lineBox.y + 10.5, { steps: 3 });
+    await page.mouse.up();
+    const vl5 = await until((x2) => fr(clipOf(x2, musicClip).start) === startWas + 10, 4000);
+    if (vl5) { await page.keyboard.press('Control+z'); await until((x2) => fr(clipOf(x2, musicClip).start) === startWas); }
+    check('volume line: the key is drawn at its frame; dragging it changes time and level in one edit (30→40, 0.5→1.5); a double-click on the line adds a key at the level there; arrow keys nudge the focused key without moving the playhead; Delete removes the key, not the clip; the key is named for assistive technology; a drag on the line moves the clip', handleAt && vl1 && vl2 && vl3 && vl4 && tcBefore === tcAfter && /\d+%/.test(namedKey) && vl5, { handleAt, vl1, vl2, vl3, vl4, vl5, tcBefore, tcAfter, namedKey, keys: volKeys(await doc()) });
+    // back to the state the following sections were written against
+    await txs(pid, [{ op: 'delete_volume_keyframe', args: { clipId: musicClip } }, { op: 'set_volume_keyframe', args: { clipId: musicClip, time: f(30), value: 0.5 } }]);
+
     console.log('\n# fit music to the picture');
     const fm0 = await doc();
     const music0 = clipOf(fm0, musicClip);

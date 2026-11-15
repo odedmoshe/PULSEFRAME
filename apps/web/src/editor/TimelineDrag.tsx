@@ -67,10 +67,11 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0 || session.current) return;
-    const el = (e.target as HTMLElement).closest?.('[data-clip-id]') as HTMLElement | null;
+    // `data-drag-clip`: an overlay drawn over a clip (its volume line) that should drag the clip like the clip itself
+    const el = (e.target as Element).closest?.('[data-clip-id], [data-drag-clip]') as HTMLElement | null;
     const doc = editor.doc;
     if (!el || !doc) return;
-    const id = el.dataset.clipId!;
+    const id = (el.dataset.clipId ?? el.dataset.dragClip)!;
     const found = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips.map((clip) => ({ clip, tr }))).find((x) => x.clip.id === id);
     if (!found) return;
     if (found.tr.locked) return;

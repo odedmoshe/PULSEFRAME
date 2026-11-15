@@ -239,3 +239,12 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .ramp .row { display: flex; gap: 6px; }
 .ramp .row label { flex: 1; min-inline-size: 0; }
 .ramp .row input { inline-size: 100%; }
+
+/* Volume line over a sound clip. The wrapper lets clicks through; only the line (when the clip is selected) and the key handles take the pointer. */
+.vol-line { position: absolute; top: 5px; height: 34px; z-index: 3; pointer-events: none; }
+.vol-line svg { position: absolute; inset: 0; overflow: visible; }
+.vol-path { fill: none; stroke: var(--pf-warn); stroke-width: 1.5; opacity: 0.9; }
+.vol-hit { fill: none; stroke: transparent; stroke-width: 9; pointer-events: stroke; cursor: copy; }
+.vol-key { position: absolute; width: 11px; height: 11px; min-width: 0; min-height: 0; margin: -5.5px 0 0 -5.5px; padding: 0; border-radius: 50%; border: 1.5px solid #111; background: var(--pf-warn); pointer-events: auto; cursor: grab; touch-action: none; }
+.vol-key:active { cursor: grabbing; }
+.vol-key:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

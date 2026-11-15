@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { toSourceSpan, clipEnd, timelineMarkers, MARKER_COLORS, type Clip, type Marker, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
+import { VolumeLine } from './VolumeLine.tsx';
 import { useEditorState } from './store.ts';
 import { useTimelineDrag } from './TimelineDrag.tsx';
 import { useMarquee } from './TimelineMarquee.tsx';
@@ -113,8 +114,10 @@ export function Timeline() {
               {tr.clips.map((c) => {
                 const width = Math.max(4, T.toSeconds(c.duration) * pps - 1);
                 const asset = c.type === 'media' ? doc.assets[c.assetId] : undefined;
+                const volLine = c.type === 'media' && tr.kind === 'audio' && asset?.kind !== 'image' && ((c.volume?.length ?? 0) > 0 || (selection.length === 1 && selection[0] === c.id));
                 return (
-                  <button key={c.id} role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
+                  <Fragment key={c.id}>
+                  <button role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
                     style={{ left: T.toSeconds(c.start) * pps, width }} onClick={(e) => editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace')} aria-pressed={selection.includes(c.id)}
                     aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
@@ -125,6 +128,8 @@ export function Timeline() {
                       <i key={s} className="kf" style={{ left: s * pps }} aria-hidden="true" />
                     ))}
                   </button>
+                  {volLine && <VolumeLine clip={c as Extract<Clip, { type: 'media' }>} selected={selection.length === 1 && selection[0] === c.id} editable={!tr.locked} pps={pps} left={T.toSeconds(c.start) * pps} width={width} />}
+                  </Fragment>
                 );
               })}
             </div>
