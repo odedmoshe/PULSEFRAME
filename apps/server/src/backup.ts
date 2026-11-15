@@ -5,23 +5,42 @@
  * Restore = start a server with PF_DATA_DIR pointing at the copy (or copy it back while the server is stopped).
  */
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface BackupResult { dest: string; /** Projects in the verified database copy. */ projects: number; databaseBytes: number; filesCopied: number; filesSkipped: number; bytesCopied: number }
+export interface BackupResult { dest: string; /** Projects in the verified database copy. */ projects: number; databaseBytes: number; filesCopied: number; /** Newly copied media files whose content hash was checked against their name. */ filesVerified: number; filesSkipped: number; bytesCopied: number }
 
-function copyTree(src: string, dest: string, r: BackupResult) {
+const sha256File = (file: string) => new Promise<string>((resolve, reject) => {
+  const h = createHash('sha256');
+  fs.createReadStream(file).on('data', (c) => h.update(c)).on('error', reject).on('end', () => resolve(h.digest('hex')));
+});
+
+/**
+ * Copy what is missing or different in size, without blocking the server (asynchronous copy and hashing).
+ * A stored media file is named by the SHA-256 of its content, so every newly copied one is hashed and must match its name:
+ * a file damaged at the source or in transit fails the backup instead of being kept as a good copy.
+ */
+async function copyTree(src: string, dest: string, r: BackupResult, root = src) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true, mode: 0o700 });
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
     const a = path.join(src, e.name), b = path.join(dest, e.name);
-    if (e.isDirectory()) { copyTree(a, b, r); continue; }
+    if (e.isDirectory()) { await copyTree(a, b, r, root); continue; }
     if (!e.isFile()) continue;
     const size = fs.statSync(a).size;
     if (fs.existsSync(b) && fs.statSync(b).size === size) { r.filesSkipped++; continue; } // content-addressed / finished files do not change
-    fs.copyFileSync(a, `${b}.part`);
-    if (fs.statSync(`${b}.part`).size !== size) { fs.rmSync(`${b}.part`, { force: true }); throw new Error(`short copy of ${path.relative(src, a)}`); }
-    fs.renameSync(`${b}.part`, b);
+    const part = `${b}.part`;
+    await fs.promises.copyFile(a, part);
+    try {
+      if (fs.statSync(part).size !== size) throw new Error(`short copy of ${path.relative(root, a)}`);
+      if (/^[0-9a-f]{64}$/.test(e.name)) {
+        const got = await sha256File(part);
+        if (got !== e.name) throw new Error(`${path.relative(root, a)} does not match its content hash (the file is damaged at the source or was damaged while copying)`);
+        r.filesVerified++;
+      }
+    } catch (err) { fs.rmSync(part, { force: true }); throw err; }
+    fs.renameSync(part, b);
     r.filesCopied++; r.bytesCopied += size;
   }
 }
@@ -31,7 +50,7 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
   if (!fs.existsSync(dbFile)) throw new Error(`${src} is not a PULSEFRAME data directory (no pulseframe.sqlite)`);
   if (path.resolve(dest) === path.resolve(src) || path.resolve(dest).startsWith(path.resolve(src) + path.sep)) throw new Error('the backup destination must be outside the data directory');
   fs.mkdirSync(dest, { recursive: true, mode: 0o700 });
-  const r: BackupResult = { dest: path.resolve(dest), projects: 0, databaseBytes: 0, filesCopied: 0, filesSkipped: 0, bytesCopied: 0 };
+  const r: BackupResult = { dest: path.resolve(dest), projects: 0, databaseBytes: 0, filesCopied: 0, filesVerified: 0, filesSkipped: 0, bytesCopied: 0 };
   // 1. database first: everything it refers to already exists on disk, and files are never modified afterwards
   const out = path.join(dest, 'pulseframe.sqlite');
   for (const stale of [out, `${out}-wal`, `${out}-shm`]) fs.rmSync(stale, { force: true });
@@ -46,7 +65,7 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
     r.projects = (copy.prepare('SELECT COUNT(*) AS n FROM projects').get() as { n: number }).n;
   } finally { copy.close(); }
   // 2. media (and their derivatives) and finished exports
-  for (const d of ['blobs', 'out']) copyTree(path.join(src, d), path.join(dest, d), r);
+  for (const d of ['blobs', 'out']) await copyTree(path.join(src, d), path.join(dest, d), r);
   // 3. credentials
   const tokens = path.join(src, 'tokens.json');
   if (fs.existsSync(tokens)) { fs.copyFileSync(tokens, path.join(dest, 'tokens.json')); fs.chmodSync(path.join(dest, 'tokens.json'), 0o600); }

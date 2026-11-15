@@ -75,6 +75,19 @@ describe('backup of a running server and restore', () => {
       expect(first.filesCopied).toBeGreaterThan(0);
       expect(second.filesCopied).toBe(0);
       expect(second.filesSkipped).toBe(first.filesCopied);
+      expect(first.filesVerified).toBeGreaterThan(0); // stored media is named by its hash and was checked
+      // a media file damaged at the source (same size, different bytes) fails the next backup into a fresh place and is not kept there
+      const blobs = path.join(src, 'blobs');
+      const victim = fs.readdirSync(blobs).find((n) => /^[0-9a-f]{64}$/.test(n))!;
+      const original = fs.readFileSync(path.join(blobs, victim));
+      const damaged = Buffer.from(original); damaged[damaged.length - 1] = damaged[damaged.length - 1]! ^ 0xff;
+      fs.writeFileSync(path.join(blobs, victim), damaged);
+      const fresh = path.join(tmp('pf-bk2-fresh-'), 'copy');
+      await expect(backupDataDir(src, fresh)).rejects.toThrow(/does not match its content hash/);
+      expect(fs.existsSync(path.join(fresh, 'blobs', victim))).toBe(false);
+      expect(fs.existsSync(path.join(fresh, 'blobs', `${victim}.part`))).toBe(false);
+      fs.writeFileSync(path.join(blobs, victim), original);
+      expect((await backupDataDir(src, fresh)).filesVerified).toBeGreaterThan(0);
       await expect(backupDataDir(src, path.join(src, 'inside'))).rejects.toThrow(/outside/);
       await expect(backupDataDir(tmp('pf-bk-empty-'), path.join(dest, 'x'))).rejects.toThrow(/not a PULSEFRAME data directory/);
     } finally { await a.close(); }

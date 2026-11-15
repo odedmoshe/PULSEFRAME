@@ -73,7 +73,7 @@ curl -s -b /tmp/pf.cookie -H "origin: http://127.0.0.1:8787" http://127.0.0.1:87
 - `GET /api/v1/storage` to see what is in use and what nothing refers to
 - `POST /api/v1/storage/gc` with `{}` for a dry run, `{"apply": true}` to remove unreferenced media
 
-Deleting a clip never deletes its media. Each backup's database copy is opened and integrity-checked before the run counts as successful; media files are compared by size only. Not built: an editor control for deleting media, content-hash verification of copied media, off-machine copies.
+Deleting a clip never deletes its media. Each backup's database copy is opened and integrity-checked before the run counts as successful; each newly copied media file is checked against the content hash it is named by (a damaged file fails the backup). Files copied by earlier runs are not re-checked. Not built: an editor control for deleting media, off-machine copies.
 
 **The whole-data-directory copy above has not been exercised by an automated test.** Tested instead: restoring a single project from its archive onto a second server with an empty data directory (`pnpm soak`), and reopening a data directory after a restart, replaying a project from its operation log, and recovering interrupted export jobs (`store.test.ts`, Phase 0 and Phase 4 proofs).
 
