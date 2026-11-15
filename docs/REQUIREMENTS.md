@@ -85,7 +85,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-06.3 | 6 | Op log and materialized doc in one transaction with transactional outbox; replay of any revision | 1 | R-06.1 | — | GET project?revision, history | — | done | `store.test.ts`; P0: replay from revision 0 reproduces document |
 | R-06.4 | 6 | Idempotency keys and strict expectedRevision; no rebasing without semantic preconditions | 1 | R-06.3 | Conflict toast | transactions | — | done | `undo.test.ts` (entity versions, per-commit entity diff, `baseRevision` rebase, typed `conflict`, strict `expectedRevision`); `store.test.ts` (idempotency compares canonical ops); P0: "rebase:" and "conflict:" checks. Conflicts are entity-level, not property-level |
 | R-06.5 | 6 | Undo/redo as compensating transactions preserving unrelated later edits | 3 | R-06.1 | Undo/redo buttons | undo, redo | — | done | `undo.test.ts` (per actor, refusal with conflict list, other actors' edits survive); P0: "agent undo:", "human undo (Ctrl+Z)…", "redo then undo…". No restore-as-branch, no drag coalescing |
-| R-06.6 | 6 | Ripple, roll, slip, slide, insert/overwrite, markers, duplicate, ripple-delete, close gaps | 3 | R-06.1 | Timeline tools | new ops | — | not started | |
+| R-06.6 | 6 | Ripple, roll, slip, slide, insert/overwrite, markers, duplicate, ripple-delete, close gaps | 3 | R-06.1 | Timeline tools | new ops | — | partial | User markers (`add_marker`, `update_marker`, `remove_marker`; `markers.test.ts`, `editor-interactions-proof.json`), duplicate/copy/paste (`editor-interactions-proof.json`), range cut that closes the gap (`cut_range`, `phase6-proof.json`). No ripple/roll/slip/slide tools, insert/overwrite modes or close-all-gaps |
 
 ## Section 7: Local media, offline work, ingestion
 
@@ -137,7 +137,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-11.2 | 11 | Image, caption, SFX, vector, adjustment, nested-sequence tracks | 3 | R-05.1 | Timeline | new track kinds | — | not started | |
 | R-11.3 | 11 | Track controls: lock, visibility, mute, solo, rename, height, reorder, grouping | 3 | R-06.1 | Track header | update_track | — | partial | Lock/mute/hidden flags in schema; no ops or UI beyond creation |
 | R-11.4 | 11 | Ripple/roll/slip/slide, insert/overwrite, J/L, detach, freeze/reverse, ramps | 3 | R-06.6, R-05.3 | Timeline tools | new ops | — | not started | |
-| R-11.5 | 11 | Transitions with handle model and explicit shortage policy; markers and protected ranges | 7 | R-06.6 | Timeline | transition ops, marker ops | — | not started | |
+| R-11.5 | 11 | Transitions with handle model and explicit shortage policy; markers and protected ranges | 7 | R-06.6 | Timeline | transition ops, marker ops | — | partial | Transitions with a source-handle model and refusal with the usable length (`phase7-proof.json`); user markers (`editor-interactions-proof.json`). No protected ranges |
 | R-11.6 | 11 | Filmstrips, waveforms, badges, minimap, keyframe lanes; virtualization by measurement | 3 | R-07.4 | Timeline | — | — | partial | Filmstrip thumbnails and waveforms on timeline clips (`apps/web/src/clipVisuals.math.test.ts` covers the index math; the drawing itself has no automated test). No minimap, keyframe lanes, virtualization measurement |
 
 ## Section 12: Catalog system and Lab
@@ -295,7 +295,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
 | R-29.1 | 29 | Core Hebrew glossary applied to UI strings | 0 | R-03.1 | All UI | — | — | partial | he/en dictionaries with key-parity test (`i18n.test.ts`); glossary conformance not audited |
-| R-30.1 | 30 project/history | Project, history, markers, checkpoint, fork, proposals, undo/redo tools | 5 | R-06.5, R-23.1 | — | MCP/REST | — | partial | rename_project only |
+| R-30.1 | 30 project/history | Project, history, markers, checkpoint, fork, proposals, undo/redo tools | 5 | R-06.5, R-23.1 | — | MCP/REST | — | partial | rename_project, marker ops, proposals, own-transaction undo/redo as MCP tools (`phase5-proof.json`, `markers.test.ts`). No checkpoint or fork tools |
 | R-30.2 | 30 tracks, clips | Track ops and clip ops (import/add/move/trim/split/delete; slip, slide, duplicate, compound, insert) | 5 | R-11.4 | — | MCP/REST | — | partial | add_track, add_clip, move_clip, trim_clip, split_clip, delete_clip; rest missing |
 | R-30.3 | 30 time, animation, appearance | Speed, ramp, keyframe, effect, mask, blend, transition tools | 7 | R-14.1, R-13.1 | — | MCP/REST | — | partial | Every registered op is an MCP tool: keyframes, constant speed, effects and effect keyframes, mask, blend, transitions (`phase7-proof.json`, `speed-proof.json`). No ramps; mask/blend/transition are exercised through REST in the proofs, speed through REST and the editor |
 | R-30.4 | 30 text, audio, analysis, elements, senses, jobs, permissions | Text/caption, audio, AI, recipe, sense, job and permission tool groups | 5 | R-22.3 | — | MCP/REST | — | partial | add_text, update_text, set_clip_gain, get_summary, get_timeline, render_frame, export_project, get_job; rest missing |

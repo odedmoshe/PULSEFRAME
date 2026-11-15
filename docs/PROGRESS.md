@@ -238,7 +238,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - `pnpm proof:owner-ui` (7 checks, `docs/evidence/owner-ui-proof.json`): the token created in the editor sees only its project, an edit attempt becomes a proposal rather than a commit, another project is refused, and revoking stops it immediately; crossfade lands in the document; a looped 1-second timeline wraps at least twice; delete stays disabled until the exact name is typed.
 - Bug found by this proof and fixed: the project dialog handled Escape only while focus was inside it, and deleting a row removed the focused element, so Escape stopped working and focus was lost. Escape is now handled at document level, focus is pulled back into the dialog, and it returns to the opener on close. **The accessibility audit did not catch this because it does not open dialogs** — its stated limit.
 - Regression caught after the first commit of this checkpoint: the access panel requested the grant list before the owner session existed, so every editor load logged a 401, which failed the "no page errors" checks of the Phase 0 and Phase 3 proofs (53/54, 26/27). The new owner-UI proof had not caught it because it filtered 4xx console messages; that filter is removed. The panel now loads after the project. Commit 01e0c33 contains the defect; the next commit fixes it.
-- Still open: approvals list UI, activity log dialog, markers, J/K/L, multi-select drag, source viewer, workspaces.
+- Still open: approvals list UI, activity log dialog, J/K/L, multi-select drag, source viewer, workspaces.
 
 **Checkpoint 13j — clip speed (slow motion and speed-up)**
 - A media clip can play its source faster or slower by an exact ratio (`speed {num, den}`, 0.1–8). `set_clip_speed` keeps the same stretch of source and changes the clip's length (rounded down to a whole frame); linked picture and sound change together; it is refused if the longer clip would overlap a neighbour. It is an ordinary registered op, so the editor, REST and MCP all have it.
@@ -247,6 +247,13 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Editor: speed field and 0.25/0.5/1/2/4× presets in the clip Inspector; the clip's thumbnails and waveform follow the speed.
 - `pnpm proof:speed` (12 checks, `docs/evidence/speed-proof.json`): every exported frame at 2×, 0.5× and 1.5× shows the predicted source frame (barcode); split keeps the export identical; overlap refused; still render and five preview seeks agree; exported tone pitch within 0.5 Hz of 440 × speed and length within a frame at four speeds; caption cues and a scene marker move with the speed. `speed.test.ts` (5, incl. a property test over speeds and trims).
 - Limits: synthetic fixtures only; preview playback sound at speed was not measured (the export was); no speed ramps, reverse, freeze frame or fit-to-duration.
+
+**Checkpoint 13k — timeline markers**
+- `doc.markers` holds named, coloured points on the timeline (frame-aligned, one per frame). `add_marker`, `update_marker`, `remove_marker` are registered ops, so the editor, REST and MCP share them; markers are entities (diffed, undoable, restorable) and appear in the timeline query (`markers.user`) and in the project archive. Documents saved before markers existed load with an empty list.
+- Editor: markers are real buttons on the ruler (name + timecode as the accessible name); M adds one at the playhead, Shift+M / Alt+M jump to the next / previous; while the playhead rests on a marker a small bar edits its name and colour or removes it.
+- Verified: `markers.test.ts` (3) and one end-to-end check in `pnpm proof:editor-interactions` (now 13): add by key, Hebrew + Latin name, colour, a marker added through the API by another participant appears, navigation lands on the exact frames, remove, undo.
+- Limits: timeline markers only (no clip markers, no ranges, no chapter export); they stay at their time when clips are cut or moved; a grant limited to tracks or a time range cannot change markers (same rule as other non-clip data).
+- Bug found while looking at the screenshot, fixed before commit: marker names were invisible because an existing ruler style applied to them; the proof now also saves `editor-markers.png`, but **no automated check asserts the name is visible** (the accessible name was correct throughout).
 
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
@@ -270,7 +277,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 Status words used here: **blocked** (cannot be implemented or verified without something external), **implemented, not runtime-qualified**, **verified on the current profile** (this CPU-only container), **verified on the target profile** (nothing yet: no target machine exists).
 
 Unblocked (no decision needed), roughly by value:
-1. Editor: multi-select drag, J/K/L, markers, source viewer, workspaces (Phase 3 carry-over).
+1. Editor: multi-select drag, J/K/L, source viewer, workspaces (Phase 3 carry-over; markers are done).
 2. Volume automation curves; speed ramps, reverse, freeze frame, pitch-preserving stretch (Phases 7–8 carry-over; constant speed is done).
 4. Disk quota; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
@@ -292,8 +299,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 265 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 31 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 19 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 12 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+Expect 268 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 31 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 19 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 13 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

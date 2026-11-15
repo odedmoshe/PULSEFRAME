@@ -6,8 +6,8 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
-  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema,
-  type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Sequence, type Track, type Transcript, type Variant,
+  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS,
+  type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
@@ -702,6 +702,57 @@ defineOp({
     const v = mustVariant(d, a.variantId);
     delete d.variants[v.id];
     return { affectedIds: [v.id], summary: `Removed format ${v.name}` };
+  },
+});
+const mustMarker = (d: ProjectDocument, id: string) => {
+  const m = d.markers?.[id];
+  if (!m) throw new OpError('not_found', `marker ${id} does not exist`, { markerId: id });
+  return m;
+};
+const markerAt = (d: ProjectDocument, sequenceId: string, time: T.RationalTime, except?: string) => Object.values(d.markers ?? {}).find((m) => m.id !== except && m.sequenceId === sequenceId && T.eq(m.time, time));
+defineOp({
+  name: 'add_marker',
+  version: 1,
+  description: 'Put a named marker on the timeline at a frame-aligned time: a note, a to-do or a sync point for people and agents. Markers stay at their time; they do not move with clips. One marker per frame.',
+  args: z.object({ time: RT, label: z.string().max(200).optional(), color: z.enum(MARKER_COLORS).optional() }).strict(),
+  apply(d, a, ctx) {
+    assertAligned(d, a.time, 'time');
+    if (T.isNegative(a.time)) throw new OpError('out_of_bounds', 'a marker cannot sit before the start', { time: a.time });
+    const taken = markerAt(d, d.mainSequenceId, a.time);
+    if (taken) throw new OpError('overlap', 'there is already a marker on this frame', { markerId: taken.id }, 'Use update_marker to change it.');
+    const m: Marker = { id: ctx.newId('mrk'), sequenceId: d.mainSequenceId, time: a.time, label: a.label ?? '', color: a.color ?? 'blue' };
+    (d.markers ??= {})[m.id] = m;
+    return { affectedIds: [m.id], summary: `Added marker${m.label ? ` "${m.label}"` : ''}`, output: { markerId: m.id } };
+  },
+});
+defineOp({
+  name: 'update_marker',
+  version: 1,
+  description: 'Rename, recolour or move a marker.',
+  args: z.object({ markerId: z.string(), time: RT.optional(), label: z.string().max(200).optional(), color: z.enum(MARKER_COLORS).optional() }).strict(),
+  apply(d, a) {
+    const m = mustMarker(d, a.markerId);
+    if (a.time) {
+      assertAligned(d, a.time, 'time');
+      if (T.isNegative(a.time)) throw new OpError('out_of_bounds', 'a marker cannot sit before the start', { time: a.time });
+      const taken = markerAt(d, m.sequenceId, a.time, m.id);
+      if (taken) throw new OpError('overlap', 'there is already a marker on this frame', { markerId: taken.id });
+      m.time = a.time;
+    }
+    if (a.label !== undefined) m.label = a.label;
+    if (a.color) m.color = a.color;
+    return { affectedIds: [m.id], summary: `Updated marker${m.label ? ` "${m.label}"` : ''}` };
+  },
+});
+defineOp({
+  name: 'remove_marker',
+  version: 1,
+  description: 'Remove a marker.',
+  args: z.object({ markerId: z.string() }).strict(),
+  apply(d, a) {
+    const m = mustMarker(d, a.markerId);
+    delete d.markers[m.id];
+    return { affectedIds: [m.id], summary: `Removed marker${m.label ? ` "${m.label}"` : ''}` };
   },
 });
 defineOp({

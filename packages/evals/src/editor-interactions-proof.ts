@@ -210,6 +210,34 @@ async function main() {
     const restored = await until((x2) => !!clipOf(x2, picClip));
     check('cut then paste moves the clip in one transaction (effects and keyframes come along); nothing is committed by the cut itself; one undo puts it back', pending === 1 && r2 === r1 && moved && !!landed && landed.effects?.[0]?.keyframes?.radius?.length === 2 && r3b === r1 + 1 && restored, { pending, revisions: [r1, r2, r3b], landedAt: landed ? fr(landed.start) : null });
 
+    console.log('\n# markers');
+    const markersOf = (d: any) => Object.values(d.markers ?? {}).sort((x: any, y: any) => fr(x.time) - fr(y.time)) as any[];
+    const tc = async () => (await page.getByTestId('timecode').textContent()) ?? '';
+    await page.mouse.click(rb.x + 180.5, rb.y + 5); // frame 60
+    await page.keyboard.press('m');
+    const mAdded = await until((x2) => markersOf(x2).length === 1 && fr(markersOf(x2)[0].time) === 60);
+    await page.getByTestId('marker-label').fill('פזמון chorus');
+    await page.getByTestId('marker-label').press('Enter');
+    await page.getByTestId('marker-color').selectOption('red');
+    const named = await until((x2) => markersOf(x2)[0]?.label === 'פזמון chorus' && markersOf(x2)[0]?.color === 'red');
+    await txs(pid, [{ op: 'add_marker', args: { time: f(150), label: 'agent note' } }]); // another participant
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 2, undefined, { timeout: 8000 }).catch(() => {});
+    const shownMarkers = await page.getByTestId('user-marker').evaluateAll((els) => els.map((e) => ({ frame: Number((e as HTMLElement).dataset.frame), name: e.getAttribute('aria-label') })));
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Shift+M');
+    const hop1 = await tc();
+    await page.keyboard.press('Shift+M');
+    const hop2 = await tc();
+    await page.keyboard.press('Alt+M');
+    const hop3 = await tc();
+    await page.screenshot({ path: path.join(art, 'editor-markers.png'), clip: { x: 0, y: Math.max(0, rb.y - 40), width: 1500, height: 260 } });
+    await page.getByTestId('marker-remove').click();
+    const mRemoved = await until((x2) => markersOf(x2).length === 1 && markersOf(x2)[0].label === 'agent note');
+    await page.keyboard.press('Control+z');
+    const undone = await until((x2) => markersOf(x2).length === 2);
+    const tlq = (await call(`/projects/${pid}/timeline`)).body.markers.user;
+    check('markers: M adds one at the playhead; name (Hebrew + Latin) and colour are committed edits; a marker added by an agent appears; Shift+M / Alt+M jump between them; remove and undo work; the timeline query lists both', mAdded && named && shownMarkers.length === 2 && shownMarkers[0]?.frame === 60 && /פזמון chorus/.test(shownMarkers[0]?.name ?? '') && hop1 === '00:00:02:00' && hop2 === '00:00:05:00' && hop3 === '00:00:02:00' && mRemoved && undone && tlq.length === 2 && tlq[1].seconds === 5, { shownMarkers, hops: [hop1, hop2, hop3], removed: mRemoved, undone });
+
     console.log('\n# project archive from the editor');
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('archive-download').click()]);
     const arcFile = path.join(art, 'project.tar');

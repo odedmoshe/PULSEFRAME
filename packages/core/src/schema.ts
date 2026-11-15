@@ -247,6 +247,11 @@ export const TrackSchema = z
       .optional(),
   })
   .strict();
+export const MARKER_COLORS = ['blue', 'green', 'yellow', 'red', 'purple'] as const;
+/** A named point on the timeline that the editor (human or agent) placed: a note, a to-do, a sync point. It does not move with clips. */
+export const MarkerSchema = z.object({ id: Id, sequenceId: Id, time: RationalTimeSchema.describe('Timeline time, frame-aligned'), label: z.string().max(200), color: z.enum(MARKER_COLORS) }).strict();
+export type Marker = z.infer<typeof MarkerSchema>;
+
 export const SequenceSchema = z.object({ id: Id, name: z.string().max(128), tracks: z.array(TrackSchema).describe('Bottom-most layer first') }).strict();
 
 export const ProjectSchema = z
@@ -272,6 +277,8 @@ export const ProjectSchema = z
     variants: z.record(Id, VariantSchema).default({}),
     /** Analysis results by asset id, in source time. */
     analyses: z.record(Id, AnalysisSchema).default({}),
+    /** User markers by marker id. */
+    markers: z.record(Id, MarkerSchema).default({}),
   })
   .strict();
 
@@ -320,6 +327,7 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
     analyses: {},
     variants: {},
     recipeRuns: {},
+    markers: {},
   };
 }
 

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T02:55:09.138Z",
+  "ranAt": "2026-11-15T03:06:01.283Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,47 +13,47 @@
       "committed": 2641,
       "refusedAsInvalidOrConflict": 359,
       "serverErrors": 0,
-      "wallSeconds": 62.1,
+      "wallSeconds": 60,
       "finalRevision": 2631,
       "clips": 708
     },
     "commitLatencyMs": {
       "first300": {
-        "median": 5.11,
-        "p95": 9
+        "median": 5.08,
+        "p95": 8.66
       },
       "last300": {
-        "median": 22.06,
-        "p95": 34.41
+        "median": 21.6,
+        "p95": 33.32
       },
       "note": "includes HTTP round trip on loopback; each commit is followed by a full project read in this harness",
       "smallProjectAfterLongHistory": {
-        "median": 5.59,
-        "p95": 8.81
+        "median": 5.03,
+        "p95": 8.31
       },
       "scaling": {
         "clipsAtEnd": 708,
-        "msPerHundredClips": 2.39,
+        "msPerHundredClips": 2.33,
         "explanation": "every commit copies, validates, diffs and stores the whole document, so cost grows with project size"
       }
     },
     "storage": {
-      "sqliteBytes": 7507968,
-      "bytesPerCommit": 2843
+      "sqliteBytes": 7512064,
+      "bytesPerCommit": 2844
     },
     "memory": {
-      "harnessAndServerRssGrowthMb": 166
+      "harnessAndServerRssGrowthMb": 146
     },
     "replay": {
       "opsReplayed": 2631,
-      "ms": 8353
+      "ms": 7958
     },
     "restart": {
-      "reopenMs": 27
+      "reopenMs": 25
     },
     "archive": {
       "bytes": 390656,
-      "exportImportMs": 902
+      "exportImportMs": 822
     }
   },
   "passed": 7,
@@ -67,7 +67,7 @@
         "committed": 2641,
         "refusedAsInvalidOrConflict": 359,
         "serverErrors": 0,
-        "wallSeconds": 62.1,
+        "wallSeconds": 60,
         "finalRevision": 2631,
         "clips": 708
       }
@@ -76,30 +76,30 @@
       "name": "history length does not slow edits: a small project in the same database, after thousands of revisions elsewhere, commits as fast as at the start of the session",
       "ok": true,
       "detail": {
-        "median": 5.59,
-        "p95": 8.81
+        "median": 5.03,
+        "p95": 8.31
       }
     },
     {
-      "name": "project size does slow edits (measured, a known limit of whole-document commits): median 22.06 ms with 708 clips; regression guard: under 50 ms at this size",
+      "name": "project size does slow edits (measured, a known limit of whole-document commits): median 21.6 ms with 708 clips; regression guard: under 50 ms at this size",
       "ok": true,
       "detail": {
         "first300": {
-          "median": 5.11,
-          "p95": 9
+          "median": 5.08,
+          "p95": 8.66
         },
         "last300": {
-          "median": 22.06,
-          "p95": 34.41
+          "median": 21.6,
+          "p95": 33.32
         },
         "note": "includes HTTP round trip on loopback; each commit is followed by a full project read in this harness",
         "smallProjectAfterLongHistory": {
-          "median": 5.59,
-          "p95": 8.81
+          "median": 5.03,
+          "p95": 8.31
         },
         "scaling": {
           "clipsAtEnd": 708,
-          "msPerHundredClips": 2.39,
+          "msPerHundredClips": 2.33,
           "explanation": "every commit copies, validates, diffs and stores the whole document, so cost grows with project size"
         }
       }
@@ -109,14 +109,14 @@
       "ok": true,
       "detail": {
         "opsReplayed": 2631,
-        "ms": 8353
+        "ms": 7958
       }
     },
     {
       "name": "after a server restart the project reopens identical, accepts new edits, and undo history still works",
       "ok": true,
       "detail": {
-        "reopenMs": 27
+        "reopenMs": 25
       }
     },
     {
@@ -124,7 +124,7 @@
       "ok": true,
       "detail": {
         "bytes": 390656,
-        "exportImportMs": 902,
+        "exportImportMs": 822,
         "blobsAdded": 1
       }
     },

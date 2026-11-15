@@ -48,6 +48,17 @@ const gotoKeyframe = (dir: 1 | -1) => (e: Editor) => {
   const next = dir > 0 ? frames.find((f) => f > e.frame) : [...frames].reverse().find((f) => f < e.frame);
   if (next !== undefined) e.seek(next);
 };
+/** User markers of the main sequence as frame numbers, ascending. */
+export const markerFrames = (e: Editor) => {
+  const doc = e.doc;
+  if (!doc) return [];
+  return Object.values(doc.markers ?? {}).filter((m) => m.sequenceId === doc.mainSequenceId).map((m) => T.frameIndexAt(m.time, e.rate)).sort((a, b) => a - b);
+};
+const gotoMarker = (dir: 1 | -1) => (e: Editor) => {
+  const frames = markerFrames(e);
+  const next = dir > 0 ? frames.find((f) => f > e.frame) : [...frames].reverse().find((f) => f < e.frame);
+  if (next !== undefined) e.seek(next);
+};
 const selectAdjacent = (dir: 1 | -1) => (e: Editor) => {
   const doc = e.doc;
   if (!doc) return;
@@ -66,6 +77,9 @@ export const COMMANDS: Command[] = [
   { id: 'transport.forward10', label: 'cmd.forward10', group: 'transport', keys: ['Shift+ArrowRight'], run: step(10) },
   { id: 'transport.start', label: 'cmd.goStart', group: 'transport', keys: ['Home'], run: (e) => e.seek(0) },
   { id: 'transport.end', label: 'cmd.goEnd', group: 'transport', keys: ['End'], run: (e) => e.seek((e.player?.frameCount ?? 1) - 1) },
+  { id: 'marker.add', label: 'marker.add', group: 'edit', keys: ['KeyM'], enabled: (e) => !!e.doc && !markerFrames(e).includes(e.frame), run: (e) => e.commit([{ op: 'add_marker', args: { time: e.playhead } }], 'Add marker') },
+  { id: 'marker.next', label: 'marker.next', group: 'transport', keys: ['Shift+KeyM'], enabled: (e) => markerFrames(e).some((f) => f > e.frame), run: gotoMarker(1) },
+  { id: 'marker.prev', label: 'marker.prev', group: 'transport', keys: ['Alt+KeyM'], enabled: (e) => markerFrames(e).some((f) => f < e.frame), run: gotoMarker(-1) },
   { id: 'edit.split', label: 'split', group: 'edit', keys: ['KeyS'], enabled: (e) => e.playheadInsideSelection, run: (e) => e.commit([{ op: 'split_clip', args: { clipId: sel(e)!.id, at: e.playhead } }], 'Split') },
   { id: 'edit.delete', label: 'delete', group: 'edit', keys: ['Delete', 'Backspace'], enabled: (e) => !!sel(e), run: (e) => e.commit([{ op: 'delete_clip', args: { clipId: sel(e)!.id } }], 'Delete') },
   { id: 'edit.cut', label: 'cmd.cut', group: 'edit', keys: ['Mod+KeyX'], enabled: (e) => e.getState().selection.length > 0, run: (e) => e.cutSelection() },

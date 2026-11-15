@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { toSourceSpan, clipEnd, timelineMarkers, type Clip, type ProjectDocument } from '@pulseframe/core';
+import { toSourceSpan, clipEnd, timelineMarkers, MARKER_COLORS, type Clip, type Marker, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
@@ -10,6 +10,23 @@ import { useTimelineDrag } from './TimelineDrag.tsx';
 const MAX_MARKERS = 3000;
 
 export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.text);
+
+/** Shown while the playhead rests on a user marker: name, colour and removal, each an ordinary committed edit. */
+function MarkerBar({ marker }: { marker: Marker }) {
+  const { editor, t } = useEditorState();
+  const update = (args: Record<string, unknown>) => void editor.commit([{ op: 'update_marker', args: { markerId: marker.id, ...args } }], 'Update marker');
+  return (
+    <div className="marker-bar" data-testid="marker-bar" role="group" aria-label={t('marker.edit')}>
+      <i className={`marker-dot ${marker.color}`} aria-hidden="true" />
+      <input key={`${marker.id}:${marker.label}`} type="text" dir="auto" maxLength={200} defaultValue={marker.label} placeholder={t('marker.label')} aria-label={t('marker.label')} data-testid="marker-label"
+        onBlur={(e) => { if (e.currentTarget.value !== marker.label) update({ label: e.currentTarget.value }); }} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+      <select value={marker.color} aria-label={t('marker.color')} data-testid="marker-color" onChange={(e) => update({ color: e.target.value })}>
+        {MARKER_COLORS.map((c) => <option key={c} value={c}>{t(`marker.color.${c}` as Key)}</option>)}
+      </select>
+      <button className="ghost" data-testid="marker-remove" onClick={() => void editor.commit([{ op: 'remove_marker', args: { markerId: marker.id } }], 'Remove marker')}>{t('marker.remove')}</button>
+    </div>
+  );
+}
 
 /**
  * DOM timeline: every clip is a real button, so the structure is directly accessible (SPEC §3).
@@ -29,7 +46,10 @@ export function Timeline() {
     const beats = m.beats.slice(0, MAX_MARKERS - scenes.length);
     return { scenes, beats, truncated: m.sceneCuts.length + m.beats.length > MAX_MARKERS };
   }, [doc]);
-  const totalSeconds = Math.max(T.toSeconds(editor.duration) + 2, 8);
+  const userMarkers = useMemo(() => (doc ? Object.values(doc.markers ?? {}).filter((m) => m.sequenceId === doc.mainSequenceId).sort((a, b) => T.cmp(a.time, b.time)) : []), [doc]);
+  const lastMarkerS = userMarkers.length ? T.toSeconds(userMarkers[userMarkers.length - 1]!.time) : 0;
+  const here = userMarkers.find((m) => T.frameIndexAt(m.time, rate) === editor.frame);
+  const totalSeconds = Math.max(T.toSeconds(editor.duration) + 2, lastMarkerS + 2, 8);
   const tickEvery = pps >= 60 ? 1 : pps >= 25 ? 2 : 5;
   return (
     <section className="timeline" dir="ltr" aria-label={t('timeline')}>
@@ -37,10 +57,18 @@ export function Timeline() {
         <input type="checkbox" checked={snapBeats} data-testid="snap-beats" onChange={(e) => { setSnapBeats(e.target.checked); writeSnapBeats(e.target.checked); }} />
         {t('snap.beats')}
       </label>
+      {here && <MarkerBar marker={here} />}
       <div className="tl-scroll" {...containerProps}>
         <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }}>
           <div className="ruler" data-testid="ruler" onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.round(((x / pps) * rate.num) / rate.den)); }}>
             {Array.from({ length: Math.floor(totalSeconds / tickEvery) + 1 }, (_, i) => <span key={i} style={{ left: i * tickEvery * pps }}>{i * tickEvery}s</span>)}
+            {userMarkers.map((m) => (
+              <button key={m.id} className={`user-marker ${m.color}${here?.id === m.id ? ' current' : ''}`} data-testid="user-marker" data-marker-id={m.id} data-frame={T.frameIndexAt(m.time, rate)} style={{ left: T.toSeconds(m.time) * pps }}
+                title={m.label || t('marker.unnamed')} aria-label={`${m.label || t('marker.unnamed')} ${T.toTimecode(m.time, rate)}`}
+                onPointerDown={(e) => e.stopPropagation()} onClick={() => editor.seek(T.frameIndexAt(m.time, rate))}>
+                {m.label && <bdi>{m.label}</bdi>}
+              </button>
+            ))}
           </div>
           <div className="tl-markers" data-testid="timeline-markers" data-truncated={markers.truncated ? 'true' : undefined} title={markers.truncated ? t('timeline.markers.truncated') : undefined} aria-hidden="true">
             {markers.beats.map((b, i) => {

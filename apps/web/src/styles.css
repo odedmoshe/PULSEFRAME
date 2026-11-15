@@ -200,3 +200,12 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .access-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .access-list > li { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-md, 6px); padding: 8px; }
 .access-token { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-md, 6px); padding: 8px; }
+
+/* User markers: real buttons on the ruler; colour is paired with the label/tooltip, never the only signal. */
+.ruler .user-marker { position: absolute; top: 0; height: 24px; min-width: 12px; margin-left: -1px; padding: 0 4px 0 6px; border: 0; border-left: 2px solid var(--mk); background: color-mix(in srgb, var(--mk) 30%, var(--pf-surface)); color: var(--pf-text); font: 11px var(--pf-font, inherit); cursor: pointer; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; z-index: 3; border-radius: 0 4px 4px 0; }
+.ruler .user-marker.current { background: color-mix(in srgb, var(--mk) 50%, var(--pf-surface)); }
+.ruler .user-marker:focus-visible { outline: 2px solid var(--pf-focus, var(--pf-accent)); outline-offset: 1px; }
+.user-marker.blue, .marker-dot.blue { --mk: #4c8dff; } .user-marker.green, .marker-dot.green { --mk: #3fb37f; } .user-marker.yellow, .marker-dot.yellow { --mk: #d9a514; } .user-marker.red, .marker-dot.red { --mk: #e5534b; } .user-marker.purple, .marker-dot.purple { --mk: #a371f7; }
+.marker-bar { position: absolute; top: 0; right: 200px; z-index: 5; display: inline-flex; gap: 6px; align-items: center; background: var(--pf-surface); padding: 2px 8px; font-size: var(--pf-fs-sm); }
+.marker-bar input[type=text] { width: 200px; }
+.marker-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mk); display: inline-block; }

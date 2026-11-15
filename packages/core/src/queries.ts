@@ -32,7 +32,7 @@ export function timeline(doc: ProjectDocument, sequenceId = doc.mainSequenceId) 
     sequenceId: seq.id,
     frameRate: doc.settings.frameRate,
     duration: sequenceDuration(doc, sequenceId),
-    markers: (() => { const m = timelineMarkers(doc); return { beatSeconds: m.beats.slice(0, 2000).map(sec), sceneCutSeconds: m.sceneCuts.slice(0, 2000).map(sec), note: 'Derived from analysis data through the current clips; snap edits to these with frame-aligned times.' }; })(),
+    markers: (() => { const m = timelineMarkers(doc); return { user: Object.values(doc.markers ?? {}).filter((k) => k.sequenceId === seq.id).sort((x, y) => T.cmp(x.time, y.time)).map((k) => ({ id: k.id, time: k.time, seconds: sec(k.time), label: k.label, color: k.color })), beatSeconds: m.beats.slice(0, 2000).map(sec), sceneCutSeconds: m.sceneCuts.slice(0, 2000).map(sec), note: 'Derived from analysis data through the current clips; snap edits to these with frame-aligned times.' }; })(),
     tracks: seq.tracks.map((t) => ({
       id: t.id, kind: t.kind, name: t.name, locked: t.locked, ...(t.caption ? { caption: t.caption } : {}),
       clips: t.clips.map((c) => ({

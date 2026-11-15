@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T02:49:19.331Z",
+  "ranAt": "2026-11-15T03:00:00.402Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -163,7 +163,7 @@
       "detail": {
         "editor-he": 1,
         "editor-en": 1,
-        "palette-en": 1
+        "palette-en": 0.985125
       }
     },
     {

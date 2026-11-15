@@ -98,6 +98,12 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       }
     }
   }
+  for (const [key, mk] of Object.entries(doc.markers ?? {})) {
+    if (key !== mk.id) issues.push({ code: 'key_mismatch', message: `marker key ${key} != id ${mk.id}`, ids: [key] });
+    uniq(mk.id);
+    if (!doc.sequences[mk.sequenceId]) issues.push({ code: 'missing_sequence', message: `marker ${mk.id} refers to a missing sequence`, ids: [mk.id] });
+    if (T.isNegative(mk.time) || !T.isFrameAligned(mk.time, doc.settings.frameRate)) issues.push({ code: 'marker_time', message: `marker ${mk.id} must sit on a non-negative whole frame`, ids: [mk.id] });
+  }
   for (const [key, va] of Object.entries(doc.variants ?? {})) {
     if (key !== va.id) issues.push({ code: 'key_mismatch', message: `variant key ${key} != id ${va.id}`, ids: [key] });
     uniq(va.id);
