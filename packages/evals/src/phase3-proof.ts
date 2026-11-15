@@ -395,6 +395,24 @@ async function main() {
     const fwdAgain = [await stillCode(atFrame), await stillCode(atFrame + 9)];
     check('"play backwards" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, an exported file of that stretch shows the same twelve frames in the same order, the clip is marked on the timeline, and unchecking restores 73…82', JSON.stringify(revShown) === JSON.stringify([30 + k - 1, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 110]) && revClip.reverse === true && T.eq(revClip.start, slipClip.start) && T.eq(revClip.duration, slipClip.duration) && previewFrame === atFrame + 2 && previewCode === 80 && exStatus === 'succeeded' && JSON.stringify(exported) === JSON.stringify(revShown) && marked === 'true' && JSON.stringify(fwdAgain) === JSON.stringify([73, 82]), { revShown, exported, exStatus, previewFrame, previewCode, marked, fwdAgain });
 
+    console.log('\n# detach');
+    const ub = await getDoc();
+    const allClips = (d: ProjectDocument) => d.sequences.seq_main!.tracks.flatMap((tr) => tr.clips.map((c) => ({ c: c as any, kind: tr.kind })));
+    const lk = allClips(ub.project).find((x) => x.kind === 'video' && x.c.linkGroupId);
+    let detached = false, buttonGone = false, partnerFree = false, oneRevision = false;
+    if (lk) {
+      const partner = allClips(ub.project).find((x) => x.c.linkGroupId === lk.c.linkGroupId && x.c.id !== lk.c.id)!;
+      await page.locator(`.clip[data-clip-id="${lk.c.id}"]`).click();
+      await page.getByTestId('unlink-clip').click();
+      let ua = await getDoc();
+      for (let i = 0; i < 50 && ua.revision === ub.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ua = await getDoc(); }
+      const now = (id: string) => allClips(ua.project).find((x) => x.c.id === id)!.c;
+      detached = now(lk.c.id).linkGroupId === null; partnerFree = now(partner.c.id).linkGroupId === null; oneRevision = ua.revision === ub.revision + 1;
+      await page.waitForFunction(() => !document.querySelector('[data-testid=unlink-clip]'), undefined, { timeout: 5000 }).catch(() => {});
+      buttonGone = (await page.getByTestId('unlink-clip').count()) === 0;
+    }
+    check('"detach picture from sound" in the Inspector unlinks the selected picture clip and its sound clip in one transaction; the button is then no longer offered', !!lk && detached && partnerFree && oneRevision && buttonGone, { found: !!lk, detached, partnerFree, oneRevision, buttonGone });
+
     console.log('\n# close gaps');
     const gb = await getDoc();
     const gEnd = endOf(gb.project);

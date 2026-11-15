@@ -168,3 +168,25 @@ describe('close_gaps', () => {
   });
 });
 
+describe('unlink_clip', () => {
+  it('detaches picture from sound so each edits alone; nothing moves; a clip that is not linked is refused; undo relinks', () => {
+    const { doc, videoId, audioId, titleId } = project();
+    const r = tx(doc, [{ op: 'unlink_clip', args: { clipId: videoId } }]);
+    const v = () => findClip(d, videoId)!.clip as any, a = () => findClip(d, audioId)!.clip as any;
+    let d = r.doc;
+    expect([v().linkGroupId, a().linkGroupId, (r.results[0]!.output as any).wasLinkedTo]).toEqual([null, null, [audioId]]);
+    expect(validateProject(d)).toEqual([]);
+    const back = structuredClone(d);
+    restoreEntities(back, diffEntities(doc, d).map((x) => ({ id: x.id, state: x.before })));
+    expect(back).toEqual(doc);
+    // while linked, trimming the picture trims the sound; once detached it does not
+    const linkedTrim = tx(doc, [{ op: 'trim_clip', args: { clipId: videoId, edge: 'end', to: f(100) } }]).doc;
+    expect(fi((findClip(linkedTrim, audioId)!.clip).duration)).toBe(100);
+    d = tx(d, [{ op: 'trim_clip', args: { clipId: videoId, edge: 'end', to: f(100) } }, { op: 'delete_clip', args: { clipId: videoId } }]).doc;
+    expect(findClip(d, videoId)).toBeUndefined();
+    expect(fi(a().duration)).toBe(240);
+    expect(code(() => tx(d, [{ op: 'unlink_clip', args: { clipId: audioId } }]))).toBe('invalid_args');
+    expect(code(() => tx(doc, [{ op: 'unlink_clip', args: { clipId: titleId } }]))).toBe('invalid_args');
+  });
+});
+

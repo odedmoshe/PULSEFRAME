@@ -526,6 +526,21 @@ defineOp({
 });
 
 defineOp({
+  name: 'unlink_clip',
+  version: 1,
+  description: 'Detach a clip from the clips it is linked to (a picture from its sound, or the other way round), so each can be moved, trimmed, split or deleted on its own. Nothing moves and nothing else changes. If only one clip would remain in the link group, it is unlinked too.',
+  args: z.object({ clipId: z.string() }).strict(),
+  apply(d, a) {
+    const { clip } = mustClip(d, a.clipId);
+    if (clip.type !== 'media' || !clip.linkGroupId) throw new OpError('invalid_args', 'this clip is not linked to another clip', { clipId: a.clipId });
+    const others = linked(d, clip);
+    clip.linkGroupId = null;
+    if (others.length === 1) others[0]!.clip.linkGroupId = null;
+    return { affectedIds: [clip.id, ...others.map((o) => o.clip.id)], summary: 'Detached clip from its linked clips', output: { wasLinkedTo: others.map((o) => o.clip.id) } };
+  },
+});
+
+defineOp({
   name: 'set_clip_reverse',
   version: 1,
   description: 'Play a video clip backwards (reverse=true) or forwards again (false). It keeps its place, length and the stretch of source it shows; only the order of the pictures changes. Picture only: sound is not reversed, so a linked sound clip is unlinked and keeps playing forwards (mute or delete it if that is not wanted). Not for freeze frames or stills. A transition into the next clip must still have enough spare source in the new direction.',

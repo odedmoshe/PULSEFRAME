@@ -485,6 +485,9 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
           <p className="muted" data-testid="reverse-note">{t(clip.linkGroupId && !clip.reverse ? 'reverse.note.linked' : 'reverse.note')}</p>
         </>
       )}
+      {clip.type === 'media' && clip.linkGroupId && !variantId && (
+        <div className="row"><button type="button" className="ghost" data-testid="unlink-clip" title={t('unlink.hint')} onClick={() => void editor.commit([{ op: 'unlink_clip', args: { clipId: clip.id } }], 'Detach clip')}>{t('unlink.label')}</button></div>
+      )}
       {clip.type === 'media' && clip.freeze && <p className="muted" data-testid="freeze-note">{t('freeze.note')}</p>}
       {/* Values shown are the ones rendered at the playhead. Editing an animated property writes a keyframe there. */}
       {variantId ? (
