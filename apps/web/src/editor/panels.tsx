@@ -5,6 +5,7 @@ import type { Clip } from '@pulseframe/core';
 import { assetNotices, clipEnd, FONT_CATALOG, speedValue } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
+import { Scopes } from './Scopes.tsx';
 import { ASSET_DRAG_TYPE, useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { AnalysisPanel } from './AnalysisPanel.tsx';
@@ -368,6 +369,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       </div>
       <div {...panelProps('clip')}>
         {/* Motion shows position, size, keyframes, speed and entrances; Color shows effects, blend, mask and transition; the others show all of it. */}
+        {clipFocus === 'color' && <Scopes />}
         {clipFocus !== 'all' && <p className="muted" data-testid="clip-focus-note">{t(clipFocus === 'motion' ? 'workspace.motion.note' : 'workspace.color.note')}</p>}
         {!sel ? <p className="muted">{t('inspector.none')}</p> : clipFocus !== 'color' && <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
         {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}

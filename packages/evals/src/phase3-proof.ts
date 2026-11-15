@@ -740,6 +740,19 @@ async function main() {
     const motion = await parts();
     await page.getByTestId('workspace-switch').selectOption('color');
     const color = await parts();
+    // scopes in the Color workspace: their numbers against the server still of the same frame
+    await page.getByTestId('scopes').waitFor({ timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => { const el = document.querySelector('[data-testid=scopes]') as HTMLElement | null; return !!el?.dataset.mean && el.dataset.frame === (document.querySelector('[data-testid=preview]') as HTMLCanvasElement).dataset.frame; }, undefined, { timeout: 8000 }).catch(() => {});
+    const scope = await page.getByTestId('scopes').evaluate((el) => ({ ...(el as HTMLElement).dataset })).catch(() => ({} as Record<string, string | undefined>));
+    const scopePng = Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${scope.frame ?? 0}`, { headers: h })).arrayBuffer());
+    const scopeRgb = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: scopePng, maxBuffer: 1 << 28 }).stdout;
+    let lumaSum = 0, lumaMax = 0, lumaMin = 255;
+    for (let i = 0; i < scopeRgb.length; i += 3) { const l = 0.2126 * scopeRgb[i]! + 0.7152 * scopeRgb[i + 1]! + 0.0722 * scopeRgb[i + 2]!; lumaSum += l; lumaMax = Math.max(lumaMax, l); lumaMin = Math.min(lumaMin, l); }
+    const stillMean = lumaSum / (scopeRgb.length / 3);
+    const histInk = await page.getByTestId('scope-histogram').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 256, 64).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; }).catch(() => 0);
+    const waveInk = await page.getByTestId('scope-waveform').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 192, 96).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; }).catch(() => 0);
+    const scopeCheck = { frame: scope.frame, mean: Number(scope.mean), stillMean: Number(stillMean.toFixed(1)), min: Number(scope.min), max: Number(scope.max), stillMin: Math.round(lumaMin), stillMax: Math.round(lumaMax), histInk, waveInk };
+    check('Color workspace scopes: drawn (histogram and waveform both have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)', histInk > 20 && waveInk > 20 && Math.abs(scopeCheck.mean - scopeCheck.stillMean) <= 3 && Math.abs(scopeCheck.min - scopeCheck.stillMin) <= 12 && Math.abs(scopeCheck.max - scopeCheck.stillMax) <= 12, scopeCheck);
     await page.getByTestId('workspace-switch').selectOption('pro');
     await page.getByTestId('inspector-tab-clip').click();
     const proParts = await parts();
