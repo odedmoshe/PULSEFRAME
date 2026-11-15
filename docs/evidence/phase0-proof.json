@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T17:05:59.582Z",
+  "ranAt": "2026-11-15T17:49:19.062Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 408,
+    "editorShellInteractiveMs": 332,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 13.6,
-      "requestToVisibleInEditorMs": 47.4,
+      "requestToCommitMs": 12.9,
+      "requestToVisibleInEditorMs": 33.2,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 6.76,
-      "p95": 13.14,
-      "max": 15.68
+      "median": 5.94,
+      "p95": 11.42,
+      "max": 11.59
     },
     "export": {
-      "file": "job_ADbDcJRAWwk.mp4",
+      "file": "job_7LxoN9pQfxY.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -68,7 +68,7 @@
         },
         "assets": [
           {
-            "id": "ast_87d2a87f8c0",
+            "id": "ast_a53d2bbea80",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -135,13 +135,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 669,
-        "readback": 676,
-        "upload": 5228
+        "draw": 642,
+        "readback": 649,
+        "upload": 4802
       },
-      "wallSeconds": 7.632,
-      "realtimeFactor": 0.4585953878406709,
-      "uiWallSeconds": 8.018
+      "wallSeconds": 7.145,
+      "realtimeFactor": 0.489853044086774,
+      "uiWallSeconds": 7.489
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -173,10 +173,10 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_87d2a87f8c0": "original"
+        "ast_a53d2bbea80": "original"
       },
       "sourcesUsed": {
-        "ast_87d2a87f8c0": [
+        "ast_a53d2bbea80": [
           "original"
         ]
       },
@@ -184,7 +184,7 @@
       "disposed": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_87d2a87f8c0/content:206"
+        "ast_a53d2bbea80/content:206"
       ]
     },
     "previewSync": {
@@ -202,7 +202,7 @@
       ],
       "audioLevels": [
         {
-          "t": -0.12,
+          "t": -0.1307,
           "peak": 0
         },
         {
@@ -616,7 +616,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 102
+        "count": 103
       }
     },
     {
@@ -624,7 +624,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_805a80aa131",
+          "id": "clp_64054555b71",
           "start": {
             "value": "2",
             "timescale": 1
@@ -644,8 +644,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 13.6,
-        "requestToVisibleInEditorMs": 47.4,
+        "requestToCommitMs": 12.9,
+        "requestToVisibleInEditorMs": 33.2,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -659,11 +659,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_eb791c08b90"
+          "selected": "clip-clp_077a71d3740"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_eb791c08b90"
+          "selected": "clip-clp_077a71d3740"
         }
       }
     },
@@ -709,7 +709,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_eb791c08b90",
+          "entityId": "clp_077a71d3740",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -846,10 +846,10 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_87d2a87f8c0": "original"
+            "ast_a53d2bbea80": "original"
           },
           "sourcesUsed": {
-            "ast_87d2a87f8c0": [
+            "ast_a53d2bbea80": [
               "original"
             ]
           },
@@ -857,7 +857,7 @@
           "disposed": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_87d2a87f8c0/content:206"
+            "ast_a53d2bbea80/content:206"
           ]
         }
       }
@@ -880,7 +880,7 @@
         ],
         "audioLevels": [
           {
-            "t": -0.12,
+            "t": -0.1307,
             "peak": 0
           },
           {
@@ -1197,7 +1197,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_87d2a87f8c0": [
+          "ast_a53d2bbea80": [
             "original",
             "proxy"
           ]

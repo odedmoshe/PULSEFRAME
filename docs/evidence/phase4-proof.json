@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T17:07:42.338Z",
+  "ranAt": "2026-11-15T18:19:08.041Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -11,38 +11,42 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 0.836,
+        "wall": 0.776,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 1.268,
+        "wall": 1.207,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.233
+        "wall": 0.2
       },
       "png": {
-        "wall": 0.323
+        "wall": 0.268
       }
     },
     "cancel": {
       "stageAtCancel": "rendering 9/600",
-      "msToCanceled": 163
+      "msToCanceled": 16
     },
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 38.37,
-      "realtimeFactor": 0.5212405525149857,
+      "wallSeconds": 38.332,
+      "realtimeFactor": 0.5217572785140353,
       "renderStageMs": {
-        "draw": 6009,
-        "readback": 3450,
-        "upload": 27083
+        "draw": 6068,
+        "readback": 3389,
+        "upload": 27174
       },
       "bytes": 747124,
       "estimateBytes": 22252800
+    },
+    "cancelAtRenderStart": {
+      "stageAtCancel": "rendering 0/600",
+      "msToCanceled": 12
     }
   },
   "notDone": [
@@ -168,7 +172,7 @@
       "ok": true,
       "detail": {
         "stageAtCancel": "rendering 9/600",
-        "msToCanceled": 163
+        "msToCanceled": 16
       }
     },
     {
@@ -185,12 +189,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 38.37,
-        "realtimeFactor": 0.5212405525149857,
+        "wallSeconds": 38.332,
+        "realtimeFactor": 0.5217572785140353,
         "renderStageMs": {
-          "draw": 6009,
-          "readback": 3450,
-          "upload": 27083
+          "draw": 6068,
+          "readback": 3389,
+          "upload": 27174
         },
         "bytes": 747124,
         "estimateBytes": 22252800
@@ -199,6 +203,14 @@
     {
       "name": "the retried output records the manifest it was rendered from",
       "ok": true
+    },
+    {
+      "name": "an export canceled as its picture render is starting stops promptly too",
+      "ok": true,
+      "detail": {
+        "stageAtCancel": "rendering 0/600",
+        "msToCanceled": 12
+      }
     },
     {
       "name": "editor: Cancel stops a running export and shows that it was canceled; Retry is offered",

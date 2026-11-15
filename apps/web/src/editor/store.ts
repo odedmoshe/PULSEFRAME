@@ -7,7 +7,7 @@
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectVariant, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { createT, dirOf, type Key, type Lang } from '@pulseframe/i18n';
+import { createT, dictionaries, dirOf, type Key, type Lang } from '@pulseframe/i18n';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
@@ -26,6 +26,8 @@ export interface EditorState {
   capJob: JobEvent | null;
   provider: ProviderInfo | null;
   error: string | null;
+  /** Translated headline at the start of `error`, when the error was a coded refusal (lets the bar set the direction of the detail on its own). */
+  errorHeadline: string | null;
   uploading: boolean;
   /** Bumped when a derivative (thumbnail/waveform/proxy) changes state. */
   derivativeTick: number;
@@ -67,7 +69,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), clipboard: [], cutPending: [],
+    provider: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), clipboard: [], cutPending: [],
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -122,7 +124,9 @@ export class Editor {
   }
   fail = (e: unknown) => {
     console.error(e);
-    this.set({ error: e instanceof Error ? e.message : String(e) });
+    // A refusal from the server carries a code: its headline is shown in the interface language, followed by the server's own detail.
+    const headline = e instanceof ApiFailure ? (dictionaries[this.state.lang] as Record<string, string>)[`error.code.${e.code}`] : undefined;
+    this.set({ error: headline && e instanceof Error ? `${headline}: ${e.message}` : e instanceof Error ? e.message : String(e), errorHeadline: headline ?? null });
   };
   async load(projectId: string) {
     const p = await api.getProject(projectId);

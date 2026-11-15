@@ -64,3 +64,5 @@
 .pf-pal-custom { color: var(--pf-accent); }
 .pf-pal-capture { color: var(--pf-accent-2); font-weight: 600; }
 .pf-pal-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.pf-pal-mouse { margin: 0; padding: 6px 14px; font-size: var(--pf-fs-sm); }

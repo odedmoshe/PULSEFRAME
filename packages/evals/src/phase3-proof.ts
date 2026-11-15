@@ -377,6 +377,27 @@ async function main() {
     const unrolled = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9)];
     check('roll by keyboard: the cut before the selected clip moves two frames later (the earlier clip plays two frames more, the selected clip starts two frames later with the same picture at every other frame), the timeline keeps its length, and rolling back restores it', JSON.stringify(rolled) === JSON.stringify([30 + k - 1, 30 + k, 30 + k + 1, 75, 82, 110]) && lenRolled === endOf(rollB.project) && JSON.stringify(unrolled) === JSON.stringify([30 + k - 1, 73, 82]) && rollA.revision === rollB.revision + 4, { rolled, unrolled, lengths: [endOf(rollB.project), lenRolled], revisions: [rollB.revision, rollA.revision] });
 
+    console.log('\n# roll by dragging');
+    const rdB = await getDoc();
+    const rdBox = (await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).boundingBox())!;
+    const pxPerFrame = rdBox.width / T.frameIndexAt(slipClip.duration, R);
+    await page.keyboard.down('Control');
+    await page.mouse.move(rdBox.x + 2, rdBox.y + rdBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(rdBox.x + 2 + pxPerFrame, rdBox.y + rdBox.height / 2, { steps: 3 });
+    await page.mouse.move(rdBox.x + 2 + 2 * pxPerFrame, rdBox.y + rdBox.height / 2, { steps: 3 });
+    await page.mouse.up();
+    await page.keyboard.up('Control');
+    let rdA = await getDoc();
+    for (let i = 0; i < 50 && rdA.revision === rdB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); rdA = await getDoc(); }
+    const rolledByDrag = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 1), await stillCode(atFrame + 2), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    const lenDrag = endOf(rdA.project), revDrag = rdA.revision;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && rdA.revision === revDrag; i++) { await new Promise((r) => setTimeout(r, 100)); rdA = await getDoc(); }
+    const undragged = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9)];
+    check('roll by dragging: Ctrl + dragging the start edge of a clip two frames later moves the cut exactly as the keyboard roll does, in one transaction, without changing the timeline length; one undo restores it', JSON.stringify(rolledByDrag) === JSON.stringify(rolled) && revDrag === rdB.revision + 1 && lenDrag === endOf(rdB.project) && JSON.stringify(undragged) === JSON.stringify(unrolled), { rolledByDrag, rolled, revisions: revDrag - rdB.revision, undragged });
+
     console.log('\n# slide');
     const sdB = await getDoc();
     await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();

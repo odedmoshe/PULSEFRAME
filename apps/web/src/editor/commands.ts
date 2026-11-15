@@ -188,7 +188,7 @@ export const COMMANDS: Command[] = [
   { id: 'edit.deselect', label: 'cmd.deselect', group: 'edit', keys: ['Escape'], enabled: (e) => (!!sel(e) || e.getState().cutPending.length > 0) && !e.getState().paletteOpen, run: (e) => { e.clearCut(); e.select(null); } },
   { id: 'edit.addText', label: 'text.add', group: 'edit', keys: ['KeyT'], run: (e) => e.addText() },
   // K stops playback or a shuttle (the J K L convention); when nothing is playing it adds a keyframe.
-  { id: 'keyframe.add', label: 'cmd.keyframeAddOrStop', group: 'keyframe', keys: ['KeyK'], enabled: (e) => !!e.player?.playing || e.playheadOnSelection, run: (e) => (e.player?.playing ? e.player.pause() : addKeyframe(e)) },
+  { id: 'keyframe.add', label: 'cmd.keyframeAddOrStop', group: 'keyframe', keys: ['KeyK'], enabled: (e) => !!e.player?.playing || (!e.selectionLocked && e.playheadOnSelection), run: (e) => (e.player?.playing ? e.player.pause() : addKeyframe(e)) }, // stopping is allowed whatever is selected; adding a key is not on a locked track
   { id: 'keyframe.remove', label: 'cmd.keyframeRemove', group: 'keyframe', keys: ['Shift+KeyK'], enabled: (e) => e.playheadOnSelection && !!sel(e)?.keyframes, run: removeKeyframe },
   { id: 'keyframe.prev', label: 'cmd.keyframePrev', group: 'keyframe', keys: ['Comma'], enabled: (e) => !!sel(e)?.keyframes, run: gotoKeyframe(-1) },
   { id: 'keyframe.next', label: 'cmd.keyframeNext', group: 'keyframe', keys: ['Period'], enabled: (e) => !!sel(e)?.keyframes, run: gotoKeyframe(1) },
@@ -238,6 +238,6 @@ export function chordLabel(chord: string, mac = typeof navigator !== 'undefined'
 }
 
 // Commands that change the selected clips do nothing while a selected clip is on a locked track.
-const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.add', 'keyframe.remove']);
+const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove']);
 for (const c of COMMANDS) if (CHANGES_SELECTION.has(c.id)) { const was = c.enabled; c.enabled = (e) => !e.selectionLocked && (!was || was(e)); }
 

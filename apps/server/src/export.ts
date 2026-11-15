@@ -257,11 +257,17 @@ export class Exporter {
     if (s.nextFrame + count > s.totalFrames) throw new ApiError(400, 'too_many_frames', 'more frames than the snapshot contains');
     s.nextFrame += count;
     const sink = s.sink;
+    // The encoder going away means the job was canceled or failed: a typed conflict, not a server error. It may already be
+    // gone when the frames arrive (a write to a closed pipe reports nothing further), so that is checked first, and the
+    // encoder exiting while a write waits for room ends the wait.
+    const closed = () => new ApiError(409, 'render_session_closed', 'the encoder for this render session has stopped');
+    if (sink.exitCode !== null || sink.signalCode !== null || sink.killed || sink.stdin.destroyed || !sink.stdin.writable) throw closed();
     await new Promise<void>((resolve, reject) => {
-      // The encoder going away mid-write means the job was canceled or failed: a typed conflict, not a server error.
-      const onErr = () => reject(new ApiError(409, 'render_session_closed', 'the encoder for this render session has stopped'));
+      const off = () => { sink.stdin.off('error', onErr); sink.off('close', onErr); sink.stdin.off('drain', done); };
+      const onErr = () => { off(); reject(closed()); };
+      const done = () => { off(); resolve(); };
       sink.stdin.once('error', onErr);
-      const done = () => { sink.stdin.off('error', onErr); resolve(); };
+      sink.once('close', onErr);
       if (sink.stdin.write(data)) done();
       else sink.stdin.once('drain', done);
     });
@@ -353,7 +359,8 @@ export class Exporter {
           const exited = new Promise<number>((res) => ff.on('close', (code) => res(code ?? -1)));
           s.sink = ff;
           this.store.updateJob(jobId, { stage: `rendering 0/${s.totalFrames}` });
-          const render = this.host.renderAll(opened.url, (abort) => { if (this.running) this.running.abort = abort; });
+          // A cancel that arrived while the render page was still being opened found nothing to abort: stop the page as soon as it can be stopped.
+          const render = this.host.renderAll(opened.url, (abort) => { if (this.running) this.running.abort = abort; if (canceled()) abort(); });
           const stats = await render;
           if (canceled()) throw new Error('canceled');
           if (s.nextFrame !== s.totalFrames) throw new Error(`renderer delivered ${s.nextFrame} of ${s.totalFrames} frames`);

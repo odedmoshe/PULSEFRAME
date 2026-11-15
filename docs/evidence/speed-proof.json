@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T17:11:44.703Z",
+  "ranAt": "2026-11-15T17:46:11.391Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Clip speed on synthetic fixtures (frame-barcode video, sine tone). Sound is varispeed; pitch-preserving stretch and speed ramps are not implemented. Preview playback audio at speed is not measured here.",
-  "passed": 18,
-  "total": 18,
+  "passed": 19,
+  "total": 19,
   "measurements": {
     "freezeSound": {
       "seconds": 5,
@@ -284,6 +284,17 @@
           "marked": 1
         },
         "errors": []
+      }
+    },
+    {
+      "name": "a refused edit in the Hebrew interface: the error bar opens with a Hebrew headline for the kind of refusal, followed by the server's own (English) detail laid out left to right; nothing changed",
+      "ok": true,
+      "detail": {
+        "headline": "אין מקום פנוי ברצועה",
+        "detail": "range overlaps clip clp_498ba5cc001 on track trk_video",
+        "detailDir": "ltr",
+        "pageDir": "rtl",
+        "unchanged": true
       }
     }
   ]

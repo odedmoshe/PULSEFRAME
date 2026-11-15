@@ -239,6 +239,27 @@ async function main() {
     check('preview: five seeks on the 2× clip each paint source frame 2×target; typing 0.75 stores the exact ratio 3/4 (160 frames)', wrong.length === 0 && ratio34?.speed?.num === 3 && ratio34?.speed?.den === 4 && ratio34Frames === 160, { wrong });
     check('Inspector: "Freeze frame" at the playhead (frame 30, 0.5 s) makes three picture clips with a 15-frame hold starting at frame 30, marked on the timeline; Ctrl+Z restores the single clip; no page errors in the editor', uiFreeze.clips === 3 && uiFreeze.holdStart === 30 && uiFreeze.holdFrames === 15 && uiFreeze.marked === 1 && clipsOf(ed, 'video').length === 1 && errors.length === 0, { uiFreeze, errors: errors.slice(0, 3) });
     await page.close();
+    // A refusal by the server, shown in the Hebrew interface: translated headline, the server's detail after it in its own direction.
+    const first = clipsOf(await doc(ep), 'video')[0];
+    await txs(ep, [{ op: 'split_clip', args: { clipId: first.id, at: T.add(first.start, f(30)) } }]);
+    const beforeRefusal = JSON.stringify(clipsOf(await doc(ep), 'video'));
+    const hp = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await hp.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'clip'); localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+    await hp.goto(`${s.ownerUrl}&project=${ep}`);
+    await hp.locator(`.clip[data-clip-id="${first.id}"]`).click();
+    await hp.getByTestId('clip-speed').fill('0.5'); // twice as long: it would run into the second half
+    await hp.getByTestId('clip-speed').press('Enter');
+    await hp.getByTestId('error-headline').waitFor({ timeout: 8000 }).catch(() => {});
+    const refusal = {
+      headline: await hp.getByTestId('error-headline').textContent().catch(() => null),
+      detail: await hp.getByTestId('error-detail').textContent().catch(() => null),
+      detailDir: await hp.getByTestId('error-detail').evaluate((el) => getComputedStyle(el).direction).catch(() => null),
+      pageDir: await hp.evaluate(() => document.documentElement.dir),
+      unchanged: JSON.stringify(clipsOf(await doc(ep), 'video')) === beforeRefusal,
+    };
+    await hp.screenshot({ path: path.join(art, 'refusal-he.png') });
+    check('a refused edit in the Hebrew interface: the error bar opens with a Hebrew headline for the kind of refusal, followed by the server\'s own (English) detail laid out left to right; nothing changed', !!refusal.headline && /[֐-׿]/.test(refusal.headline) && !!refusal.detail && /[a-z]/.test(refusal.detail) && refusal.detailDir === 'ltr' && refusal.pageDir === 'rtl' && refusal.unchanged, refusal);
+    await hp.close();
   } catch (e) {
     console.error(e);
     check('proof ran to completion', false, String(e).slice(0, 600));

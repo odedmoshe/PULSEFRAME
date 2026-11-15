@@ -206,6 +206,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                 </tbody>
               </table>
             </div>
+            <p className="muted pf-pal-mouse" data-testid="shortcuts-mouse">{t('shortcuts.mouse')}</p>
             <div className="pf-pal-footer">
               <span className="pf-pal-status" role="status" data-testid="shortcut-status">
                 {displaced && displaced.length > 0 && `${t('shortcuts.displaced')}: ${displaced.map((id) => (byId.get(id) ? label(byId.get(id)!) : id)).join(', ')}`}

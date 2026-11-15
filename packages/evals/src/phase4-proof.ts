@@ -128,6 +128,17 @@ async function main() {
     check('retry renders the same immutable snapshot (revision before the mid-export edit), although the project moved on', rj.status === 'succeeded' && rj.revision === before.revision && edit.body.revision === before.revision + 1 && now.revision > rj.revision && Number(vr.nb_frames) === 600 && readBarcode(frame10, 640, 3, rect) === 10, measurements.longExport);
     check('the retried output records the manifest it was rendered from', rj.output.manifest.assets[0].contentHash === up2.asset.contentHash && rj.output.options.format === 'mp4-h264-aac' && rj.retryOf === run.jobId);
 
+    // Cancel at the very moment the picture render starts (the render page is still being opened): it must stop just as promptly.
+    const early = (await call(`/projects/${big}/exports`, {})).body;
+    for (let i = 0; i < 3000 && !/rendering \d+\//.test((await call(`/jobs/${early.jobId}`)).body.stage ?? ''); i++) await sleep(10);
+    const stageEarly = (await call(`/jobs/${early.jobId}`)).body.stage;
+    const tEarly = Date.now();
+    await call(`/jobs/${early.jobId}/cancel`, {});
+    const ej = await Promise.race([waitJob(early.jobId), sleep(60_000).then(() => ({ status: 'still running after 60 s' }))]);
+    measurements.cancelAtRenderStart = { stageAtCancel: stageEarly, msToCanceled: Date.now() - tEarly };
+    check('an export canceled as its picture render is starting stops promptly too', ej.status === 'canceled' && Date.now() - tEarly < 5000, measurements.cancelAtRenderStart);
+    if (ej.status !== 'canceled') await waitJob(early.jobId);
+
     console.log('\n# cancel and retry from the editor');
     const browser = await chromium.launch();
     try {

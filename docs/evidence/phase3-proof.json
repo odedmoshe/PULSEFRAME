@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T17:36:38.186Z",
+  "ranAt": "2026-11-15T18:21:02.556Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -298,6 +298,34 @@
       }
     },
     {
+      "name": "roll by dragging: Ctrl + dragging the start edge of a clip two frames later moves the cut exactly as the keyboard roll does, in one transaction, without changing the timeline length; one undo restores it",
+      "ok": true,
+      "detail": {
+        "rolledByDrag": [
+          39,
+          40,
+          41,
+          75,
+          82,
+          110
+        ],
+        "rolled": [
+          39,
+          40,
+          41,
+          75,
+          82,
+          110
+        ],
+        "revisions": 1,
+        "undragged": [
+          39,
+          73,
+          82
+        ]
+      }
+    },
+    {
       "name": "slide by keyboard: three presses move the selected clip three frames later between its neighbours (same ten pictures; the clip before it plays three frames more, the clip after it starts three frames later), the timeline keeps its length, and sliding back restores it",
       "ok": true,
       "detail": {
@@ -320,8 +348,8 @@
           223
         ],
         "revisions": [
-          26,
-          32
+          28,
+          34
         ]
       }
     },
@@ -400,8 +428,8 @@
         "assetName": "ראיון.mp4",
         "focusOnRename": true,
         "revisions": [
-          39,
-          42
+          41,
+          44
         ]
       }
     },
@@ -416,8 +444,8 @@
         "emptyBefore": 1,
         "emptyCmd": "track.removeEmpty",
         "revisions": [
-          42,
-          45
+          44,
+          47
         ]
       }
     },
@@ -436,9 +464,9 @@
       "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
       "ok": true,
       "detail": {
-        "revision": 48,
-        "allRows": 48,
-        "firstRev": "48",
+        "revision": 50,
+        "allRows": 50,
+        "firstRev": "50",
         "rawNames": 0,
         "agentRows": 1,
         "agentOnly": true,
@@ -456,8 +484,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          48,
-          50
+          50,
+          52
         ]
       }
     },
@@ -495,9 +523,9 @@
             "code": 16
           },
           {
-            "frame": 19,
+            "frame": 18,
             "quality": "draft",
-            "code": 19
+            "code": 18
           }
         ],
         "mismatches": []

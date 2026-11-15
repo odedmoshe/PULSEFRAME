@@ -27,22 +27,34 @@ export class RenderHost {
   private async withPage<R>(url: string, fn: (page: Page) => Promise<R>, onAbort?: (abort: () => void) => void): Promise<R> {
     const browser = await this.launch();
     const context = await browser.newContext({ serviceWorkers: 'block' });
-    // Cancellation closes the page context; the pending evaluate rejects and the caller cleans up.
-    onAbort?.(() => void context.close().catch(() => {}));
-    const page = await context.newPage();
+    // Cancellation closes the page context and ends the wait here at once. The wait must not depend on the page calls
+    // settling: a context closed while its page is still being opened can leave that call pending for good (seen with
+    // Playwright 1.63), which used to hold the export queue until the server was restarted.
+    // The caller may abort from inside the callback (a cancel that arrived before there was anything to close).
+    let abort!: () => void;
+    const aborted = new Promise<never>((_, reject) => { abort = () => reject(new Error('aborted')); });
+    aborted.catch(() => {});
+    onAbort?.(() => { abort(); void context.close().catch(() => {}); });
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(String(e)));
-    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-    try {
+    const work = (async () => {
+      const page = await context.newPage();
+      page.on('pageerror', (e) => errors.push(String(e)));
+      page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
       await page.addInitScript('globalThis.__name = (f) => f'); // tsx keepNames helper, absent in the page
       await page.goto(url, { waitUntil: 'load' });
       await page.waitForFunction(() => !!window.__pf, undefined, { timeout: 30_000 });
       await page.evaluate(() => window.__pf!.ready);
       return await fn(page);
+    })();
+    work.catch(() => {}); // when the abort wins the race, the page work fails (or never settles) on its own
+    try {
+      return await Promise.race([work, aborted]);
     } catch (e: any) {
       throw new Error(`render page failed: ${e?.message ?? e}${errors.length ? ` | page errors: ${errors.join(' ; ').slice(0, 600)}` : ''}`);
     } finally {
-      await context.close();
+      // Closing is bounded too. A context that will not close means the browser is in a bad state: drop it, the next render starts a fresh one.
+      const closed = await Promise.race([context.close().then(() => true, () => true), new Promise<boolean>((r) => setTimeout(() => r(false), 5000).unref())]);
+      if (!closed) { this.browser = undefined; void browser.close().catch(() => {}); }
     }
   }
   async renderStill(url: string, frameIndex: number): Promise<Buffer> {
