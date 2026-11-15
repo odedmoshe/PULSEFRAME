@@ -180,6 +180,31 @@ async function main() {
     const scopeMaster = (await page.locator('[data-testid=transform-scope]').getAttribute('data-scope')) === 'master';
     check('while a format is viewed, the Inspector scale slider writes a format-only override (master unchanged), keyframe buttons are disabled, and "reset to master" removes the override; back on the master the controls edit the master again', sliderOverride && masterKept && kfDisabled && resetOk && scopeMaster, { sliderOverride, masterKept, kfDisabled, resetOk, scopeMaster });
 
+    console.log('\n# title wording for one format only');
+    const frameBytes = async (variant?: string) => Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=20${variant ? `&variant=${variant}` : ''}`, { headers: h })).arrayBuffer());
+    const sq = Object.values((await doc()).variants as Record<string, any>).find((v: any) => v.name === 'Square').id as string;
+    const wBefore = { master: await frameBytes(), tall: await frameBytes(tall), sq: await frameBytes(sq) };
+    await page.locator(`.clip[data-clip-id="${title}"]`).click();
+    await page.getByTestId('format-switch').selectOption(tall);
+    await page.getByTestId('text-format-note').waitFor();
+    const hintBefore = (await page.getByTestId('text-format-reset').count()) === 0;
+    await page.getByTestId('text-content').fill('קצר');
+    await page.getByTestId('text-content').blur();
+    const wordingSet = await until((x2) => x2.variants[tall].overrides[title]?.text === 'קצר' && clipOf(x2, title).text === 'כותרת');
+    await page.getByTestId('text-format-reset').waitFor();
+    const wAfter = { master: await frameBytes(), tall: await frameBytes(tall), sq: await frameBytes(sq) };
+    await page.getByTestId('format-switch').selectOption('');
+    const masterField = await page.getByTestId('text-content').inputValue();
+    await page.getByTestId('format-switch').selectOption(tall);
+    const tallField = await page.getByTestId('text-content').inputValue();
+    await page.getByTestId('text-format-reset').click();
+    const wordingCleared = await until((x2) => !x2.variants[tall].overrides[title]);
+    await page.waitForFunction(() => (document.querySelector('[data-testid=text-content]') as HTMLTextAreaElement | null)?.value === 'כותרת', undefined, { timeout: 5000 }).catch(() => {});
+    const fieldBack = await page.getByTestId('text-content').inputValue();
+    const wRestored = await frameBytes(tall);
+    await page.getByTestId('format-switch').selectOption('');
+    check('while a format is viewed, editing the title text changes the wording in that format only: the rendered frame of that format changes, the master and another format render byte-identically, the field shows each wording in its own view, and "back to the master text" restores it', hintBefore && wordingSet && !wAfter.tall.equals(wBefore.tall) && wAfter.master.equals(wBefore.master) && wAfter.sq.equals(wBefore.sq) && masterField === 'כותרת' && tallField === 'קצר' && wordingCleared && fieldBack === 'כותרת' && wRestored.equals(wBefore.tall), { hintBefore, wordingSet, tallChanged: !wAfter.tall.equals(wBefore.tall), masterSame: wAfter.master.equals(wBefore.master), squareSame: wAfter.sq.equals(wBefore.sq), masterField, tallField, wordingCleared, fieldBack, restoredSame: wRestored.equals(wBefore.tall) });
+
     console.log('\n# effect parameter keyframes; cut and paste');
     await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
     const pc0 = clipOf(await doc(), picClip);

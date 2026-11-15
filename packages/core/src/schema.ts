@@ -215,7 +215,14 @@ export const TranscriptSchema = z
 
 // ---------- linked format variants (SPEC §19.8; projection in variants.ts) ----------
 export const SafeAreaSchema = z.object({ top: z.number().min(0).max(0.45), bottom: z.number().min(0).max(0.45), left: z.number().min(0).max(0.45), right: z.number().min(0).max(0.45) }).strict().describe('Insets as fractions of the frame; important content should stay inside');
-export const VariantOverrideSchema = z.object({ transform: TransformSchema.partial().optional(), hidden: z.boolean().optional() }).strict();
+export const VariantOverrideSchema = z.object({
+  transform: TransformSchema.partial().optional(),
+  hidden: z.boolean().optional(),
+  /** Title clips: wording for this format only (for example a shorter line for a narrow frame). */
+  text: z.string().min(1).max(2000).optional(),
+  /** Title clips: style fields for this format only (for example a larger size). */
+  textStyle: TextStyleSchema.partial().optional(),
+}).strict();
 export const VariantSchema = z
   .object({
     id: z.string().min(1).max(64),

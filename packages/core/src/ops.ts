@@ -882,8 +882,8 @@ defineOp({
 defineOp({
   name: 'set_variant_override',
   version: 1,
-  description: 'Adjust one clip for one format only: reposition/scale it (transform fields replace the master values and stop the master animation of those fields in this format) or hide it. transform=null and hidden=false clear the override. The master and other formats are untouched.',
-  args: z.object({ variantId: z.string(), clipId: z.string(), transform: TransformSchema.partial().nullable().optional(), hidden: z.boolean().optional() }).strict(),
+  description: 'Adjust one clip for one format only: reposition/scale it (transform fields replace the master values and stop the master animation of those fields in this format) hide it, or (title clips only) give it other wording or style fields. transform=null, hidden=false, text=null and textStyle=null clear those parts. The master and other formats are untouched.',
+  args: z.object({ variantId: z.string(), clipId: z.string(), transform: TransformSchema.partial().nullable().optional(), hidden: z.boolean().optional(), text: z.string().min(1).max(2000).nullable().optional(), textStyle: TextStyleSchema.partial().nullable().optional() }).strict(),
   apply(d, a) {
     const v = mustVariant(d, a.variantId);
     const f = findClip(d, a.clipId);
@@ -893,6 +893,10 @@ defineOp({
     const next = { ...cur };
     if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
     if (a.hidden !== undefined) { if (a.hidden) next.hidden = true; else delete next.hidden; }
+    if ((a.text != null || a.textStyle != null) && f.clip.type !== 'text') throw new OpError('incompatible', 'wording and text style can be set per format on title clips only', { clipId: a.clipId });
+    if (a.text === null) delete next.text; else if (a.text !== undefined) next.text = a.text;
+    if (a.textStyle === null) delete next.textStyle; else if (a.textStyle) next.textStyle = { ...cur.textStyle, ...a.textStyle };
+    if (next.textStyle && Object.keys(next.textStyle).length === 0) delete next.textStyle;
     if (next.transform && Object.keys(next.transform).length === 0) delete next.transform;
     if (Object.keys(next).length === 0) delete v.overrides[a.clipId]; else v.overrides[a.clipId] = next;
     return { affectedIds: [v.id], summary: `Format ${v.name}: ${v.overrides[a.clipId] ? 'override set on' : 'override cleared from'} clip`, output: { override: v.overrides[a.clipId] ?? null } };

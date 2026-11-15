@@ -30,7 +30,9 @@ export function projectVariant(doc: ProjectDocument, variantId: string): Project
       if (track.caption && v.captionStyle) track.caption.style = { ...track.caption.style, ...v.captionStyle };
       track.clips = track.clips.filter((c) => !v.overrides[c.id]?.hidden);
       for (const c of track.clips) {
-        const o = v.overrides[c.id]?.transform;
+        const ov = v.overrides[c.id];
+        if (ov && c.type === 'text') { if (ov.text !== undefined) c.text = ov.text; if (ov.textStyle) c.style = { ...c.style, ...ov.textStyle }; }
+        const o = ov?.transform;
         if (!o) continue;
         c.transform = { ...c.transform, ...o };
         // An overridden property is fixed for this variant: the master's animation of that property does not apply here.

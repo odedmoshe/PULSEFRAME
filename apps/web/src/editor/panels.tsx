@@ -371,30 +371,45 @@ function AnimateControls({ clipId }: { clipId: string }) {
 
 function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
   const { editor, t } = useEditorState();
-  const [text, setText] = useState(clip.type === 'text' ? clip.text : '');
-  useEffect(() => { if (clip.type === 'text') setText(clip.text); }, [clip]);
   const variantId = editor.getState().viewVariantId;
   const viewClip = variantId ? editor.viewDoc?.sequences[editor.viewDoc.mainSequenceId]?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clip.id) ?? clip : clip;
+  // While a format is viewed, the wording and size fields show and edit that format's own values (stored as a format-only override).
+  const shownText = viewClip.type === 'text' ? viewClip.text : '';
+  const [text, setText] = useState(shownText);
+  useEffect(() => { setText(shownText); }, [shownText, clip.id, variantId]);
+  const textOverride = variantId ? editor.doc?.variants?.[variantId]?.overrides[clip.id] : undefined;
+  const hasTextOverride = !!(textOverride && (textOverride.text !== undefined || textOverride.textStyle));
   const hasOverride = !!(variantId && editor.doc?.variants?.[variantId]?.overrides[clip.id]?.transform);
   const now = editor.transformNow(variantId ? viewClip : clip);
   const inside = editor.playheadInsideSelection;
   const on = editor.playheadOnSelection;
-  const sizeCommit = (v: number) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: v } } }], 'Text size');
+  const sizeCommit = (v: number) => void editor.commit(variantId
+    ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, textStyle: { sizeFrac: v } } }]
+    : [{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: v } } }], 'Text size');
+  const textCommit = () => {
+    if (!text || text === shownText) return;
+    void editor.commit(variantId ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text } }] : [{ op: 'update_text', args: { clipId: clip.id, text } }], 'Edit text');
+  };
   return (
     <div className="fields">
       {clip.type === 'text' && (
         <>
           <label>{t('text.content')}
             <textarea dir="auto" rows={3} value={text} data-testid="text-content" onChange={(e) => setText(e.target.value)}
-              onBlur={() => text && text !== clip.text && void editor.commit([{ op: 'update_text', args: { clipId: clip.id, text } }], 'Edit text')} />
+              onBlur={textCommit} />
           </label>
+          {variantId && (
+            <p className="muted" data-testid="text-format-note">{t(hasTextOverride ? 'text.formatOnly.set' : 'text.formatOnly.hint')}
+              {hasTextOverride && <> <button type="button" className="ghost" data-testid="text-format-reset" onClick={() => void editor.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text: null, textStyle: null } }], 'Reset format text')}>{t('text.formatOnly.reset')}</button></>}
+            </p>
+          )}
           <label>{t('font.family')}
             <select value={clip.style.fontFamily} data-testid="text-font" onChange={(e) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: e.target.value } } }], 'Font')}>
               {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}
             </select>
           </label>
           <label>{t('text.size')}
-            <input type="range" min={0.02} max={0.2} step={0.005} defaultValue={clip.style.sizeFrac} onPointerUp={(e) => sizeCommit(Number(e.currentTarget.value))} onKeyUp={(e) => sizeCommit(Number(e.currentTarget.value))} />
+            <input type="range" min={0.02} max={0.2} step={0.005} key={`${variantId ?? 'master'}:${viewClip.type === 'text' ? viewClip.style.sizeFrac : 0}`} defaultValue={viewClip.type === 'text' ? viewClip.style.sizeFrac : 0.05} data-testid="text-size" onPointerUp={(e) => sizeCommit(Number(e.currentTarget.value))} onKeyUp={(e) => sizeCommit(Number(e.currentTarget.value))} />
           </label>
         </>
       )}

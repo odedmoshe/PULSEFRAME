@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:08:59.918Z",
+  "ranAt": "2026-11-15T09:13:48.668Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 19,
-  "total": 19,
+  "passed": 20,
+  "total": 20,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -91,6 +91,22 @@
       }
     },
     {
+      "name": "while a format is viewed, editing the title text changes the wording in that format only: the rendered frame of that format changes, the master and another format render byte-identically, the field shows each wording in its own view, and \"back to the master text\" restores it",
+      "ok": true,
+      "detail": {
+        "hintBefore": true,
+        "wordingSet": true,
+        "tallChanged": true,
+        "masterSame": true,
+        "squareSame": true,
+        "masterField": "כותרת",
+        "tallField": "קצר",
+        "wordingCleared": true,
+        "fieldBack": "כותרת",
+        "restoredSame": true
+      }
+    },
+    {
       "name": "effect keyframes in the editor: the ◆ button sets a key at the playhead; moving the playhead and changing the slider adds a second key 20 frames later instead of changing the static value",
       "ok": true,
       "detail": {
@@ -112,9 +128,9 @@
       "detail": {
         "pending": 1,
         "revisions": [
-          21,
-          21,
-          22
+          23,
+          23,
+          24
         ],
         "landedAt": 300
       }
@@ -161,9 +177,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.01,
+        "fwd2": 1.99,
         "sh2": "◀◀ ×1",
-        "back1": -1,
+        "back1": -0.99,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -177,7 +193,7 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.02,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
         "shuttleSpeed": 1.99,
         "staysPaused": true
@@ -207,30 +223,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_33e8d8d4490",
-          "clp_33e8d8d4491"
+          "clp_d0552823020",
+          "clp_d0552823021"
         ],
         "afterAB": [
-          "clp_33e8d8d4490",
-          "clp_33e8d8d4491"
+          "clp_d0552823020",
+          "clp_d0552823021"
         ],
         "afterAdd": [
-          "clp_33e8d8d4490",
-          "clp_33e8d8d4491",
-          "clp_33e8d8d4492"
+          "clp_d0552823020",
+          "clp_d0552823021",
+          "clp_d0552823022"
         ],
         "midEscape": [
-          "clp_33e8d8d4491"
+          "clp_d0552823021"
         ],
         "afterEscape": [
-          "clp_33e8d8d4490",
-          "clp_33e8d8d4491",
-          "clp_33e8d8d4492"
+          "clp_d0552823020",
+          "clp_d0552823021",
+          "clp_d0552823022"
         ],
         "afterEscapeUp": [
-          "clp_33e8d8d4490",
-          "clp_33e8d8d4491",
-          "clp_33e8d8d4492"
+          "clp_d0552823020",
+          "clp_d0552823021",
+          "clp_d0552823022"
         ]
       }
     },

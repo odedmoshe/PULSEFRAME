@@ -104,6 +104,35 @@ describe('linked format variants', () => {
     expect(trackOf(projectVariant(d, variantId)).caption!.style).toMatchObject({ sizeFrac: 0.06, position: 'bottom' });
     expect(code(() => tx(d, [{ op: 'update_variant', args: { variantId, captionStyle: { sizeFrac: 9 } } }]))).toBe('invalid_args');
   });
+  it('a title can have other wording and style in one format only; the master, other formats and later master edits are unaffected; clearing restores the master', () => {
+    const { doc, clipId, titleId, variantId } = project();
+    let d = tx(doc, [{ op: 'add_variant', args: { width: 360, height: 360, name: 'sq' } }]);
+    const square = d.results[0]!.output!.variantId as string;
+    d = tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, text: 'קצר', textStyle: { sizeFrac: 0.12 } } }]);
+    const title = (x: ProjectDocument) => { const c = findClip(x, titleId)!.clip; if (c.type !== 'text') throw new Error('not text'); return c; };
+    expect(validateProject(d.doc)).toEqual([]);
+    expect(title(d.doc).text).toBe('כותרת'); // master
+    expect(title(projectVariant(d.doc, square)).text).toBe('כותרת'); // other format
+    const v = title(projectVariant(d.doc, variantId));
+    expect([v.text, v.style.sizeFrac, v.style.fontFamily]).toEqual(['קצר', 0.12, title(d.doc).style.fontFamily]);
+    // a master edit of the wording and of another style field reaches the format, except where it is overridden
+    d = tx(d.doc, [{ op: 'update_text', args: { clipId: titleId, text: 'כותרת חדשה', style: { color: '#ff0000', sizeFrac: 0.05 } } }]);
+    const v2 = title(projectVariant(d.doc, variantId));
+    expect([v2.text, v2.style.sizeFrac, v2.style.color]).toEqual(['קצר', 0.12, '#ff0000']);
+    expect(title(projectVariant(d.doc, square)).text).toBe('כותרת חדשה');
+    // a second call merges style fields and keeps the wording; the position override is independent
+    d = tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, textStyle: { align: 'end' }, transform: { y: 0.2 } } }]);
+    expect(d.doc.variants[variantId]!.overrides[titleId]).toEqual({ text: 'קצר', textStyle: { sizeFrac: 0.12, align: 'end' }, transform: { y: 0.2 } });
+    // clearing parts, then everything
+    d = tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, text: null } }]);
+    expect(title(projectVariant(d.doc, variantId)).text).toBe('כותרת חדשה');
+    d = tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, textStyle: null, transform: null } }]);
+    expect(d.doc.variants[variantId]!.overrides[titleId]).toBeUndefined();
+    // refused: wording on a picture clip, empty wording, an unknown style field
+    expect(code(() => tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId, text: 'x' } }]))).toBe('incompatible');
+    expect(code(() => tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, text: '' } }]))).toBe('invalid_args');
+    expect(code(() => tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, textStyle: { blink: true } } }]))).toBe('invalid_args');
+  });
   it('a variant is one undoable entity; bad input is refused', () => {
     const { doc, titleId, variantId } = project();
     const r = tx(doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, transform: { x: 0.1 } } }]);
