@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import type { Clip } from '@pulseframe/core';
+import { findClip, type Clip } from '@pulseframe/core';
 import { boxToScreen, clampRotation, clampScale, clampX, layerBox, rotationFromDrag, scaleFromDrag, screenDeltaToFrameFraction, type LayerTransform } from './interactions.math.ts';
 import { useEditorState } from './store.ts';
 import './interactions.css';
@@ -53,11 +53,20 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
     return () => ro.disconnect();
   }, [canvas]);
 
-  const doc = state.doc;
-  const sel = editor.selected;
+  // The viewed format's projected document: its own frame size and fit mode. In a format, the clip is read from it so overrides show.
+  const doc = editor.viewDoc;
+  const viewed = state.viewVariantId ? state.doc?.variants?.[state.viewVariantId] ?? null : null;
+  const masterSel = editor.selected;
+  const sel = masterSel && doc ? findClip(doc, masterSel.clip.id) : undefined;
   const clip = sel?.clip;
+  const safe = viewed?.safeArea && state.safeAreaOn ? viewed.safeArea : null;
+  const overlay = safe && rect.width > 0 ? (
+    <div className="safe-clip" aria-hidden="true" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}>
+      <div className="safe-area" data-testid="safe-area" style={{ left: `${safe.left * 100}%`, right: `${safe.right * 100}%`, top: `${safe.top * 100}%`, bottom: `${safe.bottom * 100}%` }} />
+    </div>
+  ) : null;
   const visible = !!doc && !!sel && !!clip && editor.playheadOnSelection && (sel.track.kind === 'video' || sel.track.kind === 'text') && rect.width > 0;
-  const shell = <div ref={root} className="ch-root" data-testid="canvas-handles" dir="ltr" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, display: visible ? undefined : 'none' }} />;
+  const shell = <>{overlay}<div ref={root} className="ch-root" data-testid="canvas-handles" dir="ltr" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, display: visible ? undefined : 'none' }} /></>;
   if (!visible || !doc || !clip) return shell;
 
   const frameW = doc.settings.width;
@@ -69,7 +78,13 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
   } else if (clip.type === 'media') {
     const a = doc.assets[clip.assetId];
     const dims = a?.video ?? a?.image;
-    if (dims) natural = { w: dims.width, h: dims.height, fit: true };
+    // Pictures fill the frame with "cover" in formats set that way: natural size = source x max(W/w, H/h) instead of min.
+    if (dims) {
+      // layerBox multiplies by min(W/w, H/h); pre-scale by max/min so the result is source x max(W/w, H/h).
+      const lo = Math.min(frameW / dims.width, frameH / dims.height);
+      const hi = doc.settings.fit === 'cover' ? Math.max(frameW / dims.width, frameH / dims.height) : lo;
+      natural = { w: (dims.width * hi) / lo, h: (dims.height * hi) / lo, fit: true };
+    }
   }
   if (!natural) return shell;
 
@@ -84,7 +99,7 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
     const changed: Partial<Record<'x' | 'y' | 'scale' | 'rotation', number>> = {};
     for (const key of ['x', 'y', 'scale', 'rotation'] as const) if (p[key] !== undefined && p[key] !== d.start[key]) changed[key] = p[key]!;
     if (!Object.keys(changed).length) return;
-    void editor.setTransformAtPlayhead(c, changed, kind === 'move' ? 'Move layer' : kind === 'rotate' ? 'Rotate layer' : 'Scale layer');
+    void editor.setTransformForView(c, changed, kind === 'move' ? 'Move layer' : kind === 'rotate' ? 'Rotate layer' : 'Scale layer');
   };
   const compute = (e: ReactPointerEvent<HTMLElement>, d: Drag): Preview => {
     if (d.handle === 'move') {
@@ -134,14 +149,14 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
     const now = editor.transformNow(clip);
     if (h === 'move') {
       const step = e.shiftKey ? 0.05 : 0.01;
-      void editor.setTransformAtPlayhead(clip, { x: clampX(now.x + a[0] * step), y: clampX(now.y + a[1] * step) }, 'Move layer');
+      void editor.setTransformForView(clip, { x: clampX(now.x + a[0] * step), y: clampX(now.y + a[1] * step) }, 'Move layer');
     } else if (h === 'rotate') {
       const step = e.shiftKey ? 15 : 1;
       const dir = a[0] !== 0 ? a[0] : -a[1];
-      void editor.setTransformAtPlayhead(clip, { rotation: clampRotation(now.rotation + dir * step) }, 'Rotate layer');
+      void editor.setTransformForView(clip, { rotation: clampRotation(now.rotation + dir * step) }, 'Rotate layer');
     } else {
       const dir = a[0] !== 0 ? a[0] : -a[1];
-      void editor.setTransformAtPlayhead(clip, { scale: clampScale(now.scale + dir * 0.05) }, 'Scale layer');
+      void editor.setTransformForView(clip, { scale: clampScale(now.scale + dir * 0.05) }, 'Scale layer');
     }
   };
   const common = (h: Handle) => ({
@@ -149,6 +164,8 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
   });
 
   return (
+    <>
+    {overlay}
     <div ref={root} className="ch-root" data-testid="canvas-handles" dir="ltr" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}>
       {guide.v && <div className="ch-guide ch-guide-v" aria-hidden="true" />}
       {guide.h && <div className="ch-guide ch-guide-h" aria-hidden="true" />}
@@ -161,5 +178,6 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
         <button {...common('rotate')} className="ch-handle ch-rotate" />
       </div>
     </div>
+    </>
   );
 }

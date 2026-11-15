@@ -194,6 +194,23 @@ export const TranscriptSchema = z
   })
   .strict();
 
+// ---------- linked format variants (SPEC §19.8; projection in variants.ts) ----------
+export const SafeAreaSchema = z.object({ top: z.number().min(0).max(0.45), bottom: z.number().min(0).max(0.45), left: z.number().min(0).max(0.45), right: z.number().min(0).max(0.45) }).strict().describe('Insets as fractions of the frame; important content should stay inside');
+export const VariantOverrideSchema = z.object({ transform: TransformSchema.partial().optional(), hidden: z.boolean().optional() }).strict();
+export const VariantSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    name: z.string().min(1).max(80),
+    width: z.number().int().min(16).max(8192),
+    height: z.number().int().min(16).max(8192),
+    fit: z.enum(['contain', 'cover']).describe('contain = whole picture visible (bars possible); cover = picture fills the frame (edges cropped)'),
+    profileId: z.string().max(64).nullable().describe('Format profile this variant was created from, if any'),
+    safeArea: SafeAreaSchema.nullable(),
+    overrides: z.record(z.string(), VariantOverrideSchema),
+  })
+  .strict();
+
+
 // ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
 const AnalysisOrigin = z.object({ method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), createdBy: z.string(), edited: z.boolean().describe('true once a person or agent corrected the result by hand') }).strict();
 export const AnalysisSchema = z
@@ -234,6 +251,8 @@ export const ProjectSchema = z
     name: z.string().min(1).max(200),
     settings: z
       .object({ width: z.number().int().min(16).max(8192), height: z.number().int().min(16).max(8192), frameRate: RateSchema, sampleRate: z.number().int().min(8000).max(192000), background: Color,
+        /** How pictures are placed before their own transform: contain (default) or cover. Set by format variants. */
+        fit: z.enum(['contain', 'cover']).optional(),
         /** Export loudness: one static gain so the whole programme measures `target` LUFS (integrated), lowered if needed to keep true peak under `truePeak` dBTP. Absent = no normalisation. */
         loudness: z.object({ target: z.number().min(-40).max(-5), truePeak: z.number().min(-9).max(0) }).strict().optional() })
       .strict(),
@@ -242,6 +261,8 @@ export const ProjectSchema = z
     mainSequenceId: Id,
     /** Transcripts by asset id, in source time. */
     transcripts: z.record(Id, TranscriptSchema).default({}),
+    /** Linked output formats of this edit, by variant id (see variants.ts). */
+    variants: z.record(Id, VariantSchema).default({}),
     /** Analysis results by asset id, in source time. */
     analyses: z.record(Id, AnalysisSchema).default({}),
   })
@@ -259,6 +280,8 @@ export type CaptionClip = z.infer<typeof CaptionClipSchema>;
 export type CaptionStyle = z.infer<typeof CaptionStyleSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;
+export type Variant = z.infer<typeof VariantSchema>;
+export type SafeArea = z.infer<typeof SafeAreaSchema>;
 export type Segment = z.infer<typeof SegmentSchema>;
 export type Word = z.infer<typeof WordSchema>;
 export type Clip = z.infer<typeof ClipSchema>;
@@ -288,6 +311,7 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
     mainSequenceId: 'seq_main',
     transcripts: {},
     analyses: {},
+    variants: {},
   };
 }
 

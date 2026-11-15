@@ -29,7 +29,8 @@
     "proof:phase6": "tsx packages/evals/src/phase6-proof.ts",
     "proof:phase7": "tsx packages/evals/src/phase7-proof.ts",
     "proof:phase8": "tsx packages/evals/src/phase8-proof.ts",
-    "proof:phase9": "tsx packages/evals/src/phase9-proof.ts"
+    "proof:phase9": "tsx packages/evals/src/phase9-proof.ts",
+    "proof:phase12": "tsx packages/evals/src/phase12-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

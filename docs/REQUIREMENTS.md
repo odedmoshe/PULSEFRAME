@@ -211,10 +211,10 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-19.3 | 19.3 | Subject Stage (mask/track, text behind subject, blur) | 9 | R-13.2 | Subject Stage | track job | Compositor | not started | |
 | R-19.4 | 19.4, 19.5 | Depth and Photo Motion; Reference-to-Recipe | 9 | R-14.4, R-24.1 | Photo Motion | depth, reference job | Compositor | not started | |
 | R-19.5 | 19.6, 19.7 | Hook Lab and Long-to-Shorts Studio | 11 | R-16.2, R-23.1 | Director | alternate sequences | Batch export | not started | |
-| R-19.6 | 19.8 | Linked Format Studio (16:9, 9:16, 1:1, 4:5 with overrides) | 12 | R-05.5 | Format switcher | fork_variant | Batch export | not started | |
+| R-19.6 | 19.8 | Linked Format Studio (16:9, 9:16, 1:1, 4:5 with overrides) | 12 | R-05.5 | Format switcher | fork_variant | Batch export | partial | Variants with overrides surviving master edits, contain/cover, safe-area guides, batch export (`phase12-proof.json`, `variants.test.ts`). No per-format caption style or text; canvas override drag not browser-verified |
 | R-19.7 | 19.9, 19.10 | Prompt-to-Draft; Smart B-roll and Semantic Media Room | 11 | R-17.1, R-07.6 | Director | draft job | — | not started | |
 | R-19.8 | 19.11-19.13 | Scene-synced sound; Style Composer macros; Metadata and Thumbnail Studio | 11 | R-10.5, R-24.1 | Sound/Deliver | macro run | PNG, metadata | not started | |
-| R-19.9 | 19.14 | Creative Preflight linking issues to objects and fixes; warnings vs blockers | 12 | R-08.6, R-07.2 | Preflight panel | preflight | — | not started | |
+| R-19.9 | 19.14 | Creative Preflight linking issues to objects and fixes; warnings vs blockers | 12 | R-08.6, R-07.2 | Preflight panel | preflight | — | partial | Preflight with blockers vs warnings vs notes, object ids and fix ops (`phase12-proof.json`). Eight checks only; no audio-clipping, contrast or platform-rule checks |
 
 ## Section 20: Durable jobs, spending, late results
 

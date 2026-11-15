@@ -6,7 +6,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -18,6 +18,8 @@ import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
 import { detectBeatsOfFile, detectScenes, detectSilences } from './analysis.ts';
 import { makeSfx, SFX } from './sfx.ts';
+import { preflight } from './preflight.ts';
+import { variantDoc } from './export.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import type { Presence } from './presence.ts';
@@ -179,6 +181,23 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const a = p.doc.analyses?.[c.req.param('assetId')];
     if (!a) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
     return c.json({ revision: p.revision, ...analysisView(a) });
+  });
+  app.get('/api/v1/projects/:id/preflight', (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    const cps = c.req.query('maxCharsPerSecond');
+    return c.json(preflight(exporter, p.doc, p.revision, { variantId: c.req.query('variant'), ...(cps ? { maxCharsPerSecond: Number(cps) } : {}) }));
+  });
+  app.post('/api/v1/projects/:id/exports/batch', async (c) => {
+    const pr = need(c, 'edit');
+    const projectId = c.req.param('id');
+    gov.assertMayAct(pr, projectId, 'job');
+    const b = await body(c, z.object({ variantIds: z.array(z.string()).min(1).max(8), options: z.record(z.string(), z.unknown()).optional() }).strict());
+    const doc = store.getProject(projectId).doc;
+    // All-or-nothing: every variant must exist and plan without blockers before any job is created.
+    for (const id of b.variantIds) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, variantId: id }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `format ${id} cannot be exported: ${plan.blockers[0]!.message}`, { variantId: id, blockers: plan.blockers }); }
+    const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }));
+    return c.json({ jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, status: j.status })) }, 202);
   });
   app.post('/api/v1/projects/:id/analysis/loudness', async (c) => { need(c, 'observe'); return c.json(await programmeLoudness(store, c.req.param('id'))); });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
@@ -363,7 +382,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     const index = c.req.query('index') !== undefined ? Number(c.req.query('index')) : T.frameIndexAt(T.fromSeconds(c.req.query('seconds') ?? '0'), p.doc.settings.frameRate);
-    const png = await exporter.renderStill(p.doc, p.revision, index);
+    // ?variant= renders the frame as that linked format would export it.
+    const png = await exporter.renderStill(variantDoc(p.doc, c.req.query('variant')), p.revision, index);
     return c.body(new Uint8Array(png), 200, { 'Content-Type': 'image/png', 'X-PF-Revision': String(p.revision), 'X-PF-Frame-Index': String(index) });
   });
 
@@ -480,6 +500,7 @@ export const catalog = () => ({
   ...describeCatalog(),
   captionPresets: [...CAPTION_PRESETS],
   clipMotions: CLIP_MOTIONS.filter((m) => m !== 'none'),
+  formatProfiles: FORMAT_PROFILES.map((p) => ({ ...p, note: 'Generic safe-area guide, editable per variant; not a platform specification.' })),
   soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, source: 'synthesised by formula in this build; no third-party content' })),
   fonts: FONT_CATALOG,
   note: 'This is the complete list for this build; anything not listed here does not exist. All entries render through the same Canvas2D compositor in preview and export.',

@@ -27,7 +27,8 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | Phase 7 — Motion and creative catalog | **First batch verified-here (Canvas2D look system).** Gate ("every shipped entry has working preview/export and reviewed visual fixtures") holds for the 12 effects, 17 blend modes, 2 mask shapes and 12 transitions that exist; most of the phase scope is not built | `pnpm proof:phase7` 30/30 (`docs/evidence/phase7-proof.json`), `effects.test.ts`, `look.test.ts`, `/lab.html` |
 | Phase 8 — Sound and voice | **First batch verified-here.** Gate parts: PCM/DSP and loudness tests pass (synthetic signals); sounds are actual assets (7 synthesised); **voice/narration/cloning not built — needs a provider or model decision (B-8)** | `pnpm proof:phase8` 17/17 (`docs/evidence/phase8-proof.json`), `audio.test.ts`, `/selftest.html` |
 | Phase 9 — Analysis intelligence | **Model-free part verified-here on synthetic corpora** (scene cuts, beats: corpus results reported, confidence and manual correction, stored as source-linked editable data, fully local). **Everything model-based is not built** (reframe, segmentation, pose/tracking, depth, semantic search) | `pnpm proof:phase9` 12/12 (`docs/evidence/phase9-proof.json`), `beats.test.ts` |
-| Phases 10–13, G2–G3 | Not started | — |
+| Phase 12 — Delivery ecosystems | **Provider-free part verified-here.** Gate parts: variant overrides survive master changes (yes); preflight catches faults (the eight kinds it checks); **publishing flows, thumbnails/metadata, provenance, MCP App not built** | `pnpm proof:phase12` 13/13 (`docs/evidence/phase12-proof.json`), `variants.test.ts` |
+| Phases 10, 11, 13, G2–G3 | Not started (10 needs providers; 11 needs a language model for the Director, recipes do not) | — |
 
 ## Completed and verified-here
 
@@ -155,8 +156,17 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Flaky test fixed: `derive.test.ts` used random bytes as a corrupt file and failed once in a full run; it now uses fixed bytes.
 - **Not built (Phase 9 scope):** reframe/subject tracking, segmentation, pose, depth, semantic/visual search, assisted colour, downbeat/bar detection, fit-music-to-duration. Real footage and real music are untested (no licensed corpus here). Analysis runs inside the request (fine for short media; long files need the job queue).
 
+**Checkpoint 12a — linked formats, safe areas, preflight**
+- A format variant stores only frame size, fill mode (contain/cover), safe-area guide and per-clip overrides (position/scale/hide). The variant document is projected from the master at render time, so every master edit reaches every format and overrides survive moves, trims, splits and cuts (new pieces inherit them). An overridden property stops following the master's animation in that format only.
+- Four starting profiles (9:16, 4:5, 1:1, 16:9). Their safe-area insets are **generic guides, not any platform's specification**, and are editable per variant.
+- Export takes `variantId` and snapshots the projected document (immutable); `POST …/exports/batch` plans all formats first and creates one job each or none. `GET …/frame?variant=` renders a format still.
+- Creative preflight (`GET …/preflight`, MCP `preflight`): render blockers, stretches with no picture, missing loudness target, transitions that lost their handle, pictures enlarged >1.5×, titles/captions outside the safe area, captions over a reading-speed limit. Each issue names the objects; six of them carry a mechanical fix as ops. Title extents are estimates (the server does not shape text); the reading-speed limit is a setting.
+- Found while proving: the title safe-area fix could not clear a title wider than the safe rectangle; it now shrinks it for that format first. The headless renderer uses the built web bundle, so engine changes need `pnpm build` before stills/exports reflect them (the proof instructions already say so).
+- Editor: format switcher with badge, safe-area overlay, Deliver tab (add/remove formats, fill mode, preflight with fix buttons, export one/all). Proven: switching shape, overlay, adding a profile, preflight list and a fix. **Not exercised in a browser:** dragging on the canvas to create an override, hide-in-format, batch-export job list. Inspector sliders still edit the master while a format is viewed; caption style cannot differ per format.
+- **Not built (Phase 12 scope):** publishing connectors, thumbnail and metadata studio, provenance/C2PA, MCP App, per-format caption style, per-format text content.
+
 ## In progress
-- Phase 12 parts that need no provider (linked formats, safe areas, preflight), then recipes (Phase 11) that need no language model. Phase 10 (generative) is blocked on providers apart from the job/budget machinery already built.
+- Phase 11 recipes that need no language model (deterministic, editable, one undo), using what exists: silences, captions, loudness, formats.
 
 ## Blocked / unverified (with what would unblock)
 
@@ -180,7 +190,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
 
 ## Next executable action
-`pnpm install && pnpm build && pnpm test` (expect 243 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:phase8` (17/17), `pnpm proof:phase9` (12/12), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
+`pnpm install && pnpm build && pnpm test` (expect 247 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:phase8` (17/17), `pnpm proof:phase9` (12/12), `pnpm proof:phase12` (13/13), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
 
 ## Agent / model summary
 
@@ -203,6 +213,8 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | 5 | Lead | export options/manifest/cancel/retry, full-quality preview, governance (grants, pause, proposals, approvals, budget), integration, proofs | as above | as above | — |
 | 5 | `pf-implementer` ×3 | parity suite (90,457 + 99,731 tok on resume); browser export route (168,016 tok · 510 s); OpenAPI update | `sonnet` | not observable | as listed |
 | 6 | Lead | transcript/caption model, ops, evaluation, bidi caption layout, REST/MCP, proof | as above | as above | — |
+| 12 | Lead | variant model/projection, cover fit, variant export + batch, preflight, proof | as above | as above | — |
+| 12 | `pf-implementer` | format switcher, safe-area overlay, Deliver tab (77,607 tok · 115 s) | `sonnet` | not observable | as listed |
 | 9 | Lead | analysis model, beat tracker, scene detection, routes, corpus proof | as above | as above | — |
 | 9 | `pf-implementer` | analysis panel, timeline markers, beat snapping (56,386 tok · 88 s) | `sonnet` | not observable | as listed |
 | 8 | Lead | audio plan, streaming mixer, loudness, ducking, SFX, self-test page, proof | as above | as above | — |

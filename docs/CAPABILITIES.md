@@ -80,6 +80,9 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Narration, TTS, voice cloning, EQ/dynamics, noise reduction, recording | not built | Voice blocked on B-8 |
 | Scene-cut detection (hard cuts) and beat tracking, model-free, stored as editable source-linked data; split into shots; timeline markers; cut on the beat | tested (synthetic corpora) | `docs/evidence/phase9-proof.json` (12 checks): 5/5 cuts exact; beat F1 0.97–1.00 on six synthetic loops. Dissolves not detected; real footage/music untested |
 | Reframe, subject tracking, segmentation, pose, depth, semantic search, assisted colour | not built | Need models (B-4) |
+| Linked output formats (variants) with per-clip overrides that survive master edits; contain/cover; generic safe-area guides; variant stills, export and batch export | tested | `docs/evidence/phase12-proof.json` (13 checks), `variants.test.ts`. Safe-area numbers are generic guides |
+| Creative preflight with object links and mechanical fixes (REST, MCP, editor) | tested | `phase12-proof.json`. Eight checks listed in its `scope`; text extents estimated |
+| Publishing connectors, thumbnails/metadata, provenance manifests | not built | |
 | GPU compositor, shader effect families, keying, keyframed effect parameters, speed ramps, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface

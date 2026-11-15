@@ -13,7 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { findEffect, findFont, FONT_CATALOG, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
+import { findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { audioPlan } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
@@ -29,9 +29,16 @@ export const ExportOptionsSchema = z
     scale: z.union([z.literal(1), z.literal(0.5), z.literal(0.25)]).default(1).describe('Output size relative to the project size (rounded to even dimensions)'),
     range: z.object({ startFrame: z.number().int().nonnegative(), endFrame: z.number().int().positive() }).strict().optional().describe('Half-open frame range [startFrame, endFrame); default is the whole sequence'),
     frame: z.number().int().nonnegative().optional().describe('Frame index for format=png'),
+    variantId: z.string().optional().describe('Export this linked format instead of the master frame size'),
   })
   .strict();
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
+/** The document to render: the master, or the master projected into one of its linked formats. */
+export function variantDoc(doc: ProjectDocument, variantId?: string): ProjectDocument {
+  if (!variantId) return doc;
+  if (!doc.variants?.[variantId]) throw new ApiError(404, 'not_found', `format variant ${variantId} not found`, { variantId, available: Object.keys(doc.variants ?? {}) }, 'get_summary lists the variants.');
+  return projectVariant(doc, variantId);
+}
 const CRF = { 'mp4-h264-aac': { draft: 28, standard: 21, high: 16 }, 'webm-vp9-opus': { draft: 40, standard: 32, high: 24 } } as const;
 /** Rough bits per pixel per frame, used ONLY for the labelled size estimate. */
 const BPP = { draft: 0.03, standard: 0.07, high: 0.14 } as const;
@@ -79,6 +86,7 @@ export class Exporter {
     const parsed = ExportOptionsSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
     const options = parsed.data;
+    doc = variantDoc(doc, options.variantId);
     const { width, height, frameRate, sampleRate } = doc.settings;
     const total = T.frameCount(sequenceDuration(doc), frameRate);
     const blockers: Blocker[] = [];
@@ -153,7 +161,8 @@ export class Exporter {
     const p = retryOf ? { doc: retryOf.input.snapshot as ProjectDocument, revision: retryOf.input.revision as number } : this.store.getProject(projectId);
     const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, 'Fix the listed blockers (relink media, change the font or the range) and try again.');
-    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot: p.doc, manifest, warnings, retryOf: retryOf?.id ?? null });
+    // A variant export snapshots the PROJECTED document, so the job renders exactly what was planned even if the variant changes later.
+    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot: variantDoc(p.doc, manifest.options.variantId), manifest, warnings, retryOf: retryOf?.id ?? null });
     this.enqueue(job);
     return job;
   }

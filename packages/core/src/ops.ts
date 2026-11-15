@@ -6,9 +6,10 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
-  CaptionStyleSchema, DEFAULT_CAPTION_STYLE,
-  type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Sequence, type Track, type Transcript,
+  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema,
+  type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
+import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
@@ -441,6 +442,7 @@ defineOp({
       const left = T.sub(a.at, clip.start);
       const right: Clip = structuredClone(clip);
       right.id = ctx.newId('clp');
+      copyOverrides(d, clip.id, right.id);
       right.start = a.at;
       right.duration = T.sub(clip.duration, left);
       shiftKeyframes(right, left);
@@ -538,6 +540,76 @@ defineOp({
 
 
 
+
+
+// ---------- linked format variants (SPEC §19.8) ----------
+const mustVariant = (d: ProjectDocument, id: string) => {
+  const v = d.variants[id];
+  if (!v) throw new OpError('not_found', `variant ${id} not found`, { variantId: id }, 'get_summary lists the variants.');
+  return v;
+};
+/** When a clip is duplicated by a split or cut, its per-variant overrides apply to the new piece too. */
+function copyOverrides(d: ProjectDocument, fromClipId: string, toClipId: string) {
+  for (const v of Object.values(d.variants)) if (v.overrides[fromClipId]) v.overrides[toClipId] = structuredClone(v.overrides[fromClipId]!);
+}
+defineOp({
+  name: 'add_variant',
+  version: 1,
+  description: 'Add a linked output format of this edit (e.g. 9:16, 1:1, 4:5, 16:9). Give a profileId from list_catalog → formatProfiles, or width and height. The variant always shows the current master edit; per-clip overrides adjust framing for this shape only.',
+  args: z.object({ profileId: z.string().optional(), name: z.string().min(1).max(80).optional(), width: z.number().int().min(16).max(8192).optional(), height: z.number().int().min(16).max(8192).optional(), fit: z.enum(['contain', 'cover']).optional(), safeArea: SafeAreaSchema.nullable().optional() }).strict(),
+  apply(d, a, ctx) {
+    const p = a.profileId ? findProfile(a.profileId) : undefined;
+    if (a.profileId && !p) throw new OpError('not_found', `format profile "${a.profileId}" does not exist`, { available: FORMAT_PROFILES.map((x) => x.id) });
+    const width = a.width ?? p?.width, height = a.height ?? p?.height;
+    if (!width || !height) throw new OpError('invalid_args', 'give a profileId, or both width and height');
+    if (width % 2 || height % 2) throw new OpError('invalid_args', 'width and height must be even (video encoders require it)', { width, height });
+    const v: Variant = { id: ctx.newId('var'), name: a.name ?? p?.name.en ?? `${width}×${height}`, width, height, fit: a.fit ?? p?.fit ?? 'cover', profileId: p?.id ?? null, safeArea: a.safeArea !== undefined ? a.safeArea : p?.safeArea ?? null, overrides: {} };
+    d.variants[v.id] = v;
+    return { affectedIds: [v.id], summary: `Added format ${v.name} (${width}×${height})`, output: { variantId: v.id } };
+  },
+});
+defineOp({
+  name: 'update_variant',
+  version: 1,
+  description: 'Rename a format variant or change its size, fill mode (contain/cover) or safe-area guides. Overrides are kept.',
+  args: z.object({ variantId: z.string(), name: z.string().min(1).max(80).optional(), width: z.number().int().min(16).max(8192).optional(), height: z.number().int().min(16).max(8192).optional(), fit: z.enum(['contain', 'cover']).optional(), safeArea: SafeAreaSchema.nullable().optional() }).strict(),
+  apply(d, a) {
+    const v = mustVariant(d, a.variantId);
+    if ((a.width ?? v.width) % 2 || (a.height ?? v.height) % 2) throw new OpError('invalid_args', 'width and height must be even');
+    Object.assign(v, { ...(a.name !== undefined ? { name: a.name } : {}), ...(a.width !== undefined ? { width: a.width } : {}), ...(a.height !== undefined ? { height: a.height } : {}), ...(a.fit !== undefined ? { fit: a.fit } : {}), ...(a.safeArea !== undefined ? { safeArea: a.safeArea } : {}) });
+    return { affectedIds: [v.id], summary: `Updated format ${v.name}` };
+  },
+});
+defineOp({
+  name: 'remove_variant',
+  version: 1,
+  description: 'Remove a format variant and its overrides. The master edit is not affected.',
+  args: z.object({ variantId: z.string() }).strict(),
+  apply(d, a) {
+    const v = mustVariant(d, a.variantId);
+    delete d.variants[v.id];
+    return { affectedIds: [v.id], summary: `Removed format ${v.name}` };
+  },
+});
+defineOp({
+  name: 'set_variant_override',
+  version: 1,
+  description: 'Adjust one clip for one format only: reposition/scale it (transform fields replace the master values and stop the master animation of those fields in this format) or hide it. transform=null and hidden=false clear the override. The master and other formats are untouched.',
+  args: z.object({ variantId: z.string(), clipId: z.string(), transform: TransformSchema.partial().nullable().optional(), hidden: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    const v = mustVariant(d, a.variantId);
+    const f = findClip(d, a.clipId);
+    if (!f) throw new OpError('not_found', `clip ${a.clipId} not found`, { clipId: a.clipId });
+    if (f.track.kind === 'audio' || f.clip.type === 'caption') throw new OpError('incompatible', 'format overrides apply to picture and title clips', { clipId: a.clipId });
+    const cur = v.overrides[a.clipId] ?? {};
+    const next = { ...cur };
+    if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
+    if (a.hidden !== undefined) { if (a.hidden) next.hidden = true; else delete next.hidden; }
+    if (next.transform && Object.keys(next.transform).length === 0) delete next.transform;
+    if (Object.keys(next).length === 0) delete v.overrides[a.clipId]; else v.overrides[a.clipId] = next;
+    return { affectedIds: [v.id], summary: `Format ${v.name}: ${v.overrides[a.clipId] ? 'override set on' : 'override cleared from'} clip`, output: { override: v.overrides[a.clipId] ?? null } };
+  },
+});
 
 // ---------- analysis results and edits that use them (SPEC §19) ----------
 const TimeList = z.array(RT).max(50000);
@@ -993,7 +1065,7 @@ defineOp({
 });
 
 /** Remove [start,end) from the given tracks; with ripple, everything later moves earlier by the removed length. */
-function cutRange(seq: Sequence, start: T.RationalTime, end: T.RationalTime, tracks: Track[], ripple: boolean, ctx: OpContext) {
+function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end: T.RationalTime, tracks: Track[], ripple: boolean, ctx: OpContext) {
   const len = T.sub(end, start);
   const removed: string[] = [], changed: string[] = [], created: string[] = [];
   const relink = new Map<string, string>();
@@ -1016,6 +1088,7 @@ function cutRange(seq: Sequence, start: T.RationalTime, end: T.RationalTime, tra
         const delta = T.sub(end, clip.start);
         if (hasLeft) {
           right.id = ctx.newId('clp');
+          copyOverrides(d, clip.id, right.id);
           created.push(right.id);
           if (right.type === 'media' && right.linkGroupId) {
             if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk'));
@@ -1058,7 +1131,7 @@ defineOp({
     assertAligned(d, a.end, 'end');
     if (T.isNegative(a.start) || !T.lt(a.start, a.end)) throw new OpError('invalid_args', 'need 0 <= start < end');
     const tracks = a.trackIds ? a.trackIds.map((id) => mustTrack(seq, id)) : seq.tracks;
-    const r = cutRange(seq, a.start, a.end, tracks, a.ripple !== false, ctx);
+    const r = cutRange(d, seq, a.start, a.end, tracks, a.ripple !== false, ctx);
     return { affectedIds: [...new Set([...r.removed, ...r.changed, ...r.created])], summary: `Cut ${fmt(T.sub(a.end, a.start))} at ${fmt(a.start)}${a.ripple === false ? ' (gap left)' : ''}`, output: { removedClipIds: r.removed, createdClipIds: r.created } };
   },
 });
@@ -1092,7 +1165,7 @@ defineOp({
     if (ranges.length === 0) throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId });
     ranges.sort((x, y) => T.cmp(y.start, x.start)); // latest first, so earlier ranges keep their times
     const affected = new Set<string>();
-    for (const r of ranges) { const c = cutRange(seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created]) affected.add(id); }
+    for (const r of ranges) { const c = cutRange(d, seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created]) affected.add(id); }
     const text = picked.map((x) => x.w.text).join(' ');
     return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline`, output: { ranges: ranges.reverse(), words: picked.length } };
   },

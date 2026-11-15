@@ -43,6 +43,8 @@ export interface RenderGraph {
   width: number;
   height: number;
   background: string;
+  /** How pictures are placed before their own transform. */
+  fit: 'contain' | 'cover';
   layers: Layer[];
   audio: ActiveAudio[];
 }
@@ -76,7 +78,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
   const seq = doc.sequences[sequenceId];
   if (!seq) throw new Error(`sequence ${sequenceId} not found`);
   const { width, height, frameRate, background } = doc.settings;
-  const graph: RenderGraph = { time, frameIndex: T.frameIndexAt(time, frameRate), width, height, background, layers: [], audio: [] };
+  const graph: RenderGraph = { time, frameIndex: T.frameIndexAt(time, frameRate), width, height, background, fit: doc.settings.fit ?? 'contain', layers: [], audio: [] };
   const captions: CaptionLayer[] = [];
   for (const track of seq.tracks) {
     if (track.kind === 'caption') { const c = captionAt(doc, seq, track, time); if (c) captions.push(c); continue; }

@@ -63,6 +63,13 @@ export const he = {
   'analysis.lowConfidence': 'רמת הביטחון נמוכה: ייתכן שפס הקצב אינו אמין.',
   'analysis.runScenes': 'חיפוש חיתוכי סצנות', 'analysis.runBeats': 'חיפוש פעימות', 'analysis.running': 'מודד…', 'analysis.noVideo': 'לקובץ אין וידאו', 'analysis.noAudio': 'לקובץ אין שמע',
   'analysis.split': 'פיצול הקליפ לשוטים', 'analysis.splitNone': 'אין חיתוך סצנה בתוך הקליפ', 'analysis.addBeat': 'הוספת פעימה בסמן', 'analysis.removeBeat': 'הסרת הפעימה הקרובה', 'analysis.addCut': 'הוספת חיתוך בסמן', 'analysis.removeCut': 'הסרת החיתוך הקרוב',
+  'inspector.tab.deliver': 'מסירה', 'format.switch': 'פורמט תצוגה', 'format.badge': 'תצוגת פורמט: גרירה והגדלה בקנבס משפיעות על הפורמט הזה בלבד. עריכות בציר הזמן משנות את המקור (Master).', 'format.safeArea': 'אזור בטוח',
+  'deliver.master': 'מקור (Master)', 'deliver.formats': 'פורמטים מקושרים', 'deliver.formats.note': 'כל פורמט מציג את העריכה הראשית בצורה אחרת; שינויי מיקום וגודל הם לפורמט בלבד.', 'deliver.add': 'הוספת פורמט', 'deliver.none': 'אין עדיין פורמטים מקושרים',
+  'deliver.fit': 'התאמה', 'deliver.fit.contain': 'הכל בפריים', 'deliver.fit.cover': 'מילוי פריים', 'deliver.overrides': 'התאמות', 'deliver.view': 'הצגה', 'deliver.remove': 'הסרה', 'deliver.hide': 'הסתרה בפורמט הזה', 'deliver.clear': 'ניקוי התאמה',
+  'deliver.preflight': 'בדיקה לפני ייצוא', 'deliver.preflight.for': 'הפלט הנבדק', 'deliver.check': 'הרצת בדיקה', 'deliver.checking': 'בודק…', 'deliver.ok': 'ללא חסימות', 'deliver.notok': 'יש חסימות', 'deliver.blockers': 'חסימות', 'deliver.warnings': 'אזהרות', 'deliver.notes': 'הערות', 'deliver.stale': 'הפרויקט השתנה, הריצו שוב',
+  'deliver.severity.blocker': 'חסימה', 'deliver.severity.warning': 'אזהרה', 'deliver.severity.note': 'הערה',
+  'deliver.export': 'ייצוא', 'deliver.export.this': 'ייצוא הפורמט', 'deliver.export.all': 'ייצוא כל הפורמטים',
+  'op.add_variant': 'הוספת פורמט', 'op.update_variant': 'עדכון פורמט', 'op.remove_variant': 'הסרת פורמט', 'op.set_variant_override': 'התאמה לפורמט',
   'analysis.outside': 'הסמן מחוץ לקליפ', 'analysis.nothingToRemove': 'אין מה להסיר', 'snap.beats': 'הצמדה לפעימות וחיתוכים', 'timeline.markers.truncated': 'מוצגים 3000 הסמנים הראשונים בלבד',
 };
 export const en: Record<keyof typeof he, string> = {
@@ -128,6 +135,13 @@ export const en: Record<keyof typeof he, string> = {
   'analysis.lowConfidence': 'Confidence is low: the beat grid may be unreliable.',
   'analysis.runScenes': 'Find scene cuts', 'analysis.runBeats': 'Find beats', 'analysis.running': 'Measuring…', 'analysis.noVideo': 'This file has no video', 'analysis.noAudio': 'This file has no audio',
   'analysis.split': 'Split clip into shots', 'analysis.splitNone': 'No scene cut falls inside the clip', 'analysis.addBeat': 'Add beat at playhead', 'analysis.removeBeat': 'Remove nearest beat', 'analysis.addCut': 'Add cut at playhead', 'analysis.removeCut': 'Remove nearest cut',
+  'inspector.tab.deliver': 'Deliver', 'format.switch': 'Preview format', 'format.badge': 'Format view: canvas position and scale edits apply to this format only. Timeline edits change the master.', 'format.safeArea': 'Safe area',
+  'deliver.master': 'Master', 'deliver.formats': 'Linked formats', 'deliver.formats.note': 'Each format shows the main edit in another shape; position and scale changes are for that format only.', 'deliver.add': 'Add format', 'deliver.none': 'No linked formats yet',
+  'deliver.fit': 'Fit', 'deliver.fit.contain': 'Contain', 'deliver.fit.cover': 'Cover', 'deliver.overrides': 'overrides', 'deliver.view': 'View', 'deliver.remove': 'Remove', 'deliver.hide': 'Hide in this format', 'deliver.clear': 'Clear override',
+  'deliver.preflight': 'Preflight', 'deliver.preflight.for': 'Output checked', 'deliver.check': 'Run preflight', 'deliver.checking': 'Checking…', 'deliver.ok': 'No blockers', 'deliver.notok': 'Blocked', 'deliver.blockers': 'blockers', 'deliver.warnings': 'warnings', 'deliver.notes': 'notes', 'deliver.stale': 'Project changed, run again',
+  'deliver.severity.blocker': 'Blocker', 'deliver.severity.warning': 'Warning', 'deliver.severity.note': 'Note',
+  'deliver.export': 'Export', 'deliver.export.this': 'Export this format', 'deliver.export.all': 'Export all formats',
+  'op.add_variant': 'Added format', 'op.update_variant': 'Updated format', 'op.remove_variant': 'Removed format', 'op.set_variant_override': 'Format override',
   'analysis.outside': 'The playhead is outside the clip', 'analysis.nothingToRemove': 'Nothing to remove', 'snap.beats': 'Snap to beats and cuts', 'timeline.markers.truncated': 'Only the first 3000 markers are shown',
 };
 export type Key = keyof typeof he;

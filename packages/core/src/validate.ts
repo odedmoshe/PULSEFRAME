@@ -93,6 +93,10 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       }
     }
   }
+  for (const [key, va] of Object.entries(doc.variants ?? {})) {
+    if (key !== va.id) issues.push({ code: 'key_mismatch', message: `variant key ${key} != id ${va.id}`, ids: [key] });
+    uniq(va.id);
+  }
   for (const [key, an] of Object.entries(doc.analyses ?? {})) {
     if (key !== an.assetId || !doc.assets[an.assetId]) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });
     for (const [name, list] of [['scene cuts', an.scenes?.cuts], ['beats', an.beats?.beats]] as const)

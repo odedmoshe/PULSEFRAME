@@ -168,8 +168,8 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
     if (layer.kind === 'caption') return drawCaption(ctx, g, layer);
     const img = layer.kind === 'text' ? null : images[i];
     if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); return; }
-    // Default placement of pictures: fit (contain) inside the frame, centred.
-    const fit = layer.kind === 'text' ? 1 : Math.min(g.width / layer.sourceWidth, g.height / layer.sourceHeight);
+    // Default placement of pictures, centred: contain (whole picture visible) or cover (frame filled, edges cropped).
+    const fit = layer.kind === 'text' ? 1 : (g.fit === 'cover' ? Math.max : Math.min)(g.width / layer.sourceWidth, g.height / layer.sourceHeight);
     const w = layer.kind === 'text' ? g.width : layer.sourceWidth * fit;
     const h = layer.kind === 'text' ? g.height : layer.sourceHeight * fit;
     const place = (c: Ctx2D) => (layer.kind === 'text' ? drawText(c, g, layer) : withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h)));

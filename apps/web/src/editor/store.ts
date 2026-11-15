@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { clipEnd, findClip, projectVariant, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { createT, dirOf, type Key, type Lang } from '@pulseframe/i18n';
 import { api, ApiFailure, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
@@ -41,15 +41,23 @@ export interface EditorState {
   proposals: Proposal[];
   /** Timeline zoom in pixels per second. */
   pxPerSecond: number;
+  /** Linked format being viewed (session state, never stored in the project). null = master. */
+  viewVariantId: string | null;
+  /** Show the safe-area guide over the preview (personal setting, default on). */
+  safeAreaOn: boolean;
 }
+
+const SAFE_KEY = 'pf.safearea.v1';
+const readSafeArea = () => { try { return localStorage.getItem(SAFE_KEY) !== '0'; } catch { return true; } };
 
 export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent'; frame: number | null; selection: string[]; label: string | null }
 
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [],
+    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], viewVariantId: null, safeAreaOn: readSafeArea(),
   };
+  private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
   private es?: EventSource;
   private disposed = false;
@@ -71,6 +79,15 @@ export class Editor {
 
   // ---------- derived ----------
   get doc() { return this.state.doc; }
+  /** The document the preview shows: the master, or the master projected into the viewed format (same projection as export). */
+  get viewDoc(): ProjectDocument | null {
+    const { doc, viewVariantId: id } = this.state;
+    if (!doc || !id || !doc.variants?.[id]) return doc;
+    if (this.viewCache?.doc === doc && this.viewCache.id === id) return this.viewCache.out;
+    const out = projectVariant(doc, id);
+    this.viewCache = { doc, id, out };
+    return out;
+  }
   get rate() { return this.state.doc?.settings.frameRate ?? { num: 30, den: 1 }; }
   get frame() { return this.player?.frame ?? 0; }
   get playhead() { return T.frameTime(this.frame, this.rate); }
@@ -97,10 +114,25 @@ export class Editor {
     const p = await api.getProject(projectId);
     if (p.revision >= this.state.revision || !this.state.doc) {
       const selection = this.state.selection.filter((id) => findClip(p.project, id));
-      this.set({ doc: p.project, revision: p.revision, selection });
-      this.player?.setDoc(p.project);
+      const viewVariantId = this.state.viewVariantId && p.project.variants?.[this.state.viewVariantId] ? this.state.viewVariantId : null;
+      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId });
+      const vd = this.viewDoc;
+      if (vd) this.player?.setDoc(vd);
     }
     return p;
+  }
+  /** Switch the preview to a linked format (or back to the master with null). */
+  setViewVariant(id: string | null) {
+    const doc = this.state.doc;
+    const next = id && doc?.variants?.[id] ? id : null;
+    if (next === this.state.viewVariantId) return;
+    this.set({ viewVariantId: next });
+    const vd = this.viewDoc;
+    if (vd) this.player?.setDoc(vd);
+  }
+  setSafeArea(on: boolean) {
+    try { localStorage.setItem(SAFE_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+    this.set({ safeAreaOn: on });
   }
   /** Boot: session → project → fonts → player → live revision stream. */
   async boot(canvas: HTMLCanvasElement) {
@@ -230,9 +262,9 @@ export class Editor {
       if (!this.player?.playing) void api.presence(projectId, this.sessionId, this.frame, this.state.selection).catch(() => {});
     }, 250);
   }
-  startExport() {
+  startExport(variantId?: string) {
     const { doc } = this.state;
-    if (doc) api.startExport(doc.id).then((j) => this.set({ exportJob: { id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);
+    if (doc) api.startExport(doc.id, variantId ? { variantId } : undefined).then((j) => this.set({ exportJob: { id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);
   }
   /** Pause Agent / Take Over: the server refuses agent mutations until the owner resumes. */
   setAgentsPaused(paused: boolean) { const d = this.state.doc; if (d) api.setPaused(d.id, paused).then((r) => this.set({ agentsPaused: r.agentsPaused })).catch(this.fail); }
@@ -288,6 +320,16 @@ export class Editor {
     }
     if (Object.keys(still).length) ops.push({ op: 'set_clip_transform', args: { clipId: clip.id, transform: still } });
     return ops.length ? this.commit(ops, label) : Promise.resolve(null);
+  }
+  /**
+   * Canvas edits: while a format is viewed they become a per-format override (master untouched); otherwise a normal transform edit.
+   */
+  setTransformForView(clip: Clip, values: Partial<Record<'x' | 'y' | 'scale' | 'rotation' | 'opacity', number>>, label = 'Transform') {
+    const variantId = this.state.viewVariantId;
+    if (!variantId) return this.setTransformAtPlayhead(clip, values, label);
+    const transform: Record<string, number> = {};
+    for (const [p, raw] of Object.entries(values)) transform[p] = Math.round((raw as number) * 1e4) / 1e4;
+    return Object.keys(transform).length ? this.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, transform } }], label) : Promise.resolve(null);
   }
   /** The selected clip's transform as rendered at the playhead (keyframes applied). */
   transformNow(clip: Clip) { return transformAt(clip, T.max(clip.start, T.min(this.playhead, clipEnd(clip)))); }

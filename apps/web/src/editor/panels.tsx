@@ -6,6 +6,7 @@ import { FONT_CATALOG } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
+import { DeliverPanel } from './DeliverPanel.tsx';
 import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
@@ -17,12 +18,28 @@ const hint = (keymap: Keymap, id: string) => { const k = keymap.keysFor(id)[0]; 
 export function Header() {
   const { editor, state, t } = useEditorState();
   const { doc, save, revision, exportJob: job, lang } = state;
+  const viewVariant = state.viewVariantId ? doc?.variants?.[state.viewVariantId] ?? null : null;
   const exporting = job && ['queued', 'running', 'cancel-requested'].includes(job.status);
   return (
     <header className="header">
       <span className="logo" dangerouslySetInnerHTML={{ __html: LOGO_SVG }} />
       <strong className="brand">{BRAND.name}</strong>
       <span className="title" data-testid="project-name">{doc?.name ?? t('app.loading')}</span>
+      {doc && (
+        <label className="format-switch">
+          <span className="sr-only">{t('format.switch')}</span>
+          <select value={state.viewVariantId ?? ''} onChange={(e) => editor.setViewVariant(e.target.value || null)} data-testid="format-switch" aria-label={t('format.switch')}>
+            <option value="">{t('deliver.master')} ({doc.settings.width}×{doc.settings.height})</option>
+            {Object.values(doc.variants ?? {}).map((v) => <option key={v.id} value={v.id}>{v.name} ({v.width}×{v.height})</option>)}
+          </select>
+        </label>
+      )}
+      {viewVariant && (
+        <span className="format-badge" role="status" data-testid="format-badge" data-variant-id={viewVariant.id}>{t('format.badge')}</span>
+      )}
+      {viewVariant?.safeArea && (
+        <label className="check format-safe"><input type="checkbox" checked={state.safeAreaOn} onChange={(e) => editor.setSafeArea(e.target.checked)} data-testid="safe-area-toggle" /> {t('format.safeArea')}</label>
+      )}
       <span className="spacer" />
       <span className={`save ${save === 'save.conflict' || save === 'save.offline' ? 'warn' : ''}`} role="status" data-testid="save-state">{t(save)}</span>
       <span className="rev" data-testid="revision">{t('revision')} <bdi>{revision}</bdi></span>
@@ -118,7 +135,7 @@ export function Transport() {
       <button className="primary" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} data-testid="play">{p?.playing ? '❚❚' : '▶'}</button>
       <button className="ghost" onClick={() => run(editor, 'transport.nextFrame')} aria-label={t('frame.next')}>▶︎</button>
       <span className="timecode" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>
-      <span className="muted">/ {T.toTimecode(editor.duration, rate)} · {doc?.settings.width}×{doc?.settings.height} · {(rate.num / rate.den).toFixed(rate.den === 1 ? 0 : 2)} fps</span>
+      <span className="muted">/ {T.toTimecode(editor.duration, rate)} · {editor.viewDoc?.settings.width}×{editor.viewDoc?.settings.height} · {(rate.num / rate.den).toFixed(rate.den === 1 ? 0 : 2)} fps</span>
     </div>
   );
 }
@@ -131,7 +148,7 @@ const TRANSFORM_FIELDS: { prop: 'x' | 'y' | 'scale' | 'rotation' | 'opacity'; la
   { prop: 'opacity', label: 'transform.opacity', min: 0, max: 1, step: 0.05 },
 ];
 
-const INSPECTOR_TABS = ['clip', 'speech', 'captions', 'sound', 'review', 'all'] as const;
+const INSPECTOR_TABS = ['clip', 'speech', 'captions', 'sound', 'review', 'deliver', 'all'] as const;
 type InspectorTab = (typeof INSPECTOR_TABS)[number];
 const TAB_KEY = 'pf.inspector.tab.v1';
 
@@ -210,6 +227,10 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       <div {...panelProps('sound')}>
         <h2>{t('inspector.tab.sound')}</h2>
         <SoundPanel />
+      </div>
+      <div {...panelProps('deliver')}>
+        <h2>{t('inspector.tab.deliver')}</h2>
+        <DeliverPanel />
       </div>
       <div {...panelProps('review')}>
       <h2>{t('proposals')}</h2>
