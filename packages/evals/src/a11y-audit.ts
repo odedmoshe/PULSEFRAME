@@ -192,6 +192,14 @@ async function main() {
       await auditState('error-bar', { shown: errShown, text: errShown ? ((await page.locator('.error[role=alert]').textContent()) ?? '').slice(0, 120) : '' });
       if (errShown) await page.locator('.error[role=alert] button').click();
       Object.assign(states.at(-1), { closed: (await page.locator('.error[role=alert]').count()) === 0 });
+      // an export in progress: the export button reads "exporting", a cancel button is offered; the export is then cancelled
+      await page.getByTestId('export').click();
+      await page.getByTestId('export-cancel').waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('export-busy', { shown: (await page.getByTestId('export-cancel').count()) === 1 && await page.getByTestId('export').isDisabled() });
+      if (await page.getByTestId('export-cancel').count()) await page.getByTestId('export-cancel').click();
+      await page.getByTestId('export-cancel').waitFor({ state: 'detached', timeout: 30000 }).catch(() => {});
+      Object.assign(states.at(-1), { closed: (await page.getByTestId('export-cancel').count()) === 0 });
+      if (await page.locator('.error[role=alert] button').count()) await page.locator('.error[role=alert] button').click(); // a cancelled export is not reported as an error; close one if it is
       // source viewer dialog
       const sv = await dialogBehaviour('source-viewer', async () => { await page.getByTestId(`view-${up.assetId}`).click(); }, `[data-testid="view-${up.assetId}"]`);
       await auditState('source-viewer', { startsInside: sv.startsInside, tabStepsThatLeftTheDialog: sv.tabStepsThatLeftTheDialog }, true);
