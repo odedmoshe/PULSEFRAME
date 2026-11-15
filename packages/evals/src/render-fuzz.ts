@@ -135,12 +135,40 @@ async function main() {
         const level = (buf: Buffer) => { let sum = 0; for (let k = 0; k < buf.length; k += 97) sum += buf[k]!; return sum / Math.ceil(buf.length / 97); };
         const stillOf = async (i: number) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: (await call(`/projects/${pid}/frame?index=${i}`)).body as Buffer, maxBuffer: 1 << 28 });
         const stills = new Map<number, Buffer>();
+        // What is on the picture tracks at a frame, so the evidence says which features the compared frames actually exercised.
+        const fIdx = (t: T.RationalTime) => T.frameIndexAt(t, rate);
+        const vclips = d.sequences.seq_main.tracks.filter((x: any) => x.kind === 'video' && !x.hidden).flatMap((x: any) => x.clips).filter((c: any) => c.type === 'media');
+        const featuresAt = (i: number): string[] => {
+          const out = new Set<string>();
+          for (const c of vclips) {
+            const a = fIdx(c.start), b = a + fIdx(c.duration);
+            if (i < a || i >= b) continue;
+            if (c.reverse) out.add('reverse');
+            if (c.speed) out.add('speed');
+            if (c.freeze) out.add('freeze');
+            if (c.effects?.some((e: any) => e.enabled)) out.add('effect');
+            if (c.mask) out.add('mask');
+            if (c.blend) out.add('blend');
+            if (c.keyframes) out.add('keyframes');
+            if (c.transition && i < a + c.transition.frames) out.add('transition');
+          }
+          return [...out].sort();
+        };
+        row.features = { videoClips: vclips.length, reversed: vclips.filter((c: any) => c.reverse).length, speedChanged: vclips.filter((c: any) => c.speed).length, freezeFrames: vclips.filter((c: any) => c.freeze).length, withEffects: vclips.filter((c: any) => c.effects?.length).length, withTransition: vclips.filter((c: any) => c.transition).length };
+        // First the middle of up to two clips with a time-mapping feature (reverse, speed, freeze), so these are compared whenever they exist.
+        for (const c of vclips.filter((c: any) => c.reverse || c.speed || c.freeze).sort((x: any, y: any) => Number(!!y.reverse) - Number(!!x.reverse)).slice(0, 2)) {
+          const i = Math.min(frames - 1, fIdx(c.start) + Math.floor(fIdx(c.duration) / 2));
+          if (stills.has(i)) continue;
+          const st = await stillOf(i);
+          if (level(st) > 0.6) stills.set(i, st);
+        }
+        const wantFrames = stills.size + 3;
         for (const q of [0.5, 0.2, 0.8, 0.35, 0.65, 0.1, 0.9, 0.05, 0.95, 0.27, 0.43, 0.58, 0.73]) {
           const i = Math.min(frames - 1, Math.floor(frames * q));
           if (stills.has(i)) continue;
           const st = await stillOf(i);
           if (level(st) > 0.6) stills.set(i, st); // anything but a black frame: titles on black count
-          if (stills.size >= 3) break;
+          if (stills.size >= wantFrames) break;
         }
         const targets = [...stills.keys()];
         row.pictureFramesCompared = targets.length;
@@ -160,7 +188,7 @@ async function main() {
             const preview = Buffer.from(b64.data, 'base64');
             const mad = (x: Buffer, y: Buffer) => { if (x.length !== n || y.length !== n) return 999; let sum = 0; for (let k = 0; k < n; k++) sum += Math.abs(x[k]! - y[k]!); return Number((sum / n).toFixed(2)); };
             const worst = (x: Buffer, y: Buffer) => { if (x.length !== n || y.length !== n) return 999; let m = 0; for (let k = 0; k < n; k++) { const dd = Math.abs(x[k]! - y[k]!); if (dd > m) m = dd; } return m; };
-            parity.push({ frame: i, stillMeanLevel: Number(level(still).toFixed(1)), painted, previewSize: `${b64.w}x${b64.h}`, previewVsStill: { mean: mad(preview, still), worst: worst(preview, still) }, exportVsStill: { mean: mad(exported, still) } });
+            parity.push({ frame: i, features: featuresAt(i), stillMeanLevel: Number(level(still).toFixed(1)), painted, previewSize: `${b64.w}x${b64.h}`, previewVsStill: { mean: mad(preview, still), worst: worst(preview, still) }, exportVsStill: { mean: mad(exported, still) } });
           }
         } catch (e) { problems.push(`parity check did not run: ${String(e).slice(0, 140)}`); }
         finally { await ep.close(); fs.rmSync(row._export, { force: true }); }
@@ -179,8 +207,10 @@ async function main() {
     const bad = rows.filter((r) => /^FAILED/.test(String(r.outcome)));
     const rendered = rows.filter((r) => r.outcome === 'renders');
     const compared = rendered.reduce((k, r) => k + (r.pictureFramesCompared ?? 0), 0);
+    const byFeature: Record<string, number> = {};
+    for (const r of rendered) for (const pz of r.parity ?? []) for (const ft of pz.features ?? []) byFeature[ft] = (byFeature[ft] ?? 0) + 1;
     check(`every project produced by a random editing session renders: stills, picture+sound export with exactly the timeline's frames, sound-only export, preflight, linked formats (${rendered.length} of ${rows.length} sessions rendered; ${rows.length - rendered.length - bad.length} had an empty timeline)`, bad.length === 0 && rendered.length > 0, bad.map((r) => ({ seed: r.seed, rate: r.rate, problems: r.problems, session: r.session })));
-    check(`on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (${compared} frames compared in ${rendered.filter((r) => r.pictureFramesCompared).length} projects)`, compared >= rendered.length && bad.length === 0, rendered.map((r) => ({ seed: r.seed, frames: (r.parity ?? []).map((p: any) => ({ frame: p.frame, level: p.stillMeanLevel, preview: p.previewVsStill, export: p.exportVsStill.mean })) })));
+    check(`on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (${compared} frames compared in ${rendered.filter((r) => r.pictureFramesCompared).length} projects; frames per feature on the picture: ${JSON.stringify(byFeature)})`, compared >= rendered.length && bad.length === 0, rendered.map((r) => ({ seed: r.seed, frames: (r.parity ?? []).map((p: any) => ({ frame: p.frame, level: p.stillMeanLevel, preview: p.previewVsStill, export: p.exportVsStill.mean })) })));
   } catch (e) {
     console.error(e);
     check('run completed', false, String(e).slice(0, 600));
