@@ -121,7 +121,11 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
     const seq = draft.sequences[state.sequenceId];
     if (!seq) throw new Error(`sequence ${state.sequenceId} missing`);
     const existing = seq.tracks.find((t) => t.id === id);
-    if (existing) Object.assign(existing, structuredClone(state.track));
+    if (existing) {
+      // Replace, not merge: a property the track did not have in the target state (sound settings added later, say) must go.
+      for (const k of Object.keys(existing)) if (k !== 'clips' && !(k in state.track)) delete (existing as Record<string, unknown>)[k];
+      Object.assign(existing, structuredClone(state.track));
+    }
     else seq.tracks.splice(Math.min(state.index, seq.tracks.length), 0, { ...structuredClone(state.track), clips: [] });
   }
   // 3. clips

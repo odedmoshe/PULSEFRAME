@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, entityMap, sameEntity, sameEntityCanonical, type EntityState, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, createProject, creativeProjection, diffEntities, entityMap, restoreEntities, sameEntity, sameEntityCanonical, type EntityState, type OpCall, type ProjectDocument } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -47,5 +47,24 @@ describe('entity comparison', () => {
     expect(sameEntity(t1, t2)).toBe(true);
     expect(sameEntity(a, null)).toBe(false);
     expect(sameEntity(null, undefined)).toBe(true);
+  });
+});
+
+describe('restoring a track (the undo path)', () => {
+  it('a setting the track did not have before is removed again, not left behind (found by the operations fuzz)', () => {
+    const base = tx(createProject({ id: 'p2', name: 'p2' }), [{ op: 'add_track', args: { kind: 'audio', name: 'music' } }]);
+    const trackId = base.sequences.seq_main!.tracks.find((t) => t.name === 'music')!.id;
+    expect(base.sequences.seq_main!.tracks.find((t) => t.id === trackId)!.audio).toBeUndefined();
+    const changed = tx(base, [{ op: 'set_track_audio', args: { trackId, gain: 0.4, pan: -0.5 } }]);
+    expect(changed.sequences.seq_main!.tracks.find((t) => t.id === trackId)!.audio).toMatchObject({ gain: 0.4, pan: -0.5 });
+    const back = structuredClone(changed);
+    restoreEntities(back, diffEntities(base, changed).map((c) => ({ id: c.id, state: c.before })));
+    expect(back.sequences.seq_main!.tracks.find((t) => t.id === trackId)!.audio).toBeUndefined();
+    expect(creativeProjection(back)).toBe(creativeProjection(base));
+    // and a second change on top of an existing setting restores the earlier values
+    const again = tx(changed, [{ op: 'set_track_audio', args: { trackId, gain: 1.5 } }]);
+    const back2 = structuredClone(again);
+    restoreEntities(back2, diffEntities(changed, again).map((c) => ({ id: c.id, state: c.before })));
+    expect(creativeProjection(back2)).toBe(creativeProjection(changed));
   });
 });
