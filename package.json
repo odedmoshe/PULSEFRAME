@@ -10,6 +10,7 @@
     "dev": "pnpm --parallel --filter @pulseframe/server --filter @pulseframe/web dev",
     "build": "pnpm --filter @pulseframe/web build",
     "start": "pnpm --filter @pulseframe/server start",
+    "backup": "tsx apps/server/src/backup-cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "fixtures": "tsx packages/fixtures/src/cli.ts",

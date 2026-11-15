@@ -34,14 +34,20 @@ Stopped server (simplest, always consistent):
 ```bash
 cp -a .data /path/to/backup/pulseframe-data-$(date +%Y%m%d)
 ```
-Running server (consistent snapshot of the database, then the media):
+Running server (recommended; tested by `apps/server/src/backup.test.ts`):
+```bash
+pnpm backup /path/to/backup/pulseframe-data
+```
+It takes a consistent snapshot of the database with SQLite's online backup (including writes still in the WAL), then copies media and finished exports and `tokens.json`. Run it again into the same place and only new files are copied. The copy contains credentials; keep it private. It reads `PF_DATA_DIR` like the server does.
+
+The same by hand, if you prefer your own tools (this variant is **not** covered by a test; the `sqlite3` command-line tool is not part of this project):
 ```bash
 sqlite3 .data/pulseframe.sqlite ".backup '/path/to/backup/pulseframe.sqlite'"
 ```
 ```bash
 rsync -a .data/blobs .data/out .data/tokens.json /path/to/backup/
 ```
-Restore: stop the server, put the files back under `PF_DATA_DIR`, start the server. Blobs are content-addressed and immutable, so an incremental copy of `blobs/` is safe.
+Restore: stop the server, put the files back under `PF_DATA_DIR` (or point `PF_DATA_DIR` at the copy), start the server. Blobs are content-addressed and immutable, so an incremental copy of `blobs/` is safe.
 
 ### Moving or backing up one project
 The editor's Deliver tab has "Download archive" and "Import archive as a new project" (REST: `GET /api/v1/projects/{id}/archive`, `POST /api/v1/projects/import`). An archive is one tar file with the project and all its media; every file is verified on import. Edit history, exports and credentials are not included.

@@ -304,6 +304,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified: `quota.test.ts` (2, over HTTP): fits / does not fit / nothing kept from the refused upload; at the ceiling exports, imports and uploads are refused while a normal edit succeeds; room freed → uploads work again. 279 unit tests; owner-ui 7, phase0 54, phase12 13 (ceiling off).
 - Limits: the usage is measured by walking the data directory on each upload/export request (fine for hundreds of files, not measured for very large libraries); an export that starts under the ceiling may finish over it (its size is not known in advance); derivatives (thumbnails, proxies) made after an accepted upload are not pre-counted; sound-effect generation and model downloads are not checked; no per-project or per-credential quota; no automatic clean-up.
 
+**Checkpoint 13s — backup of a running server, restore tested**
+- `pnpm backup <destination>` (`apps/server/src/backup.ts`): SQLite online backup of the database (consistent, includes the WAL), then media and finished exports (only files that are missing or differ in size), then `tokens.json` (mode 600). Scratch files are skipped. Refuses a destination inside the data directory and a source that is not a data directory.
+- Verified by `backup.test.ts` (2): backup taken while a server is running with further edits made afterwards; a second server started on the copy has exactly the project, revision and history of the backup moment (not the later edit), serves byte-identical media, accepts the same token, and can edit and undo; a repeat backup copies nothing; the two refusals. The command itself was run once by hand against a proof data directory.
+- Why: the documented "running server" procedure needed the `sqlite3` command-line tool, which is not installed here, so it could not be verified; it is kept in OPERATIONS.md, marked as not covered by a test.
+- Limits: no scheduled/automatic backups, no retention, no encryption of the copy; "differs in size" is the change test for files (sufficient for content-addressed media and finished exports, not a general sync); restoring over a live server is not supported (stop it first); a backup taken mid-upload may lack a blob that the database does not reference yet (harmless).
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -328,7 +334,7 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 Unblocked (no decision needed), roughly by value:
 1. Editor: J/K/L, source viewer, workspaces, marquee selection (Phase 3 carry-over; markers and multi-select are done).
 2. Speed ramps, reverse, freeze frame, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed and linear volume keys are done).
-4. Whole-data-directory restore test; automatic backups (an optional storage ceiling exists).
+4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
 7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
@@ -348,7 +354,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 279 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 281 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
