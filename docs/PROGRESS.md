@@ -554,6 +554,9 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified here: `insertgap.test.ts` (6 tests; the new one covers two gaps, a track-only gap that must stay, markers, one-step undo, a range, leading empty time, refusals); the op is in the fuzz suites; 402 unit tests; `pnpm proof:phase3` 32/32 (palette command on a real project: afterwards the timeline is exactly as long as its covered frames and no covered frame was lost); accessibility audit clean.
 - The operations fuzz now runs 90 steps per seed by default (was 70): with more operations in the generator, 70 steps no longer reached an accepted `delete_effect_keyframe` in the default 60 seeds.
 
+**Regression after checkpoint 15b — all passing (current CPU profile)**
+- `pnpm proof` 54 · phase3 32 · phase4 19 · phase5 34 · phase6 35 · phase7 31 · phase8 20 · phase9 12 · phase11 12 · phase12 16 · browser-export 23 · editor-interactions 20 · owner-ui 9 · speed 16 · soak 7 · render-fuzz 2 (with `close_gaps`, `slip_clip` and `insert_gap` in the generator) · start-offset 4 · projects 2. Each proof ran under its own time limit; none hung. Not rerun since the regression after 14z (no change touches them): inputs, images, long, seek, parity. Unit tests 402 and the accessibility audit were run at checkpoint 15b.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
