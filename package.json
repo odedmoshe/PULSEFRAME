@@ -30,6 +30,7 @@
     "conformance:start-offset": "tsx packages/evals/src/start-offset.ts",
     "conformance:inputs": "tsx packages/evals/src/input-matrix.ts",
     "conformance:images": "tsx packages/evals/src/image-matrix.ts",
+    "conformance:projects": "tsx packages/evals/src/project-matrix.ts",
     "proof:phase5": "tsx packages/evals/src/phase5-proof.ts",
     "proof:phase6": "tsx packages/evals/src/phase6-proof.ts",
     "proof:phase7": "tsx packages/evals/src/phase7-proof.ts",

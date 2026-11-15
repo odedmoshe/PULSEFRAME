@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T06:29:42.301Z",
+  "ranAt": "2026-11-15T07:32:25.190Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,47 +13,47 @@
       "committed": 2641,
       "refusedAsInvalidOrConflict": 359,
       "serverErrors": 0,
-      "wallSeconds": 54.6,
+      "wallSeconds": 55.4,
       "finalRevision": 2631,
       "clips": 708
     },
     "commitLatencyMs": {
       "first300": {
-        "median": 4.86,
-        "p95": 7.88
+        "median": 4.31,
+        "p95": 7.64
       },
       "last300": {
-        "median": 19.42,
-        "p95": 28.35
+        "median": 19.53,
+        "p95": 29.34
       },
       "note": "includes HTTP round trip on loopback; each commit is followed by a full project read in this harness",
       "smallProjectAfterLongHistory": {
-        "median": 4.68,
-        "p95": 6.18
+        "median": 4.7,
+        "p95": 8.05
       },
       "scaling": {
         "clipsAtEnd": 708,
-        "msPerHundredClips": 2.06,
+        "msPerHundredClips": 2.15,
         "explanation": "every commit copies, validates, diffs and stores the whole document, so cost grows with project size"
       }
     },
     "storage": {
-      "sqliteBytes": 7507968,
-      "bytesPerCommit": 2843
+      "sqliteBytes": 7495680,
+      "bytesPerCommit": 2838
     },
     "memory": {
-      "harnessAndServerRssGrowthMb": 151
+      "harnessAndServerRssGrowthMb": 172
     },
     "replay": {
       "opsReplayed": 2631,
-      "ms": 7669
+      "ms": 7654
     },
     "restart": {
-      "reopenMs": 22
+      "reopenMs": 18
     },
     "archive": {
       "bytes": 390656,
-      "exportImportMs": 910
+      "exportImportMs": 860
     }
   },
   "passed": 7,
@@ -67,7 +67,7 @@
         "committed": 2641,
         "refusedAsInvalidOrConflict": 359,
         "serverErrors": 0,
-        "wallSeconds": 54.6,
+        "wallSeconds": 55.4,
         "finalRevision": 2631,
         "clips": 708
       }
@@ -76,30 +76,30 @@
       "name": "history length does not slow edits: a small project in the same database, after thousands of revisions elsewhere, commits as fast as at the start of the session",
       "ok": true,
       "detail": {
-        "median": 4.68,
-        "p95": 6.18
+        "median": 4.7,
+        "p95": 8.05
       }
     },
     {
-      "name": "project size does slow edits (measured, a known limit of whole-document commits): median 19.42 ms with 708 clips; regression guard: under 50 ms at this size",
+      "name": "project size does slow edits (measured, a known limit of whole-document commits): median 19.53 ms with 708 clips; regression guard: under 50 ms at this size",
       "ok": true,
       "detail": {
         "first300": {
-          "median": 4.86,
-          "p95": 7.88
+          "median": 4.31,
+          "p95": 7.64
         },
         "last300": {
-          "median": 19.42,
-          "p95": 28.35
+          "median": 19.53,
+          "p95": 29.34
         },
         "note": "includes HTTP round trip on loopback; each commit is followed by a full project read in this harness",
         "smallProjectAfterLongHistory": {
-          "median": 4.68,
-          "p95": 6.18
+          "median": 4.7,
+          "p95": 8.05
         },
         "scaling": {
           "clipsAtEnd": 708,
-          "msPerHundredClips": 2.06,
+          "msPerHundredClips": 2.15,
           "explanation": "every commit copies, validates, diffs and stores the whole document, so cost grows with project size"
         }
       }
@@ -109,14 +109,14 @@
       "ok": true,
       "detail": {
         "opsReplayed": 2631,
-        "ms": 7669
+        "ms": 7654
       }
     },
     {
       "name": "after a server restart the project reopens identical, accepts new edits, and undo history still works",
       "ok": true,
       "detail": {
-        "reopenMs": 22
+        "reopenMs": 18
       }
     },
     {
@@ -124,7 +124,7 @@
       "ok": true,
       "detail": {
         "bytes": 390656,
-        "exportImportMs": 910,
+        "exportImportMs": 860,
         "blobsAdded": 1
       }
     },

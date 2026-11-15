@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T06:33:27.827Z",
+  "ranAt": "2026-11-15T07:36:08.110Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,33 +13,33 @@
   "measurements": {
     "minutes": 20,
     "fileMB": 37.9,
-    "generateSeconds": 68.4,
+    "generateSeconds": 69.3,
     "ingestSeconds": 0.4,
     "analysis": {
       "beats": {
         "status": "succeeded",
-        "seconds": 12.3
+        "seconds": 12.7
       },
       "scenes": {
         "status": "succeeded",
-        "seconds": 15.2
+        "seconds": 15.1
       }
     },
     "editsDuringAnalysis": {
       "count": 40,
-      "medianMs": 13,
-      "p95Ms": 28,
-      "maxMs": 28
+      "medianMs": 12,
+      "p95Ms": 23,
+      "maxMs": 24
     },
     "timeline": {
       "shots": 20,
-      "splitMs": 16,
-      "timelineQueryMs": 41,
+      "splitMs": 25,
+      "timelineQueryMs": 55,
       "beatMarkers": 2000,
       "userMarkers": 40
     },
     "editor": {
-      "openSeconds": 0.6,
+      "openSeconds": 0.7,
       "seekToLastFrameSeconds": 0.4,
       "meanLevelOfMiddleRow": 111.2,
       "timecode": "00:19:59:29"
@@ -59,7 +59,7 @@
       "name": "scene job: finishes and finds all 19 cuts on the exact frames, no false cuts",
       "ok": true,
       "detail": {
-        "seconds": 15.2,
+        "seconds": 15.1,
         "found": 19,
         "firstWrong": null
       }
@@ -68,7 +68,7 @@
       "name": "beat job: finishes with a tempo within 1 BPM of 120 and a beat count within 2% of 2400",
       "ok": true,
       "detail": {
-        "seconds": 12.3,
+        "seconds": 12.7,
         "bpm": 120.19,
         "count": 2399,
         "confidence": 0.992
@@ -79,9 +79,9 @@
       "ok": true,
       "detail": {
         "count": 40,
-        "medianMs": 13,
-        "p95Ms": 28,
-        "maxMs": 28
+        "medianMs": 12,
+        "p95Ms": 23,
+        "maxMs": 24
       }
     },
     {
@@ -89,8 +89,8 @@
       "ok": true,
       "detail": {
         "shots": 20,
-        "splitMs": 16,
-        "timelineQueryMs": 41,
+        "splitMs": 25,
+        "timelineQueryMs": 55,
         "beatMarkers": 2000,
         "userMarkers": 40
       }
@@ -99,7 +99,7 @@
       "name": "editor: opens the 20-minute project and paints the very last frame (35999) after a jump to the end, picture not black, no page errors",
       "ok": true,
       "detail": {
-        "openSeconds": 0.6,
+        "openSeconds": 0.7,
         "seekToLastFrameSeconds": 0.4,
         "meanLevelOfMiddleRow": 111.2,
         "timecode": "00:19:59:29",
