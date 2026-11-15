@@ -324,10 +324,18 @@ async function main() {
     const stoppedAt = await tcFrame();
     await sleep(300);
     const sh4 = await shuttleText(), still = (await tcFrame()) === stoppedAt, pausedIcon = (await page.getByTestId('play').textContent()) === '▶';
+    // K stops a shuttle and holds the frame
+    await page.keyboard.press('l'); await page.keyboard.press('l');
+    await page.getByTestId('shuttle').waitFor();
+    await page.keyboard.press('k');
+    const kAt = await tcFrame();
+    await sleep(300);
+    const kStops = (await shuttleText()) === '' && (await tcFrame()) === kAt && (await page.getByTestId('play').textContent()) === '▶';
     await page.mouse.click(rb.x + 60.5, rb.y + 5); // frame 20
     for (let i = 0; i < 3; i++) await page.keyboard.press('j'); // ×4 backwards: reaches the start within a fraction of a second
     await page.waitForFunction(() => !document.querySelector('[data-testid=shuttle]') && document.querySelector('[data-testid=play]')?.textContent === '▶', undefined, { timeout: 5000 }).catch(() => {});
     const atStart = await tcFrame(), shEnd = await shuttleText();
+    check('shuttle: K stops it and the frame holds', kStops);
     check('shuttle: L plays, L again goes to 2× (indicator shown, measured speed about 2×); J goes backwards at 1× and J again at 2×; Space stops and the frame holds; shuttling backwards stops at the first frame', sh0 === '' && /▶▶ ×2/.test(sh1) && fwd2 > 1.5 && fwd2 < 2.5 && /◀◀ ×1/.test(sh2) && back1 < -0.6 && back1 > -1.4 && /◀◀ ×2/.test(sh3) && sh4 === '' && still && pausedIcon && atStart === 0 && shEnd === '', { sh0, sh1, fwd2: +fwd2.toFixed(2), sh2, back1: +back1.toFixed(2), sh3, sh4, still, pausedIcon, atStart, shEnd });
 
     console.log('\n# playback continues when the project changes');
