@@ -179,6 +179,8 @@ async function main() {
     await page.goto(`${s.ownerUrl}&project=${pid}`);
     await page.getByTestId('deliver-panel').waitFor();
     const ratio = async () => page.getByTestId('preview').evaluate((c) => (c as HTMLCanvasElement).width / (c as HTMLCanvasElement).height);
+    // Wait for the first painted frame: before it the canvas still has the browser's default size (300×150, ratio 2), which this check once measured by mistake.
+    await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame !== undefined, undefined, { timeout: 15000 });
     const masterRatio = await ratio();
     await page.getByTestId('format-switch').selectOption(vert);
     await page.getByTestId('format-badge').waitFor();

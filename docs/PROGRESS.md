@@ -310,6 +310,9 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Why: the documented "running server" procedure needed the `sqlite3` command-line tool, which is not installed here, so it could not be verified; it is kept in OPERATIONS.md, marked as not covered by a test.
 - Limits: no scheduled/automatic backups, no retention, no encryption of the copy; "differs in size" is the change test for files (sufficient for content-addressed media and finished exports, not a general sync); restoring over a live server is not supported (stop it first); a backup taken mid-upload may lack a blob that the database does not reference yet (harmless).
 
+**Regression note (after checkpoints 13o–13s)**
+- Full run: 281 unit tests; phase0 54, phase3 27, phase4 19, phase5 33, phase6 35, phase7 31, phase8 20, phase9 12, phase11 12, browser-export 23, editor-interactions 15, owner-ui 7, speed 12, soak 7, accessibility audit clean. **Phase 12 failed once (12/13)** in that run: the check measured the preview canvas before its first paint and read the browser's default 300×150 (ratio 2). The proof now waits for the first painted frame; three further runs passed 13/13. This was a race in the proof, present since the check was written, not a change in the product — but it means earlier Phase 12 passes depended on timing.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
