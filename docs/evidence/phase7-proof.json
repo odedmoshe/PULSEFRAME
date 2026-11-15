@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T02:09:14.844Z",
+  "ranAt": "2026-11-15T02:17:54.009Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -12,7 +12,7 @@
     "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
     "exportWithLooks": {
       "frames": 30,
-      "wallMs": 1106,
+      "wallMs": 1127,
       "minPsnrDb": 42.16,
       "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
     },
@@ -24,8 +24,8 @@
       "masks": 5
     }
   },
-  "passed": 30,
-  "total": 30,
+  "passed": 31,
+  "total": 31,
   "checks": [
     {
       "name": "catalog lists exactly what is registered: 12 effects with parameter schemas and defaults, 12 transitions, 17 blend modes",
@@ -148,6 +148,19 @@
       }
     },
     {
+      "name": "keyframed effect parameter: a blur radius animated from 0 to its end value makes the picture progressively softer, holds after the last key, and a frame in the middle is the same when rendered again",
+      "ok": true,
+      "detail": {
+        "steepestEdgeAtFrames10to50": [
+          117,
+          9.6,
+          5.4,
+          3.7,
+          3.6
+        ]
+      }
+    },
+    {
       "name": "difference of a picture with itself is black; add doubles (clamped); multiply squares; screen is the inverse of multiply — all within 2 levels",
       "ok": true,
       "detail": {
@@ -262,7 +275,7 @@
       "ok": true,
       "detail": {
         "frames": 30,
-        "wallMs": 1106,
+        "wallMs": 1127,
         "minPsnrDb": 42.16,
         "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
       }

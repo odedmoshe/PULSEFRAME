@@ -62,7 +62,7 @@ export function Timeline() {
                 const width = Math.max(4, T.toSeconds(c.duration) * pps - 1);
                 const asset = c.type === 'media' ? doc.assets[c.assetId] : undefined;
                 return (
-                  <button key={c.id} role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-clip-type={c.type} data-track-kind={tr.kind}
+                  <button key={c.id} role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-clip-type={c.type} data-track-kind={tr.kind}
                     style={{ left: T.toSeconds(c.start) * pps, width }} onClick={() => editor.select(c.id)} aria-pressed={selection.includes(c.id)}
                     aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (

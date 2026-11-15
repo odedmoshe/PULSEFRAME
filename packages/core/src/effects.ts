@@ -93,9 +93,22 @@ export type TransitionType = (typeof TRANSITIONS)[number]['id'];
 export const TransitionSchema = z.object({ type: z.enum(TRANSITION_IDS), frames: z.number().int().min(1).max(150) }).strict();
 export type Transition = z.infer<typeof TransitionSchema>;
 
+/** Same shape as a transform keyframe (schema.ts); repeated here because schema.ts imports this file. */
+const EffectKeySchema = z.object({ time: z.object({ value: z.string().regex(/^-?\d+$/), timescale: z.number().int().positive() }).strict(), value: z.number(), easing: z.enum(['linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out']) }).strict();
 export const EffectInstanceSchema = z
-  .object({ id: z.string().min(1).max(64), type: z.string().min(1).max(48), enabled: z.boolean(), params: z.record(z.string(), z.union([z.number(), z.string().max(64), z.boolean()])) })
+  .object({
+    id: z.string().min(1).max(64), type: z.string().min(1).max(48), enabled: z.boolean(), params: z.record(z.string(), z.union([z.number(), z.string().max(64), z.boolean()])),
+    /** Animation of numeric parameters: clip-local times, strictly increasing. A parameter with keys ignores its static value. */
+    keyframes: z.record(z.string(), z.array(EffectKeySchema).min(1).max(500)).optional(),
+  })
   .strict();
+/** Names of an effect's parameters that are numbers and can therefore be animated. */
+export function animatableParams(type: string): string[] {
+  const d = findEffect(type);
+  if (!d) return [];
+  const defaults = d.params.parse({}) as Record<string, unknown>;
+  return Object.keys(defaults).filter((k) => typeof defaults[k] === 'number' && k !== 'seed');
+}
 export type EffectInstance = z.infer<typeof EffectInstanceSchema>;
 
 /** Discovery payload for REST/MCP/Lab: everything registered, with JSON Schemas and defaults. */

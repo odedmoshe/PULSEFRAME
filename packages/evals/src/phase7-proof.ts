@@ -130,6 +130,16 @@ async function main() {
     check('stylize.shadow on a title: black pixels appear below the letters; the letters themselves stay', blackIn(shadow) > blackIn(noShadow) + 300, { before: blackIn(noShadow), after: blackIn(shadow) });
     await txs(pid, [{ op: 'delete_clip', args: { clipId: title } }]);
 
+    {
+      const kfx = (await txs(pid, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian', params: { radius: 0 } } }])).results[0].output.effectId;
+      await txs(pid, [{ op: 'set_effect_keyframe', args: { clipId, effectId: kfx, param: 'radius', time: f(10), value: 0 } }, { op: 'set_effect_keyframe', args: { clipId, effectId: kfx, param: 'radius', time: f(40), value: 0.05 } }]);
+      const steep = [10, 20, 30, 40, 50].map(async (n) => sharp(await still(pid, n)));
+      const sh = await Promise.all(steep);
+      const again20 = sharp(await still(pid, 20));
+      check('keyframed effect parameter: a blur radius animated from 0 to its end value makes the picture progressively softer, holds after the last key, and a frame in the middle is the same when rendered again', sh[0]! > sh[1]! && sh[1]! > sh[2]! && sh[2]! > sh[3]! && Math.abs(sh[3]! - sh[4]!) < 1.5 && again20 === sh[1], { steepestEdgeAtFrames10to50: sh.map((x) => Number(x.toFixed(1))) });
+      await txs(pid, [{ op: 'remove_effect', args: { clipId, effectId: kfx } }]);
+    }
+
     console.log('\n# blend modes (top layer identical to the layer below, so the expected result is exact arithmetic)');
     const two = await mk('phase7-blend');
     const tr2 = (await txs(two.pid, [{ op: 'add_track', args: { kind: 'video' } }])).results[0].output.trackId;

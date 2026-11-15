@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, describeCatalog, EFFECTS, effectParams, findClip, migrateProject, OpError, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, createProject, describeCatalog, EFFECTS, effectParams, effectParamsAt, findClip, migrateProject, OpError, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -53,6 +53,28 @@ describe('look ops', () => {
     expect(code(() => tx(doc, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian', params: { radius: 5 } } }]))).toBe('invalid_args');
     expect(code(() => tx(doc, [{ op: 'add_effect', args: { clipId: audioId, type: 'blur.gaussian' } }]))).toBe('incompatible');
     expect(code(() => tx(a.doc, [{ op: 'update_effect', args: { clipId, effectId: 'fx_nope', enabled: false } }]))).toBe('not_found');
+  });
+  it('effect parameters can be keyframed: range-checked, only numeric parameters, attached to the content through trims and splits', () => {
+    const { doc, clipId } = project();
+    const a = tx(doc, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian', params: { radius: 0 } } }]);
+    const fxId = a.results[0]!.output!.effectId as string;
+    let d = tx(a.doc, [{ op: 'set_effect_keyframe', args: { clipId, effectId: fxId, param: 'radius', time: f(0), value: 0 } }, { op: 'set_effect_keyframe', args: { clipId, effectId: fxId, param: 'radius', time: f(30), value: 0.06, easing: 'ease-in' } }]).doc;
+    expect(validateProject(d)).toEqual([]);
+    const fx = () => findClip(d, clipId)!.clip.effects![0]!;
+    expect(effectParamsAt(fx(), f(15)).radius).toBeCloseTo(0.03, 9);
+    expect(effectParamsAt(fx(), f(45)).radius).toBe(0.06); // holds the last value
+    expect(code(() => tx(d, [{ op: 'set_effect_keyframe', args: { clipId, effectId: fxId, param: 'radius', time: f(10), value: 9 } }]))).toBe('invalid_args');
+    expect(code(() => tx(d, [{ op: 'set_effect_keyframe', args: { clipId, effectId: fxId, param: 'nope', time: f(10), value: 0.1 } }]))).toBe('invalid_args');
+    expect(code(() => tx(d, [{ op: 'set_effect_keyframe', args: { clipId, effectId: fxId, param: 'radius', time: T.rt(1, 7), value: 0.01 } }]))).toBe('invalid_args');
+    // split at frame 20: the right half continues the same curve (its key times shift by -20)
+    const s = tx(d, [{ op: 'split_clip', args: { clipId, at: f(20) } }]);
+    const right = findClip(s.doc, s.results[0]!.output!.rightClipId as string)!.clip.effects![0]!;
+    expect(effectParamsAt(right, f(0)).radius).toBeCloseTo(effectParamsAt(fx(), f(20)).radius as number, 9);
+    expect(validateProject(s.doc)).toEqual([]);
+    // removing the last key freezes the value it had
+    d = tx(d, [{ op: 'delete_effect_keyframe', args: { clipId, effectId: fxId, param: 'radius', time: f(0) } }, { op: 'delete_effect_keyframe', args: { clipId, effectId: fxId, param: 'radius', time: f(30) } }]).doc;
+    expect(fx().keyframes).toBeUndefined();
+    expect(fx().params.radius).toBe(0.06);
   });
   it('an unknown effect type in a stored document is reported by validation (never silently dropped)', () => {
     const { doc, clipId } = project();

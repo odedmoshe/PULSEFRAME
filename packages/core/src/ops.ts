@@ -11,7 +11,7 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
+import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
 import { sampleKeyframes, shiftKeyframes } from './animation.ts';
@@ -877,6 +877,49 @@ defineOp({
     list.splice(Math.min(a.index ?? i, list.length), 0, fx);
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Updated effect ${fx.type}${a.enabled === false ? ' (bypassed)' : ''}`, output: { params: fx.params } };
+  },
+});
+const FxKeyTarget = { clipId: z.string(), effectId: z.string(), param: z.string().max(48), time: RT.describe('Offset from the clip start (frame-aligned)') };
+defineOp({
+  name: 'set_effect_keyframe',
+  version: 1,
+  description: 'Animate a numeric effect parameter: add or replace a keyframe at a clip-local time. The first key on a parameter starts animating it; between keys the value is interpolated with the easing of the earlier key. list_catalog shows each effect\'s parameters and ranges.',
+  args: z.object({ ...FxKeyTarget, value: z.number(), easing: z.enum(EASINGS).optional() }).strict(),
+  apply(d, a) {
+    const { clip } = pictureClip(d, a.clipId);
+    const i = mustEffect(clip, a.effectId);
+    const fx = { ...clip.effects![i]! };
+    if (!animatableParams(fx.type).includes(a.param)) throw new OpError('invalid_args', `"${a.param}" is not a numeric parameter of ${fx.type}`, { animatable: animatableParams(fx.type) });
+    assertAligned(d, a.time, 'time');
+    parseEffect(fx.type, { ...fx.params, [a.param]: a.value }); // range check
+    const keys = [...(fx.keyframes?.[a.param] ?? [])];
+    const k = keys.findIndex((x) => T.eq(x.time, a.time));
+    const key = { time: a.time, value: a.value, easing: a.easing ?? (k >= 0 ? keys[k]!.easing : 'linear') };
+    if (k >= 0) keys[k] = key; else keys.push(key);
+    keys.sort((x, y) => T.cmp(x.time, y.time));
+    fx.keyframes = { ...fx.keyframes, [a.param]: keys };
+    clip.effects = clip.effects!.map((e, n) => (n === i ? fx : e));
+    return { affectedIds: [clip.id], summary: `Keyframe ${fx.type}.${a.param}=${a.value} at +${fmt(a.time)}`, output: { keyframeCount: keys.length } };
+  },
+});
+defineOp({
+  name: 'delete_effect_keyframe',
+  version: 1,
+  description: 'Remove the keyframe of an effect parameter at exactly this clip-local time. Removing the last key leaves the parameter at the value it had there.',
+  args: z.object(FxKeyTarget).strict(),
+  apply(d, a) {
+    const { clip } = pictureClip(d, a.clipId);
+    const i = mustEffect(clip, a.effectId);
+    const fx = { ...clip.effects![i]! };
+    const keys = fx.keyframes?.[a.param] ?? [];
+    const k = keys.findIndex((x) => T.eq(x.time, a.time));
+    if (k < 0) throw new OpError('not_found', 'no keyframe at that time', { param: a.param, time: a.time });
+    const rest = keys.filter((_, n) => n !== k);
+    const kf = { ...fx.keyframes };
+    if (rest.length) kf[a.param] = rest; else { delete kf[a.param]; fx.params = { ...fx.params, [a.param]: keys[k]!.value }; }
+    if (Object.keys(kf).length) fx.keyframes = kf; else delete fx.keyframes;
+    clip.effects = clip.effects!.map((e, n) => (n === i ? fx : e));
+    return { affectedIds: [clip.id], summary: `Removed keyframe ${fx.type}.${a.param}`, output: { keyframeCount: rest.length } };
   },
 });
 defineOp({

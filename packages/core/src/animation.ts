@@ -4,6 +4,7 @@
  */
 import * as T from '@pulseframe/time';
 import { ANIMATABLE, type Clip, type Keyframe, type Transform } from './schema.ts';
+import type { EffectInstance } from './effects.ts';
 
 const EASE: Record<Keyframe['easing'], (u: number) => number> = {
   linear: (u) => u,
@@ -40,6 +41,14 @@ export function transformAt(clip: Clip, time: T.RationalTime): Transform {
 
 /** Shift every key by -delta (used when the clip start moves relative to its content: trim-start and the right half of a split). */
 export function shiftKeyframes(clip: Clip, delta: T.RationalTime): void {
-  if (!clip.keyframes) return;
-  for (const p of ANIMATABLE) { const keys = clip.keyframes[p]; if (keys) clip.keyframes[p] = keys.map((k) => ({ ...k, time: T.sub(k.time, delta) })); }
+  if (clip.keyframes) for (const p of ANIMATABLE) { const keys = clip.keyframes[p]; if (keys) clip.keyframes[p] = keys.map((k) => ({ ...k, time: T.sub(k.time, delta) })); }
+  // Effect parameter animation is attached to the content in the same way.
+  for (const fx of clip.effects ?? []) if (fx.keyframes) for (const p of Object.keys(fx.keyframes)) fx.keyframes[p] = fx.keyframes[p]!.map((k) => ({ ...k, time: T.sub(k.time, delta) }));
+}
+/** An effect's parameters at clip-local time `local`: static values with animated numeric parameters sampled from their keys. */
+export function effectParamsAt(fx: EffectInstance, local: T.RationalTime): EffectInstance['params'] {
+  if (!fx.keyframes) return fx.params;
+  const out = { ...fx.params };
+  for (const [p, keys] of Object.entries(fx.keyframes)) if (keys.length) out[p] = sampleKeyframes(keys, local);
+  return out;
 }

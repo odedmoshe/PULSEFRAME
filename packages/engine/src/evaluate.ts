@@ -8,7 +8,7 @@
  */
 import * as T from '@pulseframe/time';
 import { captionAt, type CaptionLayer } from './captions.ts';
-import { transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { effectParamsAt, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 
 /** Look applied by the compositor after the layer is placed: effects in order, then mask, then blend/opacity. */
 export interface LayerLook {
@@ -49,8 +49,9 @@ export interface RenderGraph {
   audio: ActiveAudio[];
 }
 
-const look = (clip: Clip): LayerLook => {
-  const fx = clip.effects?.filter((e) => e.enabled).map((e) => ({ type: e.type, params: e.params }));
+const look = (clip: Clip, time: T.RationalTime): LayerLook => {
+  const local = T.sub(time, clip.start);
+  const fx = clip.effects?.filter((e) => e.enabled).map((e) => ({ type: e.type, params: effectParamsAt(e, local) }));
   return { ...(fx?.length ? { effects: fx } : {}), ...(clip.blend ? { blend: clip.blend } : {}), ...(clip.type === 'media' && clip.mask ? { mask: clip.mask } : {}) };
 };
 const smooth = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
@@ -61,7 +62,7 @@ function pictureLayer(doc: ProjectDocument, track: Track, clip: Extract<Clip, { 
   if (!asset) return null;
   const sourceTime = T.add(clip.sourceIn, T.sub(time, clip.start));
   if (asset.kind === 'image' && asset.image)
-    return { kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time), ...look(clip) };
+    return { kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time), ...look(clip, time) };
   if (!asset.video) return null;
   const rate = asset.video.frameRate;
   let idx = Math.max(0, T.frameIndexAt(sourceTime, rate));
@@ -70,7 +71,7 @@ function pictureLayer(doc: ProjectDocument, track: Track, clip: Extract<Clip, { 
   return {
     kind: 'video', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime, sourceFrameIndex: idx,
     sourceSeekSeconds: ((idx + 0.5) * rate.den) / rate.num,
-    sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: transformAt(clip, time), ...look(clip),
+    sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: transformAt(clip, time), ...look(clip, time),
   };
 }
 
@@ -86,7 +87,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       // half-open [start, start+duration)
       if (T.lt(time, clip.start) || !T.lt(time, T.add(clip.start, clip.duration))) continue;
       if (clip.type === 'text') {
-        if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time), ...look(clip) });
+        if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time), ...look(clip, time) });
         continue;
       }
       if (clip.type !== 'media') continue;

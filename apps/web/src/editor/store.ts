@@ -47,6 +47,8 @@ export interface EditorState {
   safeAreaOn: boolean;
   /** Clip ids remembered by Copy (session state only). */
   clipboard: string[];
+  /** Clips marked by Cut; they move on the next Paste (nothing is committed until then). */
+  cutPending: string[];
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
@@ -57,7 +59,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], viewVariantId: null, safeAreaOn: readSafeArea(), clipboard: [],
+    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], viewVariantId: null, safeAreaOn: readSafeArea(), clipboard: [], cutPending: [],
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -117,7 +119,10 @@ export class Editor {
     if (p.revision >= this.state.revision || !this.state.doc) {
       const selection = this.state.selection.filter((id) => findClip(p.project, id));
       const viewVariantId = this.state.viewVariantId && p.project.variants?.[this.state.viewVariantId] ? this.state.viewVariantId : null;
-      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId });
+      // A document change that removes cut-pending clips cancels the cut.
+      const cutAlive = this.state.cutPending.filter((id) => findClip(p.project, id));
+      const cut = cutAlive.length === this.state.cutPending.length ? {} : { cutPending: [] as string[], clipboard: [] as string[] };
+      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId, ...cut });
       const vd = this.viewDoc;
       if (vd) this.player?.setDoc(vd);
     }
@@ -334,7 +339,11 @@ export class Editor {
     return Object.keys(transform).length ? this.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, transform } }], label) : Promise.resolve(null);
   }
   /** Remember the selected clips for Paste. */
-  copySelection() { if (this.state.selection.length) this.set({ clipboard: [...this.state.selection] }); }
+  copySelection() { if (this.state.selection.length) this.set({ clipboard: [...this.state.selection], cutPending: [] }); }
+  /** Remember the selected clips and mark them cut-pending; they move on Paste. */
+  cutSelection() { if (this.state.selection.length) this.set({ clipboard: [...this.state.selection], cutPending: [...this.state.selection] }); }
+  /** Cancel a pending cut (the clipboard goes with it). */
+  clearCut() { if (this.state.cutPending.length) this.set({ cutPending: [], clipboard: [] }); }
   /** Copied clip ids that still exist in the document. */
   get clipboardLive(): string[] { const d = this.state.doc; return d ? this.state.clipboard.filter((id) => findClip(d, id)) : []; }
   private async duplicate(clipIds: string[], at: T.RationalTime, label: string) {
@@ -346,7 +355,20 @@ export class Editor {
   pasteClipboard() {
     const ids = this.clipboardLive;
     if (!ids.length) { this.set({ error: this.t('clipboard.gone') }); return Promise.resolve(null); }
+    if (this.state.cutPending.length) return this.pasteCut(ids);
     return this.duplicate(ids, this.playhead, 'Paste');
+  }
+  /** Cut + paste = one transaction: duplicate at the playhead, then delete the originals. */
+  private async pasteCut(ids: string[]) {
+    const r = await this.commit([
+      { op: 'duplicate_clips', args: { clipIds: ids, at: this.playhead } },
+      ...ids.map((clipId) => ({ op: 'delete_clip', args: { clipId, includeLinked: false } })),
+    ], 'Move clips');
+    if (r) {
+      const created = r.results[0]?.output?.createdClipIds;
+      this.set({ cutPending: [], clipboard: [], ...(Array.isArray(created) && created.length ? { selection: created as string[], ...(this.following ? {} : { followAgent: false }) } : {}) });
+    }
+    return r;
   }
   duplicateSelection() {
     const doc = this.state.doc;

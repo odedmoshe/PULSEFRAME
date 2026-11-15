@@ -1,5 +1,5 @@
 import * as T from '@pulseframe/time';
-import { findEffect } from './effects.ts';
+import { animatableParams, findEffect } from './effects.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -70,6 +70,10 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           const d = findEffect(fx.type);
           if (!d) issues.push({ code: 'unknown_effect', message: `clip ${c.id} uses effect "${fx.type}", which this build does not have`, ids: [c.id] });
           else if (!d.params.safeParse(fx.params).success) issues.push({ code: 'effect_params', message: `clip ${c.id} effect ${fx.type} has invalid parameters`, ids: [c.id] });
+          for (const [param, keys] of Object.entries(fx.keyframes ?? {})) {
+            const ok = !!d && animatableParams(fx.type).includes(param) && keys.every((k, i) => (i === 0 || T.lt(keys[i - 1]!.time, k.time)) && T.isFrameAligned(k.time, rate) && d.params.safeParse({ ...fx.params, [param]: k.value }).success);
+            if (!ok) issues.push({ code: 'effect_keyframes', message: `clip ${c.id} effect ${fx.type}: keyframes of "${param}" are not animatable, out of range, unsorted or off the frame grid`, ids: [c.id] });
+          }
           if (seenFx.has(fx.id)) issues.push({ code: 'duplicate_id', message: `clip ${c.id} has two effects with id ${fx.id}`, ids: [c.id] });
           seenFx.add(fx.id);
         }
