@@ -16,7 +16,7 @@ import type { DerivativeKind, Derivatives } from './derive.ts';
 import type { Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
-import { detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
+import { BEAT_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX } from './sfx.ts';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
@@ -650,7 +650,9 @@ async function measureAndAttach(store: Store, actor: string, projectId: string, 
     args = { method: 'ffmpeg scene score (hard cuts only; dissolves are not detected)', params: { threshold }, times: await heavy(() => detectScenes(file, threshold, asset.video!.frameRate)) };
   } else {
     const r = await heavy(() => detectBeatsOfFile(file));
-    args = { method: 'spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse', params: { sampleRate: 22050, hop: 256 }, times: r.beats.filter((s) => s <= T.toSeconds(asset.duration)).map((s) => T.fromSeconds(s.toFixed(3))), bpm: r.bpm, confidence: r.confidence };
+    // The tracker reads at most the first 20 minutes of audio; say so in the stored result instead of leaving the rest silently without beats.
+    const partial = T.toSeconds(asset.duration) > BEAT_MAX_SECONDS + 1;
+    args = { method: `spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse${partial ? `; ONLY THE FIRST ${BEAT_MAX_SECONDS / 60} MINUTES were analysed` : ''}`, params: { sampleRate: 22050, hop: 256, ...(partial ? { analysedSeconds: BEAT_MAX_SECONDS } : {}) }, times: r.beats.filter((s) => s <= T.toSeconds(asset.duration)).map((s) => T.fromSeconds(s.toFixed(3))), bpm: r.bpm, confidence: r.confidence };
   }
   if (abandoned()) return null;
   // Measuring can take a while: the asset may be gone, or the result corrected by hand, since it started.

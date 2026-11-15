@@ -1,0 +1,110 @@
+{
+  "ranAt": "2026-11-15T04:44:37.272Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "One run, one machine, one SYNTHETIC 20-minute file (640x360, H.264 + AAC, test patterns and clicks). Shows the mechanisms hold at this length; not a performance qualification, not real footage or music. Export of the long timeline was not run.",
+  "passed": 6,
+  "total": 6,
+  "measurements": {
+    "minutes": 20,
+    "fileMB": 37.9,
+    "generateSeconds": 71.4,
+    "ingestSeconds": 0.4,
+    "analysis": {
+      "beats": {
+        "status": "succeeded",
+        "seconds": 14.8
+      },
+      "scenes": {
+        "status": "succeeded",
+        "seconds": 17.3
+      }
+    },
+    "editsDuringAnalysis": {
+      "count": 46,
+      "medianMs": 12,
+      "p95Ms": 24,
+      "maxMs": 28
+    },
+    "timeline": {
+      "shots": 20,
+      "splitMs": 27,
+      "timelineQueryMs": 58,
+      "beatMarkers": 2000,
+      "userMarkers": 46
+    },
+    "editor": {
+      "openSeconds": 0.7,
+      "seekToLastFrameSeconds": 0.5,
+      "meanLevelOfMiddleRow": 111.2,
+      "timecode": "00:19:59:29"
+    }
+  },
+  "checks": [
+    {
+      "name": "ingest: the 20-minute file is accepted and probed (duration within one frame of 1200 s, 36000 frames)",
+      "ok": true,
+      "detail": {
+        "seconds": 1200,
+        "frames": 36000,
+        "ingestSeconds": 0.4
+      }
+    },
+    {
+      "name": "scene job: finishes and finds all 19 cuts on the exact frames, no false cuts",
+      "ok": true,
+      "detail": {
+        "seconds": 17.3,
+        "found": 19,
+        "firstWrong": null
+      }
+    },
+    {
+      "name": "beat job: finishes with a tempo within 1 BPM of 120 and a beat count within 2% of 2400",
+      "ok": true,
+      "detail": {
+        "seconds": 14.8,
+        "bpm": 120.19,
+        "count": 2399,
+        "confidence": 0.992
+      }
+    },
+    {
+      "name": "edits made while both jobs ran all succeeded and stayed prompt (median under 100 ms, worst under 2 s)",
+      "ok": true,
+      "detail": {
+        "count": 46,
+        "medianMs": 12,
+        "p95Ms": 24,
+        "maxMs": 28
+      }
+    },
+    {
+      "name": "split_at_scenes turns the 20-minute clip into 20 shots in one transaction; the timeline query answers within 2 s",
+      "ok": true,
+      "detail": {
+        "shots": 20,
+        "splitMs": 27,
+        "timelineQueryMs": 58,
+        "beatMarkers": 2000,
+        "userMarkers": 46
+      }
+    },
+    {
+      "name": "editor: opens the 20-minute project and paints the very last frame (35999) after a jump to the end, picture not black, no page errors",
+      "ok": true,
+      "detail": {
+        "openSeconds": 0.7,
+        "seekToLastFrameSeconds": 0.5,
+        "meanLevelOfMiddleRow": 111.2,
+        "timecode": "00:19:59:29",
+        "errors": []
+      }
+    }
+  ]
+}

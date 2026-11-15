@@ -26,6 +26,7 @@
     "proof:phase4": "tsx packages/evals/src/phase4-proof.ts",
     "proof:browser-export": "tsx packages/evals/src/browser-export-proof.ts",
     "conformance:parity": "tsx packages/evals/src/parity-suite.ts",
+    "conformance:long": "tsx packages/evals/src/long-media.ts",
     "proof:phase5": "tsx packages/evals/src/phase5-proof.ts",
     "proof:phase6": "tsx packages/evals/src/phase6-proof.ts",
     "proof:phase7": "tsx packages/evals/src/phase7-proof.ts",

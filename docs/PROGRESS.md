@@ -335,6 +335,15 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified: `analysisJobs.test.ts` (1 test, real ffmpeg on a 12 s click track): 202 + job, succeeded with ≥20 beats at 120 ± 2 BPM, identical beat times to the in-request path, cancel of queued and finished jobs, restart with one interrupted job (recovered and succeeded) and one queued job against a hand-corrected result (failed with the typed error). 284 unit tests; phase9 12, editor-interactions 15, phase11 12, phase5 33.
 - Limits: tested on 12 s of audio only — **no long file was analysed**, so the claim is about the mechanism, not about hour-long media; no progress percentage; a running measurement cannot be interrupted, only abandoned; the heavy-work limiter still applies (two at a time, short queue), so many simultaneous jobs fail fast with 429 rather than queueing durably; silence detection and loudness measurement are still in-request.
 
+**Checkpoint 13w — long media run (one synthetic 20-minute file)**
+- `pnpm conformance:long` (`packages/evals/src/long-media.ts`, evidence `docs/evidence/long-media.json`, 6 checks): a 20-minute 640×360 H.264+AAC file with a hard cut every minute and a 120 BPM click.
+- Measured in that one run on this machine: ingest 0.4 s (36,000 frames probed, duration exact); scene job 17 s, all 19 cuts on the exact frames, no false cuts; beat job 15 s, 120.19 BPM, 2,399 of 2,400 beats; 46 edits committed while both jobs ran, median 12 ms, worst 28 ms; `split_at_scenes` into 20 shots 27 ms; timeline query 58 ms; editor opened in 0.7 s and painted the last frame (35,999) 0.5 s after a jump to the end.
+- **What this does and does not show.** It shows the mechanisms hold at this length for one synthetic file. It is one sample: not a performance qualification, not camera footage, not real music, not a GPU profile. Not covered: export of the long timeline (the earlier 10-minute A/V-sync export is the longest export run), playback through the whole file, files longer than 20 minutes, high-resolution or high-bitrate sources, proxy generation time.
+- Found while building the fixture:
+  - Beat analysis reads only the first 20 minutes of audio and used to stop there silently. The stored result now says so in its method text and parameters when the file is longer. **No file longer than 20 minutes was analysed to see this message in a real result** (the code path is a string change).
+  - A file whose first video timestamp is not 0 (the first fixture, made by joining segments with stream copy, started at 0.021 s) reports a cut one frame later than the frame count suggests. The frame rule documents the assumption "first PTS is 0"; ingest does not check or normalise it. **Open and unverified:** what the preview and export show for such files, and whether analysis and picture agree on them.
+  - The timeline query lists at most 2,000 beat markers (2,399 existed); the full list is in the analysis result.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -345,7 +354,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | Quality review and GPU qualification of BiRefNet (and every other model workflow) | implemented, not runtime-qualified | A1 G1 gates, FFG-05, FFG-11 | Reviewed real-image fixtures (hair, edges, blur, occlusion) with usable licences; a GPU profile. Further model downloads need a new authorisation (the 1 GB trial grant is used: 0.44 GB) |
 | GPU compositor, GPU/VRAM qualification, Appendix C2 performance targets | implementation can proceed; execution cannot be verified (B-1) | Phases 2, 4, 7, 13; FF-06 | A GPU reference machine |
 | Browser MP4+AAC export | blocked here (B-2) | Phase 4 browser route | A Chrome build with AAC WebCodecs encode |
-| Preview A/V sync; preview/export parity across many frames; long media; real camera/phone footage; other browsers; other MCP hosts | unverified | Phases 2–4 gates | Scheduled in Phase 2/4 below; other browsers are not installed here (Chromium only) |
+| Preview A/V sync; preview/export parity across many frames; long media beyond one synthetic 20-minute file (`long-media.json`); real camera/phone footage; other browsers; other MCP hosts | unverified | Phases 2–4 gates | Scheduled in Phase 2/4 below; other browsers are not installed here (Chromium only) |
 | Worker lease / prewarm (FF-07) | not started; budget reservation is wired but never run with a priced capability | G3, Phase 10 | A provider |
 | Speech recognition, forced alignment, timing corpus (B-7) | blocked on an owner decision | Phase 6 gate (timing corpus), R-16.2, R-C.10 | Authorise a local ASR model download (size/licence to approve) or supply a provider credential |
 | Narration / TTS / voice cloning (B-8) | blocked on an owner decision | Phase 8 gate (voice), R-17.x | A provider credential or an approved local model, plus the consent/verification flow the chosen provider requires |
@@ -362,7 +371,7 @@ Unblocked (no decision needed), roughly by value:
 4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 5. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
-7. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; test analysis on genuinely long media (analysis jobs exist, tested on short audio).
+7. Sources whose first video timestamp is not 0: detect at ingest and normalise or state the offset, with a frame-exact test. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
 8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
@@ -380,7 +389,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 pnpm install && pnpm build && pnpm test
 ```
 Expect 284 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 
