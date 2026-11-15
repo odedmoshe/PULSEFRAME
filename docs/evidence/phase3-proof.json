@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T14:46:43.946Z",
+  "ranAt": "2026-11-15T14:58:21.434Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -20,7 +20,7 @@
       "name": "import control is reachable with Tab and shows a visible focus ring",
       "ok": true,
       "detail": {
-        "tabs": 10
+        "tabs": 11
       }
     },
     {
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": "baseline written",
-        "editor-en": "baseline written",
-        "palette-en": "baseline written"
+        "editor-he": 1,
+        "editor-en": 1,
+        "palette-en": 1
       }
     },
     {
@@ -351,6 +351,22 @@
       }
     },
     {
+      "name": "editor: the project is renamed in the header; \"clear all keyframes\" removes a clip's animation; \"remove empty tracks\" from the palette removes the empty track added earlier, in one transaction each",
+      "ok": true,
+      "detail": {
+        "name": "סרט הדגמה Demo",
+        "shownName": "סרט הדגמה Demo",
+        "keyed": true,
+        "cleared": true,
+        "emptyBefore": 1,
+        "emptyCmd": "track.removeEmpty",
+        "revisions": [
+          32,
+          35
+        ]
+      }
+    },
+    {
       "name": "\"close empty gaps\" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost",
       "ok": true,
       "detail": {
@@ -360,8 +376,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          32,
-          34
+          35,
+          37
         ]
       }
     },
@@ -371,7 +387,7 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 29,
+        "differentSourceFrames": 28,
         "firstFrames": [
           {
             "frame": 3,
@@ -394,9 +410,9 @@
             "code": 12
           },
           {
-            "frame": 16,
+            "frame": 15,
             "quality": "draft",
-            "code": 16
+            "code": 15
           },
           {
             "frame": 18,

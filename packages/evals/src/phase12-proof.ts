@@ -287,6 +287,22 @@ async function main() {
     await cpage.getByTestId('cue-text').blur();
     for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cueOf(cdoc).text === 'HELLO AGAIN') break; await sleep(100); }
     check('editor: a caption cue\'s text can be edited; with a format selected the new wording applies to that format only (its rendered frame changes, the master frame is byte-identical and the cue keeps its text), "back to the master text" restores the format\'s frame byte for byte, and on the master view the field edits the cue itself', w1.masterText === 'HELLO' && !w1.tall.equals(w0.tall) && w1.master.equals(w0.master) && w2tall.equals(w0.tall) && cueOf(cdoc).text === 'HELLO AGAIN' && cErrors.length === 0, { masterTextDuringOverride: w1.masterText, tallChanged: !w1.tall.equals(w0.tall), masterSame: w1.master.equals(w0.master), restored: w2tall.equals(w0.tall), finalText: cueOf(cdoc).text, errors: cErrors.slice(0, 3) });
+    // a new cue from the editor: at the playhead, selected, its text typed in the Inspector
+    await txs(cp, [{ op: 'add_text', args: { text: 'spacer', start: f(0), duration: f(150), transform: { opacity: 0 } } }]); // an invisible title makes the timeline 150 frames long, so the playhead can stand after the first cue
+    await cpage.waitForFunction((n) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) >= n, (await call(`/projects/${cp}`)).body.revision, { timeout: 8000 }).catch(() => {});
+    await cpage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await cpage.keyboard.press('Home');
+    for (let i = 0; i < 9; i++) await cpage.keyboard.press('Shift+ArrowRight'); // frame 90
+    await cpage.getByTestId('cue-add').click();
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').clips.length === 2) break; await sleep(100); }
+    const newCue = cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').clips.find((c: any) => c.id !== cueId);
+    await cpage.getByTestId('cue-text').waitFor();
+    await cpage.getByTestId('cue-text').fill('שורה שנייה');
+    await cpage.getByTestId('cue-text').blur();
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').clips.find((c: any) => c.id === newCue?.id)?.text === 'שורה שנייה') break; await sleep(100); }
+    const cue2 = cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').clips.find((c: any) => c.id === newCue?.id);
+    const capAt100 = band(await still(cp, 100)), capAt70 = band(await still(cp, 70));
+    check('editor: "new caption at the playhead" adds a two-second cue at frame 90, selects it, and the text typed in the Inspector is what the cue says; a caption is drawn at frame 100 and nothing at frame 70, between the two cues', !!cue2 && Number(cue2.start.value) / cue2.start.timescale === 3 && Number(cue2.duration.value) / cue2.duration.timescale === 2 && cue2.text === 'שורה שנייה' && capAt100.top >= 0 && capAt70.top < 0 && cErrors.length === 0, { start: cue2?.start, duration: cue2?.duration, text: cue2?.text, captionTopAt100: capAt100.top, captionTopAt70: capAt70.top, errors: cErrors.slice(0, 3) });
     await cpage.close();
     await page.close();
   } catch (e) {

@@ -248,6 +248,17 @@ export function CaptionControls({ editor }: { editor: Editor }) {
         <button className="ghost" onClick={() => void editor.commit([{ op: 'add_caption_track', args: { mode: hasTranscript ? 'transcript' : 'manual' } }], 'Add caption track')} data-testid="caption-add">{t('caption.add')}</button>
       ) : (
         <>
+          {track.caption?.mode === 'manual' && (
+            <button type="button" className="ghost" data-testid="cue-add" onClick={() => void (async () => {
+              // a two-second cue at the playhead (shorter if another cue follows sooner); it is selected so its text can be typed in the Inspector
+              const rate = editor.rate, at = editor.frame;
+              const next = track.clips.map((c) => T.frameIndexAt(c.start, rate)).filter((x) => x > at).sort((a, b) => a - b)[0];
+              const frames = Math.max(1, Math.min(Math.round((2 * rate.num) / rate.den), next === undefined ? Infinity : next - at));
+              const r = await editor.commit([{ op: 'add_cue', args: { trackId: track.id, start: T.frameTime(at, rate), duration: T.frameTime(frames, rate), text: t('cue.new') } }], 'Add caption');
+              const id = r?.results[0]?.output?.clipId;
+              if (typeof id === 'string') editor.select(id);
+            })()}>{t('cue.add')}</button>
+          )}
           <label>{t('caption.preset')}
             <select value={style.preset} onChange={(e) => setStyle({ preset: e.target.value })} data-testid="caption-preset">
               {CAPTION_PRESETS.map((p) => <option key={p} value={p}>{t(`caption.preset.${p}` as Key)}</option>)}

@@ -29,6 +29,13 @@ const slip = (frames: number) => (e: Editor) => {
   const by = T.frameTime(Math.abs(frames), e.rate);
   return e.commit([{ op: 'slip_clip', args: { clipId: c.id, by: frames < 0 ? T.sub(T.ZERO, by) : by } }], 'Slip clip');
 };
+/** Tracks that can be removed: no clips, not locked, not the speech source of a ducking setting, not followed by a caption track. At least one track of each kind that has clips elsewhere is irrelevant: only empties go. */
+const emptyTracks = (e: Editor): string[] => {
+  const d = e.doc;
+  if (!d) return [];
+  const tracks = d.sequences[d.mainSequenceId]!.tracks;
+  return tracks.filter((t) => t.clips.length === 0 && !t.locked && !tracks.some((x) => x.id !== t.id && (x.audio?.duck?.sourceTrackIds.includes(t.id) || x.caption?.linkedTrackId === t.id))).map((t) => t.id);
+};
 const nudge = (frames: number) => (e: Editor) => {
   const clips = selectedClips(e);
   if (!clips.length) return;
@@ -121,6 +128,7 @@ export const COMMANDS: Command[] = [
   { id: 'edit.slipEarlier', label: 'cmd.slipEarlier', group: 'edit', keys: ['Mod+Alt+ArrowLeft'], enabled: canSlip, run: slip(-1) },
   { id: 'edit.slipLater10', label: 'cmd.slipLater10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowRight'], enabled: canSlip, run: slip(10) },
   { id: 'edit.slipEarlier10', label: 'cmd.slipEarlier10', group: 'edit', keys: ['Mod+Alt+Shift+ArrowLeft'], enabled: canSlip, run: slip(-10) },
+  { id: 'track.removeEmpty', label: 'cmd.removeEmptyTracks', group: 'edit', keys: [], enabled: (e) => emptyTracks(e).length > 0, run: (e) => e.commit(emptyTracks(e).map((id) => ({ op: 'remove_track', args: { trackId: id } })), 'Remove empty tracks') },
   { id: 'edit.closeGaps', label: 'cmd.closeGaps', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: (e) => e.commit([{ op: 'close_gaps', args: {} }], 'Close gaps') },
   { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },
   { id: 'edit.selectNext', label: 'cmd.selectNext', group: 'edit', keys: ['Alt+ArrowDown'], run: selectAdjacent(1) },

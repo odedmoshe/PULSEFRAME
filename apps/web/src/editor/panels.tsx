@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import type { Clip } from '@pulseframe/core';
-import { assetNotices, FONT_CATALOG, speedValue } from '@pulseframe/core';
+import { assetNotices, clipEnd, FONT_CATALOG, speedValue } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
@@ -31,6 +31,7 @@ export function Header() {
       <span className="logo" dangerouslySetInnerHTML={{ __html: LOGO_SVG }} />
       <strong className="brand">{BRAND.name}</strong>
       <span className="title" data-testid="project-name">{doc?.name ?? t('app.loading')}</span>
+      {doc && <InlineRename value={doc.name} label={t('project.rename')} testid="project-rename" onCommit={(name) => void editor.commit([{ op: 'rename_project', args: { name } }], 'Rename project')} />}
       {doc && (
         <label className="format-switch">
           <span className="sr-only">{t('format.switch')}</span>
@@ -516,6 +517,8 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
       <div className="row">
         <button className="ghost" disabled={!on || !!variantId} title={variantId ? t('transform.keyframesMasterOnly') : undefined} onClick={() => run(editor, 'keyframe.add')} data-testid="keyframe-add">◆ {t('cmd.keyframeAdd')} {hint(keymap, 'keyframe.add')}</button>
         <button className="ghost" disabled={!on || !clip.keyframes || !!variantId} title={variantId ? t('transform.keyframesMasterOnly') : undefined} onClick={() => run(editor, 'keyframe.remove')}>{t('cmd.keyframeRemove')} {hint(keymap, 'keyframe.remove')}</button>
+        <button className="ghost" disabled={!clip.keyframes || !!variantId} title={variantId ? t('transform.keyframesMasterOnly') : undefined} data-testid="keyframes-clear"
+          onClick={() => void editor.commit([{ op: 'clear_keyframes', args: { clipId: clip.id, at: T.sub(T.max(clip.start, T.min(editor.playhead, T.sub(clipEnd(clip), T.frameTime(1, editor.rate)))), clip.start) } }], 'Clear keyframes')}>{t('keyframes.clear')}</button>
       </div>
       <dl>
         <dt>{t('clip.start')}</dt><dd><bdi>{T.toSeconds(clip.start).toFixed(3)}s</bdi></dd>

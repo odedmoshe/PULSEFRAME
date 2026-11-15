@@ -470,6 +470,31 @@ async function main() {
     na = await getDoc();
     check('editor: a track is added from the timeline; a track and a library file are renamed in place (Hebrew + Latin), Enter commits and focus returns to the rename button, Escape discards; three transactions in all', !!addedTrack && addedTrack.kind === 'text' && na.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.name === 'ראשי Main' && na.project.assets[assetId]!.name === 'ראיון.mp4' && focusOnRename && na.revision === nb.revision + 3, { added: addedTrack?.kind, trackName: na.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.name, assetName: na.project.assets[assetId]!.name, focusOnRename, revisions: [nb.revision, na.revision] });
 
+    console.log('\n# rename project, clear keyframes, remove empty tracks');
+    const qb = await getDoc();
+    await page.getByTestId('project-rename').click();
+    await page.getByTestId('project-rename-input').fill('סרט הדגמה Demo');
+    await page.keyboard.press('Enter');
+    let qa = await getDoc();
+    for (let i = 0; i < 50 && qa.project.name !== 'סרט הדגמה Demo'; i++) { await new Promise((r) => setTimeout(r, 100)); qa = await getDoc(); }
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-name]')?.textContent === 'סרט הדגמה Demo', undefined, { timeout: 8000 }).catch(() => {}); // the page learns of the commit a moment after the server has it
+    const shownName = await page.getByTestId('project-name').textContent();
+    const keyed = qa.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.keyframes && Object.keys(c.keyframes).length > 0);
+    let cleared = false;
+    if (keyed) {
+      await page.locator(`.clip[data-clip-id="${keyed.id}"]`).click();
+      await page.getByTestId('keyframes-clear').click();
+      for (let i = 0; i < 50; i++) { qa = await getDoc(); if (!qa.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === keyed.id)!.keyframes) { cleared = true; break; } await new Promise((r) => setTimeout(r, 100)); }
+    }
+    const emptyBefore = qa.project.sequences.seq_main!.tracks.filter((tr) => tr.clips.length === 0).length;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+KeyK');
+    await page.getByTestId('palette-input').fill('remove empty tracks');
+    const emptyCmd = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    await key('Enter');
+    for (let i = 0; i < 50; i++) { qa = await getDoc(); if (qa.project.sequences.seq_main!.tracks.every((tr) => tr.clips.length > 0)) break; await new Promise((r) => setTimeout(r, 100)); }
+    check('editor: the project is renamed in the header; "clear all keyframes" removes a clip\'s animation; "remove empty tracks" from the palette removes the empty track added earlier, in one transaction each', qa.project.name === 'סרט הדגמה Demo' && shownName === 'סרט הדגמה Demo' && !!keyed && cleared && emptyBefore >= 1 && emptyCmd === 'track.removeEmpty' && qa.project.sequences.seq_main!.tracks.every((tr) => tr.clips.length > 0) && qa.revision === qb.revision + 3, { name: qa.project.name, shownName, keyed: !!keyed, cleared, emptyBefore, emptyCmd, revisions: [qb.revision, qa.revision] });
+
     console.log('\n# close gaps');
     const gb = await getDoc();
     const gEnd = endOf(gb.project);
