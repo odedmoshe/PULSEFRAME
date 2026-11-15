@@ -33,6 +33,9 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
   const [busy, setBusy] = useState(false);
   const [inFrame, setIn] = useState(0);
   const [outFrame, setOut] = useState<number | null>(null); // exclusive; null = the end of the file
+  // Target tracks for add / insert / overwrite: '' = automatic (the first unlocked track with room).
+  const [vTarget, setVTarget] = useState('');
+  const [aTarget, setATarget] = useState('');
   // Built once per file: later project edits do not matter to the viewer.
   const doc = useMemo(() => { try { return state.doc && asset ? sourceDocument(state.doc, asset) : null; } catch (e) { return e instanceof Error ? e : new Error(String(e)); } }, [assetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -47,6 +50,13 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
     return () => { playerRef.current = null; p.dispose(); };
   }, [doc, editor]);
 
+  const liveTracks = state.doc ? state.doc.sequences[state.doc.mainSequenceId]!.tracks : [];
+  const hasPicture = !!asset && (!!asset.video || asset.kind === 'image'), hasSound = !!asset?.audio;
+  const vTracks = hasPicture ? liveTracks.filter((tr) => tr.kind === 'video' && !tr.locked) : [];
+  const aTracks = hasSound ? liveTracks.filter((tr) => tr.kind === 'audio' && !tr.locked) : [];
+  const vChosen = vTracks.find((tr) => tr.id === vTarget), aChosen = aTracks.find((tr) => tr.id === aTarget); // a target that was removed or locked meanwhile falls back to automatic
+  /** `add_clip` arguments naming the chosen tracks: the picture track (or the sound track of a sound-only file) and the linked sound's track. */
+  const targetArgs = () => (hasPicture ? { ...(vChosen ? { trackId: vChosen.id } : {}), ...(aChosen ? { audioTrackId: aChosen.id } : {}) } : aChosen ? { trackId: aChosen.id } : {});
   const p = playerRef.current;
   const total = p?.frameCount ?? 0;
   const frame = p?.frame ?? 0;
@@ -63,11 +73,11 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
     try {
       playerRef.current?.pause();
       const at = T.frameTime(editor.frame, rate), duration = T.frameTime(end - inFrame, rate);
-      await editor.commit([{ op: 'insert_gap', args: { at, duration } }, { op: 'add_clip', args: { assetId, start: at, sourceIn: T.frameTime(inFrame, rate), duration } }], 'Insert clip');
+      await editor.commit([{ op: 'insert_gap', args: { at, duration } }, { op: 'add_clip', args: { assetId, start: at, sourceIn: T.frameTime(inFrame, rate), duration, ...targetArgs() } }], 'Insert clip');
       onClose();
     } catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
   };
-  /** Overwrite at the timeline playhead: clear the range's length on the first picture track and the first sound track there (nothing moves), then place the range. One transaction. */
+  /** Overwrite at the timeline playhead: clear the range's length on the target picture track and the target sound track there (the chosen ones, else the first unlocked; nothing moves), then place the range. One transaction. */
   const overwrite = async () => {
     const d = editor.doc;
     if (!asset || !d || end <= inFrame) return;
@@ -76,13 +86,12 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
       playerRef.current?.pause();
       const at = T.frameTime(editor.frame, rate), duration = T.frameTime(end - inFrame, rate);
       const tracks = d.sequences[d.mainSequenceId]!.tracks;
-      const v = asset.video ? tracks.find((tr) => tr.kind === 'video' && !tr.locked) : undefined;
-      const a = asset.audio ? tracks.find((tr) => tr.kind === 'audio' && !tr.locked) : undefined;
+      const v = hasPicture ? vChosen ?? tracks.find((tr) => tr.kind === 'video' && !tr.locked) : undefined;
+      const a = asset.audio ? aChosen ?? tracks.find((tr) => tr.kind === 'audio' && !tr.locked) : undefined;
       const clear = [v, a].filter((tr): tr is NonNullable<typeof tr> => !!tr).map((tr) => tr.id);
-      const target = v ?? a;
       await editor.commit([
         ...(clear.length ? [{ op: 'cut_range', args: { start: at, end: T.add(at, duration), ripple: false, trackIds: clear } }] : []),
-        { op: 'add_clip', args: { assetId, start: at, sourceIn: T.frameTime(inFrame, rate), duration, ...(target ? { trackId: target.id } : {}) } },
+        { op: 'add_clip', args: { assetId, start: at, sourceIn: T.frameTime(inFrame, rate), duration, ...(hasPicture ? { ...(v ? { trackId: v.id } : {}), ...(a ? { audioTrackId: a.id } : {}) } : a ? { trackId: a.id } : {}) } },
       ], 'Overwrite with clip');
       onClose();
     } catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
@@ -93,7 +102,7 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
     try {
       playerRef.current?.pause();
       const whole = inFrame === 0 && outFrame === null;
-      await editor.commit([{ op: 'add_clip', args: { assetId, start: editor.appendPoint(), ...(whole ? {} : { sourceIn: T.frameTime(inFrame, rate), duration: T.frameTime(end - inFrame, rate) }) } }], 'Add clip');
+      await editor.commit([{ op: 'add_clip', args: { assetId, start: editor.appendPoint(), ...(whole ? {} : { sourceIn: T.frameTime(inFrame, rate), duration: T.frameTime(end - inFrame, rate) }), ...targetArgs() } }], 'Add clip');
       onClose();
     } catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
   };
@@ -147,6 +156,26 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
         <p role="status" data-testid="source-range" data-in={inFrame} data-out={end}>
           {t('source.range')}: <bdi dir="ltr">{tc(inFrame)} – {tc(end)}</bdi> · <bdi dir="ltr">{end - inFrame}</bdi> {t('source.frames')}
         </p>
+        {(vTracks.length > 0 || aTracks.length > 0) && (
+          <div className="fields" data-testid="source-targets">
+            {vTracks.length > 0 && (
+              <label>{t('source.target.picture')}
+                <select value={vChosen ? vTarget : ''} onChange={(e) => setVTarget(e.target.value)} data-testid="source-target-picture">
+                  <option value="">{t('source.target.auto')}</option>
+                  {vTracks.map((tr) => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
+                </select>
+              </label>
+            )}
+            {aTracks.length > 0 && (
+              <label>{t('source.target.sound')}
+                <select value={aChosen ? aTarget : ''} onChange={(e) => setATarget(e.target.value)} data-testid="source-target-sound">
+                  <option value="">{t('source.target.auto')}</option>
+                  {aTracks.map((tr) => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+        )}
         <div className="row">
           <button type="button" className="primary" disabled={busy || end <= inFrame || total === 0} onClick={() => void add()} data-testid="source-add">{t('source.add')}</button>
           <button type="button" className="ghost" disabled={busy || end <= inFrame || total === 0} onClick={() => void insert()} data-testid="source-insert">{t('source.insert')} <bdi dir="ltr">({T.toTimecode(T.frameTime(editor.frame, rate), rate)})</bdi></button>

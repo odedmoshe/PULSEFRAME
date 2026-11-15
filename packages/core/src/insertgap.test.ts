@@ -110,6 +110,22 @@ describe('insert_gap (ripple insert) and markers under ripple edits', () => {
   });
 });
 
+describe('add_clip on chosen tracks', () => {
+  it('trackId places the picture and audioTrackId its linked sound on the named tracks; a wrong kind, a missing or a locked track is refused', () => {
+    const { doc, assetId } = project();
+    let r = tx(doc, [{ op: 'add_track', args: { kind: 'video' } }, { op: 'add_track', args: { kind: 'audio' } }]);
+    const v2 = r.results[0]!.output!.trackId as string, a2 = r.results[1]!.output!.trackId as string;
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(300), duration: f(30), trackId: v2, audioTrackId: a2 } }]);
+    const out = r.results[0]!.output as any;
+    expect([findClip(r.doc, out.clipId)!.track.id, findClip(r.doc, out.audioClipId)!.track.id]).toEqual([v2, a2]);
+    expect(validateProject(r.doc)).toEqual([]);
+    expect(code(() => tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(400), duration: f(30), audioTrackId: v2 } }]))).toBe('incompatible');
+    expect(code(() => tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(400), duration: f(30), audioTrackId: 'trk_none' } }]))).toBe('not_found');
+    const locked = tx(r.doc, [{ op: 'update_track', args: { trackId: a2, locked: true } }]).doc;
+    expect(code(() => tx(locked, [{ op: 'add_clip', args: { assetId, start: f(400), duration: f(30), audioTrackId: a2 } }]))).toBe('track_locked');
+  });
+});
+
 describe('slip_clip', () => {
   it('shows a different stretch of the source without moving or resizing the clip; linked sound follows; limits are the ends of the source', () => {
     const { doc, videoId, audioId, titleId } = project(); // 240-frame source

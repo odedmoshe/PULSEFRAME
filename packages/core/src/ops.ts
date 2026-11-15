@@ -283,7 +283,7 @@ defineOp({
   name: 'add_clip',
   version: 1,
   description:
-    'Place a source asset on the timeline. A video asset with sound also gets a linked audio clip. Omit trackId to auto-place on the first free compatible track. start and duration must be frame-aligned; duration defaults to the rest of the source.',
+    'Place a source asset on the timeline. A video asset with sound also gets a linked audio clip. Omit trackId to auto-place on the first free compatible track. audioTrackId chooses the sound track of that linked clip. start and duration must be frame-aligned; duration defaults to the rest of the source.',
   args: z
     .object({
       sequenceId: z.string().optional(),
@@ -293,6 +293,7 @@ defineOp({
       sourceIn: RT.optional(),
       duration: RT.optional(),
       withLinkedAudio: z.boolean().optional().describe('Default true'),
+      audioTrackId: z.string().optional().describe('Sound track for the linked sound of a picture asset (default: the first free one). For a sound-only asset use trackId.'),
     })
     .strict(),
   apply(d, a, ctx) {
@@ -331,7 +332,8 @@ defineOp({
     }
     if (wantAudio || !hasPicture) {
       if (!asset.audio) throw new OpError('incompatible', 'asset has neither picture nor audio', { assetId: asset.id });
-      const track = !hasPicture && explicit ? explicit : placeTrack(seq, 'audio', a.start, end, ctx);
+      const explicitAudio = a.audioTrackId ? mustTrack(seq, a.audioTrackId) : undefined;
+      const track = !hasPicture && explicit ? explicit : explicitAudio ?? placeTrack(seq, 'audio', a.start, end, ctx);
       if (track.kind !== 'audio') throw new OpError('incompatible', `audio asset cannot go on ${track.kind} track`, { trackId: track.id });
       const c = make();
       track.clips.push(c);

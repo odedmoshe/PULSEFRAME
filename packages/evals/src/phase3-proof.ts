@@ -351,6 +351,38 @@ async function main() {
     const overlaps = oa.project.sequences.seq_main!.tracks.some((tr) => [...tr.clips].sort((a, b) => T.cmp(a.start, b.start)).some((c, i, arr) => i > 0 && T.lt(c.start, T.add(arr[i - 1]!.start, arr[i - 1]!.duration))));
     check('"overwrite at the playhead" replaces exactly the range\'s length on the picture and sound tracks in one transaction: the timeline keeps its length, nothing later moves, and it shows the new frames 60–69 followed by what was already there (110–119, then the continuation)', oa.revision === ob.revision + 1 && endOf(oa.project) === endOf(ob.project) && !overlaps && JSON.stringify(oShown) === JSON.stringify([30 + k - 1, 60, 69, 110, 119, 30 + k]), { oShown, lengths: [endOf(ob.project), endOf(oa.project)], overlaps, revisions: [ob.revision, oa.revision] });
 
+    console.log('\n# target tracks for the source viewer');
+    const post = async (ops: unknown[]) => (await (await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops }) })).json()) as any;
+    const tt0 = await getDoc();
+    const added = await post([{ op: 'add_track', args: { kind: 'video', name: 'V-target' } }, { op: 'add_track', args: { kind: 'audio', name: 'A-target' } }]);
+    const vT = added.results[0].output.trackId as string, aT = added.results[1].output.trackId as string;
+    await page.waitForFunction((n) => document.querySelectorAll('.track').length >= n, tt0.project.sequences.seq_main!.tracks.length + 2, { timeout: 8000 }).catch(() => {});
+    const ttB = await getDoc();
+    await page.getByTestId(`view-${assetId}`).click();
+    await page.getByTestId('source-viewer').waitFor();
+    await page.getByTestId('source-scrub').fill('20');
+    await srcAt(20);
+    await page.keyboard.press('i');
+    await page.getByTestId('source-scrub').fill('29');
+    await srcAt(29);
+    await page.keyboard.press('o');
+    await page.getByTestId('source-target-picture').selectOption(vT);
+    await page.getByTestId('source-target-sound').selectOption(aT);
+    await page.getByTestId('source-overwrite').click();
+    await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
+    let ttA = await getDoc();
+    for (let i = 0; i < 50 && ttA.revision === ttB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ttA = await getDoc(); }
+    const onTrack = (d: ProjectDocument, id: string) => d.sequences.seq_main!.tracks.find((tr) => tr.id === id)!.clips.map((c: any) => [T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R), T.frameIndexAt(c.sourceIn, R)]);
+    const others = (d: ProjectDocument) => JSON.stringify(d.sequences.seq_main!.tracks.filter((tr) => tr.id !== vT && tr.id !== aT).map((tr) => tr.clips));
+    const targeted = { picture: onTrack(ttA.project, vT), sound: onTrack(ttA.project, aT), othersUntouched: others(ttA.project) === others(ttB.project), revisions: ttA.revision - ttB.revision, shown: await stillCode(atFrame) };
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && onTrack(ttA.project, vT).length; i++) { await new Promise((r) => setTimeout(r, 100)); ttA = await getDoc(); }
+    const removed = await post([{ op: 'remove_track', args: { trackId: vT } }, { op: 'remove_track', args: { trackId: aT } }]);
+    await page.waitForFunction((n) => document.querySelectorAll('.track').length === n, tt0.project.sequences.seq_main!.tracks.length, { timeout: 8000 }).catch(() => {});
+    check('source viewer target tracks: with a picture track and a sound track chosen, "overwrite" puts the range (source 20–29) on exactly those tracks at the playhead in one transaction, leaves every other track as it was, and the frame there now shows the new picture on top; undo and removing the two tracks restore the timeline',
+      JSON.stringify(targeted.picture) === JSON.stringify([[atFrame, 10, 20]]) && JSON.stringify(targeted.sound) === JSON.stringify([[atFrame, 10, 20]]) && targeted.othersUntouched && targeted.revisions === 1 && targeted.shown === 20 && !removed.error && JSON.stringify((await getDoc()).project.sequences.seq_main!.tracks.map((tr) => tr.clips)) === JSON.stringify(tt0.project.sequences.seq_main!.tracks.map((tr) => tr.clips)), targeted);
+
     console.log('\n# slip');
     const sb = await getDoc();
     const slipClip = sb.project.sequences.seq_main!.tracks.filter((tr) => tr.kind === 'video').flatMap((tr) => tr.clips).find((c) => T.frameIndexAt(c.start, R) === atFrame)!;
@@ -604,7 +636,7 @@ async function main() {
     const closedH = (await page.getByTestId('activity-dialog').count()) === 0;
     await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open', undefined, { timeout: 3000 }).catch(() => {}); // focus is handed back just after the dialog is removed
     const focusH = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open');
-    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 1 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
+    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 3 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
 
     console.log('\n# close gaps');
     const gb = await getDoc();
