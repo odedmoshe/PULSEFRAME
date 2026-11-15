@@ -239,6 +239,41 @@ async function main() {
     check('a revoked grant stops working immediately (401 grant_revoked)', revoked.status === 401 && (await revoked.json()).error.code === 'grant_revoked');
     const listed = (await rest('/grants')).body.grants;
     check('grant tokens are never returned again after creation', listed.length === 4 && !JSON.stringify(listed).includes(editor.token.slice(4)) && listed.every((g: any) => !('token' in g)));
+
+    console.log('\n# browser-side review: response headers, content security policy, stored markup');
+    const hdr = async (p: string) => { const r = await fetch(`${origin}${p}`, { headers: { ...owner, connection: 'close' } }); await r.arrayBuffer(); return r.headers; };
+    const hPage = await hdr('/'), hApi = await hdr(`/api/v1/projects/${pid}`), hMedia = await hdr(`/api/v1/projects/${pid}/assets/${assetId}/content`);
+    const pageCsp = hPage.get('content-security-policy') ?? '';
+    const common = (h: Headers) => h.get('x-content-type-options') === 'nosniff' && h.get('referrer-policy') === 'no-referrer' && h.get('x-frame-options') === 'DENY';
+    check('every response carries nosniff, no-referrer and a frame ban; pages allow only same-origin scripts (no inline, eval or blob:), no plugins and no framing; API and media responses allow nothing and are sandboxed', common(hPage) && common(hApi) && common(hMedia) && /script-src 'self'(;|$)/.test(pageCsp) && !/unsafe-inline|unsafe-eval|script-src[^;]*blob:/.test(pageCsp) && /object-src 'none'/.test(pageCsp) && /frame-ancestors 'none'/.test(pageCsp) && /default-src 'none'.*sandbox/.test(hApi.get('content-security-policy') ?? '') && /default-src 'none'.*sandbox/.test(hMedia.get('content-security-policy') ?? ''), { page: pageCsp, api: hApi.get('content-security-policy'), media: Object.fromEntries(['content-security-policy', 'x-content-type-options', 'referrer-policy', 'x-frame-options'].map((k) => [k, hMedia.get(k)])) });
+    // Stored markup: put active HTML into every free-text field a collaborator or agent can write, then open the editor.
+    const EVIL = '<img src=x onerror="window.__pwn=1"><script>window.__pwn=2</script>';
+    const xp = (await rest('/projects', { name: `x ${EVIL}`.slice(0, 190) })).body.project.id;
+    await rest(`/projects/${xp}/transactions`, { ops: [{ op: 'add_text', args: { text: EVIL, start: f(0), duration: f(60) } }, { op: 'add_marker', args: { time: f(30), label: EVIL } }] });
+    const xpage = await page.context().newPage();
+    const violations: string[] = [];
+    const xErrors: string[] = [];
+    xpage.on('pageerror', (e) => xErrors.push(String(e)));
+    await xpage.addInitScript(() => { (window as any).__violations = []; document.addEventListener('securitypolicyviolation', (e) => (window as any).__violations.push(`${e.violatedDirective}|${e.blockedURI}|${(e.sourceFile ?? "").split("/").pop()}:${e.lineNumber}:${e.columnNumber}`)); });
+    await xpage.goto(`${origin}/?project=${xp}`);
+    await xpage.getByTestId('user-marker').waitFor({ timeout: 15000 });
+    const stored = await xpage.evaluate(() => ({ pwn: (window as any).__pwn ?? null, injectedImgs: document.querySelectorAll('img[src="x"]').length, markerText: document.querySelector('[data-testid=user-marker]')?.textContent ?? '', violations: (window as any).__violations.length, atLoad: [...(window as any).__violations] }));
+    // Active injection attempts from inside the page (what a successful HTML injection would try next).
+    const active = await xpage.evaluate(async () => {
+      const w = window as any;
+      const s1 = document.createElement('script'); s1.textContent = 'window.__inline = 1'; document.body.appendChild(s1);
+      const s2 = document.createElement('script'); s2.src = URL.createObjectURL(new Blob(['window.__blob = 1'], { type: 'text/javascript' })); document.body.appendChild(s2);
+      const s3 = document.createElement('script'); s3.src = 'https://example.invalid/x.js'; document.body.appendChild(s3);
+      const d = document.createElement('div'); d.innerHTML = '<img src="x" onerror="window.__handler = 1">'; document.body.appendChild(d);
+      // eval is tried from a timer, not directly here: code run through the test driver is exempt from the policy, page code is not.
+      let evalBlocked = false;
+      setTimeout(() => { try { (0, eval)('window.__eval = 1'); } catch { evalBlocked = true; } }, 50);
+      await new Promise((r) => setTimeout(r, 800));
+      return { inline: w.__inline ?? null, blob: w.__blob ?? null, handler: w.__handler ?? null, evalRan: w.__eval ?? null, evalBlocked, violations: w.__violations as string[] };
+    });
+    violations.push(...active.violations);
+    check('stored markup in a project name, a title and a marker name is shown as text and runs nothing; in the live page inline scripts, blob: scripts, remote scripts, inline event handlers and eval are all blocked by the policy', stored.pwn === null && stored.injectedImgs === 0 && stored.markerText.includes('<img') && stored.violations === 0 && active.inline === null && active.blob === null && active.handler === null && active.evalRan === null && active.evalBlocked && violations.length >= 4 && xErrors.length === 0, { stored, active: { ...active, violations: violations.map((v) => v.slice(0, 60)) } });
+    await xpage.close();
     check('no uncaught errors in the editor page', pageErrors.length === 0, pageErrors.slice(0, 3));
     await browser.close();
     await Promise.all([A.c.close(), P.c.close(), S.c.close()]);

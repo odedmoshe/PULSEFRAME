@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T03:32:06.480Z",
+  "ranAt": "2026-11-15T03:38:55.658Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -76,11 +76,11 @@
       "detail": {
         "proposed": true,
         "committed": false,
-        "proposalId": "prp_99pnTE1cCjY",
+        "proposalId": "prp_UO4zt3NbLO8",
         "baseRevision": 10,
         "summary": "Updated text \"פתיחה חלופית\"",
         "changedIds": [
-          "clp_dcd8bab10d0"
+          "clp_f013222d530"
         ],
         "status": "open"
       }
@@ -113,7 +113,7 @@
       "name": "goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied",
       "ok": true,
       "detail": {
-        "entityId": "clp_801b4a890d4",
+        "entityId": "clp_173b3479b34",
         "reason": "track trk_video is outside the grant"
       }
     },
@@ -225,6 +225,47 @@
     {
       "name": "grant tokens are never returned again after creation",
       "ok": true
+    },
+    {
+      "name": "every response carries nosniff, no-referrer and a frame ban; pages allow only same-origin scripts (no inline, eval or blob:), no plugins and no framing; API and media responses allow nothing and are sandboxed",
+      "ok": true,
+      "detail": {
+        "page": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+        "api": "default-src 'none'; frame-ancestors 'none'; sandbox",
+        "media": {
+          "content-security-policy": "default-src 'none'; frame-ancestors 'none'; sandbox",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "no-referrer",
+          "x-frame-options": "DENY"
+        }
+      }
+    },
+    {
+      "name": "stored markup in a project name, a title and a marker name is shown as text and runs nothing; in the live page inline scripts, blob: scripts, remote scripts, inline event handlers and eval are all blocked by the policy",
+      "ok": true,
+      "detail": {
+        "stored": {
+          "pwn": null,
+          "injectedImgs": 0,
+          "markerText": "<img src=x onerror=\"window.__pwn=1\"><script>window.__pwn=2</script>",
+          "violations": 0,
+          "atLoad": []
+        },
+        "active": {
+          "inline": null,
+          "blob": null,
+          "handler": null,
+          "evalRan": null,
+          "evalBlocked": true,
+          "violations": [
+            "script-src-elem|inline|:1:119",
+            "script-src-elem|blob|:1:276",
+            "script-src-elem|https://example.invalid/x.js|:1:386",
+            "script-src-attr|inline|:1:0",
+            "script-src|eval|:1:578"
+          ]
+        }
+      }
     },
     {
       "name": "no uncaught errors in the editor page",

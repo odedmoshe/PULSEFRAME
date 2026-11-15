@@ -62,6 +62,12 @@ Deleting a clip never deletes its media. Not built: an editor control for these,
 
 **The whole-data-directory copy above has not been exercised by an automated test.** Tested instead: restoring a single project from its archive onto a second server with an empty data directory (`pnpm soak`), and reopening a data directory after a restart, replaying a project from its operation log, and recovering interrupted export jobs (`store.test.ts`, Phase 0 and Phase 4 proofs).
 
+## Browser security headers
+The built server (`pnpm start`) sends a strict content security policy with its pages and `nosniff`, `no-referrer` and a frame ban with every response; API and stored-file responses are sandboxed. Consequences for operators:
+- Put nothing in front of the server that injects inline scripts or styles into pages (some proxies and "optimisers" do); it will be blocked.
+- The Vite dev server (`pnpm dev`, port 5173) does not apply the policy. Check policy-sensitive changes against `pnpm build && pnpm start`.
+- Behind TLS, add the `Secure` attribute to the session cookie at the proxy (the server issues it for loopback HTTP without it).
+
 ## Verification commands
 All proofs start their own server on their own port and data directory under `.artifacts/`, and write a JSON report to `docs/evidence/`. Run `pnpm build` first.
 

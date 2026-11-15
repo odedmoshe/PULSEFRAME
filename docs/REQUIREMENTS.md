@@ -276,7 +276,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-26.1 | 26 | Loopback bind, Host check, origin-checked cookie session, scoped bearer tokens on REST and MCP | 1 | — | Session | auth middleware | — | partial | ADR-0002; P0: 401, 403 scope, cross-origin 403, DNS-rebinding 403; no tenant authz, rate limiting, audit trail |
+| R-26.1 | 26 | Loopback bind, Host check, origin-checked cookie session, scoped bearer tokens on REST and MCP | 1 | — | Session | auth middleware | — | partial | ADR-0002; P0: 401, 403 scope, cross-origin 403, DNS-rebinding 403; owner session bound to a launch secret; strict content security policy and hardening headers on every response (`phase5-proof.json`, 33 checks). No tenant authz, rate limiting, audit trail; cookie not `Secure` on loopback HTTP |
 | R-26.2 | 26 | Encrypted secret store/OS keychain, key masking, rotation, error redaction | 10 | R-26.1 | Settings | secret ops | — | not started | |
 | R-26.3 | 26 | SSRF-safe URL import, restricted worker egress | 3 | R-07.3 | Library | import job | — | not started | |
 | R-26.4 | 26 | Sandboxed FFmpeg/font/SVG/archive parsing, quotas, path-traversal and archive-bomb defenses | 13 | R-26.1 | — | — | — | partial | ffmpeg run with argument arrays; no quotas or sandbox verification |
@@ -334,7 +334,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-C.9 | C3 audio DSP | Null tests, latency compensation, loudness within 0.5 LU | 8 | R-10.2 | — | tests | — | not started | |
 | R-C.10 | C3 captions, beats | Word-boundary error (median 80 ms, p95 200 ms) and beat F1 corpora | 9 | R-16.2, R-10.4 | — | corpora | — | not started | |
 | R-C.11 | C3 durability, money | Crash between commit, outbox, queue, event; provider timeout; budget races | 10 | R-20.2 | — | tests | — | partial | `store.test.ts` outbox and job restart recovery; no provider or budget cases |
-| R-C.12 | C3 security | SSRF, archive traversal, webhook auth, secret redaction, origin checks | 13 | R-26.3 | — | tests | — | partial | P0 origin, Host and scope checks only |
+| R-C.12 | C3 security | SSRF, archive traversal, webhook auth, secret redaction, origin checks | 13 | R-26.3 | — | tests | — | partial | Origin, Host and scope checks; archive import path checks (`archive.test.ts`); stored-markup and script-injection checks in the live page (`phase5-proof.json`). No URL import (so no SSRF surface yet), no webhooks, no secret store |
 | R-C.13 | C3 accessibility | Automated and manual keyboard, screen-reader, RTL/LTR, niqqud, reduced-motion checks | 13 | R-03.3 | — | Playwright | — | partial | P0: RTL boot, LTR timeline, Hebrew+niqqud text; phase3 proof: keyboard-only import/arrange/trim/split/keyframe workflow, palette focus. No axe run, no screen-reader walkthrough, no automated a11y suite |
 | R-C.14 | C4 | Ten repeatable acceptance demonstrations with script, fixtures, assertions, outcome | 13 | R-00.2 | — | demo scripts | — | not started | Phase 0 proof is not one of the ten |
 

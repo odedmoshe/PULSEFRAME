@@ -1,3 +1,4 @@
+import './strictPage.ts';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@pulseframe/brand/tokens.css';

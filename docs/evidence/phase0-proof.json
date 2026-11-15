@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T03:31:52.869Z",
+  "ranAt": "2026-11-15T03:37:54.953Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 305,
+    "editorShellInteractiveMs": 334,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 17.9,
-      "requestToVisibleInEditorMs": 44.9,
+      "requestToCommitMs": 14.2,
+      "requestToVisibleInEditorMs": 37.1,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 5.87,
-      "p95": 8.28,
-      "max": 9.82
+      "median": 4.97,
+      "p95": 8.72,
+      "max": 12.71
     },
     "export": {
-      "file": "job_uGf4X7bGT1k.mp4",
+      "file": "job_DbMW7pGUIdI.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -68,7 +68,7 @@
         },
         "assets": [
           {
-            "id": "ast_5717dd9dfd0",
+            "id": "ast_dfdc1a96590",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -135,13 +135,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 584,
-        "readback": 613,
-        "upload": 4811
+        "draw": 592,
+        "readback": 617,
+        "upload": 4712
       },
-      "wallSeconds": 7.027,
-      "realtimeFactor": 0.4980788387647645,
-      "uiWallSeconds": 7.428
+      "wallSeconds": 6.822,
+      "realtimeFactor": 0.5130460275579009,
+      "uiWallSeconds": 6.924
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -173,10 +173,10 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_5717dd9dfd0": "original"
+        "ast_dfdc1a96590": "original"
       },
       "sourcesUsed": {
-        "ast_5717dd9dfd0": [
+        "ast_dfdc1a96590": [
           "original"
         ]
       },
@@ -184,14 +184,14 @@
       "disposed": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_5717dd9dfd0/content:206"
+        "ast_dfdc1a96590/content:206"
       ]
     },
     "previewSync": {
       "clock": "audio",
       "audioContextState": "running",
       "outputLatencyMs": 42.02,
-      "audioScheduledAheadMaxMs": 2090.7,
+      "audioScheduledAheadMaxMs": 2101.3,
       "audioLookaheadMs": 1500,
       "liveAudioNodes": 0,
       "loops": 0,
@@ -326,7 +326,7 @@
           "peak": 0
         },
         {
-          "t": 1.4273,
+          "t": 1.43,
           "peak": 0
         },
         {
@@ -494,7 +494,7 @@
       "framesPainted": 104,
       "paintLatenessMs": {
         "median": 16,
-        "p95": 24,
+        "p95": 21.33,
         "max": 36
       },
       "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
@@ -624,7 +624,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_aa49f4eb371",
+          "id": "clp_f8551d8fe91",
           "start": {
             "value": "2",
             "timescale": 1
@@ -644,8 +644,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 17.9,
-        "requestToVisibleInEditorMs": 44.9,
+        "requestToCommitMs": 14.2,
+        "requestToVisibleInEditorMs": 37.1,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -659,11 +659,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_08cd86ee890"
+          "selected": "clip-clp_6b2932750e0"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_08cd86ee890"
+          "selected": "clip-clp_6b2932750e0"
         }
       }
     },
@@ -709,7 +709,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_08cd86ee890",
+          "entityId": "clp_6b2932750e0",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -846,10 +846,10 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_5717dd9dfd0": "original"
+            "ast_dfdc1a96590": "original"
           },
           "sourcesUsed": {
-            "ast_5717dd9dfd0": [
+            "ast_dfdc1a96590": [
               "original"
             ]
           },
@@ -857,7 +857,7 @@
           "disposed": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_5717dd9dfd0/content:206"
+            "ast_dfdc1a96590/content:206"
           ]
         }
       }
@@ -869,7 +869,7 @@
         "clock": "audio",
         "audioContextState": "running",
         "outputLatencyMs": 42.02,
-        "audioScheduledAheadMaxMs": 2090.7,
+        "audioScheduledAheadMaxMs": 2101.3,
         "audioLookaheadMs": 1500,
         "liveAudioNodes": 0,
         "loops": 0,
@@ -1004,7 +1004,7 @@
             "peak": 0
           },
           {
-            "t": 1.4273,
+            "t": 1.43,
             "peak": 0
           },
           {
@@ -1172,7 +1172,7 @@
         "framesPainted": 104,
         "paintLatenessMs": {
           "median": 16,
-          "p95": 24,
+          "p95": 21.33,
           "max": 36
         },
         "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
@@ -1189,7 +1189,7 @@
           2.50006
         ],
         "maxErrorMs": 0.06,
-        "scheduledAheadMaxMs": 2090.7
+        "scheduledAheadMaxMs": 2101.3
       }
     },
     {
@@ -1197,7 +1197,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_5717dd9dfd0": [
+          "ast_dfdc1a96590": [
             "original",
             "proxy"
           ]

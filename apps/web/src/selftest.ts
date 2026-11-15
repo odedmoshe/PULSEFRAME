@@ -3,6 +3,7 @@
  * browser export produces the same samples as the reference mixer the server export uses.
  * Result: document.body.dataset.ready = '1' and a JSON report in #out / window.__pfSelfTest.
  */
+import './strictPage.ts';
 import { mixClip, type PlannedAudioClip } from '@pulseframe/engine';
 import { plannedClipInput } from './audioGraph.ts';
 

@@ -4,6 +4,7 @@
  * and streams raw RGBA to the server. A 2D context with willReadFrequently keeps the canvas on the
  * CPU raster path, so output does not depend on a GPU.
  */
+import './strictPage.ts';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate } from '@pulseframe/engine';

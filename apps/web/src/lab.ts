@@ -2,6 +2,8 @@
  * Lab page: every registered effect, blend mode, mask and transition drawn by the shared evaluate + drawGraph.
  * No server data. Pictures are generated here; the in-memory project goes through the real ops.
  */
+import './lab.css';
+import './strictPage.ts';
 import * as T from '@pulseframe/time';
 import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate, type FrameImage } from '@pulseframe/engine';

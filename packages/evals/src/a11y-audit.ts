@@ -115,8 +115,12 @@ async function main() {
       await page.evaluate(() => {
         const host = document.createElement('div');
         host.id = 'pf-a11y-planted';
-        host.innerHTML = '<button id="planted-unnamed"></button><p id="planted-contrast" style="color:#3a3f47;background:#30343b">low contrast text</p><button id="planted-nofocus" style="outline:none;box-shadow:none">no focus ring</button>';
+        host.innerHTML = '<button id="planted-unnamed"></button><p id="planted-contrast">low contrast text</p><button id="planted-nofocus">no focus ring</button>';
         document.body.prepend(host);
+        // Styles are set through the DOM API: the page's content security policy blocks inline style attributes in markup.
+        const low = host.querySelector<HTMLElement>('#planted-contrast')!, nf = host.querySelector<HTMLElement>('#planted-nofocus')!;
+        low.style.color = '#3a3f47'; low.style.background = '#30343b';
+        nf.style.outline = 'none'; nf.style.boxShadow = 'none';
       });
       const planted = await page.evaluate(auditInPage);
       const plantedFocus = await focusAudit(page, 4);

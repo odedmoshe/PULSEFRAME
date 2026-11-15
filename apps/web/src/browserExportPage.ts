@@ -2,6 +2,7 @@
  * Standalone utility page around `runBrowserExport`. A test/utility surface (the proof drives it; the editor UI
  * will call `runBrowserExport` directly). It obtains the owner cookie the same way the editor does.
  */
+import './strictPage.ts';
 import { BrowserExportError, probeCapabilities, runBrowserExport, type BrowserCapabilities } from './browserExport.ts';
 import { ownerKeyHeader } from './api.ts';
 

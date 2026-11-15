@@ -56,6 +56,11 @@ const RunBody = z
   .strict();
 const ImportBody = z.object({ id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/), title: z.string().min(1).max(120), graph: z.unknown() }).strict();
 
+/** Content security policy of the app's pages: same-origin code only, no inline or blob: scripts, no plugins, no framing. Style attributes set from code are allowed by the browser without 'unsafe-inline'. */
+export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+/** Policy of every non-page response (JSON, media, exports): nothing may load or run if it is ever opened as a document. */
+export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
+
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance) {
   const gov = governance ?? new Governance(store);
   const app = new Hono<Env>();
@@ -86,8 +91,22 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
         return c.body(null, 204);
       }
     }
-    c.header('X-Content-Type-Options', 'nosniff');
+    // Set before and after the handler: handlers that return their own Response (stored files, streams) would otherwise
+    // go out without any of these — which is how media responses used to lack even nosniff.
+    const secure = () => {
+      const p = new URL(c.req.url).pathname;
+      const h = c.res.headers;
+      h.set('X-Content-Type-Options', 'nosniff');
+      h.set('Referrer-Policy', 'no-referrer');
+      h.set('X-Frame-Options', 'DENY');
+      h.set('Cross-Origin-Opener-Policy', 'same-origin');
+      h.set('Cross-Origin-Resource-Policy', 'same-site');
+      // API, MCP and stored files are never documents: if one is opened as a page it may load and run nothing.
+      // The app's own pages get a policy that allows only this origin's scripts, styles, fonts and media.
+      h.set('Content-Security-Policy', p.startsWith('/api/') || p === '/mcp' || p.startsWith('/mcp/') ? DATA_CSP : APP_CSP);
+    };
     await next();
+    try { secure(); } catch { c.res = new Response(c.res.body, c.res); secure(); } // a Response with immutable headers is re-wrapped
   });
 
   // ----- render worker routes: single-purpose token, no user credentials -----

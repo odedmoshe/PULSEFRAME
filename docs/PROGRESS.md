@@ -182,7 +182,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - **Low, fixed:** project-limited grants via two MCP tools; cancel ignoring pause/ownership; no limit on heavy read-only work (now two at a time, bounded queue, timeouts); ffmpeg protocol whitelist missing on analysis and mix paths; playlists accepted as media.
 - **Recorded, not fixed:** budget ledger is not wired to anything (no paid capability exists); no per-credential rate limits or export quotas.
 - Six regression checks added to `pnpm proof:phase5` (30/30) and one to `pnpm proof` (54/54); `analysis.test.ts` covers the limiter.
-- This was one review by one reviewer reading code; it is not a penetration test, and the browser side (XSS, content security policy) was not reviewed.
+- This was one review by one reviewer reading code; it is not a penetration test. The browser side was reviewed later (checkpoint 13m).
 
 **Checkpoint 13b — accessibility audit and soak**
 - `pnpm audit:a11y` (`docs/evidence/a11y-audit.json`): automated heuristic audit of the editor with every Inspector panel shown and one clip selected, in Hebrew (RTL) and English (LTR): 121 visible controls, all with an accessible name; no text below WCAG contrast thresholds; tab semantics complete; a visible focus indicator on each of the 51 elements reached by Tab; `lang`/`dir` set. The audit first plants three known defects (unnamed button, low-contrast text, removed focus ring) and fails unless it detects them. **This is not a WCAG conformance claim:** no screen reader, no user testing, no check of dialogs/palette states, canvas content, drag operations by keyboard, or reduced-motion behaviour beyond the setting being honoured in tests.
@@ -266,6 +266,16 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
   3. The volume handlers used the playhead position of the last render; typing straight after a seek could write the key at the previous position. They read the live playhead now.
 - The same check exposed two places where the proof itself raced the page (it waited for the server, then acted on a panel that had not caught up). Those steps now wait for what the panel shows. The Look panel had the same weakness as (3) — its effect-key button and slider chose "write a key" vs "change the static value" from their last render — and is fixed as well: `Editor.commit` accepts a function that is evaluated when the edit's turn comes, so the choice is made from the document as it is then. The proof no longer waits before using the slider and passed 8 runs in a row. Other panels were not audited for this pattern. Markers checkpoint 13k was verified with only one run of this proof before these fixes; with the fixes it passed 8 runs in a row.
 
+**Checkpoint 13m — browser-side security review**
+- Scope: what the browser loads and runs. Read through the web app for HTML injection points (one `dangerouslySetInnerHTML`, a constant logo; no `innerHTML`, `eval`, `document.write`, message handlers or user-controlled links), then enforced the result with response headers.
+- Every response now carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-site`.
+- Pages get a content security policy that allows only same-origin scripts, styles, fonts, images and media (plus `blob:`/`data:` images and `blob:` media): no inline scripts or styles, no `eval`, no `blob:` scripts, no plugins, no framing, no `<base>`. API, MCP and stored-file responses get `default-src 'none'; sandbox`, so an uploaded file opened directly as a page can load and run nothing.
+- To make that policy possible: the audio measurement worklet moved from a `blob:` URL to a static file; the lab page's inline `<style>` moved to a CSS file; browser pages configure the schema library to interpret schemas (it otherwise probes `Function()`), so a normal page load produces **zero** policy violations.
+- **Defect found by the new check (pre-existing):** handlers that return their own response (stored media, exports, range requests) bypassed the header middleware, so user-uploaded files were served without `nosniff` although the code appeared to set it for everything. Headers are now applied after the handler to whatever response goes out.
+- `pnpm proof:phase5` (now 33): headers on a page, a JSON response and a media response; markup stored in a project name, a title and a marker name is displayed as text and runs nothing, with no violation at load; inline script, `blob:` script, remote script, inline event handler and `eval` attempts made inside the live editor page are all blocked and reported.
+- The accessibility audit's own sensitivity check failed under the new policy (it planted its test defects with inline style attributes, which the policy blocks) and therefore refused to report "no findings"; it now plants them through the DOM API. The audit, the parity suite (Test 1 and 2 pass, same small-text warnings as before) and all proofs were re-run under the policy. `conformance:seek`, `conformance:avsync` and the ComfyUI proofs were **not** re-run under it.
+- Limits: one review by one reviewer; not a penetration test. The policy is only applied by the built server (`pnpm start`), not by the Vite dev server. `style-src` does not allow inline styles, so a future dependency that injects `<style>` will fail visibly. No per-credential rate limits or export quotas yet. The session cookie is `HttpOnly; SameSite=Strict` but not `Secure` (loopback HTTP); a TLS deployment needs that flag.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -295,7 +305,7 @@ Unblocked (no decision needed), roughly by value:
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; MCP resources/prompts; activity log dialog; dialogs and transient states in the accessibility audit.
 7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
-8. Browser-side security review (XSS, content security policy); per-credential rate limits and export quotas.
+8. Per-credential rate limits and export quotas; `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
 Blocked on an owner decision or resource (see docs/BLOCKERS.md):
@@ -312,7 +322,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 pnpm install && pnpm build && pnpm test
 ```
 Expect 269 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 31 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 14 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 14 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 
