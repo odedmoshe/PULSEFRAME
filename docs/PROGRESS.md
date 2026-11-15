@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-15, checkpoint 13f. Phases 0–5 gate criteria met on the CPU profile; Phases 6–9, 11 and 12 partly met (each row says which gate parts); Phase 10 not started (needs providers); Phase 13 partly done (security review, accessibility audit, soak, archive). **The g0 and BiRefNet proofs were last run before the owner-session change and have not been re-run since** (they need a running ComfyUI; the code path for obtaining a session in them was updated but is untested).
+Last updated: 2026-11-15, checkpoint 13f. Phases 0–5 gate criteria met on the CPU profile; Phases 6–9, 11 and 12 partly met (each row says which gate parts); Phase 10 not started (needs providers); Phase 13 partly done (security review, accessibility audit, soak, archive). The provider proofs were re-run after the owner-session and budget changes against the local ComfyUI on CPU: `pnpm proof:g0` 39/39; the BiRefNet trial 9/9 with weights already present (its four download checks were not repeated; the original 13/13 evidence is kept, the re-run is `g1-birefnet-cpu-rerun.json`). No new download, no paid call.
 
 Status words: **verified-here** = checked on the current CPU profile · **implemented, not qualified** = code exists, needs a runtime/target we lack ·
 **blocked** · **not started**. Nothing is "verified on target profile" yet: no GPU reference machine exists.

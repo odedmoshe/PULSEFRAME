@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T22:39:22.125Z",
+  "ranAt": "2026-11-15T02:12:27.345Z",
   "result": "PASSED",
   "scope": "Amendment A1 G0 on the model-free smoke workflow: provider path, attachment through operations and stale-result protection. No model, no GPU, no media-input workflow.",
   "machine": {
@@ -22,13 +22,13 @@
     "capability": "comfy.smoke.solid-image",
     "workload": "320x192 solid image, batch 1",
     "stageSeconds": {
-      "preparing": 0.247,
+      "preparing": 0.261,
       "staging": 0,
       "submit": 0.008,
-      "providerQueueAndInference": 0.002,
-      "transfer": 0.476,
-      "validation": 0.064,
-      "attachment": 0.061,
+      "providerQueueAndInference": 0.59,
+      "transfer": 0.008,
+      "validation": 0.074,
+      "attachment": 0.079,
       "basis": "measured (wall clock, includes 200 ms polling granularity)"
     },
     "peakDeviceMemoryBytes": null,
@@ -101,13 +101,13 @@
       "ok": true,
       "detail": {
         "stageSeconds": {
-          "preparing": 0.247,
+          "preparing": 0.261,
           "staging": 0,
           "submit": 0.008,
-          "providerQueueAndInference": 0.002,
-          "transfer": 0.476,
-          "validation": 0.064,
-          "attachment": 0.061,
+          "providerQueueAndInference": 0.59,
+          "transfer": 0.008,
+          "validation": 0.074,
+          "attachment": 0.079,
           "basis": "measured (wall clock, includes 200 ms polling granularity)"
         },
         "bytes": 875
@@ -169,7 +169,7 @@
     {
       "name": "run-earned evidence now cites the recorded job and names the profile it applies to",
       "ok": true,
-      "detail": "job job_KP9z2JAtG7k: cpu (cpu), ComfyUI 0.45.0, 2026-11-14T22:39:10.739Z"
+      "detail": "job job_51xutR2BAgo: cpu (cpu), ComfyUI 0.45.0, 2026-11-15T02:12:14.486Z"
     },
     {
       "name": "still image upload: probed as an image asset with exact dimensions",
@@ -186,13 +186,13 @@
       "ok": true,
       "detail": {
         "stageSeconds": {
-          "preparing": 0.189,
-          "staging": 0.008,
-          "submit": 0.005,
-          "providerQueueAndInference": 0.211,
+          "preparing": 0.231,
+          "staging": 0.01,
+          "submit": 0.006,
+          "providerQueueAndInference": 0.213,
           "transfer": 0.005,
-          "validation": 0.059,
-          "attachment": 0.064,
+          "validation": 0.063,
+          "attachment": 0.067,
           "basis": "measured (wall clock, includes 200 ms polling granularity)"
         },
         "edgeProfile": [
@@ -242,7 +242,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_78c32ee7870",
+          "entityId": "clp_77b47c91510",
           "expectedVersion": 8,
           "currentVersion": 9,
           "deleted": false,
@@ -276,7 +276,7 @@
       "detail": {
         "status": "succeeded",
         "attempt": 1,
-        "providerRunsOfOurs": 49,
+        "providerRunsOfOurs": 59,
         "historyDelta": 2
       }
     },
