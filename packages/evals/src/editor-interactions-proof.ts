@@ -258,6 +258,21 @@ async function main() {
     const vk3 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[30, 0.5]]));
     check('Sound tab: typing a level writes a volume key at the playhead; between two keys the field shows the interpolated level (0.85 halfway between 0.5 and 1.2); "remove this key" removes only that key', vk1 && vk2 && midShown === '0.85' && vk3, { midShown, keys: volKeys(await doc()) });
 
+    console.log('\n# fit music to the picture');
+    const fm0 = await doc();
+    const music0 = clipOf(fm0, musicClip);
+    const pictureEnd = Math.max(...fm0.sequences.seq_main.tracks.filter((t: any) => t.kind !== 'audio').flatMap((t: any) => t.clips).map((c: any) => fr(c.start) + fr(c.duration)));
+    const beatsNow: number[] = ((await call(`/projects/${pid}/timeline`)).body.markers.beatSeconds as number[]).map((sec) => Math.floor(sec * 30 + 1e-6)); // the op takes each beat down to a whole frame
+    const wantEnd = Math.max(...beatsNow.filter((b) => b > fr(music0.start) && b <= pictureEnd));
+    await page.locator(`.clip[data-clip-id="${musicClip}"]`).click();
+    await page.getByTestId('sound-fit-music').click();
+    const fitted = await until((x2) => fr(clipOf(x2, musicClip).start) + fr(clipOf(x2, musicClip).duration) !== fr(music0.start) + fr(music0.duration) || !!clipOf(x2, musicClip).fadeOut);
+    const music1 = clipOf(await doc(), musicClip);
+    const gotEnd = fr(music1.start) + fr(music1.duration);
+    await page.keyboard.press('Control+z');
+    const fitUndone = await until((x2) => fr(clipOf(x2, musicClip).duration) === fr(music0.duration) && !clipOf(x2, musicClip).fadeOut);
+    check('Sound tab: "end the music with the picture" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it', fitted && gotEnd === wantEnd && gotEnd <= pictureEnd && fr(music1.fadeOut) > 0 && fitUndone, { pictureEnd, wantEnd, gotEnd, fadeOutFrames: music1.fadeOut ? fr(music1.fadeOut) : 0, fitUndone });
+
     console.log('\n# markers');
     const markersOf = (d: any) => Object.values(d.markers ?? {}).sort((x: any, y: any) => fr(x.time) - fr(y.time)) as any[];
     const tc = async () => (await page.getByTestId('timecode').textContent()) ?? '';

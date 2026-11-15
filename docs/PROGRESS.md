@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-15, checkpoint 15q (14k–15q, after the stretch below: render-fuzz parity, automatic backups, J/L shuttle, playback across edits, marquee, per-format title wording, per-grant request budget, Secure cookie option, sound longer than picture fix, approvals list, source viewer, ripple insert). Earlier: checkpoints 13j–14c were the stretch of: clip speed, markers, volume automation, browser hardening, multi-select, MCP resources and prompts, storage ceiling, backup, freeze frame, per-format captions, analysis jobs, and — most consequential — an input matrix that found and fixed seven long-standing defects in how ordinary media files are read, plus two flaws in my own first fixes that the same matrix caught one step later). Requirements ledger: 22 done, 101 partial, 70 not started, 6 conditional of 199 rows. Phases 0–5 gate criteria met on the CPU profile; Phases 6–9, 11 and 12 partly met (each row says which gate parts); Phase 10 not started (needs providers); Phase 13 partly done (security review, accessibility audit, soak, archive). The provider proofs were re-run after the owner-session and budget changes against the local ComfyUI on CPU: `pnpm proof:g0` 39/39; the BiRefNet trial 9/9 with weights already present (its four download checks were not repeated; the original 13/13 evidence is kept, the re-run is `g1-birefnet-cpu-rerun.json`). No new download, no paid call.
+Last updated: 2026-11-15, checkpoint 15r (14k–15r, after the stretch below: render-fuzz parity, automatic backups, J/L shuttle, playback across edits, marquee, per-format title wording, per-grant request budget, Secure cookie option, sound longer than picture fix, approvals list, source viewer, ripple insert). Earlier: checkpoints 13j–14c were the stretch of: clip speed, markers, volume automation, browser hardening, multi-select, MCP resources and prompts, storage ceiling, backup, freeze frame, per-format captions, analysis jobs, and — most consequential — an input matrix that found and fixed seven long-standing defects in how ordinary media files are read, plus two flaws in my own first fixes that the same matrix caught one step later). Requirements ledger: 22 done, 101 partial, 70 not started, 6 conditional of 199 rows. Phases 0–5 gate criteria met on the CPU profile; Phases 6–9, 11 and 12 partly met (each row says which gate parts); Phase 10 not started (needs providers); Phase 13 partly done (security review, accessibility audit, soak, archive). The provider proofs were re-run after the owner-session and budget changes against the local ComfyUI on CPU: `pnpm proof:g0` 39/39; the BiRefNet trial 9/9 with weights already present (its four download checks were not repeated; the original 13/13 evidence is kept, the re-run is `g1-birefnet-cpu-rerun.json`). No new download, no paid call.
 
 Status words: **verified-here** = checked on the current CPU profile · **implemented, not qualified** = code exists, needs a runtime/target we lack ·
 **blocked** · **not started**. Nothing is "verified on target profile" yet: no GPU reference machine exists.
@@ -652,6 +652,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - **Product defect fixed:** `close()` now drops connections that are still open after it stops accepting. `apps/server/src/shutdown.test.ts` fails without the fix (shutdown did not finish in 5 s with one open event stream) and passes with it. The proof now always closes its browser.
 - Still open: why the canceled state took more than 15 s in that run. It has only been seen under heavy parallel load; not reproduced on its own.
 
+**Checkpoint 15r — fit music to the picture; analysis marks under reversed clips**
+- New op `fit_music {clipId, to?, fadeOut?}`: a sound clip that is not linked to a picture is made to end on the last detected beat at or before the end of the picture and titles (exactly there when the file has no beat analysis) and fades out; when the music is shorter than the picture it ends on its own last beat and the output says how much is missing. Button "End the music with the picture" in the Sound panel.
+- Beats, scene cuts and silence ranges are now mapped through reversed clips correctly (they were mapped as if the clip ran forwards).
+- Verified here: `insertgap.test.ts` (2 new tests), `reverse.test.ts` (marks under a reversed clip), fuzz suites with the op, `pnpm proof:editor-interactions` 21/21 (the music ends on the last beat before the picture's end, with a fade; undo restores).
+- Not done: looping or re-arranging music that is too short; downbeats (bar starts) are not detected, so "last beat" is any beat.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -679,7 +685,7 @@ Unblocked (no decision needed), roughly by value:
 3. Pruning of media in the backup; re-checking media already in the backup (scheduled backups, snapshot retention, a read-back integrity check of the database copy and hash checks of newly copied media are done).
 4. Per-format wording for transcript-generated captions (manual cues can be edited and reworded per format in the editor); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 5. remaining transient states in the accessibility audit (confirmation forms, error and busy states).
-6. Inputs: HDR; the AVI one-frame difference; real camera and phone files. Downbeat detection; fit-music-to-duration; beat analysis past 20 minutes.
+6. Inputs: HDR; the AVI one-frame difference; real camera and phone files. Downbeat detection; beat analysis past 20 minutes.
 7. (done: request budget and export quota per grant.) A `Secure` cookie option exists; a real TLS proxy deployment is untested.
 8. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
