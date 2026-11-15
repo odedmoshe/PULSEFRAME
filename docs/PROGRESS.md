@@ -541,6 +541,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 
 **Note — a regression run hung once in the Phase 4 proof (unexplained)**
 - A full regression started after checkpoint 14z passed `pnpm proof` (54) and phase3 (31), then made no progress inside `pnpm proof:phase4` until the run hit its time limit almost two hours later. Run alone straight afterwards, phase4 passed 19/19 in under seven minutes, and it had passed in the regression after 14s. Cause not found; not reproduced. The regression is being rerun with a time limit per proof so that a hang is reported as such.
+- **Regression after checkpoint 14z, rerun in two batches with a time limit per proof: everything passed, no hang.** `pnpm proof` 54 · phase3 31 · phase4 19 · phase5 34 · phase6 35 · phase7 31 · phase8 20 · phase9 12 · phase11 12 · phase12 15 · browser-export 23 · editor-interactions 20 · owner-ui 9 · speed 16 · soak 7 · start-offset 4 · projects 2 (15 settings) · images 3 (22 shown, 2 refused) · long 6 · render-fuzz 2 (with `insert_gap` and `slip_clip` in the generator) · inputs 4 (30 shapes: 28 correct, 2 noted) · parity pass · seek 7 configurations with 0 wrong frames · accessibility audit no findings · 400 unit tests. All on the current CPU profile.
 
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.

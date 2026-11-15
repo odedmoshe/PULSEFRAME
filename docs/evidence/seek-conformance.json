@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-14T22:32:12.892Z",
+  "ranAt": "2026-11-15T12:33:23.187Z",
   "machine": {
     "os": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -9,7 +9,7 @@
   "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
   "seed": 1,
   "seeksPerFixture": 1000,
-  "totalWallSeconds": 262.2,
+  "totalWallSeconds": 271.1,
   "fixtures": [
     {
       "name": "h264-mp4-30-bf2-gop30",
@@ -28,7 +28,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 24.9,
+      "exportWallSeconds": 25.3,
       "detail": {
         "asset": {
           "codec": "h264",
@@ -63,7 +63,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 44.1,
+      "exportWallSeconds": 44.7,
       "detail": {
         "asset": {
           "codec": "h264",
@@ -98,7 +98,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 24.4,
+      "exportWallSeconds": 25.7,
       "detail": {
         "asset": {
           "codec": "h264",
@@ -133,7 +133,7 @@
         "checked": 150,
         "mismatches": 0
       },
-      "exportWallSeconds": 29.5,
+      "exportWallSeconds": 32,
       "detail": {
         "asset": {
           "codec": "h264",
@@ -168,18 +168,18 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 28.9,
+      "exportWallSeconds": 30.7,
       "detail": {
         "asset": {
           "codec": "vp9",
-          "frameCount": null,
+          "frameCount": 300,
           "frameRate": {
             "num": 30,
             "den": 1
           },
           "duration": {
-            "value": "1251",
-            "timescale": 125
+            "value": "10",
+            "timescale": 1
           }
         },
         "randomFirstMismatches": [],
@@ -203,7 +203,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 33.1,
+      "exportWallSeconds": 32.3,
       "detail": {
         "asset": {
           "codec": "av1",
@@ -238,7 +238,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 23.9,
+      "exportWallSeconds": 25.2,
       "detail": {
         "asset": {
           "codec": "h264",
