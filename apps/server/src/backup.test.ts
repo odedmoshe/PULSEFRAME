@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
-import { backupDataDir, backupWithHistory, BackupScheduler, listSnapshots, verifyBackup } from './backup.ts';
+import { backupDataDir, backupWithHistory, BackupScheduler, listSnapshots, pruneBackup, verifyBackup } from './backup.ts';
 import { startServer } from './index.ts';
 
 const dirs: string[] = [];
@@ -141,6 +141,21 @@ describe('backup of a running server and restore', () => {
       fs.writeFileSync(path.join(dest, 'snapshots', snap), snapBytes);
       expect((await verifyBackup(dest)).ok).toBe(true);
       await expect(verifyBackup(tmp('pf-bk-none-'))).rejects.toThrow(/not a PULSEFRAME backup/);
+      // pruning: a media file no database in the backup lists is reported, removed only with apply, and the backup still verifies
+      const stray = 'f'.repeat(64);
+      fs.writeFileSync(path.join(dest, 'blobs', stray), 'left over');
+      const dry = pruneBackup(dest);
+      expect(dry).toMatchObject({ removed: false, unreferenced: { files: 1, bytes: 9 } });
+      expect(dry.kept).toBeGreaterThan(0);
+      expect(fs.existsSync(path.join(dest, 'blobs', stray))).toBe(true);
+      expect(pruneBackup(dest, true)).toMatchObject({ removed: true, unreferenced: { files: 1 } });
+      expect(fs.existsSync(path.join(dest, 'blobs', stray))).toBe(false);
+      expect(pruneBackup(dest)).toMatchObject({ unreferenced: { files: 0 } });
+      expect((await verifyBackup(dest)).ok).toBe(true);
+      // an unreadable snapshot stops pruning: it cannot know what that snapshot needs
+      fs.writeFileSync(path.join(dest, 'snapshots', snap), snapBytes.subarray(0, 100));
+      expect(() => pruneBackup(dest, true)).toThrow(/nothing was removed/);
+      fs.writeFileSync(path.join(dest, 'snapshots', snap), snapBytes);
       // going back: the oldest retained snapshot over the copy's database starts as a working server at that revision
       fs.copyFileSync(path.join(dest, 'snapshots', 'pulseframe-20260101T050000Z.sqlite'), path.join(dest, 'pulseframe.sqlite'));
       b = await startServer({ port: 8965, dataDir: dest });

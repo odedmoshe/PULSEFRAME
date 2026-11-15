@@ -106,7 +106,7 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Fit music to the picture (`fit_music`; Sound panel button): end on the last beat before the picture ends, with a fade-out | tested | `insertgap.test.ts`, fuzz suites, `pnpm proof:editor-interactions`. No looping when the music is too short; downbeats not detected |
 | MCP change notifications (`subscriptions/listen`): resource updated on every commit, list changed on project create/delete, scoped to what the credential may read | tested | `packages/evals/src/mcp-notifications.test.ts` (real MCP client). Protocol revision 2026-07-28 clients only |
 | Export quota per agent grant (`exportsPerDay`; field in the grant form) | tested | `apps/server/src/reverseSound.test.ts`, `pnpm proof:owner-ui` |
-| `pnpm backup --verify <dir>`: integrity of every database in a backup, every media file against its content hash, referenced media present | tested | `apps/server/src/backup.test.ts` |
+| `pnpm backup --verify <dir>` (integrity of every database, every media file against its content hash, referenced media present) and `pnpm backup --prune <dir> [--apply]` (media no database in the backup lists) | tested | `apps/server/src/backup.test.ts` |
 | Silence and loudness measurement as background jobs (`background: true`) | tested | `apps/server/src/analysisJobs.test.ts` |
 | Full project history dialog with a filter for own or agent edits | tested | `pnpm proof:phase3`, accessibility audit |
 | Colour reading choice for files with no colour tags (BT.709 as the browser reads, or BT.601) | tested | `look.test.ts`; `docs/evidence/input-matrix.json` (13 → 5 of 255 on the server and browser exports). Per-pixel correction in JavaScript; preview speed with it not measured |

@@ -111,6 +111,39 @@ export async function verifyBackup(dir: string): Promise<VerifyResult> {
   return r;
 }
 
+export interface PruneResult { dir: string; kept: number; unreferenced: { files: number; bytes: number }; removed: boolean }
+
+/**
+ * Media in a backup that no database in it knows about any more (not the current one, not any retained snapshot): files left
+ * behind after storage clean-up on the live installation and after old snapshots were dropped. Reports them; removes them only
+ * with `apply`. A file is kept if ANY database in the backup lists it, so every retained snapshot stays restorable.
+ * Refuses to act when a database in the backup cannot be read (it could not tell what that database needs).
+ */
+export function pruneBackup(dir: string, apply = false): PruneResult {
+  const main = path.join(dir, 'pulseframe.sqlite');
+  if (!fs.existsSync(main)) throw new Error(`${dir} is not a PULSEFRAME backup (no pulseframe.sqlite)`);
+  const needed = new Set<string>();
+  for (const file of [main, ...listSnapshots(dir).map((n) => path.join(dir, 'snapshots', n))]) {
+    let db: Database.Database;
+    try { db = new Database(file, { readonly: true, fileMustExist: true }); } catch (e) { throw new Error(`${path.relative(dir, file)} cannot be opened, so nothing was removed: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`); }
+    try { for (const row of db.prepare('SELECT hash FROM blobs').all() as { hash: string }[]) needed.add(row.hash.replace(/^sha256:/, '')); }
+    catch (e) { throw new Error(`${path.relative(dir, file)} cannot be read, so nothing was removed: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`); }
+    finally { db.close(); }
+  }
+  const blobs = path.join(dir, 'blobs');
+  const r: PruneResult = { dir: path.resolve(dir), kept: 0, unreferenced: { files: 0, bytes: 0 }, removed: false };
+  if (!fs.existsSync(blobs)) return r;
+  const extra: string[] = [];
+  for (const e of fs.readdirSync(blobs, { withFileTypes: true })) {
+    if (!e.isFile() || !/^[0-9a-f]{64}$/.test(e.name)) continue;
+    if (needed.has(e.name)) { r.kept++; continue; }
+    r.unreferenced.files++; r.unreferenced.bytes += fs.statSync(path.join(blobs, e.name)).size;
+    extra.push(e.name);
+  }
+  if (apply) { for (const n of extra) fs.rmSync(path.join(blobs, n), { force: true }); r.removed = true; }
+  return r;
+}
+
 /** Name of a dated database snapshot; sorts by time. */
 const snapName = (at: number) => `pulseframe-${new Date(at).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')}.sqlite`;
 const SNAP_RE = /^pulseframe-\d{8}T\d{6}Z\.sqlite$/;

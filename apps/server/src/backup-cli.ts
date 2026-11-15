@@ -16,6 +16,17 @@ if (process.argv[2] === '--verify') {
     process.exit(r.ok ? 0 : 1);
   } catch (e) { console.error(String(e instanceof Error ? e.message : e)); process.exit(1); }
 }
+if (process.argv[2] === '--prune') {
+  const dir = process.argv[3], apply = process.argv[4] === '--apply';
+  if (!dir) { console.error('usage: pnpm backup --prune <backup directory> [--apply]'); process.exit(2); }
+  const { pruneBackup } = await import('./backup.ts');
+  try {
+    const r = pruneBackup(dir, apply);
+    console.log(`${r.kept} media file(s) are needed by a database in this backup. ${r.unreferenced.files} file(s), ${r.unreferenced.bytes} bytes, are not needed by any.`);
+    console.log(r.removed ? 'They were removed.' : r.unreferenced.files ? 'Nothing was removed. Run again with --apply to remove them.' : 'Nothing to remove.');
+    process.exit(0);
+  } catch (e) { console.error(String(e instanceof Error ? e.message : e)); process.exit(1); }
+}
 const dest = process.argv[2];
 if (!dest) { console.error('usage: pnpm backup <destination directory>'); process.exit(2); }
 backupDataDir(loadConfig().dataDir, dest).then(

@@ -58,6 +58,16 @@ pnpm backup --verify /path/to/backup
 ```
 It opens every database in the backup (the current one and each snapshot) and runs SQLite's integrity check, re-hashes every media file against the content hash it is named by, and checks that every media file the current database refers to is present. It changes nothing and exits non-zero if anything is wrong. It reads all media, so it takes as long as hashing the whole backup.
 
+Remove media the backup no longer needs (tested by `apps/server/src/backup.test.ts`):
+```bash
+pnpm backup --prune /path/to/backup
+```
+This only reports. A media file is needed if any database in the backup (the current one or any retained snapshot) lists it; files nobody lists are left over from storage clean-up on the live installation and from snapshots that were dropped. Add `--apply` to remove them:
+```bash
+pnpm backup --prune /path/to/backup --apply
+```
+It refuses to remove anything if a database in the backup cannot be read.
+
 To go back to an older state: stop the server, copy the chosen snapshot over `pulseframe.sqlite` in the backup directory, and restore as below.
 
 Restore: stop the server, put the files back under `PF_DATA_DIR` (or point `PF_DATA_DIR` at the copy), start the server. Blobs are content-addressed and immutable, so an incremental copy of `blobs/` is safe.
