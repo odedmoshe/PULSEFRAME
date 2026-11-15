@@ -23,6 +23,9 @@ export class Auth {
   private sessions = new Map<string, Principal>();
   /** Named agent grants (governance.ts). Checked before the bootstrap tokens. */
   resolveGrant: ((token: string) => Principal | null) | null = null;
+  /** Clock for the rate limiter (replaceable in tests). */
+  now: () => number = Date.now;
+  private buckets = new Map<string, { tokens: number; at: number }>();
   private allowedHosts: Set<string>;
   private allowedOrigins: Set<string>;
 
@@ -67,14 +70,34 @@ export class Auth {
     this.sessions.set(sid, { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] });
     return `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/`;
   }
+  /**
+   * Per-credential request budget for agents: a token bucket holding ten seconds' worth of requests, refilled continuously.
+   * It stops a runaway agent loop from starving the editor; it is not an abuse defence for a public service.
+   */
+  private throttle(p: Principal): Principal {
+    const perMinute = this.cfg.agentRequestsPerMinute;
+    if (!perMinute || p.kind !== 'agent') return p;
+    const key = p.grant?.id ?? p.actor;
+    const capacity = Math.max(1, perMinute / 6), perMs = perMinute / 60_000, now = this.now();
+    const b = this.buckets.get(key) ?? { tokens: capacity, at: now };
+    b.tokens = Math.min(capacity, b.tokens + (now - b.at) * perMs);
+    b.at = now;
+    this.buckets.set(key, b);
+    if (b.tokens < 1) {
+      const retryAfterSeconds = Math.ceil((1 - b.tokens) / perMs / 1000);
+      throw new ApiError(429, 'rate_limited', `this credential is limited to ${perMinute} requests per minute`, { limitPerMinute: perMinute, retryAfterSeconds }, `Wait ${retryAfterSeconds} s and continue; batch edits into one transaction where possible.`);
+    }
+    b.tokens -= 1;
+    return p;
+  }
   authenticate(req: Request): Principal {
     const header = req.headers.get('authorization');
     if (header?.startsWith('Bearer ')) {
       const token = header.slice(7);
       const granted = this.resolveGrant?.(token);
-      if (granted) return granted;
-      if (this.same(token, this.tokens.agent)) return { actor: 'agent:local', kind: 'agent', scopes: ['observe', 'edit'] };
-      if (this.same(token, this.tokens.observer)) return { actor: 'agent:observer', kind: 'agent', scopes: ['observe'] };
+      if (granted) return this.throttle(granted);
+      if (this.same(token, this.tokens.agent)) return this.throttle({ actor: 'agent:local', kind: 'agent', scopes: ['observe', 'edit'] });
+      if (this.same(token, this.tokens.observer)) return this.throttle({ actor: 'agent:observer', kind: 'agent', scopes: ['observe'] });
       throw new ApiError(401, 'invalid_token', 'bearer token not recognised');
     }
     const sid = new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`).exec(req.headers.get('cookie') ?? '')?.[1];

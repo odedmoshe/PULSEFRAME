@@ -11,6 +11,7 @@ This describes the one supported deployment profile: a single user, one machine,
 | `PF_WEB_DIST` | `apps/web/dist` | Built web bundle. The headless renderer loads the render page from here, so **stills and exports reflect the last `pnpm build`**. |
 | `PF_EXTRA_ORIGINS` | none | Additional allowed browser origins (comma-separated). |
 | `PF_MAX_UPLOAD_BYTES` | see `config.ts` | Largest accepted upload. |
+| `PF_AGENT_RPM` | `0` (off) | Requests per minute allowed per agent credential, REST and MCP together. Over the limit the server answers `429 rate_limited` with `Retry-After`. Ten seconds' worth may be sent as a burst. The owner's browser session is never limited. Off by default: fast local scripts are normal for this tool. |
 | `PF_COMFYUI_URL`, `PF_COMFYUI_ALLOW_REMOTE`, `PF_COMFYUI_MODELS_DIR`, `PF_MODEL_HOSTS` | unset | Optional provider, see INTEGRATIONS.md. |
 | `NODE_USE_ENV_PROXY=1` | unset | Needed only behind an HTTPS proxy, for model downloads. |
 

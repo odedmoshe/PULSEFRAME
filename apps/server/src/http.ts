@@ -72,7 +72,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   const need = (c: Context<Env>, scope: Scope) => { auth.require(c.var.principal, scope); return c.var.principal; };
 
   app.onError((e, c) => {
-    if (e instanceof ApiError) return c.json(e.toJSON(), e.status as any);
+    if (e instanceof ApiError) { if (e.status === 429 && typeof e.details.retryAfterSeconds === 'number') c.header('Retry-After', String(e.details.retryAfterSeconds)); return c.json(e.toJSON(), e.status as any); }
     // The client went away while sending its request body (e.g. the render worker was stopped by a cancel). Not a server fault.
     if ((e as { code?: string }).code === 'ECONNRESET') return c.json({ error: { code: 'client_disconnected', message: 'the client closed the connection before the request was complete' } }, 400);
     console.error(e);

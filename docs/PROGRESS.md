@@ -282,6 +282,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified: `moveclips.test.ts` (2) and one end-to-end check in `pnpm proof:editor-interactions` (now 15; five consecutive runs): each step is exactly one revision, a third clip stays put, one undo restores a two-clip delete.
 - Limits: no rubber-band (marquee) selection; no cross-track drag of a selection; while dragging, only the dragged clip shows a ghost, and only its own track is checked for overlap before release (the op checks everything on commit and refuses the whole move); the Inspector shows the first selected clip only; trimming stays per clip.
 
+**Checkpoint 13o — optional request limit per agent credential**
+- `PF_AGENT_RPM` (config `agentRequestsPerMinute`): a token bucket per agent credential (grant id, or the bootstrap agent/observer token), covering REST and MCP because it sits where credentials are resolved. Over the limit: `429 rate_limited` with `Retry-After` and a typed body. The owner session is exempt; a wrong token is still 401.
+- **Off by default, deliberately.** The first default (3000/min) was caught by the existing suite: the convergence test and the soak legitimately exceed it, i.e. it would have throttled the owner's own local automation. Verified with it off (the shipped default): 274 unit tests incl. `ratelimit.test.ts` (3, with an injected clock: burst, 429 + Retry-After, refill, per-credential, MCP, owner exempt, 0 = off) and soak 7/7. Phase 0 (54), Phase 5 (33) and Phase 11 (12) were run while the 3000/min default was still active and passed; they were not re-run after switching it off, and the other proofs were not re-run for this change (it only adds a branch that is skipped when the setting is 0).
+- Limits: one global setting, not per grant; no export quota; in-memory (resets on restart); not a defence for a public deployment.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -311,7 +316,7 @@ Unblocked (no decision needed), roughly by value:
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; MCP resources/prompts; activity log dialog; dialogs and transient states in the accessibility audit.
 7. Analysis in the job queue for long media; downbeat detection; fit-music-to-duration.
-8. Per-credential rate limits and export quotas; `Secure` cookie flag and deployment notes for TLS.
+8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
 Blocked on an owner decision or resource (see docs/BLOCKERS.md):
@@ -327,7 +332,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 271 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 274 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.

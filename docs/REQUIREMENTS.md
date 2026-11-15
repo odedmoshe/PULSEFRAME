@@ -276,7 +276,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-26.1 | 26 | Loopback bind, Host check, origin-checked cookie session, scoped bearer tokens on REST and MCP | 1 | — | Session | auth middleware | — | partial | ADR-0002; P0: 401, 403 scope, cross-origin 403, DNS-rebinding 403; owner session bound to a launch secret; strict content security policy and hardening headers on every response (`phase5-proof.json`, 33 checks). No tenant authz, rate limiting, audit trail; cookie not `Secure` on loopback HTTP |
+| R-26.1 | 26 | Loopback bind, Host check, origin-checked cookie session, scoped bearer tokens on REST and MCP | 1 | — | Session | auth middleware | — | partial | ADR-0002; P0: 401, 403 scope, cross-origin 403, DNS-rebinding 403; owner session bound to a launch secret; strict content security policy and hardening headers on every response (`phase5-proof.json`, 33 checks). Optional per-credential request limit for agents, off by default (`ratelimit.test.ts`). No tenant authz, audit trail; cookie not `Secure` on loopback HTTP |
 | R-26.2 | 26 | Encrypted secret store/OS keychain, key masking, rotation, error redaction | 10 | R-26.1 | Settings | secret ops | — | not started | |
 | R-26.3 | 26 | SSRF-safe URL import, restricted worker egress | 3 | R-07.3 | Library | import job | — | not started | |
 | R-26.4 | 26 | Sandboxed FFmpeg/font/SVG/archive parsing, quotas, path-traversal and archive-bomb defenses | 13 | R-26.1 | — | — | — | partial | ffmpeg run with argument arrays; no quotas or sandbox verification |
