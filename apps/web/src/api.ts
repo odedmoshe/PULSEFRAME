@@ -1,14 +1,14 @@
 import type { Asset, OpCall, ProjectDocument } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
-  constructor(public status: number, public code: string, message: string, public details?: unknown) {
+  constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
     super(message);
   }
 }
 async function call<R>(path: string, init?: RequestInit): Promise<R> {
   const r = await fetch(`/api/v1${path}`, { credentials: 'same-origin', ...init });
   const data = r.headers.get('content-type')?.includes('json') ? await r.json() : undefined;
-  if (!r.ok) throw new ApiFailure(r.status, data?.error?.code ?? 'http_error', data?.error?.message ?? `HTTP ${r.status}`, data?.error?.details);
+  if (!r.ok) throw new ApiFailure(r.status, data?.error?.code ?? 'http_error', data?.error?.message ?? `HTTP ${r.status}`, data?.error?.details, data?.error?.hint);
   return data as R;
 }
 const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -22,7 +22,13 @@ export interface CommitResult { revision: number; committed: boolean; summary: s
 export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string }
 export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; target: number | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string }
 
-export interface AnalyzeResult { revision: number; summary: string; scenes?: { count: number }; beats?: { bpm: number | null; confidence: number | null; count: number } }
+export type RecipeParams = Record<string, unknown>;
+export interface RecipeAlternative { label: string; params: RecipeParams }
+export interface RecipePlanResult { revision: number; steps: string[]; basis: string[]; operations?: unknown; alternatives: RecipeAlternative[]; method?: string; note?: string }
+export interface RecipeApplyResult { revision: number; runId: string; createdIds: string[]; steps: string[]; basis: string[]; alternatives: RecipeAlternative[] }
+export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; steps: string[] }
+
+export interface AnalyzeResult{ revision: number; summary: string; scenes?: { count: number }; beats?: { bpm: number | null; confidence: number | null; count: number } }
 
 const SNAP_BEATS_KEY = 'pf.snap.beats.v1';
 /** Personal setting (default on), never stored in the project. */
@@ -68,5 +74,8 @@ export const api = {
   exportBatch: (id: string, variantIds: string[]) => call<{ jobs: { jobId: string; variantId: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ variantIds })),
   job: (jobId: string) => call<JobEvent & { status: string }>(`/jobs/${jobId}`),
   preflight: (id: string, variantId: string | null) => call<PreflightReport>(`/projects/${id}/preflight${variantId ? `?variant=${encodeURIComponent(variantId)}` : ''}`),
+  planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
+  applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),
+  regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
   events: (id: string, since: number) => new EventSource(`/api/v1/projects/${id}/events?since=${since}`, { withCredentials: true }),
 };

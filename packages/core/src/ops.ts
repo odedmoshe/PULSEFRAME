@@ -13,7 +13,7 @@ import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
-import { analysisEntityId, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
+import { analysisEntityId, fingerprint, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
 import { sampleKeyframes, shiftKeyframes } from './animation.ts';
 
 export type OpErrorCode =
@@ -541,6 +541,51 @@ defineOp({
 
 
 
+
+
+// ---------- recipes (SPEC §23): a planned list of ordinary ops applied and recorded as one step ----------
+defineOp({
+  name: 'apply_recipe',
+  version: 1,
+  internal: true,
+  description: 'Apply a recipe plan (ordinary public ops) as one step and record which objects it created. Issued by the server from a plan it built; on regeneration it first removes the previous run\'s untouched clips.',
+  args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000) }).strict(),
+  apply(d, a, ctx) {
+    const affected = new Set<string>();
+    for (const id of a.removeClipIds ?? []) {
+      const f = findClip(d, id);
+      if (!f) continue;
+      if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: id });
+      f.track.clips.splice(f.index, 1);
+      affected.add(id);
+    }
+    const created: string[] = [...(a.keepIds ?? [])];
+    for (const [i, call] of a.ops.entries()) {
+      const def = getOp(call.op);
+      if (!def || def.internal) throw new OpError('forbidden_op', `recipe step ${i} uses "${call.op}", which is not a public operation`, { index: i });
+      const parsed = def.args.safeParse(call.args);
+      if (!parsed.success) throw new OpError('invalid_args', `recipe step ${i} (${call.op}): ${z.prettifyError(parsed.error)}`, { index: i });
+      const r = def.apply(d, parsed.data, ctx);
+      for (const id of r.affectedIds) affected.add(id);
+      const out = r.output ?? {};
+      for (const key of ['clipId', 'audioClipId', 'trackId', 'variantId'] as const) if (typeof out[key] === 'string') created.push(out[key] as string);
+      if (Array.isArray(out.createdClipIds)) created.push(...(out.createdClipIds as string[]));
+    }
+    const id = a.runId ?? ctx.newId('run');
+    const previous = a.runId ? d.recipeRuns[a.runId]?.fingerprints ?? {} : {};
+    const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!d.variants[x] || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
+    const fingerprints: Record<string, string> = {};
+    for (const cid of createdIds) {
+      const f = findClip(d, cid);
+      if (!f) continue;
+      // Clips kept from an earlier run keep their ORIGINAL fingerprint, so they stay recognisable as hand-edited next time too.
+      fingerprints[cid] = (a.keepIds ?? []).includes(cid) && previous[cid] ? previous[cid]! : fingerprint(f.clip);
+    }
+    d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps };
+    affected.add(id);
+    return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} recipe ${a.recipeId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: { runId: id, createdIds: d.recipeRuns[id]!.createdIds } };
+  },
+});
 
 // ---------- linked format variants (SPEC §19.8) ----------
 const mustVariant = (d: ProjectDocument, id: string) => {

@@ -9,3 +9,4 @@ export * from './cleanup.ts';
 export * from './fonts.ts';
 export * from './effects.ts';
 export * from './variants.ts';
+export * from './recipes.ts';

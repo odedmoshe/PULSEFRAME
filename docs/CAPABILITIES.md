@@ -83,6 +83,8 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Linked output formats (variants) with per-clip overrides that survive master edits; contain/cover; generic safe-area guides; variant stills, export and batch export | tested | `docs/evidence/phase12-proof.json` (13 checks), `variants.test.ts`. Safe-area numbers are generic guides |
 | Creative preflight with object links and mechanical fixes (REST, MCP, editor) | tested | `phase12-proof.json`. Eight checks listed in its `scope`; text extents estimated |
 | Publishing connectors, thumbnails/metadata, provenance manifests | not built | |
+| Rule-based recipes (beat montage, social pack, tidy speech): plan, apply as one undo, regenerate keeping hand edits | tested | `docs/evidence/phase11-proof.json` (11 checks). No language model involved |
+| Natural-language Director, Prompt-to-Draft, Long-to-Shorts, brand kits | not built | Blocked on B-9 |
 | GPU compositor, shader effect families, keying, keyframed effect parameters, speed ramps, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface

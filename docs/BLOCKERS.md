@@ -42,3 +42,9 @@ The bounded BiRefNet trial then ran: see docs/INTEGRATIONS.md and `docs/evidence
 - **What is blocked:** any generated or cloned voice, Hebrew TTS quality, dubbing. No adapter exists and none is simulated.
 - **Why blocked:** needs either a hosted provider (credential, per-use cost, and that provider's consent/verification rules for cloning) or a local model download (size and licence to approve). Neither is covered by an existing grant.
 - **Decision needed:** which provider or model, and the spending limit if hosted.
+
+## B-9 — A built-in natural-language Director needs a language-model provider
+- **What works without it:** an external agent (any MCP client) can plan and edit through the 50+ tools; rule-based recipes apply multi-step edits with one undo (`docs/evidence/phase11-proof.json`).
+- **What is blocked:** typing a request inside the editor and having the product plan the edit itself; Prompt-to-Draft; Long-to-Shorts selection by meaning.
+- **Why blocked:** needs a hosted model credential (per-use cost) or a local model download. Neither is covered by an existing grant.
+- **Decision needed:** provider and spending limit, or confirmation that the external-agent route is the intended Director.

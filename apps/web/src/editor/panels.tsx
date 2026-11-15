@@ -8,6 +8,7 @@ import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { AnalysisPanel } from './AnalysisPanel.tsx';
+import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
@@ -148,7 +149,7 @@ const TRANSFORM_FIELDS: { prop: 'x' | 'y' | 'scale' | 'rotation' | 'opacity'; la
   { prop: 'opacity', label: 'transform.opacity', min: 0, max: 1, step: 0.05 },
 ];
 
-const INSPECTOR_TABS = ['clip', 'speech', 'captions', 'sound', 'review', 'deliver', 'all'] as const;
+const INSPECTOR_TABS = ['clip', 'speech', 'captions', 'sound', 'review', 'deliver', 'recipes', 'all'] as const;
 type InspectorTab = (typeof INSPECTOR_TABS)[number];
 const TAB_KEY = 'pf.inspector.tab.v1';
 
@@ -231,6 +232,10 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       <div {...panelProps('deliver')}>
         <h2>{t('inspector.tab.deliver')}</h2>
         <DeliverPanel />
+      </div>
+      <div {...panelProps('recipes')}>
+        <h2>{t('inspector.tab.recipes')}</h2>
+        <RecipesPanel />
       </div>
       <div {...panelProps('review')}>
       <h2>{t('proposals')}</h2>

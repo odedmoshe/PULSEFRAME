@@ -6,7 +6,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -19,6 +19,7 @@ import { ingestUpload } from './ingest.ts';
 import { detectBeatsOfFile, detectScenes, detectSilences } from './analysis.ts';
 import { makeSfx, SFX } from './sfx.ts';
 import { preflight } from './preflight.ts';
+import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { variantDoc } from './export.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
@@ -182,6 +183,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (!a) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
     return c.json({ revision: p.revision, ...analysisView(a) });
   });
+  const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
+  app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params)); });
+  app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });
+  app.post('/api/v1/projects/:id/recipe-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await regenerateRecipe(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params)); });
   app.get('/api/v1/projects/:id/preflight', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
@@ -500,6 +505,7 @@ export const catalog = () => ({
   ...describeCatalog(),
   captionPresets: [...CAPTION_PRESETS],
   clipMotions: CLIP_MOTIONS.filter((m) => m !== 'none'),
+  recipes: describeRecipes(),
   formatProfiles: FORMAT_PROFILES.map((p) => ({ ...p, note: 'Generic safe-area guide, editable per variant; not a platform specification.' })),
   soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, source: 'synthesised by formula in this build; no third-party content' })),
   fonts: FONT_CATALOG,

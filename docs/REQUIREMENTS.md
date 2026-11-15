@@ -260,7 +260,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-24.1 | 24 | Recipes compiling to native clips; slots; save-as-template; macros | 11 | R-12.1 | Templates drawer | run_recipe | Compositor | not started | |
+| R-24.1 | 24 | Recipes compiling to native clips; slots; save-as-template; macros | 11 | R-12.1 | Templates drawer | run_recipe | Compositor | partial | Three rule-based recipes compiling to native clips/ops, one undo, alternatives, regeneration that keeps hand edits (`phase11-proof.json`). No slots, save-as-template or user macros |
 | R-24.2 | 24 | Brand kits with logos, fonts, colors, captions, sound; per-instance overrides | 11 | R-24.1 | Brand drawer | brand ops | Compositor | not started | |
 | R-24.3 | 24 | Trend packs (curated or reference-derived); extension manifests; trusted built-ins first | 13 | R-24.1 | Extensions | — | — | not started | |
 

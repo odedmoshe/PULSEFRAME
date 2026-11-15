@@ -6,7 +6,7 @@
  * if nobody changed them since" — a compensating transaction, never a history rewrite.
  */
 import * as T from '@pulseframe/time';
-import type { Analysis, Asset, Clip, ProjectDocument, Track, Transcript, Variant } from './schema.ts';
+import type { Analysis, Asset, Clip, ProjectDocument, RecipeRun, Track, Transcript, Variant } from './schema.ts';
 
 export type EntityState =
   | { kind: 'project'; name: string; settings: ProjectDocument['settings'] }
@@ -15,7 +15,8 @@ export type EntityState =
   | { kind: 'clip'; sequenceId: string; trackId: string; clip: Clip }
   | { kind: 'transcript'; transcript: Transcript }
   | { kind: 'analysis'; analysis: Analysis }
-  | { kind: 'variant'; variant: Variant };
+  | { kind: 'variant'; variant: Variant }
+  | { kind: 'recipeRun'; run: RecipeRun };
 /** Entity id of an asset's analysis results. */
 export const analysisEntityId = (assetId: string) => `analysis:${assetId}`;
 /** Entity id of an asset's transcript. */
@@ -39,6 +40,7 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
   for (const t of Object.values(doc.transcripts ?? {})) m.set(transcriptEntityId(t.assetId), { kind: 'transcript', transcript: t });
   for (const a of Object.values(doc.analyses ?? {})) m.set(analysisEntityId(a.assetId), { kind: 'analysis', analysis: a });
   for (const v of Object.values(doc.variants ?? {})) m.set(v.id, { kind: 'variant', variant: v });
+  for (const r of Object.values(doc.recipeRuns ?? {})) m.set(r.id, { kind: 'recipeRun', run: r });
   for (const seq of Object.values(doc.sequences))
     seq.tracks.forEach((t, index) => {
       const { clips, ...track } = t;
@@ -75,12 +77,14 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
       if (cur?.kind === 'transcript') delete draft.transcripts[cur.transcript.assetId];
       if (cur?.kind === 'analysis') delete draft.analyses[cur.analysis.assetId];
       if (cur?.kind === 'variant') delete draft.variants[cur.variant.id];
+      if (cur?.kind === 'recipeRun') delete draft.recipeRuns[cur.run.id];
       if (cur?.kind === 'track') { const seq = draft.sequences[cur.sequenceId]!; seq.tracks.splice(seq.tracks.findIndex((t) => t.id === id), 1); }
     } else if (state.kind === 'project') { draft.name = state.name; draft.settings = structuredClone(state.settings); }
     else if (state.kind === 'asset') draft.assets[id] = structuredClone(state.asset);
     else if (state.kind === 'transcript') draft.transcripts[state.transcript.assetId] = structuredClone(state.transcript);
     else if (state.kind === 'analysis') draft.analyses[state.analysis.assetId] = structuredClone(state.analysis);
     else if (state.kind === 'variant') draft.variants[state.variant.id] = structuredClone(state.variant);
+    else if (state.kind === 'recipeRun') draft.recipeRuns[state.run.id] = structuredClone(state.run);
   }
   // 2. tracks (so restored clips have a home), lowest original index first
   for (const { id, state } of targets.filter((t) => t.state?.kind === 'track').sort((x, y) => (x.state as any).index - (y.state as any).index)) {
@@ -107,4 +111,12 @@ export function referencedIds(args: unknown, known: (id: string) => boolean, out
   else if (Array.isArray(args)) for (const v of args) referencedIds(v, known, out);
   else if (args && typeof args === 'object') for (const v of Object.values(args)) referencedIds(v, known, out);
   return out;
+}
+
+/** Short content fingerprint of any JSON value (FNV-1a over its canonical form). Not cryptographic; used to notice hand edits. */
+export function fingerprint(value: unknown): string {
+  const s = canonical(value);
+  let a = 0x811c9dc5, b = 0x01000193;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193) >>> 0; b = Math.imul(b ^ (c + i), 0x85ebca6b) >>> 0; }
+  return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
 }

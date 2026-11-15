@@ -1,7 +1,26 @@
 # PULSEFRAME Studio
 
-Browser-based video studio with Hebrew-first authoring and full agent access (REST + MCP). **Status: Phase 0 of 14 complete — a working vertical proof, not a product.**
-See [docs/PROGRESS.md](docs/PROGRESS.md) for exactly what works and [docs/CAPABILITIES.md](docs/CAPABILITIES.md) for tested limits.
+A browser-based video editor with a Hebrew-first interface and full agent access (REST and MCP). One document, one command path: the editor, the REST API and MCP tools all make the same recorded, undoable edits, and preview, stills and export are drawn by the same compositor.
+
+**Status: a working editor on a CPU-only development profile, not a finished product.** Every phase so far is partial. What is built, what was measured, and what is missing are listed without rounding up in:
+
+- [docs/PROGRESS.md](docs/PROGRESS.md) — state per phase, what was verified, open scope, next step
+- [docs/CAPABILITIES.md](docs/CAPABILITIES.md) — each capability with its evidence and limits
+- [docs/BLOCKERS.md](docs/BLOCKERS.md) — what needs a decision, hardware or credentials (GPU, speech recognition, voice, language model, generative providers)
+- [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) — the spec mapped to status
+
+## What works today (see the linked evidence for limits)
+- Import, timeline editing with exact rational time, keyframes, undo/redo per actor, live multi-client updates
+- Export: MP4 (H.264 + AAC), WebM, WAV, PNG; frame ranges, scaling, cancel/retry; browser-side WebM export
+- Titles and captions with Hebrew and mixed-direction text, five bundled OFL fonts, SRT/VTT import, SRT/VTT/ASS export
+- Transcript-based editing (typed or imported transcripts; no speech recognition is built in)
+- 12 effects, 17 blend modes, masks, 12 transitions on a Canvas2D compositor (no GPU effects)
+- Sound: gain, pan, fades, speech ducking, loudness measurement and normalisation, 7 synthesised sound effects
+- Model-free analysis: silence, scene cuts, beats
+- Linked output formats (9:16, 1:1, 4:5, 16:9) with per-format overrides, safe-area guides, preflight
+- Rule-based recipes (beat montage, social pack, tidy speech)
+- Agents: 50+ MCP tools generated from the same operation registry, permission modes (observe / propose / edit), pause, proposals with review
+- Optional local ComfyUI provider path (one experimental matting workflow; nothing is qualified on a GPU)
 
 ## Requirements
 Node ≥ 22.12, pnpm 10, FFmpeg/ffprobe with libx264 on `PATH`, and a Playwright Chromium (`pnpm exec playwright install chromium` on a normal machine).
@@ -16,12 +35,12 @@ pnpm build
 ```bash
 pnpm start
 ```
-Open http://127.0.0.1:8787. Agent tokens are written to `.data/tokens.json`; the MCP endpoint is `http://127.0.0.1:8787/mcp` (send `Authorization: Bearer <token>`).
+Open http://127.0.0.1:8787. Agent tokens are written to `.data/tokens.json`; the MCP endpoint is `http://127.0.0.1:8787/mcp` (send `Authorization: Bearer <token>`). Other pages: `/lab.html` (every effect, blend and transition as drawn by the compositor) and `/selftest.html` (browser audio self-test).
 
 ## Verify
 ```bash
 pnpm check
 ```
-Runs type checking, unit/property tests, the web build and the end-to-end proof (import → edit → preview → export → MCP agent edit → live UI update).
+Type checking, unit/property tests, the web build, the licence-notice check and the Phase 0 end-to-end proof. The per-phase proofs (`pnpm proof:phase3` … `pnpm proof:phase12`) and how to read their evidence are in [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-Optional ComfyUI provider: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md). Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+Operations (configuration, data, backup): [docs/OPERATIONS.md](docs/OPERATIONS.md). Optional ComfyUI provider: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md). Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

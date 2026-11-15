@@ -211,6 +211,9 @@ export const VariantSchema = z
   .strict();
 
 
+export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), createdIds: z.array(Id).max(5000), /** Content fingerprint of each created clip as the recipe left it; a clip whose content differs was edited by hand. */ fingerprints: z.record(Id, z.string()).default({}), steps: z.array(z.string().max(400)).max(50) }).strict();
+export type RecipeRun = z.infer<typeof RecipeRunSchema>;
+
 // ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
 const AnalysisOrigin = z.object({ method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), createdBy: z.string(), edited: z.boolean().describe('true once a person or agent corrected the result by hand') }).strict();
 export const AnalysisSchema = z
@@ -261,6 +264,8 @@ export const ProjectSchema = z
     mainSequenceId: Id,
     /** Transcripts by asset id, in source time. */
     transcripts: z.record(Id, TranscriptSchema).default({}),
+    /** Recipe runs: which objects each run created, so a run can be regenerated without touching hand-edited results. */
+    recipeRuns: z.record(Id, RecipeRunSchema).default({}),
     /** Linked output formats of this edit, by variant id (see variants.ts). */
     variants: z.record(Id, VariantSchema).default({}),
     /** Analysis results by asset id, in source time. */
@@ -312,6 +317,7 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
     transcripts: {},
     analyses: {},
     variants: {},
+    recipeRuns: {},
   };
 }
 
