@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-15T15:56:31.377Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-15T16:23:17.252Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -11,35 +11,35 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 0.837,
+        "wall": 0.917,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 1.298,
+        "wall": 1.249,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.185
+        "wall": 0.246
       },
       "png": {
-        "wall": 0.321
+        "wall": 0.318
       }
     },
     "cancel": {
       "stageAtCancel": "rendering 9/600",
-      "msToCanceled": 168
+      "msToCanceled": 163
     },
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 41.753,
-      "realtimeFactor": 0.4790074964673197,
+      "wallSeconds": 41.46,
+      "realtimeFactor": 0.482392667631452,
       "renderStageMs": {
-        "draw": 6193,
-        "readback": 4040,
-        "upload": 29565
+        "draw": 6848,
+        "readback": 3612,
+        "upload": 29258
       },
       "bytes": 747124,
       "estimateBytes": 22252800
@@ -168,7 +168,7 @@
       "ok": true,
       "detail": {
         "stageAtCancel": "rendering 9/600",
-        "msToCanceled": 168
+        "msToCanceled": 163
       }
     },
     {
@@ -185,12 +185,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 41.753,
-        "realtimeFactor": 0.4790074964673197,
+        "wallSeconds": 41.46,
+        "realtimeFactor": 0.482392667631452,
         "renderStageMs": {
-          "draw": 6193,
-          "readback": 4040,
-          "upload": 29565
+          "draw": 6848,
+          "readback": 3612,
+          "upload": 29258
         },
         "bytes": 747124,
         "estimateBytes": 22252800
@@ -201,9 +201,8 @@
       "ok": true
     },
     {
-      "name": "proof ran to completion",
-      "ok": false,
-      "detail": "TimeoutError: locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('export-canceled') to be visible\u001b[22m\n"
+      "name": "editor: Cancel stops a running export and shows that it was canceled; Retry is offered",
+      "ok": true
     }
   ]
 }

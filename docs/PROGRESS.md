@@ -670,6 +670,10 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified here: `pnpm proof:phase3` 42/42 (two presses move the cut two frames: the earlier clip plays two frames more, the selected clip starts two frames later, the timeline keeps its length, and two presses back restore it).
 - Not done: slide; roll by dragging.
 
+**Merge note — checkpoints 15m–15t were developed in a separate worktree while a regression ran on the main tree**
+- The regression on the tree at checkpoint 15l: every proof and conformance run passed (proof 54, phase3 40, phase5 34, phase6 35, phase7 31, phase8 20, phase9 12, phase11 12, phase12 18, browser-export 23, editor-interactions 20, owner-ui 9, speed 16, soak 7, start-offset 4, projects 2, long 6, render-fuzz 2, images 3, inputs 4, parity, seek 7 configurations, accessibility audit) except phase4, which failed one editor step and hung (15q).
+- The checks quoted in 15m–15t were run in the worktree. After merging: phase4 alone 19/19; 425 unit tests. A full regression of the merged tree follows; expected counts for it: proof 54 · phase3 42 · phase4 19 · phase5 34 · phase6 35 · phase7 31 · phase8 20 · phase9 12 · phase11 12 · phase12 18 · browser-export 23 · editor-interactions 21 · owner-ui 9 · speed 18 · reverse-sound 7 · soak 7 · start-offset 4 · projects 2 · long 6 · render-fuzz 2 · images 3 · inputs 4 (31 shapes: 29 correct, 2 noted).
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -714,7 +718,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 413 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 425 tests (61 are the operations fuzz, 26 the store-level fuzz). Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 42 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 34 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 18 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 20 · `pnpm proof:owner-ui` 9 · `pnpm proof:speed` 18 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:images` 3 (24 pictures: 22 shown correctly, 2 refused as intended) · `pnpm conformance:projects` 2 (15 project settings; 7 of them also on the browser export and the preview) · `pnpm conformance:render-fuzz` 2 (10 random sessions; about twelve minutes) · `pnpm conformance:inputs` 4 (30 shapes on the server export, the browser export and the editor preview: 28 correct and 2 noted; about ten minutes).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
