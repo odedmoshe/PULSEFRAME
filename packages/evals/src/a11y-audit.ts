@@ -163,6 +163,20 @@ async function main() {
       const pd = await dialogBehaviour('projects-dialog', async () => { await page.getByTestId('projects-open').click(); }, '[data-testid=projects-open]');
       await auditState('projects-dialog', { startsInside: pd.startsInside, tabStepsThatLeftTheDialog: pd.tabStepsThatLeftTheDialog }, true);
       Object.assign(states.at(-1), await pd.close());
+      // project manager with the delete confirmation form open (a transient form inside the dialog)
+      await page.getByTestId('projects-open').click();
+      await page.getByTestId('projects-dialog').waitFor();
+      await page.getByTestId('project-delete').first().click();
+      await page.getByTestId('project-delete-confirm').waitFor({ timeout: 5000 }).catch(() => {});
+      await auditState('project-delete-confirmation', { formShown: (await page.getByTestId('project-delete-confirm').count()) === 1, applyDisabledUntilTyped: await page.getByTestId('project-delete-apply').isDisabled().catch(() => null) }, true);
+      await page.keyboard.press('Escape');
+      await page.getByTestId('projects-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      // an error shown to the user: an edit the server refuses (a clip on a locked track, changed behind the editor's back)
+      await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_track', args: { trackId: (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json() as any).project.sequences.seq_main.tracks.find((t: any) => t.clips.some((c: any) => c.id === clipId)).id, locked: true } }] });
+      await page.locator('[data-locked=true]').first().waitFor({ timeout: 8000 }).catch(() => {});
+      await auditState('locked-track', { lockedTracksShown: await page.locator('.track[data-locked=true]').count(), pressedLockButtons: await page.locator('[data-testid=track-lock][aria-pressed=true]').count() });
+      await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_track', args: { trackId: (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json() as any).project.sequences.seq_main.tracks.find((t: any) => t.locked).id, locked: false } }] });
+      await page.waitForFunction(() => !document.querySelector('.track[data-locked=true]'), undefined, { timeout: 8000 }).catch(() => {});
       // source viewer dialog
       const sv = await dialogBehaviour('source-viewer', async () => { await page.getByTestId(`view-${up.assetId}`).click(); }, `[data-testid="view-${up.assetId}"]`);
       await auditState('source-viewer', { startsInside: sv.startsInside, tabStepsThatLeftTheDialog: sv.tabStepsThatLeftTheDialog }, true);

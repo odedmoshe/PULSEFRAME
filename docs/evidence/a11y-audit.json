@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T16:53:25.521Z",
+  "ranAt": "2026-11-15T17:05:06.561Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -59,6 +59,26 @@
           "focusReturned": true
         },
         {
+          "state": "project-delete-confirmation",
+          "controls": 186,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "formShown": true,
+          "applyDisabledUntilTyped": true
+        },
+        {
+          "state": "locked-track",
+          "controls": 176,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "lockedTracksShown": 1,
+          "pressedLockButtons": 1
+        },
+        {
           "state": "source-viewer",
           "controls": 187,
           "unnamed": [],
@@ -69,7 +89,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_3f1e2163990]",
+          "focusAfterClose": "button[data-testid=view-ast_719db746430]",
           "focusReturned": true
         },
         {
@@ -155,6 +175,26 @@
           "focusReturned": true
         },
         {
+          "state": "project-delete-confirmation",
+          "controls": 186,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "formShown": true,
+          "applyDisabledUntilTyped": true
+        },
+        {
+          "state": "locked-track",
+          "controls": 176,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "lockedTracksShown": 1,
+          "pressedLockButtons": 1
+        },
+        {
           "state": "source-viewer",
           "controls": 187,
           "unnamed": [],
@@ -165,7 +205,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_3f1e2163990]",
+          "focusAfterClose": "button[data-testid=view-ast_719db746430]",
           "focusReturned": true
         },
         {

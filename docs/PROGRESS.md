@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-15, checkpoint 15x (14k–15x, after the stretch below: render-fuzz parity, automatic backups, J/L shuttle, playback across edits, marquee, per-format title wording, per-grant request budget, Secure cookie option, sound longer than picture fix, approvals list, source viewer, ripple insert). Earlier: checkpoints 13j–14c were the stretch of: clip speed, markers, volume automation, browser hardening, multi-select, MCP resources and prompts, storage ceiling, backup, freeze frame, per-format captions, analysis jobs, and — most consequential — an input matrix that found and fixed seven long-standing defects in how ordinary media files are read, plus two flaws in my own first fixes that the same matrix caught one step later). Requirements ledger: 22 done, 101 partial, 70 not started, 6 conditional of 199 rows. Phases 0–5 gate criteria met on the CPU profile; Phases 6–9, 11 and 12 partly met (each row says which gate parts); Phase 10 not started (needs providers); Phase 13 partly done (security review, accessibility audit, soak, archive). The provider proofs were re-run after the owner-session and budget changes against the local ComfyUI on CPU: `pnpm proof:g0` 39/39; the BiRefNet trial 9/9 with weights already present (its four download checks were not repeated; the original 13/13 evidence is kept, the re-run is `g1-birefnet-cpu-rerun.json`). No new download, no paid call.
+Last updated: 2026-11-15, checkpoint 15y (14k–15y, after the stretch below: render-fuzz parity, automatic backups, J/L shuttle, playback across edits, marquee, per-format title wording, per-grant request budget, Secure cookie option, sound longer than picture fix, approvals list, source viewer, ripple insert). Earlier: checkpoints 13j–14c were the stretch of: clip speed, markers, volume automation, browser hardening, multi-select, MCP resources and prompts, storage ceiling, backup, freeze frame, per-format captions, analysis jobs, and — most consequential — an input matrix that found and fixed seven long-standing defects in how ordinary media files are read, plus two flaws in my own first fixes that the same matrix caught one step later). Requirements ledger: 22 done, 101 partial, 70 not started, 6 conditional of 199 rows. Phases 0–5 gate criteria met on the CPU profile; Phases 6–9, 11 and 12 partly met (each row says which gate parts); Phase 10 not started (needs providers); Phase 13 partly done (security review, accessibility audit, soak, archive). The provider proofs were re-run after the owner-session and budget changes against the local ComfyUI on CPU: `pnpm proof:g0` 39/39; the BiRefNet trial 9/9 with weights already present (its four download checks were not repeated; the original 13/13 evidence is kept, the re-run is `g1-birefnet-cpu-rerun.json`). No new download, no paid call.
 
 Status words: **verified-here** = checked on the current CPU profile · **implemented, not qualified** = code exists, needs a runtime/target we lack ·
 **blocked** · **not started**. Nothing is "verified on target profile" yet: no GPU reference machine exists.
@@ -698,6 +698,9 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - `pnpm backup --prune <dir>` reports media in a backup that no database in it lists (current or any retained snapshot); `--apply` removes it. It refuses when a database in the backup cannot be read.
 - Verified here: `backup.test.ts` (a stray file is reported, kept without `--apply`, removed with it; the backup still verifies; an unreadable snapshot stops pruning).
 
+**Checkpoint 15y — two more states in the accessibility audit**
+- The audit now also checks the project manager with the delete-confirmation form open, and the editor with a locked track (pressed lock button, marked track), in both languages: no unnamed controls, low contrast, tab or focus-ring findings. Still not audited: the error bar, busy states during upload and export.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -724,7 +727,7 @@ Unblocked (no decision needed), roughly by value:
 2. Continuous speed ramps (a stepped ramp exists), pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed, freeze frame and linear volume keys are done).
 3. (done: scheduled backups with snapshot retention, verification, pruning.) Off-machine copies remain manual.
 4. Per-format wording for transcript-generated captions (manual cues can be edited and reworded per format in the editor); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
-5. remaining transient states in the accessibility audit (confirmation forms, error and busy states).
+5. remaining transient states in the accessibility audit (error bar, busy states).
 6. Inputs: HDR; real camera and phone files. Downbeat detection;
 7. (done: request budget and export quota per grant.) A `Secure` cookie option exists; a real TLS proxy deployment is untested.
 8. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
