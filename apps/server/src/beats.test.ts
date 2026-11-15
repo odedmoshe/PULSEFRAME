@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BEAT_SR, detectBeats } from './beats.ts';
+import { BEAT_SR, detectBeats, estimateBars } from './beats.ts';
 import { beatF1, drumLoop } from './beats.fixtures.ts';
 
 describe('beat tracking (synthetic drum loops)', () => {
@@ -26,7 +26,40 @@ describe('beat tracking (synthetic drum loops)', () => {
     expect(detectBeats(x)).toEqual(detectBeats(x));
     expect(detectBeats(new Float32Array(BEAT_SR * 10)).beats.length).toBeLessThanOrEqual(1);
     expect(detectBeats(new Float32Array(BEAT_SR * 10)).confidence).toBe(0);
-    expect(detectBeats(new Float32Array(BEAT_SR * 2))).toEqual({ bpm: null, confidence: 0, beats: [] });
+    expect(detectBeats(new Float32Array(BEAT_SR * 2))).toEqual({ bpm: null, confidence: 0, beats: [], downbeats: [], meter: null, barConfidence: 0 });
+  });
+});
+
+describe('bars (synthetic drum loops with an accent on the first beat of the bar)', () => {
+  const near = (found: number[], truth: number[], tol = 0.07) => found.filter((x) => truth.some((t) => Math.abs(t - x) <= tol)).length;
+  it('four beats to the bar: the accented beats are reported as bar starts, whatever beat the recording starts on', () => {
+    for (const [bpm, first] of [[120, 0.37], [96, 0.2], [140, 0.5]] as const) {
+      const { x, downbeats } = drumLoop(() => bpm, 30, first, 3, 4);
+      const r = detectBeats(x);
+      expect(r.meter, `${bpm} BPM`).toBe(4);
+      expect(r.barConfidence).toBeGreaterThanOrEqual(0.9);
+      expect(near(r.downbeats, downbeats) / r.downbeats.length, `${bpm} BPM precision`).toBeGreaterThanOrEqual(0.95);
+      expect(near(r.downbeats, downbeats) / downbeats.length, `${bpm} BPM recall`).toBeGreaterThanOrEqual(0.85);
+    }
+  });
+  it('three beats to the bar is recognised as three', () => {
+    const { x, downbeats } = drumLoop(() => 132, 30, 0.3, 5, 3);
+    const r = detectBeats(x);
+    expect(r.meter).toBe(3);
+    expect(near(r.downbeats, downbeats) / r.downbeats.length).toBeGreaterThanOrEqual(0.95);
+  });
+  it('a loop with no accent gets no bars rather than a guess; every bar start is one of the beats', () => {
+    const plain = detectBeats(drumLoop(() => 120, 30).x);
+    expect([plain.meter, plain.downbeats.length, plain.barConfidence]).toEqual([null, 0, 0]);
+    const r = detectBeats(drumLoop(() => 120, 30, 0.37, 3, 4).x);
+    expect(r.downbeats.every((d) => r.beats.includes(d))).toBe(true);
+  });
+  it('the bar estimate needs the accent in at least 70 % of the bars', () => {
+    const bars = (weak: number) => Array.from({ length: 40 }, (_, i) => (i % 4 === 1 ? (Math.floor(i / 4) < weak ? 0.5 : 3) : 1 + (i % 3) * 0.1));
+    expect(estimateBars(bars(0))).toMatchObject({ meter: 4, phase: 1 });
+    expect(estimateBars(bars(2))).toMatchObject({ meter: 4, phase: 1 });
+    expect(estimateBars(bars(5))).toBeNull();
+    expect(estimateBars([1, 2, 3])).toBeNull();
   });
 });
 

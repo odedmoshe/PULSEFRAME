@@ -100,6 +100,21 @@ async function main() {
     }
     measurements.beats = { tolerance: '±70 ms', rows, note: '24 s synthetic loops (kick with attack click on the beat, quieter hat off the beat, bass tone, noise). Not real music.' };
     check('beat corpus: F1 ≥ 0.92 on all six loops, tempo within 1.5 BPM on the five steady ones', rows.every((r) => r.f1 >= 0.92) && rows.slice(0, 5).every((r) => r.bpmError < 1.5), rows);
+    // bars: loops with an accent on the first beat of each bar (a louder kick and a noise burst); found bar starts against the known ones
+    const barRows: any[] = [];
+    for (const [name, bpm, meter, first] of [['4-120', 120, 4, 0.37], ['4-96', 96, 4, 0.2], ['3-132', 132, 3, 0.3]] as const) {
+      const { x, downbeats } = drumLoop(() => bpm, 30, first, 7, meter);
+      const file = path.join(art, `bars-${name}.wav`);
+      wavFile(file, x);
+      const r = await call(`/projects/${pid}/assets/${(await upload(pid, file)).assetId}/analyze`, { kind: 'beats' });
+      const found: number[] = r.body.beats.downbeatSeconds ?? [];
+      const hit = found.filter((q) => downbeats.some((b) => Math.abs(b - q) <= 0.07)).length;
+      barRows.push({ loop: name, meterFound: r.body.beats.meter ?? null, meter, bars: found.length, precision: found.length ? r3(hit / found.length) : 0, recall: r3(hit / downbeats.length) });
+    }
+    // the plain 120 BPM loop analysed above has no accent
+    const plain = (await doc(pid)).analyses[beatAsset]?.beats;
+    measurements.bars = { tolerance: '±70 ms', rows: barRows, plainLoopBars: plain?.downbeats?.length ?? 0, note: '30 s synthetic loops with an accented first beat. Not real music: real accents are subtler and often on other beats.' };
+    check('bar starts on the accented corpus: the right number of beats to the bar on all three loops, precision ≥ 0.95 and recall ≥ 0.85; the loop without an accent gets no bars', barRows.every((r) => r.meterFound === r.meter && r.precision >= 0.95 && r.recall >= 0.85) && !!plain && !plain.downbeats, measurements.bars);
     const noiseFile = path.join(art, 'noise.wav');
     ff(['-f', 'lavfi', '-t', '20', '-i', 'anoisesrc=c=pink:r=48000:a=0.3:seed=3', '-ac', '2', '-c:a', 'pcm_s16le', noiseFile]);
     const noise = await call(`/projects/${pid}/assets/${(await upload(pid, noiseFile)).assetId}/analyze`, { kind: 'beats' });
@@ -178,6 +193,21 @@ async function main() {
     for (let i = 0; i < 100 && shots !== 6; i++) { shots = (await doc(ep)).sequences.seq_main.tracks.filter((t: any) => t.kind === 'video').flatMap((t: any) => t.clips).length; if (shots !== 6) await sleep(100); }
     await page.screenshot({ path: path.join(art, 'editor-analysis.png') });
     check('editor: "find scene cuts" draws 5 markers on the exact frames; "split into shots" makes 6 clips; no page errors', noMarkers === 0 && JSON.stringify(markerFrames) === JSON.stringify(cutsTruth) && shots === 6 && errors.length === 0, { markerFrames, shots, beatMarkersOnASineTone: beatMarkers, errors: errors.slice(0, 3) });
+    // bars in the editor: an accented loop analysed through the API appears with taller markers on its bar starts, and the panel says how many
+    const loop = await upload(ep, path.join(art, 'bars-4-120.wav'));
+    const lc = (await txs(ep, [{ op: 'add_clip', args: { assetId: loop.assetId, start: f(600) } }])).results[0].output.clipId;
+    const la = await call(`/projects/${ep}/assets/${loop.assetId}/analyze`, { kind: 'beats' });
+    const wantBars = la.body.beats.barCount as number;
+    await page.waitForFunction((n) => document.querySelectorAll('[data-testid=beat-marker][data-bar=true]').length === n, wantBars, { timeout: 15000 }).catch(() => {});
+    const barMarkers = await page.locator('[data-testid=beat-marker][data-bar=true]').count();
+    const firstBarFrame = await page.locator('[data-testid=beat-marker][data-bar=true]').first().getAttribute('data-frame');
+    await page.locator(`.clip[data-clip-id="${lc}"]`).click();
+    await page.getByTestId('analysis-bars').waitFor({ timeout: 8000 }).catch(() => {});
+    const panelBars = await page.getByTestId('analysis-bars').textContent().catch(() => null);
+    const summary = (await call(`/projects/${ep}/summary`)).body;
+    check('editor: bar starts of an analysed loop are drawn as taller beat markers at their timeline frames (the clip starts at frame 600) and the analysis panel shows their number; the project summary reports bars and beats to the bar',
+      wantBars >= 10 && barMarkers === wantBars && Number(firstBarFrame) === 600 + Math.round(la.body.beats.downbeatSeconds[0] * 30) && panelBars === String(wantBars) && summary.analyses?.some((a: any) => a.assetId === loop.assetId && a.bars === wantBars && a.meter === 4),
+      { wantBars, barMarkers, firstBarFrame, panelBars, summary: summary.analyses?.find((a: any) => a.assetId === loop.assetId) });
     await page.close();
   } catch (e) {
     console.error(e);

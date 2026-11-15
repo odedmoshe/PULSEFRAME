@@ -109,14 +109,17 @@ function beatsOfWindow(file: string, origin: number, fromSeconds: number, window
  */
 export async function detectBeatsOfFile(file: string, origin = 0, durationSeconds = BEAT_MAX_SECONDS, windowSeconds = BEAT_MAX_SECONDS): Promise<BeatResult & { windows: number }> {
   const total = Math.min(durationSeconds, BEAT_TOTAL_MAX_SECONDS);
-  const beats: number[] = [];
-  let best: BeatResult | null = null, lowest = 1, windows = 0;
+  const beats: number[] = [], downbeats: number[] = [];
+  let best: BeatResult | null = null, lowest = 1, windows = 0, barLowest = 1, meter: 3 | 4 | null = null, mixedMeter = false;
   for (let from = 0; from < total - 1e-6 || windows === 0; from += windowSeconds) {
     const r = await beatsOfWindow(file, origin, from, windowSeconds);
     windows++;
     for (const b of r.beats) if (!beats.length || from + b > beats[beats.length - 1]! + 0.05) beats.push(Number((from + b).toFixed(4)));
     if (r.bpm !== null && (!best || r.confidence > best.confidence)) best = r;
     if (r.beats.length) lowest = Math.min(lowest, r.confidence);
+    for (const b of r.downbeats) if (!downbeats.length || from + b > downbeats[downbeats.length - 1]! + 0.05) downbeats.push(Number((from + b).toFixed(4)));
+    if (r.meter) { if (meter && meter !== r.meter) mixedMeter = true; meter ??= r.meter; barLowest = Math.min(barLowest, r.barConfidence); }
   }
-  return { bpm: best?.bpm ?? null, confidence: beats.length ? lowest : 0, beats, windows };
+  // Bars are reported window by window; a window without a clear accent simply has none. `meter` is null when windows disagree.
+  return { bpm: best?.bpm ?? null, confidence: beats.length ? lowest : 0, beats, downbeats, meter: mixedMeter ? null : meter, barConfidence: downbeats.length ? barLowest : 0, windows };
 }

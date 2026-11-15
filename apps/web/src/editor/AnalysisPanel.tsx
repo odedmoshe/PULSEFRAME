@@ -84,6 +84,7 @@ export function AnalysisPanel() {
             <bdi>{beats.beats.length}</bdi>
             {beats.bpm !== null && <span> · {t('analysis.bpm')}: <bdi data-testid="analysis-bpm">{beats.bpm.toFixed(1)}</bdi></span>}
             {conf !== null && <span> · {t('analysis.confidence')}: <bdi data-testid="analysis-confidence">{Math.round(conf * 100)}%</bdi></span>}
+            {!!beats.downbeats?.length && <span> · {t('analysis.bars')}: <bdi data-testid="analysis-bars">{beats.downbeats.length}</bdi>{beats.meter ? <> (<bdi>{beats.meter}</bdi> {t('analysis.beatsPerBar')})</> : null}</span>}
             {origin(beats.origin)}
           </>
         ) : <span className="muted">{t('analysis.none')}</span>}

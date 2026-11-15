@@ -1217,21 +1217,23 @@ defineOp({
   version: 1,
   internal: true,
   description: 'Attach a measured analysis result (scene cuts or beat grid) produced by the server from the source file.',
-  args: z.object({ assetId: z.string(), kind: z.enum(['scenes', 'beats']), method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), times: TimeList, bpm: z.number().nullable().optional(), confidence: z.number().min(0).max(1).nullable().optional() }).strict(),
+  args: z.object({ assetId: z.string(), kind: z.enum(['scenes', 'beats']), method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), times: TimeList, bpm: z.number().nullable().optional(), confidence: z.number().min(0).max(1).nullable().optional(), downbeats: TimeList.optional(), meter: z.number().int().min(2).max(12).nullable().optional() }).strict(),
   apply(d, a, ctx) {
     mustAsset(d, a.assetId);
     const origin = { method: a.method, params: a.params, createdAt: a.createdAt, createdBy: ctx.actor, edited: false };
     const cur = d.analyses[a.assetId] ?? { assetId: a.assetId };
     const times = sortedUnique(a.times);
-    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: times } } : { ...cur, beats: { origin, bpm: a.bpm ?? null, confidence: a.confidence ?? null, beats: times } };
-    return { affectedIds: [analysisEntityId(a.assetId)], summary: a.kind === 'scenes' ? `Found ${times.length} scene cuts` : `Found ${times.length} beats${a.bpm ? ` (${a.bpm.toFixed(1)} BPM)` : ''}` };
+    // bar starts are beats: anything else in the list (rounding at the edges of the file) is dropped
+    const bars = a.kind === 'beats' && a.downbeats ? sortedUnique(a.downbeats).filter((t) => times.some((b) => T.eq(b, t))) : [];
+    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: times } } : { ...cur, beats: { origin, bpm: a.bpm ?? null, confidence: a.confidence ?? null, beats: times, ...(bars.length ? { downbeats: bars, meter: a.meter ?? null } : {}) } };
+    return { affectedIds: [analysisEntityId(a.assetId)], summary: a.kind === 'scenes' ? `Found ${times.length} scene cuts` : `Found ${times.length} beats${a.bpm ? ` (${a.bpm.toFixed(1)} BPM)` : ''}${bars.length ? `, ${bars.length} bars` : ''}` };
   },
 });
 defineOp({
   name: 'edit_analysis',
   version: 1,
   description: 'Correct an analysis result by hand: add and/or remove scene cuts or beats (source times of the asset), or replace the whole list. Works without a prior automatic analysis, so the data can also be entered manually. Marks the result as edited.',
-  args: z.object({ assetId: z.string(), kind: z.enum(['scenes', 'beats']), add: TimeList.optional(), remove: TimeList.optional(), replace: TimeList.optional(), bpm: z.number().min(20).max(400).nullable().optional() }).strict(),
+  args: z.object({ assetId: z.string(), kind: z.enum(['scenes', 'beats']), add: TimeList.optional(), remove: TimeList.optional(), replace: TimeList.optional(), bpm: z.number().min(20).max(400).nullable().optional(), downbeats: TimeList.nullable().optional().describe('kind=beats: the beats that start a bar (each must be one of the beats after this edit); null clears them. Left out, the stored bar starts that are still beats are kept.'), meter: z.number().int().min(2).max(12).nullable().optional() }).strict(),
   apply(d, a, ctx) {
     const asset = mustAsset(d, a.assetId);
     const cur = d.analyses[a.assetId] ?? { assetId: a.assetId };
@@ -1243,7 +1245,12 @@ defineOp({
     if (list.some((t) => T.isNegative(t) || T.lt(asset.duration, t))) throw new OpError('out_of_bounds', 'times must lie inside the media', { assetDuration: asset.duration });
     const prevOrigin = a.kind === 'scenes' ? cur.scenes?.origin : cur.beats?.origin;
     const origin = { ...(prevOrigin ?? { method: 'manual', params: {}, createdAt: 'op', createdBy: ctx.actor }), edited: true };
-    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list } };
+    if (a.kind === 'scenes' && (a.downbeats !== undefined || a.meter !== undefined)) throw new OpError('invalid_args', 'bar starts and meter belong to beats', { kind: a.kind });
+    const isBeat = (t: T.RationalTime) => list.some((b) => T.eq(b, t));
+    if (a.downbeats && !a.downbeats.every(isBeat)) throw new OpError('invalid_args', 'every bar start must be one of the beats', {}, 'Add the beat first, or pass it in the same edit.');
+    const bars = a.downbeats === null ? [] : a.downbeats ? sortedUnique(a.downbeats) : (cur.beats?.downbeats ?? []).filter(isBeat);
+    const meter = a.meter !== undefined ? a.meter : cur.beats?.meter ?? null;
+    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list, ...(bars.length ? { downbeats: bars, meter } : {}) } };
     return { affectedIds: [analysisEntityId(a.assetId)], summary: `Edited ${a.kind === 'scenes' ? 'scene cuts' : 'beats'} (${list.length})` };
   },
 });

@@ -147,6 +147,7 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .tl-markers { position: absolute; top: 0; left: 56px; height: 24px; width: 0; pointer-events: none; z-index: 2; }
 .tl-markers i { position: absolute; top: 0; pointer-events: none; }
 .tl-markers .beat-marker { height: 9px; width: 1px; background: var(--pf-accent-2); opacity: .8; }
+.tl-markers .beat-marker.bar { height: 14px; width: 2px; opacity: 1; } /* first beat of a bar */
 .tl-markers .scene-marker { height: 24px; width: 2px; margin-left: -1px; background: var(--pf-warn); }
 .analysis .stat { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .analysis .row { flex-wrap: wrap; }

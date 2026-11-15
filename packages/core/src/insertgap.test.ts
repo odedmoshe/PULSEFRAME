@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, clipEnd, createProject, diffEntities, findClip, OpError, restoreEntities, sequenceDuration, sourceAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, clipEnd, createProject, timelineMarkers, diffEntities, findClip, OpError, restoreEntities, sequenceDuration, sourceAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -107,6 +107,26 @@ describe('insert_gap (ripple insert) and markers under ripple edits', () => {
     // past the end of everything: nothing moves, nothing fails
     const far = tx(doc, [{ op: 'insert_gap', args: { at: f(900), duration: f(10) } }]).doc;
     expect(far.sequences).toEqual(doc.sequences);
+  });
+});
+
+describe('bar starts in a beat analysis', () => {
+  it('are stored with the beats, must be beats, survive hand edits of the beats that keep them, reach the timeline as markers, and can be cleared', () => {
+    const { doc, assetId } = project();
+    const s = (n: number) => T.rt(n, 2); // every half second
+    let d = tx(doc, [{ op: 'attach_analysis', args: { assetId, kind: 'beats', method: 'test', params: {}, createdAt: 'now', times: [s(1), s(2), s(3), s(4), s(5), s(6), s(7), s(8)], bpm: 120, confidence: 0.9, downbeats: [s(1), s(5), T.rt(99, 100)], meter: 4 } }], true).doc;
+    const beats = () => d.analyses[assetId]!.beats!;
+    expect([beats().downbeats!.map(T.toSeconds), beats().meter]).toEqual([[0.5, 2.5], 4]); // the entry that is not a beat was dropped
+    expect(validateProject(d)).toEqual([]);
+    expect(timelineMarkers(d).downbeats.map(T.toSeconds)).toEqual([0.5, 2.5]);
+    d = tx(d, [{ op: 'edit_analysis', args: { assetId, kind: 'beats', remove: [s(5)] } }]).doc; // removing a beat that was a bar start removes that bar start
+    expect(beats().downbeats!.map(T.toSeconds)).toEqual([0.5]);
+    d = tx(d, [{ op: 'edit_analysis', args: { assetId, kind: 'beats', downbeats: [s(2), s(6)], meter: 4 } }]).doc;
+    expect([beats().downbeats!.map(T.toSeconds), beats().origin.edited]).toEqual([[1, 3], true]);
+    expect(code(() => tx(d, [{ op: 'edit_analysis', args: { assetId, kind: 'beats', downbeats: [T.rt(1, 3)] } }]))).toBe('invalid_args');
+    expect(code(() => tx(d, [{ op: 'edit_analysis', args: { assetId, kind: 'scenes', downbeats: [] } }]))).toBe('invalid_args');
+    d = tx(d, [{ op: 'edit_analysis', args: { assetId, kind: 'beats', downbeats: null } }]).doc;
+    expect([beats().downbeats, beats().beats.length]).toEqual([undefined, 7]);
   });
 });
 

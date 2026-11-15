@@ -646,7 +646,7 @@ const secs = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
 export const analysisView = (a: Analysis) => ({
   assetId: a.assetId, note: 'Times are in the source media. Correct them with edit_analysis; use split_at_scenes to cut a clip into its shots.',
   ...(a.scenes ? { scenes: { ...a.scenes.origin, count: a.scenes.cuts.length, cuts: a.scenes.cuts, cutSeconds: a.scenes.cuts.map(secs) } } : {}),
-  ...(a.beats ? { beats: { ...a.beats.origin, bpm: a.beats.bpm, confidence: a.beats.confidence, count: a.beats.beats.length, beatSeconds: a.beats.beats.map(secs) } } : {}),
+  ...(a.beats ? { beats: { ...a.beats.origin, bpm: a.beats.bpm, confidence: a.beats.confidence, count: a.beats.beats.length, beatSeconds: a.beats.beats.map(secs), ...(a.beats.downbeats?.length ? { meter: a.beats.meter ?? null, barCount: a.beats.downbeats.length, downbeatSeconds: a.beats.downbeats.map(secs) } : {}) } } : {}),
 });
 export const AnalyzeBody = z.object({ kind: z.enum(['scenes', 'beats']), overwrite: z.boolean().optional().describe('Required to replace a result that was corrected by hand'), threshold: z.number().min(0.05).max(0.9).optional().describe('scenes only: how different two frames must be to count as a cut (default 0.3; lower finds more)') }).strict();
 /** Everything that can be refused before measuring starts: permissions, the asset, hand-made corrections, the right kind of media. */
@@ -678,7 +678,7 @@ async function measureAndAttach(store: Store, actor: string, projectId: string, 
     const r = await heavy(() => detectBeatsOfFile(file, timeOriginSeconds(asset), seconds));
     // Long files are analysed in 20-minute windows; beyond four hours only the first four are analysed. Both are said in the stored result.
     const partial = seconds > BEAT_TOTAL_MAX_SECONDS + 1;
-    args = { method: `spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse${r.windows > 1 ? `; analysed in ${r.windows} consecutive ${BEAT_MAX_SECONDS / 60}-minute windows, each with its own tempo` : ''}${partial ? `; ONLY THE FIRST ${BEAT_TOTAL_MAX_SECONDS / 3600} HOURS were analysed` : ''}`, params: { sampleRate: 22050, hop: 256, ...(r.windows > 1 ? { windows: r.windows } : {}), ...(partial ? { analysedSeconds: BEAT_TOTAL_MAX_SECONDS } : {}) }, times: r.beats.filter((x) => x <= seconds).map((x) => T.fromSeconds(x.toFixed(3))), bpm: r.bpm, confidence: r.confidence };
+    args = { method: `spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse${r.downbeats.length ? `; bar starts from the loudest beat of each bar (found in ${Math.round(r.barConfidence * 100)}% of the bars)` : '; no regular bar accent found'}${r.windows > 1 ? `; analysed in ${r.windows} consecutive ${BEAT_MAX_SECONDS / 60}-minute windows, each with its own tempo` : ''}${partial ? `; ONLY THE FIRST ${BEAT_TOTAL_MAX_SECONDS / 3600} HOURS were analysed` : ''}`, params: { sampleRate: 22050, hop: 256, ...(r.windows > 1 ? { windows: r.windows } : {}), ...(partial ? { analysedSeconds: BEAT_TOTAL_MAX_SECONDS } : {}) }, times: r.beats.filter((x) => x <= seconds).map((x) => T.fromSeconds(x.toFixed(3))), bpm: r.bpm, confidence: r.confidence, ...(r.downbeats.length ? { downbeats: r.downbeats.filter((x) => x <= seconds).map((x) => T.fromSeconds(x.toFixed(3))), meter: r.meter } : {}) };
   }
   if (abandoned()) return null;
   // Measuring can take a while: the asset may be gone, or the result corrected by hand, since it started.

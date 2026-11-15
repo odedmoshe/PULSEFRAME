@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T18:37:12.763Z",
+  "ranAt": "2026-11-15T19:05:48.504Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -29,7 +29,7 @@
         ],
         "basis": [
           "31 beats of the music clip (120.2 BPM, confidence 0.988)",
-          "method: spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse"
+          "method: spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse; no regular bar accent found"
         ]
       }
     },

@@ -256,7 +256,7 @@ export const AnalysisSchema = z
     /** Picture cuts inside the source file (the first frame of each new shot), ascending. */
     scenes: z.object({ origin: AnalysisOrigin, cuts: z.array(RationalTimeSchema).max(20000) }).strict().optional(),
     /** Beat grid of the source audio, ascending. bpm and confidence describe the detector's estimate; beats are what editing tools use. */
-    beats: z.object({ origin: AnalysisOrigin, bpm: z.number().min(20).max(400).nullable(), confidence: z.number().min(0).max(1).nullable(), beats: z.array(RationalTimeSchema).max(50000) }).strict().optional(),
+    beats: z.object({ origin: AnalysisOrigin, bpm: z.number().min(20).max(400).nullable(), confidence: z.number().min(0).max(1).nullable(), beats: z.array(RationalTimeSchema).max(50000), /** Beats that start a bar (each is one of `beats`); absent when no bar pattern was found or entered. */ downbeats: z.array(RationalTimeSchema).max(50000).optional(), /** Beats per bar behind `downbeats`, when known. */ meter: z.number().int().min(2).max(12).nullable().optional() }).strict().optional(),
   })
   .strict();
 

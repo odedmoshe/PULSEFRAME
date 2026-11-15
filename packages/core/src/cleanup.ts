@@ -67,11 +67,12 @@ export function sourceTimesToTimeline(doc: ProjectDocument, assetId: string, tim
 }
 /** Beats and scene cuts as they fall on the timeline right now (derived, never stored: they follow every edit). */
 export function timelineMarkers(doc: ProjectDocument) {
-  const beats: T.RationalTime[] = [], scenes: T.RationalTime[] = [];
+  const beats: T.RationalTime[] = [], scenes: T.RationalTime[] = [], downbeats: T.RationalTime[] = [];
   for (const a of Object.values(doc.analyses ?? {})) {
     if (a.beats) beats.push(...sourceTimesToTimeline(doc, a.assetId, a.beats.beats));
+    if (a.beats?.downbeats) downbeats.push(...sourceTimesToTimeline(doc, a.assetId, a.beats.downbeats));
     if (a.scenes) scenes.push(...sourceTimesToTimeline(doc, a.assetId, a.scenes.cuts));
   }
   const uniq = (l: T.RationalTime[]) => l.sort(T.cmp).filter((t, i, x) => i === 0 || !T.eq(x[i - 1]!, t));
-  return { beats: uniq(beats), sceneCuts: uniq(scenes) };
+  return { beats: uniq(beats), sceneCuts: uniq(scenes), /** Beats that start a bar (a subset of `beats`). */ downbeats: uniq(downbeats) };
 }

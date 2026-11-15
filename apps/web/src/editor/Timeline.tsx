@@ -44,11 +44,11 @@ export function Timeline() {
   const { marqueeProps, box } = useMarquee(editor);
   const [snapBeats, setSnapBeats] = useState(readSnapBeats);
   const markers = useMemo(() => {
-    if (!doc) return { scenes: [] as T.RationalTime[], beats: [] as T.RationalTime[], truncated: false };
+    if (!doc) return { scenes: [] as T.RationalTime[], beats: [] as T.RationalTime[], bars: new Set<number>(), truncated: false };
     const m = timelineMarkers(doc);
     const scenes = m.sceneCuts.slice(0, MAX_MARKERS);
     const beats = m.beats.slice(0, MAX_MARKERS - scenes.length);
-    return { scenes, beats, truncated: m.sceneCuts.length + m.beats.length > MAX_MARKERS };
+    return { scenes, beats, bars: new Set(m.downbeats.map((b) => T.nearestFrameIndex(b, rate))), truncated: m.sceneCuts.length + m.beats.length > MAX_MARKERS };
   }, [doc]);
   const userMarkers = useMemo(() => (doc ? Object.values(doc.markers ?? {}).filter((m) => m.sequenceId === doc.mainSequenceId).sort((a, b) => T.cmp(a.time, b.time)) : []), [doc]);
   const lastMarkerS = userMarkers.length ? T.toSeconds(userMarkers[userMarkers.length - 1]!.time) : 0;
@@ -84,7 +84,7 @@ export function Timeline() {
           <div className="tl-markers" data-testid="timeline-markers" data-truncated={markers.truncated ? 'true' : undefined} title={markers.truncated ? t('timeline.markers.truncated') : undefined} aria-hidden="true">
             {markers.beats.map((b, i) => {
               const fr = T.nearestFrameIndex(b, rate);
-              return <i key={`b${i}`} className="beat-marker" data-testid="beat-marker" data-frame={fr} style={{ left: T.toSeconds(b) * pps }} />;
+              return <i key={`b${i}`} className={`beat-marker${markers.bars.has(fr) ? ' bar' : ''}`} data-testid="beat-marker" data-bar={markers.bars.has(fr) ? 'true' : undefined} data-frame={fr} style={{ left: T.toSeconds(b) * pps }} />;
             })}
             {markers.scenes.map((c, i) => {
               const fr = T.nearestFrameIndex(c, rate);

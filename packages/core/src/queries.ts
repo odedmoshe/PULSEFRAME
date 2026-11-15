@@ -21,7 +21,7 @@ export function summarize(doc: ProjectDocument) {
     tracks: seq.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, locked: t.locked, clipCount: t.clips.length, ...(t.caption ? { caption: { mode: t.caption.mode, linkedTrackId: t.caption.linkedTrackId, preset: t.caption.style.preset } } : {}) })),
     recipeRuns: Object.values(doc.recipeRuns ?? {}).map((r) => ({ id: r.id, recipeId: r.recipeId, created: r.createdIds.length, steps: r.steps })),
     variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.keys(v.overrides).length })),
-    analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null })),
+    analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null, bars: a.beats?.downbeats?.length ?? null, meter: a.beats?.meter ?? null })),
     transcripts: Object.values(doc.transcripts ?? {}).map((t) => ({ assetId: t.assetId, language: t.language, origin: t.origin.kind, phrases: t.segments.length, words: t.segments.reduce((n, s) => n + s.words.length, 0), wordTimed: t.segments.every((s) => s.timing === 'word') })),
   };
 }
