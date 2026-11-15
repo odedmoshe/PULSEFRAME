@@ -3,12 +3,14 @@
  * No I/O, no DOM. Preview, agent frames and export all call this same function.
  *
  * Layer order: tracks bottom-to-top in sequence order; within the graph, later layers draw over earlier ones.
- * Source-frame selection rule (schema v1, speed 1, CFR sources whose first PTS is 0):
+ * Source-frame selection rule (schema v1, CFR sources):
  *   sourceTime = clip.sourceIn + (t - clip.start) × speed;  sourceFrame = floor(sourceTime * assetFrameRate)
+ *   minus the whole frames by which the file's first picture starts after time 0 (asset.video.startTime), never below 0.
+ *   sourceSeekSeconds is measured from the FIRST FRAME of the stream (decoders add their own file's first timestamp).
  */
 import * as T from '@pulseframe/time';
 import { captionAt, type CaptionLayer } from './captions.ts';
-import { effectParamsAt, sourceAt, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { effectParamsAt, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 
 /** Look applied by the compositor after the layer is placed: effects in order, then mask, then blend/opacity. */
 export interface LayerLook {
@@ -25,7 +27,7 @@ export interface VideoLayer extends LayerLook {
   assetId: string;
   sourceTime: T.RationalTime;
   sourceFrameIndex: number;
-  /** Mid-frame timestamp in seconds: safe to hand to float-second decoder APIs without boundary ambiguity. */
+  /** Mid-frame time in seconds, measured from the first frame of the stream: safe to hand to float-second decoder APIs without boundary ambiguity. The decoder adds its own file's first timestamp. */
   sourceSeekSeconds: number;
   sourceWidth: number;
   sourceHeight: number;
@@ -65,7 +67,9 @@ function pictureLayer(doc: ProjectDocument, track: Track, clip: Extract<Clip, { 
     return { kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time), ...look(clip, time) };
   if (!asset.video) return null;
   const rate = asset.video.frameRate;
-  let idx = Math.max(0, T.frameIndexAt(sourceTime, rate));
+  // Frames are counted from the first picture in the file. When that picture does not sit at time 0, it is shown that many
+  // frames later (and held until then), which keeps it in step with the sound.
+  let idx = Math.max(0, T.frameIndexAt(sourceTime, rate) - startOffsetFrames(asset.video));
   const lastFrame = asset.video.frameCount !== null ? asset.video.frameCount - 1 : Math.max(0, T.frameIndexAt(asset.duration, rate) - 1);
   idx = Math.min(idx, lastFrame);
   return {

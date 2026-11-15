@@ -7,6 +7,12 @@
 import * as T from '@pulseframe/time';
 import type { Clip, MediaClip } from './schema.ts';
 
+/**
+ * Whole frames by which a video's picture starts after the file's time zero (nearest frame, so the error against the sound
+ * is at most half a frame). Source frame k is shown at source time (k + this) / rate.
+ */
+export const startOffsetFrames = (video: { frameRate: { num: number; den: number }; startTime?: T.RationalTime }): number =>
+  video.startTime ? Math.round((T.toSeconds(video.startTime) * video.frameRate.num) / video.frameRate.den) : 0;
 /** A freeze-frame clip shows one source picture for its whole length: it covers no stretch of source time. */
 export const isFreeze = (c: Clip): boolean => c.type === 'media' && c.freeze === true;
 export interface Speed { num: number; den: number }

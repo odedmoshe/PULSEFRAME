@@ -31,7 +31,9 @@ export const AssetSchema = z
     mimeType: z.string(),
     duration: RationalTimeSchema,
     video: z
-      .object({ width: z.number().int().positive(), height: z.number().int().positive(), frameRate: RateSchema, codec: z.string(), rotation: z.number(), frameCount: z.number().int().nonnegative().nullable() })
+      .object({ width: z.number().int().positive(), height: z.number().int().positive(), frameRate: RateSchema, codec: z.string(), rotation: z.number(), frameCount: z.number().int().nonnegative().nullable(),
+        /** Timestamp of the first video frame in the file when it is not 0 (remuxed files, Matroska/TS, B-frames without an edit list). The picture is placed that much later than the start of the sound. */
+        startTime: RationalTimeSchema.optional() })
       .strict()
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string() }).strict().optional(),

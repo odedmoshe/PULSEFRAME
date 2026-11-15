@@ -11,7 +11,8 @@ class ClipDecoder {
   private iter: AsyncGenerator<VideoSample, void, unknown> | null = null;
   private chain: Promise<unknown> = Promise.resolve();
   lastUsed = 0;
-  private constructor(private input: Input, private sink: VideoSampleSink, private frameDur: number) {}
+  /** `first` is the timestamp of this file's first video frame; requests are relative to it (original and proxy may differ in container offset). */
+  private constructor(private input: Input, private sink: VideoSampleSink, private frameDur: number, private first: number) {}
 
   /** `src` is a local Blob/File or a URL. URLs are read with HTTP range requests through a bounded byte cache; the file is never downloaded whole. */
   static async open(src: Blob | string, fps: number, byteCache: number): Promise<ClipDecoder> {
@@ -20,10 +21,12 @@ class ClipDecoder {
     const track = await input.getPrimaryVideoTrack();
     if (!track) throw new Error('asset has no video track');
     if (!(await track.canDecode())) throw new Error(`this browser cannot decode the video codec (${track.codec ?? 'unknown'})`);
-    return new ClipDecoder(input, new VideoSampleSink(track), 1 / fps);
+    // A negative first timestamp marks frames that are not meant to be shown; presentation starts at 0 then.
+    return new ClipDecoder(input, new VideoSampleSink(track), 1 / fps, Math.max(0, await track.getFirstTimestamp()));
   }
+  /** `seconds` is measured from the first frame of the stream (see evaluate.ts). */
   frame(seconds: number): Promise<FrameImage | null> {
-    const p = this.chain.then(() => this.get(seconds));
+    const p = this.chain.then(() => this.get(this.first + seconds));
     this.chain = p.catch(() => {});
     return p;
   }

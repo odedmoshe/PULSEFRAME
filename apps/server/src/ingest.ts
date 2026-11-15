@@ -7,7 +7,7 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import * as T from '@pulseframe/time';
-import type { Asset } from '@pulseframe/core';
+import { startOffsetFrames, type Asset } from '@pulseframe/core';
 import { ApiError, type Store } from './store.ts';
 
 const exec = promisify(execFile);
@@ -70,9 +70,13 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
       const [num, den] = [...STANDARD_RATES].sort((x, y) => Math.abs(x[0] / x[1] - avg) - Math.abs(y[0] / y[1] - avg))[0]!;
       throw new NeedsConform(reasons, { codec: v.codec_name, width: v.width, height: v.height, avgFrameRate: v.avg_frame_rate, rFrameRate: v.r_frame_rate, rotation, frameCount, durationSeconds: Number(probe.format?.duration ?? 0) }, reasons.includes('variable-frame-rate') ? { num, den } : rate);
     }
-    // Exact duration from frame count when the container states it; otherwise the decimal container duration.
-    if (frameCount) duration = T.frameTime(frameCount, rate);
-    video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount };
+    // Where the picture starts in the file. Not 0 after many remuxes, in Matroska/TS, or with B-frames and no edit list.
+    const start = Number(v.start_time ?? 0);
+    const startTime = Number.isFinite(start) && Math.abs(start) > 1e-6 ? T.fromSeconds(start.toFixed(6)) : undefined;
+    const startFrames = startTime ? startOffsetFrames({ frameRate: rate, startTime }) : 0;
+    // Exact duration from frame count when the container states it (plus the frames the picture starts late); otherwise the decimal container duration.
+    if (frameCount) duration = T.frameTime(frameCount + Math.max(0, startFrames), rate);
+    video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount, ...(startTime ? { startTime } : {}) };
   }
   const audio = a ? { sampleRate: Number(a.sample_rate), channels: Number(a.channels), codec: String(a.codec_name) } : undefined;
   if (!T.lt(T.ZERO, duration)) throw new ApiError(415, 'unsupported_media', 'media has zero duration');

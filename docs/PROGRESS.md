@@ -344,6 +344,14 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
   - A file whose first video timestamp is not 0 (the first fixture, made by joining segments with stream copy, started at 0.021 s) reports a cut one frame later than the frame count suggests. The frame rule documents the assumption "first PTS is 0"; ingest does not check or normalise it. **Open and unverified:** what the preview and export show for such files, and whether analysis and picture agree on them.
   - The timeline query lists at most 2,000 beat markers (2,399 existed); the full list is in the analysis result.
 
+**Checkpoint 13x — files whose picture does not start at time 0 (a defect found and fixed)**
+- **Defect (present since Phase 0):** a video file whose first frame's timestamp is more than half a frame after 0 was accepted at ingest and then **could not be exported at all** — the renderer asked for a time before the first frame and failed with "source frame unavailable". Such files are ordinary: remuxed MP4s, Matroska/TS, B-frame streams without an edit list. Measured before the fix with the barcode fixture shifted by 0.021 s (MP4 and MKV) and 0.5 s: all three exports failed; 0 and 0.010 s worked.
+- Fix: ingest records the stream's start time (`asset.video.startTime`); the single frame rule counts frames from the first picture and places it the nearest whole number of frames after time 0 (error against the sound at most half a frame), holding the first frame until then; the asset is that many frames longer so the last frame is reachable; the browser decoder seeks relative to its own file's first timestamp (so original and proxy cannot disagree about a container offset).
+- Verified: `pnpm conformance:start-offset` (3 checks, `docs/evidence/start-offset.json`): five files (0, 0.010, 0.021 MP4, 0.021 MKV, 0.5 s) all export, with the expected lag (0, 0, 1, 1, 15 frames), the first frame held, every source frame shown once up to the last; scene detection on shifted files reports exactly the exported frame where the picture changes (60, 61, 75); paused editor preview of the 0.5 s file shows the same frames. `startOffset.test.ts` (4). Full regression: see below.
+- Full regression with this change: phase0 54, phase3 27, phase4 19, phase5 33, phase6 35, phase7 31, phase8 20, phase9 12, phase11 12, phase12 15, browser-export 23, editor-interactions 15, owner-ui 7, speed 16, soak 7, accessibility audit clean, parity suite Test 1 and 2 pass (10 small-text warnings, as before), start-offset 3.
+- Limits / still open: assets ingested **before** this change have no recorded start time (re-import them); playback (proxy) frames for shifted files were not checked, only paused frames; sound that starts late, negative start times and files whose streams have different time bases were not tested; no real camera, phone or broadcast file was available — all fixtures are synthetic remuxes.
+- Correction: the commit "Long media run…" says 285 unit tests; the suite had 284 at that point.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -371,7 +379,7 @@ Unblocked (no decision needed), roughly by value:
 4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 5. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
-7. Sources whose first video timestamp is not 0: detect at ingest and normalise or state the offset, with a frame-exact test. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
+7. Shifted sources: playback (proxy) frames, late-starting sound, negative start times, real files (the export failure for late-starting pictures is fixed and tested). Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
 8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
@@ -388,8 +396,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 284 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file).
+Expect 288 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 3.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

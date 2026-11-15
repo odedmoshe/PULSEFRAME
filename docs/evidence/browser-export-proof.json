@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T04:28:19.788Z",
+  "ranAt": "2026-11-15T04:54:27.076Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -59,14 +59,14 @@
     },
     "browserExport": {
       "frames": 105,
-      "wallSeconds": 0.51,
-      "realtimeFactor": 6.89,
+      "wallSeconds": 0.45,
+      "realtimeFactor": 7.761,
       "bytes": 283785,
-      "wallInPageMs": 465,
+      "wallInPageMs": 426,
       "note": "headless Chromium, software (no GPU), 640x360 high quality; wall time includes asset fetch, audio mix, encode, SHA-256, base64 transfer"
     },
     "parity": {
-      "serverRouteWallSeconds": 1.719,
+      "serverRouteWallSeconds": 1.635,
       "serverBytes": 76665,
       "browserBytes": 283785,
       "ssimByFrame": {
@@ -214,7 +214,7 @@
           "location": "client-download",
           "note": "the media bytes were produced and stay in the browser tab that held the lease; the server stores only this record",
           "bytes": 283785,
-          "sha256": "677deb2bf604023adf6146da4ad360364b324f0ad8998346e095e212c8ca1339",
+          "sha256": "67c10d93185e2cdd4ed4034a938191f0bd0b60b799848facc501ceadf96a81bc",
           "videoCodec": "avc",
           "audioCodec": "opus",
           "frames": 105,
@@ -234,8 +234,8 @@
       "name": "job row sha256 and bytes equal those of the file the proof received",
       "ok": true,
       "detail": {
-        "server": "677deb2bf604023adf6146da4ad360364b324f0ad8998346e095e212c8ca1339",
-        "received": "677deb2bf604023adf6146da4ad360364b324f0ad8998346e095e212c8ca1339"
+        "server": "67c10d93185e2cdd4ed4034a938191f0bd0b60b799848facc501ceadf96a81bc",
+        "received": "67c10d93185e2cdd4ed4034a938191f0bd0b60b799848facc501ceadf96a81bc"
       }
     },
     {
@@ -290,8 +290,8 @@
       "name": "restart: a NEW job over a fresh snapshot succeeds; exactly one succeeded job carries its output; the lost job published nothing",
       "ok": true,
       "detail": {
-        "newJob": "job_xhmDDopUKMY",
-        "lostJob": "job_JZsiOrmxUdI"
+        "newJob": "job_sKCh4DxnTZw",
+        "lostJob": "job_jT4J7pkSsak"
       }
     },
     {
