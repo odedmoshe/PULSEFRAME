@@ -27,6 +27,7 @@
     "proof:browser-export": "tsx packages/evals/src/browser-export-proof.ts",
     "conformance:parity": "tsx packages/evals/src/parity-suite.ts",
     "conformance:long": "tsx packages/evals/src/long-media.ts",
+    "proof:reverse-sound": "tsx packages/evals/src/reverse-sound-proof.ts",
     "conformance:start-offset": "tsx packages/evals/src/start-offset.ts",
     "conformance:inputs": "tsx packages/evals/src/input-matrix.ts",
     "conformance:images": "tsx packages/evals/src/image-matrix.ts",
