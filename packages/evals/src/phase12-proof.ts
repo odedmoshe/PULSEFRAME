@@ -303,6 +303,19 @@ async function main() {
     const cue2 = cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').clips.find((c: any) => c.id === newCue?.id);
     const capAt100 = band(await still(cp, 100)), capAt70 = band(await still(cp, 70));
     check('editor: "new caption at the playhead" adds a two-second cue at frame 90, selects it, and the text typed in the Inspector is what the cue says; a caption is drawn at frame 100 and nothing at frame 70, between the two cues', !!cue2 && Number(cue2.start.value) / cue2.start.timescale === 3 && Number(cue2.duration.value) / cue2.duration.timescale === 2 && cue2.text === 'שורה שנייה' && capAt100.top >= 0 && capAt70.top < 0 && cErrors.length === 0, { start: cue2?.start, duration: cue2?.duration, text: cue2?.text, captionTopAt100: capAt100.top, captionTopAt70: capAt70.top, errors: cErrors.slice(0, 3) });
+    // merge two cues in the editor; hide one cue in one format only
+    const capTrack0 = () => cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption');
+    await cpage.locator(`.clip[data-clip-id="${cueId}"]`).click();
+    await cpage.getByTestId('cue-merge').click();
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (capTrack0().clips.length === 1) break; await sleep(100); }
+    const merged = capTrack0().clips[0];
+    await cpage.getByTestId('format-switch').selectOption(cv);
+    await cpage.locator(`.clip[data-clip-id="${merged.id}"]`).click();
+    const beforeHide = { master: (await still(cp, 10)).png, tall: band(await still(cp, 10, cv)) };
+    await cpage.getByTestId('cue-format-hide').click();
+    for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cdoc.variants[cv].overrides[merged.id]?.hidden) break; await sleep(100); }
+    const afterHide = { master: (await still(cp, 10)).png, tall: band(await still(cp, 10, cv)) };
+    check('editor: "merge with the next caption" joins two cues into one covering both; "hide this caption in this format" removes it from that format\'s frame only (the master frame is byte-identical)', capTrack0().clips.length === 1 && /HELLO AGAIN/.test(merged.text) && /שורה שנייה/.test(merged.text) && Number(merged.duration.value) / merged.duration.timescale === 5 && beforeHide.tall.top >= 0 && afterHide.tall.top < 0 && afterHide.master.equals(beforeHide.master) && cErrors.length === 0, { text: merged.text, duration: merged.duration, tallBefore: beforeHide.tall.top, tallAfter: afterHide.tall.top, masterSame: afterHide.master.equals(beforeHide.master), errors: cErrors.slice(0, 3) });
     await cpage.close();
     await page.close();
   } catch (e) {

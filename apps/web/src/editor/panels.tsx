@@ -508,6 +508,16 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
           <label>{t('cue.text')}
             <textarea dir="auto" rows={2} value={text} data-testid="cue-text" onChange={(e) => setText(e.target.value)} onBlur={textCommit} />
           </label>
+          {!variantId && (() => {
+            const cues = editor.selected?.track.clips ?? [];
+            const hasNext = cues[cues.findIndex((c) => c.id === clip.id) + 1]?.type === 'caption';
+            return <div className="row"><button type="button" className="ghost" disabled={!hasNext} data-testid="cue-merge" onClick={() => void editor.commit([{ op: 'merge_cues', args: { clipId: clip.id } }], 'Merge captions')}>{t('cue.merge')}</button></div>;
+          })()}
+          {variantId && (
+            <label className="check">
+              <input type="checkbox" checked={!!textOverride?.hidden} data-testid="cue-format-hide" onChange={(e) => void editor.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, hidden: e.target.checked } }], 'Hide caption in format')} /> {t('cue.formatOnly.hide')}
+            </label>
+          )}
           {variantId && (
             <p className="muted" data-testid="cue-format-note">{t(textOverride?.text !== undefined ? 'cue.formatOnly.set' : 'cue.formatOnly.hint')}
               {textOverride?.text !== undefined && <> <button type="button" className="ghost" data-testid="cue-format-reset" onClick={() => void editor.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text: null } }], 'Reset format caption')}>{t('text.formatOnly.reset')}</button></>}
