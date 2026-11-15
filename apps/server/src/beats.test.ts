@@ -29,3 +29,30 @@ describe('beat tracking (synthetic drum loops)', () => {
     expect(detectBeats(new Float32Array(BEAT_SR * 2))).toEqual({ bpm: null, confidence: 0, beats: [] });
   });
 });
+
+describe('beat tracking of a file in consecutive windows', () => {
+  it('a 48-second loop analysed in 12-second windows gives one continuous grid: the same beats as the reference, no doubles at the window edges', async () => {
+    const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+    const { detectBeatsOfFile } = await import('./analysis.ts');
+    const { x, beats } = drumLoop(() => 120, 48);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-beatwin-'));
+    try {
+      const wav = Buffer.alloc(44 + x.length * 2);
+      wav.write('RIFF', 0); wav.writeUInt32LE(36 + x.length * 2, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+      wav.writeUInt32LE(BEAT_SR, 24); wav.writeUInt32LE(BEAT_SR * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(x.length * 2, 40);
+      for (let i = 0; i < x.length; i++) wav.writeInt16LE(Math.max(-32767, Math.min(32767, Math.round(x[i]! * 30000))), 44 + i * 2);
+      const file = path.join(dir, 'loop.wav');
+      fs.writeFileSync(file, wav);
+      const whole = await detectBeatsOfFile(file, 0, 48, 1200);
+      const windowed = await detectBeatsOfFile(file, 0, 48, 12);
+      expect([whole.windows, windowed.windows]).toEqual([1, 4]);
+      expect(Math.abs(windowed.bpm! - 120)).toBeLessThan(1.5);
+      expect(beatF1(windowed.beats, beats).f1).toBeGreaterThan(0.9);
+      expect(Math.abs(windowed.beats.length - whole.beats.length)).toBeLessThanOrEqual(4);
+      const gaps = windowed.beats.slice(1).map((b, i) => b - windowed.beats[i]!);
+      expect(Math.min(...gaps)).toBeGreaterThan(0.3); // no doubled beat where two windows meet
+      expect(Math.max(...gaps)).toBeLessThan(1.1); // and no hole wider than two beats
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }, 60_000);
+});
+
