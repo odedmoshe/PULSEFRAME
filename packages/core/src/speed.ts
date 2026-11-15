@@ -61,4 +61,10 @@ export const pictureSourceAt = (c: MediaClip, t: T.RationalTime, frame: T.Ration
  */
 export const handleAfterEnd = (c: MediaClip, assetDuration: T.RationalTime): T.RationalTime =>
   c.reverse ? toTimelineSpan(c, c.sourceIn) : toTimelineSpan(c, T.sub(assetDuration, sourceEnd(c)));
+/**
+ * Timeline time at which source time `s` of the clip's stretch is played, whichever way the clip runs.
+ * Forward: `timelineAt`. Reversed: the clip starts at the END of its stretch, so source time s is reached (sourceEnd − s) later.
+ */
+export const timelineOfSource = (c: MediaClip, s: T.RationalTime): T.RationalTime =>
+  c.reverse ? T.add(c.start, toTimelineSpan(c, T.sub(sourceEnd(c), s))) : timelineAt(c, s);
 

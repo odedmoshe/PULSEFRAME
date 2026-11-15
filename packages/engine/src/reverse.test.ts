@@ -247,3 +247,18 @@ describe('track order', () => {
   });
 });
 
+describe('analysis marks under a reversed clip', () => {
+  it('beats and silences of the source fall where the reversed clip plays them', async () => {
+    const { timelineMarkers, sourceRangesToTimeline } = await import('@pulseframe/core');
+    const { fwd, doc, assetId } = project(); // source 50..149 at timeline 20..119 (frames); reversed in `doc`
+    const withBeats = (d: ProjectDocument) => tx(d, [{ op: 'attach_analysis', args: { assetId, kind: 'beats', method: 'test', params: {}, createdAt: '2026-11-15T00:00:00Z', times: [f(60), f(100), f(145), f(200)] } }], true).doc;
+    const fi = (t: T.RationalTime) => T.frameIndexAt(t, R);
+    expect(timelineMarkers(withBeats(fwd)).beats.map(fi)).toEqual([30, 70, 115]); // source 60, 100, 145 at 20 + (s − 50); 200 is outside the clip
+    expect(timelineMarkers(withBeats(doc)).beats.map(fi)).toEqual([25, 70, 110]); // reversed: source s is reached at 20 + (150 − s)
+    // a silent stretch of the source, 80..100, plays at 50..70 forwards and at 70..90 reversed
+    const range = [{ start: f(80), end: f(100) }];
+    expect(sourceRangesToTimeline(fwd, assetId, range).map((r) => [fi(r.start), fi(r.end)])).toEqual([[50, 70]]);
+    expect(sourceRangesToTimeline(doc, assetId, range).map((r) => [fi(r.start), fi(r.end)])).toEqual([[70, 90]]);
+  });
+});
+

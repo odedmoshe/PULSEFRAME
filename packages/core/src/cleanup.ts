@@ -5,7 +5,7 @@
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from './schema.ts';
 import type { OpCall } from './ops.ts';
-import { sourceEnd, timelineAt } from './speed.ts';
+import { sourceEnd, timelineAt, timelineOfSource } from './speed.ts';
 
 export interface TimeRange { start: T.RationalTime; end: T.RationalTime }
 
@@ -32,8 +32,10 @@ export function sourceRangesToTimeline(doc: ProjectDocument, assetId: string, ra
         if (c.type !== 'media' || c.assetId !== assetId) continue;
         const from = T.max(c.sourceIn, s), to = T.min(sourceEnd(c), e);
         if (!T.lt(from, to)) continue;
-        const start = ceilFrame(timelineAt(c, from), rate);
-        const end = T.frameTime(T.frameIndexAt(timelineAt(c, to), rate), rate);
+        // a reversed clip plays the later source first: the range's end comes first on the timeline
+        const a = timelineOfSource(c, c.reverse ? to : from), b = timelineOfSource(c, c.reverse ? from : to);
+        const start = ceilFrame(a, rate);
+        const end = T.frameTime(T.frameIndexAt(b, rate), rate);
         if (T.lt(start, end)) out.push({ start, end });
       }
   }
@@ -59,7 +61,7 @@ export function sourceTimesToTimeline(doc: ProjectDocument, assetId: string, tim
     for (const c of track.clips) {
       if (c.type !== 'media' || c.assetId !== assetId) continue;
       const end = sourceEnd(c);
-      for (const t of times) if (!T.lt(t, c.sourceIn) && T.lt(t, end)) out.push(timelineAt(c, t));
+      for (const t of times) if (!T.lt(t, c.sourceIn) && T.lt(t, end)) out.push(timelineOfSource(c, t));
     }
   return out.sort(T.cmp).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
 }
