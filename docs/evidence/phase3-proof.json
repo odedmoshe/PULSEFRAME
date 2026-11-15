@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T12:42:49.372Z",
+  "ranAt": "2026-11-15T12:55:58.214Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -20,7 +20,7 @@
       "name": "import control is reachable with Tab and shows a visible focus ring",
       "ok": true,
       "detail": {
-        "tabs": 9
+        "tabs": 10
       }
     },
     {
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 0.984584,
-        "editor-en": 0.983132,
-        "palette-en": 0.986847
+        "editor-he": 1,
+        "editor-en": 1,
+        "palette-en": 1
       }
     },
     {
@@ -283,6 +283,41 @@
           22,
           24
         ]
+      }
+    },
+    {
+      "name": "workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload; Pro offers every panel again; the project is not changed by any of it",
+      "ok": true,
+      "detail": {
+        "proTabs": 8,
+        "quick": {
+          "tabs": [
+            "recipes",
+            "speech",
+            "captions",
+            "deliver"
+          ],
+          "panels": [
+            "recipes"
+          ]
+        },
+        "sound": {
+          "tabs": [
+            "sound",
+            "clip"
+          ],
+          "panels": [
+            "sound"
+          ]
+        },
+        "afterReload": {
+          "ws": "sound",
+          "tabs": [
+            "sound",
+            "clip"
+          ]
+        },
+        "back": 8
       }
     },
     {

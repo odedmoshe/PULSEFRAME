@@ -47,6 +47,8 @@ export interface EditorState {
   viewVariantId: string | null;
   /** Show the safe-area guide over the preview (personal setting, default on). */
   safeAreaOn: boolean;
+  /** Workspace preset: which Inspector panels are offered. A view setting of this browser; it never changes the project. */
+  workspace: Workspace;
   /** Clip ids remembered by Copy (session state only). */
   clipboard: string[];
   /** Clips marked by Cut; they move on the next Paste (nothing is committed until then). */
@@ -54,6 +56,10 @@ export interface EditorState {
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
+export const WORKSPACES = ['pro', 'quick', 'captions', 'sound', 'deliver'] as const;
+export type Workspace = (typeof WORKSPACES)[number];
+const WS_KEY = 'pf.workspace.v1';
+const readWorkspace = (): Workspace => { try { const v = localStorage.getItem(WS_KEY); return (WORKSPACES as readonly string[]).includes(v ?? '') ? (v as Workspace) : 'pro'; } catch { return 'pro'; } };
 const readSafeArea = () => { try { return localStorage.getItem(SAFE_KEY) !== '0'; } catch { return true; } };
 
 export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent'; frame: number | null; selection: string[]; label: string | null }
@@ -61,7 +67,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), clipboard: [], cutPending: [],
+    provider: null, error: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), clipboard: [], cutPending: [],
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -283,6 +289,7 @@ export class Editor {
       this.set({ uploading: false });
     }
   }
+  setWorkspace(workspace: Workspace) { try { localStorage.setItem(WS_KEY, workspace); } catch { /* ignore */ } this.set({ workspace }); }
   /** 'toggle' adds the clip to the selection or removes it (Shift/Ctrl/⌘-click); the default replaces the selection. */
   select(id: string | null, mode: 'replace' | 'toggle' = 'replace') {
     const cur = this.state.selection;

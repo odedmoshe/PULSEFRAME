@@ -379,6 +379,23 @@ async function main() {
     const wantEnd = covered(gb.project) + 30; // everything that was covered, plus the late title
     for (let i = 0; i < 50 && endOf(ga.project) !== wantEnd; i++) { await new Promise((r) => setTimeout(r, 100)); ga = await getDoc(); }
     check('"close empty gaps" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost', gapCmd === 'edit.closeGaps' && endOf(ga.project) === wantEnd && covered(ga.project) === wantEnd && ga.revision === gb.revision + 2, { gapCmd, endBefore: gEnd, coveredBefore: covered(gb.project), endAfter: endOf(ga.project), coveredAfter: covered(ga.project), revisions: [gb.revision, ga.revision] });
+
+    console.log('\n# workspaces');
+    const wb = await getDoc();
+    const tabsShown = async () => page.locator('[role=tab]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid!.replace('inspector-tab-', '')));
+    const panelsShown = async () => page.locator('.inspector-panel:not([hidden])').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid!.replace('inspector-panel-', '')));
+    const proTabs = await tabsShown();
+    await page.getByTestId('workspace-switch').selectOption('quick');
+    const quick = { tabs: await tabsShown(), panels: await panelsShown() };
+    await page.getByTestId('workspace-switch').selectOption('sound');
+    const sound = { tabs: await tabsShown(), panels: await panelsShown() };
+    await page.reload();
+    await page.getByTestId('timecode').waitFor();
+    const afterReload = { ws: await page.getByTestId('workspace-switch').inputValue(), tabs: await tabsShown() };
+    await page.getByTestId('workspace-switch').selectOption('pro');
+    const back = await tabsShown();
+    const wa = await getDoc();
+    check('workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload; Pro offers every panel again; the project is not changed by any of it', proTabs.length === 8 && JSON.stringify(quick.tabs) === JSON.stringify(['recipes', 'speech', 'captions', 'deliver']) && JSON.stringify(quick.panels) === JSON.stringify(['recipes']) && JSON.stringify(sound.tabs) === JSON.stringify(['sound', 'clip']) && JSON.stringify(sound.panels) === JSON.stringify(['sound']) && afterReload.ws === 'sound' && JSON.stringify(afterReload.tabs) === JSON.stringify(['sound', 'clip']) && back.length === 8 && wa.revision === wb.revision && JSON.stringify(wa.project) === JSON.stringify(wb.project), { proTabs: proTabs.length, quick, sound, afterReload, back: back.length });
     check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.

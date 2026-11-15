@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import type { Clip } from '@pulseframe/core';
 import { assetNotices, FONT_CATALOG, speedValue } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
-import { useEditorState, type Editor } from './store.ts';
+import { useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
@@ -39,6 +39,12 @@ export function Header() {
           </select>
         </label>
       )}
+      <label className="format-switch">
+        <span className="sr-only">{t('workspace')}</span>
+        <select value={state.workspace} onChange={(e) => editor.setWorkspace(e.target.value as Workspace)} data-testid="workspace-switch" aria-label={t('workspace')}>
+          {WORKSPACES.map((w) => <option key={w} value={w}>{t(`workspace.${w}` as Key)}</option>)}
+        </select>
+      </label>
       {viewVariant && (
         <span className="format-badge" role="status" data-testid="format-badge" data-variant-id={viewVariant.id}>{t('format.badge')}</span>
       )}
@@ -218,6 +224,14 @@ const TRANSFORM_FIELDS: { prop: 'x' | 'y' | 'scale' | 'rotation' | 'opacity'; la
 const INSPECTOR_TABS = ['clip', 'speech', 'captions', 'sound', 'review', 'deliver', 'recipes', 'all'] as const;
 type InspectorTab = (typeof INSPECTOR_TABS)[number];
 const TAB_KEY = 'pf.inspector.tab.v1';
+/** Panels each workspace offers, in order; the first is shown when the workspace is chosen. Pro offers everything. */
+const WORKSPACE_TABS: Record<Workspace, readonly InspectorTab[]> = {
+  pro: INSPECTOR_TABS,
+  quick: ['recipes', 'speech', 'captions', 'deliver'],
+  captions: ['captions', 'speech', 'clip'],
+  sound: ['sound', 'clip'],
+  deliver: ['deliver', 'review'],
+};
 
 function loadTab(): InspectorTab {
   try {
@@ -235,7 +249,15 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     setTabState(next);
     try { localStorage.setItem(TAB_KEY, next); } catch { /* ignore */ }
   };
+  // The workspace narrows the tabs on offer. A tab that is not offered is replaced by the workspace's first one (only what is shown changes: nothing in the project does).
+  const tabs = WORKSPACE_TABS[state.workspace];
+  const lastWs = useRef(state.workspace);
+  useEffect(() => {
+    if (lastWs.current !== state.workspace) { lastWs.current = state.workspace; setTab(tabs[0]!); }
+    else if (!tabs.includes(tab)) setTab(tabs[0]!);
+  }, [state.workspace]); // eslint-disable-line react-hooks/exhaustive-deps
   const onTabKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const INSPECTOR_TABS = tabs;
     const i = INSPECTOR_TABS.indexOf(tab);
     const rtl = getComputedStyle(e.currentTarget).direction === 'rtl';
     let n = i;
@@ -264,7 +286,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     <aside className="inspector" aria-label={t('inspector')}>
       <h2>{t('inspector')}</h2>
       <div className="inspector-tabs" role="tablist" aria-label={t('inspector')} onKeyDown={onTabKey}>
-        {INSPECTOR_TABS.map((id) => (
+        {tabs.map((id) => (
           <button key={id} type="button" role="tab" id={`inspector-tab-${id}`} data-testid={`inspector-tab-${id}`}
             aria-selected={tab === id} aria-controls={id === 'all' ? INSPECTOR_TABS.filter((x) => x !== 'all').map((x) => `inspector-panel-${x}`).join(' ') : `inspector-panel-${id}`}
             tabIndex={tab === id ? 0 : -1} className={`inspector-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
