@@ -157,6 +157,19 @@ describe('browser export lease', () => {
     expect(t.store.getJob(body.jobId).status).toBe('canceled');
   });
 
+  it('a cancel right after the start, before any heartbeat, cannot hold anything up: the job ends at lease expiry at the latest and a new export of the same project starts meanwhile', async () => {
+    const t = setup();
+    const first = await t.start('session-aaaa');
+    expect(t.be.requestCancel(first.body.jobId).status).toBe('cancel-requested');
+    // the tab never answers; another tab starts an export of the same project straight away (there is no queue on this route)
+    const second = await t.start('session-bbbb');
+    expect(second.status).toBe(201);
+    expect((await t.call(`/jobs/${second.body.jobId}/heartbeat`, { sessionId: 'session-bbbb', framesDone: 1 })).body).toEqual({ ok: true, canceled: false });
+    t.advance(15_001);
+    expect(t.be.sweepLeases()).toContain(first.body.jobId);
+    expect(t.store.getJob(first.body.jobId).status).toBe('canceled');
+  });
+
   it('blockers refuse creation: no job row exists afterwards', async () => {
     const t = setup('Not Installed Sans');
     const r = await t.start();
