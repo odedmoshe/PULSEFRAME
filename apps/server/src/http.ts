@@ -263,7 +263,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const doc = store.getProject(projectId).doc;
     // All-or-nothing: every variant must exist and plan without blockers before any job is created.
     for (const id of b.variantIds) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, variantId: id }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `format ${id} cannot be exported: ${plan.blockers[0]!.message}`, { variantId: id, blockers: plan.blockers }); }
+    gov.takeExportQuota(pr, b.variantIds.length, true);
     const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }));
+    gov.takeExportQuota(pr, jobs.length);
     return c.json({ jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, status: j.status })) }, 202);
   });
   app.post('/api/v1/projects/:id/analysis/loudness', async (c) => { need(c, 'observe'); return c.json(await programmeLoudness(store, c.req.param('id'))); });
@@ -463,7 +465,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(pr, c.req.param('id'), 'job');
     const options = await c.req.json().catch(() => ({}));
     assertStorageRoom(store, cfg.maxStorageBytes, 1, 'start an export'); // the output size is not known in advance; an export is refused once the ceiling is reached
+    gov.takeExportQuota(pr, 1, true);
     const job = exporter.start(c.req.param('id'), pr.actor, options);
+    gov.takeExportQuota(pr);
     return c.json({ jobId: job.id, status: job.status, revision: job.input.revision, estimate: job.input.manifest.estimate, warnings: job.input.warnings }, 202);
   });
   /** Dry run: what would be exported, what it depends on, and what blocks it. Starts nothing. */

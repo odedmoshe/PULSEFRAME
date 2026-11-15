@@ -18,11 +18,12 @@ export const GrantInput = z
     trackIds: z.array(z.string()).max(200).nullable().default(null).describe('Only clips on these tracks may be changed'),
     range: z.object({ start: RationalTimeSchema, end: RationalTimeSchema }).strict().nullable().default(null).describe('Only clips lying fully inside this sequence time range may be changed'),
     budgetCents: z.number().int().nonnegative().default(0),
+    exportsPerDay: z.number().int().min(1).max(100000).nullable().default(null).describe('How many exports this credential may start in any 24 hours; null = no limit'),
     requestsPerMinute: z.number().int().min(1).max(100000).nullable().default(null).describe('Request budget for this credential (REST and MCP together); null = the server-wide setting'),
     expiresInSeconds: z.number().int().positive().max(365 * 86400).optional(),
   })
   .strict();
-export interface Grant { id: string; name: string; mode: Mode; projectIds: string[] | null; trackIds: string[] | null; range: { start: T.RationalTime; end: T.RationalTime } | null; budgetCents: number; requestsPerMinute: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string; createdBy: string }
+export interface Grant { id: string; name: string; mode: Mode; projectIds: string[] | null; trackIds: string[] | null; range: { start: T.RationalTime; end: T.RationalTime } | null; budgetCents: number; requestsPerMinute: number | null; exportsPerDay: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string; createdBy: string }
 export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: ('observe' | 'edit')[]; mode?: Mode; grant?: Grant }
 
 const now = () => new Date().toISOString();
@@ -41,12 +42,13 @@ export class Governance {
         status TEXT NOT NULL, created_at TEXT NOT NULL, decided_at TEXT, decided_by TEXT, result_revision INTEGER, conflicts TEXT);
       CREATE TABLE IF NOT EXISTS approvals (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, kind TEXT NOT NULL, action TEXT NOT NULL, action_hash TEXT NOT NULL, cost_cents INTEGER NOT NULL, requested_by TEXT NOT NULL,
         status TEXT NOT NULL, decided_by TEXT, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, decided_at TEXT);
+      CREATE TABLE IF NOT EXISTS grant_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, grant_id TEXT NOT NULL, kind TEXT NOT NULL, at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS budget_ledger (job_id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, reserved_cents INTEGER NOT NULL, actual_cents INTEGER, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     `);
   }
 
   // ---------- grants ----------
-  private grantRow = (r: any): Grant => ({ id: r.id, name: r.name, mode: r.mode, requestsPerMinute: null, ...JSON.parse(r.constraints), budgetCents: r.budget_cents, expiresAt: r.expires_at, revokedAt: r.revoked_at, createdAt: r.created_at, createdBy: r.created_by });
+  private grantRow = (r: any): Grant => ({ id: r.id, name: r.name, mode: r.mode, requestsPerMinute: null, exportsPerDay: null, ...JSON.parse(r.constraints), budgetCents: r.budget_cents, expiresAt: r.expires_at, revokedAt: r.revoked_at, createdAt: r.created_at, createdBy: r.created_by });
   /** The token is returned once and only its hash is stored. */
   createGrant(raw: unknown, by: Principal): { grant: Grant; token: string } {
     if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can create agent grants');
@@ -58,7 +60,7 @@ export class Governance {
     const token = `pfg_${randomBytes(24).toString('base64url')}`;
     const expiresAt = g.expiresInSeconds ? new Date(this.clock() + g.expiresInSeconds * 1000).toISOString() : null;
     this.store.db.prepare('INSERT INTO grants (id, name, token_hash, mode, constraints, budget_cents, expires_at, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?)')
-      .run(id, g.name, sha(token), g.mode, JSON.stringify({ projectIds: g.projectIds, trackIds: g.trackIds, range: g.range, requestsPerMinute: g.requestsPerMinute }), g.budgetCents, expiresAt, now(), by.actor);
+      .run(id, g.name, sha(token), g.mode, JSON.stringify({ projectIds: g.projectIds, trackIds: g.trackIds, range: g.range, requestsPerMinute: g.requestsPerMinute, exportsPerDay: g.exportsPerDay }), g.budgetCents, expiresAt, now(), by.actor);
     return { grant: this.getGrant(id), token };
   }
   getGrant(id: string): Grant {
@@ -84,6 +86,26 @@ export class Governance {
     if (g.revokedAt) throw new ApiError(401, 'grant_revoked', 'this agent grant was revoked');
     if (g.expiresAt && Date.parse(g.expiresAt) <= this.clock()) throw new ApiError(401, 'grant_expired', 'this agent grant has expired');
     return { actor: `agent:${g.name}`, kind: 'agent', scopes: g.mode === 'observe' || g.mode === 'propose' ? ['observe'] : ['observe', 'edit'], mode: g.mode, grant: g };
+  }
+
+  // ---------- export quota ----------
+  /**
+   * A grant may carry a limit on exports started in any 24 hours. Call with checkOnly before starting `count` exports (refuses when they would exceed
+   * the limit) and again without it once they have started (records them), so a start that fails costs nothing. Counted per grant (not per name), kept in the database across restarts.
+   */
+  takeExportQuota(p: Principal, count = 1, checkOnly = false): void {
+    const g = p.grant;
+    if (!g?.exportsPerDay) return;
+    const since = this.clock() - 24 * 3600_000;
+    this.store.db.prepare('DELETE FROM grant_usage WHERE at < ?').run(since - 24 * 3600_000);
+    const rows = this.store.db.prepare("SELECT at FROM grant_usage WHERE grant_id = ? AND kind = 'export' AND at >= ? ORDER BY at").all(g.id, since) as { at: number }[];
+    if (rows.length + count > g.exportsPerDay) {
+      const retryAfterSeconds = rows.length ? Math.max(1, Math.ceil((rows[Math.max(0, rows.length + count - g.exportsPerDay - 1)]!.at + 24 * 3600_000 - this.clock()) / 1000)) : null;
+      throw new ApiError(429, 'export_quota_exceeded', `this credential may start ${g.exportsPerDay} export(s) in 24 hours and has started ${rows.length}`, { limitPerDay: g.exportsPerDay, usedInLast24h: rows.length, requested: count, retryAfterSeconds }, 'Wait, or ask the owner for a grant with a higher limit.');
+    }
+    if (checkOnly) return;
+    const ins = this.store.db.prepare("INSERT INTO grant_usage (grant_id, kind, at) VALUES (?, 'export', ?)");
+    for (let i = 0; i < count; i++) ins.run(g.id, this.clock());
   }
 
   // ---------- pause / take over ----------

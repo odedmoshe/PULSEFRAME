@@ -55,7 +55,7 @@ export interface ProjectListItem { id: string; name: string; revision: number; u
 export interface StorageReport { projects: number; databaseBytes: number; media: { files: number; bytes: number }; exportsBytes: number; totalBytes: number; quotaBytes: number | null; unreferenced: { files: number; bytes: number; tooNewToJudge?: number }; rule: string }
 export interface GcResult { applied: boolean; wouldRemove?: { files: number; bytes: number }; removed?: { files: number; bytes: number }; note?: string }
 export type GrantMode = 'observe' | 'propose' | 'edit' | 'autopilot';
-export interface GrantItem { id: string; name: string; mode: GrantMode; projectIds: string[] | null; trackIds: string[] | null; range: unknown; budgetCents: number; requestsPerMinute?: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string }
+export interface GrantItem { id: string; name: string; mode: GrantMode; projectIds: string[] | null; trackIds: string[] | null; range: unknown; budgetCents: number; requestsPerMinute?: number | null; exportsPerDay?: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string }
 
 export const api = {
   listProjectsFull: () => call<{ projects: ProjectListItem[] }>('/projects'),
@@ -65,7 +65,7 @@ export const api = {
   backupNow: () => call<BackupStatus>('/backup', json({})),
   storageGc: (apply: boolean) => call<GcResult>('/storage/gc', json(apply ? { apply: true } : {})),
   listGrants: () => call<{ grants: GrantItem[] }>('/grants'),
-  createGrant: (body: { name: string; mode: GrantMode; projectIds?: string[]; budgetCents?: number; requestsPerMinute?: number }) => call<{ grant: GrantItem; token: string }>('/grants', json(body)),
+  createGrant: (body: { name: string; mode: GrantMode; projectIds?: string[]; budgetCents?: number; requestsPerMinute?: number; exportsPerDay?: number }) => call<{ grant: GrantItem; token: string }>('/grants', json(body)),
   revokeGrant: (id: string) => call<{ grant: GrantItem }>(`/grants/${encodeURIComponent(id)}/revoke`, json({})),
   analyzeAsset: (id: string, assetId: string, body: { kind: 'scenes' | 'beats'; threshold?: number }) =>
     call<AnalyzeResult>(`/projects/${id}/assets/${assetId}/analyze`, json(body)),

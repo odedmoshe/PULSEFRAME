@@ -126,6 +126,7 @@ export const he = {
   'access.mode.observe.hint': 'רואה את הפרויקט בלבד, לא משנה דבר.', 'access.mode.propose.hint': 'מציע שינויים; שום דבר לא משתנה עד שתאשרו.', 'access.mode.edit.hint': 'עורך ישירות; אפשר לבטל בכל שלב.', 'access.mode.autopilot.hint': 'פועל באופן עצמאי, כולל פעולות בתקציב מוגדר.',
   'access.scope.this': 'פרויקט זה בלבד', 'access.scope.project': 'פרויקט מסוים', 'access.scope.all': 'כל הפרויקטים', 'access.status.active': 'פעילה', 'access.status.revoked': 'בוטלה', 'access.status.expired': 'פגה',
   'access.rpm': 'מגבלת בקשות לדקה (לא חובה)', 'access.rpm.hint': 'ריק = ללא מגבלה משלה. מגן על העורך מפני סוכן שנתקע בלולאה.', 'access.rpm.unit': 'בקשות לדקה',
+  'access.epd': 'מגבלת ייצואים ל-24 שעות (לא חובה)', 'access.epd.unit': 'ייצואים ביום',
   'access.create': 'הרשאה חדשה', 'access.name': 'שם', 'access.mode': 'רמת גישה', 'access.thisProject': 'הגבלה לפרויקט זה', 'access.budget': 'תקציב (יחידות מטבע שלמות)', 'access.budget.hint': 'בגרסה זו שום דבר עדיין לא עולה כסף.', 'access.createBtn': 'יצירת הרשאה',
   'access.token.title': 'אסימון הגישה', 'access.token.once': 'האסימון מוצג פעם אחת בלבד ולא יוצג שוב. העתיקו אותו עכשיו.', 'access.token.copy': 'העתקה', 'access.token.copied': 'הועתק', 'access.token.endpoint': 'כתובת MCP', 'access.token.usage': 'שולחים את האסימון בכותרת Authorization: Bearer …', 'access.token.dismiss': 'סיימתי, הסתרת האסימון',
 };
@@ -255,6 +256,7 @@ export const en: Record<keyof typeof he, string> = {
   'access.mode.observe.hint': 'Can see the project, changes nothing.', 'access.mode.propose.hint': 'Suggests changes; nothing changes until you accept.', 'access.mode.edit.hint': 'Edits directly; every change can be undone.', 'access.mode.autopilot.hint': 'Works on its own, including actions within a set budget.',
   'access.scope.this': 'This project only', 'access.scope.project': 'Specific projects', 'access.scope.all': 'All projects', 'access.status.active': 'Active', 'access.status.revoked': 'Revoked', 'access.status.expired': 'Expired',
   'access.rpm': 'Requests per minute (optional)', 'access.rpm.hint': 'Empty = no limit of its own. Protects the editor from an agent stuck in a loop.', 'access.rpm.unit': 'requests/min',
+  'access.epd': 'Exports per 24 hours (optional)', 'access.epd.unit': 'exports/day',
   'access.create': 'New grant', 'access.name': 'Name', 'access.mode': 'Access level', 'access.thisProject': 'Limit to this project', 'access.budget': 'Budget (whole currency units)', 'access.budget.hint': 'Nothing in this build costs money yet.', 'access.createBtn': 'Create grant',
   'access.token.title': 'Access token', 'access.token.once': 'This token is shown once and will not be shown again. Copy it now.', 'access.token.copy': 'Copy', 'access.token.copied': 'Copied', 'access.token.endpoint': 'MCP endpoint', 'access.token.usage': 'Send the token as the header Authorization: Bearer …', 'access.token.dismiss': 'Done, hide the token',
 };

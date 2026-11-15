@@ -75,4 +75,30 @@ describe('reversed sound in the server export', () => {
     expect(loud(fast)![1]).toBeCloseTo(0.75, 1);
     expect(loud(fast)![0]).toBeGreaterThan(0.6);
   }, 120_000);
+
+  it('a grant can limit exports per 24 hours: starts beyond the limit get a typed 429, a refused start costs nothing, another grant is unaffected, and the limit frees up a day later', async () => {
+    const cookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]!;
+    const owner = { cookie, origin: s.url };
+    const mk = async (body: unknown) => (await (await fetch(`${s.url}/api/v1/grants`, { method: 'POST', headers: { ...owner, 'content-type': 'application/json', connection: 'close' }, body: JSON.stringify(body) })).json()) as any;
+    const two = await mk({ name: 'exporter', mode: 'edit', exportsPerDay: 2 });
+    const same = await mk({ name: 'exporter', mode: 'edit', exportsPerDay: 2 }); // same name, separate grant: counted separately
+    const free = await mk({ name: 'free', mode: 'edit' });
+    expect([two.grant.exportsPerDay, free.grant.exportsPerDay]).toEqual([2, null]);
+    const pid = (await post('/projects', { name: 'quota', width: 640, height: 360 })).project.id;
+    const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'burst.wav' }, body: new Uint8Array(burstWav()) })).json();
+    await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }] });
+    const start = async (token: string, body: unknown = { format: 'wav' } /* sound only: needs no built web bundle */) => { const r = await fetch(`${s.url}/api/v1/projects/${pid}/exports`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', connection: 'close' }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() as any }; };
+    const bad = await start(two.token, { format: 'nonsense' });
+    expect(bad.status).toBeGreaterThanOrEqual(400); // refused before any job: must not use up the quota
+    expect([(await start(two.token)).status, (await start(two.token)).status]).toEqual([202, 202]);
+    const over = await start(two.token);
+    expect(over.status).toBe(429);
+    expect(over.body.error.code).toBe('export_quota_exceeded');
+    expect(over.body.error.details).toMatchObject({ limitPerDay: 2, usedInLast24h: 2 });
+    expect((await start(same.token)).status).toBe(202);
+    expect((await start(free.token)).status).toBe(202);
+    const realNow = Date.now;
+    try { (s.governance as any).clock = () => realNow() + 24 * 3600_000 + 1000; expect((await start(two.token)).status).toBe(202); } finally { (s.governance as any).clock = realNow; }
+    expect((await mk({ name: 'bad', mode: 'edit', exportsPerDay: 0 })).error?.code).toBe('invalid_request');
+  }, 60_000);
 });
