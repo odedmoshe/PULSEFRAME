@@ -10,16 +10,18 @@ A browser-based video editor with a Hebrew-first interface and full agent access
 - [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) — the spec mapped to status
 
 ## What works today (see the linked evidence for limits)
-- Import, timeline editing with exact rational time, keyframes, undo/redo per actor, live multi-client updates
+- Import, timeline editing with exact rational time, keyframes, undo/redo per actor, live multi-client updates; multi-select, markers, copy/paste
+- Clip speed (0.1–8×, sound pitch follows speed) and freeze frame
+- Media input: MP4, MOV, Matroska, WebM, MPEG-TS, AVI; common sound formats; files with shifted timestamps, non-square pixels or unusual pixel formats are handled or converted at import (tested with synthetic files only — see `docs/evidence/input-matrix.json`)
 - Export: MP4 (H.264 + AAC), WebM, WAV, PNG; frame ranges, scaling, cancel/retry; browser-side WebM export
 - Titles and captions with Hebrew and mixed-direction text, five bundled OFL fonts, SRT/VTT import, SRT/VTT/ASS export
 - Transcript-based editing (typed or imported transcripts; no speech recognition is built in)
 - 12 effects, 17 blend modes, masks, 12 transitions on a Canvas2D compositor (no GPU effects)
-- Sound: gain, pan, fades, speech ducking, loudness measurement and normalisation, 7 synthesised sound effects
+- Sound: gain, pan, fades, volume automation, speech ducking, loudness measurement and normalisation, 7 synthesised sound effects
 - Model-free analysis: silence, scene cuts, beats
 - Linked output formats (9:16, 1:1, 4:5, 16:9) with per-format overrides, safe-area guides, preflight
 - Rule-based recipes (beat montage, social pack, tidy speech)
-- Agents: 50+ MCP tools generated from the same operation registry, permission modes (observe / propose / edit), pause, proposals with review
+- Agents: MCP tools generated from the same operation registry, plus resources (guide, operation schemas, per-project views) and playbook prompts; permission modes (observe / propose / edit), pause, proposals with review
 - Optional local ComfyUI provider path (one experimental matting workflow; nothing is qualified on a GPU)
 
 ## Requirements
@@ -41,6 +43,8 @@ Open the **"Editor (owner)" link printed at start-up** (`http://127.0.0.1:8787/?
 ```bash
 pnpm check
 ```
-Type checking, unit/property tests, the web build, the licence-notice check and the Phase 0 end-to-end proof. The per-phase proofs (`pnpm proof:phase3` … `pnpm proof:phase12`) and how to read their evidence are in [docs/OPERATIONS.md](docs/OPERATIONS.md).
+Type checking, unit/property tests, the web build, the licence-notice check and the Phase 0 end-to-end proof. The per-phase proofs (`pnpm proof:phase3` … `pnpm proof:phase12`), the conformance runs (`pnpm conformance:inputs`, `:seek`, `:parity`, `:start-offset`, `:long`) and how to read their evidence are in [docs/OPERATIONS.md](docs/OPERATIONS.md); the full list with expected check counts is at the end of [docs/PROGRESS.md](docs/PROGRESS.md).
+
+Back up a running installation with `pnpm backup <destination>`.
 
 Operations (configuration, data, backup): [docs/OPERATIONS.md](docs/OPERATIONS.md). Optional ComfyUI provider: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md). Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

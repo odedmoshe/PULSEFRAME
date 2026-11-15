@@ -91,6 +91,12 @@ All proofs start their own server on their own port and data directory under `.a
 | `pnpm proof:phase9` | scene cuts and beats on synthetic corpora |
 | `pnpm proof:phase11` | recipes |
 | `pnpm proof:phase12` | linked formats, preflight |
+| `pnpm proof:speed` | clip speed and freeze frame on exported frames and sound |
+| `pnpm proof:editor-interactions`, `pnpm proof:owner-ui` | editor interactions (multi-select, markers, volume keys, formats, archive), owner controls |
+| `pnpm conformance:inputs` | 29 synthetic media shapes on the server export, the browser export and the editor preview, against references built from each input (about ten minutes) |
+| `pnpm conformance:start-offset` | files whose picture or sound does not start at time 0 |
+| `pnpm conformance:seek` | 1,000 random seeks on seven codec/rate configurations (about 4.5 minutes) |
+| `pnpm conformance:long` | one synthetic 20-minute file: ingest, background analysis, long timeline, seek to the end (about 90 s) |
 | `pnpm proof:editor-interactions` | canvas overrides, beat snapping, manual beat edits, meter, batch export from the editor |
 | `pnpm proof:owner-ui` | agent access panel, project manager, crossfade control, loop playback |
 | `pnpm audit:a11y` | heuristic accessibility audit (he + en) |
