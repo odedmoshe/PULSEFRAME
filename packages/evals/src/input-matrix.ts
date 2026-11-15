@@ -25,7 +25,7 @@ const W = 640, H = 360;
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
 
-interface Case { name: string; file: string; make: string[] | null; picture: boolean; sound: number[] | null; note?: string; /** Seconds by which the file's own sound is ahead (−) or behind (+) its picture, by construction. */ skew?: number; /** The file does not say how its colours are encoded, so readers legitimately disagree; a colour difference is reported, not failed. */ ambiguousColour?: boolean }
+interface Case { name: string; file: string; make: string[] | null; picture: boolean; sound: number[] | null; note?: string; /** Seconds by which the file's own sound is ahead (−) or behind (+) its picture, by construction. */ skew?: number; /** The file does not say how its colours are encoded, so readers legitimately disagree; a colour difference is reported, not failed. */ ambiguousColour?: boolean; /** Notices the editor's library must show for this file (default: none). */ notices?: string[] }
 
 async function main() {
   fs.rmSync(art, { recursive: true, force: true });
@@ -42,15 +42,15 @@ async function main() {
     { name: 'mp3 in MP4', file: p('a-mp3.mp4'), make: ['-i', base, ...V, ...A, '-c:a', 'libmp3lame', '-b:a', '160k'], picture: true, sound: BEEPS },
     { name: 'no sound stream', file: p('a-none.mp4'), make: ['-i', base, ...V, '-an'], picture: true, sound: [] },
     { name: 'sound 2 s shorter than picture', file: p('a-short.mp4'), make: ['-i', base, ...V, ...A, '-c:a', 'aac', '-t', '4', '-af', 'atrim=0:2'], picture: true, sound: [0, 1] },
-    { name: 'sound starts 0.1 s before time 0 (negative start)', file: p('a-neg.mkv'), make: ['-i', base, '-itsoffset', '-0.1', '-i', base, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-avoid_negative_ts', 'disabled'], picture: true, sound: [0.9, 1.9, 2.9], skew: -0.1, note: 'built with its sound 0.1 s ahead of its picture, so its first beep lies before time 0 and is not presented; the export must keep exactly that relation' },
+    { name: 'sound starts 0.1 s before time 0 (negative start)', file: p('a-neg.mkv'), make: ['-i', base, '-itsoffset', '-0.1', '-i', base, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-avoid_negative_ts', 'disabled'], picture: true, sound: [0.9, 1.9, 2.9], skew: -0.1, note: 'built with its sound 0.1 s ahead of its picture, so its first beep lies before time 0 and is not presented; the export must keep exactly that relation', notices: ['sound-offset'] },
     // --- containers (same streams)
     { name: 'MOV container', file: p('c.mov'), make: ['-i', base, '-c', 'copy'], picture: true, sound: BEEPS },
     { name: 'Matroska container', file: p('c.mkv'), make: ['-i', base, '-c', 'copy'], picture: true, sound: BEEPS },
     { name: 'MPEG-TS container', file: p('c.ts'), make: ['-i', base, '-c', 'copy'], picture: true, sound: BEEPS, note: 'MPEG-TS streams normally start at a non-zero timestamp' },
-    { name: 'AVI container (MPEG-4 part 2 + MP3)', file: p('c.avi'), make: ['-i', base, '-c:v', 'mpeg4', '-q:v', '3', '-c:a', 'libmp3lame'], picture: true, sound: BEEPS },
+    { name: 'AVI container (MPEG-4 part 2 + MP3)', file: p('c.avi'), make: ['-i', base, '-c:v', 'mpeg4', '-q:v', '3', '-c:a', 'libmp3lame'], picture: true, sound: BEEPS, notices: ['converted'] },
     { name: 'WebM (VP9 + Opus)', file: p('c.webm'), make: ['-i', base, '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '24', '-deadline', 'good', '-cpu-used', '5', '-c:a', 'libopus'], picture: true, sound: BEEPS },
     // --- picture shapes (sound copied)
-    { name: 'non-square pixels (480×360 stored, 4:3 pixel shape → 640×360 shown)', file: p('p-sar.mp4'), make: ['-i', base, '-vf', 'scale=480:360,setsar=4/3', '-c:v', 'libx264', '-crf', '14', '-c:a', 'copy'], picture: true, sound: BEEPS },
+    { name: 'non-square pixels (480×360 stored, 4:3 pixel shape → 640×360 shown)', file: p('p-sar.mp4'), make: ['-i', base, '-vf', 'scale=480:360,setsar=4/3', '-c:v', 'libx264', '-crf', '14', '-c:a', 'copy'], picture: true, sound: BEEPS, notices: ['converted'] },
     { name: 'H.264 10-bit', file: p('p-10bit.mp4'), make: ['-i', base, '-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuv420p10le', '-c:a', 'copy'], picture: true, sound: BEEPS },
     { name: 'H.264 4:4:4', file: p('p-444.mp4'), make: ['-i', base, '-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuv444p', '-c:a', 'copy'], picture: true, sound: BEEPS },
     { name: 'H.264 4:2:2', file: p('p-422.mp4'), make: ['-i', base, '-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuv422p', '-c:a', 'copy'], picture: true, sound: BEEPS },
@@ -58,7 +58,7 @@ async function main() {
     { name: 'odd picture size 642×362', file: p('p-odd.mp4'), make: ['-i', base, '-vf', 'scale=642:362', '-c:v', 'libx264', '-crf', '14', '-c:a', 'copy'], picture: true, sound: BEEPS },
     // --- colour encodings (not conformed: decoded directly by the browser)
     { name: 'H.264 tagged BT.601', file: p('p-bt601.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt601:out_range=tv', '-c:v', 'libx264', '-crf', '14', '-colorspace', 'smpte170m', '-color_primaries', 'smpte170m', '-color_trc', 'smpte170m', '-c:a', 'copy'], picture: true, sound: BEEPS },
-    { name: 'H.264 BT.601 data with no colour tags', file: p('p-untagged.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt601:out_range=tv', '-c:v', 'libx264', '-crf', '14', '-bsf:v', 'h264_metadata=colour_primaries=2:transfer_characteristics=2:matrix_coefficients=2', '-c:a', 'copy'], picture: true, sound: BEEPS, ambiguousColour: true, note: 'untagged: decoders must guess; the reference assumes BT.601 as ffmpeg does' },
+    { name: 'H.264 BT.601 data with no colour tags', file: p('p-untagged.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt601:out_range=tv', '-c:v', 'libx264', '-crf', '14', '-bsf:v', 'h264_metadata=colour_primaries=2:transfer_characteristics=2:matrix_coefficients=2', '-c:a', 'copy'], picture: true, sound: BEEPS, ambiguousColour: true, note: 'untagged: decoders must guess; the reference assumes BT.601 as ffmpeg does', notices: ['colour-untagged'] },
     { name: 'H.264 full range (BT.709)', file: p('p-full.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt709:out_range=full', '-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuvj420p', '-color_range', 'pc', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-c:a', 'copy'], picture: true, sound: BEEPS },
     { name: 'H.264 full range BT.601 (typical phone/JPEG-style)', file: p('p-full601.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt601:out_range=full', '-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuvj420p', '-color_range', 'pc', '-colorspace', 'smpte170m', '-color_primaries', 'smpte170m', '-color_trc', 'smpte170m', '-c:a', 'copy'], picture: true, sound: BEEPS },
     // --- sound-only files
@@ -266,6 +266,9 @@ async function main() {
             if (sync.clock !== 'audio') rp.note = 'no audio clock in this browser session: sound not measured';
             else if (got.length < ref.length || ref.some((t, i) => Math.abs((got[i] ?? 99) - t) > 1 / 30)) problemsP.push('sound');
           }
+          // the library must tell the user what the editor did with, or does not know about, this file
+          rp.notices = await ep.locator('[data-testid=asset-notice]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.code));
+          if (JSON.stringify([...rp.notices].sort()) !== JSON.stringify([...(c.notices ?? [])].sort())) problemsP.push('notices');
           if (errs.length) { problemsP.push('page error'); rp.errors = errs.slice(0, 2); }
           rp.outcome = problemsP.length ? `WRONG (${problemsP.join(', ')})` : rp.noted ? 'noted-difference' : 'correct';
         } catch (e) { rp.outcome = 'PREVIEW-FAILED'; rp.detail = String(e).slice(0, 160); }
@@ -274,7 +277,7 @@ async function main() {
     }
     for (const r of rows) console.log(`${String(r.outcome).padEnd(34)} ${r.case}${r.asset?.conformed ? '  [conformed]' : ''}${r.noted ? `  — ${r.noted}` : ''}${r.detail ? `  — ${r.detail}` : ''}${/^ACCEPTED/.test(String(r.outcome)) ? `  — asset ${JSON.stringify(r.asset)} picture ${JSON.stringify(r.picture)} colour ${JSON.stringify(r.colour)} sound ${JSON.stringify(r.sound)} level ${JSON.stringify(r.level)} skew ${JSON.stringify(r.avSkewSeconds)}` : ''}`);
     if (page) { console.log('\nbrowser export route:'); for (const r of rows) if (r.browser) console.log(`  ${String(r.browser.outcome).padEnd(40)} ${r.case}${r.browser.detail ? `  — ${r.browser.detail}` : ''}${/^WRONG/.test(String(r.browser.outcome)) ? `  — picture ${JSON.stringify(r.browser.picture)} colour ${JSON.stringify(r.browser.colour)} sound ${JSON.stringify(r.browser.sound)} level ${JSON.stringify(r.browser.level)} skew ${JSON.stringify(r.browser.avSkewSeconds)}` : ''}${r.browser.noted ? `  — ${r.browser.noted}` : ''}`); }
-    if (rows.some((r) => r.preview)) { console.log('\neditor preview:'); for (const r of rows) if (r.preview) console.log(`  ${String(r.preview.outcome).padEnd(40)} ${r.case}${r.preview.outcome !== 'correct' ? `  — ${JSON.stringify({ frames: r.preview.frames, sound: r.preview.sound, detail: r.preview.detail, errors: r.preview.errors })}` : ''}${r.preview.noted ? `  — ${r.preview.noted}` : ''}${r.preview.note ? `  — ${r.preview.note}` : ''}`); }
+    if (rows.some((r) => r.preview)) { console.log('\neditor preview:'); for (const r of rows) if (r.preview) console.log(`  ${String(r.preview.outcome).padEnd(40)} ${r.case}${r.preview.outcome !== 'correct' ? `  — ${JSON.stringify({ frames: r.preview.frames, sound: r.preview.sound, notices: r.preview.notices, detail: r.preview.detail, errors: r.preview.errors })}` : ''}${r.preview.noted ? `  — ${r.preview.noted}` : ''}${r.preview.note ? `  — ${r.preview.note}` : ''}`); }
     console.log('colour worst difference (of 255) per picture file:', JSON.stringify(Object.fromEntries(rows.filter((r) => r.colour).map((r) => [r.case.slice(0, 28), r.colour.worstChannelDifference]))));
     console.log('level difference in dB [L, R] per file:', JSON.stringify(Object.fromEntries(rows.filter((r) => r.level).map((r) => [r.case.slice(0, 28), r.level.differenceDb]))));
     const defects = rows.filter((r) => /^ACCEPTED/.test(r.outcome) || r.outcome === 'accepted-but-cannot-be-placed');
@@ -283,7 +286,7 @@ async function main() {
     check(`no file is accepted at ingest and then fails or comes out wrong (${rows.length - notBuilt.length} files tried)`, defects.length === 0, defects.map((r) => ({ case: r.case, outcome: r.outcome, detail: r.detail, picture: r.picture, sound: r.sound })));
     if (page) check(`the browser export route gives the same result as the reference for every file the server route exports (${rows.filter((r) => r.browser).length} files)`, browserBad.length === 0, browserBad.map((r) => ({ case: r.case, outcome: r.browser.outcome, detail: r.browser.detail, sound: r.browser.sound, level: r.browser.level, colour: r.browser.colour })));
     const previewRows = rows.filter((r) => r.preview);
-    if (previewRows.length) check(`the editor preview shows the reference frames when paused and plays the sound at the reference times (within one frame) for every file (${previewRows.length} files)`, previewRows.every((r) => ['correct', 'noted-difference'].includes(r.preview.outcome)), previewRows.filter((r) => !['correct', 'noted-difference'].includes(r.preview.outcome)).map((r) => ({ case: r.case, ...r.preview })));
+    if (previewRows.length) check(`the editor preview shows the reference frames when paused, plays the sound at the reference times (within one frame), and its library shows exactly the expected notices (converted / sound offset / untagged colour, none for ordinary files) for every file (${previewRows.length} files)`, previewRows.every((r) => ['correct', 'noted-difference'].includes(r.preview.outcome)), previewRows.filter((r) => !['correct', 'noted-difference'].includes(r.preview.outcome)).map((r) => ({ case: r.case, ...r.preview })));
     const refused = rows.filter((r) => r.outcome === 'refused-at-ingest');
     check(`every refusal at ingest is a typed error (${refused.length} refusal(s) in this run${refused.length ? '' : ' — nothing was refused, so this check proves nothing here'})`, refused.every((r) => /^[a-z_]+: /.test(r.detail)), refused.map((r) => ({ case: r.case, detail: r.detail })));
     if (notBuilt.length) console.log(`note: ${notBuilt.length} fixture(s) could not be built by this ffmpeg and were not tried: ${notBuilt.map((r) => r.case).join('; ')}`);

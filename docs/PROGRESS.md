@@ -400,6 +400,11 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - After all the sound-clock changes of 13y–14b, the 10-minute A/V-sync export was run again (`pnpm conformance:avsync`): 563 flashes and 563 beeps detected, largest picture-to-sound offset 0.063 ms, no drift between the first and last third.
 - Not measured in the preview: colour and level (measured on both export routes only); frames *during* playback (paused frames only), which for late-starting pictures rests on inspecting the proxy file in 13y; anything beyond these 4-second synthetic files.
 
+**Checkpoint 14d — the editor says what it did with a file**
+- `assetNotices(asset)` (core) derives, from the asset alone: *converted at import* (with the reasons: rotation, variable frame rate, codec, non-square pixels), *picture starts late* (two frames or more), *sound offset* (50 ms or more, early or late), and *colour encoding not stated* (the "noted" case of the matrix; ingest now records it). The library shows them as text under the file; project summaries for agents (`get_summary`, the summary resource) carry the same list.
+- Verified: `notices.test.ts` (2), two ingest tests in `conform.test.ts` (untagged marked, tagged not), and the matrix's preview check now also requires the library to show exactly the expected notices: 4 of the 29 files show one (sound offset; converted ×2; untagged colour), 25 show none. 294 unit tests; phase0 54, phase3 27, phase5 33, accessibility audit clean, input matrix 4/4.
+- Limits: informational only — the user cannot choose a colour reading for untagged files; a conformed copy of an untagged source is not flagged although its conversion also assumed BT.601; no notice for the AVI early-frame difference, for beat analysis cut at 20 minutes (stated in the analysis result instead), or for assets imported before this change.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -427,7 +432,7 @@ Unblocked (no decision needed), roughly by value:
 3. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 4. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 5. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
-6. Inputs: untagged colour (tell the user, offer a choice); HDR; the AVI one-frame difference; sound longer than the picture; frames during playback; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
+6. Inputs: a colour choice for untagged files (the editor now says when colours are a guess); HDR; the AVI one-frame difference; sound longer than the picture; frames during playback; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
 7. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 8. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
@@ -444,7 +449,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 291 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+Expect 294 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
 `pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:seek` (7 configurations, 0 wrong frames; about 4.5 minutes) · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:inputs` 4 (29 shapes on the server export, the browser export and the editor preview: 27 correct and 2 noted; about ten minutes).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.

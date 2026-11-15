@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import type { Clip } from '@pulseframe/core';
-import { FONT_CATALOG, speedValue } from '@pulseframe/core';
+import { assetNotices, FONT_CATALOG, speedValue } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
@@ -94,6 +94,15 @@ export function Library() {
           <li key={a.id}>
             <span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
             <span className="muted"><bdi>{a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : `${T.toSeconds(a.duration).toFixed(2)}s${a.video ? ` · ${a.video.width}×${a.video.height}` : ''}`}</bdi></span>
+            {assetNotices(a).map((n) => (
+              <span key={n.code} className="asset-notice" data-testid="asset-notice" data-code={n.code}>
+                <span aria-hidden="true">ⓘ </span>
+                {n.code === 'converted' ? `${t('notice.converted')}: ${n.reasons.map((r) => t(`notice.reason.${r}` as Key)).join(', ')}`
+                  : n.code === 'picture-starts-late' ? `${t('notice.pictureLate')} (${n.frames})`
+                  : n.code === 'sound-offset' ? `${n.seconds > 0 ? t('notice.soundLate') : t('notice.soundEarly')} (${Math.abs(n.seconds).toFixed(2)}s)`
+                  : t('notice.colourUntagged')}
+              </span>
+            ))}
             <button className="ghost" onClick={() => void editor.addAsset(a.id)} data-testid={`add-${a.id}`}>{t('media.add')}</button>
           </li>
         ))}

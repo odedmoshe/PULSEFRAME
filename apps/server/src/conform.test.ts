@@ -98,10 +98,18 @@ describe('conform route (SPEC §7)', () => {
   }, 60_000);
   it('a file that starts at 0 records no origin and no stream offsets (nothing changes for ordinary files)', async () => {
     const a = await upload(base);
+    expect(a.video!.untaggedColour).toBeUndefined(); // the fixture states BT.709
     expect(a.timeOrigin).toBeUndefined();
     expect(a.video!.startTime).toBeUndefined();
     expect(a.audio!.startTime).toBeUndefined();
   });
+  it('a file that does not state its colour encoding is marked, so the editor can say its colours are a guess', async () => {
+    const plain = path.join(dir, 'untagged.mp4');
+    ff(['-i', base, '-c:v', 'libx264', '-crf', '18', '-bsf:v', 'h264_metadata=colour_primaries=2:transfer_characteristics=2:matrix_coefficients=2', '-c:a', 'copy', plain]);
+    const a = await upload(plain);
+    expect(a.conform).toBeUndefined();
+    expect(a.video!.untaggedColour).toBe(true);
+  }, 60_000);
   it('non-media bytes are still rejected with a typed error', async () => {
     const junk = path.join(dir, 'junk.mp4');
     fs.writeFileSync(junk, Buffer.alloc(5000, 7));

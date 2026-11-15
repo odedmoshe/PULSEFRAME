@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T06:50:14.209Z",
+  "ranAt": "2026-11-15T07:02:00.351Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -327,6 +327,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -643,6 +644,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -959,6 +961,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -1275,6 +1278,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -1508,6 +1512,7 @@
           "reference": [],
           "got": []
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -1802,6 +1807,7 @@
             1
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -2115,6 +2121,9 @@
             2.9
           ]
         },
+        "notices": [
+          "sound-offset"
+        ],
         "outcome": "correct"
       }
     },
@@ -2431,6 +2440,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -2746,6 +2756,7 @@
             3.021
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -3062,6 +3073,7 @@
             3.021
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -3394,6 +3406,9 @@
             3.023
           ]
         },
+        "notices": [
+          "converted"
+        ],
         "outcome": "noted-difference"
       }
     },
@@ -3710,6 +3725,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -4030,6 +4046,9 @@
             3
           ]
         },
+        "notices": [
+          "converted"
+        ],
         "outcome": "correct"
       }
     },
@@ -4346,6 +4365,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -4662,6 +4682,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -4978,6 +4999,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -5294,6 +5316,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -5610,6 +5633,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -5926,6 +5950,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -6245,6 +6270,9 @@
             3
           ]
         },
+        "notices": [
+          "colour-untagged"
+        ],
         "outcome": "correct"
       }
     },
@@ -6555,12 +6583,13 @@
             3
           ],
           "got": [
-            0,
+            -0.003,
             1,
             2,
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -6877,6 +6906,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -6995,6 +7025,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -7113,6 +7144,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -7231,6 +7263,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -7349,6 +7382,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -7467,6 +7501,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -7585,6 +7620,7 @@
             2.997
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     },
@@ -7703,6 +7739,7 @@
             3
           ]
         },
+        "notices": [],
         "outcome": "correct"
       }
     }
@@ -7719,7 +7756,7 @@
       "detail": []
     },
     {
-      "name": "the editor preview shows the reference frames when paused and plays the sound at the reference times (within one frame) for every file (29 files)",
+      "name": "the editor preview shows the reference frames when paused, plays the sound at the reference times (within one frame), and its library shows exactly the expected notices (converted / sound offset / untagged colour, none for ordinary files) for every file (29 files)",
       "ok": true,
       "detail": []
     },

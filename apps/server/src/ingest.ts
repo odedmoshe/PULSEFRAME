@@ -94,7 +94,9 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
     const startFrames = startTime ? startOffsetFrames({ frameRate: rate, startTime }) : 0;
     // Exact duration from frame count when the container states it (plus the frames the picture starts late); otherwise the decimal container duration.
     if (frameCount) duration = T.frameTime(frameCount + Math.max(0, startFrames), rate);
-    video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount, ...(startTime ? { startTime } : {}) };
+    // No statement of how colours are encoded (matrix). Decoders then guess, and they do not all guess alike.
+    const untagged = !v.color_space || v.color_space === 'unknown';
+    video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount, ...(startTime ? { startTime } : {}), ...(untagged ? { untaggedColour: true as const } : {}) };
   }
   const aStart = a ? Number(a.start_time ?? 0) - origin : 0;
   const audio = a ? { sampleRate: Number(a.sample_rate), channels: Number(a.channels), codec: String(a.codec_name), ...(Number.isFinite(aStart) && Math.abs(aStart) > 1e-6 ? { startTime: T.fromSeconds(aStart.toFixed(6)) } : {}) } : undefined;

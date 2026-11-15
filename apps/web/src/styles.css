@@ -209,3 +209,6 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .marker-bar { position: absolute; top: 0; right: 200px; z-index: 5; display: inline-flex; gap: 6px; align-items: center; background: var(--pf-surface); padding: 2px 8px; font-size: var(--pf-fs-sm); }
 .marker-bar input[type=text] { width: 200px; }
 .marker-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mk); display: inline-block; }
+
+/* Import notices in the library: plain text with an information mark; never colour alone. */
+.asset-notice { font-size: var(--pf-fs-sm); color: var(--pf-text-muted); line-height: 1.3; }
