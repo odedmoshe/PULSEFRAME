@@ -94,6 +94,8 @@ All proofs start their own server on their own port and data directory under `.a
 | `pnpm proof:speed` | clip speed and freeze frame on exported frames and sound |
 | `pnpm conformance:inputs` | 29 synthetic media shapes on the server export, the browser export and the editor preview, against references built from each input (about ten minutes) |
 | `pnpm conformance:start-offset` | files whose picture or sound does not start at time 0 |
+| `pnpm conformance:images` | 24 ways of storing one still picture: rendered still and preview |
+| `pnpm conformance:projects` | 15 project frame rates and sizes: exported frames and sound |
 | `pnpm conformance:long` | one synthetic 20-minute file: ingest, background analysis, long timeline, seek to the end (about 90 s) |
 | `pnpm proof:editor-interactions` | canvas overrides, beat snapping, manual beat edits, meter, batch export, multi-select, markers, volume keys, archive from the editor |
 | `pnpm proof:owner-ui` | agent access panel, project manager, crossfade control, loop playback |
