@@ -24,7 +24,7 @@ const W = 640, H = 360;
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
 
-interface Case { name: string; file: string; make: string[] | null; picture: boolean; sound: number[] | null; note?: string; /** Seconds by which the file's own sound is ahead (−) or behind (+) its picture, by construction. */ skew?: number }
+interface Case { name: string; file: string; make: string[] | null; picture: boolean; sound: number[] | null; note?: string; /** Seconds by which the file's own sound is ahead (−) or behind (+) its picture, by construction. */ skew?: number; /** The file does not say how its colours are encoded, so readers legitimately disagree; a colour difference is reported, not failed. */ ambiguousColour?: boolean }
 
 async function main() {
   fs.rmSync(art, { recursive: true, force: true });
@@ -55,6 +55,11 @@ async function main() {
     { name: 'H.264 4:2:2', file: p('p-422.mp4'), make: ['-i', base, '-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuv422p', '-c:a', 'copy'], picture: true, sound: BEEPS },
     { name: 'H.264 interlaced coding', file: p('p-interlaced.mp4'), make: ['-i', base, '-c:v', 'libx264', '-crf', '14', '-flags', '+ilme+ildct', '-x264opts', 'tff=1', '-c:a', 'copy'], picture: true, sound: BEEPS },
     { name: 'odd picture size 642×362', file: p('p-odd.mp4'), make: ['-i', base, '-vf', 'scale=642:362', '-c:v', 'libx264', '-crf', '14', '-c:a', 'copy'], picture: true, sound: BEEPS },
+    // --- colour encodings (not conformed: decoded directly by the browser)
+    { name: 'H.264 tagged BT.601', file: p('p-bt601.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt601:out_range=tv', '-c:v', 'libx264', '-crf', '14', '-colorspace', 'smpte170m', '-color_primaries', 'smpte170m', '-color_trc', 'smpte170m', '-c:a', 'copy'], picture: true, sound: BEEPS },
+    { name: 'H.264 BT.601 data with no colour tags', file: p('p-untagged.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt601:out_range=tv', '-c:v', 'libx264', '-crf', '14', '-bsf:v', 'h264_metadata=colour_primaries=2:transfer_characteristics=2:matrix_coefficients=2', '-c:a', 'copy'], picture: true, sound: BEEPS, ambiguousColour: true, note: 'untagged: decoders must guess; the reference assumes BT.601 as ffmpeg does' },
+    { name: 'H.264 full range (BT.709)', file: p('p-full.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt709:out_range=full', '-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuvj420p', '-color_range', 'pc', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-c:a', 'copy'], picture: true, sound: BEEPS },
+    { name: 'H.264 full range BT.601 (typical phone/JPEG-style)', file: p('p-full601.mp4'), make: ['-i', base, '-vf', 'scale=out_color_matrix=bt601:out_range=full', '-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuvj420p', '-color_range', 'pc', '-colorspace', 'smpte170m', '-color_primaries', 'smpte170m', '-color_trc', 'smpte170m', '-c:a', 'copy'], picture: true, sound: BEEPS },
     // --- sound-only files
     { name: 'WAV 16-bit', file: p('s.wav'), make: ['-i', base, '-vn', '-c:a', 'pcm_s16le'], picture: false, sound: BEEPS },
     { name: 'WAV 24-bit 44.1 kHz mono', file: p('s24.wav'), make: ['-i', base, '-vn', '-c:a', 'pcm_s24le', '-ar', '44100', '-ac', '1'], picture: false, sound: BEEPS },
@@ -99,7 +104,19 @@ async function main() {
     const at = Array.from({ length: n }, (_, k) => Math.round((pts[k]! - origin) * 30));
     const out: number[] = [];
     for (let k = 0; k < n; k++) { const until = k + 1 < n ? at[k + 1]! : at[k]! + 1; while (out.length < until) out.push(codes[k]!); }
-    return out;
+    /** RGB of the plain background of the source frame that carries barcode `code` (a point clear of the barcode, the moving box and the flash bar). */
+    const colourOf = (code: number) => { const k = codes.indexOf(code); return k < 0 ? null : pixelAt(raw, k); };
+    return { frames: out, colourOf };
+  };
+  const pixelAt = (raw: Buffer, frame: number) => { const o = frame * W * H * 3 + (120 * W + 40) * 3; return [raw[o]!, raw[o + 1]!, raw[o + 2]!]; };
+  /** Peak of each stereo channel in a short window (the second beep), from a decode that keeps the container's clock. */
+  const peaks = (file: string, origin: number | null, at: number) => {
+    const pcm = ffraw([...(origin === null ? [] : ['-copyts']), '-i', file, '-map', '0:a:0', '-af', `aresample=48000${origin === null ? '' : `:first_pts=${Math.round(origin * 48000)}`},aformat=sample_fmts=flt:channel_layouts=stereo`, '-f', 'f32le', '-']);
+    const x = new Float32Array(pcm.buffer, pcm.byteOffset, pcm.length / 4);
+    const from = Math.round((at + 0.004) * 48000), to = Math.round((at + 0.04) * 48000);
+    let l = 0, r = 0;
+    for (let i = from; i < to && i * 2 + 1 < x.length; i++) { l = Math.max(l, Math.abs(x[i * 2]!)); r = Math.max(r, Math.abs(x[i * 2 + 1]!)); }
+    return [l, r];
   };
   const soundTruth = (file: string) => {
     const pcm = ffraw(['-copyts', '-i', file, '-map', '0:a:0', '-af', `aresample=48000:first_pts=${Math.round(originOf(file) * 48000)}`, '-f', 'f32le', '-ac', '1', '-']);
@@ -133,13 +150,25 @@ async function main() {
         const raw = ffraw(['-i', out, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
         const fb = W * H * 3;
         const shown = Array.from({ length: raw.length / fb }, (_, i) => readBarcode(raw.subarray(i * fb, (i + 1) * fb), W, 3, { x: 0, y: 0, w: W, h: H }));
-        const truth = pictureTruth(c.file);
+        const ref = pictureTruth(c.file);
+        const truth = ref.frames;
         const n = Math.min(shown.length, truth.length);
         const bad = Array.from({ length: n }, (_, i) => i).filter((i) => shown[i] !== truth[i]);
         row.picture = { exportedFrames: shown.length, referenceFrames: truth.length, wrongFrames: bad.length, firstWrong: bad.length ? { at: bad[0], shows: shown[bad[0]!], reference: truth[bad[0]!] } : null, first4: shown.slice(0, 4), referenceFirst4: truth.slice(0, 4) };
         // the export may be a frame or two shorter or longer than the reference at the very end (container duration rounding), never elsewhere
+        // colour: the plain background of four source frames with different hues, export vs a direct decode of the input
+        const diffs: number[] = [];
+        for (const code of [10, 45, 70, 100]) {
+          const at = shown.indexOf(code), want = ref.colourOf(code);
+          if (at < 0 || !want) continue;
+          const got = pixelAt(raw, at);
+          diffs.push(Math.max(...got.map((v, ch) => Math.abs(v - want[ch]!))));
+        }
+        row.colour = { framesCompared: diffs.length, worstChannelDifference: diffs.length ? Math.max(...diffs) : null };
+        if (diffs.length < 3) problems.push('colour');
+        else if (Math.max(...diffs) > 12) { if (c.ambiguousColour) row.noted = `the file carries no colour tags: shown as the browser reads it, ${Math.max(...diffs)} of 255 away from the BT.601 reading used by the reference`; else problems.push('colour'); }
         const earlyOnly = bad.length > 0 && bad.length <= 2 && bad.every((i) => i < 5);
-        if (earlyOnly && row.asset.conformed) row.noted = `conformed copy differs from the reference in ${bad.length} of the first 5 frames (which early frame is repeated)`;
+        if (earlyOnly && row.asset.conformed) row.noted = `conformed copy differs from the reference in ${bad.length} of the first 5 frames (which early frame is repeated): export ${JSON.stringify(shown.slice(0, 4))}, reference ${JSON.stringify(truth.slice(0, 4))}`;
         else if (bad.length || Math.abs(shown.length - truth.length) > 2 || n < 100) problems.push('picture');
       }
       {
@@ -147,6 +176,13 @@ async function main() {
         const truth = (row.asset.audio ? soundTruth(c.file) : []).filter((t) => t < clipSeconds - 0.01);
         row.sound = { reference: truth, got, designed: c.sound };
         if (got.length !== truth.length || got.some((g, i) => Math.abs(g - truth[i]!) > 0.012)) problems.push('sound');
+        // level per stereo channel at the second beep the clip contains: export vs a direct decode of the input (same down-mix rule)
+        if (truth.length >= 2 && got.length >= 2 && !problems.includes('sound')) {
+          const refPeaks = peaks(c.file, originOf(c.file), truth[1]!), outPeaks = peaks(out, null, got[1]!);
+          const dB = refPeaks.map((p, ch) => (p > 0.001 && outPeaks[ch]! > 0.001 ? Number((20 * Math.log10(outPeaks[ch]! / p)).toFixed(2)) : p <= 0.001 && outPeaks[ch]! <= 0.001 ? 0 : 99));
+          row.level = { referencePeaks: refPeaks.map((p) => Number(p.toFixed(3))), exportPeaks: outPeaks.map((p) => Number(p.toFixed(3))), differenceDb: dB };
+          if (dB.some((d) => Math.abs(d) > 1.5)) problems.push('level');
+        }
         // picture and sound stay together: each beep is heard within about a frame of the exported frame that carries its flash
         if (c.picture && row.picture && !problems.includes('picture')) {
           const raw = ffraw(['-i', out, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
@@ -162,7 +198,9 @@ async function main() {
       row.outcome = problems.length ? `ACCEPTED-BUT-WRONG (${problems.join(', ')})` : row.noted ? 'exports-with-noted-difference' : 'exports-correctly';
       if (c.note) row.note = c.note;
     }
-    for (const r of rows) console.log(`${String(r.outcome).padEnd(34)} ${r.case}${r.asset?.conformed ? '  [conformed]' : ''}${r.noted ? `  — ${r.noted}: ${JSON.stringify({ export: r.picture.first4, reference: r.picture.referenceFirst4 })}` : ''}${r.detail ? `  — ${r.detail}` : ''}${/^ACCEPTED/.test(String(r.outcome)) ? `  — asset ${JSON.stringify(r.asset)} picture ${JSON.stringify(r.picture)} sound ${JSON.stringify(r.sound)} skew ${JSON.stringify(r.avSkewSeconds)}` : ''}`);
+    for (const r of rows) console.log(`${String(r.outcome).padEnd(34)} ${r.case}${r.asset?.conformed ? '  [conformed]' : ''}${r.noted ? `  — ${r.noted}` : ''}${r.detail ? `  — ${r.detail}` : ''}${/^ACCEPTED/.test(String(r.outcome)) ? `  — asset ${JSON.stringify(r.asset)} picture ${JSON.stringify(r.picture)} colour ${JSON.stringify(r.colour)} sound ${JSON.stringify(r.sound)} level ${JSON.stringify(r.level)} skew ${JSON.stringify(r.avSkewSeconds)}` : ''}`);
+    console.log('colour worst difference (of 255) per picture file:', JSON.stringify(Object.fromEntries(rows.filter((r) => r.colour).map((r) => [r.case.slice(0, 28), r.colour.worstChannelDifference]))));
+    console.log('level difference in dB [L, R] per file:', JSON.stringify(Object.fromEntries(rows.filter((r) => r.level).map((r) => [r.case.slice(0, 28), r.level.differenceDb]))));
     const defects = rows.filter((r) => /^ACCEPTED/.test(r.outcome) || r.outcome === 'accepted-but-cannot-be-placed');
     const notBuilt = rows.filter((r) => r.outcome === 'fixture-not-built');
     check(`no file is accepted at ingest and then fails or comes out wrong (${rows.length - notBuilt.length} files tried)`, defects.length === 0, defects.map((r) => ({ case: r.case, outcome: r.outcome, detail: r.detail, picture: r.picture, sound: r.sound })));
@@ -177,7 +215,7 @@ async function main() {
     const failed = checks.filter((x) => !x.ok);
     const tally: Record<string, number> = {};
     for (const r of rows) tally[String(r.outcome).replace(/ \(.*\)$/, '')] = (tally[String(r.outcome).replace(/ \(.*\)$/, '')] ?? 0) + 1;
-    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'Synthetic variants of one 4-second barcode fixture, server export route only (the preview and the browser export are not exercised here). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms) and by staying within about a frame of the picture, not by level or channel content.', passed: checks.length - failed.length, total: checks.length, tally, rows, checks };
+    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'Synthetic variants of one 4-second barcode fixture, server export route only (the preview and the browser export are not exercised here). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms), by staying within about a frame of the picture, and by the peak level of each stereo channel at one beep (±1.5 dB against a direct decode of the input that uses the same down-mix rule, so the down-mix coefficients themselves are not independently verified). Picture is checked by frame identity and by the background colour of four frames (worst channel difference ≤ 12 of 255 against a direct decode of the input).', passed: checks.length - failed.length, total: checks.length, tally, rows, checks };
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     fs.writeFileSync(path.join(root, 'docs/evidence/input-matrix.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(`\nInput matrix ${report.result}: ${report.passed}/${report.total}  ${JSON.stringify(tally)}`);

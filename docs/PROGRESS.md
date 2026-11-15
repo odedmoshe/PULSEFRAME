@@ -374,6 +374,14 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - What this does not show: nothing was refused in this run, so the "refusals are typed" check proved nothing; server export route only (preview and browser export were exercised for start offsets in 13x/13y, not for this matrix); sound is checked by onset times and step with the picture, **not** by level, channel mapping (the 5.1 down-mix is unverified) or quality; picture by frame identity, not colour (10-bit, 4:4:4 and interlaced material may still look wrong — bit depth, chroma and field handling are unverified); every file is a 4-second synthetic variant of one fixture — no camera, phone, screen-recording or broadcast file.
 - The preview's audio path was changed to use the same origin but is **not covered** by this matrix; a file whose sound starts before time 0 is expected to lose its first fraction of a second in preview (the decoder does not present negative timestamps) while the export keeps it.
 
+**Checkpoint 14a — input matrix extended: colour and level; one more defect fixed**
+- The matrix now also compares, for every file, the background colour of four frames and the peak level of each stereo channel at one beep against a direct decode of the input, and has four more shapes (BT.601-tagged, untagged BT.601 data, full-range BT.709, full-range BT.601): 29 files.
+- Measured (one run, server export): colour within 1–6 of 255 for every tagged shape, including 10-bit, 4:4:4, 4:2:2, interlaced coding, BT.601 and full range (the pipeline's own baseline is 4); level within 0.14 dB on both channels for every shape, including mono, 5.1, 96 kHz and all seven sound-only formats.
+- **Defect found and fixed:** the conform step labelled its output BT.709 without converting the pixel data, so every conformed source that is BT.601 or untagged (MPEG-4, much standard-definition material) shifted in colour — 15 of 255 on the AVI file, 5 after the fix.
+- **Noted, not changed:** H.264 that carries no colour tags is shown the way the browser reads it (BT.709 here), 13 of 255 away from the BT.601 reading that ffmpeg and most desktop players use for standard-definition material. The file itself does not say which is right; the editor does not tell the user or offer a choice.
+- Result: 27 export correctly, 2 noted (the AVI early-frame difference and the untagged-colour case). 291 unit tests; phase0 54, phase4 19, start-offset 4. Other proofs were not re-run after the colour-conversion change (it only affects files that are conformed).
+- Still not shown: the 5.1 down-mix coefficients (the reference uses the same rule); colour beyond one background patch per frame (no gradients, skin tones or fine chroma detail); HDR / wide gamut (not handled at all); these shapes in the preview or the browser export; real camera files.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -401,7 +409,7 @@ Unblocked (no decision needed), roughly by value:
 4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 5. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
-7. Inputs: run the matrix through the preview and the browser export; levels and channel mapping (5.1); colour of 10-bit / 4:4:4 / interlaced material; the AVI one-frame difference; sound longer than the picture; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
+7. Inputs: run the matrix through the preview and the browser export; untagged colour (tell the user, offer a choice); HDR; the AVI one-frame difference; sound longer than the picture; real camera and phone files. Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
 8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
@@ -419,7 +427,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 pnpm install && pnpm build && pnpm test
 ```
 Expect 291 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:inputs` 2 (24 of 25 shapes correct, 1 noted).
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4 · `pnpm conformance:inputs` 2 (27 of 29 shapes correct, 2 noted).
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 
