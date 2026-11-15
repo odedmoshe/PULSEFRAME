@@ -11,7 +11,7 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { handleAfterEnd, isRamped, pictureSourceAt, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
+import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
@@ -135,10 +135,15 @@ const fmt = (t: T.RationalTime) => `${T.toSeconds(t).toFixed(3)}s`;
 const refuseRamped = (clip: Clip, action: string) => {
   if (isRamped(clip)) throw new OpError('incompatible', `this clip changes speed gradually over its length, so it cannot be ${action}`, { clipId: clip.id }, 'Give it one speed first (set_clip_speed), make the edit, then apply the gradual change again.');
 };
-/** `sourceInOfPart` for operations that divide or shorten clips; a ramped clip can only be taken whole. */
-const partIn = (c: MediaClip, fromOffset: T.RationalTime, length: T.RationalTime): T.RationalTime => {
-  if (!(T.isZero(fromOffset) && T.eq(length, c.duration))) refuseRamped(c, 'divided or trimmed');
-  return sourceInOfPart(c, fromOffset, length);
+/**
+ * Make `part` the piece of `whole` that starts `fromOffset` into it and is `length` long: its source start and, for a
+ * ramped clip, its place in the ramp (so the piece shows exactly what the whole showed there). `part` may be `whole`
+ * itself or a copy of it. Call before changing the length of `whole`.
+ */
+const setPart = (part: MediaClip, whole: MediaClip, fromOffset: T.RationalTime, length: T.RationalTime) => {
+  const sourceIn = sourceInOfPart(whole, fromOffset, length), window = rampWindowOfPart(whole, fromOffset);
+  part.sourceIn = sourceIn;
+  if (window) part.rampWindow = window;
 };
 defineOp({
   name: 'rename_project',
@@ -479,7 +484,7 @@ defineOp({
     for (const { track, clip } of targets) {
       if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
       const span = toSourceSpan(clip, clip.duration); // source shown now; stays the same
-      delete clip.speedEnd; // one speed from here on: a gradual change, if there was one, ends
+      delete clip.speedEnd; delete clip.rampWindow; delete clip.speedCurve; // one speed from here on: a gradual change, if there was one, ends
       if (speed.num === speed.den) delete clip.speed; else clip.speed = speed;
       const frames = Math.max(1, T.frameIndexAt(toTimelineSpan(clip, span), rate));
       const duration = T.frameTime(frames, rate);
@@ -495,8 +500,8 @@ defineOp({
 defineOp({
   name: 'set_clip_speed_ramp',
   version: 1,
-  description: 'Change a clip\'s speed gradually and continuously over its length, from `from` at its start to `to` at its end (each 0.1–8), for example 1 → 0.25 to ease into slow motion. The clip stays one clip and keeps showing the same stretch of source (its new length is that stretch divided by the average of the two speeds, rounded down to a whole frame; nothing else moves). Linked picture and sound change together; the sound\'s pitch glides with the speed. While it has a gradual change a clip cannot be trimmed, divided, slipped, reversed, frozen, given a transition or set to keep its pitch: give it one speed first (set_clip_speed). `speed_ramp` is the older stepped variant, which divides the clip into steps of constant speed.',
-  args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), includeLinked: z.boolean().optional() }).strict(),
+  description: 'Change a clip\'s speed gradually and continuously over its length, from `from` at its start to `to` at its end (each 0.1–8), for example 1 → 0.25 to ease into slow motion. The clip stays one clip and keeps showing the same stretch of source (its new length is that stretch divided by the average of the two speeds, rounded down to a whole frame; nothing else moves). Linked picture and sound change together; the sound\'s pitch glides with the speed. A ramped clip can be trimmed and cut like any other (each part keeps its place in the ramp and shows what the whole clip showed there). It cannot be slipped, reversed, frozen, given a transition or crossfade, or set to keep its pitch: give it one speed first (set_clip_speed). `speed_ramp` is the older stepped variant, which divides the clip into steps of constant speed.',
+  args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), curve: z.enum(['even', 'smooth']).optional().describe('even (default) = the speed changes at a steady pace; smooth = it eases out of the first speed and into the last'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
@@ -518,6 +523,8 @@ defineOp({
       assertFree(track, clip.start, T.add(clip.start, duration), new Set([clip.id]));
       if (v0.num === v0.den) delete clip.speed; else clip.speed = v0;
       clip.speedEnd = v1;
+      delete clip.rampWindow; // a new ramp over the whole clip
+      if (a.curve === 'smooth') clip.speedCurve = 'smooth'; else delete clip.speedCurve;
       clip.duration = duration;
       // The length is at least one frame; for a stretch shorter than that frame needs, the ramp would read past the end of the file.
       if (T.lt(d.assets[clip.assetId]!.duration, sourceEnd(clip))) throw new OpError('out_of_bounds', 'the clip is too short for this change of speed at the end of its source', { clipId: clip.id });
@@ -692,14 +699,15 @@ defineOp({
     assertAligned(d, a.to, 'to');
     const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
     for (const { track, clip } of targets) {
-      refuseRamped(clip, 'trimmed');
+      // A ramped clip keeps its ramp when trimmed: it becomes a window of it (a longer window plays on at the first or last speed).
+      const ramp = clip.type === 'media' && isRamped(clip) ? rampWindowOf(clip) : null;
       const end = clipEnd(clip);
       if (a.edge === 'end') {
         if (!T.lt(clip.start, a.to)) throw new OpError('out_of_bounds', 'trim would leave an empty clip', { clipId: clip.id });
         const duration = T.sub(a.to, clip.start);
         if (clip.type === 'media' && clip.reverse) {
           // a reversed clip shows the earliest material at its end: a longer clip reaches further back into the source
-          const sourceIn = partIn(clip, T.ZERO, duration);
+          const sourceIn = sourceInOfPart(clip, T.ZERO, duration);
           if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'not enough source material before the stretch this reversed clip shows', { clipId: clip.id, maxEnd: T.add(clipEnd(clip), toTimelineSpan(clip, clip.sourceIn)) }, 'Extend no further than maxEnd.');
           clip.sourceIn = sourceIn;
         } else if (clip.type === 'media') {
@@ -708,6 +716,7 @@ defineOp({
             throw new OpError('out_of_bounds', 'not enough source material after the clip end', { clipId: clip.id, maxEnd: T.add(clip.start, toTimelineSpan(clip, T.sub(asset.duration, clip.sourceIn))) }, 'Extend no further than maxEnd.');
         }
         assertFree(track, clip.start, a.to, new Set([clip.id]));
+        if (ramp && clip.type === 'media') clip.rampWindow = ramp;
         clip.duration = duration;
         clampFades(clip);
       } else {
@@ -722,6 +731,7 @@ defineOp({
           const sourceIn = T.add(clip.sourceIn, toSourceSpan(clip, delta));
           if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'not enough source material before the clip start', { clipId: clip.id, minStart: T.sub(clip.start, toTimelineSpan(clip, clip.sourceIn)) }, 'Extend no earlier than minStart.');
           clip.sourceIn = sourceIn;
+          if (ramp) clip.rampWindow = { offset: T.add(ramp.offset, delta), total: ramp.total };
         }
         assertFree(track, a.to, end, new Set([clip.id]));
         shiftKeyframes(clip, delta); // the animation stays attached to the content, not to the moved edge
@@ -881,7 +891,7 @@ defineOp({
       if (clip.type === 'caption') { delete clip.words; delete (right as typeof clip).words; }
       if (right.type === 'media') delete right.transition; // the transition belongs to the original cut point
       if (right.type === 'media' && clip.type === 'media') { delete right.fadeIn; delete clip.fadeOut; } // fades stay on the outer edges
-      if (right.type === 'media' && clip.type === 'media') { right.sourceIn = partIn(clip, left, right.duration); clip.sourceIn = partIn(clip, T.ZERO, left); if (right.linkGroupId) right.linkGroupId = newLink; }
+      if (right.type === 'media' && clip.type === 'media') { setPart(right, clip, left, right.duration); setPart(clip, clip, T.ZERO, left); if (right.linkGroupId) right.linkGroupId = newLink; }
       clip.duration = left;
       clampFades(clip);
       clampFades(right);
@@ -939,8 +949,8 @@ defineOp({
         delete right.transition;
         delete right.fadeIn;
         delete clip.fadeOut;
-        right.sourceIn = partIn(clip, left, right.duration);
-        clip.sourceIn = partIn(clip, T.ZERO, left);
+        setPart(right, clip, left, right.duration);
+        setPart(clip, clip, T.ZERO, left);
         if (right.linkGroupId) { if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk')); right.linkGroupId = relink.get(right.linkGroupId)!; }
         clip.duration = left;
         clampFades(clip);
@@ -1899,7 +1909,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
         }
         if (right.type === 'media' && hasLeft) delete right.transition;
         if (right.type === 'media') delete right.fadeIn;
-        if (right.type === 'media' && clip.type === 'media') right.sourceIn = partIn(clip, delta, T.sub(cEnd, end));
+        if (right.type === 'media' && clip.type === 'media') setPart(right, clip, delta, T.sub(cEnd, end));
         if (right.type === 'caption') delete right.words;
         shiftKeyframes(right, delta);
         right.start = ripple ? start : end;
@@ -1908,7 +1918,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
       }
       if (hasLeft) {
         if (clip.type === 'media') delete clip.fadeOut;
-        if (clip.type === 'media') clip.sourceIn = partIn(clip, T.ZERO, T.sub(start, clip.start));
+        if (clip.type === 'media') setPart(clip, clip, T.ZERO, T.sub(start, clip.start));
         clip.duration = T.sub(start, clip.start);
         clampFades(clip);
         if (clip.type === 'caption') delete clip.words;
@@ -1973,13 +1983,13 @@ function openGap(d: ProjectDocument, at: T.RationalTime, len: T.RationalTime, tr
         if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk'));
         right.linkGroupId = relink.get(right.linkGroupId)!;
       }
-      if (right.type === 'media' && clip.type === 'media') { delete right.transition; delete right.fadeIn; right.sourceIn = partIn(clip, delta, T.sub(cEnd, at)); }
+      if (right.type === 'media' && clip.type === 'media') { delete right.transition; delete right.fadeIn; setPart(right, clip, delta, T.sub(cEnd, at)); }
       if (right.type === 'caption') delete right.words;
       shiftKeyframes(right, delta);
       right.start = T.add(at, len);
       right.duration = T.sub(cEnd, at);
       clampFades(right);
-      if (clip.type === 'media') { delete clip.fadeOut; clip.sourceIn = partIn(clip, T.ZERO, delta); }
+      if (clip.type === 'media') { delete clip.fadeOut; setPart(clip, clip, T.ZERO, delta); }
       clip.duration = delta;
       clampFades(clip);
       if (clip.type === 'caption') delete clip.words;

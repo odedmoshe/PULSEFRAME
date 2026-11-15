@@ -142,8 +142,12 @@ export const MediaClipSchema = z
     gain: z.number().min(0).max(8).describe('Linear audio gain'),
     /** Playback speed as an exact ratio (absent = 1). The clip shows duration × speed of source. Sound is resampled with it (pitch follows speed). */
     speed: z.object({ num: z.number().int().min(1).max(8000), den: z.number().int().min(1).max(8000) }).strict().optional(),
-    /** A continuous speed ramp: the speed changes evenly over the clip's length from `speed` (1 when absent) to this. Such a clip cannot be divided, trimmed, reversed or frozen. */
+    /** A continuous speed ramp: the speed changes evenly over the clip's length from `speed` (1 when absent) to this. Such a clip cannot be reversed, frozen, slipped or given a transition. */
     speedEnd: z.object({ num: z.number().int().min(1).max(8000), den: z.number().int().min(1).max(8000) }).strict().optional(),
+    /** For a ramped clip that is a part of its ramp (after a trim or a cut): where in the ramp it starts and how long the whole ramp is. Absent = the clip is the whole ramp. */
+    rampWindow: z.object({ offset: RationalTimeSchema, total: RationalTimeSchema }).strict().optional(),
+    /** For a ramped clip: smooth = the speed eases out of the first value and into the last instead of changing evenly. */
+    speedCurve: z.literal('smooth').optional(),
     /** Freeze frame: the clip holds the single source picture at `sourceIn` for its whole length. Video tracks only; it has no sound. */
     freeze: z.literal(true).optional(),
     /** Reverse: the clip plays its stretch of source backwards (picture on a video track, sound on an audio track; linked clips reverse together). `sourceIn` is still the earliest source time of the stretch. */

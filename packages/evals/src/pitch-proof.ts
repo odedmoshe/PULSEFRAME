@@ -213,6 +213,41 @@ async function main() {
     await rpage.close();
     check('smooth ramp, editor: paused frames 1, 30, 60 and 95 show the source frames of the formula; played on the audio clock a beep starts within 50 ms of each expected time; the clip is marked and the Inspector states 0.5× → 2×; "back to one speed" leaves 0.5×; no page errors',
       [1, 30, 60, 95].every((t) => seen[t] === wantFrames[t]) && rsync.clock === 'audio' && rheard.every((x) => x !== null) && marked === 'true' && /0\.5× → 2×/.test(stateText) && cleared && rerrors.length === 0, { seen, want: [1, 30, 60, 95].map((t) => wantFrames[t]), onsets: ronsets, heard: rheard, stateText, errors: rerrors.slice(0, 3) });
+
+    console.log('# a ramped clip cut into parts; an eased ramp');
+    const newRamp = async (name: string, curve?: string) => {
+      const id = (await call('/projects', { name, width: W, height: H })).body.project.id;
+      const up2: any = await (await fetch(`${s.url}/api/v1/projects/${id}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
+      const c = (await tx(id, [{ op: 'add_clip', args: { assetId: up2.assetId, start: f(0) } }])).results[0].output.clipId as string;
+      await tx(id, [{ op: 'set_clip_speed_ramp', args: { clipId: c, from: 0.5, to: 2, ...(curve ? { curve } : {}) } }]);
+      return { id, clip: c };
+    };
+    const cutP = await newRamp('ramp in parts');
+    await tx(cutP.id, [{ op: 'split_clip', args: { clipId: cutP.clip, at: f(30) } }]);
+    const second = (await call(`/projects/${cutP.id}`)).body.project.sequences.seq_main.tracks.find((t: any) => t.kind === 'video').clips[1].id;
+    await tx(cutP.id, [{ op: 'split_clip', args: { clipId: second, at: f(70) } }]);
+    const partsFile = await exportTo(cutP.id, 'ramp-parts.mp4');
+    const partFrames = codesOf(partsFile), partBeeps = beeps(pcmOf(partsFile));
+    const partsDoc = (await call(`/projects/${cutP.id}`)).body.project;
+    const partCounts = partsDoc.sequences.seq_main.tracks.map((t: any) => t.clips.length).filter((n: number) => n > 0);
+    // then trim two frames off the start of the last part and close the gap by moving it: the two frames are simply missing
+    const lastPart = partsDoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'video').clips[2].id;
+    await tx(cutP.id, [{ op: 'trim_clip', args: { clipId: lastPart, edge: 'start', to: f(72) } }, { op: 'move_clip', args: { clipId: lastPart, start: f(70) } }]);
+    const trimmedFrames = codesOf(await exportTo(cutP.id, 'ramp-parts-trimmed.mp4'));
+    check('a ramped clip split into three parts exports exactly the frames of the undivided clip (all 96) with the beeps where they were (±3 ms) and at the same pitch; trimming two frames off the start of the last part removes exactly those two frames',
+      JSON.stringify(partCounts) === '[3,3]' && JSON.stringify(partFrames) === JSON.stringify(wantFrames) && partBeeps.length === 4 && partBeeps.every((b, i) => Math.abs(b.start - gotBeeps[i]!.start) <= 0.003 && Math.abs(b.hz - gotBeeps[i]!.hz) <= 15)
+      && JSON.stringify(trimmedFrames) === JSON.stringify([...wantFrames.slice(0, 70), ...wantFrames.slice(72)]), { partCounts, framesEqual: JSON.stringify(partFrames) === JSON.stringify(wantFrames), partBeeps, trimmedCount: trimmedFrames.length });
+
+    const easedP = await newRamp('eased ramp', 'smooth');
+    const easedAfter = (t: number) => 0.5 * t + 1.5 * ((t * t * t) / (3.2 * 3.2) - (t * t * t * t) / (2 * 3.2 * 3.2 * 3.2));
+    const wantEased = Array.from({ length: 96 }, (_, i) => Math.floor(easedAfter(i / 30) * 30 + 1e-9));
+    const easedFile = await exportTo(easedP.id, 'ramp-eased.mp4');
+    const easedFrames = codesOf(easedFile), easedBeeps = beeps(pcmOf(easedFile));
+    // when the eased ramp reaches source seconds 1, 2 and 3 (found numerically from the same formula)
+    const reach = (sec: number) => { let lo = 0, hi = 3.2; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (easedAfter(m) < sec) lo = m; else hi = m; } return (lo + hi) / 2; };
+    const wantEasedBeeps = [0, reach(1), reach(2), reach(3)];
+    check('an eased ramp (0.5× → 2×, easing in and out): 96 frames, each the source frame its formula gives — it differs from the even ramp in between and ends on the same frame; the beeps start where the formula puts them (±5 ms)',
+      JSON.stringify(easedFrames) === JSON.stringify(wantEased) && JSON.stringify(wantEased) !== JSON.stringify(wantFrames) && easedBeeps.length === 4 && easedBeeps.every((b, i) => Math.abs(b.start - wantEasedBeeps[i]!) <= 0.005), { want: wantEasedBeeps.map((x) => Number(x.toFixed(3))), got: easedBeeps, frame48: [easedFrames[48], wantFrames[48]], last: [easedFrames[95], wantFrames[95]] });
   } catch (e) {
     console.error(e);
     check('run completed', false, String(e).slice(0, 600));

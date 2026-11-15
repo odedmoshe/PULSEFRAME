@@ -229,6 +229,7 @@ function RampField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   const [from, setFrom] = useState('1');
   const [to, setTo] = useState('2');
   const [steps, setSteps] = useState('8');
+  const [eased, setEased] = useState(clip.speedCurve === 'smooth');
   const a = Number(from), b = Number(to), n = Math.round(Number(steps));
   const range = a >= 0.1 && a <= 8 && b >= 0.1 && b <= 8 && a !== b;
   const ok = range && n >= 2 && n <= 24 && !clip.keyframes && !clip.volume && !clip.transition && !clip.reverse && !clip.speedEnd;
@@ -243,14 +244,18 @@ function RampField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
       </div>
       {clip.speedEnd && (
         <p className="row" data-testid="ramp-state">
-          <span>{t('ramp.now')}: <bdi dir="ltr">{+speedValue(clip).toFixed(3)}× → {+(clip.speedEnd.num / clip.speedEnd.den).toFixed(3)}×</bdi></span>
+          <span>{t('ramp.now')}: <bdi dir="ltr">{+speedValue(clip).toFixed(3)}× → {+(clip.speedEnd.num / clip.speedEnd.den).toFixed(3)}×</bdi>{clip.speedCurve === 'smooth' ? ` · ${t('ramp.eased.short')}` : ''}{clip.rampWindow ? ` · ${t('ramp.part')}` : ''}</span>
           <button type="button" className="ghost" data-testid="ramp-clear" onClick={() => void editor.commit([{ op: 'set_clip_speed', args: { clipId: clip.id, speed: +speedValue(clip).toFixed(3) } }], 'Clip speed')}>{t('ramp.clear')}</button>
         </p>
       )}
       <div className="row">
-        <button type="button" className="primary" disabled={!smoothOk} data-testid="ramp-smooth" onClick={() => void editor.commit([{ op: 'set_clip_speed_ramp', args: { clipId: clip.id, from: a, to: b } }], 'Gradual speed change')}>{t('ramp.smooth')}</button>
+        <button type="button" className="primary" disabled={!smoothOk} data-testid="ramp-smooth" onClick={() => void editor.commit([{ op: 'set_clip_speed_ramp', args: { clipId: clip.id, from: a, to: b, ...(eased ? { curve: 'smooth' } : {}) } }], 'Gradual speed change')}>{t('ramp.smooth')}</button>
         <button type="button" className="ghost" disabled={!ok} data-testid="ramp-apply" onClick={() => void editor.commit([{ op: 'speed_ramp', args: { clipId: clip.id, from: a, to: b, steps: n } }], 'Speed ramp')}>{t('ramp.apply')}</button>
       </div>
+      <label className="check">
+        <input type="checkbox" checked={eased} data-testid="ramp-eased" onChange={(e) => setEased(e.target.checked)} />
+        {t('ramp.eased')}
+      </label>
       <p className="muted">{t('ramp.smoothNote')}</p>
       <p className="muted">{t('ramp.note')}</p>
     </fieldset>

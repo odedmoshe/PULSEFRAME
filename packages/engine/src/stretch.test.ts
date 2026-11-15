@@ -67,7 +67,7 @@ describe('pitch-keeping time stretch', () => {
 
 describe('ramp resampler (continuous speed change)', () => {
   const run = (src: Float32Array, v0: number, v1: number, total: number, size = src.length, start = 0, offset = 0) => {
-    const r = new RampResampler(v0, v1, total, start);
+    const r = new RampResampler({ v0, v1, total, offset: 0, length: total }, start);
     const parts: Float32Array[] = [];
     for (let i = offset * 2; i < src.length; i += size * 2) parts.push(r.push(src.subarray(i, Math.min(src.length, i + size * 2))));
     parts.push(r.finish());
@@ -103,5 +103,25 @@ describe('ramp resampler (continuous speed change)', () => {
     let worst = 0;
     for (let i = 8; i < tail.length; i++) worst = Math.max(worst, Math.abs(tail[i]! - whole[start * 2 + i]!));
     expect(worst).toBeLessThan(1e-6);
+  });
+  it('a part of a ramp plays exactly what the whole ramp plays there, and the eased curve glides more slowly at first', () => {
+    const src = tone(300, 6);
+    for (let i = 0; i < src.length; i++) src[i] = src[i]! + 0.2 * Math.sin(i * 0.37) * Math.sin(i * 0.011);
+    const total = 3 * SR;
+    const collect = (span: ConstructorParameters<typeof RampResampler>[0], input: Float32Array) => { const r = new RampResampler(span); const a = r.push(input), b = r.finish(); const o = new Float32Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
+    const whole = collect({ v0: 0.5, v1: 2, total, offset: 0, length: total }, src);
+    // the second half as its own clip: it is handed the source from where that half begins
+    const off = total / 2, first = Math.floor(rampSourceFrames(0.5, 2, total, off));
+    const part = collect({ v0: 0.5, v1: 2, total, offset: off, length: total - off }, src.subarray(first * 2));
+    expect(part.length).toBe((total - off) * 2);
+    let worst = 0;
+    for (let i = 8; i < part.length; i++) worst = Math.max(worst, Math.abs(part[i]! - whole[off * 2 + i]!));
+    expect(worst).toBeLessThan(0.02); // the part's source starts on a whole frame, the whole ramp's position there is fractional: a sub-sample shift, nothing more
+    // eased: same source over the same time; a quarter of the way it has played less than the even ramp
+    expect(rampSourceFrames(1, 3, 400, 400, 'smooth')).toBeCloseTo(rampSourceFrames(1, 3, 400, 400), 9);
+    expect(rampSourceFrames(1, 3, 400, 100, 'smooth')).toBeLessThan(rampSourceFrames(1, 3, 400, 100));
+    const eased = collect({ v0: 1, v1: 2, total, offset: 0, length: total, curve: 'smooth' }, tone(440, 6));
+    expect(Math.abs(hzOf(eased, 0.05, 0.25) - 440)).toBeLessThan(12);   // still close to the first speed (an even ramp is at 462 Hz here)
+    expect(Math.abs(hzOf(eased, 2.75, 2.95) - 880)).toBeLessThan(12);   // and already close to the last
   });
 });

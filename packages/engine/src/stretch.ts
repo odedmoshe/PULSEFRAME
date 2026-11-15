@@ -1,3 +1,4 @@
+import { rampSourceSeconds } from '@pulseframe/core';
 /**
  * Time-stretch that keeps the pitch (SPEC §14, clip speed with "keep pitch"): the sound is played `speed` times as fast
  * without the pitch rising or falling with it. Waveform-similarity overlap-add (WSOLA): short windows of the source are
@@ -117,30 +118,42 @@ export function stretchKeepingPitch(source: Float32Array, speed: number, sampleR
   return out;
 }
 
-/** Source frames played in the first `n` output frames of a ramped clip of `total` output frames: v0·n + (v1 − v0)·n²/(2·total). */
-export const rampSourceFrames = (v0: number, v1: number, total: number, n: number): number => v0 * n + ((v1 - v0) * n * n) / (2 * total);
+/**
+ * Source frames played after `n` frames of a ramp of `total` frames whose speed goes from v0 to v1 (evenly, or eased with
+ * curve 'smooth'); before the ramp the speed is v0 and after it v1. The same function as the picture uses (core speed.ts).
+ */
+export const rampSourceFrames = (v0: number, v1: number, total: number, n: number, curve?: 'smooth'): number => rampSourceSeconds(v0, v1, total, n, curve);
+
+/** The part of a ramp a clip plays, in frames of some rate: the ramp's length, where the clip starts in it, and how many frames it plays. */
+export interface RampSpan { v0: number; v1: number; total: number; offset: number; length: number; curve?: 'smooth' }
+/** The ramp span of a planned clip at a sample rate (`ratio` = that rate ÷ the plan's rate). */
+export const rampSpanOf = (c: { speed: number; speedEnd?: number; length: number; rampOffset?: number; rampTotal?: number; rampCurve?: 'smooth' }, ratio = 1): RampSpan =>
+  ({ v0: c.speed, v1: c.speedEnd ?? c.speed, total: (c.rampTotal ?? c.length) * ratio, offset: (c.rampOffset ?? 0) * ratio, length: c.length * ratio, ...(c.rampCurve ? { curve: c.rampCurve } : {}) });
 
 /**
- * Variable-rate resampler for a clip whose speed changes evenly from `v0` to `v1` over `total` output frames (a continuous
- * speed ramp): output frame n is the source at position rampSourceFrames(n), read with a four-point cubic. The pitch glides
+ * Variable-rate resampler for a clip with a continuous speed ramp: output frame n of the clip is the source at position
+ * F(offset + n) − F(offset) (frames after the clip's first source frame), read with a four-point cubic. The pitch glides
  * with the speed, as with a constant speed change. Same stream interface as PitchStretcher (interleaved stereo in and out),
  * and the same output whatever sizes the input arrives in.
- * `startFrame`: the first output frame wanted; the source given must then begin at source frame floor(position of that frame).
+ * `startFrame`: the first clip frame wanted; the source given must then begin at source frame floor(position of that frame).
  * Limit: no low-pass filter before reading faster than normal, so speeds well above 1 can alias high frequencies.
  */
 export class RampResampler {
   private input = new Float32Array(0);
-  private base: number;   // absolute source frame of input[0]
-  private have: number;   // absolute source frame after the last one received
-  private n: number;      // next output frame
+  private base: number;   // source frame (after the clip's first) of input[0]
+  private have: number;   // source frame after the last one received
+  private n: number;      // next output frame of the clip
+  private readonly origin: number;
   private ended = false;
-  constructor(readonly v0: number, readonly v1: number, readonly total: number, startFrame = 0) {
-    this.n = startFrame;
-    this.base = Math.floor(rampSourceFrames(v0, v1, total, startFrame));
+  constructor(readonly span: RampSpan, startFrame = 0) {
+    this.origin = rampSourceFrames(span.v0, span.v1, span.total, span.offset, span.curve);
+    this.n = Math.round(startFrame);
+    this.base = Math.floor(this.pos(this.n));
     this.have = this.base;
   }
+  private pos(n: number): number { const s = this.span; return rampSourceFrames(s.v0, s.v1, s.total, s.offset + n, s.curve) - this.origin; }
   /** Source frames needed in all for a clip read from its start (what a caller should feed before finish()). */
-  static sourceFrames(v0: number, v1: number, total: number): number { return Math.ceil(rampSourceFrames(v0, v1, total, total)) + 3; }
+  static sourceFrames(span: RampSpan): number { return Math.ceil(rampSourceFrames(span.v0, span.v1, span.total, span.offset + span.length, span.curve) - rampSourceFrames(span.v0, span.v1, span.total, span.offset, span.curve)) + 3; }
   push(chunk: Float32Array): Float32Array {
     if (chunk.length) {
       const merged = new Float32Array(this.input.length + chunk.length);
@@ -158,8 +171,9 @@ export class RampResampler {
   }
   private run(): Float32Array {
     const out: number[] = [];
-    while (this.n < this.total) {
-      const pos = rampSourceFrames(this.v0, this.v1, this.total, this.n);
+    const end = Math.round(this.span.length);
+    while (this.n < end) {
+      const pos = this.pos(this.n);
       const i = Math.floor(pos), f = pos - i;
       if (!this.ended && i + 2 >= this.have) break; // the four points around this position have not all arrived
       for (let ch = 0; ch < 2; ch++) {
@@ -169,7 +183,7 @@ export class RampResampler {
       }
       this.n++;
     }
-    const keepFrom = Math.floor(rampSourceFrames(this.v0, this.v1, this.total, Math.min(this.n, this.total))) - 1;
+    const keepFrom = Math.floor(this.pos(Math.min(this.n, end))) - 1;
     if (keepFrom - this.base > 1 << 15) { this.input = this.input.slice((keepFrom - this.base) * 2); this.base = keepFrom; }
     return Float32Array.from(out);
   }

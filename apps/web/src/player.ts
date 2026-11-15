@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, PitchStretcher, RampResampler } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
@@ -180,7 +180,8 @@ export class Player {
           const speed = c.speed;
           // A continuous speed ramp: after x seconds of the clip, speed·x + (speedEnd − speed)·x²/(2·length) seconds of source have played.
           const ramp = c.speedEnd !== undefined;
-          const srcAfter = (x: number) => (ramp ? speed * x + ((c.speedEnd! - speed) * x * x) / (2 * (end - start)) : x * speed);
+          const rs = rampSpanOf(c, 1 / plan.sampleRate); // the ramp in seconds
+          const srcAfter = (x: number) => (ramp ? rampSourceFrames(rs.v0, rs.v1, rs.total, rs.offset + x, rs.curve) - rampSourceFrames(rs.v0, rs.v1, rs.total, rs.offset, rs.curve) : x * speed);
           const srcFrom = sourceIn + srcAfter(Math.max(0, t0 - start));
           const srcTo = sourceIn + srcAfter(end - start) + (ramp ? 4 / plan.sampleRate : 0); // the resampler reads a few frames past the last position
           // The decoder reports the file's raw timestamps; source times here are measured from the file's own start as this reader sees it.
@@ -239,7 +240,7 @@ export class Player {
             let rateOfSource = 0;
             for await (const ch of chunks()) {
               if (gen !== this.generation) break;
-              stretcher ??= ramp ? new RampResampler(speed, c.speedEnd!, Math.round((end - start) * ch.sr), Math.round((playFrom - start) * ch.sr)) : new PitchStretcher(speed, ch.sr);
+              stretcher ??= ramp ? new RampResampler(rampSpanOf(c, ch.sr / plan.sampleRate), Math.round((playFrom - start) * ch.sr)) : new PitchStretcher(speed, ch.sr);
               rateOfSource = ch.sr;
               emit(stretcher.push(ch.data), ch.sr);
               const ahead = startAt + outPos / ch.sr - now();

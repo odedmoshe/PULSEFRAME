@@ -23,33 +23,68 @@ export const speedOf = (c: Clip): Speed => (c.type === 'media' && c.speed ? c.sp
 export const speedValue = (c: Clip): number => { const s = speedOf(c); return s.num / s.den; };
 const mul = (t: T.RationalTime, num: number, den: number): T.RationalTime => (num === den ? t : T.normalize({ value: (BigInt(t.value) * BigInt(num)).toString(), timescale: t.timescale * den }));
 /**
- * A clip whose speed changes evenly over its length, from `speed` at its start to `speedEnd` at its end (a continuous ramp).
- * For such a clip the two span functions below are measured FROM THE START OF THE CLIP: `toSourceSpan(c, d)` is the source
- * played in the first `d` of the clip, v0·d + (v1 − v0)·d²/(2D). Before the start and past the end the clip is taken to
- * continue at its first and last speed. A ramped clip cannot be divided or trimmed (operations refuse it): the speed at
- * an arbitrary cut is generally not an exact ratio of small numbers.
+ * A clip with a continuous speed ramp: its speed changes from `speed` to `speedEnd` over a stretch of time called the ramp
+ * — evenly, or eased in and out with `speedCurve: 'smooth'`. A whole ramp is the clip itself. After a trim or a cut the
+ * clip is a WINDOW of the ramp: `rampWindow.total` is the length of the whole ramp and `rampWindow.offset` where in it
+ * this clip starts (it can be negative or reach past the total after an extending trim; outside the ramp the speed is
+ * the first or last one). Every part of a divided ramp therefore shows exactly the frames the undivided clip showed.
+ *
+ * With x the time since the start of the ramp and T its length, the source played is
+ *   even:  F(x) = v0·x + (v1 − v0)·x²/(2T)
+ *   eased: F(x) = v0·x + (v1 − v0)·(x³/T² − x⁴/(2T³))        (speed v0 + (v1 − v0)·(3u² − 2u³), u = x/T)
+ * and the two span functions below are measured from the start of the clip: toSourceSpan(c, d) = F(offset + d) − F(offset),
+ * each F computed exactly in integers and rounded down to 1/35,280,000 s.
  */
 export const isRamped = (c: Clip): c is MediaClip & { speedEnd: Speed } => c.type === 'media' && !!c.speedEnd && !c.freeze;
+/** Where in its ramp a ramped clip sits: the offset of its start and the length of the whole ramp. */
+export const rampWindowOf = (c: MediaClip): { offset: T.RationalTime; total: T.RationalTime } => c.rampWindow ?? { offset: T.ZERO, total: c.duration };
+/** The window of the part of `c` that starts `fromOffset` into it (for operations that divide or trim a ramped clip). Call before changing `c`. */
+export const rampWindowOfPart = (c: MediaClip, fromOffset: T.RationalTime): { offset: T.RationalTime; total: T.RationalTime } | undefined => {
+  if (!isRamped(c)) return undefined;
+  const w = rampWindowOf(c);
+  return { offset: T.add(w.offset, fromOffset), total: w.total };
+};
 /** Ramp results are rounded down to this many parts of a second: a multiple of the usual frame and sample rates, so times that fall exactly on a frame or sample stay exact. */
 const RAMP_TIMESCALE = 35_280_000;
-function rampSourceSpan(c: MediaClip & { speedEnd: Speed }, d: T.RationalTime): T.RationalTime {
-  const v0 = speedOf(c), v1 = c.speedEnd, D = c.duration;
-  if (T.isNegative(d)) return mul(d, v0.num, v0.den);
-  if (T.lt(D, d)) return T.add(rampSourceSpan(c, D), mul(T.sub(d, D), v1.num, v1.den));
-  const a = BigInt(d.value), b = BigInt(d.timescale), p = BigInt(D.value), q = BigInt(D.timescale);
+const floorDiv = (a: bigint, b: bigint) => { const q = a / b; return a % b !== 0n && (a < 0n) !== (b < 0n) ? q - 1n : q; };
+/** F(x) of the ramp of `c` (see above), rounded down to RAMP_TIMESCALE; x is measured from the start of the ramp. */
+function rampF(c: MediaClip & { speedEnd: Speed }, x: T.RationalTime, total: T.RationalTime): T.RationalTime {
+  const v0 = speedOf(c), v1 = c.speedEnd;
+  if (T.isNegative(x)) return mul(x, v0.num, v0.den);
+  if (T.lt(total, x)) return T.add(rampF(c, total, total), mul(T.sub(x, total), v1.num, v1.den));
+  const a = BigInt(x.value), b = BigInt(x.timescale), p = BigInt(total.value), q = BigInt(total.timescale);
   const n0 = BigInt(v0.num), d0 = BigInt(v0.den), n1 = BigInt(v1.num), d1 = BigInt(v1.den);
-  // v0·d + (v1 − v0)·d²/(2D) over one denominator
-  const den = d0 * d1 * b * b * 2n * p;
-  const num = n0 * a * d1 * b * 2n * p + (n1 * d0 - n0 * d1) * a * a * q;
-  return T.normalize({ value: ((num * BigInt(RAMP_TIMESCALE)) / den).toString(), timescale: RAMP_TIMESCALE });
+  const dv = n1 * d0 - n0 * d1; // (v1 − v0) × d0·d1
+  let num: bigint, den: bigint;
+  if (c.speedCurve === 'smooth') {
+    // v0·a/b + (dv/(d0·d1)) · (2·a³·q²·b·p − a⁴·q³) / (2·b⁴·p³)
+    den = d0 * d1 * 2n * b ** 4n * p ** 3n;
+    num = n0 * a * d1 * 2n * b ** 3n * p ** 3n + dv * (2n * a ** 3n * q * q * b * p - a ** 4n * q ** 3n);
+  } else {
+    den = d0 * d1 * b * b * 2n * p;
+    num = n0 * a * d1 * b * 2n * p + dv * a * a * q;
+  }
+  return T.normalize({ value: floorDiv(num * BigInt(RAMP_TIMESCALE), den).toString(), timescale: RAMP_TIMESCALE });
 }
-/** Inverse of the above. It needs a square root, so it is approximate (to a microsecond); callers snap the result to frames. */
+function rampSourceSpan(c: MediaClip & { speedEnd: Speed }, d: T.RationalTime): T.RationalTime {
+  const w = rampWindowOf(c);
+  return T.sub(rampF(c, T.add(w.offset, d), w.total), rampF(c, w.offset, w.total));
+}
+/** The same F in floating point (seconds), for the inverse and for sound. */
+export function rampSourceSeconds(v0: number, v1: number, total: number, x: number, curve?: 'smooth'): number {
+  if (x < 0) return v0 * x;
+  if (x > total) return ((v0 + v1) / 2) * total + v1 * (x - total);
+  return curve === 'smooth' ? v0 * x + (v1 - v0) * ((x * x * x) / (total * total) - (x * x * x * x) / (2 * total * total * total)) : v0 * x + ((v1 - v0) * x * x) / (2 * total);
+}
+/** Inverse of rampSourceSpan, by bisection: approximate (to a microsecond); callers snap the result to frames. */
 function rampTimelineSpan(c: MediaClip & { speedEnd: Speed }, sourceDuration: T.RationalTime): T.RationalTime {
-  const v0 = speedOf(c).num / speedOf(c).den, v1 = c.speedEnd.num / c.speedEnd.den, D = T.toSeconds(c.duration), s = T.toSeconds(sourceDuration);
-  const whole = ((v0 + v1) / 2) * D;
-  const k = (v1 - v0) / (2 * D);
-  const t = s < 0 ? s / v0 : s > whole ? D + (s - whole) / v1 : Math.abs(k) < 1e-12 ? s / v0 : (-v0 + Math.sqrt(v0 * v0 + 4 * k * s)) / (2 * k);
-  return T.fromSeconds(t.toFixed(6));
+  const v0 = speedOf(c).num / speedOf(c).den, v1 = c.speedEnd.num / c.speedEnd.den, w = rampWindowOf(c);
+  const total = T.toSeconds(w.total), off = T.toSeconds(w.offset), s = T.toSeconds(sourceDuration);
+  const f = (d: number) => rampSourceSeconds(v0, v1, total, off + d, c.speedCurve) - rampSourceSeconds(v0, v1, total, off, c.speedCurve);
+  const slowest = Math.min(v0, v1);
+  let lo = -Math.abs(s) / slowest - 1, hi = Math.abs(s) / slowest + 1; // f is increasing with slope at least `slowest`
+  for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2; if (f(mid) < s) lo = mid; else hi = mid; }
+  return T.fromSeconds(((lo + hi) / 2).toFixed(6));
 }
 /** Timeline duration -> source duration for this clip (for a ramped clip: measured from the clip's start, see isRamped). */
 export const toSourceSpan = (c: Clip, timelineDuration: T.RationalTime): T.RationalTime => { if (isFreeze(c)) return T.ZERO; if (isRamped(c)) return rampSourceSpan(c, timelineDuration); const s = speedOf(c); return mul(timelineDuration, s.num, s.den); };
@@ -91,7 +126,7 @@ export const pictureSourceAt = (c: MediaClip, t: T.RationalTime, frame: T.Ration
  * into the next clip uses). A forward clip continues into later source; a reversed clip continues into earlier source.
  */
 export const handleAfterEnd = (c: MediaClip, assetDuration: T.RationalTime): T.RationalTime =>
-  isRamped(c) ? mul(T.sub(assetDuration, sourceEnd(c)), c.speedEnd.den, c.speedEnd.num) : c.reverse ? toTimelineSpan(c, c.sourceIn) : toTimelineSpan(c, T.sub(assetDuration, sourceEnd(c)));
+  isRamped(c) ? T.sub(toTimelineSpan(c, T.sub(assetDuration, c.sourceIn)), c.duration) : c.reverse ? toTimelineSpan(c, c.sourceIn) : toTimelineSpan(c, T.sub(assetDuration, sourceEnd(c)));
 /**
  * Timeline time at which source time `s` of the clip's stretch is played, whichever way the clip runs.
  * Forward: `timelineAt`. Reversed: the clip starts at the END of its stretch, so source time s is reached (sourceEnd − s) later.

@@ -18,6 +18,8 @@ export interface PlannedAudioClip {
   speed: number;
   /** A continuous speed ramp: the rate changes evenly from `speed` at the first sample of the clip to this at its last. Mixers read the stretch at normal rate and resample it with the shared ramp resampler (stretch.ts). */
   speedEnd?: number;
+  /** For a ramped clip that is a part of its ramp: where in the ramp the clip starts and how long the whole ramp is, in samples; and the ramp's curve. Absent = the clip is the whole ramp, changing evenly. */
+  rampOffset?: number; rampTotal?: number; rampCurve?: 'smooth';
   /** With a speed other than 1: stretch the sound keeping its pitch (stretch.ts) instead of resampling it. Mixers read the stretch at normal rate and run it through the shared stretcher from the start of the clip. */
   keepPitch?: true;
   /** The clip plays its stretch of source, [source, source + length × speed), backwards. Mixers read that stretch and reverse it. */
@@ -119,7 +121,7 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId)
       if (fout > 0) fade.push({ s: length - fout, g: 1 }, { s: length, g: 0 }); else fade.push({ s: length, g: 1 });
       // smooth segments become short straight pieces here, so every mixer follows the same curve
       const vol = c.volume?.length ? sliceEnv(volumePoints(c.volume, (t) => T.nearestSampleIndex(t, sr)).map((p) => ({ s: Math.round(p.x), g: p.value })), 0, length) : undefined;
-      clips.push({ ...(vol ? { vol } : {}), ...(c.reverse ? { reverse: true as const } : {}), ...(isRamped(c) ? { speedEnd: speedEndValue(c) } : c.keepPitch && speedValue(c) !== 1 ? { keepPitch: true as const } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
+      clips.push({ ...(vol ? { vol } : {}), ...(c.reverse ? { reverse: true as const } : {}), ...(isRamped(c) ? { speedEnd: speedEndValue(c), ...(c.rampWindow ? { rampOffset: T.nearestSampleIndex(c.rampWindow.offset, sr), rampTotal: T.nearestSampleIndex(c.rampWindow.total, sr) } : {}), ...(c.speedCurve ? { rampCurve: c.speedCurve } : {}) } : c.keepPitch && speedValue(c) !== 1 ? { keepPitch: true as const } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
     }
   }
   return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null };

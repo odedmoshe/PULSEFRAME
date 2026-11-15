@@ -91,6 +91,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if (tr.kind === 'video' && !asset.video && !(asset.kind === 'image' && asset.image)) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
         if (tr.kind === 'audio' && !asset.audio) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no audio for audio track`, ids: [c.id, tr.id] });
         if (c.reverse && (c.freeze || asset.kind === 'image' || (tr.kind === 'video' ? !asset.video : tr.kind === 'audio' ? !asset.audio : true))) issues.push({ code: 'incompatible_track', message: `clip ${c.id}: only a video clip on a video track or a sound clip on a sound track can play backwards`, ids: [c.id] });
+        if ((c.rampWindow || c.speedCurve) && !c.speedEnd) issues.push({ code: 'incompatible_ramp', message: `clip ${c.id}: a ramp window or curve without a ramp`, ids: [c.id] });
+        if (c.rampWindow && !T.lt(T.ZERO, c.rampWindow.total)) issues.push({ code: 'incompatible_ramp', message: `clip ${c.id}: the ramp must have a positive length`, ids: [c.id] });
         if (c.speedEnd && (c.freeze || c.reverse || c.keepPitch || c.transition || asset.kind === 'image')) issues.push({ code: 'incompatible_ramp', message: `clip ${c.id}: a clip that changes speed gradually cannot be a freeze frame, play backwards, keep its pitch, carry a transition or show a still image`, ids: [c.id] });
         if (c.freeze && (tr.kind !== 'video' || !asset.video)) issues.push({ code: 'incompatible_track', message: `clip ${c.id}: a freeze frame needs a video asset on a video track`, ids: [c.id] });
         if (c.volume) {

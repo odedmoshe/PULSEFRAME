@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T21:34:28.749Z",
+  "ranAt": "2026-11-15T22:10:21.379Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -7,8 +7,8 @@
     "gpu": "none"
   },
   "scope": "One synthetic 4-second fixture (frame barcode with a 100 ms, 1 kHz beep each second) at half and double speed with the pitch kept. Beep times and frequencies are measured from the exported sound; in the preview only beep onsets are measured (not the frequency). A continuous ramp 0.5× → 2× on the same fixture: every exported frame against the ramp formula, beep times and pitch. No speech, no music, no listening test: this shows timing and pitch are right, not that it sounds good.",
-  "passed": 10,
-  "total": 10,
+  "passed": 12,
+  "total": 12,
   "checks": [
     {
       "name": "half speed, server export: without the option the beeps are 500 Hz; with \"keep pitch\" (set through the picture clip, stored on its linked sound) they start at 0, 2, 4 and 6 s within 25 ms, are still 1 kHz (±50 Hz) and last about twice as long",
@@ -318,6 +318,82 @@
         ],
         "stateText": "עכשיו: 0.5× → 2×חזרה למהירות אחת",
         "errors": []
+      }
+    },
+    {
+      "name": "a ramped clip split into three parts exports exactly the frames of the undivided clip (all 96) with the beeps where they were (±3 ms) and at the same pitch; trimming two frames off the start of the last part removes exactly those two frames",
+      "ok": true,
+      "detail": {
+        "partCounts": [
+          3,
+          3
+        ],
+        "framesEqual": true,
+        "partBeeps": [
+          {
+            "start": 0,
+            "end": 0.1841,
+            "hz": 543.4
+          },
+          {
+            "start": 1.2581,
+            "end": 1.3481,
+            "hz": 1111.5
+          },
+          {
+            "start": 2.0432,
+            "end": 2.111,
+            "hz": 1474.7
+          },
+          {
+            "start": 2.6667,
+            "end": 2.7234,
+            "hz": 1763.6
+          }
+        ],
+        "trimmedCount": 94
+      }
+    },
+    {
+      "name": "an eased ramp (0.5× → 2×, easing in and out): 96 frames, each the source frame its formula gives — it differs from the even ramp in between and ends on the same frame; the beeps start where the formula puts them (±5 ms)",
+      "ok": true,
+      "detail": {
+        "want": [
+          0,
+          1.387,
+          2.124,
+          2.691
+        ],
+        "got": [
+          {
+            "start": 0.0001,
+            "end": 0.1978,
+            "hz": 505.8
+          },
+          {
+            "start": 1.3874,
+            "end": 1.4756,
+            "hz": 1133
+          },
+          {
+            "start": 2.1241,
+            "end": 2.1857,
+            "hz": 1626.2
+          },
+          {
+            "start": 2.6911,
+            "end": 2.7435,
+            "hz": 1909.8
+          }
+        ],
+        "frame48": [
+          37,
+          42
+        ],
+        "last": [
+          118,
+          118
+        ]
       }
     }
   ],

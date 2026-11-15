@@ -6,7 +6,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import fs from 'node:fs';
 import type { Readable } from 'node:stream';
-import { mixClip, PitchStretcher, RampResampler, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
+import { mixClip, PitchStretcher, RampResampler, rampSpanOf, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
 import { ApiError } from './store.ts';
 
 const CHUNK = 48_000; // frames per mixing step
@@ -143,9 +143,9 @@ export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) =>
           const inJs = !!clip.keepPitch || clip.speedEnd !== undefined;
           const skip = inJs ? 0 : from - clip.at;
           // source frames the clip plays in all: its length × speed, or what the ramp covers
-          const srcLen = clip.speedEnd !== undefined ? RampResampler.sourceFrames(clip.speed, clip.speedEnd, clip.length) : Math.round(clip.length * clip.speed);
+          const srcLen = clip.speedEnd !== undefined ? RampResampler.sourceFrames(rampSpanOf(clip)) : Math.round(clip.length * clip.speed);
           const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-copyts', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate}:first_pts=${Math.round(originOf(clip.assetId) * plan.sampleRate)},${monoOf(clip.assetId) ? 'pan=stereo|c0=c0|c1=c0,' : ''}aformat=sample_fmts=flt:channel_layouts=stereo,${clip.reverse ? `atrim=start_sample=${clip.source}:end_sample=${clip.source + Math.round((clip.length - skip) * clip.speed)},asetpts=PTS-STARTPTS,areverse` : `atrim=start_sample=${clip.source + Math.round(skip * clip.speed)}:end_sample=${clip.source + srcLen},asetpts=PTS-STARTPTS`}${clip.speed === 1 || inJs ? '' : `,asetrate=${Math.round(plan.sampleRate * clip.speed)},aresample=${plan.sampleRate}`}`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
-          r = inJs ? new StretchReader(new PcmReader(child), clip.speedEnd !== undefined ? new RampResampler(clip.speed, clip.speedEnd, clip.length) : new PitchStretcher(clip.speed, plan.sampleRate), srcLen, from - clip.at) : new PcmReader(child);
+          r = inJs ? new StretchReader(new PcmReader(child), clip.speedEnd !== undefined ? new RampResampler(rampSpanOf(clip)) : new PitchStretcher(clip.speed, plan.sampleRate), srcLen, from - clip.at) : new PcmReader(child);
           readers.set(clip, r);
         }
         mixClip(out, a, clip, await r.read(to - from), from - clip.at);
