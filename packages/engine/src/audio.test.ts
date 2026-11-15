@@ -96,7 +96,7 @@ describe('audio plan', () => {
     expect(() => tx(whole.doc, [{ op: 'set_audio_crossfade', args: { clipId: second, duration: f(15) } }])).toThrow(/unused source/);
   });
   it('reference mixer: chunked mixing equals one-shot mixing, and equals the closed-form gain', () => {
-    const clip: PlannedAudioClip = { clipId: 'c', trackId: 't', assetId: 'a', at: 100, length: 1000, source: 0, gain: 0.8, pan: 0.25, fade: [{ s: 0, g: 0 }, { s: 200, g: 1 }, { s: 700, g: 1 }, { s: 1000, g: 0 }], duck: [{ s: 0, g: 1 }, { s: 400, g: 1 }, { s: 500, g: 0.25 }, { s: 1000, g: 0.25 }] };
+    const clip: PlannedAudioClip = { clipId: 'c', trackId: 't', assetId: 'a', at: 100, length: 1000, source: 0, speed: 1, gain: 0.8, pan: 0.25, fade: [{ s: 0, g: 0 }, { s: 200, g: 1 }, { s: 700, g: 1 }, { s: 1000, g: 0 }], duck: [{ s: 0, g: 1 }, { s: 400, g: 1 }, { s: 500, g: 0.25 }, { s: 1000, g: 0.25 }] };
     const pcm = new Float32Array(2000).fill(1);
     const whole = new Float32Array(2400);
     mixClip(whole, 0, clip, pcm, 0);

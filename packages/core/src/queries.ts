@@ -38,7 +38,7 @@ export function timeline(doc: ProjectDocument, sequenceId = doc.mainSequenceId) 
       clips: t.clips.map((c) => ({
         id: c.id, type: c.type, start: c.start, duration: c.duration, end: clipEnd(c),
         startSeconds: sec(c.start), endSeconds: sec(clipEnd(c)),
-        ...(c.type === 'media' ? { assetId: c.assetId, sourceIn: c.sourceIn, gain: c.gain, linkGroupId: c.linkGroupId } : c.type === 'text' ? { text: c.text, style: c.style } : { text: c.text }),
+        ...(c.type === 'media' ? { assetId: c.assetId, sourceIn: c.sourceIn, gain: c.gain, linkGroupId: c.linkGroupId, ...(c.speed ? { speed: c.speed.num / c.speed.den } : {}) } : c.type === 'text' ? { text: c.text, style: c.style } : { text: c.text }),
         transform: c.transform,
       })),
     })),

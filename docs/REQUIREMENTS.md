@@ -72,7 +72,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 |---|---|---|---|---|---|---|---|---|---|
 | R-05.1 | 5 | Versioned ProjectDocument with migration entry point, stable ids, binaries outside | 1 | — | — | — | — | partial | Schema v1 for assets, sequences, tracks, clips, text, transform, gain, links (`core.test.ts`) and keyframes on x, y, scale, rotation, opacity (`packages/core/src/animation.test.ts`); no effects, transitions, masks, markers, captions, variants, compounds, buses |
 | R-05.2 | 5 | Rational time; frame/sample exactness; half-open intervals; micros only at boundary | 1 | — | Timecode | — | — | done | `time.test.ts` unit and property tests; ADR-0003 |
-| R-05.3 | 5 | Non-drop timecode mapping now; drop-frame display, VFR rules, source time maps and speed | 2 | R-05.2 | Transport | — | — | partial | Non-drop only; speed fixed at 1; VFR handled only by conforming at ingest (`apps/server/src/conform.test.ts`). No drop-frame, ramps, freeze, reverse |
+| R-05.3 | 5 | Non-drop timecode mapping now; drop-frame display, VFR rules, source time maps and speed | 2 | R-05.2 | Transport | — | — | partial | Non-drop only; constant clip speed as an exact ratio with one source-time map (`speed-proof.json`, `speed.test.ts`); VFR handled only by conforming at ingest (`apps/server/src/conform.test.ts`). No drop-frame, ramps, freeze, reverse |
 | R-05.4 | 5 | Reference/bounds/overlap/link/lock validation and nesting-cycle checks | 1 | R-05.1 | Typed errors | all ops | — | partial | Bounds, link and off-frame validation in ops; no nesting, track-lock policy per type, transition regions |
 | R-05.5 | 5 | Responsive constraints and per-variant overrides for aspect changes | 12 | R-05.1 | Inspector | — | — | not started | |
 
@@ -162,7 +162,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
 | R-14.1 | 14 | Keyframes, easing, Bezier and spring curves, motion paths, graph editor | 7 | R-05.1 | Graph editor | keyframe ops | Compositor | partial | Keyframes for x, y, scale, rotation, opacity with linear/hold/ease easings; ops set_keyframe/delete_keyframe/clear_keyframes; exact preservation across trim and split (`packages/core/src/animation.test.ts`, `packages/engine/src/evaluate.test.ts`). No graph editor, Bezier/spring, motion paths, keyframes on crop/mask/effects/audio |
-| R-14.2 | 14 | Time remapping: speed, ramps, reverse, freeze, boomerang, fit-to-duration, audio policy | 7 | R-05.3 | Inspector | time ops | Compositor, audio | not started | Speed fixed at 1 |
+| R-14.2 | 14 | Time remapping: speed, ramps, reverse, freeze, boomerang, fit-to-duration, audio policy | 7 | R-05.3 | Inspector | time ops | Compositor, audio | partial | Constant speed 0.1–8× with varispeed sound (`speed-proof.json` 12 checks). No ramps, reverse, freeze, boomerang, fit-to-duration or pitch-preserving audio policy |
 | R-14.3 | 14 | Typed signal bindings (beat, band, speech, motion, landmark) baked to keys | 9 | R-14.1, R-20.1 | Motion workspace | binding ops | Compositor | not started | |
 | R-14.4 | 14 | Depth features (2.5D parallax, haze, push) with stated limits | 9 | R-13.3 | Photo Motion | depth job | Compositor | not started | |
 | R-14.5 | 14 | Native layouts with draggable dividers; responsive reflow; linked variants | 7 | R-05.5 | Canvas | layout ops | Compositor | not started | |
@@ -297,7 +297,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-29.1 | 29 | Core Hebrew glossary applied to UI strings | 0 | R-03.1 | All UI | — | — | partial | he/en dictionaries with key-parity test (`i18n.test.ts`); glossary conformance not audited |
 | R-30.1 | 30 project/history | Project, history, markers, checkpoint, fork, proposals, undo/redo tools | 5 | R-06.5, R-23.1 | — | MCP/REST | — | partial | rename_project only |
 | R-30.2 | 30 tracks, clips | Track ops and clip ops (import/add/move/trim/split/delete; slip, slide, duplicate, compound, insert) | 5 | R-11.4 | — | MCP/REST | — | partial | add_track, add_clip, move_clip, trim_clip, split_clip, delete_clip; rest missing |
-| R-30.3 | 30 time, animation, appearance | Speed, ramp, keyframe, effect, mask, blend, transition tools | 7 | R-14.1, R-13.1 | — | MCP/REST | — | partial | set_keyframe, delete_keyframe, clear_keyframes only; no speed, ramp, effect, mask, blend, transition tools |
+| R-30.3 | 30 time, animation, appearance | Speed, ramp, keyframe, effect, mask, blend, transition tools | 7 | R-14.1, R-13.1 | — | MCP/REST | — | partial | Every registered op is an MCP tool: keyframes, constant speed, effects and effect keyframes, mask, blend, transitions (`phase7-proof.json`, `speed-proof.json`). No ramps; mask/blend/transition are exercised through REST in the proofs, speed through REST and the editor |
 | R-30.4 | 30 text, audio, analysis, elements, senses, jobs, permissions | Text/caption, audio, AI, recipe, sense, job and permission tool groups | 5 | R-22.3 | — | MCP/REST | — | partial | add_text, update_text, set_clip_gain, get_summary, get_timeline, render_frame, export_project, get_job; rest missing |
 
 ## Appendix A: Production catalog targets

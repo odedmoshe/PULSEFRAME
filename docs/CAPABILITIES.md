@@ -93,6 +93,7 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Long-session stability: 3,000 transactions, replay, restart | tested (one run) | `docs/evidence/soak.json`. Commit time grows with project size: ≈20 ms median at ~700 clips on this machine |
 | Owner session bound to a launch secret; restricted grants refused for non-clip side doors; own-transaction undo and own-job cancel for agents; concurrency limit on heavy read-only work; container allowlist | tested | `docs/evidence/phase5-proof.json` (six review checks), `phase0-proof.json`, `analysis.test.ts`; ADR-0002 amendment. One code review, not a penetration test; browser-side security not reviewed |
 | Keyframed effect parameters; audio crossfade; cut/copy/paste/duplicate | tested | `phase7-proof.json`, `phase8-proof.json`, `editor-interactions-proof.json`, `effects.test.ts`, `audio.test.ts` |
+| Clip speed 0.1–8× as an exact ratio (slow motion, speed-up), picture and linked sound together; sound is varispeed (pitch follows speed) | tested | `docs/evidence/speed-proof.json` (exported frames, pitch, captions, markers, preview seeks), `speed.test.ts`. No ramps, reverse, freeze or pitch-preserving stretch; preview playback sound at speed not measured |
 | GPU compositor, shader effect families, keying, speed ramps, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface

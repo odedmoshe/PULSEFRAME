@@ -4,7 +4,7 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { sequenceDuration, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { sequenceDuration, sourceEnd, toTimelineSpan, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { variantDoc } from './export.ts';
@@ -55,7 +55,7 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
           const prev = track.clips.find((p) => p.type === 'media' && p.id !== c.id && T.eq(T.add(p.start, p.duration), c.start));
           const pa = prev && prev.type === 'media' ? doc.assets[prev.assetId] : undefined;
           if (prev && prev.type === 'media' && pa && pa.kind !== 'image') {
-            const handle = fi(T.sub(pa.duration, T.add(prev.sourceIn, prev.duration)));
+            const handle = fi(toTimelineSpan(prev, T.sub(pa.duration, sourceEnd(prev))));
             if (handle < c.transition.frames) issues.push({ code: 'transition_freeze', severity: 'warning', message: `the ${c.transition.type} transition needs ${c.transition.frames} spare source frames after the previous clip but only ${Math.max(0, handle)} exist; the outgoing picture will freeze`, ids: [c.id, prev.id], fix: handle > 0 ? { label: `Shorten the transition to ${handle} frames`, ops: [{ op: 'set_transition', args: { clipId: c.id, type: c.transition.type, frames: handle } }] } : { label: 'Remove the transition', ops: [{ op: 'set_transition', args: { clipId: c.id, type: null } }] } });
           }
         }

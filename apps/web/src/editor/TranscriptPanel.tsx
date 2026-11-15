@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from '@pulseframe/core';
-import { CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
+import { sourceAt, sourceEnd, timelineAt, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { api, type SilenceResult } from '../api.ts';
 import { useEditorState, type Editor } from './store.ts';
@@ -16,7 +16,7 @@ const mediaClipsOf = (doc: ProjectDocument, assetId: string): MediaClip[] =>
 const half = (d: T.RationalTime) => T.rt(BigInt(d.value), d.timescale * 2);
 /** Timeline time of a source time, or null when no clip of the asset shows it. */
 function sourceToTimeline(clips: MediaClip[], s: T.RationalTime): T.RationalTime | null {
-  for (const c of clips) if (T.lte(c.sourceIn, s) && T.lt(s, T.add(c.sourceIn, c.duration))) return T.add(c.start, T.sub(s, c.sourceIn));
+  for (const c of clips) if (T.lte(c.sourceIn, s) && T.lt(s, sourceEnd(c))) return timelineAt(c, s);
   return null;
 }
 const readText = (file: File) => file.text();
@@ -64,7 +64,7 @@ export function TranscriptPanel() {
   // Playhead → source time of this asset.
   const ph = editor.playhead;
   const playing = clips.find((c) => T.lte(c.start, ph) && T.lt(ph, T.add(c.start, c.duration)));
-  const srcNow = playing ? T.add(playing.sourceIn, T.sub(ph, playing.start)) : null;
+  const srcNow = playing ? sourceAt(playing, ph) : null;
   const idx = (id: string | null) => (id ? flat.findIndex((x) => x.w.id === id) : -1);
   const a = idx(anchor), f = idx(focus);
   const lo = a < 0 || f < 0 ? -1 : Math.min(a, f), hi = a < 0 || f < 0 ? -1 : Math.max(a, f);

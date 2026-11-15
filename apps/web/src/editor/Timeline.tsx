@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, timelineMarkers, type Clip, type ProjectDocument } from '@pulseframe/core';
+import { toSourceSpan, clipEnd, timelineMarkers, type Clip, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
@@ -66,7 +66,7 @@ export function Timeline() {
                     style={{ left: T.toSeconds(c.start) * pps, width }} onClick={() => editor.select(c.id)} aria-pressed={selection.includes(c.id)}
                     aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
-                      <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.duration} widthPx={width} heightPx={34} refreshKey={derivativeTick} />
+                      <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed */} widthPx={width} heightPx={34} refreshKey={derivativeTick} />
                     )}
                     <span dir="auto" className="clip-label">{clipLabel(doc, c)}</span>
                     {c.keyframes && [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.toSeconds(k.time))))].filter((s) => s >= 0 && s <= T.toSeconds(c.duration)).map((s) => (

@@ -182,19 +182,22 @@ export class Player {
           try {
           const fromLocal = Math.max(0, Math.round((t0 - start) * plan.sampleRate));
           const gain = plannedClipInput(this.actx!, c, plan.sampleRate, master!, originClock + (start - t0), fromLocal);
-          const srcFrom = sourceIn + Math.max(0, t0 - start);
-          const srcTo = sourceIn + (end - start);
+          // Source seconds advance `speed` times as fast as the playback clock (varispeed: pitch follows speed, as in export).
+          const speed = c.speed;
+          const srcFrom = sourceIn + Math.max(0, t0 - start) * speed;
+          const srcTo = sourceIn + (end - start) * speed;
           for await (const b of opened.sink.buffers(srcFrom, srcTo)) {
             if (gen !== this.generation) break;
             // Portion of this buffer inside [srcFrom, srcTo), then its position on the playback clock.
             const from = Math.max(b.timestamp, srcFrom);
             const to = Math.min(b.timestamp + b.duration, srcTo);
             if (to <= from) continue;
-            const when = originClock + (start + (from - sourceIn) - t0);
+            const when = originClock + (start + (from - sourceIn) / speed - t0);
             const node = this.actx!.createBufferSource();
             node.buffer = b.buffer;
+            node.playbackRate.value = speed;
             node.connect(gain);
-            const late = Math.max(0, now() - when); // decode fell behind: skip the part already in the past
+            const late = Math.max(0, now() - when) * speed; // decode fell behind: skip the part already in the past (in source seconds)
             if (to - from - late <= 0) continue;
             node.start(Math.max(when, now()), from - b.timestamp + late, to - from - late);
             this.nodes.push(node);

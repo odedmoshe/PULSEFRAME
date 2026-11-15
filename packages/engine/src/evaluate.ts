@@ -4,11 +4,11 @@
  *
  * Layer order: tracks bottom-to-top in sequence order; within the graph, later layers draw over earlier ones.
  * Source-frame selection rule (schema v1, speed 1, CFR sources whose first PTS is 0):
- *   sourceTime = clip.sourceIn + (t - clip.start);  sourceFrame = floor(sourceTime * assetFrameRate)
+ *   sourceTime = clip.sourceIn + (t - clip.start) × speed;  sourceFrame = floor(sourceTime * assetFrameRate)
  */
 import * as T from '@pulseframe/time';
 import { captionAt, type CaptionLayer } from './captions.ts';
-import { effectParamsAt, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { effectParamsAt, sourceAt, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 
 /** Look applied by the compositor after the layer is placed: effects in order, then mask, then blend/opacity. */
 export interface LayerLook {
@@ -60,7 +60,7 @@ const smooth = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 /
 function pictureLayer(doc: ProjectDocument, track: Track, clip: Extract<Clip, { type: 'media' }>, time: T.RationalTime): VideoLayer | ImageLayer | null {
   const asset = doc.assets[clip.assetId];
   if (!asset) return null;
-  const sourceTime = T.add(clip.sourceIn, T.sub(time, clip.start));
+  const sourceTime = sourceAt(clip, time);
   if (asset.kind === 'image' && asset.image)
     return { kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time), ...look(clip, time) };
   if (!asset.video) return null;
@@ -94,7 +94,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       const asset = doc.assets[clip.assetId];
       if (!asset) continue;
       if (track.kind === 'audio') {
-        if (!track.muted && asset.audio) graph.audio.push({ clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime: T.add(clip.sourceIn, T.sub(time, clip.start)), gain: clip.gain });
+        if (!track.muted && asset.audio) graph.audio.push({ clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime: sourceAt(clip, time), gain: clip.gain });
         continue;
       }
       if (track.kind !== 'video' || track.hidden) continue;

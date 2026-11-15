@@ -94,7 +94,7 @@ export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) =>
         if (!r) {
           // Start reading at the first clip-local sample this export needs; positions are absolute sample indices.
           const skip = from - clip.at;
-          const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate},aformat=sample_fmts=flt:channel_layouts=stereo,atrim=start_sample=${clip.source + skip}:end_sample=${clip.source + clip.length},asetpts=PTS-STARTPTS`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
+          const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate},aformat=sample_fmts=flt:channel_layouts=stereo,atrim=start_sample=${clip.source + Math.round(skip * clip.speed)}:end_sample=${clip.source + Math.round(clip.length * clip.speed)},asetpts=PTS-STARTPTS${clip.speed === 1 ? '' : `,asetrate=${Math.round(plan.sampleRate * clip.speed)},aresample=${plan.sampleRate}`}`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
           r = new PcmReader(child);
           readers.set(clip, r);
         }

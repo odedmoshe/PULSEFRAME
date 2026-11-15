@@ -5,6 +5,7 @@
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from './schema.ts';
 import type { OpCall } from './ops.ts';
+import { sourceEnd, timelineAt } from './speed.ts';
 
 export interface TimeRange { start: T.RationalTime; end: T.RationalTime }
 
@@ -29,10 +30,10 @@ export function sourceRangesToTimeline(doc: ProjectDocument, assetId: string, ra
     for (const track of seq.tracks)
       for (const c of track.clips) {
         if (c.type !== 'media' || c.assetId !== assetId) continue;
-        const from = T.max(c.sourceIn, s), to = T.min(T.add(c.sourceIn, c.duration), e);
+        const from = T.max(c.sourceIn, s), to = T.min(sourceEnd(c), e);
         if (!T.lt(from, to)) continue;
-        const start = ceilFrame(T.add(c.start, T.sub(from, c.sourceIn)), rate);
-        const end = T.frameTime(T.frameIndexAt(T.add(c.start, T.sub(to, c.sourceIn)), rate), rate);
+        const start = ceilFrame(timelineAt(c, from), rate);
+        const end = T.frameTime(T.frameIndexAt(timelineAt(c, to), rate), rate);
         if (T.lt(start, end)) out.push({ start, end });
       }
   }
@@ -57,8 +58,8 @@ export function sourceTimesToTimeline(doc: ProjectDocument, assetId: string, tim
   for (const track of seq.tracks)
     for (const c of track.clips) {
       if (c.type !== 'media' || c.assetId !== assetId) continue;
-      const end = T.add(c.sourceIn, c.duration);
-      for (const t of times) if (!T.lt(t, c.sourceIn) && T.lt(t, end)) out.push(T.add(c.start, T.sub(t, c.sourceIn)));
+      const end = sourceEnd(c);
+      for (const t of times) if (!T.lt(t, c.sourceIn) && T.lt(t, end)) out.push(timelineAt(c, t));
     }
   return out.sort(T.cmp).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
 }

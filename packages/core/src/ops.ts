@@ -11,6 +11,7 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
+import { sourceEnd, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
@@ -343,6 +344,32 @@ defineOp({
 });
 
 defineOp({
+  name: 'set_clip_speed',
+  version: 1,
+  description: 'Play a clip faster or slower (0.1–8; 0.5 = half speed / slow motion, 2 = double speed). The clip keeps showing the same stretch of source, so its length on the timeline changes (rounded down to a whole frame); nothing else moves. Linked picture and sound change together. Sound is resampled with the picture, so its pitch rises and falls with the speed.',
+  args: z.object({ clipId: z.string(), speed: z.number().min(0.1).max(8), includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have a speed', { clipId: a.clipId });
+    const rate = d.settings.frameRate;
+    const speed = speedFromNumber(a.speed);
+    const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
+    for (const { track, clip } of targets) {
+      if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
+      const span = toSourceSpan(clip, clip.duration); // source shown now; stays the same
+      if (speed.num === speed.den) delete clip.speed; else clip.speed = speed;
+      const frames = Math.max(1, T.frameIndexAt(toTimelineSpan(clip, span), rate));
+      const duration = T.frameTime(frames, rate);
+      assertFree(track, clip.start, T.add(clip.start, duration), new Set([clip.id]));
+      clip.duration = duration;
+      clampFades(clip);
+      if (clip.transition && clip.transition.frames > frames) clip.transition = { ...clip.transition, frames };
+    }
+    return { affectedIds: targets.map((t) => t.clip.id), summary: `Speed ${a.speed}×`, output: { speed, durationFrames: T.frameIndexAt((targets[0]!.clip).duration, rate) } };
+  },
+});
+
+defineOp({
   name: 'set_clip_gain',
   version: 1,
   description: 'Set the linear audio gain of a media clip (1 = unity, 0 = silent).',
@@ -400,8 +427,8 @@ defineOp({
         const duration = T.sub(a.to, clip.start);
         if (clip.type === 'media') {
           const asset = d.assets[clip.assetId]!;
-          if (asset.kind !== 'image' && T.lt(asset.duration, T.add(clip.sourceIn, duration)))
-            throw new OpError('out_of_bounds', 'not enough source material after the clip end', { clipId: clip.id, maxEnd: T.add(clip.start, T.sub(asset.duration, clip.sourceIn)) }, 'Extend no further than maxEnd.');
+          if (asset.kind !== 'image' && T.lt(asset.duration, T.add(clip.sourceIn, toSourceSpan(clip, duration))))
+            throw new OpError('out_of_bounds', 'not enough source material after the clip end', { clipId: clip.id, maxEnd: T.add(clip.start, toTimelineSpan(clip, T.sub(asset.duration, clip.sourceIn))) }, 'Extend no further than maxEnd.');
         }
         assertFree(track, clip.start, a.to, new Set([clip.id]));
         clip.duration = duration;
@@ -410,8 +437,8 @@ defineOp({
         if (!T.lt(a.to, end) || T.isNegative(a.to)) throw new OpError('out_of_bounds', 'trim would leave an empty clip or start before 0', { clipId: clip.id });
         const delta = T.sub(a.to, clip.start);
         if (clip.type === 'media') {
-          const sourceIn = T.add(clip.sourceIn, delta);
-          if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'not enough source material before the clip start', { clipId: clip.id, minStart: T.sub(clip.start, clip.sourceIn) }, 'Extend no earlier than minStart.');
+          const sourceIn = T.add(clip.sourceIn, toSourceSpan(clip, delta));
+          if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'not enough source material before the clip start', { clipId: clip.id, minStart: T.sub(clip.start, toTimelineSpan(clip, clip.sourceIn)) }, 'Extend no earlier than minStart.');
           clip.sourceIn = sourceIn;
         }
         assertFree(track, a.to, end, new Set([clip.id]));
@@ -449,7 +476,7 @@ defineOp({
       if (clip.type === 'caption') { delete clip.words; delete (right as typeof clip).words; }
       if (right.type === 'media') delete right.transition; // the transition belongs to the original cut point
       if (right.type === 'media' && clip.type === 'media') { delete right.fadeIn; delete clip.fadeOut; } // fades stay on the outer edges
-      if (right.type === 'media') { right.sourceIn = T.add(right.sourceIn, left); if (right.linkGroupId) right.linkGroupId = newLink; }
+      if (right.type === 'media') { right.sourceIn = T.add(right.sourceIn, toSourceSpan(right, left)); if (right.linkGroupId) right.linkGroupId = newLink; }
       clip.duration = left;
       clampFades(clip);
       clampFades(right);
@@ -752,7 +779,7 @@ defineOp({
     if (!cuts) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
     const rate = d.settings.frameRate;
     const clip = f.clip;
-    const points = sortedUnique(cuts.filter((t) => T.lt(clip.sourceIn, t) && T.lt(t, T.add(clip.sourceIn, clip.duration))).map((t) => T.snapToFrame(T.add(clip.start, T.sub(t, clip.sourceIn)), rate))).filter((t) => T.lt(clip.start, t) && T.lt(t, clipEnd(clip)));
+    const points = sortedUnique(cuts.filter((t) => T.lt(clip.sourceIn, t) && T.lt(t, sourceEnd(clip))).map((t) => T.snapToFrame(timelineAt(clip, t), rate))).filter((t) => T.lt(clip.start, t) && T.lt(t, clipEnd(clip)));
     const split = getOp('split_clip')!;
     const created: string[] = [];
     let current = clip.id;
@@ -802,7 +829,7 @@ defineOp({
     if (!prev) throw new OpError('not_found', 'no audio clip ends where this one starts on the same track', { clipId: clip.id }, 'Move the clips so they touch, then crossfade.');
     const base = T.sub(prev.duration, prev.fadeOut ?? T.ZERO); // length without any existing crossfade tail
     const asset = d.assets[prev.assetId]!;
-    const handle = T.sub(asset.duration, T.add(prev.sourceIn, base));
+    const handle = toTimelineSpan(prev, T.sub(asset.duration, T.add(prev.sourceIn, toSourceSpan(prev, base)))); // unused source after the clip, in timeline time at its speed
     if (T.lt(handle, a.duration)) throw new OpError('out_of_bounds', 'the earlier clip does not have enough unused source after its end for this crossfade', { maxDuration: T.frameTime(T.frameIndexAt(handle, d.settings.frameRate), d.settings.frameRate), previousClipId: prev.id }, 'Use at most maxDuration, or trim the end of the earlier clip first.');
     if (T.lt(clip.duration, T.add(a.duration, clip.fadeOut ?? T.ZERO)) || T.lt(base, T.add(prev.fadeIn ?? T.ZERO, T.ZERO))) throw new OpError('out_of_bounds', 'the crossfade is longer than the clip it fades into', { clipDuration: clip.duration });
     prev.duration = T.add(base, a.duration);
@@ -1006,7 +1033,7 @@ defineOp({
     if (prev) {
       const asset = d.assets[prev.assetId]!;
       if (asset.kind !== 'image') {
-        const handle = T.frameIndexAt(T.sub(asset.duration, T.add(prev.sourceIn, prev.duration)), rate);
+        const handle = T.frameIndexAt(toTimelineSpan(prev, T.sub(asset.duration, sourceEnd(prev))), rate);
         if (handle < frames) throw new OpError('out_of_bounds', `the previous clip has only ${handle} unused source frames after its end; the transition needs ${frames}`, { maxFrames: handle, previousClipId: prev.id }, handle > 0 ? 'Use at most maxFrames, or trim the end of the previous clip to free more source.' : 'Trim the end of the previous clip to free source frames for the transition.');
       }
     }
@@ -1250,7 +1277,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
         }
         if (right.type === 'media' && hasLeft) delete right.transition;
         if (right.type === 'media') delete right.fadeIn;
-        if (right.type === 'media') right.sourceIn = T.add(right.sourceIn, delta);
+        if (right.type === 'media') right.sourceIn = T.add(right.sourceIn, toSourceSpan(right, delta));
         if (right.type === 'caption') delete right.words;
         shiftKeyframes(right, delta);
         right.start = ripple ? start : end;
@@ -1310,9 +1337,9 @@ defineOp({
     for (const track of seq.tracks)
       for (const c of track.clips) {
         if (c.type !== 'media' || c.assetId !== a.assetId) continue;
-        const from = T.max(c.sourceIn, srcStart), to = T.min(T.add(c.sourceIn, c.duration), srcEnd);
+        const from = T.max(c.sourceIn, srcStart), to = T.min(sourceEnd(c), srcEnd);
         if (!T.lt(from, to)) continue;
-        const start = T.snapToFrame(T.add(c.start, T.sub(from, c.sourceIn)), rate), end = T.snapToFrame(T.add(c.start, T.sub(to, c.sourceIn)), rate);
+        const start = T.snapToFrame(timelineAt(c, from), rate), end = T.snapToFrame(timelineAt(c, to), rate);
         if (T.lt(start, end) && !ranges.some((r) => T.eq(r.start, start) && T.eq(r.end, end))) ranges.push({ start, end });
       }
     if (ranges.length === 0) throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId });

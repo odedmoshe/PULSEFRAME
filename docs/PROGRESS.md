@@ -223,7 +223,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Audio crossfade (`set_audio_crossfade`): extends the earlier clip into its source handle and overlaps two linear fades that always sum to one; refused with the usable length when there is no handle; removable. `pnpm proof:phase8` (19): the exported level moves 0.5 → 0.25 exactly linearly with no dip.
 - Cut (Ctrl+X) then paste moves clips in one transaction; nothing is committed by the cut itself.
 - `pnpm proof:editor-interactions` is now 12 checks.
-- Not built: speed changes, volume automation curves, audio crossfade attached to picture transitions, crossfade UI (op and agent tool only).
+- Not built: volume automation curves, audio crossfade attached to picture transitions, crossfade UI (op and agent tool only).
 
 **Checkpoint 13h — data lifecycle**
 - `POST /projects/{id}/delete` (owner only, the exact project name as confirmation, refused while jobs are queued or running) removes the project, its history, jobs, proposals and exported files. Media is kept at that point because other projects may use the same files.
@@ -239,6 +239,14 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Bug found by this proof and fixed: the project dialog handled Escape only while focus was inside it, and deleting a row removed the focused element, so Escape stopped working and focus was lost. Escape is now handled at document level, focus is pulled back into the dialog, and it returns to the opener on close. **The accessibility audit did not catch this because it does not open dialogs** — its stated limit.
 - Regression caught after the first commit of this checkpoint: the access panel requested the grant list before the owner session existed, so every editor load logged a 401, which failed the "no page errors" checks of the Phase 0 and Phase 3 proofs (53/54, 26/27). The new owner-UI proof had not caught it because it filtered 4xx console messages; that filter is removed. The panel now loads after the project. Commit 01e0c33 contains the defect; the next commit fixes it.
 - Still open: approvals list UI, activity log dialog, markers, J/K/L, multi-select drag, source viewer, workspaces.
+
+**Checkpoint 13j — clip speed (slow motion and speed-up)**
+- A media clip can play its source faster or slower by an exact ratio (`speed {num, den}`, 0.1–8). `set_clip_speed` keeps the same stretch of source and changes the clip's length (rounded down to a whole frame); linked picture and sound change together; it is refused if the longer clip would overlap a neighbour. It is an ordinary registered op, so the editor, REST and MCP all have it.
+- One mapping (`packages/core/src/speed.ts`) is used everywhere timeline time meets source time: frame selection, trim limits, split, range cuts, split-at-scenes, transcript cuts, captions, scene/beat markers, silence candidates, transition and crossfade handles, preflight, the audio plan, the server mixer, preview playback and browser export.
+- Sound is resampled with the picture ("varispeed"): pitch rises and falls with the speed. **Pitch-preserving time stretch is not implemented.** Keyframes and fades stay in timeline time (they are not rescaled when the speed changes).
+- Editor: speed field and 0.25/0.5/1/2/4× presets in the clip Inspector; the clip's thumbnails and waveform follow the speed.
+- `pnpm proof:speed` (12 checks, `docs/evidence/speed-proof.json`): every exported frame at 2×, 0.5× and 1.5× shows the predicted source frame (barcode); split keeps the export identical; overlap refused; still render and five preview seeks agree; exported tone pitch within 0.5 Hz of 440 × speed and length within a frame at four speeds; caption cues and a scene marker move with the speed. `speed.test.ts` (5, incl. a property test over speeds and trims).
+- Limits: synthetic fixtures only; preview playback sound at speed was not measured (the export was); no speed ramps, reverse, freeze frame or fit-to-duration.
 
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
@@ -263,7 +271,7 @@ Status words used here: **blocked** (cannot be implemented or verified without s
 
 Unblocked (no decision needed), roughly by value:
 1. Editor: multi-select drag, J/K/L, markers, source viewer, workspaces (Phase 3 carry-over).
-2. Speed changes with audio; volume automation curves (Phases 7–8 carry-over).
+2. Volume automation curves; speed ramps, reverse, freeze frame, pitch-preserving stretch (Phases 7–8 carry-over; constant speed is done).
 4. Disk quota; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; MCP resources/prompts; activity log dialog; dialogs and transient states in the accessibility audit.
@@ -284,8 +292,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 260 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 31 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 19 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 12 · `pnpm proof:owner-ui` 7 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+Expect 265 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 31 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 19 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 12 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

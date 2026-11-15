@@ -1,0 +1,31 @@
+/**
+ * Clip speed (SPEC §14): a media clip may play its source faster or slower by an exact ratio.
+ * `speed = num/den` means one second of timeline shows num/den seconds of source. All conversions between timeline time and
+ * source time go through these helpers, so every feature that maps between the two (cuts, captions, analysis markers,
+ * transitions, audio) agrees. Sound follows the picture by resampling ("varispeed"): pitch rises and falls with speed.
+ */
+import * as T from '@pulseframe/time';
+import type { Clip, MediaClip } from './schema.ts';
+
+export interface Speed { num: number; den: number }
+export const UNIT_SPEED: Speed = { num: 1, den: 1 };
+export const speedOf = (c: Clip): Speed => (c.type === 'media' && c.speed ? c.speed : UNIT_SPEED);
+export const speedValue = (c: Clip): number => { const s = speedOf(c); return s.num / s.den; };
+const mul = (t: T.RationalTime, num: number, den: number): T.RationalTime => (num === den ? t : T.normalize({ value: (BigInt(t.value) * BigInt(num)).toString(), timescale: t.timescale * den }));
+/** Timeline duration -> source duration for this clip. */
+export const toSourceSpan = (c: Clip, timelineDuration: T.RationalTime): T.RationalTime => { const s = speedOf(c); return mul(timelineDuration, s.num, s.den); };
+/** Source duration -> timeline duration for this clip. */
+export const toTimelineSpan = (c: Clip, sourceDuration: T.RationalTime): T.RationalTime => { const s = speedOf(c); return mul(sourceDuration, s.den, s.num); };
+/** Source time shown at the end of the clip. */
+export const sourceEnd = (c: MediaClip): T.RationalTime => T.add(c.sourceIn, toSourceSpan(c, c.duration));
+/** Source time shown at timeline time `t` (no clamping). */
+export const sourceAt = (c: MediaClip, t: T.RationalTime): T.RationalTime => T.add(c.sourceIn, toSourceSpan(c, T.sub(t, c.start)));
+/** Timeline time at which source time `s` is shown (no clamping). */
+export const timelineAt = (c: MediaClip, s: T.RationalTime): T.RationalTime => T.add(c.start, toTimelineSpan(c, T.sub(s, c.sourceIn)));
+/** A decimal speed such as 0.5 or 1.25 as an exact ratio (three decimals at most). */
+export function speedFromNumber(x: number): Speed {
+  const num = Math.round(x * 1000), den = 1000;
+  const g = (a: number, b: number): number => (b ? g(b, a % b) : a);
+  const k = g(num, den);
+  return { num: num / k, den: den / k };
+}

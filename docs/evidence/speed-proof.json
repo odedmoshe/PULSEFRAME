@@ -1,0 +1,202 @@
+{
+  "ranAt": "2026-11-15T02:48:27.727Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Clip speed on synthetic fixtures (frame-barcode video, sine tone). Sound is varispeed; pitch-preserving stretch and speed ramps are not implemented. Preview playback audio at speed is not measured here.",
+  "passed": 12,
+  "total": 12,
+  "measurements": {
+    "audio": {
+      "method": "zero crossings of the exported WAV mix; 440 Hz source tone of 4 s",
+      "rows": [
+        {
+          "speed": 1,
+          "expectedHz": 440,
+          "measuredHz": 439.86,
+          "expectedSeconds": 4,
+          "soundEndsAt": 4
+        },
+        {
+          "speed": 2,
+          "expectedHz": 880,
+          "measuredHz": 879.69,
+          "expectedSeconds": 2,
+          "soundEndsAt": 2
+        },
+        {
+          "speed": 0.5,
+          "expectedHz": 220,
+          "measuredHz": 219.93,
+          "expectedSeconds": 8,
+          "soundEndsAt": 8
+        },
+        {
+          "speed": 1.25,
+          "expectedHz": 550,
+          "measuredHz": 549.82,
+          "expectedSeconds": 3.2,
+          "soundEndsAt": 3.2
+        }
+      ]
+    }
+  },
+  "checks": [
+    {
+      "name": "set_clip_speed 2: one transaction halves the clip (120 → 60 frames) and its linked sound together, source span unchanged",
+      "ok": true,
+      "detail": {
+        "revision": 3
+      }
+    },
+    {
+      "name": "2×: the export has 60 frames and frame i shows source frame 2i — every frame read from its barcode",
+      "ok": true,
+      "detail": {
+        "frames": 60,
+        "mismatched": [],
+        "sample": [
+          0,
+          2,
+          4,
+          6,
+          8,
+          10
+        ]
+      }
+    },
+    {
+      "name": "0.5×: the export has 240 frames and frame i shows source frame floor(i/2) (each source frame held for two)",
+      "ok": true,
+      "detail": {
+        "frames": 240,
+        "mismatched": [],
+        "sample": [
+          0,
+          0,
+          1,
+          1,
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "name": "1.5× (exact ratio 3/2): 80 frames, frame i shows source frame floor(3i/2); no drift at the end of the clip",
+      "ok": true,
+      "detail": {
+        "frames": 80,
+        "mismatched": [],
+        "last": 118,
+        "stored": {
+          "num": 3,
+          "den": 2
+        }
+      }
+    },
+    {
+      "name": "split at timeline frame 30 of the 2× clip: the right half starts at source 2 s, keeps its speed, and the export is unchanged frame for frame",
+      "ok": true
+    },
+    {
+      "name": "slowing a clip into its neighbour is refused with a clear error and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 422,
+        "code": "overlap"
+      }
+    },
+    {
+      "name": "a still render of timeline frame 45 shows source frame 90 (same evaluator as export)",
+      "ok": true
+    },
+    {
+      "name": "undo: speed change and split were one transaction, so one undo returns to the single 1.5× clip of 80 frames",
+      "ok": true
+    },
+    {
+      "name": "exported sound of a 440 Hz tone at 1×, 2×, 0.5×, 1.25×: pitch within 0.5 Hz of 440×speed and length within one frame of 4/speed (varispeed: pitch follows speed)",
+      "ok": true,
+      "detail": [
+        {
+          "speed": 1,
+          "expectedHz": 440,
+          "measuredHz": 439.86,
+          "expectedSeconds": 4,
+          "soundEndsAt": 4
+        },
+        {
+          "speed": 2,
+          "expectedHz": 880,
+          "measuredHz": 879.69,
+          "expectedSeconds": 2,
+          "soundEndsAt": 2
+        },
+        {
+          "speed": 0.5,
+          "expectedHz": 220,
+          "measuredHz": 219.93,
+          "expectedSeconds": 8,
+          "soundEndsAt": 8
+        },
+        {
+          "speed": 1.25,
+          "expectedHz": 550,
+          "measuredHz": 549.82,
+          "expectedSeconds": 3.2,
+          "soundEndsAt": 3.2
+        }
+      ]
+    },
+    {
+      "name": "captions made from the transcript follow the speed: cues at 0–2 s and 2–4 s become 0–1 s and 1–2 s at 2×; a scene marker at source 3 s sits at 1.5 s",
+      "ok": true,
+      "detail": {
+        "base": [
+          [
+            0,
+            2
+          ],
+          [
+            2,
+            4
+          ]
+        ],
+        "fastCues": [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        "markers": [
+          1.5
+        ]
+      }
+    },
+    {
+      "name": "Inspector: the 2× preset commits set_clip_speed; the field shows 2 and the clip on the timeline is half as wide",
+      "ok": true,
+      "detail": {
+        "shown": "2",
+        "widthBefore": 359,
+        "widthAfter": 179
+      }
+    },
+    {
+      "name": "preview: five seeks on the 2× clip each paint source frame 2×target; typing 0.75 stores the exact ratio 3/4 (160 frames); no page errors",
+      "ok": true,
+      "detail": {
+        "wrong": [],
+        "errors": []
+      }
+    }
+  ]
+}

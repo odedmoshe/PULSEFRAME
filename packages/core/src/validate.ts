@@ -1,5 +1,6 @@
 import * as T from '@pulseframe/time';
 import { animatableParams, findEffect } from './effects.ts';
+import { sourceEnd } from './speed.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -92,7 +93,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if ((c.fadeIn || c.fadeOut) && tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: audio fades belong to clips on audio tracks`, ids: [c.id] });
         if ((c.fadeIn && T.isNegative(c.fadeIn)) || (c.fadeOut && T.isNegative(c.fadeOut)) || T.lt(c.duration, T.add(c.fadeIn ?? T.ZERO, c.fadeOut ?? T.ZERO))) issues.push({ code: 'fade_out_of_bounds', message: `clip ${c.id}: fades are negative or longer than the clip`, ids: [c.id] });
         if (T.isNegative(c.sourceIn)) issues.push({ code: 'source_out_of_bounds', message: `clip ${c.id} sourceIn < 0`, ids: [c.id] });
-        if (asset.kind !== 'image' && T.lt(asset.duration, T.add(c.sourceIn, c.duration)))
+        if (asset.kind !== 'image' && T.lt(asset.duration, sourceEnd(c)))
           issues.push({ code: 'source_out_of_bounds', message: `clip ${c.id} reads past the end of asset ${asset.id}`, ids: [c.id, asset.id] });
       }
     }

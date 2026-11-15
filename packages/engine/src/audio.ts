@@ -7,13 +7,15 @@
  * envelopes in clip-local samples. Mixers must evaluate them per sample (or with exact linear ramps).
  */
 import * as T from '@pulseframe/time';
-import type { ProjectDocument, Sequence, Track } from '@pulseframe/core';
+import { sourceEnd, speedValue, timelineAt, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
 
 export interface EnvPoint { s: number; g: number }
 export interface PlannedAudioClip {
   clipId: string; trackId: string; assetId: string;
   /** Timeline sample where the clip starts, its length, and the source sample it starts reading from. */
   at: number; length: number; source: number;
+  /** Source samples consumed per output sample (1 = normal). Mixers resample by this ratio, so pitch follows speed. */
+  speed: number;
   /** Clip gain × track gain (linear). */
   gain: number;
   /** -1..1 balance. Left gain = min(1, 1 - pan), right gain = min(1, 1 + pan). */
@@ -51,12 +53,12 @@ export function speechRanges(doc: ProjectDocument, seq: Sequence, sourceTrackIds
     if (!sourceTrackIds.includes(tr.id) || tr.kind !== 'audio' || tr.muted) continue;
     for (const c of tr.clips) {
       if (c.type !== 'media' || c.gain <= 0) continue;
-      const end = T.add(c.start, c.duration), srcEnd = T.add(c.sourceIn, c.duration);
+      const end = T.add(c.start, c.duration), srcEnd = sourceEnd(c);
       const transcript = doc.transcripts?.[c.assetId];
       if (!transcript) { out.push([T.nearestSampleIndex(c.start, sr), T.nearestSampleIndex(end, sr)]); continue; }
       for (const seg of transcript.segments) {
         const a = T.max(seg.start, c.sourceIn), b = T.min(T.add(seg.start, seg.duration), srcEnd);
-        if (T.lt(a, b)) out.push([T.nearestSampleIndex(T.add(c.start, T.sub(a, c.sourceIn)), sr), T.nearestSampleIndex(T.add(c.start, T.sub(b, c.sourceIn)), sr)]);
+        if (T.lt(a, b)) out.push([T.nearestSampleIndex(timelineAt(c, a), sr), T.nearestSampleIndex(timelineAt(c, b), sr)]);
       }
     }
   }
@@ -107,7 +109,7 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId)
       const fade: EnvPoint[] = [];
       if (fin > 0) fade.push({ s: 0, g: 0 }, { s: fin, g: 1 }); else fade.push({ s: 0, g: 1 });
       if (fout > 0) fade.push({ s: length - fout, g: 1 }, { s: length, g: 0 }); else fade.push({ s: length, g: 1 });
-      clips.push({ clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
+      clips.push({ clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
     }
   }
   return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null };

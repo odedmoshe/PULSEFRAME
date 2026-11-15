@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { sourceAt, sourceEnd } from '@pulseframe/core';
 import * as T from '@pulseframe/time';
 import type { Clip } from '@pulseframe/core';
 import { api, ApiFailure } from '../api.ts';
@@ -39,8 +40,8 @@ export function AnalysisPanel() {
   const clipEndT = T.add(clip.start, clip.duration);
   const ph = editor.playhead;
   const inside = T.lte(clip.start, ph) && T.lt(ph, clipEndT);
-  const srcNow = inside ? T.add(clip.sourceIn, T.sub(ph, clip.start)) : null;
-  const srcEnd = T.add(clip.sourceIn, clip.duration);
+  const srcNow = inside ? sourceAt(clip, ph) : null;
+  const srcEnd = sourceEnd(clip);
   const cutsInClip = scenes ? scenes.cuts.filter((c) => T.lt(clip.sourceIn, c) && T.lt(c, srcEnd)).length : 0;
 
   const run = async (kind: Kind) => {

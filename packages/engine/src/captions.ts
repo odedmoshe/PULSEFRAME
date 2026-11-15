@@ -5,7 +5,7 @@
  * source time -> phrase/word. Nothing is re-timed when the edit changes, so captions cannot drift from a cut.
  */
 import * as T from '@pulseframe/time';
-import type { CaptionStyle, ProjectDocument, Segment, Sequence, Track } from '@pulseframe/core';
+import { sourceAt, sourceEnd, timelineAt, type CaptionStyle, type ProjectDocument, type Segment, type Sequence, type Track } from '@pulseframe/core';
 
 export type WordState = 'past' | 'current' | 'future' | 'plain';
 export interface CaptionLayer {
@@ -93,7 +93,7 @@ function transcriptLayer(doc: ProjectDocument, seq: Sequence, track: Track, time
     const clip = activeMedia(src, time);
     const transcript = clip && doc.transcripts?.[clip.assetId];
     if (!clip || !transcript) continue;
-    const st = T.add(clip.sourceIn, T.sub(time, clip.start));
+    const st = sourceAt(clip, time);
     const seg: Segment | undefined = transcript.segments.find((s) => !T.lt(st, s.start) && T.lt(st, T.add(s.start, s.duration)));
     if (!seg) return null;
     const capacity = cfg.style.maxLines * cfg.style.maxCharsPerLine;
@@ -111,7 +111,7 @@ function transcriptLayer(doc: ProjectDocument, seq: Sequence, track: Track, time
     const used = src.clips.filter((c) => c.type === 'media' && c.assetId === clip.assetId) as Extract<Track['clips'][number], { type: 'media' }>[];
     const heard = seg.words.filter((w) => {
       const mid = T.add(w.start, { value: w.duration.value, timescale: w.duration.timescale * 2 });
-      return used.some((c) => !T.lt(mid, c.sourceIn) && T.lt(mid, T.add(c.sourceIn, c.duration)));
+      return used.some((c) => !T.lt(mid, c.sourceIn) && T.lt(mid, sourceEnd(c)));
     });
     if (heard.length === 0) return null;
     const pages = captionPages(heard.map((w) => w.text), capacity);
@@ -175,8 +175,8 @@ export function captionCues(doc: ProjectDocument, seq: Sequence, track: Track): 
       const cEnd = T.add(clip.start, clip.duration);
       if (!transcript || covered.some((r) => T.lt(clip.start, r.end) && T.lt(r.start, cEnd))) continue;
       covered.push({ start: clip.start, end: cEnd });
-      const srcEnd = T.add(clip.sourceIn, clip.duration);
-      const toTimeline = (t: T.RationalTime) => T.add(clip.start, T.sub(T.min(T.max(t, clip.sourceIn), srcEnd), clip.sourceIn));
+      const srcEnd = sourceEnd(clip);
+      const toTimeline = (t: T.RationalTime) => timelineAt(clip, T.min(T.max(t, clip.sourceIn), srcEnd));
       for (const seg of transcript.segments) {
         const segEnd = T.add(seg.start, seg.duration);
         if (!T.lt(seg.start, srcEnd) || !T.lt(clip.sourceIn, segEnd)) continue;
@@ -184,7 +184,7 @@ export function captionCues(doc: ProjectDocument, seq: Sequence, track: Track): 
         const mid = (w: { start: T.RationalTime; duration: T.RationalTime }) => T.add(w.start, { value: w.duration.value, timescale: w.duration.timescale * 2 });
         // Same rule as the renderer: a phrase shows every word still heard somewhere on this track.
         const used = src.clips.filter((c) => c.type === 'media' && c.assetId === clip.assetId) as typeof clip[];
-        const here = seg.words.filter((w) => used.some((c) => !T.lt(mid(w), c.sourceIn) && T.lt(mid(w), T.add(c.sourceIn, c.duration))));
+        const here = seg.words.filter((w) => used.some((c) => !T.lt(mid(w), c.sourceIn) && T.lt(mid(w), sourceEnd(c))));
         const pages = captionPages(here.map((w) => w.text), capacity);
         pages.forEach((p, pi) => {
           const first = here[p[0]!]!, nextPage = pages[pi + 1];

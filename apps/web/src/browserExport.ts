@@ -123,8 +123,9 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
     const buf = await decode(c.assetId);
     const src = ctx.createBufferSource();
     src.buffer = buf;
+    src.playbackRate.value = c.speed; // varispeed, same as the server mix and the preview
     src.connect(plannedClipInput(ctx, c, rate, ctx.destination, (c.at - firstSample) / rate, s0 - c.at));
-    src.start((s0 - firstSample) / rate, (c.source + (s0 - c.at)) / rate, (s1 - s0) / rate);
+    src.start((s0 - firstSample) / rate, (c.source + (s0 - c.at) * c.speed) / rate, ((s1 - s0) * c.speed) / rate);
   }
   stopped();
   return ctx.startRendering();

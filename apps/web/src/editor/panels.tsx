@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import type { Clip } from '@pulseframe/core';
-import { FONT_CATALOG } from '@pulseframe/core';
+import { FONT_CATALOG, speedValue } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
@@ -143,6 +143,28 @@ export function Transport() {
       <button className="ghost" onClick={() => run(editor, 'transport.loop')} aria-pressed={!!p?.loop} aria-label={t('cmd.loop')} title={t('cmd.loop')} data-testid="loop">⟳</button>
       <span className="timecode" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>
       <span className="muted">/ {T.toTimecode(editor.duration, rate)} · {editor.viewDoc?.settings.width}×{editor.viewDoc?.settings.height} · {(rate.num / rate.den).toFixed(rate.den === 1 ? 0 : 2)} fps</span>
+    </div>
+  );
+}
+
+/** Clip speed: a number field with common presets. Commits `set_clip_speed`; the clip's length follows, picture and linked sound together. */
+function SpeedField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
+  const { editor, t } = useEditorState();
+  const value = +speedValue(clip).toFixed(3);
+  const [v, setV] = useState(String(value));
+  useEffect(() => setV(String(value)), [value, clip.id]);
+  const set = (n: number) => { if (n !== value) void editor.commit([{ op: 'set_clip_speed', args: { clipId: clip.id, speed: n } }], 'Clip speed'); };
+  const commit = () => { const n = Number(v); if (v === '' || !Number.isFinite(n) || n < 0.1 || n > 8) { setV(String(value)); return; } set(Math.round(n * 1000) / 1000); };
+  return (
+    <div className="fields" data-testid="speed-field">
+      <label>{t('speed.label')}
+        <input type="number" dir="ltr" min={0.1} max={8} step={0.05} value={v} data-testid="clip-speed"
+          onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); }} />
+      </label>
+      <div className="row" role="group" aria-label={t('speed.presets')}>
+        {[0.25, 0.5, 1, 2, 4].map((p) => <button key={p} className="ghost" aria-pressed={value === p} data-testid={`clip-speed-${p}`} onClick={() => set(p)}><bdi>{p}×</bdi></button>)}
+      </div>
+      <p className="muted">{t('speed.hint')}</p>
     </div>
   );
 }
@@ -342,6 +364,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
           </label>
         </>
       )}
+      {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && <SpeedField clip={clip} />}
       {/* Values shown are the ones rendered at the playhead. Editing an animated property writes a keyframe there. */}
       {variantId ? (
         <div className="transform-scope" data-testid="transform-scope" data-scope="format">

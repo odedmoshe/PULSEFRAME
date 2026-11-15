@@ -10,9 +10,9 @@ async function audioChainMatchesReference() {
   const sr = 48000, total = 60000;
   const clips: PlannedAudioClip[] = [
     // fades + duck dip + balance, starting mid-timeline
-    { clipId: 'a', trackId: 't', assetId: 'x', at: 4800, length: 48000, source: 0, gain: 0.8, pan: -0.5, fade: [{ s: 0, g: 0 }, { s: 9600, g: 1 }, { s: 38400, g: 1 }, { s: 48000, g: 0 }], duck: [{ s: 0, g: 1 }, { s: 14400, g: 1 }, { s: 19200, g: 0.25 }, { s: 28800, g: 0.25 }, { s: 43200, g: 1 }, { s: 48000, g: 1 }] },
+    { clipId: 'a', trackId: 't', assetId: 'x', at: 4800, length: 48000, source: 0, speed: 1, gain: 0.8, pan: -0.5, fade: [{ s: 0, g: 0 }, { s: 9600, g: 1 }, { s: 38400, g: 1 }, { s: 48000, g: 0 }], duck: [{ s: 0, g: 1 }, { s: 14400, g: 1 }, { s: 19200, g: 0.25 }, { s: 28800, g: 0.25 }, { s: 43200, g: 1 }, { s: 48000, g: 1 }] },
     // plain clip overlapping it, panned the other way
-    { clipId: 'b', trackId: 'u', assetId: 'y', at: 0, length: 30000, source: 0, gain: 0.5, pan: 0.25, fade: [{ s: 0, g: 1 }, { s: 30000, g: 1 }], duck: [{ s: 0, g: 1 }, { s: 30000, g: 1 }] },
+    { clipId: 'b', trackId: 'u', assetId: 'y', at: 0, length: 30000, source: 0, speed: 1, gain: 0.5, pan: 0.25, fade: [{ s: 0, g: 1 }, { s: 30000, g: 1 }], duck: [{ s: 0, g: 1 }, { s: 30000, g: 1 }] },
   ];
   // Deterministic non-trivial stereo signal.
   const signal = (len: number, k: number) => { const f = new Float32Array(len * 2); for (let i = 0; i < len; i++) { f[i * 2] = Math.sin(i * 0.013 * k) * 0.7; f[i * 2 + 1] = Math.cos(i * 0.007 * k) * 0.6; } return f; };
