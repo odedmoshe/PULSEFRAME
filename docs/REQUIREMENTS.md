@@ -126,7 +126,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-10.1 | 10 | Clip gain/trim/placement mix; WebAudio preview on audio clock with monotonic fallback | 2 | R-08.1 | Transport | set_clip_gain | ffmpeg mix | partial | P0: beats land within one frame; stream duration matches video; preview audio streamed with bounded lookahead on the audio clock, onsets within 0.06 ms of timeline positions, video paint lateness median ~15 ms / p95 ~21 ms ("preview audio (streamed…", "preview playback ran to the end…"); one 3.5 s run on the CPU profile. No pan, fades, buses, AudioWorklet DSP |
 | R-10.2 | 10 | Shared DSP modules: EQ, compressor, gate, limiter, de-esser, denoise, reverb, delay, pitch | 8 | R-10.1 | Sound workspace | audio ops | Offline host | not started | |
 | R-10.3 | 10 | Meters, loudness/true-peak normalization, ducking, buses, mute/solo | 8 | R-10.2 | Meters | loudness op | Mix | partial | Track gain/pan/mute, range-based speech ducking, R128 measurement, static-gain normalisation with true-peak ceiling, level meter (`phase8-proof.json`, `audio.test.ts`). No buses, solo, limiter; meter not verified in live playback |
-| R-10.4 | 10 | Music tools: beat grid, tap tempo, downbeat, fit-to-duration, stems; J/L edits, crossfades | 9 | R-10.1 | Timeline | beat job | — | not started | |
+| R-10.4 | 10 | Music tools: beat grid, tap tempo, downbeat, fit-to-duration, stems; J/L edits, crossfades | 9 | R-10.1 | Timeline | beat job | — | partial | Beat grid with tempo and confidence, editable (`phase9-proof.json`, `beats.test.ts`, synthetic loops only); clip moves can snap to beats (not browser-verified). No tap tempo, downbeat, fit-to-duration, stems, crossfades |
 | R-10.5 | 10 | Procedural and licensed SFX with recipe/seed metadata; voice changers; censor bleep | 8 | R-10.2 | Sound drawer | add_clip | Mix | partial | 7 synthesised sounds as assets with recipe provenance (`phase8-proof.json`). No licensed library, voice changers or bleep |
 
 ## Section 11: Timeline and precise editing
@@ -206,7 +206,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-19.1 | 19.1 | Rhythm Composer with confidence, tap tempo, range regeneration | 9 | R-10.4, R-14.3 | Rhythm panel | compose job | Compositor | not started | |
+| R-19.1 | 19.1 | Rhythm Composer with confidence, tap tempo, range regeneration | 9 | R-10.4, R-14.3 | Rhythm panel | compose job | Compositor | partial | Beat markers with confidence, manual add/remove, scripted cut-on-bar-lines demo (`phase9-proof.json`). No Rhythm Composer UI, tap tempo or range regeneration |
 | R-19.2 | 19.2 | Dance and Movement Lab (pose, trails, takes, multicam sync) | 9 | R-19.3 | Dance Lab | pose job | Compositor | not started | |
 | R-19.3 | 19.3 | Subject Stage (mask/track, text behind subject, blur) | 9 | R-13.2 | Subject Stage | track job | Compositor | not started | |
 | R-19.4 | 19.4, 19.5 | Depth and Photo Motion; Reference-to-Recipe | 9 | R-14.4, R-24.1 | Photo Motion | depth, reference job | Compositor | not started | |

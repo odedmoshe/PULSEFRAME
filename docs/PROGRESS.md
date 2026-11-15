@@ -26,7 +26,8 @@ FFmpeg 6.1.1-3ubuntu5 · SQLite 3.54.1 · ComfyUI 0.45.0 / PyTorch 2.15.0 on CPU
 | Phase 6 — Typography and captions | **Partly met, verified-here on a synthetic transcript.** Gate has three parts: Hebrew/mixed-script golden tests pass (6 renders, small set); transcript removal preserves sync (frame- and sample-checked); **timing corpus not reported — no speech recognition exists here (B-7)** | `pnpm proof:phase6` 33/33 (`docs/evidence/phase6-proof.json`); `captions.test.ts` in core and engine; `subtitles.test.ts` |
 | Phase 7 — Motion and creative catalog | **First batch verified-here (Canvas2D look system).** Gate ("every shipped entry has working preview/export and reviewed visual fixtures") holds for the 12 effects, 17 blend modes, 2 mask shapes and 12 transitions that exist; most of the phase scope is not built | `pnpm proof:phase7` 30/30 (`docs/evidence/phase7-proof.json`), `effects.test.ts`, `look.test.ts`, `/lab.html` |
 | Phase 8 — Sound and voice | **First batch verified-here.** Gate parts: PCM/DSP and loudness tests pass (synthetic signals); sounds are actual assets (7 synthesised); **voice/narration/cloning not built — needs a provider or model decision (B-8)** | `pnpm proof:phase8` 17/17 (`docs/evidence/phase8-proof.json`), `audio.test.ts`, `/selftest.html` |
-| Phases 9–13, G2–G3 | Not started | — |
+| Phase 9 — Analysis intelligence | **Model-free part verified-here on synthetic corpora** (scene cuts, beats: corpus results reported, confidence and manual correction, stored as source-linked editable data, fully local). **Everything model-based is not built** (reframe, segmentation, pose/tracking, depth, semantic search) | `pnpm proof:phase9` 12/12 (`docs/evidence/phase9-proof.json`), `beats.test.ts` |
+| Phases 10–13, G2–G3 | Not started | — |
 
 ## Completed and verified-here
 
@@ -144,8 +145,18 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Editor: Sound tab (track volume in dB, pan, mute, ducking source, clip fades, loudness target, measure, level meter). The meter and audible preview of fades/ducking were **not** verified during live playback — only the WebAudio chain offline and the controls' effect on the document.
 - **Not built (Phase 8 scope):** EQ, compressor/limiter, noise reduction, de-esser, audio keyframes (volume automation), crossfades between clips, voice recording, narration/TTS, voice cloning (needs provider + consent flow), stems, licensed SFX/music library, real-speech and real-music tests.
 
+**Checkpoint 9a — model-free analysis**
+- `doc.analyses[assetId]`: scene cuts and beat grid in source time, with method, parameters and an `edited` flag. Timeline markers are derived through the current clips, so they follow every trim, move and cut (never stored in timeline time).
+- Scene cuts: ffmpeg scene score. Corpus (one synthetic 10 s clip, 5 hard cuts, H.264 with B-frames): 5/5 on the exact frame, 0 false cuts; a continuous shot gives 0; **a dissolve is not detected** (stated limit).
+- Beats: spectral-flux onsets + dynamic-programming tracking in TypeScript, no model. Corpus (six 24 s synthetic drum loops, 90–140 BPM and one drifting 120→127): F1 0.97–1.00 at ±70 ms, median timing error ≈5 ms, tempo within 1.2 BPM on the steady loops; steady noise scores 0.05 confidence against 0.57–0.99 for the loops. Known limits written in the code and UI: it follows the strongest broadband onsets (can sit on the off-beat), can report double/half tempo, and still returns a low-confidence grid for pulse-less sound.
+- Found and fixed while proving: confidence did not separate noise from music (mean not removed); the grid ran on through leading silence.
+- Ops: `edit_analysis` (add/remove/replace times by hand; also allows fully manual data), `split_at_scenes` (one transaction, linked sound included). Server: `POST …/assets/{id}/analyze` (refuses to discard hand corrections unless `overwrite`), `GET …/analysis`; MCP `analyze_asset`, `get_analysis`; `get_timeline` returns markers. Scripted agent demo: analyse music, read markers, place picture cuts on bar lines within 3.3 ms of the true beats.
+- Editor: analysis panel (run, results with confidence warning, split into shots, add/remove a beat or cut at the playhead), beat and scene markers on the timeline, optional snapping of clip moves to markers. Proven for scene markers and split; **drag snapping to beats and the manual add/remove buttons were not exercised in a browser**.
+- Flaky test fixed: `derive.test.ts` used random bytes as a corrupt file and failed once in a full run; it now uses fixed bytes.
+- **Not built (Phase 9 scope):** reframe/subject tracking, segmentation, pose, depth, semantic/visual search, assisted colour, downbeat/bar detection, fit-music-to-duration. Real footage and real music are untested (no licensed corpus here). Analysis runs inside the request (fine for short media; long files need the job queue).
+
 ## In progress
-- Phase 9 analysis without models where possible (scene/shot detection, beat detection by signal analysis), then the model-dependent parts stay blocked.
+- Phase 12 parts that need no provider (linked formats, safe areas, preflight), then recipes (Phase 11) that need no language model. Phase 10 (generative) is blocked on providers apart from the job/budget machinery already built.
 
 ## Blocked / unverified (with what would unblock)
 
@@ -169,7 +180,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 5. Phases 8–13; carry-over scope from Phases 2–5 listed above.
 
 ## Next executable action
-`pnpm install && pnpm build && pnpm test` (expect 233 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:phase8` (17/17), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
+`pnpm install && pnpm build && pnpm test` (expect 243 tests), then `pnpm proof` (53/53), `pnpm proof:phase3` (27/27), `pnpm proof:phase4` (19/19), `pnpm proof:phase5` (24/24), `pnpm proof:phase6` (33/33), `pnpm proof:phase7` (30/30), `pnpm proof:phase8` (17/17), `pnpm proof:phase9` (12/12), `pnpm proof:browser-export` (23/23), `pnpm conformance:parity`. Then Phase 6b: silence candidates (`apps/server/src/derive.ts` + a proposal), text animation presets (`packages/core/src/animation.ts`).
 
 ## Agent / model summary
 
@@ -192,6 +203,8 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 | 5 | Lead | export options/manifest/cancel/retry, full-quality preview, governance (grants, pause, proposals, approvals, budget), integration, proofs | as above | as above | — |
 | 5 | `pf-implementer` ×3 | parity suite (90,457 + 99,731 tok on resume); browser export route (168,016 tok · 510 s); OpenAPI update | `sonnet` | not observable | as listed |
 | 6 | Lead | transcript/caption model, ops, evaluation, bidi caption layout, REST/MCP, proof | as above | as above | — |
+| 9 | Lead | analysis model, beat tracker, scene detection, routes, corpus proof | as above | as above | — |
+| 9 | `pf-implementer` | analysis panel, timeline markers, beat snapping (56,386 tok · 88 s) | `sonnet` | not observable | as listed |
 | 8 | Lead | audio plan, streaming mixer, loudness, ducking, SFX, self-test page, proof | as above | as above | — |
 | 8 | `pf-implementer` | Sound tab + meter (55,487 tok · 98 s) | `sonnet` | not observable | as listed |
 | 7 | Lead | effect/blend/mask/transition registry, ops, evaluator, compositor, proof | as above | as above | — |

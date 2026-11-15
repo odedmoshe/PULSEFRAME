@@ -6,14 +6,17 @@
  * if nobody changed them since" — a compensating transaction, never a history rewrite.
  */
 import * as T from '@pulseframe/time';
-import type { Asset, Clip, ProjectDocument, Track, Transcript } from './schema.ts';
+import type { Analysis, Asset, Clip, ProjectDocument, Track, Transcript } from './schema.ts';
 
 export type EntityState =
   | { kind: 'project'; name: string; settings: ProjectDocument['settings'] }
   | { kind: 'asset'; asset: Asset }
   | { kind: 'track'; sequenceId: string; index: number; track: Omit<Track, 'clips'> }
   | { kind: 'clip'; sequenceId: string; trackId: string; clip: Clip }
-  | { kind: 'transcript'; transcript: Transcript };
+  | { kind: 'transcript'; transcript: Transcript }
+  | { kind: 'analysis'; analysis: Analysis };
+/** Entity id of an asset's analysis results. */
+export const analysisEntityId = (assetId: string) => `analysis:${assetId}`;
 /** Entity id of an asset's transcript. */
 export const transcriptEntityId = (assetId: string) => `transcript:${assetId}`;
 export interface EntityChange { id: string; before: EntityState | null; after: EntityState | null }
@@ -33,6 +36,7 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
   m.set(doc.id, { kind: 'project', name: doc.name, settings: doc.settings });
   for (const a of Object.values(doc.assets)) m.set(a.id, { kind: 'asset', asset: a });
   for (const t of Object.values(doc.transcripts ?? {})) m.set(transcriptEntityId(t.assetId), { kind: 'transcript', transcript: t });
+  for (const a of Object.values(doc.analyses ?? {})) m.set(analysisEntityId(a.assetId), { kind: 'analysis', analysis: a });
   for (const seq of Object.values(doc.sequences))
     seq.tracks.forEach((t, index) => {
       const { clips, ...track } = t;
@@ -67,10 +71,12 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
     if (state === null) {
       if (cur?.kind === 'asset') delete draft.assets[id];
       if (cur?.kind === 'transcript') delete draft.transcripts[cur.transcript.assetId];
+      if (cur?.kind === 'analysis') delete draft.analyses[cur.analysis.assetId];
       if (cur?.kind === 'track') { const seq = draft.sequences[cur.sequenceId]!; seq.tracks.splice(seq.tracks.findIndex((t) => t.id === id), 1); }
     } else if (state.kind === 'project') { draft.name = state.name; draft.settings = structuredClone(state.settings); }
     else if (state.kind === 'asset') draft.assets[id] = structuredClone(state.asset);
     else if (state.kind === 'transcript') draft.transcripts[state.transcript.assetId] = structuredClone(state.transcript);
+    else if (state.kind === 'analysis') draft.analyses[state.analysis.assetId] = structuredClone(state.analysis);
   }
   // 2. tracks (so restored clips have a home), lowest original index first
   for (const { id, state } of targets.filter((t) => t.state?.kind === 'track').sort((x, y) => (x.state as any).index - (y.state as any).index)) {

@@ -194,6 +194,18 @@ export const TranscriptSchema = z
   })
   .strict();
 
+// ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
+const AnalysisOrigin = z.object({ method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), createdBy: z.string(), edited: z.boolean().describe('true once a person or agent corrected the result by hand') }).strict();
+export const AnalysisSchema = z
+  .object({
+    assetId: Id,
+    /** Picture cuts inside the source file (the first frame of each new shot), ascending. */
+    scenes: z.object({ origin: AnalysisOrigin, cuts: z.array(RationalTimeSchema).max(20000) }).strict().optional(),
+    /** Beat grid of the source audio, ascending. bpm and confidence describe the detector's estimate; beats are what editing tools use. */
+    beats: z.object({ origin: AnalysisOrigin, bpm: z.number().min(20).max(400).nullable(), confidence: z.number().min(0).max(1).nullable(), beats: z.array(RationalTimeSchema).max(50000) }).strict().optional(),
+  })
+  .strict();
+
 export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema]);
 
 export const TrackSchema = z
@@ -230,6 +242,8 @@ export const ProjectSchema = z
     mainSequenceId: Id,
     /** Transcripts by asset id, in source time. */
     transcripts: z.record(Id, TranscriptSchema).default({}),
+    /** Analysis results by asset id, in source time. */
+    analyses: z.record(Id, AnalysisSchema).default({}),
   })
   .strict();
 
@@ -244,6 +258,7 @@ export type TextClip = z.infer<typeof TextClipSchema>;
 export type CaptionClip = z.infer<typeof CaptionClipSchema>;
 export type CaptionStyle = z.infer<typeof CaptionStyleSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
+export type Analysis = z.infer<typeof AnalysisSchema>;
 export type Segment = z.infer<typeof SegmentSchema>;
 export type Word = z.infer<typeof WordSchema>;
 export type Clip = z.infer<typeof ClipSchema>;
@@ -272,6 +287,7 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
     },
     mainSequenceId: 'seq_main',
     transcripts: {},
+    analyses: {},
   };
 }
 

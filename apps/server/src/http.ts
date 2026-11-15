@@ -6,7 +6,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type ProjectDocument } from '@pulseframe/core';
+import { describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -16,7 +16,7 @@ import type { DerivativeKind, Derivatives } from './derive.ts';
 import type { Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
-import { detectSilences } from './analysis.ts';
+import { detectBeatsOfFile, detectScenes, detectSilences } from './analysis.ts';
 import { makeSfx, SFX } from './sfx.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
@@ -168,6 +168,17 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/analysis/silences', async (c) => {
     need(c, 'observe');
     return c.json(await findSilences(store, c.req.param('id'), await body(c, SilenceBody)));
+  });
+  app.post('/api/v1/projects/:id/assets/:assetId/analyze', async (c) => {
+    const p = need(c, 'edit');
+    return c.json(await analyzeAsset(store, gov, p, c.req.param('id'), { assetId: c.req.param('assetId'), ...(await body(c, AnalyzeBody)) }));
+  });
+  app.get('/api/v1/projects/:id/assets/:assetId/analysis', (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    const a = p.doc.analyses?.[c.req.param('assetId')];
+    if (!a) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
+    return c.json({ revision: p.revision, ...analysisView(a) });
   });
   app.post('/api/v1/projects/:id/analysis/loudness', async (c) => { need(c, 'observe'); return c.json(await programmeLoudness(store, c.req.param('id'))); });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
@@ -507,4 +518,34 @@ export async function addSfx(store: Store, gov: Governance, principal: Principal
   if (!a.start) return { assetId, revision: imp.revision, placed: null };
   const placed = gov.commitAs(principal, { projectId, ops: [{ op: 'add_clip', args: { assetId, start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}) } }], label: `Place sound ${asset.name}` }) as { revision?: number; results?: { output?: Record<string, unknown> }[]; proposal?: unknown };
   return { assetId, revision: placed.revision ?? imp.revision, placed: placed.results?.[0]?.output ?? null, ...(placed.proposal ? { proposal: placed.proposal } : {}) };
+}
+
+const secs = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
+export const analysisView = (a: Analysis) => ({
+  assetId: a.assetId, note: 'Times are in the source media. Correct them with edit_analysis; use split_at_scenes to cut a clip into its shots.',
+  ...(a.scenes ? { scenes: { ...a.scenes.origin, count: a.scenes.cuts.length, cuts: a.scenes.cuts, cutSeconds: a.scenes.cuts.map(secs) } } : {}),
+  ...(a.beats ? { beats: { ...a.beats.origin, bpm: a.beats.bpm, confidence: a.beats.confidence, count: a.beats.beats.length, beatSeconds: a.beats.beats.map(secs) } } : {}),
+});
+export const AnalyzeBody = z.object({ kind: z.enum(['scenes', 'beats']), overwrite: z.boolean().optional().describe('Required to replace a result that was corrected by hand'), threshold: z.number().min(0.05).max(0.9).optional().describe('scenes only: how different two frames must be to count as a cut (default 0.3; lower finds more)') }).strict();
+/** Measure scene cuts or beats from the source file and attach the result to the project as editable data. */
+export async function analyzeAsset(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
+  gov.assertMayAct(principal, projectId, 'edit');
+  const p = store.getProject(projectId);
+  const asset = p.doc.assets[a.assetId];
+  if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+  const existing = a.kind === 'scenes' ? p.doc.analyses?.[a.assetId]?.scenes : p.doc.analyses?.[a.assetId]?.beats;
+  if (existing?.origin.edited && !a.overwrite) throw new ApiError(409, 'would_discard_edits', 'this result was corrected by hand; analysing again would discard those corrections', { kind: a.kind }, 'Pass overwrite=true to replace it.');
+  const file = store.blobPath(asset.contentHash);
+  let args: Record<string, unknown>;
+  if (a.kind === 'scenes') {
+    if (!asset.video) throw new ApiError(422, 'no_video', 'this asset has no moving picture to analyse');
+    const threshold = a.threshold ?? 0.3;
+    args = { method: 'ffmpeg scene score (hard cuts only; dissolves are not detected)', params: { threshold }, times: await detectScenes(file, threshold, asset.video.frameRate) };
+  } else {
+    if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to analyse');
+    const r = await detectBeatsOfFile(file);
+    args = { method: 'spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse', params: { sampleRate: 22050, hop: 256 }, times: r.beats.filter((s) => s <= T.toSeconds(asset.duration)).map((s) => T.fromSeconds(s.toFixed(4))), bpm: r.bpm, confidence: r.confidence };
+  }
+  const r = store.commit({ projectId, actor: principal.actor, label: a.kind === 'scenes' ? 'Find scene cuts' : 'Find beats', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: a.assetId, kind: a.kind, createdAt: new Date().toISOString(), ...args } }] });
+  return { revision: r.revision, summary: r.summary, ...analysisView(store.getProject(projectId).doc.analyses[a.assetId]!) };
 }

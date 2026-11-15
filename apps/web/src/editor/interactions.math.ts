@@ -78,3 +78,8 @@ export function overlapsOnTrack(clips: readonly { id: string; start: T.RationalT
   const moving = new Set(movingIds);
   return clips.some((c) => !moving.has(c.id) && T.lt(c.start, end) && T.lt(start, T.add(c.start, c.duration)));
 }
+
+/** Beat / scene-cut times as snap targets: each marker moved to its nearest frame so a snapped clip stays frame-aligned. */
+export function markerSnapCandidates(markers: readonly T.RationalTime[], rate: T.Rate): T.RationalTime[] {
+  return markers.map((m) => T.snapToFrame(m, rate));
+}

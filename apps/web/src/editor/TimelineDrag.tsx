@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, type Clip } from '@pulseframe/core';
+import { clipEnd, timelineMarkers, type Clip } from '@pulseframe/core';
+import { readSnapBeats } from '../api.ts';
 import { useEditor } from './store.ts';
-import { overlapsOnTrack, snapTime } from './interactions.math.ts';
+import { markerSnapCandidates, overlapsOnTrack, snapTime } from './interactions.math.ts';
 import './interactions.css';
 
 type Mode = 'move' | 'trim-start' | 'trim-end';
-type SnapKind = 'playhead' | 'clip-edge' | 'zero';
+type SnapKind = 'playhead' | 'clip-edge' | 'zero' | 'marker';
 export interface TimelineGhost { clipId: string; mode: Mode; leftPx: number; widthPx: number; snappedTo: SnapKind | null; invalid: boolean }
 
 const EDGE_PX = 6;
@@ -106,6 +107,10 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
       if (group.has(c.id)) continue;
       cands.push(c.start, clipEnd(c));
       kinds.push('clip-edge', 'clip-edge');
+    }
+    if (s.mode === 'move' && readSnapBeats()) {
+      const m = timelineMarkers(doc);
+      for (const c of markerSnapCandidates([...m.beats, ...m.sceneCuts], rate)) { cands.push(c); kinds.push('marker'); }
     }
     const snapping = !e.altKey;
     let snappedTo: SnapKind | null = null;

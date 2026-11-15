@@ -136,3 +136,12 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .sound-meter-bar { height: 100%; background: #22c55e; }
 .sound-meter.over .sound-meter-bar { background: #ef4444; }
 .sound-meter-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: #f59e0b; }
+
+.timeline { position: relative; }
+.tl-snap { position: absolute; top: 0; right: 16px; background: var(--pf-surface); opacity: .95; display: inline-flex; gap: 6px; align-items: center; font-size: var(--pf-fs-sm); color: var(--pf-text-muted); padding: 2px 8px; z-index: 4; }
+.tl-markers { position: absolute; top: 0; left: 56px; height: 24px; width: 0; pointer-events: none; z-index: 2; }
+.tl-markers i { position: absolute; top: 0; pointer-events: none; }
+.tl-markers .beat-marker { height: 9px; width: 1px; background: var(--pf-accent-2); opacity: .8; }
+.tl-markers .scene-marker { height: 24px; width: 2px; margin-left: -1px; background: var(--pf-warn); }
+.analysis .stat { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.analysis .row { flex-wrap: wrap; }

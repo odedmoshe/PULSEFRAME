@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { boxToScreen, layerBox, overlapsOnTrack, pxToFrameTime, rotationFromDrag, scaleFromDrag, screenDeltaToFrameFraction, snapTime } from './interactions.math.ts';
+import { boxToScreen, layerBox, overlapsOnTrack, pxToFrameTime, rotationFromDrag, scaleFromDrag, screenDeltaToFrameFraction, snapTime, markerSnapCandidates } from './interactions.math.ts';
 
 const s = (v: number) => T.rt(v, 1);
 
@@ -99,5 +99,20 @@ describe('overlapsOnTrack', () => {
   it('ignores moving clips', () => {
     expect(overlapsOnTrack(clips, ['a', 'b'], s(0), s(10))).toBe(false);
     expect(overlapsOnTrack(clips, ['b'], s(1), s(2))).toBe(true);
+  });
+});
+
+describe('markerSnapCandidates', () => {
+  const rate = { num: 30, den: 1 };
+  it('moves markers to the nearest frame', () => {
+    const c = markerSnapCandidates([T.rt(1, 3), T.rt(5, 1)], rate);
+    expect(c.every((t) => T.isFrameAligned(t, rate))).toBe(true);
+    expect(T.eq(c[0]!, T.rt(10, 30))).toBe(true);
+  });
+  it('a snapped time is frame-aligned and exact', () => {
+    const c = markerSnapCandidates([T.rt(1003, 1000)], rate);
+    const r = snapTime({ time: T.rt(1, 1), candidates: c, pxPerSecond: 100, thresholdPx: 8 });
+    expect(r.snapped).toBe(true);
+    expect(T.isFrameAligned(r.time, rate)).toBe(true);
   });
 });

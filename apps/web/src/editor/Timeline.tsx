@@ -1,9 +1,13 @@
+import { useMemo, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, type Clip, type ProjectDocument } from '@pulseframe/core';
+import { clipEnd, timelineMarkers, type Clip, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
+import { readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
 import { useEditorState } from './store.ts';
 import { useTimelineDrag } from './TimelineDrag.tsx';
+
+const MAX_MARKERS = 3000;
 
 export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.text);
 
@@ -17,14 +21,36 @@ export function Timeline() {
   const ghostSel = new Set(ghosts.flatMap((g) => g.selection));
   const rate = editor.rate;
   const { containerProps, ghost } = useTimelineDrag();
+  const [snapBeats, setSnapBeats] = useState(readSnapBeats);
+  const markers = useMemo(() => {
+    if (!doc) return { scenes: [] as T.RationalTime[], beats: [] as T.RationalTime[], truncated: false };
+    const m = timelineMarkers(doc);
+    const scenes = m.sceneCuts.slice(0, MAX_MARKERS);
+    const beats = m.beats.slice(0, MAX_MARKERS - scenes.length);
+    return { scenes, beats, truncated: m.sceneCuts.length + m.beats.length > MAX_MARKERS };
+  }, [doc]);
   const totalSeconds = Math.max(T.toSeconds(editor.duration) + 2, 8);
   const tickEvery = pps >= 60 ? 1 : pps >= 25 ? 2 : 5;
   return (
     <section className="timeline" dir="ltr" aria-label={t('timeline')}>
+      <label className="tl-snap">
+        <input type="checkbox" checked={snapBeats} data-testid="snap-beats" onChange={(e) => { setSnapBeats(e.target.checked); writeSnapBeats(e.target.checked); }} />
+        {t('snap.beats')}
+      </label>
       <div className="tl-scroll" {...containerProps}>
         <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }}>
           <div className="ruler" data-testid="ruler" onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.round(((x / pps) * rate.num) / rate.den)); }}>
             {Array.from({ length: Math.floor(totalSeconds / tickEvery) + 1 }, (_, i) => <span key={i} style={{ left: i * tickEvery * pps }}>{i * tickEvery}s</span>)}
+          </div>
+          <div className="tl-markers" data-testid="timeline-markers" data-truncated={markers.truncated ? 'true' : undefined} title={markers.truncated ? t('timeline.markers.truncated') : undefined} aria-hidden="true">
+            {markers.beats.map((b, i) => {
+              const fr = T.nearestFrameIndex(b, rate);
+              return <i key={`b${i}`} className="beat-marker" data-testid="beat-marker" data-frame={fr} style={{ left: T.toSeconds(b) * pps }} />;
+            })}
+            {markers.scenes.map((c, i) => {
+              const fr = T.nearestFrameIndex(c, rate);
+              return <i key={`s${i}`} className="scene-marker" data-testid="scene-marker" data-frame={fr} style={{ left: T.toSeconds(c) * pps }} />;
+            })}
           </div>
           {doc && [...doc.sequences[doc.mainSequenceId]!.tracks].reverse().map((tr) => (
             <div className={`track ${tr.kind}`} key={tr.id} role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`} data-track-id={tr.id}>

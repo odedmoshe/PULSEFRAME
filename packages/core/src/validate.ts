@@ -93,6 +93,11 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       }
     }
   }
+  for (const [key, an] of Object.entries(doc.analyses ?? {})) {
+    if (key !== an.assetId || !doc.assets[an.assetId]) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });
+    for (const [name, list] of [['scene cuts', an.scenes?.cuts], ['beats', an.beats?.beats]] as const)
+      if (list?.some((t, i) => T.isNegative(t) || (i > 0 && !T.lt(list[i - 1]!, t)))) issues.push({ code: 'analysis_order', message: `${name} of asset ${key} must be non-negative and strictly ascending`, ids: [key] });
+  }
   for (const [key, tr] of Object.entries(doc.transcripts ?? {})) {
     if (key !== tr.assetId) issues.push({ code: 'key_mismatch', message: `transcript key ${key} != assetId ${tr.assetId}`, ids: [key] });
     if (!doc.assets[tr.assetId]?.audio) issues.push({ code: 'missing_asset', message: `transcript refers to asset ${tr.assetId}, which is missing or has no audio`, ids: [tr.assetId] });

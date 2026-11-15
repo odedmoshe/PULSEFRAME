@@ -6,6 +6,7 @@ import { FONT_CATALOG } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
+import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
@@ -194,6 +195,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         {!sel ? <p className="muted">{t('inspector.none')}</p> : <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
         {sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}
         {sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} />}
+        {sel && state.selection.length === 1 && sel.clip.type === 'media' && <AnalysisPanel key={`analysis:${sel.clip.id}`} />}
       </div>
       <div {...panelProps('speech')}>
         <h2>{t('transcript')}</h2>

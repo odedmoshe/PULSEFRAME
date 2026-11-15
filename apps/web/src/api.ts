@@ -20,7 +20,20 @@ export interface CommitResult { revision: number; committed: boolean; summary: s
 export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string }
 export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; target: number | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string }
 
+export interface AnalyzeResult { revision: number; summary: string; scenes?: { count: number }; beats?: { bpm: number | null; confidence: number | null; count: number } }
+
+const SNAP_BEATS_KEY = 'pf.snap.beats.v1';
+/** Personal setting (default on), never stored in the project. */
+export function readSnapBeats(): boolean {
+  try { return globalThis.localStorage?.getItem(SNAP_BEATS_KEY) !== '0'; } catch { return true; }
+}
+export function writeSnapBeats(on: boolean): void {
+  try { globalThis.localStorage?.setItem(SNAP_BEATS_KEY, on ? '1' : '0'); } catch { /* storage unavailable */ }
+}
+
 export const api = {
+  analyzeAsset: (id: string, assetId: string, body: { kind: 'scenes' | 'beats'; threshold?: number }) =>
+    call<AnalyzeResult>(`/projects/${id}/assets/${assetId}/analyze`, json(body)),
   session: () => call<{ actor: string }>('/session'),
   listProjects: () => call<{ projects: { id: string; name: string; revision: number }[] }>('/projects'),
   createProject: (name: string) => call<{ project: ProjectDocument; revision: number }>('/projects', json({ name })),

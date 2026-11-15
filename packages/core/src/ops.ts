@@ -12,7 +12,7 @@ import {
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, validateProject } from './validate.ts';
-import { restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
+import { analysisEntityId, restoreEntities, transcriptEntityId, type EntityState } from './entities.ts';
 import { sampleKeyframes, shiftKeyframes } from './animation.ts';
 
 export type OpErrorCode =
@@ -537,6 +537,75 @@ defineOp({
 });
 
 
+
+
+// ---------- analysis results and edits that use them (SPEC §19) ----------
+const TimeList = z.array(RT).max(50000);
+const sortedUnique = (list: T.RationalTime[]) => list.slice().sort(T.cmp).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
+const mustAsset = (d: ProjectDocument, assetId: string) => {
+  const a = d.assets[assetId];
+  if (!a) throw new OpError('not_found', `asset ${assetId} not found`, { assetId });
+  return a;
+};
+defineOp({
+  name: 'attach_analysis',
+  version: 1,
+  internal: true,
+  description: 'Attach a measured analysis result (scene cuts or beat grid) produced by the server from the source file.',
+  args: z.object({ assetId: z.string(), kind: z.enum(['scenes', 'beats']), method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), times: TimeList, bpm: z.number().nullable().optional(), confidence: z.number().min(0).max(1).nullable().optional() }).strict(),
+  apply(d, a, ctx) {
+    mustAsset(d, a.assetId);
+    const origin = { method: a.method, params: a.params, createdAt: a.createdAt, createdBy: ctx.actor, edited: false };
+    const cur = d.analyses[a.assetId] ?? { assetId: a.assetId };
+    const times = sortedUnique(a.times);
+    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: times } } : { ...cur, beats: { origin, bpm: a.bpm ?? null, confidence: a.confidence ?? null, beats: times } };
+    return { affectedIds: [analysisEntityId(a.assetId)], summary: a.kind === 'scenes' ? `Found ${times.length} scene cuts` : `Found ${times.length} beats${a.bpm ? ` (${a.bpm.toFixed(1)} BPM)` : ''}` };
+  },
+});
+defineOp({
+  name: 'edit_analysis',
+  version: 1,
+  description: 'Correct an analysis result by hand: add and/or remove scene cuts or beats (source times of the asset), or replace the whole list. Works without a prior automatic analysis, so the data can also be entered manually. Marks the result as edited.',
+  args: z.object({ assetId: z.string(), kind: z.enum(['scenes', 'beats']), add: TimeList.optional(), remove: TimeList.optional(), replace: TimeList.optional(), bpm: z.number().min(20).max(400).nullable().optional() }).strict(),
+  apply(d, a, ctx) {
+    const asset = mustAsset(d, a.assetId);
+    const cur = d.analyses[a.assetId] ?? { assetId: a.assetId };
+    const existing = a.kind === 'scenes' ? cur.scenes?.cuts : cur.beats?.beats;
+    let list = a.replace ?? existing ?? [];
+    if (a.remove) list = list.filter((t) => !a.remove!.some((r) => T.eq(r, t)));
+    if (a.add) list = [...list, ...a.add];
+    list = sortedUnique(list);
+    if (list.some((t) => T.isNegative(t) || T.lt(asset.duration, t))) throw new OpError('out_of_bounds', 'times must lie inside the media', { assetDuration: asset.duration });
+    const prevOrigin = a.kind === 'scenes' ? cur.scenes?.origin : cur.beats?.origin;
+    const origin = { ...(prevOrigin ?? { method: 'manual', params: {}, createdAt: 'op', createdBy: ctx.actor }), edited: true };
+    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list } };
+    return { affectedIds: [analysisEntityId(a.assetId)], summary: `Edited ${a.kind === 'scenes' ? 'scene cuts' : 'beats'} (${list.length})` };
+  },
+});
+defineOp({
+  name: 'split_at_scenes',
+  version: 1,
+  description: 'Split a clip (and its linked sound) at every detected scene cut of its source that falls inside the clip, so each shot becomes its own clip. Needs scene analysis of the asset (analyze, or edit_analysis). Cuts are snapped to the nearest timeline frame.',
+  args: z.object({ clipId: z.string(), includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a, ctx) {
+    const f = mustClip(d, a.clipId);
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have scenes', { clipId: a.clipId });
+    const cuts = d.analyses[f.clip.assetId]?.scenes?.cuts;
+    if (!cuts) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
+    const rate = d.settings.frameRate;
+    const clip = f.clip;
+    const points = sortedUnique(cuts.filter((t) => T.lt(clip.sourceIn, t) && T.lt(t, T.add(clip.sourceIn, clip.duration))).map((t) => T.snapToFrame(T.add(clip.start, T.sub(t, clip.sourceIn)), rate))).filter((t) => T.lt(clip.start, t) && T.lt(t, clipEnd(clip)));
+    const split = getOp('split_clip')!;
+    const created: string[] = [];
+    let current = clip.id;
+    for (const at of points) {
+      const r = split.apply(d, { clipId: current, at, includeLinked: a.includeLinked }, ctx);
+      created.push(...(r.output!.createdClipIds as string[]));
+      current = r.output!.rightClipId as string;
+    }
+    return { affectedIds: [clip.id, ...created], summary: `Split into ${points.length + 1} shots`, output: { cuts: points, createdClipIds: created } };
+  },
+});
 
 // ---------- sound (SPEC §10) ----------
 const audioTrack = (seq: Sequence, trackId: string) => {

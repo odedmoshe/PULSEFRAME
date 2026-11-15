@@ -48,3 +48,27 @@ export function sourceRangesToTimeline(doc: ProjectDocument, assetId: string, ra
 
 /** One `cut_range` per range, latest first, so each cut leaves the earlier ranges where they were. Submit as ONE transaction. */
 export const cutOps = (ranges: TimeRange[]): OpCall[] => [...ranges].sort((a, b) => T.cmp(b.start, a.start)).map((r) => ({ op: 'cut_range', args: { start: r.start, end: r.end } }));
+
+/** Source times of an asset mapped to where they currently play on the timeline (every clip of the asset), ascending and unique. */
+export function sourceTimesToTimeline(doc: ProjectDocument, assetId: string, times: T.RationalTime[], sequenceId = doc.mainSequenceId): T.RationalTime[] {
+  const seq = doc.sequences[sequenceId];
+  if (!seq) return [];
+  const out: T.RationalTime[] = [];
+  for (const track of seq.tracks)
+    for (const c of track.clips) {
+      if (c.type !== 'media' || c.assetId !== assetId) continue;
+      const end = T.add(c.sourceIn, c.duration);
+      for (const t of times) if (!T.lt(t, c.sourceIn) && T.lt(t, end)) out.push(T.add(c.start, T.sub(t, c.sourceIn)));
+    }
+  return out.sort(T.cmp).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
+}
+/** Beats and scene cuts as they fall on the timeline right now (derived, never stored: they follow every edit). */
+export function timelineMarkers(doc: ProjectDocument) {
+  const beats: T.RationalTime[] = [], scenes: T.RationalTime[] = [];
+  for (const a of Object.values(doc.analyses ?? {})) {
+    if (a.beats) beats.push(...sourceTimesToTimeline(doc, a.assetId, a.beats.beats));
+    if (a.scenes) scenes.push(...sourceTimesToTimeline(doc, a.assetId, a.scenes.cuts));
+  }
+  const uniq = (l: T.RationalTime[]) => l.sort(T.cmp).filter((t, i, x) => i === 0 || !T.eq(x[i - 1]!, t));
+  return { beats: uniq(beats), sceneCuts: uniq(scenes) };
+}

@@ -4,6 +4,7 @@
  */
 import { spawn } from 'node:child_process';
 import * as T from '@pulseframe/time';
+import { BEAT_SR, detectBeats, type BeatResult } from './beats.ts';
 import { ApiError } from './store.ts';
 
 export interface SilenceOptions { thresholdDb: number; minSeconds: number }
@@ -28,6 +29,42 @@ export function detectSilences(file: string, opts: SilenceOptions): Promise<{ st
         }
       }
       resolve(out);
+    });
+  });
+}
+
+
+/**
+ * Hard picture cuts, from ffmpeg's scene-change score (difference between consecutive frames).
+ * Returns the source time of the first frame of each new shot. Dissolves and fades are gradual and are NOT found by this method.
+ */
+export function detectScenes(file: string, threshold: number, rate: { num: number; den: number }): Promise<T.RationalTime[]> {
+  return new Promise((resolve, reject) => {
+    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'info', '-i', file, '-map', '0:v:0', '-vf', `select='gt(scene,${threshold})',showinfo`, '-an', '-f', 'null', '-'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    p.stderr.on('data', (d) => { err += d; if (err.length > 16_000_000) p.kill(); });
+    p.on('error', (e) => reject(new ApiError(503, 'analysis_unavailable', `ffmpeg could not be started: ${e.message}`)));
+    p.on('close', (code) => {
+      if (code !== 0) return reject(new ApiError(422, 'analysis_failed', 'the picture of this file could not be analysed', { tail: err.slice(-400) }));
+      const frames = new Set<number>();
+      // Decimal seconds become exact frame times at this boundary: the cut is the nearest source frame.
+      for (const m of err.matchAll(/pts_time:(-?[\d.]+)/g)) frames.add(Math.round((Number(m[1]) * rate.num) / rate.den));
+      resolve([...frames].filter((f) => f > 0).sort((a, b) => a - b).map((f) => T.frameTime(f, rate)));
+    });
+  });
+}
+
+/** Beat grid of a file's first audio stream (mono mix-down at 22.05 kHz, see beats.ts). Limited to 20 minutes of audio. */
+export function detectBeatsOfFile(file: string): Promise<BeatResult> {
+  return new Promise((resolve, reject) => {
+    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-i', file, '-map', '0:a:0', '-t', '1200', '-ac', '1', '-ar', String(BEAT_SR), '-f', 'f32le', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const chunks: Buffer[] = [];
+    p.stdout.on('data', (d) => chunks.push(d));
+    p.on('error', (e) => reject(new ApiError(503, 'analysis_unavailable', `ffmpeg could not be started: ${e.message}`)));
+    p.on('close', (code) => {
+      if (code !== 0) return reject(new ApiError(422, 'analysis_failed', 'the audio of this file could not be analysed'));
+      const buf = Buffer.concat(chunks);
+      resolve(detectBeats(new Float32Array(buf.buffer, buf.byteOffset, buf.length >> 2)));
     });
   });
 }

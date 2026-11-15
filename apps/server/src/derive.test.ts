@@ -154,7 +154,8 @@ describe('Derivatives', () => {
 
   it('records failures per derivative for a corrupt blob and still goes idle', async () => {
     const junk = path.join(store.tmpDir, 'junk');
-    fs.writeFileSync(junk, randomBytes(4096));
+    // Fixed bytes, not random ones: random data very occasionally looks decodable to ffmpeg and made this test flaky (seen once in a full run).
+    fs.writeFileSync(junk, Buffer.from(Array.from({ length: 4096 }, (_, i) => (i * 37 + 11) & 0xff)));
     const contentHash = sha(junk);
     store.putBlob(contentHash, junk, 4096, 'video/mp4');
     const bad = { kind: 'video', contentHash, audio: { sampleRate: 48000, channels: 2, codec: 'aac' } } as unknown as Asset;

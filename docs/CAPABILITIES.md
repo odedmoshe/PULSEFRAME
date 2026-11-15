@@ -78,6 +78,8 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Loudness: EBU R128 measurement and static-gain normalisation with true-peak ceiling (server export only) | tested (synthetic) | `phase8-proof.json`: −16.0 LUFS for a −16 target; ceiling respected. No compressor/limiter |
 | Built-in synthesised sound effects (7) as real assets | tested | `phase8-proof.json` |
 | Narration, TTS, voice cloning, EQ/dynamics, noise reduction, recording | not built | Voice blocked on B-8 |
+| Scene-cut detection (hard cuts) and beat tracking, model-free, stored as editable source-linked data; split into shots; timeline markers; cut on the beat | tested (synthetic corpora) | `docs/evidence/phase9-proof.json` (12 checks): 5/5 cuts exact; beat F1 0.97–1.00 on six synthetic loops. Dissolves not detected; real footage/music untested |
+| Reframe, subject tracking, segmentation, pose, depth, semantic search, assisted colour | not built | Need models (B-4) |
 | GPU compositor, shader effect families, keying, keyframed effect parameters, speed ramps, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
 ## Agent surface

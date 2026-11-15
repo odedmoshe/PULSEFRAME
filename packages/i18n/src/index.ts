@@ -57,6 +57,13 @@ export const he = {
   'look.transition': 'מעבר', 'look.transition.type': 'סוג המעבר', 'look.transition.none': 'ללא', 'look.transition.frames': 'משך (פריימים)', 'look.transition.note': 'המעבר מתנגן בתחילת הקליפ הזה מעל הקליפ הקודם. כדי שיעבוד, חייב להישאר חומר מקור שלא בשימוש אחרי סוף הקליפ הקודם.',
   'look.cat.color': 'צבע', 'look.cat.blur': 'טשטוש', 'look.cat.light': 'אור', 'look.cat.stylize': 'סגנון', 'look.cat.digital': 'דיגיטלי',
   'lang.he': 'עברית', 'lang.en': 'אנגלית',
+  'op.attach_analysis': 'שמירת ניתוח מדיה', 'op.edit_analysis': 'תיקון ניתוח מדיה', 'op.split_at_scenes': 'פיצול לפי חיתוכי סצנות',
+  'analysis': 'ניתוח מדיה', 'analysis.note': 'אלה מדידות ללא בינה מלאכותית: חיתוכי תמונה נמצאים לפי שינוי חד בין פריימים, ופס הקצב מניח פעימה יציבה. מעברי התמזגות (דיזולב) אינם מזוהים.',
+  'analysis.scenes': 'חיתוכי סצנות', 'analysis.beats': 'פעימות', 'analysis.none': 'טרם נמדד', 'analysis.method': 'שיטה', 'analysis.edited': 'נערך ידנית', 'analysis.bpm': 'קצב (BPM)', 'analysis.confidence': 'ביטחון',
+  'analysis.lowConfidence': 'רמת הביטחון נמוכה: ייתכן שפס הקצב אינו אמין.',
+  'analysis.runScenes': 'חיפוש חיתוכי סצנות', 'analysis.runBeats': 'חיפוש פעימות', 'analysis.running': 'מודד…', 'analysis.noVideo': 'לקובץ אין וידאו', 'analysis.noAudio': 'לקובץ אין שמע',
+  'analysis.split': 'פיצול הקליפ לשוטים', 'analysis.splitNone': 'אין חיתוך סצנה בתוך הקליפ', 'analysis.addBeat': 'הוספת פעימה בסמן', 'analysis.removeBeat': 'הסרת הפעימה הקרובה', 'analysis.addCut': 'הוספת חיתוך בסמן', 'analysis.removeCut': 'הסרת החיתוך הקרוב',
+  'analysis.outside': 'הסמן מחוץ לקליפ', 'analysis.nothingToRemove': 'אין מה להסיר', 'snap.beats': 'הצמדה לפעימות וחיתוכים', 'timeline.markers.truncated': 'מוצגים 3000 הסמנים הראשונים בלבד',
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -115,6 +122,13 @@ export const en: Record<keyof typeof he, string> = {
   'look.transition': 'Transition', 'look.transition.type': 'Transition type', 'look.transition.none': 'None', 'look.transition.frames': 'Length (frames)', 'look.transition.note': 'The transition plays at the start of this clip, over the previous clip. It needs unused source material after the previous clip\'s end.',
   'look.cat.color': 'Color', 'look.cat.blur': 'Blur', 'look.cat.light': 'Light', 'look.cat.stylize': 'Stylize', 'look.cat.digital': 'Digital',
   'lang.he': 'Hebrew', 'lang.en': 'English',
+  'op.attach_analysis': 'Saved media analysis', 'op.edit_analysis': 'Corrected media analysis', 'op.split_at_scenes': 'Split at scene cuts',
+  'analysis': 'Media analysis', 'analysis.note': 'These are measurements without AI: scene cuts are found from abrupt changes between frames, and the beat grid assumes a steady pulse. Dissolves are not detected.',
+  'analysis.scenes': 'Scene cuts', 'analysis.beats': 'Beats', 'analysis.none': 'Not measured yet', 'analysis.method': 'Method', 'analysis.edited': 'Edited by hand', 'analysis.bpm': 'Tempo (BPM)', 'analysis.confidence': 'Confidence',
+  'analysis.lowConfidence': 'Confidence is low: the beat grid may be unreliable.',
+  'analysis.runScenes': 'Find scene cuts', 'analysis.runBeats': 'Find beats', 'analysis.running': 'Measuring…', 'analysis.noVideo': 'This file has no video', 'analysis.noAudio': 'This file has no audio',
+  'analysis.split': 'Split clip into shots', 'analysis.splitNone': 'No scene cut falls inside the clip', 'analysis.addBeat': 'Add beat at playhead', 'analysis.removeBeat': 'Remove nearest beat', 'analysis.addCut': 'Add cut at playhead', 'analysis.removeCut': 'Remove nearest cut',
+  'analysis.outside': 'The playhead is outside the clip', 'analysis.nothingToRemove': 'Nothing to remove', 'snap.beats': 'Snap to beats and cuts', 'timeline.markers.truncated': 'Only the first 3000 markers are shown',
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
