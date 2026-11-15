@@ -1,14 +1,14 @@
 {
-  "ranAt": "2026-11-15T07:47:51.870Z",
+  "ranAt": "2026-11-15T08:00:06.662Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
-  "scope": "One synthetic 4-second 30 fps source in projects with different frame rates and sizes; server export route only. Every exported frame is read from its barcode; sound by beep onsets (±12 ms). Not covered: the preview and browser export at these settings, sources at other rates in these projects, captions and effects at non-integer rates, long timelines at 29.97 fps (timecode drift).",
-  "passed": 1,
-  "total": 1,
+  "scope": "One synthetic 4-second 30 fps source in projects with different frame rates and sizes; server export route for all; browser export and editor preview for the non-integer and extreme rates, the vertical and the odd size. Every exported frame is read from its barcode; sound by beep onsets (±12 ms on the server route, one frame on the browser routes). Not covered: sources at other rates in these projects, captions and effects at non-integer rates, long timelines at 29.97 fps (timecode drift).",
+  "passed": 2,
+  "total": 2,
   "tally": {
     "exports-correctly": 15
   },
@@ -113,7 +113,61 @@
           3
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "file": {
+          "size": "640x360",
+          "averageRate": "24000/1001",
+          "frames": 95,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "onsets": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      },
+      "preview": {
+        "frames": {
+          "seen": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "31": 38,
+            "47": 58,
+            "93": 116,
+            "94": 117
+          },
+          "want": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "31": 38,
+            "47": 58,
+            "93": 116,
+            "94": 117
+          }
+        },
+        "sound": {
+          "clock": "audio",
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "want": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      }
     },
     {
       "case": "25 fps",
@@ -147,7 +201,61 @@
           3
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "file": {
+          "size": "640x360",
+          "averageRate": "25/1",
+          "frames": 100,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "onsets": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      },
+      "preview": {
+        "frames": {
+          "seen": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "33": 39,
+            "50": 60,
+            "98": 117,
+            "99": 118
+          },
+          "want": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "33": 39,
+            "50": 60,
+            "98": 117,
+            "99": 118
+          }
+        },
+        "sound": {
+          "clock": "audio",
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "want": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      }
     },
     {
       "case": "29.97 fps (30000/1001)",
@@ -181,7 +289,61 @@
           3
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "file": {
+          "size": "640x360",
+          "averageRate": "30000/1001",
+          "frames": 119,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "onsets": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      },
+      "preview": {
+        "frames": {
+          "seen": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "39": 39,
+            "59": 59,
+            "117": 117,
+            "118": 118
+          },
+          "want": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "39": 39,
+            "59": 59,
+            "117": 117,
+            "118": 118
+          }
+        },
+        "sound": {
+          "clock": "audio",
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "want": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      }
     },
     {
       "case": "50 fps",
@@ -249,7 +411,61 @@
           3
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "file": {
+          "size": "640x360",
+          "averageRate": "60000/1001",
+          "frames": 239,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "onsets": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      },
+      "preview": {
+        "frames": {
+          "seen": {
+            "0": 0,
+            "1": 0,
+            "2": 1,
+            "79": 39,
+            "119": 59,
+            "237": 118,
+            "238": 119
+          },
+          "want": {
+            "0": 0,
+            "1": 0,
+            "2": 1,
+            "79": 39,
+            "119": 59,
+            "237": 118,
+            "238": 119
+          }
+        },
+        "sound": {
+          "clock": "audio",
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "want": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      }
     },
     {
       "case": "60 fps",
@@ -317,7 +533,61 @@
           3
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "file": {
+          "size": "640x360",
+          "averageRate": "12/1",
+          "frames": 48,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "onsets": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      },
+      "preview": {
+        "frames": {
+          "seen": {
+            "0": 0,
+            "1": 2,
+            "2": 5,
+            "16": 40,
+            "24": 60,
+            "46": 115,
+            "47": 117
+          },
+          "want": {
+            "0": 0,
+            "1": 2,
+            "2": 5,
+            "16": 40,
+            "24": 60,
+            "46": 115,
+            "47": 117
+          }
+        },
+        "sound": {
+          "clock": "audio",
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "want": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      }
     },
     {
       "case": "1280×720 at 30 fps",
@@ -419,7 +689,61 @@
           3
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "file": {
+          "size": "1080x1920",
+          "averageRate": "30/1",
+          "frames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "onsets": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      },
+      "preview": {
+        "frames": {
+          "seen": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "40": 40,
+            "60": 60,
+            "118": 118,
+            "119": 119
+          },
+          "want": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "40": 40,
+            "60": 60,
+            "118": 118,
+            "119": 119
+          }
+        },
+        "sound": {
+          "clock": "audio",
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "want": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      }
     },
     {
       "case": "1080×1080 (square) at 29.97 fps",
@@ -487,7 +811,61 @@
           3
         ]
       },
-      "outcome": "exports-correctly"
+      "outcome": "exports-correctly",
+      "browser": {
+        "file": {
+          "size": "642x362",
+          "averageRate": "30/1",
+          "frames": 120,
+          "wrongFrames": 0,
+          "firstWrong": null,
+          "onsets": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      },
+      "preview": {
+        "frames": {
+          "seen": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "40": 40,
+            "60": 60,
+            "118": 118,
+            "119": 119
+          },
+          "want": {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "40": 40,
+            "60": 60,
+            "118": 118,
+            "119": 119
+          }
+        },
+        "sound": {
+          "clock": "audio",
+          "got": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "want": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "outcome": "correct"
+      }
     },
     {
       "case": "small 160×90 at 30 fps",
@@ -527,6 +905,11 @@
   "checks": [
     {
       "name": "a project is either refused when it is created or exports with the right size, rate, frames and sound (15 project settings tried)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "the browser export and the editor preview agree with the same rule at the non-integer and extreme settings (7 projects: frames, frame count, average rate, sound)",
       "ok": true,
       "detail": []
     }
