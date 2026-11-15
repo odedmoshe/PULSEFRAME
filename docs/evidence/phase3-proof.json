@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:51:52.062Z",
+  "ranAt": "2026-11-15T10:00:17.082Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -227,6 +227,29 @@
         "revisions": [
           16,
           17
+        ]
+      }
+    },
+    {
+      "name": "\"overwrite at the playhead\" replaces exactly the range's length on the picture and sound tracks in one transaction: the timeline keeps its length, nothing later moves, and it shows the new frames 60–69 followed by what was already there (110–119, then the continuation)",
+      "ok": true,
+      "detail": {
+        "oShown": [
+          39,
+          60,
+          69,
+          110,
+          119,
+          40
+        ],
+        "lengths": [
+          223,
+          223
+        ],
+        "overlaps": false,
+        "revisions": [
+          17,
+          18
         ]
       }
     },

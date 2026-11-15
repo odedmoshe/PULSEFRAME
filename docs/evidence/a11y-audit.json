@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:52:21.209Z",
+  "ranAt": "2026-11-15T10:00:30.813Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -60,7 +60,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 153,
+          "controls": 154,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -69,7 +69,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_4b54b0d3df0]",
+          "focusAfterClose": "button[data-testid=view-ast_394cc4e1360]",
           "focusReturned": true
         },
         {
@@ -142,7 +142,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 153,
+          "controls": 154,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -151,7 +151,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_4b54b0d3df0]",
+          "focusAfterClose": "button[data-testid=view-ast_394cc4e1360]",
           "focusReturned": true
         },
         {

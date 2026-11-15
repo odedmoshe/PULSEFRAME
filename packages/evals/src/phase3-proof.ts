@@ -330,6 +330,26 @@ async function main() {
     const lenBefore = T.frameIndexAt(ib.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).reduce((m, c) => T.max(m, T.add(c.start, c.duration)), T.ZERO), R);
     const lenAfter = T.frameIndexAt(ia.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).reduce((m, c) => T.max(m, T.add(c.start, c.duration)), T.ZERO), R);
     check('"insert at the playhead" from the source viewer is one transaction: the clip under the playhead is split there, the 20-frame range sits in the gap, everything later moves 20 frames, and the timeline shows the frames in order (…, before the cut, the inserted 100–119, then the continuation)', atFrame === startOf + 10 && ia.revision === ib.revision + 1 && JSON.stringify(row) === JSON.stringify([[0, k, 30], [k, 20, 100], [k + 20, 42 - k, 30 + k]]) && JSON.stringify(shown) === JSON.stringify([30 + k - 1, 100, 119, 30 + k, 71]) && lenAfter === lenBefore + 20, { atFrame, startOf, row, shown, lenBefore, lenAfter, revisions: [ib.revision, ia.revision] });
+
+    console.log('\n# overwrite at the playhead');
+    // the playhead is still at atFrame (start of the inserted 100–119 range): overwrite its first 10 frames with source 60–69
+    const ob = await getDoc();
+    await page.getByTestId(`view-${assetId}`).click();
+    await page.getByTestId('source-viewer').waitFor();
+    await page.getByTestId('source-scrub').fill('60');
+    await srcAt(60);
+    await page.keyboard.press('i');
+    await page.getByTestId('source-scrub').fill('69');
+    await srcAt(69);
+    await page.keyboard.press('o');
+    await page.getByTestId('source-overwrite').click();
+    await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
+    let oa = await getDoc();
+    for (let i = 0; i < 50 && oa.revision === ob.revision; i++) { await new Promise((r) => setTimeout(r, 100)); oa = await getDoc(); }
+    const endOf = (d: ProjectDocument) => T.frameIndexAt(d.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).reduce((m, c) => T.max(m, T.add(c.start, c.duration)), T.ZERO), R);
+    const oShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10), await stillCode(atFrame + 19), await stillCode(atFrame + 20)];
+    const overlaps = oa.project.sequences.seq_main!.tracks.some((tr) => [...tr.clips].sort((a, b) => T.cmp(a.start, b.start)).some((c, i, arr) => i > 0 && T.lt(c.start, T.add(arr[i - 1]!.start, arr[i - 1]!.duration))));
+    check('"overwrite at the playhead" replaces exactly the range\'s length on the picture and sound tracks in one transaction: the timeline keeps its length, nothing later moves, and it shows the new frames 60–69 followed by what was already there (110–119, then the continuation)', oa.revision === ob.revision + 1 && endOf(oa.project) === endOf(ob.project) && !overlaps && JSON.stringify(oShown) === JSON.stringify([30 + k - 1, 60, 69, 110, 119, 30 + k]), { oShown, lengths: [endOf(ob.project), endOf(oa.project)], overlaps, revisions: [ob.revision, oa.revision] });
     check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.

@@ -67,6 +67,26 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
       onClose();
     } catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
   };
+  /** Overwrite at the timeline playhead: clear the range's length on the first picture track and the first sound track there (nothing moves), then place the range. One transaction. */
+  const overwrite = async () => {
+    const d = editor.doc;
+    if (!asset || !d || end <= inFrame) return;
+    setBusy(true); setErr(null);
+    try {
+      playerRef.current?.pause();
+      const at = T.frameTime(editor.frame, rate), duration = T.frameTime(end - inFrame, rate);
+      const tracks = d.sequences[d.mainSequenceId]!.tracks;
+      const v = asset.video ? tracks.find((tr) => tr.kind === 'video' && !tr.locked) : undefined;
+      const a = asset.audio ? tracks.find((tr) => tr.kind === 'audio' && !tr.locked) : undefined;
+      const clear = [v, a].filter((tr): tr is NonNullable<typeof tr> => !!tr).map((tr) => tr.id);
+      const target = v ?? a;
+      await editor.commit([
+        ...(clear.length ? [{ op: 'cut_range', args: { start: at, end: T.add(at, duration), ripple: false, trackIds: clear } }] : []),
+        { op: 'add_clip', args: { assetId, start: at, sourceIn: T.frameTime(inFrame, rate), duration, ...(target ? { trackId: target.id } : {}) } },
+      ], 'Overwrite with clip');
+      onClose();
+    } catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
+  };
   const add = async () => {
     if (!asset || end <= inFrame) return;
     setBusy(true); setErr(null);
@@ -130,6 +150,7 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
         <div className="row">
           <button type="button" className="primary" disabled={busy || end <= inFrame || total === 0} onClick={() => void add()} data-testid="source-add">{t('source.add')}</button>
           <button type="button" className="ghost" disabled={busy || end <= inFrame || total === 0} onClick={() => void insert()} data-testid="source-insert">{t('source.insert')} <bdi dir="ltr">({T.toTimecode(T.frameTime(editor.frame, rate), rate)})</bdi></button>
+          <button type="button" className="ghost" disabled={busy || end <= inFrame || total === 0} onClick={() => void overwrite()} data-testid="source-overwrite">{t('source.overwrite')}</button>
         </div>
         {err && <p className="muted danger" role="alert" data-testid="source-error">{err}</p>}
       </div>
