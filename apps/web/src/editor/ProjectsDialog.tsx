@@ -97,6 +97,15 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }) {
     } catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
   };
 
+  // Escape must close the dialog wherever focus is: when a focused control is removed (for example a deleted project row)
+  // the browser moves focus to the page body, outside the dialog. Focus is also pulled back in so Tab keeps working.
+  useEffect(() => {
+    const onDocKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); } };
+    const onFocusLost = () => { if (!dialogRef.current?.contains(document.activeElement)) closeRef.current?.focus(); };
+    document.addEventListener('keydown', onDocKey, true);
+    const timer = setInterval(onFocusLost, 200);
+    return () => { document.removeEventListener('keydown', onDocKey, true); clearInterval(timer); };
+  }, [onClose]);
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return; }
     if (e.key === 'Tab') {

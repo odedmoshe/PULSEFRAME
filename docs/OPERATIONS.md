@@ -44,7 +44,8 @@ Restore: stop the server, put the files back under `PF_DATA_DIR`, start the serv
 ### Moving or backing up one project
 The editor's Deliver tab has "Download archive" and "Import archive as a new project" (REST: `GET /api/v1/projects/{id}/archive`, `POST /api/v1/projects/import`). An archive is one tar file with the project and all its media; every file is verified on import. Edit history, exports and credentials are not included.
 
-### Deleting a project and reclaiming space (owner only, REST)
+### Deleting a project and reclaiming space (owner only)
+In the editor: the Projects button in the header (delete asks you to type the project name; storage clean-up shows what would be removed first). The same over REST:
 Deleting is permanent; download the archive first if you may want it back.
 These routes need the owner session (the cookie obtained with the owner link), not an agent token. From a terminal:
 ```bash
@@ -77,6 +78,7 @@ All proofs start their own server on their own port and data directory under `.a
 | `pnpm proof:phase11` | recipes |
 | `pnpm proof:phase12` | linked formats, preflight |
 | `pnpm proof:editor-interactions` | canvas overrides, beat snapping, manual beat edits, meter, batch export from the editor |
+| `pnpm proof:owner-ui` | agent access panel, project manager, crossfade control, loop playback |
 | `pnpm audit:a11y` | heuristic accessibility audit (he + en) |
 | `pnpm soak` | 3,000-transaction session, replay, restart |
 | `pnpm conformance:seek`, `pnpm conformance:avsync` | seek accuracy, 10-minute A/V sync |

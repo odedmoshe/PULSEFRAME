@@ -11,6 +11,8 @@ import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
+import { ProjectsDialog } from './ProjectsDialog.tsx';
+import { AccessPanel } from './AccessPanel.tsx';
 import { CaptionControls, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -21,6 +23,7 @@ export function Header() {
   const { doc, save, revision, exportJob: job, lang } = state;
   const viewVariant = state.viewVariantId ? doc?.variants?.[state.viewVariantId] ?? null : null;
   const exporting = job && ['queued', 'running', 'cancel-requested'].includes(job.status);
+  const [projectsOpen, setProjectsOpen] = useState(false);
   return (
     <header className="header">
       <span className="logo" dangerouslySetInnerHTML={{ __html: LOGO_SVG }} />
@@ -48,6 +51,8 @@ export function Header() {
       {state.agentsPaused && <span className="save warn" role="status" data-testid="agents-paused">{t('agents.paused')}</span>}
       <button className="ghost" disabled={!doc} onClick={() => void editor.history('undo')} data-testid="undo" title="Ctrl+Z">{t('undo')}</button>
       <button className="ghost" disabled={!doc} onClick={() => void editor.history('redo')} data-testid="redo" title="Ctrl+Shift+Z">{t('redo')}</button>
+      <button className="ghost" onClick={() => setProjectsOpen(true)} data-testid="projects-open" aria-haspopup="dialog">{t('projects.open')}</button>
+      {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); /* return focus to the button that opened the dialog */ setTimeout(() => document.querySelector<HTMLElement>('[data-testid=projects-open]')?.focus(), 0); }} />}
       <button className="ghost" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog">{t('cmd.palette')} <kbd>{chordLabel('Mod+KeyK')}</kbd></button>
       <button className="ghost" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle">{t('lang.toggle')}</button>
       {job?.status === 'succeeded' && <a className="ghost" href={`/api/v1/jobs/${job.id}/output`} data-testid="export-download">{t('export.done')}</a>}
@@ -135,6 +140,7 @@ export function Transport() {
       <button className="ghost" onClick={() => run(editor, 'transport.prevFrame')} aria-label={t('frame.prev')}>◀︎</button>
       <button className="primary" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} data-testid="play">{p?.playing ? '❚❚' : '▶'}</button>
       <button className="ghost" onClick={() => run(editor, 'transport.nextFrame')} aria-label={t('frame.next')}>▶︎</button>
+      <button className="ghost" onClick={() => run(editor, 'transport.loop')} aria-pressed={!!p?.loop} aria-label={t('cmd.loop')} title={t('cmd.loop')} data-testid="loop">⟳</button>
       <span className="timecode" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>
       <span className="muted">/ {T.toTimecode(editor.duration, rate)} · {editor.viewDoc?.settings.width}×{editor.viewDoc?.settings.height} · {(rate.num / rate.den).toFixed(rate.den === 1 ? 0 : 2)} fps</span>
     </div>
@@ -272,6 +278,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
           </li>
         ))}
       </ol>
+      <AccessPanel />
       </div>
     </aside>
   );

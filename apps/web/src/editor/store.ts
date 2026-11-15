@@ -137,6 +137,12 @@ export class Editor {
     const vd = this.viewDoc;
     if (vd) this.player?.setDoc(vd);
   }
+  /** Loop playback on/off (session setting; the player restarts from the first frame at the end). */
+  toggleLoop() {
+    if (!this.player) return;
+    this.player.loop = !this.player.loop;
+    this.set({ tick: this.state.tick + 1 });
+  }
   setSafeArea(on: boolean) {
     try { localStorage.setItem(SAFE_KEY, on ? '1' : '0'); } catch { /* ignore */ }
     this.set({ safeAreaOn: on });

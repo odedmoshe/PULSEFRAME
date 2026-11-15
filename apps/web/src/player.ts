@@ -249,7 +249,7 @@ export class Player {
   syncStats() {
     const v = [...this.late].sort((a, b) => a - b);
     const q = (p: number) => (v.length ? +(v[Math.min(v.length - 1, Math.floor(v.length * p))]! * 1000).toFixed(2) : null);
-    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) } };
+    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, loops: this.loops, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) } };
   }
   dispose() {
     this.pause();

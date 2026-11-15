@@ -59,6 +59,7 @@ const selectAdjacent = (dir: 1 | -1) => (e: Editor) => {
 
 export const COMMANDS: Command[] = [
   { id: 'transport.toggle', label: 'cmd.playPause', group: 'transport', keys: ['Space'], run: (e) => (e.player?.playing ? e.player.pause() : e.player?.play()) },
+  { id: 'transport.loop', label: 'cmd.loop', group: 'transport', keys: ['Shift+KeyL'], run: (e) => e.toggleLoop() },
   { id: 'transport.prevFrame', label: 'frame.prev', group: 'transport', keys: ['ArrowLeft'], run: step(-1) },
   { id: 'transport.nextFrame', label: 'frame.next', group: 'transport', keys: ['ArrowRight'], run: step(1) },
   { id: 'transport.back10', label: 'cmd.back10', group: 'transport', keys: ['Shift+ArrowLeft'], run: step(-10) },

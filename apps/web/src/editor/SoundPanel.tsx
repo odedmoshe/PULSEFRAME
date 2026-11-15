@@ -114,6 +114,8 @@ export function SoundPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [res, setRes] = useState<LoudnessResult | null>(null);
   const [resRev, setResRev] = useState(0);
+  const [xf, setXf] = useState('0');
+  useEffect(() => setXf('0'), [state.selection.join(',')]);
   if (!doc) return null;
   const tracks = (doc.sequences[doc.mainSequenceId]?.tracks ?? []).filter((x) => x.kind === 'audio');
   const sel = editor.selected;
@@ -143,6 +145,14 @@ export function SoundPanel() {
           <h3>{t('sound.clip')}</h3>
           <NumberCommit key={`in:${clip.id}`} label={t('sound.fadeIn')} value={fadeSeconds(clip.fadeIn)} min={0} step={0.1} testid="sound-fade-in" onCommit={(v) => setFade('fadeIn', v)} />
           <NumberCommit key={`out:${clip.id}`} label={t('sound.fadeOut')} value={fadeSeconds(clip.fadeOut)} min={0} step={0.1} testid="sound-fade-out" onCommit={(v) => setFade('fadeOut', v)} />
+          <div className="fields" key={`xf:${clip.id}`}>
+            <label>{t('sound.crossfade')}
+              <input type="number" dir="ltr" min={0} step={0.1} value={xf} data-testid="sound-crossfade" onChange={(e) => setXf(e.target.value)} />
+            </label>
+            <p className="muted">{t('sound.crossfade.hint')}</p>
+            <button type="button" className="ghost" data-testid="sound-crossfade-apply" disabled={xf === '' || !Number.isFinite(Number(xf)) || Number(xf) < 0}
+              onClick={() => void editor.commit([{ op: 'set_audio_crossfade', args: { clipId: clip.id, duration: T.snapToFrame(T.rt(Math.round(Number(xf) * 1000), 1000), editor.rate) } }], 'Audio crossfade')}>{t('sound.crossfade.apply')}</button>
+          </div>
         </>
       )}
 
