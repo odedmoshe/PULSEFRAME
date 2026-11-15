@@ -82,7 +82,7 @@ export const BEAT_MAX_SECONDS = 1200;
 /** Beat grid of a file's first audio stream (mono mix-down at 22.05 kHz, see beats.ts). Limited to BEAT_MAX_SECONDS of audio; the caller records when that cut the file short. */
 export function detectBeatsOfFile(file: string): Promise<BeatResult> {
   return new Promise((resolve, reject) => {
-    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', file, '-map', '0:a:0', '-t', String(BEAT_MAX_SECONDS), '-ac', '1', '-ar', String(BEAT_SR), '-f', 'f32le', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'], timeout: ANALYSIS_TIMEOUT_MS, killSignal: 'SIGKILL' });
+    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', file, '-map', '0:a:0', '-t', String(BEAT_MAX_SECONDS), '-af', `aresample=${BEAT_SR}:first_pts=0` /* beat times on the file's own clock, also when its sound starts late */, '-ac', '1', '-ar', String(BEAT_SR), '-f', 'f32le', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'], timeout: ANALYSIS_TIMEOUT_MS, killSignal: 'SIGKILL' });
     const chunks: Buffer[] = [];
     p.stdout.on('data', (d) => chunks.push(d));
     p.on('error', (e) => reject(new ApiError(503, 'analysis_unavailable', `ffmpeg could not be started: ${e.message}`)));

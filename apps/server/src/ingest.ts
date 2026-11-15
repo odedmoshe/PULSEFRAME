@@ -78,7 +78,8 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
     if (frameCount) duration = T.frameTime(frameCount + Math.max(0, startFrames), rate);
     video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount, ...(startTime ? { startTime } : {}) };
   }
-  const audio = a ? { sampleRate: Number(a.sample_rate), channels: Number(a.channels), codec: String(a.codec_name) } : undefined;
+  const aStart = a ? Number(a.start_time ?? 0) : 0;
+  const audio = a ? { sampleRate: Number(a.sample_rate), channels: Number(a.channels), codec: String(a.codec_name), ...(Number.isFinite(aStart) && Math.abs(aStart) > 1e-6 ? { startTime: T.fromSeconds(aStart.toFixed(6)) } : {}) } : undefined;
   if (!T.lt(T.ZERO, duration)) throw new ApiError(415, 'unsupported_media', 'media has zero duration');
   const mimeType = (v ? MIME[container] : MIME[container === 'mp4' ? 'm4a' : container]) ?? 'application/octet-stream';
   return { kind: v ? 'video' : 'audio', container, mimeType, duration, video, audio };

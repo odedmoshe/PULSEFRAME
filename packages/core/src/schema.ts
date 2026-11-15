@@ -36,7 +36,9 @@ export const AssetSchema = z
         startTime: RationalTimeSchema.optional() })
       .strict()
       .optional(),
-    audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string() }).strict().optional(),
+    audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string(),
+      /** Timestamp of the first audio sample in the file when it is not 0: the sound starts that much after (or before) the file's time zero. */
+      startTime: RationalTimeSchema.optional() }).strict().optional(),
     image: z.object({ width: z.number().int().positive(), height: z.number().int().positive(), codec: z.string(), hasAlpha: z.boolean() }).strict().optional(),
     /**
      * Present when the stored media is a conformed copy (SPEC §7): the original could not be edited directly

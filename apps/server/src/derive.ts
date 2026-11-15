@@ -223,7 +223,7 @@ export class Derivatives {
       }
       total += usable / 2;
     };
-    await this.ff([...this.input(src), '-vn', '-map', '0:a:0', '-ac', '1', '-ar', String(WAVEFORM_SAMPLE_RATE), '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1'], onData);
+    await this.ff([...this.input(src), '-vn', '-map', '0:a:0', '-af', `aresample=${WAVEFORM_SAMPLE_RATE}:first_pts=0` /* the waveform is drawn on the file's own clock, also when its sound starts late */, '-ac', '1', '-ar', String(WAVEFORM_SAMPLE_RATE), '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1'], onData);
     if (inBucket > 0) { mins.push(lo); maxs.push(hi); }
     if (total === 0) throw new Error('no audio samples decoded');
     const levels: { samplesPerBucket: number; buckets: number; byteOffset: number }[] = [];

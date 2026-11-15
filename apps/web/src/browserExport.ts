@@ -97,6 +97,7 @@ async function api<R>(apiBase: string, path: string, body: unknown): Promise<R> 
 }
 
 /** Whole-sample mix of the exported range, positions rounded from ABSOLUTE rational times (never accumulated). */
+const startSeconds = (t: T.RationalTime | undefined) => (t ? T.toSeconds(t) : 0);
 async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, out: Leased['manifest']['output'], rate: number, stopped: () => void): Promise<AudioBuffer> {
   const firstSample = T.nearestSampleIndex(T.frameTime(out.firstFrame, out.frameRate), rate);
   const totalSamples = T.nearestSampleIndex(T.frameTime(out.firstFrame + out.frames, out.frameRate), rate) - firstSample;
@@ -125,7 +126,12 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
     src.buffer = buf;
     src.playbackRate.value = c.speed; // varispeed, same as the server mix and the preview
     src.connect(plannedClipInput(ctx, c, rate, ctx.destination, (c.at - firstSample) / rate, s0 - c.at));
-    src.start((s0 - firstSample) / rate, (c.source + (s0 - c.at) * c.speed) / rate, ((s1 - s0) * c.speed) / rate);
+    // The plan's source positions are on the file's own clock; the decoded buffer starts at the first sound sample.
+    // When the file's sound starts late, the stretch before it is silence: start later and read from the buffer's beginning.
+    const lead = startSeconds(doc.assets[c.assetId]?.audio?.startTime);
+    let when = (s0 - firstSample) / rate, offset = (c.source + (s0 - c.at) * c.speed) / rate - lead, span = ((s1 - s0) * c.speed) / rate;
+    if (offset < 0) { when += -offset / c.speed; span += offset; offset = 0; }
+    if (span > 0) src.start(when, offset, span);
   }
   stopped();
   return ctx.startRendering();

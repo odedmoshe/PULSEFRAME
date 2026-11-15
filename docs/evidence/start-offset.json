@@ -1,18 +1,18 @@
 {
-  "ranAt": "2026-11-15T04:58:19.643Z",
+  "ranAt": "2026-11-15T05:10:59.453Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
-  "scope": "Synthetic fixtures remuxed with shifted video timestamps (MP4 and Matroska): server export, scene detection, and paused preview frames in the editor. Not covered: playback (proxy) frames, audio that starts late, negative start times, real camera files.",
-  "passed": 3,
-  "total": 3,
+  "scope": "Synthetic fixtures remuxed with shifted video timestamps (MP4 and Matroska): server export, scene detection, and paused preview frames in the editor. Sound that starts late is measured on the server export, preview playback and browser export. Not covered: playback (proxy) picture frames, negative start times, real camera files.",
+  "passed": 4,
+  "total": 4,
   "rows": [
     {
       "case": "zero",
-      "projectId": "prj_QmExs2dsJcI",
+      "projectId": "prj_3IJg9yLwy5U",
       "container": "mp4",
       "startTime": 0,
       "storedStart": null,
@@ -41,7 +41,7 @@
     },
     {
       "case": "off-0.010",
-      "projectId": "prj_aYLV8mxxbfs",
+      "projectId": "prj_lXkTgsoxpcI",
       "container": "mp4",
       "startTime": 0.010026,
       "storedStart": {
@@ -73,7 +73,7 @@
     },
     {
       "case": "off-0.021",
-      "projectId": "prj_kFEglxIVxcg",
+      "projectId": "prj_aEnZgINF8Ss",
       "container": "mp4",
       "startTime": 0.021029,
       "storedStart": {
@@ -105,7 +105,7 @@
     },
     {
       "case": "off-0.021-mkv",
-      "projectId": "prj_FC4yQcGAysE",
+      "projectId": "prj_BGqEiX9LZ18",
       "container": "mkv",
       "startTime": 0.042,
       "storedStart": {
@@ -137,7 +137,7 @@
     },
     {
       "case": "off-0.500",
-      "projectId": "prj_AqLpksUaxG0",
+      "projectId": "prj_rjdxuGSoftA",
       "container": "mp4",
       "startTime": 0.5,
       "storedStart": {
@@ -195,6 +195,40 @@
         ],
         "pictureChangesAtFrame": 75,
         "expected": 75
+      }
+    },
+    {
+      "audioLate": {
+        "storedAudioStart": {
+          "value": "239",
+          "timescale": 500
+        },
+        "want": [
+          0.5,
+          1.5,
+          2.5,
+          3.5
+        ],
+        "serverOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "previewClock": "audio",
+        "previewOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "browserOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "browserNote": "mp4/opus"
       }
     }
   ],
@@ -343,6 +377,38 @@
           "134": 119
         },
         "errors": []
+      }
+    },
+    {
+      "name": "sound that starts 0.5 s late in the file is heard 0.5 s late on every route: server export within 3 ms; preview playback (audio clock) and browser export within one frame",
+      "ok": true,
+      "detail": {
+        "want": [
+          0.5,
+          1.5,
+          2.5,
+          3.5
+        ],
+        "serverOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "previewClock": "audio",
+        "previewOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "browserOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "browserNote": "mp4/opus"
       }
     }
   ]

@@ -352,6 +352,14 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Limits / still open: assets ingested **before** this change have no recorded start time (re-import them); playback (proxy) frames for shifted files were not checked, only paused frames; sound that starts late, negative start times and files whose streams have different time bases were not tested; no real camera, phone or broadcast file was available — all fixtures are synthetic remuxes.
 - Correction: the commit "Long media run…" says 285 unit tests; the suite had 284 at that point.
 
+**Checkpoint 13y — sound that starts late in the file (a second defect of the same kind, fixed)**
+- **Defect:** when a file's sound stream starts after time 0, the server export decoded it as "samples since the first one" and so played it early by the whole offset. Measured before the fix on a file that delays its sound by 0.5 s: beeps exported at 0.021, 1.021, 2.021, 3.021 s instead of 0.5, 1.5, 2.5, 3.5 s — about half a second ahead of the picture. The preview already used the file's clock, so **preview and export disagreed** for such files. The browser export had the same flaw as the server (not measured before the fix).
+- Fix: ingest records `asset.audio.startTime`; the server mixer, beat analysis and waveform decode on the file's own clock (silence before a late start); the browser export offsets the decoded buffer by the recorded start.
+- Verified in `pnpm conformance:start-offset` (now 4 checks): the same file gives onsets 0.499, 1.499, 2.499, 3.499 s on the server export, in preview playback on the audio clock, and in the browser export.
+- Full regression with this change: 288 unit tests; phase0 54, phase3 27, phase4 19, phase5 33, phase6 35, phase7 31, phase8 20, phase9 12, phase11 12, phase12 15, browser-export 23, editor-interactions 15, owner-ui 7, speed 16, soak 7, accessibility audit clean, parity suite pass, long media 6.
+- Also checked, no change needed: the playback proxy of a late-starting picture has the same 120 frames and the same container offset as the original, so with the decoder counting from its own file's first frame, proxy and original agree. This is from inspecting the proxy file, **not** from measuring frames during playback.
+- Limits: sound that continues after the picture ends is not reachable (an asset is as long as its picture); negative start times and streams with unusual time bases were not tested; no real camera, phone or broadcast file was available.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -379,7 +387,7 @@ Unblocked (no decision needed), roughly by value:
 4. Scheduled backups and retention (a tested manual backup and an optional storage ceiling exist).
 5. Per-format caption and title text (per-format caption style exists); more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Approvals list UI; activity log dialog; dialogs and transient states in the accessibility audit; MCP resource change notifications.
-7. Shifted sources: playback (proxy) frames, late-starting sound, negative start times, real files (the export failure for late-starting pictures is fixed and tested). Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
+7. Shifted sources: picture frames during playback, negative start times, sound longer than the picture, real files (late-starting picture and late-starting sound are fixed and tested). Downbeat detection; fit-music-to-duration; silence/loudness measurement as jobs; beat analysis past 20 minutes.
 8. Per-grant request limits and export quotas (a global opt-in limit exists); `Secure` cookie flag and deployment notes for TLS.
 9. Commit cost grows with project size (≈2.2 ms per 100 clips): incremental validation/diff if large projects matter.
 
@@ -397,7 +405,7 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 pnpm install && pnpm build && pnpm test
 ```
 Expect 288 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 3.
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 15 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 16 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity` · `pnpm conformance:long` 6 (about 90 s; generates a 20-minute file) · `pnpm conformance:start-offset` 4.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

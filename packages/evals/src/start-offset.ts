@@ -114,13 +114,59 @@ async function main() {
       }
       check('editor preview of the file that starts 15 frames late: paused frames 0, 14 and 15 show source frame 0, then 16 → 1, 100 → 85, 134 → 119; no page errors', JSON.stringify(seen) === JSON.stringify({ 0: 0, 14: 0, 15: 0, 16: 1, 100: 85, 134: 119 }) && errors.length === 0, { seen, errors: errors.slice(0, 3) });
     } finally { await browser.close(); }
+
+    // --- sound that starts late: the file delays its sound by 0.5 s; the picture starts at 0.
+    // The fixture beeps at source 0, 1, 2, 3 s, so on the file's own clock the beeps are at 0.5, 1.5, 2.5, 3.5 s.
+    const lateFile = path.join(art, 'audio-late.mp4');
+    ff(['-y', '-i', fixture.file, '-itsoffset', '0.5', '-i', fixture.file, '-map', '0:v', '-map', '1:a', '-c', 'copy', lateFile]);
+    const ap = (await call('/projects', { name: 'audio-late', width: W, height: H })).body.project.id;
+    const aup: any = await (await fetch(`${s.url}/api/v1/projects/${ap}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'audio-late.mp4' }, body: fs.readFileSync(lateFile) })).json();
+    await call(`/projects/${ap}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: aup.assetId, start: f(0) } }] });
+    const onsetsOf = (file: string) => {
+      const pcm = ff(['-i', file, '-f', 'f32le', '-ac', '1', '-ar', '48000', '-']);
+      const x = new Float32Array(pcm.buffer, pcm.byteOffset, pcm.length / 4);
+      const out: number[] = [];
+      for (let i = 0, quiet = 0; i < x.length; i++) if (i >= quiet && Math.abs(x[i]!) > 0.15) { out.push(Number((i / 48000).toFixed(3))); quiet = i + 48000 * 0.3; }
+      return out;
+    };
+    const want = [0.5, 1.5, 2.5, 3.5];
+    const near = (got: number[], tol: number) => got.length === want.length && got.every((g, i) => Math.abs(g - want[i]!) <= tol);
+    const wjob = (await call(`/projects/${ap}/exports`, { format: 'wav' })).body.jobId;
+    let wj: any;
+    for (;;) { wj = (await call(`/jobs/${wjob}`)).body; if (['succeeded', 'failed', 'canceled'].includes(wj.status)) break; await sleep(100); }
+    const wavFile = path.join(art, 'audio-late.wav');
+    fs.writeFileSync(wavFile, (await call(`/jobs/${wjob}/output`)).body);
+    const serverOnsets = onsetsOf(wavFile);
+    const b2 = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+    let previewOnsets: number[] = [], previewClock = 'none', browserOnsets: number[] = [], browserNote = '';
+    try {
+      const page = await b2.newPage({ viewport: { width: 1500, height: 950 } });
+      await page.addInitScript(() => { (window as any).__pfAudioTap = true; });
+      await page.goto(`${s.ownerUrl}&project=${ap}`);
+      await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame === '0', undefined, { timeout: 30000 });
+      await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
+      await page.getByTestId('play').click();
+      await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 30000 }).catch(() => {});
+      const sync = await page.evaluate(() => (window as any).__pfSync());
+      previewClock = sync.clock;
+      previewOnsets = (sync.audioOnsetsTimelineSeconds ?? []).map((x: number) => Number(x.toFixed(3)));
+      await page.close();
+      const bp = await b2.newPage();
+      await bp.goto(`${s.url}/browser-export.html?key=${s.auth.tokens.owner}`);
+      await bp.evaluate(() => (window as any).__pfBrowserExport.ready);
+      const r: any = await bp.evaluate((p) => (window as any).__pfBrowserExport.tryRun(p, { quality: 'draft' }), ap);
+      if (r.ok) { const bf = path.join(art, `audio-late-browser.${r.result.container}`); fs.writeFileSync(bf, Buffer.from(r.result.base64, 'base64')); browserOnsets = onsetsOf(bf); browserNote = `${r.result.container}/${r.result.audioCodec}`; }
+      else browserNote = `browser export did not run: ${JSON.stringify(r).slice(0, 200)}`;
+    } finally { await b2.close(); }
+    rows.push({ audioLate: { storedAudioStart: aup.asset.audio?.startTime ?? null, want, serverOnsets, previewClock, previewOnsets, browserOnsets, browserNote } });
+    check('sound that starts 0.5 s late in the file is heard 0.5 s late on every route: server export within 3 ms; preview playback (audio clock) and browser export within one frame', near(serverOnsets, 0.003) && previewClock === 'audio' && near(previewOnsets, 1 / 30) && near(browserOnsets, 1 / 30), { want, serverOnsets, previewClock, previewOnsets, browserOnsets, browserNote });
   } catch (e) {
     console.error(e);
     check('run completed', false, String(e).slice(0, 600));
   } finally {
     await s.close();
     const failed = checks.filter((x) => !x.ok);
-    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'Synthetic fixtures remuxed with shifted video timestamps (MP4 and Matroska): server export, scene detection, and paused preview frames in the editor. Not covered: playback (proxy) frames, audio that starts late, negative start times, real camera files.', passed: checks.length - failed.length, total: checks.length, rows, checks };
+    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none' }, scope: 'Synthetic fixtures remuxed with shifted video timestamps (MP4 and Matroska): server export, scene detection, and paused preview frames in the editor. Sound that starts late is measured on the server export, preview playback and browser export. Not covered: playback (proxy) picture frames, negative start times, real camera files.', passed: checks.length - failed.length, total: checks.length, rows, checks };
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     fs.writeFileSync(path.join(root, 'docs/evidence/start-offset.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(`\nStart-offset run ${report.result}: ${report.passed}/${report.total}`);

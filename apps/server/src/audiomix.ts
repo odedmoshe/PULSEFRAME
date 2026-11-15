@@ -93,8 +93,10 @@ export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) =>
         let r = readers.get(clip);
         if (!r) {
           // Start reading at the first clip-local sample this export needs; positions are absolute sample indices.
+          // first_pts=0 puts the decoded sound on the file's own clock: silence is inserted before a sound stream that starts late,
+          // so sample positions mean file time (as in the preview), not "samples since the first one decoded".
           const skip = from - clip.at;
-          const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate},aformat=sample_fmts=flt:channel_layouts=stereo,atrim=start_sample=${clip.source + Math.round(skip * clip.speed)}:end_sample=${clip.source + Math.round(clip.length * clip.speed)},asetpts=PTS-STARTPTS${clip.speed === 1 ? '' : `,asetrate=${Math.round(plan.sampleRate * clip.speed)},aresample=${plan.sampleRate}`}`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
+          const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', blobPathOf(clip.assetId), '-map', '0:a:0', '-af', `aresample=${plan.sampleRate}:first_pts=0,aformat=sample_fmts=flt:channel_layouts=stereo,atrim=start_sample=${clip.source + Math.round(skip * clip.speed)}:end_sample=${clip.source + Math.round(clip.length * clip.speed)},asetpts=PTS-STARTPTS${clip.speed === 1 ? '' : `,asetrate=${Math.round(plan.sampleRate * clip.speed)},aresample=${plan.sampleRate}`}`, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
           r = new PcmReader(child);
           readers.set(clip, r);
         }
