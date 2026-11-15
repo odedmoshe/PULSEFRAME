@@ -141,6 +141,7 @@ export function createFuzz(seed: number) {
       () => ({ op: 'unlink_clip', args: { clipId: any() } }),
       () => ({ op: 'set_clip_reverse', args: { clipId: any(), reverse: rnd() < 0.75 } }),
       () => ({ op: 'set_clip_pitch', args: { clipId: any(), keepPitch: rnd() < 0.7 } }),
+      () => { const a0 = int(40), b0 = a0 + int(60); return { op: 'draw_volume', args: { clipId: audioClips.length && rnd() < 0.9 ? pick(audioClips).c.id : any(), from: f(a0), to: f(b0), keys: Array.from({ length: int(5) }, (_, i) => ({ time: f(Math.min(b0, a0 + i * 7)), value: Number((rnd() * 2).toFixed(2)), ...(rnd() < 0.3 ? { curve: 'smooth' as const } : {}) })).filter((k, i, all) => i === 0 || !T.eq(all[i - 1]!.time, k.time)) } }; },
       () => ({ op: 'set_clip_speed_ramp', args: { clipId: any(), from: pick([0.5, 1, 1.5, 2]), to: pick([0.25, 0.75, 1, 3]) } }),
       () => ({ op: 'slip_clip', args: { clipId: any(), by: rnd() < 0.5 ? f(1 + int(40)) : T.sub(T.ZERO, f(1 + int(40))), ...(rnd() < 0.2 ? { includeLinked: false } : {}) } }),
       () => ({ op: 'close_gaps', args: rnd() < 0.7 ? {} : { from: f(int(200)), to: f(200 + int(300)) } }),

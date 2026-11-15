@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
-import type { Clip, ProjectDocument } from '@pulseframe/core';
+import { volumeLevelAt, type Clip, type ProjectDocument } from '@pulseframe/core';
 import { api, type LoudnessResult } from '../api.ts';
 import { useEditorState } from './store.ts';
 
@@ -56,16 +56,8 @@ function VolumeKeys({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   const inside = !T.isNegative(local) && T.lte(local, clip.duration);
   const keys = clip.volume ?? [];
   const here = keys.find((k) => T.eq(k.time, local));
-  // Same rule as the mixer: held outside the keys, straight line between them.
-  const now = (() => {
-    if (!keys.length) return 1;
-    if (T.lte(local, keys[0]!.time)) return keys[0]!.value;
-    const last = keys[keys.length - 1]!;
-    if (T.lte(last.time, local)) return last.value;
-    const i = keys.findIndex((k) => T.lt(local, k.time));
-    const a = keys[i - 1]!, b = keys[i]!;
-    return a.value + ((b.value - a.value) * T.toSeconds(T.sub(local, a.time))) / T.toSeconds(T.sub(b.time, a.time));
-  })();
+  // Same rule as the mixer (one shared definition): held outside the keys, a straight line or a smooth curve between them.
+  const now = volumeLevelAt(keys, local);
   // Handlers read the playhead when they run, not the position of the last render: a seek may not have re-rendered this panel yet.
   const liveLocal = () => { const at = T.sub(editor.playhead, clip.start); return !T.isNegative(at) && T.lte(at, clip.duration) ? at : null; };
   const set = (v: number) => { const at = liveLocal(); if (at) void editor.commit([{ op: 'set_volume_keyframe', args: { clipId: clip.id, time: at, value: Math.min(4, Math.max(0, v)) } }], 'Volume key'); };
@@ -77,6 +69,11 @@ function VolumeKeys({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
         <button type="button" className="ghost" disabled={!here} data-testid="volume-key-remove" onClick={() => { const at = liveLocal(); if (at) void editor.commit([{ op: 'delete_volume_keyframe', args: { clipId: clip.id, time: at } }], 'Remove volume key'); }}>{t('sound.volume.remove')}</button>
         <button type="button" className="ghost" disabled={!keys.length} data-testid="volume-key-clear" onClick={() => void editor.commit([{ op: 'delete_volume_keyframe', args: { clipId: clip.id } }], 'Clear volume keys')}>{t('sound.volume.clear')}</button>
       </div>
+      <label className="check">
+        <input type="checkbox" disabled={!here} checked={here?.curve === 'smooth'} data-testid="volume-key-smooth"
+          onChange={(e) => { const at = liveLocal(); if (at && here) void editor.commit([{ op: 'set_volume_keyframe', args: { clipId: clip.id, time: at, value: here.value, curve: e.target.checked ? 'smooth' : 'linear' } }], 'Volume curve'); }} />
+        {t('sound.volume.smooth')}
+      </label>
       <p className="muted" data-testid="volume-key-count">{t('sound.volume.hint')} <bdi>({keys.length})</bdi></p>
     </div>
   );

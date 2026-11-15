@@ -591,17 +591,38 @@ defineOp({
 defineOp({
   name: 'set_volume_keyframe',
   version: 1,
-  description: 'Volume automation: set the level of a sound clip at a clip-local, frame-aligned time (0 = silent, 1 = unchanged, up to 4). The level moves in a straight line between keys and holds before the first and after the last. It multiplies the clip gain, fades and ducking.',
-  args: z.object({ clipId: z.string(), time: RT.describe('Offset from the clip start (frame-aligned)'), value: z.number().min(0).max(4) }).strict(),
+  description: 'Volume automation: set the level of a sound clip at a clip-local, frame-aligned time (0 = silent, 1 = unchanged, up to 4). The level moves in a straight line between keys (or eases, for a key with curve=smooth) and holds before the first and after the last. It multiplies the clip gain, fades and ducking.',
+  args: z.object({ clipId: z.string(), time: RT.describe('Offset from the clip start (frame-aligned)'), value: z.number().min(0).max(4), curve: z.enum(['linear', 'smooth']).optional().describe('How the level moves from this key to the next: linear = straight line (default for a new key), smooth = eases out and in. Left out on an existing key, its shape is kept.') }).strict(),
   apply(d, a) {
     const clip = volumeTarget(d, a.clipId);
     assertAligned(d, a.time, 'time');
     if (T.isNegative(a.time) || T.lt(clip.duration, a.time)) throw new OpError('out_of_bounds', 'the key must lie inside the clip', { duration: clip.duration });
+    const was = (clip.volume ?? []).find((k) => T.eq(k.time, a.time));
     const keys = (clip.volume ?? []).filter((k) => !T.eq(k.time, a.time));
-    keys.push({ time: a.time, value: a.value });
+    const smooth = a.curve ? a.curve === 'smooth' : was?.curve === 'smooth';
+    keys.push({ time: a.time, value: a.value, ...(smooth ? { curve: 'smooth' as const } : {}) });
     keys.sort((x, y) => T.cmp(x.time, y.time));
     clip.volume = keys;
     return { affectedIds: [clip.id], summary: `Volume ${a.value} at +${fmt(a.time)}`, output: { keyframeCount: keys.length } };
+  },
+});
+defineOp({
+  name: 'draw_volume',
+  version: 1,
+  description: 'Replace the volume keys of a sound clip between two clip-local times by a new run of keys, as one edit (a level curve drawn by hand, or computed). Keys outside [from, to] are kept. Every new key must lie inside that range and inside the clip, on a whole frame; at most 400.',
+  args: z.object({ clipId: z.string(), from: RT, to: RT, keys: z.array(z.object({ time: RT, value: z.number().min(0).max(4), curve: z.literal('smooth').optional() }).strict()).max(400) }).strict(),
+  apply(d, a) {
+    const clip = volumeTarget(d, a.clipId);
+    assertAligned(d, a.from, 'from');
+    assertAligned(d, a.to, 'to');
+    if (T.isNegative(a.from) || T.lt(a.to, a.from) || T.lt(clip.duration, a.to)) throw new OpError('out_of_bounds', 'the range must lie inside the clip', { duration: clip.duration });
+    for (const k of a.keys) { assertAligned(d, k.time, 'key time'); if (T.lt(k.time, a.from) || T.lt(a.to, k.time)) throw new OpError('out_of_bounds', 'every key must lie inside the range', { time: k.time }); }
+    const fresh = a.keys.slice().sort((x, y) => T.cmp(x.time, y.time));
+    if (fresh.some((k, i) => i > 0 && T.eq(fresh[i - 1]!.time, k.time))) throw new OpError('invalid_args', 'two keys at the same time');
+    const keys = [...(clip.volume ?? []).filter((k) => T.lt(k.time, a.from) || T.lt(a.to, k.time)), ...fresh].sort((x, y) => T.cmp(x.time, y.time));
+    if (keys.length > 2000) throw new OpError('invalid_args', 'too many volume keys on this clip (2000 at most)');
+    if (keys.length) clip.volume = keys; else delete clip.volume;
+    return { affectedIds: [clip.id], summary: `Volume drawn: ${fresh.length} key(s) from +${fmt(a.from)} to +${fmt(a.to)}`, output: { keyframeCount: keys.length } };
   },
 });
 defineOp({

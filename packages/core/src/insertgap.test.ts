@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, clipEnd, createProject, timelineMarkers, diffEntities, findClip, OpError, restoreEntities, sequenceDuration, sourceAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, clipEnd, createProject, timelineMarkers, volumeLevelAt, volumePoints, diffEntities, findClip, OpError, restoreEntities, sequenceDuration, sourceAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -298,3 +298,49 @@ describe('link_clips', () => {
   });
 });
 
+
+describe('volume curves', () => {
+  const music = { kind: 'audio' as const, name: 'v.wav', contentHash: `sha256:${'9'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(20, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-15T00:00:00Z', importedBy: 'test' } };
+  function sound() {
+    let r = tx(createProject({ id: 'prj_v', name: 'V' }), [{ op: 'import_asset', args: { asset: music } }], true);
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: r.results[0]!.output!.assetId as string, start: f(0), duration: f(300) } }]);
+    return { doc: r.doc, clipId: (r.results[0]!.output as any).clipId as string };
+  }
+  const vol = (d: ProjectDocument, id: string) => (findClip(d, id)!.clip as any).volume as { time: T.RationalTime; value: number; curve?: 'smooth' }[] | undefined;
+  it('a smooth key eases to the next one (same ends, same middle, slower at the ends); the shape is kept when only the level changes and removed by curve=linear', () => {
+    const { doc, clipId } = sound();
+    let d = tx(doc, [{ op: 'set_volume_keyframe', args: { clipId, time: f(0), value: 0, curve: 'smooth' } }, { op: 'set_volume_keyframe', args: { clipId, time: f(100), value: 1 } }]).doc;
+    const at = (n: number) => volumeLevelAt(vol(d, clipId), f(n));
+    expect([at(0), at(50), at(100), at(200)]).toEqual([0, 0.5, 1, 1]);
+    expect(at(10)).toBeCloseTo(0.028, 3); // 3x² − 2x³ at x = 0.1; a straight line would give 0.1
+    expect(at(90)).toBeCloseTo(0.972, 3);
+    // the points handed to the mixers lie on the same curve
+    const pts = volumePoints(vol(d, clipId)!, (t) => fi(t));
+    expect(pts.length).toBe(17);
+    expect(pts.every((p) => Math.abs(p.value - volumeLevelAt(vol(d, clipId), T.rt(Math.round(p.x * 1000), 30000))) < 1e-9)).toBe(true);
+    d = tx(d, [{ op: 'set_volume_keyframe', args: { clipId, time: f(0), value: 0.2 } }]).doc;
+    expect(vol(d, clipId)![0]).toMatchObject({ value: 0.2, curve: 'smooth' });
+    d = tx(d, [{ op: 'set_volume_keyframe', args: { clipId, time: f(0), value: 0.2, curve: 'linear' } }]).doc;
+    expect(vol(d, clipId)![0]!.curve).toBeUndefined();
+    expect(volumeLevelAt(vol(d, clipId), f(50))).toBeCloseTo(0.6, 9);
+    expect(validateProject(d)).toEqual([]);
+  });
+  it('draw_volume replaces the keys inside a range by a new run in one edit and keeps the keys outside it; bad input is refused', () => {
+    const { doc, clipId } = sound();
+    let d = tx(doc, [10, 40, 70, 200].map((n) => ({ op: 'set_volume_keyframe', args: { clipId, time: f(n), value: 1 } }))).doc;
+    const r = tx(d, [{ op: 'draw_volume', args: { clipId, from: f(30), to: f(90), keys: [{ time: f(60), value: 0.5 }, { time: f(30), value: 0.9 }, { time: f(90), value: 1.4, curve: 'smooth' }] } }]);
+    d = r.doc;
+    expect(vol(d, clipId)!.map((k) => [fi(k.time), k.value])).toEqual([[10, 1], [30, 0.9], [60, 0.5], [90, 1.4], [200, 1]]);
+    expect(vol(d, clipId)![3]!.curve).toBe('smooth');
+    expect(validateProject(d)).toEqual([]);
+    const before = tx(doc, [10, 40, 70, 200].map((n) => ({ op: 'set_volume_keyframe', args: { clipId, time: f(n), value: 1 } }))).doc;
+    const back = structuredClone(d);
+    restoreEntities(back, diffEntities(before, d).map((x) => ({ id: x.id, state: x.before })));
+    expect(vol(back, clipId)!.map((k) => fi(k.time))).toEqual([10, 40, 70, 200]); // the undo path
+    expect(vol(tx(d, [{ op: 'draw_volume', args: { clipId, from: f(0), to: f(300), keys: [] } }]).doc, clipId)).toBeUndefined(); // an empty run clears the range
+    expect(code(() => tx(d, [{ op: 'draw_volume', args: { clipId, from: f(30), to: f(90), keys: [{ time: f(100), value: 1 }] } }]))).toBe('out_of_bounds');
+    expect(code(() => tx(d, [{ op: 'draw_volume', args: { clipId, from: f(90), to: f(30), keys: [] } }]))).toBe('out_of_bounds');
+    expect(code(() => tx(d, [{ op: 'draw_volume', args: { clipId, from: f(30), to: f(90), keys: [{ time: f(40), value: 1 }, { time: f(40), value: 0.5 }] } }]))).toBe('invalid_args');
+    expect(code(() => tx(d, [{ op: 'draw_volume', args: { clipId, from: f(30), to: f(900), keys: [] } }]))).toBe('out_of_bounds');
+  });
+});

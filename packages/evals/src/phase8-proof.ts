@@ -170,6 +170,14 @@ async function main() {
     const vw3 = await wav(vp);
     measurements.volumeAutomation = { keys: '1.0 at 1 s, 0.2 at 3 s, 1.5 at 4 s on a 0.5-amplitude tone', expected: vPts.map(([, g]) => g), exported: vGot, afterTrimAndMove: vGot2, afterClearing: r3(tone(vw3.pcm, 0, 440, 1.475)) };
     check('volume automation in the exported mix: level held before the first key, straight lines between keys (also above 1), held after the last — 5 points within 0.006; after a start trim the same levels are heard earlier; clearing the keys restores the plain level', vGot.every((g, i) => Math.abs(g - vPts[i]![1]) < 0.006) && vGot2.every((g, i) => Math.abs(g - vPts[i + 1]![1]) < 0.006) && Math.abs(tone(vw3.pcm, 0, 440, 1.475) - 0.5) < 0.003, measurements.volumeAutomation);
+    // a smooth stretch: 0 at 1 s easing to 1 at 5 s; the exported level must follow 3x² − 2x³, not the straight line
+    await txs(vp, [{ op: 'set_volume_keyframe', args: { clipId: vClip, time: f(30), value: 0, curve: 'smooth' } }, { op: 'set_volume_keyframe', args: { clipId: vClip, time: f(150), value: 1 } }]);
+    const vw4 = await wav(vp);
+    const sPts: [number, number, number][] = [[1.5, 0.125, 0], [2, 0.25, 0], [3, 0.5, 0], [4, 0.75, 0]].map(([t, x]) => [t!, 0.5 * (x! * x! * (3 - 2 * x!)), 0.5 * x!]);
+    const sGot = sPts.map(([t]) => r3(tone(vw4.pcm, 0, 440, t - 0.025)));
+    measurements.smoothVolume = { keys: '0 at 1 s (smooth) to 1.0 at 5 s on a 0.5-amplitude tone', expectedSmooth: sPts.map((q) => r3(q[1])), straightLineWouldBe: sPts.map((q) => r3(q[2])), exported: sGot };
+    check('a smooth volume stretch in the exported mix follows the S-curve (4 points within 0.006), which differs clearly from the straight line at the quarter points', sGot.every((g, i) => Math.abs(g - sPts[i]![1]) < 0.006) && Math.abs(sGot[0]! - sPts[0]![2]) > 0.03 && Math.abs(sGot[3]! - sPts[3]![2]) > 0.03, measurements.smoothVolume);
+    await txs(vp, [{ op: 'delete_volume_keyframe', args: { clipId: vClip } }]);
 
     console.log('\n# long mix stays bounded and exact');
     const lp = (await call('/projects', { name: 'phase8-long', width: 640, height: 360 })).body.project.id;

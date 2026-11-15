@@ -301,6 +301,33 @@ async function main() {
     const vl5 = await until((x2) => fr(clipOf(x2, musicClip).start) === startWas + 10, 4000);
     if (vl5) { await page.keyboard.press('Control+z'); await until((x2) => fr(clipOf(x2, musicClip).start) === startWas); }
     check('volume line: the key is drawn at its frame; dragging it changes time and level in one edit (30→40, 0.5→1.5); a double-click on the line adds a key at the level there; arrow keys nudge the focused key without moving the playhead; Delete removes the key, not the clip; the key is named for assistive technology; a drag on the line moves the clip', handleAt && vl1 && vl2 && vl3 && vl4 && tcBefore === tcAfter && /\d+%/.test(namedKey) && vl5, { handleAt, vl1, vl2, vl3, vl4, vl5, tcBefore, tcAfter, namedKey, keys: volKeys(await doc()) });
+    // smooth stretch and freehand drawing on the same line (keys now: 0.5 at clip frame 40 after the checks above → set a known pair first)
+    await txs(pid, [{ op: 'delete_volume_keyframe', args: { clipId: musicClip } }, { op: 'set_volume_keyframe', args: { clipId: musicClip, time: f(30), value: 0.5 } }, { op: 'set_volume_keyframe', args: { clipId: musicClip, time: f(90), value: 1.2 } }]);
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=volume-line-key]').length === 2, undefined, { timeout: 8000 }).catch(() => {});
+    await vkeysEl.first().focus();
+    await page.keyboard.press('s');
+    const smoothSet = await until((x2) => clipOf(x2, musicClip).volume?.[0]?.curve === 'smooth');
+    await page.waitForFunction(() => document.querySelector('[data-testid=volume-line-key]')?.getAttribute('data-curve') === 'smooth', undefined, { timeout: 5000 }).catch(() => {});
+    const musicStart = fr(clipOf(await doc(), musicClip).start);
+    await page.mouse.click(rb.x + (musicStart + 45) * 3 + 0.5, rb.y + 5); // a quarter of the way along the stretch
+    await page.waitForFunction(() => (document.querySelector('[data-testid=volume-level]') as HTMLInputElement)?.value === '0.609', undefined, { timeout: 5000 }).catch(() => {});
+    const quarterShown = await page.getByTestId('volume-level').inputValue(); // 0.5 + 0.7 × (3·0.25² − 2·0.25³) = 0.609; a straight line gives 0.675
+    // freehand: Alt + drag from the line at clip frame 110 (level 1.2, held after the last key) down to about 0.4 at frame 170
+    const lb2 = (await vline.boundingBox())!;
+    const yOf = (v: number) => lb2.y + 34 - 4 - (v / 2) * 26;
+    const revBeforeDraw = (await call(`/projects/${pid}`)).body.revision as number;
+    await page.keyboard.down('Alt');
+    await page.mouse.move(lb2.x + 110 * 3, yOf(1.2));
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(lb2.x + (110 + i * 6) * 3, yOf(1.2 - 0.08 * i));
+    await page.mouse.up();
+    await page.keyboard.up('Alt');
+    const drew = await until((x2) => (clipOf(x2, musicClip).volume?.length ?? 0) > 6);
+    const afterDraw = (await call(`/projects/${pid}`)).body;
+    const drawnKeys = volKeys(afterDraw.project).filter((k: number[]) => k[0]! >= 100);
+    check('volume line: S on a key makes the stretch to the next key smooth (the level a quarter of the way is 0.609, not the straight line\'s 0.675); Alt + drag draws the level — one edit replaces the keys under the stroke with keys along it (from frame 110 at 1.2 down to 170 at about 0.4), the earlier keys stay',
+      smoothSet && quarterShown === '0.609' && drew && afterDraw.revision === revBeforeDraw + 1 && drawnKeys.length >= 8 && drawnKeys[0][0] === 110 && Math.abs(drawnKeys[0][1] - 1.2) < 0.06 && drawnKeys.at(-1)[0] === 170 && Math.abs(drawnKeys.at(-1)[1] - 0.4) < 0.06 && drawnKeys.every((k: number[], i: number) => i === 0 || k[1]! <= drawnKeys[i - 1][1] + 0.02) && JSON.stringify(volKeys(afterDraw.project).slice(0, 2)) === JSON.stringify([[30, 0.5], [90, 1.2]]),
+      { smoothSet, quarterShown, revisions: afterDraw.revision - revBeforeDraw, drawnKeys });
     // back to the state the following sections were written against
     await txs(pid, [{ op: 'delete_volume_keyframe', args: { clipId: musicClip } }, { op: 'set_volume_keyframe', args: { clipId: musicClip, time: f(30), value: 0.5 } }]);
 

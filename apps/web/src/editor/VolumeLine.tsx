@@ -2,12 +2,14 @@
  * The volume line of a sound clip, drawn over the clip on the timeline (SPEC §17 automation).
  * Always visible when the clip has volume keys. When the clip is the selection, each key is a handle:
  * drag it (up/down = level, sideways = time, whole frames), arrow keys nudge it, Delete or a double-click removes it,
- * and a double-click on the line adds a key there. Every change is the same registered op the Sound panel uses.
+ * S makes the stretch after it smooth or straight, and a double-click on the line adds a key there. Alt + drag that starts
+ * on the line draws the level freehand: the keys under the stroke are replaced by the drawn ones, as one edit.
+ * Every change is a registered op (the ones the Sound panel uses, and `draw_volume` for a stroke).
  * The wrapper names the clip for the drag handler (`data-drag-clip`), so a drag that starts on the line still moves the clip.
  */
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import * as T from '@pulseframe/time';
-import type { Clip } from '@pulseframe/core';
+import { volumeLevelAt, volumePoints, type Clip } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
@@ -20,20 +22,17 @@ export function VolumeLine({ clip, selected, editable, pps, left, width }: { cli
   const rate = editor.rate;
   const [drag, setDrag] = useState<{ index: number; frame: number; value: number } | null>(null);
   const session = useRef<{ pointerId: number; index: number; startX: number; startY: number; frame0: number; y0: number; moved: boolean } | null>(null);
-  const stored = (clip.volume ?? []).map((k) => ({ frame: T.frameIndexAt(k.time, rate), value: k.value }));
-  const keys = drag ? stored.map((k, i) => (i === drag.index ? { frame: drag.frame, value: drag.value } : k)) : stored;
+  const [stroke, setStroke] = useState<Map<number, number> | null>(null); // freehand: frame → level, while drawing
+  const drawing = useRef<{ pointerId: number; left: number; top: number; step: number } | null>(null);
+  const stored = (clip.volume ?? []).map((k) => ({ frame: T.frameIndexAt(k.time, rate), value: k.value, curve: k.curve }));
+  const keys = drag ? stored.map((k, i) => (i === drag.index ? { ...k, frame: drag.frame, value: drag.value } : k)) : stored;
   const lastFrame = T.frameIndexAt(clip.duration, rate);
   const xOf = (frame: number) => T.toSeconds(T.frameTime(frame, rate)) * pps;
-  const points = keys.length ? [{ x: 0, y: levelToY(keys[0]!.value) }, ...keys.map((k) => ({ x: xOf(k.frame), y: levelToY(k.value) })), { x: width, y: levelToY(keys[keys.length - 1]!.value) }] : [{ x: 0, y: levelToY(1) }, { x: width, y: levelToY(1) }];
+  // the same points the mixers follow (a smooth stretch is a run of short straight pieces)
+  const shape = volumePoints(keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, ...(k.curve ? { curve: k.curve } : {}) })), (t) => T.toSeconds(t) * pps);
+  const points = keys.length ? [{ x: 0, y: levelToY(keys[0]!.value) }, ...shape.map((q) => ({ x: q.x, y: levelToY(q.value) })), { x: width, y: levelToY(keys[keys.length - 1]!.value) }] : [{ x: 0, y: levelToY(1) }, { x: width, y: levelToY(1) }];
   const path = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const levelAtFrame = (frame: number): number => {
-    if (!stored.length) return 1;
-    if (frame <= stored[0]!.frame) return stored[0]!.value;
-    const last = stored[stored.length - 1]!;
-    if (frame >= last.frame) return last.value;
-    const i = stored.findIndex((k) => frame < k.frame), a = stored[i - 1]!, b = stored[i]!;
-    return a.value + ((b.value - a.value) * (frame - a.frame)) / (b.frame - a.frame);
-  };
+  const levelAtFrame = (frame: number): number => volumeLevelAt(clip.volume, T.frameTime(frame, rate));
   /** Frames a key may move to: inside the clip and strictly between its neighbours. */
   const bounds = (index: number): [number, number] => [index > 0 ? stored[index - 1]!.frame + 1 : 0, index < stored.length - 1 ? stored[index + 1]!.frame - 1 : lastFrame];
   const write = (index: number, frame: number, value: number) => {
@@ -89,6 +88,11 @@ export function VolumeLine({ clip, selected, editable, pps, left, width }: { cli
         case 'ArrowLeft': nudge(index, -1, 0); return true;
         case 'ArrowRight': nudge(index, 1, 0); return true;
         case 'Delete': case 'Backspace': remove(index); return true;
+        case 's': case 'S': { // the stretch from this key to the next: smooth or straight
+          const k = stored[index]!;
+          void editor.commit([{ op: 'set_volume_keyframe', args: { clipId: clip.id, time: T.frameTime(k.frame, rate), value: k.value, curve: k.curve === 'smooth' ? 'linear' : 'smooth' } }], 'Volume curve');
+          return true;
+        }
         default: return false;
       }
     })();
@@ -99,17 +103,46 @@ export function VolumeLine({ clip, selected, editable, pps, left, width }: { cli
     if (stored.some((k) => k.frame === frame)) return;
     void editor.commit([{ op: 'set_volume_keyframe', args: { clipId: clip.id, time: T.frameTime(frame, rate), value: Math.round(levelAtFrame(frame) * 100) / 100 } }], 'Volume key');
   };
+  // Freehand: Alt + drag starting on the line. One key per few pixels; released, the keys under the stroke are replaced by it.
+  const frameAt = (clientX: number, left: number) => Math.min(lastFrame, Math.max(0, Math.round((((clientX - left) / pps) * rate.num) / rate.den)));
+  const drawDown = (e: ReactPointerEvent<SVGPolylineElement>) => {
+    if (!e.altKey || e.button !== 0) return; // without Alt the press goes on to the timeline and drags the clip
+    e.stopPropagation();
+    const box = e.currentTarget.ownerSVGElement!.getBoundingClientRect();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    const pxPerFrame = (pps * rate.den) / rate.num;
+    drawing.current = { pointerId: e.pointerId, left: box.left, top: box.top, step: Math.max(1, Math.round(6 / pxPerFrame)) };
+    setStroke(new Map([[frameAt(e.clientX, box.left), yToLevel(e.clientY - box.top)]]));
+  };
+  const drawMove = (e: ReactPointerEvent<SVGPolylineElement>) => {
+    const dr = drawing.current;
+    if (!dr || e.pointerId !== dr.pointerId) return;
+    const fr = frameAt(e.clientX, dr.left), bucket = Math.min(lastFrame, Math.round(fr / dr.step) * dr.step);
+    setStroke((m) => new Map(m ?? []).set(bucket, yToLevel(e.clientY - dr.top)));
+  };
+  const drawUp = (e: ReactPointerEvent<SVGPolylineElement>) => {
+    const dr = drawing.current;
+    if (!dr || e.pointerId !== dr.pointerId) return;
+    drawing.current = null;
+    const drawn = [...(stroke ?? new Map<number, number>()).entries()].sort((x, y) => x[0] - y[0]);
+    setStroke(null);
+    if (drawn.length < 2) return; // a press without a stroke changes nothing
+    void editor.commit([{ op: 'draw_volume', args: { clipId: clip.id, from: T.frameTime(drawn[0]![0], rate), to: T.frameTime(drawn[drawn.length - 1]![0], rate), keys: drawn.map(([fr, value]) => ({ time: T.frameTime(fr, rate), value })) } }], 'Draw volume');
+  };
+  const strokePath = stroke ? [...stroke.entries()].sort((x, y) => x[0] - y[0]).map(([fr, v]) => `${xOf(fr).toFixed(1)},${levelToY(v).toFixed(1)}`).join(' ') : '';
   const active = selected && editable;
   return (
     <div className={`vol-line${active ? ' active' : ''}`} data-testid={`volume-line-${clip.id}`} data-drag-clip={clip.id} data-keys={stored.length} style={{ left, width }}>
       <svg width={width} height={H} aria-hidden="true" focusable="false">
         <polyline className="vol-path" points={path} />
-        {active && <polyline className="vol-hit" data-testid="volume-line-hit" points={path} onDoubleClick={(e) => { e.stopPropagation(); addAt(e.clientX, e.currentTarget.ownerSVGElement!.getBoundingClientRect()); }}><title>{t('sound.volume.line')}</title></polyline>}
+        {active && <polyline className="vol-hit" data-testid="volume-line-hit" points={path} onDoubleClick={(e) => { e.stopPropagation(); addAt(e.clientX, e.currentTarget.ownerSVGElement!.getBoundingClientRect()); }}
+          onPointerDown={drawDown} onPointerMove={drawMove} onPointerUp={drawUp} onPointerCancel={() => { drawing.current = null; setStroke(null); }}><title>{t('sound.volume.line')}</title></polyline>}
+        {stroke && <polyline className="vol-stroke" data-testid="volume-stroke" points={strokePath} />}
       </svg>
       {active && keys.map((k, i) => {
         const label = `${t('sound.volume.key')} ${T.toTimecode(T.add(clip.start, T.frameTime(k.frame, rate)), rate)} · ${Math.round(k.value * 100)}%`;
         return (
-          <button key={i} type="button" className="vol-key" data-testid="volume-line-key" data-frame={k.frame} data-value={k.value} aria-label={label} title={`${label}\n${t('sound.volume.keyHelp')}`}
+          <button key={i} type="button" className={`vol-key${k.curve === 'smooth' ? ' smooth' : ''}`} data-testid="volume-line-key" data-frame={k.frame} data-value={k.value} data-curve={k.curve ?? 'linear'} aria-label={label} title={`${label}\n${t('sound.volume.keyHelp')}`}
             style={{ left: xOf(k.frame), top: levelToY(k.value) }} onPointerDown={onDown(i)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { session.current = null; setDrag(null); }}
             onKeyDown={onKey(i)} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => { e.stopPropagation(); remove(i); }} />
         );

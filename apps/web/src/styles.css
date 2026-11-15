@@ -249,3 +249,5 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .vol-key { position: absolute; width: 11px; height: 11px; min-width: 0; min-height: 0; margin: -5.5px 0 0 -5.5px; padding: 0; border-radius: 50%; border: 1.5px solid #111; background: var(--pf-warn); pointer-events: auto; cursor: grab; touch-action: none; }
 .vol-key:active { cursor: grabbing; }
 .vol-key:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.vol-key.smooth { border-radius: 2px; transform: rotate(45deg); } /* a key whose stretch to the next key is smooth */
+.vol-stroke { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 3 2; }

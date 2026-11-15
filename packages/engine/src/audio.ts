@@ -7,7 +7,7 @@
  * envelopes in clip-local samples. Mixers must evaluate them per sample (or with exact linear ramps).
  */
 import * as T from '@pulseframe/time';
-import { isRamped, sourceEnd, speedEndValue, speedValue, timelineAt, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
+import { isRamped, sourceEnd, speedEndValue, speedValue, timelineAt, volumePoints, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
 
 export interface EnvPoint { s: number; g: number }
 export interface PlannedAudioClip {
@@ -117,7 +117,8 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId)
       const fade: EnvPoint[] = [];
       if (fin > 0) fade.push({ s: 0, g: 0 }, { s: fin, g: 1 }); else fade.push({ s: 0, g: 1 });
       if (fout > 0) fade.push({ s: length - fout, g: 1 }, { s: length, g: 0 }); else fade.push({ s: length, g: 1 });
-      const vol = c.volume?.length ? sliceEnv(c.volume.map((k) => ({ s: T.nearestSampleIndex(k.time, sr), g: k.value })), 0, length) : undefined;
+      // smooth segments become short straight pieces here, so every mixer follows the same curve
+      const vol = c.volume?.length ? sliceEnv(volumePoints(c.volume, (t) => T.nearestSampleIndex(t, sr)).map((p) => ({ s: Math.round(p.x), g: p.value })), 0, length) : undefined;
       clips.push({ ...(vol ? { vol } : {}), ...(c.reverse ? { reverse: true as const } : {}), ...(isRamped(c) ? { speedEnd: speedEndValue(c) } : c.keepPitch && speedValue(c) !== 1 ? { keepPitch: true as const } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
     }
   }
