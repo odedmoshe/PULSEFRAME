@@ -788,6 +788,30 @@ defineOp({
   },
 });
 defineOp({
+  name: 'set_audio_crossfade',
+  version: 1,
+  description: 'Crossfade into an audio clip from the clip that ends where it starts on the same track: the earlier clip is extended by the crossfade length (it needs that much unused source after its end) and fades out while this clip fades in. Linear, equal-gain. duration=0 removes it (the earlier clip is shortened back and both fades are cleared).',
+  args: z.object({ clipId: z.string(), duration: RT.describe('Crossfade length, frame-aligned') }).strict(),
+  apply(d, a) {
+    const { clip, track } = mustClip(d, a.clipId);
+    if (clip.type !== 'media' || track.kind !== 'audio') throw new OpError('incompatible', 'crossfades apply to clips on audio tracks', { clipId: a.clipId });
+    assertAligned(d, a.duration, 'duration');
+    if (T.isNegative(a.duration)) throw new OpError('invalid_args', 'duration must be >= 0');
+    // The earlier clip either ends exactly at this clip's start, or already overlaps it by an existing crossfade.
+    const prev = track.clips.find((c) => c.type === 'media' && c.id !== clip.id && T.eq(T.sub(clipEnd(c), c.fadeOut ?? T.ZERO), clip.start) && T.lte(c.start, clip.start)) as MediaClip | undefined;
+    if (!prev) throw new OpError('not_found', 'no audio clip ends where this one starts on the same track', { clipId: clip.id }, 'Move the clips so they touch, then crossfade.');
+    const base = T.sub(prev.duration, prev.fadeOut ?? T.ZERO); // length without any existing crossfade tail
+    const asset = d.assets[prev.assetId]!;
+    const handle = T.sub(asset.duration, T.add(prev.sourceIn, base));
+    if (T.lt(handle, a.duration)) throw new OpError('out_of_bounds', 'the earlier clip does not have enough unused source after its end for this crossfade', { maxDuration: T.frameTime(T.frameIndexAt(handle, d.settings.frameRate), d.settings.frameRate), previousClipId: prev.id }, 'Use at most maxDuration, or trim the end of the earlier clip first.');
+    if (T.lt(clip.duration, T.add(a.duration, clip.fadeOut ?? T.ZERO)) || T.lt(base, T.add(prev.fadeIn ?? T.ZERO, T.ZERO))) throw new OpError('out_of_bounds', 'the crossfade is longer than the clip it fades into', { clipDuration: clip.duration });
+    prev.duration = T.add(base, a.duration);
+    if (T.isZero(a.duration)) { delete prev.fadeOut; delete clip.fadeIn; } else { prev.fadeOut = a.duration; clip.fadeIn = a.duration; }
+    sortClips(track);
+    return { affectedIds: [prev.id, clip.id], summary: T.isZero(a.duration) ? 'Removed crossfade' : `Crossfade ${fmt(a.duration)}`, output: { previousClipId: prev.id } };
+  },
+});
+defineOp({
   name: 'set_track_audio',
   version: 1,
   description: 'Set an audio track\'s volume (linear gain, 1 = unchanged), pan (-1 left … 1 right) and/or mute.',

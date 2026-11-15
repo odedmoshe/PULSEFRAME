@@ -69,6 +69,32 @@ describe('audio plan', () => {
     expect([c.fadeIn, c.fadeOut]).toEqual([T.rt(2, 1), T.rt(1, 1)]);
     expect(validateProject(d)).toEqual([]);
   });
+  it('crossfade: the earlier clip is extended into its source handle and the two linear fades overlap exactly; removable; needs handle', () => {
+    const p = project();
+    // music clip split at 3 s: left = source 0..3, right = source 3..10 starting at 3 s
+    const s1 = tx(p.doc, [{ op: 'split_clip', args: { clipId: p.mc, at: f(90) } }]);
+    const right = s1.results[0]!.output!.rightClipId as string;
+    const x = tx(s1.doc, [{ op: 'set_audio_crossfade', args: { clipId: right, duration: f(15) } }]).doc;
+    expect(validateProject(x)).toEqual([]);
+    const plan = audioPlan(x).clips;
+    const L = plan.find((c) => c.clipId === p.mc)!, Rr = plan.find((c) => c.clipId === right)!;
+    expect([L.at, L.length, Rr.at]).toEqual([0, 168000, 144000]); // left now runs 0.5 s into the right clip
+    for (const s of [144000, 150000, 156000, 162000, 167999]) {
+      const gl = envAt(L.fade, s - L.at), gr = envAt(Rr.fade, s - Rr.at);
+      expect(gl + gr).toBeCloseTo(1, 9); // equal-gain: the two fades always sum to one
+    }
+    expect(L.source + (150000 - L.at)).toBe(Rr.source + (150000 - Rr.at)); // both read the same source sample there: seamless on continuous material
+    const off = tx(x, [{ op: 'set_audio_crossfade', args: { clipId: right, duration: f(0) } }]).doc;
+    expect(findClip(off, p.mc)!.clip).toEqual(findClip(s1.doc, p.mc)!.clip);
+    expect(findClip(off, right)!.clip).toEqual(findClip(s1.doc, right)!.clip);
+    // changing the length replaces the old crossfade rather than stacking on it
+    const longer = tx(x, [{ op: 'set_audio_crossfade', args: { clipId: right, duration: f(30) } }]).doc;
+    expect((findClip(longer, p.mc)!.clip as any).duration).toEqual(f(120));
+    // no handle: a clip that already plays to the end of its source cannot be extended
+    const whole = tx(p.doc, [{ op: 'add_clip', args: { assetId: p.music, start: f(300), trackId: p.mt } }]);
+    const second = (whole.results[0]!.output!.audioClipId ?? whole.results[0]!.output!.clipId) as string;
+    expect(() => tx(whole.doc, [{ op: 'set_audio_crossfade', args: { clipId: second, duration: f(15) } }])).toThrow(/unused source/);
+  });
   it('reference mixer: chunked mixing equals one-shot mixing, and equals the closed-form gain', () => {
     const clip: PlannedAudioClip = { clipId: 'c', trackId: 't', assetId: 'a', at: 100, length: 1000, source: 0, gain: 0.8, pan: 0.25, fade: [{ s: 0, g: 0 }, { s: 200, g: 1 }, { s: 700, g: 1 }, { s: 1000, g: 0 }], duck: [{ s: 0, g: 1 }, { s: 400, g: 1 }, { s: 500, g: 0.25 }, { s: 1000, g: 0.25 }] };
     const pcm = new Float32Array(2000).fill(1);

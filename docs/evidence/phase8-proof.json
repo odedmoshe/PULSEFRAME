@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T02:15:14.112Z",
+  "ranAt": "2026-11-15T02:19:38.497Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -12,9 +12,9 @@
     "longMix": {
       "seconds": 320,
       "clips": 40,
-      "wallMs": 7303,
-      "realtimeFactor": 43.8176,
-      "serverRssGrowthMb": 232,
+      "wallMs": 6733,
+      "realtimeFactor": 47.5271,
+      "serverRssGrowthMb": 313,
       "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
     },
     "browserAudioChain": {
@@ -47,8 +47,8 @@
       "note": "peak of 50 ms windows at the output stage during real-time playback in headless Chromium; a window spans part of a ramp, so ramps carry about ±0.02 of inherent error"
     }
   },
-  "passed": 18,
-  "total": 18,
+  "passed": 19,
+  "total": 19,
   "checks": [
     {
       "name": "baseline: exported amplitude equals the source amplitude (0.5) on both channels, exact length",
@@ -171,14 +171,39 @@
       "detail": "this project has a loudness target; the browser export route cannot measure and normalise loudness"
     },
     {
+      "name": "crossfade between two clips of one continuous tone at different levels: without it the level steps at the cut; with it the level moves linearly from the first clip's level to the second's over the crossfade, with no dip (5 points within 1.5%)",
+      "ok": true,
+      "detail": {
+        "hardCut": [
+          0.5,
+          0.25
+        ],
+        "crossfade": [
+          0.5,
+          0.4375,
+          0.375,
+          0.3125,
+          0.25
+        ],
+        "expected": [
+          0.5,
+          0.4375,
+          0.375,
+          0.3125,
+          0.25
+        ],
+        "maxError": 0
+      }
+    },
+    {
       "name": "320 s mix of 40 back-to-back clips: exact length, and the tone is continuous across every one of the 39 joins (no gap, overlap or drift)",
       "ok": true,
       "detail": {
         "seconds": 320,
         "clips": 40,
-        "wallMs": 7303,
-        "realtimeFactor": 43.8176,
-        "serverRssGrowthMb": 232,
+        "wallMs": 6733,
+        "realtimeFactor": 47.5271,
+        "serverRssGrowthMb": 313,
         "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
       }
     },

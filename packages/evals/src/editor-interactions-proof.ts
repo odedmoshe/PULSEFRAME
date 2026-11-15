@@ -179,6 +179,37 @@ async function main() {
     const scopeMaster = (await page.locator('[data-testid=transform-scope]').getAttribute('data-scope')) === 'master';
     check('while a format is viewed, the Inspector scale slider writes a format-only override (master unchanged), keyframe buttons are disabled, and "reset to master" removes the override; back on the master the controls edit the master again', sliderOverride && masterKept && kfDisabled && resetOk && scopeMaster, { sliderOverride, masterKept, kfDisabled, resetOk, scopeMaster });
 
+    console.log('\n# effect parameter keyframes; cut and paste');
+    await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
+    const pc0 = clipOf(await doc(), picClip);
+    const px0 = rb.x + (fr(pc0.start) + 5) * 3; // 90 px/s = 3 px per frame: five frames into the clip
+    await page.mouse.click(px0, rb.y + rb.height / 2);
+    await page.getByTestId('effect-add').selectOption('blur.gaussian');
+    await until((x2) => clipOf(x2, picClip).effects?.length === 1);
+    await page.locator('[data-testid=effect-key][data-param=radius]').click();
+    const firstKey = await until((x2) => clipOf(x2, picClip).effects?.[0]?.keyframes?.radius?.length === 1);
+    await page.mouse.click(px0 + 60, rb.y + rb.height / 2); // 20 frames later
+    await page.locator('[data-testid=effect-param][data-param=radius]').fill('0.1');
+    await page.locator('[data-testid=effect-param][data-param=radius]').dispatchEvent('pointerup');
+    const secondKey = await until((x2) => clipOf(x2, picClip).effects?.[0]?.keyframes?.radius?.length === 2);
+    const keys = clipOf(await doc(), picClip).effects[0].keyframes?.radius ?? [];
+    check('effect keyframes in the editor: the ◆ button sets a key at the playhead; moving the playhead and changing the slider adds a second key 20 frames later instead of changing the static value', firstKey && secondKey && fr(keys[1]?.time ?? f(0)) - fr(keys[0]?.time ?? f(0)) === 20 && Math.abs((keys[1]?.value ?? 0) - 0.1) < 1e-6, { keys: keys.map((k: any) => [fr(k.time), k.value]) });
+    const revOf = async () => (await call(`/projects/${pid}`)).body.revision as number;
+    const r1 = await revOf();
+    await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
+    await page.keyboard.press('Control+x');
+    const pending = await page.locator(`.clip.cut-pending[data-clip-id="${picClip}"]`).count();
+    const r2 = await revOf();
+    await page.mouse.click(rb.x + 900, rb.y + rb.height / 2); // frame 300
+    await page.keyboard.press('Control+v');
+    const moved = await until((x2) => !clipOf(x2, picClip));
+    const dAfter = await doc();
+    const landed = dAfter.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.assetId === pc0.assetId && fr(c.start) === 300);
+    const r3b = await revOf();
+    await page.keyboard.press('Control+z');
+    const restored = await until((x2) => !!clipOf(x2, picClip));
+    check('cut then paste moves the clip in one transaction (effects and keyframes come along); nothing is committed by the cut itself; one undo puts it back', pending === 1 && r2 === r1 && moved && !!landed && landed.effects?.[0]?.keyframes?.radius?.length === 2 && r3b === r1 + 1 && restored, { pending, revisions: [r1, r2, r3b], landedAt: landed ? fr(landed.start) : null });
+
     console.log('\n# project archive from the editor');
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('archive-download').click()]);
     const arcFile = path.join(art, 'project.tar');

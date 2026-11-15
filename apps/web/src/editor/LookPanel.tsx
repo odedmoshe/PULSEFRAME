@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { BLEND_MODES, DEFAULT_MASK, EFFECTS, describeCatalog, TRANSITIONS, findEffect, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
+import * as T from '@pulseframe/time';
+import { BLEND_MODES, DEFAULT_MASK, EFFECTS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 
@@ -20,7 +21,8 @@ function propsOf(type: string): Record<string, Prop> {
 const stepOf = (min: number, max: number) => { const s = (max - min) / 200; return +s.toPrecision(2) || 0.01; };
 
 /** One control generated from a JSON-Schema property. Commits on pointer-up / key-up / change, never on drag ticks. */
-function ParamControl({ name, prop, value, onCommit }: { name: string; prop: Prop; value: number | string | boolean | undefined; onCommit: (v: number | string) => void }) {
+interface Keyer { animated: boolean; pressed: boolean; enabled: boolean; title: string; animatedTitle: string; onToggle: () => void }
+function ParamControl({ name, prop, value, onCommit, keyer }: { name: string; prop: Prop; value: number | string | boolean | undefined; onCommit: (v: number | string) => void; keyer?: Keyer }) {
   const [live, setLive] = useState<number | null>(null);
   const cur = value ?? prop.default;
   const tid = { 'data-testid': 'effect-param', 'data-param': name } as const;
@@ -38,11 +40,18 @@ function ParamControl({ name, prop, value, onCommit }: { name: string; prop: Pro
     const min = prop.minimum ?? 0;
     const max = prop.maximum ?? 1;
     const commit = (el: HTMLInputElement) => { setLive(null); const n = Number(el.value); if (n !== cur) onCommit(n); };
-    return (
-      <label><span><bdi>{name}</bdi><bdi className="val">{+(live ?? Number(cur)).toFixed(4)}</bdi></span>
+    const slider = (
+      <label><span><bdi>{name}</bdi>{keyer?.animated && <em className="animated" data-testid="effect-animated" title={keyer.animatedTitle}>◆</em>}<bdi className="val">{+(live ?? Number(cur)).toFixed(4)}</bdi></span>
         <input {...tid} type="range" min={min} max={max} step={stepOf(min, max)} defaultValue={Number(cur)} key={String(cur)}
           onInput={(e) => setLive(Number(e.currentTarget.value))} onPointerUp={(e) => commit(e.currentTarget)} onKeyUp={(e) => commit(e.currentTarget)} />
       </label>
+    );
+    if (!keyer) return slider;
+    return (
+      <div className="effect-param-row">
+        {slider}
+        <button type="button" className="ghost effect-key" data-testid="effect-key" data-param={name} aria-pressed={keyer.pressed} disabled={!keyer.enabled} title={keyer.title} aria-label={`${keyer.title}: ${name}`} onClick={keyer.onToggle}>◆</button>
+      </div>
     );
   }
   return null;
@@ -53,6 +62,11 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
   const def = findEffect(fx.type);
   const props = propsOf(fx.type);
   const label = def ? def.name[state.lang] : fx.type;
+  const animatable = new Set(animatableParams(fx.type));
+  const clip = editor.doc ? findClip(editor.doc, clipId)?.clip : undefined;
+  const inside = !!clip && T.lte(clip.start, editor.playhead) && T.lt(editor.playhead, clipEnd(clip));
+  const local = clip ? T.frameTime(editor.frame - T.frameIndexAt(clip.start, editor.rate), editor.rate) : T.ZERO;
+  const current = effectParamsAt(fx, local);
   const update = (args: Record<string, unknown>) => void editor.commit([{ op: 'update_effect', args: { clipId, effectId: fx.id, ...args } }], 'Update effect');
   return (
     <li className="effect-row" data-testid="effect-row" data-effect-type={fx.type} data-effect-id={fx.id}>
@@ -64,7 +78,22 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
         <button type="button" className="ghost danger" data-testid="effect-remove" aria-label={t('look.effect.remove')} title={t('look.effect.remove')} onClick={() => void editor.commit([{ op: 'remove_effect', args: { clipId, effectId: fx.id } }], 'Remove effect')}>×</button>
       </div>
       <div className="fields">
-        {Object.entries(props).map(([name, prop]) => <ParamControl key={name} name={name} prop={prop} value={fx.params[name]} onCommit={(v) => update({ params: { [name]: v } })} />)}
+        {Object.entries(props).map(([name, prop]) => {
+          if (!animatable.has(name) || prop.type !== 'number') return <ParamControl key={name} name={name} prop={prop} value={fx.params[name]} onCommit={(v) => update({ params: { [name]: v } })} />;
+          const keys = fx.keyframes?.[name] ?? [];
+          const animated = keys.length > 0;
+          const hasKey = inside && keys.some((k) => T.eq(k.time, local));
+          const setKey = (value: number) => void editor.commit([{ op: 'set_effect_keyframe', args: { clipId, effectId: fx.id, param: name, time: local, value } }], 'Effect keyframe');
+          const keyer: Keyer = {
+            animated, pressed: hasKey, enabled: inside, title: t('cmd.keyframeAdd'), animatedTitle: t('keyframes.animated'),
+            onToggle: () => {
+              if (hasKey) void editor.commit([{ op: 'delete_effect_keyframe', args: { clipId, effectId: fx.id, param: name, time: local } }], 'Remove effect keyframe');
+              else setKey(Number(current[name]));
+            },
+          };
+          return <ParamControl key={name} name={name} prop={prop} keyer={keyer} value={animated ? current[name] : fx.params[name]}
+            onCommit={(v) => (animated ? (inside && setKey(Number(v))) : update({ params: { [name]: v } }))} />;
+        })}
       </div>
     </li>
   );

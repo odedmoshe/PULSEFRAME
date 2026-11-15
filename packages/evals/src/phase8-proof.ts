@@ -137,6 +137,21 @@ async function main() {
     const afterUndo = (await call(`/projects/${pid}`)).body.project.settings.loudness;
     check('browser export refuses a project with a loudness target (it cannot measure) and says to use the server route; undo restores the previous setting', be.status === 409 && be.body.error.code === 'unsupported_in_browser_export' && afterUndo === undefined, be.body.error?.message);
 
+    console.log('\n# crossfade');
+    const xp = (await call('/projects', { name: 'phase8-crossfade', width: 640, height: 360 })).body.project.id;
+    const xm = await upload(xp, musicFile);
+    const xc = (await txs(xp, [{ op: 'add_clip', args: { assetId: xm.assetId, start: f(0) } }])).results[0].output;
+    const xLeft = xc.audioClipId ?? xc.clipId;
+    const xRight = (await txs(xp, [{ op: 'split_clip', args: { clipId: xLeft, at: f(90) } }])).results[0].output.rightClipId;
+    await txs(xp, [{ op: 'set_clip_gain', args: { clipId: xRight, gain: 0.5 } }]);
+    const hard = await wav(xp);
+    await txs(xp, [{ op: 'set_audio_crossfade', args: { clipId: xRight, duration: f(15) } }]);
+    const soft = await wav(xp);
+    const xa = (w: { pcm: Float32Array }, t: number) => r3(tone(w.pcm, 0, 440, t));
+    const xPts: [number, number][] = [[2.9, 0.5], [3.1, 0.4375], [3.225, 0.375], [3.35, 0.3125], [3.6, 0.25]];
+    const xErr = Math.max(...xPts.map(([t, g]) => Math.abs(tone(soft.pcm, 0, 440, t + 0.025 - 0.025) - g)));
+    check('crossfade between two clips of one continuous tone at different levels: without it the level steps at the cut; with it the level moves linearly from the first clip\'s level to the second\'s over the crossfade, with no dip (5 points within 1.5%)', Math.abs(xa(hard, 2.9) - 0.5) < 0.003 && Math.abs(xa(hard, 3.05) - 0.25) < 0.003 && xErr < 0.0075 + 0.012 && soft.pcm.length === hard.pcm.length, { hardCut: [xa(hard, 2.9), xa(hard, 3.05)], crossfade: xPts.map(([t]) => xa(soft, t)), expected: xPts.map(([, g]) => g), maxError: r3(xErr) });
+
     console.log('\n# long mix stays bounded and exact');
     const lp = (await call('/projects', { name: 'phase8-long', width: 640, height: 360 })).body.project.id;
     const lm = await upload(lp, musicFile);

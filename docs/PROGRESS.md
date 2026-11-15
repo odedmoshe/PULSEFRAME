@@ -218,6 +218,13 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - The Inspector's transform sliders now follow the viewed format (format-only override, reset to master, keyframe buttons disabled there), which removes the inconsistency noted in checkpoint 12a. Verified in `pnpm proof:editor-interactions` (now 10 checks).
 - Still open from earlier phases (unchanged): source viewer, minimap, loop playback, J/K/L, markers, multi-select drag, workspaces; resumable upload, URL import, recorder, HDR, OPFS/offline; streaming export target, checkpoint/resume; MCP Tasks/resources/prompts, OAuth, grants/approvals management UI; keyframed effect parameters, speed changes; audio crossfades and volume automation; per-format caption style; media garbage collection.
 
+**Checkpoint 13g — animation and sound carry-over**
+- Keyframed effect parameters: any numeric effect parameter can be animated with clip-local keys (`set_effect_keyframe`, `delete_effect_keyframe`); keys are range-checked, move with the content on trims and splits, and are sampled by the same evaluator. `pnpm proof:phase7` (31): an animated blur softens progressively, holds after the last key, and re-renders identically. Editor: ◆ button per parameter; the slider writes a key when the parameter is animated.
+- Audio crossfade (`set_audio_crossfade`): extends the earlier clip into its source handle and overlaps two linear fades that always sum to one; refused with the usable length when there is no handle; removable. `pnpm proof:phase8` (19): the exported level moves 0.5 → 0.25 exactly linearly with no dip.
+- Cut (Ctrl+X) then paste moves clips in one transaction; nothing is committed by the cut itself.
+- `pnpm proof:editor-interactions` is now 12 checks.
+- Not built: speed changes, volume automation curves, audio crossfade attached to picture transitions, crossfade UI (op and agent tool only).
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -240,8 +247,8 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 Status words used here: **blocked** (cannot be implemented or verified without something external), **implemented, not runtime-qualified**, **verified on the current profile** (this CPU-only container), **verified on the target profile** (nothing yet: no target machine exists).
 
 Unblocked (no decision needed), roughly by value:
-1. Editor: cut command, multi-select drag, loop playback, J/K/L, markers, source viewer, workspaces (Phase 3 carry-over).
-2. Keyframed effect parameters; speed changes with audio; audio crossfades and volume automation (Phases 7–8 carry-over).
+1. Editor: multi-select drag, loop playback, J/K/L, markers, source viewer, workspaces; crossfade control in the Sound tab (Phase 3/8 carry-over).
+2. Speed changes with audio; volume automation curves (Phases 7–8 carry-over).
 4. Media garbage collection and disk quota; whole-data-directory restore test; automatic backups.
 5. Per-format caption style and text; more caption styles, fonts and effects toward the catalog targets (Canvas2D-feasible ones only).
 6. Grants and approvals management UI; MCP resources/prompts; activity log dialog.
@@ -262,8 +269,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 256 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 30 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 30 · `pnpm proof:phase8` 18 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 10 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+Expect 258 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 30 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 19 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 
