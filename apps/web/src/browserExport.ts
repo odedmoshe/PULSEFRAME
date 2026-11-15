@@ -15,7 +15,7 @@ import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSo
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
 import { audioPlan, drawGraph, evaluate } from '@pulseframe/engine';
-import { plannedClipInput } from './audioGraph.ts';
+import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
 
@@ -150,6 +150,22 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
     const input = plannedClipInput(ctx, c, rate, ctx.destination, (c.at - firstSample) / rate, s0 - c.at);
     // the stretch of source this clip needs, in source seconds, and the output time at which it starts
     const srcFrom = (c.source + (s0 - c.at) * c.speed) / rate, srcTo = (c.source + (s1 - c.at) * c.speed) / rate, outFrom = (s0 - firstSample) / rate;
+    if (c.reverse) {
+      // The clip plays its stretch [S0, S1) backwards: clip-local output time x shows source S1 − x·speed.
+      const S1 = (c.source + c.length * c.speed) / rate;
+      const hi = S1 - ((s0 - c.at) * c.speed) / rate, lo = S1 - ((s1 - c.at) * c.speed) / rate; // source needed for this export range
+      for (const p of pieces) {
+        const from = Math.max(p.at, lo), to = Math.min(p.at + p.duration, hi);
+        if (to <= from) continue;
+        const node = ctx.createBufferSource();
+        node.buffer = reversedBuffer(ctx, p.buffer);
+        node.playbackRate.value = c.speed;
+        node.connect(input);
+        // in the reversed piece, source time `to` sits (piece end − to) from its start; it is heard (hi − to)/speed after the range starts
+        node.start(outFrom + (hi - to) / c.speed, p.at + p.duration - to, to - from);
+      }
+      continue;
+    }
     for (const p of pieces) {
       const from = Math.max(p.at, srcFrom), to = Math.min(p.at + p.duration, srcTo);
       if (to <= from) continue;

@@ -483,12 +483,12 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
       )}
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedField clip={clip} />}
       {clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video && <FreezeField clip={clip} />}
-      {clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video && (
+      {clip.type === 'media' && !variantId && !clip.freeze && (editor.selected?.track.kind === 'video' ? !!editor.doc?.assets[clip.assetId]?.video : editor.selected?.track.kind === 'audio' && !!editor.doc?.assets[clip.assetId]?.audio) && (
         <>
           <label className="check">
             <input type="checkbox" checked={!!clip.reverse} data-testid="reverse-toggle" onChange={(e) => void editor.commit([{ op: 'set_clip_reverse', args: { clipId: clip.id, reverse: e.target.checked } }], 'Reverse clip')} /> {t('reverse.label')}
           </label>
-          <p className="muted" data-testid="reverse-note">{t(clip.linkGroupId && !clip.reverse ? 'reverse.note.linked' : 'reverse.note')}</p>
+          <p className="muted" data-testid="reverse-note">{t(clip.linkGroupId ? 'reverse.note.linked' : 'reverse.note')}</p>
         </>
       )}
       {clip.type === 'media' && clip.linkGroupId && !variantId && (

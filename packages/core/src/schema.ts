@@ -142,7 +142,7 @@ export const MediaClipSchema = z
     speed: z.object({ num: z.number().int().min(1).max(8000), den: z.number().int().min(1).max(8000) }).strict().optional(),
     /** Freeze frame: the clip holds the single source picture at `sourceIn` for its whole length. Video tracks only; it has no sound. */
     freeze: z.literal(true).optional(),
-    /** Reverse: the clip plays its stretch of source backwards (picture only: video tracks; the clip has no linked sound). `sourceIn` is still the earliest source time of the stretch. */
+    /** Reverse: the clip plays its stretch of source backwards (picture on a video track, sound on an audio track; linked clips reverse together). `sourceIn` is still the earliest source time of the stretch. */
     reverse: z.literal(true).optional(),
     linkGroupId: Id.nullable(),
     /** Audio clips: linear fades at the clip edges (durations). */

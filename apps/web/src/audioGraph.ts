@@ -46,3 +46,10 @@ export function plannedClipInput(ctx: BaseAudioContext, clip: PlannedAudioClip, 
   }
   return input;
 }
+
+/** A copy of `b` with every channel reversed in time. */
+export function reversedBuffer(ctx: BaseAudioContext, b: AudioBuffer): AudioBuffer {
+  const out = ctx.createBuffer(b.numberOfChannels, b.length, b.sampleRate);
+  for (let ch = 0; ch < b.numberOfChannels; ch++) { const src = b.getChannelData(ch), dst = out.getChannelData(ch); for (let i = 0, n = src.length; i < n; i++) dst[i] = src[n - 1 - i]!; }
+  return out;
+}

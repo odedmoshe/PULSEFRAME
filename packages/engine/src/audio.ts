@@ -16,6 +16,8 @@ export interface PlannedAudioClip {
   at: number; length: number; source: number;
   /** Source samples consumed per output sample (1 = normal). Mixers resample by this ratio, so pitch follows speed. */
   speed: number;
+  /** The clip plays its stretch of source, [source, source + length × speed), backwards. Mixers read that stretch and reverse it. */
+  reverse?: true;
   /** Clip gain × track gain (linear). */
   gain: number;
   /** -1..1 balance. Left gain = min(1, 1 - pan), right gain = min(1, 1 + pan). */
@@ -57,7 +59,7 @@ export function speechRanges(doc: ProjectDocument, seq: Sequence, sourceTrackIds
       if (c.type !== 'media' || c.gain <= 0) continue;
       const end = T.add(c.start, c.duration), srcEnd = sourceEnd(c);
       const transcript = doc.transcripts?.[c.assetId];
-      if (!transcript) { out.push([T.nearestSampleIndex(c.start, sr), T.nearestSampleIndex(end, sr)]); continue; }
+      if (!transcript || c.reverse) { out.push([T.nearestSampleIndex(c.start, sr), T.nearestSampleIndex(end, sr)]); continue; } // a reversed clip is treated as speech throughout: its phrases no longer sit where the transcript says
       for (const seg of transcript.segments) {
         const a = T.max(seg.start, c.sourceIn), b = T.min(T.add(seg.start, seg.duration), srcEnd);
         if (T.lt(a, b)) out.push([T.nearestSampleIndex(timelineAt(c, a), sr), T.nearestSampleIndex(timelineAt(c, b), sr)]);
@@ -112,7 +114,7 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId)
       if (fin > 0) fade.push({ s: 0, g: 0 }, { s: fin, g: 1 }); else fade.push({ s: 0, g: 1 });
       if (fout > 0) fade.push({ s: length - fout, g: 1 }, { s: length, g: 0 }); else fade.push({ s: length, g: 1 });
       const vol = c.volume?.length ? sliceEnv(c.volume.map((k) => ({ s: T.nearestSampleIndex(k.time, sr), g: k.value })), 0, length) : undefined;
-      clips.push({ ...(vol ? { vol } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
+      clips.push({ ...(vol ? { vol } : {}), ...(c.reverse ? { reverse: true as const } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
     }
   }
   return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null };

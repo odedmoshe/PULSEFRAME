@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, diffEntities, findClip, OpError, restoreEntities, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { audioPlan } from './audio.ts';
 import { evaluate } from './evaluate.ts';
 
 const R = { num: 30, den: 1 };
@@ -35,15 +36,27 @@ describe('reverse playback of a clip', () => {
     expect(shown(doc, 20, 120)).toEqual(range(149, 50));
     expect([shown(doc, 19, 20)[0], shown(doc, 120, 121)[0]]).toEqual([null, null]);
     const c = findClip(doc, clipId)!.clip as any, a = findClip(doc, audioId)!.clip as any;
-    expect([T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R), T.frameIndexAt(c.sourceIn, R), c.linkGroupId, a.linkGroupId]).toEqual([20, 100, 50, null, null]);
-    expect((result.output as any).unlinkedClipIds).toEqual([audioId]);
+    // picture and its linked sound reverse together and stay linked
+    expect([T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R), T.frameIndexAt(c.sourceIn, R), c.reverse, a.reverse]).toEqual([20, 100, 50, true, true]);
+    expect(c.linkGroupId).not.toBeNull();
+    expect(a.linkGroupId).toBe(c.linkGroupId);
+    expect((result.output as any).reversedClipIds.sort()).toEqual([clipId, audioId].sort());
+    // the sound plan reads the same stretch of source and marks it reversed
+    const planned = audioPlan(doc).clips.find((x) => x.clipId === audioId)!;
+    expect([planned.reverse, planned.source, planned.length]).toEqual([true, Math.round((50 / 30) * 48000), Math.round((100 / 30) * 48000)]);
+    expect(audioPlan(fwd).clips.find((x) => x.clipId === audioId)!.reverse).toBeUndefined();
+    // one side only: it is reversed alone and the pair is unlinked
+    const solo = tx(fwd, [{ op: 'set_clip_reverse', args: { clipId, reverse: true, includeLinked: false } }]);
+    const sc = findClip(solo.doc, clipId)!.clip as any, sa = findClip(solo.doc, audioId)!.clip as any;
+    expect([sc.reverse, sa.reverse, sc.linkGroupId, sa.linkGroupId]).toEqual([true, undefined, null, null]);
+    expect(validateProject(solo.doc)).toEqual([]);
     const back = structuredClone(doc);
     restoreEntities(back, diffEntities(fwd, doc).map((x) => ({ id: x.id, state: x.before })));
     expect(back).toEqual(fwd);
     const again = tx(doc, [{ op: 'set_clip_reverse', args: { clipId, reverse: false } }]).doc;
     expect(shown(again, 20, 120)).toEqual(range(50, 149));
     expect(code(() => tx(doc, [{ op: 'set_clip_reverse', args: { clipId, reverse: true } }]))).toBe('invalid_args');
-    expect(code(() => tx(doc, [{ op: 'set_clip_reverse', args: { clipId: audioId, reverse: true } }]))).toBe('incompatible');
+    expect(code(() => tx(doc, [{ op: 'set_clip_reverse', args: { clipId: audioId, reverse: true } }]))).toBe('invalid_args'); // already reversed, with its picture
   });
   it('split, ripple insert and a cut in the middle leave every remaining frame showing what it showed', () => {
     const { doc, clipId } = project();

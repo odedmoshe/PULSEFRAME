@@ -640,30 +640,41 @@ defineOp({
 defineOp({
   name: 'set_clip_reverse',
   version: 1,
-  description: 'Play a video clip backwards (reverse=true) or forwards again (false). It keeps its place, length and the stretch of source it shows; only the order of the pictures changes. Picture only: sound is not reversed, so a linked sound clip is unlinked and keeps playing forwards (mute or delete it if that is not wanted). Not for freeze frames or stills. A transition into the next clip must still have enough spare source in the new direction.',
-  args: z.object({ clipId: z.string(), reverse: z.boolean() }).strict(),
+  description: 'Play a clip backwards (reverse=true) or forwards again (false): a video clip on a video track, a sound clip on a sound track, or both when they are linked (they reverse together unless includeLinked=false, which also unlinks them). The clip keeps its place, length and the stretch of source it uses; only the order changes. Not for freeze frames or stills. A transition or crossfade into the next clip must still have enough spare source in the new direction.',
+  args: z.object({ clipId: z.string(), reverse: z.boolean(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
-    const clip = f.clip;
-    const asset = clip.type === 'media' ? d.assets[clip.assetId] : undefined;
-    if (clip.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'only a video clip on a video track can play backwards', { clipId: a.clipId });
-    if (clip.freeze) throw new OpError('incompatible', 'a freeze frame has no direction', { clipId: a.clipId });
-    // A transition into the NEXT clip plays this clip on past its end; after a change of direction that material lies on the other side of the stretch.
-    const i = f.track.clips.indexOf(clip);
-    const next = f.track.clips[i + 1];
-    if (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip))) {
-      const after = T.frameIndexAt(handleAfterEnd({ ...clip, ...(a.reverse ? { reverse: true as const } : { reverse: undefined }) }, asset.duration), d.settings.frameRate);
-      if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames in the new direction but only ${after} exist`, { clipId: a.clipId, nextClipId: next.id, maxFrames: after }, 'Shorten or remove that transition first, or slip this clip.');
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can play backwards', { clipId: a.clipId });
+    const others = linked(d, f.clip);
+    const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : others)];
+    if (targets.every((t) => !!t.clip.reverse === a.reverse)) throw new OpError('invalid_args', `the clip already plays ${a.reverse ? 'backwards' : 'forwards'}`, { clipId: a.clipId });
+    const affected: string[] = [];
+    for (const { track, clip } of targets) {
+      const asset = d.assets[clip.assetId];
+      if (!asset || asset.kind === 'image' || (track.kind === 'video' ? !asset.video : track.kind === 'audio' ? !asset.audio : true)) throw new OpError('incompatible', 'only a video clip on a video track or a sound clip on a sound track can play backwards', { clipId: clip.id });
+      if (clip.freeze) throw new OpError('incompatible', 'a freeze frame has no direction', { clipId: clip.id });
+      if (!!clip.reverse === a.reverse) continue;
+      // What plays on past this clip's end (a picture transition, or the tail of a sound crossfade) lies on the other side of the stretch after a change of direction.
+      const i = track.clips.indexOf(clip);
+      const next = track.clips[i + 1];
+      const flipped = { ...clip, ...(a.reverse ? { reverse: true as const } : { reverse: undefined }) };
+      if (track.kind === 'video' && next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip))) {
+        const after = T.frameIndexAt(handleAfterEnd(flipped, asset.duration), d.settings.frameRate);
+        if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames in the new direction but only ${after} exist`, { clipId: clip.id, nextClipId: next.id, maxFrames: after }, 'Shorten or remove that transition first, or slip this clip.');
+      }
+      if (track.kind === 'audio' && clip.fadeOut && next && next.type === 'media' && next.fadeIn && T.lt(next.start, clipEnd(clip)))
+        throw new OpError('incompatible', 'remove the crossfade into the next clip first', { clipId: clip.id, nextClipId: next.id }, 'Use set_audio_crossfade with duration 0.');
+      if (a.reverse) clip.reverse = true; else delete clip.reverse;
+      affected.push(clip.id);
     }
-    if (!!clip.reverse === a.reverse) throw new OpError('invalid_args', `the clip already plays ${a.reverse ? 'backwards' : 'forwards'}`, { clipId: a.clipId });
-    const affected = [clip.id];
-    let unlinked = 0;
-    if (a.reverse) {
-      const others = linked(d, clip);
-      if (clip.linkGroupId) { clip.linkGroupId = null; if (others.length === 1) { others[0]!.clip.linkGroupId = null; } for (const o of others) { affected.push(o.clip.id); unlinked++; } }
-      clip.reverse = true;
-    } else delete clip.reverse;
-    return { affectedIds: affected, summary: a.reverse ? `Clip plays backwards${unlinked ? '; its sound was unlinked and still plays forwards' : ''}` : 'Clip plays forwards', output: { unlinkedClipIds: affected.slice(1) } };
+    // Reversing one side only leaves picture and sound running in opposite directions: they are no longer one linked thing.
+    const unlinked: string[] = [];
+    if (a.includeLinked === false && f.clip.linkGroupId) {
+      (f.clip as MediaClip).linkGroupId = null;
+      if (others.length === 1) { others[0]!.clip.linkGroupId = null; unlinked.push(others[0]!.clip.id); }
+      for (const o of others) if (!affected.includes(o.clip.id)) affected.push(o.clip.id);
+    }
+    return { affectedIds: affected, summary: `Clip plays ${a.reverse ? 'backwards' : 'forwards'}${targets.length > 1 ? ' (picture and sound)' : ''}${unlinked.length ? '; unlinked from its other half' : ''}`, output: { reversedClipIds: targets.map((t) => t.clip.id), unlinkedClipIds: unlinked } };
   },
 });
 
@@ -1186,6 +1197,7 @@ defineOp({
     if (T.isNegative(a.duration)) throw new OpError('invalid_args', 'duration must be >= 0');
     // The earlier clip either ends exactly at this clip's start, or already overlaps it by an existing crossfade.
     const prev = track.clips.find((c) => c.type === 'media' && c.id !== clip.id && T.eq(T.sub(clipEnd(c), c.fadeOut ?? T.ZERO), clip.start) && T.lte(c.start, clip.start)) as MediaClip | undefined;
+    if (prev?.reverse && !T.isZero(a.duration)) throw new OpError('incompatible', 'a crossfade out of a clip that plays backwards is not supported yet', { clipId: clip.id, previousClipId: prev.id });
     if (!prev) throw new OpError('not_found', 'no audio clip ends where this one starts on the same track', { clipId: clip.id }, 'Move the clips so they touch, then crossfade.');
     const base = T.sub(prev.duration, prev.fadeOut ?? T.ZERO); // length without any existing crossfade tail
     const asset = d.assets[prev.assetId]!;

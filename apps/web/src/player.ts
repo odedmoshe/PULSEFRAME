@@ -6,7 +6,7 @@
 import * as T from '@pulseframe/time';
 import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, drawGraph, evaluate } from '@pulseframe/engine';
-import { plannedClipInput } from './audioGraph.ts';
+import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
 export class Player {
@@ -182,6 +182,38 @@ export class Player {
           const srcTo = sourceIn + (end - start) * speed;
           // The decoder reports the file's raw timestamps; source times here are measured from the file's own start as this reader sees it.
           const origin = opened.origin;
+          if (c.reverse) {
+            // Backwards: clip-local time x plays source S1 − x·speed. The decoder only runs forwards, so the remaining stretch is
+            // taken in windows from its end towards its start; each window is decoded, then its buffers are scheduled last-first, reversed.
+            const S1 = sourceIn + (end - start) * speed;
+            let hi = S1 - Math.max(0, t0 - start) * speed;
+            const WINDOW = 2 * speed; // source seconds per window: about two seconds of playback
+            while (hi > sourceIn + 1e-6 && gen === this.generation) {
+              const lo = Math.max(sourceIn, hi - WINDOW);
+              const got: { buffer: AudioBuffer; duration: number; timestamp: number }[] = [];
+              for await (const raw of opened.sink.buffers(lo + origin, hi + origin)) { if (gen !== this.generation) break; got.push({ buffer: raw.buffer, duration: raw.duration, timestamp: raw.timestamp - origin }); }
+              if (gen !== this.generation) break;
+              for (const b of got.reverse()) {
+                const from = Math.max(b.timestamp, lo), to = Math.min(b.timestamp + b.duration, hi);
+                if (to <= from) continue;
+                const when = originClock + (start + (S1 - to) / speed - t0);
+                const node = this.actx!.createBufferSource();
+                node.buffer = reversedBuffer(this.actx!, b.buffer);
+                node.playbackRate.value = speed;
+                node.connect(gain);
+                const late = Math.max(0, now() - when) * speed;
+                if (to - from - late <= 0) continue;
+                node.start(Math.max(when, now()), b.timestamp + b.duration - to + late, to - from - late);
+                this.nodes.push(node);
+                node.onended = () => { const i = this.nodes.indexOf(node); if (i >= 0) this.nodes.splice(i, 1); node.disconnect(); };
+                this.scheduledAheadMax = Math.max(this.scheduledAheadMax, when - now());
+              }
+              hi = lo;
+              const ahead = originClock + (start + (S1 - hi) / speed - t0) - now(); // how far ahead of the clock the next window starts
+              if (ahead > Player.AUDIO_LOOKAHEAD) await new Promise((r) => setTimeout(r, (ahead - Player.AUDIO_LOOKAHEAD) * 1000));
+            }
+            return;
+          }
           for await (const raw of opened.sink.buffers(srcFrom + origin, srcTo + origin)) {
             const b = { buffer: raw.buffer, duration: raw.duration, timestamp: raw.timestamp - origin };
             if (gen !== this.generation) break;
