@@ -60,6 +60,8 @@ export interface EditorState {
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
+/** Drag-and-drop type of a library file dragged onto the timeline (the payload is the asset id). */
+export const ASSET_DRAG_TYPE = 'application/x-pulseframe-asset';
 export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver'] as const;
 export type Workspace = (typeof WORKSPACES)[number];
 const WS_KEY = 'pf.workspace.v1';
@@ -370,6 +372,20 @@ export class Editor {
     const doc = this.state.doc;
     if (doc) for (const tr of doc.sequences[doc.mainSequenceId]!.tracks) if (tr.kind !== 'text') for (const c of tr.clips) end = T.max(end, clipEnd(c));
     return T.snapToFrame(end, this.rate);
+  }
+  /**
+   * A library file dropped on the timeline: placed at that frame, on the track it was dropped on when the track suits it
+   * (a picture file on a picture track, a sound-only file on a sound track), otherwise on the first free track.
+   * The linked sound of a picture file goes to the sound target track, if one is chosen.
+   */
+  dropAsset(assetId: string, frame: number, trackId: string | null) {
+    const d = this.state.doc, a = d?.assets[assetId];
+    if (!d || !a) return Promise.resolve(null);
+    const picture = !!a.video || a.kind === 'image';
+    const tr = trackId ? d.sequences[d.mainSequenceId]!.tracks.find((t) => t.id === trackId) : undefined;
+    const fits = !!tr && !tr.locked && tr.kind === (picture ? 'video' : 'audio');
+    const au = this.target('audio');
+    return this.commit([{ op: 'add_clip', args: { assetId, start: T.frameTime(Math.max(0, frame), this.rate), ...(fits ? { trackId: tr!.id } : {}), ...(picture && a.audio && au ? { audioTrackId: au } : {}) } }], 'Add clip');
   }
   addAsset(assetId: string) {
     const a = this.state.doc?.assets[assetId];

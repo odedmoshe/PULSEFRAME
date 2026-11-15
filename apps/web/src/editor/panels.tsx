@@ -5,7 +5,7 @@ import type { Clip } from '@pulseframe/core';
 import { assetNotices, clipEnd, FONT_CATALOG, speedValue } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
-import { useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
+import { ASSET_DRAG_TYPE, useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
@@ -106,7 +106,8 @@ export function Library() {
       {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`)?.focus(), 0); }} />}
       <ul className="assets">
         {doc && Object.values(doc.assets).map((a) => (
-          <li key={a.id}>
+          <li key={a.id} draggable data-testid={`asset-${a.id}`} title={t('media.dragHint')}
+            onDragStart={(e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
             <span className="asset-name-row"><span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
               <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
             <span className="muted"><bdi>{a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : `${T.toSeconds(a.duration).toFixed(2)}s${a.video ? ` · ${a.video.width}×${a.video.height}` : ''}`}</bdi></span>

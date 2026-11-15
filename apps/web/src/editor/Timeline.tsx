@@ -5,7 +5,7 @@ import type { Key } from '@pulseframe/i18n';
 import { readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
 import { VolumeLine } from './VolumeLine.tsx';
-import { useEditorState } from './store.ts';
+import { ASSET_DRAG_TYPE, useEditorState } from './store.ts';
 import { useTimelineDrag } from './TimelineDrag.tsx';
 import { useMarquee } from './TimelineMarquee.tsx';
 import { InlineRename } from './InlineRename.tsx';
@@ -43,6 +43,13 @@ export function Timeline() {
   const { containerProps, ghost } = useTimelineDrag();
   const { marqueeProps, box } = useMarquee(editor);
   const [snapBeats, setSnapBeats] = useState(readSnapBeats);
+  // A library file being dragged over the timeline: the frame and track under the pointer.
+  const [dropAt, setDropAt] = useState<{ frame: number; trackId: string | null } | null>(null);
+  const dropPoint = (e: { clientX: number; target: EventTarget; currentTarget: Element }) => {
+    const ruler = e.currentTarget.querySelector('[data-testid=ruler]')!.getBoundingClientRect();
+    const frame = Math.max(0, Math.round((((e.clientX - ruler.left) / pps) * rate.num) / rate.den));
+    return { frame, trackId: (e.target as Element).closest?.('.track')?.getAttribute('data-track-id') ?? null };
+  };
   const markers = useMemo(() => {
     if (!doc) return { scenes: [] as T.RationalTime[], beats: [] as T.RationalTime[], bars: new Set<number>(), truncated: false };
     const m = timelineMarkers(doc);
@@ -69,7 +76,11 @@ export function Timeline() {
       </span>
       {here && <MarkerBar marker={here} />}
       <div className="tl-scroll" {...containerProps}>
-        <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}>
+        <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}
+          onDragOver={(e) => { if (!e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; const at = dropPoint(e); if (!dropAt || dropAt.frame !== at.frame || dropAt.trackId !== at.trackId) setDropAt(at); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropAt(null); }}
+          onDrop={(e) => { const id = e.dataTransfer.getData(ASSET_DRAG_TYPE); if (!id) return; e.preventDefault(); const at = dropPoint(e); setDropAt(null); void editor.dropAsset(id, at.frame, at.trackId); }}>
+          {dropAt && <div className="drop-line" data-testid="drop-line" data-frame={dropAt.frame} style={{ left: T.toSeconds(T.frameTime(dropAt.frame, rate)) * pps }} aria-hidden="true" />}
           {box && <div className="marquee" data-testid="marquee" aria-hidden="true" style={box} />}
           <div className="ruler" data-testid="ruler" onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.round(((x / pps) * rate.num) / rate.den)); }}>
             {Array.from({ length: Math.floor(totalSeconds / tickEvery) + 1 }, (_, i) => <span key={i} style={{ left: i * tickEvery * pps }}>{i * tickEvery}s</span>)}

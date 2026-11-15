@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T21:11:55.250Z",
+  "ranAt": "2026-11-15T21:22:20.003Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -294,6 +294,19 @@
       }
     },
     {
+      "name": "dragging a file from the library onto a picture track puts it on that track at the frame under the pointer (within one frame), with its linked sound, in one transaction; the drop marker goes away; undo removes it",
+      "ok": true,
+      "detail": {
+        "dropFrame": 233,
+        "droppedInfo": {
+          "frame": 233,
+          "asset": true,
+          "linked": true,
+          "lineGone": true
+        }
+      }
+    },
+    {
       "name": "slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged",
       "ok": true,
       "detail": {
@@ -305,8 +318,8 @@
         ],
         "sourceIn": 73,
         "revisions": [
-          25,
-          29
+          27,
+          31
         ]
       }
     },
@@ -332,8 +345,8 @@
           223
         ],
         "revisions": [
-          29,
-          33
+          31,
+          35
         ]
       }
     },
@@ -388,8 +401,8 @@
           223
         ],
         "revisions": [
-          35,
-          41
+          37,
+          43
         ]
       }
     },
@@ -497,8 +510,8 @@
         "assetName": "ראיון.mp4",
         "focusOnRename": true,
         "revisions": [
-          50,
-          53
+          52,
+          55
         ]
       }
     },
@@ -513,8 +526,8 @@
         "emptyBefore": 1,
         "emptyCmd": "track.removeEmpty",
         "revisions": [
-          53,
-          56
+          55,
+          58
         ]
       }
     },
@@ -533,9 +546,9 @@
       "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
       "ok": true,
       "detail": {
-        "revision": 59,
-        "allRows": 59,
-        "firstRev": "59",
+        "revision": 61,
+        "allRows": 61,
+        "firstRev": "61",
         "rawNames": 0,
         "agentRows": 4,
         "agentOnly": true,
@@ -553,8 +566,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          59,
-          61
+          61,
+          63
         ]
       }
     },
@@ -567,14 +580,14 @@
         "differentSourceFrames": 29,
         "firstFrames": [
           {
-            "frame": 4,
+            "frame": 3,
             "quality": "draft",
-            "code": 4
+            "code": 3
           },
           {
-            "frame": 7,
+            "frame": 6,
             "quality": "draft",
-            "code": 7
+            "code": 6
           },
           {
             "frame": 9,
@@ -582,9 +595,9 @@
             "code": 9
           },
           {
-            "frame": 13,
+            "frame": 12,
             "quality": "draft",
-            "code": 13
+            "code": 12
           },
           {
             "frame": 16,

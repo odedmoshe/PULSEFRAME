@@ -406,6 +406,23 @@ async function main() {
     check('source viewer target tracks: with a picture track and a sound track chosen, "overwrite" puts the range (source 20–29) on exactly those tracks at the playhead in one transaction, leaves every other track as it was, and the frame there now shows the new picture on top; undo and removing the two tracks restore the timeline',
       JSON.stringify(targeted.picture) === JSON.stringify([[atFrame, 10, 20]]) && JSON.stringify(targeted.sound) === JSON.stringify([[atFrame, 10, 20]]) && targeted.othersUntouched && targeted.revisions === 1 && targeted.shown === 20 && !removed.error && JSON.stringify((await getDoc()).project.sequences.seq_main!.tracks.map((tr) => tr.clips)) === JSON.stringify(tt0.project.sequences.seq_main!.tracks.map((tr) => tr.clips)), targeted);
 
+    console.log('\n# drag a library file onto the timeline');
+    const dgB = await getDoc();
+    const lastFrame = endOf(dgB.project);
+    const v1 = dgB.project.sequences.seq_main!.tracks.find((tr) => tr.kind === 'video')!;
+    const v1Box = (await page.locator(`.track[data-track-id="${v1.id}"]`).boundingBox())!;
+    const rulerBox = (await page.getByTestId('ruler').boundingBox())!;
+    const dropFrame = lastFrame + 10;
+    await page.getByTestId(`asset-${assetId}`).dragTo(page.locator(`.track[data-track-id="${v1.id}"]`), { targetPosition: { x: rulerBox.x - v1Box.x + dropFrame * 3, y: v1Box.height / 2 } });
+    let dgA = await getDoc();
+    for (let i = 0; i < 50 && dgA.revision === dgB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); dgA = await getDoc(); }
+    const dropped = dgA.project.sequences.seq_main!.tracks.find((tr) => tr.id === v1.id)!.clips.find((c) => !v1.clips.some((o) => o.id === c.id)) as any;
+    const droppedInfo = dropped ? { frame: T.frameIndexAt(dropped.start, R), asset: dropped.assetId === assetId, linked: !!dropped.linkGroupId, lineGone: (await page.getByTestId('drop-line').count()) === 0 } : null;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && endOf(dgA.project) !== lastFrame; i++) { await new Promise((r) => setTimeout(r, 100)); dgA = await getDoc(); }
+    check('dragging a file from the library onto a picture track puts it on that track at the frame under the pointer (within one frame), with its linked sound, in one transaction; the drop marker goes away; undo removes it', !!droppedInfo && Math.abs(droppedInfo.frame - dropFrame) <= 1 && droppedInfo.asset && droppedInfo.linked && droppedInfo.lineGone && endOf(dgA.project) === lastFrame, { dropFrame, droppedInfo });
+
     console.log('\n# slip');
     const sb = await getDoc();
     const slipClip = sb.project.sequences.seq_main!.tracks.filter((tr) => tr.kind === 'video').flatMap((tr) => tr.clips).find((c) => T.frameIndexAt(c.start, R) === atFrame)!;
