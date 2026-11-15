@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T07:29:36.460Z",
+  "ranAt": "2026-11-15T08:55:10.333Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -26,7 +26,7 @@
       ],
       "precision": 1,
       "recall": 1,
-      "analysisMs": 242,
+      "analysisMs": 245,
       "clipSeconds": 10,
       "note": "one synthetic clip with 5 hard cuts between very different pictures; H.264 with B-frames"
     },
@@ -45,7 +45,7 @@
           "medianErrorMs": 4.667,
           "p95ErrorMs": 10.667,
           "confidence": 0.787,
-          "analysisMs": 470
+          "analysisMs": 500
         },
         {
           "loop": "100",
@@ -55,7 +55,7 @@
           "medianErrorMs": 5,
           "p95ErrorMs": 10,
           "confidence": 0.873,
-          "analysisMs": 362
+          "analysisMs": 424
         },
         {
           "loop": "120",
@@ -65,7 +65,7 @@
           "medianErrorMs": 5,
           "p95ErrorMs": 10,
           "confidence": 0.986,
-          "analysisMs": 388
+          "analysisMs": 432
         },
         {
           "loop": "128",
@@ -75,7 +75,7 @@
           "medianErrorMs": 5.25,
           "p95ErrorMs": 10,
           "confidence": 0.814,
-          "analysisMs": 393
+          "analysisMs": 373
         },
         {
           "loop": "140",
@@ -85,7 +85,7 @@
           "medianErrorMs": 4,
           "p95ErrorMs": 9.429,
           "confidence": 0.984,
-          "analysisMs": 389
+          "analysisMs": 423
         },
         {
           "loop": "drift-120-127",
@@ -95,7 +95,7 @@
           "medianErrorMs": 4.496,
           "p95ErrorMs": 10.126,
           "confidence": 0.571,
-          "analysisMs": 357
+          "analysisMs": 393
         }
       ],
       "note": "24 s synthetic loops (kick with attack click on the beat, quieter hat off the beat, bass tone, noise). Not real music."
@@ -140,7 +140,7 @@
         ],
         "precision": 1,
         "recall": 1,
-        "analysisMs": 242,
+        "analysisMs": 245,
         "clipSeconds": 10,
         "note": "one synthetic clip with 5 hard cuts between very different pictures; H.264 with B-frames"
       }
@@ -165,7 +165,7 @@
           "medianErrorMs": 4.667,
           "p95ErrorMs": 10.667,
           "confidence": 0.787,
-          "analysisMs": 470
+          "analysisMs": 500
         },
         {
           "loop": "100",
@@ -175,7 +175,7 @@
           "medianErrorMs": 5,
           "p95ErrorMs": 10,
           "confidence": 0.873,
-          "analysisMs": 362
+          "analysisMs": 424
         },
         {
           "loop": "120",
@@ -185,7 +185,7 @@
           "medianErrorMs": 5,
           "p95ErrorMs": 10,
           "confidence": 0.986,
-          "analysisMs": 388
+          "analysisMs": 432
         },
         {
           "loop": "128",
@@ -195,7 +195,7 @@
           "medianErrorMs": 5.25,
           "p95ErrorMs": 10,
           "confidence": 0.814,
-          "analysisMs": 393
+          "analysisMs": 373
         },
         {
           "loop": "140",
@@ -205,7 +205,7 @@
           "medianErrorMs": 4,
           "p95ErrorMs": 9.429,
           "confidence": 0.984,
-          "analysisMs": 389
+          "analysisMs": 423
         },
         {
           "loop": "drift-120-127",
@@ -215,7 +215,7 @@
           "medianErrorMs": 4.496,
           "p95ErrorMs": 10.126,
           "confidence": 0.571,
-          "analysisMs": 357
+          "analysisMs": 393
         }
       ]
     },

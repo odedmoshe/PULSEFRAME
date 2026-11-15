@@ -471,6 +471,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 **Checkpoint 14n — playback continues when the project changes**
 - Before: any project change reaching the editor during playback (the user's own edit, an agent's edit, an undo) stopped playback. Now `Player.setDoc` stops the old schedule and continues from the same frame at the same speed (normal or shuttle), including when the change arrives while playback is still waiting for the audio device. A change while paused does not start playback. Sound restarts from the current frame, so a short gap at the moment of the change is expected; its length was not measured.
 - Verified here: `pnpm proof:editor-interactions` 18/18 twice (new check: an agent adds a marker during normal playback and during 2× shuttle; measured speeds 0.98–1.01 and 2.02–2.03 afterwards; a change while paused leaves the playhead at frame 0).
+- Regression after this change, all on the current profile: `pnpm proof` 54 · phase3 27 · phase4 19 · phase5 33 · phase6 35 · phase7 31 · phase8 20 · phase9 12 · phase11 12 · phase12 15 · browser-export 23 · owner-ui 8 · speed 16 · soak 7 · parity pass · start-offset 4. Not rerun: seek, long, inputs, images, projects, render-fuzz (they do not play back in the editor), a11y audit (run before this change).
 
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
