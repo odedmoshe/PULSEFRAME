@@ -48,6 +48,7 @@ export function RecipesPanel() {
         musicClipId,
         assetIds: pictureAssets.map((a) => a.id).filter((id) => !unchecked.includes(id)),
         everyBeats: (f.everyBeats as number | undefined) ?? 4,
+        ...(f.cutOn === 'bars' ? { cutOn: 'bars' } : {}),
         order: (f.order as string | undefined) ?? 'sequence',
         ...(f.seed !== undefined ? { seed: f.seed } : {}),
       };
@@ -72,7 +73,7 @@ export function RecipesPanel() {
   const loadParams = (recipeId: string, p: RecipeParams) => {
     if (recipeId === 'beat-montage') {
       const ids = Array.isArray(p.assetIds) ? (p.assetIds as string[]) : pictureAssets.map((a) => a.id);
-      setForms((f) => ({ ...f, [recipeId]: { musicClipId: p.musicClipId, unchecked: pictureAssets.map((a) => a.id).filter((id) => !ids.includes(id)), everyBeats: p.everyBeats, order: p.order, seed: p.seed } }));
+      setForms((f) => ({ ...f, [recipeId]: { musicClipId: p.musicClipId, unchecked: pictureAssets.map((a) => a.id).filter((id) => !ids.includes(id)), everyBeats: p.everyBeats, cutOn: p.cutOn, order: p.order, seed: p.seed } }));
     } else setForms((f) => ({ ...f, [recipeId]: { ...f[recipeId], ...p } }));
   };
 
@@ -136,6 +137,12 @@ export function RecipesPanel() {
               </label>
             ))}
           </fieldset>
+          <label>{t('recipes.cutOn')}
+            <select data-testid="recipe-cut-on" value={p.cutOn === 'bars' ? 'bars' : 'beats'} onChange={(e) => patch(recipeId, { cutOn: e.target.value })}>
+              <option value="beats">{t('recipes.cutOn.beats')}</option>
+              <option value="bars">{t('recipes.cutOn.bars')}</option>
+            </select>
+          </label>
           <label>{t('recipes.every')}
             <select data-testid="recipe-every" value={String(p.everyBeats)} onChange={(e) => patch(recipeId, { everyBeats: Number(e.target.value) })}>
               {[1, 2, 4, 8].map((n) => <option key={n} value={n}>{n}</option>)}

@@ -35,7 +35,8 @@ export interface PlanContext {
 const Montage = z.object({
   musicClipId: z.string().describe('Audio clip whose beats set the rhythm (its asset needs beat analysis)'),
   assetIds: z.array(z.string()).min(1).max(40).describe('Picture or video assets to cut between'),
-  everyBeats: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)]).default(4).describe('Cut every N beats'),
+  everyBeats: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)]).default(4).describe('Cut every N beats (or every N bars with cutOn=bars)'),
+  cutOn: z.enum(['beats', 'bars']).default('beats').describe('beats = count from the first beat inside the clip; bars = cut on the bar starts of the beat analysis (it must have found or been given them)'),
   order: z.enum(['sequence', 'reverse', 'shuffle']).default('sequence'),
   seed: z.number().int().min(0).max(1_000_000).default(1).describe('Shuffle seed (same seed = same order)'),
 }).strict();
@@ -78,7 +79,10 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   const from = mclip.start, to = T.add(mclip.start, mclip.duration);
   const fi = (t: T.RationalTime) => T.nearestFrameIndex(t, rate);
   const beatFrames = [...new Set(sourceTimesToTimeline(doc, mclip.assetId, analysis.beats).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b);
-  const cuts = beatFrames.filter((_, i) => i % p.everyBeats === 0);
+  // On bars, the cut points are the analysis's bar starts (the first beat of each bar), which sound like the natural places to cut.
+  if (p.cutOn === 'bars' && !analysis.downbeats?.length) throw new RecipeError('needs_analysis', 'the beat analysis of this music has no bar starts', 'Cut on beats instead, or mark the bar starts with edit_analysis (downbeats).');
+  const barFrames = p.cutOn === 'bars' ? [...new Set(sourceTimesToTimeline(doc, mclip.assetId, analysis.downbeats!).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b) : [];
+  const cuts = (p.cutOn === 'bars' ? barFrames : beatFrames).filter((_, i) => i % p.everyBeats === 0);
   if (cuts.length < 2) throw new RecipeError('nothing_to_do', 'fewer than two cut points fall inside the music clip');
   const bounds = [...cuts, fi(to)].filter((x, i, a) => i === 0 || x > a[i - 1]!);
   let order = p.assetIds.slice();
@@ -109,11 +113,12 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   const bpm = analysis.bpm ? `${analysis.bpm.toFixed(1)} BPM` : 'unknown tempo';
   return {
     recipeId: 'beat-montage', params: p,
-    steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} beat(s), order: ${p.order}`, ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : [])],
-    basis: [`${beatFrames.length} beats of the music clip (${bpm}, confidence ${analysis.confidence ?? 'n/a'}${analysis.origin.edited ? ', corrected by hand' : ''})`, `method: ${analysis.origin.method}`],
+    steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} ${p.cutOn === 'bars' ? 'bar(s), starting on bar starts' : 'beat(s)'}, order: ${p.order}`, ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : [])],
+    basis: [`${p.cutOn === 'bars' ? `${barFrames.length} bar starts among ` : ''}${beatFrames.length} beats of the music clip (${bpm}, confidence ${analysis.confidence ?? 'n/a'}${analysis.origin.edited ? ', corrected by hand' : ''})`, `method: ${analysis.origin.method}`],
     ops,
     alternatives: [
-      ...([1, 2, 4, 8] as const).filter((n) => n !== p.everyBeats).map((n) => ({ label: `Cut every ${n} beat(s)`, params: { ...p, everyBeats: n } })),
+      ...([1, 2, 4, 8] as const).filter((n) => n !== p.everyBeats).map((n) => ({ label: `Cut every ${n} ${p.cutOn === 'bars' ? 'bar(s)' : 'beat(s)'}`, params: { ...p, everyBeats: n } })),
+      ...(analysis.downbeats?.length ? [p.cutOn === 'bars' ? { label: 'Cut on beats', params: { ...p, cutOn: 'beats' as const } } : { label: 'Cut on bar starts', params: { ...p, cutOn: 'bars' as const, everyBeats: 1 as const } }] : []),
       ...(['sequence', 'reverse', 'shuffle'] as const).filter((o) => o !== p.order).map((o) => ({ label: `Order: ${o}`, params: { ...p, order: o } })),
     ],
   };
