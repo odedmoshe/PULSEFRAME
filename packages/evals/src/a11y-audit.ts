@@ -67,10 +67,11 @@ function auditInPage() {
 }
 
 /** Tab through the page and report focused elements that show no visible focus indicator. */
-async function focusAudit(page: Page, steps: number) {
+async function focusAudit(page: Page, steps: number, clickFirst = true) {
   const missing: string[] = [];
   const reached = new Set<string>();
-  await page.locator('body').click({ position: { x: 2, y: 2 } }).catch(() => {});
+  // Start from the page corner — except inside a modal dialog, where a click outside it could close it.
+  if (clickFirst) await page.locator('body').click({ position: { x: 2, y: 2 } }).catch(() => {});
   for (let i = 0; i < steps; i++) {
     await page.keyboard.press('Tab');
     const r = await page.evaluate(() => {
@@ -100,7 +101,7 @@ async function main() {
   try {
     const pid = (await post('/projects', { name: 'a11y', width: 640, height: 360 })).project.id;
     const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
-    const tx = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }, { op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60) } }, { op: 'add_caption_track', args: { mode: 'manual' } }, { op: 'add_variant', args: { profileId: 'vertical-9x16' } }] });
+    const tx = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }, { op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60) } }, { op: 'add_caption_track', args: { mode: 'manual' } }, { op: 'add_variant', args: { profileId: 'vertical-9x16' } }, { op: 'add_marker', args: { time: f(0), label: 'סמן פתיחה' } }] });
     const clipId = tx.results[0].output.clipId;
     for (const lang of ['he', 'en'] as const) {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
@@ -130,7 +131,44 @@ async function main() {
       const found = await page.evaluate(auditInPage);
       const focus = await focusAudit(page, 60);
       await page.screenshot({ path: path.join(art, `editor-${lang}.png`), fullPage: false });
-      report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity });
+      // --- transient states: each is audited like the resting page, and dialogs are also checked for keyboard behaviour
+      const states: any[] = [];
+      const auditState = async (name: string, extra: Record<string, unknown> = {}, modal = false) => {
+        const r = await page.evaluate(auditInPage);
+        const fr = await focusAudit(page, 14, !modal);
+        states.push({ state: name, controls: r.controls, unnamed: r.unnamed, lowContrast: r.lowContrast, tabIssues: r.tabIssues, noFocusRing: fr.missing, ...extra });
+        await page.screenshot({ path: path.join(art, `state-${name}-${lang}.png`) });
+      };
+      /** A modal dialog: focus starts inside, Tab never leaves it, Escape closes it, and focus goes back to what opened it. */
+      const dialogBehaviour = async (dialogTestId: string, opener: () => Promise<void>, openerSelector: string) => {
+        await opener();
+        await page.getByTestId(dialogTestId).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(150);
+        const inside = () => page.evaluate((id) => !!document.activeElement && !!document.querySelector(`[data-testid=${id}]`)?.contains(document.activeElement), dialogTestId);
+        const startsInside = await inside();
+        let escaped = 0;
+        for (let i = 0; i < 25; i++) { await page.keyboard.press('Tab'); if (!(await inside())) escaped++; }
+        for (let i = 0; i < 6; i++) { await page.keyboard.press('Shift+Tab'); if (!(await inside())) escaped++; }
+        return { startsInside, tabStepsThatLeftTheDialog: escaped, close: async () => { const stillOpen = (await page.getByTestId(dialogTestId).count()) === 1; await page.keyboard.press('Escape'); await page.getByTestId(dialogTestId).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); await page.waitForTimeout(150); const where = await page.evaluate(() => { const el = document.activeElement as HTMLElement | null; return el ? `${el.tagName.toLowerCase()}${el.dataset?.testid ? `[data-testid=${el.dataset.testid}]` : ''}` : 'none'; }); return { openUntilEscape: stillOpen, closed: (await page.getByTestId(dialogTestId).count()) === 0, focusAfterClose: where, focusReturned: await page.evaluate((sel) => !!document.activeElement && document.activeElement.matches(sel), openerSelector) }; } };
+      };
+      // marker bar (a marker sits on frame 0, where the playhead is)
+      await page.locator('[data-testid=marker-bar]').waitFor({ timeout: 5000 }).catch(() => {});
+      await auditState('marker-bar', { shown: (await page.getByTestId('marker-bar').count()) === 1 });
+      // a linked format selected: format badge, safe-area guide, "edited for this format only" notes
+      const variantId = await page.getByTestId('format-switch').evaluate((el) => Array.from((el as HTMLSelectElement).options).map((o) => o.value).find((v) => v && v !== 'master') ?? '');
+      if (variantId) { await page.getByTestId('format-switch').selectOption(variantId); await page.getByTestId('format-badge').waitFor({ timeout: 5000 }).catch(() => {}); }
+      await auditState('format-view', { formatSelected: !!variantId, scopeNotes: await page.locator('[data-testid=transform-scope][data-scope=format], [data-testid=caption-scope]').count() });
+      if (variantId) await page.getByTestId('format-switch').selectOption({ index: 0 });
+      // project manager dialog
+      const pd = await dialogBehaviour('projects-dialog', async () => { await page.getByTestId('projects-open').click(); }, '[data-testid=projects-open]');
+      await auditState('projects-dialog', { startsInside: pd.startsInside, tabStepsThatLeftTheDialog: pd.tabStepsThatLeftTheDialog }, true);
+      Object.assign(states.at(-1), await pd.close());
+      // command palette
+      const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
+      await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);
+      Object.assign(states.at(-1), await cp.close());
+      for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
+      report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
       await page.close();
     }
@@ -138,11 +176,14 @@ async function main() {
     await browser.close();
     await s.close();
   }
-  const total = report.runs.reduce((n: number, r: any) => n + r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length, 0);
+  const stateFindings = (st: any) => st.unnamed.length + st.lowContrast.length + st.tabIssues.length + st.noFocusRing.length
+    + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0);
+  const total = report.runs.reduce((n: number, r: any) => n + r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length + (r.states ?? []).reduce((m: number, st: any) => m + stateFindings(st), 0), 0);
   report.findings = total;
   report.result = total === 0 ? 'NO FINDINGS (heuristic)' : 'FINDINGS';
   fs.writeFileSync(path.join(root, 'docs/evidence/a11y-audit.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(`a11y audit: ${report.result}, ${total} finding(s). Evidence: docs/evidence/a11y-audit.json`);
+  for (const r of report.runs) for (const st of r.states ?? []) if (stateFindings(st)) console.log(`  [${r.uiLanguage}] state ${st.state}:`, JSON.stringify({ unnamed: st.unnamed.slice(0, 6), lowContrast: st.lowContrast.slice(0, 6), tabIssues: st.tabIssues.slice(0, 6), noFocusRing: st.noFocusRing.slice(0, 6), startsInside: st.startsInside, leftDialog: st.tabStepsThatLeftTheDialog, closed: st.closed, focusReturned: st.focusReturned, shown: st.shown, formatSelected: st.formatSelected }));
   for (const r of report.runs) { console.log(`  [${r.uiLanguage}] unnamed:`, r.unnamed.slice(0, 12)); console.log(`  [${r.uiLanguage}] low contrast:`, r.lowContrast.slice(0, 12)); console.log(`  [${r.uiLanguage}] no focus ring:`, r.focus.missing.slice(0, 12)); }
   if (process.env.PF_A11Y_STRICT === '1' && total > 0) process.exitCode = 1;
 }
