@@ -133,6 +133,27 @@ describe('linked format variants', () => {
     expect(code(() => tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, text: '' } }]))).toBe('invalid_args');
     expect(code(() => tx(d.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, textStyle: { blink: true } } }]))).toBe('invalid_args');
   });
+  it('a caption cue can be reworded or hidden in one format; its word timing is dropped there only; position and style overrides on a cue are refused', () => {
+    const { doc, variantId } = project();
+    let r = tx(doc, [{ op: 'add_caption_track', args: { mode: 'manual' } }]);
+    const trackId = r.results[0]!.output!.trackId as string;
+    r = tx(r.doc, [{ op: 'add_cue', args: { trackId, text: 'a long line for wide frames', start: f(0), duration: f(60) } }]);
+    const cueId = r.results[0]!.output!.clipId as string;
+    (findClip(r.doc, cueId)!.clip as any).words = [{ text: 'a', start: f(0), duration: f(30) }, { text: 'long', start: f(30), duration: f(30) }]; // as an imported cue with per-word timing would have
+    const cue = (x: ProjectDocument) => { const c = findClip(x, cueId)?.clip; if (c && c.type !== 'caption') throw new Error('not a cue'); return c; };
+    const d = tx(r.doc, [{ op: 'set_variant_override', args: { variantId, clipId: cueId, text: 'short line' } }]).doc;
+    expect(validateProject(d)).toEqual([]);
+    expect([cue(d)!.text, cue(d)!.words?.length]).toEqual(['a long line for wide frames', 2]);
+    const v = cue(projectVariant(d, variantId))!;
+    expect([v.text, v.words]).toEqual(['short line', undefined]);
+    const hidden = tx(d, [{ op: 'set_variant_override', args: { variantId, clipId: cueId, hidden: true } }]).doc;
+    expect(cue(projectVariant(hidden, variantId))).toBeUndefined();
+    expect(cue(hidden)!.text).toBe('a long line for wide frames');
+    expect(code(() => tx(d, [{ op: 'set_variant_override', args: { variantId, clipId: cueId, transform: { y: 0.1 } } }]))).toBe('incompatible');
+    expect(code(() => tx(d, [{ op: 'set_variant_override', args: { variantId, clipId: cueId, textStyle: { sizeFrac: 0.1 } } }]))).toBe('incompatible');
+    const cleared = tx(d, [{ op: 'set_variant_override', args: { variantId, clipId: cueId, text: null } }]).doc;
+    expect(cleared.variants[variantId]!.overrides[cueId]).toBeUndefined();
+  });
   it('a variant is one undoable entity; bad input is refused', () => {
     const { doc, titleId, variantId } = project();
     const r = tx(doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, transform: { x: 0.1 } } }]);

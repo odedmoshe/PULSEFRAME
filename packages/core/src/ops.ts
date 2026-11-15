@@ -907,18 +907,20 @@ defineOp({
 defineOp({
   name: 'set_variant_override',
   version: 1,
-  description: 'Adjust one clip for one format only: reposition/scale it (transform fields replace the master values and stop the master animation of those fields in this format) hide it, or (title clips only) give it other wording or style fields. transform=null, hidden=false, text=null and textStyle=null clear those parts. The master and other formats are untouched.',
+  description: 'Adjust one clip for one format only: reposition/scale it (transform fields replace the master values and stop the master animation of those fields in this format) hide it, or give a title other wording or style fields, or a caption cue other wording (its per-word timing is then not used in that format). transform=null, hidden=false, text=null and textStyle=null clear those parts. The master and other formats are untouched.',
   args: z.object({ variantId: z.string(), clipId: z.string(), transform: TransformSchema.partial().nullable().optional(), hidden: z.boolean().optional(), text: z.string().min(1).max(2000).nullable().optional(), textStyle: TextStyleSchema.partial().nullable().optional() }).strict(),
   apply(d, a) {
     const v = mustVariant(d, a.variantId);
     const f = findClip(d, a.clipId);
     if (!f) throw new OpError('not_found', `clip ${a.clipId} not found`, { clipId: a.clipId });
-    if (f.track.kind === 'audio' || f.clip.type === 'caption') throw new OpError('incompatible', 'format overrides apply to picture and title clips', { clipId: a.clipId });
+    if (f.track.kind === 'audio') throw new OpError('incompatible', 'format overrides apply to picture, title and caption clips', { clipId: a.clipId });
+    // a caption cue can be reworded or hidden per format; where and how captions are drawn is the caption style (update_variant.captionStyle)
+    if (f.clip.type === 'caption' && (a.transform != null || a.textStyle != null)) throw new OpError('incompatible', 'a caption cue can only be reworded or hidden per format; position and style come from the caption style of the format', { clipId: a.clipId }, 'Use update_variant with captionStyle.');
     const cur = v.overrides[a.clipId] ?? {};
     const next = { ...cur };
     if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
     if (a.hidden !== undefined) { if (a.hidden) next.hidden = true; else delete next.hidden; }
-    if ((a.text != null || a.textStyle != null) && f.clip.type !== 'text') throw new OpError('incompatible', 'wording and text style can be set per format on title clips only', { clipId: a.clipId });
+    if ((a.text != null && f.clip.type !== 'text' && f.clip.type !== 'caption') || (a.textStyle != null && f.clip.type !== 'text')) throw new OpError('incompatible', 'wording can be set per format on title and caption clips, text style on title clips', { clipId: a.clipId });
     if (a.text === null) delete next.text; else if (a.text !== undefined) next.text = a.text;
     if (a.textStyle === null) delete next.textStyle; else if (a.textStyle) next.textStyle = { ...cur.textStyle, ...a.textStyle };
     if (next.textStyle && Object.keys(next.textStyle).length === 0) delete next.textStyle;

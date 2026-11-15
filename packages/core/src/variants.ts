@@ -32,6 +32,7 @@ export function projectVariant(doc: ProjectDocument, variantId: string): Project
       for (const c of track.clips) {
         const ov = v.overrides[c.id];
         if (ov && c.type === 'text') { if (ov.text !== undefined) c.text = ov.text; if (ov.textStyle) c.style = { ...c.style, ...ov.textStyle }; }
+        if (ov && c.type === 'caption' && ov.text !== undefined) { c.text = ov.text; delete c.words; } // per-word timing described the master wording
         const o = ov?.transform;
         if (!o) continue;
         c.transform = { ...c.transform, ...o };
