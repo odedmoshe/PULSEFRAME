@@ -278,7 +278,16 @@ export class Editor {
       this.set({ uploading: false });
     }
   }
-  select(id: string | null) { this.set({ selection: id ? [id] : [], ...(this.following ? {} : { followAgent: false }) }); }
+  /** 'toggle' adds the clip to the selection or removes it (Shift/Ctrl/⌘-click); the default replaces the selection. */
+  select(id: string | null, mode: 'replace' | 'toggle' = 'replace') {
+    const cur = this.state.selection;
+    const selection = !id ? [] : mode === 'toggle' ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : [id];
+    this.set({ selection, ...(this.following ? {} : { followAgent: false }) });
+  }
+  selectAll() {
+    const doc = this.state.doc;
+    if (doc) this.set({ selection: [...doc.sequences[doc.mainSequenceId]!.tracks].reverse().filter((t) => !t.locked).flatMap((t) => t.clips.map((c) => c.id)) });
+  }
   /** A manual seek by the user ends Follow Agent: the agent never fights the human for the view. */
   seek(frame: number) { if (this.state.followAgent && !this.following) this.set({ followAgent: false }); this.player?.seek(frame); }
   /** Tell other participants where I am (throttled; transient). */

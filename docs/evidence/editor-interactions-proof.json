@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T03:41:53.143Z",
+  "ranAt": "2026-11-15T03:56:00.639Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 14,
-  "total": 14,
+  "passed": 15,
+  "total": 15,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -153,6 +153,23 @@
         ],
         "removed": true,
         "undone": true
+      }
+    },
+    {
+      "name": "multi-select: Ctrl+click adds a clip to the selection; dragging one moves both by the same 20 frames in one transaction and a third clip stays; Alt+→ nudges both; Ctrl+A selects all, Shift+click removes one; Delete removes the two selected in one transaction and one undo restores them",
+      "ok": true,
+      "detail": {
+        "twoSelected": 2,
+        "stillTwo": 2,
+        "allSelected": 3,
+        "revisions": [
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "errors": []
       }
     },
     {

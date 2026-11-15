@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T03:37:54.953Z",
+  "ranAt": "2026-11-15T03:51:58.984Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 334,
+    "editorShellInteractiveMs": 380,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 14.2,
-      "requestToVisibleInEditorMs": 37.1,
+      "requestToCommitMs": 13.2,
+      "requestToVisibleInEditorMs": 36.1,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 4.97,
-      "p95": 8.72,
-      "max": 12.71
+      "median": 5.56,
+      "p95": 7.67,
+      "max": 8.73
     },
     "export": {
-      "file": "job_DbMW7pGUIdI.mp4",
+      "file": "job_F1uZeQiANbE.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -68,7 +68,7 @@
         },
         "assets": [
           {
-            "id": "ast_dfdc1a96590",
+            "id": "ast_610725f0730",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -135,13 +135,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 592,
-        "readback": 617,
-        "upload": 4712
+        "draw": 578,
+        "readback": 633,
+        "upload": 4771
       },
-      "wallSeconds": 6.822,
-      "realtimeFactor": 0.5130460275579009,
-      "uiWallSeconds": 6.924
+      "wallSeconds": 6.962,
+      "realtimeFactor": 0.502729100833094,
+      "uiWallSeconds": 7.426
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -173,10 +173,10 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_dfdc1a96590": "original"
+        "ast_610725f0730": "original"
       },
       "sourcesUsed": {
-        "ast_dfdc1a96590": [
+        "ast_610725f0730": [
           "original"
         ]
       },
@@ -184,14 +184,14 @@
       "disposed": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_dfdc1a96590/content:206"
+        "ast_610725f0730/content:206"
       ]
     },
     "previewSync": {
       "clock": "audio",
       "audioContextState": "running",
       "outputLatencyMs": 42.02,
-      "audioScheduledAheadMaxMs": 2101.3,
+      "audioScheduledAheadMaxMs": 2090.7,
       "audioLookaheadMs": 1500,
       "liveAudioNodes": 0,
       "loops": 0,
@@ -202,7 +202,7 @@
       ],
       "audioLevels": [
         {
-          "t": -0.1307,
+          "t": -0.12,
           "peak": 0
         },
         {
@@ -493,8 +493,8 @@
       "framesRequested": 104,
       "framesPainted": 104,
       "paintLatenessMs": {
-        "median": 16,
-        "p95": 21.33,
+        "median": 14.67,
+        "p95": 20,
         "max": 36
       },
       "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
@@ -616,7 +616,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 85
+        "count": 86
       }
     },
     {
@@ -624,7 +624,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_f8551d8fe91",
+          "id": "clp_e9f912ecd91",
           "start": {
             "value": "2",
             "timescale": 1
@@ -644,8 +644,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 14.2,
-        "requestToVisibleInEditorMs": 37.1,
+        "requestToCommitMs": 13.2,
+        "requestToVisibleInEditorMs": 36.1,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -659,11 +659,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_6b2932750e0"
+          "selected": "clip-clp_b21a0ad55a0"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_6b2932750e0"
+          "selected": "clip-clp_b21a0ad55a0"
         }
       }
     },
@@ -709,7 +709,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_6b2932750e0",
+          "entityId": "clp_b21a0ad55a0",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -846,10 +846,10 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_dfdc1a96590": "original"
+            "ast_610725f0730": "original"
           },
           "sourcesUsed": {
-            "ast_dfdc1a96590": [
+            "ast_610725f0730": [
               "original"
             ]
           },
@@ -857,7 +857,7 @@
           "disposed": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_dfdc1a96590/content:206"
+            "ast_610725f0730/content:206"
           ]
         }
       }
@@ -869,7 +869,7 @@
         "clock": "audio",
         "audioContextState": "running",
         "outputLatencyMs": 42.02,
-        "audioScheduledAheadMaxMs": 2101.3,
+        "audioScheduledAheadMaxMs": 2090.7,
         "audioLookaheadMs": 1500,
         "liveAudioNodes": 0,
         "loops": 0,
@@ -880,7 +880,7 @@
         ],
         "audioLevels": [
           {
-            "t": -0.1307,
+            "t": -0.12,
             "peak": 0
           },
           {
@@ -1171,8 +1171,8 @@
         "framesRequested": 104,
         "framesPainted": 104,
         "paintLatenessMs": {
-          "median": 16,
-          "p95": 21.33,
+          "median": 14.67,
+          "p95": 20,
           "max": 36
         },
         "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
@@ -1189,7 +1189,7 @@
           2.50006
         ],
         "maxErrorMs": 0.06,
-        "scheduledAheadMaxMs": 2101.3
+        "scheduledAheadMaxMs": 2090.7
       }
     },
     {
@@ -1197,7 +1197,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_dfdc1a96590": [
+          "ast_610725f0730": [
             "original",
             "proxy"
           ]

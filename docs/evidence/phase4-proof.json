@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T03:38:47.018Z",
+  "ranAt": "2026-11-15T03:52:51.205Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -11,35 +11,35 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 0.811,
+        "wall": 0.779,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 1.262,
+        "wall": 1.149,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.222
+        "wall": 0.183
       },
       "png": {
-        "wall": 0.29
+        "wall": 0.254
       }
     },
     "cancel": {
       "stageAtCancel": "rendering 9/600",
-      "msToCanceled": 190
+      "msToCanceled": 167
     },
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 36.147,
-      "realtimeFactor": 0.553296262483747,
+      "wallSeconds": 36.538,
+      "realtimeFactor": 0.5473753352673929,
       "renderStageMs": {
-        "draw": 5366,
-        "readback": 3270,
-        "upload": 25917
+        "draw": 5558,
+        "readback": 3322,
+        "upload": 26109
       },
       "bytes": 747124,
       "estimateBytes": 22252800
@@ -168,7 +168,7 @@
       "ok": true,
       "detail": {
         "stageAtCancel": "rendering 9/600",
-        "msToCanceled": 190
+        "msToCanceled": 167
       }
     },
     {
@@ -185,12 +185,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 36.147,
-        "realtimeFactor": 0.553296262483747,
+        "wallSeconds": 36.538,
+        "realtimeFactor": 0.5473753352673929,
         "renderStageMs": {
-          "draw": 5366,
-          "readback": 3270,
-          "upload": 25917
+          "draw": 5558,
+          "readback": 3322,
+          "upload": 26109
         },
         "bytes": 747124,
         "estimateBytes": 22252800

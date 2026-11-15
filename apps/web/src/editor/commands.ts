@@ -5,6 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import type { Key } from '@pulseframe/i18n';
+import { findClip, type Clip } from '@pulseframe/core';
 import type { Editor } from './store.ts';
 
 export interface Command {
@@ -18,11 +19,24 @@ export interface Command {
 }
 
 const sel = (e: Editor) => e.selected?.clip;
+/** Selected clips that still exist, read when the command runs. */
+const selectedClips = (e: Editor) => { const doc = e.doc; return doc ? e.getState().selection.map((id) => findClip(doc, id)?.clip).filter((c): c is Clip => !!c) : []; };
 const nudge = (frames: number) => (e: Editor) => {
-  const c = sel(e);
-  if (!c) return;
-  const target = T.frameIndexAt(c.start, e.rate) + frames;
-  if (target >= 0) return e.commit([{ op: 'move_clip', args: { clipId: c.id, start: T.frameTime(target, e.rate) } }], 'Nudge clip');
+  const clips = selectedClips(e);
+  if (!clips.length) return;
+  if (clips.length === 1) {
+    const target = T.frameIndexAt(clips[0]!.start, e.rate) + frames;
+    if (target >= 0) return e.commit([{ op: 'move_clip', args: { clipId: clips[0]!.id, start: T.frameTime(target, e.rate) } }], 'Nudge clip');
+    return;
+  }
+  return e.commit([{ op: 'move_clips', args: { clipIds: clips.map((c) => c.id), delta: T.frameTime(frames, e.rate) } }], 'Nudge clips');
+};
+/** Delete every selected clip in one transaction. A linked partner is removed by its clip's own delete, so it is not listed twice. */
+const deleteSelected = (e: Editor) => {
+  const clips = selectedClips(e);
+  const seen = new Set<string>();
+  const ops = clips.filter((c) => { const g = c.type === 'media' ? c.linkGroupId : null; if (!g) return true; if (seen.has(g)) return false; seen.add(g); return true; }).map((c) => ({ op: 'delete_clip', args: { clipId: c.id } }));
+  return ops.length ? e.commit(ops, 'Delete') : undefined;
 };
 const step = (frames: number) => (e: Editor) => e.seek(e.frame + frames);
 /** Add keyframes for position, scale, rotation and opacity at the playhead with the values currently shown. */
@@ -81,7 +95,7 @@ export const COMMANDS: Command[] = [
   { id: 'marker.next', label: 'marker.next', group: 'transport', keys: ['Shift+KeyM'], enabled: (e) => markerFrames(e).some((f) => f > e.frame), run: gotoMarker(1) },
   { id: 'marker.prev', label: 'marker.prev', group: 'transport', keys: ['Alt+KeyM'], enabled: (e) => markerFrames(e).some((f) => f < e.frame), run: gotoMarker(-1) },
   { id: 'edit.split', label: 'split', group: 'edit', keys: ['KeyS'], enabled: (e) => e.playheadInsideSelection, run: (e) => e.commit([{ op: 'split_clip', args: { clipId: sel(e)!.id, at: e.playhead } }], 'Split') },
-  { id: 'edit.delete', label: 'delete', group: 'edit', keys: ['Delete', 'Backspace'], enabled: (e) => !!sel(e), run: (e) => e.commit([{ op: 'delete_clip', args: { clipId: sel(e)!.id } }], 'Delete') },
+  { id: 'edit.delete', label: 'delete', group: 'edit', keys: ['Delete', 'Backspace'], enabled: (e) => !!sel(e), run: deleteSelected },
   { id: 'edit.cut', label: 'cmd.cut', group: 'edit', keys: ['Mod+KeyX'], enabled: (e) => e.getState().selection.length > 0, run: (e) => e.cutSelection() },
   { id: 'edit.copy', label: 'cmd.copy', group: 'edit', keys: ['Mod+KeyC'], enabled: (e) => e.getState().selection.length > 0, run: (e) => e.copySelection() },
   { id: 'edit.paste', label: 'cmd.paste', group: 'edit', keys: ['Mod+KeyV'], enabled: (e) => e.clipboardLive.length > 0, run: (e) => e.pasteClipboard() },
@@ -92,6 +106,7 @@ export const COMMANDS: Command[] = [
   { id: 'edit.nudgeRight', label: 'cmd.nudgeRight', group: 'edit', keys: ['Alt+ArrowRight'], enabled: (e) => !!sel(e), run: nudge(1) },
   { id: 'edit.nudgeLeft10', label: 'cmd.nudgeLeft10', group: 'edit', keys: ['Alt+Shift+ArrowLeft'], enabled: (e) => !!sel(e), run: nudge(-10) },
   { id: 'edit.nudgeRight10', label: 'cmd.nudgeRight10', group: 'edit', keys: ['Alt+Shift+ArrowRight'], enabled: (e) => !!sel(e), run: nudge(10) },
+  { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },
   { id: 'edit.selectNext', label: 'cmd.selectNext', group: 'edit', keys: ['Alt+ArrowDown'], run: selectAdjacent(1) },
   { id: 'edit.selectPrev', label: 'cmd.selectPrev', group: 'edit', keys: ['Alt+ArrowUp'], run: selectAdjacent(-1) },
   { id: 'edit.deselect', label: 'cmd.deselect', group: 'edit', keys: ['Escape'], enabled: (e) => (!!sel(e) || e.getState().cutPending.length > 0) && !e.getState().paletteOpen, run: (e) => { e.clearCut(); e.select(null); } },

@@ -525,6 +525,30 @@ defineOp({
 });
 
 defineOp({
+  name: 'move_clips',
+  version: 1,
+  description: 'Move several clips by the same frame-aligned amount (negative = earlier), keeping their positions relative to each other. Linked picture/sound moves along. All or nothing: refused if any clip would start before 0 or land on a clip that is not moving.',
+  args: z.object({ clipIds: z.array(z.string()).min(1).max(500), delta: RT, includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    assertAligned(d, a.delta, 'delta');
+    const items = new Map<string, { track: Track; clip: Clip }>();
+    for (const id of a.clipIds) {
+      const f = mustClip(d, id);
+      items.set(f.clip.id, { track: f.track, clip: f.clip });
+      if (a.includeLinked !== false) for (const l of linked(d, f.clip)) items.set(l.clip.id, l);
+    }
+    const moving = new Set(items.keys());
+    for (const { track, clip } of items.values()) {
+      const start = T.add(clip.start, a.delta);
+      if (T.isNegative(start)) throw new OpError('out_of_bounds', 'move would place a clip before 0', { clipId: clip.id });
+      assertFree(track, start, T.add(start, clip.duration), moving);
+    }
+    for (const { clip } of items.values()) clip.start = T.add(clip.start, a.delta);
+    for (const track of new Set([...items.values()].map((i) => i.track))) sortClips(track);
+    return { affectedIds: [...moving], summary: `Moved ${moving.size} clip(s) by ${fmt(a.delta)}` };
+  },
+});
+defineOp({
   name: 'delete_clip',
   version: 1,
   description: 'Remove a clip (and its linked clips unless includeLinked=false). Leaves a gap; the source asset is kept.',

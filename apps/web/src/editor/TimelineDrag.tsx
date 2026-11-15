@@ -25,6 +25,10 @@ interface Session {
   duration: T.RationalTime;
   trackId: string;
   trackKind: string;
+  /** Other selected clips that move along (the dragged clip is part of a multi-selection); empty for a single clip. */
+  companions: string[];
+  /** Earliest start among the moving clips: the group cannot be dragged further left than this allows. */
+  groupMin: T.RationalTime;
   /** Final frame-aligned result of the latest pointer position. */
   result: { start: T.RationalTime; end: T.RationalTime } | null;
 }
@@ -49,7 +53,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     const unchanged = s.mode === 'move' ? T.eq(r.start, s.start) : s.mode === 'trim-start' ? T.eq(r.start, s.start) : T.eq(r.end, T.add(s.start, s.duration));
     if (unchanged) { setGhost(null); return; }
     const ops = s.mode === 'move'
-      ? [{ op: 'move_clip', args: { clipId: s.clipId, start: r.start } }]
+      ? (s.companions.length ? [{ op: 'move_clips', args: { clipIds: [s.clipId, ...s.companions], delta: T.sub(r.start, s.start) } }] : [{ op: 'move_clip', args: { clipId: s.clipId, start: r.start } }])
       : [{ op: 'trim_clip', args: { clipId: s.clipId, edge: s.mode === 'trim-start' ? 'start' : 'end', to: s.mode === 'trim-start' ? r.start : r.end } }];
     // The ghost stays until the server answers; a rejection (null) just removes it, the store reports the error.
     void editor.commit(ops as never, s.mode === 'move' ? 'Move clip' : 'Trim clip').finally(() => setGhost(null));
@@ -75,8 +79,16 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     container.current = e.currentTarget;
     session.current = {
       pointerId: e.pointerId, clipId: id, mode, startX: e.clientX, captured: false, start: found.clip.start, duration: found.clip.duration,
-      trackId: found.tr.id, trackKind: found.tr.kind, result: null,
+      trackId: found.tr.id, trackKind: found.tr.kind, result: null, companions: [], groupMin: found.clip.start,
     };
+    // Dragging one clip of a multi-selection moves the whole selection (move only; trimming stays per clip).
+    const selection = editor.getState().selection;
+    if (mode === 'move' && selection.length > 1 && selection.includes(id)) {
+      const all = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => (tr.locked ? [] : tr.clips));
+      const others = all.filter((c) => c.id !== id && selection.includes(c.id));
+      session.current.companions = others.map((c) => c.id);
+      session.current.groupMin = others.reduce((m, c) => T.min(m, c.start), found.clip.start);
+    }
   }, [editor]);
 
   const onPointerMove = useCallback((e: ReactPointerEvent<HTMLElement>) => {
@@ -95,10 +107,13 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     const tracks = doc.sequences[doc.mainSequenceId]!.tracks;
     const self = tracks.flatMap((tr) => tr.clips).find((c) => c.id === s.clipId);
     if (!self) { end(true); return; }
-    const group = new Set<string>([s.clipId]);
+    const group = new Set<string>([s.clipId, ...s.companions]);
     const link = (c: Clip) => (c.type === 'media' ? c.linkGroupId : null);
     const lg = link(self);
     if (lg) for (const tr of tracks) for (const c of tr.clips) if (link(c) === lg) group.add(c.id);
+    // linked partners of the other selected clips move too
+    const lgs = new Set(tracks.flatMap((tr) => tr.clips).filter((c) => s.companions.includes(c.id)).map(link).filter(Boolean));
+    if (lgs.size) for (const tr of tracks) for (const c of tr.clips) if (lgs.has(link(c))) group.add(c.id);
 
     // Snap candidates: exact times from the document.
     const cands: T.RationalTime[] = [T.ZERO, editor.playhead];
@@ -133,7 +148,9 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
       else if (b) { start = T.sub(b.time, s.duration); snappedTo = kinds[b.index]!; }
       else start = rawStart;
       start = T.snapToFrame(start, rate);
-      if (T.isNegative(start)) start = T.ZERO;
+      // The earliest moving clip stops at 0, so the group keeps its shape.
+      const floor = T.sub(s.start, s.groupMin);
+      if (T.lt(start, floor)) start = floor;
       endT = T.add(start, s.duration);
     } else if (s.mode === 'trim-start') {
       const raw = T.add(s.start, delta);

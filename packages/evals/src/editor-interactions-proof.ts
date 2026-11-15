@@ -261,6 +261,46 @@ async function main() {
     const tlq = (await call(`/projects/${pid}/timeline`)).body.markers.user;
     check('markers: M adds one at the playhead; name (Hebrew + Latin) and colour are committed edits; a marker added by an agent appears; Shift+M / Alt+M jump between them; remove and undo work; the timeline query lists both', mAdded && named && shownMarkers.length === 2 && shownMarkers[0]?.frame === 60 && /פזמון chorus/.test(shownMarkers[0]?.name ?? '') && hop1 === '00:00:02:00' && hop2 === '00:00:05:00' && hop3 === '00:00:02:00' && mRemoved && undone && tlq.length === 2 && tlq[1].seconds === 5, { shownMarkers, hops: [hop1, hop2, hop3], removed: mRemoved, undone });
 
+    console.log('\n# multi-select: move, nudge and delete several clips together');
+    const mp = (await call('/projects', { name: 'multi', width: 640, height: 360 })).body.project.id;
+    const mpic = await upload(mp, picFile);
+    const mIds = (await txs(mp, [0, 45, 120].map((st) => ({ op: 'add_clip', args: { assetId: mpic.assetId, start: f(st), duration: f(30), withLinkedAudio: false } })))).results.map((r: any) => r.output.clipId as string);
+    const [mA, mB, mC] = mIds as [string, string, string];
+    const mdoc = async () => (await call(`/projects/${mp}`)).body;
+    const mStarts = (d: any) => [mA, mB, mC].map((id) => { const c = d.project.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((x: any) => x.id === id); return c ? fr(c.start) : null; });
+    const mUntil = async (want: (number | null)[]) => { const t0 = Date.now(); for (;;) { const d = await mdoc(); if (JSON.stringify(mStarts(d)) === JSON.stringify(want)) return d.revision as number; if (Date.now() - t0 > 8000) return -1; await sleep(100); } };
+    const mpage = await page.context().newPage();
+    const mErrors: string[] = [];
+    mpage.on('pageerror', (e) => mErrors.push(String(e)));
+    mpage.on('console', (m) => m.type() === 'error' && mErrors.push(m.text()));
+    await mpage.goto(`${s.url}/?project=${mp}`);
+    const clipEl = (id: string) => mpage.locator(`.clip[data-clip-id="${id}"]`);
+    await clipEl(mA).click();
+    await clipEl(mB).click({ modifiers: ['Control'] });
+    const twoSelected = await mpage.locator('.clip.selected').count();
+    const rev0 = (await mdoc()).revision as number;
+    const bb = (await clipEl(mB).boundingBox())!;
+    await mpage.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+    await mpage.mouse.down();
+    for (const dx of [10, 25, 40, 60]) await mpage.mouse.move(bb.x + bb.width / 2 + dx, bb.y + bb.height / 2, { steps: 2 });
+    await mpage.keyboard.down('Alt'); // no snapping: the result must be exactly 20 frames
+    await mpage.mouse.move(bb.x + bb.width / 2 + 60, bb.y + bb.height / 2);
+    await mpage.mouse.up();
+    await mpage.keyboard.up('Alt');
+    const revDrag = await mUntil([20, 65, 120]);
+    const stillTwo = await mpage.locator('.clip.selected').count();
+    await mpage.keyboard.press('Alt+ArrowRight');
+    const revNudge = await mUntil([21, 66, 120]);
+    await mpage.keyboard.press('Control+a');
+    const allSelected = await mpage.locator('.clip.selected').count();
+    await clipEl(mC).click({ modifiers: ['Shift'] }); // toggle C off
+    await mpage.keyboard.press('Delete');
+    const revDelete = await mUntil([null, null, 120]);
+    await mpage.keyboard.press('Control+z');
+    const revUndo = await mUntil([21, 66, 120]);
+    check('multi-select: Ctrl+click adds a clip to the selection; dragging one moves both by the same 20 frames in one transaction and a third clip stays; Alt+→ nudges both; Ctrl+A selects all, Shift+click removes one; Delete removes the two selected in one transaction and one undo restores them', twoSelected === 2 && revDrag === rev0 + 1 && stillTwo === 2 && revNudge === rev0 + 2 && allSelected === 3 && revDelete === rev0 + 3 && revUndo === rev0 + 4 && mErrors.length === 0, { twoSelected, stillTwo, allSelected, revisions: [rev0, revDrag, revNudge, revDelete, revUndo], errors: mErrors.slice(0, 3) });
+    await mpage.close();
+
     console.log('\n# project archive from the editor');
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('archive-download').click()]);
     const arcFile = path.join(art, 'project.tar');

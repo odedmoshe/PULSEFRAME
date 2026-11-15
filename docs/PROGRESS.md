@@ -276,6 +276,12 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - The accessibility audit's own sensitivity check failed under the new policy (it planted its test defects with inline style attributes, which the policy blocks) and therefore refused to report "no findings"; it now plants them through the DOM API. The audit, the parity suite (Test 1 and 2 pass, same small-text warnings as before) and all proofs were re-run under the policy. `conformance:seek`, `conformance:avsync` and the ComfyUI proofs were **not** re-run under it.
 - Limits: one review by one reviewer; not a penetration test. The policy is only applied by the built server (`pnpm start`), not by the Vite dev server. `style-src` does not allow inline styles, so a future dependency that injects `<style>` will fail visibly. No per-credential rate limits or export quotas yet. The session cookie is `HttpOnly; SameSite=Strict` but not `Secure` (loopback HTTP); a TLS deployment needs that flag.
 
+**Checkpoint 13n — multi-select in the timeline**
+- `move_clips` (registered op): moves several clips by one frame-aligned amount, keeps their spacing, takes linked picture/sound along, and is all-or-nothing (refused before 0 or onto a clip that is not moving; clips may pass through space the group itself vacates).
+- Editor: Shift/Ctrl/⌘-click adds or removes a clip from the selection; Ctrl+A selects every clip on unlocked tracks; dragging one selected clip moves the whole selection (the earliest clip stops at 0); Alt+←/→ nudges the selection; Delete removes all selected clips in one transaction (linked partners are not listed twice). Copy, cut, paste and duplicate already worked on a selection.
+- Verified: `moveclips.test.ts` (2) and one end-to-end check in `pnpm proof:editor-interactions` (now 15; five consecutive runs): each step is exactly one revision, a third clip stays put, one undo restores a two-clip delete.
+- Limits: no rubber-band (marquee) selection; no cross-track drag of a selection; while dragging, only the dragged clip shows a ghost, and only its own track is checked for overlap before release (the op checks everything on commit and refuses the whole move); the Inspector shows the first selected clip only; trimming stays per clip.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 
@@ -298,7 +304,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 Status words used here: **blocked** (cannot be implemented or verified without something external), **implemented, not runtime-qualified**, **verified on the current profile** (this CPU-only container), **verified on the target profile** (nothing yet: no target machine exists).
 
 Unblocked (no decision needed), roughly by value:
-1. Editor: multi-select drag, J/K/L, source viewer, workspaces (Phase 3 carry-over; markers are done).
+1. Editor: J/K/L, source viewer, workspaces, marquee selection (Phase 3 carry-over; markers and multi-select are done).
 2. Speed ramps, reverse, freeze frame, pitch-preserving stretch; volume curves and drawing automation on the clip (Phases 7–8 carry-over; constant speed and linear volume keys are done).
 3. Audit the remaining editor panels for handlers that act on render-time state (Look and Sound are done).
 4. Disk quota; whole-data-directory restore test; automatic backups.
@@ -321,8 +327,8 @@ Blocked on an owner decision or resource (see docs/BLOCKERS.md):
 ```bash
 pnpm install && pnpm build && pnpm test
 ```
-Expect 269 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
-`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 14 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
+Expect 271 tests. Then the proofs, each of which must print its full check count (a shorter count means it stopped early):
+`pnpm proof` 54 · `pnpm proof:phase3` 27 · `pnpm proof:phase4` 19 · `pnpm proof:phase5` 33 · `pnpm proof:phase6` 35 · `pnpm proof:phase7` 31 · `pnpm proof:phase8` 20 · `pnpm proof:phase9` 12 · `pnpm proof:phase11` 12 · `pnpm proof:phase12` 13 · `pnpm proof:browser-export` 23 · `pnpm proof:editor-interactions` 15 · `pnpm proof:owner-ui` 7 · `pnpm proof:speed` 12 · `pnpm soak` 7 · `pnpm audit:a11y` (no findings) · `pnpm conformance:parity`.
 To use the editor: `pnpm start` and open the "Editor (owner)" link it prints.
 Then take item 1 of the unblocked list (start in `apps/web/src/editor/commands.ts` and `packages/core/src/ops.ts`), or resolve a blocker.
 

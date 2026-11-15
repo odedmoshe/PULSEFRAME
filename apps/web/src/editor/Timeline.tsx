@@ -91,7 +91,7 @@ export function Timeline() {
                 const asset = c.type === 'media' ? doc.assets[c.assetId] : undefined;
                 return (
                   <button key={c.id} role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-clip-type={c.type} data-track-kind={tr.kind}
-                    style={{ left: T.toSeconds(c.start) * pps, width }} onClick={() => editor.select(c.id)} aria-pressed={selection.includes(c.id)}
+                    style={{ left: T.toSeconds(c.start) * pps, width }} onClick={(e) => editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace')} aria-pressed={selection.includes(c.id)}
                     aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                       <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed */} widthPx={width} heightPx={34} refreshKey={derivativeTick} />
