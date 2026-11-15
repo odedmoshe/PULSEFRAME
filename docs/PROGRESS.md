@@ -539,6 +539,9 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Verified here: `insertgap.test.ts` (5 tests; the slip test covers limits at both ends, picture-only, double speed, refusals); the op is in the operations and store fuzz; 400 unit tests; `pnpm proof:phase3` 31/31 (new check: after 3 + 10 frames the clip shows source 73–82 on server stills, same place and length, neighbours unchanged); editor-interactions 20; speed 16; accessibility audit clean.
 - Not done: slipping by dragging; roll and slide as single gestures (both can be composed from two trims in one transaction over REST/MCP); `conformance:render-fuzz` not rerun with the op in the generator.
 
+**Note — a regression run hung once in the Phase 4 proof (unexplained)**
+- A full regression started after checkpoint 14z passed `pnpm proof` (54) and phase3 (31), then made no progress inside `pnpm proof:phase4` until the run hit its time limit almost two hours later. Run alone straight afterwards, phase4 passed 19/19 in under seven minutes, and it had passed in the regression after 14s. Cause not found; not reproduced. The regression is being rerun with a time limit per proof so that a hang is reported as such.
+
 ## In progress
 - Remaining work that needs no outside decision is carry-over scope listed per phase above. Everything else is blocked on B-1…B-9.
 

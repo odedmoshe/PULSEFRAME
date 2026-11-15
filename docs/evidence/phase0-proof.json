@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T09:52:48.554Z",
+  "ranAt": "2026-11-15T10:04:43.037Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 311,
+    "editorShellInteractiveMs": 358,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 13.6,
-      "requestToVisibleInEditorMs": 49.1,
+      "requestToCommitMs": 20.5,
+      "requestToVisibleInEditorMs": 41.2,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 5.21,
-      "p95": 10.12,
-      "max": 11.23
+      "median": 5.6,
+      "p95": 8.19,
+      "max": 11.17
     },
     "export": {
-      "file": "job_nruKyYYBS1E.mp4",
+      "file": "job_1DNtiYL7i3U.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -68,7 +68,7 @@
         },
         "assets": [
           {
-            "id": "ast_afbd6a25120",
+            "id": "ast_8402912e9c0",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -135,13 +135,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 569,
-        "readback": 599,
-        "upload": 4778
+        "draw": 589,
+        "readback": 657,
+        "upload": 4873
       },
-      "wallSeconds": 6.901,
-      "realtimeFactor": 0.5071728734965947,
-      "uiWallSeconds": 6.952
+      "wallSeconds": 7.295,
+      "realtimeFactor": 0.47978067169294036,
+      "uiWallSeconds": 7.477
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -173,10 +173,10 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_afbd6a25120": "original"
+        "ast_8402912e9c0": "original"
       },
       "sourcesUsed": {
-        "ast_afbd6a25120": [
+        "ast_8402912e9c0": [
           "original"
         ]
       },
@@ -184,7 +184,7 @@
       "disposed": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_afbd6a25120/content:206"
+        "ast_8402912e9c0/content:206"
       ]
     },
     "previewSync": {
@@ -493,7 +493,7 @@
       "framesRequested": 104,
       "framesPainted": 104,
       "paintLatenessMs": {
-        "median": 10.67,
+        "median": 14.67,
         "p95": 21.33,
         "max": 36
       },
@@ -616,7 +616,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 88
+        "count": 89
       }
     },
     {
@@ -624,7 +624,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_0c297e338a1",
+          "id": "clp_76fa19cd421",
           "start": {
             "value": "2",
             "timescale": 1
@@ -644,8 +644,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 13.6,
-        "requestToVisibleInEditorMs": 49.1,
+        "requestToCommitMs": 20.5,
+        "requestToVisibleInEditorMs": 41.2,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -659,11 +659,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_9b12ea89760"
+          "selected": "clip-clp_69e5a6a8520"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_9b12ea89760"
+          "selected": "clip-clp_69e5a6a8520"
         }
       }
     },
@@ -709,7 +709,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_9b12ea89760",
+          "entityId": "clp_69e5a6a8520",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -846,10 +846,10 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_afbd6a25120": "original"
+            "ast_8402912e9c0": "original"
           },
           "sourcesUsed": {
-            "ast_afbd6a25120": [
+            "ast_8402912e9c0": [
               "original"
             ]
           },
@@ -857,7 +857,7 @@
           "disposed": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_afbd6a25120/content:206"
+            "ast_8402912e9c0/content:206"
           ]
         }
       }
@@ -1171,7 +1171,7 @@
         "framesRequested": 104,
         "framesPainted": 104,
         "paintLatenessMs": {
-          "median": 10.67,
+          "median": 14.67,
           "p95": 21.33,
           "max": 36
         },
@@ -1197,7 +1197,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_afbd6a25120": [
+          "ast_8402912e9c0": [
             "original",
             "proxy"
           ]
