@@ -28,6 +28,7 @@ A browser-based video editor with a Hebrew-first interface and full agent access
 
 ## Requirements
 Node ≥ 22.12, pnpm 10, FFmpeg/ffprobe with libx264 on `PATH`, and a Playwright Chromium (`pnpm exec playwright install chromium` on a normal machine).
+A step-by-step first run on Windows, in Hebrew (untested on Windows): `docs/QUICKSTART.he.md`. Optional local speech recognition and narration: `docs/INTEGRATIONS.md`.
 
 ## Run
 ```bash

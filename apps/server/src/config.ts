@@ -68,9 +68,10 @@ export function loadConfig(env = process.env): Config {
     backupDir: env.PF_BACKUP_DIR ? path.resolve(env.PF_BACKUP_DIR) : null,
     backupEveryHours: Math.max(0, Number(env.PF_BACKUP_EVERY_HOURS ?? 24)) || 0,
     backupKeep: Math.max(1, Math.floor(Number(env.PF_BACKUP_KEEP ?? 14)) || 14),
-    speechPython: env.PF_SPEECH_PYTHON ? path.resolve(env.PF_SPEECH_PYTHON) : null,
-    voicePython: env.PF_VOICE_PYTHON ? path.resolve(env.PF_VOICE_PYTHON) : null,
-    speechModelsDir: path.resolve(env.PF_SPEECH_MODELS_DIR ?? path.join(dataDir, 'speech-models')),
+    // relative paths are taken from the repository root (pnpm runs the server from apps/server)
+    speechPython: env.PF_SPEECH_PYTHON ? path.resolve(root, env.PF_SPEECH_PYTHON) : null,
+    voicePython: env.PF_VOICE_PYTHON ? path.resolve(root, env.PF_VOICE_PYTHON) : null,
+    speechModelsDir: env.PF_SPEECH_MODELS_DIR ? path.resolve(root, env.PF_SPEECH_MODELS_DIR) : path.join(dataDir, 'speech-models'),
     speechDevice: env.PF_SPEECH_DEVICE === 'cpu' || env.PF_SPEECH_DEVICE === 'cuda' ? env.PF_SPEECH_DEVICE : 'auto',
     speechKeepSeconds: env.PF_SPEECH_KEEP_SECONDS !== undefined && Number.isFinite(Number(env.PF_SPEECH_KEEP_SECONDS)) ? Math.max(0, Number(env.PF_SPEECH_KEEP_SECONDS)) : 120,
     distributionProfile: env.PF_PROFILE === 'research' ? 'research' : 'commercial',
