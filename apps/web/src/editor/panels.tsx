@@ -21,6 +21,7 @@ import { SourceViewer } from './SourceViewer.tsx';
 import { InlineRename } from './InlineRename.tsx';
 import { ActivityDialog } from './ActivityDialog.tsx';
 import { CaptionControls, FillerPanel, SilencePanel, TranscribeAll, TranscriptPanel } from './TranscriptPanel.tsx';
+import { IconExport, IconLanguage, IconLoop, IconNextFrame, IconPause, IconPlay, IconPrevFrame, IconProjects, IconRedo, IconSearch, IconUndo, IconClose, TAB_ICON_COMPONENTS } from './icons.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
 const hint = (keymap: Keymap, id: string) => { const k = keymap.keysFor(id)[0]; return k ? <kbd>{chordLabel(k)}</kbd> : null; };
@@ -69,19 +70,19 @@ export function Header() {
       <span className="rev" data-testid="revision">{t('revision')} <bdi>{revision}</bdi></span>
       <button className={`ghost ${state.agentsPaused ? 'paused' : ''}`} disabled={!doc} aria-pressed={state.agentsPaused} onClick={() => editor.setAgentsPaused(!state.agentsPaused)} data-testid="pause-agent">{state.agentsPaused ? t('agents.resume') : t('agents.pause')}</button>
       {state.agentsPaused && <span className="save warn" role="status" data-testid="agents-paused">{t('agents.paused')}</span>}
-      <button className="ghost" disabled={!doc} onClick={() => void editor.history('undo')} data-testid="undo" title="Ctrl+Z">{t('undo')}</button>
-      <button className="ghost" disabled={!doc} onClick={() => void editor.history('redo')} data-testid="redo" title="Ctrl+Shift+Z">{t('redo')}</button>
-      <button className="ghost" onClick={() => setProjectsOpen(true)} data-testid="projects-open" aria-haspopup="dialog">{t('projects.open')}</button>
+      <button className="ghost" disabled={!doc} onClick={() => void editor.history('undo')} data-testid="undo" title="Ctrl+Z"><IconUndo className="pf-ico-flip" />{t('undo')}</button>
+      <button className="ghost" disabled={!doc} onClick={() => void editor.history('redo')} data-testid="redo" title="Ctrl+Shift+Z"><IconRedo className="pf-ico-flip" />{t('redo')}</button>
+      <button className="ghost" onClick={() => setProjectsOpen(true)} data-testid="projects-open" aria-haspopup="dialog"><IconProjects />{t('projects.open')}</button>
       {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); /* return focus to the button that opened the dialog */ setTimeout(() => document.querySelector<HTMLElement>('[data-testid=projects-open]')?.focus(), 0); }} />}
-      <button className="ghost" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog">{t('cmd.palette')} <kbd>{chordLabel('Mod+KeyK')}</kbd></button>
-      <button className="ghost" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle">{t('lang.toggle')}</button>
+      <button className="ghost" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog"><IconSearch />{t('cmd.palette')} <kbd>{chordLabel('Mod+KeyK')}</kbd></button>
+      <button className="ghost" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle"><IconLanguage />{t('lang.toggle')}</button>
       {job?.status === 'succeeded' && <span className="save" role="status" data-testid="export-finished">{t('export.finished')}</span>}
       {job?.status === 'succeeded' && <a className="ghost" href={`/api/v1/jobs/${job.id}/output`} download data-testid="export-download">{t('export.done')}</a>}
       {exporting && <button className="ghost danger" onClick={() => editor.cancelExport()} data-testid="export-cancel">{t('export.cancel')}</button>}
       {job?.status === 'canceled' && <span className="save warn" role="status" data-testid="export-canceled">{t('export.canceled')}</span>}
       {(job?.status === 'canceled' || job?.status === 'failed') && <button className="ghost" onClick={() => editor.retryExport()} data-testid="export-retry">{t('export.retry')}</button>}
       <button className="primary" disabled={!doc || !!exporting || editor.player?.frameCount === 0} onClick={() => editor.startExport()} data-testid="export">
-        {exporting ? <>{t('export.running')} <bdi>{jobStageLabel(job?.stage, lang)}</bdi></> : t('export')}
+        <IconExport />{exporting ? <>{t('export.running')} <bdi>{jobStageLabel(job?.stage, lang)}</bdi></> : t('export')}
       </button>
     </header>
   );
@@ -97,7 +98,7 @@ export function ErrorBar() {
       {error && state.errorHeadline && error.startsWith(`${state.errorHeadline}: `)
         ? <><span data-testid="error-headline">{state.errorHeadline}</span>: <bdi dir="auto" data-testid="error-detail">{error.slice(state.errorHeadline.length + 2)}</bdi></>
         : error ?? `${t('export.failed')}: ${job?.error?.message ?? ''}`}
-      <button className="ghost" onClick={() => editor.set({ error: null, ...(job?.status === 'failed' ? { exportJob: null } : {}) })} aria-label={t('close')}>×</button>
+      <button className="ghost" onClick={() => editor.set({ error: null, ...(job?.status === 'failed' ? { exportJob: null } : {}) })} aria-label={t('close')}><IconClose /></button>
     </div>
   );
 }
@@ -156,10 +157,10 @@ export function Transport() {
   const p = editor.player;
   return (
     <div className="transport" dir="ltr">
-      <button className="ghost" onClick={() => run(editor, 'transport.prevFrame')} aria-label={t('frame.prev')}>◀︎</button>
-      <button className="primary" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} data-testid="play">{p?.playing ? '❚❚' : '▶'}</button>
-      <button className="ghost" onClick={() => run(editor, 'transport.nextFrame')} aria-label={t('frame.next')}>▶︎</button>
-      <button className="ghost" onClick={() => run(editor, 'transport.loop')} aria-pressed={!!p?.loop} aria-label={t('cmd.loop')} title={t('cmd.loop')} data-testid="loop">⟳</button>
+      <button className="ghost" onClick={() => run(editor, 'transport.prevFrame')} aria-label={t('frame.prev')}><IconPrevFrame /></button>
+      <button className="primary" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} data-testid="play">{p?.playing ? <IconPause /> : <IconPlay />}</button>
+      <button className="ghost" onClick={() => run(editor, 'transport.nextFrame')} aria-label={t('frame.next')}><IconNextFrame /></button>
+      <button className="ghost" onClick={() => run(editor, 'transport.loop')} aria-pressed={!!p?.loop} aria-label={t('cmd.loop')} title={t('cmd.loop')} data-testid="loop"><IconLoop /></button>
       {!!p?.shuttleRate && <span className="shuttle" role="status" data-testid="shuttle" aria-label={`${t(p.shuttleRate < 0 ? 'cmd.shuttleBack' : 'cmd.shuttleForward')} ×${Math.abs(p.shuttleRate)}`}>{p.shuttleRate < 0 ? '◀◀' : '▶▶'} ×{Math.abs(p.shuttleRate)}</span>}
       <span className="timecode" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>
       <span className="muted">/ {T.toTimecode(editor.duration, rate)} · {editor.viewDoc?.settings.width}×{editor.viewDoc?.settings.height} · {(rate.num / rate.den).toFixed(rate.den === 1 ? 0 : 2)} fps</span>
@@ -375,6 +376,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
           <button key={id} type="button" role="tab" id={`inspector-tab-${id}`} data-testid={`inspector-tab-${id}`}
             aria-selected={tab === id} aria-controls={id === 'all' ? INSPECTOR_TABS.filter((x) => x !== 'all').map((x) => `inspector-panel-${x}`).join(' ') : `inspector-panel-${id}`}
             tabIndex={tab === id ? 0 : -1} className={`inspector-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+            {(() => { const TabIcon = TAB_ICON_COMPONENTS[id]; return TabIcon ? <TabIcon /> : null; })()}
             {t(`inspector.tab.${id}` as Key)}
             {id === 'review' && open > 0 && (
               <span className="tab-badge" role="img" aria-label={`${open} ${t('inspector.tab.review.badge')}`} data-testid="inspector-review-badge">{open}</span>

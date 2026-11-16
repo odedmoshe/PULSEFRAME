@@ -10,6 +10,7 @@ import { useTimelineDrag } from './TimelineDrag.tsx';
 import { COMMANDS, chordLabel } from './commands.ts';
 import { useMarquee } from './TimelineMarquee.tsx';
 import { InlineRename } from './InlineRename.tsx';
+import { BAR_ICON_COMPONENTS, IconHide, IconLock, IconMute, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
 
 const MAX_MARKERS = 3000;
 
@@ -122,16 +123,16 @@ export function Timeline() {
                   {tr.kind !== 'caption' && <InlineRename value={tr.name} label={`${t('track.rename')}: ${tr.name}`} testid="track-rename" onCommit={(name) => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, name } }], 'Rename track')} />}
                   {(tr.kind === 'video' || tr.kind === 'audio') && (
                     <button type="button" className="track-btn" aria-pressed={state.targets[tr.kind] === tr.id} disabled={tr.locked} data-testid="track-target" aria-label={`${t('track.target')}: ${tr.name}`} title={t('track.target.help')}
-                      onPointerDown={(e) => e.stopPropagation()} onClick={() => editor.toggleTarget(tr.kind as 'video' | 'audio', tr.id)}>◎</button>
+                      onPointerDown={(e) => e.stopPropagation()} onClick={() => editor.toggleTarget(tr.kind as 'video' | 'audio', tr.id)}><IconTarget /></button>
                   )}
                   <button type="button" className="track-btn" aria-pressed={tr.locked} data-testid="track-lock" aria-label={`${t(tr.locked ? 'track.unlock' : 'track.lock')}: ${tr.name}`} title={t(tr.locked ? 'track.unlock' : 'track.lock')}
-                    onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, locked: !tr.locked } }], 'Lock track')}>{tr.locked ? '🔒' : '🔓'}</button>
+                    onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, locked: !tr.locked } }], 'Lock track')}>{tr.locked ? <IconLock /> : <IconUnlock />}</button>
                   {tr.kind === 'audio' ? (
                     <button type="button" className="track-btn" aria-pressed={tr.muted} data-testid="track-mute" aria-label={`${t(tr.muted ? 'track.unmute' : 'track.mute')}: ${tr.name}`} title={t(tr.muted ? 'track.unmute' : 'track.mute')}
-                      onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, muted: !tr.muted } }], 'Mute track')}>{tr.muted ? '🔇' : '🔊'}</button>
+                      onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, muted: !tr.muted } }], 'Mute track')}>{tr.muted ? <IconMute /> : <IconSound />}</button>
                   ) : (
                     <button type="button" className="track-btn" aria-pressed={tr.hidden} data-testid="track-hide" aria-label={`${t(tr.hidden ? 'track.show' : 'track.hide')}: ${tr.name}`} title={t(tr.hidden ? 'track.show' : 'track.hide')}
-                      onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, hidden: !tr.hidden } }], 'Hide track')}>{tr.hidden ? '◌' : '◉'}</button>
+                      onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, hidden: !tr.hidden } }], 'Hide track')}>{tr.hidden ? <IconHide /> : <IconShow />}</button>
                   )}
                 </span>
               </span>
@@ -177,7 +178,6 @@ export function Timeline() {
 
 /** The everyday clip actions, always in view above the tracks: each is the same command the keyboard runs, with its key shown. */
 const BAR_COMMANDS = ['edit.split', 'edit.delete', 'edit.duplicate', 'edit.copy', 'edit.paste'] as const;
-const BAR_ICONS: Record<string, string> = { 'edit.split': '✂', 'edit.delete': '🗑', 'edit.duplicate': '⧉', 'edit.copy': '⎘', 'edit.paste': '📋', 'edit.cut': '✄' };
 function EditBar() {
   const { editor, state, t } = useEditorState();
   void state.selection; void state.tick; // re-render when the selection or the playhead changes: the buttons' availability depends on both
@@ -189,7 +189,7 @@ function EditBar() {
         return (
           <button key={id} type="button" className={`ghost${id === 'edit.delete' ? ' danger' : ''}`} disabled={!on} data-testid={`bar-${id.slice(5)}`}
             title={`${t(c.label as Key)}${c.keys[0] ? ` (${chordLabel(c.keys[0])})` : ''}`} onClick={() => void c.run(editor)}>
-            <span aria-hidden="true">{BAR_ICONS[id]}</span> {t(`bar.${id.slice(5)}` as Key)}
+            {(() => { const I = BAR_ICON_COMPONENTS[id]; return I ? <I /> : null; })()}{t(`bar.${id.slice(5)}` as Key)}
           </button>
         );
       })}
@@ -220,7 +220,7 @@ function ClipMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void
           return (
             <button key={id} type="button" role="menuitem" className={id === 'edit.delete' ? 'danger' : ''} disabled={!!c.enabled && !c.enabled(editor)} data-testid={`menu-${id.slice(5)}`}
               onClick={() => { onClose(); void c.run(editor); }}>
-              <span aria-hidden="true">{BAR_ICONS[id]}</span> <span>{t(`bar.${id.slice(5)}` as Key)}</span>{c.keys[0] && <kbd>{chordLabel(c.keys[0])}</kbd>}
+              {(() => { const I = BAR_ICON_COMPONENTS[id]; return I ? <I /> : null; })()}<span>{t(`bar.${id.slice(5)}` as Key)}</span>{c.keys[0] && <kbd>{chordLabel(c.keys[0])}</kbd>}
             </button>
           );
         })}
