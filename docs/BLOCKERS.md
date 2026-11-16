@@ -5,11 +5,11 @@ Each entry: what is blocked, how to reproduce, impact, proposed way forward. Wor
 ## B-1 — No GPU and no default WebGPU adapter in the development environment
 - **Reproduce:** `pnpm probe` → `browserDefault.webgpu.adapter` is `null`; `nvidia-smi` is absent.
 - **Impact:** a WebGPU compositor (needed from Phase 7 for effects) and the Appendix C2 preview/export performance targets cannot be developed against or measured on real hardware here. All current numbers are for a 4-vCPU software profile.
-- **Update 2026-11-16:** the owner named the reference machine: their laptop with an NVIDIA GeForce RTX 3050 Laptop GPU (4 GB). Nothing has been run on it yet. 4 GB of video memory bounds which model workflows can be qualified there.
+- **Update 2026-11-16:** the owner named the reference machine: their laptop with an NVIDIA GeForce RTX 3050 Laptop GPU (4 GB). The editor has since been installed and opened there (Windows 11, Node 22.17). `pnpm probe` there shows only a software renderer because it uses a headless browser; the page `/gpu.html`, opened in the owner's own Chrome, is what reports the real adapter. Its result is awaited. 4 GB of video memory bounds which model workflows can be qualified there.
 - **Proposed:** keep Canvas2D through Phase 1–2; run `pnpm probe` and the proofs on the intended reference laptop and record results; decide WebGPU vs WebGL2 from that data. Owner input needed: which machine is the reference profile.
 
 ## B-2 — Browser export cannot produce AAC here
-- **Reproduce:** probe → `audioEncode.aac: false`.
+- **Reproduce:** probe → `audioEncode.aac: false` on this Linux build. On the owner's Windows machine the same bundled Chromium reports `aac: true` (2026-11-16), so this is specific to this environment; the browser route has still not been run there.
 - **Impact:** browser-only MP4 H.264+AAC export is unavailable in this Chromium build.
 - **Proposed:** Phase 4 browser route to be qualified on real Chrome builds; otherwise Opus-in-MP4/WebM or server export. No workaround implemented.
 

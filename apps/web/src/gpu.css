@@ -1,0 +1,9 @@
+:root { color-scheme: dark; }
+body { margin: 0; background: #14171c; color: #e8eaed; font: 16px/1.5 system-ui, "Segoe UI", Arial, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px; }
+h1 { font-size: 22px; margin: 0 0 12px; }
+#summary { font-weight: 600; }
+button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 1px solid #3a4150; background: #2dd4bf; color: #06231f; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, textarea:focus-visible { outline: 2px solid #2dd4bf; outline-offset: 2px; }
+textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 12px; background: #0e1014; color: #cfd3da; border: 1px solid #2a303b; border-radius: 8px; padding: 12px; font: 13px/1.4 ui-monospace, Consolas, monospace; }

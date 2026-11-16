@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>PULSEFRAME — בדיקת כרטיס מסך</title><link rel="stylesheet" href="/src/gpu.css" /></head>
+  <body>
+    <main>
+      <h1>בדיקת כרטיס המסך בדפדפן הזה</h1>
+      <p>הדף בודק מה הדפדפן שבו הוא פתוח מסוגל לעשות: כרטיס המסך, קידוד וידאו בחומרה, ומדידת זמן קצרה אחת. שום דבר לא נשלח מכאן לשום מקום; התוצאה מוצגת למטה כדי שתוכלו להעתיק אותה.</p>
+      <p id="summary" role="status">בודק…</p>
+      <button id="copy" type="button" disabled>העתקת התוצאה</button>
+      <textarea id="out" dir="ltr" readonly rows="28" aria-label="תוצאת הבדיקה"></textarea>
+    </main>
+    <script type="module" src="/src/gpuProbe.ts"></script>
+  </body>
+</html>
