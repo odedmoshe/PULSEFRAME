@@ -207,12 +207,14 @@ async function main() {
     const cat = (await call('/catalog')).body.soundEffects as { id: string; seconds: number }[];
     const sp = (await call('/projects', { name: 'phase8-sfx', width: 640, height: 360 })).body.project.id;
     const added: any[] = [];
-    for (const [i, sfx] of cat.entries()) added.push((await call(`/projects/${sp}/sfx`, { sfxId: sfx.id, start: f(i * 60) })).body);
+    // one sound every SLOT seconds: longer than the longest sound, so each has silence after it
+    const SLOT = Math.ceil(Math.max(...cat.map((x: any) => x.seconds))) + 1;
+    for (const [i, sfx] of cat.entries()) added.push((await call(`/projects/${sp}/sfx`, { sfxId: sfx.id, start: f(i * SLOT * 30) })).body);
     const again = (await call(`/projects/${sp}/sfx`, { sfxId: cat[0]!.id })).body;
     const sdoc = (await call(`/projects/${sp}`)).body.project;
     const sfxWav = await wav(sp);
     const energy = (t0: number, t1: number) => { let e = 0; for (let i = Math.round(t0 * SR); i < Math.round(t1 * SR); i++) e += (sfxWav.pcm[i * 2] ?? 0) ** 2; return e; };
-    const heard = cat.map((sfx, i) => energy(i * 2, i * 2 + sfx.seconds) > 1e-3 && energy(i * 2 + sfx.seconds + 0.05, i * 2 + 1.95) < 1e-6);
+    const heard = cat.map((sfx, i) => energy(i * SLOT, i * SLOT + sfx.seconds) > 1e-3 && energy(i * SLOT + sfx.seconds + 0.05, (i + 1) * SLOT - 0.05) < 1e-6);
     check(`all ${cat.length} built-in sounds are synthesised, stored as content-addressed audio assets with their recipe in provenance, placed as clips, audible in the export at their positions and silent elsewhere; adding the same sound twice reuses the asset`, cat.length >= 6 && added.every((a) => a.assetId && a.placed) && Object.values(sdoc.assets).every((a: any) => a.provenance.origin === 'generated' && a.provenance.procedural?.id.startsWith('sfx.') && /^sha256:/.test(a.contentHash)) && heard.every(Boolean) && again.assetId === added[0].assetId && Object.keys(sdoc.assets).length === cat.length, { ids: cat.map((x) => x.id), heard });
     check('an unknown sound is refused with the list of available ones', (await call(`/projects/${sp}/sfx`, { sfxId: 'sfx.explosion-9000' })).status === 404);
 
