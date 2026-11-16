@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T18:20:27.056Z",
+  "ranAt": "2026-11-16T19:43:50.887Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -57,9 +57,9 @@
     "longMix": {
       "seconds": 320,
       "clips": 40,
-      "wallMs": 7014,
-      "realtimeFactor": 45.623,
-      "serverRssGrowthMb": 246,
+      "wallMs": 5931,
+      "realtimeFactor": 53.9538,
+      "serverRssGrowthMb": 242,
       "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
     },
     "browserAudioChain": {
@@ -299,9 +299,9 @@
       "detail": {
         "seconds": 320,
         "clips": 40,
-        "wallMs": 7014,
-        "realtimeFactor": 45.623,
-        "serverRssGrowthMb": 246,
+        "wallMs": 5931,
+        "realtimeFactor": 53.9538,
+        "serverRssGrowthMb": 242,
         "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
       }
     },
