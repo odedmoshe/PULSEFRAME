@@ -1,0 +1,292 @@
+{
+ "probedAt": "2026-11-16T17:51:59.622Z",
+ "note": "One run on this machine. Timings are one sample of one simple workload: not performance figures.",
+ "system": {
+  "platform": "Linux 6.18.44-fc-v470 x64",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "logicalCpus": 4
+ },
+ "expectedPixels": {
+  "first": [
+   133,
+   133,
+   138,
+   255
+  ],
+  "middle": [
+   116,
+   128,
+   133,
+   255
+  ]
+ },
+ "results": [
+  {
+   "variant": "default headless",
+   "launch": {
+    "args": [],
+    "headless": true,
+    "channel": "bundled Chromium"
+   },
+   "browser": "153.0.8010.12",
+   "api": true,
+   "adapter": null
+  },
+  {
+   "variant": "headless + software adapter (SwiftShader)",
+   "launch": {
+    "args": [
+     "--enable-unsafe-webgpu",
+     "--enable-features=Vulkan",
+     "--use-angle=swiftshader",
+     "--use-webgpu-adapter=swiftshader"
+    ],
+    "headless": true,
+    "channel": "bundled Chromium"
+   },
+   "browser": "153.0.8010.12",
+   "api": true,
+   "adapter": {
+    "vendor": "google",
+    "architecture": "swiftshader",
+    "description": "",
+    "isFallbackAdapter": true,
+    "float32Filterable": true,
+    "maxTextureDimension2D": 8192
+   },
+   "first": [
+    133,
+    133,
+    138,
+    255
+   ],
+   "middle": [
+    116,
+    128,
+    133,
+    255
+   ],
+   "msPerFrame": 45.53,
+   "readbackMs": 13.7,
+   "validationError": null,
+   "pixelsMatchReference": true
+  },
+  {
+   "variant": "headless + webgpu enabled",
+   "launch": {
+    "args": [
+     "--enable-unsafe-webgpu"
+    ],
+    "headless": true,
+    "channel": "bundled Chromium"
+   },
+   "browser": "153.0.8010.12",
+   "api": true,
+   "adapter": {
+    "vendor": "google",
+    "architecture": "swiftshader",
+    "description": "",
+    "isFallbackAdapter": true,
+    "float32Filterable": true,
+    "maxTextureDimension2D": 8192
+   },
+   "first": [
+    133,
+    133,
+    138,
+    255
+   ],
+   "middle": [
+    116,
+    128,
+    133,
+    255
+   ],
+   "msPerFrame": 41.57,
+   "readbackMs": 21.7,
+   "validationError": null,
+   "pixelsMatchReference": true
+  },
+  {
+   "variant": "headless + gpu enabled",
+   "launch": {
+    "args": [
+     "--enable-unsafe-webgpu",
+     "--enable-gpu",
+     "--ignore-gpu-blocklist"
+    ],
+    "headless": true,
+    "channel": "bundled Chromium"
+   },
+   "browser": "153.0.8010.12",
+   "api": true,
+   "adapter": {
+    "vendor": "google",
+    "architecture": "swiftshader",
+    "description": "",
+    "isFallbackAdapter": true,
+    "float32Filterable": true,
+    "maxTextureDimension2D": 8192
+   },
+   "first": [
+    133,
+    133,
+    138,
+    255
+   ],
+   "middle": [
+    116,
+    128,
+    133,
+    255
+   ],
+   "msPerFrame": 43.24,
+   "readbackMs": 12,
+   "validationError": null,
+   "pixelsMatchReference": true
+  },
+  {
+   "variant": "headless + gpu enabled + D3D11",
+   "launch": {
+    "args": [
+     "--enable-unsafe-webgpu",
+     "--enable-gpu",
+     "--ignore-gpu-blocklist",
+     "--use-angle=d3d11"
+    ],
+    "headless": true,
+    "channel": "bundled Chromium"
+   },
+   "browser": "153.0.8010.12",
+   "api": true,
+   "adapter": {
+    "vendor": "google",
+    "architecture": "swiftshader",
+    "description": "",
+    "isFallbackAdapter": true,
+    "float32Filterable": true,
+    "maxTextureDimension2D": 8192
+   },
+   "first": [
+    133,
+    133,
+    138,
+    255
+   ],
+   "middle": [
+    116,
+    128,
+    133,
+    255
+   ],
+   "msPerFrame": 45.34,
+   "readbackMs": 8.2,
+   "validationError": null,
+   "pixelsMatchReference": true
+  },
+  {
+   "variant": "headless + gpu enabled + high-performance GPU",
+   "launch": {
+    "args": [
+     "--enable-unsafe-webgpu",
+     "--enable-gpu",
+     "--ignore-gpu-blocklist",
+     "--force_high_performance_gpu"
+    ],
+    "headless": true,
+    "channel": "bundled Chromium"
+   },
+   "browser": "153.0.8010.12",
+   "api": true,
+   "adapter": {
+    "vendor": "google",
+    "architecture": "swiftshader",
+    "description": "",
+    "isFallbackAdapter": true,
+    "float32Filterable": true,
+    "maxTextureDimension2D": 8192
+   },
+   "first": [
+    133,
+    133,
+    138,
+    255
+   ],
+   "middle": [
+    116,
+    128,
+    133,
+    255
+   ],
+   "msPerFrame": 42.64,
+   "readbackMs": 8.2,
+   "validationError": null,
+   "pixelsMatchReference": true
+  },
+  {
+   "variant": "window off-screen (not headless)",
+   "launch": {
+    "args": [
+     "--enable-unsafe-webgpu",
+     "--window-position=-32000,-32000",
+     "--window-size=320,240"
+    ],
+    "headless": false,
+    "channel": "bundled Chromium"
+   },
+   "error": "browserType.launch: Target page, context or browser has been closed"
+  },
+  {
+   "variant": "window off-screen + high-performance GPU",
+   "launch": {
+    "args": [
+     "--enable-unsafe-webgpu",
+     "--force_high_performance_gpu",
+     "--window-position=-32000,-32000",
+     "--window-size=320,240"
+    ],
+    "headless": false,
+    "channel": "bundled Chromium"
+   },
+   "error": "browserType.launch: Target page, context or browser has been closed"
+  },
+  {
+   "variant": "installed Chrome, headless + gpu enabled",
+   "launch": {
+    "args": [
+     "--enable-unsafe-webgpu",
+     "--enable-gpu",
+     "--ignore-gpu-blocklist"
+    ],
+    "headless": true,
+    "channel": "chrome"
+   },
+   "browser": "153.0.8010.12",
+   "api": true,
+   "adapter": {
+    "vendor": "google",
+    "architecture": "swiftshader",
+    "description": "",
+    "isFallbackAdapter": true,
+    "float32Filterable": true,
+    "maxTextureDimension2D": 8192
+   },
+   "first": [
+    133,
+    133,
+    138,
+    255
+   ],
+   "middle": [
+    116,
+    128,
+    133,
+    255
+   ],
+   "msPerFrame": 47.45,
+   "readbackMs": 47,
+   "validationError": null,
+   "pixelsMatchReference": true
+  }
+ ]
+}
