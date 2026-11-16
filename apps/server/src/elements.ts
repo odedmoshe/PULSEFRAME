@@ -8,8 +8,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { Asset } from '@pulseframe/core';
-import { ELEMENT_IDS, ELEMENTS, elementSvg } from '../../../packages/core/src/elements.ts';
+import { ELEMENT_IDS, ELEMENTS, elementSvg, type Asset } from '@pulseframe/core';
 import { describeMedia } from './ingest.ts';
 import { ApiError, type Store } from './store.ts';
 

@@ -20,6 +20,7 @@ export * from './speed.ts';
 export * from './speedCurves.ts';
 export * from './beatgrid.ts';
 export * from './layouts.ts';
+export * from './elements.ts';
 export * from './motionPresets.ts';
 export * from './lut.ts';
 export * from './volume.ts';

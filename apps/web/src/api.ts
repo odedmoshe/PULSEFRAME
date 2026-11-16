@@ -137,6 +137,7 @@ export const api = {
     if (!r.ok) throw new ApiFailure(r.status, 'sfx_fetch_failed', `HTTP ${r.status}`);
     return r.blob();
   },
+  addElement: (id: string, body: { elementId: string; color?: string; color2?: string; start?: unknown; duration?: unknown; trackId?: string }) => call<{ assetId: string; revision: number; placed: unknown }>(`/projects/${id}/elements`, json(body)),
   addSoundEffect: (id: string, body: { sfxId: string; start?: unknown; trackId?: string }) => call<{ assetId: string; revision: number; placed: unknown }>(`/projects/${id}/sfx`, json(body)),
   events: (id: string, since: number) => new EventSource(`/api/v1/projects/${id}/events?since=${since}`, { withCredentials: true }),
 };

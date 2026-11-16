@@ -367,6 +367,37 @@ async function main() {
       check('the title panel sets a text animation through the same operation; the timeline zoom buttons change the clip\'s width on screen and "fit" brings the whole timeline into view', !!viaUi && wIn > w0 * 1.2 && fit.right <= fit.scrollRight + 1 && fit.left >= fit.scrollLeft - 1, { widthBefore: Math.round(w0), widthAfterZoomIn: Math.round(wIn), fit });
     }
 
+    console.log('\n# graphic elements');
+    {
+      const ep = (await call('/projects', { name: 'elements', width: 640, height: 360 })).body.project.id as string;
+      const status = (await call('/elements')).body;
+      const cat = (await call('/catalog')).body;
+      const viaApi = await call(`/projects/${ep}/elements`, { elementId: 'element.symbol.check', color: '#FF0000', start: f(0) });
+      const d0 = await doc(ep);
+      const elClip = clipsOf(d0, 'video')[0];
+      const elAsset = d0.assets[viaApi.body.assetId];
+      const file = path.join(art, 'element.png');
+      fs.writeFileSync(file, (await call(`/projects/${ep}/frame?index=10`)).body as Buffer);
+      const rgb = ff(['-i', file, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+      let red = 0, other = 0;
+      for (let i = 0; i < rgb.length; i += 3) { if (rgb[i]! > 200 && rgb[i + 1]! < 60 && rgb[i + 2]! < 60) red++; else if (rgb[i]! + rgb[i + 1]! + rgb[i + 2]! > 90) other++; }
+      const unknown = await call(`/projects/${ep}/elements`, { elementId: 'element.symbol.nope' });
+      const badColour = await call(`/projects/${ep}/elements`, { elementId: 'element.symbol.check', color: 'red' });
+      check('graphic elements through the API: the catalogue lists them, one is made as a PNG picture asset that records how it was made, placed as a three-second picture clip, and drawn in the asked colour over a transparent background on a rendered still; an unknown element and a colour that is not #RRGGBB are refused', status.available === true && cat.elements.length === status.count && status.count >= 120 && viaApi.status === 201 && elAsset?.kind === 'image' && elAsset?.image?.hasAlpha === true && elAsset?.provenance?.procedural?.id === 'element.symbol.check' && !!elClip && T.frameIndexAt(elClip.duration, R) === 90 && red > 500 && other < red / 20 && unknown.status === 404 && badColour.status === 400, { count: status.count, asset: elAsset?.image, redPixels: red, otherBrightPixels: other, unknown: unknown.status, badColour: badColour.status });
+      await page.goto(`${s.ownerUrl}&project=${ep}`);
+      await page.getByTestId('elements-browser').waitFor();
+      const tilesAll = await page.getByTestId('element-tile').count();
+      await page.getByTestId('elements-cat-bubble').click();
+      const bubbles = await page.getByTestId('element-tile').count();
+      const drawn = await page.evaluate(() => [...document.querySelectorAll<HTMLImageElement>('[data-testid=element-tile] img')].slice(0, 8).every((im) => im.complete && im.naturalWidth > 0));
+      const clipsBefore = clipsOf(await doc(ep), 'video').length;
+      await page.getByTestId('element-tile').first().click();
+      const addedEl = await until(ep, (x) => clipsOf(x, 'video').length === clipsBefore + 1);
+      await page.waitForFunction(() => (document.querySelector('[data-testid=elements-status]')?.textContent ?? '').length > 3, undefined, { timeout: 5000 }).catch(() => {});
+      check('the elements browser in the library shows every element as a drawn thumbnail, filters by category, and a click adds the element at the playhead as a picture clip', tilesAll === status.count && bubbles > 10 && bubbles < 60 && drawn && !!addedEl, { tilesAll, bubbles, statusText: await page.getByTestId('elements-status').textContent() });
+      await page.screenshot({ path: path.join(art, 'elements.png') });
+    }
+
     check('no console or page errors during the editor session', errors.length === 0, errors.slice(0, 5));
   } finally {
     await browser.close();

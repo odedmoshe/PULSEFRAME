@@ -17,6 +17,7 @@ import { AiTools } from './AiTools.tsx';
 import { SpeedCurveField } from './SpeedCurves.tsx';
 import { PacingPanel } from './PacingPanel.tsx';
 import { LayoutPicker } from './LayoutPicker.tsx';
+import { ElementsBrowser } from './ElementsBrowser.tsx';
 import { TextAnimationField } from './TextAnimationField.tsx';
 import { Section, SECTION_STRINGS, setAllSections } from './Section.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
@@ -124,6 +125,7 @@ export function Library() {
       <MediaGrid onView={setViewing} />
       <h2>{t('text')}</h2>
       <button className="ghost" disabled={!doc} onClick={() => void editor.addText()} data-testid="add-text">{t('text.add')}</button>
+      <ElementsBrowser />
       <h2>{t('providers')}</h2>
       <AiTools />
     </aside>

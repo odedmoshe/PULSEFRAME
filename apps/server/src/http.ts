@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, findFillers, timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -20,6 +20,7 @@ import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
+import { canRasteriseSvg, makeElement } from './elements.ts';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
@@ -441,6 +442,15 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const bytes = await sfxPreview(store.tmpDir, c.req.param('sfxId'));
     return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600' });
   });
+  // Graphic elements: the same route for the editor and for agents.
+  app.get('/api/v1/elements', async (c) => { need(c, 'observe'); return c.json({ available: await canRasteriseSvg(), count: ELEMENTS.length, note: 'Elements are listed in the catalog. available=false means this machine\'s ffmpeg cannot read SVG, so elements cannot be made here.' }); });
+  app.post('/api/v1/projects/:id/elements', async (c) => {
+    const p = need(c, 'edit');
+    const projectId = c.req.param('id');
+    store.getProject(projectId);
+    gov.assertMayAct(p, projectId, 'edit');
+    return c.json(await addElement(store, gov, p, projectId, await body(c, ElementBody)), 201);
+  });
   app.get('/api/v1/projects/:id/assets/:assetId/content', (c) => {
     need(c, 'observe');
     const a = store.getProject(c.req.param('id')).doc.assets[c.req.param('assetId')];
@@ -668,6 +678,7 @@ export const catalog = () => ({
   clipMotions: CLIP_MOTIONS.filter((m) => m !== 'none'),
   looks: COLOR_LOOKS.map((l) => ({ id: l.id, name: l.name, effect: 'color.grade', params: l.params, note: 'A setting of the color.grade effect; apply with apply_look. Chosen by description, not graded against reference pictures.' })),
   captionLooks: CAPTION_LOOKS.map((l) => ({ id: l.id, name: l.name, hint: l.hint, style: l.style, needsWordTiming: l.needsWordTiming, note: 'Apply with apply_caption_look. Chosen for readable contrast by rule; not judged on a video.' })),
+  elements: ELEMENTS.map((e) => ({ id: e.id, category: e.category, name: e.name, width: e.width, height: e.height, colors: e.colors, source: 'drawn by formula in this build; no third-party content' })),
   layouts: LAYOUTS.map((l) => ({ id: l.id, name: l.name, count: l.count, slots: l.slots, fill: l.fill, note: 'Apply with apply_layout to that many picture clips. Geometry is checked by formula, not judged on footage.' })),
   speedCurves: SPEED_CURVES.map((c) => ({ id: c.id, name: c.name, hint: c.hint, smooth: c.smooth, segments: c.segments, note: 'Apply with apply_speed_curve. The shapes are this project\'s own, written from descriptions of what such curves do; not matched against another editor.' })),
   motionPresets: MOTION_PRESETS.map((m) => ({ id: m.id, kind: m.kind, name: m.name, defaultFrames: m.defaultFrames, properties: m.properties, note: 'Apply with apply_motion_preset. Written as keyframe recipes; not judged on a video.' })),
@@ -706,6 +717,28 @@ export async function programmeLoudness(store: Store, projectId: string) {
 
 export const SfxBody = z.object({ sfxId: z.string(), start: RationalTimeSchema.optional().describe('Place it on the timeline at this frame-aligned time (omit to only add it to the media library)'), trackId: z.string().optional() }).strict();
 /** Synthesise a built-in sound effect, attach it as a normal asset, and optionally place it. Goes through governance like any edit. */
+export const ElementBody = z.object({
+  elementId: z.string(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().describe('#RRGGBB; default white'),
+  color2: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().describe('#RRGGBB; second colour of two-colour elements'),
+  start: RationalTimeSchema.optional().describe('Place it on the timeline at this frame-aligned time (omit to only add it to the media library)'),
+  duration: RationalTimeSchema.optional().describe('How long it stays, frame-aligned; default three seconds'),
+  trackId: z.string().optional(),
+}).strict();
+/** Make a graphic element (see list_catalog → elements) as a PNG image asset and optionally place it as an ordinary picture clip. */
+export async function addElement(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof ElementBody>) {
+  gov.assertMayAct(principal, projectId, 'edit');
+  gov.assertUnrestricted(principal, 'add media to the library');
+  const asset = await makeElement(store, a.elementId, { ...(a.color ? { color: a.color } : {}), ...(a.color2 ? { color2: a.color2 } : {}) }, principal.actor);
+  const imp = store.commit({ projectId, actor: principal.actor, label: `Add element ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
+  const assetId = imp.results[0]!.output!.assetId as string;
+  if (!a.start) return { assetId, revision: imp.revision, placed: null };
+  const rate = store.getProject(projectId).doc.settings.frameRate;
+  const duration = a.duration ?? T.frameTime(Math.round((3 * rate.num) / rate.den), rate);
+  const placed = gov.commitAs(principal, { projectId, ops: [{ op: 'add_clip', args: { assetId, start: a.start, duration, ...(a.trackId ? { trackId: a.trackId } : {}) } }], label: `Place element ${asset.name}` }) as { revision?: number; results?: { output?: Record<string, unknown> }[]; proposal?: unknown };
+  return { assetId, revision: placed.revision ?? imp.revision, placed: placed.results?.[0]?.output ?? null, ...(placed.proposal ? { proposal: placed.proposal } : {}) };
+}
+
 export async function addSfx(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof SfxBody>) {
   gov.assertMayAct(principal, projectId, 'edit'); // same rule as uploading media: needs edit rights and agents must not be paused
   gov.assertUnrestricted(principal, 'add media to the library');

@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-16T22:42:45.500Z",
+ "generatedAt": "2026-11-16T22:47:18.758Z",
  "profile": {
   "os": "Linux 6.18.44-fc-v470",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -400,6 +400,32 @@
    }
   },
   {
+   "name": "graphic elements through the API: the catalogue lists them, one is made as a PNG picture asset that records how it was made, placed as a three-second picture clip, and drawn in the asked colour over a transparent background on a rendered still; an unknown element and a colour that is not #RRGGBB are refused",
+   "ok": true,
+   "detail": {
+    "count": 252,
+    "asset": {
+     "width": 1024,
+     "height": 1024,
+     "codec": "png",
+     "hasAlpha": true
+    },
+    "redPixels": 14561,
+    "otherBrightPixels": 284,
+    "unknown": 404,
+    "badColour": 400
+   }
+  },
+  {
+   "name": "the elements browser in the library shows every element as a drawn thumbnail, filters by category, and a click adds the element at the playhead as a picture clip",
+   "ok": true,
+   "detail": {
+    "tilesAll": 252,
+    "bubbles": 25,
+    "statusText": "נוסף לציר הזמן: בועת דיבור מלבנית, זנב למטה"
+   }
+  },
+  {
    "name": "no console or page errors during the editor session",
    "ok": true,
    "detail": []
@@ -470,6 +496,6 @@
    "stutter": 338
   }
  },
- "passed": 36,
+ "passed": 38,
  "failed": 0
 }

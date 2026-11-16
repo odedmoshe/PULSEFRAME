@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T21:55:19.851Z",
+  "ranAt": "2026-11-16T22:55:25.664Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -11,42 +11,42 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 0.697,
+        "wall": 0.653,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 0.991,
+        "wall": 0.906,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.167
+        "wall": 0.145
       },
       "png": {
-        "wall": 0.244
+        "wall": 0.282
       }
     },
     "cancel": {
-      "stageAtCancel": "rendering 9/600",
-      "msToCanceled": 11
+      "stageAtCancel": "rendering 12/600",
+      "msToCanceled": 6
     },
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 31.151,
-      "realtimeFactor": 0.6420339635966743,
+      "wallSeconds": 30.71,
+      "realtimeFactor": 0.6512536633018561,
       "renderStageMs": {
-        "draw": 4996,
-        "readback": 3060,
-        "upload": 21694
+        "draw": 4811,
+        "readback": 2926,
+        "upload": 21613
       },
       "bytes": 747124,
       "estimateBytes": 22252800
     },
     "cancelAtRenderStart": {
       "stageAtCancel": "rendering 0/600",
-      "msToCanceled": 24
+      "msToCanceled": 14
     }
   },
   "notDone": [
@@ -171,8 +171,8 @@
       "name": "a running export is canceled promptly: encoder stopped, no partial file published, scratch removed",
       "ok": true,
       "detail": {
-        "stageAtCancel": "rendering 9/600",
-        "msToCanceled": 11
+        "stageAtCancel": "rendering 12/600",
+        "msToCanceled": 6
       }
     },
     {
@@ -189,12 +189,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 31.151,
-        "realtimeFactor": 0.6420339635966743,
+        "wallSeconds": 30.71,
+        "realtimeFactor": 0.6512536633018561,
         "renderStageMs": {
-          "draw": 4996,
-          "readback": 3060,
-          "upload": 21694
+          "draw": 4811,
+          "readback": 2926,
+          "upload": 21613
         },
         "bytes": 747124,
         "estimateBytes": 22252800
@@ -209,7 +209,7 @@
       "ok": true,
       "detail": {
         "stageAtCancel": "rendering 0/600",
-        "msToCanceled": 24
+        "msToCanceled": 14
       }
     },
     {
