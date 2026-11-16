@@ -212,7 +212,7 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
     if (!hasLook) { place(ctx); continue; } // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
-    const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), box };
+    const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), box, beat: g.beat ?? null };
     let buf = scratch(1, g.width, g.height);
     place(buf.ctx);
     if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look

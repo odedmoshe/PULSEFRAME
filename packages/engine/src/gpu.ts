@@ -16,7 +16,8 @@
  */
 type C2D = OffscreenCanvasRenderingContext2D;
 export interface GpuStatus { available: boolean; reason: string; adapter: { vendor: string | null; architecture: string | null; software: boolean } | null }
-interface EffectEnv { width: number; height: number; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number }
+import type { BeatPosition } from '@pulseframe/core';
+interface EffectEnv { width: number; height: number; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number; /** Where the frame falls in the beats of the music playing there, if any. */ beat?: BeatPosition | null }
 interface GpuEffect { /** Body of `fn effect(uv: vec2f) -> vec4f` (premultiplied in, premultiplied out). `P` holds the eight parameters. */ wgsl: string; /** Up to eight numbers, in the order the shader reads them. */ params(p: Record<string, unknown>, env: EffectEnv): number[] }
 
 const n = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -35,12 +36,26 @@ export function smoothNoise(seed: number, t: number): number {
  * The movement of the time-driven "motion" effects as plain numbers: zoom, rotation (radians) and offset (fractions of the
  * frame height) at a moment. The shader only applies them, so the picture can be checked against these numbers.
  */
-export function motionAt(type: string, p: Record<string, unknown>, seconds: number): { scale: number; rotation: number; dx: number; dy: number } {
+/**
+ * For an effect set to follow the music: how far the moment is into the current hit (0 on the hit, rising to 1 just
+ * before the next) and the seconds between hits. Null when the effect keeps its own steady setting or no analysed music
+ * plays there. `maxPerSecond` thins the hits (every second beat, every third…) until they are no more frequent than that.
+ */
+export function musicHit(p: Record<string, unknown>, beat: BeatPosition | null | undefined, maxPerSecond = Infinity): { phase: number; period: number } | null {
+  if (p.follow !== 'music' || !beat) return null;
+  let every = Math.max(1, Math.round(n(p.every, 1)));
+  if (1 / (beat.period * every) > maxPerSecond) every *= Math.ceil(1 / (beat.period * every * maxPerSecond) - 1e-9);
+  const x = beat.sinceBar / every + n(p.offset, 0);
+  return { phase: x - Math.floor(x + 1e-9), period: beat.period * every };
+}
+export function motionAt(type: string, p: Record<string, unknown>, seconds: number, beat?: BeatPosition | null): { scale: number; rotation: number; dx: number; dy: number } {
   const amount = n(p.amount, 0), speed = n(p.speed, 1), seed = Math.round(n(p.seed, 1));
+  const hit = musicHit(p, beat);
   switch (type) {
-    case 'motion.shake': { const t = seconds * speed; return { scale: 1 + amount * 2.4, rotation: smoothNoise(seed + 2, t) * amount * 0.6, dx: smoothNoise(seed, t) * amount, dy: smoothNoise(seed + 1, t) * amount }; }
+    // following the music, the shake is a jolt on each hit that dies away before the next; the zoom that hides the edges stays
+    case 'motion.shake': { const t = seconds * speed, a = amount * (hit ? Math.exp(-hit.phase * 5) : 1); return { scale: 1 + amount * 2.4, rotation: smoothNoise(seed + 2, t) * a * 0.6, dx: smoothNoise(seed, t) * a, dy: smoothNoise(seed + 1, t) * a }; }
     // a beat: full size on the beat, back to rest before the next one
-    case 'motion.pulse': { const beat = seconds * (n(p.bpm, 120) / 60) + n(p.offset) ; const ph = beat - Math.floor(beat + 1e-9); return { scale: 1 + amount * Math.exp(-ph * n(p.decay, 6)), rotation: 0, dx: 0, dy: 0 }; }
+    case 'motion.pulse': { const b = seconds * (n(p.bpm, 120) / 60) + n(p.offset); const ph = hit ? hit.phase : b - Math.floor(b + 1e-9); return { scale: 1 + amount * Math.exp(-ph * n(p.decay, 6)), rotation: 0, dx: 0, dy: 0 }; }
     case 'motion.sway': { const w = 2 * Math.PI * speed * seconds; return { scale: 1 + Math.abs(amount) * 1.2, rotation: Math.sin(w) * amount * 0.5, dx: Math.sin(w * 0.5) * amount * 0.5, dy: 0 }; }
     case 'motion.spin': return { scale: n(p.zoom, 1), rotation: (n(p.rate, 90) * Math.PI / 180) * seconds, dx: 0, dy: 0 };
     default: return { scale: 1, rotation: 0, dx: 0, dy: 0 };
@@ -54,7 +69,7 @@ const XFORM_WGSL = `
       // what moves in from outside the picture is the picture itself, mirrored: never an empty edge
       let f = abs(fract(at * 0.5 + vec2f(0.5)) * 2.0 - vec2f(1.0));
       return textureSampleLevel(src, smp, vec2f(1.0) - f, 0.0);`;
-const xform = (type: string): GpuEffect => ({ wgsl: XFORM_WGSL, params: (p, env) => { const m = motionAt(type, p, env.seconds ?? 0); return [m.scale, m.rotation, m.dx, m.dy, env.width / env.height]; } });
+const xform = (type: string): GpuEffect => ({ wgsl: XFORM_WGSL, params: (p, env) => { const m = motionAt(type, p, env.seconds ?? 0, env.beat); return [m.scale, m.rotation, m.dx, m.dy, env.width / env.height]; } });
 
 /** The implementation of every effect whose registry entry has cost 'gpu' (packages/core/src/effects.ts). */
 export const GPU_EFFECTS: Record<string, GpuEffect> = {
@@ -322,7 +337,7 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
   },
   // Brief flashes of light at a steady rate. The rate is limited to three per second (flashing faster than that is a seizure risk).
   'light.strobe': {
-    params: (p, env) => { const ph = (env.seconds ?? 0) * Math.min(3, Math.max(0, n(p.rate, 2))); const f = ph - Math.floor(ph + 1e-9); return [...rgb(p.color, '#FFFFFF'), n(p.amount, 0.6) * Math.exp(-f * 10)]; },
+    params: (p, env) => { const hit = musicHit(p, env.beat, 3); const ph = (env.seconds ?? 0) * Math.min(3, Math.max(0, n(p.rate, 2))); const f = hit ? hit.phase : ph - Math.floor(ph + 1e-9); return [...rgb(p.color, '#FFFFFF'), n(p.amount, 0.6) * Math.exp(-f * 10)]; },
     wgsl: `
       let s = textureSampleLevel(src, smp, uv, 0.0);
       return vec4f(mix(s.rgb, vec3f(P.a.x, P.a.y, P.a.z) * s.a, P.a.w), s.a);`,
@@ -348,7 +363,7 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
   },
   // The colour channels jump apart in a direction that changes several times a second.
   'digital.rgb-shake': {
-    params: (p, env) => { const tick = Math.floor((env.seconds ?? 0) * n(p.speed, 14) + 1e-6), seed = Math.round(n(p.seed, 1)); const ang = unit32(hash32(seed * 131 + tick)) * 2 * Math.PI, k = n(p.amount, 0.01) * unit32(hash32(seed * 977 + tick + 3)); return [(Math.cos(ang) * k * env.height) / env.width, Math.sin(ang) * k]; },
+    params: (p, env) => { const tick = Math.floor((env.seconds ?? 0) * n(p.speed, 14) + 1e-6), seed = Math.round(n(p.seed, 1)); const hit = musicHit(p, env.beat); const ang = unit32(hash32(seed * 131 + tick)) * 2 * Math.PI, k = n(p.amount, 0.01) * (hit ? Math.exp(-hit.phase * 5) : unit32(hash32(seed * 977 + tick + 3))); return [(Math.cos(ang) * k * env.height) / env.width, Math.sin(ang) * k]; },
     wgsl: `
       let o = vec2f(P.a.x, P.a.y);
       let r = textureSampleLevel(src, smp, uv + o, 0.0);

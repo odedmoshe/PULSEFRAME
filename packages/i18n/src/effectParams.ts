@@ -15,10 +15,12 @@ export const EFFECT_PARAM_LABELS: Record<string, L> = {
   dark: { he: 'צבע הכהים', en: 'Dark colour' }, light: { he: 'צבע הבהירים', en: 'Light colour' }, lines: { he: 'מספר קווים', en: 'Lines' }, segments: { he: 'מספר פלחים', en: 'Segments' }, position: { he: 'גובה הרצועה החדה', en: 'Position of the sharp band' }, width: { he: 'רוחב הרצועה החדה', en: 'Width of the sharp band' }, threshold: { he: 'סף בהירות', en: 'Brightness threshold' },
   spacing: { he: 'מרחק בין נקודות', en: 'Dot spacing' },
   bpm: { he: 'קצב (פעימות לדקה)', en: 'Tempo (beats per minute)' }, offset: { he: 'הזזת הפעימה', en: 'Beat offset' }, decay: { he: 'מהירות הדעיכה', en: 'Settling speed' }, rate: { he: 'קצב', en: 'Rate' }, zoom: { he: 'גודל', en: 'Size' }, length: { he: 'אורך הקרניים', en: 'Streak length' },
+  follow: { he: 'מה מניע את האפקט', en: 'Driven by' }, every: { he: 'פגיעה כל כמה פעימות', en: 'Hit on every Nth beat' },
   bands: { he: 'מספר פסים', en: 'Bands' }, density: { he: 'שיעור הפסים שקופצים', en: 'Share of bands that jump' }, split: { he: 'פיצול צבעים', en: 'Colour split' },
 };
 export const EFFECT_OPTION_LABELS: Record<string, L> = {
   color: { he: 'צבע', en: 'Colour' }, multiply: { he: 'הכפלה', en: 'Multiply' }, screen: { he: 'מסך', en: 'Screen' }, overlay: { he: 'שכבת־על', en: 'Overlay' }, 'soft-light': { he: 'אור רך', en: 'Soft light' },
+  steady: { he: 'קצב קבוע משלו', en: 'Its own steady tempo' }, music: { he: 'פעימות המוזיקה', en: 'The beats of the music' },
   horizontal: { he: 'אופקי', en: 'Horizontal' }, vertical: { he: 'אנכי', en: 'Vertical' }, left: { he: 'שמאל', en: 'Left' }, right: { he: 'ימין', en: 'Right' }, top: { he: 'עליון', en: 'Top' }, bottom: { he: 'תחתון', en: 'Bottom' },
 };
 /** The name to show for a parameter; the key itself when none is registered (never an empty label). */

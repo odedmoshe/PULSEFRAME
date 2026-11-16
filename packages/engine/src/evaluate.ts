@@ -10,7 +10,7 @@
  */
 import * as T from '@pulseframe/time';
 import { captionAt, type CaptionLayer } from './captions.ts';
-import { effectParamsAt, pictureSourceAt, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { beatPositionAt, type BeatPosition, effectParamsAt, pictureSourceAt, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 
 /** Look applied by the compositor after the layer is placed: effects in order, then mask, then blend/opacity. */
 export interface LayerLook {
@@ -42,6 +42,8 @@ export type Layer = VideoLayer | ImageLayer | TextLayer | CaptionLayer;
 export type PictureLayer = VideoLayer | ImageLayer;
 export interface ActiveAudio { clipId: string; trackId: string; assetId: string; sourceTime: T.RationalTime; gain: number }
 export interface RenderGraph {
+  /** Where this frame falls in the beats of the music playing there; absent when no analysed music plays. Read by effects set to follow the music. */
+  beat?: BeatPosition;
   time: T.RationalTime;
   frameIndex: number;
   width: number;
@@ -87,6 +89,8 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
   if (!seq) throw new Error(`sequence ${sequenceId} not found`);
   const { width, height, frameRate, background } = doc.settings;
   const graph: RenderGraph = { time, frameIndex: T.frameIndexAt(time, frameRate), width, height, background, fit: doc.settings.fit ?? 'contain', layers: [], audio: [] };
+  const beat = beatPositionAt(doc, time, sequenceId);
+  if (beat) graph.beat = beat;
   const captions: CaptionLayer[] = [];
   for (const track of seq.tracks) {
     if (track.kind === 'caption') { const c = captionAt(doc, seq, track, time); if (c) captions.push(c); continue; }

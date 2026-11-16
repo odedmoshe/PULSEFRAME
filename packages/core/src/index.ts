@@ -18,6 +18,7 @@ export * from './variants.ts';
 export * from './recipes.ts';
 export * from './speed.ts';
 export * from './speedCurves.ts';
+export * from './beatgrid.ts';
 export * from './motionPresets.ts';
 export * from './lut.ts';
 export * from './volume.ts';

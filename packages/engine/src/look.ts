@@ -5,7 +5,7 @@
  * Order for a layer with a look:  place (transform, opacity) -> effects in list order -> mask -> transition -> blend onto the frame.
  * Conventions: 8-bit sRGB, non-linear blending as defined by Canvas2D composite operations (no linear-light intermediates).
  */
-import type { BlendMode, Mask } from '@pulseframe/core';
+import type { BeatPosition, BlendMode, Mask } from '@pulseframe/core';
 import type { LayerLook } from './evaluate.ts';
 import { gpuEffect, isGpuEffect } from './gpu.ts';
 
@@ -13,7 +13,7 @@ type C2D = OffscreenCanvasRenderingContext2D;
 export interface Buf { canvas: OffscreenCanvas; ctx: C2D }
 /** Geometry of the placed layer, so layer-relative effects and masks follow its transform. */
 export interface LayerBox { cx: number; cy: number; w: number; h: number; rotation: number; scale: number }
-export interface LookEnv { width: number; height: number; frameIndex: number; /** Timeline time of the frame in seconds. */ seconds: number; box: LayerBox }
+export interface LookEnv { width: number; height: number; frameIndex: number; /** Timeline time of the frame in seconds. */ seconds: number; box: LayerBox; /** Where the frame falls in the beats of the music playing there, if any (core beatgrid.ts). */ beat?: BeatPosition | null }
 
 const pools = new Map<string, Buf[]>();
 /** Scratch buffer `slot` of the given size, cleared and reset. Buffers are reused across frames (bounded: a few per size). */
