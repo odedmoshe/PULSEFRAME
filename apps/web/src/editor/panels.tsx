@@ -8,6 +8,7 @@ import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { Scopes } from './Scopes.tsx';
 import { ASSET_DRAG_TYPE, useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
+import { MediaGrid } from './MediaLibrary.tsx';
 import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
@@ -114,40 +115,8 @@ export function Library() {
         {uploading ? t('media.uploading') : t('media.import')}
         <input type="file" multiple accept="video/*,audio/*,image/png,image/jpeg,image/webp" disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
       </label>
-      {doc && Object.keys(doc.assets).length === 0 && <p className="muted">{t('media.empty')}</p>}
       {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`)?.focus(), 0); }} />}
-      <ul className="assets">
-        {doc && Object.values(doc.assets).map((a) => (
-          <li key={a.id} draggable data-testid={`asset-${a.id}`} title={t('media.dragHint')}
-            onDragStart={(e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
-            <span className="asset-name-row"><span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
-              <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
-            <span className="muted"><bdi>{a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : `${T.toSeconds(a.duration).toFixed(2)}s${a.video ? ` · ${a.video.width}×${a.video.height}` : ''}`}</bdi></span>
-            {assetNotices(a).map((n) => (
-              <span key={n.code} className="asset-notice" data-testid="asset-notice" data-code={n.code}>
-                <span aria-hidden="true">ⓘ </span>
-                {n.code === 'converted' ? `${t('notice.converted')}: ${n.reasons.map((r) => t(`notice.reason.${r}` as Key)).join(', ')}`
-                  : n.code === 'picture-starts-late' ? `${t('notice.pictureLate')} (${n.frames})`
-                  : n.code === 'sound-offset' ? `${n.seconds > 0 ? t('notice.soundLate') : t('notice.soundEarly')} (${Math.abs(n.seconds).toFixed(2)}s)`
-                  : t('notice.colourUntagged')}
-                {n.code === 'colour-untagged' && (
-                  <label className="notice-choice">{t('notice.colourReadAs')}{' '}
-                    <select value={n.readAs} data-testid={`colour-read-${a.id}`} onChange={(e) => void editor.commit([{ op: 'set_asset_colour', args: { assetId: a.id, readAs: e.target.value } }], 'Colour reading')}>
-                      <option value="auto">{t('notice.colourReadAs.auto')}</option>
-                      <option value="bt601">{t('notice.colourReadAs.bt601')}</option>
-                    </select>
-                  </label>
-                )}
-              </span>
-            ))}
-            <button className="ghost" onClick={() => void editor.addAsset(a.id)} data-testid={`add-${a.id}`}>{t('media.add')}</button>
-            {a.kind !== 'image' && <button className="ghost" onClick={() => setViewing(a.id)} data-testid={`view-${a.id}`}>{t('source.open')}</button>}
-            {(() => { const used = doc.sequences[doc.mainSequenceId]!.tracks.some((tr) => tr.clips.some((c) => c.type === 'media' && c.assetId === a.id)); return (
-              <button className="ghost danger" disabled={used} title={used ? t('media.remove.used') : undefined} onClick={() => void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file')} data-testid={`remove-${a.id}`}>{t('media.remove')}</button>
-            ); })()}
-          </li>
-        ))}
-      </ul>
+      <MediaGrid onView={setViewing} />
       <h2>{t('text')}</h2>
       <button className="ghost" disabled={!doc} onClick={() => void editor.addText()} data-testid="add-text">{t('text.add')}</button>
       <h2>{t('providers')}</h2>
