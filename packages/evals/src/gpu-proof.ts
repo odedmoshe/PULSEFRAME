@@ -7,6 +7,7 @@
  * Here that adapter is a software one: this proves the passes are correct, not that they are fast.
  */
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -305,6 +306,52 @@ async function main() {
     check('stylize.duotone: black becomes the dark colour and white the light colour', near(px(du, 60, 320), [27, 20, 100], 2) && near(px(du, 180, 320), [255, 209, 102], 2), { black: px(du, 60, 320), white: px(du, 180, 320) });
     const sl = await onStripe('stylize.scanlines', { lines: 64, amount: 0.5 });
     check('stylize.scanlines: every other line of the 64 is darkened by the amount', px(sl, 180, 5)[0]! >= 254 && Math.abs(px(sl, 180, 15)[0]! - 127.5) <= 2 && px(sl, 180, 25)[0]! >= 254, { line0: px(sl, 180, 5)[0], line1: px(sl, 180, 15)[0], line2: px(sl, 180, 25)[0] });
+
+    // ---------- transitions over two pictures ----------
+    // Both pictures carry the column in red and the row in green; blue is 0 in the outgoing one and 255 in the incoming one,
+    // so blue says how much of each a pixel shows and red/green say where it was taken from.
+    const mk = (name: string, blue: number) => { const raw = Buffer.alloc(W * H * 3); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 3; raw[i] = Math.round((255 * x) / (W - 1)); raw[i + 1] = Math.round((255 * y) / (H - 1)); raw[i + 2] = blue; } const f = path.join(art, name); ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', f], raw); return f; };
+    const tp = (await call('/projects', { name: 'transitions', width: W, height: H })).body.project.id as string;
+    const aOut = await upload(tp, mk('out.png', 0)), aIn = await upload(tp, mk('in.png', 255));
+    const R30 = { num: 30, den: 1 };
+    await tx(tp, [{ op: 'add_clip', args: { assetId: aOut, start: T.rt(0, 1), duration: T.frameTime(60, R30) } }]);
+    const inClip = (await tx(tp, [{ op: 'add_clip', args: { assetId: aIn, start: T.frameTime(60, R30), duration: T.frameTime(60, R30) } }])).results[0].output.clipId as string;
+    const blueMean = (img: Img) => { let t = 0; for (let i = 2; i < img.length; i += 3) t += img[i]!; return t / (img.length / 3); };
+    const gpuTransitions = (await call('/catalog')).body.transitions.filter((t: any) => t.gpu).map((t: any) => t.id) as string[];
+    const rowsT: Record<string, unknown>[] = [];
+    let allOrdered = true, allRepeat = true;
+    const mids: Record<string, Img> = {};
+    for (const id of gpuTransitions) {
+      await tx(tp, [{ op: 'set_transition', args: { clipId: inClip, type: id, frames: 29 } }]);
+      // frames 60..88 are the transition; 61, 74 (the middle) and 87 are early, half-way and late
+      const early = await still(tp, 61), mid = await still(tp, 74), late = await still(tp, 87);
+      mids[id] = mid;
+      const b = [blueMean(early), blueMean(mid), blueMean(late)];
+      const ordered = id === 'flash' ? b[0]! < 110 && b[2]! > 145 : b[0]! < 70 && b[2]! > 185 && b[0]! <= b[1]! + 1 && b[1]! <= b[2]! + 1;
+      const repeat = maxDiff(mid, await still(tp, 74)) === 0;
+      allOrdered &&= ordered; allRepeat &&= repeat;
+      rowsT.push({ id, incomingShare: b.map((x) => Number((x / 255).toFixed(2))), ordered, repeat });
+    }
+    check(`All ${gpuTransitions.length} GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash is checked at its ends only)`, gpuTransitions.length === 33 && allOrdered, rowsT.filter((r) => !r.ordered).length ? rowsT.filter((r) => !r.ordered) : { transitions: gpuTransitions.length });
+    check('Every GPU transition gives the identical middle frame when rendered again, and no two of them give the same middle frame', allRepeat && new Set(Object.values(mids).map((m) => createHash('sha256').update(m).digest('hex'))).size === gpuTransitions.length, { repeatable: allRepeat, distinctMiddleFrames: new Set(Object.values(mids).map((m) => createHash('sha256').update(m).digest('hex'))).size });
+    const isIn = (img: Img, x: number, y: number) => px(img, x, y)[2]! > 200, isOut = (img: Img, x: number, y: number) => px(img, x, y)[2]! < 55;
+    check('Soft wipe right, half-way: the left side already shows the incoming picture and the right side still the outgoing one; wipe left is the opposite', isIn(mids['soft-wipe-right']!, 40, 320) && isOut(mids['soft-wipe-right']!, 320, 320) && isOut(mids['soft-wipe-left']!, 40, 320) && isIn(mids['soft-wipe-left']!, 320, 320));
+    check('Iris open, half-way: the centre shows the incoming picture and the corners the outgoing one; iris close is the opposite', isIn(mids['iris-open']!, 180, 320) && isOut(mids['iris-open']!, 8, 8) && isOut(mids['iris-close']!, 180, 320) && isIn(mids['iris-close']!, 8, 8));
+    check('Clock wipe, half-way: the right half is the incoming picture and the left half the outgoing one; reversed is the opposite', isIn(mids['clock-cw']!, 300, 320) && isOut(mids['clock-cw']!, 60, 320) && isOut(mids['clock-ccw']!, 300, 320) && isIn(mids['clock-ccw']!, 60, 320));
+    const sq = mids['squeeze-h']!;
+    // half-way, the outgoing picture is squeezed into the left half and the incoming one into the right half: columns map at twice the rate
+    check('Squeeze, half-way: each picture is squeezed into its half, with columns taken from twice as far (within 3 pixels)', isOut(sq, 60, 320) && isIn(sq, 300, 320) && Math.abs(from(sq, 60, 320).x - (((60.5 / W) / 0.5) * W - 0.5)) < 3 && Math.abs(from(sq, 300, 320).x - ((((300.5 / W) - 0.5) / 0.5) * W - 0.5)) < 3, { leftFrom: Number(from(sq, 60, 320).x.toFixed(1)), rightFrom: Number(from(sq, 300, 320).x.toFixed(1)) });
+    const bl = mids['blinds-h']!;
+    const stripT = [...Array(9).keys()].map((k) => [isIn(bl, 180, Math.round(((k + 0.2) / 9) * H)), isOut(bl, 180, Math.round(((k + 0.8) / 9) * H))]);
+    check('Blinds, half-way: in each of the nine slats the first half shows the incoming picture and the second half the outgoing one', stripT.every(([a2, b2]) => a2 && b2));
+    await tx(tp, [{ op: 'set_transition', args: { clipId: inClip, type: 'iris-open', frames: 29 } }]);
+    const trJob = await waitJob((await call(`/projects/${tp}/exports`, {})).body.jobId);
+    if (trJob.status === 'succeeded') {
+      const out = path.join(art, 'transition.mp4');
+      fs.writeFileSync(out, (await call(`/jobs/${trJob.id}/output`)).body);
+      const f74 = ff(['-i', out, '-vf', 'select=eq(n\\,74)', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+      check('A GPU transition in an export: the half-way frame of the file shows the iris as the still does', px(f74, 180, 320)[2]! > 190 && px(f74, 8, 8)[2]! < 70, { centreBlue: px(f74, 180, 320)[2], cornerBlue: px(f74, 8, 8)[2] });
+    } else check('A GPU transition in an export', false, { status: trJob.status, error: trJob.error });
 
     // edges, on the square: bright along its border, dark inside flat areas
     const edgeP = await newProject('edges', green);

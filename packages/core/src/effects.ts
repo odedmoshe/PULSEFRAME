@@ -113,21 +113,60 @@ export const MaskSchema = z
 export const DEFAULT_MASK = { shape: 'rect', x: 0, y: 0, width: 0.8, height: 0.8, radius: 0, feather: 0, invert: false } as const satisfies z.infer<typeof MaskSchema>;
 export type Mask = z.infer<typeof MaskSchema>;
 
+/**
+ * `kernel` is the piece of code that draws a transition; several entries share one with different directions.
+ * `gpu: true` entries are WebGPU passes over both pictures (ADR-0008) and exist only where an adapter has proved itself.
+ */
 export const TRANSITIONS = [
-  { id: 'dissolve', name: { he: 'מעבר רך', en: 'Cross dissolve' }, usesOutgoing: true },
-  { id: 'dip-black', name: { he: 'דרך שחור', en: 'Dip to black' }, usesOutgoing: true },
-  { id: 'dip-white', name: { he: 'דרך לבן', en: 'Dip to white' }, usesOutgoing: true },
-  { id: 'wipe-left', name: { he: 'ניגוב שמאלה', en: 'Wipe left' }, usesOutgoing: true },
-  { id: 'wipe-right', name: { he: 'ניגוב ימינה', en: 'Wipe right' }, usesOutgoing: true },
-  { id: 'wipe-up', name: { he: 'ניגוב למעלה', en: 'Wipe up' }, usesOutgoing: true },
-  { id: 'wipe-down', name: { he: 'ניגוב למטה', en: 'Wipe down' }, usesOutgoing: true },
-  { id: 'push-left', name: { he: 'דחיפה שמאלה', en: 'Push left' }, usesOutgoing: true },
-  { id: 'push-right', name: { he: 'דחיפה ימינה', en: 'Push right' }, usesOutgoing: true },
-  { id: 'push-up', name: { he: 'דחיפה למעלה', en: 'Push up' }, usesOutgoing: true },
-  { id: 'push-down', name: { he: 'דחיפה למטה', en: 'Push down' }, usesOutgoing: true },
-  { id: 'zoom', name: { he: 'זום', en: 'Zoom in' }, usesOutgoing: true },
+  { id: 'dissolve', kernel: 'dissolve', gpu: false, name: { he: 'מעבר רך', en: 'Cross dissolve' }, usesOutgoing: true },
+  { id: 'dip-black', kernel: 'dip', gpu: false, name: { he: 'דרך שחור', en: 'Dip to black' }, usesOutgoing: true },
+  { id: 'dip-white', kernel: 'dip', gpu: false, name: { he: 'דרך לבן', en: 'Dip to white' }, usesOutgoing: true },
+  { id: 'wipe-left', kernel: 'wipe', gpu: false, name: { he: 'ניגוב שמאלה', en: 'Wipe left' }, usesOutgoing: true },
+  { id: 'wipe-right', kernel: 'wipe', gpu: false, name: { he: 'ניגוב ימינה', en: 'Wipe right' }, usesOutgoing: true },
+  { id: 'wipe-up', kernel: 'wipe', gpu: false, name: { he: 'ניגוב למעלה', en: 'Wipe up' }, usesOutgoing: true },
+  { id: 'wipe-down', kernel: 'wipe', gpu: false, name: { he: 'ניגוב למטה', en: 'Wipe down' }, usesOutgoing: true },
+  { id: 'push-left', kernel: 'push', gpu: false, name: { he: 'דחיפה שמאלה', en: 'Push left' }, usesOutgoing: true },
+  { id: 'push-right', kernel: 'push', gpu: false, name: { he: 'דחיפה ימינה', en: 'Push right' }, usesOutgoing: true },
+  { id: 'push-up', kernel: 'push', gpu: false, name: { he: 'דחיפה למעלה', en: 'Push up' }, usesOutgoing: true },
+  { id: 'push-down', kernel: 'push', gpu: false, name: { he: 'דחיפה למטה', en: 'Push down' }, usesOutgoing: true },
+  { id: 'zoom', kernel: 'zoom', gpu: false, name: { he: 'זום', en: 'Zoom in' }, usesOutgoing: true },
+  { id: 'cross-zoom-in', kernel: 'cross-zoom', gpu: true, name: { he: "זום מטושטש פנימה", en: 'Cross zoom in' }, usesOutgoing: true },
+  { id: 'cross-zoom-out', kernel: 'cross-zoom', gpu: true, name: { he: "זום מטושטש החוצה", en: 'Cross zoom out' }, usesOutgoing: true },
+  { id: 'swirl-cw', kernel: 'swirl', gpu: true, name: { he: "מערבולת עם השעון", en: 'Swirl clockwise' }, usesOutgoing: true },
+  { id: 'swirl-ccw', kernel: 'swirl', gpu: true, name: { he: "מערבולת נגד השעון", en: 'Swirl counter-clockwise' }, usesOutgoing: true },
+  { id: 'wave-h', kernel: 'wave', gpu: true, name: { he: "גל אופקי", en: 'Wave sideways' }, usesOutgoing: true },
+  { id: 'wave-v', kernel: 'wave', gpu: true, name: { he: "גל אנכי", en: 'Wave up and down' }, usesOutgoing: true },
+  { id: 'glitch-cut', kernel: 'glitch', gpu: true, name: { he: "גליץ'", en: 'Glitch' }, usesOutgoing: true },
+  { id: 'pixelate', kernel: 'pixelate', gpu: true, name: { he: "פיקסלים", en: 'Pixelate' }, usesOutgoing: true },
+  { id: 'clock-cw', kernel: 'clock', gpu: true, name: { he: "שעון", en: 'Clock wipe' }, usesOutgoing: true },
+  { id: 'clock-ccw', kernel: 'clock', gpu: true, name: { he: "שעון הפוך", en: 'Clock wipe, reversed' }, usesOutgoing: true },
+  { id: 'soft-wipe-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך ימינה", en: 'Soft wipe right' }, usesOutgoing: true },
+  { id: 'soft-wipe-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך שמאלה", en: 'Soft wipe left' }, usesOutgoing: true },
+  { id: 'soft-wipe-down', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך למטה", en: 'Soft wipe down' }, usesOutgoing: true },
+  { id: 'soft-wipe-up', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך למעלה", en: 'Soft wipe up' }, usesOutgoing: true },
+  { id: 'soft-wipe-down-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני ימינה־מטה", en: 'Soft wipe to the lower right' }, usesOutgoing: true },
+  { id: 'soft-wipe-down-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני שמאלה־מטה", en: 'Soft wipe to the lower left' }, usesOutgoing: true },
+  { id: 'soft-wipe-up-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני ימינה־מעלה", en: 'Soft wipe to the upper right' }, usesOutgoing: true },
+  { id: 'soft-wipe-up-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני שמאלה־מעלה", en: 'Soft wipe to the upper left' }, usesOutgoing: true },
+  { id: 'blinds-h', kernel: 'blinds', gpu: true, name: { he: "תריסים אופקיים", en: 'Horizontal blinds' }, usesOutgoing: true },
+  { id: 'blinds-v', kernel: 'blinds', gpu: true, name: { he: "תריסים אנכיים", en: 'Vertical blinds' }, usesOutgoing: true },
+  { id: 'iris-open', kernel: 'iris', gpu: true, name: { he: "עיגול נפתח", en: 'Iris open' }, usesOutgoing: true },
+  { id: 'iris-close', kernel: 'iris', gpu: true, name: { he: "עיגול נסגר", en: 'Iris close' }, usesOutgoing: true },
+  { id: 'diamond-open', kernel: 'diamond', gpu: true, name: { he: "מעוין נפתח", en: 'Diamond open' }, usesOutgoing: true },
+  { id: 'diamond-close', kernel: 'diamond', gpu: true, name: { he: "מעוין נסגר", en: 'Diamond close' }, usesOutgoing: true },
+  { id: 'flash', kernel: 'flash', gpu: true, name: { he: "הבזק", en: 'Flash' }, usesOutgoing: true },
+  { id: 'luma-bright', kernel: 'luma', gpu: true, name: { he: "התמוססות מהבהיר", en: 'Luma fade, bright first' }, usesOutgoing: true },
+  { id: 'luma-dark', kernel: 'luma', gpu: true, name: { he: "התמוססות מהכהה", en: 'Luma fade, dark first' }, usesOutgoing: true },
+  { id: 'squeeze-h', kernel: 'squeeze', gpu: true, name: { he: "כיווץ אופקי", en: 'Squeeze sideways' }, usesOutgoing: true },
+  { id: 'squeeze-v', kernel: 'squeeze', gpu: true, name: { he: "כיווץ אנכי", en: 'Squeeze vertically' }, usesOutgoing: true },
+  { id: 'checker', kernel: 'checker', gpu: true, name: { he: "לוח שחמט", en: 'Checkerboard' }, usesOutgoing: true },
+  { id: 'bars-h', kernel: 'bars', gpu: true, name: { he: "פסים אקראיים אופקיים", en: 'Random horizontal bars' }, usesOutgoing: true },
+  { id: 'bars-v', kernel: 'bars', gpu: true, name: { he: "פסים אקראיים אנכיים", en: 'Random vertical bars' }, usesOutgoing: true },
+  { id: 'ripple', kernel: 'ripple', gpu: true, name: { he: "אדווה", en: 'Ripple' }, usesOutgoing: true },
 ] as const;
 export const TRANSITION_IDS = TRANSITIONS.map((t) => t.id) as [TransitionType, ...TransitionType[]];
+/** Transitions that run as WebGPU passes (ADR-0008). */
+export const GPU_TRANSITION_IDS: readonly string[] = TRANSITIONS.filter((t) => t.gpu).map((t) => t.id);
 export type TransitionType = (typeof TRANSITIONS)[number]['id'];
 /** A transition plays over the FIRST `frames` of the clip that carries it; the previous clip on the track keeps playing underneath from its source handle. */
 export const TransitionSchema = z.object({ type: z.enum(TRANSITION_IDS), frames: z.number().int().min(1).max(150) }).strict();
@@ -155,7 +194,7 @@ export type EffectInstance = z.infer<typeof EffectInstanceSchema>;
 export function describeCatalog() {
   return {
     effects: (EFFECTS as readonly EffectDef[]).map((e) => ({ id: e.id, version: e.version, category: e.category, name: e.name, description: e.description, cost: e.cost, seeded: e.seeded, temporal: e.temporal, implementation: 'canvas2d', defaults: e.params.parse({}), paramsSchema: z.toJSONSchema(e.params) })),
-    transitions: TRANSITIONS.map((t) => ({ ...t, version: 1, implementation: 'canvas2d', audio: 'unchanged (hard cut)' })),
+    transitions: TRANSITIONS.map((t) => ({ ...t, version: 1, implementation: t.gpu ? 'webgpu pass (needs a graphics adapter)' : 'canvas2d', audio: 'unchanged (hard cut)' })),
     blendModes: [...BLEND_MODES],
     mask: { shapes: ['rect', 'ellipse'], defaults: DEFAULT_MASK, paramsSchema: z.toJSONSchema(MaskSchema) },
   };

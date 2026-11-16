@@ -306,7 +306,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 |---|---|---|---|---|---|---|---|---|---|
 | R-A.1 | A catalog | At least 30 distinct effect primitives | 7 | R-08.6 | Effects drawer | effect ops | Compositor | partial 31 primitives registered (12 Canvas2D, 19 WebGPU), each with a proof check (`phase7-proof.json`, `gpu-proof.json`); the GPU ones verified on a software adapter, a few seen by the owner on hardware |
 | R-A.2 | A catalog | At least 80 effect entries and curated presets | 7 | R-A.1 | Effects drawer | effect ops | Compositor | not started | |
-| R-A.3 | A catalog | At least 45 transitions on at least 12 core kernels | 7 | R-13.4 | Transitions drawer | transition ops | Compositor | not started | |
+| R-A.3 | A catalog | At least 45 transitions on at least 12 core kernels | 7 | R-13.4 | Transitions drawer | transition ops | Compositor | partial 45 transitions on 21 kernels (12 Canvas2D, 33 WebGPU), each rendered and checked (`phase7-proof.json`, `gpu-proof.json`); the GPU ones only on a software adapter so far |
 | R-A.4 | A catalog | 40 text presets | 6 | R-15.3 | Text drawer | text ops | Compositor | not started | |
 | R-A.5 | A catalog | 30 text animations | 6 | R-15.3 | Text drawer | animation ops | Compositor | not started | |
 | R-A.6 | A catalog | 20 caption styles | 6 | R-16.4 | Captions drawer | caption style ops | Compositor | partial | 4 of 20 caption styles |

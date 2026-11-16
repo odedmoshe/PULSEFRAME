@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T20:25:15.312Z",
+  "ranAt": "2026-11-16T20:35:14.979Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -119,7 +119,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_28d872b9380]",
+          "focusAfterClose": "button[data-testid=view-ast_15ce347e7a0]",
           "focusReturned": true
         },
         {
@@ -265,7 +265,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_28d872b9380]",
+          "focusAfterClose": "button[data-testid=view-ast_15ce347e7a0]",
           "focusReturned": true
         },
         {

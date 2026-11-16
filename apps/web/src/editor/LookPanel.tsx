@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import * as T from '@pulseframe/time';
-import { BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
+import { BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 
@@ -162,7 +162,7 @@ function TransitionControls({ clip }: { clip: Extract<Clip, { type: 'media' }> }
       <label>{t('look.transition.type')}
         <select value={tr?.type ?? 'none'} data-testid="transition-type" onChange={(e) => (e.target.value === 'none' ? commit(null, n) : valid && commit(e.target.value, n))}>
           <option value="none">{t('look.transition.none')}</option>
-          {TRANSITIONS.map((x) => <option key={x.id} value={x.id}>{x.name[state.lang]}</option>)}
+          {TRANSITIONS.map((x) => <option key={x.id} value={x.id} disabled={x.gpu && !state.gpu?.available}>{x.name[state.lang]}{x.gpu && !state.gpu?.available ? ` — ${t('look.gpu.needed')}` : ''}</option>)}
         </select>
       </label>
       <label>{t('look.transition.frames')}
@@ -190,7 +190,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
             {effects.map((fx, i) => <EffectRow key={fx.id} clipId={clip.id} fx={fx} index={i} count={effects.length} />)}
           </ul>
         )}
-        {effects.some((fx) => GPU_EFFECT_IDS.includes(fx.type)) && !state.gpu?.available && state.gpu && (
+        {(effects.some((fx) => GPU_EFFECT_IDS.includes(fx.type)) || (clip.type === 'media' && !!clip.transition && GPU_TRANSITION_IDS.includes(clip.transition.type))) && !state.gpu?.available && state.gpu && (
           <p className="muted danger" role="status" data-testid="gpu-unavailable">{t('look.gpu.unavailable')} <bdi>{state.gpu.reason}</bdi></p>
         )}
         <label>{t('look.looks')}

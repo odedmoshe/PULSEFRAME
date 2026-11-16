@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-16T20:21:53.036Z",
+  "ranAt": "2026-11-16T20:33:38.377Z",
   "result": "PASSED",
-  "passed": 38,
-  "total": 38,
+  "passed": 46,
+  "total": 46,
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -441,6 +441,53 @@
       }
     },
     {
+      "name": "All 33 GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash is checked at its ends only)",
+      "ok": true,
+      "detail": {
+        "transitions": 33
+      }
+    },
+    {
+      "name": "Every GPU transition gives the identical middle frame when rendered again, and no two of them give the same middle frame",
+      "ok": true,
+      "detail": {
+        "repeatable": true,
+        "distinctMiddleFrames": 33
+      }
+    },
+    {
+      "name": "Soft wipe right, half-way: the left side already shows the incoming picture and the right side still the outgoing one; wipe left is the opposite",
+      "ok": true
+    },
+    {
+      "name": "Iris open, half-way: the centre shows the incoming picture and the corners the outgoing one; iris close is the opposite",
+      "ok": true
+    },
+    {
+      "name": "Clock wipe, half-way: the right half is the incoming picture and the left half the outgoing one; reversed is the opposite",
+      "ok": true
+    },
+    {
+      "name": "Squeeze, half-way: each picture is squeezed into its half, with columns taken from twice as far (within 3 pixels)",
+      "ok": true,
+      "detail": {
+        "leftFrom": 119.7,
+        "rightFrom": 239.3
+      }
+    },
+    {
+      "name": "Blinds, half-way: in each of the nine slats the first half shows the incoming picture and the second half the outgoing one",
+      "ok": true
+    },
+    {
+      "name": "A GPU transition in an export: the half-way frame of the file shows the iris as the still does",
+      "ok": true,
+      "detail": {
+        "centreBlue": 255,
+        "cornerBlue": 0
+      }
+    },
+    {
       "name": "stylize.edges: the border of the square is bright and the flat areas are dark",
       "ok": true,
       "detail": {
@@ -495,7 +542,7 @@
       "ok": true,
       "detail": {
         "status": 503,
-        "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses key.chroma, which need a graphics adapter in the render worker; the browse"
+        "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses key.chroma, which needs a graphics adapter in the render worker; the brows"
       }
     },
     {
@@ -503,7 +550,7 @@
       "ok": true,
       "detail": {
         "status": "failed",
-        "error": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses key.chroma, which need a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    at"
+        "error": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses key.chroma, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    a"
       }
     }
   ]

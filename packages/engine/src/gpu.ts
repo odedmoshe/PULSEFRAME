@@ -275,6 +275,128 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
 };
 export const isGpuEffect = (type: string) => type in GPU_EFFECTS;
 
+/**
+ * Transitions over two pictures (the outgoing one and the incoming one). `kernel` picks the WGSL body; `v` are up to three
+ * numbers that tell the variants of one kernel apart (`va` in the body). In the body: `p` is the progress 0..1, `asp` width/height,
+ * `O(uv)` and `I(uv)` sample the outgoing and incoming pictures (premultiplied), and the result is premultiplied.
+ */
+const T2: Record<string, string> = {
+  'cross-zoom': `
+    let k = sin(p * 3.14159265) * 0.45 * va.x; let c = vec2f(0.5);
+    var a = vec4f(0.0); var b = vec4f(0.0);
+    for (var i = 0; i < 12; i++) { let t = f32(i) / 11.0; a += O(c + (uv - c) * (1.0 - k * t)); b += I(c + (uv - c) * (1.0 - k * t)); }
+    return mix(a / 12.0, b / 12.0, smoothstep(0.3, 0.7, p));`,
+  swirl: `
+    let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0); let r = length(d) / 0.75;
+    let t = sin(p * 3.14159265) * 5.0 * va.x * (1.0 - clamp(r, 0.0, 1.0)) * (1.0 - clamp(r, 0.0, 1.0));
+    let q = vec2f(0.5) + vec2f(d.x * cos(t) - d.y * sin(t), d.x * sin(t) + d.y * cos(t)) / vec2f(asp, 1.0);
+    return mix(O(q), I(q), p);`,
+  wave: `
+    let k = sin(p * 3.14159265) * 0.06;
+    var q = uv;
+    if (va.x > 0.5) { q.y = q.y + k * sin(uv.x * 18.0 + p * 12.0); } else { q.x = q.x + k * sin(uv.y * 18.0 + p * 12.0); }
+    return mix(O(q), I(q), p);`,
+  glitch: `
+    let band = u32(floor(uv.y * 28.0)); let tick = u32(floor(p * 14.0));
+    let h = hash(band * 7919u + 13u) ; let j = hash(h ^ hash(tick + 3u));
+    let k = sin(p * 3.14159265);
+    var q = uv; q.x = fract(uv.x + (unit(j) - 0.5) * 0.35 * k * step(0.45, unit(hash(j))));
+    // each band switches to the new picture at its own moment
+    let sw = step(unit(h), p * 1.2 - 0.1);
+    let o = vec4f(O(q + vec2f(0.006 * k, 0.0)).r, O(q).g, O(q - vec2f(0.006 * k, 0.0)).b, O(q).a);
+    let n = vec4f(I(q + vec2f(0.006 * k, 0.0)).r, I(q).g, I(q - vec2f(0.006 * k, 0.0)).b, I(q).a);
+    return mix(o, n, sw);`,
+  pixelate: `
+    let cells = mix(dim.y, 14.0, pow(sin(p * 3.14159265), 0.6));
+    let q = (floor(uv * vec2f(cells * asp, cells)) + vec2f(0.5)) / vec2f(cells * asp, cells);
+    return mix(O(q), I(q), step(0.5, p));`,
+  clock: `
+    let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0);
+    var a = atan2(d.x * va.x, -d.y) / 6.2831853; a = a - floor(a);
+    return mix(O(uv), I(uv), 1.0 - smoothstep(p - 0.004, p + 0.004, a + 0.004 - step(1.0, p)));`,
+  'soft-wipe': `
+    let dir = vec2f(va.x, va.y); let reach = abs(dir.x) + abs(dir.y);
+    let s = (dot(uv - vec2f(0.5), dir) / reach) + 0.5; let soft = 0.12;
+    return mix(O(uv), I(uv), 1.0 - smoothstep(p * (1.0 + soft) - soft, p * (1.0 + soft), s));`,
+  blinds: `
+    let f = fract(select(uv.y, uv.x, va.x > 0.5) * 9.0);
+    return mix(O(uv), I(uv), 1.0 - smoothstep(p - 0.02, p + 0.02, f * 0.96 + 0.02 - step(1.0, p)));`,
+  iris: `
+    let r = length((uv - vec2f(0.5)) * vec2f(asp, 1.0)) / (0.5 * length(vec2f(asp, 1.0)));
+    let open = 1.0 - smoothstep(p * 1.04 - 0.04, p * 1.04, r);
+    let close = smoothstep(1.0 - p * 1.04, 1.0 - p * 1.04 + 0.04, r);
+    return mix(O(uv), I(uv), select(open, close, va.x > 0.5));`,
+  diamond: `
+    let d = abs((uv - vec2f(0.5)) * vec2f(asp, 1.0)); let r = (d.x + d.y) / (0.5 * (asp + 1.0));
+    let open = 1.0 - smoothstep(p * 1.04 - 0.04, p * 1.04, r);
+    let close = smoothstep(1.0 - p * 1.04, 1.0 - p * 1.04 + 0.04, r);
+    return mix(O(uv), I(uv), select(open, close, va.x > 0.5));`,
+  flash: `
+    let c = mix(O(uv), I(uv), smoothstep(0.4, 0.6, p));
+    let w = pow(sin(p * 3.14159265), 2.0);
+    return vec4f(min(c.rgb + vec3f(w), vec3f(1.0)), max(c.a, w));`,
+  luma: `
+    let o = O(uv); var l = luma(o.rgb / max(o.a, 0.0001)); if (va.x > 0.5) { l = 1.0 - l; }
+    let soft = 0.15; let edge = 1.0 - p * (1.0 + soft);
+    return mix(o, I(uv), smoothstep(edge, edge + soft, l));`,
+  squeeze: `
+    let t = select(uv.x, uv.y, va.x > 0.5); let cut = 1.0 - p;
+    if (t < cut) { let s = t / max(cut, 0.0001); return O(select(vec2f(s, uv.y), vec2f(uv.x, s), va.x > 0.5)); }
+    let s = (t - cut) / max(p, 0.0001); return I(select(vec2f(s, uv.y), vec2f(uv.x, s), va.x > 0.5));`,
+  checker: `
+    let cell = floor(uv * vec2f(8.0 * asp, 8.0)); let local = fract(uv * vec2f(8.0 * asp, 8.0));
+    let late = (cell.x + cell.y) - 2.0 * floor((cell.x + cell.y) * 0.5);
+    let q = clamp(p * 2.0 - late, 0.0, 1.0);
+    return mix(O(uv), I(uv), step(local.x, q) * step(0.00001, q));`,
+  bars: `
+    let along = select(uv.x, uv.y, va.x > 0.5); let across = select(uv.y, uv.x, va.x > 0.5);
+    let delay = unit(hash(u32(floor(across * 22.0)) * 7919u + 5u)) * 0.6;
+    let q = clamp((p * 1.6 - delay), 0.0, 1.0);
+    return mix(O(uv), I(uv), step(along, q) * step(0.00001, q));`,
+  ripple: `
+    let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0); let r = length(d);
+    let q = uv + normalize(d + vec2f(0.00001)) * sin(r * 40.0 - p * 18.0) * 0.03 * sin(p * 3.14159265) / vec2f(asp, 1.0);
+    return mix(O(q), I(q), p);`,
+};
+/** Transition id -> kernel and the numbers that set its variant. */
+export const GPU_TRANSITIONS: Record<string, { kernel: string; v: [number, number, number] }> = {
+  'cross-zoom-in': { kernel: 'cross-zoom', v: [1, 0, 0] }, 'cross-zoom-out': { kernel: 'cross-zoom', v: [-1, 0, 0] },
+  'swirl-cw': { kernel: 'swirl', v: [1, 0, 0] }, 'swirl-ccw': { kernel: 'swirl', v: [-1, 0, 0] },
+  'wave-h': { kernel: 'wave', v: [0, 0, 0] }, 'wave-v': { kernel: 'wave', v: [1, 0, 0] },
+  'glitch-cut': { kernel: 'glitch', v: [0, 0, 0] }, pixelate: { kernel: 'pixelate', v: [0, 0, 0] },
+  'clock-cw': { kernel: 'clock', v: [1, 0, 0] }, 'clock-ccw': { kernel: 'clock', v: [-1, 0, 0] },
+  'soft-wipe-right': { kernel: 'soft-wipe', v: [1, 0, 0] }, 'soft-wipe-left': { kernel: 'soft-wipe', v: [-1, 0, 0] }, 'soft-wipe-down': { kernel: 'soft-wipe', v: [0, 1, 0] }, 'soft-wipe-up': { kernel: 'soft-wipe', v: [0, -1, 0] },
+  'soft-wipe-down-right': { kernel: 'soft-wipe', v: [1, 1, 0] }, 'soft-wipe-down-left': { kernel: 'soft-wipe', v: [-1, 1, 0] }, 'soft-wipe-up-right': { kernel: 'soft-wipe', v: [1, -1, 0] }, 'soft-wipe-up-left': { kernel: 'soft-wipe', v: [-1, -1, 0] },
+  'blinds-h': { kernel: 'blinds', v: [0, 0, 0] }, 'blinds-v': { kernel: 'blinds', v: [1, 0, 0] },
+  'iris-open': { kernel: 'iris', v: [0, 0, 0] }, 'iris-close': { kernel: 'iris', v: [1, 0, 0] },
+  'diamond-open': { kernel: 'diamond', v: [0, 0, 0] }, 'diamond-close': { kernel: 'diamond', v: [1, 0, 0] },
+  flash: { kernel: 'flash', v: [0, 0, 0] },
+  'luma-bright': { kernel: 'luma', v: [0, 0, 0] }, 'luma-dark': { kernel: 'luma', v: [1, 0, 0] },
+  'squeeze-h': { kernel: 'squeeze', v: [0, 0, 0] }, 'squeeze-v': { kernel: 'squeeze', v: [1, 0, 0] },
+  checker: { kernel: 'checker', v: [0, 0, 0] },
+  'bars-h': { kernel: 'bars', v: [0, 0, 0] }, 'bars-v': { kernel: 'bars', v: [1, 0, 0] },
+  ripple: { kernel: 'ripple', v: [0, 0, 0] },
+};
+export const isGpuTransition = (type: string) => type in GPU_TRANSITIONS;
+const transitionShader = (body: string) => `${VERTEX}
+  struct Params { a: vec4f, b: vec4f }
+  @group(0) @binding(0) var outT: texture_2d<f32>;
+  @group(0) @binding(1) var smp: sampler;
+  @group(0) @binding(2) var<uniform> P: Params;
+  @group(0) @binding(3) var inT: texture_2d<f32>;
+  fn hash(x: u32) -> u32 { let v = x * 747796405u + 2891336453u; let w = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u; return (w >> 22u) ^ w; }
+  fn unit(x: u32) -> f32 { return f32(x >> 8u) / 16777216.0; }
+  fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
+  fn O(uv: vec2f) -> vec4f { return textureSampleLevel(outT, smp, uv, 0.0); }
+  fn I(uv: vec2f) -> vec4f { return textureSampleLevel(inT, smp, uv, 0.0); }
+  fn transition(uv: vec2f) -> vec4f {
+    let p = P.a.x; let va = vec3f(P.a.y, P.a.z, P.a.w); let asp = P.b.x; let dim = vec2f(P.b.y, P.b.z);
+    // every body reads all of them or not; touching them here keeps one binding layout for all kernels
+    let keep = va.z + asp + dim.x + O(vec2f(0.0)).a * 0.0 + I(vec2f(0.0)).a * 0.0;
+    if (keep != keep) { return vec4f(0.0); }${body}
+  }
+  @fragment fn f(i: V) -> @location(0) vec4f { let c = transition(i.uv); if (c.a <= 0.0) { return vec4f(0.0); } return vec4f(c.rgb / c.a, c.a); }`;
+
 const VERTEX = `
   struct V { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
   @vertex fn v(@builtin(vertex_index) i: u32) -> V {
@@ -298,7 +420,7 @@ const shaderOf = (body: string) => `${VERTEX}
 const REFERENCE = { wgsl: `${VERTEX}
   @fragment fn f(i: V) -> @location(0) vec4f { let p = i.pos; var c = vec3f(0); for (var k = 0; k < 16; k++) { c += 0.0625 * (0.5 + 0.5 * sin(vec3f(p.x, p.y, p.x + p.y) * 0.01 * f32(k + 1))); } return vec4f(c, 1); }`, first: [133, 133, 138, 255], middle: [116, 128, 133, 255] };
 
-interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; size: { source: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any }
+interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; size: { source: any; source2: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any }
 let state: State | null = null;
 let status: GpuStatus = { available: false, reason: 'not checked yet', adapter: null };
 let starting: Promise<GpuStatus> | null = null;
@@ -356,34 +478,51 @@ export function initGpu(): Promise<GpuStatus> {
  * Resolves to false, and records the effect as unavailable, when WebGPU is not ready or the pass fails: the caller then
  * draws the layer unchanged. Callers must not let another frame use the same buffers while this is pending.
  */
-export async function gpuEffect(type: string, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+export function gpuEffect(type: string, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
   const fx = GPU_EFFECTS[type];
+  if (!fx) { skipped.add(type); return Promise.resolve(false); }
+  return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl), fx.params(params, env), src, null, dst, env);
+}
+/**
+ * Run one GPU transition: `outgoing` (may be absent: then it is transparent) and `incoming` into `dst`, at `progress` 0..1.
+ * Same contract as gpuEffect: false, and recorded as unavailable, when it cannot run.
+ */
+export function gpuTransition(type: string, progress: number, outgoing: OffscreenCanvas | null, incoming: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+  const t = GPU_TRANSITIONS[type];
+  if (!t) { skipped.add(type); return Promise.resolve(false); }
+  return runPass(type, `tr:${t.kernel}`, () => transitionShader(T2[t.kernel]!), [progress, ...t.v, env.width / env.height, env.width, env.height], outgoing, incoming, dst, env);
+}
+/** One pass: `first` (and for a transition `second`) in, `dst` replaced. `first` null means a transparent picture. */
+async function runPass(type: string, key: string, shader: () => string, numbers: number[], first: OffscreenCanvas | null, second: OffscreenCanvas | null, dst: C2D, env: EffectEnv): Promise<boolean> {
   const s = state;
-  if (!fx || !s) { skipped.add(type); return false; }
+  if (!s) { skipped.add(type); return false; }
   const { device } = s;
   const W = env.width, H = env.height;
   try {
     if (!s.size || s.size.width !== W || s.size.height !== H) {
-      s.size?.source.destroy(); s.size?.target.destroy(); s.size?.readback.destroy();
+      s.size?.source.destroy(); s.size?.source2.destroy(); s.size?.target.destroy(); s.size?.readback.destroy();
       const stride = Math.ceil((W * 4) / 256) * 256;
       s.size = {
         source: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ | 0x10 /* RENDER_ATTACHMENT */ }),
+        source2: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x02 | 0x04 | 0x10 }),
         target: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x10 /* RENDER_ATTACHMENT */ | 0x01 /* COPY_SRC */ }),
         readback: device.createBuffer({ size: stride * H, usage: 0x01 /* MAP_READ */ | 0x08 /* COPY_DST */ }), stride, width: W, height: H,
       };
     }
     const z = s.size;
-    device.queue.copyExternalImageToTexture({ source: src }, { texture: z.source, premultipliedAlpha: true }, [W, H]);
-    let pipe = s.pipelines.get(type);
+    if (first) device.queue.copyExternalImageToTexture({ source: first }, { texture: z.source, premultipliedAlpha: true }, [W, H]);
+    else { const e0 = device.createCommandEncoder(); e0.beginRenderPass({ colorAttachments: [{ view: z.source.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] }).end(); device.queue.submit([e0.finish()]); }
+    if (second) device.queue.copyExternalImageToTexture({ source: second }, { texture: z.source2, premultipliedAlpha: true }, [W, H]);
+    let pipe = s.pipelines.get(key);
     if (!pipe) {
-      const mod = device.createShaderModule({ code: shaderOf(fx.wgsl) });
+      const mod = device.createShaderModule({ code: shader() });
       pipe = device.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'v' }, fragment: { module: mod, entryPoint: 'f', targets: [{ format: 'rgba8unorm' }] } });
-      s.pipelines.set(type, pipe);
+      s.pipelines.set(key, pipe);
     }
     const p = new Float32Array(8);
-    p.set(fx.params(params, env).slice(0, 8));
+    p.set(numbers.slice(0, 8));
     device.queue.writeBuffer(s.uniforms, 0, p);
-    const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }] });
+    const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : [])] });
     const enc = device.createCommandEncoder();
     const pass = enc.beginRenderPass({ colorAttachments: [{ view: z.target.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] });
     pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.draw(3); pass.end();

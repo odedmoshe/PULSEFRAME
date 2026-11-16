@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T20:26:37.645Z",
+  "ranAt": "2026-11-16T20:37:45.492Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -12,16 +12,16 @@
     "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
     "exportWithLooks": {
       "frames": 30,
-      "wallMs": 939,
+      "wallMs": 1093,
       "minPsnrDb": 42.16,
       "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
     },
     "lab": {
       "gpuEffectTilesUnavailable": 0,
-      "tiles": 210,
+      "tiles": 375,
       "effects": 31,
       "blends": 17,
-      "transitions": 12,
+      "transitions": 45,
       "masks": 5
     }
   },
@@ -29,7 +29,7 @@
   "total": 31,
   "checks": [
     {
-      "name": "catalog lists exactly what is registered: 31 effects with parameter schemas and defaults, 12 transitions, 17 blend modes",
+      "name": "catalog lists exactly what is registered: 31 effects with parameter schemas and defaults, 45 transitions, 17 blend modes",
       "ok": true,
       "detail": {
         "effects": [
@@ -268,7 +268,7 @@
       "ok": true
     },
     {
-      "name": "all 12 transitions render a mid-frame that differs from both sides",
+      "name": "all 45 transitions render a mid-frame that differs from both sides",
       "ok": true,
       "detail": [
         "dissolve:ok",
@@ -282,7 +282,40 @@
         "push-right:ok",
         "push-up:ok",
         "push-down:ok",
-        "zoom:ok"
+        "zoom:ok",
+        "cross-zoom-in:ok",
+        "cross-zoom-out:ok",
+        "swirl-cw:ok",
+        "swirl-ccw:ok",
+        "wave-h:ok",
+        "wave-v:ok",
+        "glitch-cut:ok",
+        "pixelate:ok",
+        "clock-cw:ok",
+        "clock-ccw:ok",
+        "soft-wipe-right:ok",
+        "soft-wipe-left:ok",
+        "soft-wipe-down:ok",
+        "soft-wipe-up:ok",
+        "soft-wipe-down-right:ok",
+        "soft-wipe-down-left:ok",
+        "soft-wipe-up-right:ok",
+        "soft-wipe-up-left:ok",
+        "blinds-h:ok",
+        "blinds-v:ok",
+        "iris-open:ok",
+        "iris-close:ok",
+        "diamond-open:ok",
+        "diamond-close:ok",
+        "flash:ok",
+        "luma-bright:ok",
+        "luma-dark:ok",
+        "squeeze-h:ok",
+        "squeeze-v:ok",
+        "checker:ok",
+        "bars-h:ok",
+        "bars-v:ok",
+        "ripple:ok"
       ]
     },
     {
@@ -295,7 +328,7 @@
       "ok": true,
       "detail": {
         "frames": 30,
-        "wallMs": 939,
+        "wallMs": 1093,
         "minPsnrDb": 42.16,
         "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
       }
@@ -320,14 +353,14 @@
       }
     },
     {
-      "name": "Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip, which is meant to be a flat colour, and the chroma key at full tolerance, which removes the whole picture), default and extreme variants differ (where the default is not already the maximum), no page errors",
+      "name": "Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip or of the flash, which is meant to be a flat colour, and the chroma key at full tolerance, which removes the whole picture), default and extreme variants differ (where the default is not already the maximum), no page errors",
       "ok": true,
       "detail": {
         "gpuEffectTilesUnavailable": 0,
-        "tiles": 210,
+        "tiles": 375,
         "effects": 31,
         "blends": 17,
-        "transitions": 12,
+        "transitions": 45,
         "masks": 5,
         "sameVariants": [
           "color.grayscale",
@@ -343,7 +376,8 @@
         "bodyErrors": null,
         "flat": [
           "effect:key.chroma:extreme",
-          "effect:key.chroma:extreme"
+          "effect:key.chroma:extreme",
+          "transition:flash:step 3/5 (frame +7 of 15)"
         ],
         "labErrors": []
       }

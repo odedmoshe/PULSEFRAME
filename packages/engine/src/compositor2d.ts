@@ -6,7 +6,7 @@
  * Text is shaped by the browser engine (HarfBuzz inside Chromium) using a bundled, pinned font file.
  */
 import * as T from '@pulseframe/time';
-import { takeUnavailableEffects } from './gpu.ts';
+import { gpuTransition, isGpuTransition, takeUnavailableEffects } from './gpu.ts';
 import type { Layer, PictureLayer, RenderGraph, TextLayer } from './evaluate.ts';
 import { visualOrder, wrapWords, type CaptionLayer } from './captions.ts';
 import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
@@ -186,7 +186,7 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
   // No other frame may draw meanwhile, so every frame first waits for such a frame to finish; frames without one stay synchronous.
   while (gpuFrame) await gpuFrame;
   let release: (() => void) | undefined;
-  if (g.layers.some((l) => l.kind !== 'caption' && l.effects && hasGpuEffect(l.effects))) gpuFrame = new Promise<void>((r) => { release = () => { gpuFrame = null; r(); }; });
+  if (g.layers.some((l) => l.kind !== 'caption' && ((l.effects && hasGpuEffect(l.effects)) || (l.transition && isGpuTransition(l.transition.type))))) gpuFrame = new Promise<void>((r) => { release = () => { gpuFrame = null; r(); }; });
   takeUnavailableEffects();
   try {
   ctx.save();
@@ -225,7 +225,13 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
       outgoing = keep;
       continue;
     }
-    compositeLayer(ctx, buf, layer, g.width, g.height, layer.transition ? outgoing : null);
+    if (layer.transition && isGpuTransition(layer.transition.type)) {
+      // A GPU transition mixes both pictures in one pass; the result is then composited like any layer (blend mode, no transition).
+      const mixed = scratch(6, g.width, g.height);
+      const ok = await gpuTransition(layer.transition.type, layer.transition.progress, outgoing ? (outgoing as Buf).canvas : null, buf.canvas, mixed.ctx, env);
+      // Not available: the incoming picture alone (a cut), recorded as missing so a still or an export refuses.
+      compositeLayer(ctx, ok ? mixed : buf, { ...layer, transition: undefined }, g.width, g.height, null);
+    } else compositeLayer(ctx, buf, layer, g.width, g.height, layer.transition ? outgoing : null);
     outgoing = null;
   }
   ctx.restore();
