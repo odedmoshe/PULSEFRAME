@@ -445,7 +445,8 @@ export class Editor {
     const picture = !!a && (!!a.video || a.kind === 'image'), v = this.target('video'), au = this.target('audio');
     // target tracks: the picture (or a sound-only file) goes to its target, the linked sound of a picture file to the sound target
     const where = picture ? { ...(v ? { trackId: v } : {}), ...(au && a?.audio ? { audioTrackId: au } : {}) } : au ? { trackId: au } : {};
-    return this.commit([{ op: 'add_clip', args: { assetId, start: this.appendPoint(), ...where } }], 'Add clip');
+    // a picture goes after what is already there; a sound-only file (music, a recording) starts at the playhead, on a sound track that is free there
+    return this.commit([{ op: 'add_clip', args: { assetId, start: picture ? this.appendPoint() : this.playhead, ...where } }], 'Add clip');
   }
   async addText() {
     const rate = this.rate;

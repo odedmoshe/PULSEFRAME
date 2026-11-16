@@ -108,3 +108,24 @@ canvas[data-testid='preview'] { border-radius: 10px; box-shadow: 0 0 0 1px var(-
 .error { border-bottom: 1px solid #5b2a2d; }
 
 @media (prefers-reduced-motion: reduce) { button, .file, a.ghost, input, select, textarea { transition: none; } button:active:not(:disabled) { transform: none; } }
+
+/* ---- header density: nothing in the top bar wraps to a second line ---- */
+.header { gap: 6px; padding-inline: 12px; }
+.header button, .header .brand, .header .save, .header .rev, .header label { white-space: nowrap; }
+.header button { padding: 5px 8px; }
+.header .format-switch select { max-inline-size: 24ch; text-overflow: ellipsis; }
+.header .title { max-inline-size: 16ch; }
+@media (max-width: 1500px) { .header kbd { display: none; } .header .rev { display: none; } }
+@media (max-width: 1320px) { .header .brand { display: none; } }
+
+/* ---- media cards: notes about a file fold away ---- */
+.mc-notes { font-size: var(--pf-fs-sm); color: var(--pf-text-muted); }
+.mc-notes summary { cursor: pointer; padding: 2px 0; border-radius: 4px; list-style-position: inside; }
+.mc-notes summary:hover { color: var(--pf-text); }
+.mc-notes .asset-notice { display: block; margin-top: 4px; }
+.mc-notes select { inline-size: 100%; margin-top: 4px; }
+
+/* the waveform of a sound clip sits on the clip's own colour, not on the black that the preview canvas uses */
+.clip-visual canvas { background: transparent; box-shadow: none; border-radius: 0; }
+.track.audio .clip-visual[data-derivative-state='ready']::after { background: linear-gradient(to right, rgba(0, 0, 0, 0.55) 0, rgba(0, 0, 0, 0.35) 90px, rgba(0, 0, 0, 0) 160px); }
+[dir='rtl'] .track.audio .clip-visual[data-derivative-state='ready']::after { background: linear-gradient(to right, rgba(0, 0, 0, 0.55) 0, rgba(0, 0, 0, 0.35) 90px, rgba(0, 0, 0, 0) 160px); }

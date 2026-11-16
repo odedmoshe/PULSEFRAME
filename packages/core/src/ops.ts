@@ -112,9 +112,13 @@ function newTrack(seq: Sequence, kind: Track['kind'], ctx: OpContext, name?: str
   seq.tracks.splice(at < 0 ? seq.tracks.length : at, 0, track);
   return track;
 }
-/** First unlocked track of `kind` where [start,end) is free; otherwise a new track. */
+/**
+ * First unlocked track of `kind` where [start,end) is free; otherwise a new track. Sound may overlap sound on one track
+ * when a track is named (that is how crossfades are made), but a clip placed automatically never lands on top of another:
+ * two sounds stacked on one track hide each other on the timeline.
+ */
 function placeTrack(seq: Sequence, kind: Track['kind'], start: T.RationalTime, end: T.RationalTime, ctx: OpContext): Track {
-  for (const t of seq.tracks) if (t.kind === kind && !t.locked && !(forbidsOverlap(t) && overlaps(t, start, end, new Set()))) return t;
+  for (const t of seq.tracks) if (t.kind === kind && !t.locked && !overlaps(t, start, end, new Set())) return t;
   return newTrack(seq, kind, ctx);
 }
 const linked = (d: ProjectDocument, clip: Clip) => {

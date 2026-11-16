@@ -111,6 +111,9 @@ export function MediaGrid({ onView }: { onView: (id: string) => void }) {
             </div>
             <span className="mc-name"><span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
               <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
+            {assetNotices(a).length > 0 && (
+            <details className="mc-notes" data-testid={`notes-${a.id}`}>
+            <summary><span aria-hidden="true">ⓘ </span>{S.notes} <bdi>({assetNotices(a).length})</bdi></summary>
             {assetNotices(a).map((n) => (
               <span key={n.code} className="asset-notice" data-testid="asset-notice" data-code={n.code}>
                 <span aria-hidden="true">ⓘ </span>
@@ -128,6 +131,8 @@ export function MediaGrid({ onView }: { onView: (id: string) => void }) {
                 )}
               </span>
             ))}
+            </details>
+            )}
             <div className="mc-actions">
               <button className="ghost" onClick={add} data-testid={`add-${a.id}`} aria-label={`${t('media.add')}: ${a.name}`} title={t('media.add')}><Plus size={16} aria-hidden="true" /></button>
               {a.kind !== 'image' && <button className="ghost" onClick={() => onView(a.id)} data-testid={`view-${a.id}`} aria-label={`${t('source.open')}: ${a.name}`} title={t('source.open')}><Eye size={16} aria-hidden="true" /></button>}
