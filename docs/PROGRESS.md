@@ -905,6 +905,7 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 **Checkpoint 17g — first owner feedback (2026-11-16)**
 - The owner listened to `docs/demo/narration-sample-he.m4a` (three sentences, built-in voice) and reported that the Hebrew "sounds fine". This is the first human judgement of any generated speech: one listener, three short sentences, no detail on stress or naturalness. Everything else about narration is still judged by machine only.
 - First run on the owner's Windows machine (Node 22.17.0) stopped at `pnpm install`: pnpm tried to switch itself to the version named in `package.json` and failed (`Cannot find module …\pnpm\.tools\pnpm\10.28.0_tmp_…\pnpm.cjs`). `.npmrc` now sets `manage-package-manager-versions=false`, and the guide pins `npm install -g pnpm@10.28.0`. **Not verified on Windows**; nothing after `pnpm install` has run there yet.
+- Second attempt there: the pnpm switch was gone, but `pnpm install` then failed compiling `better-sqlite3` (MSBuild, Windows SDK targets), so no tool was linked (`vite`/`tsx` not recognised). The package ships prebuilt binaries for Windows, Linux and macOS and loads them directly, so the compile step is now skipped (`pnpm.ignoredBuiltDependencies`); verified here that the server tests run with no compiled build present. Not yet verified on Windows.
 - The owner has not yet watched the export of their own clips (the file lives only in the cloud session's `.artifacts`, not in the repository; it was sent again).
 
 ## In progress

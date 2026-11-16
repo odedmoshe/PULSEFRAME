@@ -127,6 +127,8 @@ $env:PF_SPEECH_PYTHON = ".artifacts\speech\venv\Scripts\python.exe"; $env:PF_VOI
 |---|---|
 | `pnpm` לא מזוהה | לסגור ולפתוח את PowerShell אחרי ההתקנה |
 | `Cannot find module ...\pnpm\.tools\pnpm\10.28.0_tmp_...\pnpm.cjs` | pnpm ניסה להחליף את עצמו לגרסה אחרת ונכשל. להריץ `git pull`, אחר כך `npm install -g pnpm@10.28.0`, ואז שוב `pnpm install` |
+| `pnpm install` נכשל ב-`better-sqlite3 ... node-gyp rebuild` | גרסה ישנה של המאגר ניסתה לקמפל רכיב שמגיע כבר מוכן. להריץ `git pull` ואז שוב `pnpm install` |
+| `'vite' is not recognized` או `'tsx' is not recognized` | `pnpm install` לא הסתיים בהצלחה; לתקן אותו קודם ואז להריץ שוב |
 | שגיאה על `ffmpeg` | `ffmpeg -version` צריך לעבוד בחלון חדש; אם לא, ההתקנה לא נוספה ל-PATH |
 | הקישור לא נפתח | להשתמש בקישור המלא מהשורה **Editor (owner)**, כולל החלק שאחרי `?key=` |
 | בלשונית דיבור כתוב שהזיהוי אינו מותקן | המשתנה `PF_SPEECH_PYTHON` לא הוגדר באותו חלון שממנו הופעל `pnpm start` |
