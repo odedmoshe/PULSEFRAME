@@ -12,6 +12,8 @@ import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
+import { SpeedCurveField } from './SpeedCurves.tsx';
+import { PacingPanel } from './PacingPanel.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
 import { SourceViewer } from './SourceViewer.tsx';
@@ -441,6 +443,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       <div {...panelProps('deliver')}>
         <h2>{t('inspector.tab.deliver')}</h2>
         <DeliverPanel />
+        <PacingPanel />
       </div>
       <div {...panelProps('recipes')}>
         <h2>{t('inspector.tab.recipes')}</h2>
@@ -616,6 +619,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
       )}
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedField clip={clip} />}
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <RampField clip={clip} />}
+      {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedCurveField key={`curve:${clip.id}`} clip={clip} />}
       {clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video && <FreezeField clip={clip} />}
       {clip.type === 'media' && !variantId && !clip.freeze && (editor.selected?.track.kind === 'video' ? !!editor.doc?.assets[clip.assetId]?.video : editor.selected?.track.kind === 'audio' && !!editor.doc?.assets[clip.assetId]?.audio) && (
         <>

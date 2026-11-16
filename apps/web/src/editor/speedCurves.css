@@ -1,0 +1,22 @@
+/* Speed curves: preset tiles with a drawn curve, and the hand-made curve graph. Colours are the brand tokens. */
+.speed-curves { border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); padding: var(--pf-s-3); margin: var(--pf-s-3) 0; min-width: 0; }
+.speed-curves legend { padding: 0 var(--pf-s-2); font-weight: 600; }
+.speed-curves:disabled .sc-grid, .speed-curves:disabled .sc-custom { opacity: 0.5; }
+.sc-blocked { color: var(--pf-warn); font-size: var(--pf-fs-sm); margin: var(--pf-s-2) 0; }
+.sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--pf-s-2); margin: var(--pf-s-2) 0; }
+.sc-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: var(--pf-s-2) 4px; background: var(--pf-surface); border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); color: var(--pf-text); cursor: pointer; min-width: 0; }
+.sc-tile:hover:not(:disabled) { border-color: var(--pf-accent); background: var(--pf-surface-raised); }
+.sc-tile:focus-visible, .sc-point:focus-visible { outline: 2px solid var(--pf-accent-2); outline-offset: 2px; }
+.sc-thumb { display: block; max-width: 100%; }
+.sc-line { fill: none; stroke: var(--pf-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.sc-one { stroke: var(--pf-text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.sc-rule { stroke: var(--pf-border); stroke-width: 1; }
+.sc-name { font-size: var(--pf-fs-sm); font-weight: 600; }
+.sc-len { font-size: 11px; color: var(--pf-text-muted); }
+.sc-custom { margin-top: var(--pf-s-3); }
+.sc-custom summary { cursor: pointer; font-weight: 600; padding: var(--pf-s-1, 4px) 0; }
+.sc-graph { display: block; width: 100%; max-width: 320px; height: auto; background: var(--pf-surface); border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); touch-action: none; user-select: none; margin: var(--pf-s-2) 0; overflow: visible; }
+.sc-tick { fill: var(--pf-text-muted); font-size: 8px; }
+.sc-point { fill: var(--pf-bg, #0e1013); stroke: var(--pf-accent); stroke-width: 2; cursor: grab; }
+.sc-point:active { cursor: grabbing; fill: var(--pf-accent); }
+.sc-status { min-height: 1.4em; }

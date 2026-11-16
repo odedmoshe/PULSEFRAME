@@ -11,7 +11,10 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
+import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
+import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
+import { MOTION_PRESETS, motionKeys } from './motionPresets.ts';
+const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[]];
 import { lookParams } from './looks.ts';
 import { findTextPreset } from './textPresets.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
@@ -617,6 +620,124 @@ defineOp({
 });
 
 defineOp({
+  name: 'apply_speed_curve',
+  version: 1,
+  description: 'Give a clip a speed curve: a named shape such as hero (fast, a deep slow-down in the middle, fast again), bullet, montage, jump-cut, flash-in, flash-out, slow-down, build-up, wave, emphasis, surge or fast-forward, or a hand-made one from `points` (position in the clip 0–1 and the speed there; between two points the speed changes gradually). The clip is replaced by one clip per segment of the curve (and the same for its linked sound), each playing the source on without gaps or repeats at one speed or with a gradual change, so every time stays exact and each part can still be edited. The curve shows the same stretch of source as before, to within the rounding of each part to whole frames. The total length changes: by default the clips after it on the same tracks (and what is linked to them) move by the difference, and other tracks such as music stay where they are; with ripple=false nothing else moves and the new length must fit. Markers and hand-timed captions do not move. Sound is resampled with the picture, so its pitch follows the speed.',
+  args: z.object({
+    clipId: z.string(),
+    preset: z.enum(SPEED_CURVE_IDS).optional(),
+    points: z.array(z.object({ at: z.number().min(0).max(1), speed: z.number().min(0.1).max(8) }).strict()).min(2).max(16).optional().describe('A hand-made curve instead of a preset: first point at 0, last at 1, in increasing order'),
+    smooth: z.boolean().optional().describe('For `points`: gradual changes ease out of the first speed and into the last (default true)'),
+    ripple: z.boolean().optional().describe('Default true'),
+    includeLinked: z.boolean().optional(),
+  }).strict(),
+  apply(d, a, ctx) {
+    if (!a.preset === !a.points) throw new OpError('invalid_args', 'give either preset or points', {}, 'Use one of them.');
+    const preset = a.preset ? findSpeedCurve(a.preset)! : null;
+    const segments = preset ? preset.segments : segmentsFromPoints(a.points!);
+    if (!segments) throw new OpError('invalid_args', 'points must start at 0, end at 1 and be in increasing order (positions are taken to a thousandth)', { points: a.points });
+    const smooth = preset ? preset.smooth : a.smooth !== false;
+    const f = mustClip(d, a.clipId);
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
+    const rate = d.settings.frameRate;
+    const lead = f.clip as MediaClip;
+    const targets = [{ track: f.track, clip: lead }, ...(a.includeLinked === false ? [] : linked(d, lead))];
+    const span = toSourceSpan(lead, lead.duration); // source shown now; the curve shows this stretch
+    const gradual = segments.some((sg) => sg.from !== sg.to);
+    for (const { track, clip } of targets) {
+      if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
+      if (clip.freeze || clip.reverse) throw new OpError('incompatible', 'a freeze frame or a clip that plays backwards cannot take a speed curve', { clipId: clip.id });
+      if (gradual && clip.keepPitch) throw new OpError('incompatible', 'this sound is set to keep its pitch, which works at one speed only', { clipId: clip.id }, 'Turn that off first (set_clip_pitch keepPitch=false).');
+      if (clip.keyframes || clip.volume || clip.effects?.some((e) => e.keyframes)) throw new OpError('incompatible', 'remove keyframes and volume keys first: they would not survive the division into parts', { clipId: clip.id });
+      const i = track.clips.indexOf(clip), next = track.clips[i + 1];
+      if (clip.transition || (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip)))) throw new OpError('incompatible', 'remove the transition at this clip first', { clipId: clip.id });
+      if (!T.eq(clip.start, lead.start) || !T.eq(clip.duration, lead.duration) || !T.eq(toSourceSpan(clip, clip.duration), span))
+        throw new OpError('incompatible', 'the linked clips differ in place, length or speed, so one curve cannot fit them all', { clipId: clip.id }, 'Pass includeLinked=false, or unlink them first.');
+    }
+    // One plan for all targets: each segment ends at an exact share of the source; a part's length is what it takes to play
+    // from where the previous part actually stopped up to that point, rounded down to a whole frame (so rounding never adds up).
+    const sum = segments.reduce((n, sg) => n + sg.weight, 0);
+    const tooShort = () => new OpError('out_of_bounds', 'the clip is too short for this curve: one of its parts would be shorter than a frame', { clipId: lead.id, segments: segments.length }, 'Use a longer clip, a curve with fewer parts, or lower speeds.');
+    const plan: { frames: number; speed: Speed; speedEnd: Speed | null }[] = [];
+    const proto: MediaClip = structuredClone(lead);
+    delete proto.rampWindow;
+    let consumed = T.ZERO, cum = 0;
+    for (const sg of segments) {
+      cum += sg.weight;
+      const boundary = T.normalize({ value: (BigInt(span.value) * BigInt(cum)).toString(), timescale: span.timescale * sum });
+      const share = T.sub(boundary, consumed);
+      if (!T.lt(T.ZERO, share)) throw tooShort();
+      const v0 = speedFromNumber(sg.from), v1 = speedFromNumber(sg.to);
+      const ramp = v0.num * v1.den !== v1.num * v0.den;
+      // one speed: share ÷ v0; gradual: share ÷ the average of the two speeds
+      const length = ramp
+        ? T.normalize({ value: (BigInt(share.value) * BigInt(2 * v0.den * v1.den)).toString(), timescale: share.timescale * (v0.num * v1.den + v1.num * v0.den) })
+        : T.normalize({ value: (BigInt(share.value) * BigInt(v0.den)).toString(), timescale: share.timescale * v0.num });
+      const frames = T.frameIndexAt(length, rate);
+      if (frames < 1) throw tooShort();
+      if (v0.num === v0.den) delete proto.speed; else proto.speed = v0;
+      if (ramp) { proto.speedEnd = v1; if (smooth) proto.speedCurve = 'smooth'; else delete proto.speedCurve; } else { delete proto.speedEnd; delete proto.speedCurve; }
+      proto.duration = T.frameTime(frames, rate);
+      consumed = T.add(consumed, toSourceSpan(proto, proto.duration));
+      plan.push({ frames, speed: v0, speedEnd: ramp ? v1 : null });
+    }
+    const total = plan.reduce((n, p) => n + p.frames, 0);
+    const oldEnd = clipEnd(lead), newEnd = T.add(lead.start, T.frameTime(total, rate));
+    const created: string[] = [], partIds = new Set<string>();
+    const links = targets.length > 1 ? plan.map(() => ctx.newId('lnk')) : null;
+    for (const { track, clip } of targets) {
+      const asset = d.assets[clip.assetId]!;
+      let start = clip.start, sourceIn = clip.sourceIn;
+      const parts: MediaClip[] = [];
+      plan.forEach((pl, k) => {
+        const p: MediaClip = structuredClone(clip);
+        p.id = k === 0 ? clip.id : ctx.newId('clp'); // the first part keeps the clip's id, so references to it stay valid
+        p.start = start; p.duration = T.frameTime(pl.frames, rate); p.sourceIn = sourceIn;
+        delete p.rampWindow;
+        if (pl.speed.num === pl.speed.den) delete p.speed; else p.speed = pl.speed;
+        if (pl.speedEnd) { p.speedEnd = pl.speedEnd; if (smooth) p.speedCurve = 'smooth'; else delete p.speedCurve; } else { delete p.speedEnd; delete p.speedCurve; }
+        if (links) p.linkGroupId = links[k]!;
+        if (k > 0) delete p.fadeIn;
+        if (k < plan.length - 1) delete p.fadeOut;
+        clampFades(p);
+        const used = toSourceSpan(p, p.duration);
+        if (T.lt(asset.duration, T.add(sourceIn, used))) throw new OpError('out_of_bounds', 'the curve would read past the end of the source', { clipId: clip.id });
+        if (k > 0) { copyOverrides(d, clip.id, p.id); created.push(p.id); }
+        partIds.add(p.id);
+        parts.push(p);
+        start = T.add(start, p.duration); sourceIn = T.add(sourceIn, used);
+      });
+      track.clips.splice(track.clips.indexOf(clip), 1, ...parts);
+    }
+    // What comes after: by default it follows the new end on the tracks of the curve (with whatever is linked to it).
+    const moved: string[] = [];
+    const delta = T.sub(newEnd, oldEnd);
+    if (a.ripple !== false && !T.isZero(delta)) {
+      const moving = new Map<string, { track: Track; clip: Clip }>();
+      for (const { track } of targets) for (const c of track.clips) if (!partIds.has(c.id) && !T.lt(c.start, oldEnd)) moving.set(c.id, { track, clip: c });
+      for (const m of [...moving.values()]) for (const l of linked(d, m.clip)) if (!partIds.has(l.clip.id)) moving.set(l.clip.id, l);
+      for (const m of moving.values()) { m.clip.start = T.add(m.clip.start, delta); moved.push(m.clip.id); }
+      for (const track of new Set([...targets.map((t) => t.track), ...[...moving.values()].map((m) => m.track)])) {
+        sortClips(track);
+        if (!forbidsOverlap(track)) continue;
+        for (let i = 1; i < track.clips.length; i++) {
+          const prev = track.clips[i - 1]!, cur = track.clips[i]!;
+          if (T.lt(cur.start, clipEnd(prev))) throw new OpError('overlap', `moving what follows the clip would make clip ${cur.id} overlap clip ${prev.id} on track ${track.id}`, { trackId: track.id, clipId: cur.id }, 'Pass ripple=false and make room by hand, or unlink the clip that is in the way.');
+        }
+      }
+    } else {
+      for (const { track } of targets) { assertFree(track, lead.start, newEnd, partIds); sortClips(track); }
+    }
+    const oldFrames = T.frameIndexAt(T.sub(oldEnd, lead.start), rate);
+    return {
+      affectedIds: [...new Set([...targets.map((t) => t.clip.id), ...created, ...moved])],
+      summary: `Speed curve ${preset ? preset.id : `(${segments.length} parts)`}: ${plan.length} parts, ${fmt(T.frameTime(oldFrames, rate))} → ${fmt(T.frameTime(total, rate))}`,
+      output: { partClipIds: [lead.id, ...created.slice(0, plan.length - 1)], createdClipIds: created, durationFrames: total, deltaFrames: total - oldFrames, movedClipIds: moved, parts: plan.map((p) => ({ frames: p.frames, from: p.speed.num / p.speed.den, to: p.speedEnd ? p.speedEnd.num / p.speedEnd.den : p.speed.num / p.speed.den })) },
+    };
+  },
+});
+
+defineOp({
   name: 'set_volume_keyframe',
   version: 1,
   description: 'Volume automation: set the level of a sound clip at a clip-local, frame-aligned time (0 = silent, 1 = unchanged, up to 4). The level moves in a straight line between keys (or eases, for a key with curve=smooth) and holds before the first and after the last. It multiplies the clip gain, fades and ducking.',
@@ -1093,6 +1214,35 @@ defineOp({
 
 
 
+
+defineOp({
+  name: 'apply_motion_preset',
+  version: 1,
+  description: 'Give a text or picture clip one motion from the motion library (see list_catalog → motionPresets): an entrance (motion.in.*), an exit (motion.out.*), a loop that repeats over the whole clip (motion.loop.*) or one move across the whole clip such as a slow zoom or pan (motion.move.*). It writes ordinary keyframes on the properties the motion uses (x, y, scale, rotation, opacity), measured from the values the clip has now, so the result stays editable with set_keyframe. An entrance replaces the keys of those properties in its first frames and an exit in its last frames, so the two can be combined; a loop or a move replaces all keys of its properties. `frames` is the length of an entrance or exit, or the period of a loop. The exit is placed against the current clip end; run again after changing the length.',
+  args: z.object({ clipId: z.string(), presetId: z.enum(MOTION_PRESET_IDS), frames: z.number().int().min(1).max(600).optional(), amount: z.number().min(0).max(2).optional().describe('Strength, default 1') }).strict(),
+  apply(d, a) {
+    const { clip, track } = mustClip(d, a.clipId);
+    if (clip.type === 'caption' || track.kind === 'audio') throw new OpError('incompatible', 'only text and picture clips can be animated', { clipId: clip.id });
+    const preset = MOTION_PRESETS.find((m) => m.id === a.presetId)!;
+    const rate = d.settings.frameRate;
+    const total = T.frameIndexAt(clip.duration, rate);
+    if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
+    const made = motionKeys(preset.id, { totalFrames: total, rest: clip.transform, ...(a.frames !== undefined ? { frames: a.frames } : {}), ...(a.amount !== undefined ? { amount: a.amount } : {}) });
+    const keyframes = { ...clip.keyframes };
+    const frameOf = (t: T.RationalTime) => T.toSeconds(t) * (rate.num / rate.den);
+    for (const [p, keys] of Object.entries(made) as [(typeof ANIMATABLE)[number], { frame: number; value: number; easing: (typeof EASINGS)[number] }[]][]) {
+      const lo = keys[0]!.frame, hi = keys[keys.length - 1]!.frame;
+      // keys the motion does not cover stay: after an entrance, before an exit; a loop or a move covers the whole clip
+      const kept = preset.kind === 'in' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) > hi + 1e-9)
+        : preset.kind === 'out' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) < lo - 1e-9) : [];
+      const next = [...kept, ...keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }))].sort((x, y) => T.cmp(x.time, y.time));
+      if (next.length > 2000) throw new OpError('out_of_bounds', 'this motion would need more keyframes than a property can hold on a clip this long', { keyframes: next.length }, 'Use a longer period (frames), or a shorter clip.');
+      keyframes[p] = next;
+    }
+    clip.keyframes = keyframes;
+    return { affectedIds: [clip.id], summary: `Motion ${preset.id}`, output: { properties: Object.keys(made), kind: preset.kind } };
+  },
+});
 
 defineOp({
   name: 'duplicate_clips',
