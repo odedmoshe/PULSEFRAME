@@ -63,6 +63,7 @@ export interface SpeechStatus {
   engine: { configured: boolean; ok: boolean; detail: string };
   models: { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; license: string | null; totalBytes: number; missingDownloadBytes: number; ready: boolean }[];
 }
+export interface SoundEffectInfo { id: string; version: number; name: { he: string; en: string }; seconds: number; category: string }
 export const api = {
   listProjectsFull: () => call<{ projects: ProjectListItem[] }>('/projects'),
   deleteProject: (id: string, confirmName: string) => call<unknown>(`/projects/${encodeURIComponent(id)}/delete`, json({ confirmName })),
@@ -130,6 +131,13 @@ export const api = {
   planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
   applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),
   regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
+  soundEffects: async () => (await call<{ soundEffects: SoundEffectInfo[] }>('/catalog')).soundEffects,
+  soundEffectAudio: async (id: string) => {
+    const r = await fetch(`/api/v1/sfx/${encodeURIComponent(id)}/audio`, { credentials: 'same-origin' });
+    if (!r.ok) throw new ApiFailure(r.status, 'sfx_fetch_failed', `HTTP ${r.status}`);
+    return r.blob();
+  },
+  addSoundEffect: (id: string, body: { sfxId: string; start?: unknown; trackId?: string }) => call<{ assetId: string; revision: number; placed: unknown }>(`/projects/${id}/sfx`, json(body)),
   events: (id: string, since: number) => new EventSource(`/api/v1/projects/${id}/events?since=${since}`, { withCredentials: true }),
 };
 

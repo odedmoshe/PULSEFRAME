@@ -3,6 +3,7 @@ import * as T from '@pulseframe/time';
 import { splitSentences, volumeLevelAt, type Clip, type ProjectDocument } from '@pulseframe/core';
 import { api, type LoudnessResult, type SpeechStatus } from '../api.ts';
 import { useEditorState } from './store.ts';
+import { SfxBrowser } from './SfxBrowser.tsx';
 
 type Track = ProjectDocument['sequences'][string]['tracks'][number];
 
@@ -290,6 +291,7 @@ export function SoundPanel() {
       )}
       <p className="muted">{t('sound.duck.hint')}</p>
       <Narration />
+      <SfxBrowser />
 
       {clip && (
         <>
