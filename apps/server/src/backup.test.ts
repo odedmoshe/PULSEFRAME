@@ -114,7 +114,7 @@ describe('backup of a running server and restore', () => {
       // each retained snapshot is a complete database at the revision of its run
       for (const [i, n] of listSnapshots(dest).entries()) {
         const db = new Database(path.join(dest, 'snapshots', n), { readonly: true });
-        try { expect(db.pragma('integrity_check', { simple: true })).toBe('ok'); expect(JSON.stringify(db.prepare('select * from projects').all())).toContain(`m${i + 2}`); expect(JSON.stringify(db.prepare('select * from projects').all())).not.toContain(`m${i + 3}`); } finally { db.close(); }
+        try { expect(db.pragma('integrity_check', { simple: true })).toBe('ok'); /* the marker labels as written in the stored document; a bare "m4" would also match random ids, which made this test fail now and then */ const stored = JSON.stringify(db.prepare('select * from projects').all()).replaceAll('\\"', '"'); expect(stored).toContain(`"label":"m${i + 2}"`); expect(stored).not.toContain(`"label":"m${i + 3}"`); } finally { db.close(); }
       }
       // verifying the backup: clean now; a flipped byte in a media file and a truncated snapshot are both reported, and nothing is changed
       const upv: any = await (await fetch(`${a.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'tone.wav' }, body: new Uint8Array(wav()) })).json();

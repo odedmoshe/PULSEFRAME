@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import type { Clip } from '@pulseframe/core';
-import { assetNotices, clipEnd, FONT_CATALOG, speedValue } from '@pulseframe/core';
+import { assetNotices, clipEnd, FONT_CATALOG, speedValue, TEXT_PRESETS } from '@pulseframe/core';
 import { dictionaries, jobStageLabel, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { Scopes } from './Scopes.tsx';
@@ -542,7 +542,7 @@ function AnimateControls({ clipId }: { clipId: string }) {
 }
 
 function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
-  const { editor, t } = useEditorState();
+  const { editor, state, t } = useEditorState();
   const variantId = editor.getState().viewVariantId;
   const viewClip = variantId ? editor.viewDoc?.sequences[editor.viewDoc.mainSequenceId]?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clip.id) ?? clip : clip;
   // While a format is viewed, the wording and size fields show and edit that format's own values (stored as a format-only override).
@@ -575,6 +575,12 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
               {hasTextOverride && <> <button type="button" className="ghost" data-testid="text-format-reset" onClick={() => void editor.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text: null, textStyle: null } }], 'Reset format text')}>{t('text.formatOnly.reset')}</button></>}
             </p>
           )}
+          <label>{t('text.preset')}
+            <select value="" data-testid="text-preset" onChange={(e) => { const presetId = e.target.value; if (presetId) void editor.commit([{ op: 'apply_text_preset', args: { clipId: clip.id, presetId } }], 'Apply text style'); }}>
+              <option value="">{t('text.preset.pick')}</option>
+              {TEXT_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name[state.lang]}</option>)}
+            </select>
+          </label>
           <label>{t('font.family')}
             <select value={clip.style.fontFamily} data-testid="text-font" onChange={(e) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: e.target.value } } }], 'Font')}>
               {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}

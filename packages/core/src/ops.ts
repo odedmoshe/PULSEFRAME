@@ -13,6 +13,7 @@ import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
 import { lookParams } from './looks.ts';
+import { findTextPreset } from './textPresets.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
@@ -381,6 +382,25 @@ defineOp({
     track.clips.push(clip);
     sortClips(track);
     return { affectedIds: [clip.id], summary: `Added text "${a.text.slice(0, 40)}" at ${fmt(a.start)}`, output: { clipId: clip.id, trackId: track.id } };
+  },
+});
+
+defineOp({
+  name: 'apply_text_preset',
+  version: 1,
+  description: 'Give a text clip one of the named text styles (see list_catalog → textPresets): font, weight, size, colours, box, outline and an optional shadow or glow. The text itself, its position, alignment and direction are kept, and every value stays editable (update_text, update_effect).',
+  args: z.object({ clipId: z.string(), presetId: z.string() }).strict(),
+  apply(d, a, ctx) {
+    const { clip } = mustClip(d, a.clipId);
+    if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
+    const preset = findTextPreset(a.presetId);
+    if (!preset) throw new OpError('not_found', `text style "${a.presetId}" does not exist`, { presetId: a.presetId }, 'Call list_catalog for the text styles.');
+    clip.style = { ...clip.style, ...preset.style };
+    // The preset owns the clip's drop shadow: replaced, added or removed. Other effects are left alone.
+    const others = (clip.effects ?? []).filter((e) => e.type !== 'stylize.shadow');
+    const list = preset.shadow ? [...others, { id: ctx.newId('fx'), type: 'stylize.shadow', enabled: true, params: parseEffect('stylize.shadow', preset.shadow) }] : others;
+    if (list.length) clip.effects = list; else delete clip.effects;
+    return { affectedIds: [clip.id], summary: `Applied text style ${a.presetId}`, output: { style: clip.style } };
   },
 });
 
