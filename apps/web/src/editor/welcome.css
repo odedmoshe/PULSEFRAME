@@ -1,0 +1,19 @@
+.welcome { position: absolute; inset-block: var(--pf-s-3); inset-inline: 0; margin-inline: auto; width: min(520px, calc(100% - 2 * var(--pf-s-4))); max-height: calc(100% - 2 * var(--pf-s-3)); height: fit-content; margin-block: auto; overflow: auto; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: var(--pf-s-3); padding: var(--pf-s-5); background: var(--pf-surface); border: 1px solid var(--pf-border); border-radius: var(--pf-r-lg); box-shadow: 0 12px 36px rgba(0, 0, 0, .45); color: var(--pf-text); text-align: start; z-index: 5; }
+.welcome h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.welcome-lead { margin: 0; color: var(--pf-text-muted); font-size: var(--pf-fs-md); }
+.welcome-drop { display: flex; flex-direction: column; align-items: center; gap: var(--pf-s-3); padding: var(--pf-s-5) var(--pf-s-4); text-align: center; border: 2px dashed var(--pf-border); border-radius: var(--pf-r-lg); background: var(--pf-surface-raised); font-size: var(--pf-fs-lg); transition: border-color .15s, background-color .15s; }
+.welcome-drop svg { color: var(--pf-accent); }
+.welcome-drop.over { border-color: var(--pf-accent); background: var(--pf-bg); }
+.welcome-drop button { padding: var(--pf-s-2) var(--pf-s-5); font-size: var(--pf-fs-lg); }
+.welcome-drop button:focus-visible { outline: 2px solid var(--pf-accent-2); outline-offset: 3px; }
+.welcome-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-s-2); font-size: var(--pf-fs-md); }
+.welcome-steps li { display: flex; align-items: center; gap: var(--pf-s-2); }
+.welcome-steps svg { color: var(--pf-accent); flex: none; }
+.welcome-steps .n { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--pf-surface-raised); border: 1px solid var(--pf-border); font-size: var(--pf-fs-sm); font-weight: 600; }
+.welcome-hints { margin: 0; display: flex; flex-wrap: wrap; gap: var(--pf-s-1) var(--pf-s-4); color: var(--pf-text-muted); font-size: var(--pf-fs-sm); }
+.welcome kbd { font-family: var(--pf-mono); font-size: 11px; padding: 1px 6px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); background: var(--pf-surface-raised); color: var(--pf-text); }
+@media (max-height: 760px) { .welcome { padding: var(--pf-s-3) var(--pf-s-4); gap: var(--pf-s-2); } .welcome h2 { font-size: 16px; } .welcome-lead, .welcome-hints { display: none; }
+  .welcome-drop { padding: var(--pf-s-2); gap: var(--pf-s-2); font-size: var(--pf-fs-md); } .welcome-drop svg { width: 20px; height: 20px; } .welcome-drop button { padding: var(--pf-s-1) var(--pf-s-4); font-size: var(--pf-fs-md); }
+  .welcome-steps { flex-direction: row; flex-wrap: wrap; gap: var(--pf-s-1) var(--pf-s-3); font-size: var(--pf-fs-sm); } }
+@media (prefers-reduced-motion: reduce) { .welcome, .welcome * { transition: none !important; animation: none !important; } }

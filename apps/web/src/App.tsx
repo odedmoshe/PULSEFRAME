@@ -5,6 +5,7 @@ import { chordOf, Keymap } from './editor/commands.ts';
 import { ErrorBar, Header, Inspector, Library, Transport } from './editor/panels.tsx';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { Timeline } from './editor/Timeline.tsx';
+import { Welcome } from './editor/Welcome.tsx';
 
 export function App() {
   const editor = useMemo(() => new Editor(), []);
@@ -53,6 +54,7 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
         <div className="canvas-wrap">
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
           <CanvasHandles canvas={canvasEl} />
+          <Welcome />
         </div>
         <Transport />
       </main>
