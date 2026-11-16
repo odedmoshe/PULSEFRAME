@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import * as T from '@pulseframe/time';
-import { applyTransaction, COLOR_LOOKS, createProject, EFFECTS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, COLOR_LOOKS, createProject, EFFECTS, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate, type FrameImage } from '@pulseframe/engine';
 import type { Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
@@ -14,9 +14,11 @@ import { useEditorState } from './store.ts';
 import { GALLERY_STRINGS } from './gallery.strings.ts';
 import './effectGallery.css';
 
-type Kind = 'effect' | 'look' | 'transition' | 'text';
-type TabId = 'effects' | 'looks' | 'transitions' | 'text';
-const TAB_KIND: Record<TabId, Kind> = { effects: 'effect', looks: 'look', transitions: 'transition', text: 'text' };
+type Kind = 'effect' | 'look' | 'transition' | 'text' | 'motion';
+type TabId = 'effects' | 'looks' | 'transitions' | 'text' | 'motion';
+const TAB_KIND: Record<TabId, Kind> = { effects: 'effect', looks: 'look', transitions: 'transition', text: 'text', motion: 'motion' };
+const MOTION_GROUPS = ['in', 'out', 'loop', 'move'] as const;
+const MOTION_FRAMES = 60;
 const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'distort', 'motion'] as const;
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const LONG_SIDE = 180;
@@ -25,12 +27,13 @@ const f = (n: number) => T.frameTime(n, RATE);
 const FRAME_AT = 12; // 0.4 s at 30 fps, so time-driven effects show something
 const TRANSITION_FRAMES = 15;
 
-interface Item { key: string; kind: Kind; id: string; he: string; en: string; gpu: boolean; category?: string }
+interface Item { key: string; kind: Kind; id: string; he: string; en: string; gpu: boolean; category?: string; mkind?: (typeof MOTION_GROUPS)[number]; mframes?: number }
 const ITEMS: Item[] = [
   ...EFFECTS.map((e) => ({ key: `effect:${e.id}`, kind: 'effect' as const, id: e.id, he: e.name.he, en: e.name.en, gpu: e.cost === 'gpu', category: e.category })),
   ...COLOR_LOOKS.map((l) => ({ key: `look:${l.id}`, kind: 'look' as const, id: l.id, he: l.name.he, en: l.name.en, gpu: true })),
   ...TRANSITIONS.map((x) => ({ key: `transition:${x.id}`, kind: 'transition' as const, id: x.id, he: x.name.he, en: x.name.en, gpu: x.gpu })),
   ...TEXT_PRESETS.map((p) => ({ key: `text:${p.id}`, kind: 'text' as const, id: p.id, he: p.name.he, en: p.name.en, gpu: false })),
+  ...MOTION_PRESETS.map((m) => ({ key: `motion:${m.id}`, kind: 'motion' as const, id: m.id, he: m.name.he, en: m.name.en, gpu: false, mkind: m.kind as (typeof MOTION_GROUPS)[number], mframes: m.defaultFrames })),
 ];
 
 // ---- thumbnail documents (same approach as the Look Lab: a small in-memory project through the real ops) ----
@@ -54,7 +57,25 @@ function makeScene(w: number, h: number): Scene {
   return { w, h, base: s.doc, a: s.out[0]!.assetId as string, b: s.out[1]!.assetId as string, v1 };
 }
 const addPicture = (s: Scene, assetId: string, start: number, dur: number): OpCall => ({ op: 'add_clip', args: { assetId, trackId: s.v1, start: f(start), duration: f(dur), withLinkedAudio: false } });
-function buildDoc(s: Scene, it: Item): { doc: ProjectDocument; frame: number } {
+/** A frame where the motion is visible: a third into an entrance, two thirds into an exit, a quarter period of a loop, the end of a move. */
+function motionStaticFrame(it: Item): number {
+  const n = it.mframes || 0;
+  if (it.mkind === 'in') return Math.max(1, Math.floor(n / 3));
+  if (it.mkind === 'out') return Math.min(MOTION_FRAMES - 1, MOTION_FRAMES - n + Math.floor((2 * n) / 3));
+  if (it.mkind === 'loop') return Math.max(1, Math.floor(n / 4));
+  return MOTION_FRAMES - 1;
+}
+function buildDoc(s: Scene, it: Item, isText = false): { doc: ProjectDocument; frame: number } {
+  if (it.kind === 'motion') {
+    const frame = motionStaticFrame(it);
+    if (isText) {
+      const doc = { ...s.base, settings: { ...s.base.settings, background: '#2b2b2b' } };
+      const a = step(doc, [{ op: 'add_text', args: { text: GALLERY_STRINGS.he.sample, start: f(0), duration: f(MOTION_FRAMES) } }]);
+      return { doc: step(a.doc, [{ op: 'apply_motion_preset', args: { clipId: a.out[0]!.clipId as string, presetId: it.id } }]).doc, frame };
+    }
+    const a = step(s.base, [addPicture(s, s.a, 0, MOTION_FRAMES)]);
+    return { doc: step(a.doc, [{ op: 'apply_motion_preset', args: { clipId: a.out[0]!.clipId as string, presetId: it.id } }]).doc, frame };
+  }
   if (it.kind === 'transition') {
     const a = step(s.base, [addPicture(s, s.a, 0, 60), addPicture(s, s.b, 60, 60)]);
     const clipId = a.out[1]!.clipId as string;
@@ -74,7 +95,7 @@ function buildDoc(s: Scene, it: Item): { doc: ProjectDocument; frame: number } {
 const sameParams = (a: Record<string, unknown>, b: Record<string, unknown>) => Object.keys(b).every((k) => a[k] === b[k]);
 function pressed(clip: Clip, it: Item): boolean {
   if (it.kind === 'transition') return clip.type === 'media' && clip.transition?.type === it.id;
-  if (it.kind === 'text') return false;
+  if (it.kind === 'text' || it.kind === 'motion') return false;
   const fx = clip.type === 'caption' ? [] : clip.effects ?? [];
   if (it.kind === 'effect') return fx.some((e) => e.type === it.id);
   const look = COLOR_LOOKS.find((l) => l.id === it.id)!;
@@ -101,7 +122,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
   const gpuOk = !!state.gpu?.available;
   const isText = clip.type === 'text';
   const media = clip.type === 'media' && trackKind === 'video';
-  const tabs = useMemo<TabId[]>(() => [...(isText || media ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : [])], [isText, media]);
+  const tabs = useMemo<TabId[]>(() => [...(isText || media ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media ? (['motion'] as TabId[]) : [])], [isText, media]);
   const [tab, setTab] = useState<TabId>(tabs[0] ?? 'effects');
   const [query, setQuery] = useState('');
   const [snap, setSnap] = useState<{ bitmap: ImageBitmap; dim: ImageBitmap; w: number; h: number } | null | undefined>(undefined);
@@ -111,10 +132,18 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
   const canvases = useRef(new Map<string, HTMLCanvasElement>());
   const done = useRef(new Set<string>());
   const running = useRef<Promise<void>>(Promise.resolve());
+  const [hot, setHot] = useState<string | null>(null);
+  const motionDocs = useRef(new Map<string, { doc: ProjectDocument; frame: number }>());
+  const motionDoc = (it: Item) => {
+    let d = motionDocs.current.get(it.key);
+    if (!d) { d = buildDoc(motionScene, it, isText); motionDocs.current.set(it.key, d); }
+    return d;
+  };
   const settings = editor.doc?.settings;
   const aspect = settings ? settings.width / settings.height : 16 / 9;
   const [tw, th] = aspect >= 1 ? [LONG_SIDE, Math.max(16, Math.round(LONG_SIDE / aspect))] : [Math.max(16, Math.round(LONG_SIDE * aspect)), LONG_SIDE];
 
+  const motionScene = useMemo(() => makeScene(tw, th), [tw, th]);
   useEffect(() => { searchRef.current?.focus(); }, []);
 
   // One snapshot of the frame on screen, taken when the dialog opens.
@@ -147,7 +176,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
   // Draw tiles of the visible tab one after another; stop when the tab, the filter or the dialog changes.
   useEffect(() => {
     if (!tabs.includes(tab)) return;
-    const needsSnap = tab !== 'text';
+    const needsSnap = tab !== 'text' && !(tab === 'motion' && isText);
     if (needsSnap && !snap) return;
     let cancelled = false;
     const prev = running.current;
@@ -164,7 +193,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
         const canvas = canvases.current.get(it.key);
         if (!canvas) continue;
         try {
-          const { doc, frame } = buildDoc(scene, it);
+          const { doc, frame } = buildDoc(scene, it, isText);
           const provider = async (l: { assetId: string }): Promise<FrameImage | null> => {
             const bm = bitmaps.get(l.assetId);
             return bm ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(bm, dx, dy, dw, dh) } : null;
@@ -182,11 +211,47 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, visibleKey, snap, gpuOk, tw, th]);
 
+  // Animate only the hot motion tile: one drawGraph at a time, about 30 fps, stopped on leave / blur / tab change / close.
+  useEffect(() => { setHot(null); }, [tab]);
+  useEffect(() => {
+    if (!hot || tab !== 'motion') return;
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const it = ITEMS.find((i) => i.key === hot);
+    const canvas = canvases.current.get(hot);
+    if (!it || !canvas || (!isText && !snap)) return;
+    const { doc, frame } = motionDoc(it);
+    const provider = async (): Promise<FrameImage | null> => (snap ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(snap.bitmap, dx, dy, dw, dh) } : null);
+    const ctx = canvas.getContext('2d')!;
+    let stop = false;
+    let busy: Promise<unknown> = Promise.resolve();
+    let startAt = 0, last = -1, raf = 0;
+    const tick = (now: number) => {
+      if (stop) return;
+      raf = requestAnimationFrame(tick);
+      if (!startAt) startAt = now;
+      const n = Math.floor(((now - startAt) * 30) / 1000) % MOTION_FRAMES;
+      if (n === last || inflight) return;
+      last = n;
+      inflight = true;
+      busy = drawGraph(ctx, evaluate(doc, f(n)), provider).catch(() => undefined).finally(() => { inflight = false; });
+    };
+    let inflight = false;
+    const prev = running.current;
+    void prev.then(() => { if (!stop) raf = requestAnimationFrame(tick); });
+    return () => {
+      stop = true;
+      cancelAnimationFrame(raf);
+      void busy.then(() => { if (canvases.current.get(it.key) === canvas) return drawGraph(ctx, evaluate(doc, f(frame)), provider); }).catch(() => undefined);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hot, tab, snap]);
+
   const commit = (it: Item) => {
     const clipId = clip.id;
     const call: OpCall = it.kind === 'effect' ? { op: 'add_effect', args: { clipId, type: it.id } }
       : it.kind === 'look' ? { op: 'apply_look', args: { clipId, lookId: it.id } }
       : it.kind === 'transition' ? { op: 'set_transition', args: { clipId, type: it.id } }
+      : it.kind === 'motion' ? { op: 'apply_motion_preset', args: { clipId, presetId: it.id } }
       : { op: 'apply_text_preset', args: { clipId, presetId: it.id } };
     void editor.commit([call], `Gallery: ${it.id}`);
   };
@@ -218,7 +283,9 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     return (
       <button key={it.key} type="button" className="pf-gal-tile" data-testid="gallery-tile" data-kind={it.kind} data-id={it.id}
         data-rendered={rendered.has(it.key) ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
-        disabled={unavailable} aria-pressed={pressed(clip, it)} hidden={!matches(it)} onClick={() => commit(it)}>
+        disabled={unavailable} aria-pressed={pressed(clip, it)} hidden={!matches(it)} onClick={() => commit(it)}
+        onPointerEnter={it.kind === 'motion' ? () => setHot(it.key) : undefined} onPointerLeave={it.kind === 'motion' ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
+        onFocus={it.kind === 'motion' ? () => setHot(it.key) : undefined} onBlur={it.kind === 'motion' ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
         <canvas ref={(c) => { if (c) canvases.current.set(it.key, c); else canvases.current.delete(it.key); }} width={tw} height={th} aria-hidden="true" style={{ ['--pf-gal-aspect' as string]: `${tw} / ${th}` }} />
         <span className="pf-gal-name"><bdi>{name}</bdi></span>
         {unavailable && <span className="pf-gal-unavail">{G.needsGpu}</span>}
@@ -242,7 +309,18 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
               </section>
             );
           })
-          : <div className="pf-gal-grid">{items.map(tileOf)}</div>}
+          : id === 'motion'
+            ? MOTION_GROUPS.map((g) => {
+              const group = items.filter((i) => i.mkind === g);
+              if (!group.some(matches)) return null;
+              return (
+                <section key={g} aria-labelledby={`pf-gal-mot-${g}`}>
+                  <h3 className="pf-gal-heading" id={`pf-gal-mot-${g}`} data-testid={`gallery-motion-group-${g}`}>{G.motionGroups[g]}</h3>
+                  <div className="pf-gal-grid">{group.map(tileOf)}</div>
+                </section>
+              );
+            })
+            : <div className="pf-gal-grid">{items.map(tileOf)}</div>}
         {id === tab && shown === 0 && <div className="pf-gal-empty" role="status">{G.empty}</div>}
       </div>
     );
@@ -263,6 +341,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
         </div>
         <div className="pf-gal-body">
           <p className="pf-gal-note" role="status">{tab !== 'text' && snap === null ? G.noFrame : G.thumbNote}</p>
+          {tab === 'motion' && <p className="pf-gal-note pf-gal-note-small" data-testid="gallery-motion-note">{G.motionNote}</p>}
           {tabs.map(panel)}
         </div>
       </div>
