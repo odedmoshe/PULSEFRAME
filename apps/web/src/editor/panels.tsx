@@ -15,6 +15,7 @@ import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
 import { SpeedCurveField } from './SpeedCurves.tsx';
 import { PacingPanel } from './PacingPanel.tsx';
+import { Section, SECTION_STRINGS, setAllSections } from './Section.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
 import { SourceViewer } from './SourceViewer.tsx';
@@ -389,11 +390,17 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         {clipFocus === 'color' && <Scopes />}
         {clipFocus !== 'all' && <p className="muted" data-testid="clip-focus-note">{t(clipFocus === 'motion' ? 'workspace.motion.note' : 'workspace.color.note')}</p>}
         {sel && <p><button className="ghost danger" data-testid="clip-delete" onClick={() => run(editor, 'edit.delete')}>🗑 {t('clip.delete')} <kbd>Del</kbd></button></p>}
+        {sel && (
+          <div className="pf-sections-bar" role="group" aria-label={SECTION_STRINGS[state.lang].group}>
+            <button type="button" className="ghost" data-testid="sections-open-all" onClick={() => setAllSections(true)}>{SECTION_STRINGS[state.lang].openAll}</button>
+            <button type="button" className="ghost" data-testid="sections-close-all" onClick={() => setAllSections(false)}>{SECTION_STRINGS[state.lang].closeAll}</button>
+          </div>
+        )}
         {!sel ? <p className="muted">{t('inspector.none')}</p> : clipFocus !== 'color' && <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
-        {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}
-        {clipFocus !== 'motion' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} />}
+        {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <Section id="entrance" title={SECTION_STRINGS[state.lang].entrance}><AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} /></Section>}
+        {clipFocus !== 'motion' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <Section id="look" title={SECTION_STRINGS[state.lang].look}><LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} /></Section>}
         {clipFocus === 'color' && sel && !(state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video')) && <p className="muted" data-testid="color-none">{t('workspace.color.none')}</p>}
-        {clipFocus === 'all' && sel && state.selection.length === 1 && sel.clip.type === 'media' && <AnalysisPanel key={`analysis:${sel.clip.id}`} />}
+        {clipFocus === 'all' && sel && state.selection.length === 1 && sel.clip.type === 'media' && <Section id="analysis" title={SECTION_STRINGS[state.lang].analysis}><AnalysisPanel key={`analysis:${sel.clip.id}`} /></Section>}
       </div>
       <div {...panelProps('speech')}>
         <h2>{t('transcript')}</h2>
@@ -537,8 +544,14 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
     if (!text || text === shownText) return;
     void editor.commit(variantId ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text } }] : [{ op: clip.type === 'caption' ? 'update_cue' : 'update_text', args: { clipId: clip.id, text } }], 'Edit text');
   };
+  const S = SECTION_STRINGS[state.lang];
+  const notImage = clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze;
+  const canFreeze = clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video;
+  const canReverse = clip.type === 'media' && !variantId && !clip.freeze && (editor.selected?.track.kind === 'video' ? !!editor.doc?.assets[clip.assetId]?.video : editor.selected?.track.kind === 'audio' && !!editor.doc?.assets[clip.assetId]?.audio);
+  const hasSpeed = notImage || canFreeze || canReverse || (clip.type === 'media' && !!clip.freeze);
   return (
     <div className="fields">
+      {(clip.type === 'text' || clip.type === 'caption') && <Section id="text" title={S.text}>
       {clip.type === 'text' && (
         <>
           <label>{t('text.content')}
@@ -588,6 +601,8 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
           )}
         </>
       )}
+      </Section>}
+      {hasSpeed && <Section id="speed" title={S.speed}>
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedField clip={clip} />}
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <RampField clip={clip} />}
       {clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze && <SpeedCurveField key={`curve:${clip.id}`} clip={clip} />}
@@ -600,10 +615,12 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
           <p className="muted" data-testid="reverse-note">{t(clip.linkGroupId ? 'reverse.note.linked' : 'reverse.note')}</p>
         </>
       )}
+      {clip.type === 'media' && clip.freeze && <p className="muted" data-testid="freeze-note">{t('freeze.note')}</p>}
+      </Section>}
       {clip.type === 'media' && clip.linkGroupId && !variantId && (
         <div className="row"><button type="button" className="ghost" data-testid="unlink-clip" title={t('unlink.hint')} onClick={() => void editor.commit([{ op: 'unlink_clip', args: { clipId: clip.id } }], 'Detach clip')}>{t('unlink.label')}</button></div>
       )}
-      {clip.type === 'media' && clip.freeze && <p className="muted" data-testid="freeze-note">{t('freeze.note')}</p>}
+      <Section id="transform" title={S.transform}>
       {/* Values shown are the ones rendered at the playhead. Editing an animated property writes a keyframe there. */}
       {variantId ? (
         <div className="transform-scope" data-testid="transform-scope" data-scope="format">
@@ -629,6 +646,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
         <button className="ghost" disabled={!clip.keyframes || !!variantId} title={variantId ? t('transform.keyframesMasterOnly') : undefined} data-testid="keyframes-clear"
           onClick={() => void editor.commit([{ op: 'clear_keyframes', args: { clipId: clip.id, at: T.sub(T.max(clip.start, T.min(editor.playhead, T.sub(clipEnd(clip), T.frameTime(1, editor.rate)))), clip.start) } }], 'Clear keyframes')}>{t('keyframes.clear')}</button>
       </div>
+      </Section>
       <dl>
         <dt>{t('clip.start')}</dt><dd><bdi>{T.toSeconds(clip.start).toFixed(3)}s</bdi></dd>
         <dt>{t('clip.duration')}</dt><dd><bdi>{T.toSeconds(clip.duration).toFixed(3)}s</bdi></dd>

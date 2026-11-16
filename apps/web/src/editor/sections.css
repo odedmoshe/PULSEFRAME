@@ -1,0 +1,15 @@
+.pf-section { border-block-end: 1px solid var(--pf-border); padding-block: var(--pf-s-1); }
+.pf-section > summary {
+  display: flex; align-items: center; gap: var(--pf-s-2); min-height: 32px; padding: var(--pf-s-1) var(--pf-s-1);
+  cursor: pointer; list-style: none; user-select: none; color: var(--pf-text); font-size: var(--pf-fs-md); font-weight: 600; border-radius: var(--pf-r-sm);
+}
+.pf-section > summary::-webkit-details-marker { display: none; }
+.pf-section > summary:hover { background: var(--pf-surface-raised); }
+.pf-section > summary:focus-visible { outline: 2px solid var(--pf-accent); outline-offset: 1px; }
+.pf-section-chev { display: inline-flex; flex: none; color: var(--pf-text-muted); transform: rotate(-90deg); transition: transform 120ms ease; }
+html[dir='rtl'] .pf-section-chev { transform: rotate(90deg); }
+.pf-section[open] > summary .pf-section-chev, html[dir='rtl'] .pf-section[open] > summary .pf-section-chev { transform: rotate(0); }
+.pf-section-body { display: grid; gap: var(--pf-s-3); padding: var(--pf-s-2) var(--pf-s-1) var(--pf-s-3); }
+.pf-sections-bar { display: flex; gap: var(--pf-s-2); justify-content: flex-end; }
+.pf-sections-bar button { font-size: var(--pf-fs-sm); padding: 2px var(--pf-s-2); }
+@media (prefers-reduced-motion: reduce) { .pf-section-chev { transition: none; } }
