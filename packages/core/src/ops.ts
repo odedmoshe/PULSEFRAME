@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
-  ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
+  ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
   CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS,
   type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
@@ -424,6 +424,24 @@ defineOp({
     if (a.text !== undefined) clip.text = a.text;
     if (a.style) clip.style = { ...clip.style, ...a.style };
     return { affectedIds: [clip.id], summary: `Updated text "${clip.text.slice(0, 40)}"` };
+  },
+});
+
+defineOp({
+  name: 'set_text_animation',
+  version: 1,
+  description: 'Animate the letters, words or lines of a title one after another: an entrance (fade, typewriter, rise, drop, pop, slide, zoom), an exit (fade, sink, lift, shrink, slide) and/or a movement that repeats while it is shown (wave, bounce, pulse, jitter). Unspecified fields keep their value; animation=null removes it. Units follow reading order, so Hebrew starts from the right. This is separate from keyframes and motions, which move the whole title. When nothing is animating (after the entrance, before the exit, no loop) the title is drawn exactly as a title without animation.',
+  args: z.object({ clipId: z.string(), animation: TextAnimationSchema.partial().nullable() }).strict(),
+  apply(d, a) {
+    const { clip } = mustClip(d, a.clipId);
+    if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId }, 'Captions animate through their caption style; picture clips through motions.');
+    if (a.animation === null) { delete clip.animation; return { affectedIds: [clip.id], summary: 'Removed text animation' }; }
+    const next = { ...(clip.animation ?? DEFAULT_TEXT_ANIMATION), ...a.animation };
+    if (!next.in && !next.out && !next.loop) { delete clip.animation; return { affectedIds: [clip.id], summary: 'Removed text animation' }; }
+    const total = T.frameIndexAt(clip.duration, d.settings.frameRate);
+    if ((next.in ? next.inFrames : 0) + (next.out ? next.outFrames : 0) > total) throw new OpError('out_of_bounds', `entrance (${next.in ? next.inFrames : 0}) plus exit (${next.out ? next.outFrames : 0}) frames exceed the clip length (${total} frames)`, { clipFrames: total }, 'Use fewer frames or a longer title.');
+    clip.animation = next;
+    return { affectedIds: [clip.id], summary: `Text animation by ${next.by}${next.in ? `, in: ${next.in}` : ''}${next.out ? `, out: ${next.out}` : ''}${next.loop ? `, loop: ${next.loop}` : ''}`, output: { animation: next } };
   },
 });
 

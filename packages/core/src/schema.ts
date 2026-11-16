@@ -175,7 +175,28 @@ export const MediaClipSchema = z
     transition: TransitionSchema.optional(),
   })
   .strict();
-export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema }).strict();
+/**
+ * How the letters, words or lines of a title come in, go out and move while it is shown. The units animate one after
+ * another in reading order. Entrance: fade, typewriter (each unit simply appears), rise (from below), drop (from above),
+ * pop (grows with a small overshoot), slide (from the side reading starts on), zoom (settles from larger).
+ * Exit: fade, sink (down), lift (up), shrink, slide (toward the side reading ends on). Loop: wave, bounce, pulse, jitter.
+ */
+export const TEXT_ANIM_IN = ['fade', 'typewriter', 'rise', 'drop', 'pop', 'slide', 'zoom'] as const;
+export const TEXT_ANIM_OUT = ['fade', 'sink', 'lift', 'shrink', 'slide'] as const;
+export const TEXT_ANIM_LOOP = ['wave', 'bounce', 'pulse', 'jitter'] as const;
+export const TextAnimationSchema = z
+  .object({
+    by: z.enum(['letter', 'word', 'line']).describe('what animates as one piece'),
+    in: z.enum(TEXT_ANIM_IN).nullable(),
+    out: z.enum(TEXT_ANIM_OUT).nullable(),
+    loop: z.enum(TEXT_ANIM_LOOP).nullable(),
+    inFrames: z.number().int().min(1).max(600).describe('length of the whole entrance, first unit to last'),
+    outFrames: z.number().int().min(1).max(600),
+  })
+  .strict();
+export type TextAnimation = z.infer<typeof TextAnimationSchema>;
+export const DEFAULT_TEXT_ANIMATION = { by: 'word', in: null, out: null, loop: null, inFrames: 20, outFrames: 15 } as const satisfies TextAnimation;
+export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema, animation: TextAnimationSchema.optional() }).strict();
 
 // ---------- captions and transcripts (SPEC §16) ----------
 export const CAPTION_PRESETS = ['classic', 'karaoke', 'word-pop', 'box-highlight', 'reveal', 'underline', 'dim-ahead'] as const;

@@ -8,7 +8,8 @@
 import * as T from '@pulseframe/time';
 import { gpuTransition, isGpuTransition, takeUnavailableEffects } from './gpu.ts';
 import type { Layer, PictureLayer, RenderGraph, TextLayer } from './evaluate.ts';
-import { visualOrder, wrapWords, type CaptionLayer } from './captions.ts';
+import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
+import { textAtRest, unitPose } from './textAnimation.ts';
 import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -74,6 +75,7 @@ function drawText(ctx: Ctx2D, g: RenderGraph, layer: TextLayer) {
       ctx.roundRect(-blockW / 2 - pad, -blockH / 2 - pad * 0.6, blockW + pad * 2, blockH + pad * 1.2, px * 0.18);
       ctx.fill();
     }
+    if (layer.animation && !textAtRest(layer.animation)) { drawTextUnits(ctx, layer, measured, { px, lineH, blockW, blockH }); return; }
     measured.forEach((m, i) => {
       ctx.direction = m.dir;
       // "start" is the right edge for RTL lines and the left edge for LTR lines.
@@ -91,6 +93,80 @@ function drawText(ctx: Ctx2D, g: RenderGraph, layer: TextLayer) {
       ctx.fillText(m.line, left, baseline);
     });
   });
+}
+
+const GRAPHEMES = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+/** User-perceived characters: a letter stays with its vowel points and other combining marks. */
+const graphemes = (w: string): string[] => (GRAPHEMES ? Array.from(GRAPHEMES.segment(w), (x) => x.segment) : Array.from(w));
+const RTL_CHAR = /[֐-ࣿיִ-﷿ﹰ-﻿]/, LTR_CHAR = /[A-Za-z0-9À-ɏͰ-ϿЀ-ӿ]/;
+/** A word as runs of one direction each (Hebrew letters; Latin letters and digits); marks and symbols stay with the run before them. */
+function directionRuns(word: string, base: 'rtl' | 'ltr'): { text: string; dir: 'rtl' | 'ltr' }[] {
+  const runs: { text: string; dir: 'rtl' | 'ltr' | null }[] = [];
+  for (const g of graphemes(word)) {
+    const d = RTL_CHAR.test(g) ? 'rtl' : LTR_CHAR.test(g) ? 'ltr' : null;
+    const last = runs[runs.length - 1];
+    if (last && (d === null || last.dir === null || last.dir === d)) { last.text += g; last.dir ??= d; } else runs.push({ text: g, dir: d });
+  }
+  return runs.map((r) => ({ text: r.text, dir: r.dir ?? base }));
+}
+/**
+ * A title whose letters, words or lines are animating: each unit is placed where the whole line would put it (word-level
+ * visual order as for captions; letters by the measured width of the text before them, per direction run) and drawn with
+ * the pose textAnimation.ts computes for it. All outlines are drawn before all fills, so a thick outline never covers a neighbour.
+ */
+function drawTextUnits(ctx: Ctx2D, layer: TextLayer, lines: { line: string; dir: 'rtl' | 'ltr'; width: number }[], geo: { px: number; lineH: number; blockW: number; blockH: number }) {
+  const s = layer.style, a = layer.animation!, { px, lineH, blockW, blockH } = geo;
+  const units: { text: string; left: number; width: number; baseline: number; dir: 'rtl' | 'ltr'; rtl: boolean }[] = [];
+  lines.forEach((m, li) => {
+    const rtl = m.dir === 'rtl';
+    const left = s.align === 'center' ? -m.width / 2 : (s.align === 'start') === rtl ? blockW / 2 - m.width : -blockW / 2;
+    const baseline = -blockH / 2 + lineH * li + lineH / 2 + px * 0.34;
+    if (a.by === 'line') { if (m.line.trim()) units.push({ text: m.line, left, width: m.width, baseline, dir: m.dir, rtl }); return; }
+    ctx.direction = m.dir;
+    const words = m.line.split(' ');
+    const widths = words.map((w) => ctx.measureText(w).width), space = ctx.measureText(' ').width;
+    const lefts: number[] = [];
+    let x = left;
+    for (const wi of visualOrder(words, m.dir)) { lefts[wi] = x; x += widths[wi]! + space; }
+    words.forEach((w, wi) => {
+      if (!w) return;
+      const wdir = wordDir(w) ?? m.dir;
+      if (a.by === 'word') { units.push({ text: w, left: lefts[wi]!, width: widths[wi]!, baseline, dir: wdir, rtl }); return; }
+      // letters: runs of one direction inside the word, placed in visual order; inside a run, by the width of the text before each letter
+      const runs = directionRuns(w, wdir);
+      ctx.direction = wdir;
+      const runWidths = runs.map((r) => ctx.measureText(r.text).width);
+      const scale = widths[wi]! / Math.max(1e-6, runWidths.reduce((n, v) => n + v, 0)); // runs measured apart can differ from the word by kerning: spread the difference
+      const runLefts: number[] = [];
+      let rx = lefts[wi]!;
+      for (const ri of visualOrder(runs.map((r) => r.text), wdir)) { runLefts[ri] = rx; rx += runWidths[ri]! * scale; }
+      runs.forEach((r, ri) => {
+        ctx.direction = r.dir;
+        let before = 0, prefix = '';
+        for (const g of graphemes(r.text)) {
+          prefix += g;
+          const upTo = ctx.measureText(prefix).width, width = (upTo - before) * scale;
+          units.push({ text: g, left: r.dir === 'rtl' ? runLefts[ri]! + (runWidths[ri]! - upTo) * scale : runLefts[ri]! + before * scale, width, baseline, dir: r.dir, rtl });
+          before = upTo;
+        }
+      });
+    });
+  });
+  const poses = units.map((_, i) => unitPose(a, i, units.length, units[i]!.rtl));
+  const paint = (outline: boolean) => units.forEach((u, i) => {
+    const p = poses[i]!;
+    if (p.alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha *= p.alpha;
+    ctx.direction = u.dir;
+    ctx.translate(u.left + u.width / 2 + p.dx * px, u.baseline + p.dy * px - px * 0.34);
+    ctx.scale(p.scale, p.scale); // about the middle of the unit, a third of the font size above the baseline
+    if (outline) ctx.strokeText(u.text, -u.width / 2, px * 0.34); else ctx.fillText(u.text, -u.width / 2, px * 0.34);
+    ctx.restore();
+  });
+  if (s.stroke && s.strokeFrac > 0) { ctx.strokeStyle = s.stroke; ctx.lineWidth = px * s.strokeFrac * 2; paint(true); }
+  ctx.fillStyle = s.color;
+  paint(false);
 }
 
 /** Captions: words are placed one by one (so each can be highlighted) in word-level bidi visual order. */

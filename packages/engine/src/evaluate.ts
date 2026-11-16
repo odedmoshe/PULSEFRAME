@@ -10,7 +10,7 @@
  */
 import * as T from '@pulseframe/time';
 import { captionAt, type CaptionLayer } from './captions.ts';
-import { beatPositionAt, type BeatPosition, effectParamsAt, pictureSourceAt, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { beatPositionAt, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 
 /** Look applied by the compositor after the layer is placed: effects in order, then mask, then blend/opacity. */
 export interface LayerLook {
@@ -37,7 +37,7 @@ export interface VideoLayer extends LayerLook {
 }
 /** A still picture. Same placement rules as video; one decoded image for the whole clip. */
 export interface ImageLayer extends LayerLook { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform }
-export interface TextLayer extends LayerLook { kind: 'text'; clipId: string; trackId: string; text: string; style: TextStyle; transform: Transform }
+export interface TextLayer extends LayerLook { kind: 'text'; clipId: string; trackId: string; text: string; style: TextStyle; transform: Transform; /** Letter/word/line animation with where this frame is in the clip (seconds from its start, and the clip's length). */ animation?: TextAnimation & { local: number; total: number; fps: number } }
 export type Layer = VideoLayer | ImageLayer | TextLayer | CaptionLayer;
 export type PictureLayer = VideoLayer | ImageLayer;
 export interface ActiveAudio { clipId: string; trackId: string; assetId: string; sourceTime: T.RationalTime; gain: number }
@@ -98,7 +98,8 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       // half-open [start, start+duration)
       if (T.lt(time, clip.start) || !T.lt(time, T.add(clip.start, clip.duration))) continue;
       if (clip.type === 'text') {
-        if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time), ...look(clip, time) });
+        if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time), ...look(clip, time),
+          ...(clip.animation ? { animation: { ...clip.animation, local: T.toSeconds(T.sub(time, clip.start)), total: T.toSeconds(clip.duration), fps: frameRate.num / frameRate.den } } : {}) });
         continue;
       }
       if (clip.type !== 'media') continue;

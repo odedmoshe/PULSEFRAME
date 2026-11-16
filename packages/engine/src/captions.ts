@@ -38,7 +38,8 @@ export function captionPages(words: string[], capacity: number): number[][] {
 const RTL = /[֐-ࣿיִ-﷿ﹰ-﻿]/;
 const LTR = /[A-Za-zÀ-ɏͰ-ϿЀ-ӿ]/;
 type Dir = 'rtl' | 'ltr';
-const wordDir = (w: string): Dir | null => (RTL.test(w) ? 'rtl' : LTR.test(w) ? 'ltr' : null);
+/** Direction of a word from its first strong characters: rtl if it has any right-to-left letter, ltr if it has Latin letters, null for digits and symbols only. */
+export const wordDir = (w: string): Dir | null => (RTL.test(w) ? 'rtl' : LTR.test(w) ? 'ltr' : null);
 
 /**
  * Word-level visual order for one line (left to right on screen), a word-granular form of UAX #9:
