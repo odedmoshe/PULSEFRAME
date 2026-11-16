@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T06:19:19.394Z",
+  "ranAt": "2026-11-16T18:28:18.492Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -13,12 +13,12 @@
   "measurements": {
     "minutes": 20,
     "fileMB": 37.9,
-    "generateSeconds": 69.3,
+    "generateSeconds": 62.5,
     "ingestSeconds": 0.4,
     "analysis": {
       "beats": {
         "status": "succeeded",
-        "seconds": 14.8
+        "seconds": 13.3
       },
       "scenes": {
         "status": "succeeded",
@@ -26,17 +26,17 @@
       }
     },
     "editsDuringAnalysis": {
-      "count": 42,
-      "medianMs": 11,
-      "p95Ms": 16,
-      "maxMs": 17
+      "count": 44,
+      "medianMs": 12,
+      "p95Ms": 22,
+      "maxMs": 30
     },
     "timeline": {
       "shots": 20,
-      "splitMs": 20,
-      "timelineQueryMs": 57,
+      "splitMs": 45,
+      "timelineQueryMs": 64,
       "beatMarkers": 2000,
-      "userMarkers": 42
+      "userMarkers": 44
     },
     "editor": {
       "openSeconds": 0.9,
@@ -68,7 +68,7 @@
       "name": "beat job: finishes with a tempo within 1 BPM of 120 and a beat count within 2% of 2400",
       "ok": true,
       "detail": {
-        "seconds": 14.8,
+        "seconds": 13.3,
         "bpm": 120.19,
         "count": 2399,
         "confidence": 0.992
@@ -78,10 +78,10 @@
       "name": "edits made while both jobs ran all succeeded and stayed prompt (median under 100 ms, worst under 2 s)",
       "ok": true,
       "detail": {
-        "count": 42,
-        "medianMs": 11,
-        "p95Ms": 16,
-        "maxMs": 17
+        "count": 44,
+        "medianMs": 12,
+        "p95Ms": 22,
+        "maxMs": 30
       }
     },
     {
@@ -89,10 +89,10 @@
       "ok": true,
       "detail": {
         "shots": 20,
-        "splitMs": 20,
-        "timelineQueryMs": 57,
+        "splitMs": 45,
+        "timelineQueryMs": 64,
         "beatMarkers": 2000,
-        "userMarkers": 42
+        "userMarkers": 44
       }
     },
     {

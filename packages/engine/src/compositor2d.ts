@@ -5,9 +5,10 @@
  * Conventions: sRGB 8-bit, straight-alpha canvas source-over compositing, SDR Rec.709 assumed for sources.
  * Text is shaped by the browser engine (HarfBuzz inside Chromium) using a bundled, pinned font file.
  */
+import { takeUnavailableEffects } from './gpu.ts';
 import type { Layer, PictureLayer, RenderGraph, TextLayer } from './evaluate.ts';
 import { visualOrder, wrapWords, type CaptionLayer } from './captions.ts';
-import { applyColourMatrix, applyEffects, applyMask, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
+import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Something that can paint a decoded source frame into a rectangle. */
@@ -171,9 +172,22 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
 }
 
 /** Draw one evaluated frame. Awaits source frames; drawing order equals graph.layers order. */
-export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[] }> {
+/**
+ * `unavailableEffects`: ids of GPU effects in this frame that could not run here (ADR-0008). The frame was drawn without them;
+ * a preview says so, a still or an export must refuse rather than deliver it.
+ */
+/** The frame that is waiting on a GPU pass, if any (see drawGraph). */
+let gpuFrame: Promise<void> | null = null;
+export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; unavailableEffects: string[] }> {
   const missing: string[] = [];
   const images = await Promise.all(g.layers.map((l) => (l.kind === 'text' || l.kind === 'caption' ? null : frames(l))));
+  // A frame with a GPU effect waits for the pass in the middle of drawing, while the shared scratch buffers hold its layers.
+  // No other frame may draw meanwhile, so every frame first waits for such a frame to finish; frames without one stay synchronous.
+  while (gpuFrame) await gpuFrame;
+  let release: (() => void) | undefined;
+  if (g.layers.some((l) => l.kind !== 'caption' && l.effects && hasGpuEffect(l.effects))) gpuFrame = new Promise<void>((r) => { release = () => { gpuFrame = null; r(); }; });
+  takeUnavailableEffects();
+  try {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
@@ -183,10 +197,10 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
   ctx.imageSmoothingQuality = 'high';
   /** Finished buffer of the outgoing side of a transition, waiting for its incoming layer (the next layer in the graph). */
   let outgoing: Buf | null = null;
-  g.layers.forEach((layer, i) => {
-    if (layer.kind === 'caption') return drawCaption(ctx, g, layer);
+  for (const [i, layer] of g.layers.entries()) {
+    if (layer.kind === 'caption') { drawCaption(ctx, g, layer); continue; }
     const img = layer.kind === 'text' ? null : images[i];
-    if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); return; }
+    if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); continue; }
     // Default placement of pictures, centred: contain (whole picture visible) or cover (frame filled, edges cropped).
     const fit = layer.kind === 'text' ? 1 : (g.fit === 'cover' ? Math.max : Math.min)(g.width / layer.sourceWidth, g.height / layer.sourceHeight);
     const w = layer.kind === 'text' ? g.width : layer.sourceWidth * fit;
@@ -194,25 +208,26 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
     const place = (c: Ctx2D) => (layer.kind === 'text' ? drawText(c, g, layer) : withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h)));
     const colourFix = layer.kind === 'video' ? layer.colourFix : undefined;
     const hasLook = !!(colourFix || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
-    if (!hasLook) return place(ctx); // fast path: identical to drawing without the look system
+    if (!hasLook) { place(ctx); continue; } // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
     const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, box };
     let buf = scratch(1, g.width, g.height);
     place(buf.ctx);
     if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
-    if (layer.effects?.length) buf = applyEffects(buf, layer.effects, env);
+    if (layer.effects?.length) buf = await applyEffects(buf, layer.effects, env);
     if (layer.mask) applyMask(buf, layer.mask, env);
     if (layer.transition?.role === 'out') {
       // Keep the outgoing picture aside; its incoming partner composites both.
       const keep = scratch(7, g.width, g.height);
       keep.ctx.drawImage(buf.canvas, 0, 0);
       outgoing = keep;
-      return;
+      continue;
     }
     compositeLayer(ctx, buf, layer, g.width, g.height, layer.transition ? outgoing : null);
     outgoing = null;
-  });
+  }
   ctx.restore();
-  return { missing };
+  return { missing, unavailableEffects: takeUnavailableEffects() };
+  } finally { release?.(); }
 }

@@ -7,7 +7,8 @@
 import './strictPage.ts';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { drawGraph, evaluate } from '@pulseframe/engine';
+import { GPU_EFFECT_IDS } from '@pulseframe/core';
+import { drawGraph, evaluate, gpuStatus, initGpu } from '@pulseframe/engine';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
 
@@ -25,9 +26,10 @@ const pool = new MediaPool({ assetUrl: (assetId) => `${base}/assets/${assetId}`,
 async function draw(index: number) {
   // `index` is relative to the exported range. Layout is resolution-independent, so a scaled output only changes the raster size.
   const g = evaluate(doc, T.frameTime(firstFrame + index, doc.settings.frameRate));
-  const { missing } = await drawGraph(ctx, { ...g, width: outWidth, height: outHeight }, pool.frames);
-  // Final renders never substitute black for media that failed to decode.
+  const { missing, unavailableEffects } = await drawGraph(ctx, { ...g, width: outWidth, height: outHeight }, pool.frames);
+  // Final renders never substitute black for media that failed to decode, and never leave out an effect that could not run.
   if (missing.length) throw new Error(`frame ${index}: source frame unavailable for clips ${missing.join(', ')}`);
+  if (unavailableEffects.length) throw new Error(`gpu_effect_unavailable: frame ${index} uses ${unavailableEffects.join(', ')}, which need a graphics adapter in the render worker; ${gpuStatus().reason}`);
 }
 
 window.__pf = {
@@ -37,6 +39,8 @@ window.__pf = {
     if (!r.ok) throw new Error(`snapshot: HTTP ${r.status}`);
     ({ doc, frameCount, firstFrame, outWidth, outHeight } = await r.json());
     await ensureFonts();
+    // Only when the project uses a GPU effect: the adapter check costs time and a GPU device.
+    if (JSON.stringify(doc.sequences).match(new RegExp(GPU_EFFECT_IDS.map((id) => `"${id.replace('.', '\\.')}"`).join('|')))) await initGpu();
     const canvas = document.createElement('canvas');
     canvas.width = outWidth;
     canvas.height = outHeight;

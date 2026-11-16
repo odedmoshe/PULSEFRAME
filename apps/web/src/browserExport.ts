@@ -14,7 +14,7 @@
 import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Input, Mp4OutputFormat, Output, Quality, UrlSource, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, RampResampler, rampSpanOf, stretchKeepingPitch } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, initGpu, RampResampler, rampSpanOf, stretchKeepingPitch } from '@pulseframe/engine';
 import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
@@ -265,6 +265,7 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
   try {
     progress('fonts', 0, out.frames);
     await ensureFonts();
+    await initGpu(); // GPU effects run only if this passes; a frame that needs one fails the export otherwise
     check();
     const canvas = document.createElement('canvas');
     canvas.width = out.width;
@@ -293,8 +294,9 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
       check();
       if (opts.freezeAfterFrames !== undefined && i === opts.freezeAfterFrames) await new Promise(() => {}); // stuck-render simulation: heartbeats keep running until the page is closed
       const g = evaluate(doc, T.frameTime(out.firstFrame + i, rate));
-      const { missing } = await drawGraph(ctx, { ...g, width: out.width, height: out.height }, pool.frames);
+      const { missing, unavailableEffects } = await drawGraph(ctx, { ...g, width: out.width, height: out.height }, pool.frames);
       if (missing.length) throw new BrowserExportError('export_failed', `frame ${i}: source frame unavailable for clips ${missing.join(', ')}`, { jobId });
+      if (unavailableEffects.length) throw new BrowserExportError('export_failed', `frame ${i} uses ${unavailableEffects.join(', ')}, which need a graphics adapter (WebGPU) in this browser`, { jobId });
       await video.add(frameSeconds(i), frameSeconds(i + 1) - frameSeconds(i)); // awaited: encoder + muxer backpressure
       framesDone = i + 1;
       if (i % 4 === 0 || framesDone === out.frames) progress('rendering', framesDone, out.frames);

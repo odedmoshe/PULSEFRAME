@@ -1,0 +1,227 @@
+{
+  "ranAt": "2026-11-16T18:43:59.069Z",
+  "result": "PASSED",
+  "passed": 15,
+  "total": 15,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "gpu": "none: the WebGPU adapter here is a software one"
+  },
+  "scope": "Two effects on two synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
+  "measurements": {
+    "previewVsStill": {
+      "meanDifference": 0,
+      "maxDifference": 0
+    }
+  },
+  "checks": [
+    {
+      "name": "Fixture as imported: green background, red square in the middle",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          254,
+          0
+        ],
+        "centre": [
+          253,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "key.chroma (still): the green background is gone (the black project background shows) and the red square is untouched",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          0,
+          0
+        ],
+        "centre": [
+          253,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "The same still rendered twice is identical",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "key.chroma follows its parameters: keying red instead removes the square and keeps the green",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          254,
+          0
+        ],
+        "centre": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "key.chroma (editor preview): same result on the preview canvas",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          0,
+          0
+        ],
+        "centre": [
+          253,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "Preview and still agree (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "meanDifference": 0,
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "key.chroma (export): the exported frame shows the same (within video compression)",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          0,
+          0
+        ],
+        "centre": [
+          251,
+          0,
+          0
+        ],
+        "meanDifferenceFromStill": 0.047
+      }
+    },
+    {
+      "name": "distort.wave: before the effect the stripe is straight",
+      "ok": true,
+      "detail": {
+        "centre": 179.5
+      }
+    },
+    {
+      "name": "distort.wave: each row of the stripe is displaced by the sine the parameters describe (within 1 pixel)",
+      "ok": true,
+      "detail": [
+        {
+          "y": 40,
+          "measured": 156.5,
+          "expected": 156.65
+        },
+        {
+          "y": 80,
+          "measured": 147.5,
+          "expected": 147.5
+        },
+        {
+          "y": 160,
+          "measured": 179.5,
+          "expected": 179.81
+        },
+        {
+          "y": 240,
+          "measured": 211.5,
+          "expected": 211.5
+        },
+        {
+          "y": 320,
+          "measured": 179.5,
+          "expected": 179.19
+        },
+        {
+          "y": 400,
+          "measured": 147.5,
+          "expected": 147.5
+        },
+        {
+          "y": 480,
+          "measured": 179.5,
+          "expected": 179.81
+        },
+        {
+          "y": 560,
+          "measured": 211.5,
+          "expected": 211.5
+        },
+        {
+          "y": 600,
+          "measured": 201.5,
+          "expected": 201.9
+        }
+      ]
+    },
+    {
+      "name": "distort.wave: preview and still agree (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "meanDifference": 0,
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "No uncaught errors in the editor page",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Editor with an adapter: the GPU effects are offered and no warning is shown",
+      "ok": true,
+      "detail": {
+        "disabled": false,
+        "text": "מסך ירוק (הסרת צבע רקע)"
+      }
+    },
+    {
+      "name": "Editor without an adapter: the clip is shown WITHOUT the effect (green still there), a warning says why, and the effect cannot be added",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          254,
+          0
+        ],
+        "warned": 1,
+        "option": {
+          "disabled": true,
+          "text": "מסך ירוק (הסרת צבע רקע) — דורש כרטיס מסך"
+        }
+      }
+    },
+    {
+      "name": "Worker without an adapter: a still is refused with the reason, not delivered without the effect",
+      "ok": true,
+      "detail": {
+        "status": 503,
+        "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses key.chroma, which need a graphics adapter in the render worker; the browse"
+      }
+    },
+    {
+      "name": "Worker without an adapter: the export fails with the reason",
+      "ok": true,
+      "detail": {
+        "status": "failed",
+        "error": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses key.chroma, which need a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    at"
+      }
+    }
+  ]
+}

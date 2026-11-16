@@ -12,12 +12,30 @@ declare global {
   }
 }
 
+/**
+ * How the worker browser is started (ADR-0008). Whether it can use WebGPU is a property of the machine, measured by
+ * `pnpm probe:gpu`; nothing here is assumed to work, and the render page proves its adapter before using it.
+ *   PF_RENDER_GPU=auto    (default) headless with WebGPU enabled. Measured: a software adapter on the Linux development
+ *                         container; no adapter on the owner's Windows laptop (GPU effects are then refused at export).
+ *   PF_RENDER_GPU=window  a real window placed off-screen, asking for the high-performance GPU. Measured on that laptop:
+ *                         a hardware adapter (the discrete card). Needs a desktop session.
+ *   PF_RENDER_GPU=chrome  the installed Chrome instead of the bundled Chromium, headless with the GPU enabled. Measured on
+ *                         that laptop: a hardware adapter. Text is then shaped by that Chrome's version, not the pinned one.
+ *   PF_RENDER_GPU=off     plain headless, no WebGPU flags (the behaviour before ADR-0008).
+ */
+export function workerLaunchOptions(mode = process.env.PF_RENDER_GPU ?? 'auto'): { args?: string[]; headless?: boolean; channel?: string } {
+  if (mode === 'off') return {};
+  if (mode === 'window') return { headless: false, args: ['--enable-unsafe-webgpu', '--force_high_performance_gpu', '--window-position=-32000,-32000', '--window-size=320,240', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'] };
+  if (mode === 'chrome') return { channel: 'chrome', args: ['--enable-unsafe-webgpu', '--enable-gpu', '--ignore-gpu-blocklist'] };
+  return { args: ['--enable-unsafe-webgpu'] };
+}
+
 export class RenderHost {
   private browser?: Promise<Browser>;
   version?: string;
 
   private async launch(): Promise<Browser> {
-    this.browser ??= chromium.launch().then((b) => {
+    this.browser ??= chromium.launch(workerLaunchOptions()).then((b) => {
       this.version = b.version();
       b.on('disconnected', () => (this.browser = undefined));
       return b;

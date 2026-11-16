@@ -8,6 +8,7 @@ import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectVariant, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
+import { initGpu, type GpuStatus } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
@@ -25,6 +26,8 @@ export interface EditorState {
   exportJob: JobEvent | null;
   capJob: JobEvent | null;
   provider: ProviderInfo | null;
+  /** WebGPU effect passes in this browser (ADR-0008): null until checked. */
+  gpu: GpuStatus | null;
   error: string | null;
   /** Translated headline at the start of `error`, when the error was a coded refusal (lets the bar set the direction of the detail on its own). */
   errorHeadline: string | null;
@@ -77,7 +80,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
+    provider: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -178,6 +181,7 @@ export class Editor {
     this.setLang(this.state.lang);
     try { await api.session(); } catch (e) { throw e instanceof ApiFailure && e.code === 'owner_key_required' ? new Error(this.t('boot.ownerKey')) : e; }
     await ensureFonts();
+    void initGpu().then((g) => { this.set({ gpu: g }); if (this.player && !this.player.playing) this.player.seek(this.player.frame); }); // not awaited: the editor works without it; GPU effects appear once it is ready
     let id = new URLSearchParams(location.search).get('project');
     if (!id) {
       const { projects } = await api.listProjects();

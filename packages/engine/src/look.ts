@@ -7,6 +7,7 @@
  */
 import type { BlendMode, Mask } from '@pulseframe/core';
 import type { LayerLook } from './evaluate.ts';
+import { gpuEffect, isGpuEffect } from './gpu.ts';
 
 type C2D = OffscreenCanvasRenderingContext2D;
 export interface Buf { canvas: OffscreenCanvas; ctx: C2D }
@@ -195,7 +196,9 @@ function layerEffect(type: string, p: Record<string, unknown>, src: OffscreenCan
 }
 
 /** Run the effect list. `a` holds the placed layer; returns the buffer holding the result (ping-pong between slots 1 and 2). */
-export function applyEffects(a: Buf, effects: NonNullable<LayerLook['effects']>, env: LookEnv): Buf {
+/** True when the list holds an effect that runs as a GPU pass, which makes applying it asynchronous. */
+export const hasGpuEffect = (effects: NonNullable<LayerLook['effects']>) => effects.some((e) => isGpuEffect(e.type));
+export async function applyEffects(a: Buf, effects: NonNullable<LayerLook['effects']>, env: LookEnv): Promise<Buf> {
   let cur = a;
   let slot = 2;
   for (let i = 0; i < effects.length; ) {
@@ -207,6 +210,10 @@ export function applyEffects(a: Buf, effects: NonNullable<LayerLook['effects']>,
       i++;
       for (; i < effects.length; i++) { const g = filterOf(effects[i]!.type, effects[i]!.params, env.height); if (!g) break; css += ` ${g.css}`; blur = Math.max(blur, g.blurPx); }
       drawFiltered(next.ctx, cur.canvas, css, blur, env.width, env.height);
+    } else if (isGpuEffect(effects[i]!.type)) {
+      // Not available (no adapter, or the reference check failed): the layer goes on unchanged and the effect is recorded as missing.
+      if (!(await gpuEffect(effects[i]!.type, effects[i]!.params, cur.canvas, next.ctx, env))) next.ctx.drawImage(cur.canvas, 0, 0);
+      i++;
     } else {
       layerEffect(effects[i]!.type, effects[i]!.params, cur.canvas, next.ctx, env);
       i++;

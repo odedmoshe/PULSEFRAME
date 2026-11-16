@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import * as T from '@pulseframe/time';
-import { BLEND_MODES, DEFAULT_MASK, EFFECTS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
+import { BLEND_MODES, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
-const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital'] as const;
+const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'distort'] as const;
 const CATALOG = describeCatalog();
 const schemaCache = new Map<string, Record<string, Prop>>();
 function propsOf(type: string): Record<string, Prop> {
@@ -188,12 +188,15 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
             {effects.map((fx, i) => <EffectRow key={fx.id} clipId={clip.id} fx={fx} index={i} count={effects.length} />)}
           </ul>
         )}
+        {effects.some((fx) => GPU_EFFECT_IDS.includes(fx.type)) && !state.gpu?.available && state.gpu && (
+          <p className="muted danger" role="status" data-testid="gpu-unavailable">{t('look.gpu.unavailable')} <bdi>{state.gpu.reason}</bdi></p>
+        )}
         <label className="sr-only" htmlFor="look-effect-add">{t('look.effect.add')}</label>
         <select id="look-effect-add" data-testid="effect-add" value="" onChange={(e) => { const type = e.target.value; if (type) void editor.commit([{ op: 'add_effect', args: { clipId: clip.id, type } }], 'Add effect'); }}>
           <option value="">{t('look.effect.add')}</option>
           {CATEGORIES.map((c) => (
             <optgroup key={c} label={t(`look.cat.${c}` as Key)}>
-              {EFFECTS.filter((e) => e.category === c).map((e) => <option key={e.id} value={e.id}>{e.name[state.lang]}</option>)}
+              {EFFECTS.filter((e) => e.category === c).map((e) => <option key={e.id} value={e.id} disabled={e.cost === 'gpu' && !state.gpu?.available}>{e.name[state.lang]}{e.cost === 'gpu' && !state.gpu?.available ? ` — ${t('look.gpu.needed')}` : ''}</option>)}
             </optgroup>
           ))}
         </select>

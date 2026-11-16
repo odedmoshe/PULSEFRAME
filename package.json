@@ -16,6 +16,7 @@
     "fixtures": "tsx packages/fixtures/src/cli.ts",
     "probe": "tsx apps/renderer/src/probe-cli.ts",
     "probe:gpu": "tsx apps/renderer/src/gpu-worker-probe.ts",
+    "proof:gpu": "tsx packages/evals/src/gpu-proof.ts",
     "proof": "tsx packages/evals/src/phase0-proof.ts",
     "proof:g0": "tsx packages/evals/src/g0-proof.ts",
     "conformance:seek": "tsx packages/evals/src/seek-conformance.ts",

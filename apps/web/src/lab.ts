@@ -6,7 +6,7 @@ import './lab.css';
 import './strictPage.ts';
 import * as T from '@pulseframe/time';
 import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { drawGraph, evaluate, type FrameImage } from '@pulseframe/engine';
+import { drawGraph, evaluate, gpuStatus, initGpu, type FrameImage } from '@pulseframe/engine';
 import { ensureFonts } from './fonts.ts';
 
 const lang: 'he' | 'en' = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'he';
@@ -178,6 +178,7 @@ async function main() {
   await ensureFonts();
   const scenes: Record<Aspect, Scene> = { '16:9': makeScene('16:9'), '9:16': makeScene('9:16') };
   let errors = 0;
+  await initGpu(); // GPU effects are drawn for real when this browser has a working adapter, and labelled as unavailable otherwise
   for (const tile of tiles) {
     const s = scenes[tile.aspect];
     const [w, h] = SIZE[tile.aspect];
@@ -192,8 +193,10 @@ async function main() {
         const pic = s.pics.get(l.assetId);
         return pic ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(pic, dx, dy, dw, dh) } : null;
       };
-      const { missing } = await drawGraph(canvas.getContext('2d')!, g, provider);
+      const { missing, unavailableEffects } = await drawGraph(canvas.getContext('2d')!, g, provider);
       if (missing.length) throw new Error(`source picture missing for ${missing.join(', ')}`);
+      // Not an error of the page: this browser cannot run the effect, so the tile shows the picture without it and says so.
+      if (unavailableEffects.length) { fig.dataset.unavailable = '1'; cap.before(el('div', { className: 'tile-note', role: 'note', textContent: `needs a graphics adapter (WebGPU): ${gpuStatus().reason}` })); }
     } catch (e) {
       errors++;
       cap.before(el('div', { className: 'tile-error', role: 'alert', textContent: e instanceof Error ? e.message : String(e) }));

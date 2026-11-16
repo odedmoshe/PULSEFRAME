@@ -4,3 +4,4 @@ export * from './captions.ts';
 export { grainOffset, COMPOSITE } from './look.ts';
 export * from './audio.ts';
 export * from './stretch.ts';
+export { initGpu, gpuStatus, isGpuEffect, GPU_EFFECTS, type GpuStatus } from './gpu.ts';

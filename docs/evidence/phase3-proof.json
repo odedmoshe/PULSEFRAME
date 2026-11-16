@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T07:08:09.336Z",
+  "ranAt": "2026-11-16T18:16:36.298Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -610,9 +610,9 @@
         "differentSourceFrames": 29,
         "firstFrames": [
           {
-            "frame": 4,
+            "frame": 1,
             "quality": "draft",
-            "code": 4
+            "code": 1
           },
           {
             "frame": 7,
@@ -620,9 +620,9 @@
             "code": 7
           },
           {
-            "frame": 9,
+            "frame": 10,
             "quality": "draft",
-            "code": 9
+            "code": 10
           },
           {
             "frame": 13,

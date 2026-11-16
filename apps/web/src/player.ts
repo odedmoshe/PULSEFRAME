@@ -10,6 +10,8 @@ import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
 export class Player {
+  /** See drawFrame: effect ids the last painted frame had to leave out. */
+  unavailableEffects: string[] = [];
   doc: ProjectDocument | null = null;
   frame = 0;
   playing = false;
@@ -89,7 +91,9 @@ export class Player {
         const h = Math.round(height * scale);
         if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
         const g = evaluate(doc, T.frameTime(frame, frameRate));
-        await drawGraph(this.canvas.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames);
+        const drawn = await drawGraph(this.canvas.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames);
+        /** GPU effects of the frame on screen that could not run in this browser (shown without them; the editor says so). */
+        this.unavailableEffects = drawn.unavailableEffects;
         this.painted = frame;
         if (this.playing) {
           const { num, den } = frameRate;

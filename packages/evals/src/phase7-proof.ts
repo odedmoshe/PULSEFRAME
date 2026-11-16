@@ -67,7 +67,7 @@ async function main() {
     const r = await txs(pid, [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }]);
     return { pid, assetId: up.assetId as string, clipId: r.results[0].output.clipId as string };
   };
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ['--enable-unsafe-webgpu'] }); // lets the page ask for a WebGPU adapter; where none exists the GPU effects are labelled unavailable
   try {
     console.log('\n# catalog');
     const cat = (await call('/catalog')).body;
@@ -283,7 +283,7 @@ async function main() {
     lab.on('pageerror', (e) => labErrors.push(String(e)));
     await lab.goto(`${s.url}/lab.html`);
     await lab.waitForFunction(() => document.body.dataset.ready === '1', undefined, { timeout: 120000 });
-    const tiles: { kind: string; id: string; variant: string; aspect: string; hash: number; flat: boolean }[] = await lab.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-testid=lab-tile]')].map((fig) => {
+    const tiles: { kind: string; id: string; variant: string; aspect: string; hash: number; flat: boolean; unavailable: boolean }[] = await lab.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-testid=lab-tile]')].map((fig) => {
       const hashes: number[] = []; let flat = true;
       for (const c of fig.querySelectorAll('canvas')) {
         const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
@@ -291,16 +291,16 @@ async function main() {
         for (let i = 0; i < d.length; i += 16) { hsh = (hsh * 31 + d[i]! + d[i + 1]! * 3 + d[i + 2]! * 7) >>> 0; if (d[i]! < min) min = d[i]!; if (d[i]! > max) max = d[i]!; }
         hashes.push(hsh); if (max - min > 8) flat = false;
       }
-      return { kind: fig.dataset.kind!, id: fig.dataset.id!, variant: fig.dataset.variant!, aspect: fig.dataset.aspect!, hash: hashes.reduce((a, b) => (a * 33 + b) >>> 0, 7), flat };
+      return { kind: fig.dataset.kind!, id: fig.dataset.id!, variant: fig.dataset.variant!, aspect: fig.dataset.aspect!, unavailable: fig.dataset.unavailable === '1', hash: hashes.reduce((a, b) => (a * 33 + b) >>> 0, 7), flat };
     }));
     const byKind = (k: string) => tiles.filter((t) => t.kind === k);
     const fxIds = new Set(byKind('effect').map((t) => t.id)), trIds = new Set(byKind('transition').map((t) => t.id)), blIds = new Set(byKind('blend').map((t) => t.id));
     const fullByDefault = new Set(['color.grayscale', 'color.sepia', 'color.invert']); // default amount is already the maximum
-    const variantsDiffer = EFFECTS.every((e) => { if (fullByDefault.has(e.id)) return true; const mine = byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9'); return new Set(mine.map((t) => t.hash)).size >= 2; });
+    const variantsDiffer = EFFECTS.every((e) => { if (fullByDefault.has(e.id)) return true; if (byKind('effect').some((t) => t.id === e.id && t.unavailable)) return true; /* no adapter in this browser: the tile says so */ const mine = byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9'); return new Set(mine.map((t) => t.hash)).size >= 2; });
     const aspects = new Set(byKind('effect').map((t) => t.aspect));
     await lab.screenshot({ path: path.join(art, 'lab.png'), fullPage: true });
-    measurements.lab = { tiles: tiles.length, effects: fxIds.size, blends: blIds.size, transitions: trIds.size, masks: byKind('mask').length };
-    check('Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip, which is meant to be a flat colour), default and extreme variants differ (where the default is not already the maximum), no page errors', fxIds.size === EFFECTS.length && blIds.size === BLEND_MODES.length && trIds.size === TRANSITIONS.length && byKind('mask').length >= 4 && aspects.size === 2 && tiles.every((t) => !t.flat || t.id.startsWith('dip-')) && variantsDiffer && !lab.url().includes('error') && (await lab.evaluate(() => document.body.dataset.errors)) === undefined && labErrors.length === 0, { ...(measurements.lab as object), sameVariants: EFFECTS.filter((e) => new Set(byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9').map((t) => t.hash)).size < 2).map((e) => e.id), aspects: [...aspects], bodyErrors: await lab.evaluate(() => document.body.dataset.errors ?? null), flat: tiles.filter((t) => t.flat && !t.id.startsWith('dip-')).map((t) => `${t.kind}:${t.id}:${t.variant}`).slice(0, 6), labErrors: labErrors.slice(0, 2) });
+    measurements.lab = { gpuEffectTilesUnavailable: tiles.filter((t) => t.unavailable).length, tiles: tiles.length, effects: fxIds.size, blends: blIds.size, transitions: trIds.size, masks: byKind('mask').length };
+    check('Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip, which is meant to be a flat colour, and the chroma key at full tolerance, which removes the whole picture), default and extreme variants differ (where the default is not already the maximum), no page errors', fxIds.size === EFFECTS.length && blIds.size === BLEND_MODES.length && trIds.size === TRANSITIONS.length && byKind('mask').length >= 4 && aspects.size === 2 && tiles.every((t) => !t.flat || t.id.startsWith('dip-') || (t.id === 'key.chroma' && t.variant === 'extreme')) && variantsDiffer && !lab.url().includes('error') && (await lab.evaluate(() => document.body.dataset.errors)) === undefined && labErrors.length === 0, { ...(measurements.lab as object), sameVariants: EFFECTS.filter((e) => new Set(byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9').map((t) => t.hash)).size < 2).map((e) => e.id), aspects: [...aspects], bodyErrors: await lab.evaluate(() => document.body.dataset.errors ?? null), flat: tiles.filter((t) => t.flat && !t.id.startsWith('dip-')).map((t) => `${t.kind}:${t.id}:${t.variant}`).slice(0, 6), labErrors: labErrors.slice(0, 2) });
     await lab.close();
   } catch (e) {
     console.error(e);

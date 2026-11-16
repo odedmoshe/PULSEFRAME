@@ -15,12 +15,12 @@ const frac = (max: number, def: number, what: string) => z.number().min(0).max(m
 export interface EffectDef<S extends z.ZodObject = z.ZodObject> {
   id: string;
   version: number;
-  category: 'color' | 'blur' | 'light' | 'stylize' | 'digital';
+  category: 'color' | 'blur' | 'light' | 'stylize' | 'digital' | 'key' | 'distort';
   name: { he: string; en: string };
   description: string;
   params: S;
-  /** filter = one compositor filter pass; layer = needs its own layer buffer pass (costlier). */
-  cost: 'filter' | 'layer';
+  /** filter = one compositor filter pass; layer = needs its own layer buffer pass (costlier); gpu = a WebGPU pass (ADR-0008): available only where the browser and the render worker both have a working adapter. */
+  cost: 'filter' | 'layer' | 'gpu';
   /** Depends only on the current frame (no neighbouring frames), so random seek equals sequential playback. */
   temporal: false;
   /** Uses seeded noise that varies per frame. */
@@ -48,7 +48,13 @@ export const EFFECTS = [
     params: z.object({ amount: frac(1, 0.25, 'strength'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
   def({ id: 'digital.rgb-split', version: 1, category: 'digital', name: { he: 'פיצול צבעים', en: 'RGB split' }, description: 'Offsets the red and blue channels in opposite directions.', cost: 'layer', temporal: false, seeded: false,
     params: z.object({ amount: frac(0.05, 0.006, 'offset, fraction of frame height'), angle: z.number().min(-180).max(180).default(0).describe('degrees') }).strict() }),
+  def({ id: 'key.chroma', version: 1, category: 'key', name: { he: 'מסך ירוק (הסרת צבע רקע)', en: 'Chroma key (green screen)' }, description: 'Makes a background colour transparent. Needs a graphics adapter (WebGPU). Works on an evenly lit screen; hair and motion blur are not handled specially.', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ color: Color.default('#00FF00').describe('the background colour to remove'), tolerance: frac(1, 0.18, 'how far from that colour still counts as background'), softness: frac(1, 0.08, 'width of the soft edge'), spill: frac(1, 0.5, 'how strongly leftover background colour on the subject is greyed') }).strict() }),
+  def({ id: 'distort.wave', version: 1, category: 'distort', name: { he: 'גל', en: 'Wave' }, description: 'Bends the picture along a sine wave. Keyframe the phase to make it move. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ amplitude: frac(0.2, 0.01, 'how far pixels move, fraction of frame height'), wavelength: z.number().min(0.005).max(2).default(0.2).describe('length of one wave, fraction of frame height'), phase: z.number().min(-36000).max(36000).default(0).describe('degrees; 360 is one full wave'), direction: z.enum(['horizontal', 'vertical']).default('horizontal').describe('which way pixels move') }).strict() }),
 ] as const;
+/** Effects that run as WebGPU passes (ADR-0008). */
+export const GPU_EFFECT_IDS: readonly string[] = (EFFECTS as readonly EffectDef[]).filter((e) => e.cost === 'gpu').map((e) => e.id);
 export type EffectType = (typeof EFFECTS)[number]['id'];
 export const findEffect = (type: string): EffectDef | undefined => (EFFECTS as readonly EffectDef[]).find((e) => e.id === type);
 /** Validate and complete parameters for an effect type. Throws ZodError on bad input. */

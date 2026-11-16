@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T06:21:24.234Z",
+  "ranAt": "2026-11-16T18:30:16.238Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -362,11 +362,11 @@
         "transitionsAdded": 0
       },
       "session": {
-        "accepted": 86,
-        "refused": 74,
+        "accepted": 87,
+        "refused": 73,
         "clips": 9,
-        "frames": 255,
-        "seconds": 4.25,
+        "frames": 216,
+        "seconds": 3.6,
         "formats": 0,
         "effects": 0,
         "freezes": 0,
@@ -379,14 +379,14 @@
       },
       "preflight": {
         "blockers": 0,
-        "warnings": 7
+        "warnings": 6
       },
       "export": {
-        "frames": 255,
+        "frames": 216,
         "rate": "60/1",
-        "videoSeconds": 4.25,
-        "audioSeconds": 4.25,
-        "bytes": 32979
+        "videoSeconds": 3.6,
+        "audioSeconds": 3.6,
+        "bytes": 25152
       },
       "features": {
         "videoClips": 0,
@@ -396,26 +396,12 @@
         "withEffects": 0,
         "withTransition": 0
       },
-      "pictureFramesCompared": 3,
+      "pictureFramesCompared": 2,
       "parity": [
         {
-          "frame": 127,
+          "frame": 108,
           "features": [],
-          "stillMeanLevel": 0.7,
-          "painted": true,
-          "previewSize": "640x360",
-          "previewVsStill": {
-            "mean": 0,
-            "worst": 0
-          },
-          "exportVsStill": {
-            "mean": 0.02
-          }
-        },
-        {
-          "frame": 51,
-          "features": [],
-          "stillMeanLevel": 0.6,
+          "stillMeanLevel": 0.8,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -427,9 +413,9 @@
           }
         },
         {
-          "frame": 165,
+          "frame": 75,
           "features": [],
-          "stillMeanLevel": 0.7,
+          "stillMeanLevel": 0.6,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -437,7 +423,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.02
+            "mean": 0.01
           }
         }
       ],
@@ -1145,7 +1131,7 @@
       "detail": []
     },
     {
-      "name": "on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (41 frames compared in 8 projects; frames per feature on the picture: {\"blend\":11,\"reverse\":7,\"effect\":8,\"freeze\":6,\"transition\":10,\"mask\":12,\"keyframes\":8,\"speed\":6})",
+      "name": "on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (40 frames compared in 8 projects; frames per feature on the picture: {\"blend\":11,\"reverse\":7,\"effect\":8,\"freeze\":6,\"transition\":10,\"mask\":12,\"keyframes\":8,\"speed\":6})",
       "ok": true,
       "detail": [
         {
@@ -1283,17 +1269,8 @@
           "seed": 4,
           "frames": [
             {
-              "frame": 127,
-              "level": 0.7,
-              "preview": {
-                "mean": 0,
-                "worst": 0
-              },
-              "export": 0.02
-            },
-            {
-              "frame": 51,
-              "level": 0.6,
+              "frame": 108,
+              "level": 0.8,
               "preview": {
                 "mean": 0,
                 "worst": 0
@@ -1301,13 +1278,13 @@
               "export": 0.01
             },
             {
-              "frame": 165,
-              "level": 0.7,
+              "frame": 75,
+              "level": 0.6,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.02
+              "export": 0.01
             }
           ]
         },
