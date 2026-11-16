@@ -67,7 +67,7 @@ function AutoTranscribe({ assetId, language, overwrite }: { assetId: string; lan
   const pid = state.doc.id;
   const start = (kind: 'asr' | 'download', p: Promise<{ jobId: string }>) => { setNote(null); p.then((r) => setJob({ id: r.jobId, kind, stage: null })).catch(editor.fail); };
   const tr = status.transcription;
-  const model = status.models.find((m) => !m.ready) ?? status.models[0];
+  const model = status.models.find((m) => m.kind === 'asr');
   return (
     <div className="asr" data-testid="asr" data-state={job ? job.kind : tr.ready ? 'ready' : tr.reason ?? 'unknown'}>
       {job ? (

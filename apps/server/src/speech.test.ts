@@ -56,7 +56,7 @@ describe('reviewed speech models', () => {
       expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(f.bytes).toBeGreaterThan(0);
       expect(f.source).toMatch(new RegExp(`^https://huggingface\\.co/.+/resolve/${f.revision}/`));
-      expect(f.path.startsWith(`${m.dir}/`)).toBe(true);
+      expect(f.path.startsWith(`${m.kind}/`)).toBe(true);
       expect(f.license).toBeTruthy();
     }
   });

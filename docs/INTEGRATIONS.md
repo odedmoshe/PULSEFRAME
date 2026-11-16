@@ -103,9 +103,37 @@ Download is the owner's action in the Speech tab (or `POST /api/v1/projects/{id}
 **Evidence and limits.** `pnpm proof:speech` (19 checks) and `pnpm check:media <folder>`; see `docs/evidence/speech-proof.json`. Sample speech for the proof: the first ~14 MB of `google/fleurs` `data/he_il/audio/dev.tar.gz` plus `dev.tsv`, unpacked to `.artifacts/speech/fleurs` (CC BY 4.0; not committed).
 Not established: accuracy beyond clean read sentences, word-timing accuracy, speed on a GPU. PyAV is bypassed on purpose: faster-whisper 1.2.1's own decoder fails with the PyAV version pip resolves today, so the worker passes samples directly.
 
+## Local narration / text to speech (optional — SPEC §17, B-8)
+Same shape as speech recognition: optional, nothing installed or downloaded automatically, an honest setup state in the Sound tab.
+
+**Engine.** A separate Python environment (its pinned PyTorch differs from the recognition engine's needs):
+```bash
+python3 -m venv .artifacts/speech/tts-venv
+.artifacts/speech/tts-venv/bin/pip install chatterbox-tts==0.1.7 phonikud-onnx==1.0.6 setuptools==80.9.0
+PF_VOICE_PYTHON=.artifacts/speech/tts-venv/bin/python PF_SPEECH_PYTHON=.artifacts/speech/venv/bin/python pnpm start
+```
+`setuptools==80.9.0` is needed because the engine's watermarker imports `pkg_resources`; without it the engine cannot load, and the setup state says so. The environment is about 6 GB on Linux (PyTorch 2.6.0 with its CUDA libraries). `PF_VOICE_PYTHON` unset = the speech interpreter is tried.
+
+**Model.** `tts.chatterbox-multilingual`: five files of `ResembleAI/chatterbox@5bb1f6ee` (3,207,031,585 bytes; MIT by its model card) and `Phonikud/phonikud-onnx@b806189f` `phonikud-1.0.int8.onnx` (307,844,158 bytes; MIT by its model card), each pinned by size and SHA-256. Licence checks are metadata-level; training-data terms were not reviewed. Download is the owner's action, exactly as for the recognition model.
+
+**Narration.** `POST /api/v1/projects/{id}/narration` (`text` up to 300 characters, `language`, `seed`, optional `start`/`trackId`) or MCP `generate_narration`: a job speaks the text, the result is checked (has a length, is not silence), converted to 48 kHz mono WAV and imported as a generated audio asset whose provenance holds the text, the pointed text that was actually spoken, engine, model revisions, seed and the engine's watermark note. Same text, voice and seed reproduced the same bytes on this machine.
+Hebrew: the voice model garbles unpointed Hebrew (a second model recovered 8 of 18 words), so unpointed Hebrew is vowel-pointed first (17 of 18). Text that already has points is spoken as written: that is the way to fix a misread word.
+
+**Reference voice.** `referenceAssetId` + `consent: { speaker, confirmed: true }`: owner session only (agents get 403 `human_approval_required`), at least 5 s of sound, first 30 s used; the consent statement, who made it and when are stored in the asset's provenance. REST only. Tried with a synthetic reference; likeness to a real speaker was not assessed.
+
+**Evidence and limits.** `pnpm proof:voice` (19 checks), `docs/evidence/voice-proof.json`, sample `docs/demo/narration-sample-he.m4a`. Nobody has listened to the output. Not established: pronunciation, stress, naturalness, numbers and foreign words, other languages, GPU speed (CPU: about 40 s per sentence, model loaded per job).
+
+## Running on the owner's GPU laptop (RTX 3050, 4 GB) — untested guidance
+Nothing below has been run; it is the intended procedure, to be corrected by the first real run.
+1. Install Node 22, pnpm, FFmpeg and Python 3.11–3.13; clone, `pnpm install && pnpm build`.
+2. `pnpm probe` and send the output: it reports the browser's WebGPU adapter, codecs and encoders, which decides the GPU compositor route (B-1).
+3. Recognition on the GPU: create the environment above, add `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`, set `PF_SPEECH_DEVICE=cuda`. The model in half precision is about 1.6 GB of video memory.
+4. Narration on the GPU: the voice model needs roughly 3–4 GB in full precision, which may not fit beside anything else in 4 GB; `PF_SPEECH_DEVICE=cpu` remains the fallback.
+5. `PF_SPEECH_PYTHON=… pnpm proof:speech` and `PF_VOICE_PYTHON=… pnpm proof:voice`, then send `docs/evidence/*.json`.
+
 ## MCP clients
 Official TypeScript SDK client 2.4.0: tested (modern pinned and legacy default). No other host (desktop apps, IDEs) has been tested; setup snippets for them are not written yet.
 
 ## Not integrated (no adapter, no credentials requested)
-Forced alignment (WhisperX), ElevenLabs, fal, Runway, Black Forest Labs, stock media, YouTube, TikTok, C2PA signing, LLM for the Director.
+Forced alignment (WhisperX), hosted voice providers (ElevenLabs), fal, Runway, Black Forest Labs, stock media, YouTube, TikTok, C2PA signing, LLM for the Director.
 These remain exactly as described in SPEC §18/§25: candidates to verify when their phase starts.

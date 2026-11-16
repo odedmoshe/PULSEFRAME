@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-15T22:26:48.186Z",
+  "ranAt": "2026-11-16T04:34:50.689Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -14,7 +14,7 @@
     {
       "name": "no transcript: the panel says so and offers import; it does not invent text",
       "ok": true,
-      "detail": "אין תמלול לקליפ הזה. זיהוי דיבור אינו מוגדר במחשב זה, ולכן לא נוצר תמלול אוטומטי. אפשר לייבא קובץ כתוביות שמתוזמן מול המדיה המקורית."
+      "detail": "אין תמלול לקליפ הזה. אפשר לייבא קובץ כתוביות, או לזהות את הדיבור אוטומטית אם הזיהוי מותקן במחשב הזה."
     },
     {
       "name": "editor: 8 word buttons; clicking word 6 seeks to 00:00:05:00; shift-click selects 2 words; delete cuts them from every track and marks them as cut",

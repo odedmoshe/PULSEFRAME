@@ -35,6 +35,8 @@ export interface Config {
   backupKeep: number;
   /** Python interpreter of an environment with the local speech engine installed (see docs/INTEGRATIONS.md). Unset = automatic transcription is not configured; typed and imported transcripts work without it. */
   speechPython: string | null;
+  /** Python interpreter of an environment with the local voice engine (text to speech). Unset = the speech interpreter is tried; narration is not configured when neither has the engine. */
+  voicePython: string | null;
   /** Where verified speech model files live. */
   speechModelsDir: string;
   /** Device for speech recognition: auto uses a CUDA device when the engine sees one. */
@@ -65,6 +67,7 @@ export function loadConfig(env = process.env): Config {
     backupEveryHours: Math.max(0, Number(env.PF_BACKUP_EVERY_HOURS ?? 24)) || 0,
     backupKeep: Math.max(1, Math.floor(Number(env.PF_BACKUP_KEEP ?? 14)) || 14),
     speechPython: env.PF_SPEECH_PYTHON ? path.resolve(env.PF_SPEECH_PYTHON) : null,
+    voicePython: env.PF_VOICE_PYTHON ? path.resolve(env.PF_VOICE_PYTHON) : null,
     speechModelsDir: path.resolve(env.PF_SPEECH_MODELS_DIR ?? path.join(dataDir, 'speech-models')),
     speechDevice: env.PF_SPEECH_DEVICE === 'cpu' || env.PF_SPEECH_DEVICE === 'cuda' ? env.PF_SPEECH_DEVICE : 'auto',
     distributionProfile: env.PF_PROFILE === 'research' ? 'research' : 'commercial',

@@ -11,7 +11,7 @@ import { timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, ser
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
-import { Speech, TranscribeBody } from './speech.ts';
+import { NarrationBody, Speech, TranscribeBody } from './speech.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
 import type { DerivativeKind, Derivatives } from './derive.ts';
@@ -540,6 +540,11 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = need(c, 'edit');
     const b = await body(c, TranscribeBody);
     const job = await speech.startTranscription(gov, p, c.req.param('id'), { ...b, assetId: c.req.param('assetId') });
+    return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
+  });
+  app.post('/api/v1/projects/:id/narration', async (c) => {
+    const p = need(c, 'edit');
+    const job = await speech.startNarration(gov, p, c.req.param('id'), await body(c, NarrationBody));
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {

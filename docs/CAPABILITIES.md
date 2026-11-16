@@ -80,7 +80,9 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Sound: track gain/pan/mute, clip fades, speech ducking, one audio plan shared by server export, preview and browser export | tested (synthetic signals) | `docs/evidence/phase8-proof.json` (17 checks), `audio.test.ts`, `/selftest.html`; live playback level measured at six points in headless Chromium. No real audio device |
 | Loudness: EBU R128 measurement and static-gain normalisation with true-peak ceiling (server export only) | tested (synthetic) | `phase8-proof.json`: −16.0 LUFS for a −16 target; ceiling respected. No compressor/limiter |
 | Built-in synthesised sound effects (7) as real assets | tested | `phase8-proof.json` |
-| Narration, TTS, voice cloning, EQ/dynamics, noise reduction, recording | not built | Voice blocked on B-8 |
+| Narration from text (optional local voice model): setup state, owner-approved verified download, durable cancelable job, result as an audio asset with its recipe (text, pointed text, model, seed, watermark), placement, Sound-tab form, MCP `generate_narration` (built-in voice) | tested (functional, CPU; three Hebrew sentences; **nobody listened**) | `docs/evidence/voice-proof.json` (19 checks). A second model recovers 17 of 18 words with automatic vowel points, 8 of 18 without |
+| Reference voice (speak in the voice of a recording): owner session only, consent statement recorded, agents refused | tested (rules; one take from a synthetic reference; likeness not assessed) | `voice-proof.json`. REST only, no editor UI |
+| EQ/dynamics, noise reduction, recording, voice list with previews, narration sequences, dubbing | not built | |
 | Scene-cut detection (hard cuts) and beat tracking, model-free, stored as editable source-linked data; split into shots; timeline markers; cut on the beat | tested (synthetic corpora) | `docs/evidence/phase9-proof.json` (12 checks): 5/5 cuts exact; beat F1 0.97–1.00 on six synthetic loops. Dissolves not detected; real footage/music untested |
 | Reframe, subject tracking, segmentation, pose, depth, semantic search, assisted colour | not built | Need models (B-4) |
 | Linked output formats (variants) with per-clip overrides that survive master edits; contain/cover; generic safe-area guides; variant stills, export and batch export | tested | `docs/evidence/phase12-proof.json` (13 checks), `variants.test.ts`. Safe-area numbers are generic guides |
@@ -181,7 +183,7 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Image media-input staging | tested on CPU | `g0-smoke-proof.json` (39 checks): image parameters are project asset ids only (paths/URLs rejected), streamed to the provider under content-addressed names, lineage on derived assets, declared output-size contracts ("media workflow ran…", "lineage:", "media parameters accept only…"). Video/audio source-range staging, cost reservation and budget checks are not built |
 | Model files | tested | Ready only with exact size + SHA-256; resumable, host-restricted, verified downloads; explicit owner-only download bound to the exact byte count (`apps/server/src/models.test.ts`; trial evidence). Not built: shared-dependency accounting, uninstall, readiness report for disk/RAM/GPU |
 | Worker lease/prewarm | not built | |
-| Every other AI capability in SPEC §18 (TTS, generation, …) | not built | No adapters, no credentials requested |
+| Every other AI capability in SPEC §18 (generation, translation, …) | not built | No adapters, no credentials requested |
 
 ### Qualification dimensions (Amendment A1, FF-04) — current values
 

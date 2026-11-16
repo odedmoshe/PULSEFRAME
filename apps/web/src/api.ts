@@ -58,9 +58,10 @@ export type GrantMode = 'observe' | 'propose' | 'edit' | 'autopilot';
 export interface GrantItem { id: string; name: string; mode: GrantMode; projectIds: string[] | null; trackIds: string[] | null; range: unknown; budgetCents: number; requestsPerMinute?: number | null; exportsPerDay?: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string }
 
 export interface SpeechStatus {
+  narration: { ready: boolean; reason: 'engine_not_configured' | 'engine_not_working' | 'model_missing' | null; detail: string; device: 'cpu' | 'cuda' | null; maxCharacters: number };
   transcription: { ready: boolean; reason: 'engine_not_configured' | 'engine_not_working' | 'model_missing' | null; detail: string; device: 'cpu' | 'cuda' | null };
   engine: { configured: boolean; ok: boolean; detail: string };
-  models: { id: string; title: { he: string; en: string }; license: string | null; totalBytes: number; missingDownloadBytes: number; ready: boolean }[];
+  models: { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; license: string | null; totalBytes: number; missingDownloadBytes: number; ready: boolean }[];
 }
 export const api = {
   listProjectsFull: () => call<{ projects: ProjectListItem[] }>('/projects'),
@@ -110,6 +111,7 @@ export const api = {
   speech: () => call<SpeechStatus>('/speech'),
   downloadSpeechModel: (id: string, modelId: string, confirmBytes: number) => call<{ jobId: string }>(`/projects/${id}/speech/models/${encodeURIComponent(modelId)}/download`, json({ confirmBytes })),
   transcribe: (id: string, assetId: string, body: { language: string; overwrite?: boolean }) => call<{ jobId: string }>(`/projects/${id}/assets/${assetId}/transcribe`, json(body)),
+  narrate: (id: string, body: { text: string; language: string; start?: unknown }) => call<{ jobId: string }>(`/projects/${id}/narration`, json(body)),
   cancelJob: (jobId: string) => call<{ status: string; outcome: string }>(`/jobs/${jobId}/cancel`, json({})),
   retryJob: (jobId: string) => call<{ jobId: string }>(`/jobs/${jobId}/retry`, json({})),
   controls: (id: string) => call<{ agentsPaused: boolean }>(`/projects/${id}/controls`),

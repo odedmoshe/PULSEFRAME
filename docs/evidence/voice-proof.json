@@ -1,0 +1,248 @@
+{
+  "ranAt": "2026-11-16T04:29:50.759Z",
+  "result": "PASSED",
+  "passed": 19,
+  "total": 19,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v470 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4,
+    "gpu": "none"
+  },
+  "scope": "Functional evidence only: three short Hebrew sentences with the built-in voice and one take with a synthetic reference voice, on one CPU machine, one run. Nobody listened to any of it. No claim about pronunciation, naturalness, likeness to a reference, other languages or speed.",
+  "download": {
+    "bytes": 307844158,
+    "wallSeconds": 14.655,
+    "note": "network-dependent, single sample"
+  },
+  "takes": [
+    {
+      "text": "שלום, ברוכים הבאים לסרטון החדש שלנו.",
+      "seconds": 3.84,
+      "wallSeconds": 43.7,
+      "placed": true,
+      "provenance": {
+        "jobId": "job_EecIZlnK9KE",
+        "engine": "chatterbox-tts 0.1.7",
+        "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
+        "language": "he",
+        "text": "שלום, ברוכים הבאים לסרטון החדש שלנו.",
+        "spokenText": "שָׁלוֹם, בְּרוּכִים הַבָּאִים לַסִּרְטוֹן הֶחָדָשׁ שֶׁלָּנוּ.",
+        "seed": 100,
+        "voice": "built-in",
+        "watermark": "PerTh (Resemble AI) imperceptible watermark, applied by the engine"
+      }
+    },
+    {
+      "text": "היום נלמד איך לערוך וידאו בקלות ובמהירות.",
+      "seconds": 3.96,
+      "wallSeconds": 43.5,
+      "placed": true,
+      "provenance": {
+        "jobId": "job_umahe2XOKx0",
+        "engine": "chatterbox-tts 0.1.7",
+        "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
+        "language": "he",
+        "text": "היום נלמד איך לערוך וידאו בקלות ובמהירות.",
+        "spokenText": "הַיּוֹם נִלְמַד אֵיךְ לַעֲרֹוךְ וִידֵאוֹ בְּקַלּוּת וּבִמְהִירוּת.",
+        "seed": 101,
+        "voice": "built-in",
+        "watermark": "PerTh (Resemble AI) imperceptible watermark, applied by the engine"
+      }
+    },
+    {
+      "text": "תודה שצפיתם, נתראה בפעם הבאה.",
+      "seconds": 3,
+      "wallSeconds": 39.1,
+      "placed": true,
+      "provenance": {
+        "jobId": "job_Fo0hseu7fLk",
+        "engine": "chatterbox-tts 0.1.7",
+        "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
+        "language": "he",
+        "text": "תודה שצפיתם, נתראה בפעם הבאה.",
+        "spokenText": "תּוֹדָה שֶׁצְּפִיתֶם, נִתְרָאֶה בַּפַּעַם הַבָּאָה.",
+        "seed": 102,
+        "voice": "built-in",
+        "watermark": "PerTh (Resemble AI) imperceptible watermark, applied by the engine"
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "Not configured: status says so, and narration is refused with the reason (no job, no sound)",
+      "ok": true,
+      "detail": {
+        "detail": "neither PF_VOICE_PYTHON nor PF_SPEECH_PYTHON is set: no voice engine is configured",
+        "status": 409
+      }
+    },
+    {
+      "name": "Voice engine answers a probe and is reported with its version",
+      "ok": true,
+      "detail": {
+        "engine": "chatterbox-tts",
+        "version": "0.1.7"
+      }
+    },
+    {
+      "name": "The reviewed voice model is listed with licence, exact size and per-file state",
+      "ok": true,
+      "detail": {
+        "id": "tts.chatterbox-multilingual",
+        "totalBytes": 3514875743,
+        "missing": 307844158
+      }
+    },
+    {
+      "name": "Download: an agent credential is refused",
+      "ok": true,
+      "detail": {
+        "status": 403
+      }
+    },
+    {
+      "name": "Download: the owner's approval of the exact size downloads and verifies every file",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "error": null,
+        "wallSeconds": 14.655,
+        "bytes": 307844158
+      }
+    },
+    {
+      "name": "Ready state names the device and says what has not been qualified",
+      "ok": true,
+      "detail": {
+        "device": "cpu"
+      }
+    },
+    {
+      "name": "Three Hebrew sentences were spoken by jobs and became audio assets",
+      "ok": true,
+      "detail": {
+        "seconds": [
+          3.84,
+          3.96,
+          3
+        ]
+      }
+    },
+    {
+      "name": "Each asset is ordinary 48 kHz audio of a plausible length (0.05–0.3 s per character)",
+      "ok": true,
+      "detail": [
+        {
+          "chars": 36,
+          "seconds": 3.84
+        },
+        {
+          "chars": 41,
+          "seconds": 3.96
+        },
+        {
+          "chars": 29,
+          "seconds": 3
+        }
+      ]
+    },
+    {
+      "name": "Each asset records its recipe: engine, model revisions, language, the text and the pointed text that was spoken, the seed, built-in voice, watermark",
+      "ok": true
+    },
+    {
+      "name": "The three takes sit on the timeline one after another",
+      "ok": true,
+      "detail": [
+        0,
+        3.8333333333333335,
+        7.766666666666667
+      ]
+    },
+    {
+      "name": "Round trip: the local recogniser recovers at least 60% of the words from the generated speech",
+      "ok": true,
+      "detail": {
+        "wordsRecovered": 17,
+        "words": 18,
+        "heard": [
+          {
+            "said": "שלום, ברוכים הבאים לסרטון החדש שלנו.",
+            "recognised": "שלום ברוכים הבאים לסרטון החדש שלנו"
+          },
+          {
+            "said": "היום נלמד איך לערוך וידאו בקלות ובמהירות.",
+            "recognised": "היום נלמד איך לערוך וידאו בקלות ובמהירות"
+          },
+          {
+            "said": "תודה שצפיתם, נתראה בפעם הבאה.",
+            "recognised": "תודה שצפיתם נקראה בפעם הבאה"
+          }
+        ],
+        "note": "machine check only; says nothing about how it sounds to a person"
+      }
+    },
+    {
+      "name": "The same text, voice and seed give the same audio again on this machine (the existing asset is reused)",
+      "ok": true,
+      "detail": {
+        "assetId": "ast_117d108c960",
+        "first": "ast_117d108c960"
+      }
+    },
+    {
+      "name": "Another seed gives another take, kept as its own asset",
+      "ok": true,
+      "detail": {
+        "seconds": 3.64
+      }
+    },
+    {
+      "name": "Reference voice: an agent credential is refused, even with a consent object",
+      "ok": true,
+      "detail": {
+        "status": 403
+      }
+    },
+    {
+      "name": "Reference voice: the owner without a consent statement is refused",
+      "ok": true,
+      "detail": {
+        "status": 422
+      }
+    },
+    {
+      "name": "Reference voice: a recording under 5 seconds is refused",
+      "ok": true,
+      "detail": {
+        "status": 422,
+        "seconds": 3
+      }
+    },
+    {
+      "name": "Reference voice: with the owner's statement the job runs, and the asset records the reference, the speaker, the statement, who made it and when",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "error": null,
+        "seconds": 3.6
+      }
+    },
+    {
+      "name": "Cancel stops a running narration and adds nothing to the library",
+      "ok": true,
+      "detail": {
+        "status": "canceled"
+      }
+    },
+    {
+      "name": "The timeline with the narration exports with audible sound of the expected length",
+      "ok": true,
+      "detail": {
+        "seconds": 10.77,
+        "expected": 10.77
+      }
+    }
+  ]
+}

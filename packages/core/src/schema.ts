@@ -74,6 +74,16 @@ export const AssetSchema = z
         importedBy: z.string(),
         /** Present for built-in synthesised sounds: which formula made this file. */
         procedural: z.object({ id: z.string(), version: z.number().int(), generator: z.string() }).strict().optional(),
+        /** Present for generated speech (SPEC §17): what was said, by which engine and model, in which voice. A voice taken from a recording carries the consent statement its owner made; an agent cannot make one. */
+        voice: z
+          .object({
+            jobId: z.string(), engine: z.string(), model: z.string(), language: z.string(), text: z.string().max(2000), /** The text as the model was given it, when it differs (Hebrew with the vowel points that were added). */ spokenText: z.string().max(4000).optional(), seed: z.number().int(),
+            voice: z.enum(['built-in', 'reference']), referenceAssetId: z.string().optional(),
+            consent: z.object({ speaker: z.string().max(120), statement: z.string().max(400), attestedBy: z.string(), attestedAt: z.string() }).strict().optional(),
+            watermark: z.string().max(200).nullable(),
+          })
+          .strict()
+          .optional(),
         /** Present for provider outputs (SPEC §25, Amendment A1 FF-08): enough to recreate the recipe and trace lineage. */
         derived: z
           .object({ jobId: z.string(), capabilityId: z.string(), capabilityVersion: z.string(), graphDigest: z.string(), params: z.record(z.string(), z.unknown()), sourceAssetIds: z.array(z.string()), outputName: z.string(), outputRole: z.string(), encoding: z.string(), provider: z.record(z.string(), z.unknown()) })

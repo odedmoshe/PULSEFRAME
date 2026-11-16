@@ -16,23 +16,32 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { timeOriginSeconds } from '@pulseframe/core';
+import { createHash, randomBytes } from 'node:crypto';
+import { RationalTimeSchema, timeOriginSeconds, type Asset } from '@pulseframe/core';
 import type { CapabilityDescriptor } from '@pulseframe/providers';
 import * as T from '@pulseframe/time';
 import type { Principal } from './auth.ts';
 import type { Config } from './config.ts';
 import type { Governance } from './governance.ts';
+import { describeMedia } from './ingest.ts';
 import { ModelStore, type ModelStatus } from './models.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
 type ModelFile = CapabilityDescriptor['models'][number];
-export interface SpeechModel { id: string; kind: 'asr'; title: { he: string; en: string }; languages: string[]; note: string; engineModel: string; dir: string; files: ModelFile[] }
+export interface SpeechModel { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; languages: string[]; note: string; engineModel: string; dir: string; files: ModelFile[] }
 
 const IVRIT_REV = '72ad623a37947395efcc3933132353790e5a12f5';
 const ivrit = (name: string, bytes: number, sha256: string): ModelFile => ({
   role: 'asr', path: `asr/ivrit-ai-whisper-large-v3-turbo-ct2/${name}`, publisher: 'ivrit-ai', revision: IVRIT_REV, sha256, bytes,
   license: 'Apache-2.0', licenseEvidence: `model card of ivrit-ai/whisper-large-v3-turbo-ct2@${IVRIT_REV.slice(0, 8)} is tagged license:apache-2.0 (metadata-level check; training-data terms not reviewed)`,
   commercialUse: 'allowed', gated: false, source: `https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ct2/resolve/${IVRIT_REV}/${name}`,
+});
+const NIKUD_REV = 'b806189fe1fc0085b1012b7560ffb5e8ecfd72a2', NIKUD_PATH = 'tts/phonikud/phonikud-1.0.int8.onnx';
+const CHATTERBOX_REV = '5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18';
+const chatterbox = (name: string, bytes: number, sha256: string): ModelFile => ({
+  role: 'tts', path: `tts/chatterbox-multilingual/${name}`, publisher: 'ResembleAI', revision: CHATTERBOX_REV, sha256, bytes,
+  license: 'MIT', licenseEvidence: `model card of ResembleAI/chatterbox@${CHATTERBOX_REV.slice(0, 8)} is tagged license:mit (metadata-level check; training-data terms not reviewed)`,
+  commercialUse: 'allowed', gated: false, source: `https://huggingface.co/ResembleAI/chatterbox/resolve/${CHATTERBOX_REV}/${name}`,
 });
 /** Reviewed, pinned models. Adding one means reviewing its licence and recording size and digest of every file here. */
 export const SPEECH_MODELS: SpeechModel[] = [{
@@ -47,7 +56,34 @@ export const SPEECH_MODELS: SpeechModel[] = [{
     ivrit('tokenizer.json', 2710337, '297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd'),
     ivrit('vocabulary.json', 1068114, 'c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1'),
   ],
+}, {
+  id: 'tts.chatterbox-multilingual', kind: 'tts',
+  title: { he: 'קריינות מטקסט (Chatterbox רב־לשוני, Resemble AI)', en: 'Text to speech (Chatterbox Multilingual, Resemble AI)' },
+  languages: ['he', 'en', 'ar', 'ru', 'fr', 'es', 'de'], note: 'Speaks 23 languages; only Hebrew was tried here. Can speak in the voice of a reference recording. Output carries the engine\'s inaudible watermark.',
+  engineModel: `ResembleAI/chatterbox@${CHATTERBOX_REV.slice(0, 8)} (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@${NIKUD_REV.slice(0, 8)} for Hebrew vowel points`, dir: 'tts/chatterbox-multilingual',
+  files: [
+    chatterbox('t3_mtl23ls_v2.safetensors', 2143989752, 'b1237586127ce98e7800a68e49938eb5092846862aabcb6e17b2fda7889a6c75'),
+    chatterbox('s3gen.pt', 1057165844, '9b9ff07e60b20c136e2b1b3d7563a24604e8d2c4c267888d1ee929dd0151d2a3'),
+    chatterbox('ve.pt', 5698626, '4b16d836bc598509860f6fa068165a8bb5e9ac84f05582dfcf278a5a372879f1'),
+    chatterbox('conds.pt', 107374, '6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e'),
+    chatterbox('grapheme_mtl_merged_expanded_v1.json', 69989, '69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf'),
+    // Hebrew vowel pointing: without it this voice model garbles unpointed Hebrew (measured: see docs/evidence/voice-proof.json).
+    { role: 'hebrew-pointing', path: NIKUD_PATH, publisher: 'Phonikud', revision: NIKUD_REV, sha256: '113afb58d3140502aa1e7691cdc6b240b56cf97e5852fc870e1a7fb5a400dd62', bytes: 307844158, license: 'MIT', licenseEvidence: `model card of Phonikud/phonikud-onnx@${NIKUD_REV.slice(0, 8)} is tagged license:mit (metadata-level check; training-data terms not reviewed)`, commercialUse: 'allowed', gated: false, source: `https://huggingface.co/Phonikud/phonikud-onnx/resolve/${NIKUD_REV}/phonikud-1.0.int8.onnx` },
+  ],
 }];
+
+/** Languages the voice model accepts (its own list). */
+export const NARRATION_LANGUAGES = ['ar', 'da', 'de', 'el', 'en', 'es', 'fi', 'fr', 'he', 'hi', 'it', 'ja', 'ko', 'ms', 'nl', 'no', 'pl', 'pt', 'ru', 'sv', 'sw', 'tr', 'zh'] as const;
+export const NarrationBody = z.object({
+  text: z.string().min(1).max(300).describe('What to say: one or two sentences (up to 300 characters). Longer narration is made sentence by sentence, so one sentence can be redone. Hebrew without vowel points is pointed automatically; text that already has points is spoken as written, which is how a wrong reading is corrected'),
+  language: z.enum(NARRATION_LANGUAGES).optional().describe('Language of the text (default he)'),
+  seed: z.number().int().min(0).max(2 ** 31 - 1).optional().describe('Same text, voice and seed give the same take on the same machine; another seed gives another take'),
+  start: RationalTimeSchema.optional().describe('Place the result on the timeline at this frame-aligned time (omit to only add it to the media library)'),
+  trackId: z.string().optional(),
+  referenceAssetId: z.string().optional().describe('Speak in the voice heard in this project asset. Owner session only, and only with consent'),
+  consent: z.object({ speaker: z.string().min(1).max(120).describe('Whose voice it is'), confirmed: z.literal(true).describe('The owner states that this person agreed to their voice being used this way') }).strict().optional(),
+}).strict();
+const CONSENT_STATEMENT = 'The project owner states that the person whose voice is in the reference recording agreed to it being used to generate this speech.';
 
 export const TranscribeBody = z.object({
   language: z.string().regex(/^[a-z]{2,3}$|^auto$/).optional().describe('Spoken language as a two-letter code (default he), or auto to let the recogniser decide from the first 30 seconds'),
@@ -55,7 +91,7 @@ export const TranscribeBody = z.object({
 }).strict();
 
 const WORKER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../speech/pf_speech.py');
-const DOWNLOAD = 'speech-model-download', TRANSCRIBE = 'transcribe';
+const DOWNLOAD = 'speech-model-download', TRANSCRIBE = 'transcribe', NARRATE = 'narration';
 /** No single recognition may run longer than this. */
 const MAX_RUN_MS = 12 * 3600_000;
 
@@ -105,10 +141,11 @@ export function sanitizeRecognition(segments: WorkerSegment[], mediaSeconds: num
   return { segments: out, stats: { phrases: out.length, words, lowConfidenceWords: low, adjustedTimes: adjusted, droppedPhrases: dropped, degeneratePhrases: garbled } };
 }
 
+interface EngineState { configured: boolean; ok: boolean; detail: string; engine?: string; version?: string; python?: string; cudaDevices?: number }
+
 export class Speech {
   readonly models: ModelStore;
   private readonly dir: string;
-  private probed: { at: number; value: Awaited<ReturnType<Speech['probe']>> } | null = null;
   private running = new Map<string, ChildProcess>();
   private chain: Promise<void> = Promise.resolve();
   private stopped = false;
@@ -117,10 +154,10 @@ export class Speech {
     this.models = new ModelStore(this.dir, cfg.modelHosts);
   }
 
-  private worker(args: string[], onLine: (o: any) => void, jobId?: string): Promise<{ code: number | null; stderr: string }> {
+  private worker(python: string, args: string[], onLine: (o: any) => void, jobId?: string): Promise<{ code: number | null; stderr: string }> {
     return new Promise((resolve, reject) => {
       // -I: the interpreter ignores the environment and the current directory when importing, so only the worker and its installed packages run.
-      const p = spawn(this.cfg.speechPython!, ['-I', WORKER, ...args], { stdio: ['ignore', 'pipe', 'pipe'], timeout: MAX_RUN_MS, killSignal: 'SIGKILL' });
+      const p = spawn(python, ['-I', WORKER, ...args], { stdio: ['ignore', 'pipe', 'pipe'], timeout: MAX_RUN_MS, killSignal: 'SIGKILL' });
       if (jobId) this.running.set(jobId, p);
       let buf = '', err = '';
       p.stdout.setEncoding('utf8');
@@ -136,20 +173,27 @@ export class Speech {
       p.on('close', (code) => { if (jobId) this.running.delete(jobId); resolve({ code, stderr: err }); });
     });
   }
-  private async probe(): Promise<{ configured: boolean; ok: boolean; detail: string; engine?: string; version?: string; python?: string; cudaDevices?: number }> {
-    if (!this.cfg.speechPython) return { configured: false, ok: false, detail: 'PF_SPEECH_PYTHON is not set: no speech engine is configured' };
+  private async probeOne(python: string | null, what: 'asr' | 'tts'): Promise<EngineState> {
+    const unset = what === 'asr' ? 'PF_SPEECH_PYTHON is not set: no speech engine is configured' : 'neither PF_VOICE_PYTHON nor PF_SPEECH_PYTHON is set: no voice engine is configured';
+    if (!python) return { configured: false, ok: false, detail: unset };
     let result: any = null;
     try {
-      const r = await this.worker(['probe'], (o) => { if (o.event === 'result') result = o; });
+      const r = await this.worker(python, ['probe'], (o) => { if (o.event === 'result') result = o; });
       if (!result) return { configured: true, ok: false, detail: `the speech worker did not answer (exit ${r.code})` };
     } catch (e: any) { return { configured: true, ok: false, detail: e.message }; }
-    if (!result.asr) return { configured: true, ok: false, python: result.python, detail: `the recognition engine is not installed in that Python environment (${result.asrError ?? 'import failed'})` };
-    return { configured: true, ok: true, detail: 'engine answers', engine: result.asr.engine, version: result.asr.version, python: result.python, cudaDevices: result.cudaDevices };
+    const e = result[what];
+    if (!e) return { configured: true, ok: false, python: result.python, detail: `the ${what === 'asr' ? 'recognition' : 'voice'} engine is not installed in that Python environment (${result[`${what}Error`] ?? 'import failed'})` };
+    return { configured: true, ok: true, detail: 'engine answers', engine: e.engine, version: e.version, python: result.python, cudaDevices: what === 'asr' ? result.cudaDevices : result.torchCuda ? 1 : 0 };
   }
-  private async engine() {
-    if (!this.probed || Date.now() - this.probed.at > 60_000 || !this.probed.value.ok) this.probed = { at: Date.now(), value: await this.probe() };
-    return this.probed.value;
+  private probes = new Map<string, { at: number; value: EngineState }>();
+  private async engineOf(what: 'asr' | 'tts'): Promise<EngineState> {
+    const cached = this.probes.get(what);
+    if (cached && cached.value.ok && Date.now() - cached.at < 60_000) return cached.value;
+    const value = await this.probeOne(what === 'asr' ? this.cfg.speechPython : this.cfg.voicePython ?? this.cfg.speechPython, what);
+    this.probes.set(what, { at: Date.now(), value });
+    return value;
   }
+  private voicePython() { return (this.cfg.voicePython ?? this.cfg.speechPython)!; }
   private async modelStatus(m: SpeechModel) {
     const files: ModelStatus[] = [];
     for (const f of m.files) files.push(await this.models.status(f));
@@ -158,20 +202,18 @@ export class Speech {
   }
   /** Honest setup state: what is installed, what is missing, and what that means. Read-only. */
   async status() {
-    const engine = await this.engine();
-    const models = [];
+    const engine = await this.engineOf('asr'), voiceEngine = await this.engineOf('tts');
+    const models: Awaited<ReturnType<Speech['modelStatus']>>[] = [];
     for (const m of SPEECH_MODELS) models.push(await this.modelStatus(m));
-    const asr = models.find((m) => m.kind === 'asr' && m.ready);
-    const device = this.cfg.speechDevice === 'auto' ? (engine.cudaDevices ? 'cuda' : 'cpu') : this.cfg.speechDevice;
+    const part = (e: EngineState, kind: 'asr' | 'tts', missing: string, qualification: string) => {
+      const m = models.find((x) => x.kind === kind && x.ready);
+      const device = this.cfg.speechDevice === 'auto' ? (e.cudaDevices ? 'cuda' : 'cpu') : this.cfg.speechDevice;
+      return { ready: e.ok && !!m, reason: !e.configured ? 'engine_not_configured' : !e.ok ? 'engine_not_working' : !m ? 'model_missing' : null, detail: !e.ok ? e.detail : !m ? missing : `ready on ${device}`, device: e.ok ? device : null, qualification };
+    };
     return {
-      transcription: {
-        ready: engine.ok && !!asr,
-        reason: !engine.configured ? 'engine_not_configured' : !engine.ok ? 'engine_not_working' : !asr ? 'model_missing' : null,
-        detail: !engine.ok ? engine.detail : !asr ? 'the recognition model has not been downloaded' : `ready on ${device}`,
-        device: engine.ok ? device : null,
-        qualification: 'functional only: accuracy, Hebrew word timing and speed have not been qualified',
-      },
-      engine, models, modelsDir: this.dir,
+      transcription: part(engine, 'asr', 'the recognition model has not been downloaded', 'functional only: accuracy, Hebrew word timing and speed have not been qualified'),
+      narration: { ...part(voiceEngine, 'tts', 'the voice model has not been downloaded', 'functional only: nobody has listened to the Hebrew output; pronunciation, naturalness and speed have not been qualified'), languages: NARRATION_LANGUAGES, maxCharacters: 300, voices: ['built-in', 'reference (owner session, with consent)'] },
+      engine, voiceEngine, models, modelsDir: this.dir,
     };
   }
 
@@ -235,7 +277,7 @@ export class Speech {
   }
   /** One recognition at a time: each uses every core (or the whole GPU). */
   private enqueue(jobId: string) {
-    this.chain = this.chain.then(() => this.run(jobId)).catch((e) => console.error(e));
+    this.chain = this.chain.then(() => (this.store.getJob(jobId).type === NARRATE ? this.narrate(jobId) : this.run(jobId))).catch((e) => console.error(e));
   }
   private canceled(jobId: string) { return ['cancel-requested', 'canceled'].includes(this.store.getJob(jobId).status); }
   private async run(jobId: string) {
@@ -254,7 +296,7 @@ export class Speech {
       if (this.canceled(jobId)) return this.finishCanceled(jobId);
       let result: unknown = null, failure: { code: string; message: string } | null = null, lastStage = 0;
       this.store.updateJob(jobId, { stage: `recognising speech: 0 of ${Math.round(seconds)} s` });
-      const r = await this.worker(['transcribe', '--model', path.join(this.dir, model.dir), '--audio', wav, '--language', j.input.language, '--device', this.cfg.speechDevice], (o) => {
+      const r = await this.worker(this.cfg.speechPython!, ['transcribe', '--model', path.join(this.dir, model.dir), '--audio', wav, '--language', j.input.language, '--device', this.cfg.speechDevice], (o) => {
         if (o.event === 'result') result = o;
         else if (o.event === 'error') failure = { code: String(o.code), message: String(o.message).slice(0, 500) };
         else if (o.event === 'progress' && Date.now() - lastStage > 1000) { lastStage = Date.now(); this.store.updateJob(jobId, { stage: `recognising speech: ${Math.round(o.seconds)} of ${Math.round(seconds)} s` }); }
@@ -265,7 +307,8 @@ export class Speech {
       const parsed = WorkerResult.safeParse(result);
       if (!parsed.success) throw new ApiError(502, 'transcription_failed', `the recogniser ended without a usable result (exit ${r.code})`, { tail: r.stderr.slice(-400) });
       const { segments, stats } = sanitizeRecognition(parsed.data.segments, seconds);
-      const run = { engine: `${this.probed?.value.engine ?? 'faster-whisper'} ${this.probed?.value.version ?? ''}`.trim(), model: model.engineModel, device: parsed.data.device, computeType: parsed.data.computeType, audioSeconds: Number(seconds.toFixed(3)), speechSeconds: Number(parsed.data.speechDuration.toFixed(3)), wallSeconds: (Date.now() - started) / 1000, language: parsed.data.language, languageProbability: Number(parsed.data.languageProbability.toFixed(3)) };
+      const eng = this.probes.get('asr')?.value;
+      const run = { engine: `${eng?.engine ?? 'faster-whisper'} ${eng?.version ?? ''}`.trim(), model: model.engineModel, device: parsed.data.device, computeType: parsed.data.computeType, audioSeconds: Number(seconds.toFixed(3)), speechSeconds: Number(parsed.data.speechDuration.toFixed(3)), wallSeconds: (Date.now() - started) / 1000, language: parsed.data.language, languageProbability: Number(parsed.data.languageProbability.toFixed(3)) };
       if (!segments.length) { this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { assetId: asset.id, attached: false, note: stats.degeneratePhrases ? 'the recogniser produced only repetition, not words; nothing was attached' : 'no speech was recognised; nothing was attached', ...stats, run } }); return; }
       // Recognition takes a while: the asset may be gone, or a transcript typed, since it started.
       this.assertTranscribable(j.projectId, j.input);
@@ -293,7 +336,117 @@ export class Speech {
     });
   }
 
-  handles(job: JobRow) { return job.type === DOWNLOAD || job.type === TRANSCRIBE; }
+  /**
+   * Start a narration job: the text is spoken by the local voice model and the result becomes a normal audio asset with its
+   * recipe in provenance. A reference voice is the owner's own decision with a consent statement; an agent cannot make one.
+   */
+  async startNarration(gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof NarrationBody>): Promise<JobRow> {
+    gov.assertMayAct(principal, projectId, 'edit');
+    gov.assertUnrestricted(principal, 'add media to the library');
+    const p = this.store.getProject(projectId);
+    if (a.referenceAssetId) {
+      if (principal.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'speaking in a recorded person\'s voice needs the owner\'s own consent statement; an agent credential cannot give it', {}, 'Use the built-in voice, or ask the owner to start this from the editor.');
+      if (!a.consent) throw new ApiError(422, 'consent_required', 'a reference voice needs a consent statement: whose voice it is, and that they agreed', {}, 'Send consent: { speaker, confirmed: true }.');
+      const ref = p.doc.assets[a.referenceAssetId];
+      if (!ref) throw new ApiError(404, 'not_found', `asset ${a.referenceAssetId} not found`, { assetId: a.referenceAssetId });
+      if (!ref.audio) throw new ApiError(422, 'no_audio', 'the reference asset has no sound');
+      if (T.toSeconds(ref.duration) < 5) throw new ApiError(422, 'reference_too_short', 'the reference recording must be at least 5 seconds long', { seconds: Number(T.toSeconds(ref.duration).toFixed(2)) });
+    } else if (a.consent) throw new ApiError(400, 'invalid_request', 'consent is only meaningful together with referenceAssetId');
+    if (!a.text.trim()) throw new ApiError(400, 'invalid_request', 'there is no text to speak');
+    const st = await this.status();
+    if (!st.narration.ready) throw new ApiError(409, 'voice_not_ready', `narration is not set up: ${st.narration.detail}`, { reason: st.narration.reason }, 'A recorded or imported voice file works without it.');
+    const model = st.models.find((m) => m.kind === 'tts' && m.ready)!;
+    const job = this.store.createJob(projectId, NARRATE, principal.actor, {
+      text: a.text.trim(), language: a.language ?? 'he', seed: a.seed ?? randomBytes(4).readUInt32BE() >>> 1, modelId: model.id, projectRevision: p.revision,
+      ...(a.start ? { start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}) } : {}),
+      ...(a.referenceAssetId ? { referenceAssetId: a.referenceAssetId, consent: { speaker: a.consent!.speaker, statement: CONSENT_STATEMENT, attestedBy: principal.actor, attestedAt: new Date().toISOString() } } : {}),
+    });
+    this.enqueue(job.id);
+    return this.store.getJob(job.id);
+  }
+  private ffmpeg(args: string[], jobId: string, what: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file', ...args], { stdio: ['ignore', 'ignore', 'pipe'], timeout: 30 * 60_000, killSignal: 'SIGKILL' });
+      this.running.set(jobId, p);
+      let err = '';
+      p.stderr.on('data', (d) => { err = (err + d).slice(-2000); });
+      p.on('error', (e) => { this.running.delete(jobId); reject(new ApiError(503, 'analysis_unavailable', `ffmpeg could not be started: ${e.message}`)); });
+      p.on('close', (code) => { this.running.delete(jobId); code === 0 ? resolve() : reject(new ApiError(422, 'analysis_failed', what, { tail: err.slice(-400) })); });
+    });
+  }
+  private async narrate(jobId: string) {
+    if (this.stopped || this.store.getJob(jobId).status !== 'queued') return;
+    const j = this.store.getJob(jobId);
+    const started = Date.now();
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-tts-'));
+    try {
+      this.store.updateJob(jobId, { status: 'running', stage: 'loading the voice model', attempt: j.attempt + 1 });
+      const model = SPEECH_MODELS.find((m) => m.id === j.input.modelId);
+      if (!model || !(await this.modelStatus(model)).ready) throw new ApiError(409, 'voice_not_ready', 'the voice model is no longer present and verified');
+      const textFile = path.join(tmp, 'text.txt'), raw = path.join(tmp, 'raw.wav'), out = path.join(tmp, 'narration.wav');
+      fs.writeFileSync(textFile, j.input.text, 'utf8');
+      const args = ['synthesize', '--model', path.join(this.dir, model.dir), '--text-file', textFile, '--out', raw, '--language', j.input.language, '--seed', String(j.input.seed), '--device', this.cfg.speechDevice, '--nikud', path.join(this.dir, NIKUD_PATH)];
+      if (j.input.referenceAssetId) {
+        const ref = this.store.getProject(j.projectId).doc.assets[j.input.referenceAssetId];
+        if (!ref?.audio) throw new ApiError(409, 'not_found', 'the reference recording is no longer in the project');
+        const refWav = path.join(tmp, 'reference.wav');
+        // the first half minute is plenty for the voice encoder
+        await this.ffmpeg(['-i', this.store.blobPath(ref.contentHash), '-map', '0:a:0', '-t', '30', '-ac', '1', '-ar', '24000', '-c:a', 'pcm_s16le', '-y', refWav], jobId, 'the reference recording could not be read');
+        args.push('--reference', refWav);
+      }
+      if (this.canceled(jobId)) return this.finishCanceled(jobId);
+      let result: any = null, failure: { code: string; message: string } | null = null;
+      const r = await this.worker(this.voicePython(), args, (o) => {
+        if (o.event === 'result') result = o;
+        else if (o.event === 'error') failure = { code: String(o.code), message: String(o.message).slice(0, 500) };
+        else if (o.event === 'progress') this.store.updateJob(jobId, { stage: 'speaking the text' });
+      }, jobId);
+      if (this.stopped) return;
+      if (this.canceled(jobId)) return this.finishCanceled(jobId);
+      if (failure) throw new ApiError(502, 'narration_failed', `the voice engine reported: ${(failure as { message: string }).message}`, { engineCode: (failure as { code: string }).code });
+      if (!result || !fs.existsSync(raw)) throw new ApiError(502, 'narration_failed', `the voice engine ended without a result (exit ${r.code})`, { tail: r.stderr.slice(-400) });
+      // Checked before it may become an asset: it has a length and it is not silence.
+      const pcm = fs.readFileSync(raw).subarray(44);
+      const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.length >> 1);
+      let peak = 0;
+      for (const v of samples) peak = Math.max(peak, Math.abs(v));
+      const seconds = samples.length / result.sampleRate;
+      if (seconds < 0.2 || peak < 300) throw new ApiError(502, 'narration_failed', 'the voice engine produced no audible speech', { seconds: Number(seconds.toFixed(2)), peak });
+      await this.ffmpeg(['-i', raw, '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le', '-bitexact', '-fflags', '+bitexact', '-y', out], jobId, 'the generated speech could not be converted');
+      const bytes = fs.readFileSync(out);
+      const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+      const meta = await describeMedia(out);
+      this.store.putBlob(contentHash, out, bytes.length, meta.mimeType);
+      const eng = this.probes.get('tts')?.value;
+      const name = `${j.input.text.replace(/\s+/g, ' ').slice(0, 40)}.wav`;
+      const asset: Omit<Asset, 'id'> = { ...meta, name, contentHash, byteSize: bytes.length, provenance: { origin: 'generated', importedAt: new Date().toISOString(), importedBy: j.actor, voice: {
+        jobId, engine: `${eng?.engine ?? 'chatterbox-tts'} ${eng?.version ?? ''}`.trim(), model: model.engineModel, language: j.input.language, text: j.input.text, ...(typeof result.spokenText === 'string' && result.spokenText !== j.input.text ? { spokenText: result.spokenText.slice(0, 4000) } : {}), seed: j.input.seed,
+        voice: j.input.referenceAssetId ? 'reference' : 'built-in', ...(j.input.referenceAssetId ? { referenceAssetId: j.input.referenceAssetId, consent: j.input.consent } : {}), watermark: result.watermark ?? null,
+      } } };
+      const imp = this.store.commit({ projectId: j.projectId, actor: j.actor, label: 'Generate narration', allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
+      const assetId = imp.results[0]!.output!.assetId as string;
+      let placed: unknown = null, revision = imp.revision, placeError: unknown;
+      if (j.input.start) {
+        try {
+          const c = this.store.commit({ projectId: j.projectId, actor: j.actor, label: 'Place narration', ops: [{ op: 'add_clip', args: { assetId, start: j.input.start, ...(j.input.trackId ? { trackId: j.input.trackId } : {}) } }] });
+          placed = c.results[0]!.output ?? null; revision = c.revision;
+        } catch (e: any) { placeError = e instanceof ApiError ? e.toJSON().error : { code: e?.code ?? 'place_failed', message: String(e?.message ?? e) }; }
+      }
+      this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: {
+        assetId, revision, placed, ...(placeError ? { placeError, note: 'the narration is in the media library; it could not be placed at the requested time' } : {}),
+        seconds: Number(seconds.toFixed(3)), voice: j.input.referenceAssetId ? 'reference' : 'built-in',
+        run: { engine: asset.provenance!.voice!.engine, model: model.engineModel, device: result.device, seed: j.input.seed, wallSeconds: (Date.now() - started) / 1000 },
+        review: 'Machine speech: listen to it before publishing. Hebrew pronunciation has not been qualified.',
+      } });
+    } catch (e: any) {
+      if (this.stopped) return;
+      if (this.canceled(jobId)) return this.finishCanceled(jobId);
+      if (!(e instanceof ApiError)) console.error(e);
+      this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'internal_error', message: 'narration failed unexpectedly' } });
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  }
+
+  handles(job: JobRow) { return job.type === DOWNLOAD || job.type === TRANSCRIBE || job.type === NARRATE; }
   cancel(jobId: string, actor: string) {
     const j = this.store.getJob(jobId);
     if (['succeeded', 'failed', 'canceled'].includes(j.status)) return { jobId, status: j.status, outcome: 'already-finished' };
@@ -305,7 +458,7 @@ export class Speech {
   }
   /** Jobs interrupted by a restart: downloads resume from the part on disk, recognitions start again. */
   recover(): number {
-    const downloads = this.store.recoverJobs(DOWNLOAD), jobs = this.store.recoverJobs(TRANSCRIBE);
+    const downloads = this.store.recoverJobs(DOWNLOAD), jobs = [...this.store.recoverJobs(TRANSCRIBE), ...this.store.recoverJobs(NARRATE)];
     for (const j of downloads) void this.driveDownload(j.id);
     for (const j of jobs) this.enqueue(j.id);
     return downloads.length + jobs.length;

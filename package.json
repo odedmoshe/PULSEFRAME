@@ -31,6 +31,7 @@
     "proof:pitch": "tsx packages/evals/src/pitch-proof.ts",
     "proof:speech": "tsx packages/evals/src/speech-proof.ts",
     "check:media": "tsx packages/evals/src/real-media-check.ts",
+    "proof:voice": "tsx packages/evals/src/voice-proof.ts",
     "conformance:start-offset": "tsx packages/evals/src/start-offset.ts",
     "conformance:inputs": "tsx packages/evals/src/input-matrix.ts",
     "conformance:images": "tsx packages/evals/src/image-matrix.ts",

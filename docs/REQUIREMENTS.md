@@ -190,8 +190,8 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-17.1 | 17 | TTS narration with takes, pronunciation, provider-gated controls, provenance | 8 | R-18.1, R-20.2 | Narration drawer | tts job | Mix | not started | |
-| R-17.2 | 17 | Voice cloning via real provider verification; revoke/delete | 8 | R-17.1, R-21.4 | Voice settings | approval, clone job | — | not started | |
+| R-17.1 | 17 | TTS narration with takes, pronunciation, provider-gated controls, provenance | 8 | R-18.1, R-20.2 | Narration drawer | tts job | Mix | partial | Local voice model: narration job → audio asset with recipe in provenance, placed at a time; other seed = other take; Hebrew pointed automatically, hand-pointed text spoken as written (`voice-proof.json`, 19 checks, functional on CPU; nobody listened). No voice list with previews, no narration sequence, no pronunciation dictionary, no delivery controls |
+| R-17.2 | 17 | Voice cloning via real provider verification; revoke/delete | 8 | R-17.1, R-21.4 | Voice settings | approval, clone job | — | partial | Reference voice through REST only: owner session, consent statement stored in the asset's provenance, agents refused, minimum 5 s (`voice-proof.json`; tried with a synthetic reference only). No editor UI, no likeness check, no revoke/delete of takes made from a reference |
 | R-17.3 | 17 | Dubbing pipeline (ASR, translation, speakers, synthesis, duration) and lip sync | 10 | R-17.1, R-16.2 | Dub panel | dub job | Mix | not started | |
 
 ## Section 18: AI tiers and capability registry

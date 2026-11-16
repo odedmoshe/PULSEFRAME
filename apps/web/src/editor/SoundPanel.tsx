@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { volumeLevelAt, type Clip, type ProjectDocument } from '@pulseframe/core';
-import { api, type LoudnessResult } from '../api.ts';
+import { api, type LoudnessResult, type SpeechStatus } from '../api.ts';
 import { useEditorState } from './store.ts';
 
 type Track = ProjectDocument['sequences'][string]['tracks'][number];
@@ -146,6 +146,78 @@ function Meter() {
 
 const TARGETS = [-14, -16, -23] as const;
 
+/**
+ * Narration from text with the local voice model: the setup state as the server reports it, the owner's model download for the
+ * exact size shown, and the job. The result arrives as a normal audio clip at the playhead. Built-in voice only: a recorded
+ * person's voice needs a consent statement and is not offered here yet.
+ */
+function Narration() {
+  const { editor, state, t } = useEditorState();
+  const [status, setStatus] = useState<SpeechStatus | null>(null);
+  const [text, setText] = useState('');
+  const [job, setJob] = useState<{ id: string; kind: 'voice' | 'download'; stage: string | null } | null>(null);
+  const [note, setNote] = useState<{ kind: 'done' | 'failed'; detail?: string } | null>(null);
+  const refresh = () => api.speech().then(setStatus).catch(() => setStatus(null));
+  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    if (!job) return;
+    let live = true, timer = 0;
+    const tick = async () => {
+      try {
+        const j = (await api.job(job.id)) as { status: string; stage?: string | null; output?: { placeError?: unknown }; error?: { message?: string } };
+        if (!live) return;
+        if (['succeeded', 'failed', 'canceled'].includes(j.status)) {
+          setJob(null);
+          if (job.kind === 'download') void refresh();
+          if (j.status === 'failed') setNote({ kind: 'failed', detail: j.error?.message });
+          else if (j.status === 'succeeded' && job.kind === 'voice') { setNote({ kind: 'done' }); setText(''); }
+          return;
+        }
+        setJob((cur) => (cur && cur.id === job.id ? { ...cur, stage: j.stage ?? null } : cur));
+      } catch { /* the next tick tries again */ }
+      if (live) timer = window.setTimeout(tick, 1000);
+    };
+    timer = window.setTimeout(tick, 500);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [job?.id]);
+  if (!status || !state.doc) return null;
+  const pid = state.doc.id, nar = status.narration;
+  const model = status.models.find((m) => m.kind === 'tts');
+  const start = (kind: 'voice' | 'download', p: Promise<{ jobId: string }>) => { setNote(null); p.then((r) => setJob({ id: r.jobId, kind, stage: null })).catch(editor.fail); };
+  return (
+    <div className="narration" data-testid="narration" data-state={job ? job.kind : nar.ready ? 'ready' : nar.reason ?? 'unknown'}>
+      <h3>{t('narration')}</h3>
+      {job ? (
+        <p role="status" data-testid="narration-progress">
+          {t(job.kind === 'voice' ? 'narration.working' : 'asr.downloading')} <bdi className="muted">{job.stage ?? ''}</bdi>{' '}
+          <button className="ghost" onClick={() => void api.cancelJob(job.id).catch(editor.fail)} data-testid="narration-cancel">{t('asr.cancel')}</button>
+        </p>
+      ) : nar.ready ? (
+        <>
+          <label>{t('narration.text')}
+            <textarea dir="auto" rows={3} maxLength={nar.maxCharacters} value={text} onChange={(e) => setText(e.target.value)} data-testid="narration-text" />
+          </label>
+          <p>
+            <button disabled={!text.trim()} onClick={() => start('voice', api.narrate(pid, { text: text.trim(), language: /[\u0590-\u05ff]/.test(text) ? 'he' : 'en', start: editor.playhead }))} data-testid="narration-run">{t('narration.run')}</button>{' '}
+            <span className="muted">{t(nar.device === 'cuda' ? 'asr.device.cuda' : 'asr.device.cpu')}</span>
+          </p>
+          <p className="muted">{t('narration.hint')}</p>
+        </>
+      ) : nar.reason === 'model_missing' && model ? (
+        <p data-testid="narration-model-missing">
+          {t('narration.modelMissing')} <bdi>{model.title[state.lang === 'en' ? 'en' : 'he']}</bdi> · {t('asr.license')}: <bdi>{model.license}</bdi>{' '}
+          <button onClick={() => start('download', api.downloadSpeechModel(pid, model.id, model.missingDownloadBytes))} data-testid="narration-download">{t('asr.download')} (<bdi>{(model.missingDownloadBytes / 1e9).toFixed(2)} GB</bdi>)</button>
+        </p>
+      ) : nar.reason === 'engine_not_working' ? (
+        <p className="muted" data-testid="narration-unavailable">{t('narration.engineBroken')} <bdi>{nar.detail}</bdi></p>
+      ) : (
+        <p className="muted" data-testid="narration-unavailable">{t('narration.notConfigured')}</p>
+      )}
+      {note && <p role="status" data-testid="narration-note" data-kind={note.kind}>{t(note.kind === 'done' ? 'narration.done' : 'narration.failed')} {note.detail && <bdi>{note.detail}</bdi>}</p>}
+    </div>
+  );
+}
+
 export function SoundPanel() {
   const { editor, state, t } = useEditorState();
   const { doc } = state;
@@ -178,6 +250,7 @@ export function SoundPanel() {
         </ul>
       )}
       <p className="muted">{t('sound.duck.hint')}</p>
+      <Narration />
 
       {clip && (
         <>
