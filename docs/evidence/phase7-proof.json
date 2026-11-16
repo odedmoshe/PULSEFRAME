@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T19:36:35.328Z",
+  "ranAt": "2026-11-16T20:26:37.645Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -12,14 +12,14 @@
     "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
     "exportWithLooks": {
       "frames": 30,
-      "wallMs": 1091,
+      "wallMs": 939,
       "minPsnrDb": 42.16,
       "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
     },
     "lab": {
       "gpuEffectTilesUnavailable": 0,
-      "tiles": 170,
-      "effects": 21,
+      "tiles": 210,
+      "effects": 31,
       "blends": 17,
       "transitions": 12,
       "masks": 5
@@ -29,7 +29,7 @@
   "total": 31,
   "checks": [
     {
-      "name": "catalog lists exactly what is registered: 21 effects with parameter schemas and defaults, 12 transitions, 17 blend modes",
+      "name": "catalog lists exactly what is registered: 31 effects with parameter schemas and defaults, 12 transitions, 17 blend modes",
       "ok": true,
       "detail": {
         "effects": [
@@ -53,7 +53,17 @@
           "blur.zoom",
           "stylize.posterize",
           "stylize.edges",
-          "digital.glitch"
+          "digital.glitch",
+          "color.grade",
+          "stylize.duotone",
+          "stylize.halftone",
+          "stylize.scanlines",
+          "stylize.vhs",
+          "distort.kaleidoscope",
+          "distort.fisheye",
+          "blur.directional",
+          "blur.tilt-shift",
+          "light.glow"
         ]
       }
     },
@@ -285,7 +295,7 @@
       "ok": true,
       "detail": {
         "frames": 30,
-        "wallMs": 1091,
+        "wallMs": 939,
         "minPsnrDb": 42.16,
         "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
       }
@@ -314,8 +324,8 @@
       "ok": true,
       "detail": {
         "gpuEffectTilesUnavailable": 0,
-        "tiles": 170,
-        "effects": 21,
+        "tiles": 210,
+        "effects": 31,
         "blends": 17,
         "transitions": 12,
         "masks": 5,
@@ -323,7 +333,8 @@
           "color.grayscale",
           "color.sepia",
           "color.invert",
-          "distort.mirror"
+          "distort.mirror",
+          "stylize.duotone"
         ],
         "aspects": [
           "16:9",

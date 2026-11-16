@@ -12,6 +12,7 @@ import {
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan } from './speed.ts';
+import { lookParams } from './looks.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
@@ -1522,6 +1523,29 @@ const parseEffect = (type: string, params: unknown) => {
   if (!findEffect(type)) throw new OpError('not_found', `effect "${type}" does not exist`, { type, available: EFFECTS.map((e) => e.id) }, 'Call list_catalog for the available effects and their parameters.');
   try { return effectParams(type, params); } catch (e: any) { throw new OpError('invalid_args', `invalid parameters for ${type}`, { issues: e.issues?.slice(0, 8) }, 'Call list_catalog for the parameter schema.'); }
 };
+defineOp({
+  name: 'apply_look',
+  version: 1,
+  description: 'Give a picture or title clip one of the named colour looks (see list_catalog → looks). A look is a setting of the color.grade effect: the clip\'s existing colour grade is replaced, or one is added first in its effect list; every value stays editable with update_effect. Needs a graphics adapter (WebGPU) to be shown and exported.',
+  args: z.object({ clipId: z.string(), lookId: z.string() }).strict(),
+  apply(d, a, ctx) {
+    const { clip } = pictureClip(d, a.clipId);
+    const params = lookParams(a.lookId);
+    if (!params) throw new OpError('not_found', `colour look "${a.lookId}" does not exist`, { lookId: a.lookId }, 'Call list_catalog for the looks.');
+    const list = [...(clip.effects ?? [])];
+    const at = list.findIndex((e) => e.type === 'color.grade');
+    let effectId: string;
+    if (at >= 0) { list[at] = { ...list[at]!, enabled: true, params }; effectId = list[at]!.id; }
+    else {
+      if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
+      effectId = ctx.newId('fx');
+      list.unshift({ id: effectId, type: 'color.grade', enabled: true, params });
+    }
+    clip.effects = list;
+    return { affectedIds: [clip.id], summary: `Applied colour look ${a.lookId}`, output: { effectId, params } };
+  },
+});
+
 defineOp({
   name: 'add_effect',
   version: 1,

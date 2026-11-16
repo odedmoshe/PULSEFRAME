@@ -1,14 +1,14 @@
 {
-  "ranAt": "2026-11-16T19:38:37.125Z",
+  "ranAt": "2026-11-16T20:21:53.036Z",
   "result": "PASSED",
-  "passed": 26,
-  "total": 26,
+  "passed": 38,
+  "total": 38,
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
-  "scope": "Nine effects on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
+  "scope": "Nineteen effects and the colour looks on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
   "measurements": {
     "previewVsStill": {
       "meanDifference": 0,
@@ -303,6 +303,142 @@
     {
       "name": "digital.glitch: the same frame is identical when rendered again; half a second later the pattern is another one",
       "ok": true
+    },
+    {
+      "name": "distort.fisheye: matches its formula (within 2.5 pixels)",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.14,
+        "points": 36
+      }
+    },
+    {
+      "name": "distort.kaleidoscope: every wedge shows the first half-wedge, mirrored (within 2.5 pixels away from the folds)",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.47,
+        "points": 40
+      }
+    },
+    {
+      "name": "color.grade, saturation 0: every pixel is the grey of its own brightness (within 2 of 255)",
+      "ok": true,
+      "detail": {
+        "worst": 0.5
+      }
+    },
+    {
+      "name": "color.grade: one stop of exposure doubles the values; a warmer temperature raises red by a tenth and lowers blue by a tenth",
+      "ok": true,
+      "detail": {
+        "plain": [
+          64,
+          64,
+          128
+        ],
+        "plusOneStop": [
+          128,
+          128,
+          255
+        ],
+        "warm": [
+          70,
+          64,
+          115
+        ]
+      }
+    },
+    {
+      "name": "Colour looks: 40 are listed; applying one sets the clip's colour grade (noir is black and white), applying another replaces it instead of stacking, an unknown look is refused",
+      "ok": true,
+      "detail": {
+        "looks": 40,
+        "effectsOnClip": 1,
+        "unknown": 404
+      }
+    },
+    {
+      "name": "stylize.halftone: white paper shows between the dots, the dark corner is darker than the bright corner, and the same frame is identical again",
+      "ok": true,
+      "detail": {
+        "paperShare": 0.208,
+        "darkCorner": 50,
+        "brightCorner": 240
+      }
+    },
+    {
+      "name": "stylize.vhs: at amount 0 the picture is unchanged; at 0.6 it changes, the same frame is identical again, and another frame has another pattern",
+      "ok": true,
+      "detail": {
+        "amount0": 0,
+        "changed": 8.998,
+        "nextFrame": 5.082
+      }
+    },
+    {
+      "name": "blur.directional: sideways, pixels near the stripe take the share of the 17 samples that fall on it; along the stripe, nothing changes",
+      "ok": true,
+      "detail": {
+        "measured": [
+          60,
+          75,
+          75,
+          75,
+          30
+        ],
+        "expected": [
+          60,
+          75,
+          75,
+          75,
+          30
+        ],
+        "alongStripe": 0
+      }
+    },
+    {
+      "name": "blur.tilt-shift: the band stays sharp, far rows are blurred",
+      "ok": true,
+      "detail": {
+        "bandOutside": 0,
+        "bandInside": 255,
+        "farOutside": 102,
+        "farInside": 117
+      }
+    },
+    {
+      "name": "light.glow: light spills next to the bright stripe, not far from it, and the stripe itself stays",
+      "ok": true,
+      "detail": {
+        "near": 80,
+        "far": 0,
+        "stripe": 255
+      }
+    },
+    {
+      "name": "stylize.duotone: black becomes the dark colour and white the light colour",
+      "ok": true,
+      "detail": {
+        "black": [
+          27,
+          20,
+          100
+        ],
+        "white": [
+          255,
+          209,
+          102
+        ]
+      }
+    },
+    {
+      "name": "stylize.scanlines: every other line of the 64 is darkened by the amount",
+      "ok": true,
+      "detail": {
+        "line0": 255,
+        "line1": 128,
+        "line2": 255
+      }
     },
     {
       "name": "stylize.edges: the border of the square is bright and the flat areas are dark",

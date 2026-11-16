@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { findClip, FORMAT_PROFILES } from '@pulseframe/core';
-import type { Key } from '@pulseframe/i18n';
+import { jobStageLabel, type Key } from '@pulseframe/i18n';
 import { api, type PreflightReport } from '../api.ts';
 import { useEditorState } from './store.ts';
 
@@ -188,7 +188,7 @@ export function DeliverPanel() {
           <ul className="deliver-jobs" data-testid="deliver-jobs">
             {jobs.map((j) => (
               <li key={j.jobId} data-testid="deliver-job" data-job-id={j.jobId} data-status={j.status}>
-                <span dir="auto">{doc?.variants?.[j.variantId]?.name ?? j.variantId}</span> <span className="muted">{j.status}{j.stage ? ` · ${j.stage}` : ''}</span>
+                <span dir="auto">{doc?.variants?.[j.variantId]?.name ?? j.variantId}</span> <span className="muted">{j.status}{j.stage ? ` · ${jobStageLabel(j.stage, lang)}` : ''}</span>
                 {j.status === 'succeeded' && <a href={`/api/v1/jobs/${j.jobId}/output`} data-testid="deliver-job-download">{t('export.done')}</a>}
               </li>
             ))}

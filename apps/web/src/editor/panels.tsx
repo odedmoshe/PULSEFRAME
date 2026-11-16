@@ -3,7 +3,7 @@ import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import type { Clip } from '@pulseframe/core';
 import { assetNotices, clipEnd, FONT_CATALOG, speedValue } from '@pulseframe/core';
-import { dictionaries, type Key } from '@pulseframe/i18n';
+import { dictionaries, jobStageLabel, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { Scopes } from './Scopes.tsx';
 import { ASSET_DRAG_TYPE, useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
@@ -78,7 +78,7 @@ export function Header() {
       {job?.status === 'canceled' && <span className="save warn" role="status" data-testid="export-canceled">{t('export.canceled')}</span>}
       {(job?.status === 'canceled' || job?.status === 'failed') && <button className="ghost" onClick={() => editor.retryExport()} data-testid="export-retry">{t('export.retry')}</button>}
       <button className="primary" disabled={!doc || !!exporting || editor.player?.frameCount === 0} onClick={() => editor.startExport()} data-testid="export">
-        {exporting ? `${t('export.running')} ${job?.stage ?? ''}` : t('export')}
+        {exporting ? <>{t('export.running')} <bdi>{jobStageLabel(job?.stage, lang)}</bdi></> : t('export')}
       </button>
     </header>
   );

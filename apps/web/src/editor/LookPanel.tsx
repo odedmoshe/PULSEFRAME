@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import * as T from '@pulseframe/time';
-import { BLEND_MODES, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
+import { BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 
@@ -193,6 +193,12 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
         {effects.some((fx) => GPU_EFFECT_IDS.includes(fx.type)) && !state.gpu?.available && state.gpu && (
           <p className="muted danger" role="status" data-testid="gpu-unavailable">{t('look.gpu.unavailable')} <bdi>{state.gpu.reason}</bdi></p>
         )}
+        <label>{t('look.looks')}
+          <select data-testid="look-apply" value="" disabled={!state.gpu?.available} title={state.gpu?.available ? t('look.looks.hint') : t('look.gpu.needed')} onChange={(e) => { const lookId = e.target.value; if (lookId) void editor.commit([{ op: 'apply_look', args: { clipId: clip.id, lookId } }], 'Apply colour look'); }}>
+            <option value="">{state.gpu?.available ? t('look.looks.pick') : `${t('look.looks.pick')} — ${t('look.gpu.needed')}`}</option>
+            {COLOR_LOOKS.map((l) => <option key={l.id} value={l.id}>{l.name[state.lang]}</option>)}
+          </select>
+        </label>
         <label className="sr-only" htmlFor="look-effect-add">{t('look.effect.add')}</label>
         <select id="look-effect-add" data-testid="effect-add" value="" onChange={(e) => { const type = e.target.value; if (type) void editor.commit([{ op: 'add_effect', args: { clipId: clip.id, type } }], 'Add effect'); }}>
           <option value="">{t('look.effect.add')}</option>

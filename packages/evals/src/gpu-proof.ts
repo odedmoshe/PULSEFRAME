@@ -228,6 +228,84 @@ async function main() {
     check('digital.glitch: the same frame is identical when rendered again; half a second later the pattern is another one', maxDiff(fx.img, g0again) === 0 && maxDiff(fx.img, g15) > 20);
     await fx.remove();
 
+    // ---------- second batch: lens, kaleidoscope, grade, looks ----------
+    fx = await withEffect('distort.fisheye', { amount: 0.4 });
+    w1 = worst(fx.img, (u, v) => { const dx = (u - 0.5) * asp, dy = v - 0.5, k = 1 + 0.4 * (dx * dx + dy * dy) * 2; return [0.5 + (dx * k) / asp, 0.5 + dy * k]; });
+    check('distort.fisheye: matches its formula (within 2.5 pixels)', w1.worstPixels < 2.5 && maxDiff(fx.img, plainRamp) > 10, w1);
+    await fx.remove();
+
+    fx = await withEffect('distort.kaleidoscope', { segments: 6, angle: 0, x: 0.5, y: 0.5 });
+    const fold = (z: number) => 1 - Math.abs((((z * 0.5 + 0.5) % 1) + 1) % 1 * 2 - 1);
+    w1 = worst(fx.img, (u, v) => {
+      const dx = (u - 0.5) * asp, dy = v - 0.5, wedge = (2 * Math.PI) / 6;
+      let t = Math.atan2(dy, dx); t -= wedge * Math.floor(t / wedge);
+      // next to a fold the sampler mixes both sides: leave those points out
+      if (Math.min(t, Math.abs(t - wedge / 2), wedge - t) < 0.06) return null;
+      if (t > wedge / 2) t = wedge - t;
+      const r = Math.hypot(dx, dy);
+      return [fold(0.5 + (r * Math.cos(t)) / asp), fold(0.5 + r * Math.sin(t))];
+    });
+    check('distort.kaleidoscope: every wedge shows the first half-wedge, mirrored (within 2.5 pixels away from the folds)', w1.worstPixels < 2.5 && w1.points > 15, w1);
+    await fx.remove();
+
+    fx = await withEffect('color.grade', { saturation: 0 });
+    let grey = 0;
+    for (const [x, y] of grid) { const c = px(fx.img, x, y), src = px(plainRamp, x, y); grey = Math.max(grey, Math.abs(c[0]! - c[1]!), Math.abs(c[1]! - c[2]!), Math.abs(c[0]! - (0.2126 * src[0]! + 0.7152 * src[1]! + 0.0722 * src[2]!))); }
+    check('color.grade, saturation 0: every pixel is the grey of its own brightness (within 2 of 255)', grey <= 2, { worst: Number(grey.toFixed(2)) });
+    await tx(ramp.pid, [{ op: 'update_effect', args: { clipId: ramp.clipId, effectId: fx.id, params: { saturation: 1, exposure: 1 } } }]);
+    const bright = await still(ramp.pid);
+    await tx(ramp.pid, [{ op: 'update_effect', args: { clipId: ramp.clipId, effectId: fx.id, params: { exposure: 0, temperature: 0.5 } } }]);
+    const warm = await still(ramp.pid);
+    const p0 = px(plainRamp, 90, 160), pb = px(bright, 90, 160), pw = px(warm, 90, 160);
+    check('color.grade: one stop of exposure doubles the values; a warmer temperature raises red by a tenth and lowers blue by a tenth', near(pb, [p0[0]! * 2, p0[1]! * 2, 255], 3) && Math.abs(pw[0]! - p0[0]! * 1.1) <= 2 && Math.abs(pw[2]! - p0[2]! * 0.9) <= 2 && Math.abs(pw[1]! - p0[1]!) <= 1, { plain: p0, plusOneStop: pb, warm: pw });
+    await fx.remove();
+
+    const cat = (await call('/catalog')).body;
+    const lookA = await tx(ramp.pid, [{ op: 'apply_look', args: { clipId: ramp.clipId, lookId: 'noir' } }]);
+    const noir = await still(ramp.pid);
+    const lookB = await tx(ramp.pid, [{ op: 'apply_look', args: { clipId: ramp.clipId, lookId: 'teal-orange' } }]);
+    const teal = await still(ramp.pid);
+    const fxList = (await call(`/projects/${ramp.pid}`)).body.project.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === ramp.clipId).effects;
+    const bad = await call(`/projects/${ramp.pid}/transactions`, { ops: [{ op: 'apply_look', args: { clipId: ramp.clipId, lookId: 'no-such-look' } }] });
+    const isGrey = grid.every(([x, y]) => { const c = px(noir, x, y); return Math.abs(c[0]! - c[1]!) <= 1 && Math.abs(c[1]! - c[2]!) <= 1; });
+    check('Colour looks: 40 are listed; applying one sets the clip\'s colour grade (noir is black and white), applying another replaces it instead of stacking, an unknown look is refused', cat.looks?.length === 40 && new Set(cat.looks.map((l: any) => l.id)).size === 40 && isGrey && maxDiff(noir, teal) > 20 && fxList.length === 1 && fxList[0].type === 'color.grade' && lookA.results[0].output.effectId === lookB.results[0].output.effectId && bad.status >= 400, { looks: cat.looks?.length, effectsOnClip: fxList.length, unknown: bad.status });
+    await tx(ramp.pid, [{ op: 'remove_effect', args: { clipId: ramp.clipId, effectId: fxList[0].id } }]);
+
+    fx = await withEffect('stylize.halftone', { spacing: 0.02, angle: 45 });
+    const meanAround = (img: Img, x0: number, y0: number) => { let t = 0, k = 0; for (let y = y0; y < y0 + 60; y++) for (let x = x0; x < x0 + 60; x++) { const c = px(img, x, y); t += c[0]! + c[1]! + c[2]!; k += 3; } return t / k; };
+    const paper = [...Array(W * H).keys()].filter((i) => fx.img[i * 3]! > 245 && fx.img[i * 3 + 1]! > 245 && fx.img[i * 3 + 2]! > 245).length / (W * H);
+    check('stylize.halftone: white paper shows between the dots, the dark corner is darker than the bright corner, and the same frame is identical again', paper > 0.05 && paper < 0.95 && meanAround(fx.img, 10, 10) < meanAround(fx.img, 290, 570) - 20 && maxDiff(fx.img, await still(ramp.pid)) === 0, { paperShare: Number(paper.toFixed(3)), darkCorner: Math.round(meanAround(fx.img, 10, 10)), brightCorner: Math.round(meanAround(fx.img, 290, 570)) });
+    await fx.remove();
+
+    fx = await withEffect('stylize.vhs', { amount: 0, speed: 24, seed: 5 });
+    const vhs0 = fx.img;
+    await tx(ramp.pid, [{ op: 'update_effect', args: { clipId: ramp.clipId, effectId: fx.id, params: { amount: 0.6 } } }]);
+    const vhsA = await still(ramp.pid, 0), vhsA2 = await still(ramp.pid, 0), vhsB = await still(ramp.pid, 15);
+    check('stylize.vhs: at amount 0 the picture is unchanged; at 0.6 it changes, the same frame is identical again, and another frame has another pattern', maxDiff(vhs0, plainRamp) <= 1 && meanDiff(vhsA, plainRamp) > 1 && maxDiff(vhsA, vhsA2) === 0 && meanDiff(vhsA, vhsB) > 0.5, { amount0: maxDiff(vhs0, plainRamp), changed: meanDiff(vhsA, plainRamp), nextFrame: meanDiff(vhsA, vhsB) });
+    await fx.remove();
+
+    // ---------- on the stripe: blurs, glow, duotone, scanlines ----------
+    const onStripe = async (type: string, params: Record<string, unknown>) => {
+      const id = (await tx(wave.pid, [{ op: 'add_effect', args: { clipId: wave.clipId, type, params } }])).results[0].output.effectId as string;
+      const img = await still(wave.pid, 0);
+      await tx(wave.pid, [{ op: 'remove_effect', args: { clipId: wave.clipId, effectId: id } }]);
+      return img;
+    };
+    await tx(wave.pid, [{ op: 'remove_effect', args: { clipId: wave.clipId, effectId: waveFx } }]);
+    const sharp = await still(wave.pid, 0);
+    const mb = await onStripe('blur.directional', { amount: 0.1, angle: 0 });
+    const lit = (x: number) => { let k = 0; for (let i = 0; i < 17; i++) { const xs = x + 0.5 + 64 * (i / 16 - 0.5); if (xs >= 170 && xs < 190) k++; } return (255 * k) / 17; };
+    const mbv = await onStripe('blur.directional', { amount: 0.1, angle: 90 });
+    check('blur.directional: sideways, pixels near the stripe take the share of the 17 samples that fall on it; along the stripe, nothing changes', [150, 160, 180, 200, 215].every((x) => Math.abs(px(mb, x, 320)[0]! - lit(x)) <= 20) && px(mb, 100, 320)[0]! <= 1 && maxDiff(mbv, sharp) <= 2, { measured: [150, 160, 180, 200, 215].map((x) => px(mb, x, 320)[0]), expected: [150, 160, 180, 200, 215].map((x) => Math.round(lit(x))), alongStripe: maxDiff(mbv, sharp) });
+    const ts = await onStripe('blur.tilt-shift', { position: 0.5, width: 0.2, amount: 0.05 });
+    check('blur.tilt-shift: the band stays sharp, far rows are blurred', px(ts, 165, 320)[0]! === 0 && px(ts, 180, 320)[0]! >= 254 && px(ts, 165, 40)[0]! > 10 && px(ts, 180, 40)[0]! < 250, { bandOutside: px(ts, 165, 320)[0], bandInside: px(ts, 180, 320)[0], farOutside: px(ts, 165, 40)[0], farInside: px(ts, 180, 40)[0] });
+    const gl = await onStripe('light.glow', { threshold: 0.7, radius: 0.05, amount: 1.5 });
+    check('light.glow: light spills next to the bright stripe, not far from it, and the stripe itself stays', px(gl, 160, 320)[0]! > 10 && px(gl, 60, 320)[0]! <= 1 && px(gl, 180, 320)[0]! >= 254, { near: px(gl, 160, 320)[0], far: px(gl, 60, 320)[0], stripe: px(gl, 180, 320)[0] });
+    const du = await onStripe('stylize.duotone', { dark: '#1B1464', light: '#FFD166', amount: 1 });
+    check('stylize.duotone: black becomes the dark colour and white the light colour', near(px(du, 60, 320), [27, 20, 100], 2) && near(px(du, 180, 320), [255, 209, 102], 2), { black: px(du, 60, 320), white: px(du, 180, 320) });
+    const sl = await onStripe('stylize.scanlines', { lines: 64, amount: 0.5 });
+    check('stylize.scanlines: every other line of the 64 is darkened by the amount', px(sl, 180, 5)[0]! >= 254 && Math.abs(px(sl, 180, 15)[0]! - 127.5) <= 2 && px(sl, 180, 25)[0]! >= 254, { line0: px(sl, 180, 5)[0], line1: px(sl, 180, 15)[0], line2: px(sl, 180, 25)[0] });
+
     // edges, on the square: bright along its border, dark inside flat areas
     const edgeP = await newProject('edges', green);
     await tx(edgeP.pid, [{ op: 'add_effect', args: { clipId: edgeP.clipId, type: 'stylize.edges', params: { amount: 1, strength: 2 } } }]);
@@ -277,7 +355,7 @@ async function main() {
     const report = {
       ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', passed: checks.length - failed.length, total: checks.length,
       machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none: the WebGPU adapter here is a software one' },
-      scope: 'Nine effects on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
+      scope: 'Nineteen effects and the colour looks on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
       measurements, checks,
     };
     fs.writeFileSync(path.join(root, 'docs/evidence/gpu-proof.json'), JSON.stringify(report, null, 2) + '\n');

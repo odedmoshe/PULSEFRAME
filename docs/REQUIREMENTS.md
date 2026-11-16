@@ -304,14 +304,14 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 
 | ID | Spec ref | Requirement | Phase | Depends on | UI | Op / job / tool | Export path | Status | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| R-A.1 | A catalog | At least 30 distinct effect primitives | 7 | R-08.6 | Effects drawer | effect ops | Compositor | not started | |
+| R-A.1 | A catalog | At least 30 distinct effect primitives | 7 | R-08.6 | Effects drawer | effect ops | Compositor | partial 31 primitives registered (12 Canvas2D, 19 WebGPU), each with a proof check (`phase7-proof.json`, `gpu-proof.json`); the GPU ones verified on a software adapter, a few seen by the owner on hardware |
 | R-A.2 | A catalog | At least 80 effect entries and curated presets | 7 | R-A.1 | Effects drawer | effect ops | Compositor | not started | |
 | R-A.3 | A catalog | At least 45 transitions on at least 12 core kernels | 7 | R-13.4 | Transitions drawer | transition ops | Compositor | not started | |
 | R-A.4 | A catalog | 40 text presets | 6 | R-15.3 | Text drawer | text ops | Compositor | not started | |
 | R-A.5 | A catalog | 30 text animations | 6 | R-15.3 | Text drawer | animation ops | Compositor | not started | |
 | R-A.6 | A catalog | 20 caption styles | 6 | R-16.4 | Captions drawer | caption style ops | Compositor | partial | 4 of 20 caption styles |
 | R-A.7 | A catalog | 8 velocity presets (Montage, Hero, Bullet, Flash In, Flash Out, Jump Cut, Smooth Ramp, Stutter) | 7 | R-14.2 | Inspector | time ops | Compositor, audio | not started | |
-| R-A.8 | A catalog | 40 color looks | 7 | R-13.1 | Effects drawer | grade ops | Compositor | not started | |
+| R-A.8 | A catalog | 40 color looks | 7 | R-13.1 | Effects drawer | grade ops | Compositor | partial 40 looks as settings of `color.grade` (`looks.ts`, `apply_look`); arithmetic of the grade is proven, the looks themselves were not judged on footage |
 | R-A.9 | A catalog | 80 SFX assets, original or licensed | 8 | R-10.5 | Sound drawer | add_clip | Mix | not started | |
 | R-A.10 | A catalog | 60 font families, 20 with verified Hebrew coverage | 6 | R-15.4 | Fonts drawer | font ops | Font manifest | partial | 5 of 60 families, 5 of 20 with Hebrew (declared subset + load check); `pnpm check:notices` |
 | R-A.11 | A catalog | 120 original graphic elements | 7 | R-15.5 | Elements drawer | add_clip | Compositor | not started | |
