@@ -12,6 +12,9 @@ Commands:
   transcribe --model DIR --audio WAV     speech to text with word times (faster-whisper / CTranslate2)
   synthesize --model DIR --text-file F --out WAV [--reference WAV]
                                          text to speech (Chatterbox multilingual); with --reference, in that voice
+  serve                                  stay alive and take the same commands as JSON lines on stdin, e.g.
+                                         {"cmd": "transcribe", "model": "...", "audio": "..."}; each request ends with
+                                         {"event": "end"}. Models stay loaded between requests.
 """
 import argparse
 import json
@@ -24,9 +27,24 @@ def out(obj):
     sys.stdout.flush()
 
 
+class WorkerError(BaseException):  # not an Exception, so the broad handlers around engine calls do not swallow it
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
 def fail(code, message):
-    out({"event": "error", "code": code, "message": message})
-    sys.exit(1)
+    raise WorkerError(code, message)
+
+
+# Loaded models are kept for the life of the process: in `serve` mode that saves loading them again for every job.
+_models = {}
+
+
+def cached(key, load):
+    if key not in _models:
+        _models[key] = load()
+    return _models[key]
 
 
 def cuda_count():
@@ -83,14 +101,14 @@ def synthesize(args):
     if args.language == "he" and args.nikud and not any("\u05b0" <= c <= "\u05c7" for c in text):
         try:
             from phonikud_onnx import Phonikud
-            pointed = Phonikud(args.nikud).add_diacritics(text)
+            pointed = cached(("nikud", args.nikud), lambda: Phonikud(args.nikud)).add_diacritics(text)
             # keep standard vowel points only: drop the stress mark, the vocal-shva mark and the prefix separator this tool adds
             spoken = pointed.replace("|", "").replace("\u05ab", "").replace("\u05bd", "")
         except Exception as e:
             fail("diacritics_failed", f"{type(e).__name__}: {e}")
     try:
+        model = cached(("tts", args.model, device), lambda: ChatterboxMultilingualTTS.from_local(args.model, device))
         torch.manual_seed(args.seed)
-        model = ChatterboxMultilingualTTS.from_local(args.model, device)
     except Exception as e:
         fail("model_load_failed", f"{type(e).__name__}: {e}")
     out({"event": "progress", "stage": "model loaded"})
@@ -119,7 +137,7 @@ def transcribe(args):
         device = "cuda" if cuda_count() > 0 else "cpu"
     compute = "float16" if device == "cuda" else "int8"
     try:
-        model = WhisperModel(args.model, device=device, compute_type=compute, local_files_only=True, cpu_threads=args.threads)
+        model = cached(("asr", args.model, device), lambda: WhisperModel(args.model, device=device, compute_type=compute, local_files_only=True, cpu_threads=args.threads))
     except Exception as e:
         fail("model_load_failed", f"{type(e).__name__}: {e}")
     try:
@@ -177,8 +195,35 @@ def main():
     y.add_argument("--seed", type=int, default=0)
     y.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     y.set_defaults(fn=synthesize)
+    sub.add_parser("serve").set_defaults(fn=None)
     a = p.parse_args()
-    a.fn(a)
+    if a.cmd != "serve":
+        try:
+            a.fn(a)
+        except WorkerError as e:
+            out({"event": "error", "code": e.code, "message": str(e)})
+            sys.exit(1)
+        return
+    out({"event": "ready"})
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+            argv = [str(req.pop("cmd"))]
+            for k, v in req.items():
+                if v is not None:
+                    argv += ["--" + k.replace("_", "-"), str(v)]
+            r = p.parse_args(argv)
+            r.fn(r)
+        except WorkerError as e:
+            out({"event": "error", "code": e.code, "message": str(e)})
+        except SystemExit:  # argparse rejected the request
+            out({"event": "error", "code": "bad_request", "message": "the request was not understood"})
+        except Exception as e:
+            out({"event": "error", "code": "worker_failed", "message": f"{type(e).__name__}: {e}"})
+        out({"event": "end"})
 
 
 if __name__ == "__main__":

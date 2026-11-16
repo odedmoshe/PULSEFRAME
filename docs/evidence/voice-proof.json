@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T06:04:56.603Z",
+  "ranAt": "2026-11-16T06:52:04.327Z",
   "result": "PASSED",
   "passed": 23,
   "total": 23,
@@ -16,11 +16,11 @@
   "takes": [
     {
       "text": "שלום, ברוכים הבאים לסרטון החדש שלנו.",
-      "seconds": 3.84,
-      "wallSeconds": 44.7,
+      "seconds": 2.76,
+      "wallSeconds": 36.9,
       "placed": true,
       "provenance": {
-        "jobId": "job_YVM34VYfQHI",
+        "jobId": "job_eDTfxa6DOwE",
         "engine": "chatterbox-tts 0.1.7",
         "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
         "language": "he",
@@ -33,11 +33,11 @@
     },
     {
       "text": "היום נלמד איך לערוך וידאו בקלות ובמהירות.",
-      "seconds": 3.96,
-      "wallSeconds": 46.1,
+      "seconds": 3.16,
+      "wallSeconds": 15.7,
       "placed": true,
       "provenance": {
-        "jobId": "job_r4EOxKZBNdk",
+        "jobId": "job_tDxnOgOwV7U",
         "engine": "chatterbox-tts 0.1.7",
         "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
         "language": "he",
@@ -50,11 +50,11 @@
     },
     {
       "text": "תודה שצפיתם, נתראה בפעם הבאה.",
-      "seconds": 3,
-      "wallSeconds": 39.8,
+      "seconds": 3.08,
+      "wallSeconds": 16.4,
       "placed": true,
       "provenance": {
-        "jobId": "job_MVsmUKQXTJg",
+        "jobId": "job_imqJceIkcRw",
         "engine": "chatterbox-tts 0.1.7",
         "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
         "language": "he",
@@ -111,9 +111,9 @@
       "ok": true,
       "detail": {
         "seconds": [
-          3.84,
-          3.96,
-          3
+          2.76,
+          3.16,
+          3.08
         ]
       }
     },
@@ -123,15 +123,15 @@
       "detail": [
         {
           "chars": 36,
-          "seconds": 3.84
+          "seconds": 2.76
         },
         {
           "chars": 41,
-          "seconds": 3.96
+          "seconds": 3.16
         },
         {
           "chars": 29,
-          "seconds": 3
+          "seconds": 3.08
         }
       ]
     },
@@ -144,8 +144,8 @@
       "ok": true,
       "detail": [
         0,
-        3.8333333333333335,
-        7.766666666666667
+        2.7333333333333334,
+        5.866666666666666
       ]
     },
     {
@@ -157,7 +157,7 @@
         "heard": [
           {
             "said": "שלום, ברוכים הבאים לסרטון החדש שלנו.",
-            "recognised": "שלום ברוכים הבאים לסרטון החדש שלנו"
+            "recognised": "שלום ברוכים הבאים לסבתון החדש שלנו"
           },
           {
             "said": "היום נלמד איך לערוך וידאו בקלות ובמהירות.",
@@ -165,7 +165,7 @@
           },
           {
             "said": "תודה שצפיתם, נתראה בפעם הבאה.",
-            "recognised": "תודה שצפיתם נקראה בפעם הבאה"
+            "recognised": "תודה שצפיתם נתראה בפעם הבאה"
           }
         ],
         "note": "machine check only; says nothing about how it sounds to a person"
@@ -175,15 +175,15 @@
       "name": "The same text, voice and seed give the same audio again on this machine (the existing asset is reused)",
       "ok": true,
       "detail": {
-        "assetId": "ast_5491eec9630",
-        "first": "ast_5491eec9630"
+        "assetId": "ast_993da7c8e40",
+        "first": "ast_993da7c8e40"
       }
     },
     {
       "name": "Another seed gives another take, kept as its own asset",
       "ok": true,
       "detail": {
-        "seconds": 3.64
+        "seconds": 3.76
       }
     },
     {
@@ -205,7 +205,7 @@
       "ok": true,
       "detail": {
         "status": 422,
-        "seconds": 3
+        "seconds": 3.08
       }
     },
     {
@@ -214,7 +214,7 @@
       "detail": {
         "status": "succeeded",
         "error": null,
-        "seconds": 3.6
+        "seconds": 3.24
       }
     },
     {
@@ -245,7 +245,7 @@
           "succeeded"
         ],
         "first": 20,
-        "third": 25.433333333333334
+        "third": 21.733333333333334
       }
     },
     {
@@ -264,9 +264,10 @@
       }
     },
     {
-      "name": "Editor: a reference voice needs the speaker's name and the ticked statement before the button works; the result records them and the owner as the one who stated it",
+      "name": "Editor: a clip under 5 seconds is not offered as a reference; a longer one needs the speaker's name and the ticked statement before the button works; the result records them and the owner as the one who stated it",
       "ok": true,
       "detail": {
+        "tooShort": true,
         "blockedFirst": true,
         "blockedNoTick": true,
         "voice": "reference"
@@ -276,8 +277,8 @@
       "name": "The timeline with the narration exports with audible sound of the expected length",
       "ok": true,
       "detail": {
-        "seconds": 29.57,
-        "expected": 29.57
+        "seconds": 123.07,
+        "expected": 123.07
       }
     }
   ]

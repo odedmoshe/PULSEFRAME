@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T05:55:20.213Z",
+  "ranAt": "2026-11-16T06:37:15.102Z",
   "result": "PASSED",
   "passed": 26,
   "total": 26,
@@ -15,10 +15,10 @@
   },
   "timing": {
     "audioSeconds": 116.1,
-    "wallSeconds": 112.1,
-    "wallPerAudioSecond": 0.97,
+    "wallSeconds": 77.3,
+    "wallPerAudioSecond": 0.67,
     "lowConfidenceWords": 3,
-    "note": "each job loads the model again; one CPU machine, one run: not a performance figure"
+    "note": "the model stays loaded between jobs (first job includes the load); one CPU machine, one run: not a performance figure"
   },
   "checks": [
     {
@@ -242,7 +242,7 @@
     {
       "file": "10285382808955499770.wav",
       "audioSeconds": 5.16,
-      "wallSeconds": 9.6,
+      "wallSeconds": 10.9,
       "referenceWords": 14,
       "wordErrors": 1,
       "reference": "הוצאות המלחמה של האימפריאליזם האמריקני על כיבוש הפיליפינים שולמו על-ידי העם הפיליפיני עצמו.",
@@ -251,7 +251,7 @@
     {
       "file": "10333197193824183869.wav",
       "audioSeconds": 7.56,
-      "wallSeconds": 8.8,
+      "wallSeconds": 5.2,
       "referenceWords": 12,
       "wordErrors": 5,
       "reference": "ניתן להמיר כסף בבנק היחידי באיים שממוקם בסטנלי מול חנות FIC West.",
@@ -260,7 +260,7 @@
     {
       "file": "10608586173590639256.wav",
       "audioSeconds": 7.08,
-      "wallSeconds": 9.3,
+      "wallSeconds": 5.2,
       "referenceWords": 16,
       "wordErrors": 9,
       "reference": "\"למשל, נטען ש\"\"למידה\"\" ו\"\"חברות\"\" הם גורמי מוטיבציה חשובים לשימוש באינטרנט (ג'יימס ושות', 1995).\"",
@@ -269,7 +269,7 @@
     {
       "file": "1083791105728656051.wav",
       "audioSeconds": 4.8,
-      "wallSeconds": 8.3,
+      "wallSeconds": 6,
       "referenceWords": 13,
       "wordErrors": 0,
       "reference": "האוכלוסייה המקורית לא השתנתה כלל, הם עדיין צריכים את אותן התאמות שהיו בעבר.",
@@ -278,7 +278,7 @@
     {
       "file": "11824821116359364698.wav",
       "audioSeconds": 6.06,
-      "wallSeconds": 8.1,
+      "wallSeconds": 6,
       "referenceWords": 12,
       "wordErrors": 6,
       "reference": "הערבים גם הביאו את האיסלם לארצות, והוא קנה אחיזה נרחבת בקומורו ובמיוט.",
@@ -287,7 +287,7 @@
     {
       "file": "10068749401638533088.wav",
       "audioSeconds": 7.62,
-      "wallSeconds": 9.9,
+      "wallSeconds": 6.5,
       "referenceWords": 15,
       "wordErrors": 0,
       "reference": "כשהגעת למדינה זרה בהתחלה, כנראה שאנשים היו סבלניים ומבינים, בידיעה שמטיילים במדינות חדשות צריכים להתאקלם.",
@@ -296,7 +296,7 @@
     {
       "file": "11816505664411611127.wav",
       "audioSeconds": 19.26,
-      "wallSeconds": 10.7,
+      "wallSeconds": 7.5,
       "referenceWords": 39,
       "wordErrors": 10,
       "reference": "\"בתור NSA הוא סייע לקרטר להתנהל בדיפלומטיות בענייני מדינות העולם (world affairs), כמו אירועי קמפ דייויד, 1978; נרמול יחסי ארה\"\"ב-סין במהלך שנות ה-70 המאוחרות; המהפכה האיראנית, אשר הובילה למקרה בני הערובה, 1979; והפלישה הסובייטית לאפגניסטן, 1979.\"",
@@ -305,7 +305,7 @@
     {
       "file": "11540143980768727994.wav",
       "audioSeconds": 8.58,
-      "wallSeconds": 9.5,
+      "wallSeconds": 6.1,
       "referenceWords": 24,
       "wordErrors": 4,
       "reference": "רובין אות'אפה השיג את התוצאה הגבוהה ביותר בסבבים, 70 ריצות ב-41 כדורים בלבד על ידי פגיעה ב-11 רביעיות ו-2 שישיות.",
@@ -314,7 +314,7 @@
     {
       "file": "1125590556134020107.wav",
       "audioSeconds": 10.86,
-      "wallSeconds": 9.2,
+      "wallSeconds": 6,
       "referenceWords": 22,
       "wordErrors": 3,
       "reference": "נשים צריכות להבין שהבדלים תרבותיים עלולים לגרום למה שהן היו רואות כהטרדה, וכי זה לא נדיר שמישהו יעקוב אחריהן, יאחוז בזרוען וכו'.",
@@ -323,7 +323,7 @@
     {
       "file": "10043827527204102024.wav",
       "audioSeconds": 13.32,
-      "wallSeconds": 9.9,
+      "wallSeconds": 6.5,
       "referenceWords": 22,
       "wordErrors": 9,
       "reference": "הפארק הלאומי קרוגר (KNP) נמצא בחלק הצפון מזרחי של דרום אפריקה, לאורך גבול מוזמביק במזרח, זימבבואה בצפון, וגבולו הדרומי הוא נהר קרוקודייל.",
@@ -332,7 +332,7 @@
     {
       "file": "11304748757603993363.wav",
       "audioSeconds": 17.76,
-      "wallSeconds": 9.3,
+      "wallSeconds": 5.9,
       "referenceWords": 24,
       "wordErrors": 22,
       "reference": "ברחבי ארצות הברית, ישנם כ-400,000 מקרים ידועים של טרשת נפוצה (MS), כך שהיא עדיין המחלה העצבית המובילה בקרב מבוגרים צעירים ובגיל העמידה.",
@@ -341,7 +341,7 @@
     {
       "file": "11039943409256922423.wav",
       "audioSeconds": 8.04,
-      "wallSeconds": 9.4,
+      "wallSeconds": 5.5,
       "referenceWords": 16,
       "wordErrors": 1,
       "reference": "עד מהרה קצינים מצוידים בציוד לפיזור מהומות נכנסו לחצר ודחקו את האסירים לפינה באמצעות גז מדמיע.",

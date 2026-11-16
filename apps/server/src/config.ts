@@ -41,6 +41,8 @@ export interface Config {
   speechModelsDir: string;
   /** Device for speech recognition: auto uses a CUDA device when the engine sees one. */
   speechDevice: 'auto' | 'cpu' | 'cuda';
+  /** How long an idle speech worker keeps its model loaded, in seconds (default 120; 0 = a new process for every job). A loaded model holds roughly 2–4 GB of memory. */
+  speechKeepSeconds: number;
   /** Licence profile used to decide which capabilities may run. */
   distributionProfile: 'commercial' | 'research';
 }
@@ -70,6 +72,7 @@ export function loadConfig(env = process.env): Config {
     voicePython: env.PF_VOICE_PYTHON ? path.resolve(env.PF_VOICE_PYTHON) : null,
     speechModelsDir: path.resolve(env.PF_SPEECH_MODELS_DIR ?? path.join(dataDir, 'speech-models')),
     speechDevice: env.PF_SPEECH_DEVICE === 'cpu' || env.PF_SPEECH_DEVICE === 'cuda' ? env.PF_SPEECH_DEVICE : 'auto',
+    speechKeepSeconds: env.PF_SPEECH_KEEP_SECONDS !== undefined && Number.isFinite(Number(env.PF_SPEECH_KEEP_SECONDS)) ? Math.max(0, Number(env.PF_SPEECH_KEEP_SECONDS)) : 120,
     distributionProfile: env.PF_PROFILE === 'research' ? 'research' : 'commercial',
   };
 }

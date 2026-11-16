@@ -185,6 +185,54 @@ export class Speech {
       p.on('close', (code) => { if (jobId) this.running.delete(jobId); resolve({ code, stderr: err }); });
     });
   }
+  /**
+   * The same as `worker`, but through a process that stays alive between jobs so the model is loaded once
+   * (`speechKeepSeconds`; 0 falls back to one process per job). One request at a time per interpreter: jobs already run in turn.
+   * Killing the process (cancel, shutdown, idle timeout) only costs the next job a model load.
+   */
+  private kept = new Map<string, { p: ChildProcess; idle: NodeJS.Timeout | null; onLine: ((o: any) => void) | null; done: ((r: { code: number | null; stderr: string }) => void) | null; err: string }>();
+  private request(python: string, args: string[], onLine: (o: any) => void, jobId: string): Promise<{ code: number | null; stderr: string }> {
+    if (!this.cfg.speechKeepSeconds) return this.worker(python, args, onLine, jobId);
+    const req: Record<string, string> = { cmd: args[0]! };
+    for (let i = 1; i + 1 < args.length; i += 2) req[args[i]!.replace(/^--/, '').replaceAll('-', '_')] = args[i + 1]!;
+    return new Promise((resolve, reject) => {
+      let k = this.kept.get(python);
+      if (!k) {
+        const p = spawn(python, ['-I', WORKER, 'serve'], { stdio: ['pipe', 'pipe', 'pipe'] });
+        const entry = { p, idle: null as NodeJS.Timeout | null, onLine: null as ((o: any) => void) | null, done: null as ((r: { code: number | null; stderr: string }) => void) | null, err: '' };
+        k = entry;
+        this.kept.set(python, entry);
+        let buf = '';
+        p.stdout!.setEncoding('utf8');
+        p.stdout!.on('data', (d: string) => {
+          buf += d;
+          for (let i = buf.indexOf('\n'); i >= 0; i = buf.indexOf('\n')) {
+            const line = buf.slice(0, i); buf = buf.slice(i + 1);
+            let o: any;
+            try { o = JSON.parse(line); } catch { continue; }
+            if (o.event === 'end') entry.done?.({ code: 0, stderr: entry.err });
+            else if (o.event !== 'ready') entry.onLine?.(o);
+          }
+        });
+        p.stderr!.on('data', (d) => { entry.err = (entry.err + d).slice(-4000); });
+        p.stdin!.on('error', () => { /* the process went away; 'close' reports it */ });
+        p.on('error', (e) => { if (this.kept.get(python) === entry) this.kept.delete(python); const d = entry.done; entry.done = null; if (d) reject(new ApiError(503, 'speech_engine_unavailable', `the speech worker could not be started: ${e.message}`)); });
+        p.on('close', (code) => { if (this.kept.get(python) === entry) this.kept.delete(python); if (entry.idle) clearTimeout(entry.idle); entry.done?.({ code: code ?? 1, stderr: entry.err }); });
+      }
+      const entry = k;
+      if (entry.idle) { clearTimeout(entry.idle); entry.idle = null; }
+      entry.err = '';
+      entry.onLine = onLine;
+      entry.done = (r) => {
+        entry.onLine = null; entry.done = null;
+        this.running.delete(jobId);
+        if (this.kept.get(python) === entry) { entry.idle = setTimeout(() => entry.p.kill('SIGKILL'), this.cfg.speechKeepSeconds * 1000); entry.idle.unref(); }
+        resolve(r);
+      };
+      this.running.set(jobId, entry.p);
+      entry.p.stdin!.write(`${JSON.stringify(req)}\n`);
+    });
+  }
   private async probeOne(python: string | null, what: 'asr' | 'tts'): Promise<EngineState> {
     const unset = what === 'asr' ? 'PF_SPEECH_PYTHON is not set: no speech engine is configured' : 'neither PF_VOICE_PYTHON nor PF_SPEECH_PYTHON is set: no voice engine is configured';
     if (!python) return { configured: false, ok: false, detail: unset };
@@ -312,7 +360,7 @@ export class Speech {
       if (this.canceled(jobId)) return this.finishCanceled(jobId);
       let result: unknown = null, failure: { code: string; message: string } | null = null, lastStage = 0;
       this.store.updateJob(jobId, { stage: `recognising speech: 0 of ${Math.round(seconds)} s` });
-      const r = await this.worker(this.cfg.speechPython!, ['transcribe', '--model', path.join(this.dir, model.dir), '--audio', wav, '--language', j.input.language, '--device', this.cfg.speechDevice], (o) => {
+      const r = await this.request(this.cfg.speechPython!, ['transcribe', '--model', path.join(this.dir, model.dir), '--audio', wav, '--language', j.input.language, '--device', this.cfg.speechDevice], (o) => {
         if (o.event === 'result') result = o;
         else if (o.event === 'error') failure = { code: String(o.code), message: String(o.message).slice(0, 500) };
         else if (o.event === 'progress' && Date.now() - lastStage > 1000) { lastStage = Date.now(); this.store.updateJob(jobId, { stage: `recognising speech: ${Math.round(o.seconds)} of ${Math.round(seconds)} s` }); }
@@ -485,7 +533,7 @@ export class Speech {
       }
       if (this.canceled(jobId)) return this.finishCanceled(jobId);
       let result: any = null, failure: { code: string; message: string } | null = null;
-      const r = await this.worker(this.voicePython(), args, (o) => {
+      const r = await this.request(this.voicePython(), args, (o) => {
         if (o.event === 'result') result = o;
         else if (o.event === 'error') failure = { code: String(o.code), message: String(o.message).slice(0, 500) };
         else if (o.event === 'progress') this.store.updateJob(jobId, { stage: 'speaking the text' });
@@ -563,6 +611,7 @@ export class Speech {
     this.stopped = true;
     for (const c of this.aborts.values()) c.abort();
     for (const p of this.running.values()) p.kill('SIGKILL');
+    for (const k of this.kept.values()) { if (k.idle) clearTimeout(k.idle); k.p.kill('SIGKILL'); }
     await this.chain.catch(() => {});
   }
 }

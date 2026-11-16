@@ -171,6 +171,9 @@ async function main() {
     cursor = T.add(c3 ? T.add(c3.start, c3.duration) : cursor, T.ZERO);
 
     // ---------- the form in the editor ----------
+    // on the timeline for the form: the 7-second synthetic reference, and a take that is too short to be one
+    const forForm = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: refId, start: T.frameTime(3000, rate) } }, { op: 'add_clip', args: { assetId: made[2]!.assetId, start: T.frameTime(3600, rate) } }] });
+    const refClip = forForm.body.results[0].output.clipId as string, shortClip = forForm.body.results[1].output.clipId as string;
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
@@ -187,9 +190,13 @@ async function main() {
       const after = Object.keys((await call(`/projects/${pid}`)).body.project.assets).length;
       check('Editor: the Sound tab offers narration when it is set up; typing a sentence and pressing the button adds a narration clip', state0 === 'ready' && kind === 'done' && after === before + 1, { state: state0, note: kind });
       // a reference voice from the form: the selected clip's media, a named speaker and a ticked statement
-      await page.locator(`.clip[data-clip-id="${c1.id}"]`).click();
+      // first a clip that is too short to be a reference: the form says so and offers no consent fields
+      await page.locator(`.clip[data-clip-id="${shortClip}"]`).click();
       await page.getByTestId('inspector-tab-sound').click();
       await page.getByTestId('narration-use-reference').check();
+      const tooShort = (await page.getByTestId('narration-reference-none').count()) === 1 && (await page.getByTestId('narration-consent').count()) === 0;
+      await page.locator(`.clip[data-clip-id="${refClip}"]`).click();
+      await page.getByTestId('inspector-tab-sound').click();
       await page.getByTestId('narration-text').fill('וזה נאמר בקול של ההקלטה שנבחרה.');
       const blockedFirst = await page.getByTestId('narration-run').isDisabled();
       await page.getByTestId('narration-speaker').fill('קול סינתטי לבדיקה');
@@ -201,7 +208,7 @@ async function main() {
       await page.locator('[data-testid=narration-note]').waitFor({ timeout: 600_000 });
       const made2 = Object.values((await call(`/projects/${pid}`)).body.project.assets).find((x: any) => !known.has(x.id)) as any;
       const v2 = made2?.provenance?.voice;
-      check('Editor: a reference voice needs the speaker\'s name and the ticked statement before the button works; the result records them and the owner as the one who stated it', blockedFirst && blockedNoTick && v2?.voice === 'reference' && v2.referenceAssetId === c1.assetId && v2.consent?.speaker === 'קול סינתטי לבדיקה' && v2.consent?.attestedBy === 'user:local', { blockedFirst, blockedNoTick, voice: v2?.voice });
+      check('Editor: a clip under 5 seconds is not offered as a reference; a longer one needs the speaker\'s name and the ticked statement before the button works; the result records them and the owner as the one who stated it', tooShort && blockedFirst && blockedNoTick && v2?.voice === 'reference' && v2.referenceAssetId === refId && v2.consent?.speaker === 'קול סינתטי לבדיקה' && v2.consent?.attestedBy === 'user:local', { tooShort, blockedFirst, blockedNoTick, voice: v2?.voice });
     } finally { await browser.close(); }
     const tl3 = (await call(`/projects/${pid}/timeline`)).body;
     cursor = tl3.tracks.flatMap((t: any) => t.clips).reduce((m: T.RationalTime, c: any) => T.max(m, T.add(c.start, c.duration)), T.ZERO);
