@@ -1799,11 +1799,11 @@ defineOp({
 
 const WordIn = z.object({ text: z.string().min(1).max(200), start: RT, duration: RT, confidence: z.number().min(0).max(1).optional() }).strict();
 const SegmentIn = z.object({ start: RT, duration: RT, text: z.string().max(4000), speaker: z.string().max(80).optional(), words: z.array(WordIn).max(2000).optional(), approximate: z.boolean().optional().describe('true when word times are estimates') }).strict();
-function buildTranscript(d: ProjectDocument, ctx: OpContext, assetId: string, language: string, kind: 'import' | 'manual', segments: z.infer<typeof SegmentIn>[]): Transcript {
+function buildTranscript(d: ProjectDocument, ctx: OpContext, assetId: string, language: string, kind: 'import' | 'manual' | 'asr', segments: z.infer<typeof SegmentIn>[], asr?: { provider: string; model: string; createdAt: string }): Transcript {
   const asset = d.assets[assetId];
   if (!asset) throw new OpError('not_found', `asset ${assetId} not found`, { assetId });
   if (!asset.audio) throw new OpError('incompatible', `asset ${assetId} has no audio to transcribe`, { assetId });
-  const out: Transcript = { assetId, language, origin: { kind, provider: null, model: null, createdAt: 'op', createdBy: ctx.actor }, segments: [] };
+  const out: Transcript = { assetId, language, origin: { kind, provider: asr?.provider ?? null, model: asr?.model ?? null, createdAt: asr?.createdAt ?? 'op', createdBy: ctx.actor }, segments: [] };
   let prevEnd = T.ZERO;
   for (const s of [...segments].sort((x, y) => T.cmp(x.start, y.start))) {
     const end = T.add(s.start, s.duration);
@@ -1828,6 +1828,19 @@ defineOp({
     d.transcripts[a.assetId] = buildTranscript(d, ctx, a.assetId, a.language, a.origin ?? 'manual', a.segments);
     const t = d.transcripts[a.assetId]!;
     return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Set transcript (${t.segments.length} phrases, ${a.language})`, output: { segmentIds: t.segments.map((s) => s.id), wordIds: t.segments.map((s) => s.words.map((w) => w.id)) } };
+  },
+});
+
+defineOp({
+  name: 'attach_transcript',
+  version: 1,
+  internal: true,
+  description: 'Attach a speech-recognition result produced by a local speech job from the source file. Words carry the times and confidence the recogniser reported.',
+  args: z.object({ assetId: z.string(), language: z.string().min(2).max(35), provider: z.string().min(1).max(80), model: z.string().min(1).max(200), createdAt: z.string(), segments: z.array(SegmentIn).min(1).max(20000) }).strict(),
+  apply(d, a, ctx) {
+    d.transcripts[a.assetId] = buildTranscript(d, ctx, a.assetId, a.language, 'asr', a.segments, { provider: a.provider, model: a.model, createdAt: a.createdAt });
+    const t = d.transcripts[a.assetId]!;
+    return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Recognised speech (${t.segments.length} phrases, ${t.segments.reduce((n, s) => n + s.words.length, 0)} words, ${a.language})`, output: { segmentIds: t.segments.map((s) => s.id) } };
   },
 });
 

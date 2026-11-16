@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import type { AddressInfo } from 'node:net';
+import path from 'node:path';
 import { RenderHost } from '@pulseframe/renderer';
 import type { ProviderAdapter } from '@pulseframe/providers';
 import { Auth } from './auth.ts';
@@ -12,6 +13,7 @@ import { Governance } from './governance.ts';
 import { recoverAnalysisJobs, createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
 import { Presence } from './presence.ts';
+import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 
 export { loadConfig, type Config } from './config.ts';
@@ -19,6 +21,7 @@ export interface RunningServer { url: string; /** Link that opens the editor as 
 
 export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
+  if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
   const store = new Store(cfg.dataDir);
   const auth = new Auth(cfg);
@@ -31,8 +34,9 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const governance = new Governance(store);
   auth.resolveGrant = (token) => governance.principalForToken(token);
   capabilities.governance = governance;
-  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance);
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup);
+  const speech = new Speech(store, cfg);
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech);
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech);
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');
@@ -45,6 +49,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   }
   await capabilities.recover();
   recoverAnalysisJobs(store);
+  speech.recover();
   derivatives.recover();
   backup.start();
   return {
@@ -54,6 +59,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       await mcp.close();
       await backup.stop();
       await capabilities.stop();
+      await speech.stop();
       await derivatives.stop();
       // Stop accepting, then drop connections that are still open (event streams of pages that were not closed, idle keep-alives):
       // without this, shutdown waited for them indefinitely.

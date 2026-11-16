@@ -5,6 +5,7 @@
  * authorization is enforced in `need()` from the authenticated principal.
  */
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
+import { TranscribeBody, type Speech } from './speech.ts';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { listOps, RationalTimeSchema, summarize, timeline, transcriptView } from '@pulseframe/core';
@@ -22,7 +23,7 @@ import { PROJECT_RESOURCE_KINDS, registerResourcesAndPrompts } from './mcpResour
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
 
-export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance) {
+export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech) {
   const gov = governance ?? new Governance(store);
   const factory: Parameters<typeof createMcpHandler>[0] = (ctx) => {
     const principal = (ctx.authInfo?.extra?.principal as Principal | undefined) ?? { actor: 'anonymous', kind: 'agent' as const, scopes: [] as Scope[] };
@@ -83,6 +84,10 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('observe', () => { const p = read(projectId); const o = exportCaptions(p.doc, trackId, format ?? 'srt', variantId); return { revision: p.revision, format: o.format, trackId: o.trackId, cues: o.cues, text: o.text }; }));
     server.registerTool('list_catalog', { description: 'Every effect (with parameter schema and defaults), transition, blend mode, mask shape, caption preset, clip motion and font available in this build. Use the ids with add_effect, set_transition, set_clip_blend, set_clip_mask, animate_clip, set_caption_style, update_text.', inputSchema: z.object({}), annotations: ro }, () => run('observe', () => catalog()));
     server.registerTool('add_sound_effect', { description: 'Add one of the built-in synthesised sound effects (see list_catalog → soundEffects) to the project as a normal audio asset, and optionally place it on the timeline at a frame-aligned time.', inputSchema: z.object({ projectId: pid, ...SfxBody.shape }) }, ({ projectId, ...a }) => run('edit', () => { read(projectId); return addSfx(store, gov, principal, projectId, a); }));
+    if (speech) {
+      server.registerTool('get_speech_status', { description: 'Whether automatic transcription is set up on this machine: the engine, the device, and each reviewed model with its size and what is missing. Downloading a model is the owner\'s action in the editor, not available to agents.', inputSchema: z.object({}), annotations: ro }, () => run('observe', () => speech.status()));
+      server.registerTool('transcribe_asset', { description: 'Recognise the speech of a media asset with the local model and attach the result as its transcript (phrases and words with source times and confidence). Runs as a job: poll get_job; when it succeeds read it with get_transcript. Machine recognition contains errors: correct_transcript fixes text. Refused with speech_not_ready when the engine or model is not installed; a typed or imported transcript (set_transcript, import_transcript) works without it.', inputSchema: z.object({ projectId: pid, assetId: z.string(), ...TranscribeBody.shape }) }, ({ projectId, ...a }) => run('edit', async () => { read(projectId); const j = await speech.startTranscription(gov, principal, projectId, a); return { jobId: j.id, status: j.status }; }));
+    }
     server.registerTool('analyze_asset', { description: 'Measure a media asset and store the result in the project as editable data: kind=scenes finds hard picture cuts (then split_at_scenes cuts a clip into its shots); kind=beats finds the beat grid and tempo of music. No AI model is used. Results can be corrected with edit_analysis.', inputSchema: z.object({ projectId: pid, assetId: z.string(), ...AnalyzeBody.shape, background: z.boolean().optional().describe('For long media: return a jobId at once and poll get_job; the result is attached when the job succeeds') }) }, ({ projectId, background, ...a }) => run('edit', () => { read(projectId); if (background) { const j = startAnalysisJob(store, gov, principal, projectId, a); return { jobId: j.id, status: j.status }; } return analyzeAsset(store, gov, principal, projectId, a); }));
     server.registerTool('get_analysis', { description: 'Stored analysis results of an asset: scene cuts and/or beats with tempo and confidence, in source time.', inputSchema: z.object({ projectId: pid, assetId: z.string() }), annotations: ro }, ({ projectId, assetId }) => run('observe', () => { const p = read(projectId); const a = p.doc.analyses?.[assetId]; if (!a) throw new ApiError(404, 'not_found', 'this asset has no analysis results', { assetId }, 'Run analyze_asset first.'); return { revision: p.revision, ...analysisView(a) }; }));
     const rparams = z.record(z.string(), z.unknown()).optional().describe('Recipe parameters (see list_catalog → recipes for each schema)');

@@ -11,6 +11,7 @@ import { timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, ser
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
+import { Speech, TranscribeBody } from './speech.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
 import type { DerivativeKind, Derivatives } from './derive.ts';
@@ -62,8 +63,9 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 /** Policy of every non-page response (JSON, media, exports): nothing may load or run if it is ever opened as a document. */
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
-export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler) {
+export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech) {
   const gov = governance ?? new Governance(store);
+  const speech = speechService ?? new Speech(store, cfg);
   const app = new Hono<Env>();
   const body = async <S extends z.ZodType>(c: Context, schema: S): Promise<z.infer<S>> => {
     const parsed = schema.safeParse(await c.req.json().catch(() => undefined));
@@ -524,12 +526,29 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const job = await capabilities.startDownload(c.req.param('id'), c.req.param('capabilityId'), b.confirmBytes, p.actor);
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
+  // ---- local speech recognition (optional; an honest setup state when the engine or the model is absent) ----
+  app.get('/api/v1/speech', async (c) => { need(c, 'observe'); return c.json(await speech.status()); });
+  // As with capability models: a deliberate human action for the exact byte count shown, never an agent's.
+  app.post('/api/v1/projects/:id/speech/models/:modelId/download', async (c) => {
+    const p = need(c, 'edit');
+    if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
+    const b = await body(c, z.object({ confirmBytes: z.number().int().positive() }).strict());
+    const job = await speech.startDownload(c.req.param('id'), c.req.param('modelId'), b.confirmBytes, p.actor);
+    return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
+  });
+  app.post('/api/v1/projects/:id/assets/:assetId/transcribe', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, TranscribeBody);
+    const job = await speech.startTranscription(gov, p, c.req.param('id'), { ...b, assetId: c.req.param('assetId') });
+    return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
+  });
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
     const p = need(c, 'edit');
     const j = store.getJob(c.req.param('jobId'));
     assertMayCancel(gov, p, j);
     if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
+    if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
   });
   app.get('/api/v1/jobs/:jobId/outputs/:index', (c) => {

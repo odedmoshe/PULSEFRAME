@@ -73,7 +73,8 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Silence candidates (ffmpeg measurement → reviewable timeline cuts), REST + MCP + editor | tested (synthetic) | `phase6-proof.json`; `cleanup.test.ts`. Real recordings not exercised |
 | Entrance/exit animation presets as editable keyframes (`animate_clip`) | tested | `cleanup.test.ts`, `phase6-proof.json` |
 | Font catalog: 5 OFL Hebrew-capable families, pinned, licence-checked at build, load-verified | tested | `pnpm check:notices`, `phase6-proof.json` |
-| Speech recognition, forced alignment, filler detection, translation | not built | Blocked on B-7 |
+| Automatic speech recognition (optional local engine): setup state, owner-approved verified model download, durable cancelable job, checked result attached as an undoable transcript with word times and confidence, editor button, MCP `transcribe_asset` | tested (functional, CPU): 12 real Hebrew read-speech recordings and 5 owner clips; accuracy on other speech, word-timing accuracy and GPU speed not established | `docs/evidence/speech-proof.json` (19 checks), `docs/evidence/real-media-check.json` (8), `apps/server/src/speech.test.ts` |
+| Forced alignment of typed text, filler detection, translation | not built | B-7 (remaining part) |
 | Look system: 12 effects, 17 blend modes, rect/ellipse masks (feather, invert), 12 transitions, one Canvas2D implementation for preview and export | tested | `docs/evidence/phase7-proof.json` (30 checks, pixel arithmetic), `effects.test.ts`, `look.test.ts`; `/lab.html`. One synthetic fixture; 1080p+ cost unmeasured |
 | Catalog discovery (`GET /api/v1/catalog`, MCP `list_catalog`) and generated effect inspectors | tested | `phase7-proof.json` |
 | Sound: track gain/pan/mute, clip fades, speech ducking, one audio plan shared by server export, preview and browser export | tested (synthetic signals) | `docs/evidence/phase8-proof.json` (17 checks), `audio.test.ts`, `/selftest.html`; live playback level measured at six points in headless Chromium. No real audio device |
@@ -180,7 +181,7 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Image media-input staging | tested on CPU | `g0-smoke-proof.json` (39 checks): image parameters are project asset ids only (paths/URLs rejected), streamed to the provider under content-addressed names, lineage on derived assets, declared output-size contracts ("media workflow ran…", "lineage:", "media parameters accept only…"). Video/audio source-range staging, cost reservation and budget checks are not built |
 | Model files | tested | Ready only with exact size + SHA-256; resumable, host-restricted, verified downloads; explicit owner-only download bound to the exact byte count (`apps/server/src/models.test.ts`; trial evidence). Not built: shared-dependency accounting, uninstall, readiness report for disk/RAM/GPU |
 | Worker lease/prewarm | not built | |
-| Every other AI capability in SPEC §18 (ASR, TTS, generation, …) | not built | No adapters, no credentials requested |
+| Every other AI capability in SPEC §18 (TTS, generation, …) | not built | No adapters, no credentials requested |
 
 ### Qualification dimensions (Amendment A1, FF-04) — current values
 

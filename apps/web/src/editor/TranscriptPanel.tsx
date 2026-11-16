@@ -4,7 +4,7 @@ import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from '@pulseframe/core';
 import { sourceAt, sourceEnd, timelineAt, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
-import { api, type SilenceResult } from '../api.ts';
+import { api, type SilenceResult, type SpeechStatus } from '../api.ts';
 import { useEditorState, type Editor } from './store.ts';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
@@ -27,6 +27,72 @@ function EncodingNote({ info }: { info: DecodedText | null }) {
   const { t } = useEditorState();
   if (!info?.guessed) return null;
   return <p className="muted" role="status" data-testid="encoding-note" data-encoding={info.encoding}>{t('import.encodingGuessed')} <bdi>{info.encoding}</bdi></p>;
+}
+
+const gb = (bytes: number) => `${(bytes / 1e9).toFixed(2)} GB`;
+/**
+ * Automatic recognition for one asset: the setup state as the server reports it, the owner's model download for the exact size
+ * shown, and the recognition job with its stage and a cancel button. The transcript itself arrives as a normal project change.
+ */
+function AutoTranscribe({ assetId, language, overwrite }: { assetId: string; language: string; overwrite?: boolean }) {
+  const { editor, state, t } = useEditorState();
+  const [status, setStatus] = useState<SpeechStatus | null>(null);
+  const [job, setJob] = useState<{ id: string; kind: 'asr' | 'download'; stage: string | null } | null>(null);
+  const [note, setNote] = useState<{ kind: 'done' | 'noSpeech' | 'failed'; detail?: string } | null>(null);
+  const refresh = () => api.speech().then(setStatus).catch(() => setStatus(null));
+  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { setNote(null); }, [assetId]);
+  useEffect(() => {
+    if (!job) return;
+    let live = true;
+    const tick = async () => {
+      try {
+        const j = (await api.job(job.id)) as { status: string; stage?: string | null; output?: { attached?: boolean }; error?: { message?: string } };
+        if (!live) return;
+        if (['succeeded', 'failed', 'canceled'].includes(j.status)) {
+          setJob(null);
+          if (job.kind === 'download') void refresh();
+          if (j.status === 'failed') setNote({ kind: 'failed', detail: j.error?.message });
+          else if (j.status === 'succeeded' && job.kind === 'asr') setNote({ kind: j.output?.attached ? 'done' : 'noSpeech' });
+          return;
+        }
+        setJob((cur) => (cur && cur.id === job.id ? { ...cur, stage: j.stage ?? null } : cur));
+      } catch { /* the next tick tries again */ }
+      if (live) timer = window.setTimeout(tick, 1000);
+    };
+    let timer = window.setTimeout(tick, 500);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [job?.id]);
+  if (!status || !state.doc) return null;
+  const pid = state.doc.id;
+  const start = (kind: 'asr' | 'download', p: Promise<{ jobId: string }>) => { setNote(null); p.then((r) => setJob({ id: r.jobId, kind, stage: null })).catch(editor.fail); };
+  const tr = status.transcription;
+  const model = status.models.find((m) => !m.ready) ?? status.models[0];
+  return (
+    <div className="asr" data-testid="asr" data-state={job ? job.kind : tr.ready ? 'ready' : tr.reason ?? 'unknown'}>
+      {job ? (
+        <p role="status" data-testid="asr-progress">
+          {t(job.kind === 'asr' ? 'asr.working' : 'asr.downloading')} <bdi className="muted">{job.stage ?? ''}</bdi>{' '}
+          <button className="ghost" onClick={() => void api.cancelJob(job.id).catch(editor.fail)} data-testid="asr-cancel">{t('asr.cancel')}</button>
+        </p>
+      ) : tr.ready ? (
+        <p>
+          <button onClick={() => start('asr', api.transcribe(pid, assetId, { language, ...(overwrite ? { overwrite: true } : {}) }))} data-testid="asr-run">{t(overwrite ? 'asr.again' : 'asr.run')}</button>{' '}
+          <span className="muted">{t(tr.device === 'cuda' ? 'asr.device.cuda' : 'asr.device.cpu')}</span>
+        </p>
+      ) : tr.reason === 'model_missing' && model ? (
+        <p data-testid="asr-model-missing">
+          {t('asr.modelMissing')} <bdi>{model.title[state.lang === "en" ? "en" : "he"]}</bdi> · {t('asr.license')}: <bdi>{model.license}</bdi>{' '}
+          <button onClick={() => start('download', api.downloadSpeechModel(pid, model.id, model.missingDownloadBytes))} data-testid="asr-download">{t('asr.download')} (<bdi>{gb(model.missingDownloadBytes)}</bdi>)</button>
+        </p>
+      ) : tr.reason === 'engine_not_working' ? (
+        <p className="muted" data-testid="asr-unavailable">{t('asr.engineBroken')} <bdi>{tr.detail}</bdi></p>
+      ) : !overwrite ? (
+        <p className="muted" data-testid="asr-unavailable">{t('asr.notConfigured')}</p>
+      ) : null}
+      {note && <p role="status" data-testid="asr-note" data-kind={note.kind}>{t(note.kind === 'done' ? 'asr.done' : note.kind === 'noSpeech' ? 'asr.noSpeech' : 'asr.failed')} {note.detail && <bdi>{note.detail}</bdi>}</p>}
+    </div>
+  );
 }
 
 export function TranscriptPanel() {
@@ -67,6 +133,7 @@ export function TranscriptPanel() {
           </label>
           <EncodingNote info={decoded} />
           {!selAsset && <p className="muted">{t('transcript.selectClip')}</p>}
+          {selAsset && doc.assets[selAsset]?.audio && <AutoTranscribe assetId={selAsset} language={lang} />}
         </div>
       </div>
     );

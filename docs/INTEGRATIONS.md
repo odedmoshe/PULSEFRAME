@@ -84,9 +84,28 @@ Unless a row says otherwise: source-reviewed by the addendum only; **not** schem
 
 Model file size is a download figure. It is not runtime VRAM, and neither number is a hardware recommendation.
 
+## Local speech recognition (optional — SPEC §16, B-7)
+Without it everything else works; the Speech tab says recognition is not installed. Nothing here is downloaded or installed automatically.
+
+**Engine.** A Python environment with `faster-whisper==1.2.1` (pulls CTranslate2 4.9.0); the server starts `apps/server/speech/pf_speech.py` in it per job with `python -I`.
+```bash
+python3 -m venv .artifacts/speech/venv && .artifacts/speech/venv/bin/pip install faster-whisper==1.2.1
+PF_SPEECH_PYTHON=.artifacts/speech/venv/bin/python pnpm start
+```
+On Windows the interpreter is `.artifacts\speech\venv\Scripts\python.exe`. Settings: `PF_SPEECH_PYTHON` (interpreter; unset = not configured), `PF_SPEECH_MODELS_DIR` (default `<data dir>/speech-models`), `PF_SPEECH_DEVICE` (`auto` | `cpu` | `cuda`; auto uses a CUDA device when CTranslate2 sees one).
+GPU use needs the NVIDIA cuBLAS and cuDNN libraries that CTranslate2 expects; **not tried** (no GPU here), so the steps for the owner's RTX 3050 laptop are unverified.
+
+**Model.** One reviewed model: `asr.ivrit-turbo` = `ivrit-ai/whisper-large-v3-turbo-ct2@72ad623a`, five files, 1,621,665,181 bytes, each pinned by size and SHA-256 in `speech.ts`; Apache-2.0 by its model card (metadata-level check; training-data terms not reviewed). Fine-tuned for Hebrew; other languages unchecked.
+Download is the owner's action in the Speech tab (or `POST /api/v1/projects/{id}/speech/models/{modelId}/download` with `confirmBytes` equal to the exact missing bytes from `GET /api/v1/speech`): agent credentials are refused, it is not an MCP tool, hosts are limited to `PF_MODEL_HOSTS`, files are verified before they are moved into place. Behind an HTTPS proxy start the server with `NODE_USE_ENV_PROXY=1`.
+
+**Recognition.** `POST /api/v1/projects/{id}/assets/{assetId}/transcribe` (`language` default `he`, `overwrite`) or MCP `transcribe_asset` starts a job: ffmpeg writes 16 kHz mono on the asset's own clock, the worker recognises with word times (voice-activity filter on, no conditioning on earlier text), the server makes times obey the transcript rules by moving them only onto a neighbour or the end of the media, leaves out phrases that are repetition, and attaches the rest with `attach_transcript`. One recognition runs at a time. The model is loaded again for every job.
+
+**Evidence and limits.** `pnpm proof:speech` (19 checks) and `pnpm check:media <folder>`; see `docs/evidence/speech-proof.json`. Sample speech for the proof: the first ~14 MB of `google/fleurs` `data/he_il/audio/dev.tar.gz` plus `dev.tsv`, unpacked to `.artifacts/speech/fleurs` (CC BY 4.0; not committed).
+Not established: accuracy beyond clean read sentences, word-timing accuracy, speed on a GPU. PyAV is bypassed on purpose: faster-whisper 1.2.1's own decoder fails with the PyAV version pip resolves today, so the worker passes samples directly.
+
 ## MCP clients
 Official TypeScript SDK client 2.4.0: tested (modern pinned and legacy default). No other host (desktop apps, IDEs) has been tested; setup snippets for them are not written yet.
 
 ## Not integrated (no adapter, no credentials requested)
-ASR/alignment (ivrit.ai faster-whisper, WhisperX), ElevenLabs, fal, Runway, Black Forest Labs, stock media, YouTube, TikTok, C2PA signing, LLM for the Director.
+Forced alignment (WhisperX), ElevenLabs, fal, Runway, Black Forest Labs, stock media, YouTube, TikTok, C2PA signing, LLM for the Director.
 These remain exactly as described in SPEC §18/§25: candidates to verify when their phase starts.

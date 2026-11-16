@@ -29,6 +29,8 @@
     "conformance:long": "tsx packages/evals/src/long-media.ts",
     "proof:reverse-sound": "tsx packages/evals/src/reverse-sound-proof.ts",
     "proof:pitch": "tsx packages/evals/src/pitch-proof.ts",
+    "proof:speech": "tsx packages/evals/src/speech-proof.ts",
+    "check:media": "tsx packages/evals/src/real-media-check.ts",
     "conformance:start-offset": "tsx packages/evals/src/start-offset.ts",
     "conformance:inputs": "tsx packages/evals/src/input-matrix.ts",
     "conformance:images": "tsx packages/evals/src/image-matrix.ts",
