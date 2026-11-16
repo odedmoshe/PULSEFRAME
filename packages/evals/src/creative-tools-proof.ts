@@ -154,7 +154,7 @@ async function main() {
     await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
     await page.getByTestId('speed-curves').waitFor();
     const tiles = await page.getByTestId('speed-curve').count();
-    check('twelve curve tiles, each with a drawn line', tiles === SPEED_CURVES.length && (await page.locator('[data-testid=speed-curve] svg polyline.sc-line').count()) === tiles, { tiles });
+    check(`${SPEED_CURVES.length} curve tiles, each with a drawn line`, tiles === SPEED_CURVES.length && (await page.locator('[data-testid=speed-curve] svg polyline.sc-line').count()) === tiles, { tiles });
     await page.locator('[data-testid=speed-curve][data-id=bullet]').click();
     const five = await until(pid, (x) => clipsOf(x, 'video').length === 5);
     await page.waitForFunction(() => document.querySelectorAll('.clip.selected').length >= 5, undefined, { timeout: 5000 }).catch(() => {});

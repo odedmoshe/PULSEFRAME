@@ -112,7 +112,7 @@ async function main() {
     await page.evaluate(() => { const el = document.querySelector('[data-testid=ruler]')!; const rr = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: rr.left + 0.5, clientY: rr.top + 5, bubbles: true })); });
     await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
     await page.getByTestId('play').click();
-    await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 40000 }).catch(() => {});
+    await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 40000 }).catch(() => {});
     const sync = await page.evaluate(() => (window as any).__pfSync());
     previewClock = sync.clock;
     previewOnsets = (sync.audioOnsetsTimelineSeconds ?? []).map((x: number) => Number(x.toFixed(3)));

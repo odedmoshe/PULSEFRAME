@@ -146,7 +146,7 @@ async function main() {
       await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame === '0', undefined, { timeout: 30000 });
       await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
       await page.getByTestId('play').click();
-      await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 30000 }).catch(() => {});
+      await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 30000 }).catch(() => {});
       const sync = await page.evaluate(() => (window as any).__pfSync());
       previewClock = sync.clock;
       previewOnsets = (sync.audioOnsetsTimelineSeconds ?? []).map((x: number) => Number(x.toFixed(3)));

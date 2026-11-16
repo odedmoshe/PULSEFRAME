@@ -382,7 +382,7 @@ async function main() {
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 2, undefined, { timeout: 8000 });
     await page.mouse.click(rb.x + 90.5, rb.y + 5); // frame 30
     await page.keyboard.press('l');
-    await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.textContent === '❚❚', undefined, { timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'true', undefined, { timeout: 5000 });
     const sh0 = await shuttleText(); // ordinary playback: no shuttle indicator
     await page.keyboard.press('l');
     await page.getByTestId('shuttle').waitFor();
@@ -396,17 +396,17 @@ async function main() {
     await page.keyboard.press('Space');
     const stoppedAt = await tcFrame();
     await sleep(300);
-    const sh4 = await shuttleText(), still = (await tcFrame()) === stoppedAt, pausedIcon = (await page.getByTestId('play').textContent()) === '▶';
+    const sh4 = await shuttleText(), still = (await tcFrame()) === stoppedAt, pausedIcon = (await page.getByTestId('play').getAttribute('data-playing')) === 'false';
     // K stops a shuttle and holds the frame
     await page.keyboard.press('l'); await page.keyboard.press('l');
     await page.getByTestId('shuttle').waitFor();
     await page.keyboard.press('k');
     const kAt = await tcFrame();
     await sleep(300);
-    const kStops = (await shuttleText()) === '' && (await tcFrame()) === kAt && (await page.getByTestId('play').textContent()) === '▶';
+    const kStops = (await shuttleText()) === '' && (await tcFrame()) === kAt && (await page.getByTestId('play').getAttribute('data-playing')) === 'false';
     await page.mouse.click(rb.x + 60.5, rb.y + 5); // frame 20
     for (let i = 0; i < 3; i++) await page.keyboard.press('j'); // ×4 backwards: reaches the start within a fraction of a second
-    await page.waitForFunction(() => !document.querySelector('[data-testid=shuttle]') && document.querySelector('[data-testid=play]')?.textContent === '▶', undefined, { timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => !document.querySelector('[data-testid=shuttle]') && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 5000 }).catch(() => {});
     const atStart = await tcFrame(), shEnd = await shuttleText();
     check('shuttle: K stops it and the frame holds', kStops);
     check('shuttle: L plays, L again goes to 2× (indicator shown, measured speed about 2×); J goes backwards at 1× and J again at 2×; Space stops and the frame holds; shuttling backwards stops at the first frame', sh0 === '' && /▶▶ ×2/.test(sh1) && fwd2 > 1.5 && fwd2 < 2.5 && /◀◀ ×1/.test(sh2) && back1 < -0.6 && back1 > -1.4 && /◀◀ ×2/.test(sh3) && sh4 === '' && still && pausedIcon && atStart === 0 && shEnd === '', { sh0, sh1, fwd2: +fwd2.toFixed(2), sh2, back1: +back1.toFixed(2), sh3, sh4, still, pausedIcon, atStart, shEnd });
@@ -414,12 +414,12 @@ async function main() {
     console.log('\n# playback continues when the project changes');
     await page.mouse.click(rb.x + 30.5, rb.y + 5); // frame 10
     await page.keyboard.press('Space');
-    await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.textContent === '❚❚', undefined, { timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'true', undefined, { timeout: 5000 });
     const revPlay0 = (await call(`/projects/${pid}`)).body.revision;
     await txs(pid, [{ op: 'add_marker', args: { time: f(300), label: 'while playing' } }]); // another participant edits during playback
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 3, undefined, { timeout: 8000 });
     await sleep(500);
-    const keptPlaying = (await page.getByTestId('play').textContent()) === '❚❚';
+    const keptPlaying = (await page.getByTestId('play').getAttribute('data-playing')) === 'true';
     const playSpeed = await speedOver(800);
     await page.keyboard.press('l'); // 2×
     await page.getByTestId('shuttle').waitFor();
@@ -434,7 +434,7 @@ async function main() {
     await txs(pid, [{ op: 'add_marker', args: { time: f(345) } }]);
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 5, undefined, { timeout: 8000 });
     await sleep(300);
-    const staysPaused = (await page.getByTestId('play').textContent()) === '▶' && (await tcFrame()) === 0;
+    const staysPaused = (await page.getByTestId('play').getAttribute('data-playing')) === 'false' && (await tcFrame()) === 0;
     check('a project change by another participant during playback does not stop it (normal speed and 2× shuttle both continue at their speed); a change while paused does not start it', keptPlaying && playSpeed > 0.8 && playSpeed < 1.2 && /▶▶ ×2/.test(keptShuttle) && shuttleSpeed > 1.5 && shuttleSpeed < 2.5 && staysPaused && (await call(`/projects/${pid}`)).body.revision === revPlay0 + 3, { keptPlaying, playSpeed: +playSpeed.toFixed(2), keptShuttle, shuttleSpeed: +shuttleSpeed.toFixed(2), staysPaused });
 
     console.log('\n# multi-select: move, nudge and delete several clips together');

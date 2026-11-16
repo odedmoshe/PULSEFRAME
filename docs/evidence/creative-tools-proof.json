@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-16T21:27:01.871Z",
+ "generatedAt": "2026-11-16T22:08:13.511Z",
  "profile": {
   "os": "Linux 6.18.44-fc-v470",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -117,7 +117,7 @@
    }
   },
   {
-   "name": "all 12 presets apply to the same clip through the API and give one part per segment",
+   "name": "all 14 presets apply to the same clip through the API and give one part per segment",
    "ok": true,
    "detail": {
     "hero": 178,
@@ -131,7 +131,9 @@
     "wave": 192,
     "emphasis": 320,
     "surge": 180,
-    "fast-forward": 127
+    "fast-forward": 127,
+    "smooth-ramp": 160,
+    "stutter": 338
    }
   },
   {
@@ -160,10 +162,10 @@
    }
   },
   {
-   "name": "twelve curve tiles, each with a drawn line",
+   "name": "14 curve tiles, each with a drawn line",
    "ok": true,
    "detail": {
-    "tiles": 12
+    "tiles": 14
    }
   },
   {
@@ -354,7 +356,9 @@
    "wave": 192,
    "emphasis": 320,
    "surge": 180,
-   "fast-forward": 127
+   "fast-forward": 127,
+   "smooth-ramp": 160,
+   "stutter": 338
   }
  },
  "passed": 29,

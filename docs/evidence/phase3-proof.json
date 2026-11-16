@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T21:34:23.165Z",
+  "ranAt": "2026-11-16T22:04:21.107Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -123,8 +123,8 @@
       "ok": true,
       "detail": {
         "xBefore": 0,
-        "xAfter": 0.1328,
-        "expectedDelta": 0.1328
+        "xAfter": 0.1588,
+        "expectedDelta": 0.1588
       }
     },
     {
@@ -148,7 +148,7 @@
       "ok": true,
       "detail": {
         "libraryLeft": 0,
-        "inspectorLeft": 1140,
+        "inspectorLeft": 1110,
         "timelineDir": "ltr"
       }
     },
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 0.994276,
-        "editor-en": 0.982822,
-        "palette-en": 0.987189
+        "editor-he": "baseline written",
+        "editor-en": "baseline written",
+        "palette-en": "baseline written"
       }
     },
     {
@@ -607,37 +607,37 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 29,
+        "differentSourceFrames": 28,
         "firstFrames": [
           {
-            "frame": 4,
+            "frame": 3,
             "quality": "draft",
-            "code": 4
+            "code": 3
           },
           {
-            "frame": 7,
+            "frame": 6,
             "quality": "draft",
-            "code": 7
+            "code": 6
           },
           {
-            "frame": 10,
+            "frame": 9,
             "quality": "draft",
-            "code": 10
+            "code": 9
           },
           {
-            "frame": 13,
+            "frame": 12,
             "quality": "draft",
-            "code": 13
+            "code": 12
           },
           {
-            "frame": 16,
+            "frame": 15,
             "quality": "draft",
-            "code": 16
+            "code": 15
           },
           {
-            "frame": 19,
+            "frame": 18,
             "quality": "draft",
-            "code": 19
+            "code": 18
           }
         ],
         "mismatches": []
@@ -655,8 +655,8 @@
         "stillMin": 0,
         "stillMax": 255,
         "histInk": 306,
-        "waveInk": 1961,
-        "vecInk": 58,
+        "waveInk": 1934,
+        "vecInk": 56,
         "saturation": 10.6
       }
     },

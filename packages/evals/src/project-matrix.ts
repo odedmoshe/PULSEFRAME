@@ -175,7 +175,7 @@ async function main() {
         if (JSON.stringify(seen) !== JSON.stringify(wantSeen)) pp.push('picture');
         await ep.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const rr = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: rr.left + x, clientY: rr.top + 5, bubbles: true })); }, 0.5);
         await ep.getByTestId('play').click();
-        await ep.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 40000 }).catch(() => {});
+        await ep.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 40000 }).catch(() => {});
         const sync = await ep.evaluate(() => (window as any).__pfSync());
         const got = (sync.audioOnsetsTimelineSeconds ?? []).map((v: number) => Number(v.toFixed(3)));
         const snd = [0, 1, 2, 3].filter((t) => t < row.timeline.seconds - 0.35);

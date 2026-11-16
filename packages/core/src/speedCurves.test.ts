@@ -28,18 +28,20 @@ const frameSeconds = 1 / 30;
 
 describe('speed curves', () => {
   it('the catalogue is well formed', () => {
-    expect(SPEED_CURVES.length).toBeGreaterThanOrEqual(12);
+    expect(SPEED_CURVES.length).toBeGreaterThanOrEqual(14);
+    // the eight velocity presets the specification names (Appendix A): each has a curve here
+    for (const id of ['montage', 'hero', 'bullet', 'flash-in', 'flash-out', 'jump-cut', 'smooth-ramp', 'stutter']) expect(SPEED_CURVES.some((c) => c.id === id), id).toBe(true);
     expect(new Set(SPEED_CURVES.map((c) => c.id)).size).toBe(SPEED_CURVES.length);
     for (const c of SPEED_CURVES) {
       expect(c.id).toMatch(/^[a-z]+(-[a-z]+)*$/);
       expect(c.name.he.length && c.name.en.length && c.hint.he.length && c.hint.en.length).toBeGreaterThan(0);
-      expect(c.segments.length).toBeGreaterThanOrEqual(2);
+      expect(c.segments.length).toBeGreaterThanOrEqual(1);
       for (const s of c.segments) {
         expect(Number.isInteger(s.weight) && s.weight > 0).toBe(true);
         for (const v of [s.from, s.to]) expect(v >= 0.1 && v <= 8).toBe(true);
       }
       // a curve without steps is continuous: each segment starts at the speed the previous one ended at
-      if (c.id !== 'jump-cut') for (let i = 1; i < c.segments.length; i++) expect(c.segments[i]!.from).toBe(c.segments[i - 1]!.to);
+      if (c.id !== 'jump-cut' && c.id !== 'stutter') for (let i = 1; i < c.segments.length; i++) expect(c.segments[i]!.from).toBe(c.segments[i - 1]!.to);
       const line = curvePolyline(c.segments, c.smooth);
       expect(line[0]!.x).toBe(0);
       expect(line[line.length - 1]!.x).toBeCloseTo(1, 9);

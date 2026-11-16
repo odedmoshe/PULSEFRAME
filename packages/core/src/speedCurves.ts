@@ -38,6 +38,10 @@ export const SPEED_CURVES: readonly SpeedCurve[] = [
     segments: repeat(5, [seg(10, 1), seg(5, 1, 3), seg(5, 3, 1)]) },
   { id: 'fast-forward', smooth: true, name: { he: 'הרצה קדימה', en: 'Fast forward' }, hint: { he: 'פתיחה וסיום רגילים, האמצע רץ פי שישה', en: 'Normal opening and ending, the middle runs six times faster' },
     segments: [seg(20, 1), seg(10, 1, 6), seg(40, 6), seg(10, 6, 1), seg(20, 1)] },
+  { id: 'smooth-ramp', smooth: true, name: { he: 'רמפה חלקה', en: 'Smooth ramp' }, hint: { he: 'האצה אחת רציפה, מאיטי למהיר, לאורך כל הקליפ', en: 'One continuous acceleration, slow to fast, across the whole clip' },
+    segments: [seg(100, 0.5, 2.5)] },
+  { id: 'stutter', smooth: false, name: { he: 'גמגום', en: 'Stutter' }, hint: { he: 'מהירות רגילה עם שש עצירות קצרצרות כמעט מוחלטות', en: 'Normal speed with six very short near-stops' },
+    segments: [...repeat(6, [seg(32, 1), seg(1, 0.1)]), seg(6, 1)] },
 ];
 export const SPEED_CURVE_IDS = SPEED_CURVES.map((c) => c.id) as [string, ...string[]];
 export const findSpeedCurve = (id: string): SpeedCurve | undefined => SPEED_CURVES.find((c) => c.id === id);

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T19:45:06.977Z",
+  "ranAt": "2026-11-16T21:59:03.274Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -60,13 +60,13 @@
     "browserExport": {
       "frames": 105,
       "wallSeconds": 0.44,
-      "realtimeFactor": 8.009,
+      "realtimeFactor": 7.919,
       "bytes": 283785,
-      "wallInPageMs": 411,
+      "wallInPageMs": 419,
       "note": "headless Chromium, software (no GPU), 640x360 high quality; wall time includes asset fetch, audio mix, encode, SHA-256, base64 transfer"
     },
     "parity": {
-      "serverRouteWallSeconds": 1.484,
+      "serverRouteWallSeconds": 1.293,
       "serverBytes": 76665,
       "browserBytes": 283785,
       "ssimByFrame": {
@@ -214,7 +214,7 @@
           "location": "client-download",
           "note": "the media bytes were produced and stay in the browser tab that held the lease; the server stores only this record",
           "bytes": 283785,
-          "sha256": "db385e59e5b8b010af3f49c72af9116b8fc4de40d855ee0e0953abdf266893bc",
+          "sha256": "4c4b40b7ffa5a9eb1f35a8280b6791aae7c5b4a13b671014029e14466d426db6",
           "videoCodec": "avc",
           "audioCodec": "opus",
           "frames": 105,
@@ -234,8 +234,8 @@
       "name": "job row sha256 and bytes equal those of the file the proof received",
       "ok": true,
       "detail": {
-        "server": "db385e59e5b8b010af3f49c72af9116b8fc4de40d855ee0e0953abdf266893bc",
-        "received": "db385e59e5b8b010af3f49c72af9116b8fc4de40d855ee0e0953abdf266893bc"
+        "server": "4c4b40b7ffa5a9eb1f35a8280b6791aae7c5b4a13b671014029e14466d426db6",
+        "received": "4c4b40b7ffa5a9eb1f35a8280b6791aae7c5b4a13b671014029e14466d426db6"
       }
     },
     {
@@ -290,8 +290,8 @@
       "name": "restart: a NEW job over a fresh snapshot succeeds; exactly one succeeded job carries its output; the lost job published nothing",
       "ok": true,
       "detail": {
-        "newJob": "job_e5xTu66Y2L4",
-        "lostJob": "job_gAix2w0SHvI"
+        "newJob": "job_l1J9CfQQZaQ",
+        "lostJob": "job_w46vUxCQHjg"
       }
     },
     {

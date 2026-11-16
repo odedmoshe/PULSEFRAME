@@ -83,6 +83,8 @@ async function main() {
     r0 = await rev();
     await key('KeyT');
     await waitRev(r0 + 1);
+    // the revision number can update a moment before the new title is selected; K acts on the selection
+    await page.waitForFunction(() => !!document.querySelector('.track.text .clip.selected'), undefined, { timeout: 8000 });
     await edit('KeyK');
     await key('Shift+ArrowRight', 2);
     await page.getByTestId('transform-y').focus();

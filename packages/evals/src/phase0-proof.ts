@@ -363,7 +363,7 @@ async function main() {
   await page.keyboard.press('Home');
   await waitPainted(0);
   await page.getByTestId('play').click();
-  await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 0 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 30_000 });
+  await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 0 && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 30_000 });
   const sync = await page.evaluate(() => (window as any).__pfSync());
   measurements.previewSync = { ...sync, note: 'one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it' };
   check('preview playback ran to the end on a measured clock; paint lateness recorded (measurement, not a pass/fail target)', sync.framesPainted > 10 && sync.paintLatenessMs.median !== null, measurements.previewSync);

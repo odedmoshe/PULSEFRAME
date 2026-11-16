@@ -158,7 +158,7 @@ export function Transport() {
   return (
     <div className="transport" dir="ltr">
       <button className="ghost" onClick={() => run(editor, 'transport.prevFrame')} aria-label={t('frame.prev')}><IconPrevFrame /></button>
-      <button className="primary" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} data-testid="play">{p?.playing ? <IconPause /> : <IconPlay />}</button>
+      <button className="primary" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} data-testid="play" data-playing={p?.playing ? 'true' : 'false'}>{p?.playing ? <IconPause /> : <IconPlay />}</button>
       <button className="ghost" onClick={() => run(editor, 'transport.nextFrame')} aria-label={t('frame.next')}><IconNextFrame /></button>
       <button className="ghost" onClick={() => run(editor, 'transport.loop')} aria-pressed={!!p?.loop} aria-label={t('cmd.loop')} title={t('cmd.loop')} data-testid="loop"><IconLoop /></button>
       {!!p?.shuttleRate && <span className="shuttle" role="status" data-testid="shuttle" aria-label={`${t(p.shuttleRate < 0 ? 'cmd.shuttleBack' : 'cmd.shuttleForward')} ×${Math.abs(p.shuttleRate)}`}>{p.shuttleRate < 0 ? '◀◀' : '▶▶'} ×{Math.abs(p.shuttleRate)}</span>}

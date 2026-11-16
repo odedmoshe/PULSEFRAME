@@ -116,7 +116,7 @@ async function main() {
     const boxChecked = await page.getByTestId('clip-keep-pitch').isChecked().catch(() => null);
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.getByTestId('play').click();
-    await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 60000 }).catch(() => {});
+    await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 60000 }).catch(() => {});
     const sync = await page.evaluate(() => (window as any).__pfSync());
     const onsets: number[] = (sync.audioOnsetsTimelineSeconds ?? []).map((x: number) => Number(x.toFixed(3)));
     // one onset per beep is expected; a stretched beep may register a second onset inside itself, so each expected time needs one onset near it
@@ -202,7 +202,7 @@ async function main() {
     const stateText = ((await rpage.getByTestId('ramp-state').textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ');
     await rpage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await rpage.getByTestId('play').click();
-    await rpage.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && !document.querySelector('[data-testid=play]')?.textContent?.includes('❚'), undefined, { timeout: 60000 }).catch(() => {});
+    await rpage.waitForFunction(() => (window as any).__pfSync().framesPainted > 10 && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 60000 }).catch(() => {});
     const rsync = await rpage.evaluate(() => (window as any).__pfSync());
     const ronsets: number[] = (rsync.audioOnsetsTimelineSeconds ?? []).map((x: number) => Number(x.toFixed(3)));
     const rheard = wantBeeps.map((w) => ronsets.find((o) => Math.abs(o - w) <= 0.05) ?? null);

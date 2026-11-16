@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T21:32:44.514Z",
+  "ranAt": "2026-11-16T22:04:48.515Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -268,9 +268,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.99,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
-        "back1": -1,
+        "back1": -0.99,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -284,9 +284,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.02,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2,
+        "shuttleSpeed": 1.99,
         "staysPaused": true
       }
     },
@@ -314,30 +314,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_c3ae839e020",
-          "clp_c3ae839e021"
+          "clp_67a35cb8850",
+          "clp_67a35cb8851"
         ],
         "afterAB": [
-          "clp_c3ae839e020",
-          "clp_c3ae839e021"
+          "clp_67a35cb8850",
+          "clp_67a35cb8851"
         ],
         "afterAdd": [
-          "clp_c3ae839e020",
-          "clp_c3ae839e021",
-          "clp_c3ae839e022"
+          "clp_67a35cb8850",
+          "clp_67a35cb8851",
+          "clp_67a35cb8852"
         ],
         "midEscape": [
-          "clp_c3ae839e021"
+          "clp_67a35cb8851"
         ],
         "afterEscape": [
-          "clp_c3ae839e020",
-          "clp_c3ae839e021",
-          "clp_c3ae839e022"
+          "clp_67a35cb8850",
+          "clp_67a35cb8851",
+          "clp_67a35cb8852"
         ],
         "afterEscapeUp": [
-          "clp_c3ae839e020",
-          "clp_c3ae839e021",
-          "clp_c3ae839e022"
+          "clp_67a35cb8850",
+          "clp_67a35cb8851",
+          "clp_67a35cb8852"
         ]
       }
     },

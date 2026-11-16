@@ -91,10 +91,10 @@ async function main() {
     await page.getByTestId('loop').click();
     const pressed = await page.getByTestId('loop').getAttribute('aria-pressed');
     await page.getByTestId('play').click();
-    await page.waitForFunction(() => (window as any).__pfSync?.().loops >= 2, undefined, { timeout: 30000 });
+    await page.waitForFunction(() => (window as any).__pfSync?.().loops >= 2, undefined, { timeout: 30000 }).catch(async () => console.log('  loop wait timed out:', JSON.stringify(await page.evaluate(() => { const y = (window as any).__pfSync?.(); return { loops: y?.loops, framesPainted: y?.framesPainted, clock: y?.clock, playing: document.querySelector('[data-testid=play]')?.getAttribute('data-playing'), loopPressed: document.querySelector('[data-testid=loop]')?.getAttribute('aria-pressed'), timecode: document.querySelector('[data-testid=timecode]')?.textContent, active: (document.activeElement as HTMLElement)?.dataset?.testid }; }))));
     const stillPlaying = (await page.getByTestId('play').getAttribute('aria-label')) !== null && (await page.evaluate(() => (window as any).__pfSync().loops)) >= 2;
     await page.getByTestId('loop').click();
-    await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.textContent?.includes('▶'), undefined, { timeout: 20000 });
+    await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 20000 });
     check('loop playback: with loop on, a 1-second timeline wraps around at least twice and keeps playing; turning loop off lets it stop at the end', pressed === 'true' && stillPlaying, { loops: await page.evaluate(() => (window as any).__pfSync().loops) });
 
     console.log('\n# project manager');
