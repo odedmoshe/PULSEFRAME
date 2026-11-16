@@ -13,7 +13,7 @@ type C2D = OffscreenCanvasRenderingContext2D;
 export interface Buf { canvas: OffscreenCanvas; ctx: C2D }
 /** Geometry of the placed layer, so layer-relative effects and masks follow its transform. */
 export interface LayerBox { cx: number; cy: number; w: number; h: number; rotation: number; scale: number }
-export interface LookEnv { width: number; height: number; frameIndex: number; box: LayerBox }
+export interface LookEnv { width: number; height: number; frameIndex: number; /** Timeline time of the frame in seconds. */ seconds: number; box: LayerBox }
 
 const pools = new Map<string, Buf[]>();
 /** Scratch buffer `slot` of the given size, cleared and reset. Buffers are reused across frames (bounded: a few per size). */

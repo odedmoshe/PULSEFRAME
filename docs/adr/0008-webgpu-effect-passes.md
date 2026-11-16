@@ -1,6 +1,6 @@
 # ADR-0008: WebGPU effect passes behind the shared compositor
 
-Status: **accepted** (2026-11-16) for steps 1–3; step 4 (the owner checks the effects on the laptop) is open.
+Status: **accepted** (2026-11-16) for steps 1–3; step 4: the owner ran both effects on the laptop on 2026-11-16 (preview and one export worked; which adapter was used was not recorded).
 
 ## Context (measured, with where each fact comes from)
 - ADR-0005 keeps one evaluator and one Canvas2D compositor for preview, stills and export, and deferred the GPU decision to data from real hardware (B-1).

@@ -132,6 +132,15 @@ async function main() {
     const got = rows.map((y) => ({ y, measured: stripeAt(bent, y), expected: Number(expected(y).toFixed(2)) }));
     check('distort.wave: before the effect the stripe is straight', rows.every((y) => Math.abs(stripeAt(flat, y)! - 179.5) < 0.6), { centre: stripeAt(flat, 320) });
     check('distort.wave: each row of the stripe is displaced by the sine the parameters describe (within 1 pixel)', got.every((g) => g.measured !== null && Math.abs(g.measured - g.expected) <= 1), got);
+    // the wave travels: half a second later, at 0.5 waves per second, it has moved a quarter of a wave (90 degrees)
+    const later = await still(wave.pid, 15);
+    const expectedAt = (y: number, turns: number) => 179.5 - amplitude * H * Math.sin((2 * Math.PI * ((y + 0.5) / H)) / wavelength + 2 * Math.PI * turns);
+    const moved = rows.map((y) => ({ y, measured: stripeAt(later, y), expected: Number(expectedAt(y, 0.25).toFixed(2)) }));
+    check('distort.wave travels by itself: 0.5 s later the stripe is where a quarter-wave shift puts it (within 1 pixel), and that frame alone gives the same picture again', moved.every((g) => g.measured !== null && Math.abs(g.measured - g.expected) <= 1) && maxDiff(later, await still(wave.pid, 15)) === 0, moved);
+    const waveFx = (await call(`/projects/${wave.pid}`)).body.project.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === wave.clipId).effects[0].id as string;
+    await tx(wave.pid, [{ op: 'update_effect', args: { clipId: wave.clipId, effectId: waveFx, params: { speed: 0 } } }]);
+    check('distort.wave with speed 0 stays still', maxDiff(await still(wave.pid, 15), bent) === 0);
+    await tx(wave.pid, [{ op: 'update_effect', args: { clipId: wave.clipId, effectId: waveFx, params: { speed: 0.5 } } }]);
     await page.goto(`${s.ownerUrl}&project=${wave.pid}`);
     await page.locator('.clip').first().waitFor();
     let wprev: Img = await previewRgb(page);

@@ -270,12 +270,15 @@ async function main() {
 
   console.log('\n# export (started from the UI button)');
   const tExport = Date.now();
+  const saved = page.waitForEvent('download', { timeout: 300_000 }).then((d) => d.suggestedFilename(), () => null);
   await page.getByTestId('export').click();
   // Editing continues while the export runs: the job must keep its immutable snapshot.
   const snapshotRevision = rev;
   const late = await rest(`/projects/${projectId}/transactions`, { method: 'POST', body: JSON.stringify({ label: 'Edit during export', ops: [{ op: 'update_text', args: { clipId: textClip.id, text: 'EDITED AFTER EXPORT STARTED' } }] }) });
   check('editing continues while the export job runs', late.ok);
   await page.getByTestId('export-download').waitFor({ timeout: 300_000 });
+  const savedName = await saved;
+  check('when the export finishes the editor says so and the file starts saving by itself; the link stays for another copy', (await page.getByTestId('export-finished').count()) === 1 && !!savedName && /\.mp4$/.test(savedName), { savedName });
   const href = await page.getByTestId('export-download').getAttribute('href');
   const jobId = href!.split('/').at(-2)!;
   const job = await (await rest(`/jobs/${jobId}`)).json();

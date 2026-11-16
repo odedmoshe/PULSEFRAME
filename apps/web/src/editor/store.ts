@@ -233,7 +233,20 @@ export class Editor {
     es.addEventListener('control', (m) => this.set({ agentsPaused: !!JSON.parse((m as MessageEvent).data).agentsPaused }));
     refreshProposals();
     void api.controls(projectId).then((c) => this.set({ agentsPaused: c.agentsPaused })).catch(() => {});
-    es.addEventListener('job', (m) => { const j: JobEvent = JSON.parse((m as MessageEvent).data); this.set(j.type === 'capability' ? { capJob: j } : j.type === 'export' ? { exportJob: j } : {}); });
+    es.addEventListener('job', (m) => {
+      const j: JobEvent = JSON.parse((m as MessageEvent).data);
+      this.set(j.type === 'capability' ? { capJob: j } : j.type === 'export' ? { exportJob: j } : {});
+      // An export this tab started saves its file as soon as it is ready, once; the link in the header stays for another copy.
+      if (j.type === 'export' && j.status === 'succeeded' && this.myExports.delete(j.id)) {
+        const a = document.createElement('a');
+        a.href = `/api/v1/jobs/${j.id}/output`;
+        a.download = '';
+        a.hidden = true;
+        document.body.append(a);
+        a.click();
+        a.remove();
+      }
+    });
     es.onerror = () => this.set({ save: 'save.offline' });
     es.onopen = () => this.set({ save: 'save.saved' });
     // Listing capabilities only reads provider status; it never starts a worker.
@@ -368,9 +381,11 @@ export class Editor {
       if (!this.player?.playing) void api.presence(projectId, this.sessionId, this.frame, this.state.selection).catch(() => {});
     }, 250);
   }
+  /** Exports started from this tab that have not finished yet (their file is saved automatically when ready). */
+  private myExports = new Set<string>();
   startExport(variantId?: string) {
     const { doc } = this.state;
-    if (doc) api.startExport(doc.id, variantId ? { variantId } : undefined).then((j) => this.set({ exportJob: { id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);
+    if (doc) api.startExport(doc.id, variantId ? { variantId } : undefined).then((j) => { this.myExports.add(j.jobId); this.set({ exportJob: { id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } }); }).catch(this.fail);
   }
   /** Pause Agent / Take Over: the server refuses agent mutations until the owner resumes. */
   setAgentsPaused(paused: boolean) { const d = this.state.doc; if (d) api.setPaused(d.id, paused).then((r) => this.set({ agentsPaused: r.agentsPaused })).catch(this.fail); }
@@ -396,7 +411,7 @@ export class Editor {
   cancelExport() { const j = this.state.exportJob; if (j) api.cancelJob(j.id).catch(this.fail); }
   retryExport() {
     const j = this.state.exportJob;
-    if (j) api.retryJob(j.id).then((n) => this.set({ exportJob: { id: n.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);
+    if (j) api.retryJob(j.id).then((n) => { this.myExports.add(n.jobId); this.set({ exportJob: { id: n.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } }); }).catch(this.fail);
   }
   runCapability(capabilityId: string) {
     const { doc } = this.state;

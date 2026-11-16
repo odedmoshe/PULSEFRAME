@@ -16,7 +16,7 @@
  */
 type C2D = OffscreenCanvasRenderingContext2D;
 export interface GpuStatus { available: boolean; reason: string; adapter: { vendor: string | null; architecture: string | null; software: boolean } | null }
-interface EffectEnv { width: number; height: number }
+interface EffectEnv { width: number; height: number; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number }
 interface GpuEffect { /** Body of `fn effect(uv: vec2f) -> vec4f` (premultiplied in, premultiplied out). `P` holds the eight parameters. */ wgsl: string; /** Up to eight numbers, in the order the shader reads them. */ params(p: Record<string, unknown>, env: EffectEnv): number[] }
 
 const n = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -41,9 +41,10 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       let a = s.a * keep;
       return vec4f(outc * a, a);`,
   },
-  // Displace the picture along a sine wave. Lengths are fractions of the frame height; the phase can be keyframed to make it move.
+  // Displace the picture along a travelling sine wave. Lengths are fractions of the frame height.
   'distort.wave': {
-    params: (p, env) => [n(p.amplitude, 0.01), Math.max(n(p.wavelength, 0.2), 0.005), (n(p.phase) * Math.PI) / 180, p.direction === 'vertical' ? 1 : 0, env.height / env.width],
+    // the wave travels: its phase advances by one full turn per wave that passes (a clip saved before `speed` existed has none and stays still)
+    params: (p, env) => [n(p.amplitude, 0.01), Math.max(n(p.wavelength, 0.2), 0.005), (n(p.phase) * Math.PI) / 180 + 2 * Math.PI * (((n(p.speed) * (env.seconds ?? 0)) % 1 + 1) % 1), p.direction === 'vertical' ? 1 : 0, env.height / env.width],
     wgsl: `
       let amp = P.a.x; let len = P.a.y; let phase = P.a.z; let aspect = P.b.x;
       var at = uv;

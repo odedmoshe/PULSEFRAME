@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-16T18:43:59.069Z",
+  "ranAt": "2026-11-16T19:09:02.200Z",
   "result": "PASSED",
-  "passed": 15,
-  "total": 15,
+  "passed": 17,
+  "total": 17,
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -169,6 +169,61 @@
           "expected": 201.9
         }
       ]
+    },
+    {
+      "name": "distort.wave travels by itself: 0.5 s later the stripe is where a quarter-wave shift puts it (within 1 pixel), and that frame alone gives the same picture again",
+      "ok": true,
+      "detail": [
+        {
+          "y": 40,
+          "measured": 157.5,
+          "expected": 157.1
+        },
+        {
+          "y": 80,
+          "measured": 179.5,
+          "expected": 179.81
+        },
+        {
+          "y": 160,
+          "measured": 211.5,
+          "expected": 211.5
+        },
+        {
+          "y": 240,
+          "measured": 179.5,
+          "expected": 179.19
+        },
+        {
+          "y": 320,
+          "measured": 147.5,
+          "expected": 147.5
+        },
+        {
+          "y": 400,
+          "measured": 179.5,
+          "expected": 179.81
+        },
+        {
+          "y": 480,
+          "measured": 211.5,
+          "expected": 211.5
+        },
+        {
+          "y": 560,
+          "measured": 179.5,
+          "expected": 179.19
+        },
+        {
+          "y": 600,
+          "measured": 156.5,
+          "expected": 156.65
+        }
+      ]
+    },
+    {
+      "name": "distort.wave with speed 0 stays still",
+      "ok": true
     },
     {
       "name": "distort.wave: preview and still agree (mean difference under 0.5 of 255)",
