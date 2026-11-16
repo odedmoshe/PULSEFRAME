@@ -315,7 +315,7 @@ Evidence files today: `packages/time/src/time.test.ts`, `packages/core/src/core.
 | R-A.9 | A catalog | 80 SFX assets, original or licensed | 8 | R-10.5 | Sound drawer | add_clip | Mix | partial 80 sounds, all synthesised by formula in this build (no third-party content), in ten categories, with a browser in the Sound tab. Checked for length, level, determinism and silence after the end; 73 of them have not been listened to | `sfx.test.ts`, `phase8-proof.json`, `pnpm proof:creative` |
 | R-A.10 | A catalog | 60 font families, 20 with verified Hebrew coverage | 6 | R-15.4 | Fonts drawer | font ops | Font manifest | partial | 5 of 60 families, 5 of 20 with Hebrew (declared subset + load check); `pnpm check:notices` |
 | R-A.11 | A catalog | 120 original graphic elements | 7 | R-15.5 | Elements drawer | add_clip | Compositor | not started | |
-| R-A.12 | A catalog | 12 layout recipes | 7 | R-14.5 | Layouts drawer | layout ops | Compositor | not started | |
+| R-A.12 | A catalog | 12 layout recipes | 7 | R-14.5 | Layouts drawer | layout ops | Compositor | partial 17 layouts for 2, 3, 4 and 9 pictures as position, size and mask per clip (`layouts.ts`, `apply_layout`); they arrange clips that already play together, they do not build the timeline | `layouts.test.ts`, `pnpm proof:creative` |
 | R-A.13 | A catalog | At least 24 named creative templates, each with slots and export test | 11 | R-24.1 | Templates drawer | run_recipe | Compositor | not started | |
 | R-A.14 | A catalog | 8 platform output profiles | 12 | R-25.1 | Deliver workspace | profile ops | Profile preset | not started | |
 

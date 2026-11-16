@@ -13,7 +13,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
+import { beatPositionAt } from '@pulseframe/core';
 import { hash32, motionAt, unit32 } from '@pulseframe/engine';
+import { BEAT_SR } from '../../../apps/server/src/beats.ts';
+import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { startServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -334,6 +337,44 @@ async function main() {
     check('motion.shake, pulse, sway and spin: the still at 7/30 s matches the transform the same code computes (within 3 pixels), is identical when rendered again, and differs at another moment', motionOk, motionRows);
     const onBeat = motionAt('motion.pulse', { amount: 0.2, bpm: 120, decay: 6 }, 0.5).scale, between = motionAt('motion.pulse', { amount: 0.2, bpm: 120, decay: 6 }, 0.95).scale;
     check('motion.pulse is largest exactly on the beat (every half second at 120 beats per minute) and has settled before the next one', Math.abs(onBeat - 1.2) < 1e-6 && between < 1.02, { onBeat, justBeforeNext: Number(between.toFixed(4)) });
+
+    // Following the music: the beats come from the real beat analysis of a generated drum loop (94 beats per minute, so no
+    // beat falls on a frame of the 30 fps grid by design); the still must show the pulse that the beat position predicts.
+    {
+      const loop = drumLoop(() => 94, 6, 0.41, 5);
+      const rawLoop = path.join(art, 'loop.f32');
+      fs.writeFileSync(rawLoop, Buffer.from(loop.x.buffer, loop.x.byteOffset, loop.x.byteLength));
+      const loopFile = path.join(art, 'loop.wav');
+      ff(['-y', '-f', 'f32le', '-ar', String(BEAT_SR), '-ac', '1', '-i', rawLoop, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', loopFile]);
+      const musicAsset = await upload(ramp.pid, loopFile);
+      const analysed = await call(`/projects/${ramp.pid}/assets/${musicAsset}/analyze`, { kind: 'beats' });
+      const placed = (await tx(ramp.pid, [{ op: 'add_clip', args: { assetId: musicAsset, start: T.frameTime(0, { num: 30, den: 1 }) } }])).results[0].output;
+      const musicTrack = (await call(`/projects/${ramp.pid}`)).body.project.sequences.seq_main.tracks.find((t: any) => t.clips.some((c: any) => c.id === (placed.audioClipId ?? placed.clipId))).id as string;
+      const params = { amount: 0.2, bpm: 77, offset: 0, decay: 6, follow: 'music' };
+      const follow = await withEffect('motion.pulse', params, 0);
+      const docNow = (await call(`/projects/${ramp.pid}`)).body.project;
+      const frames = Array.from({ length: 55 }, (_, k) => k + 3).map((k) => ({ k, beat: beatPositionAt(docNow, T.frameTime(k, { num: 30, den: 1 })) })).filter((x) => x.beat);
+      const frac = (x: number) => x - Math.floor(x);
+      const onBeatFrame = frames.reduce((a, b) => (frac(b.beat!.sinceBar) < frac(a.beat!.sinceBar) ? b : a), frames[0]!);
+      const lateFrame = frames.reduce((a, b) => (frac(b.beat!.sinceBar) > frac(a.beat!.sinceBar) ? b : a), frames[0]!);
+      const rows: unknown[] = [];
+      let ok = frames.length > 40 && analysed.status === 200;
+      for (const fr of [onBeatFrame, lateFrame]) {
+        const m = motionAt('motion.pulse', params, fr.k / 30, fr.beat);
+        const w = worst(await still(ramp.pid, fr.k), xf(m));
+        ok &&= w.worstPixels < 3;
+        rows.push({ frame: fr.k, beatsIntoBar: Number(fr.beat!.sinceBar.toFixed(3)), scale: Number(m.scale.toFixed(4)), ...w });
+      }
+      const sOn = motionAt('motion.pulse', params, onBeatFrame.k / 30, onBeatFrame.beat).scale, sLate = motionAt('motion.pulse', params, lateFrame.k / 30, lateFrame.beat).scale;
+      check('motion.pulse set to follow the music: on a clip under a drum loop whose beats were detected by the analysis, the stills at the frame nearest a beat and at the frame latest in a beat match the pulse computed from the detected beats (within 3 pixels); the picture is larger near the beat', ok && sOn > sLate + 0.05, { detectedBeats: docNow.analyses[musicAsset]?.beats?.beats?.length, detectedBpm: docNow.analyses[musicAsset]?.beats?.bpm, rows });
+      // muting the music track: nothing to follow, so the effect falls back to its own tempo (77 beats per minute)
+      await tx(ramp.pid, [{ op: 'update_track', args: { trackId: musicTrack, muted: true } }]);
+      const fb = motionAt('motion.pulse', params, onBeatFrame.k / 30, null);
+      const wFb = worst(await still(ramp.pid, onBeatFrame.k), xf(fb));
+      check('with the music track muted the same effect falls back to its own tempo setting', wFb.worstPixels < 3 && Math.abs(fb.scale - sOn) > 0.01, { frame: onBeatFrame.k, scale: Number(fb.scale.toFixed(4)), ...wFb });
+      await follow.remove();
+      await tx(ramp.pid, [{ op: 'remove_track', args: { trackId: musicTrack } }]).catch(async () => { await tx(ramp.pid, [{ op: 'delete_clip', args: { clipId: placed.audioClipId ?? placed.clipId } }]); });
+    }
 
     fx = await withEffect('light.leak', { amount: 0, speed: 0.3, seed: 2, color: '#FF7A2F' });
     const leak0 = fx.img;

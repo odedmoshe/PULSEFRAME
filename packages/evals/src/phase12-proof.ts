@@ -296,6 +296,8 @@ async function main() {
     await cpage.getByTestId('cue-add').click();
     for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').clips.length === 2) break; await sleep(100); }
     const newCue = cdoc.sequences.seq_main.tracks.find((t: any) => t.kind === 'caption').clips.find((c: any) => c.id !== cueId);
+    // the field of the cue selected before is still on screen until the new cue is selected: wait for that, or the text would go to the old cue's field
+    await cpage.locator(`.clip.selected[data-clip-id="${newCue?.id}"]`).waitFor({ timeout: 8000 });
     await cpage.getByTestId('cue-text').waitFor();
     await cpage.getByTestId('cue-text').fill('שורה שנייה');
     await cpage.getByTestId('cue-text').blur();

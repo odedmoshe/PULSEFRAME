@@ -100,8 +100,9 @@ async function main() {
     console.log('\n# project manager');
     await page.getByTestId('projects-open').click();
     await page.getByTestId('projects-dialog').waitFor();
-    const rows0 = await page.getByTestId('project-row').count();
     const row = page.locator(`[data-testid=project-row][data-project-id="${other}"]`);
+    await row.waitFor(); // the list loads after the dialog opens: count the rows only once the one to delete is there
+    const rows0 = await page.getByTestId('project-row').count();
     await row.getByTestId('project-delete').click();
     await page.getByTestId('project-delete-confirm').fill('למחיק');
     const blocked = await page.getByTestId('project-delete-apply').isDisabled();

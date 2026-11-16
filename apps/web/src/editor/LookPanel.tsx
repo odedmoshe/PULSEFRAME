@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import * as T from '@pulseframe/time';
-import { BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
+import { beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { EffectGalleryButton } from './EffectGallery.tsx';
@@ -114,6 +114,9 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
               }, 'Effect parameter');
             }} />;
         })}
+        {fx.params.follow === 'music' && editor.doc && !beatPositionAt(editor.doc, editor.playhead) && (
+          <p className="muted" role="note" data-testid="effect-follow-note">{state.lang === 'he' ? 'אין כאן מוזיקה עם פעימות מזוהות, אז האפקט פועל בקצב הקבוע שלו. מנתחים פעימות בלשונית קליפ ← ניתוח, כשקליפ המוזיקה נבחר.' : 'No music with detected beats plays here, so the effect uses its own steady tempo. Detect beats in the Clip tab → Analysis with the music clip selected.'}</p>
+        )}
       </div>
     </li>
   );

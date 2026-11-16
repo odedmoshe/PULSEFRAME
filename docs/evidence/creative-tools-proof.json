@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-16T22:08:13.511Z",
+ "generatedAt": "2026-11-16T22:23:52.178Z",
  "profile": {
   "os": "Linux 6.18.44-fc-v470",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -291,6 +291,34 @@
    }
   },
   {
+   "name": "a layout for the wrong number of pictures is refused with the layouts that do fit; with two picture clips selected the editor offers the two-picture layouts, and \"side by side\" fills the left half with the lower track's picture and the right half with the upper one, each cropped to its cell, on a rendered still",
+   "ok": true,
+   "detail": {
+    "refusedStatus": 422,
+    "tilesShown": 11,
+    "left": [
+     253,
+     0,
+     0
+    ],
+    "right": [
+     0,
+     0,
+     254
+    ],
+    "topLeft": [
+     253,
+     0,
+     0
+    ],
+    "bottomRight": [
+     0,
+     0,
+     254
+    ]
+   }
+  },
+  {
    "name": "no console or page errors during the editor session",
    "ok": true,
    "detail": []
@@ -361,6 +389,6 @@
    "stutter": 338
   }
  },
- "passed": 29,
+ "passed": 30,
  "failed": 0
 }

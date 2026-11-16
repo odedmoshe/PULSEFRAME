@@ -204,6 +204,8 @@ async function main() {
     await page.screenshot({ path: path.join(art, 'gallery.png') });
     await page.keyboard.press('Escape');
     const closed = (await page.getByTestId('effect-gallery').count()) === 0;
+    // focus is handed back on the next tick after the dialog is gone: wait for it (bounded) rather than read in the same instant
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'gallery-open', undefined, { timeout: 2000 }).catch(() => {});
     const focusBack = await page.evaluate(() => document.activeElement?.getAttribute('data-testid'));
     check('Escape closes the gallery and focus returns to the button that opened it', closed && focusBack === 'gallery-open', { focusBack });
     if (graded) { await page.keyboard.press('Control+z'); await until(pid, (x) => !clipsOf(x, 'video')[0].effects?.length); }
@@ -283,6 +285,34 @@ async function main() {
     await sleep(300);
     const shownLook = await page.getByTestId('caption-look').inputValue();
     check('the caption controls list the ready-made looks; choosing one restyles the caption track and the list then shows that look as the current one', lookOptions > 30 && !!styled && shownLook === chosen, { lookOptions, chosen, shownLook });
+
+    console.log('\n# layouts for several pictures');
+    {
+      const lp = (await call('/projects', { name: 'layouts', width: 1280, height: 720 })).body.project.id as string;
+      const mk = (name: string, color: string) => { const file = path.join(art, `${name}.png`); ff(['-y', '-f', 'lavfi', '-i', `color=c=${color}:s=640x480`, '-frames:v', '1', file]); return file; };
+      const A = await upload(lp, mk('red', 'red')), B = await upload(lp, mk('blue', 'blue'));
+      const v1 = (await doc(lp)).sequences.seq_main.tracks.find((t: any) => t.kind === 'video').id;
+      const v2 = (await txs(lp, [{ op: 'add_track', args: { kind: 'video' } }])).results[0].output.trackId;
+      const ca = (await txs(lp, [{ op: 'add_clip', args: { assetId: A.assetId, trackId: v1, start: f(0), duration: f(60) } }])).results[0].output.clipId;
+      const cb = (await txs(lp, [{ op: 'add_clip', args: { assetId: B.assetId, trackId: v2, start: f(0), duration: f(60) } }])).results[0].output.clipId;
+      const wrong = await call(`/projects/${lp}/transactions`, { ops: [{ op: 'apply_layout', args: { layoutId: 'layout.grid-2x2', clipIds: [ca, cb] } }] });
+      await page.goto(`${s.ownerUrl}&project=${lp}`);
+      await page.locator(`.clip[data-clip-id="${ca}"]`).click();
+      await page.locator(`.clip[data-clip-id="${cb}"]`).click({ modifiers: ['Shift'] });
+      await page.getByTestId('layout-picker').waitFor();
+      const tilesShown = await page.getByTestId('layout-tile').count();
+      await page.locator('[data-testid=layout-tile][data-id="layout.side-by-side"]').click();
+      const arranged = await until(lp, (x) => clipsOf(x, 'video').every((c: any) => !!c.mask));
+      const png = (await call(`/projects/${lp}/frame?index=10`)).body as Buffer;
+      const pngFile = path.join(art, 'layout.png');
+      fs.writeFileSync(pngFile, png);
+      const rgb = ff(['-i', pngFile, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+      const at = (x: number, y: number) => [rgb[(y * 1280 + x) * 3]!, rgb[(y * 1280 + x) * 3 + 1]!, rgb[(y * 1280 + x) * 3 + 2]!];
+      const left = at(320, 360), right = at(960, 360), topLeft = at(20, 20), bottomRight = at(1260, 700);
+      const isRed = (c: number[]) => c[0]! > 200 && c[2]! < 60, isBlue = (c: number[]) => c[2]! > 200 && c[0]! < 60;
+      check('a layout for the wrong number of pictures is refused with the layouts that do fit; with two picture clips selected the editor offers the two-picture layouts, and "side by side" fills the left half with the lower track\'s picture and the right half with the upper one, each cropped to its cell, on a rendered still', wrong.status !== 200 && tilesShown >= 4 && !!arranged && isRed(left) && isBlue(right) && isRed(topLeft) && isBlue(bottomRight), { refusedStatus: wrong.status, tilesShown, left, right, topLeft, bottomRight });
+      await page.screenshot({ path: path.join(art, 'layout-editor.png') });
+    }
 
     check('no console or page errors during the editor session', errors.length === 0, errors.slice(0, 5));
   } finally {

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T21:49:11.162Z",
+  "ranAt": "2026-11-16T22:24:40.278Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "browser": "153.0.8010.12"
@@ -10,7 +10,7 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 386,
+      "controls": 391,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -27,7 +27,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 386,
+          "controls": 391,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -36,7 +36,7 @@
         },
         {
           "state": "format-view",
-          "controls": 352,
+          "controls": 355,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -46,7 +46,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 392,
+          "controls": 397,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -60,7 +60,7 @@
         },
         {
           "state": "project-delete-confirmation",
-          "controls": 396,
+          "controls": 401,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -70,7 +70,7 @@
         },
         {
           "state": "locked-track",
-          "controls": 386,
+          "controls": 391,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -80,7 +80,7 @@
         },
         {
           "state": "upload-busy",
-          "controls": 386,
+          "controls": 391,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -89,7 +89,7 @@
         },
         {
           "state": "error-bar",
-          "controls": 387,
+          "controls": 392,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -100,7 +100,7 @@
         },
         {
           "state": "export-busy",
-          "controls": 387,
+          "controls": 392,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -110,7 +110,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 400,
+          "controls": 405,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -119,12 +119,12 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_9586e2e4d70]",
+          "focusAfterClose": "button[data-testid=view-ast_12bad66a620]",
           "focusReturned": true
         },
         {
           "state": "activity-dialog",
-          "controls": 389,
+          "controls": 394,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -138,7 +138,7 @@
         },
         {
           "state": "command-palette",
-          "controls": 390,
+          "controls": 395,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -156,7 +156,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 386,
+      "controls": 391,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -173,7 +173,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 386,
+          "controls": 391,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -182,7 +182,7 @@
         },
         {
           "state": "format-view",
-          "controls": 352,
+          "controls": 355,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -192,7 +192,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 392,
+          "controls": 397,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -206,7 +206,7 @@
         },
         {
           "state": "project-delete-confirmation",
-          "controls": 396,
+          "controls": 401,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -216,7 +216,7 @@
         },
         {
           "state": "locked-track",
-          "controls": 386,
+          "controls": 391,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -226,7 +226,7 @@
         },
         {
           "state": "upload-busy",
-          "controls": 386,
+          "controls": 391,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -235,7 +235,7 @@
         },
         {
           "state": "error-bar",
-          "controls": 387,
+          "controls": 392,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -246,7 +246,7 @@
         },
         {
           "state": "export-busy",
-          "controls": 387,
+          "controls": 392,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -256,7 +256,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 400,
+          "controls": 405,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -265,12 +265,12 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=view-ast_9586e2e4d70]",
+          "focusAfterClose": "button[data-testid=view-ast_12bad66a620]",
           "focusReturned": true
         },
         {
           "state": "activity-dialog",
-          "controls": 389,
+          "controls": 394,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -284,7 +284,7 @@
         },
         {
           "state": "command-palette",
-          "controls": 390,
+          "controls": 395,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],

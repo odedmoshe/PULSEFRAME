@@ -14,6 +14,7 @@ import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
 import { MOTION_PRESETS, motionKeys } from './motionPresets.ts';
+import { findLayout, layoutPlacements, LAYOUT_IDS, LAYOUTS } from './layouts.ts';
 const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[]];
 import { lookParams } from './looks.ts';
 import { findTextPreset } from './textPresets.ts';
@@ -1838,6 +1839,37 @@ defineOp({
     if (a.mask === null) { delete clip.mask; return { affectedIds: [clip.id], summary: 'Removed mask' }; }
     clip.mask = { ...(clip.mask ?? DEFAULT_MASK), ...a.mask };
     return { affectedIds: [clip.id], summary: `Mask ${clip.mask.shape}${clip.mask.invert ? ' (inverted)' : ''}`, output: { mask: clip.mask } };
+  },
+});
+defineOp({
+  name: 'apply_layout',
+  version: 1,
+  description: 'Arrange several picture clips in one of the ready-made layouts (see list_catalog → layouts): side by side, top and bottom, grids, a main picture with smaller ones, picture-in-picture in a corner. Give exactly as many clips as the layout has cells. Cells are filled from the bottom track up (clips on one track in time order), so for picture-in-picture the small window must be on a track above the background. Each clip gets a position and size and, where a picture is cropped to its cell, a rectangle mask; rotation is set to 0 and opacity is kept. The clips are not moved in time or between tracks: for a split screen they must already play at the same time on different tracks.',
+  args: z.object({ layoutId: z.enum(LAYOUT_IDS), clipIds: z.array(z.string()).min(2).max(9) }).strict(),
+  apply(d, a) {
+    const layout = findLayout(a.layoutId)!;
+    if (new Set(a.clipIds).size !== a.clipIds.length) throw new OpError('invalid_args', 'the same clip is listed twice', { clipIds: a.clipIds });
+    if (a.clipIds.length !== layout.count) throw new OpError('invalid_args', `this layout takes ${layout.count} pictures, ${a.clipIds.length} were given`, { layoutId: layout.id, count: layout.count, available: LAYOUTS.filter((l) => l.count === a.clipIds.length).map((l) => l.id) }, 'Choose one of the listed layouts for this many pictures.');
+    const found = a.clipIds.map((id) => pictureClip(d, id));
+    const order = new Map<Track, number>();
+    for (const seq of Object.values(d.sequences)) seq.tracks.forEach((t, i) => order.set(t, i));
+    const sorted = found.map((f) => {
+      if (f.clip.type !== 'media' || f.track.kind !== 'video') throw new OpError('incompatible', 'a layout arranges picture clips on video tracks', { clipId: f.clip.id });
+      const asset = d.assets[f.clip.assetId]!;
+      const size = asset.video ?? asset.image;
+      if (!size) throw new OpError('incompatible', 'this clip has no picture', { clipId: f.clip.id });
+      if (f.clip.keyframes && (['x', 'y', 'scale', 'rotation'] as const).some((p) => f.clip.keyframes?.[p]?.length)) throw new OpError('incompatible', 'this clip has position, size or rotation keyframes; a layout sets fixed values', { clipId: f.clip.id }, 'Clear those keyframes first (clear_keyframes).');
+      return { clip: f.clip as MediaClip, track: f.track, size: { width: size.width, height: size.height } };
+    }).sort((x, y) => order.get(x.track)! - order.get(y.track)! || T.cmp(x.clip.start, y.clip.start) || (x.clip.id < y.clip.id ? -1 : 1));
+    let placements;
+    try { placements = layoutPlacements(layout.id, { frame: { width: d.settings.width, height: d.settings.height }, fit: d.settings.fit ?? 'contain', pictures: sorted.map((x) => x.size) }); }
+    catch (e) { throw new OpError('out_of_bounds', `this layout cannot be computed for these pictures: ${e instanceof Error ? e.message : String(e)}`, { layoutId: layout.id }); }
+    sorted.forEach(({ clip }, i) => {
+      const p = placements[i]!;
+      clip.transform = { ...clip.transform, x: p.transform.x, y: p.transform.y, scale: p.transform.scale, rotation: 0 };
+      if (p.mask) clip.mask = p.mask; else delete clip.mask;
+    });
+    return { affectedIds: sorted.map((x) => x.clip.id), summary: `Layout ${layout.id}`, output: { cells: sorted.map((x, i) => ({ clipId: x.clip.id, cell: i + 1 })) } };
   },
 });
 /** The clip that ends exactly where `clip` starts on the same track, if any. */

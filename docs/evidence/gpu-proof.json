@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-16T21:58:09.843Z",
+  "ranAt": "2026-11-16T22:21:25.998Z",
   "result": "PASSED",
-  "passed": 53,
-  "total": 53,
+  "passed": 55,
+  "total": 55,
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -509,6 +509,40 @@
       "detail": {
         "onBeat": 1.2,
         "justBeforeNext": 1.0009
+      }
+    },
+    {
+      "name": "motion.pulse set to follow the music: on a clip under a drum loop whose beats were detected by the analysis, the stills at the frame nearest a beat and at the frame latest in a beat match the pulse computed from the detected beats (within 3 pixels); the picture is larger near the beat",
+      "ok": true,
+      "detail": {
+        "detectedBeats": 8,
+        "detectedBpm": 93.97,
+        "rows": [
+          {
+            "frame": 12,
+            "beatsIntoBar": -1,
+            "scale": 1.2,
+            "worstPixels": 1.59,
+            "points": 48
+          },
+          {
+            "frame": 31,
+            "beatsIntoBar": -0.009,
+            "scale": 1.0005,
+            "worstPixels": 1.33,
+            "points": 48
+          }
+        ]
+      }
+    },
+    {
+      "name": "with the music track muted the same effect falls back to its own tempo setting",
+      "ok": true,
+      "detail": {
+        "frame": 12,
+        "scale": 1.0092,
+        "worstPixels": 1.22,
+        "points": 48
       }
     },
     {

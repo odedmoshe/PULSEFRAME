@@ -16,6 +16,7 @@ import { SoundPanel } from './SoundPanel.tsx';
 import { AiTools } from './AiTools.tsx';
 import { SpeedCurveField } from './SpeedCurves.tsx';
 import { PacingPanel } from './PacingPanel.tsx';
+import { LayoutPicker } from './LayoutPicker.tsx';
 import { Section, SECTION_STRINGS, setAllSections } from './Section.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
@@ -373,6 +374,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
             <button type="button" className="ghost" data-testid="sections-close-all" onClick={() => setAllSections(false)}>{SECTION_STRINGS[state.lang].closeAll}</button>
           </div>
         )}
+        {clipFocus !== 'color' && <LayoutPicker />}
         {!sel ? <p className="muted">{t('inspector.none')}</p> : clipFocus !== 'color' && <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
         {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <Section id="entrance" title={SECTION_STRINGS[state.lang].entrance}><AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} /></Section>}
         {clipFocus !== 'motion' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <Section id="look" title={SECTION_STRINGS[state.lang].look}><LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} /></Section>}
