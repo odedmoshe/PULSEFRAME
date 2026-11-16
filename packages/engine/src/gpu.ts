@@ -22,6 +22,40 @@ interface GpuEffect { /** Body of `fn effect(uv: vec2f) -> vec4f` (premultiplied
 const n = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const rgb = (hex: unknown, fallback: string) => { const h = typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : fallback; return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255]; };
 
+/** The integer hash used by every seeded pass, in JavaScript: the same numbers as the WGSL `hash`/`unit`. */
+export const hash32 = (x: number) => { const v = (Math.imul(x >>> 0, 747796405) + 2891336453) >>> 0; const w = Math.imul(((v >>> ((v >>> 28) + 4)) ^ v) >>> 0, 277803737) >>> 0; return ((w >>> 22) ^ w) >>> 0; };
+export const unit32 = (x: number) => (x >>> 8) / 16777216;
+/** Smooth seeded noise in [-1, 1]: random values at whole numbers of `t`, eased in between. A pure function of (seed, t). */
+export function smoothNoise(seed: number, t: number): number {
+  const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f);
+  const at = (k: number) => unit32(hash32((hash32(seed >>> 0) ^ hash32((k + 0x40000000) >>> 0)) >>> 0)) * 2 - 1;
+  return at(i) * (1 - u) + at(i + 1) * u;
+}
+/**
+ * The movement of the time-driven "motion" effects as plain numbers: zoom, rotation (radians) and offset (fractions of the
+ * frame height) at a moment. The shader only applies them, so the picture can be checked against these numbers.
+ */
+export function motionAt(type: string, p: Record<string, unknown>, seconds: number): { scale: number; rotation: number; dx: number; dy: number } {
+  const amount = n(p.amount, 0), speed = n(p.speed, 1), seed = Math.round(n(p.seed, 1));
+  switch (type) {
+    case 'motion.shake': { const t = seconds * speed; return { scale: 1 + amount * 2.4, rotation: smoothNoise(seed + 2, t) * amount * 0.6, dx: smoothNoise(seed, t) * amount, dy: smoothNoise(seed + 1, t) * amount }; }
+    // a beat: full size on the beat, back to rest before the next one
+    case 'motion.pulse': { const beat = seconds * (n(p.bpm, 120) / 60) + n(p.offset) ; const ph = beat - Math.floor(beat + 1e-9); return { scale: 1 + amount * Math.exp(-ph * n(p.decay, 6)), rotation: 0, dx: 0, dy: 0 }; }
+    case 'motion.sway': { const w = 2 * Math.PI * speed * seconds; return { scale: 1 + Math.abs(amount) * 1.2, rotation: Math.sin(w) * amount * 0.5, dx: Math.sin(w * 0.5) * amount * 0.5, dy: 0 }; }
+    case 'motion.spin': return { scale: n(p.zoom, 1), rotation: (n(p.rate, 90) * Math.PI / 180) * seconds, dx: 0, dy: 0 };
+    default: return { scale: 1, rotation: 0, dx: 0, dy: 0 };
+  }
+}
+const XFORM_WGSL = `
+      let asp = vec2f(P.b.x, 1.0);
+      let d = (uv - vec2f(0.5)) * asp - vec2f(P.a.z, P.a.w);
+      let r = vec2f(d.x * cos(P.a.y) + d.y * sin(P.a.y), -d.x * sin(P.a.y) + d.y * cos(P.a.y)) / P.a.x;
+      let at = vec2f(0.5) + r / asp;
+      // what moves in from outside the picture is the picture itself, mirrored: never an empty edge
+      let f = abs(fract(at * 0.5 + vec2f(0.5)) * 2.0 - vec2f(1.0));
+      return textureSampleLevel(src, smp, vec2f(1.0) - f, 0.0);`;
+const xform = (type: string): GpuEffect => ({ wgsl: XFORM_WGSL, params: (p, env) => { const m = motionAt(type, p, env.seconds ?? 0); return [m.scale, m.rotation, m.dx, m.dy, env.width / env.height]; } });
+
 /** The implementation of every effect whose registry entry has cost 'gpu' (packages/core/src/effects.ts). */
 export const GPU_EFFECTS: Record<string, GpuEffect> = {
   // Remove a background colour. Distance is measured in the chroma plane (Cb, Cr), so brightness changes of the screen matter less.
@@ -271,6 +305,73 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       }
       // light is added inside the layer's own shape only
       return vec4f(min(s.rgb + sum / 24.0 * P.a.z * s.a, vec3f(s.a)), s.a);`,
+  },
+  // Time-driven movement of the whole layer (see motionAt): one shader, four kinds of motion.
+  'motion.shake': xform('motion.shake'), 'motion.pulse': xform('motion.pulse'), 'motion.sway': xform('motion.sway'), 'motion.spin': xform('motion.spin'),
+  // Soft coloured light drifting over the picture, added on top (screen), as from a leak in the camera.
+  'light.leak': {
+    params: (p, env) => { const t = (env.seconds ?? 0) * n(p.speed, 0.3), seed = Math.round(n(p.seed, 1)); return [...rgb(p.color, '#FF7A2F'), n(p.amount, 0.6), 0.5 + 0.45 * smoothNoise(seed, t), 0.5 + 0.45 * smoothNoise(seed + 1, t), 0.5 + 0.45 * smoothNoise(seed + 2, t * 0.7), env.width / env.height]; },
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      let asp = vec2f(P.b.w, 1.0);
+      let a = length((uv - vec2f(P.b.x, P.b.y)) * asp); let b = length((uv - vec2f(1.0 - P.b.y, P.b.z)) * asp);
+      let glow = exp(-a * a * 5.0) + 0.7 * exp(-b * b * 9.0);
+      let leak = vec3f(P.a.x, P.a.y, P.a.z) * clamp(glow * P.a.w, 0.0, 1.0);
+      let c = s.rgb / max(s.a, 0.0001);
+      return vec4f((vec3f(1.0) - (vec3f(1.0) - c) * (vec3f(1.0) - leak)) * s.a, s.a);`,
+  },
+  // Brief flashes of light at a steady rate. The rate is limited to three per second (flashing faster than that is a seizure risk).
+  'light.strobe': {
+    params: (p, env) => { const ph = (env.seconds ?? 0) * Math.min(3, Math.max(0, n(p.rate, 2))); const f = ph - Math.floor(ph + 1e-9); return [...rgb(p.color, '#FFFFFF'), n(p.amount, 0.6) * Math.exp(-f * 10)]; },
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      return vec4f(mix(s.rgb, vec3f(P.a.x, P.a.y, P.a.z) * s.a, P.a.w), s.a);`,
+  },
+  // Old film: the frame weaves a little, the light flickers, dust and scratches come and go, the colour fades toward brown.
+  'stylize.film': {
+    params: (p, env) => { const tick = Math.floor((env.seconds ?? 0) * 18 + 1e-6), seed = Math.round(n(p.seed, 1)), a = n(p.amount, 0.6); return [a, seed, tick, (unit32(hash32(seed * 31 + tick)) - 0.5) * 0.004 * a, 1 - 0.12 * a * unit32(hash32(seed * 57 + tick + 9)), env.width, env.height]; },
+    wgsl: `
+      let a = P.a.x; let seed = u32(P.a.y) * 104729u; let tick = u32(P.a.z);
+      let s = textureSampleLevel(src, smp, vec2f(uv.x, uv.y + P.a.w), 0.0);
+      if (s.a <= 0.0) { return s; }
+      var c = s.rgb / s.a;
+      let l = luma(c);
+      c = mix(c, vec3f(l * 1.07, l * 0.98, l * 0.82), 0.55 * a) * P.b.x;
+      // scratches: a few thin vertical lines per frame
+      let col = u32(uv.x * P.b.y);
+      let sc = step(0.9975, unit(hash(hash(col / 2u + seed) ^ hash(tick / 3u + 5u))));
+      // dust: sparse dark specks in cells
+      let cell = vec2u(u32(uv.x * P.b.y / 6.0), u32(uv.y * P.b.z / 6.0));
+      let du = step(0.9985, unit(hash(hash(cell.x + cell.y * 8191u + seed) ^ hash(tick + 77u))));
+      c = c * (1.0 - 0.6 * a * du) + vec3f(0.35 * a * sc);
+      return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)) * s.a, s.a);`,
+  },
+  // The colour channels jump apart in a direction that changes several times a second.
+  'digital.rgb-shake': {
+    params: (p, env) => { const tick = Math.floor((env.seconds ?? 0) * n(p.speed, 14) + 1e-6), seed = Math.round(n(p.seed, 1)); const ang = unit32(hash32(seed * 131 + tick)) * 2 * Math.PI, k = n(p.amount, 0.01) * unit32(hash32(seed * 977 + tick + 3)); return [(Math.cos(ang) * k * env.height) / env.width, Math.sin(ang) * k]; },
+    wgsl: `
+      let o = vec2f(P.a.x, P.a.y);
+      let r = textureSampleLevel(src, smp, uv + o, 0.0);
+      let g = textureSampleLevel(src, smp, uv, 0.0);
+      let b = textureSampleLevel(src, smp, uv - o, 0.0);
+      return vec4f(r.r, g.g, b.b, max(g.a, max(r.a, b.a)));`,
+  },
+  // Star-shaped glints: bright spots send short streaks sideways and up and down.
+  'light.sparkle': {
+    params: (p, env) => [n(p.threshold, 0.8), n(p.length, 0.04), n(p.amount, 1), env.height / env.width],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      var sum = vec3f(0.0);
+      for (var i = 1; i <= 10; i++) {
+        let t = f32(i) / 10.0; let w = 1.0 - t;
+        let h = vec2f(t * P.a.y * P.a.w, 0.0); let v = vec2f(0.0, t * P.a.y);
+        for (var k = 0; k < 4; k++) {
+          var o = h; if (k == 1) { o = -h; } else if (k == 2) { o = v; } else if (k == 3) { o = -v; }
+          let q = textureSampleLevel(src, smp, uv + o, 0.0);
+          sum += q.rgb * smoothstep(P.a.x, min(P.a.x + 0.15, 1.0), luma(q.rgb)) * w;
+        }
+      }
+      return vec4f(min(s.rgb + sum / 10.0 * P.a.z * s.a, vec3f(s.a)), s.a);`,
   },
 };
 export const isGpuEffect = (type: string) => type in GPU_EFFECTS;

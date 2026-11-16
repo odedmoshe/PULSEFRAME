@@ -415,6 +415,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         {/* Motion shows position, size, keyframes, speed and entrances; Color shows effects, blend, mask and transition; the others show all of it. */}
         {clipFocus === 'color' && <Scopes />}
         {clipFocus !== 'all' && <p className="muted" data-testid="clip-focus-note">{t(clipFocus === 'motion' ? 'workspace.motion.note' : 'workspace.color.note')}</p>}
+        {sel && <p><button className="ghost danger" data-testid="clip-delete" onClick={() => run(editor, 'edit.delete')}>🗑 {t('clip.delete')} <kbd>Del</kbd></button></p>}
         {!sel ? <p className="muted">{t('inspector.none')}</p> : clipFocus !== 'color' && <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
         {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} />}
         {clipFocus !== 'motion' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} />}

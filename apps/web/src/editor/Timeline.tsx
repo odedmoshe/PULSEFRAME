@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { toSourceSpan, clipEnd, timelineMarkers, MARKER_COLORS, type Clip, type Marker, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
@@ -7,6 +7,7 @@ import { ClipVisuals } from '../ClipVisuals.tsx';
 import { VolumeLine } from './VolumeLine.tsx';
 import { ASSET_DRAG_TYPE, useEditorState } from './store.ts';
 import { useTimelineDrag } from './TimelineDrag.tsx';
+import { COMMANDS, chordLabel } from './commands.ts';
 import { useMarquee } from './TimelineMarquee.tsx';
 import { InlineRename } from './InlineRename.tsx';
 
@@ -62,6 +63,7 @@ export function Timeline() {
   const here = userMarkers.find((m) => T.frameIndexAt(m.time, rate) === editor.frame);
   const totalSeconds = Math.max(T.toSeconds(editor.duration) + 2, lastMarkerS + 2, 8);
   const tickEvery = pps >= 60 ? 1 : pps >= 25 ? 2 : 5;
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   return (
     <section className="timeline" dir="ltr" aria-label={t('timeline')}>
       <label className="tl-snap">
@@ -74,6 +76,8 @@ export function Timeline() {
           <button key={k} type="button" className="ghost" disabled={!doc} data-testid={`add-track-${k}`} onClick={() => void editor.commit([{ op: 'add_track', args: { kind: k } }], 'Add track')}>{t(`track.${k}` as Key)}</button>
         ))}
       </span>
+      <EditBar />
+      {menu && <ClipMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
       {here && <MarkerBar marker={here} />}
       <div className="tl-scroll" {...containerProps}>
         <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}
@@ -142,6 +146,7 @@ export function Timeline() {
                   <Fragment key={c.id}>
                   <button role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-ramp={c.type === 'media' && c.speedEnd ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
                     style={{ left: T.toSeconds(c.start) * pps, width }} onClick={(e) => editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace')} aria-pressed={selection.includes(c.id)}
+                    onContextMenu={(e) => { e.preventDefault(); if (!selection.includes(c.id)) editor.select(c.id); setMenu({ x: e.clientX, y: e.clientY }); }}
                     aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                       <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={34} refreshKey={derivativeTick} reverse={c.type === 'media' && !!c.reverse} />
@@ -167,5 +172,59 @@ export function Timeline() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The everyday clip actions, always in view above the tracks: each is the same command the keyboard runs, with its key shown. */
+const BAR_COMMANDS = ['edit.split', 'edit.delete', 'edit.duplicate', 'edit.copy', 'edit.paste'] as const;
+const BAR_ICONS: Record<string, string> = { 'edit.split': '✂', 'edit.delete': '🗑', 'edit.duplicate': '⧉', 'edit.copy': '⎘', 'edit.paste': '📋', 'edit.cut': '✄' };
+function EditBar() {
+  const { editor, state, t } = useEditorState();
+  void state.selection; void state.tick; // re-render when the selection or the playhead changes: the buttons' availability depends on both
+  return (
+    <span className="tl-edit" role="toolbar" aria-label={t('timeline.actions')} data-testid="timeline-actions">
+      {BAR_COMMANDS.map((id) => {
+        const c = COMMANDS.find((x) => x.id === id)!;
+        const on = !!state.doc && (!c.enabled || c.enabled(editor));
+        return (
+          <button key={id} type="button" className={`ghost${id === 'edit.delete' ? ' danger' : ''}`} disabled={!on} data-testid={`bar-${id.slice(5)}`}
+            title={`${t(c.label as Key)}${c.keys[0] ? ` (${chordLabel(c.keys[0])})` : ''}`} onClick={() => void c.run(editor)}>
+            <span aria-hidden="true">{BAR_ICONS[id]}</span> {t(`bar.${id.slice(5)}` as Key)}
+          </button>
+        );
+      })}
+      {!state.selection.length && <span className="muted tl-edit-hint">{t('timeline.actions.hint')}</span>}
+    </span>
+  );
+}
+/** Right-click menu of a clip: the same commands, where the pointer is. Escape or a click elsewhere closes it. */
+function ClipMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void }) {
+  const { editor, t } = useEditorState();
+  const items = ['edit.split', 'edit.duplicate', 'edit.copy', 'edit.cut', 'edit.delete'];
+  const box = useRef<HTMLDivElement>(null);
+  // the keyboard focus goes to the first action that can be used (the first one may be unavailable)
+  useEffect(() => { box.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); }, []);
+  return (
+    <>
+      <div className="clip-menu-veil" onPointerDown={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
+      <div ref={box} className="clip-menu" role="menu" aria-label={t('timeline.actions')} data-testid="clip-menu" dir={editor.getState().lang === 'he' ? 'rtl' : 'ltr'} style={{ left: Math.min(x, window.innerWidth - 220), top: Math.min(y, window.innerHeight - 230) }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+          e.preventDefault();
+          const all = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+          all[(all.indexOf(document.activeElement as HTMLButtonElement) + (e.key === 'ArrowDown' ? 1 : all.length - 1)) % all.length]?.focus();
+        }}>
+        {items.map((id) => {
+          const c = COMMANDS.find((k) => k.id === id)!;
+          return (
+            <button key={id} type="button" role="menuitem" className={id === 'edit.delete' ? 'danger' : ''} disabled={!!c.enabled && !c.enabled(editor)} data-testid={`menu-${id.slice(5)}`}
+              onClick={() => { onClose(); void c.run(editor); }}>
+              <span aria-hidden="true">{BAR_ICONS[id]}</span> <span>{t(`bar.${id.slice(5)}` as Key)}</span>{c.keys[0] && <kbd>{chordLabel(c.keys[0])}</kbd>}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }

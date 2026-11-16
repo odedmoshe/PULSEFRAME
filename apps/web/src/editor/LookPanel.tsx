@@ -6,7 +6,7 @@ import { useEditorState } from './store.ts';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
-const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'distort'] as const;
+const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'distort', 'motion'] as const;
 const CATALOG = describeCatalog();
 const schemaCache = new Map<string, Record<string, Prop>>();
 function propsOf(type: string): Record<string, Prop> {

@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
+import { hash32, motionAt, unit32 } from '@pulseframe/engine';
 import { startServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -306,6 +307,66 @@ async function main() {
     check('stylize.duotone: black becomes the dark colour and white the light colour', near(px(du, 60, 320), [27, 20, 100], 2) && near(px(du, 180, 320), [255, 209, 102], 2), { black: px(du, 60, 320), white: px(du, 180, 320) });
     const sl = await onStripe('stylize.scanlines', { lines: 64, amount: 0.5 });
     check('stylize.scanlines: every other line of the 64 is darkened by the amount', px(sl, 180, 5)[0]! >= 254 && Math.abs(px(sl, 180, 15)[0]! - 127.5) <= 2 && px(sl, 180, 25)[0]! >= 254, { line0: px(sl, 180, 5)[0], line1: px(sl, 180, 15)[0], line2: px(sl, 180, 25)[0] });
+    const sp = await onStripe('light.sparkle', { threshold: 0.8, length: 0.08, amount: 2 });
+    check('light.sparkle: a streak reaches sideways from the bright stripe, fading with distance, and nothing appears far away', px(sp, 160, 320)[0]! > px(sp, 140, 320)[0]! && px(sp, 140, 320)[0]! > 0 && px(sp, 60, 320)[0]! <= 1 && px(sp, 180, 320)[0]! >= 254, { near: px(sp, 160, 320)[0], farther: px(sp, 140, 320)[0], far: px(sp, 60, 320)[0] });
+
+    // ---------- movement and light that depend on time ----------
+    // The motion effects are a transform computed in JavaScript (motionAt) and applied by one shader: the still must agree with those numbers.
+    const xf = (m: { scale: number; rotation: number; dx: number; dy: number }) => (u: number, v: number): [number, number] => {
+      const dx = (u - 0.5) * asp - m.dx, dy = v - 0.5 - m.dy;
+      const rx = (dx * Math.cos(m.rotation) + dy * Math.sin(m.rotation)) / m.scale, ry = (-dx * Math.sin(m.rotation) + dy * Math.cos(m.rotation)) / m.scale;
+      const fold2 = (z: number) => 1 - Math.abs((((z * 0.5 + 0.5) % 1) + 1) % 1 * 2 - 1);
+      return [fold2(0.5 + rx / asp), fold2(0.5 + ry)];
+    };
+    const motions: [string, Record<string, unknown>][] = [['motion.shake', { amount: 0.03, speed: 8, seed: 4 }], ['motion.pulse', { amount: 0.2, bpm: 120, offset: 0, decay: 6 }], ['motion.sway', { amount: 0.1, speed: 0.5 }], ['motion.spin', { rate: 90, zoom: 1.2 }]];
+    const motionRows: unknown[] = [];
+    let motionOk = true;
+    for (const [type, params] of motions) {
+      fx = await withEffect(type, params, 7); // frame 7 = 7/30 s
+      const m = motionAt(type, params, 7 / 30);
+      const w7 = worst(fx.img, xf(m));
+      const later = await still(ramp.pid, 19), again = await still(ramp.pid, 7); // 19/30 s is at another point of the beat and of every cycle here
+      const ok = w7.worstPixels < 3 && maxDiff(fx.img, again) === 0 && maxDiff(fx.img, later) > 2;
+      motionOk &&= ok;
+      motionRows.push({ type, at: { scale: Number(m.scale.toFixed(3)), rotation: Number(m.rotation.toFixed(3)), dx: Number(m.dx.toFixed(4)), dy: Number(m.dy.toFixed(4)) }, ...w7, ok });
+      await fx.remove();
+    }
+    check('motion.shake, pulse, sway and spin: the still at 7/30 s matches the transform the same code computes (within 3 pixels), is identical when rendered again, and differs at another moment', motionOk, motionRows);
+    const onBeat = motionAt('motion.pulse', { amount: 0.2, bpm: 120, decay: 6 }, 0.5).scale, between = motionAt('motion.pulse', { amount: 0.2, bpm: 120, decay: 6 }, 0.95).scale;
+    check('motion.pulse is largest exactly on the beat (every half second at 120 beats per minute) and has settled before the next one', Math.abs(onBeat - 1.2) < 1e-6 && between < 1.02, { onBeat, justBeforeNext: Number(between.toFixed(4)) });
+
+    fx = await withEffect('light.leak', { amount: 0, speed: 0.3, seed: 2, color: '#FF7A2F' });
+    const leak0 = fx.img;
+    await tx(ramp.pid, [{ op: 'update_effect', args: { clipId: ramp.clipId, effectId: fx.id, params: { amount: 1 } } }]);
+    const leakA = await still(ramp.pid, 0), leakB = await still(ramp.pid, 60);
+    let darker = 0;
+    for (let i = 0; i < leakA.length; i++) if (leakA[i]! < plainRamp[i]! - 1) darker++;
+    check('light.leak: nothing at amount 0; otherwise it only ever adds light, and the light has moved two seconds later', maxDiff(leak0, plainRamp) <= 1 && darker === 0 && meanDiff(leakA, plainRamp) > 2 && meanDiff(leakA, leakB) > 0.5, { added: meanDiff(leakA, plainRamp), moved: meanDiff(leakA, leakB), darkerPixels: darker });
+    await fx.remove();
+
+    fx = await withEffect('light.strobe', { rate: 2, amount: 0.8, color: '#FFFFFF' }, 0);
+    const flashOn = fx.img, flashOff = await still(ramp.pid, 12); // 0.4 s into a 0.5 s cycle
+    const tooFast = await call(`/projects/${ramp.pid}/transactions`, { ops: [{ op: 'update_effect', args: { clipId: ramp.clipId, effectId: fx.id, params: { rate: 5 } } }] });
+    check('light.strobe: brightest at the start of each cycle and nearly gone before the next; a rate above three flashes per second is refused', meanDiff(flashOn, plainRamp) > 60 && meanDiff(flashOff, plainRamp) < 6 && tooFast.status >= 400, { atFlash: meanDiff(flashOn, plainRamp), before_next: meanDiff(flashOff, plainRamp), fivePerSecond: tooFast.status });
+    await fx.remove();
+
+    fx = await withEffect('stylize.film', { amount: 0.8, seed: 3 }, 0);
+    check('stylize.film: changes the picture, is identical for the same frame, and differs on another frame', meanDiff(fx.img, plainRamp) > 2 && maxDiff(fx.img, await still(ramp.pid, 0)) === 0 && meanDiff(fx.img, await still(ramp.pid, 15)) > 0.2, { changed: meanDiff(fx.img, plainRamp) });
+    await fx.remove();
+
+    // the split of each step is seeded: reproduce it, pick a step whose split is clearly sideways (red encodes the column), and check red moved by that much
+    const RS = { amount: 0.05, speed: 14, seed: 2 };
+    const splitAt = (frame: number) => { const tick = Math.floor((frame / 30) * RS.speed + 1e-6); const ang = unit32(hash32(RS.seed * 131 + tick)) * 2 * Math.PI, k = RS.amount * unit32(hash32(RS.seed * 977 + tick + 3)); return { x: Math.cos(ang) * k * H, y: Math.sin(ang) * k * H, tick }; };
+    const pick = [...Array(30).keys()].find((f) => Math.abs(splitAt(f).x) > 6)!;
+    const other = [...Array(30).keys()].find((f) => splitAt(f).tick !== splitAt(pick).tick && Math.abs(splitAt(f).x - splitAt(pick).x) > 3)!;
+    fx = await withEffect('digital.rgb-shake', RS, pick);
+    let greenMoved = 0, redOff = 0;
+    for (const [x, y] of grid) {
+      greenMoved = Math.max(greenMoved, Math.abs(px(fx.img, x, y)[1]! - px(plainRamp, x, y)[1]!));
+      if (x + splitAt(pick).x > 4 && x + splitAt(pick).x < W - 4) redOff = Math.max(redOff, Math.abs(from(fx.img, x, y).x - (x + splitAt(pick).x)));
+    }
+    check('digital.rgb-shake: red is taken from exactly the seeded offset (within 1.5 pixels), green stays where it is, another step has another offset, and a frame is identical when rendered again', greenMoved <= 1 && redOff < 1.5 && maxDiff(fx.img, await still(ramp.pid, other)) > 2 && maxDiff(fx.img, await still(ramp.pid, pick)) === 0, { frame: pick, sidewaysPixels: Number(splitAt(pick).x.toFixed(2)), redOff: Number(redOff.toFixed(2)), greenMoved });
+    await fx.remove();
 
     // ---------- transitions over two pictures ----------
     // Both pictures carry the column in red and the row in green; blue is 0 in the outgoing one and 255 in the incoming one,
@@ -402,7 +463,7 @@ async function main() {
     const report = {
       ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', passed: checks.length - failed.length, total: checks.length,
       machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none: the WebGPU adapter here is a software one' },
-      scope: 'Nineteen effects and the colour looks on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
+      scope: 'Twenty-eight effects, the colour looks and thirty-three transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
       measurements, checks,
     };
     fs.writeFileSync(path.join(root, 'docs/evidence/gpu-proof.json'), JSON.stringify(report, null, 2) + '\n');

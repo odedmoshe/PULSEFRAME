@@ -260,3 +260,16 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .scope-stats dd { margin: 0; font-family: var(--pf-mono); }
 .scopes .scope.vec { max-inline-size: 128px; }
 .custom-panels { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0 0 6px; padding: 4px 8px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); font-size: var(--pf-fs-sm); }
+
+/* everyday clip actions above the tracks, and the right-click menu of a clip */
+.tl-edit { display: inline-flex; align-items: center; gap: var(--pf-s-1, 6px); margin-inline-start: var(--pf-s-3, 12px); flex-wrap: wrap; }
+.tl-edit button { padding: 4px 10px; font-size: 13px; }
+.tl-edit button:disabled { opacity: .45; }
+.tl-edit-hint { font-size: 12px; margin-inline-start: 6px; }
+.clip-menu-veil { position: fixed; inset: 0; z-index: 60; }
+.clip-menu { position: fixed; z-index: 61; min-width: 200px; display: grid; gap: 2px; padding: 6px; border-radius: 10px; background: var(--pf-surface-2, #1c2129); border: 1px solid var(--pf-border, #2e3440); box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+.clip-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.clip-menu button:hover:not(:disabled), .clip-menu button:focus-visible { background: var(--pf-surface-3, rgba(255,255,255,.08)); outline: 2px solid var(--pf-accent); outline-offset: -2px; }
+.clip-menu button:disabled { opacity: .45; cursor: default; }
+.clip-menu button.danger { color: var(--pf-danger, #ff6b6b); }
+.clip-menu kbd { margin-inline-start: auto; font-size: 11px; opacity: .7; }

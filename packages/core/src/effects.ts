@@ -15,7 +15,7 @@ const frac = (max: number, def: number, what: string) => z.number().min(0).max(m
 export interface EffectDef<S extends z.ZodObject = z.ZodObject> {
   id: string;
   version: number;
-  category: 'color' | 'blur' | 'light' | 'stylize' | 'digital' | 'key' | 'distort';
+  category: 'color' | 'blur' | 'light' | 'stylize' | 'digital' | 'key' | 'distort' | 'motion';
   name: { he: string; en: string };
   description: string;
   params: S;
@@ -86,6 +86,24 @@ export const EFFECTS = [
     params: z.object({ position: frac(1, 0.5, 'height of the sharp band, 0 = top'), width: frac(1, 0.2, 'height of the sharp band, fraction of the frame'), amount: frac(0.1, 0.02, 'largest blur radius, fraction of frame height') }).strict() }),
   def({ id: 'light.glow', version: 1, category: 'light', name: { he: 'זוהר', en: 'Glow' }, description: 'Bright areas spill light around them. Unlike diffusion, only areas above the threshold glow. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
     params: z.object({ threshold: frac(1, 0.7, 'how bright an area must be to glow'), radius: frac(0.2, 0.03, 'reach of the glow, fraction of frame height'), amount: frac(3, 0.8, 'strength') }).strict() }),
+  def({ id: 'motion.shake', version: 1, category: 'motion', name: { he: 'רעידת מצלמה', en: 'Camera shake' }, description: 'The picture shakes as if hand-held or hit: a seeded, smooth movement, the same on every render. Slightly zoomed in so no edge shows. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true,
+    params: z.object({ amount: frac(0.2, 0.02, 'how far it moves, fraction of frame height'), speed: z.number().min(0).max(30).default(8).describe('changes of direction per second'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
+  def({ id: 'motion.pulse', version: 1, category: 'motion', name: { he: 'פעימת זום לפי קצב', en: 'Beat zoom pulse' }, description: 'The picture jumps a little larger on every beat and settles back. Set the tempo of the music in beats per minute; `offset` shifts where the beat falls. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ amount: frac(0.5, 0.08, 'how much larger on the beat'), bpm: z.number().min(20).max(300).default(120).describe('beats per minute'), offset: z.number().min(0).max(1).default(0).describe('shift of the beat, in beats'), decay: z.number().min(1).max(30).default(6).describe('how quickly it settles; larger is snappier') }).strict() }),
+  def({ id: 'motion.sway', version: 1, category: 'motion', name: { he: 'נדנוד עדין', en: 'Gentle sway' }, description: 'A slow tilt from side to side, like a hand-held camera. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ amount: frac(0.3, 0.04, 'strength'), speed: z.number().min(0).max(5).default(0.4).describe('sways per second') }).strict() }),
+  def({ id: 'motion.spin', version: 1, category: 'motion', name: { he: 'סיבוב', en: 'Spin' }, description: 'Turns the picture steadily. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ rate: z.number().min(-720).max(720).default(90).describe('degrees per second; negative turns the other way'), zoom: z.number().min(0.2).max(4).default(1).describe('size while turning') }).strict() }),
+  def({ id: 'light.leak', version: 1, category: 'light', name: { he: 'דליפת אור', en: 'Light leak' }, description: 'Soft coloured light drifts over the picture, as from a leak in an old camera. Seeded. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true,
+    params: z.object({ color: Color.default('#FF7A2F'), amount: frac(2, 0.6, 'strength'), speed: z.number().min(0).max(5).default(0.3).describe('how fast the light drifts'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
+  def({ id: 'light.strobe', version: 1, category: 'light', name: { he: 'הבזקים', en: 'Strobe' }, description: 'Brief flashes at a steady rate. The rate cannot exceed three per second: faster flashing is a seizure risk for some viewers. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ rate: z.number().min(0).max(3).default(2).describe('flashes per second (at most 3)'), amount: frac(1, 0.6, 'brightness of the flash'), color: Color.default('#FFFFFF') }).strict() }),
+  def({ id: 'stylize.film', version: 1, category: 'stylize', name: { he: 'פילם ישן', en: 'Old film' }, description: 'The frame weaves, the light flickers, dust and scratches come and go, the colour fades toward brown. Seeded; the same frame always looks the same. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true,
+    params: z.object({ amount: frac(1, 0.6, 'strength'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
+  def({ id: 'digital.rgb-shake', version: 1, category: 'digital', name: { he: 'רעידת צבעים', en: 'RGB shake' }, description: 'The colour channels jump apart in a direction that changes several times a second. Seeded. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true,
+    params: z.object({ amount: frac(0.1, 0.01, 'largest split, fraction of frame height'), speed: z.number().min(0).max(60).default(14).describe('changes per second'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
+  def({ id: 'light.sparkle', version: 1, category: 'light', name: { he: 'נצנוצים', en: 'Sparkle' }, description: 'Bright spots send out short star-shaped streaks. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ threshold: frac(1, 0.8, 'how bright a spot must be'), length: frac(0.3, 0.04, 'length of the streaks, fraction of frame height'), amount: frac(4, 1, 'strength') }).strict() }),
 ] as const;
 /** Effects that run as WebGPU passes (ADR-0008). */
 export const GPU_EFFECT_IDS: readonly string[] = (EFFECTS as readonly EffectDef[]).filter((e) => e.cost === 'gpu').map((e) => e.id);

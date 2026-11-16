@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T20:36:28.239Z",
+  "ranAt": "2026-11-16T21:00:09.808Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 0.992667,
-        "editor-en": 0.987157,
-        "palette-en": 0.990475
+        "editor-he": 1,
+        "editor-en": 1,
+        "palette-en": 1
       }
     },
     {
@@ -630,9 +630,9 @@
             "code": 12
           },
           {
-            "frame": 15,
+            "frame": 16,
             "quality": "draft",
-            "code": 15
+            "code": 16
           },
           {
             "frame": 18,

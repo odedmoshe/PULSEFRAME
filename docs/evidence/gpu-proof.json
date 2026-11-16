@@ -1,14 +1,14 @@
 {
-  "ranAt": "2026-11-16T20:33:38.377Z",
+  "ranAt": "2026-11-16T20:55:12.767Z",
   "result": "PASSED",
-  "passed": 46,
-  "total": 46,
+  "passed": 53,
+  "total": 53,
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
-  "scope": "Nineteen effects and the colour looks on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
+  "scope": "Twenty-eight effects, the colour looks and thirty-three transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
   "measurements": {
     "previewVsStill": {
       "meanDifference": 0,
@@ -438,6 +438,112 @@
         "line0": 255,
         "line1": 128,
         "line2": 255
+      }
+    },
+    {
+      "name": "light.sparkle: a streak reaches sideways from the bright stripe, fading with distance, and nothing appears far away",
+      "ok": true,
+      "detail": {
+        "near": 133,
+        "farther": 51,
+        "far": 0
+      }
+    },
+    {
+      "name": "motion.shake, pulse, sway and spin: the still at 7/30 s matches the transform the same code computes (within 3 pixels), is identical when rendered again, and differs at another moment",
+      "ok": true,
+      "detail": [
+        {
+          "type": "motion.shake",
+          "at": {
+            "scale": 1.072,
+            "rotation": 0.006,
+            "dx": -0.0172,
+            "dy": -0.0002
+          },
+          "worstPixels": 1.65,
+          "points": 48,
+          "ok": true
+        },
+        {
+          "type": "motion.pulse",
+          "at": {
+            "scale": 1.012,
+            "rotation": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          "worstPixels": 1.33,
+          "points": 48,
+          "ok": true
+        },
+        {
+          "type": "motion.sway",
+          "at": {
+            "scale": 1.12,
+            "rotation": 0.033,
+            "dx": 0.0179,
+            "dy": 0
+          },
+          "worstPixels": 1.54,
+          "points": 48,
+          "ok": true
+        },
+        {
+          "type": "motion.spin",
+          "at": {
+            "scale": 1.2,
+            "rotation": 0.367,
+            "dx": 0,
+            "dy": 0
+          },
+          "worstPixels": 1.57,
+          "points": 47,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "motion.pulse is largest exactly on the beat (every half second at 120 beats per minute) and has settled before the next one",
+      "ok": true,
+      "detail": {
+        "onBeat": 1.2,
+        "justBeforeNext": 1.0009
+      }
+    },
+    {
+      "name": "light.leak: nothing at amount 0; otherwise it only ever adds light, and the light has moved two seconds later",
+      "ok": true,
+      "detail": {
+        "added": 48.981,
+        "moved": 9.65,
+        "darkerPixels": 0
+      }
+    },
+    {
+      "name": "light.strobe: brightest at the start of each cycle and nearly gone before the next; a rate above three flashes per second is refused",
+      "ok": true,
+      "detail": {
+        "atFlash": 102,
+        "before_next": 0,
+        "fivePerSecond": 422
+      }
+    },
+    {
+      "name": "stylize.film: changes the picture, is identical for the same frame, and differs on another frame",
+      "ok": true,
+      "detail": {
+        "changed": 20.549
+      }
+    },
+    {
+      "name": "digital.rgb-shake: red is taken from exactly the seeded offset (within 1.5 pixels), green stays where it is, another step has another offset, and a frame is identical when rendered again",
+      "ok": true,
+      "detail": {
+        "frame": 0,
+        "sidewaysPixels": 26.66,
+        "redOff": 0.73,
+        "greenMoved": 0
       }
     },
     {

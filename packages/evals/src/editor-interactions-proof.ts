@@ -536,6 +536,37 @@ async function main() {
     const imported = (await call(`/projects/${newId}`)).body.project;
     check('download the project archive in the editor, import it back, and the editor opens a new project with the same content', newId !== pid && /\.pulseframe\.tar$/.test(download.suggestedFilename()) && JSON.stringify({ ...imported, id: before.id }) === JSON.stringify(before), { file: download.suggestedFilename(), bytes: fs.statSync(arcFile).size });
     check('no uncaught errors in the page during these interactions', errors.length === 0, errors.slice(0, 4));
+    console.log('\n# removing a clip: action bar, right-click menu, clip panel');
+    {
+      const dp = (await call('/projects', { name: 'delete', width: 640, height: 360 })).body.project.id as string;
+      const da = await upload(dp, picFile);
+      const mk = async (frame: number) => (await call(`/projects/${dp}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: da.assetId ?? da, start: T.frameTime(frame, { num: 30, den: 1 }), duration: T.frameTime(30, { num: 30, den: 1 }) } }] })).body.results[0].output.clipId as string;
+      const c1 = await mk(0), c2 = await mk(40), c3 = await mk(80);
+      const page3 = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+      await page3.goto(`${s.ownerUrl}&project=${dp}`);
+      const has = async (id: string) => (await page3.locator(`.clip[data-clip-id="${id}"]`).count()) === 1;
+      await page3.locator(`.clip[data-clip-id="${c1}"]`).waitFor();
+      const idle = await page3.getByTestId('bar-delete').isDisabled();
+      await page3.locator(`.clip[data-clip-id="${c1}"]`).click();
+      const armed = await page3.getByTestId('bar-delete').isEnabled();
+      await page3.getByTestId('bar-delete').click();
+      await page3.locator(`.clip[data-clip-id="${c1}"]`).waitFor({ state: 'detached' });
+      await page3.locator(`.clip[data-clip-id="${c2}"]`).click({ button: 'right' });
+      await page3.getByTestId('clip-menu').waitFor();
+      const focused = await page3.evaluate(() => document.activeElement?.getAttribute('data-testid'));
+      await page3.getByTestId('menu-delete').click();
+      await page3.locator(`.clip[data-clip-id="${c2}"]`).waitFor({ state: 'detached' });
+      const menuClosed = (await page3.getByTestId('clip-menu').count()) === 0;
+      await page3.locator(`.clip[data-clip-id="${c3}"]`).click();
+      await page3.getByTestId('inspector-tab-clip').click();
+      await page3.getByTestId('clip-delete').click();
+      await page3.locator(`.clip[data-clip-id="${c3}"]`).waitFor({ state: 'detached' });
+      await page3.getByTestId('undo').click();
+      await page3.locator(`.clip[data-clip-id="${c3}"]`).waitFor();
+      check('a clip is removed from the timeline in one step three ways: the action bar above the tracks (disabled until a clip is selected), the right-click menu (opens with the keyboard focus inside and closes after use), and a button in the clip panel; undo brings it back', idle && armed && !(await has(c1)) && !(await has(c2)) && (await has(c3)) && menuClosed && !!focused?.startsWith('menu-'), { idle, armed, focused, menuClosed });
+      await page3.close();
+    }
+
     await page.close();
   } catch (e) {
     console.error(e);
