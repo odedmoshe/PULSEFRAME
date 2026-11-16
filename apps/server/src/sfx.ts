@@ -133,6 +133,25 @@ export const SFX: readonly SfxDef[] = [...ORIGINAL_SFX, ...NEW_SFX];
 /** ffmpeg arguments used by makeSfx (exported so tests render exactly what production renders). */
 export const sfxFfmpegArgs = (graph: string, out: string): string[] => ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-f', 'lavfi', '-i', graph, '-ac', '2', '-ar', '48000', '-c:a', 'pcm_s16le', '-bitexact', '-fflags', '+bitexact', out];
 
+/** Rendered bytes of one effect for listening before adding it. Held in memory for the few most recent ones; nothing is stored. */
+const previews = new Map<string, Buffer>();
+export async function sfxPreview(tmpDir: string, id: string): Promise<Buffer> {
+  const def = SFX.find((s) => s.id === id);
+  if (!def) throw new ApiError(404, 'not_found', `sound effect "${id}" does not exist`, { available: SFX.map((s) => s.id) }, 'Call list_catalog.');
+  const hit = previews.get(id);
+  if (hit) return hit;
+  const tmp = path.join(tmpDir, `sfxp_${randomBytes(6).toString('hex')}.wav`);
+  try {
+    await exec('ffmpeg', sfxFfmpegArgs(def.graph, tmp), { timeout: 30_000 });
+    const bytes = fs.readFileSync(tmp);
+    previews.set(id, bytes);
+    if (previews.size > 24) previews.delete(previews.keys().next().value!);
+    return bytes;
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+}
+
 /** Synthesise one effect and return it as an asset (blob stored, not yet attached to a project). */
 export async function makeSfx(store: Store, id: string, actor: string): Promise<Omit<Asset, 'id'>> {
   const def = SFX.find((s) => s.id === id);

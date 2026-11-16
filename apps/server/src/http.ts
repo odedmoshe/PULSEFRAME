@@ -19,7 +19,7 @@ import type { Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
-import { makeSfx, SFX } from './sfx.ts';
+import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
@@ -435,6 +435,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(p, projectId, 'edit');
     return c.json(await addSfx(store, gov, p, projectId, await body(c, SfxBody)), 201);
   });
+  // Listening to a built-in sound before adding it: the same bytes that adding it would store.
+  app.get('/api/v1/sfx/:sfxId/audio', async (c) => {
+    need(c, 'observe');
+    const bytes = await sfxPreview(store.tmpDir, c.req.param('sfxId'));
+    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600' });
+  });
   app.get('/api/v1/projects/:id/assets/:assetId/content', (c) => {
     need(c, 'observe');
     const a = store.getProject(c.req.param('id')).doc.assets[c.req.param('assetId')];
@@ -664,7 +670,7 @@ export const catalog = () => ({
   textPresets: TEXT_PRESETS.map((p) => ({ id: p.id, name: p.name, style: p.style, shadow: p.shadow, note: 'Apply with apply_text_preset. Written from descriptions, not judged on a video.' })),
   recipes: describeRecipes(),
   formatProfiles: FORMAT_PROFILES.map((p) => ({ ...p, note: 'Generic safe-area guide, editable per variant; not a platform specification.' })),
-  soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, source: 'synthesised by formula in this build; no third-party content' })),
+  soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, category: s.category, source: 'synthesised by formula in this build; no third-party content' })),
   fonts: FONT_CATALOG,
   note: 'This is the complete list for this build; anything not listed here does not exist. All entries render through the same Canvas2D compositor in preview and export.',
 });
