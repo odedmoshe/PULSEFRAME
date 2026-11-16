@@ -85,9 +85,14 @@ async function main() {
 
     // ---------- speech ----------
     if (speech.transcription.ready) {
-      for (const r of perFile.filter((x) => x.assetId && x.source.audio)) {
-        const j = await waitJob((await call(`/projects/${pid}/assets/${r.assetId}/transcribe`, { language: 'he' })).body.jobId);
-        r.speech = j.status === 'succeeded' ? { attached: j.output.attached, phrases: j.output.phrases, words: j.output.words, lowConfidenceWords: j.output.lowConfidenceWords, adjustedTimes: j.output.adjustedTimes, language: j.output.run.language, languageProbability: j.output.run.languageProbability, speechSeconds: j.output.run.speechSeconds, wallSeconds: Number(j.output.run.wallSeconds.toFixed(1)) } : { status: j.status, error: j.error };
+      // one request for the whole project, as the editor's "recognise every file" button does
+      const all = await call(`/projects/${pid}/transcribe`, { language: 'he' });
+      const again = await call(`/projects/${pid}/transcribe`, { language: 'he' });
+      check('One request starts a recognition job for every file with sound; asking again does not queue them twice', all.status === 202 && all.body.jobs.length === perFile.filter((x) => x.assetId && x.source.audio).length && again.body.jobs.length === 0, { jobs: all.body.jobs?.length, secondRequest: again.body.jobs?.length, alreadyQueued: again.body.alreadyQueued });
+      for (const { assetId, jobId } of all.body.jobs as { assetId: string; jobId: string }[]) {
+        const r = perFile.find((x) => x.assetId === assetId)!;
+        const j = await waitJob(jobId);
+        r.speech = j.status === 'succeeded' ? { attached: j.output.attached, phrases: j.output.phrases, words: j.output.words, lowConfidenceWords: j.output.lowConfidenceWords, adjustedTimes: j.output.adjustedTimes, degeneratePhrases: j.output.degeneratePhrases, language: j.output.run.language, languageProbability: j.output.run.languageProbability, speechSeconds: j.output.run.speechSeconds, wallSeconds: Number(j.output.run.wallSeconds.toFixed(1)) } : { status: j.status, error: j.error };
         if (showText && j.output?.attached) console.log(`       file ${r.file}: ${(await call(`/projects/${pid}`)).body.project.transcripts[r.assetId].segments.map((x: any) => x.text).join(' ')}`);
       }
       check('Speech recognition jobs finished on every file with sound', perFile.filter((r) => r.source.audio).every((r) => r.speech && r.speech.attached !== undefined), perFile.map((r) => ({ file: r.file, ...r.speech })));

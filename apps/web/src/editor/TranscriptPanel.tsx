@@ -189,7 +189,7 @@ export function TranscriptPanel() {
               const i = flat.findIndex((x) => x.w.id === w.id);
               const selected = lo >= 0 && i >= lo && i <= hi;
               return (
-                <button key={w.id} type="button" className={`word${onTimeline ? '' : ' cut'}${now ? ' now' : ''}${selected ? ' sel' : ''}`} data-testid="transcript-word" data-word-id={w.id}
+                <button key={w.id} type="button" className={`word${onTimeline ? '' : ' cut'}${now ? ' now' : ''}${selected ? ' sel' : ''}${w.confidence !== null && w.confidence < 0.5 ? ' unsure' : ''}`} data-testid="transcript-word" data-word-id={w.id} title={w.confidence !== null && w.confidence < 0.5 ? t('asr.unsure') : undefined}
                   aria-pressed={selected} aria-current={now ? 'true' : undefined} onClick={(e) => clickWord(w.id, w.start, e.shiftKey)}>{w.text}</button>
               );
             }} />
@@ -232,6 +232,26 @@ function Phrase({ seg, editing, onEdit, onSave, renderWord, formatName, formatTe
         </>
       )}
     </li>
+  );
+}
+
+/** One button for the common case: recognise every file with sound that has no transcript yet. The transcripts arrive as normal project changes. */
+export function TranscribeAll() {
+  const { editor, state, t } = useEditorState();
+  const [status, setStatus] = useState<SpeechStatus | null>(null);
+  const [started, setStarted] = useState<number | null>(null);
+  // only once a project is open: before that the owner session may not exist yet
+  const docId = state.doc?.id;
+  useEffect(() => { if (docId) api.speech().then(setStatus).catch(() => setStatus(null)); }, [docId]);
+  const doc = state.doc;
+  if (!doc || !status?.transcription.ready) return null;
+  const waiting = Object.values(doc.assets).filter((a) => a.audio && !doc.transcripts[a.id] && a.provenance?.origin !== 'generated').length;
+  if (waiting < 2 && started === null) return null;
+  return (
+    <p className="asr-all" data-testid="asr-all" data-waiting={waiting}>
+      {waiting > 0 && <button className="ghost" onClick={() => void api.transcribeAll(doc.id, 'he').then((r) => setStarted(r.jobs.length)).catch(editor.fail)} data-testid="asr-all-run">{t('asr.all')} (<bdi>{waiting}</bdi>)</button>}
+      {started !== null && <span className="muted" role="status" data-testid="asr-all-note"> {t('asr.all.started')} <bdi>{started}</bdi></span>}
+    </p>
   );
 }
 

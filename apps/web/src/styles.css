@@ -99,6 +99,8 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .word.sel { background: var(--pf-accent-3, #7c6cf0); color: #fff; }
 .word.now { box-shadow: inset 0 -2px 0 var(--pf-accent); }
 .word.cut { text-decoration: line-through; opacity: .5; }
+.word.unsure { text-decoration: underline dotted; text-underline-offset: 3px; }
+.word.unsure.cut { text-decoration: line-through underline dotted; }
 .badge { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--pf-warn); color: var(--pf-warn); align-self: center; }
 .small { padding: 2px 8px; }
 .danger { color: var(--pf-danger, #ff6b6b); }

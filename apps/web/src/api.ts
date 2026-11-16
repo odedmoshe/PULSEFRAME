@@ -112,6 +112,7 @@ export const api = {
   speech: () => call<SpeechStatus>('/speech'),
   downloadSpeechModel: (id: string, modelId: string, confirmBytes: number) => call<{ jobId: string }>(`/projects/${id}/speech/models/${encodeURIComponent(modelId)}/download`, json({ confirmBytes })),
   transcribe: (id: string, assetId: string, body: { language: string; overwrite?: boolean; mode?: 'recognise' | 'align' }) => call<{ jobId: string }>(`/projects/${id}/assets/${assetId}/transcribe`, json(body)),
+  transcribeAll: (id: string, language: string) => call<{ jobs: { assetId: string; jobId: string }[]; alreadyQueued: number }>(`/projects/${id}/transcribe`, json({ language })),
   narrate: (id: string, body: { text: string; language: string; start?: unknown; referenceAssetId?: string; consent?: { speaker: string; confirmed: true } }) => call<{ jobId: string }>(`/projects/${id}/narration`, json(body)),
   narrateScript: (id: string, body: { text: string; language: string; start: unknown; referenceAssetId?: string; consent?: { speaker: string; confirmed: true } }) => call<{ sentences: string[]; jobs: { jobId: string }[] }>(`/projects/${id}/narration/script`, json(body)),
   cancelJob: (jobId: string) => call<{ status: string; outcome: string }>(`/jobs/${jobId}/cancel`, json({})),

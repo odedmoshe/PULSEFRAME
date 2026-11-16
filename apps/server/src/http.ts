@@ -548,6 +548,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const job = await speech.startNarration(gov, p, c.req.param('id'), await body(c, NarrationBody));
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
+  app.post('/api/v1/projects/:id/transcribe', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, z.object({ language: TranscribeBody.shape.language }).strict());
+    const r = await speech.startTranscriptionAll(gov, p, c.req.param('id'), b);
+    return c.json({ jobs: r.jobs.map((j) => ({ assetId: j.assetId, jobId: j.job.id, status: j.job.status, type: j.job.type })), alreadyQueued: r.skipped }, 202);
+  });
   app.post('/api/v1/projects/:id/narration/script', async (c) => {
     const p = need(c, 'edit');
     const r = await speech.startNarrationScript(gov, p, c.req.param('id'), await body(c, NarrationScriptBody));

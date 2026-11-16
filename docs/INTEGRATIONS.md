@@ -92,7 +92,7 @@ Without it everything else works; the Speech tab says recognition is not install
 python3 -m venv .artifacts/speech/venv && .artifacts/speech/venv/bin/pip install faster-whisper==1.2.1
 PF_SPEECH_PYTHON=.artifacts/speech/venv/bin/python pnpm start
 ```
-On Windows the interpreter is `.artifacts\speech\venv\Scripts\python.exe`. Settings: `PF_SPEECH_PYTHON` (interpreter; unset = not configured), `PF_SPEECH_MODELS_DIR` (default `<data dir>/speech-models`), `PF_SPEECH_DEVICE` (`auto` | `cpu` | `cuda`; auto uses a CUDA device when CTranslate2 sees one).
+On Windows the interpreter is `.artifacts\speech\venv\Scripts\python.exe`. Relative paths in `PF_SPEECH_PYTHON`, `PF_VOICE_PYTHON` and `PF_SPEECH_MODELS_DIR` are taken from the repository root. Settings: `PF_SPEECH_PYTHON` (interpreter; unset = not configured), `PF_SPEECH_MODELS_DIR` (default `<data dir>/speech-models`), `PF_SPEECH_DEVICE` (`auto` | `cpu` | `cuda`; auto uses a CUDA device when CTranslate2 sees one).
 GPU use needs the NVIDIA cuBLAS and cuDNN libraries that CTranslate2 expects; **not tried** (no GPU here), so the steps for the owner's RTX 3050 laptop are unverified.
 
 **Model.** One reviewed model: `asr.ivrit-turbo` = `ivrit-ai/whisper-large-v3-turbo-ct2@72ad623a`, five files, 1,621,665,181 bytes, each pinned by size and SHA-256 in `speech.ts`; Apache-2.0 by its model card (metadata-level check; training-data terms not reviewed). Fine-tuned for Hebrew; other languages unchecked.

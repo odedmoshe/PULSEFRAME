@@ -17,7 +17,7 @@ import { AccessPanel } from './AccessPanel.tsx';
 import { SourceViewer } from './SourceViewer.tsx';
 import { InlineRename } from './InlineRename.tsx';
 import { ActivityDialog } from './ActivityDialog.tsx';
-import { CaptionControls, FillerPanel, SilencePanel, TranscriptPanel } from './TranscriptPanel.tsx';
+import { CaptionControls, FillerPanel, SilencePanel, TranscribeAll, TranscriptPanel } from './TranscriptPanel.tsx';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
 const hint = (keymap: Keymap, id: string) => { const k = keymap.keysFor(id)[0]; return k ? <kbd>{chordLabel(k)}</kbd> : null; };
@@ -422,6 +422,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       </div>
       <div {...panelProps('speech')}>
         <h2>{t('transcript')}</h2>
+        <TranscribeAll />
         <TranscriptPanel />
         <FillerSection />
         <h2>{t('silence')}</h2>

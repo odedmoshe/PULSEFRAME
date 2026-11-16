@@ -161,7 +161,8 @@ function Narration() {
   const [job, setJob] = useState<{ id: string; kind: 'voice' | 'download'; stage: string | null; all?: string[]; done?: number } | null>(null);
   const [note, setNote] = useState<{ kind: 'done' | 'failed'; detail?: string } | null>(null);
   const refresh = () => api.speech().then(setStatus).catch(() => setStatus(null));
-  useEffect(() => { void refresh(); }, []);
+  const docId = state.doc?.id;
+  useEffect(() => { if (docId) void refresh(); }, [docId]);
   useEffect(() => {
     if (!job) return;
     let live = true, timer = 0;

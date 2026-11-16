@@ -339,6 +339,21 @@ export class Speech {
     this.enqueue(job.id);
     return this.store.getJob(job.id);
   }
+  /** Recognise every media file of the project that has sound and no transcript yet (generated sounds and narration are left out). */
+  async startTranscriptionAll(gov: Governance, principal: Principal, projectId: string, a: { language?: string }): Promise<{ jobs: { assetId: string; job: JobRow }[]; skipped: number }> {
+    gov.assertMayAct(principal, projectId, 'edit');
+    gov.assertUnrestricted(principal, 'attach a transcript');
+    const p = this.store.getProject(projectId);
+    const todo = Object.values(p.doc.assets).filter((x) => x.audio && !p.doc.transcripts[x.id] && x.provenance?.origin !== 'generated');
+    const st = await this.status();
+    if (!st.transcription.ready) throw new ApiError(409, 'speech_not_ready', `automatic transcription is not set up: ${st.transcription.detail}`, { reason: st.transcription.reason }, 'A typed or imported (SRT/VTT) transcript works without it.');
+    const model = st.models.find((m) => m.kind === 'asr' && m.ready)!;
+    // files already waiting or being recognised are not queued twice
+    const busy = new Set([...this.store.openJobs(TRANSCRIBE)].filter((j) => j.projectId === projectId).map((j) => j.input.assetId as string));
+    const jobs = todo.filter((x) => !busy.has(x.id)).slice(0, 100).map((x) => ({ assetId: x.id, job: this.store.createJob(projectId, TRANSCRIBE, principal.actor, { assetId: x.id, language: a.language ?? 'he', modelId: model.id, projectRevision: p.revision }) }));
+    for (const j of jobs) this.enqueue(j.job.id);
+    return { jobs, skipped: todo.length - jobs.length };
+  }
   /** One recognition at a time: each uses every core (or the whole GPU). */
   private enqueue(jobId: string) {
     this.chain = this.chain.then(() => (this.store.getJob(jobId).type === NARRATE ? this.narrate(jobId) : this.run(jobId))).catch((e) => console.error(e));
