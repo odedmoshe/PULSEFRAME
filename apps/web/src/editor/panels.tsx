@@ -13,6 +13,7 @@ import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
+import { AiTools } from './AiTools.tsx';
 import { SpeedCurveField } from './SpeedCurves.tsx';
 import { PacingPanel } from './PacingPanel.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
@@ -121,32 +122,8 @@ export function Library() {
       <h2>{t('text')}</h2>
       <button className="ghost" disabled={!doc} onClick={() => void editor.addText()} data-testid="add-text">{t('text.add')}</button>
       <h2>{t('providers')}</h2>
-      <ProviderPanel />
+      <AiTools />
     </aside>
-  );
-}
-
-function ProviderPanel() {
-  const { editor, state, t } = useEditorState();
-  const { provider, capJob: job } = state;
-  if (!provider) return null;
-  const pr = provider.provider;
-  if (!pr.configured) return <p className="muted" data-testid="provider-status" data-state="not-configured">{t('providers.notConfigured')}</p>;
-  if (!pr.readiness?.reachable) return <p className="muted" data-testid="provider-status" data-state="unreachable">{t('providers.unreachable')}</p>;
-  const smoke = provider.capabilities.find((c) => c.id === 'comfy.smoke.solid-image');
-  const busy = job && ['queued', 'running', 'cancel-requested'].includes(job.status);
-  return (
-    <div className="fields">
-      <p className="muted" data-testid="provider-status" data-state="ready">{t('providers.ready')} · <bdi>{pr.readiness.runtimeVersion} · {pr.readiness.device?.type}</bdi></p>
-      {smoke && <button className="ghost" disabled={!smoke.runnable || !!busy} onClick={() => editor.runCapability(smoke.id)} data-testid="provider-smoke">{busy ? `${t('providers.running')} ${job?.stage ?? ''}` : t('providers.smoke')}</button>}
-      {job?.status === 'succeeded' && (
-        <p className="muted" data-testid="provider-result" data-job={job.id}>
-          <img src={`/api/v1/jobs/${job.id}/outputs/0`} alt="" width={48} height={48} style={{ verticalAlign: 'middle', borderRadius: 4, marginInlineEnd: 8 }} />
-          {t('providers.ok')} · <bdi>{job.output?.bundle?.[0]?.width}×{job.output?.bundle?.[0]?.height}</bdi>
-        </p>
-      )}
-      {job?.status === 'failed' && <p className="muted danger" data-testid="provider-result" role="alert">{t('providers.failed')}: {job.error?.message}</p>}
-    </div>
   );
 }
 
