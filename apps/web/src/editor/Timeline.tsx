@@ -10,6 +10,7 @@ import { useTimelineDrag } from './TimelineDrag.tsx';
 import { COMMANDS, chordLabel } from './commands.ts';
 import { useMarquee } from './TimelineMarquee.tsx';
 import { InlineRename } from './InlineRename.tsx';
+import { TimelineZoom, useWheelZoom } from './TimelineZoom.tsx';
 import { BAR_ICON_COMPONENTS, IconHide, IconLock, IconMute, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
 
 const MAX_MARKERS = 3000;
@@ -44,6 +45,7 @@ export function Timeline() {
   const rate = editor.rate;
   const { containerProps, ghost } = useTimelineDrag();
   const { marqueeProps, box } = useMarquee(editor);
+  const wheelZoomRef = useWheelZoom();
   const [snapBeats, setSnapBeats] = useState(readSnapBeats);
   // A library file being dragged over the timeline: the frame and track under the pointer.
   const [dropAt, setDropAt] = useState<{ frame: number; trackId: string | null } | null>(null);
@@ -71,6 +73,7 @@ export function Timeline() {
         <input type="checkbox" checked={snapBeats} data-testid="snap-beats" onChange={(e) => { setSnapBeats(e.target.checked); writeSnapBeats(e.target.checked); }} />
         {t('snap.beats')}
       </label>
+      <TimelineZoom />
       <span className="tl-add-track" role="group" aria-label={t('track.add')}>
         <span className="muted">{t('track.add')}:</span>
         {(['video', 'audio', 'text'] as const).map((k) => (
@@ -80,7 +83,7 @@ export function Timeline() {
       <EditBar />
       {menu && <ClipMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
       {here && <MarkerBar marker={here} />}
-      <div className="tl-scroll" {...containerProps}>
+      <div className="tl-scroll" ref={wheelZoomRef} {...containerProps}>
         <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}
           onDragOver={(e) => { if (!e.dataTransfer.types.includes(ASSET_DRAG_TYPE) && !e.dataTransfer.types.includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; const at = dropPoint(e); if (!dropAt || dropAt.frame !== at.frame || dropAt.trackId !== at.trackId) setDropAt(at); }}
           onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropAt(null); }}
