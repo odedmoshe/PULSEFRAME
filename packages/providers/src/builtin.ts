@@ -203,6 +203,7 @@ export const IMAGE_UPSCALE_4X: CapabilityDescriptor = DescriptorSchema.parse({
     'Upscaling invents detail and can alter faces, text and fine patterns.',
     'The output has 16x the pixels of the input (4x per side); memory use has not been measured, and no GPU memory or speed figures exist. Model file size is not runtime memory.',
     'The output size is not contract-checked (the descriptor schema cannot express a 4x multiple).',
+    'The model file is a PyTorch .pth, not safetensors. The pinned ComfyUI reads it through its weights-only loader (comfy_extras/nodes_upscale_model.py calls load_torch_file with safe_load=True); that was read in the source, not exercised.',
   ],
   qualification: {
     schemaValid: { status: 'pass', evidence: 'DescriptorSchema + graph digest' },

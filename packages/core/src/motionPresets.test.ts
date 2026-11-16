@@ -86,7 +86,7 @@ describe('motionKeys rules', () => {
       for (const totalFrames of [2, 3, 7, 12, 30, 90, 300, 1800])
         for (const rest of RESTS)
           for (const amount of [0, 0.5, 1, 2]) checkRules(p, { totalFrames, rest, amount });
-  });
+  }, 60_000); // about 5 s alone; the suite runs many files at once
   it('holds with explicit frames, including tiny and oversize values', () => {
     for (const p of MOTION_PRESETS)
       for (const frames of [1, 2, 5, 40, 5000]) checkRules(p, { totalFrames: 37, frames, rest: RESTS[3]! });

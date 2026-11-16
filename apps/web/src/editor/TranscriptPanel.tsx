@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { decodeTextFile, type DecodedText } from '../textDecode.ts';
 import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from '@pulseframe/core';
-import { sourceAt, sourceEnd, timelineAt, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
+import { sourceAt, sourceEnd, timelineAt, CAPTION_LOOKS, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { api, type SilenceResult, type SpeechStatus } from '../api.ts';
 import { useEditorState, type Editor } from './store.ts';
@@ -404,6 +404,9 @@ export function CaptionControls({ editor }: { editor: Editor }) {
   const style = master && formatStyle ? { ...master, ...formatStyle } : master;
   const setStyle = (patch: Record<string, unknown>) => track && void editor.commit([{ op: 'set_caption_style', args: { trackId: track.id, style: patch } }], 'Caption style');
   const setScoped = (patch: Record<string, unknown>) => (variantId ? void editor.commit([{ op: 'update_variant', args: { variantId, captionStyle: patch } }], 'Caption style (format)') : setStyle(patch));
+  // the look the track currently wears, if its style still matches one exactly
+  const currentLook = master ? CAPTION_LOOKS.find((l) => Object.entries(l.style).every(([k, v]) => (master as Record<string, unknown>)[k] === v)) : undefined;
+  const hasWordTiming = Object.values(doc.transcripts).some((tr) => tr.segments.some((sg) => sg.timing === 'word'));
   const base = `/api/v1/projects/${doc.id}/captions`;
   return (
     <div className="fields" data-testid="caption-controls">
@@ -422,6 +425,15 @@ export function CaptionControls({ editor }: { editor: Editor }) {
               if (typeof id === 'string') editor.select(id);
             })()}>{t('cue.add')}</button>
           )}
+          {!variantId && (
+            <label>{t('caption.look')}
+              <select value={currentLook?.id ?? ''} data-testid="caption-look" onChange={(e) => { if (e.target.value) void editor.commit([{ op: 'apply_caption_look', args: { trackId: track.id, lookId: e.target.value } }], 'Caption look'); }}>
+                <option value="">{t('caption.look.choose')}</option>
+                {CAPTION_LOOKS.map((l) => <option key={l.id} value={l.id} title={l.hint[state.lang]}>{l.name[state.lang]}</option>)}
+              </select>
+            </label>
+          )}
+          {currentLook?.needsWordTiming && !hasWordTiming && <p className="muted" data-testid="caption-look-note">{t('caption.look.needsWords')}</p>}
           <label>{t('caption.preset')}
             <select value={style.preset} onChange={(e) => setStyle({ preset: e.target.value })} data-testid="caption-preset">
               {CAPTION_PRESETS.map((p) => <option key={p} value={p}>{t(`caption.preset.${p}` as Key)}</option>)}

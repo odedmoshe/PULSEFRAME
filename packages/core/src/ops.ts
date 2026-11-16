@@ -17,6 +17,7 @@ import { MOTION_PRESETS, motionKeys } from './motionPresets.ts';
 const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[]];
 import { lookParams } from './looks.ts';
 import { findTextPreset } from './textPresets.ts';
+import { CAPTION_LOOK_IDS, findCaptionLook } from './captionPresets.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
 import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
@@ -1909,6 +1910,21 @@ defineOp({
     const t = mustCaptionTrack(seqOf(d, a.sequenceId), a.trackId);
     t.caption!.style = { ...t.caption!.style, ...a.style };
     return { affectedIds: [t.id], summary: `Updated caption style (${t.caption!.style.preset})` };
+  },
+});
+
+defineOp({
+  name: 'apply_caption_look',
+  version: 1,
+  description: 'Give a caption track one of the ready-made caption looks (see list_catalog → captionLooks): behaviour, font, size, colours, background, outline and position in one step. Fields a look does not set (such as text direction and margin) keep their current value. A look whose behaviour follows the spoken word needs word timing to show it.',
+  args: z.object({ sequenceId: z.string().optional(), trackId: z.string(), lookId: z.enum(CAPTION_LOOK_IDS) }).strict(),
+  apply(d, a) {
+    const t = mustCaptionTrack(seqOf(d, a.sequenceId), a.trackId);
+    const look = findCaptionLook(a.lookId)!;
+    const next = { ...t.caption!.style, ...look.style };
+    if (look.style.wordEntrance === undefined) delete next.wordEntrance; // a look that says nothing about word entrances has none
+    t.caption!.style = next;
+    return { affectedIds: [t.id], summary: `Caption look ${look.id}`, output: { needsWordTiming: look.needsWordTiming } };
   },
 });
 

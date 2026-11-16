@@ -21,6 +21,8 @@ export function SfxBrowser() {
   const blobs = useRef(new Map<string, Blob>());
   const audio = useRef<{ el: HTMLAudioElement; url: string; id: string } | null>(null);
   const token = useRef(0);
+  /** The sound the listener asked for: set from the press, so a second press stops it even while it is still loading. */
+  const wanted = useRef<string | null>(null);
 
   useEffect(() => {
     if (!projectId || items) return;
@@ -31,6 +33,7 @@ export function SfxBrowser() {
 
   const stop = () => {
     token.current++;
+    wanted.current = null;
     const a = audio.current;
     audio.current = null;
     if (a) { a.el.pause(); a.el.removeAttribute('src'); URL.revokeObjectURL(a.url); }
@@ -39,8 +42,9 @@ export function SfxBrowser() {
   useEffect(() => () => stop(), []);
 
   const play = async (fx: SoundEffectInfo) => {
-    if (audio.current?.id === fx.id) return stop();
+    if (wanted.current === fx.id) return stop();
     stop();
+    wanted.current = fx.id;
     const my = token.current;
     setPlaying(fx.id); setStatus(null);
     try {

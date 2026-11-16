@@ -9,6 +9,7 @@ export * from './cleanup.ts';
 export * from './fillers.ts';
 export * from './looks.ts';
 export * from './textPresets.ts';
+export * from './captionPresets.ts';
 export * from './sentences.ts';
 export * from './align.ts';
 export * from './fonts.ts';
