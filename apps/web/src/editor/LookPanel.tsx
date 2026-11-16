@@ -3,6 +3,7 @@ import * as T from '@pulseframe/time';
 import { BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
+import { EffectGalleryButton } from './EffectGallery.tsx';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
@@ -183,6 +184,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
   return (
     <div className="look-panel" data-testid="look-panel">
       <h3>{t('look')}</h3>
+      <EffectGalleryButton clip={clip} trackKind={trackKind} />
       <div className="fields">
         <h4>{t('look.effects')}</h4>
         {effects.length === 0 ? <p className="muted">{t('look.effects.none')}</p> : (
