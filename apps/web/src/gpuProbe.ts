@@ -4,7 +4,7 @@
  * this page runs in the owner's own browser instead. Nothing is sent anywhere: the result is shown for copying.
  * The timing at the end is ONE sample of one simple workload, labelled as such; it is not a performance figure.
  */
-const out: Record<string, unknown> = { page: 'gpu.html', at: new Date().toISOString(), userAgent: navigator.userAgent, hardwareConcurrency: navigator.hardwareConcurrency, deviceMemoryGb: (navigator as { deviceMemory?: number }).deviceMemory ?? null, screen: `${screen.width}x${screen.height} @${devicePixelRatio}` };
+const out: Record<string, unknown> = { page: 'gpu.html', version: 2, at: new Date().toISOString(), userAgent: navigator.userAgent, hardwareConcurrency: navigator.hardwareConcurrency, deviceMemoryGb: (navigator as { deviceMemory?: number }).deviceMemory ?? null, screen: `${screen.width}x${screen.height} @${devicePixelRatio}` };
 const ok = async (f: () => Promise<{ supported?: boolean }>) => { try { return !!(await f()).supported; } catch { return false; } };
 
 async function webgpu() {
@@ -31,17 +31,25 @@ async function webgpu() {
       @fragment fn f(@builtin(position) p: vec4f) -> @location(0) vec4f { var c = vec3f(0); for (var k = 0; k < 16; k++) { c += 0.0625 * (0.5 + 0.5 * sin(vec3f(p.x, p.y, p.x + p.y) * 0.01 * f32(k + 1))); } return vec4f(c, 1); }` });
     const pipe = d.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'v' }, fragment: { module: mod, entryPoint: 'f', targets: [{ format }] } });
     const frame = () => { const e = d.createCommandEncoder(); const p = e.beginRenderPass({ colorAttachments: [{ view: tex.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }] }); p.setPipeline(pipe); p.draw(3); p.end(); d.queue.submit([e.finish()]); };
+    d.pushErrorScope('validation'); // anything invalid in the passes below is reported, not silently dropped
     frame(); await d.queue.onSubmittedWorkDone(); // warm-up, not timed
     const t0 = performance.now();
     for (let i = 0; i < 120; i++) frame();
     await d.queue.onSubmittedWorkDone();
     const t1 = performance.now();
-    const buf = d.createBuffer({ size: W * H * 4, usage: 0x01 /* MAP_READ */ | 0x08 /* COPY_DST */ });
-    const e = d.createCommandEncoder(); e.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: W * 4 }, [W, H]); d.queue.submit([e.finish()]);
+    // rows in a texture-to-buffer copy must be a multiple of 256 bytes
+    const stride = Math.ceil((W * 4) / 256) * 256;
+    const buf = d.createBuffer({ size: stride * H, usage: 0x01 /* MAP_READ */ | 0x08 /* COPY_DST */ });
+    d.pushErrorScope('validation');
+    const e = d.createCommandEncoder(); e.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: stride }, [W, H]); d.queue.submit([e.finish()]);
+    const copyError = await d.popErrorScope();
     await buf.mapAsync(0x01);
-    const px = new Uint8Array(buf.getMappedRange()).slice(0, 4);
+    const bytes = new Uint8Array(buf.getMappedRange());
+    const px = bytes.slice(0, 4), mid = bytes.slice(stride * (H >> 1) + (W >> 1) * 4, stride * (H >> 1) + (W >> 1) * 4 + 4);
     const t2 = performance.now();
-    res.oneTimingSample = { workload: '120 full-frame passes of a 16-step fragment shader at 1080x1920, rgba8', msPerFrame: Number(((t1 - t0) / 120).toFixed(3)), readbackOfOneFrameMs: Number((t2 - t1).toFixed(1)), firstPixel: [...px], note: 'one run, one workload: not a performance figure' };
+    const renderError = await d.popErrorScope();
+    res.validationErrors = [renderError?.message, copyError?.message].filter(Boolean);
+    res.oneTimingSample = { workload: '120 full-frame passes of a 16-step fragment shader at 1080x1920, rgba8', msPerFrame: Number(((t1 - t0) / 120).toFixed(3)), readbackOfOneFrameMs: Number((t2 - t1).toFixed(1)), firstPixel: [...px], middlePixel: [...mid], pixelsLookRendered: px[3] === 255 && mid[3] === 255, note: 'one run, one workload: not a performance figure' };
     d.destroy();
   } catch (e) { res.timingError = String(e); }
   return res;
