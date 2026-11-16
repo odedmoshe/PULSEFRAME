@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-16T22:23:52.178Z",
+ "generatedAt": "2026-11-16T22:42:45.500Z",
  "profile": {
   "os": "Linux 6.18.44-fc-v470",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -319,6 +319,87 @@
    }
   },
   {
+   "name": "typewriter by letter on an English title: one letter at the first frame, on the left; more ink at every later sample; from the end of the entrance on, the frame is byte-identical to the same title without animation",
+   "ok": true,
+   "detail": {
+    "ink": [
+     "0:115",
+     "4:329",
+     "8:558",
+     "12:738",
+     "16:959",
+     "20:1143",
+     "22:1144",
+     "45:1144"
+    ],
+    "restInk": 1144,
+    "firstLetterSpan": [
+     237,
+     250
+    ],
+    "titleSpan": [
+     237,
+     402
+    ]
+   }
+  },
+  {
+   "name": "fade out by word: unchanged before the exit begins, less ink during it, almost none on the last frame",
+   "ok": true,
+   "detail": {
+    "rest": 1144,
+    "during": 470,
+    "last": 0
+   }
+  },
+  {
+   "name": "a wave loop moves the letters: the same frame is identical when rendered again, differs from another frame and from the title at rest, and keeps about the same amount of ink",
+   "ok": true,
+   "detail": {
+    "rest": 1144,
+    "wave": 1143
+   }
+  },
+  {
+   "name": "the same on a Hebrew title starts from the right: the first letter appears at the right end, half-way the ink is still on the right side, and at rest it is byte-identical to the plain title",
+   "ok": true,
+   "detail": {
+    "firstLetterSpan": [
+     392,
+     403
+    ],
+    "halfWaySpan": [
+     311,
+     403
+    ],
+    "titleSpan": [
+     237,
+     403
+    ]
+   }
+  },
+  {
+   "name": "an entrance and exit that together are longer than the title are refused",
+   "ok": true,
+   "detail": {
+    "status": 422
+   }
+  },
+  {
+   "name": "the title panel sets a text animation through the same operation; the timeline zoom buttons change the clip's width on screen and \"fit\" brings the whole timeline into view",
+   "ok": true,
+   "detail": {
+    "widthBefore": 269,
+    "widthAfterZoomIn": 404,
+    "fit": {
+     "right": 1134,
+     "scrollRight": 1500,
+     "left": 76,
+     "scrollLeft": 0
+    }
+   }
+  },
+  {
    "name": "no console or page errors during the editor session",
    "ok": true,
    "detail": []
@@ -389,6 +470,6 @@
    "stutter": 338
   }
  },
- "passed": 30,
+ "passed": 36,
  "failed": 0
 }

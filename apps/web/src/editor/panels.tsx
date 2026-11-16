@@ -17,6 +17,7 @@ import { AiTools } from './AiTools.tsx';
 import { SpeedCurveField } from './SpeedCurves.tsx';
 import { PacingPanel } from './PacingPanel.tsx';
 import { LayoutPicker } from './LayoutPicker.tsx';
+import { TextAnimationField } from './TextAnimationField.tsx';
 import { Section, SECTION_STRINGS, setAllSections } from './Section.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
@@ -548,6 +549,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
               {TEXT_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name[state.lang]}</option>)}
             </select>
           </label>
+          <TextAnimationField clip={clip} />
           <label>{t('font.family')}
             <select value={clip.style.fontFamily} data-testid="text-font" onChange={(e) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: e.target.value } } }], 'Font')}>
               {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}

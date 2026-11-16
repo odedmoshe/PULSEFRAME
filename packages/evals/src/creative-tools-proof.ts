@@ -314,6 +314,59 @@ async function main() {
       await page.screenshot({ path: path.join(art, 'layout-editor.png') });
     }
 
+    console.log('\n# text animation by letter and word; timeline zoom control');
+    {
+      const tp = (await call('/projects', { name: 'titles', width: 640, height: 360 })).body.project.id as string;
+      const ink = async (index: number) => {
+        const file = path.join(art, 'title.png');
+        fs.writeFileSync(file, (await call(`/projects/${tp}/frame?index=${index}`)).body as Buffer);
+        const rgb = ff(['-i', file, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+        let count = 0, minX = 640, maxX = -1;
+        for (let y = 0; y < 360; y++) for (let x = 0; x < 640; x++) if (rgb[(y * 640 + x) * 3]! > 128) { count++; if (x < minX) minX = x; if (x > maxX) maxX = x; }
+        return { count, minX, maxX, bytes: rgb };
+      };
+      const plainStyle = { stroke: null, background: null, color: '#FFFFFF', align: 'center' };
+      const en = (await txs(tp, [{ op: 'add_text', args: { text: 'ONE TWO THREE', start: f(0), duration: f(90) } }])).results[0].output.clipId as string;
+      await txs(tp, [{ op: 'update_text', args: { clipId: en, style: plainStyle } }]);
+      const rest = await ink(45);
+      await txs(tp, [{ op: 'set_text_animation', args: { clipId: en, animation: { by: 'letter', in: 'typewriter', inFrames: 22 } } }]);
+      const steps: ({ k: number } & Awaited<ReturnType<typeof ink>>)[] = [];
+      for (const k of [0, 4, 8, 12, 16, 20, 22, 45]) steps.push({ k, ...(await ink(k)) });
+      const growing = steps.every((x, i) => i === 0 || x.count >= steps[i - 1]!.count) && steps[0]!.count > 0 && steps[0]!.count < rest.count / 5;
+      const leftFirst = steps[0]!.maxX < (rest.minX + rest.maxX) / 2;
+      const restSame = steps[steps.length - 1]!.bytes.equals(rest.bytes) && steps[steps.length - 2]!.bytes.equals(rest.bytes);
+      check('typewriter by letter on an English title: one letter at the first frame, on the left; more ink at every later sample; from the end of the entrance on, the frame is byte-identical to the same title without animation', growing && leftFirst && restSame, { ink: steps.map((x) => `${x.k}:${x.count}`), restInk: rest.count, firstLetterSpan: [steps[0]!.minX, steps[0]!.maxX], titleSpan: [rest.minX, rest.maxX] });
+      await txs(tp, [{ op: 'set_text_animation', args: { clipId: en, animation: { in: null, out: 'fade', outFrames: 20, by: 'word' } } }]);
+      const outMid = await ink(80), outEnd = await ink(89), before = await ink(60);
+      check('fade out by word: unchanged before the exit begins, less ink during it, almost none on the last frame', before.bytes.equals(rest.bytes) && outMid.count < rest.count && outEnd.count < rest.count / 10, { rest: rest.count, during: outMid.count, last: outEnd.count });
+      await txs(tp, [{ op: 'set_text_animation', args: { clipId: en, animation: { out: null, loop: 'wave', by: 'letter' } } }]);
+      const w1 = await ink(30), w1again = await ink(30), w2 = await ink(37);
+      check('a wave loop moves the letters: the same frame is identical when rendered again, differs from another frame and from the title at rest, and keeps about the same amount of ink', w1.bytes.equals(w1again.bytes) && !w1.bytes.equals(w2.bytes) && !w1.bytes.equals(rest.bytes) && Math.abs(w1.count - rest.count) < rest.count * 0.1, { rest: rest.count, wave: w1.count });
+      await txs(tp, [{ op: 'delete_clip', args: { clipId: en } }]);
+      const he = (await txs(tp, [{ op: 'add_text', args: { text: 'אחת שתיים שלוש', start: f(0), duration: f(90) } }])).results[0].output.clipId as string;
+      await txs(tp, [{ op: 'update_text', args: { clipId: he, style: plainStyle } }]);
+      const heRest = await ink(45);
+      await txs(tp, [{ op: 'set_text_animation', args: { clipId: he, animation: { by: 'letter', in: 'typewriter', inFrames: 24 } } }]);
+      const he0 = await ink(0), he12 = await ink(12), heEnd = await ink(30);
+      check('the same on a Hebrew title starts from the right: the first letter appears at the right end, half-way the ink is still on the right side, and at rest it is byte-identical to the plain title', he0.count > 0 && he0.minX > (heRest.minX + heRest.maxX) / 2 && he12.minX > heRest.minX + 20 && he12.maxX >= heRest.maxX - 2 && heEnd.bytes.equals(heRest.bytes), { firstLetterSpan: [he0.minX, he0.maxX], halfWaySpan: [he12.minX, he12.maxX], titleSpan: [heRest.minX, heRest.maxX] });
+      const tooLong = await call(`/projects/${tp}/transactions`, { ops: [{ op: 'set_text_animation', args: { clipId: he, animation: { in: 'fade', inFrames: 60, out: 'fade', outFrames: 60 } } }] });
+      check('an entrance and exit that together are longer than the title are refused', tooLong.status !== 200, { status: tooLong.status });
+      await page.goto(`${s.ownerUrl}&project=${tp}`);
+      await page.locator(`.clip[data-clip-id="${he}"]`).click();
+      await page.getByTestId('text-animation').waitFor();
+      await page.getByTestId('text-anim-loop').selectOption('pulse');
+      const viaUi = await until(tp, (x) => x.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === he)?.animation?.loop === 'pulse');
+      const widthOf = async () => (await page.locator(`.clip[data-clip-id="${he}"]`).boundingBox())!.width;
+      const w0 = await widthOf();
+      await page.getByTestId('tl-zoom-in').click();
+      await sleep(200);
+      const wIn = await widthOf();
+      await page.getByTestId('tl-zoom-fit').click();
+      await sleep(200);
+      const fit = await page.evaluate((id) => { const c = document.querySelector(`.clip[data-clip-id="${id}"]`)!.getBoundingClientRect(), sc = document.querySelector('.tl-scroll')!.getBoundingClientRect(); return { right: c.right, scrollRight: sc.right, left: c.left, scrollLeft: sc.left }; }, he);
+      check('the title panel sets a text animation through the same operation; the timeline zoom buttons change the clip\'s width on screen and "fit" brings the whole timeline into view', !!viaUi && wIn > w0 * 1.2 && fit.right <= fit.scrollRight + 1 && fit.left >= fit.scrollLeft - 1, { widthBefore: Math.round(w0), widthAfterZoomIn: Math.round(wIn), fit });
+    }
+
     check('no console or page errors during the editor session', errors.length === 0, errors.slice(0, 5));
   } finally {
     await browser.close();
