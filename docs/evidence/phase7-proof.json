@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T19:12:35.546Z",
+  "ranAt": "2026-11-16T19:36:35.328Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -12,14 +12,14 @@
     "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
     "exportWithLooks": {
       "frames": 30,
-      "wallMs": 1095,
+      "wallMs": 1091,
       "minPsnrDb": 42.16,
       "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
     },
     "lab": {
       "gpuEffectTilesUnavailable": 0,
-      "tiles": 142,
-      "effects": 14,
+      "tiles": 170,
+      "effects": 21,
       "blends": 17,
       "transitions": 12,
       "masks": 5
@@ -29,7 +29,7 @@
   "total": 31,
   "checks": [
     {
-      "name": "catalog lists exactly what is registered: 14 effects with parameter schemas and defaults, 12 transitions, 17 blend modes",
+      "name": "catalog lists exactly what is registered: 21 effects with parameter schemas and defaults, 12 transitions, 17 blend modes",
       "ok": true,
       "detail": {
         "effects": [
@@ -46,7 +46,14 @@
           "stylize.grain",
           "digital.rgb-split",
           "key.chroma",
-          "distort.wave"
+          "distort.wave",
+          "distort.bulge",
+          "distort.swirl",
+          "distort.mirror",
+          "blur.zoom",
+          "stylize.posterize",
+          "stylize.edges",
+          "digital.glitch"
         ]
       }
     },
@@ -278,7 +285,7 @@
       "ok": true,
       "detail": {
         "frames": 30,
-        "wallMs": 1095,
+        "wallMs": 1091,
         "minPsnrDb": 42.16,
         "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
       }
@@ -307,15 +314,16 @@
       "ok": true,
       "detail": {
         "gpuEffectTilesUnavailable": 0,
-        "tiles": 142,
-        "effects": 14,
+        "tiles": 170,
+        "effects": 21,
         "blends": 17,
         "transitions": 12,
         "masks": 5,
         "sameVariants": [
           "color.grayscale",
           "color.sepia",
-          "color.invert"
+          "color.invert",
+          "distort.mirror"
         ],
         "aspects": [
           "16:9",

@@ -54,6 +54,88 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       if (at.x < 0.0 || at.x > 1.0 || at.y < 0.0 || at.y > 1.0) { return vec4f(0.0); }
       return textureSampleLevel(src, smp, at, 0.0);`,
   },
+  // Magnify (amount > 0) or pinch (amount < 0) inside a circle. Lengths are fractions of the frame height.
+  'distort.bulge': {
+    params: (p, env) => [n(p.amount, 0.5), Math.max(n(p.radius, 0.35), 0.001), n(p.x, 0.5), n(p.y, 0.5), env.width / env.height],
+    wgsl: `
+      let c = vec2f(P.a.z, P.a.w); let asp = vec2f(P.b.x, 1.0);
+      let d = (uv - c) * asp; let k = length(d) / P.a.y;
+      if (k >= 1.0) { return textureSampleLevel(src, smp, uv, 0.0); }
+      return textureSampleLevel(src, smp, c + d * pow(max(k, 0.00001), P.a.x) / asp, 0.0);`,
+  },
+  // Rotate the picture around a point, most at the centre and not at all at the radius.
+  'distort.swirl': {
+    params: (p, env) => [(n(p.angle, 180) * Math.PI) / 180, Math.max(n(p.radius, 0.4), 0.001), n(p.x, 0.5), n(p.y, 0.5), env.width / env.height],
+    wgsl: `
+      let c = vec2f(P.a.z, P.a.w); let asp = vec2f(P.b.x, 1.0);
+      let d = (uv - c) * asp; let k = length(d) / P.a.y;
+      if (k >= 1.0) { return textureSampleLevel(src, smp, uv, 0.0); }
+      let t = P.a.x * (1.0 - k) * (1.0 - k);
+      let r = vec2f(d.x * cos(t) - d.y * sin(t), d.x * sin(t) + d.y * cos(t));
+      return textureSampleLevel(src, smp, c + r / asp, 0.0);`,
+  },
+  // Show one half of the picture mirrored onto the other.
+  'distort.mirror': {
+    params: (p) => [({ left: 0, right: 1, top: 2, bottom: 3 } as Record<string, number>)[String(p.keep)] ?? 0],
+    wgsl: `
+      var at = uv; let m = P.a.x;
+      if (m < 0.5) { if (at.x > 0.5) { at.x = 1.0 - at.x; } }
+      else if (m < 1.5) { if (at.x < 0.5) { at.x = 1.0 - at.x; } }
+      else if (m < 2.5) { if (at.y > 0.5) { at.y = 1.0 - at.y; } }
+      else { if (at.y < 0.5) { at.y = 1.0 - at.y; } }
+      return textureSampleLevel(src, smp, at, 0.0);`,
+  },
+  // Blur along lines through a point: 16 samples between the pixel and a point `amount` of the way toward the centre.
+  'blur.zoom': {
+    params: (p) => [n(p.amount, 0.15), n(p.x, 0.5), n(p.y, 0.5)],
+    wgsl: `
+      let c = vec2f(P.a.y, P.a.z);
+      var sum = vec4f(0.0);
+      for (var i = 0; i < 16; i++) { sum += textureSampleLevel(src, smp, c + (uv - c) * (1.0 - P.a.x * f32(i) / 15.0), 0.0); }
+      return sum / 16.0;`,
+  },
+  // Reduce each colour channel to a few levels.
+  'stylize.posterize': {
+    params: (p) => [Math.max(2, Math.round(n(p.levels, 4)))],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let L = P.a.x;
+      let c = min(floor(s.rgb / s.a * L), vec3f(L - 1.0)) / (L - 1.0);
+      return vec4f(c * s.a, s.a);`,
+  },
+  // Outlines: the strength of brightness changes around each pixel (Sobel), mixed over the picture.
+  'stylize.edges': {
+    params: (p, env) => [n(p.amount, 1), n(p.strength, 2), 1 / env.width, 1 / env.height],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let t = vec2f(P.a.z, P.a.w);
+      var l: array<f32, 9>;
+      for (var j = 0; j < 3; j++) { for (var i = 0; i < 3; i++) {
+        let q = textureSampleLevel(src, smp, uv + vec2f(f32(i - 1), f32(j - 1)) * t, 0.0);
+        l[j * 3 + i] = dot(q.rgb, vec3f(0.2126, 0.7152, 0.0722));
+      } }
+      let gx = (l[2] + 2.0 * l[5] + l[8]) - (l[0] + 2.0 * l[3] + l[6]);
+      let gy = (l[6] + 2.0 * l[7] + l[8]) - (l[0] + 2.0 * l[1] + l[2]);
+      let e = clamp(length(vec2f(gx, gy)) * P.a.y, 0.0, 1.0);
+      return vec4f(mix(s.rgb, vec3f(e) * s.a, P.a.x), s.a);`,
+  },
+  // Horizontal bands jump sideways and the colours split, a different pattern `speed` times per second.
+  // The pattern comes from an integer hash of (band, step, seed), so it is the same on every adapter and for every repeat of a frame.
+  'digital.glitch': {
+    params: (p, env) => [n(p.amount, 0.08), Math.max(1, Math.round(n(p.bands, 24))), Math.min(1, Math.max(0, n(p.density, 0.35))), Math.round(n(p.seed, 1)), Math.floor((env.seconds ?? 0) * n(p.speed, 12) + 1e-6), n(p.split, 0.004) * (env.height / env.width)],
+    wgsl: `
+      let band = u32(floor(uv.y * P.a.y));
+      let key = hash(band * 7919u + u32(P.a.w) * 104729u) ^ hash(u32(P.b.x) + 1u);
+      var at = uv;
+      var split = 0.0;
+      if (unit(key) < P.a.z) { at.x = fract(uv.x + (unit(hash(key)) - 0.5) * 2.0 * P.a.x); split = P.b.y; }
+      let r = textureSampleLevel(src, smp, vec2f(at.x + split, at.y), 0.0);
+      let g = textureSampleLevel(src, smp, at, 0.0);
+      let b = textureSampleLevel(src, smp, vec2f(at.x - split, at.y), 0.0);
+      return vec4f(r.r, g.g, b.b, max(g.a, max(r.a, b.a)));`,
+  },
 };
 export const isGpuEffect = (type: string) => type in GPU_EFFECTS;
 
@@ -68,6 +150,8 @@ const shaderOf = (body: string) => `${VERTEX}
   @group(0) @binding(0) var src: texture_2d<f32>;
   @group(0) @binding(1) var smp: sampler;
   @group(0) @binding(2) var<uniform> P: Params;
+  fn hash(x: u32) -> u32 { let v = x * 747796405u + 2891336453u; let w = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u; return (w >> 22u) ^ w; }
+  fn unit(x: u32) -> f32 { return f32(x >> 8u) / 16777216.0; }
   fn chroma(c: vec3f) -> vec2f { return vec2f(-0.1146 * c.r - 0.3854 * c.g + 0.5 * c.b, 0.5 * c.r - 0.4542 * c.g - 0.0458 * c.b); }
   fn effect(uv: vec2f) -> vec4f {${body}
   }

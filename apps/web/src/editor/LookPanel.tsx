@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BLEND_MODES, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
-import type { Key } from '@pulseframe/i18n';
+import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
@@ -24,16 +24,18 @@ const stepOf = (min: number, max: number) => { const s = (max - min) / 200; retu
 interface Keyer { animated: boolean; pressed: boolean; enabled: boolean; title: string; animatedTitle: string; onToggle: () => void }
 function ParamControl({ name, prop, value, onCommit, keyer }: { name: string; prop: Prop; value: number | string | boolean | undefined; onCommit: (v: number | string) => void; keyer?: Keyer }) {
   const [live, setLive] = useState<number | null>(null);
+  const { state } = useEditorState();
+  const shown = effectParamLabel(name, state.lang);
   const cur = value ?? prop.default;
   const tid = { 'data-testid': 'effect-param', 'data-param': name } as const;
   if (prop.enum) {
-    return <label><span><bdi>{name}</bdi></span><select {...tid} value={String(cur)} onChange={(e) => onCommit(e.target.value)}>{prop.enum.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>;
+    return <label><span><bdi>{shown}</bdi></span><select {...tid} value={String(cur)} onChange={(e) => onCommit(e.target.value)}>{prop.enum.map((o) => <option key={o} value={o}>{effectOptionLabel(o, state.lang)}</option>)}</select></label>;
   }
   if (prop.type === 'string' && prop.pattern?.includes('[0-9a-fA-F]{6}')) {
-    return <label><span><bdi>{name}</bdi><bdi className="val">{String(cur)}</bdi></span><input {...tid} type="color" defaultValue={String(cur).toLowerCase()} key={String(cur)} onChange={(e) => onCommit(e.target.value.toUpperCase())} /></label>;
+    return <label><span><bdi>{shown}</bdi><bdi className="val">{String(cur)}</bdi></span><input {...tid} type="color" defaultValue={String(cur).toLowerCase()} key={String(cur)} onChange={(e) => onCommit(e.target.value.toUpperCase())} /></label>;
   }
   if (prop.type === 'integer') {
-    return <label><span><bdi>{name}</bdi></span><input {...tid} type="number" step={1} min={prop.minimum} max={prop.maximum} defaultValue={Number(cur)} key={String(cur)}
+    return <label><span><bdi>{shown}</bdi></span><input {...tid} type="number" step={1} min={prop.minimum} max={prop.maximum} defaultValue={Number(cur)} key={String(cur)}
       onChange={(e) => { const n = Math.round(Number(e.target.value)); if (Number.isFinite(n) && e.target.value !== '') onCommit(n); }} /></label>;
   }
   if (prop.type === 'number') {
@@ -41,7 +43,7 @@ function ParamControl({ name, prop, value, onCommit, keyer }: { name: string; pr
     const max = prop.maximum ?? 1;
     const commit = (el: HTMLInputElement) => { setLive(null); const n = Number(el.value); if (n !== cur) onCommit(n); };
     const slider = (
-      <label><span><bdi>{name}</bdi>{keyer?.animated && <em className="animated" data-testid="effect-animated" title={keyer.animatedTitle}>◆</em>}<bdi className="val">{+(live ?? Number(cur)).toFixed(4)}</bdi></span>
+      <label><span><bdi>{shown}</bdi>{keyer?.animated && <em className="animated" data-testid="effect-animated" title={keyer.animatedTitle}>◆</em>}<bdi className="val">{+(live ?? Number(cur)).toFixed(4)}</bdi></span>
         <input {...tid} type="range" min={min} max={max} step={stepOf(min, max)} defaultValue={Number(cur)} key={String(cur)}
           onInput={(e) => setLive(Number(e.currentTarget.value))} onPointerUp={(e) => commit(e.currentTarget)} onKeyUp={(e) => commit(e.currentTarget)} />
       </label>

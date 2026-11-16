@@ -35,7 +35,7 @@ async function main() {
   await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('console', (m) => m.type() === 'error' && errors.push(`${m.text()}${m.location().url ? ` [${m.location().url.replace(/^https?:\/\/[^/]+/, '')}]` : ''}`)); // with the address, so a failed request can be traced
   try {
     await page.goto(s.ownerUrl);
     await page.waitForFunction(() => document.querySelector('[data-testid=project-name]')?.textContent === 'הפרויקט שלי');
@@ -465,8 +465,10 @@ async function main() {
     const two = placedTwo();
     const twoInfo = { names: two.map((x) => x.name), frames: two.map((x) => (x.clip ? [T.frameIndexAt(x.clip.start, R), T.frameIndexAt(T.add(x.clip.start, x.clip.duration), R)] : null)), wanted: twoFrame };
     check('two files dropped together are both imported and placed one after the other in name order, the first at the frame under the pointer', twoInfo.names.join() === 'two-a.mp4,two-b.mp4' && !!twoInfo.frames[0] && !!twoInfo.frames[1] && Math.abs(twoInfo.frames[0]![0]! - twoFrame) <= 1 && twoInfo.frames[1]![0] === twoInfo.frames[0]![1], twoInfo);
-    // put the project back
+    // put the project back (after the editor has finished asking about the new files: removing one while it still asks leaves a failed request in the page)
+    await new Promise((r) => setTimeout(r, 2500));
     await post(two.filter((x) => x.clip).map((x) => ({ op: 'delete_clip', args: { clipId: x.clip.id } })));
+    await new Promise((r) => setTimeout(r, 1500));
     twoA = await getDoc();
     await post(Object.values(twoA.project.assets).filter((a) => !twoB.project.assets[a.id]).map((a) => ({ op: 'remove_asset', args: { assetId: a.id } })));
 

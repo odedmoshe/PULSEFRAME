@@ -148,6 +148,92 @@ async function main() {
     check('distort.wave: preview and still agree (mean difference under 0.5 of 255)', meanDiff(wprev, bent) < 0.5, { meanDifference: meanDiff(wprev, bent), maxDifference: maxDiff(wprev, bent) });
     check('No uncaught errors in the editor page', errors.length === 0, errors);
 
+    // ---------- the distortion, blur, stylize and glitch passes, against their own formulas ----------
+    // Fixture: red encodes the column and green the row of every pixel, so a still tells where each output pixel was taken from.
+    const rampFile = path.join(art, 'ramp.png');
+    const rampRaw = Buffer.alloc(W * H * 3);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 3; rampRaw[i] = Math.round((255 * x) / (W - 1)); rampRaw[i + 1] = Math.round((255 * y) / (H - 1)); rampRaw[i + 2] = 128; }
+    ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', rampFile], rampRaw);
+    const ramp = await newProject('ramp', rampFile);
+    const plainRamp = await still(ramp.pid);
+    const withEffect = async (type: string, params: Record<string, unknown>, index = 0) => {
+      const id = (await tx(ramp.pid, [{ op: 'add_effect', args: { clipId: ramp.clipId, type, params } }])).results[0].output.effectId as string;
+      const img = await still(ramp.pid, index);
+      return { img, remove: () => tx(ramp.pid, [{ op: 'remove_effect', args: { clipId: ramp.clipId, effectId: id } }]), id };
+    };
+    /** Where output pixel (x, y) says it came from, in source pixels. */
+    const from = (img: Img, x: number, y: number) => { const c = px(img, x, y); return { x: (c[0]! / 255) * (W - 1), y: (c[1]! / 255) * (H - 1) }; };
+    const grid: [number, number][] = [];
+    for (let y = 40; y < H; y += 80) for (let x = 30; x < W; x += 60) grid.push([x, y]);
+    /** Largest distance, in source pixels, between where the still says pixels came from and where `map` says they should. */
+    const worst = (img: Img, map: (u: number, v: number) => [number, number] | null) => {
+      let m = 0, n = 0;
+      for (const [x, y] of grid) {
+        const at = map((x + 0.5) / W, (y + 0.5) / H);
+        if (!at || at[0] < 0.01 || at[0] > 0.99 || at[1] < 0.01 || at[1] > 0.99) continue;
+        const f = from(img, x, y);
+        m = Math.max(m, Math.abs(f.x - (at[0] * W - 0.5)), Math.abs(f.y - (at[1] * H - 0.5))); n++;
+      }
+      return { worstPixels: Number(m.toFixed(2)), points: n };
+    };
+    const asp = W / H;
+    check('Ramp fixture reads back as itself (the measuring stick: within 1.5 pixels)', worst(plainRamp, (u, v) => [u, v]).worstPixels < 1.5, worst(plainRamp, (u, v) => [u, v]));
+
+    let fx = await withEffect('distort.bulge', { amount: 0.5, radius: 0.35, x: 0.5, y: 0.5 });
+    let w1 = worst(fx.img, (u, v) => { const dx = (u - 0.5) * asp, dy = v - 0.5, k = Math.hypot(dx, dy) / 0.35; if (k >= 1) return [u, v]; const s = Math.pow(Math.max(k, 1e-5), 0.5); return [0.5 + (dx * s) / asp, 0.5 + dy * s]; });
+    check('distort.bulge: every sampled pixel comes from where the formula says (within 2.5 pixels), and differs from the plain picture', w1.worstPixels < 2.5 && maxDiff(fx.img, plainRamp) > 20, w1);
+    await fx.remove();
+
+    fx = await withEffect('distort.swirl', { angle: 180, radius: 0.4, x: 0.5, y: 0.5 });
+    w1 = worst(fx.img, (u, v) => { const dx = (u - 0.5) * asp, dy = v - 0.5, k = Math.hypot(dx, dy) / 0.4; if (k >= 1) return [u, v]; const t = Math.PI * (1 - k) * (1 - k); return [0.5 + (dx * Math.cos(t) - dy * Math.sin(t)) / asp, 0.5 + dx * Math.sin(t) + dy * Math.cos(t)]; });
+    check('distort.swirl: matches its formula (within 2.5 pixels)', w1.worstPixels < 2.5 && maxDiff(fx.img, plainRamp) > 20, w1);
+    await fx.remove();
+
+    fx = await withEffect('distort.mirror', { keep: 'left' });
+    w1 = worst(fx.img, (u, v) => [u > 0.5 ? 1 - u : u, v]);
+    check('distort.mirror: the right half shows the left half mirrored (within 1.5 pixels)', w1.worstPixels < 1.5 && Math.abs(from(fx.img, 300, 320).x - 59) < 1.5, { ...w1, at300: from(fx.img, 300, 320).x });
+    await fx.remove();
+
+    fx = await withEffect('blur.zoom', { amount: 0.3, x: 0.5, y: 0.5 });
+    // on a linear ramp the average of the 16 samples is the sample half-way along the streak
+    w1 = worst(fx.img, (u, v) => [0.5 + (u - 0.5) * (1 - 0.15), 0.5 + (v - 0.5) * (1 - 0.15)]);
+    check('blur.zoom: each pixel is the average along its streak toward the centre (within 2.5 pixels on a linear ramp)', w1.worstPixels < 2.5, w1);
+    await fx.remove();
+
+    fx = await withEffect('stylize.posterize', { levels: 4 });
+    const seen = new Set<number>();
+    for (let i = 0; i < fx.img.length; i += 3) { seen.add(fx.img[i]!); seen.add(fx.img[i + 1]!); }
+    check('stylize.posterize with 4 levels leaves only four values per channel', [...seen].every((v) => [0, 85, 170, 255].some((l) => Math.abs(v - l) <= 1)) && seen.size >= 4, { values: [...seen].sort((a, b) => a - b).slice(0, 12) });
+    await fx.remove();
+
+    // glitch: the pattern is an integer hash, reproduced here
+    const hash = (x: number) => { const v = (Math.imul(x >>> 0, 747796405) + 2891336453) >>> 0; const w2 = Math.imul(((v >>> ((v >>> 28) + 4)) ^ v) >>> 0, 277803737) >>> 0; return ((w2 >>> 22) ^ w2) >>> 0; };
+    const unit = (x: number) => (x >>> 8) / 16777216;
+    const G = { amount: 0.1, bands: 16, density: 0.5, seed: 3, speed: 10, split: 0 };
+    fx = await withEffect('digital.glitch', G);
+    const shiftOf = (band: number, tick: number) => { const key = (hash((Math.imul(band, 7919) + Math.imul(G.seed, 104729)) >>> 0) ^ hash(tick + 1)) >>> 0; return unit(key) < G.density ? (unit(hash(key)) - 0.5) * 2 * G.amount : 0; };
+    let jumped = 0, worstG = 0, rowsMoved = 0;
+    for (let band = 0; band < G.bands; band++) {
+      const y = Math.round(((band + 0.5) / G.bands) * H), sh = shiftOf(band, 0);
+      if (sh !== 0) jumped++;
+      for (const x of [60, 150, 240]) {
+        const u = ((x + 0.5) / W + sh + 1) % 1;
+        if (u < 0.03 || u > 0.97) continue; // next to the wrap-around the sampler blends both ends
+        worstG = Math.max(worstG, Math.abs(from(fx.img, x, y).x - (u * W - 0.5)));
+      }
+      rowsMoved = Math.max(rowsMoved, Math.abs(from(fx.img, 150, y).y - from(plainRamp, 150, y).y));
+    }
+    const g0again = await still(ramp.pid, 0), g15 = await still(ramp.pid, 15);
+    check('digital.glitch: each band jumps sideways by exactly what the integer hash gives (within 1.5 pixels), some bands jump and some do not, rows never move up or down', worstG < 1.5 && jumped > 2 && jumped < G.bands - 2 && rowsMoved < 1.5, { worstPixels: Number(worstG.toFixed(2)), bandsThatJump: jumped, of: G.bands });
+    check('digital.glitch: the same frame is identical when rendered again; half a second later the pattern is another one', maxDiff(fx.img, g0again) === 0 && maxDiff(fx.img, g15) > 20);
+    await fx.remove();
+
+    // edges, on the square: bright along its border, dark inside flat areas
+    const edgeP = await newProject('edges', green);
+    await tx(edgeP.pid, [{ op: 'add_effect', args: { clipId: edgeP.clipId, type: 'stylize.edges', params: { amount: 1, strength: 2 } } }]);
+    const edges = await still(edgeP.pid);
+    check('stylize.edges: the border of the square is bright and the flat areas are dark', px(edges, 130, 320)[0]! > 150 && px(edges, 180, 270)[0]! > 150 && near(px(edges, 180, 320), [0, 0, 0], 8) && near(px(edges, 40, 100), [0, 0, 0], 8), { leftBorder: px(edges, 130, 320), topBorder: px(edges, 180, 270), inside: px(edges, 180, 320), background: px(edges, 40, 100) });
+
     // the editor says what it has
     await page.locator('.clip').first().click();
     await page.getByTestId('inspector-tab-clip').click().catch(() => {});
@@ -191,7 +277,7 @@ async function main() {
     const report = {
       ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', passed: checks.length - failed.length, total: checks.length,
       machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none: the WebGPU adapter here is a software one' },
-      scope: 'Two effects on two synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
+      scope: 'Nine effects on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
       measurements, checks,
     };
     fs.writeFileSync(path.join(root, 'docs/evidence/gpu-proof.json'), JSON.stringify(report, null, 2) + '\n');
