@@ -309,6 +309,25 @@ export class Editor {
       this.set({ uploading: false });
     }
   }
+  /**
+   * Several files at once (a multi-file drop or pick): imported one after another, in name order. With `place`, the first goes
+   * where it was dropped and each following one starts where the previous one ended, on the same track when it fits there.
+   */
+  async importFiles(files: File[], place?: { frame: number; trackId: string | null }) {
+    let at = place;
+    for (const file of [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
+      const before = new Set(Object.keys(this.state.doc?.assets ?? {}));
+      await this.importFile(file, at);
+      if (this.state.error) return; // stop at the first file that fails: the message names it
+      const doc = this.state.doc;
+      if (!at || !doc) continue;
+      // where the clip of this file ended up: the next file follows it
+      const assetId = Object.keys(doc.assets).find((id) => !before.has(id));
+      const start = T.frameTime(Math.max(0, at.frame), this.rate);
+      const clip = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((t) => t.clips).filter((c) => c.type === 'media' && T.eq(c.start, start) && (!assetId || c.assetId === assetId)).at(-1);
+      if (clip) at = { frame: T.frameIndexAt(T.add(clip.start, clip.duration), this.rate), trackId: at.trackId };
+    }
+  }
   /** Choose (or, given the current one, clear) the target track of its kind. */
   toggleTarget(kind: 'video' | 'audio', trackId: string) {
     const targets = { ...this.state.targets, [kind]: this.state.targets[kind] === trackId ? null : trackId };

@@ -449,6 +449,27 @@ async function main() {
     if (newAsset) await post([{ op: 'remove_asset', args: { assetId: newAsset.id } }]);
     check('a file dropped from the computer onto a picture track is imported into the library and placed on that track at the frame under the pointer (within one frame)', osInfo.imported === 'dropped.mp4' && osInfo.clipFrame !== null && Math.abs(osInfo.clipFrame - osFrame) <= 1, osInfo);
 
+    console.log('\n# drop two files from the computer at once');
+    const twoB = await getDoc();
+    const twoFrame = endOf(twoB.project) + 20;
+    const twoFiles = [await generateBarcodeFixture({ out: path.join(art, 'two-b.mp4'), frames: 36 }), await generateBarcodeFixture({ out: path.join(art, 'two-a.mp4'), frames: 30 })]; // given out of name order on purpose
+    await page.evaluate(async ({ files, x, y, trackId }) => {
+      const dt = new DataTransfer();
+      for (const f of files) { const bin = atob(f.b64), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); dt.items.add(new File([bytes], f.name, { type: 'video/mp4' })); }
+      const track = document.querySelector(`.track[data-track-id="${trackId}"]`)!;
+      for (const type of ['dragover', 'drop']) track.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, dataTransfer: dt }));
+    }, { files: twoFiles.map((f) => ({ name: path.basename(f.file), b64: fs.readFileSync(f.file).toString('base64') })), x: rulerBox.x + twoFrame * 3, y: v1Box.y + v1Box.height / 2, trackId: v1.id });
+    let twoA = await getDoc();
+    const placedTwo = () => Object.values(twoA.project.assets).filter((a) => !twoB.project.assets[a.id]).map((a) => ({ name: a.name, clip: twoA.project.sequences.seq_main!.tracks.find((tr) => tr.id === v1.id)!.clips.find((c: any) => c.assetId === a.id) as any })).sort((x, y) => x.name.localeCompare(y.name));
+    for (let i = 0; i < 300 && placedTwo().filter((x) => x.clip).length < 2; i++) { await new Promise((r) => setTimeout(r, 100)); twoA = await getDoc(); }
+    const two = placedTwo();
+    const twoInfo = { names: two.map((x) => x.name), frames: two.map((x) => (x.clip ? [T.frameIndexAt(x.clip.start, R), T.frameIndexAt(T.add(x.clip.start, x.clip.duration), R)] : null)), wanted: twoFrame };
+    check('two files dropped together are both imported and placed one after the other in name order, the first at the frame under the pointer', twoInfo.names.join() === 'two-a.mp4,two-b.mp4' && !!twoInfo.frames[0] && !!twoInfo.frames[1] && Math.abs(twoInfo.frames[0]![0]! - twoFrame) <= 1 && twoInfo.frames[1]![0] === twoInfo.frames[0]![1], twoInfo);
+    // put the project back
+    await post(two.filter((x) => x.clip).map((x) => ({ op: 'delete_clip', args: { clipId: x.clip.id } })));
+    twoA = await getDoc();
+    await post(Object.values(twoA.project.assets).filter((a) => !twoB.project.assets[a.id]).map((a) => ({ op: 'remove_asset', args: { assetId: a.id } })));
+
     console.log('\n# slip');
     const sb = await getDoc();
     const slipClip = sb.project.sequences.seq_main!.tracks.filter((tr) => tr.kind === 'video').flatMap((tr) => tr.clips).find((c) => T.frameIndexAt(c.start, R) === atFrame)!;
@@ -702,7 +723,7 @@ async function main() {
     const closedH = (await page.getByTestId('activity-dialog').count()) === 0;
     await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open', undefined, { timeout: 3000 }).catch(() => {}); // focus is handed back just after the dialog is removed
     const focusH = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open');
-    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 5 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
+    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 7 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
 
     console.log('\n# close gaps');
     const gb = await getDoc();

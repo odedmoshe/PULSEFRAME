@@ -105,11 +105,11 @@ export function Library() {
   return (
     <aside className="library" aria-label={t('media')} data-testid="library"
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
-      onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (!f) return; e.preventDefault(); if (!uploading && doc) void editor.importFile(f); }}>
+      onDrop={(e) => { const fs = [...(e.dataTransfer.files ?? [])]; if (!fs.length) return; e.preventDefault(); if (!uploading && doc) void editor.importFiles(fs); }}>
       <h2>{t('media')}</h2>
       <label className="primary file">
         {uploading ? t('media.uploading') : t('media.import')}
-        <input type="file" accept="video/*,audio/*,image/png,image/jpeg,image/webp" disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void editor.importFile(f); }} />
+        <input type="file" multiple accept="video/*,audio/*,image/png,image/jpeg,image/webp" disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
       </label>
       {doc && Object.keys(doc.assets).length === 0 && <p className="muted">{t('media.empty')}</p>}
       {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`)?.focus(), 0); }} />}

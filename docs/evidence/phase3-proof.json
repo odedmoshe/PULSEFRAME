@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-16T07:02:17.363Z",
+  "ranAt": "2026-11-16T07:08:09.336Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
@@ -316,6 +316,27 @@
       }
     },
     {
+      "name": "two files dropped together are both imported and placed one after the other in name order, the first at the frame under the pointer",
+      "ok": true,
+      "detail": {
+        "names": [
+          "two-a.mp4",
+          "two-b.mp4"
+        ],
+        "frames": [
+          [
+            243,
+            273
+          ],
+          [
+            273,
+            309
+          ]
+        ],
+        "wanted": 243
+      }
+    },
+    {
       "name": "slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged",
       "ok": true,
       "detail": {
@@ -327,8 +348,8 @@
         ],
         "sourceIn": 73,
         "revisions": [
-          31,
-          35
+          37,
+          41
         ]
       }
     },
@@ -354,8 +375,8 @@
           223
         ],
         "revisions": [
-          35,
-          39
+          41,
+          45
         ]
       }
     },
@@ -410,8 +431,8 @@
           223
         ],
         "revisions": [
-          41,
-          47
+          47,
+          53
         ]
       }
     },
@@ -519,8 +540,8 @@
         "assetName": "ראיון.mp4",
         "focusOnRename": true,
         "revisions": [
-          56,
-          59
+          62,
+          65
         ]
       }
     },
@@ -535,8 +556,8 @@
         "emptyBefore": 1,
         "emptyCmd": "track.removeEmpty",
         "revisions": [
-          59,
-          62
+          65,
+          68
         ]
       }
     },
@@ -555,11 +576,11 @@
       "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
       "ok": true,
       "detail": {
-        "revision": 65,
-        "allRows": 65,
-        "firstRev": "65",
+        "revision": 71,
+        "allRows": 71,
+        "firstRev": "71",
         "rawNames": 0,
-        "agentRows": 5,
+        "agentRows": 7,
         "agentOnly": true,
         "closedH": true,
         "focusH": true
@@ -575,8 +596,8 @@
         "endAfter": 212,
         "coveredAfter": 212,
         "revisions": [
-          65,
-          67
+          71,
+          73
         ]
       }
     },
@@ -586,17 +607,17 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 28,
+        "differentSourceFrames": 29,
         "firstFrames": [
           {
-            "frame": 3,
+            "frame": 4,
             "quality": "draft",
-            "code": 3
+            "code": 4
           },
           {
-            "frame": 6,
+            "frame": 7,
             "quality": "draft",
-            "code": 6
+            "code": 7
           },
           {
             "frame": 9,
@@ -604,19 +625,19 @@
             "code": 9
           },
           {
-            "frame": 12,
+            "frame": 13,
             "quality": "draft",
-            "code": 12
+            "code": 13
           },
           {
-            "frame": 15,
+            "frame": 16,
             "quality": "draft",
-            "code": 15
+            "code": 16
           },
           {
-            "frame": 18,
+            "frame": 19,
             "quality": "draft",
-            "code": 18
+            "code": 19
           }
         ],
         "mismatches": []
