@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-16T19:53:11.318Z",
+  "ranAt": "2026-11-16T23:14:50.270Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v470 x64",
+    "platform": "Linux 6.18.44-fc-v509 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
@@ -160,15 +160,15 @@
         "transitionsAdded": 3
       },
       "session": {
-        "accepted": 81,
-        "refused": 79,
+        "accepted": 79,
+        "refused": 81,
         "clips": 29,
-        "frames": 341,
-        "seconds": 14.22,
+        "frames": 376,
+        "seconds": 15.68,
         "formats": 0,
         "effects": 1,
         "freezes": 2,
-        "sped": 2,
+        "sped": 3,
         "transitions": 4,
         "masks": 3,
         "blends": 2,
@@ -177,17 +177,17 @@
       },
       "preflight": {
         "blockers": 0,
-        "warnings": 4
+        "warnings": 5
       },
       "export": {
-        "frames": 341,
+        "frames": 376,
         "rate": "24000/1001",
-        "videoSeconds": 14.223,
-        "audioSeconds": 14.222,
-        "bytes": 424284
+        "videoSeconds": 15.682,
+        "audioSeconds": 15.682,
+        "bytes": 430558
       },
       "features": {
-        "videoClips": 10,
+        "videoClips": 11,
         "reversed": 1,
         "speedChanged": 0,
         "freezeFrames": 2,
@@ -197,12 +197,11 @@
       "pictureFramesCompared": 7,
       "parity": [
         {
-          "frame": 227,
+          "frame": 269,
           "features": [
-            "blend",
             "reverse"
           ],
-          "stillMeanLevel": 82.9,
+          "stillMeanLevel": 84.2,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -210,7 +209,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.42
+            "mean": 0.9
           }
         },
         {
@@ -247,12 +246,13 @@
           }
         },
         {
-          "frame": 243,
+          "frame": 195,
           "features": [
-            "reverse",
+            "blend",
+            "keyframes",
             "transition"
           ],
-          "stillMeanLevel": 94,
+          "stillMeanLevel": 105.9,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -260,15 +260,15 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.67
+            "mean": 0.92
           }
         },
         {
-          "frame": 170,
+          "frame": 188,
           "features": [
             "mask"
           ],
-          "stillMeanLevel": 61.1,
+          "stillMeanLevel": 77.4,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -276,11 +276,11 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 1.13
+            "mean": 1.72
           }
         },
         {
-          "frame": 68,
+          "frame": 75,
           "features": [],
           "stillMeanLevel": 48.4,
           "painted": true,
@@ -294,9 +294,12 @@
           }
         },
         {
-          "frame": 272,
-          "features": [],
-          "stillMeanLevel": 93.2,
+          "frame": 300,
+          "features": [
+            "mask",
+            "transition"
+          ],
+          "stillMeanLevel": 82.2,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -304,7 +307,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.64
+            "mean": 1.25
           }
         }
       ],
@@ -362,11 +365,11 @@
         "transitionsAdded": 0
       },
       "session": {
-        "accepted": 87,
-        "refused": 73,
+        "accepted": 86,
+        "refused": 74,
         "clips": 9,
-        "frames": 216,
-        "seconds": 3.6,
+        "frames": 255,
+        "seconds": 4.25,
         "formats": 0,
         "effects": 0,
         "freezes": 0,
@@ -379,14 +382,14 @@
       },
       "preflight": {
         "blockers": 0,
-        "warnings": 6
+        "warnings": 7
       },
       "export": {
-        "frames": 216,
+        "frames": 255,
         "rate": "60/1",
-        "videoSeconds": 3.6,
-        "audioSeconds": 3.6,
-        "bytes": 25152
+        "videoSeconds": 4.25,
+        "audioSeconds": 4.25,
+        "bytes": 32979
       },
       "features": {
         "videoClips": 0,
@@ -396,12 +399,26 @@
         "withEffects": 0,
         "withTransition": 0
       },
-      "pictureFramesCompared": 2,
+      "pictureFramesCompared": 3,
       "parity": [
         {
-          "frame": 108,
+          "frame": 127,
           "features": [],
-          "stillMeanLevel": 0.8,
+          "stillMeanLevel": 0.7,
+          "painted": true,
+          "previewSize": "640x360",
+          "previewVsStill": {
+            "mean": 0,
+            "worst": 0
+          },
+          "exportVsStill": {
+            "mean": 0.02
+          }
+        },
+        {
+          "frame": 51,
+          "features": [],
+          "stillMeanLevel": 0.6,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -413,9 +430,9 @@
           }
         },
         {
-          "frame": 75,
+          "frame": 165,
           "features": [],
-          "stillMeanLevel": 0.6,
+          "stillMeanLevel": 0.7,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -423,7 +440,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.01
+            "mean": 0.02
           }
         }
       ],
@@ -436,15 +453,15 @@
         "transitionsAdded": 1
       },
       "session": {
-        "accepted": 79,
-        "refused": 81,
+        "accepted": 78,
+        "refused": 82,
         "clips": 15,
-        "frames": 245,
-        "seconds": 8.17,
+        "frames": 323,
+        "seconds": 10.77,
         "formats": 0,
         "effects": 0,
         "freezes": 1,
-        "sped": 9,
+        "sped": 7,
         "transitions": 1,
         "masks": 1,
         "blends": 3,
@@ -453,19 +470,19 @@
       },
       "preflight": {
         "blockers": 0,
-        "warnings": 1
+        "warnings": 0
       },
       "export": {
-        "frames": 245,
+        "frames": 323,
         "rate": "30/1",
-        "videoSeconds": 8.167,
-        "audioSeconds": 8.166,
-        "bytes": 160482
+        "videoSeconds": 10.767,
+        "audioSeconds": 10.766,
+        "bytes": 194572
       },
       "features": {
         "videoClips": 4,
         "reversed": 2,
-        "speedChanged": 3,
+        "speedChanged": 2,
         "freezeFrames": 1,
         "withEffects": 0,
         "withTransition": 1
@@ -473,14 +490,14 @@
       "pictureFramesCompared": 6,
       "parity": [
         {
-          "frame": 64,
+          "frame": 67,
           "features": [
             "blend",
             "keyframes",
             "reverse",
             "speed"
           ],
-          "stillMeanLevel": 71.6,
+          "stillMeanLevel": 71.4,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -488,11 +505,11 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.3
+            "mean": 0.34
           }
         },
         {
-          "frame": 123,
+          "frame": 126,
           "features": [
             "blend",
             "keyframes",
@@ -507,18 +524,18 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.49
+            "mean": 0.5
           }
         },
         {
-          "frame": 71,
+          "frame": 74,
           "features": [
             "blend",
             "freeze",
             "mask",
             "transition"
           ],
-          "stillMeanLevel": 77.8,
+          "stillMeanLevel": 77.3,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -526,18 +543,15 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.88
+            "mean": 0.9
           }
         },
         {
-          "frame": 122,
+          "frame": 258,
           "features": [
-            "blend",
-            "keyframes",
-            "reverse",
-            "speed"
+            "keyframes"
           ],
-          "stillMeanLevel": 55.4,
+          "stillMeanLevel": 90.1,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -545,25 +559,11 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.3
+            "mean": 0.68
           }
         },
         {
-          "frame": 196,
-          "features": [],
-          "stillMeanLevel": 0.8,
-          "painted": true,
-          "previewSize": "640x360",
-          "previewVsStill": {
-            "mean": 0,
-            "worst": 0
-          },
-          "exportVsStill": {
-            "mean": 0.02
-          }
-        },
-        {
-          "frame": 85,
+          "frame": 113,
           "features": [
             "blend",
             "freeze",
@@ -577,7 +577,23 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.63
+            "mean": 0.66
+          }
+        },
+        {
+          "frame": 209,
+          "features": [
+            "keyframes"
+          ],
+          "stillMeanLevel": 88.3,
+          "painted": true,
+          "previewSize": "640x360",
+          "previewVsStill": {
+            "mean": 0,
+            "worst": 0
+          },
+          "exportVsStill": {
+            "mean": 0.98
           }
         }
       ],
@@ -632,21 +648,21 @@
       "seed": 7,
       "rate": "24000/1001",
       "dressing": {
-        "transitionsAdded": 3
+        "transitionsAdded": 5
       },
       "session": {
-        "accepted": 74,
-        "refused": 86,
-        "clips": 38,
-        "frames": 602,
-        "seconds": 25.11,
+        "accepted": 79,
+        "refused": 81,
+        "clips": 48,
+        "frames": 601,
+        "seconds": 25.07,
         "formats": 1,
-        "effects": 8,
+        "effects": 9,
         "freezes": 3,
-        "sped": 16,
-        "transitions": 3,
-        "masks": 5,
-        "blends": 5,
+        "sped": 24,
+        "transitions": 5,
+        "masks": 6,
+        "blends": 6,
         "captions": 1,
         "titles": 1
       },
@@ -655,19 +671,19 @@
         "warnings": 6
       },
       "export": {
-        "frames": 602,
+        "frames": 601,
         "rate": "24000/1001",
-        "videoSeconds": 25.108,
-        "audioSeconds": 25.108,
-        "bytes": 582705
+        "videoSeconds": 25.067,
+        "audioSeconds": 25.067,
+        "bytes": 598044
       },
       "features": {
-        "videoClips": 20,
+        "videoClips": 25,
         "reversed": 0,
-        "speedChanged": 8,
+        "speedChanged": 12,
         "freezeFrames": 3,
-        "withEffects": 8,
-        "withTransition": 3
+        "withEffects": 9,
+        "withTransition": 5
       },
       "pictureFramesCompared": 7,
       "parity": [
@@ -764,11 +780,11 @@
           }
         },
         {
-          "frame": 481,
+          "frame": 480,
           "features": [
-            "effect"
+            "transition"
           ],
-          "stillMeanLevel": 83.6,
+          "stillMeanLevel": 100.7,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -776,7 +792,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.05
+            "mean": 0.93
           }
         },
         {
@@ -805,8 +821,8 @@
         "transitionsAdded": 0
       },
       "session": {
-        "accepted": 90,
-        "refused": 70,
+        "accepted": 91,
+        "refused": 69,
         "clips": 16,
         "frames": 294,
         "seconds": 9.81,
@@ -829,7 +845,7 @@
         "rate": "30000/1001",
         "videoSeconds": 9.81,
         "audioSeconds": 9.81,
-        "bytes": 120392
+        "bytes": 81266
       },
       "features": {
         "videoClips": 4,
@@ -842,11 +858,11 @@
       "pictureFramesCompared": 5,
       "parity": [
         {
-          "frame": 139,
+          "frame": 136,
           "features": [
             "speed"
           ],
-          "stillMeanLevel": 94.9,
+          "stillMeanLevel": 90.5,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -854,7 +870,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 1.19
+            "mean": 0.66
           }
         },
         {
@@ -951,7 +967,7 @@
         "rate": "60/1",
         "videoSeconds": 6.917,
         "audioSeconds": 6.916,
-        "bytes": 285660
+        "bytes": 286202
       },
       "features": {
         "videoClips": 4,
@@ -1131,7 +1147,7 @@
       "detail": []
     },
     {
-      "name": "on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (40 frames compared in 8 projects; frames per feature on the picture: {\"blend\":11,\"reverse\":7,\"effect\":8,\"freeze\":6,\"transition\":10,\"mask\":12,\"keyframes\":8,\"speed\":6})",
+      "name": "on the rendered projects the paused editor preview equals the server still (mean difference ≤ 0.5 of 255) and the exported frame is close to it (≤ 6) at frames that contain a picture (41 frames compared in 8 projects; frames per feature on the picture: {\"blend\":10,\"reverse\":5,\"effect\":7,\"freeze\":6,\"transition\":12,\"mask\":13,\"keyframes\":10,\"speed\":5})",
       "ok": true,
       "detail": [
         {
@@ -1197,13 +1213,13 @@
           "seed": 2,
           "frames": [
             {
-              "frame": 227,
-              "level": 82.9,
+              "frame": 269,
+              "level": 84.2,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.42
+              "export": 0.9
             },
             {
               "frame": 123,
@@ -1224,25 +1240,25 @@
               "export": 1.23
             },
             {
-              "frame": 243,
-              "level": 94,
+              "frame": 195,
+              "level": 105.9,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.67
+              "export": 0.92
             },
             {
-              "frame": 170,
-              "level": 61.1,
+              "frame": 188,
+              "level": 77.4,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 1.13
+              "export": 1.72
             },
             {
-              "frame": 68,
+              "frame": 75,
               "level": 48.4,
               "preview": {
                 "mean": 0,
@@ -1251,13 +1267,13 @@
               "export": 1.02
             },
             {
-              "frame": 272,
-              "level": 93.2,
+              "frame": 300,
+              "level": 82.2,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.64
+              "export": 1.25
             }
           ]
         },
@@ -1269,67 +1285,8 @@
           "seed": 4,
           "frames": [
             {
-              "frame": 108,
-              "level": 0.8,
-              "preview": {
-                "mean": 0,
-                "worst": 0
-              },
-              "export": 0.01
-            },
-            {
-              "frame": 75,
-              "level": 0.6,
-              "preview": {
-                "mean": 0,
-                "worst": 0
-              },
-              "export": 0.01
-            }
-          ]
-        },
-        {
-          "seed": 5,
-          "frames": [
-            {
-              "frame": 64,
-              "level": 71.6,
-              "preview": {
-                "mean": 0,
-                "worst": 0
-              },
-              "export": 0.3
-            },
-            {
-              "frame": 123,
-              "level": 56.2,
-              "preview": {
-                "mean": 0,
-                "worst": 0
-              },
-              "export": 0.49
-            },
-            {
-              "frame": 71,
-              "level": 77.8,
-              "preview": {
-                "mean": 0,
-                "worst": 0
-              },
-              "export": 0.88
-            },
-            {
-              "frame": 122,
-              "level": 55.4,
-              "preview": {
-                "mean": 0,
-                "worst": 0
-              },
-              "export": 0.3
-            },
-            {
-              "frame": 196,
-              "level": 0.8,
+              "frame": 127,
+              "level": 0.7,
               "preview": {
                 "mean": 0,
                 "worst": 0
@@ -1337,13 +1294,81 @@
               "export": 0.02
             },
             {
-              "frame": 85,
+              "frame": 51,
+              "level": 0.6,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 0.01
+            },
+            {
+              "frame": 165,
+              "level": 0.7,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 0.02
+            }
+          ]
+        },
+        {
+          "seed": 5,
+          "frames": [
+            {
+              "frame": 67,
+              "level": 71.4,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 0.34
+            },
+            {
+              "frame": 126,
+              "level": 56.2,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 0.5
+            },
+            {
+              "frame": 74,
+              "level": 77.3,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 0.9
+            },
+            {
+              "frame": 258,
+              "level": 90.1,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 0.68
+            },
+            {
+              "frame": 113,
               "level": 31.8,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.63
+              "export": 0.66
+            },
+            {
+              "frame": 209,
+              "level": 88.3,
+              "preview": {
+                "mean": 0,
+                "worst": 0
+              },
+              "export": 0.98
             }
           ]
         },
@@ -1400,13 +1425,13 @@
               "export": 0.97
             },
             {
-              "frame": 481,
-              "level": 83.6,
+              "frame": 480,
+              "level": 100.7,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.05
+              "export": 0.93
             },
             {
               "frame": 210,
@@ -1423,13 +1448,13 @@
           "seed": 8,
           "frames": [
             {
-              "frame": 139,
-              "level": 94.9,
+              "frame": 136,
+              "level": 90.5,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 1.19
+              "export": 0.66
             },
             {
               "frame": 157,
