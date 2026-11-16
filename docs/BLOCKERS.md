@@ -24,6 +24,8 @@ Each entry: what is blocked, how to reproduce, impact, proposed way forward. Wor
 - **Update 2026-11-14:** owner designated this machine a provisional CPU functional profile and authorised one bounded trial; BiRefNet image matting ran on CPU (functional evidence only). GPU memory/speed and quality review remain open for every workflow.
 - **Proposed:** (a) the owner names a GPU machine or approved remote worker and a first workflow — BiRefNet image matte is the smallest candidate (0.44 GB of weights reported); or (b) authorise a CPU attempt of that single workflow here for functional (not performance) evidence. Until then, G0 continues with the parts that do not need a model: image/derived-asset support, attachment via operations, stale-result protection.
 
+- **Update 2026-11-16:** a second descriptor exists (`comfy.image.upscale-4x`, Real-ESRGAN, 67 MB) and has never been run. Two things are the owner's: (1) permission to download that file here for one CPU functional trial (the earlier 1 GB trial grant was for BiRefNet and is spent; the speech and voice grants do not cover it); (2) confirmation of its licence against the original publisher (the mirror says BSD-3-Clause; the publisher's repository could not be read from this environment). Depth (for parallax) and frame interpolation need custom node packs, which the product never installs by itself; nothing was built for them.
+
 ## B-5 — Preconditions inside the project (not external)
 Stale-result protection (FFG-09) needs entity versions (Phase 1). Timeline attachment needs image/derived assets (Phase 2). Worker lease and budgets need Phase 5/10 work.
 
