@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-16T04:29:50.759Z",
+  "ranAt": "2026-11-16T06:04:56.603Z",
   "result": "PASSED",
-  "passed": 19,
-  "total": 19,
+  "passed": 23,
+  "total": 23,
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -11,18 +11,16 @@
   },
   "scope": "Functional evidence only: three short Hebrew sentences with the built-in voice and one take with a synthetic reference voice, on one CPU machine, one run. Nobody listened to any of it. No claim about pronunciation, naturalness, likeness to a reference, other languages or speed.",
   "download": {
-    "bytes": 307844158,
-    "wallSeconds": 14.655,
-    "note": "network-dependent, single sample"
+    "note": "files were already present from an earlier run; verified by size and SHA-256"
   },
   "takes": [
     {
       "text": "שלום, ברוכים הבאים לסרטון החדש שלנו.",
       "seconds": 3.84,
-      "wallSeconds": 43.7,
+      "wallSeconds": 44.7,
       "placed": true,
       "provenance": {
-        "jobId": "job_EecIZlnK9KE",
+        "jobId": "job_YVM34VYfQHI",
         "engine": "chatterbox-tts 0.1.7",
         "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
         "language": "he",
@@ -36,10 +34,10 @@
     {
       "text": "היום נלמד איך לערוך וידאו בקלות ובמהירות.",
       "seconds": 3.96,
-      "wallSeconds": 43.5,
+      "wallSeconds": 46.1,
       "placed": true,
       "provenance": {
-        "jobId": "job_umahe2XOKx0",
+        "jobId": "job_r4EOxKZBNdk",
         "engine": "chatterbox-tts 0.1.7",
         "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
         "language": "he",
@@ -53,10 +51,10 @@
     {
       "text": "תודה שצפיתם, נתראה בפעם הבאה.",
       "seconds": 3,
-      "wallSeconds": 39.1,
+      "wallSeconds": 39.8,
       "placed": true,
       "provenance": {
-        "jobId": "job_Fo0hseu7fLk",
+        "jobId": "job_MVsmUKQXTJg",
         "engine": "chatterbox-tts 0.1.7",
         "model": "ResembleAI/chatterbox@5bb1f6ee (t3_mtl23ls_v2) + Phonikud/phonikud-onnx@b806189f for Hebrew vowel points",
         "language": "he",
@@ -91,24 +89,14 @@
       "detail": {
         "id": "tts.chatterbox-multilingual",
         "totalBytes": 3514875743,
-        "missing": 307844158
+        "missing": 0
       }
     },
     {
-      "name": "Download: an agent credential is refused",
+      "name": "Model files were already present; size and SHA-256 of each were verified again",
       "ok": true,
       "detail": {
-        "status": 403
-      }
-    },
-    {
-      "name": "Download: the owner's approval of the exact size downloads and verifies every file",
-      "ok": true,
-      "detail": {
-        "status": "succeeded",
-        "error": null,
-        "wallSeconds": 14.655,
-        "bytes": 307844158
+        "files": 6
       }
     },
     {
@@ -187,8 +175,8 @@
       "name": "The same text, voice and seed give the same audio again on this machine (the existing asset is reused)",
       "ok": true,
       "detail": {
-        "assetId": "ast_117d108c960",
-        "first": "ast_117d108c960"
+        "assetId": "ast_5491eec9630",
+        "first": "ast_5491eec9630"
       }
     },
     {
@@ -237,11 +225,59 @@
       }
     },
     {
+      "name": "Script: the text is split into its three sentences, one job each, in order",
+      "ok": true,
+      "detail": {
+        "sentences": [
+          "זה המשפט הראשון בתסריט.",
+          "זה המשפט השני, והוא יבוטל!",
+          "וזה המשפט השלישי והאחרון?"
+        ]
+      }
+    },
+    {
+      "name": "Script: sentences are placed one after another with the gap, on one track; a canceled sentence leaves no hole",
+      "ok": true,
+      "detail": {
+        "statuses": [
+          "succeeded",
+          "canceled",
+          "succeeded"
+        ],
+        "first": 20,
+        "third": 25.433333333333334
+      }
+    },
+    {
+      "name": "Script: more than 60 sentences in one request is refused before any job",
+      "ok": true,
+      "detail": {
+        "status": 422
+      }
+    },
+    {
+      "name": "Editor: the Sound tab offers narration when it is set up; typing a sentence and pressing the button adds a narration clip",
+      "ok": true,
+      "detail": {
+        "state": "ready",
+        "note": "done"
+      }
+    },
+    {
+      "name": "Editor: a reference voice needs the speaker's name and the ticked statement before the button works; the result records them and the owner as the one who stated it",
+      "ok": true,
+      "detail": {
+        "blockedFirst": true,
+        "blockedNoTick": true,
+        "voice": "reference"
+      }
+    },
+    {
       "name": "The timeline with the narration exports with audible sound of the expected length",
       "ok": true,
       "detail": {
-        "seconds": 10.77,
-        "expected": 10.77
+        "seconds": 29.57,
+        "expected": 29.57
       }
     }
   ]

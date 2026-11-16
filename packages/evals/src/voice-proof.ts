@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as T from '@pulseframe/time';
+import { chromium } from 'playwright';
 import { startServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -149,6 +150,61 @@ async function main() {
     const c = await call(`/jobs/${cj}/cancel`, {});
     const done = await waitJob(cj, 60_000);
     check('Cancel stops a running narration and adds nothing to the library', c.status === 200 && done.status === 'canceled' && Object.keys((await call(`/projects/${pid}`)).body.project.assets).length === assetsBefore, { status: done.status });
+
+    // ---------- a script, sentence by sentence ----------
+    const rate = { num: 30, den: 1 };
+    const scriptStart = T.frameTime(600, rate); // 20 s: clear of everything above
+    const script = 'זה המשפט הראשון בתסריט. זה המשפט השני, והוא יבוטל! וזה המשפט השלישי והאחרון?';
+    const sr = await call(`/projects/${pid}/narration/script`, { text: script, language: 'he', seed: 300, start: scriptStart, gapFrames: 6 });
+    const ids: string[] = (sr.body.jobs ?? []).map((x: any) => x.jobId);
+    // the middle sentence is canceled while it waits: the third must take its place
+    const cq = ids[1] ? await call(`/jobs/${ids[1]}/cancel`, {}) : { status: 0, body: null };
+    const sj: any[] = [];
+    for (const id of ids) sj.push(await waitJob(id));
+    const tl2 = (await call(`/projects/${pid}/timeline`)).body;
+    const all2 = tl2.tracks.flatMap((t: any) => t.clips.map((c: any) => ({ ...c, trackId: t.id })));
+    const c1 = all2.find((c: any) => c.id === sj[0]?.output?.placed?.clipId), c3 = all2.find((c: any) => c.id === sj[2]?.output?.placed?.clipId);
+    check('Script: the text is split into its three sentences, one job each, in order', sr.status === 202 && sr.body.sentences.length === 3 && ids.length === 3 && sr.body.sentences.join(' ') === script, { sentences: sr.body.sentences });
+    check('Script: sentences are placed one after another with the gap, on one track; a canceled sentence leaves no hole', cq.status === 200 && sj[0]?.status === 'succeeded' && sj[1]?.status === 'canceled' && sj[2]?.status === 'succeeded' && !!c1 && !!c3 && T.eq(c1.start, scriptStart) && T.eq(c3.start, T.add(T.add(c1.start, c1.duration), T.frameTime(6, rate))) && c1.trackId === c3.trackId, { statuses: sj.map((x) => x.status), first: c1 && T.toSeconds(c1.start), third: c3 && T.toSeconds(c3.start) });
+    const long = await call(`/projects/${pid}/narration/script`, { text: Array.from({ length: 61 }, (_, i) => `זה משפט מספר ${i + 1} בתסריט ארוך.`).join(' '), start: scriptStart });
+    check('Script: more than 60 sentences in one request is refused before any job', long.status === 422 && long.body.error.code === 'script_too_long', { status: long.status });
+    cursor = T.add(c3 ? T.add(c3.start, c3.duration) : cursor, T.ZERO);
+
+    // ---------- the form in the editor ----------
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+      await page.goto(`${s.ownerUrl}&project=${pid}`);
+      await page.getByTestId('inspector-tab-sound').click();
+      await page.getByTestId('narration').waitFor();
+      const before = Object.keys((await call(`/projects/${pid}`)).body.project.assets).length;
+      const state0 = await page.getByTestId('narration').getAttribute('data-state');
+      await page.getByTestId('narration-text').fill('זו קריינות שנוצרה מתוך העורך.');
+      await page.getByTestId('narration-run').click();
+      await page.getByTestId('narration-progress').waitFor();
+      await page.locator('[data-testid=narration-note]').waitFor({ timeout: 600_000 });
+      const kind = await page.getByTestId('narration-note').getAttribute('data-kind');
+      const after = Object.keys((await call(`/projects/${pid}`)).body.project.assets).length;
+      check('Editor: the Sound tab offers narration when it is set up; typing a sentence and pressing the button adds a narration clip', state0 === 'ready' && kind === 'done' && after === before + 1, { state: state0, note: kind });
+      // a reference voice from the form: the selected clip's media, a named speaker and a ticked statement
+      await page.locator(`.clip[data-clip-id="${c1.id}"]`).click();
+      await page.getByTestId('inspector-tab-sound').click();
+      await page.getByTestId('narration-use-reference').check();
+      await page.getByTestId('narration-text').fill('וזה נאמר בקול של ההקלטה שנבחרה.');
+      const blockedFirst = await page.getByTestId('narration-run').isDisabled();
+      await page.getByTestId('narration-speaker').fill('קול סינתטי לבדיקה');
+      const blockedNoTick = await page.getByTestId('narration-run').isDisabled();
+      await page.getByTestId('narration-consent').check();
+      const known = new Set(Object.keys((await call(`/projects/${pid}`)).body.project.assets));
+      await page.getByTestId('narration-run').click();
+      await page.getByTestId('narration-progress').waitFor();
+      await page.locator('[data-testid=narration-note]').waitFor({ timeout: 600_000 });
+      const made2 = Object.values((await call(`/projects/${pid}`)).body.project.assets).find((x: any) => !known.has(x.id)) as any;
+      const v2 = made2?.provenance?.voice;
+      check('Editor: a reference voice needs the speaker\'s name and the ticked statement before the button works; the result records them and the owner as the one who stated it', blockedFirst && blockedNoTick && v2?.voice === 'reference' && v2.referenceAssetId === c1.assetId && v2.consent?.speaker === 'קול סינתטי לבדיקה' && v2.consent?.attestedBy === 'user:local', { blockedFirst, blockedNoTick, voice: v2?.voice });
+    } finally { await browser.close(); }
+    const tl3 = (await call(`/projects/${pid}/timeline`)).body;
+    cursor = tl3.tracks.flatMap((t: any) => t.clips).reduce((m: T.RationalTime, c: any) => T.max(m, T.add(c.start, c.duration)), T.ZERO);
 
     // ---------- export with narration ----------
     const ej = await waitJob((await call(`/projects/${pid}/exports`, {})).body.jobId);

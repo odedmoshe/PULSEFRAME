@@ -34,14 +34,14 @@ The bounded BiRefNet trial then ran: see docs/INTEGRATIONS.md and `docs/evidence
 
 ## B-7 — Speech recognition: PARTLY RESOLVED 2026-11-16 (local recognition works; timing accuracy and alignment remain)
 - **Resolved:** the owner authorised a local model download (up to 5 GB). Recognition runs locally with faster-whisper and `ivrit-ai/whisper-large-v3-turbo-ct2` (1.62 GB, Apache-2.0 by its model card): `docs/INTEGRATIONS.md`, `docs/evidence/speech-proof.json`, `docs/evidence/real-media-check.json`.
-- **Still open:** Hebrew word-boundary accuracy against SPEC Appendix C (median 80 ms, p95 200 ms) is unmeasured because no reference timings exist here; forced alignment of a typed transcript and filler-word detection are not built; conversational, noisy, English or mixed-language speech was not checked; GPU speed is unmeasured.
+- **Still open:** Hebrew word-boundary accuracy against SPEC Appendix C (median 80 ms, p95 200 ms) is unmeasured because no reference timings exist here; word timing for typed transcripts is done through recognition (not a dedicated aligner) and filler candidates are rule-based, both checked only on clean read speech; conversational, noisy, English or mixed-language speech was not checked; GPU speed is unmeasured.
 - **Needed to go further:** a few recordings with hand-checked word times (or the owner's judgement of karaoke captions on their own clips), and a run on the GPU laptop.
 
 ## B-8 — Voice: PARTLY RESOLVED 2026-11-16 (local narration works; nobody has listened to it)
 - **Resolved:** the owner authorised a local voice model (up to 5 GB). Narration runs locally with Chatterbox Multilingual (MIT by its model card, 3.21 GB) plus a Hebrew vowel-pointing model (Phonikud, MIT by its model card, 0.31 GB): `docs/INTEGRATIONS.md`, `docs/evidence/voice-proof.json`. Used 3.52 GB of the 5 GB allowed.
 - **Still open:** how the Hebrew sounds. Every check so far is by machine. A person has to listen (`docs/demo/narration-sample-he.m4a` is three sentences) before any claim about pronunciation or naturalness. Speed is unmeasured on a GPU; on this CPU a sentence takes about 40 s.
-- **Reference voice (cloning):** the rules are built (owner only, consent recorded) and one take was made from a synthetic reference. Whether the result resembles a real speaker was not assessed, and it has no editor UI. Using a real person's voice stays the owner's decision each time.
-- **Not built:** voice list with previews, narration of a whole script in one step, pronunciation dictionary, dubbing.
+- **Reference voice (cloning):** the rules are built (owner only, consent recorded) and one take was made from a synthetic reference. Whether the result resembles a real speaker was not assessed. The editor form requires a named speaker and a ticked statement. Using a real person's voice stays the owner's decision each time.
+- **Not built:** voice list with previews, pronunciation dictionary, dubbing. (Script narration sentence by sentence is built.)
 
 ## B-9 — CLOSED AS A DECISION 2026-11-16: the external agent is the Director
 The owner chose the external-agent route: any MCP client plans and edits through the tools; the editor does not embed a language model. Prompt-to-Draft and Long-to-Shorts by meaning are therefore done by that agent, not by a built-in feature. Reopen only on request (it would need a provider credential and a spending limit).

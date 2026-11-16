@@ -1845,6 +1845,33 @@ defineOp({
 });
 
 defineOp({
+  name: 'attach_word_timing',
+  version: 1,
+  internal: true,
+  description: 'Give the words of existing transcript phrases the times a local recognition job heard (alignment). The phrases, their text and their ids are kept; only word times change.',
+  args: z.object({ assetId: z.string(), segments: z.array(z.object({ segmentId: z.string(), approximate: z.boolean(), words: z.array(WordIn).min(1).max(2000) }).strict()).min(1).max(20000) }).strict(),
+  apply(d, a, ctx) {
+    const tr = d.transcripts[a.assetId];
+    if (!tr) throw new OpError('not_found', `asset ${a.assetId} has no transcript`, { assetId: a.assetId });
+    let words = 0;
+    for (const s of a.segments) {
+      const seg = tr.segments.find((x) => x.id === s.segmentId);
+      if (!seg) throw new OpError('not_found', `phrase ${s.segmentId} not found in the transcript of ${a.assetId}`, { segmentId: s.segmentId });
+      const end = T.add(seg.start, seg.duration);
+      let at = seg.start;
+      for (const w of s.words) {
+        if (T.lt(w.start, at) || T.isNegative(w.duration) || T.lt(end, T.add(w.start, w.duration))) throw new OpError('invalid_args', 'word times must be in order and inside their phrase', { segmentId: seg.id, word: w.text.slice(0, 40) });
+        at = T.add(w.start, w.duration);
+      }
+      seg.words = s.words.map((w) => ({ id: ctx.newId('wrd'), text: w.text, start: w.start, duration: w.duration, confidence: w.confidence ?? null }));
+      seg.timing = s.approximate ? 'approximate' : 'word';
+      words += seg.words.length;
+    }
+    return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Timed ${words} words in ${a.segments.length} phrases from the sound`, output: { phrases: a.segments.length, words } };
+  },
+});
+
+defineOp({
   name: 'import_transcript',
   version: 1,
   description: 'Use an SRT or WebVTT file, timed against the SOURCE media, as that asset\'s transcript. Phrases are timed; words are not (no karaoke or word-precise cuts until word timing exists).',

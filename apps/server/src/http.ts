@@ -7,11 +7,11 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { findFillers, timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
-import { NarrationBody, Speech, TranscribeBody } from './speech.ts';
+import { NarrationBody, NarrationScriptBody, Speech, TranscribeBody } from './speech.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
 import type { DerivativeKind, Derivatives } from './derive.ts';
@@ -229,6 +229,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt', c.req.query('variant'));
     return c.body(out.text, 200, { 'content-type': `${out.mime}; charset=utf-8`, 'content-disposition': `attachment; filename="captions.${out.format}"`, 'x-pulseframe-revision': String(p.revision), 'x-pulseframe-cues': String(out.cues) });
   });
+  app.post('/api/v1/projects/:id/analysis/fillers', async (c) => { need(c, 'observe'); return c.json(findFillerWords(store, c.req.param('id'), await body(c, FillerBody))); });
   app.post('/api/v1/projects/:id/analysis/silences', async (c) => {
     const p = need(c, 'observe');
     const { background, ...b } = await body(c, SilenceBody.extend({ background: z.boolean().optional() }).strict());
@@ -547,6 +548,11 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const job = await speech.startNarration(gov, p, c.req.param('id'), await body(c, NarrationBody));
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
+  app.post('/api/v1/projects/:id/narration/script', async (c) => {
+    const p = need(c, 'edit');
+    const r = await speech.startNarrationScript(gov, p, c.req.param('id'), await body(c, NarrationScriptBody));
+    return c.json({ sentences: r.sentences, jobs: r.jobs.map((j) => ({ jobId: j.id, status: j.status, type: j.type })) }, 202);
+  });
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
     const p = need(c, 'edit');
     const j = store.getJob(c.req.param('jobId'));
@@ -613,6 +619,33 @@ export async function findSilences(store: Store, projectId: string, a: z.infer<t
     removableSeconds: sec(candidates.reduce((n, r) => T.add(n, T.sub(r.end, r.start)), T.ZERO)),
     ops: cutOps(candidates),
     note: 'Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it). Quiet speech can be mistaken for silence: review before applying.',
+  };
+}
+
+export const FillerBody = z.object({
+  assetId: z.string(),
+  repeats: z.boolean().optional().describe('Also mark the first of two identical consecutive words (default true)'),
+  words: z.array(z.string().min(1).max(40)).max(50).optional().describe('Extra words to treat as fillers in this search (for example a speaker\'s habitual word)'),
+}).strict();
+/** Filler candidates from the transcript's words, and the timeline cuts that would remove them. Read-only. */
+export function findFillerWords(store: Store, projectId: string, a: z.infer<typeof FillerBody>) {
+  const p = store.getProject(projectId);
+  const tr = p.doc.transcripts[a.assetId];
+  if (!p.doc.assets[a.assetId]) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+  if (!tr) throw new ApiError(404, 'no_transcript', 'this asset has no transcript to search', { assetId: a.assetId }, 'Recognise or import a transcript first.');
+  const { candidates: found, skippedPhrases } = findFillers(tr, { repeats: a.repeats, words: a.words });
+  const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
+  // Each word is mapped on its own, so a word that is no longer on the timeline simply yields no cut.
+  const rows = found.map((c) => ({ ...c, timeline: sourceRangesToTimeline(p.doc, a.assetId, [{ start: c.start, end: c.end }]) }));
+  const cuts = sourceRangesToTimeline(p.doc, a.assetId, found.map((c) => ({ start: c.start, end: c.end })));
+  return {
+    revision: p.revision, assetId: a.assetId, method: 'rules over the transcript\'s words (hesitation sounds, immediate repetitions, listed words); no model, no audio',
+    transcript: { origin: tr.origin.kind, language: tr.language, phrasesWithoutWordTiming: skippedPhrases },
+    words: rows.map((r) => ({ kind: r.kind, text: r.text, segmentId: r.segmentId, wordIds: r.wordIds, sourceStartSeconds: sec(r.start), sourceEndSeconds: sec(r.end), onTimeline: r.timeline.map((x) => ({ startSeconds: sec(x.start), seconds: sec(T.sub(x.end, x.start)) })) })),
+    candidates: cuts.map((r) => ({ start: r.start, end: r.end, startSeconds: sec(r.start), seconds: sec(T.sub(r.end, r.start)) })),
+    removableSeconds: sec(cuts.reduce((n, r) => T.add(n, T.sub(r.end, r.start)), T.ZERO)),
+    ops: cutOps(cuts),
+    note: 'Candidates only. Recognisers often leave hesitation sounds out of their text, so an empty list does not mean there are none. Cuts are snapped inward to whole frames; a word shorter than a frame yields no cut. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it).',
   };
 }
 

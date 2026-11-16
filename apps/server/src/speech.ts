@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { createHash, randomBytes } from 'node:crypto';
-import { RationalTimeSchema, timeOriginSeconds, type Asset } from '@pulseframe/core';
+import { alignPhrase, RationalTimeSchema, splitSentences, timeOriginSeconds, type Asset } from '@pulseframe/core';
 import type { CapabilityDescriptor } from '@pulseframe/providers';
 import * as T from '@pulseframe/time';
 import type { Principal } from './auth.ts';
@@ -83,11 +83,23 @@ export const NarrationBody = z.object({
   referenceAssetId: z.string().optional().describe('Speak in the voice heard in this project asset. Owner session only, and only with consent'),
   consent: z.object({ speaker: z.string().min(1).max(120).describe('Whose voice it is'), confirmed: z.literal(true).describe('The owner states that this person agreed to their voice being used this way') }).strict().optional(),
 }).strict();
+export const NarrationScriptBody = z.object({
+  text: z.string().min(1).max(6000).describe('The whole script. It is split into sentences; each becomes its own narration clip, so one sentence can be redone later with generate_narration at the same place'),
+  language: NarrationBody.shape.language,
+  seed: NarrationBody.shape.seed.describe('Seed of the first sentence; each following sentence uses the next number'),
+  start: RationalTimeSchema.describe('Where the first sentence goes on the timeline (frame-aligned); each following sentence starts where the previous one ends, plus the gap'),
+  trackId: z.string().optional(),
+  gapFrames: z.number().int().min(0).max(300).optional().describe('Silence between sentences, in frames (default 6)'),
+  referenceAssetId: NarrationBody.shape.referenceAssetId,
+  consent: NarrationBody.shape.consent,
+}).strict();
+const MAX_SCRIPT_SENTENCES = 60;
 const CONSENT_STATEMENT = 'The project owner states that the person whose voice is in the reference recording agreed to it being used to generate this speech.';
 
 export const TranscribeBody = z.object({
   language: z.string().regex(/^[a-z]{2,3}$|^auto$/).optional().describe('Spoken language as a two-letter code (default he), or auto to let the recogniser decide from the first 30 seconds'),
   overwrite: z.boolean().optional().describe('Required when the asset already has a transcript: recognising again replaces it, including corrections made by hand'),
+  mode: z.enum(['recognise', 'align']).optional().describe('recognise (default) creates the transcript. align keeps an existing typed or imported transcript exactly as written and only gives its words the times heard in the sound; phrases that already have word times are left alone'),
 }).strict();
 
 const WORKER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../speech/pf_speech.py');
@@ -260,7 +272,11 @@ export class Speech {
     const asset = p.doc.assets[a.assetId];
     if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
     if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to transcribe');
-    if (p.doc.transcripts?.[a.assetId] && !a.overwrite) throw new ApiError(409, 'would_replace_transcript', 'this asset already has a transcript; recognising again would replace it, including corrections made by hand', { assetId: a.assetId }, 'Pass overwrite=true to replace it.');
+    const existing = p.doc.transcripts?.[a.assetId];
+    if (a.mode === 'align') {
+      if (!existing) throw new ApiError(404, 'no_transcript', 'this asset has no transcript to time', { assetId: a.assetId }, 'Import or type one first, or use mode=recognise.');
+      if (!existing.segments.some((s) => s.timing !== 'word' && s.text.trim())) throw new ApiError(409, 'already_timed', 'every phrase of this transcript already has word times', { assetId: a.assetId });
+    } else if (existing && !a.overwrite) throw new ApiError(409, 'would_replace_transcript', 'this asset already has a transcript; recognising again would replace it, including corrections made by hand', { assetId: a.assetId }, 'Pass overwrite=true to replace it.');
     return { asset, revision: p.revision };
   }
   /** Start recognition as a durable job. Refused, with the reason, when the engine or the model is not ready. */
@@ -271,7 +287,7 @@ export class Speech {
     const st = await this.status();
     if (!st.transcription.ready) throw new ApiError(409, 'speech_not_ready', `automatic transcription is not set up: ${st.transcription.detail}`, { reason: st.transcription.reason }, 'A typed or imported (SRT/VTT) transcript works without it.');
     const model = st.models.find((m) => m.kind === 'asr' && m.ready)!;
-    const job = this.store.createJob(projectId, TRANSCRIBE, principal.actor, { assetId: a.assetId, language: a.language ?? 'he', ...(a.overwrite ? { overwrite: true } : {}), modelId: model.id, projectRevision: revision });
+    const job = this.store.createJob(projectId, TRANSCRIBE, principal.actor, { assetId: a.assetId, language: a.language ?? 'he', ...(a.overwrite ? { overwrite: true } : {}), ...(a.mode === 'align' ? { mode: 'align' } : {}), modelId: model.id, projectRevision: revision });
     this.enqueue(job.id);
     return this.store.getJob(job.id);
   }
@@ -309,6 +325,30 @@ export class Speech {
       const { segments, stats } = sanitizeRecognition(parsed.data.segments, seconds);
       const eng = this.probes.get('asr')?.value;
       const run = { engine: `${eng?.engine ?? 'faster-whisper'} ${eng?.version ?? ''}`.trim(), model: model.engineModel, device: parsed.data.device, computeType: parsed.data.computeType, audioSeconds: Number(seconds.toFixed(3)), speechSeconds: Number(parsed.data.speechDuration.toFixed(3)), wallSeconds: (Date.now() - started) / 1000, language: parsed.data.language, languageProbability: Number(parsed.data.languageProbability.toFixed(3)) };
+      if (j.input.mode === 'align') {
+        // The typed text stays; each phrase takes the times of the words heard inside it.
+        const heard = segments.flatMap((sg) => sg.words.map((w) => ({ text: w.text, start: Math.round(T.toSeconds(w.start) * 1000), end: Math.round((T.toSeconds(w.start) + T.toSeconds(w.duration)) * 1000), confidence: w.confidence })));
+        const tr = this.store.getProject(j.projectId).doc.transcripts[asset.id];
+        if (!tr) throw new ApiError(409, 'no_transcript', 'the transcript was removed while the sound was being recognised');
+        const rt = (v: number) => T.rt(v, 1000);
+        const timed: { segmentId: string; approximate: boolean; words: { text: string; start: T.RationalTime; duration: T.RationalTime; confidence?: number }[] }[] = [];
+        const tally = { same: 0, different: 0, estimated: 0, phrasesWord: 0, phrasesApproximate: 0, phrasesLeftAlone: 0 };
+        for (const sg of tr.segments) {
+          const typed = sg.text.split(/\s+/).filter(Boolean);
+          if (sg.timing === 'word' || !typed.length) { tally.phrasesLeftAlone++; continue; }
+          // phrase bounds rounded inward to the millisecond, so no word can fall outside the phrase
+          const from = Math.ceil(T.toSeconds(sg.start) * 1000 - 1e-6), to = Math.floor((T.toSeconds(sg.start) + T.toSeconds(sg.duration)) * 1000 + 1e-6);
+          if (to <= from) { tally.phrasesLeftAlone++; continue; }
+          const al = alignPhrase(typed, heard.filter((w) => (w.start + w.end) / 2 >= from && (w.start + w.end) / 2 < to), from, to);
+          tally.same += al.same; tally.different += al.different; tally.estimated += al.estimated;
+          tally[al.timing === 'word' ? 'phrasesWord' : 'phrasesApproximate']++;
+          timed.push({ segmentId: sg.id, approximate: al.timing !== 'word', words: al.words.map((w) => ({ text: w.text, start: rt(w.start), duration: rt(w.end - w.start), ...(w.confidence !== null ? { confidence: w.confidence } : {}) })) });
+        }
+        if (!timed.length) { this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { assetId: asset.id, attached: false, mode: 'align', note: 'no phrase needed timing; nothing was changed', ...tally, run } }); return; }
+        const c = this.store.commit({ projectId: j.projectId, actor: j.actor, label: 'Time words from the sound', allowInternal: true, ops: [{ op: 'attach_word_timing', args: { assetId: asset.id, segments: timed } }] });
+        this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { assetId: asset.id, attached: true, mode: 'align', revision: c.revision, ...tally, run, note: 'The text is unchanged. Words the recogniser did not hear have estimated times; their phrases are marked approximate and are not cut word by word unless that is allowed explicitly.' } });
+        return;
+      }
       if (!segments.length) { this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { assetId: asset.id, attached: false, note: stats.degeneratePhrases ? 'the recogniser produced only repetition, not words; nothing was attached' : 'no speech was recognised; nothing was attached', ...stats, run } }); return; }
       // Recognition takes a while: the asset may be gone, or a transcript typed, since it started.
       this.assertTranscribable(j.projectId, j.input);
@@ -336,6 +376,20 @@ export class Speech {
     });
   }
 
+  /** The rules for speaking in a recorded voice, in one place: the owner's own session, a consent statement, a usable recording. */
+  private referenceInput(principal: Principal, doc: { assets: Record<string, Asset> }, a: { referenceAssetId?: string; consent?: { speaker: string; confirmed: true } }) {
+    if (!a.referenceAssetId) {
+      if (a.consent) throw new ApiError(400, 'invalid_request', 'consent is only meaningful together with referenceAssetId');
+      return {};
+    }
+    if (principal.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'speaking in a recorded person\'s voice needs the owner\'s own consent statement; an agent credential cannot give it', {}, 'Use the built-in voice, or ask the owner to start this from the editor.');
+    if (!a.consent) throw new ApiError(422, 'consent_required', 'a reference voice needs a consent statement: whose voice it is, and that they agreed', {}, 'Send consent: { speaker, confirmed: true }.');
+    const ref = doc.assets[a.referenceAssetId];
+    if (!ref) throw new ApiError(404, 'not_found', `asset ${a.referenceAssetId} not found`, { assetId: a.referenceAssetId });
+    if (!ref.audio) throw new ApiError(422, 'no_audio', 'the reference asset has no sound');
+    if (T.toSeconds(ref.duration) < 5) throw new ApiError(422, 'reference_too_short', 'the reference recording must be at least 5 seconds long', { seconds: Number(T.toSeconds(ref.duration).toFixed(2)) });
+    return { referenceAssetId: a.referenceAssetId, consent: { speaker: a.consent.speaker, statement: CONSENT_STATEMENT, attestedBy: principal.actor, attestedAt: new Date().toISOString() } };
+  }
   /**
    * Start a narration job: the text is spoken by the local voice model and the result becomes a normal audio asset with its
    * recipe in provenance. A reference voice is the owner's own decision with a consent statement; an agent cannot make one.
@@ -344,14 +398,7 @@ export class Speech {
     gov.assertMayAct(principal, projectId, 'edit');
     gov.assertUnrestricted(principal, 'add media to the library');
     const p = this.store.getProject(projectId);
-    if (a.referenceAssetId) {
-      if (principal.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'speaking in a recorded person\'s voice needs the owner\'s own consent statement; an agent credential cannot give it', {}, 'Use the built-in voice, or ask the owner to start this from the editor.');
-      if (!a.consent) throw new ApiError(422, 'consent_required', 'a reference voice needs a consent statement: whose voice it is, and that they agreed', {}, 'Send consent: { speaker, confirmed: true }.');
-      const ref = p.doc.assets[a.referenceAssetId];
-      if (!ref) throw new ApiError(404, 'not_found', `asset ${a.referenceAssetId} not found`, { assetId: a.referenceAssetId });
-      if (!ref.audio) throw new ApiError(422, 'no_audio', 'the reference asset has no sound');
-      if (T.toSeconds(ref.duration) < 5) throw new ApiError(422, 'reference_too_short', 'the reference recording must be at least 5 seconds long', { seconds: Number(T.toSeconds(ref.duration).toFixed(2)) });
-    } else if (a.consent) throw new ApiError(400, 'invalid_request', 'consent is only meaningful together with referenceAssetId');
+    const reference = this.referenceInput(principal, p.doc, a);
     if (!a.text.trim()) throw new ApiError(400, 'invalid_request', 'there is no text to speak');
     const st = await this.status();
     if (!st.narration.ready) throw new ApiError(409, 'voice_not_ready', `narration is not set up: ${st.narration.detail}`, { reason: st.narration.reason }, 'A recorded or imported voice file works without it.');
@@ -359,10 +406,49 @@ export class Speech {
     const job = this.store.createJob(projectId, NARRATE, principal.actor, {
       text: a.text.trim(), language: a.language ?? 'he', seed: a.seed ?? randomBytes(4).readUInt32BE() >>> 1, modelId: model.id, projectRevision: p.revision,
       ...(a.start ? { start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}) } : {}),
-      ...(a.referenceAssetId ? { referenceAssetId: a.referenceAssetId, consent: { speaker: a.consent!.speaker, statement: CONSENT_STATEMENT, attestedBy: principal.actor, attestedAt: new Date().toISOString() } } : {}),
+      ...reference,
     });
     this.enqueue(job.id);
     return this.store.getJob(job.id);
+  }
+  /**
+   * Narrate a script: one job per sentence, run in order; each sentence is placed where the previous one ended.
+   * A sentence that fails or is canceled leaves a hole of zero length: the next one takes its place.
+   */
+  async startNarrationScript(gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof NarrationScriptBody>): Promise<{ jobs: JobRow[]; sentences: string[] }> {
+    gov.assertMayAct(principal, projectId, 'edit');
+    gov.assertUnrestricted(principal, 'add media to the library');
+    const p = this.store.getProject(projectId);
+    const reference = this.referenceInput(principal, p.doc, a);
+    const sentences = splitSentences(a.text, 300);
+    if (!sentences.length) throw new ApiError(400, 'invalid_request', 'there is no text to speak');
+    if (sentences.length > MAX_SCRIPT_SENTENCES) throw new ApiError(422, 'script_too_long', `the script has ${sentences.length} sentences; at most ${MAX_SCRIPT_SENTENCES} are narrated in one request`, { sentences: sentences.length, max: MAX_SCRIPT_SENTENCES }, 'Send it in parts.');
+    const st = await this.status();
+    if (!st.narration.ready) throw new ApiError(409, 'voice_not_ready', `narration is not set up: ${st.narration.detail}`, { reason: st.narration.reason }, 'A recorded or imported voice file works without it.');
+    const model = st.models.find((m) => m.kind === 'tts' && m.ready)!;
+    const rate = p.doc.settings.frameRate;
+    const gap = T.frameTime(a.gapFrames ?? 6, rate);
+    const seed = a.seed ?? randomBytes(4).readUInt32BE() >>> 1;
+    const script = randomBytes(6).toString('hex');
+    const jobs: JobRow[] = [];
+    for (const [i, text] of sentences.entries()) {
+      const job = this.store.createJob(projectId, NARRATE, principal.actor, {
+        text, language: a.language ?? 'he', seed: (seed + i) % 2 ** 31, modelId: model.id, projectRevision: p.revision,
+        start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}), script: { id: script, index: i, of: sentences.length, gap, ...(i ? { follows: jobs[i - 1]!.id } : {}) }, ...reference,
+      });
+      jobs.push(job);
+    }
+    for (const j of jobs) this.enqueue(j.id);
+    return { jobs: jobs.map((j) => this.store.getJob(j.id)), sentences };
+  }
+  /** Where a sentence of a script goes: after the sentence before it (which may have failed, in which case its own place is taken). */
+  private scriptPlace(j: JobRow): { start: unknown; trackId?: string } {
+    const follows = j.input.script?.follows as string | undefined;
+    if (!follows) return { start: j.input.start, ...(j.input.trackId ? { trackId: j.input.trackId } : {}) };
+    const prev = this.store.getJob(follows);
+    const next = prev.output?.script?.next ?? prev.error?.details?.script?.next;
+    // a sentence that was canceled left no note of its place: it had the place of whatever came before it
+    return next ?? this.scriptPlace(prev);
   }
   private ffmpeg(args: string[], jobId: string, what: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -379,6 +465,9 @@ export class Speech {
     const j = this.store.getJob(jobId);
     const started = Date.now();
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-tts-'));
+    const place = this.scriptPlace(j);
+    let next = place; // where the following sentence of a script goes if this one places nothing
+    const scriptState = () => (j.input.script ? { script: { id: j.input.script.id, index: j.input.script.index, of: j.input.script.of, next } } : {});
     try {
       this.store.updateJob(jobId, { status: 'running', stage: 'loading the voice model', attempt: j.attempt + 1 });
       const model = SPEECH_MODELS.find((m) => m.id === j.input.modelId);
@@ -425,15 +514,21 @@ export class Speech {
       } } };
       const imp = this.store.commit({ projectId: j.projectId, actor: j.actor, label: 'Generate narration', allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
       const assetId = imp.results[0]!.output!.assetId as string;
-      let placed: unknown = null, revision = imp.revision, placeError: unknown;
+      let placed: any = null, revision = imp.revision, placeError: unknown;
       if (j.input.start) {
         try {
-          const c = this.store.commit({ projectId: j.projectId, actor: j.actor, label: 'Place narration', ops: [{ op: 'add_clip', args: { assetId, start: j.input.start, ...(j.input.trackId ? { trackId: j.input.trackId } : {}) } }] });
+          const c = this.store.commit({ projectId: j.projectId, actor: j.actor, label: 'Place narration', ops: [{ op: 'add_clip', args: { assetId, start: place.start, ...(place.trackId ? { trackId: place.trackId } : {}) } }] });
           placed = c.results[0]!.output ?? null; revision = c.revision;
+          if (j.input.script && placed?.clipId) {
+            // the next sentence starts where this clip ends, plus the gap, on the same track
+            const doc = this.store.getProject(j.projectId).doc;
+            for (const seq of Object.values(doc.sequences)) for (const tr of seq.tracks) { const c2 = tr.clips.find((x) => x.id === placed.clipId); if (c2) next = { start: T.add(T.add(c2.start, c2.duration), j.input.script.gap), trackId: tr.id }; }
+          }
         } catch (e: any) { placeError = e instanceof ApiError ? e.toJSON().error : { code: e?.code ?? 'place_failed', message: String(e?.message ?? e) }; }
       }
       this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: {
         assetId, revision, placed, ...(placeError ? { placeError, note: 'the narration is in the media library; it could not be placed at the requested time' } : {}),
+        ...(j.input.script ? { script: { id: j.input.script.id, index: j.input.script.index, of: j.input.script.of, next } } : {}),
         seconds: Number(seconds.toFixed(3)), voice: j.input.referenceAssetId ? 'reference' : 'built-in',
         run: { engine: asset.provenance!.voice!.engine, model: model.engineModel, device: result.device, seed: j.input.seed, wallSeconds: (Date.now() - started) / 1000 },
         review: 'Machine speech: listen to it before publishing. Hebrew pronunciation has not been qualified.',
@@ -442,7 +537,8 @@ export class Speech {
       if (this.stopped) return;
       if (this.canceled(jobId)) return this.finishCanceled(jobId);
       if (!(e instanceof ApiError)) console.error(e);
-      this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'internal_error', message: 'narration failed unexpectedly' } });
+      const err = e instanceof ApiError ? e.toJSON().error : { code: 'internal_error', message: 'narration failed unexpectedly' };
+      this.store.updateJob(jobId, { status: 'failed', stage: null, error: { ...err, details: { ...(err as { details?: object }).details, ...scriptState() } } });
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   }
 

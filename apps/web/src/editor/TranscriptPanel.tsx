@@ -34,7 +34,7 @@ const gb = (bytes: number) => `${(bytes / 1e9).toFixed(2)} GB`;
  * Automatic recognition for one asset: the setup state as the server reports it, the owner's model download for the exact size
  * shown, and the recognition job with its stage and a cancel button. The transcript itself arrives as a normal project change.
  */
-function AutoTranscribe({ assetId, language, overwrite }: { assetId: string; language: string; overwrite?: boolean }) {
+function AutoTranscribe({ assetId, language, overwrite, align }: { assetId: string; language: string; overwrite?: boolean; align?: boolean }) {
   const { editor, state, t } = useEditorState();
   const [status, setStatus] = useState<SpeechStatus | null>(null);
   const [job, setJob] = useState<{ id: string; kind: 'asr' | 'download'; stage: string | null } | null>(null);
@@ -77,7 +77,7 @@ function AutoTranscribe({ assetId, language, overwrite }: { assetId: string; lan
         </p>
       ) : tr.ready ? (
         <p>
-          <button onClick={() => start('asr', api.transcribe(pid, assetId, { language, ...(overwrite ? { overwrite: true } : {}) }))} data-testid="asr-run">{t(overwrite ? 'asr.again' : 'asr.run')}</button>{' '}
+          <button onClick={() => start('asr', api.transcribe(pid, assetId, { language, ...(align ? { mode: 'align' as const } : overwrite ? { overwrite: true } : {}) }))} data-testid={align ? 'asr-align' : 'asr-run'}>{t(align ? 'asr.align' : overwrite ? 'asr.again' : 'asr.run')}</button>{' '}
           <span className="muted">{t(tr.device === 'cuda' ? 'asr.device.cuda' : 'asr.device.cpu')}</span>
         </p>
       ) : tr.reason === 'model_missing' && model ? (
@@ -87,10 +87,10 @@ function AutoTranscribe({ assetId, language, overwrite }: { assetId: string; lan
         </p>
       ) : tr.reason === 'engine_not_working' ? (
         <p className="muted" data-testid="asr-unavailable">{t('asr.engineBroken')} <bdi>{tr.detail}</bdi></p>
-      ) : !overwrite ? (
+      ) : !overwrite && !align ? (
         <p className="muted" data-testid="asr-unavailable">{t('asr.notConfigured')}</p>
       ) : null}
-      {note && <p role="status" data-testid="asr-note" data-kind={note.kind}>{t(note.kind === 'done' ? 'asr.done' : note.kind === 'noSpeech' ? 'asr.noSpeech' : 'asr.failed')} {note.detail && <bdi>{note.detail}</bdi>}</p>}
+      {note && <p role="status" data-testid="asr-note" data-kind={note.kind}>{t(note.kind === 'done' ? (align ? 'asr.aligned' : 'asr.done') : note.kind === 'noSpeech' ? 'asr.noSpeech' : 'asr.failed')} {note.detail && <bdi>{note.detail}</bdi>}</p>}
     </div>
   );
 }
@@ -171,6 +171,7 @@ export function TranscriptPanel() {
         {failure?.approx && <button className="ghost" onClick={() => void cut(true)} data-testid="transcript-cut-anyway">{t('transcript.cutAnyway')}</button>}
       </div>
       {failure && <p className="muted danger" role="alert" data-testid="transcript-error">{failure.message}</p>}
+      {assetId && doc.assets[assetId]?.audio && transcript.segments.some((s) => s.timing !== 'word' && s.text.trim()) && <AutoTranscribe assetId={assetId} language={transcript.language.slice(0, 2)} align />}
       <ol className="phrases">
         {transcript.segments.map((s) => (
           <Phrase key={s.id} seg={s} editing={editing === s.id} onEdit={(on) => setEditing(on ? s.id : null)}
@@ -231,6 +232,66 @@ function Phrase({ seg, editing, onEdit, onSave, renderWord, formatName, formatTe
         </>
       )}
     </li>
+  );
+}
+
+/** Filler candidates from the transcript of the selected clip's media: found by rule, listed for review, removed as one undoable edit. */
+export function FillerPanel() {
+  const { editor, state, t } = useEditorState();
+  const { doc } = state;
+  const sel = editor.selected;
+  const selAsset = sel?.clip.type === 'media' ? sel.clip.assetId : null;
+  const assetId = selAsset ?? (doc ? Object.keys(doc.transcripts)[0] ?? null : null);
+  const [extra, setExtra] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [res, setRes] = useState<Awaited<ReturnType<typeof api.findFillers>> | null>(null);
+  useEffect(() => { setRes(null); setErr(null); setStale(false); }, [assetId]);
+  if (!doc || !assetId || !doc.transcripts[assetId]) return null;
+  const find = async () => {
+    setBusy(true); setErr(null); setStale(false); setRes(null);
+    const words = extra.split(/[,\s]+/).map((w) => w.trim()).filter(Boolean).slice(0, 50);
+    try { setRes(await api.findFillers(doc.id, { assetId, ...(words.length ? { words } : {}) })); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+  const apply = async () => {
+    if (!res || res.candidates.length === 0) return;
+    if (editor.getState().revision !== res.revision) { setRes(null); setStale(true); return; }
+    const r = await editor.commit(res.ops, 'Remove filler words');
+    if (r) setRes(null);
+  };
+  return (
+    <div className="fields fillers" data-testid="filler-panel" data-asset-id={assetId}>
+      <p className="muted">{t('filler.hint')}</p>
+      <label>{t('filler.extra')}
+        <input type="text" dir="auto" value={extra} onChange={(e) => setExtra(e.target.value)} data-testid="filler-extra" />
+      </label>
+      <button className="ghost" disabled={busy} onClick={() => void find()} data-testid="filler-find">{t('filler.find')}</button>
+      {err && <p className="muted danger" role="alert" data-testid="filler-error">{err}</p>}
+      {stale && <p className="muted danger" role="alert" data-testid="filler-stale">{t('silence.stale')}</p>}
+      {res && (
+        <>
+          <p role="status" data-testid="filler-summary" data-count={res.words.length} data-cuts={res.candidates.length}>
+            {res.words.length === 0 ? t('filler.none') : `${t('filler.count')}: `}
+            {res.words.length > 0 && <bdi>{res.words.length} · {res.removableSeconds.toFixed(2)}s</bdi>}
+          </p>
+          {res.words.length > 0 && (
+            <ul className="filler-list" data-testid="filler-list">
+              {res.words.slice(0, 200).map((w, i) => (
+                <li key={i} data-kind={w.kind}>
+                  <button className="ghost" disabled={!w.onTimeline.length} onClick={() => { const at = w.onTimeline[0]; if (at) editor.seek(Math.round((at.startSeconds * editor.rate.num) / editor.rate.den)); }}>
+                    <bdi>{w.text}</bdi> <span className="muted">{t(w.kind === 'hesitation' ? 'filler.kind.hesitation' : w.kind === 'repeat' ? 'filler.kind.repeat' : 'filler.kind.listed')}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {res.candidates.length > 0 && <button className="ghost danger" onClick={() => void apply()} data-testid="filler-apply">{t('filler.apply')}</button>}
+        </>
+      )}
+    </div>
   );
 }
 

@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-16T03:52:03.275Z",
+  "ranAt": "2026-11-16T05:55:20.213Z",
   "result": "PASSED",
-  "passed": 19,
-  "total": 19,
+  "passed": 26,
+  "total": 26,
   "machine": {
     "platform": "Linux 6.18.44-fc-v470 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -15,8 +15,8 @@
   },
   "timing": {
     "audioSeconds": 116.1,
-    "wallSeconds": 107.7,
-    "wallPerAudioSecond": 0.93,
+    "wallSeconds": 112.1,
+    "wallPerAudioSecond": 0.97,
     "lowConfidenceWords": 3,
     "note": "each job loads the model again; one CPU machine, one run: not a performance figure"
   },
@@ -167,6 +167,69 @@
       }
     },
     {
+      "name": "Filler search runs on a recognised transcript and returns candidates with the cuts to apply (read-only)",
+      "ok": true,
+      "detail": {
+        "found": 0,
+        "note": "read sentences: few or none are expected"
+      }
+    },
+    {
+      "name": "Filler search finds the hesitations and the repeated word in a typed transcript, and applying its cuts removes exactly them",
+      "ok": true,
+      "detail": {
+        "words": [
+          "hesitation:אה",
+          "repeat:אני",
+          "hesitation:אממ"
+        ],
+        "removedSeconds": 1.5,
+        "status": 200
+      }
+    },
+    {
+      "name": "Alignment: an imported phrase-timed transcript gets word times from the sound; its text, phrase ids and origin are unchanged",
+      "ok": true,
+      "detail": {
+        "timing": "word",
+        "same": 13,
+        "different": 0,
+        "estimated": 0,
+        "words": 13,
+        "error": null
+      }
+    },
+    {
+      "name": "Alignment: most typed words were found in the sound (at least 60% identical to what was heard)",
+      "ok": true,
+      "detail": {
+        "identical": 13,
+        "of": 13
+      }
+    },
+    {
+      "name": "Alignment: refused for an asset without a transcript",
+      "ok": true,
+      "detail": {
+        "status": 404
+      }
+    },
+    {
+      "name": "Editor: the Speech tab offers recognition when it is set up; pressing the button fills the transcript panel with words",
+      "ok": true,
+      "detail": {
+        "state": "ready",
+        "words": 14
+      }
+    },
+    {
+      "name": "Editor: the filler search reports its result in the panel",
+      "ok": true,
+      "detail": {
+        "count": "0"
+      }
+    },
+    {
       "name": "Cancel stops a running recognition and nothing is attached",
       "ok": true,
       "detail": {
@@ -179,7 +242,7 @@
     {
       "file": "10285382808955499770.wav",
       "audioSeconds": 5.16,
-      "wallSeconds": 8.8,
+      "wallSeconds": 9.6,
       "referenceWords": 14,
       "wordErrors": 1,
       "reference": "הוצאות המלחמה של האימפריאליזם האמריקני על כיבוש הפיליפינים שולמו על-ידי העם הפיליפיני עצמו.",
@@ -188,7 +251,7 @@
     {
       "file": "10333197193824183869.wav",
       "audioSeconds": 7.56,
-      "wallSeconds": 8.5,
+      "wallSeconds": 8.8,
       "referenceWords": 12,
       "wordErrors": 5,
       "reference": "ניתן להמיר כסף בבנק היחידי באיים שממוקם בסטנלי מול חנות FIC West.",
@@ -197,7 +260,7 @@
     {
       "file": "10608586173590639256.wav",
       "audioSeconds": 7.08,
-      "wallSeconds": 8.7,
+      "wallSeconds": 9.3,
       "referenceWords": 16,
       "wordErrors": 9,
       "reference": "\"למשל, נטען ש\"\"למידה\"\" ו\"\"חברות\"\" הם גורמי מוטיבציה חשובים לשימוש באינטרנט (ג'יימס ושות', 1995).\"",
@@ -206,7 +269,7 @@
     {
       "file": "1083791105728656051.wav",
       "audioSeconds": 4.8,
-      "wallSeconds": 8,
+      "wallSeconds": 8.3,
       "referenceWords": 13,
       "wordErrors": 0,
       "reference": "האוכלוסייה המקורית לא השתנתה כלל, הם עדיין צריכים את אותן התאמות שהיו בעבר.",
@@ -215,7 +278,7 @@
     {
       "file": "11824821116359364698.wav",
       "audioSeconds": 6.06,
-      "wallSeconds": 8.4,
+      "wallSeconds": 8.1,
       "referenceWords": 12,
       "wordErrors": 6,
       "reference": "הערבים גם הביאו את האיסלם לארצות, והוא קנה אחיזה נרחבת בקומורו ובמיוט.",
@@ -224,7 +287,7 @@
     {
       "file": "10068749401638533088.wav",
       "audioSeconds": 7.62,
-      "wallSeconds": 9,
+      "wallSeconds": 9.9,
       "referenceWords": 15,
       "wordErrors": 0,
       "reference": "כשהגעת למדינה זרה בהתחלה, כנראה שאנשים היו סבלניים ומבינים, בידיעה שמטיילים במדינות חדשות צריכים להתאקלם.",
@@ -233,7 +296,7 @@
     {
       "file": "11816505664411611127.wav",
       "audioSeconds": 19.26,
-      "wallSeconds": 10.1,
+      "wallSeconds": 10.7,
       "referenceWords": 39,
       "wordErrors": 10,
       "reference": "\"בתור NSA הוא סייע לקרטר להתנהל בדיפלומטיות בענייני מדינות העולם (world affairs), כמו אירועי קמפ דייויד, 1978; נרמול יחסי ארה\"\"ב-סין במהלך שנות ה-70 המאוחרות; המהפכה האיראנית, אשר הובילה למקרה בני הערובה, 1979; והפלישה הסובייטית לאפגניסטן, 1979.\"",
@@ -242,7 +305,7 @@
     {
       "file": "11540143980768727994.wav",
       "audioSeconds": 8.58,
-      "wallSeconds": 8.9,
+      "wallSeconds": 9.5,
       "referenceWords": 24,
       "wordErrors": 4,
       "reference": "רובין אות'אפה השיג את התוצאה הגבוהה ביותר בסבבים, 70 ריצות ב-41 כדורים בלבד על ידי פגיעה ב-11 רביעיות ו-2 שישיות.",
@@ -251,7 +314,7 @@
     {
       "file": "1125590556134020107.wav",
       "audioSeconds": 10.86,
-      "wallSeconds": 9.4,
+      "wallSeconds": 9.2,
       "referenceWords": 22,
       "wordErrors": 3,
       "reference": "נשים צריכות להבין שהבדלים תרבותיים עלולים לגרום למה שהן היו רואות כהטרדה, וכי זה לא נדיר שמישהו יעקוב אחריהן, יאחוז בזרוען וכו'.",
@@ -260,7 +323,7 @@
     {
       "file": "10043827527204102024.wav",
       "audioSeconds": 13.32,
-      "wallSeconds": 9.5,
+      "wallSeconds": 9.9,
       "referenceWords": 22,
       "wordErrors": 9,
       "reference": "הפארק הלאומי קרוגר (KNP) נמצא בחלק הצפון מזרחי של דרום אפריקה, לאורך גבול מוזמביק במזרח, זימבבואה בצפון, וגבולו הדרומי הוא נהר קרוקודייל.",
@@ -269,7 +332,7 @@
     {
       "file": "11304748757603993363.wav",
       "audioSeconds": 17.76,
-      "wallSeconds": 9.8,
+      "wallSeconds": 9.3,
       "referenceWords": 24,
       "wordErrors": 22,
       "reference": "ברחבי ארצות הברית, ישנם כ-400,000 מקרים ידועים של טרשת נפוצה (MS), כך שהיא עדיין המחלה העצבית המובילה בקרב מבוגרים צעירים ובגיל העמידה.",
@@ -278,7 +341,7 @@
     {
       "file": "11039943409256922423.wav",
       "audioSeconds": 8.04,
-      "wallSeconds": 8.6,
+      "wallSeconds": 9.4,
       "referenceWords": 16,
       "wordErrors": 1,
       "reference": "עד מהרה קצינים מצוידים בציוד לפיזור מהומות נכנסו לחצר ודחקו את האסירים לפינה באמצעות גז מדמיע.",

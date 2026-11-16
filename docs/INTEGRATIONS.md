@@ -100,7 +100,9 @@ Download is the owner's action in the Speech tab (or `POST /api/v1/projects/{id}
 
 **Recognition.** `POST /api/v1/projects/{id}/assets/{assetId}/transcribe` (`language` default `he`, `overwrite`) or MCP `transcribe_asset` starts a job: ffmpeg writes 16 kHz mono on the asset's own clock, the worker recognises with word times (voice-activity filter on, no conditioning on earlier text), the server makes times obey the transcript rules by moving them only onto a neighbour or the end of the media, leaves out phrases that are repetition, and attaches the rest with `attach_transcript`. One recognition runs at a time. The model is loaded again for every job.
 
-**Evidence and limits.** `pnpm proof:speech` (19 checks) and `pnpm check:media <folder>`; see `docs/evidence/speech-proof.json`. Sample speech for the proof: the first ~14 MB of `google/fleurs` `data/he_il/audio/dev.tar.gz` plus `dev.tsv`, unpacked to `.artifacts/speech/fleurs` (CC BY 4.0; not committed).
+**Alignment and fillers.** `mode: "align"` on the same route keeps an existing typed or imported transcript's text and gives its words the heard times (phrases with estimated words become approximate). `POST /api/v1/projects/{id}/analysis/fillers` lists filler candidates by rule from any word-timed transcript.
+
+**Evidence and limits.** `pnpm proof:speech` (26 checks) and `pnpm check:media <folder>`; see `docs/evidence/speech-proof.json`. Sample speech for the proof: the first ~14 MB of `google/fleurs` `data/he_il/audio/dev.tar.gz` plus `dev.tsv`, unpacked to `.artifacts/speech/fleurs` (CC BY 4.0; not committed).
 Not established: accuracy beyond clean read sentences, word-timing accuracy, speed on a GPU. PyAV is bypassed on purpose: faster-whisper 1.2.1's own decoder fails with the PyAV version pip resolves today, so the worker passes samples directly.
 
 ## Local narration / text to speech (optional — SPEC §17, B-8)
@@ -119,9 +121,11 @@ PF_VOICE_PYTHON=.artifacts/speech/tts-venv/bin/python PF_SPEECH_PYTHON=.artifact
 **Narration.** `POST /api/v1/projects/{id}/narration` (`text` up to 300 characters, `language`, `seed`, optional `start`/`trackId`) or MCP `generate_narration`: a job speaks the text, the result is checked (has a length, is not silence), converted to 48 kHz mono WAV and imported as a generated audio asset whose provenance holds the text, the pointed text that was actually spoken, engine, model revisions, seed and the engine's watermark note. Same text, voice and seed reproduced the same bytes on this machine.
 Hebrew: the voice model garbles unpointed Hebrew (a second model recovered 8 of 18 words), so unpointed Hebrew is vowel-pointed first (17 of 18). Text that already has points is spoken as written: that is the way to fix a misread word.
 
-**Reference voice.** `referenceAssetId` + `consent: { speaker, confirmed: true }`: owner session only (agents get 403 `human_approval_required`), at least 5 s of sound, first 30 s used; the consent statement, who made it and when are stored in the asset's provenance. REST only. Tried with a synthetic reference; likeness to a real speaker was not assessed.
+**Script.** `POST /api/v1/projects/{id}/narration/script` (`text` up to 6,000 characters, `start`, `gapFrames`) or MCP `narrate_script`: split into sentences, one job and clip per sentence, in order.
 
-**Evidence and limits.** `pnpm proof:voice` (19 checks), `docs/evidence/voice-proof.json`, sample `docs/demo/narration-sample-he.m4a`. Nobody has listened to the output. Not established: pronunciation, stress, naturalness, numbers and foreign words, other languages, GPU speed (CPU: about 40 s per sentence, model loaded per job).
+**Reference voice.** `referenceAssetId` + `consent: { speaker, confirmed: true }`: owner session only (agents get 403 `human_approval_required`), at least 5 s of sound, first 30 s used; the consent statement, who made it and when are stored in the asset's provenance. Available in the Sound tab (named speaker and ticked statement required) and over REST; never over MCP. Tried with a synthetic reference; likeness to a real speaker was not assessed.
+
+**Evidence and limits.** `pnpm proof:voice` (23 checks), `docs/evidence/voice-proof.json`, sample `docs/demo/narration-sample-he.m4a`. Nobody has listened to the output. Not established: pronunciation, stress, naturalness, numbers and foreign words, other languages, GPU speed (CPU: about 40 s per sentence, model loaded per job).
 
 ## Running on the owner's GPU laptop (RTX 3050, 4 GB) — untested guidance
 Nothing below has been run; it is the intended procedure, to be corrected by the first real run.

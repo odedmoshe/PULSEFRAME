@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as T from '@pulseframe/time';
+import { chromium } from 'playwright';
 import { startServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -188,6 +189,59 @@ async function main() {
     const durBefore = (await call(`/projects/${pid}/timeline`)).body;
     const cut = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'delete_transcript_range', args: { assetId: first, fromWordId: allWords[1].id, toWordId: allWords[2].id } }] });
     check('Recognised words drive an edit: deleting two words by their ids cuts the clip', placed.status === 200 && cut.status === 200, { status: cut.status, summary: cut.body?.summary ?? cut.body?.error, words: allWords.slice(1, 3).map((w: any) => w.text), hadTimeline: !!durBefore });
+
+    // ---------- filler candidates ----------
+    // On the recognised transcripts (reported, whatever the count), then on a typed transcript with known fillers.
+    const fa = await call(`/projects/${pid}/analysis/fillers`, { assetId: assets[1]! });
+    check('Filler search runs on a recognised transcript and returns candidates with the cuts to apply (read-only)', fa.status === 200 && Array.isArray(fa.body.words) && fa.body.ops.length === fa.body.candidates.length && fa.body.transcript.origin === 'asr', { found: fa.body.words?.length, note: 'read sentences: few or none are expected' });
+    const fid = assets[2]!;
+    const one = (k: number) => T.rt(k, 2);
+    const typed = ['שלום', 'אה', 'לכולם', 'אני', 'אני', 'כאן', 'אממ', 'היום'];
+    const st2 = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_transcript', args: { assetId: fid, language: 'he', segments: [{ start: one(0), duration: one(typed.length), text: typed.join(' '), words: typed.map((text, k) => ({ text, start: one(k), duration: one(1) })) }] } }, { op: 'add_clip', args: { assetId: fid, start: T.frameTime(900, { num: 30, den: 1 }) } }] });
+    const ff2 = await call(`/projects/${pid}/analysis/fillers`, { assetId: fid });
+    const lenBefore = (await call(`/projects/${pid}/timeline`)).body.tracks.flatMap((t: any) => t.clips).filter((c: any) => c.assetId === fid).reduce((n: number, c: any) => n + T.toSeconds(c.duration), 0);
+    const applied = await call(`/projects/${pid}/transactions`, { ops: ff2.body.ops, expectedRevision: ff2.body.revision });
+    const lenAfter = (await call(`/projects/${pid}/timeline`)).body.tracks.flatMap((t: any) => t.clips).filter((c: any) => c.assetId === fid).reduce((n: number, c: any) => n + T.toSeconds(c.duration), 0);
+    check('Filler search finds the hesitations and the repeated word in a typed transcript, and applying its cuts removes exactly them', st2.status === 200 && ff2.body.words.map((w: any) => `${w.kind}:${w.text}`).join() === 'hesitation:אה,repeat:אני,hesitation:אממ' && applied.status === 200 && Math.abs(lenBefore - lenAfter - 1.5) < 1e-6, { words: ff2.body.words?.map((w: any) => `${w.kind}:${w.text}`), removedSeconds: Number((lenBefore - lenAfter).toFixed(3)), status: applied.status });
+
+    // ---------- time the words of an imported transcript (alignment) ----------
+    const aid = assets[3]!, aref = refs[3]!;
+    const adur = T.toSeconds((await call(`/projects/${pid}`)).body.project.assets[aid].duration);
+    const stamp = (x: number) => { const ms = Math.floor(x * 1000); const p2 = (v: number, n = 2) => String(v).padStart(n, '0'); return `${p2(Math.floor(ms / 3600000))}:${p2(Math.floor(ms / 60000) % 60)}:${p2(Math.floor(ms / 1000) % 60)},${p2(ms % 1000, 3)}`; };
+    const srtText = aref.text.replace(/\s+/g, ' ').trim();
+    const imp = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'import_transcript', args: { assetId: aid, language: 'he', content: `1\n00:00:00,000 --> ${stamp(adur)}\n${srtText}\n` } }] });
+    const beforeAlign = (await call(`/projects/${pid}`)).body.project.transcripts[aid];
+    const aj = await waitJob((await call(`/projects/${pid}/assets/${aid}/transcribe`, { mode: 'align' })).body.jobId);
+    const afterAlign = (await call(`/projects/${pid}`)).body.project.transcripts[aid];
+    const seg0 = afterAlign.segments[0];
+    const inOrder = seg0.words.every((w: any, k: number) => k === 0 || T.lte(T.add(seg0.words[k - 1].start, seg0.words[k - 1].duration), w.start));
+    check('Alignment: an imported phrase-timed transcript gets word times from the sound; its text, phrase ids and origin are unchanged', imp.status === 200 && beforeAlign.segments[0].timing === 'segment' && aj.status === 'succeeded' && aj.output.attached === true && afterAlign.origin.kind === 'import' && seg0.id === beforeAlign.segments[0].id && seg0.text === beforeAlign.segments[0].text && seg0.words.map((w: any) => w.text).join(' ') === srtText && inOrder && ['word', 'approximate'].includes(seg0.timing), { timing: seg0.timing, same: aj.output?.same, different: aj.output?.different, estimated: aj.output?.estimated, words: seg0.words.length, error: aj.error });
+    check('Alignment: most typed words were found in the sound (at least 60% identical to what was heard)', aj.output.same / seg0.words.length >= 0.6, { identical: aj.output.same, of: seg0.words.length });
+    const noTr = await call(`/projects/${pid}/assets/${sid}/transcribe`, { mode: 'align' });
+    check('Alignment: refused for an asset without a transcript', noTr.status === 404 && noTr.body.error.code === 'no_transcript', { status: noTr.status });
+
+    // ---------- the button in the editor ----------
+    const browser = await chromium.launch();
+    try {
+      const fresh = path.join(art, 'ui.wav');
+      ff(['-i', refs[0]!.file, '-af', 'volume=0.9', '-ac', '1', '-ar', '16000', '-y', fresh]); // a new file (other bytes), so it has no transcript yet
+      const uid = await upload(pid, fresh);
+      const placedUi = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: uid, start: T.frameTime(1800, { num: 30, den: 1 }) } }] });
+      const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+      await page.goto(`${s.ownerUrl}&project=${pid}`);
+      await page.locator(`.clip[data-clip-id="${placedUi.body.results[0].output.clipId}"]`).click();
+      await page.getByTestId('inspector-tab-speech').click();
+      await page.locator('[data-testid=transcript-panel][data-state=empty]').waitFor();
+      const state0 = await page.getByTestId('asr').getAttribute('data-state');
+      await page.getByTestId('asr-run').click();
+      await page.getByTestId('asr-progress').waitFor();
+      await page.locator('[data-testid=transcript-panel][data-state=ready]').waitFor({ timeout: 300_000 });
+      const shown = await page.getByTestId('transcript-word').count();
+      check('Editor: the Speech tab offers recognition when it is set up; pressing the button fills the transcript panel with words', state0 === 'ready' && shown > 3, { state: state0, words: shown });
+      await page.getByTestId('filler-find').click();
+      await page.getByTestId('filler-summary').waitFor();
+      check('Editor: the filler search reports its result in the panel', (await page.getByTestId('filler-summary').getAttribute('data-count')) !== null, { count: await page.getByTestId('filler-summary').getAttribute('data-count') });
+    } finally { await browser.close(); }
 
     // ---------- 8. cancel a running recognition ----------
     const long = path.join(art, 'long.wav');

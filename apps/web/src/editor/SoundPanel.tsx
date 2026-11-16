@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { volumeLevelAt, type Clip, type ProjectDocument } from '@pulseframe/core';
+import { splitSentences, volumeLevelAt, type Clip, type ProjectDocument } from '@pulseframe/core';
 import { api, type LoudnessResult, type SpeechStatus } from '../api.ts';
 import { useEditorState } from './store.ts';
 
@@ -155,7 +155,10 @@ function Narration() {
   const { editor, state, t } = useEditorState();
   const [status, setStatus] = useState<SpeechStatus | null>(null);
   const [text, setText] = useState('');
-  const [job, setJob] = useState<{ id: string; kind: 'voice' | 'download'; stage: string | null } | null>(null);
+  const [withRef, setWithRef] = useState(false);
+  const [speaker, setSpeaker] = useState('');
+  const [agreed, setAgreed] = useState(false);
+  const [job, setJob] = useState<{ id: string; kind: 'voice' | 'download'; stage: string | null; all?: string[]; done?: number } | null>(null);
   const [note, setNote] = useState<{ kind: 'done' | 'failed'; detail?: string } | null>(null);
   const refresh = () => api.speech().then(setStatus).catch(() => setStatus(null));
   useEffect(() => { void refresh(); }, []);
@@ -164,16 +167,27 @@ function Narration() {
     let live = true, timer = 0;
     const tick = async () => {
       try {
-        const j = (await api.job(job.id)) as { status: string; stage?: string | null; output?: { placeError?: unknown }; error?: { message?: string } };
+        // a script is several jobs run in order: follow the first one that has not finished
+        type J = { status: string; stage?: string | null; error?: { message?: string } };
+        const ids = job.all ?? [job.id];
+        let running: J | null = null, done = 0, failed: string | undefined, anyFailed = false, made = 0;
+        for (const id of ids) {
+          const j = (await api.job(id)) as unknown as J;
+          if (!['succeeded', 'failed', 'canceled'].includes(j.status)) { running = j; break; }
+          done++;
+          if (j.status === 'failed') { anyFailed = true; failed = j.error?.message; }
+          if (j.status === 'succeeded') made++;
+        }
         if (!live) return;
-        if (['succeeded', 'failed', 'canceled'].includes(j.status)) {
+        if (!running) {
           setJob(null);
           if (job.kind === 'download') void refresh();
-          if (j.status === 'failed') setNote({ kind: 'failed', detail: j.error?.message });
-          else if (j.status === 'succeeded' && job.kind === 'voice') { setNote({ kind: 'done' }); setText(''); }
+          if (anyFailed) setNote({ kind: 'failed', detail: failed });
+          else if (job.kind === 'voice' && made) { setNote({ kind: 'done' }); setText(''); }
           return;
         }
-        setJob((cur) => (cur && cur.id === job.id ? { ...cur, stage: j.stage ?? null } : cur));
+        const stage = `${ids.length > 1 ? `${done + 1}/${ids.length} · ` : ''}${running.stage ?? ''}`;
+        setJob((cur) => (cur && cur.id === job.id ? { ...cur, stage, done } : cur));
       } catch { /* the next tick tries again */ }
       if (live) timer = window.setTimeout(tick, 1000);
     };
@@ -183,6 +197,12 @@ function Narration() {
   if (!status || !state.doc) return null;
   const pid = state.doc.id, nar = status.narration;
   const model = status.models.find((m) => m.kind === 'tts');
+  // A reference voice comes from the selected clip's media: at least five seconds of sound.
+  const selClip = editor.selected?.clip;
+  const refAsset = selClip?.type === 'media' ? state.doc.assets[selClip.assetId] : undefined;
+  const refOk = !!refAsset?.audio && T.toSeconds(refAsset.duration) >= 5;
+  const reference = withRef && refOk && refAsset ? { referenceAssetId: refAsset.id, consent: { speaker: speaker.trim(), confirmed: true as const } } : null;
+  const refBlocked = withRef && (!refOk || !speaker.trim() || !agreed);
   const start = (kind: 'voice' | 'download', p: Promise<{ jobId: string }>) => { setNote(null); p.then((r) => setJob({ id: r.jobId, kind, stage: null })).catch(editor.fail); };
   return (
     <div className="narration" data-testid="narration" data-state={job ? job.kind : nar.ready ? 'ready' : nar.reason ?? 'unknown'}>
@@ -190,18 +210,36 @@ function Narration() {
       {job ? (
         <p role="status" data-testid="narration-progress">
           {t(job.kind === 'voice' ? 'narration.working' : 'asr.downloading')} <bdi className="muted">{job.stage ?? ''}</bdi>{' '}
-          <button className="ghost" onClick={() => void api.cancelJob(job.id).catch(editor.fail)} data-testid="narration-cancel">{t('asr.cancel')}</button>
+          <button className="ghost" onClick={() => void Promise.all((job.all ?? [job.id]).map((id) => api.cancelJob(id))).catch(editor.fail)} data-testid="narration-cancel">{t('asr.cancel')}</button>
         </p>
       ) : nar.ready ? (
         <>
           <label>{t('narration.text')}
-            <textarea dir="auto" rows={3} maxLength={nar.maxCharacters} value={text} onChange={(e) => setText(e.target.value)} data-testid="narration-text" />
+            <textarea dir="auto" rows={4} maxLength={6000} value={text} onChange={(e) => setText(e.target.value)} data-testid="narration-text" />
           </label>
           <p>
-            <button disabled={!text.trim()} onClick={() => start('voice', api.narrate(pid, { text: text.trim(), language: /[\u0590-\u05ff]/.test(text) ? 'he' : 'en', start: editor.playhead }))} data-testid="narration-run">{t('narration.run')}</button>{' '}
+            <button disabled={!text.trim() || refBlocked} onClick={() => {
+              const body = { text: text.trim(), language: /[\u0590-\u05ff]/.test(text) ? 'he' : 'en', start: editor.playhead, ...(reference ?? {}) };
+              if (splitSentences(body.text, nar.maxCharacters).length < 2) return start('voice', api.narrate(pid, body));
+              setNote(null);
+              api.narrateScript(pid, body).then((r) => setJob({ id: r.jobs[0]!.jobId, kind: 'voice', stage: null, all: r.jobs.map((x) => x.jobId) })).catch(editor.fail);
+            }} data-testid="narration-run">{t('narration.run')}</button>{' '}
             <span className="muted">{t(nar.device === 'cuda' ? 'asr.device.cuda' : 'asr.device.cpu')}</span>
           </p>
           <p className="muted">{t('narration.hint')}</p>
+          <fieldset className="voice-reference" data-testid="narration-reference">
+            <label><input type="checkbox" checked={withRef} onChange={(e) => { setWithRef(e.target.checked); setAgreed(false); }} data-testid="narration-use-reference" /> {t('narration.ref.use')}</label>
+            {withRef && (refOk && refAsset ? (
+              <>
+                <p className="muted">{t('narration.ref.from')} <bdi>{refAsset.name}</bdi></p>
+                <label>{t('narration.ref.speaker')}
+                  <input type="text" dir="auto" maxLength={120} value={speaker} onChange={(e) => setSpeaker(e.target.value)} data-testid="narration-speaker" />
+                </label>
+                <label><input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} data-testid="narration-consent" /> {t('narration.ref.consent')}</label>
+                <p className="muted">{t('narration.ref.note')}</p>
+              </>
+            ) : <p className="muted" data-testid="narration-reference-none">{t('narration.ref.select')}</p>)}
+          </fieldset>
         </>
       ) : nar.reason === 'model_missing' && model ? (
         <p data-testid="narration-model-missing">
