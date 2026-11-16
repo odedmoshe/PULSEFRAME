@@ -1,0 +1,13 @@
+/* Colours come from the brand tokens; text uses --pf-text / --pf-text-muted on --pf-surface (both above 4.5:1). */
+.pacing { padding: var(--pf-s-3); }
+.pacing-labels { display: flex; justify-content: space-between; font-size: var(--pf-fs-sm); color: var(--pf-text-muted); margin-bottom: var(--pf-s-2); }
+.pacing-strip { display: flex; gap: 2px; overflow-x: auto; padding: 2px; }
+.pacing-cell { flex: 1 0 14px; min-width: 14px; padding: 0; border-radius: var(--pf-r-sm); display: flex; flex-direction: column; gap: 2px; background: transparent; }
+.pacing-cell:focus-visible { outline: 2px solid var(--pf-accent-2); outline-offset: 2px; }
+.pacing-heat { display: block; height: 18px; border-radius: 2px; background: color-mix(in srgb, var(--hue) calc(var(--i, 0) * 100%), var(--pf-surface-raised)); border: 1px solid var(--pf-border); }
+.pacing-cuts { --hue: var(--pf-warn); }
+.pacing-words { --hue: var(--pf-accent-3); }
+.pacing-totals { margin: var(--pf-s-3) 0; font-size: var(--pf-fs-sm); color: var(--pf-text); }
+.pacing-issues { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-s-2); }
+.pacing-issues li { display: flex; align-items: center; justify-content: space-between; gap: var(--pf-s-3); padding: var(--pf-s-2); background: var(--pf-surface); border: 1px solid var(--pf-border); border-inline-start: 3px solid var(--pf-warn); border-radius: var(--pf-r-sm); font-size: var(--pf-fs-sm); color: var(--pf-text); }
+.pacing-issues li button { flex: none; }

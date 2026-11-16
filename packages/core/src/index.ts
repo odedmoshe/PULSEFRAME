@@ -18,3 +18,4 @@ export * from './recipes.ts';
 export * from './speed.ts';
 export * from './volume.ts';
 export * from './notices.ts';
+export * from './pacing.ts';
