@@ -39,7 +39,8 @@ The bounded BiRefNet trial then ran: see docs/INTEGRATIONS.md and `docs/evidence
 
 ## B-8 — Voice: PARTLY RESOLVED 2026-11-16 (local narration works; nobody has listened to it)
 - **Resolved:** the owner authorised a local voice model (up to 5 GB). Narration runs locally with Chatterbox Multilingual (MIT by its model card, 3.21 GB) plus a Hebrew vowel-pointing model (Phonikud, MIT by its model card, 0.31 GB): `docs/INTEGRATIONS.md`, `docs/evidence/voice-proof.json`. Used 3.52 GB of the 5 GB allowed.
-- **Still open:** how the Hebrew sounds. Every check so far is by machine. A person has to listen (`docs/demo/narration-sample-he.m4a` is three sentences) before any claim about pronunciation or naturalness. Speed is unmeasured on a GPU; on this CPU a sentence takes about 40 s.
+- **Update 2026-11-16:** the owner listened to `docs/demo/narration-sample-he.m4a` (three sentences) and said the Hebrew sounds fine. One listener, three sentences; longer texts, numbers, names and a reference voice have not been heard by anyone.
+- **Still open:** pronunciation beyond that sample. Speed is unmeasured on a GPU; on this CPU a sentence takes about 40 s.
 - **Reference voice (cloning):** the rules are built (owner only, consent recorded) and one take was made from a synthetic reference. Whether the result resembles a real speaker was not assessed. The editor form requires a named speaker and a ticked statement. Using a real person's voice stays the owner's decision each time.
 - **Not built:** voice list with previews, pronunciation dictionary, dubbing. (Script narration sentence by sentence is built.)
 
