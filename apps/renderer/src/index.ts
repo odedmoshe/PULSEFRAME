@@ -3,6 +3,8 @@
  * evaluator + compositor bundle the editor uses) and drives it. Trusted code only: the page is
  * served by our own server and receives a single-purpose render token, never user credentials.
  */
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { chromium, type Browser, type Page } from 'playwright';
 
 export interface ExportStats { frames: number; stageMs: { draw: number; readback: number; upload: number } }
@@ -15,7 +17,9 @@ declare global {
 /**
  * How the worker browser is started (ADR-0008). Whether it can use WebGPU is a property of the machine, measured by
  * `pnpm probe:gpu`; nothing here is assumed to work, and the render page proves its adapter before using it.
- *   PF_RENDER_GPU=auto    (default) headless with WebGPU enabled. Measured: a software adapter on the Linux development
+ *   (unset)               headless with WebGPU enabled for ordinary renders; for a project that uses a GPU effect the host
+ *                         finds, once, the first of auto / window / chrome that yields a working device, and uses that.
+ *   PF_RENDER_GPU=auto    always headless with WebGPU enabled. Measured: a software adapter on the Linux development
  *                         container; no adapter on the owner's Windows laptop (GPU effects are then refused at export).
  *   PF_RENDER_GPU=window  a real window placed off-screen, asking for the high-performance GPU. Measured on that laptop:
  *                         a hardware adapter (the discrete card). Needs a desktop session.
@@ -30,8 +34,29 @@ export function workerLaunchOptions(mode = process.env.PF_RENDER_GPU ?? 'auto'):
   return { args: ['--enable-unsafe-webgpu'] };
 }
 
+/** Launch modes tried, in order, when a render needs a graphics adapter and PF_RENDER_GPU is not set. A window needs a desktop session. */
+const gpuCandidates = (): string[] => ['auto', ...(process.platform !== 'linux' || process.env.DISPLAY || process.env.WAYLAND_DISPLAY ? ['window'] : []), 'chrome'];
+/** Can this browser create a WebGPU device? (On the owner's laptop the headless browser finds an adapter with some flags and then fails here.) */
+async function hasGpuDevice(browser: Browser): Promise<boolean> {
+  const srv = http.createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end('<!doctype html><title>gpu check</title>'); });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r)); // WebGPU exists only on a secure origin; loopback counts
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:${(srv.address() as AddressInfo).port}/`);
+    return await Promise.race([
+      page.evaluate('(async () => { try { const a = await navigator.gpu?.requestAdapter({ powerPreference: "high-performance" }); if (!a) return false; const d = await a.requestDevice(); d.destroy(); return true; } catch { return false; } })()') as Promise<boolean>,
+      new Promise<boolean>((r) => setTimeout(() => r(false), 20_000).unref()),
+    ]);
+  } catch { return false; } finally { await context.close().catch(() => {}); srv.close(); }
+}
+
 export class RenderHost {
   private browser?: Promise<Browser>;
+  /** The browser for renders that need a graphics adapter, once one was found; `null` when none of the launch modes gave a device. */
+  private gpuBrowser?: Promise<Browser | null>;
+  /** Which launch mode gave the GPU browser, for diagnostics ('none' when the search failed). */
+  gpuMode?: string;
   version?: string;
 
   private async launch(): Promise<Browser> {
@@ -42,8 +67,37 @@ export class RenderHost {
     });
     return this.browser;
   }
-  private async withPage<R>(url: string, fn: (page: Page) => Promise<R>, onAbort?: (abort: () => void) => void): Promise<R> {
-    const browser = await this.launch();
+  /**
+   * The browser for a render that uses a GPU effect. With PF_RENDER_GPU set, that is simply the configured browser. Otherwise
+   * the launch modes are tried once, in order, and the first whose browser can create a WebGPU device is kept. When none can,
+   * the ordinary browser is returned: the render page then refuses the frame with the reason, as it must.
+   */
+  private async launchGpu(): Promise<Browser> {
+    if (process.env.PF_RENDER_GPU) return this.launch();
+    this.gpuBrowser ??= (async () => {
+      const plain = await this.launch();
+      if (await hasGpuDevice(plain)) { this.gpuMode = 'auto'; return plain; }
+      for (const mode of gpuCandidates().slice(1)) {
+        let b: Browser | undefined;
+        try {
+          b = await chromium.launch({ ...workerLaunchOptions(mode), timeout: 30_000 });
+          if (await hasGpuDevice(b)) {
+            this.gpuMode = mode;
+            console.log(`render worker: GPU effects use launch mode "${mode}" (${b.version()})`);
+            b.on('disconnected', () => { this.gpuBrowser = undefined; });
+            return b;
+          }
+        } catch { /* this mode cannot start here (no display, no installed Chrome): try the next */ }
+        await b?.close().catch(() => {});
+      }
+      this.gpuMode = 'none';
+      console.log('render worker: no launch mode gave a WebGPU device on this machine; renders that use GPU effects will be refused (see `pnpm probe:gpu`)');
+      return null;
+    })();
+    return (await this.gpuBrowser) ?? this.launch();
+  }
+  private async withPage<R>(url: string, fn: (page: Page) => Promise<R>, onAbort?: (abort: () => void) => void, gpu = false): Promise<R> {
+    const browser = gpu ? await this.launchGpu() : await this.launch();
     const context = await browser.newContext({ serviceWorkers: 'block' });
     // Cancellation closes the page context and ends the wait here at once. The wait must not depend on the page calls
     // settling: a context closed while its page is still being opened can leave that call pending for good (seen with
@@ -72,19 +126,22 @@ export class RenderHost {
     } finally {
       // Closing is bounded too. A context that will not close means the browser is in a bad state: drop it, the next render starts a fresh one.
       const closed = await Promise.race([context.close().then(() => true, () => true), new Promise<boolean>((r) => setTimeout(() => r(false), 5000).unref())]);
-      if (!closed) { this.browser = undefined; void browser.close().catch(() => {}); }
+      if (!closed) { if (await this.browser?.catch(() => undefined) === browser) this.browser = undefined; else this.gpuBrowser = undefined; void browser.close().catch(() => {}); }
     }
   }
-  async renderStill(url: string, frameIndex: number): Promise<Buffer> {
-    const b64 = await this.withPage(url, (p) => p.evaluate((i) => window.__pf!.renderPng(i), frameIndex));
+  async renderStill(url: string, frameIndex: number, opts: { gpu?: boolean } = {}): Promise<Buffer> {
+    const b64 = await this.withPage(url, (p) => p.evaluate((i) => window.__pf!.renderPng(i), frameIndex), undefined, !!opts.gpu);
     return Buffer.from(b64, 'base64');
   }
-  async renderAll(url: string, onAbort?: (abort: () => void) => void): Promise<ExportStats> {
-    return this.withPage(url, (p) => p.evaluate(() => window.__pf!.exportAll()), onAbort);
+  async renderAll(url: string, onAbort?: (abort: () => void) => void, opts: { gpu?: boolean } = {}): Promise<ExportStats> {
+    return this.withPage(url, (p) => p.evaluate(() => window.__pf!.exportAll()), onAbort, !!opts.gpu);
   }
   async close() {
     const b = await this.browser?.catch(() => undefined);
+    const g = await this.gpuBrowser?.catch(() => undefined);
     this.browser = undefined;
+    this.gpuBrowser = undefined;
     await b?.close();
+    if (g && g !== b) await g.close().catch(() => {});
   }
 }

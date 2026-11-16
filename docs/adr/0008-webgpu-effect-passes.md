@@ -13,7 +13,7 @@ Status: **accepted** (2026-11-16) for steps 1–3; step 4: the owner ran both ef
 - Bundled Chromium with a real window placed off-screen: a hardware adapter; with `--force_high_performance_gpu` it is the RTX 3050 (0.34 ms per pass in one sample; the integrated Intel adapter gave 4.7 ms).
 - Installed Chrome, headless with the GPU enabled: the RTX 3050 as well.
 - The reference pixels match on Intel, on NVIDIA and on the software adapter.
-Consequence: the worker's launch mode is a setting (`PF_RENDER_GPU`: `auto`, `window`, `chrome`, `off`; see `apps/renderer/src/index.ts`). The default stays headless; on that laptop GPU effects in export need `window` (pinned browser) or `chrome` (text shaped by the installed Chrome's version).
+Consequence: the worker's launch mode is found by the render host for projects that use a GPU effect (first of headless / window / installed Chrome whose browser can create a device), and can be forced by a setting (`PF_RENDER_GPU`: `auto`, `window`, `chrome`, `off`; see `apps/renderer/src/index.ts`). The default stays headless; on that laptop GPU effects in export need `window` (pinned browser) or `chrome` (text shaped by the installed Chrome's version).
 
 ## Found while building step 2
 - Drawing a WebGPU canvas into the 2D canvas returned an empty picture and lost the device on the headless software adapter. The pass therefore renders into a texture and the result is read back through a buffer. This costs a readback per effect and makes applying an effect asynchronous.

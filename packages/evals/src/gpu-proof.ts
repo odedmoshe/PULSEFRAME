@@ -53,7 +53,7 @@ async function main() {
   ff(['-f', 'lavfi', '-i', `color=c=0x00FF00:s=${W}x${H},drawbox=x=130:y=270:w=100:h=100:color=0xFF0000:t=fill`, '-frames:v', '1', '-y', green]);
   ff(['-f', 'lavfi', '-i', `color=c=black:s=${W}x${H},drawbox=x=170:y=0:w=20:h=${H}:color=white:t=fill`, '-frames:v', '1', '-y', stripe]);
 
-  process.env.PF_RENDER_GPU = 'auto';
+  delete process.env.PF_RENDER_GPU; // unset: the render host itself finds a launch mode that gives a graphics device
   const s = await startServer({ port: 8861, dataDir: path.join(art, 'data') });
   // Is there an adapter at all on this machine? (WebGPU exists only on a secure origin, so this needs the running server.)
   {

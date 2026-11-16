@@ -13,7 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { timeOriginSeconds, findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, timeOriginSeconds, findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
@@ -91,6 +91,9 @@ export interface Manifest {
   estimate: { bytes: number | null; basis: string };
 }
 export interface Blocker { code: string; message: string; ids: string[] }
+
+/** True when any clip of the project carries an effect that runs as a WebGPU pass: such a render needs a worker browser with a graphics adapter (ADR-0008). */
+export const usesGpuEffects = (doc: ProjectDocument) => Object.values(doc.sequences).some((q) => q.tracks.some((t) => t.clips.some((c) => 'effects' in c && c.effects?.some((e) => GPU_EFFECT_IDS.includes(e.type)))));
 
 export class Exporter {
   readonly sessions = new Map<string, RenderSession>();
@@ -232,7 +235,7 @@ export class Exporter {
     const { token, url } = this.open(doc, revision, null, { width: manifest.output.width, height: manifest.output.height, firstFrame: frameIndex, frames: 1 });
     try {
       // Stills are reachable with a read-only credential and each opens a browser page: run at most two at a time.
-      return await stillLimit(() => this.host.renderStill(url, 0));
+      return await stillLimit(() => this.host.renderStill(url, 0, { gpu: usesGpuEffects(doc) }));
     } catch (e: any) {
       if (e instanceof ApiError) throw e;
       // A renderer that went away (shutdown, crashed page) is an unavailable dependency, not an unexplained server error.
@@ -360,7 +363,7 @@ export class Exporter {
           s.sink = ff;
           this.store.updateJob(jobId, { stage: `rendering 0/${s.totalFrames}` });
           // A cancel that arrived while the render page was still being opened found nothing to abort: stop the page as soon as it can be stopped.
-          const render = this.host.renderAll(opened.url, (abort) => { if (this.running) this.running.abort = abort; if (canceled()) abort(); });
+          const render = this.host.renderAll(opened.url, (abort) => { if (this.running) this.running.abort = abort; if (canceled()) abort(); }, { gpu: usesGpuEffects(doc) });
           const stats = await render;
           if (canceled()) throw new Error('canceled');
           if (s.nextFrame !== s.totalFrames) throw new Error(`renderer delivered ${s.nextFrame} of ${s.totalFrames} frames`);
