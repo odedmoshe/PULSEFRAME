@@ -152,4 +152,66 @@ export const IMAGE_REMOVE_BACKGROUND: CapabilityDescriptor = DescriptorSchema.pa
     hardwareQualified: { status: 'not_assessed', evidence: 'set from a recorded run; a CPU run is not GPU qualification' },
   },
 });
-export const BUILTIN_CAPABILITIES: CapabilityDescriptor[] = [SMOKE_SOLID_IMAGE, IMAGE_SOFT_BLUR, IMAGE_REMOVE_BACKGROUND];
+const upscaleGraph: ComfyGraph = {
+  '1': { class_type: 'LoadImage', inputs: { image: 'pulseframe_input.png' } },
+  '2': { class_type: 'UpscaleModelLoader', inputs: { model_name: 'RealESRGAN_x4plus.pth' } },
+  '3': { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['2', 0], image: ['1', 0] } },
+  '4': { class_type: 'SaveImage', inputs: { images: ['3', 0], filename_prefix: 'pulseframe_upscale' } },
+};
+/**
+ * Still-image 4x upscale with Real-ESRGAN x4plus through ComfyUI core nodes (comfy_extras.nodes_upscale_model).
+ * EXPERIMENTAL: implemented only. Never executed, not quality-reviewed, not hardware-qualified.
+ * The output is 4x the input size; the descriptor schema cannot express a size multiple, so `expectSize` is left unset.
+ */
+export const IMAGE_UPSCALE_4X: CapabilityDescriptor = DescriptorSchema.parse({
+  id: 'comfy.image.upscale-4x',
+  version: '0.1.0',
+  provider: 'comfyui',
+  state: 'published',
+  title: { he: 'הגדלת תמונה פי 4 (ניסיוני, טרם הורץ)', en: 'Upscale image 4x (experimental, not yet run)' },
+  description: { he: 'הגדלת תמונה סטילית פי 4 באמצעות Real-ESRGAN. ניסיוני: הגרף עדיין לא הורץ.', en: 'Still-image 4x upscale using Real-ESRGAN. Experimental: this graph has not been run yet.' },
+  source: { repository: 'https://github.com/comfyanonymous/ComfyUI', commit: 'eee59185ff4f43ae2d9ad122b245619d27d9daad', notices: 'Graph authored for PULSEFRAME from ComfyUI core nodes (comfy_extras.nodes_upscale_model). Not copied from Freefield.' },
+  graph: upscaleGraph,
+  graphDigest: graphDigest(upscaleGraph),
+  inputs: [{ name: 'image', label: { he: 'תמונת מקור', en: 'Source image' }, type: 'image', binding: { nodeId: '1', input: 'image' }, required: true, reviewed: true }],
+  outputs: [{ name: 'image', role: 'primary', mediaType: 'image', nodeId: '4', encoding: 'display', reviewed: true, expectSize: null }],
+  requiredNodes: ['LoadImage', 'UpscaleModelLoader', 'ImageUpscaleWithModel', 'SaveImage'].map((classType) => ({ classType, pack: 'core', packVersion: null })),
+  models: [{
+    role: 'upscale',
+    path: 'upscale_models/RealESRGAN_x4plus.pth',
+    publisher: 'Real-ESRGAN (xinntao); file as mirrored by nateraw on Hugging Face',
+    revision: 'nateraw/real-esrgan@42efb9c3eeed1f5c0c8a626cf5f7f4481dfbb094',
+    sha256: '4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1',
+    bytes: 67040989,
+    license: 'BSD-3-Clause (as tagged on the mirror)',
+    licenseEvidence: 'Metadata-level check on 2026-11-16 of https://huggingface.co/nateraw/real-esrgan at revision 42efb9c3eeed1f5c0c8a626cf5f7f4481dfbb094: cardData.license is bsd-3-clause; RealESRGAN_x4plus.pth is 67040989 bytes with LFS sha256 4fa0d389...82f1. The same digest is served by other third-party mirrors. The original publisher repository could not be fetched in this session, so the licence is NOT confirmed against the original publisher and the mirror owner is not the publisher. Training-data terms were not reviewed. Not a .safetensors file (PyTorch .pth, loaded by ComfyUI with safe_load).',
+    commercialUse: 'unknown',
+    gated: false,
+    source: 'https://huggingface.co/nateraw/real-esrgan/resolve/42efb9c3eeed1f5c0c8a626cf5f7f4481dfbb094/RealESRGAN_x4plus.pth',
+  }],
+  runtime: { comfyuiCommit: 'eee59185ff4f43ae2d9ad122b245619d27d9daad', imageDigest: null },
+  // Limits apply to the INPUT; the output has 16x the pixels.
+  limits: { maxFrames: 1, maxPixels: 1024 * 1024 },
+  // Three different quantities (FF-06). Residency and host RAM are unknown until measured.
+  resources: { downloadBytes: 67040989, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
+  egress: 'none',
+  languages: [],
+  limitations: [
+    'Still images only; not suitable for video without separate temporal-consistency tests.',
+    'Experimental: this graph has never been executed.',
+    'Not quality-reviewed: no reviewed fixtures.',
+    'Upscaling invents detail and can alter faces, text and fine patterns.',
+    'The output has 16x the pixels of the input (4x per side); memory use has not been measured, and no GPU memory or speed figures exist. Model file size is not runtime memory.',
+    'The output size is not contract-checked (the descriptor schema cannot express a 4x multiple).',
+  ],
+  qualification: {
+    schemaValid: { status: 'pass', evidence: 'DescriptorSchema + graph digest' },
+    dependencyReady: { status: 'pass', evidence: 'core nodes; model file verified by size and SHA-256 at run time' },
+    licenseReviewed: { status: 'not_assessed', evidence: 'mirror tagged bsd-3-clause; original publisher licence not fetched; owner confirmation pending' },
+    executed: { status: 'not_assessed', evidence: 'never run' },
+    qualityReviewed: { status: 'not_assessed', evidence: 'no reviewed fixture set' },
+    hebrewQualified: NA,
+    hardwareQualified: { status: 'not_assessed', evidence: 'never run on any profile' },
+  },
+});
+export const BUILTIN_CAPABILITIES: CapabilityDescriptor[] = [SMOKE_SOLID_IMAGE, IMAGE_SOFT_BLUR, IMAGE_REMOVE_BACKGROUND, IMAGE_UPSCALE_4X];

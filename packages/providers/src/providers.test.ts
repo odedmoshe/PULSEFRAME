@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CapabilityError, ComfyUIAdapter, graphDigest, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph, SMOKE_SOLID_IMAGE, type CapabilityDescriptor } from './index.ts';
+import { BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, graphDigest, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph, SMOKE_SOLID_IMAGE, IMAGE_UPSCALE_4X, type CapabilityDescriptor } from './index.ts';
 
 const codes = (d: CapabilityDescriptor, profile: 'commercial' | 'research' = 'commercial') => publicationBlockers(d, profile).map((b) => b.code);
 const thrown = (fn: () => unknown) => { try { fn(); } catch (e: any) { return e.code as string; } return 'ok'; };
@@ -98,5 +98,28 @@ describe('ComfyUI adapter policy', () => {
     const r = await a.probe(SMOKE_SOLID_IMAGE);
     expect(r).toMatchObject({ reachable: false, wokeWorker: false });
     expect(r.problems.length).toBe(1);
+  });
+});
+
+describe('comfy.image.upscale-4x descriptor', () => {
+  const d = IMAGE_UPSCALE_4X;
+  it('is a listed built-in with a matching graph digest', () => {
+    expect(BUILTIN_CAPABILITIES).toContain(d);
+    expect(d.id).toBe('comfy.image.upscale-4x');
+    expect(d.graphDigest).toBe(graphDigest(d.graph));
+  });
+  it('requires exactly the node classes used by its graph', () => {
+    const used = [...new Set(Object.values(d.graph).map((n) => n.class_type))].sort();
+    expect(d.requiredNodes.map((n) => n.classType).sort()).toEqual(used);
+  });
+  it('pins a model under upscale_models on huggingface.co at its revision, and claims nothing unrun', () => {
+    const m = d.models[0]!;
+    expect(m.path.startsWith('upscale_models/')).toBe(true);
+    expect(new URL(m.source!).hostname).toBe('huggingface.co');
+    expect(m.source).toContain(m.revision!.split('@')[1]!);
+    expect(m.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(d.resources.downloadBytes).toBe(m.bytes);
+    expect(d.resources.estimatedResidencyBytes).toBeNull();
+    for (const k of ['executed', 'qualityReviewed', 'hardwareQualified'] as const) expect(d.qualification[k].status).toBe('not_assessed');
   });
 });
