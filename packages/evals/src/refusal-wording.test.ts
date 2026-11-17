@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, effectParams } from '@pulseframe/core';
-import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, TEMPLATE_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
+import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, effectParams, LIFE_REFUSALS, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS, type Capture, type LifeEvent, type LifeRefusalKey } from '@pulseframe/core';
+import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, TEMPLATE_REFUSAL_PATTERNS, LIFE_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -74,6 +74,13 @@ describe('Hebrew wording of common refusals', () => {
       ['an effect value outside its range', d, [{ op: 'add_effect', args: { clipId: a, type: 'blur.gaussian', params: { radius: 5 } } }]],
       ['a fixed colour value over an animated one', animatedGrade, [{ op: 'set_colour_grade', args: { clipId: a, params: { exposure: 0.5 } } }]],
     ];
+    // a title with live fields (ADR-0021) left holding a brace group that is not a field, in its text and in a format's wording
+    const titled = tx(d, [{ op: 'add_text', args: { text: '{date}', start: f(0), duration: f(60) } }]);
+    const titleId = titled.results[0]!.output!.clipId as string;
+    const fielded = tx(titled.doc, [{ op: 'set_text_fields', args: { clipId: titleId, enabled: true } }, { op: 'add_variant', args: { profileId: 'square-1x1' } }]);
+    const fieldVariant = fielded.results[1]!.output!.variantId as string;
+    cases.push(['a brace group that is not a field in a title with fields', fielded.doc, [{ op: 'update_text', args: { clipId: titleId, text: '{date} {weather}' } }]]);
+    cases.push(['a brace group that is not a field in a format\'s wording of a title with fields', fielded.doc, [{ op: 'set_variant_override', args: { variantId: fieldVariant, clipId: titleId, text: 'a } b' } }]]);
     void bSound;
     const matched = new Set<number>();
     const unrecognised: string[] = [];
@@ -334,5 +341,82 @@ describe('Hebrew wording of common refusals', () => {
     // the numbers and the reason are kept
     expect(translateRefusal('he', 'the transition into the next clip needs 15 spare source frames after this clip, and the file has only 5')).toBe('המעבר לקליפ הבא צריך 15 פריימים של חומר מקור אחרי הקליפ הזה, ובקובץ יש רק 5');
     expect(translateRefusal('he', "time.echo cannot go on an adjustment: a time effect needs a clip's own source; it cannot act on the picture below")).toBe('האפקט הזה אינו יכול לחול על שכבת התאמה: אפקט זמן צריך את המקור של הקליפ עצמו, ואינו יכול לפעול על התמונה שמתחת. אפשר לשים אותו על הקליפ עצמו');
+  });
+
+  it('life line (ADR-0021): every refusal of the capture, event and title-field operations is provoked through its operation and worded in Hebrew', () => {
+    const evening: Capture = { at: '2024-12-25T17:30:00', utcOffsetMinutes: 120, source: 'container' };
+    const dated = (hash: string, capture?: Capture) => ({ ...video, name: `${hash}.mp4`, contentHash: `sha256:${hash.repeat(64)}`, ...(capture ? { capture } : {}) });
+    const copy = (hash: string, source: string) => ({ ...dated(hash), provenance: { origin: 'derived' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'test', derived: { jobId: 'job_t', capabilityId: 'test.fixture', capabilityVersion: '0.0.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: [source], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' }, sourceRangeStart: T.rt(2, 1), audio: 'source-copied' } } });
+    const sound = { kind: 'audio' as const, name: 's.wav', contentHash: `sha256:${'9'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(8, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: prov };
+    const table = { kind: 'lut' as const, name: 'look.cube', contentHash: `sha256:${'8'.repeat(64)}`, byteSize: 1, container: 'cube', mimeType: 'text/plain', duration: T.ZERO, lut: { size: 2, title: null }, provenance: prov };
+    let r = tx(createProject({ id: 'prj_life_w', name: 'W' }), [dated('a', evening), dated('b', { at: '2024-03-24', utcOffsetMinutes: null, source: 'filename', circa: true }), dated('c'), sound, table].map((asset) => ({ op: 'import_asset', args: { asset } })), true);
+    const [a, dayOnly, undated, soundId, lut] = r.results.map((x) => x.output!.assetId as string) as [string, string, string, string, string];
+    r = tx(r.doc, [{ op: 'import_asset', args: { asset: copy('d', a) } }], true);
+    const copyId = r.results[0]!.output!.assetId as string;
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: a, start: f(0), duration: f(60) } }, { op: 'add_text', args: { text: '{date}', start: f(0), duration: f(60) } }, { op: 'add_event', args: { assetIds: [a, dayOnly] } }]);
+    const d = r.doc, clipId = (r.results[0]!.output as any).clipId as string, titleId = (r.results[1]!.output as any).clipId as string, eventId = (r.results[2]!.output as any).eventId as string;
+    const on: OpCall = { op: 'set_text_fields', args: { clipId: titleId, enabled: true } };
+    const text = (t: string): OpCall => ({ op: 'update_text', args: { clipId: titleId, text: t } });
+    const event = (id: string, assetIds: string[]): LifeEvent => ({ id, name: '', afterSunset: null, assetIds, origin: { method: 'manual', gapMinutes: null, createdBy: 'test', edited: true } });
+    // documents no short run of operations makes: a project with as many events as it may hold, an event as full as it can be, a clock total that does not match its date
+    const full: ProjectDocument = { ...structuredClone(d), events: Object.fromEntries(Array.from({ length: MAX_LIFE_EVENTS }, (_, i) => [`evt_${i}`, event(`evt_${i}`, [undated])])) };
+    const crowded = structuredClone(d);
+    const many = Array.from({ length: MAX_EVENT_FILES }, (_, i) => `ast_many${i}`);
+    for (const id of many) crowded.assets[id] = { ...structuredClone(crowded.assets[undated]!), id };
+    crowded.events = { evt_big: event('evt_big', many) };
+    const drifted = structuredClone(d);
+    drifted.assets[a]!.capture = { ...evening, shiftedMinutes: MAX_CAPTURE_SHIFT_MINUTES };
+    const cases: Record<LifeRefusalKey, [ProjectDocument, OpCall[], boolean?][]> = {
+      assetNotFound: [[d, [{ op: 'set_asset_capture', args: { assetId: 'ast_none', capture: null } }]], [d, [{ op: 'attach_asset_capture', args: { assetId: 'ast_none', capture: evening } }], true]],
+      eventNotFound: [[d, [{ op: 'update_event', args: { eventId: 'evt_none', name: 'x' } }]], [d, [{ op: 'remove_event', args: { eventId: 'evt_none' } }]]],
+      lutHasNoDate: [[d, [{ op: 'set_asset_capture', args: { assetId: lut, capture: { at: '2024-12-25' } } }]]],
+      noSuchDay: [[d, [{ op: 'set_asset_capture', args: { assetId: undated, capture: { at: '2024-02-30' } } }]]],
+      dateOutOfRange: [[d, [{ op: 'set_asset_capture', args: { assetId: undated, capture: { at: '1850-06-01' } } }]], [tx(d, [{ op: 'set_asset_capture', args: { assetId: undated, capture: { at: '2100-12-31T23:00:00' } } }]).doc, [{ op: 'shift_asset_captures', args: { assetIds: [undated], minutes: 90 } }]]],
+      captureUnchanged: [[tx(d, [{ op: 'set_asset_capture', args: { assetId: undated, capture: { at: '2021-06-01' } } }]).doc, [{ op: 'set_asset_capture', args: { assetId: undated, capture: { at: '2021-06-01' } } }]]],
+      noCaptureToRemove: [[d, [{ op: 'set_asset_capture', args: { assetId: copyId, capture: null } }]]],
+      listedTwice: [[d, [{ op: 'add_event', args: { assetIds: [undated, undated] } }]]],
+      shiftNoDate: [[d, [{ op: 'shift_asset_captures', args: { assetIds: [undated, soundId, a], minutes: 60 } }]]],
+      shiftDayOnly: [[d, [{ op: 'shift_asset_captures', args: { assetIds: [dayOnly], minutes: 90 } }]]],
+      shiftInherited: [[d, [{ op: 'shift_asset_captures', args: { assetIds: [copyId], minutes: 60 } }]]],
+      shiftTooFar: [[drifted, [{ op: 'shift_asset_captures', args: { assetIds: [a], minutes: 60 } }]]],
+      notATitle: [[d, [{ op: 'set_text_fields', args: { clipId, enabled: true } }]]],
+      fieldsAlready: [[d, [{ op: 'set_text_fields', args: { clipId: titleId, enabled: false } }]], [tx(d, [on]).doc, [on]]],
+      notFields: [[d, [text('{weather} {date:fancy} a { b'), on]]],
+      fieldsStillThere: [[tx(d, [on]).doc, [{ op: 'set_text_fields', args: { clipId: titleId, enabled: false } }]]],
+      noDatedFiles: [[tx(createProject({ id: 'prj_none', name: 'N' }), [{ op: 'import_asset', args: { asset: dated('a') } }], true).doc, [{ op: 'cluster_events', args: {} }]]],
+      tooManyEvents: [[full, [{ op: 'add_event', args: { assetIds: [a] } }]]],
+      eventFileKind: [[d, [{ op: 'add_event', args: { assetIds: [soundId] } }]]],
+      eventLastFile: [[d, [{ op: 'update_event', args: { eventId, removeAssetIds: [a, dayOnly] } }]]],
+      eventTooManyFiles: [[crowded, [{ op: 'update_event', args: { eventId: 'evt_big', addAssetIds: [a] } }]]],
+      eventNothingToChange: [[d, [{ op: 'update_event', args: { eventId } }]]],
+      eventFileNotIn: [[d, [{ op: 'update_event', args: { eventId, removeAssetIds: [undated] } }]]],
+      eventAddAndRemove: [[d, [{ op: 'update_event', args: { eventId, addAssetIds: [undated], removeAssetIds: [undated] } }]]],
+    };
+    expect(Object.keys(cases).sort()).toEqual(Object.keys(LIFE_REFUSALS).sort());
+    const matched = new Set<number>();
+    const unrecognised: string[] = [];
+    const messages: Partial<Record<LifeRefusalKey, string[]>> = {};
+    for (const [key, list] of Object.entries(cases) as [LifeRefusalKey, [ProjectDocument, OpCall[], boolean?][]][]) for (const [doc, ops, internal] of list) {
+      let message = '';
+      let code = '';
+      try { tx(doc, ops, internal); message = '(not refused)'; } catch (e) { if (!(e instanceof OpError)) throw e; message = e.message; code = e.code; }
+      (messages[key] ??= []).push(message);
+      expect(code, `${key}: ${message}`).toBe(LIFE_REFUSALS[key].code);
+      const he = translateRefusal('he', message);
+      if (!he || !/[֐-׿]/.test(he)) unrecognised.push(`${key}: ${message}`);
+      const hits = LIFE_REFUSAL_PATTERNS.map((re, i) => (re.test(message) ? i : -1)).filter((i) => i >= 0);
+      expect(hits.length, `${key}: ${message} is recognised by exactly one life-line pattern`).toBe(1);
+      matched.add(hits[0]!);
+      expect(translateRefusal('en', message), key).toBeUndefined(); // English shows the operation's own sentence
+    }
+    expect(unrecognised).toEqual([]);
+    expect(LIFE_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
+    // the numbers, the years and the brace groups a person needs are kept in the Hebrew sentence
+    expect(translateRefusal('he', messages.shiftNoDate![0]!)).toContain('2');
+    expect(translateRefusal('he', messages.dateOutOfRange![0]!)).toMatch(/1900.*2100/);
+    expect(translateRefusal('he', messages.notFields![0]!)).toContain('{weather}, {date:fancy}, {');
+    expect(translateRefusal('he', messages.eventTooManyFiles![0]!)).toContain(String(MAX_EVENT_FILES));
+    expect(translateRefusal('he', messages.tooManyEvents![0]!)).toContain(String(MAX_LIFE_EVENTS));
+    expect(translateRefusal('he', messages.fieldsAlready![0]!)).not.toBe(translateRefusal('he', messages.fieldsAlready![1]!)); // off, and on
   });
 });

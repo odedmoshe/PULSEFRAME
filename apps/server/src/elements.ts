@@ -8,7 +8,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { ELEMENT_IDS, ELEMENTS, elementSvg, type Asset } from '@pulseframe/core';
+import { ELEMENT_IDS, elementDefaultColours, ELEMENTS, elementSvg, type Asset } from '@pulseframe/core';
 import { describeMedia } from './ingest.ts';
 import { synth, SynthFailure, type Synth, type SynthLane } from './sfx.ts';
 import { assertStorageRoom } from './storage.ts';
@@ -59,7 +59,9 @@ function validate(id: string, o: Opts): { svg: string; longSide: number; color: 
   if (!def) throw new ApiError(404, 'not_found', `element "${id}" does not exist`, { available: ELEMENT_IDS }, 'Call list_catalog.');
   const longSide = o.longSide ?? 1024;
   if (!Number.isInteger(longSide) || longSide < 64 || longSide > 2048) throw new ApiError(400, 'invalid_option', 'longSide must be a whole number from 64 to 2048', { longSide });
-  const color = o.color ?? '#FFFFFF', color2 = o.color2 ?? '#3DE0C8';
+  // a colour left out is the element's own (pack elements carry their colours, ADR-0022), else white and teal
+  const own = elementDefaultColours(id)!;
+  const color = o.color ?? own.color, color2 = o.color2 ?? own.color2;
   for (const [k, v] of [['color', color], ['color2', color2]] as const) if (typeof v !== 'string' || !COLOUR.test(v)) throw new ApiError(400, 'invalid_option', `${k} must be a colour like #RRGGBB`, { [k]: v });
   return { svg: sizeSvg(elementSvg(id, { color, color2 }), id, longSide), longSide, color, color2, version: def.version };
 }

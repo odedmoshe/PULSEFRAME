@@ -51,7 +51,7 @@ input[type='range'] { accent-color: var(--pf-accent); cursor: pointer; }
 fieldset { border-color: var(--pf-border); border-radius: var(--pf-r-md); }
 
 /* ---- shell ---- */
-.app { grid-template-rows: auto auto minmax(0, 1fr) clamp(230px, 34vh, 420px); grid-template-columns: 290px minmax(0, 1fr) 330px; }
+/* the shell grid (.app) is in ds/shell.css */
 .header { background: linear-gradient(180deg, #171b22 0%, #12151a 100%); border-bottom: 1px solid var(--pf-border); box-shadow: 0 1px 0 var(--pf-border-soft) inset, 0 6px 18px rgba(0, 0, 0, 0.25); padding-block: 7px; position: relative; }
 /* The header is positioned so its shadow paints over the panels below, but it has NO z-index: with one it became a stacking
    context, and the Projects dialog opened from it (rendered inside the header) was trapped under the start panel and the

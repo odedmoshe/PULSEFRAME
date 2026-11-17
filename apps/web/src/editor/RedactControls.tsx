@@ -45,7 +45,7 @@ function RedactFields({ clipId }: { clipId: string }) {
 
   return (
     <div className="fields" data-testid={ID.redact} data-regions={regions.length}>
-      <p className="muted">{tt('redact.note')}</p>
+      <p className="muted pf-help">{tt('redact.note')}</p>
       {tracked && <p className="redact-warning" role="status" data-testid={ID.redactWarning} data-frames={unsure}>{redactWarning(lang, unsure)}</p>}
       <div className="row" style={{ alignItems: 'end' }}>
         <label>{tt('redact.source')}

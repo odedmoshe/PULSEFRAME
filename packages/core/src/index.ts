@@ -40,3 +40,24 @@ export * from './lineage.ts';
 export * from './sha256.ts';
 export * from './transitionTiming.ts';
 export * from './voiceClean.ts';
+// life line (ADR-0021)
+export * from './hebrewCalendar.ts';
+export * from './capture.ts';
+export * from './events.ts';
+export * from './fields.ts';
+export * from './lifeOps.ts';
+// content packs, Hebrew fonts, built-in music (ADR-0022)
+export type { PackElementEntry } from './elementKit.ts';
+export * from './musicStyles.ts';
+export * from './packOps.ts';
+export * from './titleFields.ts';
+export * from './fontPairs.ts';
+export * from './packs/contract.ts';
+export * from './packs/index.ts';
+export * from './packs/suggest.ts';
+export * from './packs/use.ts';
+export * from './packs/check.ts';
+// people (ADR-0021, people section)
+export * from './people.ts';
+export * from './ageWords.ts';
+export * from './peopleOps.ts';

@@ -9,6 +9,8 @@ import { promisify } from 'node:util';
 import * as T from '@pulseframe/time';
 import { LUT_MAX_TEXT_LENGTH, LutError, parseCube, startOffsetFrames, type Asset } from '@pulseframe/core';
 import { ApiError, type Store } from './store.ts';
+import { DEFAULT_HOME_ZONE } from './config.ts';
+import { readCapture, type CaptureContext } from './captureMeta.ts';
 
 const exec = promisify(execFile);
 
@@ -162,7 +164,11 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
 /** Self-contained containers ffprobe may report for an upload (names as ffmpeg prints them). */
 const CONTAINERS = new Set(['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2', 'matroska', 'webm', 'wav', 'mp3', 'ogg', 'flac', 'aac', 'avi', 'mpegts', 'image2', 'gif', 'aiff', 'w64', 'caf']);
 
-export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array>, name: string, actor: string, maxBytes: number): Promise<Omit<Asset, 'id'>> {
+/**
+ * `captureContext` (life line, ADR-0021): the home zone and the time of this import, for reading the file's capture date; the
+ * upload route passes the server's configured zone.
+ */
+export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array>, name: string, actor: string, maxBytes: number, captureContext: CaptureContext = { homeZone: DEFAULT_HOME_ZONE, now: new Date() }): Promise<Omit<Asset, 'id'>> {
   const tmp = path.join(store.tmpDir, `up_${randomBytes(8).toString('hex')}`);
   const hash = createHash('sha256');
   let size = 0;
@@ -199,6 +205,10 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
       store.putBlob(originalHash, tmp, size, 'text/plain');
       return { kind: 'lut', container: 'cube', mimeType: 'text/plain', duration: T.ZERO, lut: { size: table.size, title: table.title === null ? null : table.title.slice(0, 256) }, name: assetName, contentHash: originalHash, byteSize: size, provenance };
     }
+    // life line (ADR-0021): the capture date is read from the ORIGINAL bytes, before any conform (the conformed copy does not carry
+    // it). Reading never fails an import: no date is simply no date.
+    const capture = await readCapture(tmp, baseName, captureContext);
+    const dated = capture ? { capture } : {};
     let meta: MediaMeta;
     try {
       meta = await describeMedia(tmp);
@@ -216,7 +226,7 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
           const cSize = fs.statSync(png).size;
           store.putBlob(originalHash, tmp, size, 'application/octet-stream');
           store.putBlob(contentHash, png, cSize, converted.mimeType);
-          return { ...converted, name: assetName, contentHash, byteSize: cSize, provenance, conform: { originalContentHash: originalHash, originalByteSize: size, reasons: e.reasons, original: e.original, frameMapping: 'identity', method: 'ffmpeg, first picture to PNG (lossless)' } };
+          return { ...converted, name: assetName, contentHash, byteSize: cSize, provenance, ...dated, conform: { originalContentHash: originalHash, originalByteSize: size, reasons: e.reasons, original: e.original, frameMapping: 'identity', method: 'ffmpeg, first picture to PNG (lossless)' } };
         } catch (err) {
           fs.rmSync(png, { force: true });
           if (err instanceof ApiError) throw err;
@@ -244,7 +254,7 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
         store.putBlob(originalHash, tmp, size, 'application/octet-stream');
         store.putBlob(contentHash, out, cSize, conformed.mimeType);
         return {
-          ...conformed, name: assetName, contentHash, byteSize: cSize, provenance,
+          ...conformed, name: assetName, contentHash, byteSize: cSize, provenance, ...dated,
           conform: { originalContentHash: originalHash, originalByteSize: size, reasons: e.reasons, original: e.original, frameMapping: e.reasons.includes('variable-frame-rate') ? 'cfr-nearest-timestamp' : 'identity', method: `ffmpeg libx264 crf 15, constant rate ${e.targetRate.num}/${e.targetRate.den} (fps filter), display rotation applied${e.reasons.includes('hdr') ? '; high dynamic range tone-mapped to standard range (reference white 203 nits, mobius roll-off of highlights, BT.709)' : ''}` },
         };
       } catch (err) {
@@ -255,7 +265,7 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
       }
     }
     store.putBlob(originalHash, tmp, size, meta.mimeType);
-    return { ...meta, name: assetName, contentHash: originalHash, byteSize: size, provenance };
+    return { ...meta, name: assetName, contentHash: originalHash, byteSize: size, provenance, ...dated };
   } finally {
     fs.rmSync(tmp, { force: true });
   }

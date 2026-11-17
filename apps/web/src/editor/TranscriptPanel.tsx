@@ -5,6 +5,9 @@ import type { Clip, ProjectDocument } from '@pulseframe/core';
 import { sourceAt, sourceEnd, timelineAt, CAPTION_LOOKS, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { api, type SilenceResult, type SpeechStatus } from '../api.ts';
+import { CaptionLooks } from './CaptionLooks.tsx';
+import { CAP_STRINGS } from './captions.strings.ts';
+import './captionsPanel.css';
 import { useEditorState, type Editor } from './store.ts';
 import { openItems, readingLimitFor, readReadingLimits, reviewRows, writeReadingLimit, type ReviewRow } from './aiTools.recheck.ts';
 
@@ -69,27 +72,39 @@ function AutoTranscribe({ assetId, language, overwrite, align }: { assetId: stri
   const start = (kind: 'asr' | 'download', p: Promise<{ jobId: string }>) => { setNote(null); p.then((r) => setJob({ id: r.jobId, kind, stage: null })).catch(editor.fail); };
   const tr = status.transcription;
   const model = status.models.find((m) => m.kind === 'asr');
+  const C = CAP_STRINGS[state.lang];
+  const pill = job ? 'running' : tr.ready ? 'ready' : tr.reason === 'model_missing' && model ? 'prep' : 'off';
   return (
-    <div className="asr" data-testid="asr" data-state={job ? job.kind : tr.ready ? 'ready' : tr.reason ?? 'unknown'}>
+    <div className="asr pf-ds pf-asr" data-testid="asr" data-state={job ? job.kind : tr.ready ? 'ready' : tr.reason ?? 'unknown'}>
+      <div className="pf-asr-head">
+        <b>{C.engine}</b>
+        <span className={`pf-asr-pill is-${pill}`}>{job ? t(job.kind === 'asr' ? 'asr.working' : 'asr.downloading') : pill === 'ready' ? C.ready : pill === 'prep' ? C.prep(gb(model!.missingDownloadBytes)) : C.off}</span>
+      </div>
       {job ? (
         <p role="status" data-testid="asr-progress">
-          {t(job.kind === 'asr' ? 'asr.working' : 'asr.downloading')} <bdi className="muted">{job.stage ?? ''}</bdi>{' '}
+          <bdi className="muted">{job.stage ?? ''}</bdi>{' '}
           <button className="ghost" onClick={() => void api.cancelJob(job.id).catch(editor.fail)} data-testid="asr-cancel">{t('asr.cancel')}</button>
         </p>
       ) : tr.ready ? (
         <p>
           <button onClick={() => start('asr', api.transcribe(pid, assetId, { language, ...(align ? { mode: 'align' as const } : overwrite ? { overwrite: true } : {}) }))} data-testid={align ? 'asr-align' : 'asr-run'}>{t(align ? 'asr.align' : overwrite ? 'asr.again' : 'asr.run')}</button>{' '}
-          <span className="muted">{t(tr.device === 'cuda' ? 'asr.device.cuda' : 'asr.device.cpu')}</span>
+          <span className="muted">{tr.device === 'cuda' ? C.gpu : C.cpu}</span>
         </p>
       ) : tr.reason === 'model_missing' && model ? (
-        <p data-testid="asr-model-missing">
-          {t('asr.modelMissing')} <bdi>{model.title[state.lang === "en" ? "en" : "he"]}</bdi> · {t('asr.license')}: <bdi>{model.license}</bdi>{' '}
+        <div data-testid="asr-model-missing">
+          <p className="muted">{C.prepNote} <bdi className="muted">{model.title[state.lang === 'en' ? 'en' : 'he']}</bdi></p>
           <button onClick={() => start('download', api.downloadSpeechModel(pid, model.id, model.missingDownloadBytes))} data-testid="asr-download">{t('asr.download')} (<bdi>{gb(model.missingDownloadBytes)}</bdi>)</button>
-        </p>
+        </div>
       ) : tr.reason === 'engine_not_working' ? (
-        <p className="muted" data-testid="asr-unavailable">{t('asr.engineBroken')} <bdi>{tr.detail}</bdi></p>
+        <div className="muted" data-testid="asr-unavailable">
+          <p>{C.broken}</p>
+          <details><summary>{C.brokenDetail}</summary><bdi>{tr.detail}</bdi></details>
+        </div>
       ) : !overwrite && !align ? (
-        <p className="muted" data-testid="asr-unavailable">{t('asr.notConfigured')}</p>
+        <div className="muted" data-testid="asr-unavailable">
+          <p>{C.notConfigured}</p>
+          <details><summary>{C.howTo}</summary><ol>{C.notConfiguredHow.map((x) => <li key={x}>{x}</li>)}</ol></details>
+        </div>
       ) : null}
       {note && <p role="status" data-testid="asr-note" data-kind={note.kind}>{t(note.kind === 'done' ? (align ? 'asr.aligned' : 'asr.done') : note.kind === 'noSpeech' ? 'asr.noSpeech' : 'asr.failed')} {note.detail && <bdi>{note.detail}</bdi>}</p>}
     </div>
@@ -167,7 +182,8 @@ export function TranscriptPanel() {
   };
 
   return (
-    <div className="transcript" data-testid="transcript-panel" data-state="ready" data-asset-id={assetId ?? undefined}>
+    <div className="transcript pf-ds pf-cap" data-testid="transcript-panel" data-state="ready" data-asset-id={assetId ?? undefined}>
+      <header className="pf-cap-head"><h2>{CAP_STRINGS[state.lang].title} <span className="num">{transcript.segments.length}</span></h2><span className="pf-cap-hint">{CAP_STRINGS[state.lang].wordsHint}</span></header>
       <TranslationReview />
       <div className="row">
         <button className="ghost danger" disabled={lo < 0} onClick={() => void cut(false)} data-testid="transcript-delete">{t('transcript.delete')}</button>
@@ -525,6 +541,14 @@ function ColorField({ label, value, onCommit, testid }: { label: string; value: 
   );
 }
 
+/** The words of the first caption the project shows, so the caption looks are drawn on real text (null: a sample line is used). */
+function firstCueText(doc: NonNullable<ReturnType<typeof useEditorState>['state']['doc']>, track: { clips: { type: string }[] }): string | undefined {
+  const cue = track.clips.find((c): c is { type: 'caption'; text: string } => c.type === 'caption' && typeof (c as { text?: string }).text === 'string' && !!(c as { text?: string }).text);
+  if (cue) return cue.text;
+  const tr = Object.values(doc.transcripts)[0];
+  return tr?.segments[0]?.text;
+}
+
 export function CaptionControls({ editor }: { editor: Editor }) {
   const { state, t } = useEditorState();
   const { doc } = state;
@@ -561,12 +585,10 @@ export function CaptionControls({ editor }: { editor: Editor }) {
             })()}>{t('cue.add')}</button>
           )}
           {!variantId && (
-            <label>{t('caption.look')}
-              <select value={currentLook?.id ?? ''} data-testid="caption-look" onChange={(e) => { if (e.target.value) void editor.commit([{ op: 'apply_caption_look', args: { trackId: track.id, lookId: e.target.value } }], 'Caption look'); }}>
-                <option value="">{t('caption.look.choose')}</option>
-                {CAPTION_LOOKS.map((l) => <option key={l.id} value={l.id} title={l.hint[state.lang]}>{l.name[state.lang]}</option>)}
-              </select>
-            </label>
+            <div className="caption-look-block">
+              <h3>{t('caption.look')}</h3>
+              <CaptionLooks trackId={track.id} currentLookId={currentLook?.id ?? null} sampleText={firstCueText(doc, track)} />
+            </div>
           )}
           {currentLook?.needsWordTiming && !hasWordTiming && <p className="muted" data-testid="caption-look-note">{t('caption.look.needsWords')}</p>}
           <label>{t('caption.preset')}

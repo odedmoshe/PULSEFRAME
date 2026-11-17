@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LUT_MAX_TEXT_LENGTH, LutError, migrateProject, parseCube, validateProject, type ProjectDocument } from '@pulseframe/core';
 import { ApiError, type Store } from './store.ts';
+import { readerAccess, withoutFamily, type ArchiveFamily } from './peoplePrivacy.ts';
 
 export const ARCHIVE_FORMAT = 'pulseframe-archive/1';
 const BLOCK = 512;
@@ -40,14 +41,26 @@ export function archiveBlobs(doc: ProjectDocument): string[] {
   return [...out].sort();
 }
 
-export function planArchive(store: Store, projectId: string) {
-  const { doc, revision } = store.getProject(projectId);
+/**
+ * What an archive of the project holds. People (ADR-0021, people section; peoplePrivacy.ts rule 4):
+ * - family 'keep' (the default): the document as the caller may read it. For the owner that is everything, people included;
+ *   for a credential without the people scope it is the document without birth dates (the store answers so).
+ * - family 'omit', «בלי פרטי משפחה»: no people at all, their fields made plain text (withoutFamily). The owner's choice; a
+ *   credential without the people scope may ask for it too, and it is then made from what that credential may read.
+ * The manifest says which it is, so an import can tell the owner.
+ */
+export function planArchive(store: Store, projectId: string, opts: { family?: ArchiveFamily } = {}) {
+  const read = store.getProject(projectId), revision = read.revision;
+  const family: ArchiveFamily = opts.family ?? 'keep';
+  const doc = family === 'omit' ? withoutFamily(read.doc).doc : read.doc;
+  // what the archive says about the people in it: none, names only (made for a credential that reads no birth dates), or all
+  const people = !doc.people || Object.keys(doc.people).length === 0 ? 'none' : readerAccess() === 'full' ? 'full' : 'names';
   const blobs = archiveBlobs(doc).map((hash) => {
     const file = store.blobPath(hash);
     if (!fs.existsSync(file)) throw new ApiError(409, 'missing_media', `media ${hash} is referenced by the project but missing from the store`, { hash });
     return { hash, size: fs.statSync(file).size, file };
   });
-  const manifest = Buffer.from(JSON.stringify({ format: ARCHIVE_FORMAT, schemaVersion: doc.schemaVersion, projectName: doc.name, exportedRevision: revision, blobs: blobs.map(({ hash, size }) => ({ hash, size })), note: 'History, derivatives, exports and credentials are not part of an archive.' }, null, 2));
+  const manifest = Buffer.from(JSON.stringify({ format: ARCHIVE_FORMAT, schemaVersion: doc.schemaVersion, projectName: doc.name, exportedRevision: revision, blobs: blobs.map(({ hash, size }) => ({ hash, size })), ...(people === 'none' && family === 'keep' ? {} : { people, family }), note: 'History, derivatives, exports and credentials are not part of an archive.' }, null, 2));
   const project = Buffer.from(JSON.stringify(doc));
   const bytes = [manifest.length, project.length, ...blobs.map((b) => b.size)].reduce((n, s) => n + BLOCK + s + pad(s), 0) + 2 * BLOCK;
   return { doc, manifest, project, blobs, bytes };

@@ -1,219 +1,841 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  AudioLines, Captions, Clapperboard, Film, Layers, Link2, MapPin, Metronome, Mic, MousePointer2, Music, Pencil, Plus, Rewind, Scissors, Snowflake, Sparkles, TrendingUp, Type, Zap,
+} from 'lucide-react';
 import * as T from '@pulseframe/time';
-import { toSourceSpan, clipEnd, findAudioEffect, sortAudioFx, timelineMarkers, MARKER_COLORS, type Clip, type Marker, type ProjectDocument } from '@pulseframe/core';
-import type { Key } from '@pulseframe/i18n';
-import { readSnapBeats, writeSnapBeats } from '../api.ts';
+import {
+  toSourceSpan, clipEnd, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
+  type Clip, type Marker, type ProjectDocument, type Track,
+} from '@pulseframe/core';
+import { duckEnvelope, flashSchedule, speechRanges } from '@pulseframe/engine';
+import type { Key, Lang } from '@pulseframe/i18n';
+import { api, readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
+import { IconButton, Seg, Tooltip } from '../ds/index.ts';
 import { VolumeLine } from './VolumeLine.tsx';
-import { ASSET_DRAG_TYPE, useEditorState } from './store.ts';
-import { useTimelineDrag } from './TimelineDrag.tsx';
+import { ASSET_DRAG_TYPE, useEditor, useEditorState, type Editor, type EditorState } from './store.ts';
+import { useTimelineDrag, type TimelineGhost } from './TimelineDrag.tsx';
 import { COMMANDS, chordLabel } from './commands.ts';
 import { useMarquee } from './TimelineMarquee.tsx';
-import { InlineRename } from './InlineRename.tsx';
 import { TimelineZoom, useWheelZoom } from './TimelineZoom.tsx';
-import { BAR_ICON_COMPONENTS, IconHide, IconLock, IconMute, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
+import { BAR_ICON_COMPONENTS, IconBeatLock, IconHide, IconLock, IconMainMagnet, IconMute, IconRippleDelete, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
 import { soundTailsFor } from './AudioFxBlock.tsx';
-import { findEffect } from '@pulseframe/core';
+import { CutChip, cutSelection, useSelectedCut } from './CutChip.tsx';
+import { PulseStrip, TempoHead, type PulseModel } from './PulseStrip.tsx';
+import { RideBar } from './RideBar.tsx';
+import { barGrid, capPlacement, catalogDragFrom, cutRoom, cutsOf, labelsUnder, laneOrder, lastAtOrBefore, pickSpoken, rulerLabel, rulerStep, signedTimecode, type SpokenChip, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
+import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
 import './templates.css';
+import './timeline.css';
 
 const MAX_MARKERS = 3000;
+type MediaClip = Extract<Clip, { type: 'media' }>;
 
 export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.text);
+/** A file name as the timeline shows it: without its extension. */
+const bare = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '');
 
+// ---------- lanes ----------
+/** Sizes the timeline is drawn with: the design tokens of ds/tokens.css as they are at this window size. */
+interface Metrics { head: number; lane: Record<LaneRole, number> }
+const TOKENS: Record<LaneRole, string> = { t: '--pf-lane-t', c: '--pf-lane-c', fx: '--pf-lane-v2', v2: '--pf-lane-v2', v1: '--pf-lane-v1', a1: '--pf-lane-a1', a2: '--pf-lane-a2', a3: '--pf-lane-a3' };
+const DEFAULT_METRICS: Metrics = { head: 156, lane: { t: 30, c: 28, fx: 30, v2: 30, v1: 64, a1: 40, a2: 40, a3: 26 } };
+function readMetrics(el: Element): Metrics {
+  const cs = getComputedStyle(el);
+  const px = (name: string, fallback: number) => { const v = parseFloat(cs.getPropertyValue(name)); return Number.isFinite(v) && v > 0 ? v : fallback; };
+  const lane = { ...DEFAULT_METRICS.lane };
+  for (const r of Object.keys(TOKENS) as LaneRole[]) lane[r] = px(TOKENS[r], DEFAULT_METRICS.lane[r]);
+  return { head: px('--pf-track-head', DEFAULT_METRICS.head), lane };
+}
+const sameMetrics = (a: Metrics, b: Metrics) => a.head === b.head && (Object.keys(a.lane) as LaneRole[]).every((k) => a.lane[k] === b.lane[k]);
+/** The mode of the editor as the timeline shows it: taller sound lanes in Sound, taller caption and voice lanes in Captions; the playhead cap takes the mode's tint. */
+type Mode = 'edit' | 'look' | 'sound' | 'captions' | 'deliver';
+const modeOf = (ws: EditorState['workspace']): Mode => (ws === 'color' ? 'look' : ws === 'sound' ? 'sound' : ws === 'captions' ? 'captions' : ws === 'deliver' ? 'deliver' : 'edit');
+function laneHeight(m: Metrics, role: LaneRole, mode: Mode): number {
+  const h = m.lane[role];
+  if (mode === 'sound' && (role === 'a1' || role === 'a2')) return Math.round(h * 1.9);
+  if (mode === 'sound' && role === 'a3') return Math.round(h * 1.6);
+  if (mode === 'captions' && (role === 'c' || role === 'a1')) return Math.round(h * 1.6);
+  return h;
+}
+const CLIP_PAD = 3; // space above and below a clip inside its lane
+
+/** What a sound clip is, from what is known about its file: music has an analysed beat, a voice has a transcript or was spoken by a voice engine, a built-in sound is an effect. */
+type Flavour = 'voice' | 'music' | 'sfx' | 'sound';
+function flavourOf(doc: ProjectDocument, assetId: string): Flavour {
+  const a = doc.assets[assetId];
+  if (doc.analyses?.[assetId]?.beats?.beats.length) return 'music';
+  if (a?.provenance?.voice || transcriptFor(doc, assetId)) return 'voice';
+  if (a?.provenance?.procedural) return 'sfx';
+  return 'sound';
+}
+function trackFlavour(doc: ProjectDocument, tr: Track): Flavour {
+  const counts: Record<Flavour, number> = { voice: 0, music: 0, sfx: 0, sound: 0 };
+  for (const c of tr.clips) if (c.type === 'media') counts[flavourOf(doc, c.assetId)]++;
+  return (['music', 'voice', 'sfx'] as const).find((f) => counts[f] > 0 && counts[f] >= counts.sound) ?? 'sound';
+}
+const DEFAULT_NAME = /^(V|A|T|C|FX)\d+$/;
+function trackTitle(s: TlStrings, lane: Lane<Track>, flavour: Flavour): string {
+  const tr = lane.track;
+  if (!DEFAULT_NAME.test(tr.name)) return tr.name;
+  if (tr.kind === 'video') return lane.role === 'v1' ? s.trackMain : s.trackOverlay;
+  if (tr.kind === 'text') return s.trackTitles;
+  if (tr.kind === 'caption') return s.trackCaptions;
+  if (tr.kind === 'adjustment') return s.trackAdjust;
+  return flavour === 'voice' ? s.trackVoice : flavour === 'music' ? s.trackMusic : flavour === 'sfx' ? s.trackSfx : s.trackSound;
+}
+const kindOf = (doc: ProjectDocument, lane: Lane<Track>, c: Clip): string => c.type === 'caption' ? 'caption' : c.type === 'adjustment' ? 'adjust' : c.type === 'text' ? 'text'
+  : lane.track.kind === 'audio' ? flavourOf(doc, c.assetId) : lane.role === 'v1' ? 'video' : 'overlay';
+const KIND_ICON: Record<string, typeof Film> = { video: Film, overlay: Clapperboard, text: Type, caption: Captions, adjust: Layers, voice: Mic, music: Music, sfx: Zap, sound: AudioLines };
+const TRACK_ICON = (lane: Lane<Track>, flavour: Flavour) => KIND_ICON[lane.track.kind === 'audio' ? flavour : lane.track.kind === 'video' ? (lane.role === 'v1' ? 'video' : 'overlay') : lane.track.kind === 'adjustment' ? 'adjust' : lane.track.kind]!;
+
+/** The editor state, unchanged by player ticks: the heavy parts of the timeline render from it, so playback does not redraw them. */
+function useCalmState(editor: Editor): EditorState {
+  const cache = useRef<EditorState | null>(null);
+  const get = useCallback(() => {
+    const now = editor.getState(), was = cache.current;
+    if (was && was !== now) {
+      let same = true;
+      for (const k of Object.keys(now) as (keyof EditorState)[]) if (k !== 'tick' && now[k] !== was[k]) { same = false; break; }
+      if (same) return was;
+    }
+    cache.current = now;
+    return now;
+  }, [editor]);
+  return useSyncExternalStore(editor.subscribe, get);
+}
+
+const shortTimecode = (frame: number, rate: T.Rate) => signedTimecode(frame, rate).slice(1);
+
+/**
+ * How wide a spoken chip's text is, in the chip's font (--pf-fs-xs in --pf-font, the tokens timeline.css gives .word-chip).
+ * Measured on a canvas once per text; 1 px is added for the difference between the canvas and the page's text layout.
+ */
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+const textWidths = new Map<string, number>();
+function chipTextWidth(text: string): number {
+  if (measureCtx === undefined) {
+    measureCtx = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+    if (measureCtx) {
+      const cs = getComputedStyle(document.documentElement);
+      measureCtx.font = `${cs.getPropertyValue('--pf-fs-xs').trim() || '13px'} ${cs.getPropertyValue('--pf-font').trim() || 'sans-serif'}`;
+      // the interface font may still be loading: what was measured with the fallback font is measured again once it is in
+      void document.fonts?.ready.then(() => textWidths.clear());
+    }
+  }
+  let w = textWidths.get(text);
+  if (w === undefined) { w = measureCtx ? Math.ceil(measureCtx.measureText(text).width) + 1 : text.length * 8; textWidths.set(text, w); }
+  return w;
+}
+
+/**
+ * What is said in a sound clip, placed on the clip where it is said: each word when the words are timed and most fit whole at
+ * this zoom (interactions.math pickSpoken), otherwise each phrase, shortened with an ellipsis. From the transcript of the
+ * clip's file (or of the file it was made from).
+ */
+function spokenChips(doc: ProjectDocument, c: MediaClip, pps: number): { mode: 'word' | 'phrase'; chips: SpokenChip[] } {
+  const none = { mode: 'word' as const, chips: [] };
+  if (c.reverse || c.freeze) return none;
+  const spoken = transcriptFor(doc, c.assetId);
+  if (!spoken) return none;
+  const srcIn = T.add(c.sourceIn, spoken.offset), srcEnd = T.add(sourceEnd(c), spoken.offset);
+  const x = (t: T.RationalTime) => T.toSeconds(T.sub(timelineAt(c, T.sub(t, spoken.offset)), c.start)) * pps;
+  const words: SpokenChip[] = [], phrases: SpokenChip[] = [];
+  for (const seg of spoken.transcript.segments) {
+    const a = T.max(seg.start, srcIn), b = T.min(T.add(seg.start, seg.duration), srcEnd);
+    if (!T.lt(a, b)) continue;
+    phrases.push({ key: seg.id, left: x(a), width: x(b) - x(a), text: seg.text });
+    if (seg.timing === 'word') for (const w of seg.words) {
+      if (T.lt(w.start, srcIn) || !T.lt(w.start, srcEnd)) continue;
+      words.push({ key: w.id, left: x(w.start), width: x(T.min(T.add(w.start, w.duration), srcEnd)) - x(w.start), text: w.text });
+    }
+  }
+  return pickSpoken(words, phrases, chipTextWidth);
+}
+
+// ---------- markers ----------
 /** Shown while the playhead rests on a user marker: name, colour and removal, each an ordinary committed edit. */
-function MarkerBar({ marker }: { marker: Marker }) {
+function MarkerBar({ marker, left }: { marker: Marker; left: number }) {
   const { editor, t } = useEditorState();
   const update = (args: Record<string, unknown>) => void editor.commit([{ op: 'update_marker', args: { markerId: marker.id, ...args } }], 'Update marker');
   return (
-    <div className="marker-bar" data-testid="marker-bar" role="group" aria-label={t('marker.edit')}>
+    <div className="marker-bar" data-testid="marker-bar" role="group" aria-label={t('marker.edit')} dir={editor.getState().lang === 'he' ? 'rtl' : 'ltr'} style={{ left }} onPointerDown={(e) => e.stopPropagation()}>
       <i className={`marker-dot ${marker.color}`} aria-hidden="true" />
       <input key={`${marker.id}:${marker.label}`} type="text" dir="auto" maxLength={200} defaultValue={marker.label} placeholder={t('marker.label')} aria-label={t('marker.label')} data-testid="marker-label"
         onBlur={(e) => { if (e.currentTarget.value !== marker.label) update({ label: e.currentTarget.value }); }} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
       <select value={marker.color} aria-label={t('marker.color')} data-testid="marker-color" onChange={(e) => update({ color: e.target.value })}>
         {MARKER_COLORS.map((c) => <option key={c} value={c}>{t(`marker.color.${c}` as Key)}</option>)}
       </select>
-      <button className="ghost" data-testid="marker-remove" onClick={() => void editor.commit([{ op: 'remove_marker', args: { markerId: marker.id } }], 'Remove marker')}>{t('marker.remove')}</button>
+      <button type="button" className="marker-remove" data-testid="marker-remove" onClick={() => void editor.commit([{ op: 'remove_marker', args: { markerId: marker.id } }], 'Remove marker')}>{t('marker.remove')}</button>
     </div>
   );
 }
+/** The marker editor follows the playhead, so it listens to the player on its own. */
+function MarkerSlot({ markers, pps, head }: { markers: Marker[]; pps: number; head: number }) {
+  const { editor, state } = useEditorState();
+  void state.tick;
+  const here = markers.find((m) => T.frameIndexAt(m.time, editor.rate) === editor.frame);
+  return here ? <MarkerBar marker={here} left={head + T.toSeconds(here.time) * pps} /> : null;
+}
+
+// ---------- playhead ----------
+/** The line through the lanes. Only this and the cap below move while the film plays. */
+function PlayheadLine({ pps, head }: { pps: number; head: number }) {
+  const { editor, state } = useEditorState();
+  void state.tick;
+  return <div className="playhead" data-testid="playhead" data-frame={editor.frame} style={{ left: head + T.toSeconds(editor.playhead) * pps }} />;
+}
+/**
+ * The cap on the ruler with the timecode, the part of the line over the top rows, and the lit beat on the Pulse Strip.
+ * The timecode is centred on the line (interactions.math capPlacement); it ends at the line when a marker is there, so the
+ * marker's flag stays readable; the ruler labels it or a marker's flag covers are hidden while covered, so no stray digit shows.
+ */
+function PlayheadCap({ pps, beatSeconds, markerFrames }: { pps: number; beatSeconds: number[]; markerFrames: ReadonlySet<number> }) {
+  const { editor, state } = useEditorState();
+  void state.tick;
+  const at = T.toSeconds(editor.playhead);
+  const i = lastAtOrBefore(beatSeconds, at + 1e-6);
+  const next = i >= 0 ? beatSeconds[i + 1] : undefined;
+  // lit while the playhead is inside the beat that starts here (never past the analysed grid)
+  const lit = i >= 0 && (next !== undefined ? at < next : at - beatSeconds[i]! < (i > 0 ? beatSeconds[i]! - beatSeconds[i - 1]! : 0));
+  const code = useRef<HTMLElement>(null);
+  const onMarker = markerFrames.has(editor.frame);
+  const text = shortTimecode(editor.frame, editor.rate);
+  useLayoutEffect(() => {
+    const el = code.current, ruler = el?.closest('.tl-top-lanes')?.querySelector<HTMLElement>(':scope > .ruler');
+    if (!el || !ruler) return;
+    const x = at * pps, w = el.offsetWidth;
+    const place = capPlacement(x, w, onMarker);
+    if (el.dataset.place !== place) el.dataset.place = place;
+    const from = place === 'centre' ? x - w / 2 : place === 'start' ? x : x - w;
+    const spans = [...ruler.querySelectorAll<HTMLElement>(':scope > span')];
+    // a label's text starts after its tick and padding (timeline.css: 5 px)
+    const boxes = spans.map((sp) => ({ left: sp.offsetLeft + 5, width: Math.max(0, sp.offsetWidth - 5) }));
+    const under = new Set(labelsUnder(boxes, from - 2, from + w + 2));
+    // a marker's flag hides the labels it lies over too
+    for (const m of ruler.querySelectorAll<HTMLElement>(':scope > .user-marker')) for (const k of labelsUnder(boxes, m.offsetLeft - 2, m.offsetLeft + m.offsetWidth + 2)) under.add(k);
+    spans.forEach((sp, k) => sp.classList.toggle('under-cap', under.has(k)));
+  });
+  return (
+    <>
+      {lit && <i className={`pulse-now${editor.player?.playing ? ' playing' : ''}`} key={i} data-testid="pulse-now" style={{ left: beatSeconds[i]! * pps }} aria-hidden="true" />}
+      <div className="playhead-cap" style={{ left: at * pps }} aria-hidden="true"><bdi ref={code} className="num">{text}</bdi></div>
+    </>
+  );
+}
+/** Says where the playhead is in bars and beats while the user steps through the film; silent during playback. */
+function BeatAnnouncer({ grid, s }: { grid: BarGrid | null; s: TlStrings }) {
+  const { editor, state } = useEditorState();
+  void state.tick;
+  const playing = !!editor.player?.playing;
+  const pos = !playing && grid ? grid.at(editor.frame) : null;
+  const last = useRef<{ frame: number; text: string }>({ frame: -1, text: '' });
+  if (!playing && last.current.frame !== editor.frame) last.current = { frame: editor.frame, text: pos ? s.atBarBeat(pos.bar, pos.beat) : '' };
+  return <span className="pf-sr" role="status" aria-live="polite" data-testid="tl-live">{playing ? '' : last.current.text}</span>;
+}
+
+// ---------- track header ----------
+function TrackRename({ value, label, onCommit }: { value: string; label: string; onCommit: (name: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value);
+  const input = useRef<HTMLInputElement>(null), button = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (editing) { setText(value); input.current?.focus(); input.current?.select(); } }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const done = (commit: boolean) => {
+    setEditing(false);
+    const next = text.trim();
+    if (commit && next && next !== value) onCommit(next);
+    setTimeout(() => button.current?.focus(), 0);
+  };
+  if (editing) {
+    return <input ref={input} className="track-rename-input" dir="auto" value={text} aria-label={label} data-testid="track-rename-input" maxLength={120}
+      onChange={(e) => setText(e.target.value)} onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); done(true); } else if (e.key === 'Escape') { e.preventDefault(); done(false); } }}
+      onBlur={() => { if (editing) done(true); }} />;
+  }
+  return <button ref={button} type="button" className="track-btn" aria-label={label} title={label} data-testid="track-rename" onPointerDown={(e) => e.stopPropagation()} onClick={() => setEditing(true)}><Pencil size={14} strokeWidth={1.75} aria-hidden="true" /></button>;
+}
+
+const TrackHead = memo(function TrackHead({ lane, flavour, lang, target, tempo }: { lane: Lane<Track>; flavour: Flavour; lang: Lang; target: boolean; tempo: number | null }) {
+  const editor = useEditor();
+  const t = editor.t, s = TL_STRINGS[lang];
+  const tr = lane.track;
+  const Icon = TRACK_ICON(lane, flavour);
+  const auto = tr.kind === 'caption' && tr.caption?.mode === 'transcript';
+  const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
+  return (
+    <div className="track-head" data-flavour={tr.kind === 'audio' ? flavour : undefined}>
+      <i className="track-bar" aria-hidden="true" />
+      <Icon className="track-ico" size={15} strokeWidth={1.75} aria-hidden="true" />
+      <bdi className="track-code num">{lane.code}</bdi>
+      <span className="track-name" dir="auto" title={tr.name}>{tr.kind === 'adjustment' && !DEFAULT_NAME.test(tr.name) ? <><span className="track-kind">{t('track.adjustment')}</span> <bdi>{tr.name}</bdi></> : trackTitle(s, lane, flavour)}</span>
+      <span className="track-state" aria-hidden="true">
+        {auto && <span title={s.trackAutoCaptions}><Sparkles size={12} strokeWidth={1.75} /></span>}
+        {lane.role === 'v1' && <span className="track-magnet" title={s.mainTrack}><IconMainMagnet size={14} /></span>}
+        {tempo !== null && <bdi className="track-tempo num">♩ {Math.round(tempo)}</bdi>}
+        {target && <IconTarget size={12} />}
+        {tr.locked && <IconLock size={12} />}
+        {tr.kind === 'audio' ? tr.muted && <IconMute size={12} /> : tr.hidden && <IconHide size={12} />}
+      </span>
+      <span className="track-buttons" dir="ltr">
+        {tr.kind !== 'caption' && <TrackRename value={tr.name} label={`${t('track.rename')}: ${tr.name}`} onCommit={(name) => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, name } }], 'Rename track')} />}
+        {(tr.kind === 'video' || tr.kind === 'audio') && (
+          <button type="button" className="track-btn" aria-pressed={target} disabled={tr.locked} data-testid="track-target" aria-label={`${t('track.target')}: ${tr.name}`} title={t('track.target.help')}
+            onPointerDown={stop} onClick={() => editor.toggleTarget(tr.kind as 'video' | 'audio', tr.id)}><IconTarget /></button>
+        )}
+        <button type="button" className="track-btn" aria-pressed={tr.locked} data-testid="track-lock" aria-label={`${t(tr.locked ? 'track.unlock' : 'track.lock')}: ${tr.name}`} title={t(tr.locked ? 'track.unlock' : 'track.lock')}
+          onPointerDown={stop} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, locked: !tr.locked } }], 'Lock track')}>{tr.locked ? <IconLock /> : <IconUnlock />}</button>
+        {tr.kind === 'audio' ? (
+          <button type="button" className="track-btn" aria-pressed={tr.muted} data-testid="track-mute" aria-label={`${t(tr.muted ? 'track.unmute' : 'track.mute')}: ${tr.name}`} title={t(tr.muted ? 'track.unmute' : 'track.mute')}
+            onPointerDown={stop} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, muted: !tr.muted } }], 'Mute track')}>{tr.muted ? <IconMute /> : <IconSound />}</button>
+        ) : (
+          <button type="button" className="track-btn" aria-pressed={tr.hidden} data-testid="track-hide" aria-label={`${t(tr.hidden ? 'track.show' : 'track.hide')}: ${tr.name}`} title={t(tr.hidden ? 'track.show' : 'track.hide')}
+            onPointerDown={stop} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, hidden: !tr.hidden } }], 'Hide track')}>{tr.hidden ? <IconHide /> : <IconShow />}</button>
+        )}
+      </span>
+    </div>
+  );
+});
+
+// ---------- a lane and its clips ----------
+interface DuckShape { points: string; db: string; labelX: number; low: number }
+interface LaneProps {
+  lane: Lane<Track>; doc: ProjectDocument; lang: Lang; pps: number; height: number; flavour: Flavour; target: boolean; tempo: number | null;
+  selection: string[]; ghostSel: ReadonlySet<string>; cutPending: string[]; ghost: TimelineGhost | null; tails: ReadonlyMap<string, { seconds: number; cut: boolean }>;
+  grid: BarGrid | null; heldLights: ReadonlySet<string>; selectedCut: string | null; dropClip: string | null; dropCut: string | null; anchorClip: string | null;
+  blade: boolean; empty: boolean; onMenu: (clipId: string, x: number, y: number) => void;
+}
+const TrackRow = memo(function TrackRow(p: LaneProps) {
+  const editor = useEditor();
+  const { lane, doc, lang, pps, height, selection, ghost } = p;
+  const s = TL_STRINGS[lang], t = editor.t, rate = editor.rate;
+  const tr = lane.track;
+  const clipH = height - 2 * CLIP_PAD;
+  const isVideo = tr.kind === 'video';
+  const cuts = useMemo(() => (isVideo ? cutsOf(tr.clips) : []), [isVideo, tr.clips]);
+  const beforeOf = useMemo(() => new Map(cuts.map((c) => [c.after.id, c.before])), [cuts]);
+  // captions that come from the transcript of the linked track are drawn where they play (they are not clips: they follow every cut)
+  const autoCues = useMemo(() => {
+    if (tr.kind !== 'caption' || tr.caption?.mode !== 'transcript' || !tr.caption.linkedTrackId) return [];
+    const src = doc.sequences[doc.mainSequenceId]!.tracks.find((x) => x.id === tr.caption!.linkedTrackId);
+    const out: { key: string; start: number; end: number; text: string; frame: number }[] = [];
+    for (const c of src?.clips ?? []) {
+      if (c.type !== 'media' || c.reverse || c.freeze) continue;
+      const spoken = transcriptFor(doc, c.assetId);
+      if (!spoken) continue;
+      const srcIn = T.add(c.sourceIn, spoken.offset), srcEnd = T.add(sourceEnd(c), spoken.offset);
+      for (const seg of spoken.transcript.segments) {
+        const a = T.max(seg.start, srcIn), b = T.min(T.add(seg.start, seg.duration), srcEnd);
+        if (!T.lt(a, b)) continue;
+        const from = timelineAt(c, T.sub(a, spoken.offset));
+        out.push({ key: `${c.id}:${seg.id}`, start: T.toSeconds(from), end: T.toSeconds(timelineAt(c, T.sub(b, spoken.offset))), text: seg.text, frame: T.frameIndexAt(from, rate) });
+      }
+    }
+    return out;
+  }, [doc, tr, rate]);
+  // the level a ducked track is lowered to while there is speech, as the mixers compute it (drawn, not editable: it follows the speech)
+  const duck = useMemo((): DuckShape | null => {
+    const d = tr.kind === 'audio' ? tr.audio?.duck : null;
+    if (!d || !tr.clips.length) return null;
+    const env = duckEnvelope(speechRanges(doc, doc.sequences[doc.mainSequenceId]!, d.sourceTrackIds, 1000), d.reductionDb, d.attackMs, d.releaseMs);
+    if (env.length < 2) return null;
+    const low = 10 ** (-d.reductionDb / 20);
+    const y = (g: number) => CLIP_PAD + 4 + (1 - (g - low) / (1 - low)) * Math.max(6, clipH * 0.42);
+    const first = env.find((q) => q.g < 1);
+    return { points: env.map((q) => `${((q.s / 1000) * pps).toFixed(1)},${y(q.g).toFixed(1)}`).join(' '), db: `−${d.reductionDb} dB`, labelX: ((first?.s ?? 0) / 1000) * pps + 8, low: y(low) };
+  }, [doc, tr, pps, clipH]);
+
+  return (
+    <div className={`track ${tr.kind} lane-${lane.role}${tr.locked ? ' locked' : ''}${tr.hidden || tr.muted ? ' off' : ''}`} style={{ height }} data-lane={lane.role} data-locked={tr.locked ? 'true' : undefined} data-off={tr.hidden || tr.muted ? 'true' : undefined}
+      role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`} data-track-id={tr.id}>
+      <TrackHead lane={lane} flavour={p.flavour} lang={lang} target={p.target} tempo={p.tempo} />
+      <div className="track-lane">
+        {p.empty && lane.role === 'v1' && (
+          <div className="tl-empty" data-testid="tl-empty" dir={lang === 'he' ? 'rtl' : 'ltr'}>
+            <Plus size={15} strokeWidth={1.75} aria-hidden="true" /><strong>{s.dropFirst}</strong><span>{s.dropFirstOr}</span>
+          </div>
+        )}
+        {ghost && tr.clips.some((c) => c.id === ghost.clipId) && (
+          <div className={`clip-ghost${ghost.invalid ? ' invalid' : ''}${ghost.snappedTo ? ' snapped' : ''}`} data-testid="clip-ghost" data-mode={ghost.mode} style={{ left: ghost.leftPx, width: ghost.widthPx, top: CLIP_PAD, height: clipH }}>
+            <span className={`trim-chip at-${ghost.mode === 'trim-start' || ghost.mode === 'move' ? 'start' : 'end'}`} data-testid="trim-chip" dir={lang === 'he' ? 'rtl' : 'ltr'}>
+              <bdi className="num">{signedTimecode(ghost.deltaFrames, rate)}</bdi><span aria-hidden="true">·</span><span>{s.frames(Math.abs(ghost.deltaFrames))}</span>
+            </span>
+          </div>
+        )}
+        {duck && (
+          <div className="duck-env" data-testid="duck-envelope" aria-hidden="true">
+            <svg height={height} width="100%" focusable="false"><polyline points={duck.points} /></svg>
+            <span className="duck-label" style={{ left: duck.labelX, top: Math.min(height - 20, duck.low + 2) }} dir={lang === 'he' ? 'rtl' : 'ltr'}><Mic size={11} strokeWidth={1.75} /><bdi className="num">{duck.db}</bdi><span>· {s.duckUnder}</span></span>
+          </div>
+        )}
+        {autoCues.map((q) => (
+          <span key={q.key} className="cue-auto" data-testid="cue-auto" data-frame={q.frame} style={{ left: q.start * pps, width: Math.max(4, (q.end - q.start) * pps - 1), top: CLIP_PAD, height: clipH }} title={q.text}>
+            <Captions size={12} strokeWidth={1.75} aria-hidden="true" /><span dir="auto">{q.text}</span>
+          </span>
+        ))}
+        {tr.clips.map((c) => {
+          const left = T.toSeconds(c.start) * pps;
+          const width = Math.max(4, T.toSeconds(c.duration) * pps - 1);
+          const asset = c.type === 'media' ? doc.assets[c.assetId] : undefined;
+          const missing = c.type === 'media' && !asset;
+          const selected = selection.includes(c.id);
+          const only = selection.length === 1 && selected;
+          const volLine = c.type === 'media' && tr.kind === 'audio' && asset?.kind !== 'image' && ((c.volume?.length ?? 0) > 0 || only);
+          // sound effects of a sound clip: named in the clip's accessible name, with the tail drawn after the clip
+          const fxNames = c.type === 'media' && tr.kind === 'audio' ? sortAudioFx(c.audioFx ?? []).filter((x) => x.enabled).map((x) => findAudioEffect(x.type)?.name[lang] ?? x.type) : [];
+          const tail = p.tails.get(c.id);
+          // an adjustment clip (ADR-0016) is named by its label, else by the track kind and its effects
+          const adjFx = c.type === 'adjustment' ? (c.effects ?? []).filter((x) => x.enabled).map((x) => findEffect(x.type)?.name[lang] ?? x.type) : [];
+          const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : c.type === 'media' ? bare(clipLabel(doc, c)) : clipLabel(doc, c);
+          const tailS = tail && tail.seconds >= 0.05 ? tail.seconds : 0;
+          const fxLabel = `${fxNames.length ? `; ${t('timeline.fx')}: ${fxNames.join(', ')}` : ''}${tailS ? `; ${t('timeline.fx.tail')} ${tailS.toFixed(1)} ${t('sound.fx.seconds')}` : ''}`;
+          const kind = kindOf(doc, lane, c);
+          const KindIcon = KIND_ICON[kind]!;
+          const fxCount = c.type === 'caption' ? 0 : (c.effects ?? []).filter((x) => x.enabled).length;
+          const speed = c.type === 'media' && !c.freeze && !c.speedEnd ? speedValue(c) : 1;
+          const ai = c.type === 'media' && !!asset?.provenance?.derived;
+          const onBeatFx = c.type !== 'caption' && (c.effects ?? []).some((x) => x.enabled && x.modulate && Object.keys(x.modulate).length > 0);
+          const before = beforeOf.get(c.id) ?? null;
+          const hasCut = isVideo && c.type === 'media' && (!!c.transition || !!before);
+          const room = cutRoom(before ? T.toSeconds(before.duration) * pps : null, T.toSeconds(c.duration) * pps);
+          const kfs = c.keyframes ? [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.frameIndexAt(k.time, rate))))].filter((f) => f >= 0 && f <= T.frameIndexAt(c.duration, rate)) : [];
+          const startFrame = T.frameIndexAt(c.start, rate);
+          const said = tr.kind === 'audio' && c.type === 'media' && clipH >= 30 ? spokenChips(doc, c, pps) : null;
+          return (
+            <Fragment key={c.id}>
+              <button role="listitem" type="button" tabIndex={p.anchorClip === c.id ? 0 : -1}
+                className={`clip k-${kind}${c.type === 'caption' ? ' caption-cue' : ''}${c.type === 'adjustment' ? ' adjust-clip' : ''}${selected ? ' selected' : ''}${p.selectedCut === c.id ? ' via-cut' : ''}${p.ghostSel.has(c.id) ? ' ghost-selected' : ''}${p.cutPending.includes(c.id) ? ' cut-pending' : ''}${missing ? ' missing' : ''}${width < 36 ? ' tiny' : ''}${left < 4 ? ' at-origin' : ''}${p.dropClip === c.id ? ' drop-target' : ''}`}
+                data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-ramp={c.type === 'media' && c.speedEnd ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
+                style={{ left, width, top: CLIP_PAD, height: clipH }} aria-pressed={selected}
+                onClick={(e) => {
+                  if (p.blade && !tr.locked) {
+                    const frame = startFrame + Math.round((((e.clientX - e.currentTarget.getBoundingClientRect().left) / pps) * rate.num) / rate.den);
+                    if (frame > startFrame && frame < T.frameIndexAt(clipEnd(c), rate)) void editor.commit([{ op: 'split_clip', args: { clipId: c.id, at: T.frameTime(frame, rate) } }], 'Split');
+                    return;
+                  }
+                  cutSelection.set(null);
+                  editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace');
+                }}
+                onContextMenu={(e) => { e.preventDefault(); p.onMenu(c.id, e.clientX, e.clientY); }}
+                aria-label={`${label} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}${fxLabel}${missing ? `; ${s.clipMissing}` : ''}`} data-fx={fxNames.length ? 'true' : undefined}>
+                {asset?.kind === 'image' && tr.kind === 'video' && <span className="clip-still" aria-hidden="true" style={{ backgroundImage: `url("/api/v1/projects/${encodeURIComponent(doc.id)}/assets/${encodeURIComponent(asset.id)}/content")` }} />}
+                {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
+                  <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as MediaClip).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={clipH} reverse={c.type === 'media' && !!c.reverse} tintKey={kind} />
+                )}
+                <span className="clip-plate">
+                  {kind !== 'video' && <KindIcon className="clip-kind" size={12} strokeWidth={1.75} aria-hidden="true" />}
+                  {fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿</span> : null}
+                  <span dir="auto" className="clip-label">{label || (missing ? s.clipMissing : '')}</span>
+                </span>
+                {(fxCount > 0 || speed !== 1 || ai || onBeatFx || (c.type === 'media' && (c.freeze || c.reverse || c.speedEnd))) && (
+                  <span className="clip-badges" aria-hidden="true">
+                    {c.type === 'media' && c.freeze && <span className="clip-badge" title={s.clipFreeze}><Snowflake size={11} strokeWidth={1.75} /></span>}
+                    {c.type === 'media' && c.reverse && <span className="clip-badge" title={s.clipReverse}><Rewind size={11} strokeWidth={1.75} /></span>}
+                    {c.type === 'media' && c.speedEnd && <span className="clip-badge" title={s.clipRamp}><TrendingUp size={11} strokeWidth={1.75} /></span>}
+                    {speed !== 1 && <span className="clip-badge num" title={s.clipSpeed}>{Number(speed.toFixed(2))}×</span>}
+                    {fxCount > 0 && <span className="clip-badge num" title={s.clipEffects(fxCount)}><Sparkles size={11} strokeWidth={1.75} />{fxCount}</span>}
+                    {onBeatFx && <span className="clip-badge is-beat" title={s.clipOnBeat}><IconBeatLock size={11} /></span>}
+                    {ai && <span className="clip-badge is-ai num" title={s.clipAi}>AI</span>}
+                  </span>
+                )}
+                {said?.chips.map((w) => <span key={w.key} className={`word-chip is-${said.mode}`} dir="auto" style={{ left: w.left + 1, maxWidth: Math.max(0, w.width - 2) }}>{w.text}</span>)}
+                {kfs.map((f) => <i key={f} className={`kf${p.grid?.at(startFrame + f)?.onBeat ? ' on-beat' : ''}`} style={{ left: T.toSeconds(T.frameTime(f, rate)) * pps }} aria-hidden="true" />)}
+                {selected && p.selectedCut !== c.id && !tr.locked && width >= 16 && <><i className="clip-grip start" data-grip="start" aria-hidden="true" /><i className="clip-grip end" data-grip="end" aria-hidden="true" /></>}
+              </button>
+              {volLine && <VolumeLine clip={c as MediaClip} selected={only} editable={!tr.locked} pps={pps} left={left} width={width} clipHeight={clipH} clipTop={CLIP_PAD} />}
+              {tailS > 0 && <div className="clip-tail" aria-hidden="true" data-testid="clip-tail" data-tail-of={c.id} data-cut={tail!.cut ? 'true' : undefined} style={{ left: T.toSeconds(clipEnd(c)) * pps, width: Math.max(2, tailS * pps), top: CLIP_PAD + clipH * 0.25, height: clipH * 0.5 }} />}
+              {hasCut && (
+                <CutChip editor={editor} lang={lang} clip={c as MediaClip} before={before} beforeName={before ? bare(clipLabel(doc, before)) : ''} afterName={label} x={left} pps={pps} rate={rate} locked={tr.locked}
+                  onBeat={!!before && !!p.grid?.at(startFrame)?.onBeat} held={p.heldLights.has(c.id)} spare={(c as MediaClip).transition || before ? velocityLimit(doc, c.id).haveOutFrames : null}
+                  selected={p.selectedCut === c.id} dropping={p.dropCut === c.id} nearSelected={selected || (!!before && selection.includes(before.id))}
+                  roomAdd={room.add} roomChip={room.chip} />
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+// ---------- the timeline ----------
+type Drop =
+  | { kind: 'asset'; frame: number; trackId: string | null }
+  | { kind: 'catalog'; item: CatalogDragItem; on: { type: 'clip' | 'cut'; clipId: string } | null; x: number; y: number };
+const RULER_KEY = 'pf.tl.ruler.v1';
+const readRuler = (): 'time' | 'bars' => { try { return localStorage.getItem(RULER_KEY) === 'bars' ? 'bars' : 'time'; } catch { return 'time'; } };
+/** The op that will store the per-project editing behaviour (main-track magnet, ripple delete). Until it is registered both are off and say why. */
+const BEHAVIOUR_OP = 'set_timeline_behaviour';
 
 /**
  * DOM timeline: every clip is a real button, so the structure is directly accessible (SPEC §3).
- * Time always progresses left-to-right, also in the Hebrew interface.
+ * Time always progresses left-to-right, also in the Hebrew interface; the track headers stay at the time origin, on the left.
  */
 export function Timeline() {
-  const { editor, state, t } = useEditorState();
-  const { doc, selection, pxPerSecond: pps, ghosts } = state;
-  const ghostSel = new Set(ghosts.flatMap((g) => g.selection));
-  const rate = editor.rate;
-  const { containerProps, ghost } = useTimelineDrag();
+  const editor = useEditor();
+  const state = useCalmState(editor);
+  const { doc, selection, pxPerSecond: pps, ghosts, lang } = state;
+  const t = editor.t, s = TL_STRINGS[lang], rate = editor.rate;
+  const uiDir = lang === 'he' ? 'rtl' : 'ltr';
+  const mode = modeOf(state.workspace);
+  const root = useRef<HTMLElement>(null);
+  const scrollEl = useRef<HTMLDivElement | null>(null);
+  const [tool, setTool] = useState<'select' | 'blade'>('select');
+  const { containerProps, ghost } = useTimelineDrag({ disabled: tool === 'blade' });
   const { marqueeProps, box } = useMarquee(editor);
   const wheelZoomRef = useWheelZoom();
   const [snapBeats, setSnapBeats] = useState(readSnapBeats);
-  // A library file being dragged over the timeline: the frame and track under the pointer.
-  const [dropAt, setDropAt] = useState<{ frame: number; trackId: string | null } | null>(null);
-  const dropPoint = (e: { clientX: number; target: EventTarget; currentTarget: Element }) => {
-    const ruler = e.currentTarget.querySelector('[data-testid=ruler]')!.getBoundingClientRect();
-    const frame = Math.max(0, Math.round((((e.clientX - ruler.left) / pps) * rate.num) / rate.den));
-    return { frame, trackId: (e.target as Element).closest?.('.track')?.getAttribute('data-track-id') ?? null };
-  };
-  const markers = useMemo(() => {
-    if (!doc) return { scenes: [] as T.RationalTime[], beats: [] as T.RationalTime[], bars: new Set<number>(), truncated: false };
+  const [ruler, setRuler] = useState(readRuler);
+  const [metrics, setMetrics] = useState(DEFAULT_METRICS);
+  const [view, setView] = useState({ left: 0, width: 0 });
+  const [drop, setDrop] = useState<Drop | null>(null);
+  // a drag that ends anywhere (dropped elsewhere, cancelled, left the window) takes its tip and its target lights with it
+  useEffect(() => {
+    const clear = () => setDrop(null);
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    return () => { window.removeEventListener('dragend', clear); window.removeEventListener('drop', clear); };
+  }, []);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [analysing, setAnalysing] = useState(false);
+  const selectedCut = useSelectedCut();
+  const kbdNav = useRef(false);
+
+  // sizes: the tokens as they are at this window size
+  useLayoutEffect(() => {
+    const read = () => { if (root.current) { const next = readMetrics(root.current); setMetrics((was) => (sameMetrics(was, next) ? was : next)); } };
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+  }, []);
+  const head = metrics.head;
+
+  const tracks = doc?.sequences[doc.mainSequenceId]?.tracks;
+  const lanes = useMemo(() => (tracks ? laneOrder(tracks) : []), [tracks]);
+  const heights = useMemo(() => lanes.map((l) => laneHeight(metrics, l.role, mode)), [lanes, metrics, mode]);
+  const empty = !!tracks && tracks.every((tr) => tr.clips.length === 0);
+
+  // the height the lanes need, for the splitter's default (Splitter.tsx): the timeline is as tall as its lanes
+  useLayoutEffect(() => {
+    const app = root.current?.parentElement, sc = scrollEl.current, bar = root.current?.querySelector<HTMLElement>('.tl-bar'), top = root.current?.querySelector<HTMLElement>('.tl-top');
+    if (!app || !sc || !bar || !top) return;
+    const lanesH = heights.reduce((a, b) => a + b, 0);
+    app.style.setProperty('--pf-tl-natural', `${Math.ceil(bar.offsetHeight + top.offsetHeight + lanesH + (sc.offsetHeight - sc.clientHeight) + 8)}px`);
+    return () => { app.style.removeProperty('--pf-tl-natural'); };
+  }, [heights]);
+
+  // beats, bars and scene cuts as they fall on the timeline now
+  const pulse = useMemo(() => {
+    const none: PulseModel = { beats: [], scenes: [], truncated: false, beatSeconds: null, barSeconds: null };
+    if (!doc) return { model: none, grid: null as BarGrid | null, beatSeconds: [] as number[], bpm: null as number | null, analysable: null as string | null };
     const m = timelineMarkers(doc);
     const scenes = m.sceneCuts.slice(0, MAX_MARKERS);
     const beats = m.beats.slice(0, MAX_MARKERS - scenes.length);
-    return { scenes, beats, bars: new Set(m.downbeats.map((b) => T.nearestFrameIndex(b, rate))), truncated: m.sceneCuts.length + m.beats.length > MAX_MARKERS };
-  }, [doc]);
+    const barFrames = m.downbeats.map((b) => T.nearestFrameIndex(b, rate));
+    const bars = new Map(barFrames.map((f, i) => [f, i + 1]));
+    const median = (xs: number[]) => { if (xs.length < 2) return null; const g = xs.slice(1).map((v, i) => v - xs[i]!).sort((a, b) => a - b); return g[g.length >> 1]!; };
+    const beatS = beats.map((b) => T.toSeconds(b));
+    const model: PulseModel = {
+      beats: beats.map((b, i) => { const frame = T.nearestFrameIndex(b, rate); return { s: beatS[i]!, frame, bar: bars.has(frame), n: bars.get(frame) ?? null }; }),
+      scenes: scenes.map((c) => ({ s: T.toSeconds(c), frame: T.nearestFrameIndex(c, rate) })),
+      truncated: m.sceneCuts.length + m.beats.length > MAX_MARKERS, beatSeconds: median(beatS), barSeconds: median(m.downbeats.map((b) => T.toSeconds(b))),
+    };
+    const beatFrames = m.beats.map((b) => T.nearestFrameIndex(b, rate));
+    const all = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips.map((c) => ({ c, tr })));
+    // the tempo shown is the analysis's own estimate for the music on the timeline (the file with the most beats there)
+    const used = all.filter((x) => x.c.type === 'media' && !!doc.analyses?.[x.c.assetId]?.beats?.beats.length).map((x) => doc.analyses![(x.c as MediaClip).assetId]!.beats!);
+    const bpm = used.sort((a, b) => b.beats.length - a.beats.length)[0]?.bpm ?? null;
+    // what "analyse the beat" would analyse: the longest sound on a sound track that has no beat analysis yet
+    const music = all.filter((x) => x.tr.kind === 'audio' && x.c.type === 'media' && !!doc.assets[x.c.assetId]?.audio && !doc.analyses?.[x.c.assetId]?.beats).sort((a, b) => T.cmp(b.c.duration, a.c.duration))[0];
+    return { model, grid: beatFrames.length ? barGrid(beatFrames, barFrames) : null, beatSeconds: beatS, bpm, analysable: music ? (music.c as MediaClip).assetId : null };
+  }, [doc, rate]);
+  const hasBeats = pulse.model.beats.length > 0;
+  const rulerMode = ruler === 'bars' && hasBeats ? 'bars' : 'time';
+
   // Echo and reverb ring on past a clip's end (ADR-0010): the planned tail of each sound clip, from the same audio plan as playback and export.
   const tails = useMemo(() => (doc ? soundTailsFor(doc) : new Map<string, { seconds: number; cut: boolean }>()), [doc]);
+  const heldLights = useMemo(() => { const out = new Set<string>(); if (doc) for (const [id, plan] of flashSchedule(doc).lights) if (!plan.kept) out.add(id); return out; }, [doc]);
   const userMarkers = useMemo(() => (doc ? Object.values(doc.markers ?? {}).filter((m) => m.sequenceId === doc.mainSequenceId).sort((a, b) => T.cmp(a.time, b.time)) : []), [doc]);
+  const markerFrames = useMemo(() => new Set(userMarkers.map((m) => T.frameIndexAt(m.time, rate))), [userMarkers, rate]);
+  const ghostSel = useMemo(() => new Set(ghosts.flatMap((g) => g.selection)), [ghosts]);
+  const flavours = useMemo(() => new Map(lanes.map((l) => [l.track.id, doc && l.track.kind === 'audio' ? trackFlavour(doc, l.track) : 'sound' as Flavour])), [lanes, doc]);
   const lastMarkerS = userMarkers.length ? T.toSeconds(userMarkers[userMarkers.length - 1]!.time) : 0;
-  const here = userMarkers.find((m) => T.frameIndexAt(m.time, rate) === editor.frame);
   const totalSeconds = Math.max(T.toSeconds(editor.duration) + 2, lastMarkerS + 2, 8);
-  const tickEvery = pps >= 60 ? 1 : pps >= 25 ? 2 : 5;
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const anchorClip = selection[0] ?? lanes.find((l) => l.track.clips.length)?.track.clips[0]?.id ?? null;
+  // the result of the last export's flash check, drawn where it found a risk
+  const flashRanges = useMemo(() => {
+    const r = (state.exportJob?.output as { photosensitivity?: { verdict: string; ranges: { from: T.RationalTime; to: T.RationalTime; flashesPerSecond: number }[] } } | null | undefined)?.photosensitivity;
+    return r && r.verdict !== 'pass' ? r.ranges.map((x) => ({ from: T.toSeconds(x.from), to: T.toSeconds(x.to), perSecond: x.flashesPerSecond })) : [];
+  }, [state.exportJob]);
+
+  // a cut stays selected only while its clip is the selection
+  useEffect(() => { if (selectedCut && !(selection.length === 1 && selection[0] === selectedCut)) cutSelection.set(null); }, [selection, selectedCut]);
+
+  // V and C choose the tool (physical keys, so a Hebrew layout works); never while typing, with a modifier or behind a dialog
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || (e.code !== 'KeyV' && e.code !== 'KeyC')) return;
+      const el = e.target as HTMLElement;
+      if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || document.querySelector('[aria-modal="true"]') || editor.getState().paletteOpen) return;
+      setTool(e.code === 'KeyC' ? 'blade' : 'select');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editor]);
+
+  // the scroll position and width of the lanes: the ride bar rides over the selection
+  const setScroller = useCallback((el: HTMLDivElement | null) => { scrollEl.current = el; wheelZoomRef(el); }, [wheelZoomRef]);
+  useEffect(() => {
+    const el = scrollEl.current;
+    if (!el) return;
+    let raf = 0;
+    const read = () => { raf = 0; setView((v) => (v.left === el.scrollLeft && v.width === el.clientWidth ? v : { left: el.scrollLeft, width: el.clientWidth })); };
+    const later = () => { if (!raf) raf = requestAnimationFrame(read); };
+    read();
+    el.addEventListener('scroll', later, { passive: true });
+    const ro = new ResizeObserver(later);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', later); ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+  const anchor = useMemo(() => {
+    if (!doc || !selection.length || !view.width) return null;
+    let from = Infinity, to = -Infinity;
+    for (const tr of doc.sequences[doc.mainSequenceId]!.tracks) for (const c of tr.clips) if (selection.includes(c.id)) { from = Math.min(from, T.toSeconds(c.start)); to = Math.max(to, T.toSeconds(clipEnd(c))); }
+    if (!Number.isFinite(from)) return null;
+    const x = selectedCut ? from : (from + to) / 2;
+    return Math.min(view.width, Math.max(head, head + x * pps - view.left));
+  }, [doc, selection, selectedCut, view, pps, head]);
+
+  // ---- drops: a library file, a file from the computer, or a catalogue item (a transition onto a cut, an effect or a look onto a clip) ----
+  const pointAt = (e: { clientX: number; target: EventTarget; currentTarget: Element }) => {
+    const rb = e.currentTarget.querySelector('[data-testid=ruler]')!.getBoundingClientRect();
+    const frame = Math.max(0, Math.round((((e.clientX - rb.left) / pps) * rate.num) / rate.den));
+    return { frame, trackId: (e.target as Element).closest?.('.track')?.getAttribute('data-track-id') ?? null };
+  };
+  const catalogTarget = (e: ReactDragEvent<HTMLElement>, item: CatalogDragItem): { type: 'clip' | 'cut'; clipId: string } | null => {
+    const el = e.target as Element;
+    const clipEl = el.closest?.('[data-clip-id]'), cutEl = el.closest?.('[data-cut-of]');
+    const trackEl = el.closest?.('.track');
+    const track = doc?.sequences[doc.mainSequenceId]!.tracks.find((tr) => tr.id === trackEl?.getAttribute('data-track-id'));
+    if (!doc || !track || track.locked) return null;
+    if (item.kind === 'transition') {
+      if (track.kind !== 'video') return null;
+      if (cutEl) return { type: 'cut', clipId: cutEl.getAttribute('data-cut-of')! };
+      // the nearest cut on this track within reach of the pointer; otherwise the start of the clip under it
+      const at = (e.clientX - e.currentTarget.querySelector('[data-testid=ruler]')!.getBoundingClientRect().left) / pps;
+      const near = cutsOf(track.clips).filter((c) => c.after.type === 'media').map((c) => ({ id: c.after.id, d: Math.abs(T.toSeconds(c.at) - at) * pps })).sort((a, b) => a.d - b.d)[0];
+      if (near && near.d <= 28) return { type: 'cut', clipId: near.id };
+      const id = clipEl?.getAttribute('data-clip-id');
+      const c = track.clips.find((x) => x.id === id);
+      return c && c.type === 'media' ? { type: 'cut', clipId: c.id } : null;
+    }
+    const id = clipEl?.getAttribute('data-clip-id');
+    const c = track.clips.find((x) => x.id === id);
+    if (!c || c.type === 'caption' || track.kind === 'audio') return null;
+    return { type: 'clip', clipId: c.id };
+  };
+  const onDragOver = (e: ReactDragEvent<HTMLDivElement>) => {
+    const types = [...e.dataTransfer.types];
+    const item = catalogDragFrom(types);
+    if (item) {
+      e.preventDefault();
+      const on = catalogTarget(e, item);
+      e.dataTransfer.dropEffect = on ? 'copy' : 'none';
+      const r = e.currentTarget.getBoundingClientRect();
+      const next: Drop = { kind: 'catalog', item, on, x: e.clientX - r.left, y: e.clientY - r.top };
+      setDrop((was) => (was?.kind === 'catalog' && was.on?.clipId === on?.clipId && was.on?.type === on?.type && Math.abs(was.x - next.x) < 6 && Math.abs(was.y - next.y) < 6 ? was : next));
+      return;
+    }
+    if (!types.includes(ASSET_DRAG_TYPE) && !types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    const at = pointAt(e);
+    setDrop((was) => (was?.kind === 'asset' && was.frame === at.frame && was.trackId === at.trackId ? was : { kind: 'asset', ...at }));
+  };
+  const onDrop = (e: ReactDragEvent<HTMLDivElement>) => {
+    const item = catalogDragFrom([...e.dataTransfer.types]);
+    if (item) {
+      e.preventDefault();
+      const on = catalogTarget(e, item);
+      setDrop(null);
+      if (!on || !doc) return;
+      const clip = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === on.clipId);
+      if (item.kind === 'transition') {
+        const frames = clip?.type === 'media' && clip.transition ? { frames: clip.transition.frames } : {};
+        void editor.commit([{ op: 'set_transition', args: { clipId: on.clipId, type: item.id, ...frames } }], 'Transition').then((r) => { if (r) { editor.select(on.clipId); cutSelection.set(on.clipId); } });
+      } else {
+        void editor.commit([item.kind === 'effect' ? { op: 'add_effect', args: { clipId: on.clipId, type: item.id } } : { op: 'apply_look', args: { clipId: on.clipId, lookId: item.id } }], item.kind === 'effect' ? 'Add effect' : 'Apply look').then((r) => { if (r) editor.select(on.clipId); });
+      }
+      return;
+    }
+    const id = e.dataTransfer.getData(ASSET_DRAG_TYPE), files = [...(e.dataTransfer.files ?? [])], file = files[0];
+    if (!id && !file) return;
+    e.preventDefault();
+    const at = pointAt(e);
+    setDrop(null);
+    // a library file is placed; a file from the computer is imported first and then placed (the first file only)
+    if (id) void editor.dropAsset(id, at.frame, at.trackId); else if (file) void editor.importFiles(files, at);
+  };
+  const dropTip = (() => {
+    if (drop?.kind !== 'catalog' || !doc) return null;
+    const name = drop.item.name || s.unnamedItem;
+    if (!drop.on) return { ok: false, text: s.dropNotHere };
+    const clip = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === drop.on!.clipId);
+    if (!clip) return { ok: false, text: s.dropNotHere };
+    if (drop.on.type === 'clip') return { ok: true, text: s.dropOnClip(name, clip.type === 'media' ? bare(clipLabel(doc, clip)) : clipLabel(doc, clip) || t('track.adjustment')) };
+    const tr = clip.type === 'media' ? clip.transition : undefined;
+    const frames = tr?.frames ?? Math.max(1, Math.round(rate.num / rate.den / 2));
+    const len = s.seconds((Math.round(((frames * rate.den) / rate.num) * 10) / 10).toFixed(1));
+    return { ok: true, text: `${s.dropOnCut(name, rulerLabel(T.toSeconds(clip.start), 1), len)}${tr?.sync === 'beat' ? ` · ${s.cutBeatLocked}` : ''}` };
+  })();
+
+  // ---- clips with the keyboard: arrows along a track, Alt+arrows between tracks, the menu key for the menu ----
+  const onMenu = useCallback((clipId: string, x: number, y: number) => { if (!editor.getState().selection.includes(clipId)) editor.select(clipId); setMenu({ x, y }); }, [editor]);
+  const onLanesKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('.clip');
+    if (!el || e.target !== el) return;
+    if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); e.stopPropagation(); const r = el.getBoundingClientRect(); onMenu(el.dataset.clipId!, r.left + Math.min(24, r.width / 2), r.bottom); return; }
+    if (!kbdNav.current || e.ctrlKey || e.metaKey) return; // after a click the arrows keep stepping the playhead
+    const lane = el.closest('.track-lane')!;
+    const inLane = [...lane.querySelectorAll<HTMLElement>(':scope > .clip')].sort((a, b) => a.offsetLeft - b.offsetLeft);
+    let to: HTMLElement | undefined;
+    if (!e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) to = inLane[inLane.indexOf(el) + (e.key === 'ArrowRight' ? 1 : -1)];
+    else if (!e.altKey && (e.key === 'Home' || e.key === 'End')) to = e.key === 'Home' ? inLane[0] : inLane[inLane.length - 1];
+    else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      const rows = [...e.currentTarget.querySelectorAll<HTMLElement>('.track')].filter((r) => r.querySelector('.clip'));
+      const next = rows[rows.indexOf(el.closest<HTMLElement>('.track')!) + (e.key === 'ArrowDown' ? 1 : -1)];
+      to = next ? [...next.querySelectorAll<HTMLElement>('.clip')].sort((a, b) => Math.abs(a.offsetLeft - el.offsetLeft) - Math.abs(b.offsetLeft - el.offsetLeft))[0] : undefined;
+    } else return;
+    e.preventDefault(); e.stopPropagation(); // these keys move between clips here, not the playhead or the selection
+    to?.focus();
+  };
+
+  const analyse = () => {
+    if (!doc || !pulse.analysable) return;
+    setAnalysing(true);
+    void api.analyzeAssetJob(doc.id, pulse.analysable, { kind: 'beats' }).catch(editor.fail).finally(() => setAnalysing(false));
+  };
+  const behaviour = (doc?.settings as { timeline?: { mainMagnet?: boolean; rippleDelete?: boolean } } | undefined)?.timeline;
+  const canBehave = !!getOp(BEHAVIOUR_OP);
+  const setBehaviour = (patch: Record<string, boolean>) => void editor.commit([{ op: BEHAVIOUR_OP, args: patch }], 'Timeline behaviour');
+
+  // ruler labels
+  const step = rulerStep(pps);
+  const labelsEvery = pulse.model.barSeconds ? Math.max(1, Math.ceil(44 / (pulse.model.barSeconds * pps))) : 1;
+  const innerWidth = head + totalSeconds * pps + 80;
+  const tetherX = ghost && ghost.snappedTo ? head + T.toSeconds(T.frameTime(ghost.edgeFrame, rate)) * pps : null;
+  const tetherText = (() => {
+    if (!ghost?.snappedTo) return '';
+    const pos = pulse.grid?.at(ghost.edgeFrame);
+    if (ghost.snappedTo === 'bar') return pos ? s.snapBar(pos.bar) : s.snapBeat(null, null);
+    if (ghost.snappedTo === 'beat') return s.snapBeat(pos?.bar ?? null, pos?.beat ?? null);
+    return s.snapTo[ghost.snappedTo] ?? '';
+  })();
+
   return (
-    <section className="timeline" dir="ltr" aria-label={t('timeline')}>
-      <label className="tl-snap">
-        <input type="checkbox" checked={snapBeats} data-testid="snap-beats" onChange={(e) => { setSnapBeats(e.target.checked); writeSnapBeats(e.target.checked); }} />
-        {t('snap.beats')}
-      </label>
-      <TimelineZoom />
-      <span className="tl-add-track" role="group" aria-label={t('track.add')}>
-        <span className="muted">{t('track.add')}:</span>
-        {(['video', 'audio', 'text', 'adjustment'] as const).map((k) => (
-          <button key={k} type="button" className="ghost" disabled={!doc} data-testid={`add-track-${k}`} onClick={() => void editor.commit([{ op: 'add_track', args: { kind: k } }], 'Add track')}>{t(`track.${k}` as Key)}</button>
-        ))}
-      </span>
-      <EditBar />
+    <section ref={root} className="timeline pf-ds" dir="ltr" aria-label={t('timeline')} data-mode={mode} data-tool={tool} style={pulse.bpm ? ({ '--pf-bpm': Math.round(pulse.bpm) } as React.CSSProperties) : undefined}>
+      {/* The toolbar is one row of fixed height, so the lanes below it get exactly the height that is left (timeline.css). It mirrors with the interface; the lanes never do. */}
+      <div className="tl-bar" dir={uiDir} role="group" aria-label={s.toolbar}>
+        <div className="tl-tools">
+          <Seg label={s.tools} size="sm" iconOnly value={tool} onChange={setTool} className="tl-tool"
+            options={[{ value: 'select', label: s.toolSelect, ariaLabel: `${s.toolSelect} (V)`, icon: <MousePointer2 size={15} strokeWidth={1.75} aria-hidden="true" />, testId: 'tl-tool-select' }, { value: 'blade', label: s.toolBlade, ariaLabel: `${s.toolBlade} (C)`, icon: <Scissors size={15} strokeWidth={1.75} aria-hidden="true" />, testId: 'tl-tool-blade' }]} />
+          <span className="tl-sep" aria-hidden="true" />
+          <IconButton size="sm" className="tl-magnet" data-testid="tl-magnet" label={s.magnet} pressed={!!behaviour?.mainMagnet} disabledReason={!doc ? s.needClip : canBehave ? undefined : s.magnetSoon} icon={<IconMainMagnet size={16} />} onClick={() => setBehaviour({ mainMagnet: !behaviour?.mainMagnet })} />
+          <IconButton size="sm" className="tl-ripple" data-testid="tl-ripple" label={s.ripple} pressed={!!behaviour?.rippleDelete} disabledReason={!doc ? s.needClip : canBehave ? undefined : s.magnetSoon} icon={<IconRippleDelete size={16} />} onClick={() => setBehaviour({ rippleDelete: !behaviour?.rippleDelete })} />
+          <Tooltip label={s.snapBeats}>
+            <button type="button" role="switch" aria-checked={snapBeats} aria-label={s.snapBeats} className={`pf-btn pf-btn-ghost pf-btn-sm pf-iconbtn tl-snap${snapBeats ? ' is-on' : ''}`} data-testid="snap-beats" onClick={() => { setSnapBeats(!snapBeats); writeSnapBeats(!snapBeats); }}><Metronome size={16} strokeWidth={1.75} aria-hidden="true" /></button>
+          </Tooltip>
+          <span className="tl-sep" aria-hidden="true" />
+          <ToolbarActions s={s} />
+        </div>
+        <div className="tl-ride-zone"><RideBar anchor={anchor} grid={pulse.grid} /></div>
+        <div className="tl-view">
+          <Seg label={s.rulerMode} size="sm" value={rulerMode} onChange={(v) => { setRuler(v); try { localStorage.setItem(RULER_KEY, v); } catch { /* the choice lasts for this visit */ } }} className="tl-ruler-mode"
+            options={[{ value: 'time', label: s.rulerTime, testId: 'tl-ruler-time' }, { value: 'bars', label: s.rulerBars, disabled: !hasBeats, testId: 'tl-ruler-bars' }]} />
+          <TimelineZoom pps={pps} lang={lang} />
+        </div>
+      </div>
       {menu && <ClipMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
-      {here && <MarkerBar marker={here} />}
-      <div className="tl-scroll" ref={wheelZoomRef} {...containerProps}>
-        <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}
-          onDragOver={(e) => { if (!e.dataTransfer.types.includes(ASSET_DRAG_TYPE) && !e.dataTransfer.types.includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; const at = dropPoint(e); if (!dropAt || dropAt.frame !== at.frame || dropAt.trackId !== at.trackId) setDropAt(at); }}
-          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropAt(null); }}
-          onDrop={(e) => {
-            const id = e.dataTransfer.getData(ASSET_DRAG_TYPE), files = [...(e.dataTransfer.files ?? [])], file = files[0];
-            if (!id && !file) return;
-            e.preventDefault();
-            const at = dropPoint(e);
-            setDropAt(null);
-            // a library file is placed; a file from the computer is imported first and then placed (the first file only)
-            if (id) void editor.dropAsset(id, at.frame, at.trackId); else if (file) void editor.importFiles(files, at);
-          }}>
-          {dropAt && <div className="drop-line" data-testid="drop-line" data-frame={dropAt.frame} style={{ left: T.toSeconds(T.frameTime(dropAt.frame, rate)) * pps }} aria-hidden="true" />}
-          {box && <div className="marquee" data-testid="marquee" aria-hidden="true" style={box} />}
-          <div className="ruler" data-testid="ruler" onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.round(((x / pps) * rate.num) / rate.den)); }}>
-            {Array.from({ length: Math.floor(totalSeconds / tickEvery) + 1 }, (_, i) => <span key={i} style={{ left: i * tickEvery * pps }}>{i * tickEvery}s</span>)}
-            {userMarkers.map((m) => (
-              <button key={m.id} className={`user-marker ${m.color}${here?.id === m.id ? ' current' : ''}`} data-testid="user-marker" data-marker-id={m.id} data-frame={T.frameIndexAt(m.time, rate)} style={{ left: T.toSeconds(m.time) * pps }}
-                title={m.label || t('marker.unnamed')} aria-label={`${m.label || t('marker.unnamed')} ${T.toTimecode(m.time, rate)}`}
-                onPointerDown={(e) => e.stopPropagation()} onClick={() => editor.seek(T.frameIndexAt(m.time, rate))}>
-                {m.label && <bdi>{m.label}</bdi>}
-              </button>
-            ))}
-          </div>
-          <div className="tl-markers" data-testid="timeline-markers" data-truncated={markers.truncated ? 'true' : undefined} title={markers.truncated ? t('timeline.markers.truncated') : undefined} aria-hidden="true">
-            {markers.beats.map((b, i) => {
-              const fr = T.nearestFrameIndex(b, rate);
-              return <i key={`b${i}`} className={`beat-marker${markers.bars.has(fr) ? ' bar' : ''}`} data-testid="beat-marker" data-bar={markers.bars.has(fr) ? 'true' : undefined} data-frame={fr} style={{ left: T.toSeconds(b) * pps }} />;
-            })}
-            {markers.scenes.map((c, i) => {
-              const fr = T.nearestFrameIndex(c, rate);
-              return <i key={`s${i}`} className="scene-marker" data-testid="scene-marker" data-frame={fr} style={{ left: T.toSeconds(c) * pps }} />;
-            })}
-          </div>
-          {doc && [...doc.sequences[doc.mainSequenceId]!.tracks].reverse().map((tr) => (
-            <div className={`track ${tr.kind}${tr.locked ? ' locked' : ''}${tr.hidden || tr.muted ? ' off' : ''}`} data-locked={tr.locked ? 'true' : undefined} data-off={tr.hidden || tr.muted ? 'true' : undefined} key={tr.id} role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`} data-track-id={tr.id}>
-              <span className="track-head">
-                <span className="track-name" dir="auto" title={tr.name}>{tr.kind === 'caption' ? `${t('track.caption')}${tr.caption?.mode === 'transcript' ? ' ✦' : ''}` : tr.kind === 'adjustment' ? <><span className="track-kind">{t('track.adjustment')}</span> <bdi>{tr.name}</bdi></> : tr.name}</span>
-                <span className="track-buttons">
-                  {tr.kind !== 'caption' && <InlineRename value={tr.name} label={`${t('track.rename')}: ${tr.name}`} testid="track-rename" onCommit={(name) => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, name } }], 'Rename track')} />}
-                  {(tr.kind === 'video' || tr.kind === 'audio') && (
-                    <button type="button" className="track-btn" aria-pressed={state.targets[tr.kind] === tr.id} disabled={tr.locked} data-testid="track-target" aria-label={`${t('track.target')}: ${tr.name}`} title={t('track.target.help')}
-                      onPointerDown={(e) => e.stopPropagation()} onClick={() => editor.toggleTarget(tr.kind as 'video' | 'audio', tr.id)}><IconTarget /></button>
-                  )}
-                  <button type="button" className="track-btn" aria-pressed={tr.locked} data-testid="track-lock" aria-label={`${t(tr.locked ? 'track.unlock' : 'track.lock')}: ${tr.name}`} title={t(tr.locked ? 'track.unlock' : 'track.lock')}
-                    onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, locked: !tr.locked } }], 'Lock track')}>{tr.locked ? <IconLock /> : <IconUnlock />}</button>
-                  {tr.kind === 'audio' ? (
-                    <button type="button" className="track-btn" aria-pressed={tr.muted} data-testid="track-mute" aria-label={`${t(tr.muted ? 'track.unmute' : 'track.mute')}: ${tr.name}`} title={t(tr.muted ? 'track.unmute' : 'track.mute')}
-                      onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, muted: !tr.muted } }], 'Mute track')}>{tr.muted ? <IconMute /> : <IconSound />}</button>
-                  ) : (
-                    <button type="button" className="track-btn" aria-pressed={tr.hidden} data-testid="track-hide" aria-label={`${t(tr.hidden ? 'track.show' : 'track.hide')}: ${tr.name}`} title={t(tr.hidden ? 'track.show' : 'track.hide')}
-                      onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, hidden: !tr.hidden } }], 'Hide track')}>{tr.hidden ? <IconHide /> : <IconShow />}</button>
-                  )}
-                </span>
+      <div className="tl-scroll" ref={setScroller} {...containerProps} onPointerDownCapture={() => { kbdNav.current = false; }} onFocusCapture={(e) => { if ((e.target as HTMLElement).classList?.contains('clip') && (e.target as HTMLElement).matches(':focus-visible')) kbdNav.current = true; }}>
+        <div className="tl-inner" style={{ width: innerWidth, '--tl-head': `${head}px`, '--tl-step': `${step * pps}px` } as React.CSSProperties} {...marqueeProps} onKeyDown={onLanesKey}
+          onDragOver={onDragOver} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(null); }} onDrop={onDrop}>
+          <div className="tl-top">
+            <div className="tl-corner">
+              <TempoHead lang={lang} bpm={pulse.bpm} hasBeats={hasBeats} canAnalyse={!!pulse.analysable} analysing={analysing} onAnalyse={analyse} />
+              <span className="tl-add-track" role="group" aria-label={t('track.add')} dir={uiDir}>
+                <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                {(['video', 'audio', 'text', 'adjustment'] as const).map((k) => {
+                  const I = { video: Film, audio: AudioLines, text: Type, adjustment: Layers }[k];
+                  return <button key={k} type="button" className="tl-add" disabled={!doc} data-testid={`add-track-${k}`} aria-label={s.addTrackKind[k]} title={s.addTrackKind[k]} onPointerDown={(e) => e.stopPropagation()} onClick={() => void editor.commit([{ op: 'add_track', args: { kind: k } }], 'Add track')}><I size={13} strokeWidth={1.75} aria-hidden="true" /></button>;
+                })}
               </span>
-              {ghost && tr.clips.some((c) => c.id === ghost.clipId) && (
-                <div className={`clip-ghost${ghost.invalid ? ' invalid' : ''}${ghost.snappedTo ? ' snapped' : ''}`} data-testid="clip-ghost" style={{ left: ghost.leftPx, width: ghost.widthPx }} />
-              )}
-              {tr.clips.map((c) => {
-                const width = Math.max(4, T.toSeconds(c.duration) * pps - 1);
-                const asset = c.type === 'media' ? doc.assets[c.assetId] : undefined;
-                const volLine = c.type === 'media' && tr.kind === 'audio' && asset?.kind !== 'image' && ((c.volume?.length ?? 0) > 0 || (selection.length === 1 && selection[0] === c.id));
-                // sound effects of a sound clip: «∿» on the clip, its names and tail in the clip's accessible name, the tail drawn after the clip
-                const fxNames = c.type === 'media' && tr.kind === 'audio' ? sortAudioFx(c.audioFx ?? []).filter((x) => x.enabled).map((x) => findAudioEffect(x.type)?.name[state.lang] ?? x.type) : [];
-                const tail = tails.get(c.id);
-                // an adjustment clip (ADR-0016) is named by its label, else by the track kind and its effects
-                const adjFx = c.type === 'adjustment' ? (c.effects ?? []).filter((x) => x.enabled).map((x) => findEffect(x.type)?.name[state.lang] ?? x.type) : [];
-                const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : clipLabel(doc, c);
-                const tailS = tail && tail.seconds >= 0.05 ? tail.seconds : 0;
-                const fxLabel = `${fxNames.length ? `; ${t('timeline.fx')}: ${fxNames.join(', ')}` : ''}${tailS ? `; ${t('timeline.fx.tail')} ${tailS.toFixed(1)} ${t('sound.fx.seconds')}` : ''}`;
-                return (
-                  <Fragment key={c.id}>
-                  <button role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''}${c.type === 'adjustment' ? ' adjust-clip' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-ramp={c.type === 'media' && c.speedEnd ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
-                    style={{ left: T.toSeconds(c.start) * pps, width }} onClick={(e) => editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace')} aria-pressed={selection.includes(c.id)}
-                    onContextMenu={(e) => { e.preventDefault(); if (!selection.includes(c.id)) editor.select(c.id); setMenu({ x: e.clientX, y: e.clientY }); }}
-                    aria-label={`${label} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}${fxLabel}`} data-fx={fxNames.length ? 'true' : undefined}>
-                    {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
-                      <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={34} reverse={c.type === 'media' && !!c.reverse} />
-                    )}
-                    <span dir="auto" className="clip-label">{c.type === 'media' && c.freeze ? '❄ ' : ''}{c.type === 'media' && c.reverse ? '◀ ' : ''}{c.type === 'media' && c.speedEnd ? '⤴ ' : ''}{fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿ </span> : ''}{c.type === 'adjustment' ? <span className="adjust-badge" aria-hidden="true">◐ </span> : ''}{label}</span>
-                    {c.keyframes && [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.toSeconds(k.time))))].filter((s) => s >= 0 && s <= T.toSeconds(c.duration)).map((s) => (
-                      <i key={s} className="kf" style={{ left: s * pps }} aria-hidden="true" />
-                    ))}
-                  </button>
-                  {volLine && <VolumeLine clip={c as Extract<Clip, { type: 'media' }>} selected={selection.length === 1 && selection[0] === c.id} editable={!tr.locked} pps={pps} left={T.toSeconds(c.start) * pps} width={width} />}
-                  {tailS > 0 && <div className="clip-tail" aria-hidden="true" data-testid="clip-tail" data-tail-of={c.id} data-cut={tail!.cut ? 'true' : undefined} style={{ left: T.toSeconds(clipEnd(c)) * pps, width: Math.max(2, tailS * pps) }} />}
-                  </Fragment>
-                );
-              })}
             </div>
+            <div className="tl-top-lanes">
+              <PulseStrip model={pulse.model} pps={pps} lang={lang} onSeekFrame={(f) => editor.seek(f)} truncatedTitle={t('timeline.markers.truncated')} />
+              <div className="ruler" data-testid="ruler" data-mode={rulerMode} onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.max(0, Math.round(((x / pps) * rate.num) / rate.den))); }}>
+                {rulerMode === 'time'
+                  ? Array.from({ length: Math.floor(Math.max(totalSeconds + 80 / pps, (view.width - head) / pps) / step) + 1 }, (_, i) => <span key={i} className="num" style={{ left: i * step * pps }}>{rulerLabel(i * step, step)}</span>)
+                  : pulse.model.beats.filter((b) => b.n !== null && (b.n - 1) % labelsEvery === 0).map((b) => <span key={b.frame} className="num" style={{ left: b.s * pps }}>{b.n}</span>)}
+                {userMarkers.map((m) => (
+                  <button key={m.id} type="button" className={`user-marker ${m.color}`} data-testid="user-marker" data-marker-id={m.id} data-frame={T.frameIndexAt(m.time, rate)} style={{ left: T.toSeconds(m.time) * pps }}
+                    title={m.label || t('marker.unnamed')} aria-label={`${m.label || t('marker.unnamed')} ${T.toTimecode(m.time, rate)}`}
+                    onPointerDown={(e) => e.stopPropagation()} onClick={() => editor.seek(T.frameIndexAt(m.time, rate))}>
+                    {m.label && <bdi>{m.label}</bdi>}
+                  </button>
+                ))}
+              </div>
+              <div className="tl-flash" data-testid="flash-lane" role="img" aria-label={s.flashLane}>
+                {flashRanges.map((r, i) => <i key={i} data-testid="flash-risk" style={{ left: r.from * pps, width: Math.max(3, (r.to - r.from) * pps) }} title={s.flashRisk(rulerLabel(r.from, 1), rulerLabel(r.to, 1), String(r.perSecond))} />)}
+              </div>
+              <PlayheadCap pps={pps} beatSeconds={pulse.beatSeconds} markerFrames={markerFrames} />
+            </div>
+          </div>
+          {doc && lanes.map((lane, i) => (
+            <TrackRow key={lane.track.id} lane={lane} doc={doc} lang={lang} pps={pps} height={heights[i]!} flavour={flavours.get(lane.track.id) ?? 'sound'}
+              target={(lane.track.kind === 'video' || lane.track.kind === 'audio') && state.targets[lane.track.kind] === lane.track.id}
+              tempo={lane.track.kind === 'audio' && flavours.get(lane.track.id) === 'music' ? pulse.bpm : null}
+              selection={selection} ghostSel={ghostSel} cutPending={state.cutPending} ghost={ghost} tails={tails} grid={pulse.grid} heldLights={heldLights} selectedCut={selectedCut}
+              dropClip={drop?.kind === 'catalog' && drop.on?.type === 'clip' ? drop.on.clipId : null} dropCut={drop?.kind === 'catalog' && drop.on?.type === 'cut' ? drop.on.clipId : null}
+              anchorClip={anchorClip} blade={tool === 'blade'} empty={empty} onMenu={onMenu} />
           ))}
+          {drop?.kind === 'asset' && <div className="drop-line" data-testid="drop-line" data-frame={drop.frame} style={{ left: head + T.toSeconds(T.frameTime(drop.frame, rate)) * pps }} aria-hidden="true"><span className="num">{shortTimecode(drop.frame, rate)}</span></div>}
+          {dropTip && drop?.kind === 'catalog' && <div className={`drop-tip${dropTip.ok ? '' : ' no'}`} data-testid="drop-tip" role="status" dir={uiDir} style={{ left: Math.max(head + 8, drop.x + 14), top: drop.y + 18 }}>{dropTip.text}</div>}
+          {box && <div className="marquee" data-testid="marquee" aria-hidden="true" style={box} />}
+          {tetherX !== null && ghost && (
+            <div className={`tether is-${ghost.snappedTo}`} data-testid="snap-tether" data-snap={ghost.snappedTo} style={{ left: tetherX }} aria-hidden="true">
+              {tetherText && <span dir={uiDir}>{tetherText}</span>}
+            </div>
+          )}
           {/* Other participants: a labelled marker only. It never moves this user's playhead. */}
           {ghosts.filter((g) => g.frame !== null).map((g) => (
-            <div key={`${g.actor}:${g.sessionId}`} className={`ghost-playhead ${g.kind}`} data-testid="ghost-playhead" data-actor={g.actor} data-frame={g.frame} style={{ left: T.toSeconds(T.frameTime(g.frame!, rate)) * pps }}>
+            <div key={`${g.actor}:${g.sessionId}`} className={`ghost-playhead ${g.kind}`} data-testid="ghost-playhead" data-actor={g.actor} data-frame={g.frame} style={{ left: head + T.toSeconds(T.frameTime(g.frame!, rate)) * pps }}>
               <span>{g.kind === 'agent' ? t('actor.agent') : g.actor}{g.label ? ` · ${g.label}` : ''}</span>
             </div>
           ))}
-          <div className="playhead" style={{ left: T.toSeconds(editor.playhead) * pps }} />
+          <MarkerSlot markers={userMarkers} pps={pps} head={head} />
+          <PlayheadLine pps={pps} head={head} />
         </div>
       </div>
+      <BeatAnnouncer grid={pulse.grid} s={s} />
     </section>
   );
 }
 
-/** The everyday clip actions, always in view above the tracks: each is the same command the keyboard runs, with its key shown. */
-const BAR_COMMANDS = ['edit.split', 'edit.delete', 'edit.duplicate', 'edit.copy', 'edit.paste'] as const;
-function EditBar() {
-  const { editor, state, t } = useEditorState();
-  void state.selection; void state.tick; // re-render when the selection or the playhead changes: the buttons' availability depends on both
+/** The toolbar's own actions: link, split at the playhead, a marker. They follow the playhead, so they listen to the player themselves. */
+function ToolbarActions({ s }: { s: TlStrings }) {
+  const { editor, state } = useEditorState();
+  void state.tick;
+  const cmd = (id: string) => COMMANDS.find((c) => c.id === id)!;
+  const can = (id: string) => { const c = cmd(id); return !!state.doc && (!c.enabled || c.enabled(editor)); };
+  const keys = (id: string) => { const k = cmd(id).keys[0]; return k ? chordLabel(k).split('+') : undefined; };
   return (
-    <span className="tl-edit" role="toolbar" aria-label={t('timeline.actions')} data-testid="timeline-actions">
-      {BAR_COMMANDS.map((id) => {
-        const c = COMMANDS.find((x) => x.id === id)!;
-        const on = !!state.doc && (!c.enabled || c.enabled(editor));
-        return (
-          <button key={id} type="button" className={`ghost${id === 'edit.delete' ? ' danger' : ''}`} disabled={!on} data-testid={`bar-${id.slice(5)}`}
-            title={`${t(c.label as Key)}${c.keys[0] ? ` (${chordLabel(c.keys[0])})` : ''}`} onClick={() => void c.run(editor)}>
-            {(() => { const I = BAR_ICON_COMPONENTS[id]; return I ? <I /> : null; })()}{t(`bar.${id.slice(5)}` as Key)}
-          </button>
-        );
-      })}
-      {!state.selection.length && <span className="muted tl-edit-hint">{t('timeline.actions.hint')}</span>}
-    </span>
+    <>
+      <IconButton size="sm" data-testid="tl-link" label={s.link} disabledReason={can('edit.link') ? undefined : s.linkNeed} icon={<Link2 size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('edit.link').run(editor)} />
+      <IconButton size="sm" data-testid="tl-split" label={s.split} keys={keys('edit.split')} disabledReason={can('edit.split') ? undefined : s.splitNeed} icon={<Scissors size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('edit.split').run(editor)} />
+      <IconButton size="sm" data-testid="tl-marker" label={s.marker} keys={keys('marker.add')} disabledReason={can('marker.add') ? undefined : s.markerThere} icon={<MapPin size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('marker.add').run(editor)} />
+    </>
   );
 }
+
 /** Right-click menu of a clip: the same commands, where the pointer is. Escape or a click elsewhere closes it. */
 function ClipMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void }) {
   const { editor, t } = useEditorState();
@@ -223,12 +845,12 @@ function ClipMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void
   useEffect(() => { box.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); }, []);
   return (
     <>
-      <div className="clip-menu-veil" onPointerDown={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
-      <div ref={box} className="clip-menu" role="menu" aria-label={t('timeline.actions')} data-testid="clip-menu" dir={editor.getState().lang === 'he' ? 'rtl' : 'ltr'} style={{ left: Math.min(x, window.innerWidth - 220), top: Math.min(y, window.innerHeight - 230) }}
+      <div className="clip-menu-veil" onPointerDown={onClose} onContextMenu={(e: ReactMouseEvent) => { e.preventDefault(); onClose(); }} />
+      <div ref={box} className="clip-menu pf-ds" role="menu" aria-label={t('timeline.actions')} data-testid="clip-menu" dir={editor.getState().lang === 'he' ? 'rtl' : 'ltr'} style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 250) }}
         onKeyDown={(e) => {
           if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
           if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-          e.preventDefault();
+          e.preventDefault(); e.stopPropagation();
           const all = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
           all[(all.indexOf(document.activeElement as HTMLButtonElement) + (e.key === 'ArrowDown' ? 1 : all.length - 1)) % all.length]?.focus();
         }}>
@@ -237,7 +859,7 @@ function ClipMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void
           return (
             <button key={id} type="button" role="menuitem" className={id === 'edit.delete' ? 'danger' : ''} disabled={!!c.enabled && !c.enabled(editor)} data-testid={`menu-${id.slice(5)}`}
               onClick={() => { onClose(); void c.run(editor); }}>
-              {(() => { const I = BAR_ICON_COMPONENTS[id]; return I ? <I /> : null; })()}<span>{t(`bar.${id.slice(5)}` as Key)}</span>{c.keys[0] && <kbd>{chordLabel(c.keys[0])}</kbd>}
+              {(() => { const I = BAR_ICON_COMPONENTS[id]; return I ? <I /> : null; })()}<span>{t(`bar.${id.slice(5)}` as Key)}</span>{c.keys[0] && <kbd className="num">{chordLabel(c.keys[0])}</kbd>}
             </button>
           );
         })}

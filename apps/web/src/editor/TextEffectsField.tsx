@@ -181,7 +181,7 @@ export function TextEffectsField({ clip, style, variantId }: { clip: Text; style
 
   return (
     <fieldset className="ramp" data-testid={TEXT_EFFECT_TESTIDS.panel}>
-      <legend>{S.title}</legend>
+      <legend className="sr-only">{S.title}</legend>
       <div className="fields">
         {TEXT_LOOK_FIELDS.map((k) => (
           <div key={k} className="fields" data-field={k}>
@@ -192,7 +192,7 @@ export function TextEffectsField({ clip, style, variantId }: { clip: Text; style
           </div>
         ))}
         {variantId && <p className="muted">{S.format}</p>}
-        <p className="muted">{S.note}</p>
+        <p className="muted pf-help">{S.note}</p>
         <p className="muted" role="status" aria-live="polite" data-testid={TEXT_EFFECT_TESTIDS.status}>{status ?? ''}</p>
         <div className="row">
           <button type="button" className="ghost" disabled={!anyOn} data-testid={TEXT_EFFECT_TESTIDS.removeAll}

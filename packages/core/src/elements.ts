@@ -4,7 +4,19 @@
  * only svg, g, path, rect, circle, ellipse, line, polyline, polygon, so it can be rasterised by ffmpeg's librsvg
  * and shown inline in a browser. Pure functions; the same id and options always return the same string.
  */
-export type ElementCategory = 'arrow' | 'shape' | 'badge' | 'bubble' | 'frame' | 'bar' | 'line' | 'symbol';
+import { r2, n, poly, fillD, strokeD, both, disc, ringC, box, boxS, g, rot, FLIPX, FLIPY, FLIPXY, rad, polar, regular, star, smoothClosed, smoothOpen, head, sine, rrPath, type Body, type Pt } from './elementKit.ts';
+import { PACK_ELEMENTS } from './packs/elements.ts';
+
+/** The categories of the elements drawn in this file. */
+export const BASE_ELEMENT_CATEGORIES = ['arrow', 'shape', 'badge', 'bubble', 'frame', 'bar', 'line', 'symbol'] as const;
+/** The categories of the elements content packs bring (ADR-0022; packs/elements.ts): holiday symbols and party things. */
+export const PACK_ELEMENT_CATEGORIES = ['holiday', 'party'] as const;
+export type ElementCategory = (typeof BASE_ELEMENT_CATEGORIES)[number] | (typeof PACK_ELEMENT_CATEGORIES)[number];
+/** The name of each category, for the elements browser. */
+export const ELEMENT_CATEGORY_NAMES: Readonly<Record<ElementCategory, { he: string; en: string }>> = {
+  arrow: { he: 'חיצים', en: 'Arrows' }, shape: { he: 'צורות', en: 'Shapes' }, badge: { he: 'תגים', en: 'Badges' }, bubble: { he: 'בועות', en: 'Bubbles' }, frame: { he: 'מסגרות', en: 'Frames' },
+  bar: { he: 'פסי כותרת', en: 'Title bars' }, line: { he: 'קווים', en: 'Lines' }, symbol: { he: 'סמלים', en: 'Symbols' }, holiday: { he: 'חג', en: 'Holiday' }, party: { he: 'מסיבה', en: 'Party' },
+};
 export interface ElementDef {
   id: string;
   /**
@@ -18,72 +30,12 @@ export interface ElementDef {
   width: number; height: number;
   /** how many colours the element uses (1 or 2) */
   colors: 1 | 2;
+  /** The colours it is drawn in when the caller names none (pack elements, ADR-0022); without it white, and teal as the second colour. */
+  defaults?: { color: string; color2?: string };
 }
 export interface ElementOptions {
   /** #RRGGBB */ color?: string;
   /** #RRGGBB, second colour for two-colour elements */ color2?: string;
-}
-
-// ---- number and path helpers ----
-type Pt = [number, number];
-const r2 = (x: number): number => { const v = Math.round(x * 100) / 100; return v === 0 ? 0 : v; };
-const n = (x: number): string => String(r2(x));
-const poly = (p: Pt[], close = true): string => p.map(([x, y], i) => `${i ? 'L' : 'M'}${n(x)} ${n(y)}`).join('') + (close ? 'Z' : '');
-const fillD = (d: string, c: string, extra = ''): string => `<path d="${d}" fill="${c}"${extra}/>`;
-const strokeD = (d: string, c: string, w: number, extra = ''): string => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${n(w)}" stroke-linecap="round" stroke-linejoin="round"${extra}/>`;
-const both = (d: string, fill: string, stroke: string, w: number): string => `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${n(w)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-const disc = (cx: number, cy: number, r: number, c: string): string => `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="${c}"/>`;
-const ringC = (cx: number, cy: number, r: number, c: string, w: number, extra = ''): string => `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="none" stroke="${c}" stroke-width="${n(w)}"${extra}/>`;
-const box = (x: number, y: number, w: number, h: number, c: string, rx = 0): string => `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}"${rx ? ` rx="${n(rx)}"` : ''} fill="${c}"/>`;
-const boxS = (x: number, y: number, w: number, h: number, c: string, sw: number, rx = 0, extra = ''): string => `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}"${rx ? ` rx="${n(rx)}"` : ''} fill="none" stroke="${c}" stroke-width="${n(sw)}"${extra}/>`;
-const g = (body: string, tf: string): string => `<g transform="${tf}">${body}</g>`;
-const rot = (a: number, cx = 50, cy = 50): string => `rotate(${n(a)} ${n(cx)} ${n(cy)})`;
-const FLIPX = 'matrix(-1 0 0 1 100 0)', FLIPY = 'matrix(1 0 0 -1 0 100)', FLIPXY = 'matrix(-1 0 0 -1 100 100)';
-const rad = (deg: number): number => (deg * Math.PI) / 180;
-const polar = (cx: number, cy: number, R: number, deg: number): Pt => [cx + R * Math.cos(rad(deg)), cy + R * Math.sin(rad(deg))];
-const regular = (cx: number, cy: number, R: number, k: number, start = -90): Pt[] => Array.from({ length: k }, (_, i) => polar(cx, cy, R, start + (360 * i) / k));
-const star = (cx: number, cy: number, R: number, r: number, k: number, start = -90): Pt[] => Array.from({ length: 2 * k }, (_, i) => polar(cx, cy, i % 2 ? r : R, start + (180 * i) / k));
-/** Closed Catmull-Rom curve through the points, as cubic Beziers. */
-const smoothClosed = (p: Pt[]): string => {
-  const k = p.length; let d = `M${n(p[0]![0])} ${n(p[0]![1])}`;
-  for (let i = 0; i < k; i++) {
-    const p0 = p[(i + k - 1) % k]!, p1 = p[i]!, p2 = p[(i + 1) % k]!, p3 = p[(i + 2) % k]!;
-    d += `C${n(p1[0] + (p2[0] - p0[0]) / 6)} ${n(p1[1] + (p2[1] - p0[1]) / 6)} ${n(p2[0] - (p3[0] - p1[0]) / 6)} ${n(p2[1] - (p3[1] - p1[1]) / 6)} ${n(p2[0])} ${n(p2[1])}`;
-  }
-  return d + 'Z';
-};
-/** Open path through the points, smoothed. */
-const smoothOpen = (p: Pt[]): string => {
-  const k = p.length; let d = `M${n(p[0]![0])} ${n(p[0]![1])}`;
-  for (let i = 0; i < k - 1; i++) {
-    const p0 = p[Math.max(0, i - 1)]!, p1 = p[i]!, p2 = p[i + 1]!, p3 = p[Math.min(k - 1, i + 2)]!;
-    d += `C${n(p1[0] + (p2[0] - p0[0]) / 6)} ${n(p1[1] + (p2[1] - p0[1]) / 6)} ${n(p2[0] - (p3[0] - p1[0]) / 6)} ${n(p2[1] - (p3[1] - p1[1]) / 6)} ${n(p2[0])} ${n(p2[1])}`;
-  }
-  return d;
-};
-/** Two short strokes forming an arrow head at (x, y) for travel in direction `ang` (radians). Returned as sub-paths. */
-const head = (x: number, y: number, ang: number, s = 24, spread = 0.75): string => {
-  const a: Pt = [x + s * Math.cos(ang + Math.PI - spread), y + s * Math.sin(ang + Math.PI - spread)];
-  const b: Pt = [x + s * Math.cos(ang + Math.PI + spread), y + s * Math.sin(ang + Math.PI + spread)];
-  return `M${n(a[0])} ${n(a[1])}L${n(x)} ${n(y)}L${n(b[0])} ${n(b[1])}`;
-};
-const sine = (x0: number, x1: number, y: number, amp: number, wl: number, steps: number): Pt[] =>
-  Array.from({ length: steps + 1 }, (_, i) => { const x = x0 + ((x1 - x0) * i) / steps; return [x, y + amp * Math.sin(((x - x0) / wl) * 2 * Math.PI)] as Pt; });
-/** Rounded rectangle path, optionally with a triangular tail on one side. s1 < s2 are offsets along the edge. */
-function rrPath(x: number, y: number, w: number, h: number, r: number, tail?: { side: 'top' | 'right' | 'bottom' | 'left'; s1: number; s2: number; tip: Pt }): string {
-  const L = (a: number, b: number) => `L${n(a)} ${n(b)}`;
-  const A = (a: number, b: number) => `A${n(r)} ${n(r)} 0 0 1 ${n(a)} ${n(b)}`;
-  const t = tail; const [tx, ty] = t?.tip ?? [0, 0];
-  let d = `M${n(x + r)} ${n(y)}`;
-  if (t?.side === 'top') d += L(x + t.s1, y) + L(tx, ty) + L(x + t.s2, y);
-  d += L(x + w - r, y) + A(x + w, y + r);
-  if (t?.side === 'right') d += L(x + w, y + t.s1) + L(tx, ty) + L(x + w, y + t.s2);
-  d += L(x + w, y + h - r) + A(x + w - r, y + h);
-  if (t?.side === 'bottom') d += L(x + t.s2, y + h) + L(tx, ty) + L(x + t.s1, y + h);
-  d += L(x + r, y + h) + A(x, y + h - r);
-  if (t?.side === 'left') d += L(x, y + t.s2) + L(tx, ty) + L(x, y + t.s1);
-  d += L(x, y + r) + A(x + r, y);
-  return d + 'Z';
 }
 
 // ---- the table ----
@@ -96,7 +48,6 @@ function rrPath(x: number, y: number, w: number, h: number, r: number, tail?: { 
  * An element whose own drawing changes later gets a higher number of its own.
  */
 export const ELEMENT_PICTURE_VERSION = 2;
-type Body = (c: string, k: string) => string;
 interface Entry extends ElementDef { body: Body }
 const TABLE: Entry[] = [];
 const add = (category: ElementCategory, slug: string, he: string, en: string, width: number, height: number, colors: 1 | 2, body: Body): void => {
@@ -418,10 +369,24 @@ const add = (category: ElementCategory, slug: string, he: string, en: string, wi
   Y('flag', 'דגל', 'Flag', (c) => box(20, 8, 8, 86, c, 3) + fillD(poly([[28, 14], [86, 14], [72, 34], [86, 54], [28, 54]]), c));
 }
 
+// ================= pack elements (ADR-0022) =================
+// Drawn by formula in packs/elements*.ts with the same helpers (elementKit.ts), and listed after the elements of this file.
+/** How many elements this file itself draws; the pack elements follow them in ELEMENTS. */
+export const BASE_ELEMENT_COUNT = TABLE.length;
+for (const e of PACK_ELEMENTS) TABLE.push({ id: `element.${e.category}.${e.slug}`, version: e.version ?? ELEMENT_PICTURE_VERSION, category: e.category, name: { he: e.he, en: e.en }, width: e.width, height: e.height, colors: e.colors, defaults: { color: e.defaults.color, ...(e.defaults.color2 ? { color2: e.defaults.color2 } : {}) }, body: e.body });
+
 // ---- public API ----
 export const ELEMENTS: readonly ElementDef[] = TABLE.map(({ body: _body, ...def }) => def);
 export const ELEMENT_IDS = ELEMENTS.map((e) => e.id) as [string, ...string[]];
-export const ELEMENT_CATEGORIES: readonly ElementCategory[] = ['arrow', 'shape', 'badge', 'bubble', 'frame', 'bar', 'line', 'symbol'];
+/** The categories that hold elements in this build: the eight of this file, then the pack categories some pack element uses. */
+export const ELEMENT_CATEGORIES: readonly ElementCategory[] = [...BASE_ELEMENT_CATEGORIES, ...PACK_ELEMENT_CATEGORIES.filter((c) => PACK_ELEMENTS.some((e) => e.category === c))];
+/** White, and teal as the second colour: what an element without colours of its own is drawn in. */
+export const DEFAULT_ELEMENT_COLOURS = { color: '#FFFFFF', color2: '#3DE0C8' } as const;
+/** The colours element `id` is drawn in when the caller names none: its own defaults, else DEFAULT_ELEMENT_COLOURS. Undefined for an unknown id. */
+export function elementDefaultColours(id: string): { color: string; color2: string } | undefined {
+  const e = BY_ID.get(id);
+  return e ? { color: e.defaults?.color ?? DEFAULT_ELEMENT_COLOURS.color, color2: e.defaults?.color2 ?? DEFAULT_ELEMENT_COLOURS.color2 } : undefined;
+}
 
 const COLOUR = /^#[0-9A-Fa-f]{6}$/;
 const BY_ID = new Map(TABLE.map((e) => [e.id, e] as const));
@@ -430,7 +395,7 @@ const BY_ID = new Map(TABLE.map((e) => [e.id, e] as const));
 export function elementSvg(id: string, options: ElementOptions = {}): string {
   const e = BY_ID.get(id);
   if (!e) throw new RangeError(`unknown element "${id}"`);
-  const c = options.color ?? '#FFFFFF', k = options.color2 ?? '#3DE0C8';
+  const c = options.color ?? e.defaults?.color ?? DEFAULT_ELEMENT_COLOURS.color, k = options.color2 ?? e.defaults?.color2 ?? DEFAULT_ELEMENT_COLOURS.color2;
   if (!COLOUR.test(c)) throw new RangeError(`color must be #RRGGBB, got "${String(c)}"`);
   if (!COLOUR.test(k)) throw new RangeError(`color2 must be #RRGGBB, got "${String(k)}"`);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${e.width} ${e.height}" width="${e.width}" height="${e.height}">${e.body(c, k)}</svg>`;

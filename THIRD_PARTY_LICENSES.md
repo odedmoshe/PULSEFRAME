@@ -73,6 +73,16 @@ Bundled font files and their SHA-256 hashes (verified against the installed pack
 
 The OFL requires the licence text to accompany the font. The full OFL-1.1 text and copyright line from `@fontsource/heebo/LICENSE` are emitted into `apps/web/dist/THIRD_PARTY_NOTICES.txt` at build time (served at `/THIRD_PARTY_NOTICES.txt`).
 
+### Interface fonts (UI redesign "Pulse", `apps/web/src/ds/uiFonts.css`)
+
+Bundled for the interface only; the canvas and export fonts above are unchanged. All three are SIL Open Font License, Version 1.1 (OFL-1.1), recorded in each package's `package.json` and `LICENSE`, pinned exactly (5.3.0).
+
+- **IBM Plex Sans Hebrew** (400/500/600/700, Hebrew and Latin subsets), `@fontsource/ibm-plex-sans-hebrew` 5.3.0. Copyright 2019 IBM Corp. All rights reserved.
+- **IBM Plex Mono** (400/500, Latin subset), `@fontsource/ibm-plex-mono` 5.3.0. Copyright 2017 IBM Corp. All rights reserved.
+- **Karantina** (400/700, Hebrew and Latin subsets; display sizes only), `@fontsource/karantina` 5.3.0. Copyright 2020 The Karantina Project Authors (https://github.com/ronykoch/Karantina).
+
+`apps/web/notices-plugin.ts` emits the full OFL-1.1 text and copyright lines of these three packages into `apps/web/dist/THIRD_PARTY_NOTICES.txt` at build time, next to the Heebo notice.
+
 ## 4. External runtimes used but NOT distributed by this repository
 
 The items below are system-installed or operator-installed. They are not vendored in this repository. Their licence obligations apply to whoever distributes or operates them.

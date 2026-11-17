@@ -72,12 +72,14 @@ function studio() {
   run('edit_analysis', { assetId, kind: 'scenes', replace: [T.rt(2, 1)] });
   run('edit_analysis', { assetId, kind: 'beats', replace: [T.rt(1, 1), T.rt(2, 1), T.rt(3, 1)] });
   const effectId = run('add_effect', { clipId, type: 'blur.gaussian' }).effectId as string;
+  run('set_asset_capture', { assetId, capture: { at: '2026-05-01T10:00:00' } });
+  const eventId = run('add_event', { assetIds: [assetId], name: 'Trip' }).eventId as string;
   const motionTrackId = run('create_motion_track', { assetId, kind: 'point', frame: 0, x: 100, y: 100 }).motionTrackId as string;
   const audioEffectId = (run('add_audio_effect', { clipId: audioClipId, type: 'tone.bassboost' }).effects as { effectId: string }[])[0]!.effectId;
   run('set_effect_keyframe', { clipId, effectId, param: 'radius', time: f(0), value: 0.02 });
   const runId = run('apply_recipe', { recipeId: 'fixture', params: {}, steps: ['add a title'], ops: [{ op: 'add_text', args: { text: 'From a recipe', start: f(150), duration: f(30) } }] }, true).runId as string;
   expect(validateProject(doc)).toEqual([]);
-  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, runId };
+  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, eventId, runId };
 }
 
 describe('own', () => {
@@ -276,7 +278,7 @@ describe('every registered op', () => {
     const s = studio();
     const ids: Record<string, unknown> = {
       assetId: s.assetId, clipId: s.clipId, trackId: s.trackId, audioTrackId: s.audioTrackId, linkedTrackId: s.audioTrackId, sequenceId: 'seq_main', variantId: s.variantId, markerId: s.markerId,
-      effectId: s.effectId, motionTrackId: s.motionTrackId, targetTrackId: s.trackId, segmentId: s.segmentId, fromWordId: s.fromWordId, toWordId: s.toWordId, runId: s.runId, presetId: TEXT_PRESETS[0]!.id, lookId: COLOR_LOOKS[0]!.id, type: 'blur.gaussian', param: 'radius',
+      effectId: s.effectId, motionTrackId: s.motionTrackId, targetTrackId: s.trackId, eventId: s.eventId, segmentId: s.segmentId, fromWordId: s.fromWordId, toWordId: s.toWordId, runId: s.runId, presetId: TEXT_PRESETS[0]!.id, lookId: COLOR_LOOKS[0]!.id, type: 'blur.gaussian', param: 'radius',
       language: 'en', clipIds: [s.clipId, s.audioClipId], trackIds: [s.trackId], sourceTrackIds: [s.trackId], preferTrackIds: [s.trackId], removeClipIds: [s.textId], keepIds: [s.clipId],
     };
     // The clip or track an op is about, where it is not the picture clip on the picture track.
@@ -284,7 +286,7 @@ describe('every registered op', () => {
     const about: Record<string, Record<string, unknown>> = {
       apply_text_preset: title, update_text: title, set_text_animation: title, add_text: { trackId: undefined }, update_cue: cue, merge_cues: cue,
       set_volume_keyframe: sound, draw_volume: sound, delete_volume_keyframe: sound, set_clip_fades: sound, set_audio_crossfade: sound, fit_music: sound,
-      set_track_audio: soundTrack, add_adjustment: { trackId: undefined }, set_clip_follow: title,
+      set_track_audio: soundTrack, add_adjustment: { trackId: undefined }, set_clip_follow: title, set_text_fields: title,
       add_audio_effect: sound, apply_audio_preset: sound, update_audio_effect: { ...sound, effectId: s.audioEffectId }, remove_audio_effect: { ...sound, effectId: s.audioEffectId }, set_ducking: { ...soundTrack, sourceTrackIds: [s.trackId] }, set_caption_style: captions, apply_caption_look: captions, add_cue: captions,
     };
     // Arguments the schema alone cannot make meaningful.
@@ -300,6 +302,10 @@ describe('every registered op', () => {
       set_effect_keyframe: { clipId: s.clipId, effectId: s.effectId, param: 'radius', time: f(30), value: 0.05 },
       add_audio_effect: { clipId: s.audioClipId, type: 'cleanup.dehum' },
       edit_motion_track: { motionTrackId: s.motionTrackId, name: 'Renamed' },
+      set_asset_capture: { assetId: s.assetId, capture: { at: '2026-05-02' } },
+      update_event: { eventId: s.eventId, name: 'Renamed trip' },
+      set_text_fields: { clipId: s.textId, enabled: true },
+      attach_asset_capture: { assetId: s.assetId, capture: { at: '2026-05-03T09:00:00', utcOffsetMinutes: null, source: 'exif' }, overwrite: true },
       update_audio_effect: { clipId: s.audioClipId, effectId: s.audioEffectId, enabled: false },
       apply_audio_preset: { clipId: s.audioClipId, presetId: 'telephone' },
       set_effect_modulator: { clipId: s.clipId, effectId: s.effectId, param: 'radius', modulator: { depth: 0.05 } },

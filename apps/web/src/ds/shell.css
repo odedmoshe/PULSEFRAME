@@ -1,0 +1,93 @@
+/*
+ * The shell: one fixed grid the size of the window (docs/design/UX_REDESIGN.md §4.1). The document never scrolls; every pane
+ * has min-height 0 and scrolls inside itself. Imported first by App.tsx, so it sits before every component sheet; theme.css
+ * comes after it. Owned by the lead: workers place nothing in the grid themselves and fill the mounts named below.
+ *
+ *   areas   top  top     top   top          the top bar (Header.tsx): one row that neither wraps nor grows
+ *           err  err     err   err          the error bar (ErrorBar.tsx): no height while there is no error
+ *           rail browser stage inspector    Rail.tsx · Library.tsx · <main class="stage"> · Inspector.tsx
+ *           rail split   split split        Splitter.tsx (viewer / timeline)
+ *           rail tl      tl    tl           Timeline.tsx
+ *           rail status  status status      StatusBar.tsx
+ *
+ * Sizes are the --pf-shell-* properties on .app. They hold what the editor drew before the redesign, so this sheet changes
+ * no size by itself. Three of them belong to mounts that are still empty (rail, splitter, status bar): they are 0 while the
+ * mount has no content and open to the design-system size (ds/tokens.css) when the worker's component renders something.
+ * The lead points the others at the tokens (--pf-topbar, --pf-browser, --pf-inspector, --pf-tl-h) when the new chrome lands.
+ * The splitter resizes the timeline by setting --pf-shell-tl on .app.
+ */
+.app {
+  --pf-shell-top: 47.3px; /* the bar's height before the redesign, to the fraction: 7px padding twice, a 32.3px control, a 1px line */
+  --pf-shell-rail: 0px;
+  --pf-shell-browser: 290px;
+  --pf-shell-inspector: 330px;
+  --pf-shell-splitter: 0px;
+  --pf-shell-tl: clamp(230px, 34vh, 420px);
+  --pf-shell-status: 0px;
+  position: fixed; inset: 0; block-size: 100dvh; overflow: clip;
+  display: grid;
+  grid-template-columns: var(--pf-shell-rail) var(--pf-shell-browser) minmax(0, 1fr) var(--pf-shell-inspector);
+  grid-template-rows: var(--pf-shell-top) auto minmax(0, 1fr) var(--pf-shell-splitter) var(--pf-shell-tl) var(--pf-shell-status);
+  grid-template-areas:
+    'top  top     top    top'
+    'err  err     err    err'
+    'rail browser stage  inspector'
+    'rail split   split  split'
+    'rail tl      tl     tl'
+    'rail status  status status';
+}
+.app:has(> [data-shell-slot='rail']:not(:empty)) { --pf-shell-rail: var(--pf-rail, 72px); }
+.app:has(> [data-shell-slot='splitter']:not(:empty)) { --pf-shell-splitter: var(--pf-splitter, 8px); }
+.app:has(> [data-shell-slot='status']:not(:empty)) { --pf-shell-status: var(--pf-statusbar, 24px); }
+
+/* panes: placed by the shell only, and never larger than their cell */
+.app > * { min-inline-size: 0; min-block-size: 0; }
+.app > .header { grid-area: top; }
+.app > .error { grid-area: err; }
+.app > [data-shell-slot='rail'] { grid-area: rail; }
+.app > .library { grid-area: browser; }
+.app > .stage { grid-area: stage; }
+.app > .inspector { grid-area: inspector; }
+.app > [data-shell-slot='splitter'] { grid-area: split; }
+.app > .timeline { grid-area: tl; }
+.app > [data-shell-slot='status'] { grid-area: status; }
+/* an empty mount is not a pane yet */
+.app > [data-shell-slot]:empty { display: none; }
+
+/*
+ * The top bar is one row. It used to wrap (195px tall while a format was viewed) and to push the window sideways (1623px
+ * wide after an export, with Export off screen). Nothing here changes the bar while it has room. When it has not, its
+ * parts give way in this order. The flex-shrink factors are 100000 times apart, so a step's share of the narrowing stays under
+ * a sixty-fourth of a pixel (nothing at all) until the step before it is used up; a smaller gap narrowed every button by a
+ * fraction of a pixel at once, which is enough to put an ellipsis in its label:
+ *   1. the two long notes: the sentence about the viewed format and "the export finished" (their whole text is in the tooltip);
+ *   2. the product name beside the logo;
+ *   3. the project name (and the field that edits it), the two selects and the safe-area label;
+ *   4. the short states: saved, agents paused, the flash check, the revision;
+ *   5. the labels of buttons, down to the icon (a text-only button keeps an ellipsis); the names stay for assistive technology.
+ * A note or a state never narrows to nothing: an ellipsis stays, so the element is still there to see, to hover and for a
+ * proof to wait for. The logo and Export never narrow, so the main action is always whole and in view. The bar does not
+ * scroll and clips nothing: what it holds may still paint outside it (the glow of Export, the list of flashing stretches,
+ * a focus ring).
+ */
+.app > .header { flex-wrap: nowrap; }
+.app > .header > * { flex: 0 0 auto; }
+.app > .header > .spacer { flex: 1 1 0; min-inline-size: 0; }
+.app > .header > :is(.format-badge, .export-finished, .brand, .save, .rev, .title, .format-safe) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app > .header > :is(.format-badge, .export-finished) { flex: 0 1e20 auto; min-inline-size: 2.5ch; }
+.app > .header > .brand { flex: 0 1e15 auto; min-inline-size: 0; }
+.app > .header > :is(.title, .format-safe, .format-switch) { flex: 0 1e10 auto; }
+.app > .header > .title { min-inline-size: 6ch; }
+/* The field that takes the place of the rename button while the project name is edited (InlineRename.tsx). Everywhere else
+   it is as wide as its container (styles.css: inline-size 100%); here the container is the bar, and a rigid field that wide
+   pushed every control after it, Export included, out of the window. It has a width of its own and gives way in step 3. */
+.app > .header > .inline-rename-input { flex: 0 1e10 12rem; inline-size: auto; min-inline-size: 4rem; }
+.app > .header > .format-safe { min-inline-size: 1.5rem; }
+.app > .header > .format-switch { min-inline-size: 9ch; }
+.app > .header > .format-switch select { inline-size: 100%; min-inline-size: 0; }
+.app > .header > :is(.save:not(.export-finished), .rev) { flex: 0 1e5 auto; min-inline-size: 2.5ch; }
+.app > .header > .flash-result { flex: 0 1e5 auto; min-inline-size: 3rem; }
+.app > .header > .flash-result > summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app > .header > :is(button, a.ghost):not(.primary, .inline-rename-btn) { flex: 0 1 auto; min-inline-size: 2.5rem; white-space: nowrap; }
+/* the label is what narrows (Header.tsx wraps each in .hd-label): the button itself clips nothing, so its corners and focus ring are drawn as before */
+.app > .header .hd-label { flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

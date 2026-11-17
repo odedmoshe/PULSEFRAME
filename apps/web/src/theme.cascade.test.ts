@@ -80,7 +80,8 @@ const winner = (rules: { rule: Rule; selector: string }[], prop: string) =>
 const main = read('./main.tsx');
 const styles = parse('./styles.css');
 // every component sheet, so a rule added in any of them is weighed too
-const componentFiles = [...readdirSync(new URL('./editor/', import.meta.url)).filter((f) => f.endsWith('.css')).sort().map((f) => `./editor/${f}`), './clip-visuals.css'];
+// the shell grid (ds/shell.css) is imported by App.tsx before the components' sheets, and is weighed with them
+const componentFiles = ['./ds/shell.css', ...readdirSync(new URL('./editor/', import.meta.url)).filter((f) => f.endsWith('.css')).sort().map((f) => `./editor/${f}`), './clip-visuals.css'];
 const components = componentFiles.flatMap((f) => parse(f));
 const theme = parse('./theme.css');
 const all = [...styles, ...components, ...theme];
@@ -95,6 +96,55 @@ describe('the specificity helper', () => {
     expect(specificity('button:hover:not(:disabled)')).toEqual([0, 2, 1]);
     expect(specificity('.clip-menu button.danger')).toEqual([0, 2, 1]);
     expect(specificity('.playhead::before')).toEqual([0, 1, 1]);
+  });
+});
+
+describe('design tokens (ds/tokens.css)', () => {
+  const tokens = read('./ds/tokens.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const brand = readFileSync(new URL('../../../packages/brand/src/tokens.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const declared = (css: string) => new Set([...css.matchAll(/(--pf-[\w-]+)\s*:/g)].map((m) => m[1]!));
+  const aliases: Record<string, string> = {
+    '--pf-bg': '--pf-canvas', '--pf-surface': '--pf-surface-1', '--pf-surface-raised': '--pf-surface-3', '--pf-border': '--pf-line-strong-solid',
+    '--pf-text-muted': '--pf-text-2', '--pf-accent': '--pf-frame', '--pf-accent-2': '--pf-info', '--pf-accent-3': '--pf-agent', '--pf-warn': '--pf-attention',
+  };
+
+  it('load first: the tokens, then the fonts, then the legacy aliases, then the base sheet', () => {
+    const at = (s: string) => main.indexOf(`'${s}'`);
+    expect(at('./ds/tokens.css')).toBeGreaterThan(-1);
+    expect(at('./ds/tokens.css')).toBeLessThan(at('./ds/uiFonts.ts'));
+    expect(at('./ds/uiFonts.ts')).toBeLessThan(at('@pulseframe/brand/tokens.css'));
+    expect(at('@pulseframe/brand/tokens.css')).toBeLessThan(at('./styles.css'));
+  });
+
+  it('defines dark as the default (regardless of the OS) and light as an explicit setting', () => {
+    expect(tokens).toMatch(/:root,\s*:root\[data-theme="dark"\]\s*\{/);
+    expect(tokens).toMatch(/:root\[data-theme="light"\]\s*\{/);
+    expect(tokens).not.toMatch(/prefers-color-scheme/);
+    // density: the layout tokens step with the viewport, and motion shortens under reduced motion
+    for (const q of ['(min-width:1800px)', '(min-width:2300px)', '(max-width:1366px)', '(max-height:780px)', '(prefers-reduced-motion:reduce)']) expect(tokens, q).toContain(q);
+  });
+
+  it('every legacy name still resolves: an alias onto a token that exists', () => {
+    const real = declared(tokens);
+    for (const [legacy, target] of Object.entries(aliases)) {
+      expect(brand, legacy).toContain(`${legacy}: var(${target})`);
+      expect(real.has(target), `${target} exists in ds/tokens.css`).toBe(true);
+    }
+  });
+
+  it('every var(--pf-...) the legacy sheets use is defined somewhere that loads', () => {
+    const defined = new Set([...declared(tokens), ...declared(brand), ...declared(read('./theme.css')), ...declared(read('./styles.css'))]);
+    for (const f of componentFiles) for (const d of declared(read(f))) defined.add(d);
+    const used = new Map<string, string>();
+    for (const f of ['./styles.css', './theme.css', ...componentFiles]) for (const m of read(f).matchAll(/var\((--pf-[\w-]+)\s*(,|\))/g)) if (!used.has(m[1]!)) used.set(m[1]!, f);
+    const missing = [...used].filter(([n]) => !defined.has(n)).map(([n, f]) => `${n} (${f})`);
+    // names with an inline fallback or set from script are listed by hand when they appear; the list must stay empty otherwise
+    expect(missing.filter((x) => !/--pf-(vol|tl|clip-|ch-|gal-|pal-|dlg-)/.test(x))).toEqual([]);
+  });
+
+  it('names both sheets define keep their legacy value in the brand sheet and the spec value in the tokens', () => {
+    expect(tokens).toMatch(/--pf-fs-sm:14px/);
+    expect(brand).toMatch(/--pf-fs-sm: 12px/);
   });
 });
 
@@ -144,7 +194,8 @@ describe('editor stylesheets', () => {
 
   it('the header and the panels that hold dialogs create no stacking context, so a dialog opened from them is on top of the page', () => {
     const traps = ['z-index', 'opacity', 'transform', 'filter', 'backdrop-filter', 'perspective', 'clip-path', 'mask', 'isolation', 'mix-blend-mode', 'contain', 'will-change', 'container-type'];
-    const holders = pick(all, (s) => ['.app', '.header', '.library', '.inspector'].includes(s));
+    // the shell sheet names the panes as children of the grid (`.app > .header`): those rules are held to the same list
+    const holders = pick(all, (s) => ['.app', '.header', '.library', '.inspector'].includes(s.replace(/^\.app > /, '')));
     expect(holders.some((h) => h.selector === '.header' && h.rule.file === './theme.css')).toBe(true);
     for (const h of holders) for (const prop of traps) expect(h.rule.decls[prop], `${h.selector} { ${prop} } in ${h.rule.file}`).toBeUndefined();
     // what the dialogs must stay above
@@ -153,6 +204,91 @@ describe('editor stylesheets', () => {
       expect(pick(all, (s) => s === dialog)[0]!.rule.decls.position, dialog).toBe('fixed');
       for (const under of ['.welcome', '.marker-bar', '.tl-snap', '.tl-add-track', '.clip-menu']) expect(z(dialog), `${dialog} over ${under}`).toBeGreaterThan(z(under));
     }
+  });
+
+  it('the shell is one fixed grid the size of the window: the page cannot scroll and the top bar is one row that cannot grow', () => {
+    const shell = parse('./ds/shell.css');
+    const app = pick(shell, (s) => s === '.app');
+    const decl = (prop: string) => winner(app, prop)?.rule.decls[prop];
+    expect(decl('position')).toBe('fixed');
+    expect(decl('inset')).toBe('0');
+    expect(decl('block-size')).toBe('100dvh');
+    expect(decl('overflow')).toBe('clip'); // not hidden: a clipped box cannot be scrolled by focus or scrollIntoView either
+    expect(decl('display')).toBe('grid');
+    // every area of the design is in the grid, and each pane is placed by the shell sheet alone
+    const areas = decl('grid-template-areas')!;
+    for (const area of ['top', 'err', 'rail', 'browser', 'stage', 'inspector', 'split', 'tl', 'status']) expect(areas, area).toMatch(new RegExp(`\\b${area}\\b`));
+    const placed = Object.fromEntries(shell.flatMap((r) => r.selectors.filter((sel) => sel.startsWith('.app > ') && r.decls['grid-area']).map((sel) => [sel.slice(7), r.decls['grid-area']])));
+    expect(placed).toEqual({ '.header': 'top', '.error': 'err', "[data-shell-slot='rail']": 'rail', '.library': 'browser', '.stage': 'stage', '.inspector': 'inspector', "[data-shell-slot='splitter']": 'split', '.timeline': 'tl', "[data-shell-slot='status']": 'status' });
+    const elsewhere = [...styles, ...components.filter((r) => r.file !== './ds/shell.css'), ...theme];
+    expect(elsewhere.filter((r) => 'grid-area' in r.decls && r.selectors.some((sel) => ['.header', '.error', '.library', '.inspector', '.stage', '.timeline'].includes(sel))).map((r) => `${r.file}: ${r.selectors.join(', ')}`)).toEqual([]);
+    expect(pick(elsewhere, (s) => s === '.app')).toEqual([]); // the grid rules left styles.css and theme.css
+    // panes cannot be larger than their cell
+    const panes = pick(shell, (s) => s === '.app > *')[0]!;
+    expect(panes.rule.decls['min-block-size']).toBe('0');
+    expect(panes.rule.decls['min-inline-size']).toBe('0');
+    // the row of the top bar has a fixed height, and the bar itself never wraps; it does not scroll or clip (its dialog, the
+    // list of flashing stretches and the glow of Export are drawn outside it)
+    expect(decl('grid-template-rows')!.startsWith('var(--pf-shell-top) ')).toBe(true);
+    expect(decl('--pf-shell-top')).toMatch(/^[\d.]+px$/);
+    const bar = pick(shell, (s) => s === '.app > .header');
+    expect(winner(bar, 'flex-wrap')?.rule.decls['flex-wrap']).toBe('nowrap');
+    for (const r of bar) for (const prop of ['overflow', 'overflow-x', 'overflow-y']) expect(r.rule.decls[prop], prop).toBeUndefined();
+    // Export and the logo never narrow: everything in the bar is rigid unless a later rule lets it give way, and none names .primary or .logo
+    expect(pick(shell, (s) => s === '.app > .header > *')[0]!.rule.decls.flex).toBe('0 0 auto');
+    expect(shell.filter((r) => r.decls.flex && r.selectors.some((sel) => /\.primary|\.logo/.test(sel) && !/:not\([^)]*\.primary/.test(sel)))).toEqual([]);
+    // the mounts that are still empty take no room; the App renders them in the grid
+    const src = read('./App.tsx');
+    for (const mount of ['<Rail />', '<Splitter />', '<StatusBar />']) expect(src, mount).toContain(mount);
+    for (const slot of ['rail', 'splitter', 'status']) expect(read(`./editor/${{ rail: 'Rail', splitter: 'Splitter', status: 'StatusBar' }[slot]}.tsx`)).toContain(`data-shell-slot="${slot}"`);
+    expect(pick(shell, (s) => s === '.app > [data-shell-slot]:empty')[0]!.rule.decls.display).toBe('none');
+    // the timeline is a column: the bar above the tracks, and the tracks in the height that is left (they used to reach below the window)
+    const tl = pick(components, (s) => s === '.timeline');
+    expect(winner(tl, 'display')?.rule.decls.display).toBe('flex');
+    expect(winner(tl, 'flex-direction')?.rule.decls['flex-direction']).toBe('column');
+    const scroll = pick(components, (s) => s === '.tl-scroll');
+    expect(winner(scroll, 'min-height')?.rule.decls['min-height']).toBe('0');
+    for (const r of scroll) expect(r.rule.decls.height, '.tl-scroll { height }').toBeUndefined();
+  });
+
+  it('no child of the top bar takes its width from the bar: the field that edits the project name has a width of its own', () => {
+    // Every child of the bar is rigid at its own width unless a shell rule lets it give way (pinned above). A child whose
+    // width is a share of its container is then a share of the whole bar: the rename field (100% wide everywhere else) was
+    // 1416px in a 1440px window and pushed the selects, undo, redo and Export out of it.
+    expect(read('./editor/Header.tsx')).toMatch(/<InlineRename [^>]*testid="project-rename"/);
+    expect(read('./editor/InlineRename.tsx')).toMatch(/<input [^>]*className=\{`inline-rename-input /);
+    expect(winner(pick(styles, (s) => s === '.inline-rename-input'), 'inline-size')?.rule.decls['inline-size']).toBe('100%');
+    // the classes the direct children of <header> carry (Header.tsx, InlineRename.tsx), and the rules that can reach such a child
+    const childClasses = ['logo', 'brand', 'title', 'inline-rename-btn', 'inline-rename-input', 'track-btn', 'format-switch', 'format-badge', 'check', 'format-safe', 'spacer', 'save', 'warn', 'rev', 'ghost', 'paused', 'danger', 'export-finished', 'flash-result', 'primary'];
+    const header = read('./editor/Header.tsx');
+    for (const c of ['logo', 'brand', 'title', 'format-switch', 'format-badge', 'check format-safe', 'spacer', 'rev', 'primary', 'flash-result']) expect(header, c).toContain(`className="${c}"`);
+    const compounds = (sel: string) => sel.split(/\s*>\s*|\s+/).filter(Boolean);
+    const reaches = (sel: string, cls: string) => {
+      const parts = compounds(sel), last = parts.at(-1)!;
+      if (!parts.slice(0, -1).every((p) => ['.app', '.header', 'header'].includes(p))) return false; // scoped to another container
+      const base = last.replace(/:(?:not|is|where)\([^)]*\)|::?[\w-]+|\[[^\]]*\]/g, '');
+      const named = [...base.matchAll(/\.([\w-]+)/g)].map((m) => m[1]!);
+      return named.length ? named.includes(cls) && named.every((n) => childClasses.includes(n)) : /^(\*|button|a|input|span|strong|label|details)$/.test(base);
+    };
+    const widthOf = (cls: string) => {
+      const rules = pick(all, (s) => reaches(s, cls)).flatMap((r) => (['inline-size', 'width'] as const).filter((p) => p in r.rule.decls).map((p) => ({ ...r, value: r.rule.decls[p]! })));
+      return rules.sort((a, b) => cmp(specificity(a.selector), specificity(b.selector)) || a.rule.order - b.rule.order).at(-1)?.value ?? 'auto';
+    };
+    for (const cls of childClasses) expect(widthOf(cls), `.header > .${cls} { inline-size }`).not.toMatch(/%|v[wi]\b|stretch|fill-available/);
+    // the field: 12rem to type in, not growing, and narrowing in the same step as the project name it edits
+    expect(widthOf('inline-rename-input')).toBe('auto');
+    const shell = parse('./ds/shell.css');
+    const field = pick(shell, (s) => s === '.app > .header > .inline-rename-input');
+    expect(field.length).toBe(1);
+    const [grow, shrink, basis] = field[0]!.rule.decls.flex!.split(/\s+/);
+    expect(grow).toBe('0');
+    expect(basis).toMatch(/^[\d.]+(rem|px|ch)$/);
+    const step = pick(shell, (s) => s === '.app > .header > :is(.title, .format-safe, .format-switch)')[0]!.rule.decls.flex!.split(/\s+/)[1];
+    expect(Number(shrink)).toBeGreaterThan(0);
+    expect(shrink).toBe(step);
+    expect(field[0]!.rule.decls['min-inline-size']).toMatch(/^[1-9][\d.]*(rem|px|ch)$/); // still a field one can type in when the bar is at its narrowest
+    // nothing after it in the sheets widens it again (theme.css is loaded last)
+    expect(pick(theme, (s) => /inline-rename-input/.test(s) && compounds(s).slice(0, -1).every((p) => ['.app', '.header'].includes(p)))).toEqual([]);
   });
 
   it('what the preview draws above the stage is cut off at the stage edge, so the handles of an enlarged clip cannot lie over the header', () => {

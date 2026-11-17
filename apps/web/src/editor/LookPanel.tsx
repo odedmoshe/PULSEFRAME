@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronDown, Eye, EyeOff, Trash2 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { adjustmentRefusal, beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument, beatSwitchFrame, TRANSITION_CATEGORIES, transitionDef, velocityLimit, velocityNeeds } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key, fillIn, translateRefusal } from '@pulseframe/i18n';
@@ -8,7 +9,10 @@ import { ADJUST_STRINGS } from './adjust.strings.ts';
 import { wholeEditAdjustment, type WholeEditPick } from './commands.ts';
 import { flashSchedule } from '@pulseframe/engine';
 import { TRANSITION_OPTION_TESTIDS } from './trendTestIds.ts';
-import { ColourMatchPanel } from './ColourMatchPanel.tsx';
+import { SectionsContext } from './Section.tsx';
+import { Seg } from '../ds/index.ts';
+import { INSPECTOR_STRINGS } from './inspector.strings.ts';
+import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } from './icons.tsx';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
@@ -78,7 +82,7 @@ function BeatFieldset({ name, label, beat }: { name: string; label: string; beat
           onPointerUp={(e) => { setDecay(null); const v = Number(e.currentTarget.value); if (v !== m.decay) commit({ decay: v }); }}
           onKeyUp={(e) => { if (!moves(e.key)) return; setDecay(null); const v = Number(e.currentTarget.value); if (v !== m.decay) commit({ decay: v }); }} />
       </label>
-      <p className="muted">{t('look.beat.note')}</p>
+      <p className="muted pf-help">{t('look.beat.note')}</p>
       <button type="button" className="ghost" data-testid="beat-remove" onClick={() => beat.set(null)}>{t('look.beat.remove')}</button>
     </fieldset>
   );
@@ -104,7 +108,7 @@ function ParamControl({ name, prop, value, onCommit, keyer, effectType, beat }: 
     const max = prop.maximum ?? 1;
     const commit = (el: HTMLInputElement) => { setLive(null); const n = Number(el.value); if (n !== cur) onCommit(n); };
     const slider = (
-      <label><span><bdi>{shown}</bdi>{keyer?.animated && <em className="animated" data-testid="effect-animated" title={keyer.animatedTitle}>◆</em>}<bdi className="val">{+(live ?? Number(cur)).toFixed(4)}</bdi></span>
+      <label><span><bdi>{shown}</bdi>{keyer?.animated && <em className="animated" data-testid="effect-animated" title={keyer.animatedTitle}><IconKeyframeHalf size={12} /></em>}<bdi className="val">{+(live ?? Number(cur)).toFixed(4)}</bdi></span>
         <input {...tid} type="range" min={min} max={max} step={stepOf(min, max)} defaultValue={Number(cur)} key={String(cur)}
           onInput={(e) => setLive(Number(e.currentTarget.value))} onPointerUp={(e) => commit(e.currentTarget)} onKeyUp={(e) => commit(e.currentTarget)} />
       </label>
@@ -113,12 +117,12 @@ function ParamControl({ name, prop, value, onCommit, keyer, effectType, beat }: 
     const row = (
       <div className="effect-param-row">
         {slider}
-        <button type="button" className="ghost effect-key" data-testid="effect-key" data-param={name} aria-pressed={keyer.pressed} disabled={!keyer.enabled} title={keyer.title} aria-label={`${keyer.title}: ${name}`} onClick={keyer.onToggle}>◆</button>
+        <button type="button" className="ghost effect-key" data-testid="effect-key" data-param={name} aria-pressed={keyer.pressed} disabled={!keyer.enabled} title={keyer.title} aria-label={`${keyer.title}: ${name}`} onClick={keyer.onToggle}>{keyer.pressed ? <IconKeyframeFull size={16} /> : keyer.animated ? <IconKeyframeHalf size={16} /> : <IconKeyframeHollow size={16} />}</button>
         {beat && (
           <button type="button" className="ghost effect-beat" data-testid="beat-toggle" data-param={name} aria-pressed={!!beat.modulator}
             disabled={!beat.modulator && !beat.music} aria-describedby={!beat.music ? beat.noteId : undefined}
             aria-label={`${t('look.beat.toggle')} ${shown}`} title={`${t('look.beat.toggle')} ${shown}`}
-            onClick={() => beat.set(beat.modulator ? null : BEAT_DEFAULT(beat.range))}>♪</button>
+            onClick={() => beat.set(beat.modulator ? null : BEAT_DEFAULT(beat.range))}><IconOnBeat size={16} /></button>
         )}
       </div>
     );
@@ -209,14 +213,14 @@ function StampControl({ value, onCommit }: { value: string; onCommit: (text: str
           onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void commit(e.currentTarget.value); }} onBlur={(e) => void commit(e.currentTarget.value)} />
       </label>
       <button type="button" className="ghost" data-testid="effect-stamp-today" onClick={() => { const s = todayStamp(); setDraft(s); void commit(s); }}>{t('look.stamp.today')}</button>
-      <p id={hintId} className="muted" data-testid="effect-stamp-hint">{t('look.stamp.hint')}</p>
+      <p id={hintId} className="muted pf-help" data-testid="effect-stamp-hint">{t('look.stamp.hint')}</p>
       {refusal && <p id={refusalId} className="danger" role="alert" data-testid="effect-stamp-refusal">{refusal}</p>}
     </div>
   );
 }
 
 /** Whether music with detected beats plays anywhere under the clip: what a beat modulator follows (core beatPositionAt, sampled over the clip). */
-function musicUnder(doc: ProjectDocument, clip: Clip, rate: T.Rate): boolean {
+export function musicUnder(doc: ProjectDocument, clip: Clip, rate: T.Rate): boolean {
   const start = T.frameIndexAt(clip.start, rate), frames = Math.max(1, T.frameIndexAt(clip.duration, rate));
   for (let k = 0; k <= 8; k++) if (beatPositionAt(doc, T.frameTime(start + Math.min(frames - 1, Math.round((k * frames) / 8)), rate))) return true;
   return false;
@@ -251,16 +255,28 @@ function EffectRow({ clipId, fx, index, count, timeFirst, run }: { clipId: strin
   const beatNoteId = useId();
   const setModulator = (param: string, modulator: { every: number; depth: number; decay: number } | null) => void run([{ op: 'set_effect_modulator', args: { clipId, effectId: fx.id, param, modulator } }], 'Beat on a parameter');
   const blockedTitle = t('look.time.first');
+  // A row shows its parameters when it is the only one or the newest; in the "all tools" view every row does.
+  const { flat } = useContext(SectionsContext);
+  const [open, setOpen] = useState(flat || count <= 2 || index === count - 1);
+  const bodyId = useId();
+  const beats = Object.keys(fx.modulate ?? {}).length;
   return (
-    <li className={`effect-row${time ? ' time-effect' : ''}`} data-testid="effect-row" data-effect-type={fx.type} data-effect-id={fx.id}>
+    <li className={`effect-row${time ? ' time-effect' : ''}${open ? ' is-open' : ''}`} data-testid="effect-row" data-effect-type={fx.type} data-effect-id={fx.id}>
       <div className="row effect-head">
-        <label className="check"><input type="checkbox" checked={fx.enabled} data-testid="effect-enabled" aria-label={`${t('look.effect.bypass')}: ${label}`} onChange={(e) => update({ enabled: e.target.checked })} /> <strong>{label}</strong></label>
-        <span className="spacer" />
-        <button type="button" className="ghost" data-testid="effect-up" disabled={index === 0} aria-disabled={upBlocked || undefined} aria-label={t('look.effect.up')} title={upBlocked ? blockedTitle : t('look.effect.up')} onClick={() => { if (!upBlocked) update({ index: index - 1 }); }}>↑</button>
-        <button type="button" className="ghost" data-testid="effect-down" disabled={index === count - 1} aria-disabled={downBlocked || undefined} aria-label={t('look.effect.down')} title={downBlocked ? blockedTitle : t('look.effect.down')} onClick={() => { if (!downBlocked) update({ index: index + 1 }); }}>↓</button>
-        <button type="button" className="ghost danger" data-testid="effect-remove" aria-label={t('look.effect.remove')} title={t('look.effect.remove')} onClick={() => void run([{ op: 'remove_effect', args: { clipId, effectId: fx.id } }], 'Remove effect')}>×</button>
+        <label className="check fx-eye" title={t('look.effect.bypass')}>
+          <input type="checkbox" checked={fx.enabled} data-testid="effect-enabled" aria-label={`${t('look.effect.bypass')}: ${label}`} onChange={(e) => update({ enabled: e.target.checked })} />
+          {fx.enabled ? <Eye size={16} strokeWidth={1.75} aria-hidden="true" /> : <EyeOff size={16} strokeWidth={1.75} aria-hidden="true" />}
+        </label>
+        <button type="button" className="fx-name" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
+          <strong>{label}</strong>
+          {beats > 0 && <span className="fx-beat" title={t('look.beat.toggle')}><IconOnBeat size={14} /></span>}
+          <ChevronDown className="fx-chev" size={16} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+        <button type="button" className="ghost fx-act" data-testid="effect-up" disabled={index === 0} aria-disabled={upBlocked || undefined} aria-label={t('look.effect.up')} title={upBlocked ? blockedTitle : t('look.effect.up')} onClick={() => { if (!upBlocked) update({ index: index - 1 }); }}><ArrowUp size={14} strokeWidth={1.75} aria-hidden="true" /></button>
+        <button type="button" className="ghost fx-act" data-testid="effect-down" disabled={index === count - 1} aria-disabled={downBlocked || undefined} aria-label={t('look.effect.down')} title={downBlocked ? blockedTitle : t('look.effect.down')} onClick={() => { if (!downBlocked) update({ index: index + 1 }); }}><ArrowDown size={14} strokeWidth={1.75} aria-hidden="true" /></button>
+        <button type="button" className="ghost danger fx-act" data-testid="effect-remove" aria-label={t('look.effect.remove')} title={t('look.effect.remove')} onClick={() => void run([{ op: 'remove_effect', args: { clipId, effectId: fx.id } }], 'Remove effect')}><Trash2 size={14} strokeWidth={1.75} aria-hidden="true" /></button>
       </div>
-      <div className="fields">
+      <div className="fields fx-body" id={bodyId} hidden={!open}>
         {pictures !== null && <p className="muted" data-testid="time-cost">{t('look.time.cost')} <bdi>{pictures}</bdi></p>}
         {fx.type === 'time.shutter' && <p className="muted" role="note" data-testid="time-note">{t('look.time.shutterNote')}</p>}
         {fx.type === 'time.stutter' && <p className="muted" role="note" data-testid="time-note">{t('look.time.stutterNote')}</p>}
@@ -320,14 +336,13 @@ function MaskControls({ clipId, mask }: { clipId: string; mask: Mask | undefined
   const m = mask ?? DEFAULT_MASK;
   const slider = (field: 'x' | 'y' | 'width' | 'height' | 'radius' | 'feather', min: number, max: number, step: number) => (
     <label key={`${field}:${m[field]}`}><span>{t(`look.mask.${field}` as Key)} <bdi className="val">{+m[field].toFixed(3)}</bdi></span>
-      <input type="range" min={min} max={max} step={step} defaultValue={m[field]} disabled={!mask} data-testid={`mask-${field}`}
+      <input type="range" dir={field === 'x' || field === 'y' ? 'ltr' : undefined} min={min} max={max} step={step} defaultValue={m[field]} disabled={!mask} data-testid={`mask-${field}`}
         onPointerUp={(e) => Number(e.currentTarget.value) !== m[field] && set({ [field]: Number(e.currentTarget.value) })}
         onKeyUp={(e) => Number(e.currentTarget.value) !== m[field] && set({ [field]: Number(e.currentTarget.value) })} />
     </label>
   );
   return (
     <div className="fields" data-testid="mask-controls">
-      <h3>{t('look.mask')}</h3>
       <label className="check"><input type="checkbox" checked={!!mask} data-testid="mask-enabled" onChange={(e) => set(e.target.checked ? { ...DEFAULT_MASK } : null)} /> {t('look.mask.enabled')}</label>
       <label>{t('look.mask.shape')}
         <select value={m.shape} disabled={!mask} data-testid="mask-shape" onChange={(e) => set({ shape: e.target.value === 'ellipse' ? 'ellipse' : 'rect' })}>
@@ -460,7 +475,6 @@ function TransitionControls({ clip }: { clip: Extract<Clip, { type: 'media' }> }
   const describedBy = refusal ? refusalId : undefined;
   return (
     <div className="fields" data-testid="transition-controls">
-      <h3>{t('look.transition')}</h3>
       <label>{t('look.transition.type')}
         <select value={tr?.type ?? 'none'} data-testid="transition-type" aria-describedby={describedBy} onChange={(e) => (e.target.value === 'none' ? commit(null, n) : valid && commit(e.target.value, n))}>
           <option value="none">{t('look.transition.none')}</option>
@@ -476,37 +490,38 @@ function TransitionControls({ clip }: { clip: Extract<Clip, { type: 'media' }> }
           onChange={(e) => setFrames(e.target.value)}
           onBlur={() => { if (tr && valid && n !== tr.frames) commit(tr.type, n); }} />
       </label>
-      <p className="muted">{t('look.transition.note')}</p>
+      <p className="muted pf-help">{t('look.transition.note')}</p>
       {tr && <TransitionOptions clip={clip} run={setOptions} describedBy={describedBy} />}
       {refusal && <p id={refusalId} className="danger" role="alert" data-testid="transition-refusal">{refusal}</p>}
     </div>
   );
 }
 
-export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }) {
-  const { editor, state, t } = useEditorState();
-  const effects = clip.type === 'caption' ? [] : clip.effects ?? [];
-  const blend = clip.type === 'caption' ? 'normal' : clip.blend ?? 'normal';
-  const media = clip.type === 'media' && trackKind === 'video';
-  // Adjustment layers (ADR-0016): an adjustment clip's own look acts on everything below it; for any other clip the look can
-  // go on this clip or, through an adjustment layer over the whole edit, on everything (one transaction either way).
+/** Whether a clip takes a look at all, and what the panel around it shares: where a look goes, and the refusal of the last edit. */
+export interface LookState {
+  clip: Clip;
+  trackKind: string;
+  adjustment: boolean;
+  applyTo: ApplyTo;
+  setApplyTo: (v: ApplyTo) => void;
+  toEdit: boolean;
+  refusal: string | null;
+  refusalId: string;
+  editStatus: string | null;
+  run: RunFx;
+  toWholeEdit: (pick: WholeEditPick) => Promise<void>;
+}
+/**
+ * The state the look controls of one clip share, wherever the inspector shows them (the colour tab and the effects tab):
+ * whether a look goes on this clip or, through an adjustment layer, on the whole edit; and the refusal of the last edit made
+ * here, worded in the interface language (store.ts fail), which the controls point to.
+ */
+export function useLook(clip: Clip, trackKind: string): LookState {
+  const { editor, state } = useEditorState();
   const adjustment = clip.type === 'adjustment';
   const A = ADJUST_STRINGS[state.lang];
-  const [applyTo, setApplyTo] = useState<ApplyTo>('clip');
-  const toEdit = !adjustment && applyTo === 'edit';
-  /** Why this effect cannot be picked here: an adjustment (this clip, or the whole-edit layer) refuses time effects, the chroma key and the shadow. */
-  const refusedHere = (type: string) => (adjustment || toEdit ? adjustmentRefusal(type) : null);
-  const whole = state.doc ? wholeEditAdjustment(state.doc) : null;
+  const [applyTo, setApply] = useState<ApplyTo>('clip');
   const [editStatus, setEditStatus] = useState<string | null>(null);
-  const toWholeEdit = async (pick: WholeEditPick) => {
-    const r = await editor.applyToWholeEdit(pick);
-    const why = r ? null : editor.getState().error;
-    setRefusal(why);
-    setEditStatus(r ? A.appliedToEdit : null);
-  };
-  const timeFirst = effects.length > 0 && isTimeEffect(effects[0]!.type);
-  // A refusal of an edit made here is shown here too (besides the editor's error bar), in the interface language: the editor
-  // words the server's refusal with translateRefusal (store.ts fail).
   const [refusal, setRefusal] = useState<string | null>(null);
   const refusalId = useId();
   const run: RunFx = async (ops, label, own = false) => {
@@ -515,37 +530,81 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
     setRefusal(own ? null : why);
     return why;
   };
+  const toWholeEdit = async (pick: WholeEditPick) => {
+    const r = await editor.applyToWholeEdit(pick);
+    setRefusal(r ? null : editor.getState().error);
+    setEditStatus(r ? A.appliedToEdit : null);
+  };
+  return { clip, trackKind, adjustment, applyTo, setApplyTo: (v) => { setApply(v); setEditStatus(null); }, toEdit: !adjustment && applyTo === 'edit', refusal, refusalId, editStatus, run, toWholeEdit };
+}
+
+/** "This clip / the whole edit", the gallery button and what an adjustment layer says about itself: the head of the effects tab. */
+export function LookTarget({ look }: { look: LookState }) {
+  const { editor, state } = useEditorState();
+  const A = ADJUST_STRINGS[state.lang];
+  const { clip, adjustment, toEdit } = look;
+  const whole = state.doc ? wholeEditAdjustment(state.doc) : null;
   return (
-    <div className="look-panel" data-testid="look-panel">
-      <h3>{t('look')}</h3>
-      {adjustment && <p className="muted" role="note" data-testid="adjust-note">{A.adjustNote}</p>}
-      {!adjustment && clip.type !== 'caption' && <ApplyToGroup value={applyTo} onChange={(v) => { setApplyTo(v); setEditStatus(null); }} />}
-      <EffectGalleryButton clip={clip} trackKind={trackKind} applyTo={adjustment ? 'clip' : applyTo} onApplyTo={setApplyTo} />
+    <div className="look-target">
+      {adjustment && <p className="muted pf-help" role="note" data-testid="adjust-note">{A.adjustNote}</p>}
+      {!adjustment && clip.type !== 'caption' && <ApplyToGroup value={look.applyTo} onChange={look.setApplyTo} />}
+      <EffectGalleryButton clip={clip} trackKind={look.trackKind} applyTo={adjustment ? 'clip' : look.applyTo} onApplyTo={look.setApplyTo} />
       {toEdit && whole && (
         <p className="row">
           <button type="button" className="ghost" data-testid="adjust-select" onClick={() => editor.select(whole.clip.id)}>{A.showAdjustment}</button>
         </p>
       )}
-      {toEdit && editStatus && <p className="muted" role="status" data-testid="adjust-status">{editStatus}</p>}
-      <div className="fields">
-        <h4>{t('look.effects')}</h4>
-        {effects.length === 0 ? <p className="muted">{t('look.effects.none')}</p> : (
-          <ul className="effect-list" data-testid="effect-list">
-            {effects.map((fx, i) => <EffectRow key={fx.id} clipId={clip.id} fx={fx} index={i} count={effects.length} timeFirst={timeFirst} run={run} />)}
-          </ul>
-        )}
-        {(effects.some((fx) => GPU_EFFECT_IDS.includes(fx.type)) || (clip.type === 'media' && !!clip.transition && GPU_TRANSITION_IDS.includes(clip.transition.type))) && !state.gpu?.available && state.gpu && (
-          <p className="muted danger" role="status" data-testid="gpu-unavailable">{t('look.gpu.unavailable')} <bdi>{state.gpu.reason}</bdi></p>
-        )}
-        <label>{t('look.looks')}
-          <select data-testid="look-apply" value="" disabled={!state.gpu?.available} title={state.gpu?.available ? t('look.looks.hint') : t('look.gpu.needed')} onChange={(e) => { const lookId = e.target.value; if (!lookId) return; if (toEdit) void toWholeEdit({ kind: 'look', lookId }); else void editor.commit([{ op: 'apply_look', args: { clipId: clip.id, lookId } }], 'Apply colour look'); }}>
-            <option value="">{state.gpu?.available ? t('look.looks.pick') : `${t('look.looks.pick')} — ${t('look.gpu.needed')}`}</option>
-            {COLOR_LOOKS.map((l) => <option key={l.id} value={l.id}>{l.name[state.lang]}</option>)}
-          </select>
-        </label>
+      {toEdit && look.editStatus && <p className="muted" role="status" data-testid="adjust-status">{look.editStatus}</p>}
+    </div>
+  );
+}
+
+/**
+ * The same "this clip / the whole edit" choice as the effects tab's, at the head of the colour tab, so a ready look never
+ * changes the whole edit without the tab saying so; and what the last look applied from here did (or why it was refused).
+ * The manual sliders below always act on the clip, which the note under "the whole edit" says.
+ */
+export function LookTargetLine({ look }: { look: LookState }) {
+  const { editor, state } = useEditorState();
+  const A = ADJUST_STRINGS[state.lang];
+  const whole = state.doc ? wholeEditAdjustment(state.doc) : null;
+  const refusalId = useId();
+  if (look.adjustment || look.clip.type === 'caption') return null;
+  return (
+    <div className="look-target-line" data-testid="colour-apply-to">
+      <span className="look-target-label">{A.applyTo}</span>
+      <Seg label={A.applyTo} size="sm" value={look.applyTo} onChange={(v) => look.setApplyTo(v as ApplyTo)}
+        options={[{ value: 'clip', label: A.applyToClip, testId: 'colour-apply-clip' }, { value: 'edit', label: A.applyToEdit, testId: 'colour-apply-edit' }]} />
+      {look.toEdit && <p className="muted pf-help">{A.looksOnEditNote}</p>}
+      {look.toEdit && look.editStatus && <p className="muted" role="status" data-testid="colour-apply-status">{look.editStatus} {whole && <button type="button" className="ghost" onClick={() => editor.select(whole.clip.id)}>{A.showAdjustment}</button>}</p>}
+      {look.refusal && <p id={refusalId} className="danger" role="alert" data-testid="colour-refusal">{look.refusal}</p>}
+    </div>
+  );
+}
+
+/** The effect stack of a clip: its rows in order, the notice of a missing graphics adapter, and "add an effect". */
+export function EffectsBlock({ look }: { look: LookState }) {
+  const { state, t } = useEditorState();
+  const { clip, adjustment, toEdit, refusal, refusalId, run } = look;
+  const A = ADJUST_STRINGS[state.lang];
+  const effects = clip.type === 'caption' ? [] : clip.effects ?? [];
+  /** Why this effect cannot be picked here: an adjustment (this clip, or the whole-edit layer) refuses time effects, the chroma key and the shadow. */
+  const refusedHere = (type: string) => (adjustment || toEdit ? adjustmentRefusal(type) : null);
+  const timeFirst = effects.length > 0 && isTimeEffect(effects[0]!.type);
+  return (
+    <div className="fields effects-block">
+      {effects.length === 0 ? <p className="muted fx-empty">{t('look.effects.none')}</p> : (
+        <ul className="effect-list" data-testid="effect-list">
+          {effects.map((fx, i) => <EffectRow key={fx.id} clipId={clip.id} fx={fx} index={i} count={effects.length} timeFirst={timeFirst} run={run} />)}
+        </ul>
+      )}
+      {(effects.some((fx) => GPU_EFFECT_IDS.includes(fx.type)) || (clip.type === 'media' && !!clip.transition && GPU_TRANSITION_IDS.includes(clip.transition.type))) && !state.gpu?.available && state.gpu && (
+        <p className="muted danger" role="status" data-testid="gpu-unavailable">{t('look.gpu.unavailable')} <bdi>{state.gpu.reason}</bdi></p>
+      )}
+      <div className="fx-add">
         <label className="sr-only" htmlFor="look-effect-add">{t('look.effect.add')}</label>
-        <select id="look-effect-add" data-testid="effect-add" value="" aria-describedby={refusal ? refusalId : undefined} onChange={(e) => { const type = e.target.value; if (!type) return; if (toEdit) void toWholeEdit({ kind: 'effect', type }); else void run([{ op: 'add_effect', args: { clipId: clip.id, type } }], 'Add effect'); }}>
-          <option value="">{t('look.effect.add')}</option>
+        <select id="look-effect-add" data-testid="effect-add" value="" aria-describedby={refusal ? refusalId : undefined} onChange={(e) => { const type = e.target.value; if (!type) return; if (toEdit) void look.toWholeEdit({ kind: 'effect', type }); else void run([{ op: 'add_effect', args: { clipId: clip.id, type } }], 'Add effect'); }}>
+          <option value="">+ {t('look.effect.add')}</option>
           {CATEGORIES.map((c) => (
             <optgroup key={c} label={t(`look.cat.${c}` as Key)}>
               {EFFECTS.filter((e) => e.category === c).map((e) => {
@@ -555,17 +614,37 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
             </optgroup>
           ))}
         </select>
-        {refusal && <p id={refusalId} className="danger" role="alert" data-testid="look-refusal">{refusal}</p>}
-        <label>{t('look.blend')}
-          <select value={blend} data-testid="blend-mode" onChange={(e) => void editor.commit([{ op: 'set_clip_blend', args: { clipId: clip.id, mode: e.target.value } }], 'Blend mode')}>
-            {BLEND_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </label>
       </div>
-      {media && clip.type === 'media' && <ColourMatchPanel key={`cm:${clip.id}`} clip={clip} />}
-      {media && clip.type === 'media' && <MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} />}
-      {adjustment && clip.type === 'adjustment' && <><MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} /><p className="muted" role="note" data-testid="adjust-mask-note">{A.maskNote}</p></>}
-      {media && clip.type === 'media' && <TransitionControls key={`tr:${clip.id}:${clip.transition?.type ?? ''}:${clip.transition?.frames ?? ''}`} clip={clip} />}
+      {refusal && <p id={refusalId} className="danger" role="alert" data-testid="look-refusal">{refusal}</p>}
     </div>
   );
 }
+
+/** "Apply a ready colour look": the catalogue of looks, for this clip or (through an adjustment layer) the whole edit. */
+export function LooksField({ look }: { look: LookState }) {
+  const { editor, state, t } = useEditorState();
+  const { clip, toEdit } = look;
+  return (
+    <label className="looks-field">{t('look.looks')}
+      <select data-testid="look-apply" value="" disabled={!state.gpu?.available} title={state.gpu?.available ? t('look.looks.hint') : t('look.gpu.needed')} onChange={(e) => { const lookId = e.target.value; if (!lookId) return; if (toEdit) void look.toWholeEdit({ kind: 'look', lookId }); else void look.run([{ op: 'apply_look', args: { clipId: clip.id, lookId } }], 'Apply colour look'); }}>
+        <option value="">{state.gpu?.available ? t('look.looks.pick') : `${t('look.looks.pick')} — ${t('look.gpu.needed')}`}</option>
+        {COLOR_LOOKS.map((l) => <option key={l.id} value={l.id}>{l.name[state.lang]}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/** How the clip is mixed with what lies under it. */
+export function BlendField({ clip }: { clip: Clip }) {
+  const { editor, state, t } = useEditorState();
+  const blend = clip.type === 'caption' ? 'normal' : clip.blend ?? 'normal';
+  return (
+    <label className="blend-field">{t('look.blend')}
+      <select value={blend} data-testid="blend-mode" onChange={(e) => void editor.commit([{ op: 'set_clip_blend', args: { clipId: clip.id, mode: e.target.value } }], 'Blend mode')}>
+        {BLEND_MODES.map((m) => <option key={m} value={m}>{INSPECTOR_STRINGS[state.lang].blend[m] ?? m}</option>)}
+      </select>
+    </label>
+  );
+}
+export { MaskControls, TransitionControls };
+export const LOOK_CATALOG_COUNTS = { looks: COLOR_LOOKS.length, effects: EFFECTS.length, transitions: TRANSITIONS.length } as const;

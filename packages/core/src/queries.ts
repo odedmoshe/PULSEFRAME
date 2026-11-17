@@ -4,6 +4,7 @@ import { clipEnd, sequenceDuration } from './validate.ts';
 import { timelineMarkers } from './cleanup.ts';
 import { assetNotices } from './notices.ts';
 import { own } from './own.ts';
+import { eventDisplayName } from './events.ts';
 
 const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
 
@@ -45,12 +46,19 @@ export function summarize(doc: ProjectDocument) {
     duration,
     durationSeconds: sec(duration),
     frameCount: T.frameCount(duration, doc.settings.frameRate),
-    assets: Object.values(doc.assets).map((a) => ({ id: a.id, kind: a.kind, name: a.name, duration: a.duration, durationSeconds: sec(a.duration), hasAudio: !!a.audio, video: a.video && { width: a.video.width, height: a.video.height, frameRate: a.video.frameRate }, ...(a.lut ? { lut: a.lut } : {}), notices: assetNotices(a) })),
+    assets: Object.values(doc.assets).map((a) => ({ id: a.id, kind: a.kind, name: a.name, duration: a.duration, durationSeconds: sec(a.duration), hasAudio: !!a.audio, video: a.video && { width: a.video.width, height: a.video.height, frameRate: a.video.frameRate }, ...(a.lut ? { lut: a.lut } : {}),
+      // life line (ADR-0021): the file's own capture date; `circa` = an estimate (a file-name date)
+      ...(a.capture ? { capture: { at: a.capture.at, source: a.capture.source, circa: a.capture.circa === true } } : {}), notices: assetNotices(a) })),
     tracks: seq.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, locked: t.locked, muted: t.muted, clipCount: t.clips.length, ...(t.caption ? { caption: { mode: t.caption.mode, linkedTrackId: t.caption.linkedTrackId, preset: t.caption.style.preset } } : {}) })),
     recipeRuns: Object.values(doc.recipeRuns ?? {}).map((r) => ({ id: r.id, recipeId: r.recipeId, created: r.createdIds.length, steps: r.steps })),
     variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.keys(v.overrides).length })),
     analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null, bars: a.beats?.downbeats?.length ?? null, meter: a.beats?.meter ?? null })),
     transcripts: Object.values(doc.transcripts ?? {}).map((t) => ({ assetId: t.assetId, language: t.language, origin: t.origin.kind, phrases: t.segments.length, words: t.segments.reduce((n, s) => n + s.words.length, 0), wordTimed: t.segments.every((s) => s.timing === 'word') })),
+    // life line (ADR-0021): `name` is what a person typed ('' = none); `shownAs` is the name the library shows (typed, or derived from a holiday), '' = shown by its date
+    // people (ADR-0021, people section): the id and the name, for every reader. A summary never holds a birth date or the word choice;
+    // the editor reads those from the document, which the server hands to the owner and to credentials granted them.
+    people: Object.values(doc.people ?? {}).map((p) => ({ id: p.id, name: p.name })),
+    events: Object.values(doc.events ?? {}).map((e) => { const shown = eventDisplayName(doc, e, 'en'); return { id: e.id, name: e.name, shownAs: shown.name, nameKind: shown.kind, files: e.assetIds.length, afterSunset: e.afterSunset, edited: e.origin.edited }; }),
   };
 }
 
@@ -68,7 +76,7 @@ export function timeline(doc: ProjectDocument, sequenceId = doc.mainSequenceId) 
       clips: t.clips.map((c) => ({
         id: c.id, type: c.type, start: c.start, duration: c.duration, end: clipEnd(c),
         startSeconds: sec(c.start), endSeconds: sec(clipEnd(c)),
-        ...(c.type === 'media' ? { assetId: c.assetId, sourceIn: c.sourceIn, gain: c.gain, linkGroupId: c.linkGroupId, ...(c.speed ? { speed: c.speed.num / c.speed.den } : {}), ...(t.kind === 'audio' ? soundFields(c, tails) : {}) } : c.type === 'text' ? { text: c.text, style: c.style } : c.type === 'caption' ? { text: c.text } : { ...(c.label ? { label: c.label } : {}) }),
+        ...(c.type === 'media' ? { assetId: c.assetId, sourceIn: c.sourceIn, gain: c.gain, linkGroupId: c.linkGroupId, ...(c.speed ? { speed: c.speed.num / c.speed.den } : {}), ...(t.kind === 'audio' ? soundFields(c, tails) : {}) } : c.type === 'text' ? { text: c.text, style: c.style, ...(c.fields ? { fields: true as const } : {}) } : c.type === 'caption' ? { text: c.text } : { ...(c.label ? { label: c.label } : {}) }),
         transform: c.transform,
       })),
     })),

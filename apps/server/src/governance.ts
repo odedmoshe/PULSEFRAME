@@ -8,6 +8,7 @@ import * as T from '@pulseframe/time';
 import { applyTransaction, canonical, clipEnd, diffEntities, OpError, RationalTimeSchema, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { z } from 'zod';
 import { ApiError, type CommitRequest, type CommitResult, type Store } from './store.ts';
+import { assertMayWritePeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
 
 export type Mode = 'observe' | 'propose' | 'edit' | 'autopilot';
 export const GrantInput = z
@@ -20,10 +21,12 @@ export const GrantInput = z
     budgetCents: z.number().int().nonnegative().default(0),
     exportsPerDay: z.number().int().min(1).max(100000).nullable().default(null).describe('How many exports this credential may start in any 24 hours; null = no limit'),
     requestsPerMinute: z.number().int().min(1).max(100000).nullable().default(null).describe('Request budget for this credential (REST and MCP together); null = the server-wide setting'),
+    /** ADR-0021, people section. Off unless the owner turns it on for this grant. */
+    people: z.enum(PEOPLE_ACCESS).default('names').describe("What this credential reads about the people of a project: 'names' = ids and names only (the default); 'full' = also birth dates and word choices, and with them the ages titles show and exports of them"),
     expiresInSeconds: z.number().int().positive().max(365 * 86400).optional(),
   })
   .strict();
-export interface Grant { id: string; name: string; mode: Mode; projectIds: string[] | null; trackIds: string[] | null; range: { start: T.RationalTime; end: T.RationalTime } | null; budgetCents: number; requestsPerMinute: number | null; exportsPerDay: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string; createdBy: string }
+export interface Grant { id: string; name: string; mode: Mode; projectIds: string[] | null; trackIds: string[] | null; range: { start: T.RationalTime; end: T.RationalTime } | null; budgetCents: number; requestsPerMinute: number | null; exportsPerDay: number | null; /** What it reads about people (peoplePrivacy.ts); a grant stored before this existed is 'names'. */ people: PeopleAccess; expiresAt: string | null; revokedAt: string | null; createdAt: string; createdBy: string }
 export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: ('observe' | 'edit')[]; mode?: Mode; grant?: Grant }
 
 const now = () => new Date().toISOString();
@@ -48,7 +51,7 @@ export class Governance {
   }
 
   // ---------- grants ----------
-  private grantRow = (r: any): Grant => ({ id: r.id, name: r.name, mode: r.mode, requestsPerMinute: null, exportsPerDay: null, ...JSON.parse(r.constraints), budgetCents: r.budget_cents, expiresAt: r.expires_at, revokedAt: r.revoked_at, createdAt: r.created_at, createdBy: r.created_by });
+  private grantRow = (r: any): Grant => ({ id: r.id, name: r.name, mode: r.mode, requestsPerMinute: null, exportsPerDay: null, people: 'names', ...JSON.parse(r.constraints), budgetCents: r.budget_cents, expiresAt: r.expires_at, revokedAt: r.revoked_at, createdAt: r.created_at, createdBy: r.created_by });
   /** The token is returned once and only its hash is stored. */
   createGrant(raw: unknown, by: Principal): { grant: Grant; token: string } {
     if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can create agent grants');
@@ -60,7 +63,7 @@ export class Governance {
     const token = `pfg_${randomBytes(24).toString('base64url')}`;
     const expiresAt = g.expiresInSeconds ? new Date(this.clock() + g.expiresInSeconds * 1000).toISOString() : null;
     this.store.db.prepare('INSERT INTO grants (id, name, token_hash, mode, constraints, budget_cents, expires_at, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?)')
-      .run(id, g.name, sha(token), g.mode, JSON.stringify({ projectIds: g.projectIds, trackIds: g.trackIds, range: g.range, requestsPerMinute: g.requestsPerMinute, exportsPerDay: g.exportsPerDay }), g.budgetCents, expiresAt, now(), by.actor);
+      .run(id, g.name, sha(token), g.mode, JSON.stringify({ projectIds: g.projectIds, trackIds: g.trackIds, range: g.range, requestsPerMinute: g.requestsPerMinute, exportsPerDay: g.exportsPerDay, people: g.people }), g.budgetCents, expiresAt, now(), by.actor);
     return { grant: this.getGrant(id), token };
   }
   getGrant(id: string): Grant {
@@ -165,6 +168,7 @@ export class Governance {
    */
   commitAs(p: Principal, req: Omit<CommitRequest, 'actor' | 'guard'>): CommitResult | ReturnType<Governance['propose']> {
     if (p.kind === 'user') return this.store.commit({ ...req, actor: p.actor });
+    assertMayWritePeople(p, req.ops); // a credential without the people scope gives names only (also in a dry run)
     if (modeOf(p) === 'propose' && !req.dryRun) return this.propose(p, req.projectId, req.ops, req.label);
     this.assertMayAct(p, req.projectId, req.dryRun ? 'propose' : 'edit');
     return this.store.commit({ ...req, actor: p.actor, guard: this.scopeGuard(p) });
@@ -180,7 +184,11 @@ export class Governance {
   /** Validate against the current document and store the exact diff for review. Nothing is committed. */
   propose(p: Principal, projectId: string, ops: OpCall[], label?: string) {
     this.assertMayAct(p, projectId, 'propose');
-    const { doc, revision } = this.store.getProject(projectId);
+    assertMayWritePeople(p, ops);
+    // Worked out on the document as the proposer may read it (whatever request this runs in): the diff stored for review then
+    // holds nothing the proposer could not see. Accepting applies the operations to the whole document again (decide → commit).
+    const whole = this.store.wholeProject(projectId);
+    const doc = docForPrincipal(whole.doc, p), revision = whole.revision;
     let after: ProjectDocument;
     let summary: string;
     try {
@@ -212,7 +220,9 @@ export class Governance {
   proposalDocs(id: string): { before: ProjectDocument; after: ProjectDocument; baseRevision: number } {
     const pr = this.getProposal(id);
     const before = this.store.replay(pr.projectId, pr.baseRevision).doc;
-    return { before, after: applyTransaction(before, pr.ops, { idSeed: 'preview', actor: pr.actor }).doc, baseRevision: pr.baseRevision };
+    // `before` is what the reader may read (Store.replay); the proposal's own operations may add a birth date (a proposal by a
+    // credential that has the people scope), so the result is reduced for the reader again.
+    return { before, after: docForReader(applyTransaction(before, pr.ops, { idSeed: 'preview', actor: pr.actor }).doc), baseRevision: pr.baseRevision };
   }
   /**
    * Accept = commit the proposed operations now, by the accepting user (so it sits on the user's undo stack),

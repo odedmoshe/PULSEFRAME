@@ -13,6 +13,8 @@ import { z } from 'zod';
 import { createdIdsOf, defineOp, findClip, getOp, OpError, refuseInheritedIds, removeRunClips, runFingerprints } from './ops.ts';
 import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, type ApplyTemplateOutput } from './templateContract.ts';
 import type { SlotRecord } from './schema.ts';
+import { attachKnownGrid } from './packOps.ts';
+import { analysisEntityId } from './entities.ts';
 
 /** How deep a step's arguments are walked for bindings. */
 export const MAX_BINDING_DEPTH = 64;
@@ -85,12 +87,14 @@ defineOp({
     const affected = new Set<string>(removeRunClips(d, a.removeClipIds ?? []));
     // b. the procedural media the server made for this plan, deduplicated by content like import_asset
     const assets = new Map<string, string>();
-    for (const { key, asset } of a.assets ?? []) {
+    for (const { key, asset, analysis } of a.assets ?? []) {
       if (assets.has(key)) throw new OpError('invalid_args', `asset key "${key}" is given twice`, { key });
       const existing = Object.values(d.assets).find((x) => x.contentHash === asset.contentHash);
       const id = existing?.id ?? ctx.newId('ast');
       if (!existing) { d.assets[id] = { id, ...asset }; affected.add(id); }
       assets.set(key, id);
+      // built-in music (ADR-0022) arrives with its known beat grid; it is attached as add_builtin_music attaches it
+      if (analysis && attachKnownGrid(d, id, analysis, ctx.actor)) affected.add(analysisEntityId(id));
     }
     // c. the steps, each with its bindings resolved against the steps before it only
     const bound = new Map<string, Readonly<Record<string, unknown>>>();

@@ -3,6 +3,10 @@ import { findClip, FORMAT_PROFILES } from '@pulseframe/core';
 import { jobStageLabel, type Key } from '@pulseframe/i18n';
 import { api, type PreflightReport } from '../api.ts';
 import { useEditorState } from './store.ts';
+import { ExportSheetHost, openExportSheet, useRecentExports } from './ExportSheet.tsx';
+import { EXPORT_STRINGS } from './exportSheet.strings.ts';
+import { formatFileSize } from './exportSheet.logic.ts';
+import './deliverPanel.css';
 
 interface BatchJob { jobId: string; variantId: string; status: string; stage: string | null }
 const ACTIVE = ['queued', 'running', 'cancel-requested'];
@@ -102,9 +106,12 @@ export function DeliverPanel() {
     } catch (e) { editor.fail(e); }
   };
   const sevLabel = (s: string) => t(`deliver.severity.${s}` as Key);
+  const XS = EXPORT_STRINGS[lang];
+  const recent = useRecentExports();
 
   return (
-    <div className="deliver" data-testid="deliver-panel">
+    <div className="deliver pf-ds pf-dlv" data-testid="deliver-panel">
+      <ExportSheetHost />
       <ProjectFrame />
       <section aria-labelledby="deliver-formats-h">
         <h3 id="deliver-formats-h">{t('deliver.formats')}</h3>
@@ -162,14 +169,14 @@ export function DeliverPanel() {
                 {report.r.issues.map((i, n) => (
                   <li key={`${i.code}:${n}`} data-testid="preflight-issue" data-code={i.code} data-severity={i.severity} className={`sev-${i.severity}`}>
                     <button type="button" className="ghost small issue-main" onClick={() => clickIssue(i.ids, i.range?.startFrame)}>
-                      <span className="sev">{sevLabel(i.severity)}</span> <span dir="auto">{i.message}</span>
+                      <span className="sev">{sevLabel(i.severity)}</span> <span dir="auto"><b>{XS.issue[i.code]?.[0] ?? i.message}</b>{XS.issue[i.code]?.[1] && <small>{XS.issue[i.code]![1]}</small>}</span>
                     </button>
-                    {i.fix && <button type="button" className="primary small" data-testid="preflight-fix" disabled={stale} onClick={() => void applyFix(i.fix!.ops)}>{i.fix.label}</button>}
+                    {i.fix && <button type="button" className="primary small" data-testid="preflight-fix" disabled={stale} onClick={() => void applyFix(i.fix!.ops)}>{XS.issue[i.code]?.[2] || i.fix.label}</button>}
                   </li>
                 ))}
               </ul>
             )}
-            <p className="muted small-text" data-testid="preflight-scope" dir="auto">{report.r.scope}</p>
+            <p className="muted small-text" data-testid="preflight-scope" dir="auto">{XS.scope}</p>
           </div>
         )}
       </section>
@@ -177,11 +184,19 @@ export function DeliverPanel() {
       <section aria-labelledby="deliver-exp-h">
         <h3 id="deliver-exp-h">{t('deliver.export')}</h3>
         <div className="row">
-          <button type="button" className="primary" disabled={!doc || exporting || editor.player?.frameCount === 0} data-testid="deliver-export" onClick={() => editor.startExport(viewed?.id)}>
-            {exporting ? t('export.running') : t('deliver.export.this')}: <bdi>{viewed ? viewed.name : t('deliver.master')}</bdi>
+          <button type="button" className="primary" disabled={!doc || editor.player?.frameCount === 0} data-testid="deliver-export" onClick={() => openExportSheet()}>
+            {exporting ? t('export.running') : XS.title}…
           </button>
           <button type="button" className="ghost" disabled={!doc || variants.length === 0 || batchActive} data-testid="deliver-export-all" onClick={() => void exportAll()}>{t('deliver.export.all')}</button>
         </div>
+        {recent.length > 0 && (
+          <div className="pf-dlv-recent" data-testid="deliver-recent">
+            <h4>{lang === 'he' ? 'ייצואים אחרונים' : 'Recent exports'}</h4>
+            <ul>{recent.map((j) => (
+              <li key={j.id}><span dir="auto">{doc?.name} · {j.label}</span><span className="num">{j.ext.toUpperCase()}{typeof j.output?.bytes === 'number' ? ` · ${formatFileSize(j.output.bytes)}` : ''}</span><a href={`/api/v1/jobs/${j.id}/output`} download>{XS.download}</a></li>
+            ))}</ul>
+          </div>
+        )}
         {exportJob?.status === 'succeeded' && <a href={`/api/v1/jobs/${exportJob.id}/output`} data-testid="deliver-export-link">{t('export.done')}</a>}
         {exportJob?.status === 'failed' && <p className="danger" role="alert">{t('export.failed')}: {exportJob.error?.message}</p>}
         {jobs.length > 0 && (

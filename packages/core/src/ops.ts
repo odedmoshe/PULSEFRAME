@@ -29,6 +29,8 @@ import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequen
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 import { isInheritedName, own } from './own.ts';
+import { detachAssetFromEvents } from './events.ts';
+import { handDownCapture } from './capture.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
@@ -120,7 +122,8 @@ export function findClip(d: ProjectDocument, clipId: string): { seq: Sequence; t
     }
   return undefined;
 }
-const mustClip = (d: ProjectDocument, clipId: string) => {
+/** The clip, refused when it does not exist or its track is locked. Exported for op families kept in their own file (lifeOps.ts). */
+export const mustClip = (d: ProjectDocument, clipId: string) => {
   const f = findClip(d, clipId);
   if (!f) throw new OpError('not_found', `clip ${clipId} not found`, { clipId }, 'Call get_timeline to list current clip ids.');
   if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId });
@@ -362,7 +365,7 @@ defineOp({
 defineOp({
   name: 'remove_asset',
   version: 1,
-  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks; it also leaves the event it was in (an event left without files is removed), and a copy made from it that took its capture date from it keeps that date. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
     const asset = mustAsset(d, a.assetId);
@@ -379,8 +382,10 @@ defineOp({
     for (const id of tracks) { delete d.motionTracks[id]; affected.push(id); }
     if (own(d.transcripts, asset.id)) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
     if (own(d.analyses, asset.id)) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
+    // life line (ADR-0021): a copy that took its capture date from this file keeps it, and the file leaves its event
+    affected.push(...handDownCapture(d, asset.id), ...detachAssetFromEvents(d, asset.id));
     delete d.assets[asset.id];
-    return { affectedIds: affected, summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
+    return { affectedIds: [...new Set(affected)], summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
   },
 });
 
@@ -518,9 +523,15 @@ defineOp({
 defineOp({
   name: 'add_text',
   version: 1,
-  description: 'Add a text layer. Text is shaped with bidi support; Hebrew defaults to right-to-left. Position is the layer centre relative to frame centre (x,y fractions).',
+  description: 'Add a text layer. Text is shaped with bidi support; Hebrew defaults to right-to-left. Position is the layer centre relative to frame centre (x,y fractions). A finished title in one step: presetId gives it a named text style exactly as apply_text_preset does (the explicit style is then set on top of it, as update_text would), animation animates it exactly as set_text_animation does, and fields: true turns its live fields on exactly as set_text_fields does (the text then holds fields such as {hebrewDate}, and plain braces are written doubled). Each of the three refuses as its own operation does, and then nothing is added.',
   args: z
-    .object({ sequenceId: z.string().optional(), trackId: z.string().optional(), text: z.string().min(1).max(2000), start: RT, duration: RT, style: TextStyleSchema.partial().optional(), transform: TransformSchema.partial().optional() })
+    .object({
+      sequenceId: z.string().optional(), trackId: z.string().optional(), text: z.string().min(1).max(2000), start: RT, duration: RT, style: TextStyleSchema.partial().optional(), transform: TransformSchema.partial().optional(),
+      // ADR-0022: optional on a v1 operation, so logs written before it replay unchanged
+      presetId: z.string().optional().describe('A text style of list_catalog → textPresets, applied before `style`'),
+      animation: TextAnimationSchema.partial().optional().describe('As set_text_animation'),
+      fields: z.literal(true).optional().describe('Live fields on, as set_text_fields enabled: true'),
+    })
     .strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
@@ -531,13 +542,41 @@ defineOp({
     const track = a.trackId ? mustTrack(seq, a.trackId) : placeTrack(seq, 'text', a.start, end, ctx);
     if (track.kind !== 'text') throw new OpError('incompatible', `text cannot go on ${track.kind} track`, { trackId: track.id });
     assertFree(track, a.start, end);
-    const clip: Clip = { id: ctx.newId('clp'), type: 'text', text: a.text, start: a.start, duration: a.duration, style: normaliseTextStyle({ ...DEFAULT_TEXT_STYLE, ...a.style }), transform: { ...DEFAULT_TRANSFORM, ...a.transform } };
+    const clip: Extract<Clip, { type: 'text' }> = { id: ctx.newId('clp'), type: 'text', text: a.text, start: a.start, duration: a.duration, style: normaliseTextStyle({ ...DEFAULT_TEXT_STYLE, ...a.style }), transform: { ...DEFAULT_TRANSFORM, ...a.transform } };
     track.clips.push(clip);
     sortClips(track);
+    // A finished title in one step (ADR-0022). Each part runs the body of the operation it stands for, so the result is what
+    // add_text, apply_text_preset, update_text (style), set_text_animation and set_text_fields would leave, and a refusal of
+    // any of them refuses the whole add.
+    if (a.presetId !== undefined) {
+      applyTextPreset(clip, a.presetId, ctx);
+      if (a.style) clip.style = normaliseTextStyle({ ...clip.style, ...a.style });
+    }
+    if (a.animation !== undefined) sameOp('set_text_animation').apply(d, { clipId: clip.id, animation: a.animation }, ctx);
+    if (a.fields) sameOp('set_text_fields').apply(d, { clipId: clip.id, enabled: true }, ctx);
     return { affectedIds: [clip.id], summary: `Added text "${a.text.slice(0, 40)}" at ${fmt(a.start)}`, output: { clipId: clip.id, trackId: track.id } };
   },
 });
 
+/** The registered operation `name`, for an operation that includes another's body (looked up when it runs, so the order of the files does not matter). */
+function sameOp(name: string): OpDefinition {
+  const def = registry.get(name);
+  if (!def) throw new OpError('unknown_op', `operation ${name} is not registered in this build`, { op: name });
+  return def;
+}
+/** apply_text_preset's body (also the presetId of add_text). */
+function applyTextPreset(clip: Extract<Clip, { type: 'text' }>, presetId: string, ctx: OpContext): void {
+  const preset = findTextPreset(presetId);
+  if (!preset) throw new OpError('not_found', `text style "${presetId}" does not exist`, { presetId }, 'Call list_catalog for the text styles.');
+  // The preset owns the look fields (ADR-0012): a look from an earlier preset or edit is cleared, then the preset's own are set.
+  const base: Record<string, unknown> = { ...clip.style };
+  for (const k of TEXT_LOOK_FIELDS) delete base[k];
+  clip.style = normaliseTextStyle({ ...(base as typeof clip.style), ...preset.style });
+  // The preset owns the clip's drop shadow: replaced, added or removed. Other effects are left alone.
+  const others = (clip.effects ?? []).filter((e) => e.type !== 'stylize.shadow');
+  const list = preset.shadow ? [...others, { id: ctx.newId('fx'), type: 'stylize.shadow', enabled: true, params: parseEffect('stylize.shadow', preset.shadow) }] : others;
+  if (list.length) clip.effects = list; else delete clip.effects;
+}
 defineOp({
   name: 'apply_text_preset',
   version: 1,
@@ -546,16 +585,7 @@ defineOp({
   apply(d, a, ctx) {
     const { clip } = mustClip(d, a.clipId);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
-    const preset = findTextPreset(a.presetId);
-    if (!preset) throw new OpError('not_found', `text style "${a.presetId}" does not exist`, { presetId: a.presetId }, 'Call list_catalog for the text styles.');
-    // The preset owns the look fields (ADR-0012): a look from an earlier preset or edit is cleared, then the preset's own are set.
-    const base: Record<string, unknown> = { ...clip.style };
-    for (const k of TEXT_LOOK_FIELDS) delete base[k];
-    clip.style = normaliseTextStyle({ ...(base as typeof clip.style), ...preset.style });
-    // The preset owns the clip's drop shadow: replaced, added or removed. Other effects are left alone.
-    const others = (clip.effects ?? []).filter((e) => e.type !== 'stylize.shadow');
-    const list = preset.shadow ? [...others, { id: ctx.newId('fx'), type: 'stylize.shadow', enabled: true, params: parseEffect('stylize.shadow', preset.shadow) }] : others;
-    if (list.length) clip.effects = list; else delete clip.effects;
+    applyTextPreset(clip, a.presetId, ctx);
     return { affectedIds: [clip.id], summary: `Applied text style ${a.presetId}`, output: { style: clip.style } };
   },
 });
@@ -1922,7 +1952,9 @@ defineOp({
     if (a.downbeats && !a.downbeats.every(isBeat)) throw new OpError('invalid_args', 'every bar start must be one of the beats', {}, 'Add the beat first, or pass it in the same edit.');
     const bars = a.downbeats === null ? [] : a.downbeats ? sortedUnique(a.downbeats) : (cur.beats?.downbeats ?? []).filter(isBeat);
     const meter = a.meter !== undefined ? a.meter : cur.beats?.meter ?? null;
-    d.analyses[asset.id] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list, ...(bars.length ? { downbeats: bars, meter } : {}) } };
+    d.analyses[asset.id] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list, ...(bars.length ? { downbeats: bars, meter } : {}),
+      // the sections of built-in music (ADR-0022) are not beats: a correction of the beats leaves them exactly as they are
+      ...(cur.beats?.sections ? { sections: cur.beats.sections } : {}) } };
     return { affectedIds: [analysisEntityId(asset.id)], summary: `Edited ${a.kind === 'scenes' ? 'scene cuts' : 'beats'} (${list.length})` };
   },
 });

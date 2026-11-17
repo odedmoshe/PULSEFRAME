@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CAPTION_PRESETS, CaptionStyleSchema, DEFAULT_CAPTION_STYLE } from './schema.ts';
 import { FONT_CATALOG } from './fonts.ts';
-import { CAPTION_LOOKS as LOOKS, CAPTION_LOOK_IDS as IDS, findCaptionLook as find } from './captionPresets.ts';
+import { BUILTIN_CAPTION_LOOKS, CAPTION_LOOKS as LOOKS, CAPTION_LOOK_IDS as IDS, findCaptionLook as find } from './captionPresets.ts';
+import { PACKS } from './packs/index.ts';
 import { describeOps } from './ops.ts';
 
 const lum = (hex: string) => {
@@ -56,8 +57,11 @@ describe('caption looks', () => {
       expect(l.needsWordTiming, l.id).toBe(expected);
     }
   });
-  it('has exactly 40 looks: the number the documentation and the caption controls state, and what the operation offers', () => {
-    expect(LOOKS.length).toBe(40);
+  it('has exactly 40 looks of its own, then those of the content packs: what the operation offers', () => {
+    // ADR-0022: the content packs add their caption looks after the forty of this file (CAPABILITIES states both numbers)
+    expect(BUILTIN_CAPTION_LOOKS.length).toBe(40);
+    expect(LOOKS.length).toBe(40 + PACKS.reduce((k, p) => k + p.captionLooks.length, 0));
+    expect(LOOKS.slice(0, 40)).toEqual(BUILTIN_CAPTION_LOOKS);
     expect(IDS.length).toBe(LOOKS.length);
     // what apply_caption_look accepts (and so what describe_ops and the catalogue list) is this same list
     const lookId = (describeOps().find((o) => o.name === 'apply_caption_look')!.argsSchema as unknown as { properties: { lookId: { enum: string[] } } }).properties.lookId;
