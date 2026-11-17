@@ -6,7 +6,7 @@
  * Text is shaped by the browser engine (HarfBuzz inside Chromium) using a bundled, pinned font file.
  */
 import * as T from '@pulseframe/time';
-import { gpuTransition, isGpuTransition, takeUnavailableEffects } from './gpu.ts';
+import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip } from './gpu.ts';
 import type { Layer, PictureLayer, RenderGraph, TextLayer } from './evaluate.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
 import { textAtRest, unitPose } from './textAnimation.ts';
@@ -15,7 +15,15 @@ import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, BT709_AS_BT60
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Something that can paint a decoded source frame into a rectangle. */
 export interface FrameImage { draw(ctx: Ctx2D, dx: number, dy: number, dw: number, dh: number): void }
-export type FrameProvider = (layer: PictureLayer) => Promise<FrameImage | null>;
+/**
+ * What a view hands the compositor: the decoded source frame of a picture layer and, optionally, the colour tables that
+ * color.lut effects name (by asset id). A view without `lut` cannot show such an effect: it is then reported as unavailable.
+ */
+export interface FrameProvider {
+  (layer: PictureLayer): Promise<FrameImage | null>;
+  /** The strip of a colour table asset (core `lutStrip` of the file text, with a key unique per content), or null when there is none. May reject. */
+  lut?(assetId: string): Promise<LutStrip | null>;
+}
 
 /** Text wraps at this fraction of the frame width (before the layer's own scale). */
 export const TEXT_MAX_WIDTH_FRAC = 0.9;
@@ -252,18 +260,31 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
 /**
  * `unavailableEffects`: ids of GPU effects in this frame that could not run here (ADR-0008). The frame was drawn without them;
  * a preview says so, a still or an export must refuse rather than deliver it.
+ * `unavailableReasons`: for those of them whose cause is not the graphics adapter (a colour table that could not be loaded), why.
  */
 /** The frame that is waiting on a GPU pass, if any (see drawGraph). */
 let gpuFrame: Promise<void> | null = null;
-export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; unavailableEffects: string[] }> {
+export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
   const missing: string[] = [];
-  const images = await Promise.all(g.layers.map((l) => (l.kind === 'text' || l.kind === 'caption' ? null : frames(l))));
+  // Colour tables named by effects of this frame are loaded here, with the source frames and before the GPU gate; a table that
+  // cannot be had becomes null with its reason, and the effect that needs it is then reported as unavailable, never thrown.
+  const luts = new Map<string, LutStrip | null>();
+  const lutReasons = new Map<string, string>();
+  for (const l of g.layers) if (l.kind !== 'caption') for (const e of l.effects ?? []) { const id = lutIdOf(e.type, e.params); if (id) luts.set(id, null); }
+  const loadLut = async (id: string) => {
+    if (!frames.lut) { lutReasons.set(id, 'this view cannot load colour tables'); return; }
+    try {
+      const strip = await frames.lut(id);
+      if (strip) luts.set(id, strip); else lutReasons.set(id, `colour table ${id} is not available`);
+    } catch (e) { lutReasons.set(id, `colour table ${id} could not be loaded: ${String((e as Error)?.message ?? e).slice(0, 200)}`); }
+  };
+  const [images] = await Promise.all([Promise.all(g.layers.map((l) => (l.kind === 'text' || l.kind === 'caption' ? null : frames(l)))), Promise.all([...luts.keys()].map(loadLut))]);
   // A frame with a GPU effect waits for the pass in the middle of drawing, while the shared scratch buffers hold its layers.
   // No other frame may draw meanwhile, so every frame first waits for such a frame to finish; frames without one stay synchronous.
   while (gpuFrame) await gpuFrame;
   let release: (() => void) | undefined;
   if (g.layers.some((l) => l.kind !== 'caption' && ((l.effects && hasGpuEffect(l.effects)) || (l.transition && isGpuTransition(l.transition.type))))) gpuFrame = new Promise<void>((r) => { release = () => { gpuFrame = null; r(); }; });
-  takeUnavailableEffects();
+  takeUnavailable();
   try {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -288,7 +309,7 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
     if (!hasLook) { place(ctx); continue; } // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
-    const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), box, beat: g.beat ?? null };
+    const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), box, beat: g.beat ?? null, luts, lutReasons };
     let buf = scratch(1, g.width, g.height);
     place(buf.ctx);
     if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
@@ -311,6 +332,7 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
     outgoing = null;
   }
   ctx.restore();
-  return { missing, unavailableEffects: takeUnavailableEffects() };
+  const unavailable = takeUnavailable();
+  return { missing, unavailableEffects: unavailable.effects, ...(Object.keys(unavailable.reasons).length ? { unavailableReasons: unavailable.reasons } : {}) };
   } finally { release?.(); }
 }

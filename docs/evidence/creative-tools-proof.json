@@ -1,7 +1,7 @@
 {
- "generatedAt": "2026-11-16T22:47:18.758Z",
+ "generatedAt": "2026-11-17T01:02:08.318Z",
  "profile": {
-  "os": "Linux 6.18.44-fc-v470",
+  "os": "Linux 6.18.44-fc-v509",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "note": "CPU-only container; Chromium with the software WebGPU adapter. Functional checks only; nothing here judges how a curve, motion, thumbnail or sound looks or sounds."
  },
@@ -192,8 +192,8 @@
    "name": "the gallery opens on the effects tab with a thumbnail drawn for every effect this browser can run",
    "ok": true,
    "detail": {
-    "nEffects": 40,
-    "rendered": 40,
+    "nEffects": 41,
+    "rendered": 41,
     "unavailable": 0,
     "webgpu": true
    }

@@ -4,7 +4,7 @@ import { useEditorState } from './store.ts';
 import { WELCOME_STRINGS } from './welcome.strings.ts';
 import './welcome.css';
 
-const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp'; // same list as the library input
+const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp,.cube'; // same list as the library input (.cube = a colour table)
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Start panel over the stage of an empty project (no assets, no clips). */

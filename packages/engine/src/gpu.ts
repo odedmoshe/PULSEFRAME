@@ -17,8 +17,22 @@
 type C2D = OffscreenCanvasRenderingContext2D;
 export interface GpuStatus { available: boolean; reason: string; adapter: { vendor: string | null; architecture: string | null; software: boolean } | null }
 import type { BeatPosition } from '@pulseframe/core';
-interface EffectEnv { width: number; height: number; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number; /** Where the frame falls in the beats of the music playing there, if any. */ beat?: BeatPosition | null }
-interface GpuEffect { /** Body of `fn effect(uv: vec2f) -> vec4f` (premultiplied in, premultiplied out). `P` holds the eight parameters. */ wgsl: string; /** Up to eight numbers, in the order the shader reads them. */ params(p: Record<string, unknown>, env: EffectEnv): number[] }
+/**
+ * A colour table as a pass samples it: core's `lutStrip` (RGBA8, width = size*size, height = size; pixel (r + b*size, g) holds
+ * entry (r, g, b)) plus `key`, which is unique per content (the asset's content hash) and names its texture on the device.
+ */
+export interface LutStrip { key: string; size: number; width: number; height: number; data: Uint8Array }
+interface EffectEnv {
+  width: number; height: number; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number; /** Where the frame falls in the beats of the music playing there, if any. */ beat?: BeatPosition | null;
+  /** Colour tables of this frame by asset id, loaded by drawGraph before drawing; null = could not be supplied (why: `lutReasons`). */
+  luts?: ReadonlyMap<string, LutStrip | null>;
+  lutReasons?: ReadonlyMap<string, string>;
+}
+interface GpuEffect {
+  /** Body of `fn effect(uv: vec2f) -> vec4f` (premultiplied in, premultiplied out). `P` holds the eight parameters. */ wgsl: string; /** Up to eight numbers, in the order the shader reads them. */ params(p: Record<string, unknown>, env: EffectEnv): number[];
+  /** Name of the string parameter holding the id of a colour table. The pass then samples that table as `lut` (binding 3); with an empty id the picture passes through unchanged. */
+  lut?: string;
+}
 
 const n = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const rgb = (hex: unknown, fallback: string) => { const h = typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : fallback; return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255]; };
@@ -201,6 +215,28 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       c = c + (1.0 - l) * (1.0 - l) * P.b.z * vec3f(-0.08, 0.02, 0.10) + l * l * P.b.w * vec3f(0.10, 0.04, -0.08);
       c = c * (1.0 - 0.25 * P.b.y) + vec3f(0.12 * P.b.y);
       return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)) * s.a, s.a);`,
+  },
+  // A 3D colour table (.cube) held as a strip of blue slices. The same arithmetic as core's sampleStrip, which is its tested model:
+  // straight colour clamped to 0..1, one bilinear tap (half-texel inset, so a tap never bleeds into the next slice) in each of the
+  // two nearest blue slices, blended by the blue fraction, then mixed with the original by the intensity. The table's size is
+  // read from the texture, so one pipeline serves every table.
+  'color.lut': {
+    lut: 'lut',
+    params: (p) => [Math.min(1, Math.max(0, n(p.intensity, 1)))],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let c = clamp(s.rgb / s.a, vec3f(0.0), vec3f(1.0));
+      let size = f32(textureDimensions(lut).y);
+      let d = size - 1.0;
+      let q = c * d;
+      let b0 = min(floor(q.z), d);
+      let b1 = min(b0 + 1.0, d);
+      let ty = (q.y + 0.5) / size;
+      let t0 = textureSampleLevel(lut, smp, vec2f((b0 * size + q.x + 0.5) / (size * size), ty), 0.0).rgb;
+      let t1 = textureSampleLevel(lut, smp, vec2f((b1 * size + q.x + 0.5) / (size * size), ty), 0.0).rgb;
+      let o = mix(c, mix(t0, t1, q.z - b0), P.a.x);
+      return vec4f(o * s.a, s.a);`,
   },
   // Map dark to one colour and bright to another.
   'stylize.duotone': {
@@ -390,6 +426,8 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
   },
 };
 export const isGpuEffect = (type: string) => type in GPU_EFFECTS;
+/** The id of the colour table an effect instance names, or '' when it names none (or is not a table effect). */
+export const lutIdOf = (type: string, params: Record<string, unknown>): string => { const key = GPU_EFFECTS[type]?.lut; const id = key ? params[key] : ''; return typeof id === 'string' ? id : ''; };
 
 /**
  * Transitions over two pictures (the outgoing one and the incoming one). `kernel` picks the WGSL body; `v` are up to three
@@ -519,11 +557,12 @@ const VERTEX = `
     var p = array<vec2f, 3>(vec2f(-1, -1), vec2f(3, -1), vec2f(-1, 3));
     var o: V; o.pos = vec4f(p[i], 0, 1); o.uv = vec2f(p[i].x * 0.5 + 0.5, 0.5 - p[i].y * 0.5); return o;
   }`;
-const shaderOf = (body: string) => `${VERTEX}
+const shaderOf = (body: string, withLut = false) => `${VERTEX}
   struct Params { a: vec4f, b: vec4f }
   @group(0) @binding(0) var src: texture_2d<f32>;
   @group(0) @binding(1) var smp: sampler;
-  @group(0) @binding(2) var<uniform> P: Params;
+  @group(0) @binding(2) var<uniform> P: Params;${withLut ? `
+  @group(0) @binding(3) var lut: texture_2d<f32>;` : ''}
   fn hash(x: u32) -> u32 { let v = x * 747796405u + 2891336453u; let w = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u; return (w >> 22u) ^ w; }
   fn unit(x: u32) -> f32 { return f32(x >> 8u) / 16777216.0; }
   fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
@@ -536,15 +575,24 @@ const shaderOf = (body: string) => `${VERTEX}
 const REFERENCE = { wgsl: `${VERTEX}
   @fragment fn f(i: V) -> @location(0) vec4f { let p = i.pos; var c = vec3f(0); for (var k = 0; k < 16; k++) { c += 0.0625 * (0.5 + 0.5 * sin(vec3f(p.x, p.y, p.x + p.y) * 0.01 * f32(k + 1))); } return vec4f(c, 1); }`, first: [133, 133, 138, 255], middle: [116, 128, 133, 255] };
 
-interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; size: { source: any; source2: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any }
+interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; size: { source: any; source2: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any; /** Colour-table textures by LutStrip.key: made once per table, bounded, gone with the device. */ luts: Map<string, any> }
+/** Colour-table textures kept on the device at once (the largest is 4225 x 65, about 1.1 MB). */
+const MAX_LUT_TEXTURES = 8;
 let state: State | null = null;
 let status: GpuStatus = { available: false, reason: 'not checked yet', adapter: null };
 let starting: Promise<GpuStatus> | null = null;
-/** Effect ids that could not be applied since the last `takeUnavailableEffects()`. */
+/** Effect ids that could not be applied since the last `takeUnavailable()`. */
 const skipped = new Set<string>();
+/** For the skipped effects whose cause is not the adapter (a colour table that could not be supplied): why, by effect id. */
+const skippedWhy = new Map<string, string>();
 
 export const gpuStatus = (): GpuStatus => status;
-export function takeUnavailableEffects(): string[] { const out = [...skipped]; skipped.clear(); return out; }
+/** The skipped effect ids and, where the cause is not the adapter, the reason; both are cleared. */
+export function takeUnavailable(): { effects: string[]; reasons: Record<string, string> } {
+  const out = { effects: [...skipped], reasons: Object.fromEntries(skippedWhy) };
+  skipped.clear(); skippedWhy.clear();
+  return out;
+}
 
 /** Ask for an adapter and prove it renders the reference pixels. Safe to call many times; resolves to the same status. */
 export function initGpu(): Promise<GpuStatus> {
@@ -581,8 +629,9 @@ export function initGpu(): Promise<GpuStatus> {
       buf.unmap(); buf.destroy(); target.destroy();
       if (!same(first, REFERENCE.first) || !same(middle, REFERENCE.middle)) return fail(`the adapter renders the reference shader differently (${JSON.stringify(middle)} instead of ${JSON.stringify(REFERENCE.middle)})`, about);
       // ---- ready ----
-      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 32, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }) };
-      device.lost.then((l: { message?: string }) => { state = null; status = { available: false, reason: `the graphics device was lost: ${l?.message ?? 'no reason given'}`, adapter: about }; starting = null; });
+      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 32, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }), luts: new Map() };
+      const made = state;
+      device.lost.then((l: { message?: string }) => { for (const t of made.luts.values()) { try { t.destroy(); } catch { /* already gone with the device */ } } made.luts.clear(); state = null; status = { available: false, reason: `the graphics device was lost: ${l?.message ?? 'no reason given'}`, adapter: about }; starting = null; });
       return (status = { available: true, reason: `${about.software ? 'software' : 'hardware'} adapter${about.vendor ? ` (${about.vendor})` : ''}, reference pixels match`, adapter: about });
     } catch (e) { return fail(`WebGPU could not be started: ${String((e as Error)?.message ?? e).slice(0, 200)}`); }
   })();
@@ -597,7 +646,18 @@ export function initGpu(): Promise<GpuStatus> {
 export function gpuEffect(type: string, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
   const fx = GPU_EFFECTS[type];
   if (!fx) { skipped.add(type); return Promise.resolve(false); }
-  return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl), fx.params(params, env), src, null, dst, env);
+  if (!fx.lut) return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl), fx.params(params, env), src, null, dst, env);
+  const id = lutIdOf(type, params);
+  // No table chosen: the picture as it is. That is what the effect means with its default parameters, so it is not a missing effect.
+  if (!id) { dst.drawImage(src, 0, 0); return Promise.resolve(true); }
+  const strip = env.luts?.get(id) ?? null;
+  if (!strip) {
+    // A named table that was not supplied: unavailable, with the reason (when the adapter is missing too, that is the reason given).
+    if (state && !skippedWhy.has(type)) skippedWhy.set(type, env.lutReasons?.get(id) ?? `colour table ${id} was not supplied to this view`);
+    skipped.add(type);
+    return Promise.resolve(false);
+  }
+  return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl, true), fx.params(params, env), src, null, dst, env, strip);
 }
 /**
  * Run one GPU transition: `outgoing` (may be absent: then it is transparent) and `incoming` into `dst`, at `progress` 0..1.
@@ -608,8 +668,19 @@ export function gpuTransition(type: string, progress: number, outgoing: Offscree
   if (!t) { skipped.add(type); return Promise.resolve(false); }
   return runPass(type, `tr:${t.kernel}`, () => transitionShader(T2[t.kernel]!), [progress, ...t.v, env.width / env.height, env.width, env.height], outgoing, incoming, dst, env);
 }
-/** One pass: `first` (and for a transition `second`) in, `dst` replaced. `first` null means a transparent picture. */
-async function runPass(type: string, key: string, shader: () => string, numbers: number[], first: OffscreenCanvas | null, second: OffscreenCanvas | null, dst: C2D, env: EffectEnv): Promise<boolean> {
+/** The texture of a colour table, made on first use. Raw bytes (writeTexture), so no premultiplication or colour conversion touches the table. */
+function lutTexture(s: State, strip: LutStrip): any {
+  let tex = s.luts.get(strip.key);
+  if (tex) return tex;
+  if (strip.width !== strip.size * strip.size || strip.height !== strip.size || strip.data.length !== strip.width * strip.height * 4) throw new Error('the colour table strip has the wrong dimensions');
+  if (s.luts.size >= MAX_LUT_TEXTURES) { for (const t of s.luts.values()) t.destroy(); s.luts.clear(); }
+  tex = s.device.createTexture({ size: [strip.width, strip.height], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ });
+  s.device.queue.writeTexture({ texture: tex }, strip.data, { bytesPerRow: strip.width * 4, rowsPerImage: strip.height }, [strip.width, strip.height]);
+  s.luts.set(strip.key, tex);
+  return tex;
+}
+/** One pass: `first` (and for a transition `second`) in, `dst` replaced. `first` null means a transparent picture. `lut`: the colour table an effect samples at binding 3. */
+async function runPass(type: string, key: string, shader: () => string, numbers: number[], first: OffscreenCanvas | null, second: OffscreenCanvas | null, dst: C2D, env: EffectEnv, lut: LutStrip | null = null): Promise<boolean> {
   const s = state;
   if (!s) { skipped.add(type); return false; }
   const { device } = s;
@@ -638,7 +709,7 @@ async function runPass(type: string, key: string, shader: () => string, numbers:
     const p = new Float32Array(8);
     p.set(numbers.slice(0, 8));
     device.queue.writeBuffer(s.uniforms, 0, p);
-    const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : [])] });
+    const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : lut ? [{ binding: 3, resource: lutTexture(s, lut).createView() }] : [])] });
     const enc = device.createCommandEncoder();
     const pass = enc.beginRenderPass({ colorAttachments: [{ view: z.target.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] });
     pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.draw(3); pass.end();

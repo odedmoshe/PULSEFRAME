@@ -97,7 +97,7 @@ export function parseCube(text: string, opts?: { maxSize?: number }): Lut3D {
       const toks = line.split(/[ \t]+/);
       const kw = toks[0]!.toUpperCase();
       if (data !== null && filled > 0) {
-        throw new LutError('malformed', `Keyword ${kw} after data`, lineNo);
+        throw new LutError('malformed', `Keyword ${kw.slice(0, 32)} after data`, lineNo);
       }
       switch (kw) {
         case 'TITLE': {
@@ -305,4 +305,59 @@ export function sampleStrip(
     (a[1] * (1 - fb) + b[1] * fb) / 255,
     (a[2] * (1 - fb) + b[2] * fb) / 255,
   ];
+}
+
+/** True when every entry position of the table that lies inside 0..1 (per channel) is a point of a 0..1 grid with `m` points per axis. */
+function knotsOnUnitGrid(lut: Lut3D, m: number): boolean {
+  const d = lut.size - 1;
+  for (let c = 0; c < 3; c++) {
+    const lo = lut.domainMin[c]!;
+    const step = (lut.domainMax[c]! - lo) / d;
+    for (let k = 0; k <= d; k++) {
+      const x = lo + k * step;
+      if (x < 0 || x > 1) continue;
+      const t = x * (m - 1);
+      if (Math.abs(t - Math.round(t)) > 1e-6) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * The same table over the unit domain: unchanged when its domain is already 0..1, otherwise resampled (trilinear, sampleLut)
+ * onto a 0..1 grid. Inputs outside the file's domain take its edge values.
+ * The grid keeps the file's size whenever that loses nothing, which is when it contains every entry position of the file inside
+ * 0..1 (a domain such as 0..2 or 0..4). Otherwise it is the smallest larger grid that does (0..1.5 at size 17 becomes 33), and
+ * when no grid up to LUT_MAX_SIZE does (a video-range domain such as 0.0625..0.9375) it is LUT_MAX_SIZE: then the copy is an
+ * approximation, at most a quarter of the new grid step times the table's change of slope away from the file's definition.
+ */
+export function unitDomainLut(lut: Lut3D): Lut3D {
+  const unit = lut.domainMin.every((v) => v === 0) && lut.domainMax.every((v) => v === 1);
+  if (unit) return lut;
+  let n = LUT_MAX_SIZE;
+  for (let m = lut.size; m < LUT_MAX_SIZE; m++) if (knotsOnUnitGrid(lut, m)) { n = m; break; }
+  const d = n - 1;
+  const data = new Float32Array(n * n * n * 3);
+  let i = 0;
+  for (let b = 0; b < n; b++) {
+    for (let g = 0; g < n; g++) {
+      for (let r = 0; r < n; r++) {
+        const v = sampleLut(lut, [r / d, g / d, b / d]);
+        data[i++] = v[0];
+        data[i++] = v[1];
+        data[i++] = v[2];
+      }
+    }
+  }
+  return { title: lut.title, size: n, data, domainMin: [0, 0, 0], domainMax: [1, 1, 1] };
+}
+
+/**
+ * File text to the strip a render pass samples: parseCube, unitDomainLut, lutToRgba8Strip. Every context (editor, render worker,
+ * browser export, proofs) uses this one function. `size` is the strip's own (the file's, or a finer one for a file whose input
+ * domain does not line up with its grid: see unitDomainLut), which is what sampleStrip and the pass need. Throws LutError.
+ */
+export function lutStrip(text: string): { key?: undefined } & { size: number; width: number; height: number; data: Uint8Array } {
+  const lut = unitDomainLut(parseCube(text));
+  return { size: lut.size, ...lutToRgba8Strip(lut) };
 }

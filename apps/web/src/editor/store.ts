@@ -309,19 +309,24 @@ export class Editor {
       this.fail(e instanceof ApiFailure && e.code === 'undo_conflict' ? new Error(this.t('undo.conflict')) : e);
     }
   }
-  /** Import a file into the library; with `place`, also put it on the timeline there (a file dropped from the computer onto the timeline). */
-  async importFile(file: File, place?: { frame: number; trackId: string | null }) {
+  /**
+   * Import a file into the library; with `place`, also put it on the timeline there (a file dropped from the computer onto the timeline).
+   * A colour table (.cube) only joins the library: it is applied to clips as an effect. Resolves to the asset id, or null when it failed.
+   */
+  async importFile(file: File, place?: { frame: number; trackId: string | null }): Promise<string | null> {
     const { doc } = this.state;
-    if (!doc) return;
+    if (!doc) return null;
     this.set({ uploading: true, error: null });
     try {
       const r = await api.upload(doc.id, file);
       // A conformed asset is not byte-identical to the local file, so only reuse the local file when it was stored as-is.
       if (!r.asset.conform) this.pool?.provideLocal(r.assetId, file);
       await this.load(doc.id);
-      if (place) await this.dropAsset(r.assetId, place.frame, place.trackId);
+      if (place && r.asset.kind !== 'lut') await this.dropAsset(r.assetId, place.frame, place.trackId);
+      return r.assetId;
     } catch (e) {
       this.fail(e instanceof ApiFailure && e.code === 'unsupported_media' ? new Error(`${this.t('media.unsupported')}: ${e.message}`) : e);
+      return null;
     } finally {
       this.set({ uploading: false });
     }
@@ -334,10 +339,11 @@ export class Editor {
     let at = place;
     for (const file of [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
       const before = new Set(Object.keys(this.state.doc?.assets ?? {}));
-      await this.importFile(file, at);
+      const imported = await this.importFile(file, at);
       if (this.state.error) return; // stop at the first file that fails: the message names it
       const doc = this.state.doc;
       if (!at || !doc) continue;
+      if (imported && doc.assets[imported]?.kind === 'lut') continue; // a colour table is not placed, so the next file goes where this one would have
       // where the clip of this file ended up: the next file follows it
       const assetId = Object.keys(doc.assets).find((id) => !before.has(id));
       const start = T.frameTime(Math.max(0, at.frame), this.rate);
@@ -433,7 +439,7 @@ export class Editor {
    */
   dropAsset(assetId: string, frame: number, trackId: string | null) {
     const d = this.state.doc, a = d?.assets[assetId];
-    if (!d || !a) return Promise.resolve(null);
+    if (!d || !a || a.kind === 'lut') return Promise.resolve(null); // a colour table is applied as an effect, never placed
     const picture = !!a.video || a.kind === 'image';
     const tr = trackId ? d.sequences[d.mainSequenceId]!.tracks.find((t) => t.id === trackId) : undefined;
     const fits = !!tr && !tr.locked && tr.kind === (picture ? 'video' : 'audio');
@@ -442,6 +448,7 @@ export class Editor {
   }
   addAsset(assetId: string) {
     const a = this.state.doc?.assets[assetId];
+    if (a?.kind === 'lut') return Promise.resolve(null); // a colour table is applied as an effect, never placed
     const picture = !!a && (!!a.video || a.kind === 'image'), v = this.target('video'), au = this.target('audio');
     // target tracks: the picture (or a sound-only file) goes to its target, the linked sound of a picture file to the sound target
     const where = picture ? { ...(v ? { trackId: v } : {}), ...(au && a?.audio ? { audioTrackId: au } : {}) } : au ? { trackId: au } : {};

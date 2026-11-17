@@ -15,7 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
-import { SPEED_CURVES, MOTION_PRESETS } from '@pulseframe/core';
+import { EFFECTS, SPEED_CURVES, MOTION_PRESETS } from '@pulseframe/core';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 
@@ -191,7 +191,7 @@ async function main() {
     await page.waitForFunction(() => { const t = [...document.querySelectorAll('[data-testid=gallery-panel-effects] [data-testid=gallery-tile]')]; return t.length > 0 && t.every((x) => x.getAttribute('data-rendered') === '1' || x.getAttribute('data-unavailable') === '1'); }, undefined, { timeout: 60_000 }).catch(() => {});
     const rendered = await page.locator('[data-testid=gallery-panel-effects] [data-testid=gallery-tile][data-rendered="1"]').count();
     const unavailable = await page.locator('[data-testid=gallery-panel-effects] [data-testid=gallery-tile][data-unavailable="1"]').count();
-    check('the gallery opens on the effects tab with a thumbnail drawn for every effect this browser can run', nEffects === 40 && rendered + unavailable === 40 && rendered >= 12, { nEffects, rendered, unavailable, webgpu: gpu });
+    check('the gallery opens on the effects tab with a thumbnail drawn for every effect this browser can run', nEffects === EFFECTS.length && rendered + unavailable === EFFECTS.length && rendered >= 12, { nEffects, rendered, unavailable, webgpu: gpu });
     await page.getByTestId('gallery-search').fill('vhs');
     const found = await page.locator('[data-testid=gallery-panel-effects] [data-testid=gallery-tile]:not([hidden])').count();
     await page.getByTestId('gallery-search').fill('');
@@ -200,7 +200,7 @@ async function main() {
     const lookClickable = (await lookTile.count()) > 0;
     if (lookClickable) await lookTile.click();
     const graded = lookClickable ? await until(pid, (x) => clipsOf(x, 'video')[0].effects?.some((e: any) => e.type === 'color.grade')) : null;
-    check('search narrows the tiles; picking a colour look in the gallery adds the grade to the clip', found >= 1 && found < 40 && (!lookClickable || !!graded), { found, lookClickable });
+    check('search narrows the tiles; picking a colour look in the gallery adds the grade to the clip', found >= 1 && found < EFFECTS.length && (!lookClickable || !!graded), { found, lookClickable });
     await page.screenshot({ path: path.join(art, 'gallery.png') });
     await page.keyboard.press('Escape');
     const closed = (await page.getByTestId('effect-gallery').count()) === 0;

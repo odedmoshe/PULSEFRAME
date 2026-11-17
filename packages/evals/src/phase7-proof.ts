@@ -295,7 +295,7 @@ async function main() {
     }));
     const byKind = (k: string) => tiles.filter((t) => t.kind === k);
     const fxIds = new Set(byKind('effect').map((t) => t.id)), trIds = new Set(byKind('transition').map((t) => t.id)), blIds = new Set(byKind('blend').map((t) => t.id));
-    const fullByDefault = new Set(['color.grayscale', 'color.sepia', 'color.invert', 'distort.mirror', 'stylize.duotone']); // default amount is already the maximum; the mirror has no amount at all, only which half is kept
+    const fullByDefault = new Set(['color.grayscale', 'color.sepia', 'color.invert', 'distort.mirror', 'stylize.duotone', 'color.lut']); // default amount is already the maximum; the mirror has no amount at all, only which half is kept; color.lut needs a colour table to change anything and the Lab project has none (no table chosen = the picture unchanged, in both variants; the pass itself is checked in gpu-proof.ts)
     const variantsDiffer = EFFECTS.every((e) => { if (fullByDefault.has(e.id)) return true; if (byKind('effect').some((t) => t.id === e.id && t.unavailable)) return true; /* no adapter in this browser: the tile says so */ const mine = byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9'); return new Set(mine.map((t) => t.hash)).size >= 2; });
     const aspects = new Set(byKind('effect').map((t) => t.aspect));
     await lab.screenshot({ path: path.join(art, 'lab.png'), fullPage: true });

@@ -6,6 +6,7 @@ import { ErrorBar, Header, Inspector, Library, Transport } from './editor/panels
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
+import { findEffect } from '@pulseframe/core';
 
 export function App() {
   const editor = useMemo(() => new Editor(), []);
@@ -42,6 +43,28 @@ export function App() {
   );
 }
 
+const NOTICE_STRINGS = {
+  he: { without: 'התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.' },
+  en: { without: 'The picture is shown without this effect for now, because its material could not be loaded. Loading is tried again automatically; stills and exports are refused until it loads.' },
+} as const;
+/**
+ * The frame on screen had to be drawn without an effect whose own material could not be loaded (a colour table whose file
+ * could not be fetched or read): say so over the preview, with the effect and the reason, instead of showing it silently.
+ * A missing graphics adapter is a different state with its own notice (Look panel).
+ */
+function PreviewNotice() {
+  const { editor, state } = useEditorState(); // the player ticks the state after every painted frame
+  const reasons = editor.player?.unavailableReasons ?? {};
+  const ids = Object.keys(reasons);
+  if (ids.length === 0) return null;
+  return (
+    <div className="preview-notice" role="status" data-testid="effect-unavailable">
+      <p>{NOTICE_STRINGS[state.lang].without}</p>
+      <ul>{ids.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong> — <bdi dir="ltr">{reasons[id]}</bdi></li>)}</ul>
+    </div>
+  );
+}
+
 function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasElement | null>; keymap: Keymap }) {
   const { t } = useEditorState();
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
@@ -54,6 +77,7 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
         <div className="canvas-wrap">
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
           <CanvasHandles canvas={canvasEl} />
+          <PreviewNotice />
           <Welcome />
         </div>
         <Transport />

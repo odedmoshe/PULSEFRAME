@@ -7,7 +7,7 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import * as T from '@pulseframe/time';
-import { startOffsetFrames, type Asset } from '@pulseframe/core';
+import { LUT_MAX_TEXT_LENGTH, LutError, parseCube, startOffsetFrames, type Asset } from '@pulseframe/core';
 import { ApiError, type Store } from './store.ts';
 
 const exec = promisify(execFile);
@@ -61,7 +61,7 @@ const parseRate = (s: string | undefined) => {
 const MIME: Record<string, string> = { mp4: 'video/mp4', webm: 'video/webm', wav: 'audio/wav', mp3: 'audio/mpeg', ogg: 'audio/ogg', flac: 'audio/flac', m4a: 'audio/mp4' };
 
 const ALPHA_PIX = /^(rgba|bgra|argb|abgr|ya\d|yuva|gbrap|pal8|rgba64|ya16)/;
-export type MediaMeta = Pick<Asset, 'kind' | 'container' | 'mimeType' | 'duration' | 'video' | 'audio' | 'image' | 'timeOrigin'>;
+export type MediaMeta = Pick<Asset, 'kind' | 'container' | 'mimeType' | 'duration' | 'video' | 'audio' | 'image' | 'timeOrigin' | 'lut'>;
 /** Video codecs the editor decodes directly (WebCodecs, measured in docs/CAPABILITIES.md). Anything else is conformed. */
 const EDITABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1']);
 /** Transfer functions of high-dynamic-range video: PQ (HDR10, Dolby Vision base layers) and HLG. */
@@ -166,9 +166,16 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
   const tmp = path.join(store.tmpDir, `up_${randomBytes(8).toString('hex')}`);
   const hash = createHash('sha256');
   let size = 0;
+  // A file named .cube is a colour table (3D LUT): text, read whole and parsed strictly, so it gets the parser's own size limit
+  // while streaming. The name only chooses the reader; acceptance comes from the content. The extension is read from the whole
+  // name, before it is cut to what the document allows, and survives the cut: a long name must not send a table to the media reader.
+  const baseName = path.basename(name);
+  const isCube = /\.cube$/i.test(baseName);
+  const assetName = (isCube && baseName.length > 256 ? baseName.slice(0, 251) + baseName.slice(-5) : baseName.slice(0, 256)) || 'untitled';
   const meter = new Transform({
     transform(chunk, _enc, cb) {
       size += chunk.length;
+      if (isCube && size > LUT_MAX_TEXT_LENGTH) return cb(new ApiError(413, 'upload_too_large', `a colour table (.cube) file can be at most ${LUT_MAX_TEXT_LENGTH} bytes`, { maxBytes: LUT_MAX_TEXT_LENGTH }));
       if (size > maxBytes) return cb(new ApiError(413, 'upload_too_large', `upload exceeds ${maxBytes} bytes`));
       hash.update(chunk);
       cb(null, chunk);
@@ -179,7 +186,19 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
     if (size === 0) throw new ApiError(400, 'empty_upload', 'upload body is empty');
     const originalHash = `sha256:${hash.digest('hex')}`;
     const provenance = { origin: 'upload' as const, importedAt: new Date().toISOString(), importedBy: actor };
-    const assetName = path.basename(name).slice(0, 256) || 'untitled';
+    if (isCube) {
+      // Never handed to ffprobe: a .cube that does not parse is refused here, and the blob is stored only after it parsed.
+      let table;
+      try {
+        table = parseCube(fs.readFileSync(tmp, 'utf8'));
+      } catch (e) {
+        if (!(e instanceof LutError)) throw e;
+        // The parser's messages quote at most a few characters of the file; the cut here keeps that true whatever it says.
+        throw new ApiError(415, 'unsupported_media', `this .cube file could not be read as a 3D colour table${e.line ? ` (line ${e.line})` : ''}: ${e.message.slice(0, 200)}`, { lut: { code: e.code, line: e.line } }, e.code === 'unsupported' ? 'Only 3D tables (LUT_3D_SIZE) are supported; export the look as a 3D .cube.' : e.code === 'too_large' ? 'Tables up to 65 entries per axis are supported.' : 'Export the table again as an Adobe/Resolve .cube file.');
+      }
+      store.putBlob(originalHash, tmp, size, 'text/plain');
+      return { kind: 'lut', container: 'cube', mimeType: 'text/plain', duration: T.ZERO, lut: { size: table.size, title: table.title === null ? null : table.title.slice(0, 256) }, name: assetName, contentHash: originalHash, byteSize: size, provenance };
+    }
     let meta: MediaMeta;
     try {
       meta = await describeMedia(tmp);

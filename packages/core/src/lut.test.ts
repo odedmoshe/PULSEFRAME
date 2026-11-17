@@ -4,11 +4,13 @@ import {
   LUT_MAX_TEXT_LENGTH,
   LutError,
   identityLut,
+  lutStrip,
   lutToRgba8Strip,
   parseCube,
   sampleLut,
   sampleStrip,
   serializeCube,
+  unitDomainLut,
   type Lut3D,
 } from './lut.js';
 
@@ -131,6 +133,24 @@ describe('parseCube', () => {
     expect(e.line).toBe(11);
   });
 
+  it('keeps every message short, whatever the file holds: a refusal never carries the file back', () => {
+    const long = 'Q'.repeat(3_000_000);
+    const cases = [
+      `LUT_3D_SIZE 2\n0 0 0\n${long}\n`, // a keyword after data
+      `${long} 1\n`, // an unknown keyword
+      `LUT_3D_SIZE 2\n0 0 ${'9'.repeat(3_000_000)}\n`, // a number
+      `LUT_3D_SIZE 2\n0 0 1e${'9'.repeat(40)}\n`, // not finite
+      `LUT_3D_SIZE ${'7'.repeat(3_000_000)}\n`,
+      `DOMAIN_MIN ${long} 0 0\n`,
+      `TITLE "${long}"\nLUT_3D_SIZE 2\n0 0 0\n`,
+    ];
+    for (const text of cases) {
+      const e = err(() => parseCube(text));
+      expect(e.message.length).toBeLessThanOrEqual(120);
+    }
+    expect(err(() => parseCube(cases[0]!))).toMatchObject({ code: 'malformed', line: 3, message: `Keyword ${'Q'.repeat(32)} after data` });
+  });
+
   it('rejects oversized text before other work', () => {
     expect(err(() => parseCube('#'.repeat(LUT_MAX_TEXT_LENGTH + 1))).code).toBe('too_large');
   });
@@ -223,5 +243,136 @@ describe('strip', () => {
         for (let i = 0; i < 3; i++) expect(Math.abs(a[i]! - b[i]!)).toBeLessThanOrEqual(3 / 255);
       }),
     );
+  });
+});
+
+/**
+ * A non-separable table over an arbitrary domain: output = rotated channels of the domain-normalised input, with a gamma
+ * (`ofInput`: of the input value itself, clamped to 0..1, as a conversion table would hold).
+ */
+function rotatedGamma(n: number, lo: number, hi: number, ofInput = false): Lut3D {
+  const data = new Float32Array(n ** 3 * 3);
+  let i = 0;
+  for (let b = 0; b < n; b++) for (let g = 0; g < n; g++) for (let r = 0; r < n; r++) {
+    const x = [r, g, b].map((v) => lo + ((hi - lo) * v) / (n - 1)); // the input this entry stands for
+    const u = x.map((v) => (ofInput ? Math.min(1, Math.max(0, v)) : (v - lo) / (hi - lo)));
+    data[i++] = Math.pow(u[2]!, 1 / 2.2);
+    data[i++] = Math.pow(u[0]!, 1 / 2.2);
+    data[i++] = Math.pow(u[1]!, 1 / 2.2);
+  }
+  return { title: 'rot', size: n, data, domainMin: [lo, lo, lo], domainMax: [hi, hi, hi] };
+}
+
+/**
+ * Largest difference, in units of 1/255, between `got` and the file's definition (sampleLut on the table as parsed) over a fixed
+ * set of 300,000 colours, half of them dark (below 0.15), where a gamma-type table is steepest.
+ */
+function worstOf255(lut: Lut3D, got: (c: [number, number, number]) => readonly number[]): number {
+  let seed = 12345;
+  const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  let worst = 0;
+  for (let i = 0; i < 300_000; i++) {
+    const k = i % 2 === 0 ? 0.15 : 1;
+    const c: [number, number, number] = [rnd() * k, rnd() * k, rnd() * k];
+    const a = got(c);
+    const b = sampleLut(lut, c);
+    for (let j = 0; j < 3; j++) worst = Math.max(worst, Math.abs(a[j]! - b[j]!) * 255);
+  }
+  return worst;
+}
+
+describe('unit domain and the strip every context uses', () => {
+  it('unitDomainLut returns the very same table when the domain is already 0..1', () => {
+    const lut = rotatedGamma(9, 0, 1);
+    expect(unitDomainLut(lut)).toBe(lut);
+  });
+
+  it('unitDomainLut resamples another domain onto a 0..1 grid of the same size, keeping title and what sampleLut answers', () => {
+    const lut = rotatedGamma(17, 0, 2);
+    const unit = unitDomainLut(lut);
+    expect(unit).not.toBe(lut);
+    expect([unit.size, unit.title, unit.domainMin, unit.domainMax]).toEqual([17, 'rot', [0, 0, 0], [1, 1, 1]]);
+    expect(unit.data.length).toBe(lut.data.length);
+    // grid points of the new table are the old table sampled there
+    expect(Array.from(unit.data.slice(0, 3))).toEqual(sampleLut(lut, [0, 0, 0]).map((v) => Math.fround(v)));
+    const last = 17 ** 3 - 1;
+    expect(Array.from(unit.data.slice(last * 3, last * 3 + 3))).toEqual(sampleLut(lut, [1, 1, 1]).map((v) => Math.fround(v)));
+    fc.assert(
+      fc.property(rgbArb, (c) => {
+        const a = sampleLut(unit, c);
+        const b = sampleLut(lut, c);
+        for (let i = 0; i < 3; i++) expect(Math.abs(a[i]! - b[i]!)).toBeLessThanOrEqual(1e-5);
+      }),
+    );
+  });
+
+  it('a table with domain 0..2 samples, through lutStrip, like sampleLut on the original within 3/255', () => {
+    const lut = rotatedGamma(33, 0, 2);
+    const strip = lutStrip(serializeCube(lut));
+    expect([strip.size, strip.width, strip.height, strip.data.length]).toEqual([33, 33 * 33, 33, 33 * 33 * 33 * 4]);
+    // ignoring the domain would be far off: the plain strip of the same file answers differently
+    const naive = lutToRgba8Strip(lut);
+    const far = sampleStrip(naive, 33, [0.5, 0.5, 0.5]).map((v, i) => Math.abs(v - sampleLut(lut, [0.5, 0.5, 0.5])[i]!));
+    expect(Math.max(...far)).toBeGreaterThan(20 / 255);
+    fc.assert(
+      fc.property(rgbArb, (c) => {
+        const a = sampleStrip(strip, strip.size, c);
+        const b = sampleLut(lut, c);
+        for (let i = 0; i < 3; i++) expect(Math.abs(a[i]! - b[i]!)).toBeLessThanOrEqual(3 / 255);
+      }),
+    );
+  });
+
+  it('a domain that does not line up with the file\'s grid is resampled onto the smallest finer grid that holds every entry of the file, and loses nothing', () => {
+    // 0..1.5 at size 17: entries at k*3/32, all on a grid of 33. -0.1..1.1 at size 17: entries at -0.1 + k*0.075, on a grid of 41.
+    for (const [lo, hi, grid] of [[0, 1.5, 33], [-0.1, 1.1, 41]] as const) {
+      const lut = rotatedGamma(17, lo, hi);
+      const unit = unitDomainLut(lut);
+      expect([unit.size, unit.domainMin, unit.domainMax]).toEqual([grid, [0, 0, 0], [1, 1, 1]]);
+      const strip = lutStrip(serializeCube(lut));
+      expect([strip.size, strip.width, strip.height]).toEqual([grid, grid * grid, grid]);
+      expect(worstOf255(lut, (c) => sampleLut(unit, c))).toBeLessThanOrEqual(0.01);
+      expect(worstOf255(lut, (c) => sampleStrip(strip, strip.size, c))).toBeLessThanOrEqual(1); // what is left is the 8-bit strip
+    }
+  });
+
+  it('a domain that fits no grid up to 65 (a video-range table, 0..1.25) is resampled at 65: an approximation, within 4/255 of the file\'s definition even in the steepest cell (5/255 for the worst domain found)', () => {
+    // Measured with this table (a gamma of the domain-normalised input, so the first cell is very steep): 3.3 of 255 for both.
+    // On the file's own grid size the same tables were 5.8 and 5.3 of 255 away.
+    for (const [n, lo, hi] of [[17, 0.0625, 0.9375], [33, 0, 1.25]] as const) {
+      const lut = rotatedGamma(n, lo, hi);
+      const strip = lutStrip(serializeCube(lut));
+      expect(strip.size).toBe(65);
+      expect(worstOf255(lut, (c) => sampleStrip(strip, strip.size, c))).toBeLessThanOrEqual(4);
+    }
+    // the worst found: a domain with no relation to any grid (0.01..1.37 at size 33) is 4.5 of 255 away in its darkest cell
+    const awkward = rotatedGamma(33, 0.01, 1.37);
+    const awkwardStrip = lutStrip(serializeCube(awkward));
+    expect(awkwardStrip.size).toBe(65);
+    expect(worstOf255(awkward, (c) => sampleStrip(awkwardStrip, awkwardStrip.size, c))).toBeLessThanOrEqual(5);
+    // a gentler table (a gamma of the real input value, as a conversion table holds) over the same video-range domain: within 1/255
+    const gentle = rotatedGamma(17, 0.0625, 0.9375, true);
+    const strip = lutStrip(serializeCube(gentle));
+    expect(worstOf255(gentle, (c) => sampleStrip(strip, strip.size, c))).toBeLessThanOrEqual(1);
+  });
+
+  it('LUT_3D_INPUT_RANGE is honoured the same way, and a unit-domain file gives exactly the plain strip', () => {
+    const wide = rotatedGamma(9, 0, 4);
+    const text = `LUT_3D_SIZE 9\nLUT_3D_INPUT_RANGE 0 4\n${serializeCube(wide).split('\n').slice(4).join('\n')}`;
+    const strip = lutStrip(text);
+    for (const c of [[0, 0, 0], [1, 1, 1], [0.25, 0.5, 0.75], [0.9, 0.1, 0.4]] as const) {
+      const a = sampleStrip(strip, 9, c);
+      const b = sampleLut(wide, c);
+      for (let i = 0; i < 3; i++) expect(Math.abs(a[i]! - b[i]!)).toBeLessThanOrEqual(3 / 255);
+    }
+    const plain = rotatedGamma(9, 0, 1);
+    const viaText = lutStrip(serializeCube(plain));
+    expect(viaText.size).toBe(9);
+    expect(Array.from(viaText.data)).toEqual(Array.from(lutToRgba8Strip(plain).data));
+  });
+
+  it('lutStrip throws only LutError on text that is not a 3D table', () => {
+    expect(err(() => lutStrip('hello')).code).toBe('malformed');
+    expect(err(() => lutStrip('LUT_1D_SIZE 4\n0 0 0\n')).code).toBe('unsupported');
   });
 });
