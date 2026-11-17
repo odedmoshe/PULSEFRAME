@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T16:39:44.219Z",
+  "ranAt": "2026-11-17T17:06:28.462Z",
   "result": "FAILED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -28,25 +28,25 @@
       "to": 239
     }
   },
-  "passed": 13,
+  "passed": 23,
   "total": 25,
   "measurements": {
     "trackingJob": {
       "status": "succeeded",
       "output": {
-        "motionTrackId": "mtk_20e11f89470",
+        "motionTrackId": "mtk_4ec9e1584a0",
         "revision": 4,
         "from": 0,
         "to": 240,
         "frames": 240,
         "decodedFrames": 240,
-        "trackingFps": 61.31,
+        "trackingFps": 48.6,
         "input": "proxy",
         "counts": {
           "unknown": 0,
-          "tracked": 213,
+          "tracked": 216,
           "weak": 0,
-          "lost": 25,
+          "lost": 22,
           "manual": 1,
           "interpolated": 0,
           "reacquired": 1
@@ -54,12 +54,12 @@
         "problems": [
           {
             "from": 150,
-            "to": 175,
+            "to": 172,
             "state": "lost"
           },
           {
-            "from": 175,
-            "to": 176,
+            "from": 172,
+            "to": 173,
             "state": "reacquired"
           }
         ]
@@ -67,16 +67,16 @@
       "error": null
     },
     "P2": {
-      "usable": 215,
-      "medianPx": 0.28,
-      "p95Px": 879.03,
-      "maxPx": 888.54,
+      "usable": 218,
+      "medianPx": 0.18,
+      "p95Px": 0.33,
+      "maxPx": 0.45,
       "sizeMedian": 0.0082,
       "counts": {
         "unknown": 0,
-        "tracked": 213,
+        "tracked": 216,
         "weak": 0,
-        "lost": 25,
+        "lost": 22,
         "manual": 1,
         "interpolated": 0,
         "reacquired": 1
@@ -84,8 +84,8 @@
     },
     "P7": {
       "n": 27,
-      "medianPx": 0.4,
-      "maxPx": 888.51
+      "medianPx": 0.22,
+      "maxPx": 0.62
     },
     "P8": {
       "speed 0.5": {
@@ -96,33 +96,33 @@
       },
       "speed 2": {
         "n": 18,
-        "medianPx": 0.28,
-        "maxPx": 882.25
+        "medianPx": 0.25,
+        "maxPx": 0.6
       },
       "reversed": {
         "n": 18,
-        "medianPx": 0.59,
-        "maxPx": 884.84
+        "medianPx": 0.2,
+        "maxPx": 0.67
       },
       "slipped": {
-        "n": 12,
-        "medianPx": 0.32,
-        "maxPx": 887.52
+        "n": 13,
+        "medianPx": 0.22,
+        "maxPx": 0.69
       },
       "split": {
         "n": 12,
-        "medianPx": 0.23,
-        "maxPx": 888.51
+        "medianPx": 0.21,
+        "maxPx": 0.53
       },
       "stutter": {
         "n": 18,
-        "medianPx": 0.32,
-        "maxPx": 887.52
+        "medianPx": 0.26,
+        "maxPx": 0.69
       },
       "9:16 cover": {
         "n": 6,
         "medianPx": 0.28,
-        "maxPx": null
+        "maxPx": 0.6
       }
     },
     "P9": {
@@ -141,11 +141,11 @@
         },
         {
           "frame": 200,
-          "drop": 0
+          "drop": 0.83
         },
         {
           "frame": 230,
-          "drop": 0
+          "drop": 0.838
         }
       ],
       "wholeDrops": [
@@ -258,22 +258,22 @@
       }
     ],
     "P13": {
-      "trackingFps": 61.31,
+      "trackingFps": 48.6,
       "framesTracked": 240,
       "framesDecoded": 240,
       "input": "proxy",
       "eventLoopLagMs": {
-        "p50": 13.4,
-        "p99": 55.3,
-        "max": 60.7,
+        "p50": 12.1,
+        "p99": 89,
+        "max": 109.3,
         "budgetP99": 100,
         "withinBudget": true
       },
       "commitMs": {
         "samples": 43200,
-        "baselineP95": 21.7,
-        "withSamplesP95": 119.4,
-        "deltaP95": 97.7,
+        "baselineP95": 27.7,
+        "withSamplesP95": 160.4,
+        "deltaP95": 132.7,
         "budgetDelta": 15,
         "withinBudget": false
       }
@@ -318,18 +318,18 @@
     },
     {
       "name": "P2 accuracy on usable frames: median error ≤ 1.0 px, p95 ≤ 3.0 px; size error median ≤ 5%",
-      "ok": false,
+      "ok": true,
       "detail": {
-        "usable": 215,
-        "medianPx": 0.28,
-        "p95Px": 879.03,
-        "maxPx": 888.54,
+        "usable": 218,
+        "medianPx": 0.18,
+        "p95Px": 0.33,
+        "maxPx": 0.45,
         "sizeMedian": 0.0082,
         "counts": {
           "unknown": 0,
-          "tracked": 213,
+          "tracked": 216,
           "weak": 0,
-          "lost": 25,
+          "lost": 22,
           "manual": 1,
           "interpolated": 0,
           "reacquired": 1
@@ -338,12 +338,12 @@
     },
     {
       "name": "P3 occlusion: at least 90% of frames 150–169 are weak or lost; no usable sample anywhere is more than 8 px off; re-acquired by frame 175",
-      "ok": false,
+      "ok": true,
       "detail": {
         "weakOrLost": 20,
         "of": 20,
-        "worstUsablePx": 888.54,
-        "firstUsableAfter": 175,
+        "worstUsablePx": 0.45,
+        "firstUsableAfter": 172,
         "stateThere": 6
       }
     },
@@ -367,8 +367,8 @@
       "name": "P5 two runs on the same seed give the same SHA-256 of the sample arrays",
       "ok": true,
       "detail": {
-        "a": "dff49535dabcee01bb817d4c4aa5e9f578416d12064de42c9a28922d0d9719e7",
-        "b": "dff49535dabcee01bb817d4c4aa5e9f578416d12064de42c9a28922d0d9719e7",
+        "a": "56e8aaa5342415cb94b9605cb5c3bfcf412acaa078ccacd177f6ddc048c1dc86",
+        "b": "56e8aaa5342415cb94b9605cb5c3bfcf412acaa078ccacd177f6ddc048c1dc86",
         "job": "succeeded"
       }
     },
@@ -378,13 +378,13 @@
       "detail": {
         "stageWhenCanceled": "reading frames",
         "cancel": {
-          "jobId": "job_hxlDcfVWFDY",
+          "jobId": "job_ggQMic0PlLY",
           "status": "cancel-requested",
           "outcome": "stopping",
           "note": "the tracker is being stopped; nothing will be attached"
         },
         "status": "canceled",
-        "ms": 10,
+        "ms": 31,
         "ffmpegLeft": 0,
         "revision": [
           8,
@@ -395,37 +395,37 @@
     },
     {
       "name": "P7 the sticker that follows the disc, on stills: centroid median ≤ 2 px and max ≤ 5 px from the truth projected independently (usable frames)",
-      "ok": false,
+      "ok": true,
       "detail": {
         "n": 27,
-        "medianPx": 0.4,
-        "maxPx": 888.51,
+        "medianPx": 0.22,
+        "maxPx": 0.62,
         "worst": [
           {
-            "frame": 200,
-            "source": 200,
-            "err": 888.5079622939943,
+            "frame": 40,
+            "source": 40,
+            "err": 0.6196748336696583,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 1019.5,
+              "y": 484.5
             }
           },
           {
-            "frame": 192,
-            "source": 192,
-            "err": 868.230260202273,
+            "frame": 144,
+            "source": 144,
+            "err": 0.6031187891741889,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 416.5,
+              "y": 564.5
             }
           },
           {
-            "frame": 208,
-            "source": 208,
-            "err": 865.2577457537473,
+            "frame": 88,
+            "source": 88,
+            "err": 0.5297965804591179,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 522.5,
+              "y": 287.5
             }
           }
         ]
@@ -494,28 +494,28 @@
     },
     {
       "name": "P8 speed 2: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
-      "ok": false,
+      "ok": true,
       "detail": {
         "n": 18,
-        "medianPx": 0.28,
-        "maxPx": 882.25,
+        "medianPx": 0.25,
+        "maxPx": 0.6,
         "worst": [
           {
-            "frame": 102,
-            "source": 204,
-            "err": 882.2523087116658,
+            "frame": 72,
+            "source": 144,
+            "err": 0.6031187891741889,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 416.5,
+              "y": 564.5
             }
           },
           {
-            "frame": 96,
-            "source": 192,
-            "err": 868.230260202273,
+            "frame": 42,
+            "source": 84,
+            "err": 0.5888250293737229,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 580.5,
+              "y": 275.5
             }
           }
         ]
@@ -523,28 +523,28 @@
     },
     {
       "name": "P8 reversed: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
-      "ok": false,
+      "ok": true,
       "detail": {
         "n": 18,
-        "medianPx": 0.59,
-        "maxPx": 884.84,
+        "medianPx": 0.2,
+        "maxPx": 0.67,
         "worst": [
           {
-            "frame": 36,
-            "source": 203,
-            "err": 884.8377417458892,
+            "frame": 180,
+            "source": 59,
+            "err": 0.6734203381118361,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 918.5,
+              "y": 341.5
             }
           },
           {
-            "frame": 48,
-            "source": 191,
-            "err": 862.689013662851,
+            "frame": 192,
+            "source": 47,
+            "err": 0.6330702305049406,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 1005.5,
+              "y": 431.5
             }
           }
         ]
@@ -552,28 +552,28 @@
     },
     {
       "name": "P8 slipped: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
-      "ok": false,
+      "ok": true,
       "detail": {
-        "n": 12,
-        "medianPx": 0.32,
-        "maxPx": 887.52,
+        "n": 13,
+        "medianPx": 0.22,
+        "maxPx": 0.69,
         "worst": [
           {
-            "frame": 168,
-            "source": 198,
-            "err": 887.5238135722564,
+            "frame": 36,
+            "source": 66,
+            "err": 0.6943182889316887,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 838.5,
+              "y": 300.5
             }
           },
           {
-            "frame": 156,
-            "source": 186,
-            "err": 825.6163814013802,
+            "frame": 24,
+            "source": 54,
+            "err": 0.5435546167712231,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 963.5,
+              "y": 377.5
             }
           }
         ]
@@ -581,21 +581,12 @@
     },
     {
       "name": "P8 split: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
-      "ok": false,
+      "ok": true,
       "detail": {
         "n": 12,
-        "medianPx": 0.23,
-        "maxPx": 888.51,
+        "medianPx": 0.21,
+        "maxPx": 0.53,
         "worst": [
-          {
-            "frame": 200,
-            "source": 200,
-            "err": 888.5079622939943,
-            "at": {
-              "x": 180,
-              "y": 560
-            }
-          },
           {
             "frame": 88,
             "source": 88,
@@ -604,34 +595,43 @@
               "x": 522.5,
               "y": 287.5
             }
+          },
+          {
+            "frame": 112,
+            "source": 112,
+            "err": 0.49015460624241297,
+            "at": {
+              "x": 278.5,
+              "y": 447.5
+            }
           }
         ]
       }
     },
     {
       "name": "P8 stutter: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
-      "ok": false,
+      "ok": true,
       "detail": {
         "n": 18,
-        "medianPx": 0.32,
-        "maxPx": 887.52,
+        "medianPx": 0.26,
+        "maxPx": 0.69,
         "worst": [
           {
-            "frame": 199,
-            "source": 198,
-            "err": 887.5238135722564,
+            "frame": 67,
+            "source": 66,
+            "err": 0.6943182889316887,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 838.5,
+              "y": 300.5
             }
           },
           {
-            "frame": 210,
-            "source": 210,
-            "err": 852.896250860375,
+            "frame": 144,
+            "source": 144,
+            "err": 0.6031187891741889,
             "at": {
-              "x": 180,
-              "y": 560
+              "x": 416.5,
+              "y": 564.5
             }
           }
         ]
@@ -639,11 +639,11 @@
     },
     {
       "name": "P8 9:16 cover format: the sticker follows the disc where it is in the cropped frame (median ≤ 2 px, max ≤ 5 px)",
-      "ok": false,
+      "ok": true,
       "detail": {
         "n": 6,
         "medianPx": 0.28,
-        "maxPx": null
+        "maxPx": 0.6
       }
     },
     {
@@ -654,13 +654,13 @@
           "got": [
             [
               140,
-              185
+              182
             ]
           ],
           "want": [
             [
               140,
-              185
+              182
             ]
           ]
         },
@@ -668,13 +668,13 @@
           "got": [
             [
               150,
-              175
+              172
             ]
           ],
           "want": [
             [
               150,
-              175
+              172
             ]
           ]
         }
@@ -688,13 +688,13 @@
           "got": [
             [
               70,
-              93
+              91
             ]
           ],
           "want": [
             [
               70,
-              93
+              91
             ]
           ]
         },
@@ -702,13 +702,13 @@
           "got": [
             [
               75,
-              88
+              86
             ]
           ],
           "want": [
             [
               75,
-              88
+              86
             ]
           ]
         },
@@ -730,7 +730,7 @@
     },
     {
       "name": "P9 blur: the |Laplacian| energy inside the disc drops by at least 80% on every measured frame",
-      "ok": false,
+      "ok": true,
       "detail": [
         {
           "frame": 20,
@@ -746,11 +746,11 @@
         },
         {
           "frame": 200,
-          "drop": 0
+          "drop": 0.83
         },
         {
           "frame": 230,
-          "drop": 0
+          "drop": 0.838
         }
       ]
     },

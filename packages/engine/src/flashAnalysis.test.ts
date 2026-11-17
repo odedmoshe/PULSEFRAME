@@ -103,6 +103,45 @@ describe('photosensitivity check of rendered frames', () => {
   });
 });
 
+describe('peak(): the most transitions any one cell had in any one second', () => {
+  /** Push `seconds` of frames and return the analyser (for peak) as well as its report. */
+  function run(fps: number, seconds: number, at: (k: number) => Uint8ClampedArray) {
+    const a = new FlashAnalyser(fps);
+    const cache = new Map<Uint8ClampedArray, ReturnType<typeof flashCells>>();
+    for (let k = 0; k < Math.round(fps * seconds); k++) { const f = at(k); let c = cache.get(f); if (!c) cache.set(f, (c = flashCells(f, W, H))); a.push(c); }
+    return { peak: a.peak(), report: a.report() };
+  }
+  it('is 0 before anything is pushed and on a still picture', () => {
+    expect(new FlashAnalyser(30).peak()).toEqual({ general: 0, red: 0 });
+    expect(run(30, 2, () => GREY).peak).toEqual({ general: 0, red: 0 });
+  });
+  it('square waves: equals the number of changes that fit in one second, and the verdict fails exactly above 6 (property)', () => {
+    fc.assert(fc.property(fc.constantFrom(24, 25, 30, 50, 60), fc.integer({ min: 1, max: 14 }), (fps, half) => {
+      // black, then a change every `half` frames: every change is one luminance transition, in every cell
+      const r = run(fps, 4, (k) => (Math.floor(k / half) % 2 === 0 ? BLACK : WHITE));
+      const fit = Math.floor((Math.round(fps) - 1) / half) + 1;
+      expect(r.peak, `${fps} fps, a change every ${half} frames`).toEqual({ general: fit, red: 0 });
+      expect(r.report.verdict).toBe(r.peak.general > 6 ? 'fail' : 'pass');
+    }), { numRuns: 70 });
+  });
+  it('counts red transitions apart: saturated red against black changes the red value and hardly the luminance', () => {
+    const DARK_RED = frame(() => [120, 0, 0]);
+    const r = run(30, 3, (k) => (Math.floor(k / 10) % 2 === 0 ? BLACK : DARK_RED)); // a change every 10 frames: 3 in any second
+    expect(r.peak).toEqual({ general: 0, red: 3 });
+    expect(r.report.verdict).toBe('pass');
+  });
+  it('a single change, and a flash that rises over several frames and falls, count once per direction', () => {
+    expect(run(30, 2, (k) => (k < 20 ? BLACK : WHITE)).peak.general).toBe(1);
+    const levels = [0, 60, 120, 180, 255, 180, 120, 60, 0]; // up over four frames, down over four
+    expect(run(30, 2, (k) => flat(levels[Math.min(k, levels.length - 1)]!)).peak.general).toBe(2);
+  });
+  it('only the busiest cell counts: a patch flashing in a corner sets the peak, the rest of the frame does not lower it', () => {
+    const on = frame((x, y) => (x < 24 && y < 24 ? [255, 255, 255] : [0, 0, 0])), off = BLACK;
+    const r = run(30, 3, (k) => (Math.floor(k / 5) % 2 ? on : off)); // a change every 5 frames: 6 in a second
+    expect(r.peak.general).toBe(6);
+  });
+});
+
 describe('built-ins kept below the flash threshold by construction', () => {
   it('old film: on a white picture at full amount, no two frames differ by a tenth of the luminance range, for any seed', async () => {
     const { GPU_EFFECTS } = await import('./gpu.ts');

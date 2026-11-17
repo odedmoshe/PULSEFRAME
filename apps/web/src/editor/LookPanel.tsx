@@ -1,11 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { adjustmentRefusal, beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
+import { adjustmentRefusal, beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument, beatSwitchFrame, TRANSITION_CATEGORIES, transitionDef, velocityLimit, velocityNeeds } from '@pulseframe/core';
+import { effectOptionLabel, effectParamLabel, type Key, fillIn, translateRefusal } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { ApplyToGroup, EffectGalleryButton, type ApplyTo } from './EffectGallery.tsx';
 import { ADJUST_STRINGS } from './adjust.strings.ts';
 import { wholeEditAdjustment, type WholeEditPick } from './commands.ts';
+import { flashSchedule } from '@pulseframe/engine';
+import { TRANSITION_OPTION_TESTIDS } from './trendTestIds.ts';
+import { ColourMatchPanel } from './ColourMatchPanel.tsx';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
@@ -342,28 +345,140 @@ function MaskControls({ clipId, mask }: { clipId: string; mask: Mask | undefined
   );
 }
 
+/** One option of set_transition_options: a value, or null to remove it (ADR-0012). */
+type TransitionOptionArgs = Partial<{ sync: 'beat' | null; velocity: 2 | 3 | 4 | null; color: string | null; seed: number | null }>;
+const VELOCITY_CHOICES = [2, 3, 4] as const;
+const HEX = /^#[0-9a-fA-F]{6}$/;
+/** A timecode inside a sentence of either direction: an isolated left-to-right run. */
+const ltrRun = (s: string) => `\u2066${s}\u2069`;
+
+/**
+ * The options of the transition at the start of a picture clip (ADR-0012), each changed by one set_transition_options
+ * commit: the beat lock with what it locks to, the velocity ramp with what each choice needs, the colour and seed of the types
+ * that have them, and whether a light transition's light is shown or held by the timeline's flash schedule.
+ */
+function TransitionOptions({ clip, run, describedBy }: { clip: Extract<Clip, { type: 'media' }>; run: (args: TransitionOptionArgs, label: string) => void; describedBy: string | undefined }) {
+  const { editor, state, t } = useEditorState();
+  const tr = clip.transition!;
+  const doc = editor.doc;
+  const def = transitionDef(tr.type);
+  const rate = editor.rate, fps = rate.num / rate.den, n = tr.frames;
+  const syncNoteId = useId(), velocityNoteId = useId();
+  // what the beat lock locks to: the frame of the beat nearest the middle of the window, or nothing (it then plays as usual)
+  const k = useMemo(() => (doc && tr.sync ? beatSwitchFrame(doc, clip) : null), [doc, clip, tr.sync]);
+  const syncText = !tr.sync ? '' : k === null ? t('look.transition.sync.none') : (() => {
+    const frame = T.frameIndexAt(clip.start, rate) + k;
+    return fillIn(t('look.transition.sync.locked'), { frame, time: ltrRun(T.toTimecode(T.frameTime(frame, rate), rate)) });
+  })();
+  // what the velocity ramp may be: the largest the source on both sides allows as the clips are now
+  const limit = useMemo(() => (doc ? velocityLimit(doc, clip.id) : null), [doc, clip.id]);
+  const maxVelocity = limit?.maxVelocity ?? 1;
+  const needOf = (v: number) => { const need = velocityNeeds(n, v); return fillIn(t('look.transition.velocity.need'), { out: need.outFrames, head: need.headFrames }); };
+  // a velocity a later trim, slip or speed change has outgrown: the ramp holds its first or last source frame (preflight warns)
+  const outgrown = !!tr.velocity && tr.velocity > maxVelocity;
+  const whyNone = maxVelocity === 1 && limit?.refusal ? translateRefusal(state.lang, limit.refusal) ?? limit.refusal : null;
+  // a light transition's light (ADR-0012 under ADR-0009 decision 5): shown, or held after another flash
+  const plan = def?.light && doc ? flashSchedule(doc).lights.get(clip.id) : undefined;
+  const lightText = !plan ? '' : plan.kept ? t('look.transition.light.kept') : fillIn(t('look.transition.light.held'), { s: plan.since === null ? '0' : (plan.since / fps).toFixed(2) });
+  const hasColor = !!def?.options.includes('color'), hasSeed = !!def?.options.includes('seed');
+  const color = tr.color ?? def?.defaults?.color ?? null;
+  const seed = tr.seed ?? def?.defaults?.seed ?? 0;
+  const [hex, setHex] = useState(color ?? '');
+  const [seedText, setSeedText] = useState(String(seed));
+  useEffect(() => { setHex(color ?? ''); }, [color]);
+  useEffect(() => { setSeedText(String(seed)); }, [seed]);
+  // the colour picker commits when it is closed (its change event), not on every move inside it
+  const picker = useRef<HTMLInputElement>(null);
+  const colorRef = useRef(color);
+  colorRef.current = color;
+  useEffect(() => {
+    const el = picker.current;
+    if (!el) return;
+    const onChange = () => { const v = el.value.toUpperCase(); if (HEX.test(v) && v !== colorRef.current?.toUpperCase()) run({ color: v }, 'Transition colour'); };
+    el.addEventListener('change', onChange);
+    return () => el.removeEventListener('change', onChange);
+  }, [run]);
+  const commitHex = (text: string) => {
+    const v = text.trim().toUpperCase();
+    if (v === '') { if (tr.color !== undefined) run({ color: null }, 'Transition colour'); return; } // empty: the type's own (none, or its default)
+    if (HEX.test(v) && v !== color?.toUpperCase()) run({ color: v }, 'Transition colour');
+  };
+  const commitSeed = (text: string) => { const v = Math.round(Number(text)); if (text.trim() !== '' && Number.isFinite(v) && v >= 0 && v <= 9999 && v !== seed) run({ seed: v }, 'Transition variation'); };
+  const hexValid = hex.trim() === '' || HEX.test(hex.trim());
+  return (
+    <fieldset className="transition-options" data-testid={TRANSITION_OPTION_TESTIDS.options}>
+      <legend>{t('look.transition.options')}</legend>
+      <label className="check">
+        <input type="checkbox" checked={tr.sync === 'beat'} data-testid={TRANSITION_OPTION_TESTIDS.sync} aria-describedby={[syncNoteId, describedBy].filter(Boolean).join(' ') || undefined}
+          onChange={(e) => run({ sync: e.target.checked ? 'beat' : null }, 'Transition beat lock')} /> {t('look.transition.sync')}
+      </label>
+      <p className="muted" role="status" id={syncNoteId} data-testid={TRANSITION_OPTION_TESTIDS.syncStatus}>{syncText}</p>
+      <label>{t('look.transition.velocity')}
+        <select value={tr.velocity ?? ''} data-testid={TRANSITION_OPTION_TESTIDS.velocity} aria-describedby={[outgrown || whyNone ? velocityNoteId : '', describedBy ?? ''].filter(Boolean).join(' ') || undefined}
+          onChange={(e) => { const v = e.target.value === '' ? null : (Number(e.target.value) as 2 | 3 | 4); run({ velocity: v }, 'Transition velocity'); }}>
+          <option value="">{t('look.transition.velocity.off')}</option>
+          {VELOCITY_CHOICES.map((v) => <option key={v} value={v} disabled={v > maxVelocity}>{`×${v}`}{v > maxVelocity ? ` — ${needOf(v)}` : ''}</option>)}
+        </select>
+      </label>
+      {(outgrown || whyNone) && <p className="muted danger" id={velocityNoteId} data-testid="transition-velocity-note">{outgrown ? `×${tr.velocity}: ${needOf(tr.velocity!)}` : whyNone}</p>}
+      {hasColor && (
+        <div className="transition-color">
+          <label>{t('look.transition.color')}
+            <input ref={picker} type="color" data-testid={TRANSITION_OPTION_TESTIDS.color} defaultValue={(color ?? '#FFFFFF').toLowerCase()} key={color ?? 'none'} aria-describedby={describedBy} />
+          </label>
+          <input type="text" dir="ltr" className="transition-hex" data-testid="transition-color-hex" aria-label={`${t('look.transition.color')} (#RRGGBB)`} value={hex} placeholder={def?.defaults?.color ?? '#RRGGBB'}
+            spellCheck={false} autoComplete="off" aria-invalid={!hexValid} aria-describedby={describedBy}
+            onChange={(e) => setHex(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') commitHex(e.currentTarget.value); }} onBlur={(e) => commitHex(e.currentTarget.value)} />
+        </div>
+      )}
+      {hasSeed && (
+        <div className="transition-seed">
+          <label>{t('look.transition.seed')}
+            <input type="number" dir="ltr" min={0} max={9999} step={1} value={seedText} data-testid={TRANSITION_OPTION_TESTIDS.seed} aria-describedby={describedBy}
+              onChange={(e) => setSeedText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') commitSeed(e.currentTarget.value); }} onBlur={(e) => commitSeed(e.currentTarget.value)} />
+          </label>
+          <button type="button" className="ghost" data-testid={TRANSITION_OPTION_TESTIDS.shuffle} aria-describedby={describedBy} onClick={() => run({ seed: (seed + 1) % 10000 }, 'Transition variation')}>{t('look.transition.shuffle')}</button>
+        </div>
+      )}
+      {def?.light && <p className="muted" role="status" data-testid={TRANSITION_OPTION_TESTIDS.lightStatus}>{lightText}</p>}
+    </fieldset>
+  );
+}
+
 function TransitionControls({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   const { editor, state, t } = useEditorState();
   const tr = clip.transition;
   const [frames, setFrames] = useState(String(tr?.frames ?? 15));
   const n = Math.round(Number(frames));
   const valid = Number.isFinite(n) && n >= 1 && n <= 150;
-  const commit = (type: string | null, f: number) => void editor.commit([{ op: 'set_transition', args: { clipId: clip.id, type, frames: f } }], 'Transition');
+  // a refusal of an edit made here is shown here, in a live region the controls point to (the pattern of the look panel)
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const refusalId = useId();
+  const commitOps = async (ops: OpCall[], label: string) => { const r = await editor.commit(ops, label); setRefusal(r ? null : editor.getState().error); };
+  const commit = (type: string | null, f: number) => void commitOps([{ op: 'set_transition', args: { clipId: clip.id, type, frames: f } }], 'Transition');
+  const setOptions = (args: TransitionOptionArgs, label: string) => void commitOps([{ op: 'set_transition_options', args: { clipId: clip.id, ...args } }], label);
+  const describedBy = refusal ? refusalId : undefined;
   return (
     <div className="fields" data-testid="transition-controls">
       <h3>{t('look.transition')}</h3>
       <label>{t('look.transition.type')}
-        <select value={tr?.type ?? 'none'} data-testid="transition-type" onChange={(e) => (e.target.value === 'none' ? commit(null, n) : valid && commit(e.target.value, n))}>
+        <select value={tr?.type ?? 'none'} data-testid="transition-type" aria-describedby={describedBy} onChange={(e) => (e.target.value === 'none' ? commit(null, n) : valid && commit(e.target.value, n))}>
           <option value="none">{t('look.transition.none')}</option>
-          {TRANSITIONS.map((x) => <option key={x.id} value={x.id} disabled={x.gpu && !state.gpu?.available}>{x.name[state.lang]}{x.gpu && !state.gpu?.available ? ` — ${t('look.gpu.needed')}` : ''}</option>)}
+          {TRANSITION_CATEGORIES.map((c) => (
+            <optgroup key={c} label={t(`look.trcat.${c}` as Key)}>
+              {TRANSITIONS.filter((x) => x.category === c).map((x) => <option key={x.id} value={x.id} disabled={x.gpu && !state.gpu?.available}>{x.name[state.lang]}{x.gpu && !state.gpu?.available ? ` — ${t('look.gpu.needed')}` : ''}</option>)}
+            </optgroup>
+          ))}
         </select>
       </label>
       <label>{t('look.transition.frames')}
-        <input type="number" min={1} max={150} step={1} value={frames} data-testid="transition-frames" aria-invalid={!valid}
+        <input type="number" min={1} max={150} step={1} value={frames} data-testid="transition-frames" aria-invalid={!valid} aria-describedby={describedBy}
           onChange={(e) => setFrames(e.target.value)}
           onBlur={() => { if (tr && valid && n !== tr.frames) commit(tr.type, n); }} />
       </label>
       <p className="muted">{t('look.transition.note')}</p>
+      {tr && <TransitionOptions clip={clip} run={setOptions} describedBy={describedBy} />}
+      {refusal && <p id={refusalId} className="danger" role="alert" data-testid="transition-refusal">{refusal}</p>}
     </div>
   );
 }
@@ -447,6 +562,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
           </select>
         </label>
       </div>
+      {media && clip.type === 'media' && <ColourMatchPanel key={`cm:${clip.id}`} clip={clip} />}
       {media && clip.type === 'media' && <MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} />}
       {adjustment && clip.type === 'adjustment' && <><MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} /><p className="muted" role="note" data-testid="adjust-mask-note">{A.maskNote}</p></>}
       {media && clip.type === 'media' && <TransitionControls key={`tr:${clip.id}:${clip.transition?.type ?? ''}:${clip.transition?.frames ?? ''}`} clip={clip} />}

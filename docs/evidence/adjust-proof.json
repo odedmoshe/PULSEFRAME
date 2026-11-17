@@ -1,7 +1,7 @@
 {
-  "ranAt": "2026-11-17T16:42:33.634Z",
-  "result": "FAILED",
-  "passed": 8,
+  "ranAt": "2026-11-17T16:57:13.625Z",
+  "result": "PASSED",
+  "passed": 11,
   "total": 11,
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -53,27 +53,27 @@
       "drawMsPerFrame": {
         "none": {
           "samples": 30,
-          "medianMs": 32,
-          "p95Ms": 46,
-          "meanOf30FrameExportMs": 1.43
+          "medianMs": 35,
+          "p95Ms": 115,
+          "meanOf30FrameExportMs": 4.43
         },
         "color.adjust": {
           "samples": 30,
-          "medianMs": 87,
-          "p95Ms": 118,
-          "meanOf30FrameExportMs": 46.33
+          "medianMs": 89,
+          "p95Ms": 122,
+          "meanOf30FrameExportMs": 36.3
         },
         "blur.gaussian 0.01": {
           "samples": 30,
-          "medianMs": 118,
-          "p95Ms": 147,
-          "meanOf30FrameExportMs": 62.37
+          "medianMs": 114,
+          "p95Ms": 203,
+          "meanOf30FrameExportMs": 70.2
         },
         "overlay.snow": {
           "samples": 30,
-          "medianMs": 86,
-          "p95Ms": 118,
-          "meanOf30FrameExportMs": 18.1
+          "medianMs": 88,
+          "p95Ms": 109,
+          "meanOf30FrameExportMs": 18.23
         }
       },
       "note": "server export, software canvas, this machine under whatever load it had; each per-frame sample is a one-frame export (one frame drawn in a fresh render page, its picture decode included); the mean is the draw stage of one 30-frame export. Recorded, not a target."
@@ -100,10 +100,13 @@
     },
     {
       "name": "2. Opacity 0.5: every byte of the still is within 1 of round((with + without) / 2) (a whole-edit color.invert)",
-      "ok": false,
+      "ok": true,
       "detail": {
-        "worstDifference": 2,
-        "fullVsWithout": 211
+        "worstDifference": 1,
+        "fullVsWithout": 211,
+        "bytes": 691200,
+        "bytesEqual": 306900,
+        "distinctBytePairsInTheStill": 15
       }
     },
     {
@@ -118,8 +121,8 @@
       }
     },
     {
-      "name": "3b. Caption pixels and the pixels of a title on a track above the FX track: 0 differing bytes against the render without the adjustment (a whole-edit color.invert that changes the picture under them)",
-      "ok": false,
+      "name": "3b. The pixels the captions cover fully, and those a title on a track above the FX track covers fully (each text alone is equal on a black and on a white background there): 0 differing bytes against the render without the adjustment (a whole-edit color.invert that changes the picture under them). Rim pixels a text covers only partly mix with the picture below; they are counted, not compared",
+      "ok": true,
       "detail": {
         "trackOrder": [
           "video",
@@ -128,16 +131,23 @@
           "caption",
           "audio"
         ],
-        "titlePixels": 4750,
+        "titlePixels": 5812,
         "titleDifferingBytes": 0,
-        "captionPixels": 2960,
-        "captionDifferingBytes": 1,
-        "pictureDifferingBytes": 661332
+        "captionPixels": 4125,
+        "captionDifferingBytes": 0,
+        "pictureDifferingBytes": 661332,
+        "leftOut": {
+          "titleRimPixels": 981,
+          "titleRimDifferingBytes": 2936,
+          "captionRimPixels": 1056,
+          "captionRimDifferingBytes": 3118
+        },
+        "stillAfterMeasuringCoverageDifferingBytes": 0
       }
     },
     {
-      "name": "4. The FX track moved above the title track: the title's pixels differ (> 0); the caption's still do not (captions are drawn last)",
-      "ok": false,
+      "name": "4. The FX track moved above the title track: the title's fully covered pixels differ (> 0); the caption's still do not (captions are drawn last)",
+      "ok": true,
       "detail": {
         "trackOrder": [
           "video",
@@ -146,8 +156,8 @@
           "caption",
           "audio"
         ],
-        "titleDifferingBytes": 14250,
-        "captionDifferingBytes": 1
+        "titleDifferingBytes": 17436,
+        "captionDifferingBytes": 0
       }
     },
     {
@@ -248,27 +258,27 @@
         "drawMsPerFrame": {
           "none": {
             "samples": 30,
-            "medianMs": 32,
-            "p95Ms": 46,
-            "meanOf30FrameExportMs": 1.43
+            "medianMs": 35,
+            "p95Ms": 115,
+            "meanOf30FrameExportMs": 4.43
           },
           "color.adjust": {
             "samples": 30,
-            "medianMs": 87,
-            "p95Ms": 118,
-            "meanOf30FrameExportMs": 46.33
+            "medianMs": 89,
+            "p95Ms": 122,
+            "meanOf30FrameExportMs": 36.3
           },
           "blur.gaussian 0.01": {
             "samples": 30,
-            "medianMs": 118,
-            "p95Ms": 147,
-            "meanOf30FrameExportMs": 62.37
+            "medianMs": 114,
+            "p95Ms": 203,
+            "meanOf30FrameExportMs": 70.2
           },
           "overlay.snow": {
             "samples": 30,
-            "medianMs": 86,
-            "p95Ms": 118,
-            "meanOf30FrameExportMs": 18.1
+            "medianMs": 88,
+            "p95Ms": 109,
+            "meanOf30FrameExportMs": 18.23
           }
         },
         "note": "server export, software canvas, this machine under whatever load it had; each per-frame sample is a one-frame export (one frame drawn in a fresh render page, its picture decode included); the mean is the draw stage of one 30-frame export. Recorded, not a target."
@@ -279,7 +289,7 @@
       "ok": true,
       "detail": {
         "exportStatus": "failed",
-        "exportError": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    at v (http://127.0.0.1:8914/assets/render-DPQfVre0.js:1:738)",
+        "exportError": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    at v (http://127.0.0.1:8914/assets/render-Bbfce5L8.js:1:738)",
         "stillStatus": 503,
         "stillError": "{\"error\":{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n\""
       }

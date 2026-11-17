@@ -12,12 +12,18 @@
  * same frame are one flash. `gapFrames` is a third of a second rounded up to whole frames, plus one frame. Kept flash
  * starts are therefore more than a third of a second apart, so no period of one second contains more than three.
  *
+ * Light transitions (film-burn, light-leak: TransitionDef.light) join the same walk (ADR-0012, an amendment to ADR-0009
+ * decision 1): each asks for one flash start, the first frame its light envelope is above 0, and is kept by the same rule.
+ * A light transition whose start is not kept draws with light 0 (`lights`), so strobes and lights together never start
+ * more than three flashes in a second.
+ *
  * The schedule is a pure function of the document (cached per document object), so preview, stills and export agree and
  * any frame can be drawn on its own. What it does not cover: flashing a user builds by other means (keyframed opacity,
- * rapid cuts between bright and dark pictures, the flash transition): only the strobe effect is limited here.
+ * rapid cuts between bright and dark pictures, the legacy flash and dip transitions, ADR-0011): only the strobe effect and
+ * the light transitions are limited here; the export's flash check (flashAnalysis.ts) reads everything else.
  */
 import * as T from '@pulseframe/time';
-import { flashGapFrames, followedBeats, type ProjectDocument } from '@pulseframe/core';
+import { beatSwitchFrame, flashGapFrames, followedBeats, lightStartFrame, switchFrame, transitionDef, type ProjectDocument } from '@pulseframe/core';
 import { FLASH_SINCE, STROBE_FADE, thinnedHits } from './gpu.ts';
 import type { RenderGraph } from './evaluate.ts';
 
@@ -51,8 +57,8 @@ export interface FlashSchedule {
   runOf: Map<string, string>;
   /**
    * Per light transition, by the id of the clip that carries it: where its light would start and whether the schedule
-   * kept that start (ADR-0012). PLACEHOLDER: created empty here; worker W2 fills it in the walk below. Until then no
-   * light transition is kept, so every light transition draws with light 0 (never a light the schedule did not allow).
+   * kept that start (ADR-0012). Only light transitions that are drawn are listed (a media clip with a picture on a visible
+   * video track, the start inside the clip); the evaluator gives any other light transition light 0.
    */
   lights: Map<string, LightPlan>;
 }
@@ -75,8 +81,8 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
   bySequence.set(sequenceId, schedule);
   const seq = doc.sequences[sequenceId];
   if (!seq) return schedule;
-  // every flash a strobe would like to start, on the first frame that would show it
-  const wanted: { frame: number; key: string }[] = [];
+  // every flash a strobe or a light transition would like to start, on the first frame that would show it
+  const wanted: { frame: number; key: string; /** set for a light transition: the clip that carries it */ light?: string }[] = [];
   let beats: { t: number; index: number }[] | null = null;
   const thinned = new Map<number, number[]>(); // the beats a following strobe may flash on, per `every`
   for (const track of seq.tracks) {
@@ -84,6 +90,17 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
     // effect id -> the run it currently belongs to on this track, the frame at which that run ends, and its settings
     const open = new Map<string, { key: string; end: number; settings: string }>();
     for (const clip of [...track.clips].sort((a, b) => T.cmp(a.start, b.start))) {
+      // A light transition (ADR-0012): drawn as evaluate.ts draws it, on the clip's frames 0 … n−1 from the first frame that
+      // shows the clip, on a visible video track, over a picture; its light starts on its first frame with light above 0.
+      const tr = clip.type === 'media' && track.kind === 'video' ? clip.transition : undefined;
+      if (clip.type === 'media' && tr && transitionDef(tr.type)?.light) {
+        const asset = doc.assets[clip.assetId];
+        const l0 = lightStartFrame(tr.frames, fps, switchFrame(tr.frames, beatSwitchFrame(doc, clip, sequenceId)));
+        const first = firstFrameAt(clip.start, rate), end = firstFrameAt(T.add(clip.start, clip.duration), rate);
+        if (asset && ((asset.kind === 'image' && asset.image) || asset.video) && l0 !== null && first + l0 < end) {
+          wanted.push({ frame: first + l0, key: lightKey(clip.id), light: clip.id });
+        }
+      }
       for (const fx of clip.type === 'caption' ? [] : clip.effects ?? []) {
         if (fx.type !== 'light.strobe' || !fx.enabled) continue;
         const first = firstFrameAt(clip.start, rate), end = firstFrameAt(T.add(clip.start, clip.duration), rate); // drawn on frames first … end - 1
@@ -118,7 +135,12 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
   for (let i = 0; i < wanted.length; ) {
     const frame = wanted[i]!.frame;
     const keep = frame - last >= gapFrames;
-    for (; i < wanted.length && wanted[i]!.frame === frame; i++) if (keep) { const k = wanted[i]!.key; let list = kept.get(k); if (!list) kept.set(k, (list = [])); if (list[list.length - 1] !== frame) list.push(frame); }
+    for (; i < wanted.length && wanted[i]!.frame === frame; i++) {
+      const { key: k, light } = wanted[i]!;
+      // a light transition: kept, or held with the frames since the last kept start (of a strobe or another light)
+      if (light !== undefined) { schedule.lights.set(light, { frame, kept: keep, since: keep ? null : frame - last }); continue; }
+      if (keep) { let list = kept.get(k); if (!list) kept.set(k, (list = [])); if (list[list.length - 1] !== frame) list.push(frame); }
+    }
     if (keep) last = frame;
   }
   for (const [k, frames] of kept) schedule.shown.set(k, Float64Array.from(frames)); // whole numbers, exact up to 2^53 (an Int32Array wrapped at absurd frame rates)
@@ -146,11 +168,12 @@ export const SCREEN_FLASH_STEP = 0.02;
  * (an edit, another format) could show them closer together on screen. The editor's player passes every frame it is
  * about to draw through this guard with the real time of drawing.
  *
- * The guard follows the strobe light it lets through (the strongest strobe on the frame, as the GPU pass computes it).
+ * The guard follows the light it lets through: the strongest strobe on the frame, as the GPU pass computes it, or the light
+ * of a light transition (film-burn, light-leak: the envelope the schedule allowed, ADR-0012), whichever is stronger.
  * A flash on screen is a rise followed by a fall. A rise begins when the light goes more than SCREEN_FLASH_STEP above the
  * lowest it has been since the last fall, and a fall when it goes more than that below the highest since the rise began.
- * A rise that would begin less than SCREEN_FLASH_GAP after the last one began is not let through: every strobe on that
- * frame draws nothing (which is no rise), until enough real time has passed. So no second of real time shows more than
+ * A rise that would begin less than SCREEN_FLASH_GAP after the last one began is not let through: every strobe and every
+ * light transition on that frame draws no light (which is no rise), until enough real time has passed. So no second of real time shows more than
  * three rises, whatever the transport does; ordinary playback at normal speed is not changed (the schedule's starts are
  * further apart than the gap).
  * Exported files, stills and frames rendered for agents do not pass through this guard: they are drawn at their own
@@ -167,12 +190,15 @@ export class FlashGuard {
   /** Forget what was shown (a new player, another project). */
   reset() { this.last = -Infinity; this.rising = false; this.low = 0; this.high = 0; }
   /**
-   * The graph to draw at real time `now` (seconds, any monotonic clock). The graph is not changed; when its strobes must
-   * not flash on this frame, a copy without their light is returned.
+   * The graph to draw at real time `now` (seconds, any monotonic clock). The graph is not changed; when its strobes and
+   * light transitions must not flash on this frame, a copy without their light is returned.
    */
   apply(graph: RenderGraph, now: number): RenderGraph {
     let light = 0;
-    for (const layer of graph.layers) for (const fx of effectsOf(layer)) if (fx.type === 'light.strobe') light = Math.max(light, strength(fx.params));
+    for (const layer of graph.layers) {
+      for (const fx of effectsOf(layer)) if (fx.type === 'light.strobe') light = Math.max(light, strength(fx.params));
+      light = Math.max(light, transitionLight(layer));
+    }
     let out = graph, shown = light;
     if (!this.rising && light > this.low + SCREEN_FLASH_STEP) {
       if (now - this.last >= this.gap) { this.last = now; this.rising = true; this.high = light; }
@@ -183,10 +209,19 @@ export class FlashGuard {
     return out;
   }
 }
-const effectsOf = (l: RenderGraph['layers'][number]) => ('effects' in l ? l.effects ?? [] : []);
+type AnyLayer = RenderGraph['layers'][number];
+const effectsOf = (l: AnyLayer) => ('effects' in l ? l.effects ?? [] : []);
+/** The light a light transition adds on this frame (0 without one): the envelope the evaluator put on its incoming layer. */
+const transitionLight = (l: AnyLayer) => ('transition' in l && l.transition?.light ? l.transition.light : 0);
+/** The graph with no strobe flash and no transition light (the pictures and every other effect unchanged). */
 const withoutFlash = (graph: RenderGraph): RenderGraph => ({
   ...graph,
-  layers: graph.layers.map((l) => (effectsOf(l).some((fx) => fx.type === 'light.strobe') ? { ...l, effects: effectsOf(l).map((fx) => (fx.type === 'light.strobe' ? { ...fx, params: { ...fx.params, [FLASH_SINCE]: Infinity } } : fx)) } : l)) as RenderGraph['layers'],
+  layers: graph.layers.map((l) => {
+    let out: AnyLayer = l;
+    if (effectsOf(l).some((fx) => fx.type === 'light.strobe')) out = { ...out, effects: effectsOf(l).map((fx) => (fx.type === 'light.strobe' ? { ...fx, params: { ...fx.params, [FLASH_SINCE]: Infinity } } : fx)) } as AnyLayer;
+    if (transitionLight(l) && 'transition' in out && out.transition) out = { ...out, transition: { ...out.transition, light: 0 } } as AnyLayer;
+    return out;
+  }),
 });
 /** The light a strobe adds on a frame, as its GPU pass computes it (gpu.ts 'light.strobe'): 0 without a flash time. */
 const strength = (p: Record<string, number | string | boolean>) => {

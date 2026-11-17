@@ -183,6 +183,7 @@ function recorder(name: string, canvas: object): Ctx2D {
     save: () => stack.push({ ...state }), restore: () => Object.assign(state, stack.pop()),
     drawImage: (src: unknown) => log.push({ on: name, op: 'drawImage', src: nameOf(src), alpha: state.globalAlpha, gco: state.globalCompositeOperation, filter: state.filter }),
     fillText: (text: string) => log.push({ on: name, op: 'fillText', text, alpha: state.globalAlpha, gco: state.globalCompositeOperation }),
+    fillRect: () => log.push({ on: name, op: 'fillRect', alpha: state.globalAlpha, gco: state.globalCompositeOperation }),
     strokeText: () => {},
     measureText: (text: string) => ({ width: text.length * 10 }),
     getTransform: () => ({ a: 1, b: 0 }),
@@ -219,7 +220,7 @@ describe('the adjustment pass in drawGraph (ADR-0016)', () => {
     expect(withAdj.result.missing).toEqual([]);
     expect(withAdj.result.unavailableEffects).toEqual([]);
   });
-  it('copies the frame so far, runs the effects, and composites back with the clip\'s opacity and blend, after the picture and the title below it and before the caption', async () => {
+  it('copies the frame so far, runs the effects, puts the clip\'s opacity into the copy\'s alpha and composites it back with the blend, after the picture and the title below it and before the caption', async () => {
     const b = base();
     const { doc, adjId } = adjust(b.doc, { span: 'edit', effects: [{ type: 'color.grayscale' }], opacity: 0.5 });
     const shaped = withClip(doc, adjId, (c) => { c.blend = 'multiply'; });
@@ -234,7 +235,8 @@ describe('the adjustment pass in drawGraph (ADR-0016)', () => {
     const caption = main.findIndex((e) => e.op === 'fillText' && e.text !== 'Title');
     expect(picture).toBeGreaterThanOrEqual(0);
     expect([picture < title, title < back, back < caption]).toEqual([true, true, true]);
-    expect(main[back]).toMatchObject({ alpha: 0.5, gco: 'multiply' });
+    // opacity is not the globalAlpha of the composite (8-bit rounding, see adjustPass): the copy goes back at full alpha
+    expect(main[back]).toMatchObject({ alpha: 1, gco: 'multiply' });
     expect(main[caption]).toMatchObject({ alpha: 1, gco: 'source-over' }); // the caption is drawn plainly after the pass
     // the snapshot: a scratch canvas drew the frame's own canvas; the effect ran as a filter from it into another scratch canvas
     const snap = events.find((e) => e.op === 'drawImage' && e.src === 'main-canvas');
@@ -242,6 +244,11 @@ describe('the adjustment pass in drawGraph (ADR-0016)', () => {
     const filtered = events.find((e) => e.op === 'drawImage' && e.on !== 'main' && e.src === snap!.on);
     expect(filtered).toMatchObject({ filter: expect.stringContaining('grayscale') });
     expect(main[back]!.src).toBe(filtered!.on);
+    // the opacity: one destination-in fill of the adjusted copy at 0.5, after the effect and before the copy goes back
+    const fades = events.filter((e) => e.op === 'fillRect' && e.gco === 'destination-in');
+    expect(fades).toEqual([{ on: filtered!.on, op: 'fillRect', alpha: 0.5, gco: 'destination-in' }]);
+    expect(events.indexOf(filtered!)).toBeLessThan(events.indexOf(fades[0]!));
+    expect(events.indexOf(fades[0]!)).toBeLessThan(events.indexOf(main[back]!));
   });
   it('the scratch slot of the pass is the one allocated to this track (wave 3: 14)', () => {
     expect(ADJUST_PASS_SLOT).toBe(14);
@@ -254,6 +261,7 @@ describe('the adjustment pass in drawGraph (ADR-0016)', () => {
     const back = events.filter((e) => e.on === 'main' && e.op === 'drawImage' && e.src!.startsWith('scratch#'));
     expect(back).toHaveLength(1);
     expect(back[0]).toMatchObject({ alpha: 1, gco: 'source-over' });
+    expect(events.filter((e) => e.op === 'fillRect' && e.gco === 'destination-in')).toEqual([]); // full opacity: the copy is not faded
     // the mask is applied to the adjusted copy (destination-in) before it is composited back
     const maskDraw = events.findIndex((e) => e.on === back[0]!.src && e.op === 'drawImage' && e.gco === 'destination-in');
     expect(maskDraw).toBeGreaterThanOrEqual(0);
