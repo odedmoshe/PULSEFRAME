@@ -17,7 +17,7 @@
  * rapid cuts between bright and dark pictures, the flash transition): only the strobe effect is limited here.
  */
 import * as T from '@pulseframe/time';
-import { followedBeats, type ProjectDocument } from '@pulseframe/core';
+import { flashGapFrames, followedBeats, type ProjectDocument } from '@pulseframe/core';
 import { FLASH_SINCE, STROBE_FADE, thinnedHits } from './gpu.ts';
 import type { RenderGraph } from './evaluate.ts';
 
@@ -42,8 +42,7 @@ const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.i
 /** The first frame that starts at or after a time: a clip is drawn from this frame of its start to the frame before this frame of its end. */
 const firstFrameAt = (t: T.RationalTime, rate: T.Rate) => { const i = T.frameIndexAt(t, rate); return T.isFrameAligned(t, rate) ? i : i + 1; };
 
-/** Frames between flash starts at a frame rate: a third of a second, up to whole frames, and one more. */
-export const flashGapFrames = (fps: number) => Math.ceil(fps / 3 - 1e-9) + 1;
+export { flashGapFrames }; // defined in core (flashSafety.ts), shared with the beat montage
 
 export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenceId): FlashSchedule {
   let bySequence = schedules.get(doc);
