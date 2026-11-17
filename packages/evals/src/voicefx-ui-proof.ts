@@ -28,7 +28,7 @@ import * as T from '@pulseframe/time';
 import { AUDIO_EFFECTS, AUDIO_PRESETS } from '@pulseframe/core';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
-import { expandAll } from './voicefx-ui-helpers.ts';
+import { expandAll, inReadingOrder } from './voicefx-ui-helpers.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/voicefx-ui');
@@ -206,9 +206,10 @@ async function main() {
     let at = await active();
     while (!(at?.group === 'afx-voice' && at.role === 'radio') && tabs < 40) { await page.keyboard.press('Tab'); tabs++; at = await active(); }
     const rev0 = await uiRev();
-    const geometry = await page.evaluate((b) => { const g = document.querySelector(`${b} [data-testid=afx-voice]`)!; return { dir: getComputedStyle(g).direction, chips: [...g.querySelectorAll<HTMLElement>('[role=radio]')].map((x) => ({ value: x.dataset.value, left: Math.round(x.getBoundingClientRect().left) })) }; }, block);
+    const geometry = await page.evaluate((b) => { const g = document.querySelector(`${b} [data-testid=afx-voice]`)!; const r1 = (n: number) => Math.round(n * 10) / 10; return { dir: getComputedStyle(g).direction, chips: [...g.querySelectorAll<HTMLElement>('[role=radio]')].map((x) => { const r = x.getBoundingClientRect(); return { value: x.dataset.value, left: r1(r.left), right: r1(r.right), top: r1(r.top), bottom: r1(r.bottom) }; }) }; }, block);
     check('Tab reaches the character-voice strip («דמות קול») at its chosen chip («ללא»)', at?.group === 'afx-voice' && at.value === 'none', { tabsFromFadeOut: tabs, at });
-    check('the strip runs right to left: each next chip lies to the left of the one before', geometry.dir === 'rtl' && geometry.chips.length === 5 && geometry.chips.every((c, i) => i === 0 || c.left < geometry.chips[i - 1]!.left), geometry);
+    check('the strip reads right to left: each next chip lies to the left of the one before on its line, or starts the next line (the chips, each with its ▶, wrap in the inspector)',
+      geometry.dir === 'rtl' && geometry.chips.length === 5 && inReadingOrder(geometry.chips, true), geometry);
     const keys = ['ArrowLeft', 'ArrowLeft', 'ArrowRight', 'End', 'Home', 'ArrowRight', 'ArrowLeft', 'ArrowLeft'];
     const want = ['voice.telephone', 'voice.megaphone', 'voice.telephone', 'voice.robot', 'none', 'voice.robot', 'none', 'voice.telephone'];
     const got: (string | null)[] = [];

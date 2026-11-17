@@ -22,3 +22,20 @@ export async function expandAll(collapsed: Clickables): Promise<number> {
   return collapsed.count();
 }
 
+/** A chip's box on the page (getBoundingClientRect, in CSS pixels). */
+export interface ChipBox { value?: string; left: number; right: number; top: number; bottom: number }
+
+/**
+ * Whether the chips, in their DOM (focus) order, are laid out in reading order. A row that wraps (flex-wrap in a narrow
+ * inspector) is read line by line: each next chip lies wholly before-in-reading-direction of the one before on the same line
+ * (to its left in a right-to-left row), or starts a line below it. Two boxes are on one line when they overlap vertically.
+ */
+export function inReadingOrder(chips: readonly ChipBox[], rtl: boolean): boolean {
+  return chips.every((c, i) => {
+    if (i === 0) return true;
+    const p = chips[i - 1]!;
+    const sameLine = c.top < p.bottom && c.bottom > p.top;
+    if (sameLine) return rtl ? c.right <= p.left : c.left >= p.right;
+    return c.top >= p.bottom;
+  });
+}
