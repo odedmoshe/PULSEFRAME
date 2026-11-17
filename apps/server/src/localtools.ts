@@ -271,6 +271,14 @@ const directionOf = (d: LocalToolDescriptor) => {
   return { from: m[1]!, to: m[2]! };
 };
 const DEFAULT_NAME: Record<string, string> = { en: 'English (machine translation)', he: 'עברית (תרגום מכונה)' };
+/**
+ * The entry under an id in one of the document's plain objects keyed by id (assets, variants, transcripts). An id that names an
+ * Object.prototype member (`constructor`, `__proto__`, `toString`, …) is not an entry, although a plain lookup finds something.
+ */
+const own = <V>(map: Record<string, V> | undefined, id: string): V | undefined => (map && Object.hasOwn(map, id) ? map[id] : undefined);
+const INHERITED_NAMES: ReadonlySet<string> = new Set(Object.getOwnPropertyNames(Object.prototype));
+/** The ids a stored job input names; prepare() never writes an inherited name, so a row with one was not prepared here. */
+const namedIds = (inp: LocalJobInput) => [inp.translate?.variantId, inp.translate?.baseVariantId, inp.translate && ('assetId' in inp.translate.source ? inp.translate.source.assetId : inp.translate.source.trackId), inp.audio?.assetId, inp.audio?.clipId].filter((x): x is string => typeof x === 'string');
 
 interface Kept { p: ChildProcess; idle: NodeJS.Timeout | null; onLine: ((o: any) => void) | null; done: ((r: { code: number | null; stderr: string }) => void) | null; err: string }
 interface EngineState { state: SetupState; at: number }
@@ -420,7 +428,7 @@ export class LocalTools implements LocalToolRunner {
           if (req.source.range) throw new ApiError(422, 'range_not_supported', 'a translation covers the whole transcript; a frame range is not used', {});
           assetId = req.source.assetId;
         }
-        if (!doc.assets[assetId]) throw new ApiError(404, 'not_found', `asset ${assetId} not found`, { assetId });
+        if (!own(doc.assets, assetId)) throw new ApiError(404, 'not_found', `asset ${assetId} not found`, { assetId });
         const tr = transcriptFor(doc, assetId);
         if (!tr) throw new ApiError(404, 'no_transcript', 'this source has no transcript to translate', { assetId }, 'Type, import or recognise a transcript first.');
         if (languageOf(tr.transcript.language) !== from) throw new ApiError(422, 'language_mismatch', `the transcript is in "${tr.transcript.language}"; this tool translates from "${from}"`, { language: tr.transcript.language, from }, 'Pick the tool for the transcript\'s language.');
@@ -432,12 +440,12 @@ export class LocalTools implements LocalToolRunner {
       const variantId = typeof params.variantId === 'string' ? params.variantId : null;
       const baseVariantId = typeof params.baseVariantId === 'string' ? params.baseVariantId : null;
       if (variantId) {
-        const v = doc.variants[variantId];
+        const v = own(doc.variants, variantId);
         if (!v) throw new ApiError(404, 'not_found', `format ${variantId} not found`, { variantId });
         if (!v.translation || languageOf(v.translation.from) !== from || languageOf(v.translation.to) !== to) throw new ApiError(422, 'incompatible', `format ${variantId} is not a ${from}→${to} translation`, { variantId }, 'Omit variantId to make a new language format.');
       }
-      if (baseVariantId && !doc.variants[baseVariantId]) throw new ApiError(404, 'not_found', `format ${baseVariantId} not found`, { baseVariantId });
-      const name = typeof params.name === 'string' && params.name.trim() ? params.name.trim() : variantId ? doc.variants[variantId]!.name : DEFAULT_NAME[to] ?? `${to} (machine translation)`;
+      if (baseVariantId && !own(doc.variants, baseVariantId)) throw new ApiError(404, 'not_found', `format ${baseVariantId} not found`, { baseVariantId });
+      const name = typeof params.name === 'string' && params.name.trim() ? params.name.trim() : variantId ? own(doc.variants, variantId)!.name : DEFAULT_NAME[to] ?? `${to} (machine translation)`;
       const input: LocalJobInput = { ...base, apply: 'library', preconditions: [], translate: { from, to, source, variantId, baseVariantId, name } };
       return { local: input };
     }
@@ -451,13 +459,13 @@ export class LocalTools implements LocalToolRunner {
       if (clip.type !== 'media') throw new ApiError(422, 'incompatible', 'the source clip must show a media file', { clipId: clip.id });
       if (clip.freeze || isRamped(clip) || clip.reverse) throw new ApiError(422, 'incompatible', 'this version reads clips that play forwards at one speed; freeze frames, reversed clips and gradual speed changes are refused', { clipId: clip.id }, 'Run it on the asset (source assetId) instead, or remove the speed change first.');
       if (apply === 'replace-clip' && f.track.kind !== 'audio') throw new ApiError(422, 'incompatible', 'replace-clip needs a clip on a sound track; the sound of a picture clip is its linked clip on a sound track', { clipId: clip.id }, 'Pick the linked sound clip.');
-      asset = doc.assets[clip.assetId];
+      asset = own(doc.assets, clip.assetId);
       clipId = clip.id;
       t0 = clip.sourceIn;
       t1 = sourceEnd(clip);
     } else {
       if (apply === 'replace-clip') throw new ApiError(422, 'apply_not_supported', 'replace-clip needs a clip as the source', { apply }, 'Pass source {clipId}.');
-      asset = doc.assets[req.source.assetId];
+      asset = own(doc.assets, req.source.assetId);
       if (!asset) throw new ApiError(404, 'not_found', `asset ${req.source.assetId} not found`, { assetId: req.source.assetId });
       if (req.source.range) {
         const rate = asset.video?.frameRate ?? doc.settings.frameRate;
@@ -497,7 +505,7 @@ export class LocalTools implements LocalToolRunner {
   private async run(jobId: string, d: LocalToolDescriptor) {
     if (this.stopped || this.store.getJob(jobId).status !== 'queued') return;
     const parsed = LocalInput.safeParse(this.store.getJob(jobId).input?.local);
-    if (!parsed.success || parsed.data.capabilityId !== d.id) {
+    if (!parsed.success || parsed.data.capabilityId !== d.id || namedIds(parsed.data).some((id) => INHERITED_NAMES.has(id))) {
       this.store.updateJob(jobId, { status: 'failed', stage: null, error: { code: 'invalid_job_input', message: 'this job was not prepared for this local tool', retryable: false } });
       return;
     }
@@ -561,7 +569,7 @@ export class LocalTools implements LocalToolRunner {
     // What is translated is read now: the phrases and cues as they are when the run starts (their hashes are recorded).
     let items: { id: string; text: string; master: string; kind: 'phrase' | 'cue' }[];
     if (t.source.kind === 'transcript') {
-      const tr = doc.transcripts[t.source.assetId];
+      const tr = own(doc.transcripts, t.source.assetId);
       if (!tr) throw new ApiError(409, 'source_changed', 'the transcript was removed before the translation started');
       items = tr.segments.filter((s) => s.text.trim()).map((s) => ({ id: s.id, text: s.text.trim(), master: s.text, kind: 'phrase' as const }));
     } else {
@@ -571,6 +579,9 @@ export class LocalTools implements LocalToolRunner {
       items = track.clips.flatMap((c) => (c.type === 'caption' && c.text.trim() ? [{ id: c.id, text: c.text.trim(), master: c.text, kind: 'cue' as const }] : []));
     }
     if (!items.length) throw new ApiError(422, 'nothing_to_translate', 'there is no text to translate');
+    // The formats named are checked now too (they may have been removed while the job waited), not only after the compute is spent.
+    if (t.variantId && !own(doc.variants, t.variantId)?.translation) throw new ApiError(409, 'source_changed', `format ${t.variantId} was removed before the translation started; nothing was run`);
+    if (!t.variantId && t.baseVariantId && !own(doc.variants, t.baseVariantId)) throw new ApiError(409, 'source_changed', `base format ${t.baseVariantId} was removed before the translation started; nothing was run`);
     const inFile = path.join(tmp, 'items.json'), outFile = path.join(tmp, 'translations.json');
     fs.writeFileSync(inFile, JSON.stringify({ items: items.map(({ id, text }) => ({ id, text })) }), 'utf8');
     const weights = d.models.some((m) => m.path.endsWith('.safetensors')) ? 'safetensors' : 'pickle';
@@ -611,8 +622,8 @@ export class LocalTools implements LocalToolRunner {
     const leftOut = items.length - present.length;
     const changed = present.filter((x) => masterTextOf(now, x.id) !== x.master).length;
     if (!present.length) throw new ApiError(409, 'source_changed', 'every phrase that was translated was removed while the translation ran; nothing was stored');
-    if (t.variantId && !now.variants[t.variantId]?.translation) throw new ApiError(409, 'source_changed', `format ${t.variantId} was removed while the translation ran; nothing was stored`);
-    if (!t.variantId && t.baseVariantId && !now.variants[t.baseVariantId]) throw new ApiError(409, 'source_changed', `base format ${t.baseVariantId} was removed while the translation ran; nothing was stored`);
+    if (t.variantId && !own(now.variants, t.variantId)?.translation) throw new ApiError(409, 'source_changed', `format ${t.variantId} was removed while the translation ran; nothing was stored`);
+    if (!t.variantId && t.baseVariantId && !own(now.variants, t.baseVariantId)) throw new ApiError(409, 'source_changed', `base format ${t.baseVariantId} was removed while the translation ran; nothing was stored`);
     const phraseText: Record<string, string> = {}, cueText: Record<string, string> = {}, sources: Record<string, string> = {};
     for (const x of present) { (x.kind === 'cue' ? cueText : phraseText)[x.id] = got[x.id]!.trim(); sources[x.id] = sha256Hex(x.master); }
     const v = res.data.versions;
@@ -642,7 +653,7 @@ export class LocalTools implements LocalToolRunner {
   private async runSound(jobId: string, d: LocalToolDescriptor, inp: LocalJobInput, tmp: string, setup: SetupState, started: number) {
     const a = inp.audio!;
     const job = this.store.getJob(jobId);
-    const src = this.store.getProject(job.projectId).doc.assets[a.assetId];
+    const src = own(this.store.getProject(job.projectId).doc.assets, a.assetId);
     if (!src?.audio) throw new ApiError(409, 'source_changed', 'the source file was removed before the tool started');
     const N = a.endSample - a.startSample;
     const voice = inp.task === 'voice-clean';

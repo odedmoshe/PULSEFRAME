@@ -290,6 +290,50 @@ describe('translation (fake worker)', () => {
     expect(v.phraseText).toBeUndefined();
     fx.store.close();
   }, 60_000);
+  // Formats and library files are kept in plain objects keyed by id: `doc.variants.constructor` is Object, not a format.
+  const INHERITED = ['constructor', '__proto__', 'toString', 'hasOwnProperty'];
+  it('an id that names an Object.prototype member is not a format or a file: refused 404 before a job exists', async () => {
+    const fx = fixture();
+    const d = translateTestCopy(fx);
+    const { assetId } = await withTranscript(fx, ['אחת']);
+    const req = (x: Partial<RunRequest>) => ({ projectId: fx.pid, capabilityId: d.id, params: {}, actor: 'user:owner', ...x });
+    for (const id of INHERITED) {
+      expect(refusal(() => fx.tools.prepare(d, req({ source: { assetId }, params: { baseVariantId: id } }))), `baseVariantId ${id}`).toBe('404:not_found');
+      expect(refusal(() => fx.tools.prepare(d, req({ source: { assetId }, params: { variantId: id } }))), `variantId ${id}`).toBe('404:not_found');
+      expect(refusal(() => fx.tools.prepare(d, req({ source: { assetId: id } }))), `translation source ${id}`).toBe('404:not_found');
+      expect(refusal(() => fx.tools.prepare(VOCALS_CLASSIC, req({ capabilityId: VOCALS_CLASSIC.id, source: { assetId: id } }))), `sound source ${id}`).toBe('404:not_found');
+    }
+    fx.store.close();
+  }, 60_000);
+  it('a stored job input naming an inherited id fails invalid_job_input (not retryable) and runs nothing; a format removed while the job waited fails before translating', async () => {
+    const fx = fixture();
+    const d = translateTestCopy(fx);
+    const { assetId } = await withTranscript(fx, ['אחת', 'שתיים']);
+    const pidFile = path.join(fx.dir, 'worker.pid');
+    process.env.PF_FAKE_TOOLS_PIDFILE = pidFile;
+    const rev = fx.store.getProject(fx.pid).revision;
+    // TEST ROWS: what prepare() makes, with one id changed by hand (a row written by another build, or edited in the database)
+    const { local } = fx.tools.prepare(d, { projectId: fx.pid, capabilityId: d.id, params: {}, actor: 'user:owner', source: { assetId } }) as { local: any };
+    const crafted = (translate: Record<string, unknown>) => fx.store.createJob(fx.pid, 'capability', 'user:owner', { capabilityId: d.id, capabilityVersion: d.version, local: { ...local, translate: { ...local.translate, ...translate } } });
+    for (const change of [{ baseVariantId: 'constructor' }, { variantId: '__proto__' }, { source: { kind: 'transcript', assetId: 'toString' } }, { source: { kind: 'cues', trackId: 'valueOf' } }]) {
+      const job = crafted(change);
+      await fx.tools.drive(job.id, d);
+      expect(fx.store.getJob(job.id), JSON.stringify(change)).toMatchObject({ status: 'failed', error: { code: 'invalid_job_input', retryable: false } });
+    }
+    expect(fs.existsSync(pidFile), 'the tools worker was started').toBe(false);
+    // a real base format, removed after prepare and before the run: refused before the compute is spent
+    const add = fx.store.commit({ projectId: fx.pid, actor: 'user:owner', ops: [{ op: 'add_variant', args: { width: 1080, height: 1920 } }] });
+    const baseVariantId = add.results[0]!.output!.variantId as string;
+    const job = start(fx, d, { params: { baseVariantId }, source: { assetId } });
+    fx.store.commit({ projectId: fx.pid, actor: 'user:owner', ops: [{ op: 'remove_variant', args: { variantId: baseVariantId } }] });
+    await fx.tools.drive(job.id, d);
+    const j = fx.store.getJob(job.id);
+    expect(j).toMatchObject({ status: 'failed', error: { code: 'source_changed' } });
+    expect(j.error.message).toMatch(/before the translation started/);
+    expect(fs.existsSync(pidFile), 'the tools worker was started').toBe(false);
+    expect(fx.store.getProject(fx.pid).revision).toBe(rev + 2);
+    fx.store.close();
+  }, 60_000);
 });
 
 describe('voice cleanup (fake deep-filter)', () => {
