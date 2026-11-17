@@ -22,10 +22,18 @@ export function musicRows(lang: 'he' | 'en'): MusicRow[] {
   return listMusicStyles().map((s) => ({ id: s.id, name: s.name[lang], hint: s.hint[lang], bpm: s.bpm, unheard: s.review === 'unheard', label: s.label[lang], style: s }));
 }
 
-/** "n" or "n/d" seconds as an exact time; null for anything else (including zero). */
-export function parseFitSeconds(s: string | null): T.RationalTime | null {
-  const m = /^([1-9]\d{0,3})(?:\/([1-9]\d{0,3}))?$/.exec(s ?? '');
-  return m ? T.rt(Number(m[1]), m[2] === undefined ? 1 : Number(m[2])) : null;
+/**
+ * The film's exact length, "n" or "n/d" seconds with any number of digits (an NTSC edit is 1200199/10000 s, one ending on a
+ * 48 kHz clip 1234567/48000 s), as an exact time. `null` for an empty film (no length, or zero); `'unknown'` for text that is
+ * not such a length (a decimal, a denominator past the largest exact timescale), which is shown as its own reason.
+ */
+export function parseFitSeconds(s: string | null): T.RationalTime | null | 'unknown' {
+  if (s === null || s === '') return null;
+  const m = /^(\d+)(?:\/(\d+))?$/.exec(s);
+  if (!m) return 'unknown';
+  const den = m[2] === undefined ? 1 : Number(m[2]);
+  if (!Number.isSafeInteger(den) || den <= 0) return 'unknown';
+  return BigInt(m[1]!) === 0n ? null : T.rt(BigInt(m[1]!), den);
 }
 
 export interface LengthChoice { key: LengthKey; bars: number | null; seconds: number | null; bytes: number | null; disabledReason: string | null }
@@ -35,16 +43,18 @@ export function sizeOf(style: Pick<MusicStyleSummary, 'bpm'>, bars: number): { s
   return { seconds: (240 * bars) / style.bpm, bytes: 44 + 16 * bars * S };
 }
 /**
- * The chips of a row: 8, 16 and 32 bars, and «כאורך הסרטון» (the edit's exact length rounded up to whole bars). A choice the
- * style cannot make is shown with the reason, never hidden: an empty film, a film longer than the longest track.
+ * The chips of a row: 8, 16 and 32 bars, and «כאורך הסרטון» (the edit's exact length rounded up to whole bars, computed here
+ * with core barsForDuration, the server's own rounding, from any exact length). A choice the style cannot make is shown with
+ * its true reason, never hidden: a fixed length shorter or longer than the style makes, an empty film, a film whose length
+ * cannot be read, a film longer than the longest track.
  */
 export function lengthChoices(style: MusicStyleSummary, fitSeconds: string | null, s: MusicStrings): LengthChoice[] {
   const fixed = BAR_CHOICES.map((bars): LengthChoice => {
-    const ok = bars >= style.minBars && bars <= style.maxBars;
-    return { key: `${bars}` as LengthKey, bars, ...sizeOf(style, bars), disabledReason: ok ? null : s.fitTooLong };
+    const reason = bars < style.minBars ? s.barsTooShort : bars > style.maxBars ? s.barsTooLong : null;
+    return { key: `${bars}` as LengthKey, bars, ...sizeOf(style, bars), disabledReason: reason };
   });
   const fit = parseFitSeconds(fitSeconds);
-  if (!fit) return [...fixed, { key: 'fit', bars: null, seconds: null, bytes: null, disabledReason: s.fitEmpty }];
+  if (fit === null || fit === 'unknown') return [...fixed, { key: 'fit', bars: null, seconds: null, bytes: null, disabledReason: fit === null ? s.fitEmpty : s.fitUnknown }];
   const bars = barsForDuration(style.id, fit);
   if (bars > style.maxBars) return [...fixed, { key: 'fit', bars, seconds: null, bytes: null, disabledReason: s.fitTooLong }];
   return [...fixed, { key: 'fit', bars, ...sizeOf(style, bars), disabledReason: null }];
@@ -71,10 +81,14 @@ export const formatMegabytes = (bytes: number): string => (bytes / 1_000_000).to
 export function previewUrl(styleId: string, bars: number, seed: number): string {
   return `/api/v1/music/${encodeURIComponent(styleId)}/audio?bars=${Math.min(bars, PREVIEW_MAX_BARS)}&seed=${seed}`;
 }
-/** The body of POST /api/v1/projects/:id/music: the chosen length, the seed, placed from the start of the film. */
-export function addBody(styleId: string, choice: LengthChoice, fitSeconds: string | null, seed: number): Record<string, unknown> {
-  const length = choice.key === 'fit' ? { fitSeconds } : { bars: choice.bars };
-  return { styleId, ...length, seed, start: T.ZERO };
+/**
+ * The body of POST /api/v1/projects/:id/music: the chosen length in bars, the seed, placed from the start of the film.
+ * «כאורך הסרטון» sends the bars computed from the exact length (lengthChoices), not `fitSeconds`: the request schema's
+ * fitSeconds takes only short "n/d" forms, and the bars are the same number the server would round to.
+ */
+export function addBody(styleId: string, choice: LengthChoice, seed: number): Record<string, unknown> {
+  if (choice.bars === null) throw new RangeError('this length cannot be added');
+  return { styleId, bars: choice.bars, seed, start: T.ZERO };
 }
 
 /** What to tell the person when a request failed: the Hebrew wording of a known refusal, the busy line, or the server's words. */

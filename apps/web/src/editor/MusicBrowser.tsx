@@ -1,7 +1,8 @@
 /**
  * The audio drawer's second tab «מוזיקה מובנית» (ADR-0022; plan §8; the lead mounts it after the redesign's audio drawer has
  * merged). Per style (listMusicStyles, the catalogue the server makes from): name, «120 BPM» as a .num token and the line
- * «קצב ידוע מהמתכון» (never "measured"); length chips 8 / 16 / 32 bars and «כאורך הסרטון» (fitSeconds = `fitSeconds`);
+ * «קצב ידוע מהמתכון» (never "measured"); length chips 8 / 16 / 32 bars and «כאורך הסרטון» (the exact length in `fitSeconds`,
+ * any "n" or "n/d", rounded up to whole bars here and sent as bars);
  * seconds and megabytes before adding; play/stop preview through the preview route (no autoplay); the section strip from
  * musicLayout with text labels, not colour alone; the attention badge «מוזיקה מובנית — עוד לא הושמעה לאף אחד» while a style is
  * unheard; «הוספה לציר הזמן» (POST /api/v1/projects/:id/music, placed from the start of the film: one undo). Test ids:
@@ -69,7 +70,7 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
     setAdding(row.id);
     setStatus(null);
     try {
-      const r = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/music`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(addBody(row.id, c, fitSeconds, seed)) });
+      const r = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/music`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(addBody(row.id, c, seed)) });
       const body = await r.json().catch(() => null);
       if (!r.ok) { setStatus({ kind: 'err', text: errorText(lang, s, r.status, body) }); return; }
       const out = body as { assetId: string; clipId: string | null; revision: number };

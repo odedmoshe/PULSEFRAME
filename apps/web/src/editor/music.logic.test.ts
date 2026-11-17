@@ -10,7 +10,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { MUSIC_SECTION_KINDS, MUSIC_STYLES, MUSIC_UNHEARD_LABEL, musicLayout } from '@pulseframe/core';
+import { barsForDuration, MUSIC_SECTION_KINDS, MUSIC_STYLES, MUSIC_UNHEARD_LABEL, musicLayout } from '@pulseframe/core';
 import { dictionaries } from '@pulseframe/i18n';
 import { contrast, readThemes } from '../ds/contrast.ts';
 import { MusicBrowser } from './MusicBrowser.tsx';
@@ -61,7 +61,33 @@ describe('rows and lengths', () => {
     expect(at('0')).toMatchObject({ disabledReason: he.fitEmpty });
     expect(at('301')).toMatchObject({ disabledReason: he.fitTooLong });
     expect(parseFitSeconds('40/3')).toEqual(T.rt(40, 3));
-    expect(parseFitSeconds('abc')).toBeNull();
+    expect(parseFitSeconds('abc')).toBe('unknown');
+    expect([parseFitSeconds(null), parseFitSeconds('0')]).toEqual([null, null]);
+  });
+  it('«כאורך הסרטון» takes any exact length: an NTSC edit or one ending on a 48 kHz clip is not called empty', () => {
+    const pop = musicRows('en').find((r) => r.id === 'music.pop')!.style;
+    const at = (fit: string | null) => lengthChoices(pop, fit, en).find((c) => c.key === 'fit')!;
+    // 3597 frames at 30000/1001 = 1200199/10000 s (≈ 120.02 s); 1234567/48000 s (≈ 25.72 s)
+    for (const [fit, secs] of [['1200199/10000', 1200199 / 10000], ['1234567/48000', 1234567 / 48000]] as const) {
+      const bars = barsForDuration(pop.id, parseFitSeconds(fit) as T.RationalTime);
+      expect(at(fit)).toMatchObject({ bars, disabledReason: null });
+      expect(at(fit).seconds! >= secs).toBe(true); // rounded up, never short
+    }
+    expect(parseFitSeconds('1200199/10000')).toEqual(T.rt(1200199, 10000));
+    expect(parseFitSeconds('123456789012345678901/48000')).toEqual(T.rt('123456789012345678901', 48000));
+    // a length that cannot be read is its own reason, not "the film is empty"
+    expect(at('12.5')).toMatchObject({ bars: null, disabledReason: en.fitUnknown });
+    expect(at('1/99999999999999999999')).toMatchObject({ bars: null, disabledReason: en.fitUnknown });
+    expect(at(null).disabledReason).toBe(en.fitEmpty);
+    expect(at('0').disabledReason).toBe(en.fitEmpty);
+    expect(at('0/7').disabledReason).toBe(en.fitEmpty);
+  });
+  it('a fixed chip the style cannot make says why in its own words, not the film\'s', () => {
+    const pop = musicRows('en').find((r) => r.id === 'music.pop')!.style;
+    const reasons = (style: typeof pop) => Object.fromEntries(lengthChoices(style, '30', en).map((c) => [c.key, c.disabledReason]));
+    expect(reasons({ ...pop, minBars: 12 })).toMatchObject({ 8: en.barsTooShort, 16: null, 32: null });
+    expect(reasons({ ...pop, maxBars: 16 })).toMatchObject({ 8: null, 16: null, 32: en.barsTooLong });
+    expect(reasons(pop)).toMatchObject({ 8: null, 16: null, 32: null, fit: null });
   });
   it('the section strip is the layout the server makes, with a word on every part', () => {
     for (const s of MUSIC_STYLES) for (const bars of [8, 16, 32]) {
@@ -79,8 +105,12 @@ describe('requests', () => {
     expect(previewUrl('music.pop', 60, 3)).toBe('/api/v1/music/music.pop/audio?bars=32&seed=3');
     const pop = musicRows('en').find((r) => r.id === 'music.pop')!.style;
     const [c8, , , fit] = lengthChoices(pop, '30', en);
-    expect(addBody('music.pop', c8!, '30', 2)).toEqual({ styleId: 'music.pop', bars: 8, seed: 2, start: T.ZERO });
-    expect(addBody('music.pop', fit!, '30', 2)).toEqual({ styleId: 'music.pop', fitSeconds: '30', seed: 2, start: T.ZERO });
+    expect(addBody('music.pop', c8!, 2)).toEqual({ styleId: 'music.pop', bars: 8, seed: 2, start: T.ZERO });
+    // «כאורך הסרטון» sends the bars computed here from the exact length (core barsForDuration, the server's own rounding),
+    // so any exact length works, not only the short "n/d" forms the request schema's fitSeconds accepts
+    expect(addBody('music.pop', fit!, 2)).toEqual({ styleId: 'music.pop', bars: barsForDuration('music.pop', T.rt(30, 1)), seed: 2, start: T.ZERO });
+    const ntsc = lengthChoices(pop, '1200199/10000', en)[3]!;
+    expect(addBody('music.pop', ntsc, 2)).toEqual({ styleId: 'music.pop', bars: barsForDuration('music.pop', T.rt(1200199, 10000)), seed: 2, start: T.ZERO });
     expect([stepSeed(0, -1), stepSeed(1, 1), stepSeed(1_000_000, 1)]).toEqual([0, 2, 1_000_000]);
   });
   it('errors: busy is its own line; a known refusal is worded in Hebrew; anything else keeps the server\'s words', () => {
