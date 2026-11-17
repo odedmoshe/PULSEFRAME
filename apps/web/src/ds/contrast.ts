@@ -47,3 +47,14 @@ export function readThemes(css: string): { dark: Record<string, string>; light: 
   const light = { ...dark, ...parseDecls(body(/:root\[data-theme="light"\]\s*\{/)) };
   return { dark, light };
 }
+
+/** The theme-independent `:root { ... }` block (type, spacing, radii, motion, layout). */
+export function readBase(css: string): Record<string, string> {
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const m = /(^|\})\s*:root\s*\{/.exec(clean);
+  if (!m) throw new Error('tokens.css: no plain :root rule');
+  const open = clean.indexOf('{', m.index);
+  let depth = 1, j = open + 1;
+  for (; j < clean.length && depth > 0; j++) { if (clean[j] === '{') depth++; else if (clean[j] === '}') depth--; }
+  return parseDecls(clean.slice(open + 1, j - 1));
+}

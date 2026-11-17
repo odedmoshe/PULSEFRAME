@@ -1,0 +1,63 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { Button } from './Button.tsx';
+import { DEFAULT_TTL, dismissToast, pushToast, type ToastItem, type ToastKind } from './logic.ts';
+import { CheckIcon, CloseIcon, DS, InfoIcon, WarnIcon, cx } from './util.tsx';
+
+export interface ToastInput { id?: string; kind: ToastKind; title: string; body?: string; action?: string; onAction?: () => void; ttl?: number }
+interface Entry extends ToastItem { onAction?: () => void }
+interface Api { push: (t: ToastInput) => string; dismiss: (id: string) => void }
+const Ctx = createContext<Api | null>(null);
+export function useToasts(): Api {
+  const api = useContext(Ctx);
+  if (!api) throw new Error('useToasts needs a <ToastProvider>');
+  return api;
+}
+
+let counter = 0;
+/** Toast queue: start-bottom, at most three, undo with a timer bar, receipt (agent edge), fix. role=status, never steals focus. */
+export function ToastProvider({ children, closeLabel = 'Close' }: { children: ReactNode; closeLabel?: string }) {
+  const [queue, setQueue] = useState<Entry[]>([]);
+  const dismiss = useCallback((id: string) => setQueue((q) => dismissToast(q, id) as Entry[]), []);
+  const push = useCallback((t: ToastInput) => {
+    const id = t.id ?? `t${++counter}`;
+    setQueue((q) => pushToast(q, { id, kind: t.kind, title: t.title, body: t.body, action: t.action, ttl: t.ttl ?? DEFAULT_TTL[t.kind], onAction: t.onAction } as Entry) as Entry[]);
+    return id;
+  }, []);
+  const api = useMemo(() => ({ push, dismiss }), [push, dismiss]);
+  return (
+    <Ctx.Provider value={api}>
+      {children}
+      {typeof document !== 'undefined' && createPortal(
+        <div className={cx(DS, 'pf-toasts')} role="region" aria-label="Notifications">
+          {queue.map((t) => <ToastView key={t.id} t={t} onDismiss={() => dismiss(t.id)} closeLabel={closeLabel} />)}
+        </div>, document.body)}
+    </Ctx.Provider>
+  );
+}
+
+const ICON: Record<ToastKind, ReactNode> = { undo: <CheckIcon />, receipt: <CheckIcon />, fix: <WarnIcon />, info: <InfoIcon /> };
+
+/** One toast. Exported so the gallery can show each kind statically (no timer when `static`). */
+export function ToastView({ t, onDismiss, closeLabel = 'Close', staticView }: { t: Entry; onDismiss?: () => void; closeLabel?: string; staticView?: boolean }) {
+  const [paused, setPaused] = useState(false);
+  const left = useRef(t.ttl);
+  const started = useRef(0);
+  useEffect(() => {
+    if (staticView || t.ttl <= 0 || paused) return;
+    started.current = performance.now();
+    const h = setTimeout(() => onDismiss?.(), left.current);
+    return () => { clearTimeout(h); left.current = Math.max(0, left.current - (performance.now() - started.current)); };
+  }, [paused, staticView, t.ttl, onDismiss]);
+  return (
+    <div role="status" className={cx('pf-toast', `is-${t.kind}`)} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
+      <span className="pf-toast-ic" aria-hidden="true">{ICON[t.kind]}</span>
+      <div className="pf-toast-body">
+        <b>{t.title}</b>{t.body && <p>{t.body}</p>}
+        {t.action && <div className="pf-toast-actions"><Button size="sm" variant={t.kind === 'fix' ? 'primary' : 'secondary'} onClick={() => { t.onAction?.(); onDismiss?.(); }}>{t.action}</Button></div>}
+      </div>
+      {onDismiss && <button type="button" className="pf-toast-x" aria-label={closeLabel} onClick={onDismiss}><CloseIcon size={14} /></button>}
+      {t.ttl > 0 && <span className={cx('pf-toast-timer', paused && 'is-paused')} style={{ '--ttl': `${t.ttl}ms` } as CSSProperties} aria-hidden="true" />}
+    </div>
+  );
+}

@@ -20,7 +20,7 @@ function wrap(Icon: ComponentType<LucideProps>) {
  *  somewhere mirrors by opting in with the `pf-ico-flip` class (icons.css). */
 function fixed(Icon: ComponentType<LucideProps>) {
   return function PfFixedIcon({ className, ...rest }: LucideProps) {
-    return createElement(Icon, { size: 16, strokeWidth: 1.75, 'aria-hidden': 'true', focusable: 'false', 'data-pf-dir': 'fixed', ...rest, className: `pf-ico pf-ico-fixed${className ? ` ${className}` : ''}` });
+    return createElement(Icon, { size: 16, strokeWidth: 1.75, 'aria-hidden': 'true', focusable: 'false', ...({ 'data-pf-dir': 'fixed' } as object), ...rest, className: `pf-ico pf-ico-fixed${className ? ` ${className}` : ''}` });
   };
 }
 

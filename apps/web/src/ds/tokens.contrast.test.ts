@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { contrast, readThemes } from './contrast.ts';
+import { contrast, readBase, readThemes } from './contrast.ts';
 
 const themes = readThemes(readFileSync(new URL('./tokens.css', import.meta.url), 'utf8'));
 const SURFACES = ['canvas', 'surface-1', 'surface-2', 'surface-3', 'surface-4'] as const;
@@ -51,5 +51,22 @@ describe('token contrast, the spec numbers', () => {
   it('the helper really fails a low pair', () => {
     expect(contrast('#777777', '#808080')).toBeLessThan(4.5);
     expect(contrast('#000000', '#ffffff')).toBeCloseTo(21, 5);
+  });
+});
+
+describe('primitives.css', () => {
+  const css = readFileSync(new URL('./primitives.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  it('uses no literal colour: every colour is a token or a mix of tokens', () => {
+    const body = css.replace(/var\([^)]*\)/g, '');
+    expect(body.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([]);
+    expect(body.match(/\brgba?\(/g) ?? []).toEqual([]);
+  });
+  it('re-asserts, for the primitives, exactly the spec values of the names the legacy sheet also defines', () => {
+    const t = readBase(readFileSync(new URL('./tokens.css', import.meta.url), 'utf8'));
+    const scope = /\.pf-ds, \.pf-ds \* \{([^}]*)\}/.exec(css)![1]!;
+    for (const name of ['--pf-r-sm', '--pf-r-md', '--pf-r-lg', '--pf-fs-sm', '--pf-fs-md', '--pf-fs-lg']) {
+      expect(new RegExp(`${name}:\\s*${t[name]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')};`).test(scope), name).toBe(true);
+    }
+    expect(scope).toContain("'IBM Plex Sans Hebrew'");
   });
 });
