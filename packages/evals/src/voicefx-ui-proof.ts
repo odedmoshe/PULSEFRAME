@@ -28,6 +28,7 @@ import * as T from '@pulseframe/time';
 import { AUDIO_EFFECTS, AUDIO_PRESETS } from '@pulseframe/core';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { expandAll } from './voicefx-ui-helpers.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/voicefx-ui');
@@ -326,16 +327,17 @@ async function main() {
     check('nothing in the block is animated, and under reduced motion nothing in it transitions either', motion.reducedMotion && motion.elements > 20 && motion.animated.length === 0 && motion.transitioning.length === 0, motion);
 
     // --- every control has a Hebrew name; the accessibility heuristics, with every settings panel open
-    const openSettings = async () => { for (const b of await page.locator(`${block} [data-testid=afx-settings][aria-expanded=false]`).all()) await b.click(); };
-    await openSettings();
+    /** Opens every settings panel of the block; the number left closed (0 when all opened). */
+    const openSettings = () => expandAll(page.locator(`${block} [data-testid=afx-settings][aria-expanded=false]`));
+    const leftClosed = await openSettings();
     const names = await page.evaluate(controlNames, block);
     const notHebrew = names.filter((n) => !HEBREW.test(n.name));
     measurements.controlNames = names;
-    check('every control of the block (chips, ▶, toggles, switches, sliders, settings, presets, A/B, apply to the track) has a Hebrew accessible name', names.length >= 30 && notHebrew.length === 0, { controls: names.length, notHebrew, sample: names.slice(0, 6) });
+    check('every control of the block (chips, ▶, toggles, switches, sliders, settings, presets, A/B, apply to the track) has a Hebrew accessible name, with every settings panel open', leftClosed === 0 && names.length >= 30 && notHebrew.length === 0, { settingsLeftClosed: leftClosed, controls: names.length, notHebrew, sample: names.slice(0, 6) });
     const audits: Record<string, unknown> = {};
     for (const lang of ['he', 'en'] as const) {
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) { await page.getByTestId('lang-toggle').click(); await page.waitForFunction((l) => document.documentElement.lang === l, lang, { timeout: 5000 }).catch(() => {}); }
-      await openSettings();
+      const closed = await openSettings();
       await sleep(300);
       const found = await page.evaluate(auditInPage, BLOCK);
       const focus = await focusWalk(page, block, '[data-testid=sound-fade-out]');
@@ -344,8 +346,8 @@ async function main() {
       const inBlock = found.unnamed.filter((x) => x.inBlock).length + found.lowContrast.filter((x) => x.inBlock).length + found.tabIssues.filter((x) => x.inBlock).length;
       const elsewhere = found.unnamed.length + found.lowContrast.length + found.tabIssues.length - inBlock;
       check(`[${lang}] the a11y-audit heuristics with the block and its settings open: no unnamed control, no low-contrast text, no tab defect in the block or anywhere on the page; every Tab stop in the block shows a focus ring`,
-        found.lang === lang && found.dir === (lang === 'he' ? 'rtl' : 'ltr') && found.controlsInBlock >= 30 && inBlock === 0 && elsewhere === 0 && focus.stops >= 20 && focus.missing.length === 0,
-        { lang: found.lang, dir: found.dir, controlsInBlock: found.controlsInBlock, inBlock, elsewhere, unnamed: found.unnamed.slice(0, 6), lowContrast: found.lowContrast.slice(0, 6), tabIssues: found.tabIssues.slice(0, 4), focusStops: focus.stops, noFocusRing: focus.missing });
+        closed === 0 && found.lang === lang && found.dir === (lang === 'he' ? 'rtl' : 'ltr') && found.controlsInBlock >= 30 && inBlock === 0 && elsewhere === 0 && focus.stops >= 20 && focus.missing.length === 0,
+        { settingsLeftClosed: closed, lang: found.lang, dir: found.dir, controlsInBlock: found.controlsInBlock, inBlock, elsewhere, unnamed: found.unnamed.slice(0, 6), lowContrast: found.lowContrast.slice(0, 6), tabIssues: found.tabIssues.slice(0, 4), focusStops: focus.stops, noFocusRing: focus.missing });
     }
     measurements.a11y = audits;
     if ((await page.evaluate(() => document.documentElement.lang)) !== 'he') await page.getByTestId('lang-toggle').click();
