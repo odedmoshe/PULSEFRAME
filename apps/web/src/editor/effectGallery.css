@@ -29,6 +29,7 @@
 .pf-gal-name { font-weight: 600; color: var(--pf-text); }
 .pf-gal-unavail { color: var(--pf-warn); font-size: var(--pf-fs-sm); }
 .pf-gal-empty { padding: var(--pf-s-4); color: var(--pf-text-muted); text-align: center; }
+.pf-gal-note.pf-gal-room { color: var(--pf-warn); }
 .pf-gal-note-small { margin-block-start: calc(-1 * var(--pf-s-2)); }
 .pf-gal-dialog:focus { outline: none; }
 .pf-gal-status { margin: 0; padding: var(--pf-s-2) var(--pf-s-3); min-block-size: calc(1.45em + 2 * var(--pf-s-2)); border-block-start: 1px solid var(--pf-border); color: var(--pf-text-muted); font-size: var(--pf-fs-sm); }

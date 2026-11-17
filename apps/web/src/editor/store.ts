@@ -13,6 +13,8 @@ import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type 
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
 import { Player } from '../player.ts';
+import { timelineDerivatives } from '../clipVisuals.cache.ts';
+import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
 import { addAssetArgs, dropAssetArgs } from './placement.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
@@ -26,7 +28,13 @@ export interface EditorState {
   activity: RevisionEvent[];
   exportJob: JobEvent | null;
   capJob: JobEvent | null;
+  /** The latest event of each recent capability job, by job id (a panel shows the jobs it started, whatever ran since). */
+  capJobs: Record<string, JobEvent>;
   provider: ProviderInfo | null;
+  /** The provider state is being read from the server (the first request, at boot). */
+  providerAsking: boolean;
+  /** That request failed: what the server answered (code), or that it did not answer (code null). */
+  providerError: ProviderFailure | null;
   /** WebGPU effect passes in this browser (ADR-0008): null until checked. */
   gpu: GpuStatus | null;
   error: string | null;
@@ -80,8 +88,8 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 
 export class Editor {
   private state: EditorState = {
-    lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null,
-    provider: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
+    lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
+    provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -210,6 +218,7 @@ export class Editor {
     });
     es.addEventListener('derivative', (m) => {
       const d: { assetId: string; kind: string; status: string } = JSON.parse((m as MessageEvent).data);
+      timelineDerivatives.changed(projectId, d.assetId, d.kind); // only timeline clips of that file and kind that are still waiting look again
       this.set({ derivativeTick: this.state.derivativeTick + 1 });
       if (d.kind === 'proxy' && d.status === 'ready') { this.pool?.invalidate(d.assetId); if (this.player && !this.player.playing) this.player.seek(this.player.frame); }
     });
@@ -236,7 +245,7 @@ export class Editor {
     void api.controls(projectId).then((c) => this.set({ agentsPaused: c.agentsPaused })).catch(() => {});
     es.addEventListener('job', (m) => {
       const j: JobEvent = JSON.parse((m as MessageEvent).data);
-      this.set(j.type === 'capability' ? { capJob: j } : j.type === 'export' ? { exportJob: j } : {});
+      this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : {});
       // An export this tab started saves its file as soon as it is ready, once; the link in the header stays for another copy.
       if (j.type === 'export' && j.status === 'succeeded' && this.myExports.delete(j.id)) {
         const a = document.createElement('a');
@@ -251,7 +260,10 @@ export class Editor {
     es.onerror = () => this.set({ save: 'save.offline' });
     es.onopen = () => this.set({ save: 'save.saved' });
     // Listing capabilities only reads provider status; it never starts a worker.
-    void api.capabilities().then((provider) => this.set({ provider })).catch(() => this.set({ provider: null }));
+    // A failure is kept and shown (AI tools panel) with a way to ask again; it is not taken for "no provider".
+    this.set({ providerAsking: true });
+    void api.capabilities().then((provider) => this.set({ provider, providerAsking: false, providerError: null }))
+      .catch((e) => this.set({ provider: null, providerAsking: false, providerError: failureOf(e) }));
   }
   dispose() {
     this.disposed = true;
@@ -420,9 +432,19 @@ export class Editor {
     const j = this.state.exportJob;
     if (j) api.retryJob(j.id).then((n) => { this.myExports.add(n.jobId); this.set({ exportJob: { id: n.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } }); }).catch(this.fail);
   }
-  runCapability(capabilityId: string) {
+  /**
+   * Starts a capability run and returns its job id. The job is recorded as queued unless its first event has already come in
+   * (the event stream can be quicker than the answer to the request). A refusal is thrown to the caller, who says it in place.
+   */
+  async runCapability(capabilityId: string, params: Record<string, unknown> = {}): Promise<string | null> {
     const { doc } = this.state;
-    if (doc) api.runCapability(doc.id, capabilityId, {}).then((j) => this.set({ capJob: { id: j.jobId, type: 'capability', status: 'queued', stage: null, output: null, error: null } })).catch(this.fail);
+    if (!doc) return null;
+    const { jobId } = await api.runCapability(doc.id, capabilityId, params);
+    if (!this.state.capJobs[jobId]) {
+      const queued: JobEvent = { id: jobId, type: 'capability', status: 'queued', stage: null, output: null, error: null };
+      this.set({ capJob: queued, capJobs: rememberJob(this.state.capJobs, queued) });
+    }
+    return jobId;
   }
 
   // ---------- editing helpers used by commands and panels ----------

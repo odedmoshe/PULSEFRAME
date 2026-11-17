@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
-import type { Clip } from '@pulseframe/core';
+import type { Clip, OpCall } from '@pulseframe/core';
 import { assetNotices, clipEnd, FONT_CATALOG, speedValue, TEXT_PRESETS } from '@pulseframe/core';
 import { dictionaries, jobStageLabel, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
 import { Scopes } from './Scopes.tsx';
+import { repeatClick, singleFlight } from './oneAtATime.ts';
 import { ASSET_DRAG_TYPE, useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { MediaGrid } from './MediaLibrary.tsx';
@@ -195,6 +196,16 @@ function RampField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
   const range = a >= 0.1 && a <= 8 && b >= 0.1 && b <= 8 && a !== b;
   const ok = range && n >= 2 && n <= 24 && !clip.keyframes && !clip.volume && !clip.transition && !clip.reverse && !clip.speedEnd;
   const smoothOk = range && !clip.transition && !clip.reverse && !clip.freeze && !clip.keepPitch;
+  // One edit at a time (oneAtATime.ts, as in SpeedCurves.tsx): the second click of a double-click, or a click while the
+  // first edit is still on its way, sends nothing. "In steps" in particular would otherwise divide its own first step again.
+  // `busy` only repaints the buttons (aria-disabled, so the focus stays); the guard reads the flight itself.
+  const [flight] = useState(singleFlight);
+  const [busy, setBusy] = useState(false);
+  const once = async (clicks: number, ops: OpCall[], label: string) => {
+    if (repeatClick(clicks) || flight.busy) return;
+    setBusy(true);
+    try { await flight.run(() => editor.commit(ops, label)); } finally { setBusy(false); }
+  };
   return (
     <fieldset className="ramp" data-testid="ramp">
       <legend>{t('ramp.title')}</legend>
@@ -206,12 +217,12 @@ function RampField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
       {clip.speedEnd && (
         <p className="row" data-testid="ramp-state">
           <span>{t('ramp.now')}: <bdi dir="ltr">{+speedValue(clip).toFixed(3)}× → {+(clip.speedEnd.num / clip.speedEnd.den).toFixed(3)}×</bdi>{clip.speedCurve === 'smooth' ? ` · ${t('ramp.eased.short')}` : ''}{clip.rampWindow ? ` · ${t('ramp.part')}` : ''}</span>
-          <button type="button" className="ghost" data-testid="ramp-clear" onClick={() => void editor.commit([{ op: 'set_clip_speed', args: { clipId: clip.id, speed: +speedValue(clip).toFixed(3) } }], 'Clip speed')}>{t('ramp.clear')}</button>
+          <button type="button" className="ghost" data-testid="ramp-clear" aria-disabled={busy || undefined} aria-busy={busy || undefined} onClick={(e) => void once(e.detail, [{ op: 'set_clip_speed', args: { clipId: clip.id, speed: +speedValue(clip).toFixed(3) } }], 'Clip speed')}>{t('ramp.clear')}</button>
         </p>
       )}
       <div className="row">
-        <button type="button" className="primary" disabled={!smoothOk} data-testid="ramp-smooth" onClick={() => void editor.commit([{ op: 'set_clip_speed_ramp', args: { clipId: clip.id, from: a, to: b, ...(eased ? { curve: 'smooth' } : {}) } }], 'Gradual speed change')}>{t('ramp.smooth')}</button>
-        <button type="button" className="ghost" disabled={!ok} data-testid="ramp-apply" onClick={() => void editor.commit([{ op: 'speed_ramp', args: { clipId: clip.id, from: a, to: b, steps: n } }], 'Speed ramp')}>{t('ramp.apply')}</button>
+        <button type="button" className="primary" disabled={!smoothOk} aria-disabled={busy || undefined} aria-busy={busy || undefined} data-testid="ramp-smooth" onClick={(e) => void once(e.detail, [{ op: 'set_clip_speed_ramp', args: { clipId: clip.id, from: a, to: b, ...(eased ? { curve: 'smooth' } : {}) } }], 'Gradual speed change')}>{t('ramp.smooth')}</button>
+        <button type="button" className="ghost" disabled={!ok} aria-disabled={busy || undefined} aria-busy={busy || undefined} data-testid="ramp-apply" onClick={(e) => void once(e.detail, [{ op: 'speed_ramp', args: { clipId: clip.id, from: a, to: b, steps: n } }], 'Speed ramp')}>{t('ramp.apply')}</button>
       </div>
       <label className="check">
         <input type="checkbox" checked={eased} data-testid="ramp-eased" onChange={(e) => setEased(e.target.checked)} />

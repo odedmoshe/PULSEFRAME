@@ -16,7 +16,7 @@ export const EFFECT_PARAM_LABELS: Record<string, L> = {
   spacing: { he: 'מרחק בין נקודות', en: 'Dot spacing' },
   lut: { he: 'טבלת צבע', en: 'Colour table' }, intensity: { he: 'עוצמת הטבלה', en: 'Intensity' },
   bpm: { he: 'קצב (פעימות לדקה)', en: 'Tempo (beats per minute)' }, offset: { he: 'הזזת הפעימה', en: 'Beat offset' }, decay: { he: 'מהירות הדעיכה', en: 'Settling speed' }, rate: { he: 'קצב', en: 'Rate' }, zoom: { he: 'גודל', en: 'Size' }, length: { he: 'אורך הקרניים', en: 'Streak length' },
-  follow: { he: 'מה מניע את האפקט', en: 'Driven by' }, every: { he: 'פגיעה כל כמה פעימות', en: 'Hit on every Nth beat' },
+  follow: { he: 'מה מניע את האפקט', en: 'Driven by' }, every: { he: 'פגיעה כל כמה פעימות (בספירה מהתיבה הראשונה של המוזיקה)', en: 'Hit on every Nth beat (counted from the first bar of the music)' },
   bands: { he: 'מספר פסים', en: 'Bands' }, density: { he: 'שיעור הפסים שקופצים', en: 'Share of bands that jump' }, split: { he: 'פיצול צבעים', en: 'Colour split' },
 };
 export const EFFECT_OPTION_LABELS: Record<string, L> = {
