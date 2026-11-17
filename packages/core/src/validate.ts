@@ -26,7 +26,29 @@ export function lutUsers(doc: ProjectDocument, assetId: string): string[] {
   return Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).filter((c) => (c.effects ?? []).some((fx) => lutRef(fx) === assetId)).map((c) => c.id);
 }
 
-/** Semantic validation beyond the zod shape: references, bounds, frame alignment, overlap policy, sorted clips, id uniqueness. */
+/**
+ * Clips (in every sequence, in document order) that carry a link id no other clip carries: a link group of one, which links
+ * to nothing.
+ *
+ * No edit leaves one behind: an edit that removes, divides or detaches clips of a link group clears the link id of a clip it
+ * leaves as the only member (ops.ts dissolveLoneLinks). A project saved before that rule may still hold some, and
+ * validateProject deliberately does not report them: every transaction is validated as a whole, so an issue here would make
+ * such a project impossible to edit at all. They are inert: no other clip moves, trims, splits, reverses or is deleted with
+ * such a clip (it has no partner), link_clips and fit_music treat it as unlinked, unlink_clip clears it, and an edit that
+ * divides or cuts it clears it on the way. (The editor shows the link control for any clip with a link id.)
+ */
+export function loneLinkClips(doc: ProjectDocument): string[] {
+  const members = new Map<string, string[]>();
+  for (const seq of Object.values(doc.sequences))
+    for (const tr of seq.tracks)
+      for (const c of tr.clips) if (c.type === 'media' && c.linkGroupId) { const list = members.get(c.linkGroupId); if (list) list.push(c.id); else members.set(c.linkGroupId, [c.id]); }
+  return [...members.values()].filter((ids) => ids.length === 1).map((ids) => ids[0]!);
+}
+
+/**
+ * Semantic validation beyond the zod shape: references, bounds, frame alignment, overlap policy, sorted clips, id uniqueness.
+ * Not reported, on purpose: a link id that no other clip carries (see loneLinkClips).
+ */
 export function validateProject(doc: ProjectDocument): Issue[] {
   const issues: Issue[] = [];
   const rate = doc.settings.frameRate;
