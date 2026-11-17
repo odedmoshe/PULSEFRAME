@@ -1,0 +1,25 @@
+/* Colour match «התאמת צבע» (ColourMatchPanel.tsx, ADR-0014). Logical properties only, so the panel lays out right to left in
+   Hebrew. Nothing moves, blinks or pulses: tiles are still pictures and every state is a steady style (no transition, no animation). */
+.cm { display: grid; gap: var(--pf-s-2); margin-block: var(--pf-s-2); padding-block-start: var(--pf-s-2); border-block-start: 1px solid var(--pf-border); }
+.cm h4 { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-s-2); }
+.cm p { margin: 0; }
+.cm-badge { font-size: var(--pf-fs-sm); font-weight: 400; color: var(--pf-text-muted); border: 1px solid var(--pf-border); border-radius: 99px; padding: 0 8px; }
+.cm-reference { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-s-2); }
+.cm-reference > span { margin-inline-end: auto; }
+.cm-group { display: flex; flex-wrap: wrap; gap: 4px var(--pf-s-2); margin: 0; padding: 4px var(--pf-s-2); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); }
+.cm-group legend { font-size: var(--pf-fs-sm); color: var(--pf-text-muted); padding-inline: 4px; }
+.cm-radio { display: inline-flex; align-items: center; gap: 4px; font-size: var(--pf-fs-sm); }
+.cm-amount { display: grid; gap: 2px; }
+.cm-actions { display: flex; flex-wrap: wrap; gap: var(--pf-s-2); align-items: center; }
+.cm-status:empty { display: none; }
+.cm-results { width: 100%; border-collapse: collapse; font-size: var(--pf-fs-sm); }
+.cm-results caption { text-align: start; color: var(--pf-text-muted); padding-block-end: 4px; }
+.cm-results th, .cm-results td { text-align: start; vertical-align: top; padding: 4px; border-block-end: 1px solid var(--pf-border); }
+.cm-results th[scope='row'] { font-weight: 600; max-inline-size: 10em; overflow-wrap: anywhere; }
+.cm-tile { margin: 0; display: grid; gap: 2px; }
+.cm-tile canvas { display: block; max-inline-size: 112px; height: auto; border-radius: var(--pf-r-sm, 4px); background: var(--pf-bg); }
+.cm-tile[data-state='missing'] canvas { outline: 1px dashed var(--pf-border); }
+.cm-result { display: grid; gap: 2px; min-inline-size: 10em; }
+.cm-chips, .cm-warnings { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.cm-warnings { display: grid; color: var(--pf-text-muted); }
+.cm-chip { border: 1px solid var(--pf-warn, var(--pf-border)); border-radius: 99px; padding: 0 8px; }

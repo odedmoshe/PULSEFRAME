@@ -8,7 +8,7 @@
  * reference, `amount` can be below 1, and the residual is always reported. color.grade has limited reach (white balance R/B
  * 0.67–1.5, no curves): a cast beyond it is reported as `partial`, with the values that hit their limit in `limitedBy`.
  */
-import { paramRange } from '@pulseframe/core';
+import { DEFAULT_TRANSFORM, isTimeEffect, paramRange, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 
 export interface GradeParams { exposure: number; temperature: number; tint: number; contrast: number; saturation: number; shadows: number; highlights: number; fade: number }
 /** The color.grade defaults (core effects.ts): no change. */
@@ -441,4 +441,35 @@ export function balanceGrade(target: PictureSample, opts: { amount: number }): G
   if (target.count === 0) throw new RangeError('the picture has no points to measure');
   const g = balanceGoal(pictureStats(target));
   return search(target, { lPct: g.lPct, a: 0, b: 0, spread: g.meanC, useSpread: false, weightAB: BALANCE_AB_WEIGHT }, ['exposure', 'temperature', 'tint', 'contrast'], { ...GRADE_DEFAULTS }, opts.amount);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The scratch document a clip is measured (server) and shown (the panel's tiles) in
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * A scratch document (never committed) showing one clip of the main sequence alone: the other picture, title, caption and
+ * adjustment tracks are left out (sound tracks stay, so beat-driven effects see the same music); the clip fills the frame (cover)
+ * at its own place in time, with opacity 1, no keyframed transform, no mask, normal blend, no transition and no follow.
+ * `effects`: 'shown' keeps them all (the clip as it looks); 'grade-input' keeps only the effects before the place of its colour
+ * grade (what a new grade would act on: set_colour_grade replaces the first color.grade, or puts one first after a time effect).
+ */
+export function isolateClip(doc: ProjectDocument, clipId: string, effects: 'shown' | 'grade-input'): ProjectDocument {
+  const d = structuredClone(doc);
+  d.settings = { ...d.settings, fit: 'cover' };
+  const seq = d.sequences[d.mainSequenceId]!;
+  const own = seq.tracks.find((t) => t.clips.some((c) => c.id === clipId));
+  if (!own) throw new Error(`clip ${clipId} is not in the main sequence`);
+  seq.tracks = seq.tracks.filter((t) => t === own || t.kind === 'audio');
+  own.clips = own.clips.filter((c) => c.id === clipId);
+  own.hidden = false;
+  const clip = own.clips[0] as MediaClip;
+  clip.transform = { ...DEFAULT_TRANSFORM };
+  delete clip.keyframes; delete clip.mask; delete clip.blend; delete clip.transition; delete clip.follow;
+  if (effects === 'grade-input' && clip.effects) {
+    const at = clip.effects.findIndex((e) => e.type === 'color.grade');
+    clip.effects = at >= 0 ? clip.effects.slice(0, at) : clip.effects.filter((e, i) => i === 0 && isTimeEffect(e.type));
+    if (!clip.effects.length) delete clip.effects;
+  }
+  return d;
 }

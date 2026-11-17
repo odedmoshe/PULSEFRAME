@@ -12,7 +12,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, findClip, validateProject, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { GRADE_DEFAULTS, gradePixel, type GradeParams } from '@pulseframe/engine';
-import { decodePng, isolateClip, matchColour, MATCH_STILL_SCALE, type ColourMatch } from './colourMatch.ts';
+import { isolateClip } from '@pulseframe/engine/colourMatch.ts';
+import { decodePng, matchColour, MATCH_STILL_SCALE, type ColourMatch } from './colourMatch.ts';
 import type { Exporter } from './export.ts';
 import { ApiError, Store } from './store.ts';
 

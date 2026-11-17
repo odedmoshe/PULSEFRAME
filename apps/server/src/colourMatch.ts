@@ -17,9 +17,9 @@
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { applyTransaction, DEFAULT_TRANSFORM, findClip, isTimeEffect, OpError, type EffectInstance, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, findClip, OpError, type EffectInstance, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { balanceGrade, fitGrade, GRADE_DEFAULTS, mergeSamples, pictureStats, samplePicture, statsDistance, type GradeFit, type GradeParams, type PictureSample, type PictureStats } from '@pulseframe/engine';
-import { balanceGoal, colourSpread } from '@pulseframe/engine/colourMatch.ts';
+import { balanceGoal, colourSpread, isolateClip } from '@pulseframe/engine/colourMatch.ts';
 import type { Exporter } from './export.ts';
 import { ApiError, type Store } from './store.ts';
 
@@ -80,31 +80,6 @@ function sampleFrames(doc: ProjectDocument, clip: MediaClip, samples: 1 | 3): nu
 /** The clip's colour grade: the first color.grade, as set_colour_grade and apply_look find it. */
 const gradeOf = (clip: MediaClip): EffectInstance | undefined => clip.effects?.find((e) => e.type === GRADE);
 const animatedKeys = (fx: EffectInstance | undefined) => Object.keys(fx?.keyframes ?? {}).filter((k) => (GRADE_KEYS as string[]).includes(k));
-
-/**
- * A scratch document showing one clip alone (see the header). `effects`: 'shown' keeps them all; 'grade-input' keeps only the
- * effects before the place of its grade.
- */
-export function isolateClip(doc: ProjectDocument, clipId: string, effects: 'shown' | 'grade-input'): ProjectDocument {
-  const d = structuredClone(doc);
-  d.settings = { ...d.settings, fit: 'cover' };
-  const seq = d.sequences[d.mainSequenceId]!;
-  const own = seq.tracks.find((t) => t.clips.some((c) => c.id === clipId));
-  if (!own) throw new Error(`clip ${clipId} is not in the main sequence`);
-  seq.tracks = seq.tracks.filter((t) => t === own || t.kind === 'audio');
-  own.clips = own.clips.filter((c) => c.id === clipId);
-  own.hidden = false;
-  const clip = own.clips[0] as MediaClip;
-  clip.transform = { ...DEFAULT_TRANSFORM };
-  delete clip.keyframes; delete clip.mask; delete clip.blend; delete clip.transition; delete clip.follow;
-  if (effects === 'grade-input' && clip.effects) {
-    const at = clip.effects.findIndex((e) => e.type === GRADE);
-    // without a grade, set_colour_grade inserts it first, after a time effect (core effectSlot)
-    clip.effects = at >= 0 ? clip.effects.slice(0, at) : clip.effects.filter((e, i) => i === 0 && isTimeEffect(e.type));
-    if (!clip.effects.length) delete clip.effects;
-  }
-  return d;
-}
 
 /** Width and height from a PNG's header, and its pixels as straight RGBA through ffmpeg (the parity-suite decode). */
 export function decodePng(png: Buffer): Promise<{ rgba: Uint8Array; width: number; height: number }> {

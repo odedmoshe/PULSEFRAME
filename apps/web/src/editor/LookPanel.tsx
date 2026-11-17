@@ -4,6 +4,7 @@ import { beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EF
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { EffectGalleryButton } from './EffectGallery.tsx';
+import { ColourMatchPanel } from './ColourMatchPanel.tsx';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
@@ -418,6 +419,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
           </select>
         </label>
       </div>
+      {media && clip.type === 'media' && <ColourMatchPanel key={`cm:${clip.id}`} clip={clip} />}
       {media && clip.type === 'media' && <MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} />}
       {media && clip.type === 'media' && <TransitionControls key={`tr:${clip.id}:${clip.transition?.type ?? ''}:${clip.transition?.frames ?? ''}`} clip={clip} />}
     </div>
