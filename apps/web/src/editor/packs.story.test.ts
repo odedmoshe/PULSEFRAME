@@ -58,9 +58,18 @@ describe('PacksShelf', () => {
 
 const view = (lang: 'he' | 'en', tab: (typeof PACK_TABS)[number], over: Partial<PackPageViewProps> = {}) => renderToStaticMarkup(h(PackPageView, {
   pack: FIXTURE_PACK, view: packView(FIXTURE_PACK, { 'sfx.fixture-chime': { he: 'צלצול', en: 'Chime' } }), lang, tab, onTab: noop, onBack: noop, onOpenTemplate: noop,
-  captionTracks: [{ id: 'c1', name: 'כתוביות' }], captionTrackId: 'c1', onCaptionTrack: noop, fields: {}, onFields: noop, busy: null, status: null,
+  captionTracks: [{ id: 'c1', name: 'כתוביות' }], captionTrackId: 'c1', onCaptionTrack: noop, fields: {}, onFields: noop, motionNone: false, onMotionNone: noop, busy: null, status: null,
   onAddTitle: noop, onApplyLook: noop, onApplyCaption: noop, onAddElement: noop, onAddSound: noop, ...over,
 }));
+describe('PackPageView title animation switch', () => {
+  it('is a visible checkbox that shows the choice, so reduced motion is never decided silently', () => {
+    const on = view('en', 'titles', { motionNone: true }), off = view('en', 'titles', { motionNone: false });
+    expect(on).toMatch(/<input[^>]*data-testid="pack-title-motion-none"[^>]*checked/);
+    expect(off).toMatch(/data-testid="pack-title-motion-none"/);
+    expect(off).not.toMatch(/<input[^>]*data-testid="pack-title-motion-none"[^>]*checked/);
+    expect(on).toContain('Title without animation');
+  });
+});
 describe('PackPageView', () => {
   it('has the page, the back button, the six tabs with the right one selected and its panel', () => {
     for (const t of PACK_TABS) {

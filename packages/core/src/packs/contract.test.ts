@@ -60,7 +60,7 @@ describe('packIssues', () => {
     expect(issues({ looks: [{ ...FIXTURE.looks[0]!, effects: [{ type: 'time.strobe' }] }] })).toMatch(/time\.strobe/);
     expect(issues({ looks: [{ ...FIXTURE.looks[0]!, effects: [{ type: 'stylize.shadow' }] }] })).toContain('cannot go on an adjustment clip');
     expect(issues({ looks: [{ ...FIXTURE.looks[0]!, id: 'look.other-warm' }] })).toContain('the id must be look.test-<words>');
-    expect(issues({ textPresets: [{ ...FIXTURE.textPresets[0]!, style: { ...FIXTURE.textPresets[0]!.style, fontFamily: 'Suez One' } }] })).toContain('not bundled');
+    expect(issues({ textPresets: [{ ...FIXTURE.textPresets[0]!, style: { ...FIXTURE.textPresets[0]!.style, fontFamily: 'Alef' } }] })).toContain('not bundled');
     expect(issues({ textPresets: [{ ...FIXTURE.textPresets[0]!, id: 'clean-white' }] })).toContain('exists already');
     expect(issues({ titles: [{ ...FIXTURE.titles[0]!, fallback: { he: 'נר {night}', en: 'Candle {night}' } }] })).toContain('a fallback is plain text');
     expect(issues({ titles: [{ ...FIXTURE.titles[0]!, text: { he: 'בן {age:per_1}', en: 'Age {age:per_1}' } }] })).toContain('people fields');

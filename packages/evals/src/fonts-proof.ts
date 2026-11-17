@@ -7,13 +7,14 @@
  *
  * What it checks, and what each check is able to fail for:
  * - F1 placement, for every family and every weight of FONT_CATALOG: for each of the 16 vowel points, the letter with the point
- *   and the letter alone are drawn at 200 px; the pixels that changed are the point. Their horizontal centre must lie inside the
- *   letter's ink box ± 10 % of the em; the below-points (U+05B0–05B8, U+05BB, U+05C7) must lie below the letter's baseline row;
+ *   and the letter alone are drawn at 200 px; the pixels that changed are the point. Their horizontal centre must lie within 40 % of
+ *   the letter's own width of its middle (and inside its ink box ± 10 % of the em); the below-points (U+05B0–05B8, U+05BB, U+05C7) must lie below the letter's baseline row;
  *   holam (U+05B9, and U+05BA) in the upper part of the letter; dagesh (U+05BC) inside the ink box; the shin dot (U+05C1) in the
  *   upper right half and the sin dot (U+05C2) in the upper left half of a shin. A point that draws nothing fails (a fallback font
  *   or a missing glyph). The width rule of the plan (pointed width = unpointed width) is not used: a mark has no advance wherever
- *   it is drawn, so it cannot fail for a misplaced mark. Control (first weight of each family): the point drawn as a title of its
- *   own, 0.55 em to the side of its letter, must be rejected by the horizontal rule, and drawn 0.6 em above or below its place
+ *   it is drawn, so it cannot fail for a misplaced mark. Control (first weight of each family): the point drawn as a separate
+ *   title with its centre on the letter's right and on its left edge (the pen-origin failure of an unpositioned mark; each must be
+ *   rejected by the horizontal rule), and the point drawn as a title of its own, 0.55 em to the side of its letter, must be rejected by the horizontal rule, and drawn 0.6 em above or below its place
  *   it must be rejected on at least one side by the vertical rule: a check that cannot reject these proves nothing.
  *   The thresholds are constants below; the evidence records every measured margin, so a threshold can be tuned from numbers.
  * - F2 goldens: one pointed line per family and weight, starting and ending with an unpointed wide letter; SHA-256 of the decoded
@@ -63,7 +64,7 @@ export const MARKS: { cp: number; name: string; base: string; zone: Zone }[] = [
 ];
 export type Zone = 'below' | 'above' | 'inside' | 'shin' | 'sin';
 /** The thresholds, in em (200 px). Written down here and in the header; the evidence records the measured margins. */
-export const RULES = { centreSlack: 0.10, belowSlack: 0.04, aboveShare: 0.30, insideSlack: 0.02, halfSlack: 0.03, minChanged: 30, changedThreshold: 24 } as const;
+export const RULES = { centreSlack: 0.10, centreFrac: 0.40, belowSlack: 0.04, aboveShare: 0.30, insideSlack: 0.02, halfSlack: 0.03, minChanged: 30, changedThreshold: 24 } as const;
 /** The weights the controls run at: the first weight of each family only (the controls are about the check, not the font). */
 export const CONTROL_MARKS = [0x5b7, 0x5b9, 0x5c1];
 export const CONTROL_SIDE_EM = 0.55, CONTROL_UP_EM = 0.6;
@@ -112,6 +113,11 @@ export function checkMark(alone: Img, pointed: Img, mark: { cp: number; name: st
   const slack = RULES.centreSlack * EM;
   r.margins.centreLeft = box.x0 - slack <= cxm ? Number((cxm - (box.x0 - slack)).toFixed(1)) : Number((cxm - (box.x0 - slack)).toFixed(1));
   r.margins.centreRight = Number(((box.x1 + slack) - cxm).toFixed(1));
+  // the centre lies in the middle of the letter: within centreFrac of the letter's own width of its middle (a point hanging off an edge, which is
+  // what a point drawn at the pen origin looks like, has its centre at the edge = 0.5 of the width from the middle, and is rejected)
+  const bw = box.x1 - box.x0 + 1, frac = Math.abs(cxm - cx) / bw;
+  r.margins.centreFrac = Number((RULES.centreFrac - frac).toFixed(3));
+  if (frac > RULES.centreFrac) fail(`the point's horizontal centre ${cxm.toFixed(1)} is ${(frac * 100).toFixed(0)} % of the letter's width from its middle ${cx.toFixed(1)} (limit ${RULES.centreFrac * 100} %)`);
   if (cxm < box.x0 - slack || cxm > box.x1 + slack) fail(`the point's horizontal centre ${cxm.toFixed(1)} is outside the letter's ink box ${box.x0}..${box.x1} ± ${slack} px`);
   switch (mark.zone) {
     case 'below': {
@@ -153,6 +159,19 @@ export function controlRejects(alone: Img, sideways: Img, up: Img, down: Img, ma
   const drawn = [rs, ru, rd].every((x) => x.changed >= RULES.minChanged);
   const sidewaysRejected = !rs.pass, verticalRejected = !ru.pass || !rd.pass;
   return { ok: drawn && sidewaysRejected && verticalRejected, sidewaysRejected, verticalRejected, drawn };
+}
+
+/**
+ * The control the contract named: the point drawn as a separate fillText at the pen origin, i.e. with its centre on the edge of its letter
+ * (`atRight` and `atLeft`: the pictures with the point's centre on the letter's right and left edge). The check must reject both on the
+ * horizontal rule, and each must have drawn the point.
+ */
+export function penOriginRejects(alone: Img, atRight: Img, atLeft: Img, mark: { cp: number; name: string; zone: Zone }): { ok: boolean; rightRejected: boolean; leftRejected: boolean; drawn: boolean } {
+  const rr = checkMark(alone, atRight, mark), rl = checkMark(alone, atLeft, mark);
+  const horizontal = (x: MarkResult) => !x.pass && x.reasons.some((w) => w.includes('horizontal centre'));
+  const drawn = rr.changed >= RULES.minChanged && rl.changed >= RULES.minChanged;
+  const rightRejected = horizontal(rr), leftRejected = horizontal(rl);
+  return { ok: drawn && rightRejected && leftRejected, rightRejected, leftRejected, drawn };
 }
 
 // ---------------------------------------------------------------- goldens
@@ -265,7 +284,7 @@ async function main() {
   try {
     // ======================================================== F1 placement of every point, with the controls
     console.log(`\n# F1 the vowel points sit where they belong (${combos.length} faces x ${MARKS.length} points) with controls`);
-    const placement: Record<string, { marks: MarkResult[]; control: { cp: number; name: string; ok: boolean; sidewaysRejected: boolean; verticalRejected: boolean; drawn: boolean }[] | null }> = {};
+    const placement: Record<string, { marks: MarkResult[]; control: { cp: number; name: string; ok: boolean; sidewaysRejected: boolean; verticalRejected: boolean; drawn: boolean; penOrigin: { ok: boolean; rightRejected: boolean; leftRejected: boolean; drawn: boolean } }[] | null }> = {};
     {
       const pid = await project('f1 placement');
       const clip = await addTitle(pid, BET, 'Heebo', 400, SIZE_FRAC);
@@ -299,7 +318,12 @@ async function main() {
               return img;
             };
             const sideways = await pic({ x: side, y: 0 }), up = await pic({ x: 0, y: -vert }), down = await pic({ x: 0, y: vert });
-            control.push({ cp, name: m.name, ...controlRejects(alone, sideways, up, down, m) });
+            // the pen-origin control: the point's centre moved onto the right and onto the left edge of its letter (x measured from the
+            // point's own picture, which is above the letter so that nothing overlaps)
+            const lb = inkBox(alone), ub = changedBox(alone, up);
+            const cx0 = (ub.x0 + ub.x1) / 2;
+            const atRight = await pic({ x: (lb.x1 - cx0) / W, y: 0 }), atLeft = await pic({ x: (lb.x0 - cx0) / W, y: 0 });
+            control.push({ cp, name: m.name, ...controlRejects(alone, sideways, up, down, m), penOrigin: penOriginRejects(alone, atRight, atLeft, m) });
           }
         }
         placement[key] = { marks, control };
@@ -309,9 +333,9 @@ async function main() {
       const failing = Object.entries(placement).flatMap(([k, v]) => v.marks.filter((m) => !m.pass).map((m) => ({ face: k, mark: m.name, why: m.reasons })));
       measurements.placement = { rules: RULES, em: EM, faces: placement };
       check('F1', `every one of the ${MARKS.length} vowel points of every face (${combos.length} family and weight pairs) is drawn and sits in its zone`, failing.length === 0, failing.slice(0, 8));
-      const badControl = Object.entries(placement).flatMap(([k, v]) => (v.control ?? []).filter((c) => !c.ok).map((c) => ({ face: k, mark: c.name, ...c })));
+      const badControl = Object.entries(placement).flatMap(([k, v]) => (v.control ?? []).filter((c) => !c.ok || !c.penOrigin.ok).map((c) => ({ face: k, mark: c.name, ...c })));
       const controlCount = Object.values(placement).reduce((n, v) => n + (v.control?.length ?? 0), 0);
-      check('F1', `controls: a point drawn 0.55 em to the side of its letter is rejected, and drawn 0.6 em above or below its place is rejected on one side, for ${controlCount} (face, point) cases`, controlCount === FONT_CATALOG.length * CONTROL_MARKS.length && badControl.length === 0, badControl.slice(0, 6));
+      check('F1', `controls: a point drawn as a separate title with its centre on the edge of its letter (the pen origin) is rejected by the horizontal rule, a point drawn 0.55 em to the side of its letter is rejected, and drawn 0.6 em above or below its place is rejected on one side, for ${controlCount} (face, point) cases`, controlCount === FONT_CATALOG.length * CONTROL_MARKS.length && badControl.length === 0, badControl.slice(0, 6));
     }
 
     // ======================================================== F2 goldens

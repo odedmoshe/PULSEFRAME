@@ -3,7 +3,7 @@
  * sideways, on the wrong side or in a fallback place fails; the control logic rejects what it must; the golden helpers.
  */
 import { describe, expect, it } from 'vitest';
-import { RULES, checkMark, compareGolden, controlRejects, duplicateHashes, GOLDEN_LINE, TASK_LINE, MARKS, EM, type Img } from './fonts-proof.ts';
+import { RULES, checkMark, compareGolden, controlRejects, penOriginRejects, duplicateHashes, GOLDEN_LINE, TASK_LINE, MARKS, EM, type Img } from './fonts-proof.ts';
 
 const W = 600, H = 600;
 const blank = (): Img => ({ w: W, h: H, d: new Uint8Array(W * H * 4) });
@@ -37,6 +37,21 @@ describe('checkMark', () => {
     const r = checkMark(letter(), withMark(280, 350, 320, 370), M(0x5b7));
     expect(r.margins.belowBaseline).toBe(350 - (339 - RULES.belowSlack * EM));
     expect(r.centreOffsetEm).toBeCloseTo(0, 1);
+  });
+});
+
+describe('a point hanging off the letter\'s edge (drawn at the pen origin) is rejected', () => {
+  it('below, beside and above the edges', () => {
+    expect(checkMark(letter(), withMark(220, 350, 260, 370), M(0x5b7)).pass).toBe(false);
+    expect(checkMark(letter(), withMark(340, 350, 380, 370), M(0x5b7)).pass).toBe(false);
+    expect(checkMark(letter(), withMark(225, 160, 245, 190), M(0x5b9)).pass).toBe(false);
+    expect(checkMark(letter(), withMark(280, 350, 320, 370), M(0x5b7)).pass).toBe(true);
+    expect(checkMark(letter(), withMark(260, 160, 290, 190), M(0x5b9)).pass).toBe(true);
+  });
+  it('penOriginRejects is satisfied by edge-centred points and not by points in place', () => {
+    expect(penOriginRejects(letter(), withMark(330, 350, 370, 370), withMark(230, 350, 270, 370), M(0x5b7))).toEqual({ ok: true, rightRejected: true, leftRejected: true, drawn: true });
+    const inPlace = withMark(280, 350, 320, 370);
+    expect(penOriginRejects(letter(), inPlace, inPlace, M(0x5b7)).ok).toBe(false);
   });
 });
 

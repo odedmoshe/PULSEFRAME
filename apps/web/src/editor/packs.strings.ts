@@ -15,7 +15,7 @@ export interface PackStrings {
   back: string; tabsLabel: string; tab: Record<PackTab, string>;
   panelEmpty: string; seconds: (s: number) => string;
   openTemplate: string; addTitle: string; applyLook: string; applyCaption: string; addElement: string; addSound: string;
-  oneUndo: string; libraryNote: string;
+  motionNone: string; oneUndo: string; libraryNote: string;
   added: (what: string) => string; failed: string; working: string;
   noCaptionTrack: string; captionTrack: string; captionNeedsWords: string;
   titleFieldsNote: string; titleDatedNote: string;
@@ -45,6 +45,7 @@ const he: PackStrings = {
   seconds: (s) => `${s} ש׳`,
   openTemplate: 'פתיחת התבנית',
   addTitle: 'הוספת כותרת',
+  motionNone: 'כותרת בלי תנועה (ללא הנפשה)',
   applyLook: 'החלת המראה',
   applyCaption: 'החלת הסגנון',
   addElement: 'הוספת אלמנט',
@@ -100,6 +101,7 @@ const en: PackStrings = {
   seconds: (s) => `${s} s`,
   openTemplate: 'Open the template',
   addTitle: 'Add title',
+  motionNone: 'Title without animation',
   applyLook: 'Apply the look',
   applyCaption: 'Apply the style',
   addElement: 'Add element',

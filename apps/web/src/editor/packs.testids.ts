@@ -18,7 +18,7 @@ export const PACK_TESTIDS = {
   // a pack page: the page, its back button, a tab (pack-tab-<tab>) and its panel
   page: 'pack-page', back: 'pack-back', tab: (t: PackTab) => `pack-tab-${t}`, panel: (t: PackTab) => `pack-panel-${t}`,
   // the items of the tabs (data-template-id, data-title-id, data-element-id, data-look-id, data-caption-look-id, data-sfx-id / data-style-id)
-  template: 'pack-template', title: 'pack-title', element: 'pack-element', look: 'pack-look', captionLook: 'pack-caption-look', sound: 'pack-sound',
+  template: 'pack-template', title: 'pack-title', titleMotionNone: 'pack-title-motion-none', element: 'pack-element', look: 'pack-look', captionLook: 'pack-caption-look', sound: 'pack-sound',
   // the template dialog's fieldset «פרטים»: one field per pack field (tpl-field-<key>), the date, its live Hebrew date (aria-live), the lighting switch
   fields: 'tpl-fields', field: (k: PackFieldKey) => `tpl-field-${k}`, date: 'tpl-field-date', hebrewDate: 'tpl-field-hebrew-date', atLighting: 'tpl-field-at-lighting',
   // the template dialog's music source (radio group: none / library / builtin), the style select and the seed («גרסה») stepper

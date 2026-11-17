@@ -34,6 +34,8 @@ export interface PackPageViewProps {
   fields: PackFieldsInput; onFields: (next: PackFieldsInput) => void;
   /** the id of the item an action is running for (its button says «מוסיף…» and cannot be pressed twice) */
   busy: string | null; status: PackStatus | null;
+  /** the title animation switch: a visible, editable default (the viewer's reduced-motion setting only sets it at first), never a silent decision */
+  motionNone: boolean; onMotionNone: (none: boolean) => void;
   onAddTitle: (title: PackTitle) => void; onApplyLook: (look: PackLook) => void; onApplyCaption: (lookId: string) => void; onAddElement: (id: string, name: Words) => void; onAddSound: (id: string, name: string) => void;
 }
 
@@ -71,6 +73,7 @@ export function PackPageView(p: PackPageViewProps) {
           <>
             {pack.fields.length > 0 && (<><PackFields fields={pack.fields} candle={false} value={p.fields} onChange={p.onFields} lang={lang} /><p className="pf-pack-note">{S.titleFieldsNote}</p></>)}
             {pack.liveFields && <p className="pf-pack-note">{S.titleDatedNote}</p>}
+            <label className="check pf-pack-motion"><input type="checkbox" checked={p.motionNone} data-testid={TID.titleMotionNone} onChange={(e) => p.onMotionNone(e.target.checked)} /> {S.motionNone}</label>
             {view.titles.length === 0 ? empty : (
               <ul className="pf-pack-list">
                 {view.titles.map((t) => {
@@ -162,6 +165,8 @@ export function PackPage({ pack, projectId, lang, initialTab, onBack, onOpenTemp
   const S = PACK_STRINGS[lang];
   const [tab, setTab] = useState<PackTab>(initialTab ?? 'templates');
   const [fields, setFields] = useState<PackFieldsInput>({});
+  // reduced motion in the viewer's system sets the default of a visible switch; the person can turn the animation back on
+  const [motionNone, setMotionNone] = useState(reduced);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<PackStatus | null>(null);
   const [sfxNames, setSfxNames] = useState<Record<string, Words>>({});
@@ -185,8 +190,8 @@ export function PackPage({ pack, projectId, lang, initialTab, onBack, onOpenTemp
     <PackPageView
       pack={pack} view={view} lang={lang} tab={tab} onTab={setTab} onBack={onBack} onOpenTemplate={onOpenTemplate}
       captionTracks={tracks} captionTrackId={pickCaptionTarget(tracks, trackChoice)} onCaptionTrack={setTrackChoice}
-      fields={fields} onFields={setFields} busy={busy} status={status}
-      onAddTitle={(t) => { const a = titleAction(t, { lang, start: editor.playhead, rate: editor.rate, fields, motion: reduced() ? 'none' : 'full' }); void run(t.id, () => commit([a.op], a.label), a.label); }}
+      fields={fields} onFields={setFields} motionNone={motionNone} onMotionNone={setMotionNone} busy={busy} status={status}
+      onAddTitle={(t) => { const a = titleAction(t, { lang, start: editor.playhead, rate: editor.rate, fields, motion: motionNone ? 'none' : 'full' }); void run(t.id, () => commit([a.op], a.label), a.label); }}
       onApplyLook={(l) => { const a = lookAction(l, lang); void run(l.id, () => commit([a.op], a.label), a.label); }}
       onApplyCaption={(id) => { const track = pickCaptionTarget(tracks, trackChoice); const l = view.captionLooks.find((x) => x.id === id); if (track && l) void run(id, () => commit([captionAction(track, id)], l.name[lang]), l.name[lang]); }}
       onAddElement={(id, name) => void run(id, async () => { await api.addElement(projectId, { elementId: id, ...elementColours(pack), start: editor.playhead }); return true; }, name[lang])}
