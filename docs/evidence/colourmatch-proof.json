@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T19:44:47.968Z",
+  "ranAt": "2026-11-17T21:36:21.346Z",
   "result": "PASSED",
   "passed": 17,
   "total": 17,
@@ -23,8 +23,8 @@
       },
       "found": {
         "exposure": 0.301,
-        "temperature": 0.349,
-        "tint": -0.198,
+        "temperature": 0.348,
+        "tint": -0.199,
         "contrast": 1.151,
         "saturation": 0.849,
         "shadows": 0.2,
@@ -43,7 +43,7 @@
       },
       "verified": 0.05,
       "model": 0.06,
-      "seconds": 7.802
+      "seconds": 4.068
     },
     "m2b": {
       "known": {
@@ -57,11 +57,11 @@
         "fade": 0.05
       },
       "found": {
-        "exposure": 0.318,
-        "temperature": 0.347,
-        "tint": -0.011,
-        "contrast": 1.156,
-        "saturation": 0.837,
+        "exposure": 0.316,
+        "temperature": 0.351,
+        "tint": -0.031,
+        "contrast": 1.154,
+        "saturation": 0.839,
         "shadows": 0.2,
         "highlights": 0.1,
         "fade": 0.05
@@ -69,27 +69,27 @@
       "errors": {
         "exposure": 0.02,
         "temperature": 0,
-        "tint": 0.19,
-        "contrast": 0.01,
+        "tint": 0.17,
+        "contrast": 0,
         "saturation": 0.01,
         "shadows": 0,
         "highlights": 0,
         "fade": 0
       },
-      "verified": 0.06,
-      "model": 0.06,
+      "verified": 0.05,
+      "model": 0.03,
       "limitedBy": [],
       "verdict": "close"
     },
     "m3": {
       "before": 6.17,
-      "after": 0.52,
-      "reduction": 0.92,
+      "after": 0.43,
+      "reduction": 0.93,
       "params": {
-        "exposure": 0.013,
-        "temperature": -0.371,
-        "tint": -0.105,
-        "contrast": 0.995,
+        "exposure": 0.012,
+        "temperature": -0.383,
+        "tint": -0.106,
+        "contrast": 0.996,
         "saturation": 0.956,
         "shadows": 0,
         "highlights": 0,
@@ -100,11 +100,11 @@
     },
     "m4": {
       "params": {
-        "exposure": -0.002,
+        "exposure": 0.028,
         "temperature": -1,
         "tint": 1,
-        "contrast": 0.804,
-        "saturation": 1.247,
+        "contrast": 0.811,
+        "saturation": 1.216,
         "shadows": 0,
         "highlights": 0,
         "fade": 0
@@ -114,41 +114,41 @@
         "tint"
       ],
       "verdict": "partial",
-      "model": 14.35,
-      "verified": 14.43
+      "model": 14.02,
+      "verified": 14.02
     },
     "m5": {
       "targets": [
         {
-          "clipId": "clp_af6230aa4f0",
+          "clipId": "clp_2937a426f40",
           "verdict": "close",
-          "verified": 0.52,
+          "verified": 0.43,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_57d32513a10",
+          "clipId": "clp_ceda9526af0",
           "verdict": "close",
-          "verified": 0.64,
+          "verified": 0.38,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_43e49e01ff0",
+          "clipId": "clp_ff2278e6920",
           "verdict": "close",
           "verified": 0.13,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_50eda632290",
+          "clipId": "clp_2574da6a680",
           "verdict": "close",
           "verified": 0.14,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_8ed7e638cb0",
+          "clipId": "clp_519defbe7d0",
           "verdict": "close",
           "verified": 0.27,
           "limitedBy": [],
@@ -236,12 +236,12 @@
       "rows": [
         {
           "verdict": "close",
-          "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.5"
+          "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.4"
         }
       ],
       "measured": {
         "verdict": "close",
-        "verified": 0.52
+        "verified": 0.43
       },
       "tiles": [
         "drawn",
@@ -276,38 +276,38 @@
       {
         "check": "M2",
         "targets": 1,
-        "seconds": 7.8,
-        "secondsPerTarget": 7.8
+        "seconds": 4.07,
+        "secondsPerTarget": 4.07
       },
       {
         "check": "M2b",
         "targets": 1,
-        "seconds": 8.53,
-        "secondsPerTarget": 8.53
+        "seconds": 4.18,
+        "secondsPerTarget": 4.18
       },
       {
         "check": "M3",
         "targets": 1,
-        "seconds": 6.63,
-        "secondsPerTarget": 6.63
+        "seconds": 3.02,
+        "secondsPerTarget": 3.02
       },
       {
         "check": "M5",
         "targets": 5,
-        "seconds": 24.91,
-        "secondsPerTarget": 4.98
+        "seconds": 13.71,
+        "secondsPerTarget": 2.74
       },
       {
         "check": "M6",
         "targets": 2,
-        "seconds": 10.29,
-        "secondsPerTarget": 5.14
+        "seconds": 7.96,
+        "secondsPerTarget": 3.98
       },
       {
         "check": "M9",
         "targets": 1,
-        "seconds": 4.27,
-        "secondsPerTarget": 4.27
+        "seconds": 3.57,
+        "secondsPerTarget": 3.57
       }
     ]
   },
@@ -328,8 +328,8 @@
         },
         "found": {
           "exposure": 0.301,
-          "temperature": 0.349,
-          "tint": -0.198,
+          "temperature": 0.348,
+          "tint": -0.199,
           "contrast": 1.151,
           "saturation": 0.849,
           "shadows": 0.2,
@@ -348,7 +348,7 @@
         },
         "verified": 0.05,
         "model": 0.06,
-        "seconds": 7.802
+        "seconds": 4.068
       }
     },
     {
@@ -366,11 +366,11 @@
           "fade": 0.05
         },
         "found": {
-          "exposure": 0.318,
-          "temperature": 0.347,
-          "tint": -0.011,
-          "contrast": 1.156,
-          "saturation": 0.837,
+          "exposure": 0.316,
+          "temperature": 0.351,
+          "tint": -0.031,
+          "contrast": 1.154,
+          "saturation": 0.839,
           "shadows": 0.2,
           "highlights": 0.1,
           "fade": 0.05
@@ -378,15 +378,15 @@
         "errors": {
           "exposure": 0.02,
           "temperature": 0,
-          "tint": 0.19,
-          "contrast": 0.01,
+          "tint": 0.17,
+          "contrast": 0,
           "saturation": 0.01,
           "shadows": 0,
           "highlights": 0,
           "fade": 0
         },
-        "verified": 0.06,
-        "model": 0.06,
+        "verified": 0.05,
+        "model": 0.03,
         "limitedBy": [],
         "verdict": "close"
       }
@@ -396,13 +396,13 @@
       "ok": true,
       "detail": {
         "before": 6.17,
-        "after": 0.52,
-        "reduction": 0.92,
+        "after": 0.43,
+        "reduction": 0.93,
         "params": {
-          "exposure": 0.013,
-          "temperature": -0.371,
-          "tint": -0.105,
-          "contrast": 0.995,
+          "exposure": 0.012,
+          "temperature": -0.383,
+          "tint": -0.106,
+          "contrast": 0.996,
           "saturation": 0.956,
           "shadows": 0,
           "highlights": 0,
@@ -417,11 +417,11 @@
       "ok": true,
       "detail": {
         "params": {
-          "exposure": -0.002,
+          "exposure": 0.028,
           "temperature": -1,
           "tint": 1,
-          "contrast": 0.804,
-          "saturation": 1.247,
+          "contrast": 0.811,
+          "saturation": 1.216,
           "shadows": 0,
           "highlights": 0,
           "fade": 0
@@ -431,8 +431,8 @@
           "tint"
         ],
         "verdict": "partial",
-        "model": 14.35,
-        "verified": 14.43
+        "model": 14.02,
+        "verified": 14.02
       }
     },
     {
@@ -441,35 +441,35 @@
       "detail": {
         "targets": [
           {
-            "clipId": "clp_af6230aa4f0",
+            "clipId": "clp_2937a426f40",
             "verdict": "close",
-            "verified": 0.52,
+            "verified": 0.43,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_57d32513a10",
+            "clipId": "clp_ceda9526af0",
             "verdict": "close",
-            "verified": 0.64,
+            "verified": 0.38,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_43e49e01ff0",
+            "clipId": "clp_ff2278e6920",
             "verdict": "close",
             "verified": 0.13,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_50eda632290",
+            "clipId": "clp_2574da6a680",
             "verdict": "close",
             "verified": 0.14,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_8ed7e638cb0",
+            "clipId": "clp_519defbe7d0",
             "verdict": "close",
             "verified": 0.27,
             "limitedBy": [],
@@ -586,12 +586,12 @@
         "rows": [
           {
             "verdict": "close",
-            "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.5"
+            "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.4"
           }
         ],
         "measured": {
           "verdict": "close",
-          "verified": 0.52
+          "verified": 0.43
         },
         "tiles": [
           "drawn",
@@ -635,12 +635,12 @@
         "rows": [
           {
             "verdict": "close",
-            "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.5"
+            "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.4"
           }
         ],
         "measured": {
           "verdict": "close",
-          "verified": 0.5201491444583148
+          "verified": 0.4318531442207807
         }
       }
     },
@@ -653,10 +653,10 @@
           "after": 5
         },
         "grade": {
-          "exposure": 0.013,
-          "temperature": -0.371,
-          "tint": -0.105,
-          "contrast": 0.995,
+          "exposure": 0.012,
+          "temperature": -0.383,
+          "tint": -0.106,
+          "contrast": 0.996,
           "saturation": 0.956,
           "shadows": 0,
           "highlights": 0,
@@ -693,7 +693,7 @@
       "ok": true,
       "detail": {
         "status": 503,
-        "error": "the reference clip clp_39bcfa72b80 uses an effect that needs a graphics adapter, and the render worker has none, so it cannot be measured: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_u"
+        "error": "the reference clip clp_d141a650010 uses an effect that needs a graphics adapter, and the render worker has none, so it cannot be measured: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_u"
       }
     },
     {
@@ -703,38 +703,38 @@
         {
           "check": "M2",
           "targets": 1,
-          "seconds": 7.8,
-          "secondsPerTarget": 7.8
+          "seconds": 4.07,
+          "secondsPerTarget": 4.07
         },
         {
           "check": "M2b",
           "targets": 1,
-          "seconds": 8.53,
-          "secondsPerTarget": 8.53
+          "seconds": 4.18,
+          "secondsPerTarget": 4.18
         },
         {
           "check": "M3",
           "targets": 1,
-          "seconds": 6.63,
-          "secondsPerTarget": 6.63
+          "seconds": 3.02,
+          "secondsPerTarget": 3.02
         },
         {
           "check": "M5",
           "targets": 5,
-          "seconds": 24.91,
-          "secondsPerTarget": 4.98
+          "seconds": 13.71,
+          "secondsPerTarget": 2.74
         },
         {
           "check": "M6",
           "targets": 2,
-          "seconds": 10.29,
-          "secondsPerTarget": 5.14
+          "seconds": 7.96,
+          "secondsPerTarget": 3.98
         },
         {
           "check": "M9",
           "targets": 1,
-          "seconds": 4.27,
-          "secondsPerTarget": 4.27
+          "seconds": 3.57,
+          "secondsPerTarget": 3.57
         }
       ]
     }
