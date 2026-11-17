@@ -48,7 +48,7 @@ function templateParts(body: string): { lit: string[]; expr: string[] } {
       expr.push(body.slice(i + 2, j - 1));
       lit.push('');
       i = j - 1;
-    } else lit[lit.length - 1] += body[i];
+    } else lit[lit.length - 1] = lit[lit.length - 1]! + body[i]!;
   }
   return { lit, expr };
 }
