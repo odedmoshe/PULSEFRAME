@@ -62,7 +62,7 @@ import { applyTransaction, createProject, creativeProjection, freezeOps, gregori
 import { evaluate } from '@pulseframe/engine';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
-import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
+import { PLACE_PHOTO, PLACE_VIDEO, placeLeak, withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/lifeline-proof');
@@ -209,12 +209,15 @@ async function main() {
       const phone = rows[7]!;
       check(`1. capture dates: ${right}/8 uploaded files get exactly the date typed here; the same UTC hour is 17:30 in winter and 18:30 in summer; the conformed file keeps its date`, right === 8 && phone.conformed, { wrong: rows.filter((r) => !r.ok), conformedPhone: phone.conformed });
       const dead = await upload(pid, tagged('dead.mp4', ['creation_time=1970-01-01T00:00:00Z']));
-      const place = await upload(pid, tagged('place.mov', ['com.apple.quicktime.creationdate=2024-07-01T18:30:00+0300', 'com.apple.quicktime.location.ISO6709=+32.0853+034.7818+040.000/', 'location=+32.0853+034.7818/'], ['-movflags', 'use_metadata_tags']));
-      const gpsPhoto = await upload(pid, photo('gps.jpg', { date: '2024:07:01 18:30:00', offset: '+03:00', gps: true }));
-      const fixtureHasPlace = /32\.0853/.test(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', file('place.mov')], { encoding: 'utf8' })) && fs.readFileSync(file('gps.jpg')).includes(Buffer.from([0x25, 0x88]));
-      const everything = JSON.stringify(await getDoc(pid)) + JSON.stringify((await call(`/projects/${pid}/history?since=0`)).body) + JSON.stringify((await call(`/projects/${pid}/summary`)).body);
-      const leaked = everything.match(/32\.08|34\.78|0853|7818|ISO6709|location|gps|latitude|longitude/i);
-      check('1b. a clock that was never set (1970) gives no date; files that say where they were taken are imported with their date and no location anywhere in the project, its summary or its history', dead.asset.capture === undefined && fixtureHasPlace && !leaked && place.asset.capture?.at === '2024-07-01T18:30:00' && gpsPhoto.asset.capture?.at === '2024-07-01T18:30:00' && Object.keys(place.asset.capture ?? {}).sort().join() === 'at,source,utcOffsetMinutes', { deadClock: dead.asset.capture ?? null, fixtureHasPlace, leaked: leaked?.[0] ?? null, placeCapture: place.asset.capture, gpsCapture: gpsPhoto.asset.capture });
+      // The two files that say where they were taken, the names they are kept under and the search for a place are the ones the
+      // unit tests use (captureMeta.fixtures.ts): a name is stored as given, so it must not itself hold a word the search looks for.
+      const place = await upload(pid, tagged(PLACE_VIDEO.name, [...PLACE_VIDEO.tags], ['-movflags', 'use_metadata_tags']));
+      const gpsPhoto = await upload(pid, photo(PLACE_PHOTO.name, PLACE_PHOTO.exif));
+      const fixtureHasPlace = /32\.0853/.test(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', file(PLACE_VIDEO.name)], { encoding: 'utf8' })) && fs.readFileSync(file(PLACE_PHOTO.name)).includes(Buffer.from([0x25, 0x88]));
+      const history = (await call(`/projects/${pid}/history?since=0`)).body, summary = (await call(`/projects/${pid}/summary`)).body;
+      const looked = [JSON.stringify(await getDoc(pid)), JSON.stringify(history), JSON.stringify(summary)].every((t) => t.includes(PLACE_VIDEO.name) && t.includes(PLACE_PHOTO.name));
+      const leaked = placeLeak(await getDoc(pid), history, summary);
+      check('1b. a clock that was never set (1970) gives no date; files that say where they were taken are imported with their date and no location anywhere in the project, its summary or its history', dead.asset.capture === undefined && fixtureHasPlace && looked && leaked === null && place.asset.capture?.at === PLACE_VIDEO.at && gpsPhoto.asset.capture?.at === PLACE_PHOTO.at && Object.keys(place.asset.capture ?? {}).sort().join() === 'at,source,utcOffsetMinutes', { deadClock: dead.asset.capture ?? null, fixtureHasPlace, looked, leaked, placeCapture: place.asset.capture, gpsCapture: gpsPhoto.asset.capture });
       measurements.captures = { right, of: 8, rows: rows.map((r) => ({ what: r.what, got: r.got, conformed: r.conformed })) };
     }
 

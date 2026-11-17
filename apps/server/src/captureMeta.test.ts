@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CaptureSchema, type Capture } from '@pulseframe/core';
 import { generateBarcodeFixture, mulberry32 } from '../../../packages/fixtures/src/index.ts';
 import { HEAD_BYTES, captureFromExif, captureFromFileName, captureFromTags, isMessagingAppName, readCapture, wallInZone, type CaptureContext } from './captureMeta.ts';
-import { SOI, exifSegment, exifTiff, jpegHead, jpegSegment, withExif, type ExifOptions } from './captureMeta.fixtures.ts';
+import { PLACE_PHOTO, PLACE_VIDEO, SOI, exifSegment, exifTiff, jpegHead, jpegSegment, placeLeak, withExif, type ExifOptions } from './captureMeta.fixtures.ts';
 import { ingestUpload, jpegOrientation } from './ingest.ts';
 import { Store } from './store.ts';
 
@@ -379,19 +379,46 @@ describe('readCapture: files made here with ffmpeg and a hand-built EXIF segment
     expect(await readCapture(store.blobPath(a.conform!.originalContentHash), 'original.mp4', cx)).toEqual(a.capture);
   }, 120_000);
   it('no location: a file that says where it was taken is imported with its date and nothing about the place', async () => {
-    const video = tagged('place.mov', ['com.apple.quicktime.creationdate=2024-07-01T18:30:00+0300', 'com.apple.quicktime.location.ISO6709=+32.0853+034.7818+040.000/', 'location=+32.0853+034.7818/'], ['-movflags', 'use_metadata_tags']);
+    const video = tagged(PLACE_VIDEO.name, [...PLACE_VIDEO.tags], ['-movflags', 'use_metadata_tags']);
     // the fixture really carries the place, or this test would prove nothing
     const probed = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', video]).toString());
     expect(JSON.stringify(probed.format.tags)).toMatch(/32\.0853/);
-    const photo = write('place.jpg', withExif(picture, { gps: true, offset: '+03:00', date: '2024:07:01 18:30:00' }));
+    expect(placeLeak(probed.format.tags)).toMatch(/ISO6709|location/);
+    const photo = write(PLACE_PHOTO.name, withExif(picture, PLACE_PHOTO.exif));
     expect(fs.readFileSync(photo).includes(Buffer.from([0x25, 0x88]))).toBe(true); // the GPS pointer (0x8825, little-endian) is in the file
     for (const file of [video, photo]) {
       const a = await upload(file);
       expect(a.capture).toMatchObject({ at: '2024-07-01T18:30:00', utcOffsetMinutes: 180 });
       expect(Object.keys(a.capture!).sort()).toEqual(['at', 'source', 'utcOffsetMinutes']);
-      const text = JSON.stringify(a);
-      expect(text).not.toMatch(/32\.08|34\.78|0853|7818|ISO6709|location|gps|latitude|longitude/i);
+      expect(placeLeak(a)).toBeNull();
       expect(Object.keys(a).sort().join(' ')).not.toMatch(/place|geo|location|gps/i);
     }
   }, 60_000);
+});
+
+describe('placeLeak: what the "no location" checks of the tests and of proof:lifeline look for', () => {
+  it('the two fixtures are kept in the library under names that say nothing about a place (a name is stored as given)', () => {
+    expect(placeLeak(PLACE_VIDEO.name)).toBeNull();
+    expect(placeLeak(PLACE_PHOTO.name)).toBeNull();
+    expect(placeLeak({ label: `Import ${PLACE_PHOTO.name}`, summary: `Imported image "${PLACE_PHOTO.name}"` })).toBeNull();
+    expect(PLACE_VIDEO.name).not.toBe(PLACE_PHOTO.name);
+  });
+  it('finds the place in each shape it could be stored in: the tag as written, a key, a word, the coordinates as numbers', () => {
+    expect(placeLeak({ tags: { other: '+32.0853+034.7818+040.000/' } })).toMatch(/^"32\.08" in value 0\.tags\.other/);
+    expect(placeLeak({ capture: { at: '2024-07-01T18:30:00', gps: [1, 2] } })).toMatch(/^"gps" in a key of value 0\.capture/);
+    expect(placeLeak({ a: 1 }, { capture: { Location: null } })).toMatch(/^"Location" in a key of value 1\.capture/);
+    expect(placeLeak([{ note: 'GPSLatitude present' }])).toMatch(/^"GPS" in value 0\[0\]\.note/);
+    // the EXIF block of the photo, as degrees: 32°5'7.11" N, 34°46'54.45" E
+    expect(placeLeak({ where: [32 + 5 / 60 + 7.11 / 3600, 34 + 46 / 60 + 54.45 / 3600] })).toMatch(/^32\.085\d* in value 0\.where\[0\]/);
+    expect(placeLeak({ x: -34.7818 })).toMatch(/^-34\.7818 in value 0\.x/);
+    expect(placeLeak('lat 320853 lon 347818')).toMatch(/^"0853" in value 0/);
+    expect(placeLeak({ summary: 'Imported video "trip.mov" (taken at 34.78 east)' })).toMatch(/^"34\.78"/);
+  });
+  it('is not set off by chance: digits inside a content hash or a generated id, a byte count, a date', () => {
+    const asset = { id: 'ast_08537818aa0', name: 'trip.mov', contentHash: `sha256:${'0853'.repeat(8)}${'7818'.repeat(8)}`, byteSize: 7818, capture: { at: '2024-07-01T18:30:00', utcOffsetMinutes: 180, source: 'container' }, provenance: { importedAt: '2026-11-17T08:53:07.818Z' } };
+    expect(placeLeak(asset, { assets: { [asset.id]: asset } }, { transactionId: 'tx_a0853b7818c', affectedIds: [asset.id] })).toBeNull();
+    // the same digits in words a person or the server wrote are still found
+    expect(placeLeak({ ...asset, name: 'trip-0853.mov' })).toMatch(/^"0853" in value 0\.name/);
+    expect(placeLeak({ ...asset, contentHash: 'sha256:0853' })).toMatch(/^"0853"/);
+  });
 });

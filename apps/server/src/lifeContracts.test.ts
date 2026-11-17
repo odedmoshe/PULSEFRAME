@@ -15,7 +15,7 @@ import { LIFE_OPS_BUILT, creativeProjection, type Asset, type Capture, type Proj
 import { evaluate } from '@pulseframe/engine';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
-import { withExif } from './captureMeta.fixtures.ts';
+import { PLACE_PHOTO, PLACE_VIDEO, placeLeak, withExif } from './captureMeta.fixtures.ts';
 import { DEFAULT_HOME_ZONE, loadConfig, type Config } from './config.ts';
 import { Derivatives } from './derive.ts';
 import { Exporter } from './export.ts';
@@ -29,7 +29,7 @@ import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 
-let dir: string, cfg: Config, store: Store, auth: Auth, app: ReturnType<typeof createApp>, exporter: Exporter;
+let dir: string, cfg: Config, store: Store, auth: Auth, app: ReturnType<typeof createApp>, exporter: Exporter, derivatives: Derivatives;
 let pid = '', ownerCookie = '';
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -53,11 +53,12 @@ beforeAll(() => {
   auth.resolveGrant = (token) => governance.principalForToken(token);
   const speech = new Speech(store, cfg);
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech);
-  app = createApp(cfg, store, auth, exporter, capabilities, new Derivatives(store), presence, mcp, governance, undefined, speech);
+  derivatives = new Derivatives(store);
+  app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, undefined, speech);
   ownerCookie = auth.issueSession(new Request(`${base()}/api/v1/session`, { headers: { origin: base(), 'x-pf-owner-key': auth.tokens.owner } })).split(';')[0]!;
   pid = store.createProject({ name: 'life', width: 640, height: 360, frameRate: R }).doc.id;
 });
-afterAll(() => { store.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+afterAll(async () => { await derivatives.stop(); store.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
 describe('life line: the home time zone (PF_HOME_TZ)', () => {
   it('defaults to Asia/Jerusalem, takes an IANA name, and refuses to start with a name this machine does not know', () => {
@@ -173,8 +174,35 @@ describe('life line: route guards', () => {
     // nothing about the place anywhere in the project, its summary or its history
     const project = await rest('GET', `/projects/${id}`, bearer(auth.tokens.observer));
     const history = await rest('GET', `/projects/${id}/history?since=0`, bearer(auth.tokens.observer));
-    for (const text of [JSON.stringify(project.body), JSON.stringify(history.body), JSON.stringify(store.replay(id).doc)]) expect(text).not.toMatch(/32\.08|34\.78|0853|7818|ISO6709|location|gps|latitude|longitude/i);
+    expect(placeLeak(project.body, history.body, store.replay(id).doc)).toBeNull();
     expect(Object.values(project.body.project.assets as Record<string, Asset>).map((a) => Object.keys(a.capture ?? {}).sort())).toEqual([['at', 'source', 'utcOffsetMinutes'], ['at', 'source', 'utcOffsetMinutes']]);
+  }, 60_000);
+  it('the two files of proof:lifeline that say where they were taken, uploaded under the proof\'s own names: dated, and no place in the project, its history or its summary', async () => {
+    // what check 1b of the proof does, with the same fixtures, names and search (captureMeta.fixtures.ts), through the same three routes
+    const id = store.createProject({ name: '1 capture dates', width: 640, height: 360, frameRate: R }).doc.id;
+    const plain = path.join(dir, 'place-plain.mp4'), video = path.join(dir, PLACE_VIDEO.name), jpg = path.join(dir, 'place-plain.jpg');
+    ff(['-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=30', '-t', '0.5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-bitexact', '-map_metadata', '-1', plain]);
+    ff(['-i', plain, '-c', 'copy', '-movflags', 'use_metadata_tags', ...PLACE_VIDEO.tags.flatMap((m) => ['-metadata', m]), video]);
+    ff(['-f', 'lavfi', '-i', 'color=c=0x336699:size=64x48', '-frames:v', '1', jpg]);
+    const photo = withExif(fs.readFileSync(jpg), PLACE_PHOTO.exif);
+    // the files really say where: the search finds the place in what ffprobe reads, and the GPS pointer is in the picture
+    expect(placeLeak(JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', video]).toString()))).not.toBeNull();
+    expect(photo.includes(Buffer.from([0x25, 0x88]))).toBe(true);
+    const upload = async (name: string, bytes: Buffer) => {
+      const r = await app.fetch(new Request(`${base()}/api/v1/projects/${id}/assets`, { method: 'POST', headers: { host: `127.0.0.1:${cfg.port}`, authorization: `Bearer ${auth.tokens.agent}`, 'x-filename': encodeURIComponent(name) }, body: new Uint8Array(bytes) }));
+      expect(r.status, name).toBe(201);
+      return ((await r.json()) as { asset: Asset }).asset;
+    };
+    const place = await upload(PLACE_VIDEO.name, fs.readFileSync(video));
+    const gps = await upload(PLACE_PHOTO.name, photo);
+    expect(place.capture).toEqual({ at: PLACE_VIDEO.at, utcOffsetMinutes: 180, source: 'container' });
+    expect(gps.capture).toEqual({ at: PLACE_PHOTO.at, utcOffsetMinutes: 180, source: 'exif' });
+    const agent = bearer(auth.tokens.agent);
+    const project = await rest('GET', `/projects/${id}`, agent), history = await rest('GET', `/projects/${id}/history?since=0`, agent), summary = await rest('GET', `/projects/${id}/summary`, agent);
+    expect([project.status, history.status, summary.status]).toEqual([200, 200, 200]);
+    // the names are in all three answers (so the search looked at the place a name would have tripped it) and nothing else is found
+    for (const body of [project.body, history.body, summary.body]) expect(JSON.stringify(body)).toContain(PLACE_PHOTO.name);
+    expect(placeLeak(project.body.project, history.body, summary.body)).toBeNull();
   }, 60_000);
 });
 
