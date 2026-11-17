@@ -335,6 +335,10 @@ async function main() {
     const notHebrew = names.filter((n) => !HEBREW.test(n.name));
     measurements.controlNames = names;
     check('every control of the block (chips, ▶, toggles, switches, sliders, settings, presets, A/B, apply to the track) has a Hebrew accessible name, with every settings panel open', leftClosed === 0 && names.length >= 30 && notHebrew.length === 0, { settingsLeftClosed: leftClosed, controls: names.length, notHebrew, sample: names.slice(0, 6) });
+    const valueText = (p: string) => page.locator(`${block} [data-testid=afx-param-${p}]`).getAttribute('aria-valuetext', { timeout: 2000 }).catch(() => null);
+    const echoSliders = { repeats: await valueText('repeats'), delayMs: await valueText('delayMs'), feedback: await valueText('feedback') };
+    check('the echo\'s settings say their numbers as they are: «מספר חזרות» 4 (a count, not 400%), the time between repeats 250 with its unit word, the level of each repeat 50%',
+      echoSliders.repeats === '4' && echoSliders.delayMs === '250 אלפיות שנייה' && echoSliders.feedback === '50%', echoSliders);
     const audits: Record<string, unknown> = {};
     for (const lang of ['he', 'en'] as const) {
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) { await page.getByTestId('lang-toggle').click(); await page.waitForFunction((l) => document.documentElement.lang === l, lang, { timeout: 5000 }).catch(() => {}); }

@@ -33,7 +33,7 @@ export function CommitSlider({ label, value, min, max, step, display, onCommit, 
 }
 
 /** Parameter schemas of the sound effects (JSON Schema, as list_catalog gives them to agents). */
-type ParamSchema = { type?: string; minimum?: number; maximum?: number; enum?: string[] };
+export type ParamSchema = { type?: string; minimum?: number; maximum?: number; enum?: string[] };
 const SCHEMAS = new Map(describeAudioCatalog().audioEffects.map((e) => [e.id, (e.paramsSchema as { properties: Record<string, ParamSchema> }).properties]));
 const VOICES = ['voice.telephone', 'voice.megaphone', 'voice.radio', 'voice.robot'] as const;
 const ROOMS = ['room', 'hall', 'cave', 'bathroom'] as const; // each is also a preset of the same id: its reverb settings
@@ -42,8 +42,13 @@ const NONE = 'none';
 const nameOf = (type: string, lang: Lang) => findAudioEffect(type)?.name[lang] ?? type;
 const isVoice = (f: { type: string }) => findAudioEffect(f.type)?.exclusive === 'voice';
 const roomParams = (room: string) => audioEffectParams('space.reverb', AUDIO_PRESETS.find((p) => p.id === room)?.effects[0]?.params ?? { room });
-/** Numbers as shown: 0–1 (and width 0–2) as a percentage, other values as they are, to at most two decimals. */
-const showValue = (name: string, v: number) => (audioFxParamUnit(name, 'en') ? `${+v.toFixed(2)}` : `${Math.round(v * 100)}%`);
+/** A fraction: a parameter without a unit word whose range lies within 0–2 and that is not a whole-number count. */
+const isFraction = (name: string, s: ParamSchema) => !audioFxParamUnit(name, 'en') && s.type !== 'integer' && (s.minimum ?? 0) >= 0 && (s.maximum ?? 1) <= 2;
+/**
+ * Numbers as shown (and as the slider's aria-valuetext): a fraction (0–1, and width 0–2) as a percentage; a value with a unit word,
+ * and a whole-number count such as the echo's repeats, as the number itself, to at most two decimals.
+ */
+export const showValue = (name: string, s: ParamSchema, v: number) => (isFraction(name, s) ? `${Math.round(v * 100)}%` : `${+v.toFixed(2)}`);
 const stepOf = (s: ParamSchema) => (s.type === 'integer' ? 1 : (s.maximum ?? 1) - (s.minimum ?? 0) <= 1 ? 0.05 : (s.maximum ?? 1) - (s.minimum ?? 0) <= 3 ? 0.1 : 0.5);
 
 /** Planned ring-out of each sound clip, from the engine's audio plan (the one the player and both exports use), once per document. */
@@ -152,7 +157,7 @@ function FxRow({ clip, fx, lang, locked, blocked, mono }: { clip: SoundClip; fx:
   const setParam = (p: string, v: number | string | boolean) => update({ params: { [p]: v } }, 'Sound effect setting');
   const slider = (p: string, s: ParamSchema, testid: string) => (
     <CommitSlider key={p} label={audioFxParamLabel(p, lang)} value={Number(fx.params[p] ?? 0)} min={s.minimum ?? 0} max={s.maximum ?? 1} step={stepOf(s)} unit={audioFxParamUnit(p, lang) || undefined}
-      ariaLabel={`${audioFxParamLabel(p, lang)}: ${name}`} display={(v) => showValue(p, v)} testid={testid} disabled={disabled} onCommit={(v) => setParam(p, v)} />
+      ariaLabel={`${audioFxParamLabel(p, lang)}: ${name}`} display={(v) => showValue(p, s, v)} testid={testid} disabled={disabled} onCommit={(v) => setParam(p, v)} />
   );
   return (
     <li className="afx-row" data-testid="afx-row" data-type={fx.type} data-enabled={fx.enabled ? 'true' : 'false'}>

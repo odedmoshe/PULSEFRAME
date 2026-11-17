@@ -1,12 +1,14 @@
 /**
  * The sound-effects block (AudioFxBlock.tsx) decides two things without a browser, checked here: where the arrow keys move in a
  * chip row (visual order, also right to left), and which operations a chip or toggle commits. Those operations are run through
- * the real operation registry, so a chip never sends something the server refuses for a clip it offers the chip on.
+ * the real operation registry, so a chip never sends something the server refuses for a clip it offers the chip on. Also how a
+ * slider shows (and announces, aria-valuetext) its number.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, AUDIO_PRESETS, audioEffectParams, createProject, findClip, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { chipKeyTarget, roomOps, toggleOps, voiceOps } from './AudioFxBlock.tsx';
+import { applyTransaction, AUDIO_PRESETS, audioEffectParams, createProject, describeAudioCatalog, findClip, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { audioFxParamUnit } from '@pulseframe/i18n';
+import { chipKeyTarget, roomOps, showValue, toggleOps, voiceOps, type ParamSchema } from './AudioFxBlock.tsx';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -69,5 +71,28 @@ describe('what the chips commit', () => {
     expect(clipOf(d, p.id).audioFx!.map((x) => x.type)).toEqual(['tone.bassboost', 'texture.8bit', 'space.echo', 'utility.width']);
     for (const type of ['space.echo', 'tone.bassboost', 'texture.8bit', 'utility.width']) d = tx(d, toggleOps(clipOf(d, p.id), type)).doc;
     expect(clipOf(d, p.id).audioFx).toBeUndefined();
+  });
+});
+
+describe('how a slider shows its number (also its aria-valuetext)', () => {
+  const schemas = describeAudioCatalog().audioEffects.map((e) => [e.id, (e.paramsSchema as { properties: Record<string, ParamSchema & { default?: unknown }> }).properties] as const);
+  it('the echo\'s «מספר חזרות» shows 4 repeats as 4, not as a percentage', () => {
+    const repeats = schemas.find(([id]) => id === 'space.echo')![1].repeats!;
+    expect(showValue('repeats', repeats, 4)).toBe('4');
+    expect(showValue('repeats', repeats, 8)).toBe('8');
+  });
+  it('every numeric parameter (but the seed, a typed field) shows its own number: a fraction as a percentage of it, anything else as the number; whole-number counts are never percentages', () => {
+    const wrong: string[] = [];
+    for (const [id, props] of schemas) for (const [p, s] of Object.entries(props)) {
+      if (p === 'seed' || (s.type !== 'number' && s.type !== 'integer')) continue;
+      for (const v of [s.minimum!, s.maximum!, Number(s.default)]) {
+        const shown = showValue(p, s, v);
+        const pct = shown.endsWith('%');
+        const fraction = s.type === 'number' && s.minimum! >= 0 && s.maximum! <= 2;
+        const back = pct ? Number(shown.slice(0, -1)) / 100 : Number(shown);
+        if ((pct && (!fraction || !!audioFxParamUnit(p, 'en'))) || Math.abs(back - v) > 0.005) wrong.push(`${id}.${p}=${v} shown "${shown}"`);
+      }
+    }
+    expect(wrong).toEqual([]);
   });
 });

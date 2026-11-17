@@ -32,7 +32,9 @@ export const effectOptionLabel = (value: string, lang: 'he' | 'en') => EFFECT_OP
  * Sound effects («אפקטי קול», packages/core/src/audioEffects.ts) have parameters of their own. They are kept apart from the picture
  * labels above, so a key both registries use (`amount`, `seed`) can be worded for sound without changing the picture panel.
  * Units are words, shown after the number (the number itself sits in a left-to-right isolate); parameters from 0 to 1 have no
- * unit and are shown as a percentage. effect-param-labels.test.ts fails when a sound-effect parameter or option has no name here.
+ * unit and are shown as a percentage, whole-number counts (the echo's repeats) have none and are shown as the number
+ * (AudioFxBlock.tsx showValue; AudioFxBlock.test.ts checks every parameter). effect-param-labels.test.ts fails when a
+ * sound-effect parameter or option has no name here.
  */
 export const AUDIO_FX_PARAM_LABELS: Record<string, L> = {
   amount: { he: 'עוצמה', en: 'Amount' }, gainDb: { he: 'הגברת הבאס', en: 'Bass gain' }, freqHz: { he: 'תדר הפינה', en: 'Corner frequency' },
