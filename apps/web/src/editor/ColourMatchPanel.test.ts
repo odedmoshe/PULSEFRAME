@@ -3,11 +3,13 @@
  * show; checked here on a document made by the real operations. The ops it would commit are the server's (match_colour), committed
  * as one transaction: that is checked by the server test and by proof:colourmatch M10.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as React from 'react';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, findClip, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { GRADE_DEFAULTS } from '@pulseframe/engine';
-import { pictureClipIds, pressesButton, requestFor, shownDifference, tileDocs } from './ColourMatchPanel.tsx';
+import { ColourMatchPanel, pictureClipIds, pressesButton, requestFor, shownDifference, tileDocs } from './ColourMatchPanel.tsx';
+import type { ColourMatch } from '../api.ts';
 import { COLOUR_MATCH_STRINGS, fill } from './colourMatch.strings.ts';
 
 const R = { num: 30, den: 1 };
@@ -102,6 +104,71 @@ describe('what a result row and the keyboard do', () => {
     expect(shownDifference(0.59)).toBe('0.6');
     expect(shownDifference(8.22)).toBe('8.2');
     for (const v of [0, 0.01, 0.049, 0.05, 0.3, 2, 5.5, 40]) expect(shownDifference(v)).not.toMatch(/^0\.0$/);
+  });
+});
+
+/**
+ * Test only: the panel's element tree without a browser. This repository's unit tests run in Node with no DOM, so the component
+ * is called as a function under a stand-in for React's hook dispatcher (the technique of React's former shallow renderer; React
+ * is pinned at 19.3.1, whose `H` slot this sets): the editor and the tab's session are the given ones, effects do not run, and
+ * child components stay elements. What it shows is what the panel puts on the page, handlers included.
+ */
+function shallow<P>(component: (props: P) => React.ReactNode, props: P, editor: { state: object; run?: ColourMatch }): React.ReactElement {
+  const internals = (React as unknown as Record<string, { H: unknown }>).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE!;
+  const before = internals.H;
+  let ids = 0;
+  const fakeEditor = { getState: () => editor.state, subscribe: () => () => undefined, t: (k: string) => k };
+  internals.H = {
+    useContext: () => fakeEditor,
+    // the editor's state, or the tab's session (the panel's own store) with the result given
+    useSyncExternalStore: (_s: unknown, get: () => unknown) => { const v = get() as Record<string, unknown>; return 'run' in v && editor.run ? { ...v, run: { kind: 'done', result: editor.run } } : v; },
+    useEffect: () => undefined,
+    useId: () => `:t${ids++}:`,
+    useState: (init: unknown) => [typeof init === 'function' ? (init as () => unknown)() : init, () => undefined],
+    useRef: (v: unknown) => ({ current: v ?? null }),
+  };
+  try { return component(props) as React.ReactElement; } finally { internals.H = before; }
+}
+type El = React.ReactElement<Record<string, unknown> & { children?: unknown }>;
+const elements = (node: unknown): El[] => {
+  if (Array.isArray(node)) return node.flatMap(elements);
+  if (!React.isValidElement(node)) return [];
+  const el = node as El;
+  return [el, ...elements(el.props.children)];
+};
+const textOf = (node: unknown): string => (Array.isArray(node) ? node.map(textOf).join('') : typeof node === 'string' || typeof node === 'number' ? String(node) : React.isValidElement(node) ? textOf((node as El).props.children) : '');
+
+describe('the panel as rendered', () => {
+  const panelFor = (run?: ColourMatch) => {
+    const p = project(), clip = findClip(p.doc, p.b)!.clip as MediaClip;
+    const state = { doc: p.doc, lang: 'he', revision: 0, gpu: { available: true } };
+    return { p, tree: shallow(ColourMatchPanel, { clip }, { state, run }), state };
+  };
+  // proof:colourmatch M10: Space on «קבע כייחוס» started playback instead of pressing it. A key event bubbles from the focused button
+  // through the panel's root to the window, where the editor's one dispatcher (App.tsx) takes Space for play and pause.
+  it('Space and Enter on any of its buttons stop at the panel; other keys go on to the editor', () => {
+    const { tree } = panelFor();
+    const root = tree as El;
+    expect(root.type).toBe('section');
+    const buttons = elements(root).filter((e) => e.type === 'button');
+    expect(buttons.length).toBeGreaterThanOrEqual(2); // «קבע כייחוס» and «מדוד»
+    const onKeyDown = root.props.onKeyDown as ((e: unknown) => void) | undefined;
+    expect(onKeyDown, 'the panel root has a key handler').toBeTypeOf('function');
+    const press = (key: string, tagName: string) => { const stop = vi.fn(); onKeyDown!({ key, target: { tagName }, stopPropagation: stop }); return stop.mock.calls.length > 0; };
+    for (const key of [' ', 'Enter']) expect(press(key, 'BUTTON'), `${JSON.stringify(key)} on a button`).toBe(true);
+    expect(press('k', 'BUTTON')).toBe(false);
+    expect(press(' ', 'INPUT')).toBe(false);
+    expect(press(' ', 'SECTION')).toBe(false);
+  });
+  it('a result row shows a difference under 0.05 as "< 0.1", never "0.0"', () => {
+    const { p } = panelFor();
+    const target = { clipId: p.b, params: { ...GRADE_DEFAULTS }, residual: { model: 0.02, verified: 0.03 }, verdict: 'close' as const, limitedBy: [], warnings: [], statsBefore: null as never, statsAfter: null };
+    const { tree, state } = panelFor({ revision: 0, method: 'match', reference: { clipId: p.a, stats: null as never }, targets: [target], ops: [], unavailable: null, note: '' });
+    const row = elements(tree).find((e) => typeof e.type === 'function' && (e.props as { target?: unknown }).target === target);
+    expect(row, 'the result row').toBeDefined();
+    const shown = textOf(shallow(row!.type as (props: object) => React.ReactNode, row!.props, { state }));
+    expect(shown).toContain('< 0.1');
+    expect(shown).not.toMatch(/0\.0(?!\d)/);
   });
 });
 
