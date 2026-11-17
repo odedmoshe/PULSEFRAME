@@ -2,19 +2,15 @@
  * Visual layer of the editor (2026-11 refresh). Loaded after styles.css and after the components' own stylesheets,
  * so it only restyles: no rule here changes layout geometry that code depends on (track and clip heights, the 76px
  * track-header gutter) and nothing here hides or reorders controls. Colours are the brand tokens plus the few
- * derived surfaces defined below; text on every surface stays at 4.5:1 or better.
+ * derived surfaces defined below (never the names ds/tokens.css owns: --pf-surface-2/-3, --pf-text, --pf-focus); text on every surface stays at 4.5:1 or better.
  */
 :root {
   --pf-bg: #0b0d11;
   --pf-surface: #13161b;
   --pf-surface-raised: #1b1f27;
-  --pf-surface-2: #222733;
-  --pf-surface-3: rgba(255, 255, 255, 0.07);
   --pf-border: #2a303b;
   --pf-border-soft: rgba(255, 255, 255, 0.06);
-  --pf-text: #eceef2;
   --pf-text-muted: #a3abb8;
-  --pf-focus: var(--pf-accent-2);
   --pf-grad-accent: linear-gradient(135deg, #3de0c8 0%, #4cc2ff 100%);
   --pf-shadow-1: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
   --pf-shadow-2: 0 10px 30px rgba(0, 0, 0, 0.45);
