@@ -213,13 +213,15 @@ export class MediaPool {
    * Streaming audio decode for preview (bounded: the caller pulls a few buffers ahead of the playhead).
    * Always the ORIGINAL asset, read by range requests; the caller must call `dispose` when playback stops.
    */
-  async openAudio(assetId: string): Promise<{ sink: AudioBufferSink; /** This reader's time zero for the file (see Asset.timeOrigin): subtract it from the sink's timestamps. */ origin: number; dispose(): void } | null> {
+  async openAudio(assetId: string): Promise<{ sink: AudioBufferSink; /** This reader's time zero for the file (see Asset.timeOrigin): subtract it from the sink's timestamps. */ origin: number; /** The track's sample rate as the container states it (sound effects open their voice at the decoder's rate; the first decoded buffer confirms it). */ sampleRate: number; dispose(): void } | null> {
     const l = this.local.get(assetId);
     const source = l ? new BlobSource(l) : new UrlSource(this.opts.assetUrl(assetId), { requestInit: { credentials: 'same-origin' }, maxCacheSize: 8 << 20, getRetryDelay: (n) => (n < 3 ? 0.2 * 2 ** n : null) });
     const input = new Input({ source, formats: ALL_FORMATS });
-    const track = await input.getPrimaryAudioTrack();
-    if (!track || !(await track.canDecode())) { input.dispose(); return null; }
-    return { sink: new AudioBufferSink(track), origin: Math.max(0, await input.getFirstTimestamp()), dispose: () => input.dispose() };
+    try {
+      const track = await input.getPrimaryAudioTrack();
+      if (!track || !(await track.canDecode())) { input.dispose(); return null; }
+      return { sink: new AudioBufferSink(track), origin: Math.max(0, await input.getFirstTimestamp()), sampleRate: await track.getSampleRate(), dispose: () => input.dispose() };
+    } catch (e) { input.dispose(); throw e; }
   }
   /** Drop decoders of one asset (e.g. its proxy just became ready, or the asset was replaced). */
   invalidate(assetId: string) {
