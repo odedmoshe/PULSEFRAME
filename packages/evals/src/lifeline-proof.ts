@@ -73,6 +73,12 @@ const f = (n: number) => T.frameTime(n, R);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ff = (args: string[], input?: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', ...args], { maxBuffer: 1 << 30, input });
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
+/**
+ * A still as a 4:2:0 file can hold it: converted to BT.709 limited-range yuv420p and back (rgba), with nothing encoded. The whole-frame
+ * comparison of the H.264 export uses this reference, because the test picture's saturated colour edges lose about 3.4 dB of a 36 dB
+ * bound to chroma subsampling alone (measured: the still against its own 4:2:0 copy is 32.6 dB, the export against that copy 47–48 dB).
+ */
+const as420 = (png: Buffer) => { const b = ff(['-i', 'pipe:0', '-vf', 'scale=out_color_matrix=bt709:out_range=limited,format=yuv420p,scale=in_color_matrix=bt709:in_range=limited:out_range=full', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-'], png); if (b.length !== W * H * 4) throw new Error(`unexpected 4:2:0 still size ${b.length}`); return b; };
 const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)]! : NaN; };
 const r3 = (x: number) => (Number.isFinite(x) ? Number(x.toFixed(3)) : x);
 
@@ -274,11 +280,13 @@ async function main() {
       const raw = ff(['-i', file('export.mp4'), '-vf', 'scale=in_color_matrix=bt709:in_range=limited:out_range=full', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
       const frames = raw.length / (W * H * 3);
       const exported = (n: number) => raw.subarray(n * W * H * 3, (n + 1) * W * H * 3);
-      const side = (n: number, own: Buffer, other: Buffer) => ({ frame: n, psnrGlobal: r3(psnr(own, exported(n), 3)), psnrBoxOwn: r3(psnr(own, exported(n), 3, box)), psnrBoxOther: r3(psnr(other, exported(n), 3, box)), farPixelsOwn: closeness(own, exported(n), 3, box).farPixels, farPixelsOther: closeness(other, exported(n), 3, box).farPixels });
+      const refA = as420(pngA), refB = as420(pngB);
+      // whole frame: against the still as 4:2:0 can hold it, with two controls — what subsampling alone costs this picture, and the wrong side's reference
+      const side = (n: number, own: Buffer, other: Buffer) => ({ frame: n, psnrGlobal: r3(psnr(n === A ? refA : refB, exported(n), 3)), psnrGlobalOther: r3(psnr(n === A ? refB : refA, exported(n), 3)), psnrStillAgainstRgb: r3(psnr(own, exported(n), 3)), psnrSubsamplingAlone: r3(psnr(own, n === A ? refA : refB, 4)), psnrBoxOwn: r3(psnr(own, exported(n), 3, box)), psnrBoxOther: r3(psnr(other, exported(n), 3, box)), farPixelsOwn: closeness(own, exported(n), 3, box).farPixels, farPixelsOther: closeness(other, exported(n), 3, box).farPixels });
       const eA = side(A, stillA, stillB), eB = side(B, stillB, stillA);
       const differingPixels = closeness(stillA, stillB, 4, box).farPixels;
-      const exportOk = (e: typeof eA) => e.psnrGlobal >= TH.psnr && e.psnrBoxOwn >= TH.regionalPsnr && e.psnrBoxOther <= e.psnrBoxOwn - FAR_DB && e.farPixelsOther >= FAR_SHARE * differingPixels;
-      check(`4. export = still, inside the title's box: each H.264 frame is within the suite's bounds of its own still (PSNR ≥ ${TH.psnr} dB whole frame, ≥ ${TH.regionalPsnr} dB in the box) and at least ${FAR_DB} dB farther from the other still; ${frames} frames exported`, frames === 120 && exportOk(eA) && exportOk(eB), { box, differingPixels, lastFrameOfA: eA, firstFrameOfB: eB });
+      const exportOk = (e: typeof eA) => e.psnrGlobal >= TH.psnr && e.psnrGlobalOther <= e.psnrGlobal - FAR_DB && e.psnrBoxOwn >= TH.regionalPsnr && e.psnrBoxOther <= e.psnrBoxOwn - FAR_DB && e.farPixelsOther >= FAR_SHARE * differingPixels;
+      check(`4. export = still, inside the title's box: each H.264 frame is within the suite's bounds of its own still (PSNR ≥ ${TH.psnr} dB whole frame against the still as 4:2:0 can hold it, ≥ ${TH.regionalPsnr} dB in the box against the still itself) and at least ${FAR_DB} dB farther from the other still, whole frame and in the box; ${frames} frames exported`, frames === 120 && exportOk(eA) && exportOk(eB), { box, differingPixels, lastFrameOfA: eA, firstFrameOfB: eB });
       check('4a. (determinism only) the PNG export of both frames is byte-equal to render_frame', pngEqual);
       measurements.exportAgainstStill = { box, differingPixels, frames, lastFrameOfA: eA, firstFrameOfB: eB, bounds: { psnr: TH.psnr, regionalPsnr: TH.regionalPsnr, fartherByDb: FAR_DB, shareStillDiffering: FAR_SHARE } };
 
@@ -443,6 +451,7 @@ async function main() {
     // ================================================================ 12. the calendar inside headless Chromium
     {
       const page = await (await browser.newContext()).newPage();
+      await page.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate
       await page.goto(`${s.url}/selftest.html`);
       await page.waitForFunction(() => typeof (window as any).__pfLife?.hebrewFromRd === 'function', undefined, { timeout: 120_000 });
       const r = await page.evaluate(() => {
@@ -451,7 +460,10 @@ async function main() {
         const MONTHS: Record<string, string> = { Tishri: 'tishrei', Tishrei: 'tishrei', Heshvan: 'cheshvan', Cheshvan: 'cheshvan', Kislev: 'kislev', Tevet: 'tevet', Shevat: 'shevat', Adar: 'adar', 'Adar I': 'adar1', 'Adar II': 'adar2', Nisan: 'nisan', Iyar: 'iyar', Iyyar: 'iyar', Sivan: 'sivan', Tamuz: 'tammuz', Tammuz: 'tammuz', Av: 'av', Elul: 'elul' };
         const en = new Intl.DateTimeFormat('en-u-ca-hebrew', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
         const he = new Intl.DateTimeFormat('he-u-ca-hebrew', { timeZone: 'UTC', dateStyle: 'long' });
-        const out = { days: 0, date: 0, numerals: 0, weekday: 0, roundTrip: 0, unknownMonth: 0, first: [] as string[], sample: '' };
+        const out = { days: 0, date: 0, numerals: 0, weekday: 0, roundTrip: 0, unknownMonth: 0, numeralsOracle: { letters: 0, digits: 0 }, first: [] as string[], sample: '' };
+        const VALUE: Record<string, number> = { א: 1, ב: 2, ג: 3, ד: 4, ה: 5, ו: 6, ז: 7, ח: 8, ט: 9, י: 10, כ: 20, ך: 20, ל: 30, מ: 40, ם: 40, נ: 50, ן: 50, ס: 60, ע: 70, פ: 80, ף: 80, צ: 90, ץ: 90, ק: 100, ר: 200, ש: 300, ת: 400 };
+        const value = (numeral: string) => { let n = 0; for (const ch of numeral) { if (ch === '׳' || ch === '״') continue; const v = VALUE[ch]; if (v === undefined) return NaN; n += v; } return n; };
+        const plain = (x: string) => x.replace(/[ךםןףץ]/g, (c) => ({ ך: 'כ', ם: 'מ', ן: 'נ', ף: 'פ', ץ: 'צ' } as Record<string, string>)[c]!);
         const note = (kind: 'date' | 'numerals' | 'weekday' | 'roundTrip' | 'unknownMonth', text: string) => { out[kind]++; if (out.first.length < 8) out.first.push(`${kind}: ${text}`); };
         for (let ms = Date.UTC(2022, 0, 1, 12); ms <= Date.UTC(2027, 11, 31, 12); ms += 86400000) {
           const d = new Date(ms), g = { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() }, iso = d.toISOString().slice(0, 10);
@@ -466,7 +478,17 @@ async function main() {
           if (L.rdFromHebrew(h) !== rd || back.y !== g.y || back.m !== g.m || back.d !== g.d) note('roundTrip', iso);
           const hp: Record<string, string> = {};
           for (const p of he.formatToParts(d)) if (p.type === 'day' || p.type === 'year') hp[p.type] = p.value;
-          if (L.hebrewNumeral(h.d) !== hp.day || L.hebrewNumeral(h.y) !== hp.year) note('numerals', `${iso} ours ${L.hebrewNumeral(h.d)} ${L.hebrewNumeral(h.y)}, Intl ${hp.day} ${hp.year}`);
+          // This browser's Intl may write the Hebrew day and year in Hebrew letters (full ICU data) or in digits (headless Chromium here: no Hebrew
+          // calendar patterns). Letters: compared as the unit test compares them with Node's ICU (ICU ends a year with a final letter only for ף).
+          // Digits: our letters are read back to a number by the letter values below and must equal Intl's day and its year without the thousands.
+          const nd = L.hebrewNumeral(h.d) as string, ny = L.hebrewNumeral(h.y) as string;
+          if (/[\u05D0-\u05EA]/.test(hp.day ?? '')) {
+            out.numeralsOracle.letters++;
+            if (nd !== hp.day || plain(ny) !== plain(hp.year!) || (hp.year!.endsWith('ף') && !ny.endsWith('ף'))) note('numerals', `${iso} ours ${nd} ${ny}, Intl ${hp.day} ${hp.year}`);
+          } else {
+            out.numeralsOracle.digits++;
+            if (value(nd) !== Number(hp.day) || value(ny) !== Number(hp.year) % 1000) note('numerals', `${iso} ours ${nd} (${value(nd)}) ${ny} (${value(ny)}), Intl ${hp.day} ${hp.year}`);
+          }
           if (iso === '2024-12-26') out.sample = `${L.formatHebrewDate(h)} | Hanukkah day ${L.hanukkahDay(rd)} | ${L.holidaysOn(rd, 'day').map((x: { he: string }) => x.he).join(', ')}`;
         }
         return out;
@@ -474,7 +496,7 @@ async function main() {
       const version = browser.version();
       await page.close();
       const mismatches = r.date + r.numerals + r.weekday + r.roundTrip + r.unknownMonth;
-      check(`12. the calendar inside headless Chromium ${version}: ${r.days} days of 2022–2027 against the page's own Intl (date, Hebrew-letter numerals, weekday, round trips): ${mismatches} mismatches`, r.days === 2191 && mismatches === 0 && r.sample.startsWith('כ״ה בכסלו תשפ״ה | Hanukkah day 1'), r);
+      check(`12. the calendar inside headless Chromium ${version}: ${r.days} days of 2022–2027 against the page's own Intl (date, weekday, round trips; Hebrew-letter numerals against Intl's letters on ${r.numeralsOracle.letters} days and, where this browser's Intl writes digits, read back to Intl's numbers on ${r.numeralsOracle.digits} days): ${mismatches} mismatches`, r.days === 2191 && r.numeralsOracle.letters + r.numeralsOracle.digits === 2191 && mismatches === 0 && r.sample.startsWith('כ״ה בכסלו תשפ״ה | Hanukkah day 1'), r);
       measurements.calendarInChromium = { chromium: version, ...r };
       // for the owner's review: every row of the holiday table of three Hebrew years, with its Gregorian day
       measurements.holidayTable = Object.fromEntries([5785, 5786, 5787].map((y) => [y, holidayTable(y).map((row) => { const g = gregorianFromRd(row.rd); return { date: `${g.y}-${String(g.m).padStart(2, '0')}-${String(g.d).padStart(2, '0')}`, part: row.part, id: row.holiday.id, he: row.holiday.he, en: row.holiday.en }; })]));
