@@ -90,7 +90,7 @@ const candles: TemplateDef = {
   texts: [
     { key: 'night', role: { he: 'הנר של הלילה', en: 'Candle of the night' }, default: { he: 'נר {night} של חנוכה', en: 'Night {night} of Hanukkah' }, fallback: { he: 'חנוכה שמח', en: 'Happy Hanukkah' }, maxChars: 40, presetId: 'hanukkah-gold',
       anim: A('word', 'rise', 'fade', 0.7), at: { slot: 'lighting', offsetBeats: 1, spanSlots: 1 }, place: { x: 0, y: -0.3, sizeFrac: 0.07 } },
-    { key: 'date', role: { he: 'התאריך', en: 'The date' }, default: { he: '{hebrewDate}', en: '{hebrewDate}' }, fallback: { he: 'ימי חנוכה', en: 'Days of Hanukkah' }, maxChars: 30, presetId: 'hanukkah-glow',
+    { key: 'date', role: { he: 'התאריך', en: 'The date' }, default: { he: 'חנוכה · {hebrewDate}', en: 'Hanukkah · {hebrewDate}' }, fallback: { he: 'ימי חנוכה', en: 'Days of Hanukkah' }, maxChars: 30, presetId: 'hanukkah-glow',
       anim: A('line', 'fade', 'fade', 0.6), at: { slot: 'family', offsetBeats: 1 }, place: { x: 0, y: 0.3, sizeFrac: 0.05 } },
     { key: 'house', role: { he: 'שם המשפחה', en: 'Family' }, default: { he: 'משפחת {name}', en: 'The {name} family' }, fallback: { he: 'המשפחה שלנו', en: 'Our family' }, maxChars: 30, presetId: 'hanukkah-soft',
       anim: A('word', 'fade', 'fade', 0.5), at: { slot: 'table', offsetBeats: 1 }, place: { x: 0, y: 0.3, sizeFrac: 0.05 } },
@@ -169,7 +169,7 @@ const greeting: TemplateDef = {
   texts: [
     { key: 'greet', role: { he: 'הברכה', en: 'Greeting' }, default: { he: 'חנוכה שמח!', en: 'Happy Hanukkah!' }, maxChars: 24, presetId: 'hanukkah-big',
       anim: A('letter', 'pop', 'fade', 0.8, 0.5), at: { slot: 'card' }, place: { x: 0, y: -0.12, sizeFrac: 0.1 } },
-    { key: 'date', role: { he: 'התאריך', en: 'The date' }, default: { he: '{hebrewDate}', en: '{hebrewDate}' }, fallback: { he: 'ימי חנוכה', en: 'Days of Hanukkah' }, maxChars: 30, presetId: 'hanukkah-glow',
+    { key: 'date', role: { he: 'התאריך', en: 'The date' }, default: { he: 'חנוכה · {hebrewDate}', en: 'Hanukkah · {hebrewDate}' }, fallback: { he: 'ימי חנוכה', en: 'Days of Hanukkah' }, maxChars: 30, presetId: 'hanukkah-glow',
       anim: A('line', 'fade', 'fade', 0.6), at: { slot: 'card', offsetBeats: 2 }, place: { x: 0, y: 0.08, sizeFrac: 0.045 } },
     { key: 'from', role: { he: 'מאת', en: 'From' }, default: { he: 'באהבה, {name}', en: 'With love, {name}' }, fallback: { he: 'באהבה', en: 'With love' }, maxChars: 30, presetId: 'hanukkah-soft',
       anim: A('line', 'fade', 'fade', 0.6), at: { slot: 'card', offsetBeats: 4 }, place: { x: 0, y: 0.3, sizeFrac: 0.045 } },

@@ -21,8 +21,8 @@ const A = (by: Anim['by'], inn: Anim['in'], out: Anim['out'], inSeconds: number,
 const textPresets: readonly TextPreset[] = [
   { id: 'birthday-bubble', name: { he: 'יום הולדת, בועה', en: 'Birthday bubble' }, style: { fontFamily: 'Secular One', fontWeight: 400, sizeFrac: 0.1, color: '#FFFFFF', background: null, stroke: PINK, strokeFrac: 0.12 }, shadow: { color: '#000000', opacity: 0.35, blur: 0.01, x: 0, y: 0.005 } },
   { id: 'birthday-sunny', name: { he: 'יום הולדת, שמש', en: 'Birthday sunny' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.08, color: SUN, background: null, stroke: DEEP, strokeFrac: 0.1 }, shadow: null },
-  { id: 'birthday-pink-box', name: { he: 'יום הולדת, תיבה ורודה', en: 'Birthday pink box' }, style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.05, color: '#FFFFFF', background: PINK, stroke: null, strokeFrac: 0 }, shadow: null },
-  { id: 'birthday-blue-box', name: { he: 'יום הולדת, תיבה תכלת', en: 'Birthday sky box' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.05, color: '#FFFFFF', background: '#1F8FD6', stroke: null, strokeFrac: 0 }, shadow: null },
+  { id: 'birthday-pink-box', name: { he: 'יום הולדת, תיבה ורודה', en: 'Birthday pink box' }, style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.05, color: '#FFFFFF', background: '#D81B6A', stroke: null, strokeFrac: 0 }, shadow: null },
+  { id: 'birthday-blue-box', name: { he: 'יום הולדת, תיבה תכלת', en: 'Birthday sky box' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.05, color: '#FFFFFF', background: '#1565C0', stroke: null, strokeFrac: 0 }, shadow: null },
   { id: 'birthday-soft', name: { he: 'יום הולדת, רך', en: 'Birthday soft' }, style: { fontFamily: 'Assistant', fontWeight: 700, sizeFrac: 0.05, color: '#FFFFFF', background: null, stroke: null, strokeFrac: 0 }, shadow: { color: '#000000', opacity: 0.6, blur: 0.016, x: 0, y: 0.003 } },
   { id: 'birthday-neon', name: { he: 'יום הולדת, זוהר ורוד', en: 'Birthday pink glow' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.075, color: '#FFE8F2', background: null, stroke: null, strokeFrac: 0, glow: { color: PINK, radiusFrac: 0.55, intensity: 0.85 } }, shadow: null },
 ];
@@ -30,7 +30,7 @@ const textPresets: readonly TextPreset[] = [
 // ---------------------------------------------------------------- caption looks
 const captionLooks: readonly CaptionLook[] = [
   { id: 'caption.birthday-bubble', name: { he: 'יום הולדת, פס ורוד', en: 'Birthday, pink plate' }, hint: { he: 'כתב לבן עגול על פס ורוד', en: 'Round white type on a pink plate' },
-    style: { preset: 'classic', fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.046, color: '#FFFFFF', highlightColor: SUN, background: '#FF4D8DE6', stroke: null, strokeFrac: 0.08, position: 'bottom', maxLines: 2, maxCharsPerLine: 30 }, needsWordTiming: false },
+    style: { preset: 'classic', fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.046, color: '#FFFFFF', highlightColor: SUN, background: '#D81B6AE6', stroke: null, strokeFrac: 0.08, position: 'bottom', maxLines: 2, maxCharsPerLine: 30 }, needsWordTiming: false },
   { id: 'caption.birthday-pop', name: { he: 'יום הולדת, מילה קופצת', en: 'Birthday, popping words' }, hint: { he: 'מילה אחר מילה בצהוב עם קו מתאר סגול', en: 'One word at a time in yellow with a plum outline' },
     style: { preset: 'word-pop', fontFamily: 'Secular One', fontWeight: 400, sizeFrac: 0.08, color: SUN, highlightColor: '#FFFFFF', background: null, stroke: DEEP, strokeFrac: 0.14, position: 'center', maxLines: 2, maxCharsPerLine: 14, wordEntrance: 'pop' }, needsWordTiming: true },
   { id: 'caption.birthday-karaoke', name: { he: 'יום הולדת, מילה בצהוב', en: 'Birthday, word in yellow' }, hint: { he: 'לבן על פס כהה, המילה שנאמרת הופכת לצהוב', en: 'White on a dark plate; the spoken word turns yellow' },
@@ -149,9 +149,9 @@ const invite: TemplateDef = {
       anim: A('letter', 'pop', 'fade', 0.8, 0.5), at: { slot: 'card' }, place: { x: 0, y: -0.2, sizeFrac: 0.09 } },
     { key: 'name', role: { he: 'שם החוגג', en: 'Name' }, default: { he: 'ליום ההולדת של {name}', en: "{name}'s birthday party" }, fallback: { he: 'ליום ההולדת שלנו', en: 'To our birthday party' }, maxChars: 40, presetId: 'birthday-sunny',
       anim: A('word', 'rise', 'fade', 0.5), at: { slot: 'card', offsetBeats: 2 }, place: { x: 0, y: -0.06, sizeFrac: 0.06 } },
-    { key: 'when', role: { he: 'מתי', en: 'When' }, default: { he: '{when}', en: '{when}' }, fallback: { he: 'המועד יפורסם בקרוב', en: 'The time will follow soon' }, maxChars: 40, presetId: 'birthday-pink-box',
+    { key: 'when', role: { he: 'מתי', en: 'When' }, default: { he: 'מתי: {when}', en: 'When: {when}' }, fallback: { he: 'המועד יפורסם בקרוב', en: 'The time will follow soon' }, maxChars: 40, presetId: 'birthday-pink-box',
       anim: A('line', 'fade', 'fade', 0.5), at: { slot: 'card', offsetBeats: 4 }, place: { x: 0, y: 0.1, sizeFrac: 0.05 } },
-    { key: 'place', role: { he: 'איפה', en: 'Where' }, default: { he: '{place}', en: '{place}' }, fallback: { he: 'המקום יפורסם בקרוב', en: 'The place will follow soon' }, maxChars: 40, presetId: 'birthday-soft',
+    { key: 'place', role: { he: 'איפה', en: 'Where' }, default: { he: 'איפה: {place}', en: 'Where: {place}' }, fallback: { he: 'המקום יפורסם בקרוב', en: 'The place will follow soon' }, maxChars: 40, presetId: 'birthday-soft',
       anim: A('line', 'fade', 'fade', 0.5), at: { slot: 'card', offsetBeats: 5 }, place: { x: 0, y: 0.22, sizeFrac: 0.05 } },
   ],
   elements: [
