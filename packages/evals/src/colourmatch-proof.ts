@@ -57,12 +57,18 @@ interface Match { revision: number; method: string; reference: { clipId: string;
  * channel is 0 or 255 nearly everywhere, so a grade's gains are clipped away (0 stays 0, 255 stays 255), ffmpeg's colorbalance
  * (which moves the middle of each channel) hardly touches it, and green is absent from the bars that make up the mid-tones. The
  * first run of this proof (2026-11-17, on the merged tree) used it as it is. Measured on the stills its matches took (the same
- * matches run again, with the same results):
+ * matches run again, with the same results), by the repair agent and checked by an adversarial verifier:
  * - M2: with tint held anywhere from −1 to 1 and the other values refitted, the statistics stay within 0.37 CIELAB units of the
  *   reference, and within 0.1 for tint from −1 to 0.2 (the 8-bit rounding of a still alone leaves 0.04; people notice about 2).
  *   No fit can return tint to ±0.05 from statistics of that picture.
- * - M3: the colorbalance cast moved the statistics by 1.13 (already "close" before any match), and a search over all five
- *   values of color.grade finds nothing under 0.53: a fall of 54 % at most, so "at least 60 %" was out of the grade's reach.
+ * - M3: the colorbalance cast moved the statistics by only 1.13, already under the 'close' limit of 2 before any match, so it
+ *   could not show a match of a noticeable cast; that is why the fixture changed. The fit stopped at 0.57 in the model (0.59 in
+ *   the real render), a fall of 48 %. The repair report then said no grade reaches under 0.53 there; that was wrong. The verifier's
+ *   search (same model, same distance) found 0.28, a fall of 75 % (0.31 on the 0.001 steps a value is stored in), in a narrow
+ *   region: exposure or contrast moved by 0.005 gives 0.71 to 0.97. Part of the failure was the fit's objective, a sum of squares
+ *   rather than the distance it reports; the fit now finishes on that distance and reaches 0.41 on those stills (0.42 with the
+ *   graded points rounded to 8 bits as a render stores them: a fall of 63 %). It does not reach 0.28, and that is worth little:
+ *   at the verifier's own point the 8-bit figure is 0.40, so most of that region is finer than a render holds.
  * In 25..165 every bar has some of every channel, the casts are ones a picture with mid-tones gets (6 units for M3), and the
  * reference grade of M2 (gains up to 1.32, contrast 1.15) keeps every value inside 0..255. `bars` keeps the pattern as it is for
  * M2b, which checks what a match should do with a picture that hides a value.
