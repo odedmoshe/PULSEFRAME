@@ -6,12 +6,6 @@
  * carries the class `header`; the drawer keeps `library` for the grid and the proofs, and is restyled here).
  */
 
-/* theme.css (legacy, loaded last) still redefines four ds token names at :root: --pf-surface-2, --pf-surface-3 (a translucent white),
-   --pf-text and --pf-focus. Re-asserted here for everything that carries .pf-ds, with the spec values; dead once that block of
-   theme.css is deleted (lead, integration). */
-.pf-ds { --pf-surface-2: #181A1F; --pf-surface-3: #1F2228; --pf-text: #EDEFF3; --pf-focus: #86F3E3; }
-:root[data-theme='light'] .pf-ds { --pf-surface-2: #FFFFFF; --pf-surface-3: #FFFFFF; --pf-text: #12151A; --pf-focus: #055C4F; }
-
 /* ---------- shell: sizes follow the tokens once the new chrome is there ---------- */
 .app:has(> .pf-top) { --pf-shell-top: var(--pf-topbar); background: var(--pf-canvas); }
 .app:has(> .pf-browser) { --pf-shell-browser: var(--pf-browser); }

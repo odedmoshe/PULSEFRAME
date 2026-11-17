@@ -102,6 +102,15 @@ describe('the specificity helper', () => {
 });
 
 describe('design tokens (ds/tokens.css)', () => {
+  it('only ds/tokens.css defines the theme tokens: no other sheet redefines them, so no rule on a primitive can beat a .pf-force-dark subtree', () => {
+    const names = ['--pf-surface-2', '--pf-surface-3', '--pf-text', '--pf-focus'];
+    const others = [...styles, ...components, ...theme, ...chrome];
+    // the one refinement is the stage's own (editor/stage.css), which is scoped to the stage and .pf-force-dark roots themselves
+    const redefined = others.filter((r) => names.some((n) => n in r.decls) && !r.selectors.every((sel) => /\.pf-force-dark|\.app > \.stage/.test(sel))).map((r) => r.selectors.join(', '));
+    expect(redefined).toEqual([]);
+    expect(tokens).toMatch(/\.pf-force-dark\s*\{/);
+  });
+
   const tokens = read('./ds/tokens.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const brand = readFileSync(new URL('../../../packages/brand/src/tokens.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const declared = (css: string) => new Set([...css.matchAll(/(--pf-[\w-]+)\s*:/g)].map((m) => m[1]!));
@@ -229,7 +238,7 @@ describe('editor stylesheets', () => {
     const areas = decl('grid-template-areas')!;
     for (const area of ['top', 'err', 'rail', 'browser', 'stage', 'inspector', 'split', 'tl', 'status']) expect(areas, area).toMatch(new RegExp(`\\b${area}\\b`));
     const placed = Object.fromEntries(shell.flatMap((r) => r.selectors.filter((sel) => sel.startsWith('.app > ') && r.decls['grid-area']).map((sel) => [sel.slice(7), r.decls['grid-area']])));
-    expect(placed).toEqual({ '.header': 'top', '.error': 'err', "[data-shell-slot='rail']": 'rail', '.library': 'browser', '.stage': 'stage', '.inspector': 'inspector', "[data-shell-slot='splitter']": 'split', '.timeline': 'tl', "[data-shell-slot='status']": 'status' });
+    expect(placed).toEqual({ '.pf-top': 'top', '.error': 'err', "[data-shell-slot='rail']": 'rail', '.library': 'browser', '.stage': 'stage', '.inspector': 'inspector', "[data-shell-slot='splitter']": 'split', '.timeline': 'tl', "[data-shell-slot='status']": 'status' });
     const elsewhere = [...styles, ...components.filter((r) => r.file !== './ds/shell.css'), ...theme];
     expect(elsewhere.filter((r) => 'grid-area' in r.decls && r.selectors.some((sel) => ['.header', '.error', '.library', '.inspector', '.stage', '.timeline'].includes(sel))).map((r) => `${r.file}: ${r.selectors.join(', ')}`)).toEqual([]);
     expect(pick(elsewhere, (s) => s === '.app')).toEqual([]); // the grid rules left styles.css and theme.css
@@ -241,11 +250,12 @@ describe('editor stylesheets', () => {
     // list of flashing stretches and the glow of Export are drawn outside it)
     expect(decl('grid-template-rows')!.startsWith('var(--pf-shell-top) ')).toBe(true);
     expect(decl('--pf-shell-top')).toMatch(/^[\d.]+px$/);
-    const bar = pick(shell, (s) => s === '.app > .header');
+    const bar = pick(chrome, (s) => s === '.pf-top');
     expect(winner(bar, 'flex-wrap')?.rule.decls['flex-wrap']).toBe('nowrap');
     for (const r of bar) for (const prop of ['overflow', 'overflow-x', 'overflow-y']) expect(r.rule.decls[prop], prop).toBeUndefined();
-    // Export and the logo never narrow: everything in the bar is rigid unless a later rule lets it give way, and none names .primary or .logo
-    expect(pick(shell, (s) => s === '.app > .header > *')[0]!.rule.decls.flex).toBe('0 0 auto');
+    // the bar's children are rigid (ds/chrome.css), and the shell sheet carries no rule about the bar's content at all: no legacy `.header` ladder
+    expect(pick(chrome, (s) => s === '.pf-top > *')[0]!.rule.decls.flex).toBe('0 0 auto');
+    expect(shell.filter((r) => r.selectors.some((sel) => /\.header\b|\.hd-label/.test(sel)))).toEqual([]);
     expect(shell.filter((r) => r.decls.flex && r.selectors.some((sel) => /\.primary|\.logo/.test(sel) && !/:not\([^)]*\.primary/.test(sel)))).toEqual([]);
     // the mounts that are still empty take no room; the App renders them in the grid
     const src = read('./App.tsx');
