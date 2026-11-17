@@ -8,7 +8,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { switchFrame, transitionProgress, TRANSITIONS, type TransitionDef } from '@pulseframe/core';
-import { blockColors, blockSpans, CANVAS_KERNELS, CANVAS_TRANSITION_SLOT, CANVAS_TRANSITIONS, coverScale, insidePolygon, punchScale, SHAPES, shapeScale, sliceBands, SLICE_BANDS, type CanvasTransitionArgs, type RevealShape } from './canvasTransitions.ts';
+import { BLOCK_ORDER, blockColors, blockSpans, CANVAS_KERNELS, CANVAS_TRANSITION_SLOT, CANVAS_TRANSITIONS, coverScale, insidePolygon, punchScale, SHAPES, shapeScale, sliceBands, SLICE_BANDS, type CanvasTransitionArgs, type RevealShape } from './canvasTransitions.ts';
 import { GPU_TRANSITIONS } from './gpu.ts';
 import { scratch, type Buf } from './look.ts';
 
@@ -224,6 +224,16 @@ describe('colour blocks', () => {
       const p = 0.92 + (0.08 * i) / 100;
       for (const [frame, frames] of [[undefined, undefined], [3, 7], [20, 30], [1, 2]] as const) expect(covered(blockSpans(p, frame, frames)), `p=${p}`).toBe(0);
     }
+  });
+  it('every bar colour shows: bar 0 (in front) is drawn at the bottom, each later bar over it, and each is visible somewhere while the bars cross', () => {
+    // the colour on top at q: the last bar in drawing order whose span holds q
+    const topAt = (spans: [number, number][], q: number) => { let top = -1; for (const i of BLOCK_ORDER) { const [a, b] = spans[i]!; if (q >= a && q <= b) top = i; } return top; };
+    const shown = new Set<number>();
+    for (let l = 0; l < 29; l++) { const s = blockSpans(transitionProgress(l, 29, null), l, 29); for (let q = 0; q <= 1; q += 0.01) shown.add(topAt(s, q)); }
+    expect([...shown].filter((i) => i >= 0).sort()).toEqual([0, 1, 2]);
+    // entering at p = 0.3: from the start side, c·0.6 (bar 2), then c·0.8, then c at the front edge
+    const s = blockSpans(0.3, 9, 29);
+    expect([topAt(s, 0.1), topAt(s, 0.5), topAt(s, 0.58), topAt(s, 0.7)]).toEqual([2, 1, 0, -1]);
   });
   it('the plan\'s edges where the switch lands on 0.5: bar i leads from p = 0.06·i, trails from 0.5 + 0.06·(2 − i), and the front bar is the colour itself', () => {
     // an odd length without a beat lock switches exactly on 0.5: the edges are the plan's formula

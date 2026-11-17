@@ -266,9 +266,11 @@ export function blockHold(p: number, frame: number | undefined, frames: number |
   return h;
 }
 /**
- * The three colour blocks on progress p: [trailing edge, leading edge] of bar i (0 = the front bar, drawn last) along the
- * axis from the side they start at, 0 … 1. The leading edges cross the frame by the switch (bar i delayed by 0.06·i); after the
- * hold (blockHold) the trailing edges follow, staggered the other way, and every bar has left by p = 0.92.
+ * The three colour blocks on progress p: [trailing edge, leading edge] of bar i along the axis from the side they start at,
+ * 0 … 1. The leading edges cross the frame by the switch (bar i delayed by 0.06·i, so bar 0 is in front); after the hold
+ * (blockHold) the trailing edges follow, staggered the other way (bar 2 leaves first, bar 0 last), and every bar has left
+ * by p = 0.92. Bar 0's span therefore always contains the other two, so the bars are stacked with bar 0 at the bottom and
+ * bar 2 on top (BLOCK_ORDER): each colour shows as a band.
  */
 export function blockSpans(p: number, frame?: number, frames?: number): [number, number][] {
   const h = blockHold(p, frame, frames), tail = (0.92 - h) / 0.42;
@@ -286,6 +288,11 @@ export function blockColors(color: string): [string, string, string] {
   return [shade(1), shade(0.8), shade(0.6)];
 }
 const BLOCK_COLOR = '#3DE0C8';
+/**
+ * Drawing order of the bars, bottom first. (The plan's "2, 1, 0" puts bar 0 on top; as bar 0's span contains the others at
+ * every progress, bars 1 and 2 would never be seen. Bottom-first 0, 1, 2 shows c in front, then c·0.8, then c·0.6.)
+ */
+export const BLOCK_ORDER = [0, 1, 2] as const;
 const block: CanvasKernel = ({ ctx, incoming, outgoing, t, v, W, H }) => {
   const p = t.progress, side = p < 0.5 ? outgoing : incoming;
   const color = /^#[0-9a-fA-F]{6}$/.test(t.color ?? '') ? t.color! : transitionDef(t.type)?.defaults?.color ?? BLOCK_COLOR;
@@ -293,7 +300,7 @@ const block: CanvasKernel = ({ ctx, incoming, outgoing, t, v, W, H }) => {
   const mix = scratch(6, W, H), m = mix.ctx;
   if (side) m.drawImage(side.canvas, 0, 0);
   // v0 = −1 travels from the right edge to the left, v0 = +1 from the left edge to the right
-  for (const i of [2, 1, 0]) {
+  for (const i of BLOCK_ORDER) {
     const [a, b] = spans[i]!;
     if (b <= a) continue;
     const x0 = v[0] < 0 ? W * (1 - b) : W * a, x1 = v[0] < 0 ? W * (1 - a) : W * b;
