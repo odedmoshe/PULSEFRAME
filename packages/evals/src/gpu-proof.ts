@@ -18,11 +18,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
-import { beatPositionAt, identityLut, lutStrip, sampleLut, sampleStrip, serializeCube, type Lut3D } from '@pulseframe/core';
+import { beatPositionAt, identityLut, lutStrip, sampleLut, sampleStrip, serializeCube, type Lut3D, type ProjectDocument } from '@pulseframe/core';
 import { crtMap, digicamTick, digicamTone, FlashAnalyser, flashCells, flashSchedule, hash32, motionAt, unit32 } from '@pulseframe/engine';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { startServer } from '@pulseframe/server';
+import { shuttleAt8 } from './shuttle-flash.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/gpu-proof');
@@ -419,46 +420,33 @@ async function main() {
         const seconds = means.length / 30;
         check('Strobes together, on an exported file: two strobes on a picture and a strobing title over it start at most three flashes in any one second (30 frames), and do keep flashing (at least 2.4 starts a second on average)', means.length > 60 && most <= 3 && starts.length >= Math.floor(2.4 * seconds), { frames: means.length, flashStarts: starts, mostInOneSecond: most, perSecond: Number((starts.length / seconds).toFixed(2)) });
       }
-      // The same project in the editor, shuttled at 8x (L four times): the timeline passes eight times faster than real
-      // time, so without the player's guard its flashes would be eight times as frequent on screen. The preview canvas is
-      // sampled on every animation frame with its real time; a flash is a rise of its mean brightness by more than 8 of
-      // 255 above the lowest since the last fall, a fall the same below the highest since the rise.
-      // a 30-second timeline (at 8x the shuttle needs 3.75 s to cross it): the picture with two strobes and a strobing title over it
+      // The same strobes in the editor, shuttled at 8x (L four times): the timeline passes eight times faster than real
+      // time, so without the player's guard its flashes would be eight times as frequent on screen. The measurement and its
+      // verdict are in shuttle-flash.ts: the preview canvas is sampled on every animation frame with its real time; a flash
+      // is a rise of its mean brightness by more than 8 of 255 above the lowest since the last fall, a fall the same below
+      // the highest since the rise. That the guard was needed is measured too, not assumed: the frames that were on screen
+      // are evaluated again without the guard, and must there rise more than three times in some second.
+      // The editor has to paint more than six frames a second for that (a rise needs a darker frame and a brighter one). On
+      // a busy machine the software adapter paints fewer, the guard has nothing to hold, and a fixed 2.5 s window said
+      // nothing about it (the check failed with 0 frames held at 4 to 6 paints a second). So the shuttle goes on until the
+      // guard was needed, at least 2.5 s and at most 55 s; if it never was, the check fails as "blocked by load".
+      // An 8-minute timeline (at 8x the shuttle needs 60 s to cross it): the picture with two strobes and a strobing title over it.
+      const LONG = 14_400;
       const long = (await call('/projects', { name: 'strobes-shuttle', width: W, height: H })).body.project.id as string;
       const longAsset = await upload(long, rampFile);
       const R30 = { num: 30, den: 1 };
-      const longClip = (await tx(long, [{ op: 'add_clip', args: { assetId: longAsset, start: T.rt(0, 1), duration: T.frameTime(900, R30) } }])).results[0].output.clipId as string;
+      const longClip = (await tx(long, [{ op: 'add_clip', args: { assetId: longAsset, start: T.rt(0, 1), duration: T.frameTime(LONG, R30) } }])).results[0].output.clipId as string;
       await tx(long, [{ op: 'add_effect', args: { clipId: longClip, type: 'light.strobe', params: { rate: 3, amount: 0.8 } } }, { op: 'add_effect', args: { clipId: longClip, type: 'light.strobe', params: { rate: 2.5, amount: 0.8 } } }]);
-      const longTitle = (await tx(long, [{ op: 'add_text', args: { text: 'FLASH', start: T.frameTime(5, R30), duration: T.frameTime(895, R30) } }])).results[0].output.clipId as string;
+      const longTitle = (await tx(long, [{ op: 'add_text', args: { text: 'FLASH', start: T.frameTime(5, R30), duration: T.frameTime(LONG - 5, R30) } }])).results[0].output.clipId as string;
       await tx(long, [{ op: 'add_effect', args: { clipId: longTitle, type: 'light.strobe', params: { rate: 3, amount: 1 } } }]);
+      const longDoc = (await call(`/projects/${long}`)).body.project as ProjectDocument;
       const sp8 = await browser.newPage({ viewport: { width: 1500, height: 950 } });
       await sp8.goto(`${s.ownerUrl}&project=${long}`);
       await sp8.locator('.clip').first().waitFor();
       await sp8.waitForFunction(() => Number(document.querySelector('canvas[data-testid=preview]')?.getAttribute('data-frame') ?? -1) >= 0, undefined, { timeout: 30_000 });
-      // (a string, not a function: the TypeScript runner would wrap named functions in a helper the page does not have)
-      await sp8.evaluate(`(() => {
-        const c = document.querySelector('canvas[data-testid=preview]');
-        const small = document.createElement('canvas'); small.width = 16; small.height = 16;
-        const sx = small.getContext('2d', { willReadFrequently: true });
-        const out = []; window.__pfFlashSamples = out;
-        const loop = () => { sx.drawImage(c, 0, 0, 16, 16); const d = sx.getImageData(0, 0, 16, 16).data; let m = 0; for (let i = 0; i < d.length; i += 4) m += (d[i] + d[i + 1] + d[i + 2]) / 3; out.push([performance.now() / 1000, m / 256]); if (out.length < 20000) requestAnimationFrame(loop); };
-        requestAnimationFrame(loop);
-      })()`);
-      const rb8 = (await sp8.getByTestId('ruler').boundingBox())!;
-      await sp8.mouse.click(rb8.x + 3, rb8.y + 5); // the playhead to the start; the keys go to the editor
-      await sp8.keyboard.press('l');
-      await sp8.waitForFunction(() => document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'true', undefined, { timeout: 10_000 });
-      for (let i = 0; i < 3; i++) { await sp8.keyboard.press('l'); await sleep(60); }
-      const shuttleShown = ((await sp8.getByTestId('shuttle').textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
-      await sleep(2500);
-      await sp8.keyboard.press('k');
-      const samples = await sp8.evaluate(() => (window as unknown as { __pfFlashSamples: [number, number][] }).__pfFlashSamples.splice(0));
-      const held = Number(await sp8.locator('canvas[data-testid=preview]').getAttribute('data-flashes-held'));
-      const rises: number[] = [];
-      { let rising = false, low = Infinity, high = 0; for (const [t, m] of samples) { if (!rising && m > low + 8) { rises.push(t); rising = true; high = m; } else if (rising && m < high - 8) { rising = false; low = m; } if (rising) high = Math.max(high, m); else low = Math.min(low, m); } }
-      let most8 = 0; for (let i = 0, j = 0; i < rises.length; i++) { while (rises[i]! - rises[j]! > 1) j++; most8 = Math.max(most8, i - j + 1); }
-      check('Strobes together, in the editor shuttled at 8x: the preview keeps flashing but shows at most three flashes in any second of real time (sampled on every animation frame); the player\'s safety guard held flashes back, so without it there would have been more', samples.length > 30 && shuttleShown.includes('8') && rises.length >= 3 && most8 <= 3 && held > 0, { shuttle: shuttleShown, samples: samples.length, flashesOnScreen: rises.length, mostInOneSecond: most8, framesHeldBack: held });
-      fs.writeFileSync(path.join(art, 'shuttle-samples.json'), JSON.stringify(samples.map(([t, m]) => [Number(t.toFixed(3)), Math.round(m)])));
+      const run8 = await shuttleAt8(sp8, longDoc, { minMs: 2500, deadlineMs: 55_000 });
+      check('Strobes together, in the editor shuttled at 8x: the preview keeps flashing but shows at most three flashes in any second of real time (sampled on every animation frame); the frames it showed would have flashed more than three times in a second without the player\'s safety guard, and the guard held flashes back', run8.verdict === 'ok', { verdict: run8.verdict, shuttle: run8.shuttle, seconds: run8.seconds, ...run8.measure, framesHeldBack: run8.held, load1: Number(os.loadavg()[0]!.toFixed(2)), ...(run8.blockedByLoad ? { blockedByLoad: run8.blockedByLoad } : {}) });
+      fs.writeFileSync(path.join(art, 'shuttle-samples.json'), JSON.stringify(run8.samples.map(([t, m, f]) => [Number(t.toFixed(3)), Math.round(m), f])));
       await sp8.close();
     }
 

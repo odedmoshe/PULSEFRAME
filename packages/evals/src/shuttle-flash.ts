@@ -74,6 +74,8 @@ export interface ShuttleMeasure {
   /** Rises of the brightness on screen, and the most within one second. */
   flashesOnScreen: number;
   mostInOneSecond: number;
+  /** Seconds between the two closest rises on screen (null with fewer than two): told, not judged (an animation frame is 17 ms). */
+  closestOnScreen: number | null;
   /** Rises the same frames at the same times would have shown without the guard, and the most within one second. */
   flashesWithoutGuard: number;
   mostInOneSecondWithoutGuard: number;
@@ -91,6 +93,7 @@ export function measureShuttle(samples: readonly ShuttleSample[], doc: ProjectDo
   return {
     samples: samples.length, paints: Math.max(0, shown.length - 1), paintsPerSecond: span > 0 ? Number(((shown.length - 1) / span).toFixed(1)) : 0,
     flashesOnScreen: onScreen.length, mostInOneSecond: mostInOneSecond(onScreen),
+    closestOnScreen: onScreen.length > 1 ? Number(Math.min(...onScreen.slice(1).map((t, i) => t - onScreen[i]!)).toFixed(3)) : null,
     flashesWithoutGuard: without.length, mostInOneSecondWithoutGuard: most, guardNeeded: most > 3,
   };
 }
