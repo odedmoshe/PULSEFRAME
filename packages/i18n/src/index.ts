@@ -4,6 +4,8 @@ export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
   'save.saved': 'נשמר', 'save.saving': 'שומר…', 'save.offline': 'לא מקוון', 'save.conflict': 'התנגשות — נטען מחדש',
+  // photosensitivity check of an export (ADR-0009)
+  'flash.pass': 'בדיקת הבהובים: לא נמצאו', 'flash.passTitle': 'הסרטון נבדק: אין בו קטע שמהבהב יותר משלוש פעמים בשנייה על שטח גדול', 'flash.fail': 'נמצאו הבהובים מסוכנים', 'flash.failIntro': 'בקטעים האלה התמונה מהבהבת יותר משלוש פעמים בשנייה על שטח גדול. זה עלול לגרום להתקפים אצל צופים רגישים. הייצוא לא שונה; אפשר לתקן ולייצא שוב.', 'flash.general': 'הבהוב', 'flash.red': 'הבהוב אדום', 'flash.perSecond': 'בשנייה', 'flash.area': 'מהמסך', 'flash.jump': 'מעבר לקטע', 'flash.method': 'הבדיקה מקורבת (WCAG 2.3.1) ואינה אישור רשמי.',
   'revision': 'גרסה', 'export': 'ייצוא', 'export.running': 'מייצא…', 'export.done': 'הורדת הסרטון שוב', 'export.finished': 'הייצוא הסתיים והקובץ נשמר בהורדות', 'export.failed': 'הייצוא נכשל',
   'media': 'מדיה', 'media.import': 'ייבוא קובץ', 'media.uploading': 'מעלה…', 'media.empty': 'אין עדיין מדיה. ייבאו קובץ וידאו או אודיו.', 'media.add': 'הוספה לציר הזמן', 'media.dragHint': 'אפשר גם לגרור את הקובץ אל ציר הזמן', 'media.unsupported': 'הקובץ אינו נתמך',
   'text': 'טקסט', 'text.add': 'הוספת טקסט', 'text.default': 'טקסט חדש', 'text.content': 'תוכן', 'text.size': 'גודל', 'text.y': 'מיקום אנכי',
@@ -157,6 +159,8 @@ export const he = {
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
   'save.saved': 'Saved', 'save.saving': 'Saving…', 'save.offline': 'Offline', 'save.conflict': 'Conflict — reloaded',
+  // photosensitivity check of an export (ADR-0009)
+  'flash.pass': 'Flash check: none found', 'flash.passTitle': 'The video was checked: no stretch flashes more than three times a second over a large area', 'flash.fail': 'Dangerous flashing found', 'flash.failIntro': 'In these stretches the picture flashes more than three times a second over a large area, which can trigger seizures in sensitive viewers. The export was not changed; you can fix them and export again.', 'flash.general': 'flashing', 'flash.red': 'red flashing', 'flash.perSecond': 'a second', 'flash.area': 'of the screen', 'flash.jump': 'Go to this stretch', 'flash.method': 'The check is an approximation (WCAG 2.3.1), not a certification.',
   'revision': 'Revision', 'export': 'Export', 'export.running': 'Exporting…', 'export.done': 'Download the video again', 'export.finished': 'Export finished; the file was saved to Downloads', 'export.failed': 'Export failed',
   'media': 'Media', 'media.import': 'Import file', 'media.uploading': 'Uploading…', 'media.empty': 'No media yet. Import a video or audio file.', 'media.add': 'Add to timeline', 'media.dragHint': 'You can also drag the file onto the timeline', 'media.unsupported': 'Unsupported file',
   'text': 'Text', 'text.add': 'Add text', 'text.default': 'New text', 'text.content': 'Content', 'text.size': 'Size', 'text.y': 'Vertical position',

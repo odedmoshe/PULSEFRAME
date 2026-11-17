@@ -140,6 +140,30 @@ async function main() {
     if (ej.status !== 'canceled') await waitJob(early.jobId);
 
     console.log('\n# cancel and retry from the editor');
+    // Photosensitivity check of exports (ADR-0009 decision 4): a timeline that alternates black and white every 3 frames for
+    // 3 s (5 flashes a second over the whole picture) exports with a failing report naming that stretch; the calm fixture
+    // export above passed. The check never changes or blocks the export.
+    let flashProject = '', flashFrom = -1;
+    {
+      const fl = (await call('/projects', { name: 'flashing', width: 320, height: 180 })).body.project.id as string;
+      flashProject = fl;
+      const img = (name: string, colour: string) => { const file = path.join(art, `${name}.png`); ff(['-y', '-f', 'lavfi', '-i', `color=c=${colour}:s=320x180`, '-frames:v', '1', file]); return file; };
+      const upImg = async (file: string) => ((await (await fetch(`${s.url}/api/v1/projects/${fl}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(file) }, body: fs.readFileSync(file) })).json()) as any).assetId as string;
+      const black = await upImg(img('flash-black', 'black')), white = await upImg(img('flash-white', 'white'));
+      // 1 s calm (black), then 30 clips of 3 frames alternating, then 1 s calm: frames 30..119 flash
+      const ops: unknown[] = [{ op: 'add_clip', args: { assetId: black, start: f(0), duration: f(30) } }];
+      for (let k = 0; k < 30; k++) ops.push({ op: 'add_clip', args: { assetId: k % 2 ? black : white, start: f(30 + 3 * k), duration: f(3) } });
+      ops.push({ op: 'add_clip', args: { assetId: black, start: f(120), duration: f(30) } });
+      const built = await call(`/projects/${fl}/transactions`, { ops });
+      const fj = await waitJob((await call(`/projects/${fl}/exports`, { quality: 'draft' })).body.jobId);
+      const rep = fj.output?.photosensitivity;
+      const sec = (x: { value: string; timescale: number }) => Number(x.value) / x.timescale;
+      const range = rep?.ranges?.[0];
+      if (range) flashFrom = Math.floor(sec(range.from) * 30);
+      measurements.photosensitivity = { flashing: rep && { verdict: rep.verdict, frames: rep.frames, ranges: rep.ranges.map((r: any) => ({ fromSeconds: sec(r.from), toSeconds: sec(r.to), kind: r.kind, flashesPerSecond: r.flashesPerSecond, area: r.area })) }, calm: j1.output?.photosensitivity?.verdict };
+      check('photosensitivity: an export that alternates black and white every 3 frames for 3 s reports dangerous flashing over the whole frame in that stretch (and succeeds: nothing is changed or blocked); the calm fixture export passed', built.status === 200 && fj.status === 'succeeded' && rep?.verdict === 'fail' && rep.ranges.length === 1 && range.kind === 'general' && range.area === 1 && range.flashesPerSecond >= 4 && sec(range.from) >= 0 && sec(range.from) <= 1.2 && sec(range.to) >= 3.9 && sec(range.to) <= 5 && j1.output?.photosensitivity?.verdict === 'pass', measurements.photosensitivity);
+    }
+
     const browser = await chromium.launch();
     try {
     const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
@@ -152,6 +176,25 @@ async function main() {
     await page.getByTestId('export-cancel').click();
     await page.getByTestId('export-canceled').waitFor({ timeout: 15_000 });
     check('editor: Cancel stops a running export and shows that it was canceled; Retry is offered', (await page.getByTestId('export-retry').count()) === 1 && (await page.getByTestId('export-download').count()) === 0);
+    // the same flashing project exported from the editor: the header says dangerous flashing was found; the list names the
+    // stretch and its button moves the playhead there
+    {
+      const fp = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
+      const fErrors: string[] = [];
+      fp.on('pageerror', (e) => fErrors.push(String(e)));
+      await fp.goto(`${s.ownerUrl}&project=${flashProject}`);
+      await fp.locator('.clip').first().waitFor();
+      await fp.getByTestId('export').click();
+      await fp.getByTestId('flash-fail').waitFor({ timeout: 120_000 });
+      await fp.locator('[data-testid=flash-fail] > summary').click();
+      const ranges = await fp.getByTestId('flash-range').count();
+      await fp.getByTestId('flash-jump').first().click();
+      await fp.waitForFunction((want) => document.querySelector('canvas[data-testid=preview]')?.getAttribute('data-frame') === String(want), flashFrom, { timeout: 10_000 }).catch(() => {});
+      const at = Number(await fp.locator('canvas[data-testid=preview]').getAttribute('data-frame'));
+      const text = (await fp.getByTestId('flash-fail').textContent()) ?? '';
+      check('editor: after exporting the flashing project the header warns of dangerous flashing (Hebrew), lists the one stretch, and its button moves the playhead to its start', ranges === 1 && at === flashFrom && /הבהוב/.test(text) && fErrors.length === 0, { ranges, playheadFrame: at, wanted: flashFrom, errors: fErrors.slice(0, 2) });
+      await fp.close();
+    }
     } finally { await browser.close(); } // always: a page left open keeps its event stream, which used to make shutdown wait forever after a failed step
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.

@@ -144,3 +144,15 @@ canvas[data-testid='preview'] { border-radius: 10px; box-shadow: 0 0 0 1px var(-
 .clip-visual canvas { background: transparent; box-shadow: none; border-radius: 0; }
 .track.audio .clip-visual[data-derivative-state='ready']::after { background: linear-gradient(to right, rgba(0, 0, 0, 0.55) 0, rgba(0, 0, 0, 0.35) 90px, rgba(0, 0, 0, 0) 160px); }
 [dir='rtl'] .track.audio .clip-visual[data-derivative-state='ready']::after { background: linear-gradient(to right, rgba(0, 0, 0, 0.55) 0, rgba(0, 0, 0, 0.35) 90px, rgba(0, 0, 0, 0) 160px); }
+
+/* photosensitivity result of the last export (ADR-0009): a warning that opens the list of flashing stretches */
+.flash-result { position: relative; }
+.flash-result > summary { cursor: pointer; list-style: none; }
+.flash-result > summary::-webkit-details-marker { display: none; }
+.flash-result[open] > .flash-result-body {
+  position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 40; width: min(420px, 90vw);
+  background: var(--pf-surface-2); color: var(--pf-text); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md);
+  box-shadow: var(--pf-shadow-2); padding: 10px 12px;
+}
+.flash-result-body ul { margin: 6px 0; padding-inline-start: 18px; }
+.flash-result-body li { margin: 4px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
