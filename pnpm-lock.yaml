@@ -78,6 +78,15 @@ importers:
       '@fontsource/heebo':
         specifier: 5.3.0
         version: 5.3.0
+      '@fontsource/ibm-plex-mono':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/ibm-plex-sans-hebrew':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/karantina':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/rubik':
         specifier: 5.3.0
         version: 5.3.0
@@ -359,6 +368,15 @@ packages:
 
   '@fontsource/heebo@5.3.0':
     resolution: {integrity: sha512-Z01U2fWWrfJnSE6SmDYtZJ1uCnKs8V3WSdip/lVDfKnsC1ASumb7IZmOrXjaYK+PVm7qGD3+4cwTAFOxG5uMaw==}
+
+  '@fontsource/ibm-plex-mono@5.3.0':
+    resolution: {integrity: sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q==}
+
+  '@fontsource/ibm-plex-sans-hebrew@5.3.0':
+    resolution: {integrity: sha512-6sYM3VzG65AnG1jul3dl+H8eBWYfx6Rqzm7946VNBIXx/ArU1NR5ZKdFx80EDehVqdbPsLOpP1fjImQFjVMopg==}
+
+  '@fontsource/karantina@5.3.0':
+    resolution: {integrity: sha512-+IYC+UR+1yPS6g631hJreAsdyLHwroCa+MMzJnlkP8WJrcvDZr2wgvGj6WGOzgK3I4xTTvgWhFPLBQz/dnRozw==}
 
   '@fontsource/rubik@5.3.0':
     resolution: {integrity: sha512-Nks2mn7vlE1jZVHuVgoKU2Ejqjvd+GJzLRdraCjo1xc79oo7O6vJ8pcvSfmKPGX3/Ln7nt09XWFzPeu2jWf0xQ==}
@@ -1146,6 +1164,12 @@ snapshots:
   '@fontsource/frank-ruhl-libre@5.3.0': {}
 
   '@fontsource/heebo@5.3.0': {}
+
+  '@fontsource/ibm-plex-mono@5.3.0': {}
+
+  '@fontsource/ibm-plex-sans-hebrew@5.3.0': {}
+
+  '@fontsource/karantina@5.3.0': {}
 
   '@fontsource/rubik@5.3.0': {}
 

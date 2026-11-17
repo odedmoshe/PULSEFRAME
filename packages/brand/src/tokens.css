@@ -1,10 +1,25 @@
+/* Brand constants and LEGACY aliases. The single source of the design tokens is apps/web/src/ds/tokens.css (UX_REDESIGN §3.1),
+   imported before this file. The aliases below keep the 150+ existing var(--pf-...) uses rendering until each surface is rebuilt;
+   theme.css (loaded last) still restyles them with its own legacy values and is retired surface by surface. */
 :root {
-  --pf-bg: #0e1013; --pf-surface: #16191e; --pf-surface-raised: #1d2128; --pf-border: #2a2f38;
-  --pf-text: #e8eaee; --pf-text-muted: #9aa2ae;
-  --pf-accent: #3de0c8; --pf-accent-2: #4cc2ff; --pf-accent-3: #9b8cff; --pf-danger: #ff6b6b; --pf-warn: #f5b84b;
-  --pf-r-sm: 4px; --pf-r-md: 8px; --pf-r-lg: 12px;
+  /* legacy name -> new token */
+  --pf-bg: var(--pf-canvas);
+  --pf-surface: var(--pf-surface-1);
+  --pf-surface-raised: var(--pf-surface-3);
+  --pf-border: var(--pf-line-strong-solid);
+  --pf-text-muted: var(--pf-text-2);
+  --pf-accent: var(--pf-frame);
+  --pf-accent-2: var(--pf-info);
+  --pf-accent-3: var(--pf-agent);
+  --pf-warn: var(--pf-attention);
+  /* legacy-only names (no new equivalent yet) */
   --pf-s-1: 4px; --pf-s-2: 8px; --pf-s-3: 12px; --pf-s-4: 16px; --pf-s-5: 24px;
-  --pf-font: 'Heebo', system-ui, sans-serif; --pf-mono: ui-monospace, 'SF Mono', Menlo, monospace;
-  --pf-fs-sm: 12px; --pf-fs-md: 14px; --pf-fs-lg: 16px;
+  --pf-mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --pf-clip-video: #2b6f8f; --pf-clip-audio: #2f7d63; --pf-clip-text: #6a5bbf;
+  /* Names that BOTH sheets define. The existing screens were laid out with these legacy values, so they keep them here
+     (this sheet loads after ds/tokens.css). Primitives are immune: every ds component carries .pf-ds, which re-asserts the
+     spec values (ds/primitives.css). Delete a line when the last legacy screen using it is rebuilt. */
+  --pf-r-sm: 4px; --pf-r-md: 8px; --pf-r-lg: 12px;
+  --pf-fs-sm: 12px; --pf-fs-md: 14px; --pf-fs-lg: 16px;
+  --pf-font: 'Heebo', system-ui, sans-serif;
 }
