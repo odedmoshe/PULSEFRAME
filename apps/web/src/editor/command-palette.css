@@ -16,7 +16,7 @@
 .pf-pal-input::placeholder { color: var(--pf-text-3); opacity: 1; }
 .pf-pal-esc, .pf-pal-dialog kbd { font-family: var(--pf-font-mono); font-size: var(--pf-fs-digits); line-height: 18px; padding-inline: 5px; direction: ltr; unicode-bidi: isolate; background: var(--pf-surface-4); border: 0; border-radius: var(--pf-r-xs); color: var(--pf-text-2); box-shadow: 0 0 0 1px var(--pf-line-strong); }
 .pf-pal-btn:focus-visible, .pf-pal-scope:focus-visible, .pf-pal-input:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
-.pf-pal-input:focus-visible { outline: 0; }
+.pf-pal-input:focus-visible { outline-offset: 3px; border-radius: var(--pf-r-xs); } /* the field draws its own focus ring inside the search box */
 .pf-pal-scopes { display: flex; gap: var(--pf-sp-3); padding: var(--pf-sp-2) var(--pf-sp-5) var(--pf-sp-4); overflow-x: auto; scrollbar-width: none; }
 .pf-pal-scope { display: inline-flex; align-items: center; gap: var(--pf-sp-3); flex: none; block-size: var(--pf-h-sm); padding-inline: var(--pf-sp-5); border: 0; border-radius: var(--pf-r-pill); background: var(--pf-surface-1); color: var(--pf-text-2); font: inherit; font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); cursor: pointer; box-shadow: 0 0 0 1px var(--pf-line); }
 .pf-pal-scope:hover { background: var(--pf-surface-3); color: var(--pf-text); }

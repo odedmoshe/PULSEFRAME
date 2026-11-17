@@ -214,7 +214,8 @@ function PlayheadCap({ pps, beatSeconds, markerFrames }: { pps: number; beatSeco
     const under = new Set(labelsUnder(boxes, from - 2, from + w + 2));
     // a marker's flag hides the labels it lies over too
     for (const m of ruler.querySelectorAll<HTMLElement>(':scope > .user-marker')) for (const k of labelsUnder(boxes, m.offsetLeft - 2, m.offsetLeft + m.offsetWidth + 2)) under.add(k);
-    spans.forEach((sp, k) => sp.classList.toggle('under-cap', under.has(k)));
+    // a covered label is hidden from sight (timeline.css) and from assistive technology alike: the cap above it says the time
+    spans.forEach((sp, k) => { const u = under.has(k); sp.classList.toggle('under-cap', u); if (u) sp.setAttribute('aria-hidden', 'true'); else sp.removeAttribute('aria-hidden'); });
   });
   return (
     <>
