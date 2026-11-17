@@ -269,13 +269,13 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const pr = need(c, 'edit');
     const projectId = c.req.param('id');
     gov.assertMayAct(pr, projectId, 'job');
-    assertStorageRoom(store, 1, 'start exports'); // also checked by each exporter.start; checked here first so a refusal creates none of the jobs
+    assertStorageRoom(store, 1, 'start exports'); // once for the whole batch, before any job exists (each start below is told so)
     const b = await body(c, z.object({ variantIds: z.array(z.string()).min(1).max(8), options: z.record(z.string(), z.unknown()).optional() }).strict());
     const doc = store.getProject(projectId).doc;
     // All-or-nothing: every variant must exist and plan without blockers before any job is created.
     for (const id of b.variantIds) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, variantId: id }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `format ${id} cannot be exported: ${plan.blockers[0]!.message}`, { variantId: id, blockers: plan.blockers }); }
     gov.takeExportQuota(pr, b.variantIds.length, true);
-    const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }));
+    const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }, undefined, { roomChecked: true }));
     gov.takeExportQuota(pr, jobs.length);
     return c.json({ jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, status: j.status })) }, 202);
   });

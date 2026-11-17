@@ -91,6 +91,19 @@ describe('exports: export_project is held to the ceiling like POST /exports', ()
       expect(jobs()).toBe(before);
     } finally { unfill(); }
   });
+  it('the batch route checks once for all its jobs: 507 past the ceiling with no job created, and its starts are not checked again one by one', async () => {
+    fill();
+    try {
+      const jobs = () => (store.db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number }).n;
+      const before = jobs();
+      const batch = await rest('POST', `/projects/${pid}/exports/batch`, { variantIds: ['v1', 'v2'] });
+      expect([batch.status, batch.body.error.code]).toEqual([507, 'storage_quota_exceeded']);
+      expect(jobs()).toBe(before);
+      // what the batch route passes to each start once it has checked: no second check (planning is reached; this project is empty)
+      expect(() => exporter.start(pid, 'agent:local', {}, undefined, { roomChecked: true })).toThrow(expect.objectContaining({ code: 'render_blocked' }));
+      expect(() => exporter.start(pid, 'agent:local', {})).toThrow(expect.objectContaining({ code: 'storage_quota_exceeded' }));
+    } finally { unfill(); }
+  });
   it('a retry writes a new file too: retry_job and POST /jobs/:id/retry are refused past the ceiling', async () => {
     const doc = store.getProject(pid).doc;
     const failed = store.createJob(pid, 'export', 'agent:local', { revision: 0, snapshot: doc, sidecar: null, manifest: { options: {} }, warnings: [], retryOf: null });
