@@ -99,7 +99,12 @@ export interface DiscSceneOptions {
 export function discScene(o: DiscSceneOptions = {}): DiscScene {
   const W = o.width ?? 320, H = o.height ?? 240, n = o.frames ?? 60, R = o.radius ?? 18;
   const start = o.start ?? { x: 80, y: 120 }, v = o.velocity ?? { x: 2.3, y: 0.7 }, c = o.curve ?? { x: 0, y: -0.02 };
-  const bg = texture(31), disc = texture(32, [12, 6, 3]), block = texture(33);
+  const disc = texture(32, [12, 6, 3]);
+  // the background and the occluder are static: their values per pixel are computed once
+  const bgT = texture(31), blockT = texture(33);
+  const bgPx = new Float64Array(W * H), blockPx = new Float64Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { bgPx[y * W + x] = bgT(x, y); if (o.occlude) blockPx[y * W + x] = blockT(x, y); }
+  const bg = (x: number, y: number) => bgPx[y * W + x]!, block = (x: number, y: number) => blockPx[y * W + x]!;
   const frames: GreyFrame[] = [], truth: { cx: number; cy: number }[] = [], decoy: ({ cx: number; cy: number } | null)[] = [];
   const at = (k: number) => ({ cx: start.x + v.x * k + c.x * k * k, cy: start.y + v.y * k + c.y * k * k });
   const decoyAt = o.decoy ? { cx: at(o.decoy.from).cx + o.decoy.offset.x, cy: at(o.decoy.from).cy + o.decoy.offset.y } : null;
