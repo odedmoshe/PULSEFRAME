@@ -3,6 +3,8 @@
  * canvas drag that creates a format-only override, hide-in-format, clip moves snapping to beats, manual beat edits at the
  * playhead, the batch-export job list, and the level meter during playback. The visual wave's look panel (ADR-0011): the ♪
  * beat toggle with its fieldset and undo, the date-stamp field with its inline refusal, and the time-first separator.
+ * Motion tracking (ADR-0015): a point picked with the keyboard only, an area picked by dragging, tracking progress that rises
+ * and Stop, a title attached to a track without a jump, a handle drag on that follower, and the preview against the still.
  * Still not covered here: audible fades/ducking during live playback (only the offline WebAudio chain is measured).
  *   pnpm build && pnpm proof:editor-interactions
  */
@@ -12,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
+import { generateTrackingFixture, trackingTruth } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
@@ -659,6 +662,153 @@ async function main() {
       check('time effect first: echo added after two effects is placed first; a separator (role separator, named by the rule) closes its row; moving the next effect up and the echo down are aria-disabled and change nothing; the cost line counts its pictures; a second time effect is refused and the refusal is shown in the panel in Hebrew', echoFirst && sepInfo.count === 1 && sepInfo.role === 'separator' && sepInfo.inFirstRow === 1 && !!sepInfo.name && blocked.up === 'true' && blocked.down === 'true' && blocked.otherDown === null && JSON.stringify(order1) === JSON.stringify(order0) && rev1 === rev0 && /4/.test(cost) && panelRefusal.includes(wantTime) && stillOne, { order0, order1, revisions: [rev0, rev1], separator: sepInfo, blocked, cost, panelRefusal, wantTime });
       check('no uncaught errors in the page with the visual-wave controls', vErrors.length === 0, vErrors.slice(0, 4));
       await vctx.close();
+    }
+
+    console.log('\n# motion tracking (ADR-0015): keyboard pick, box drag, progress and Stop, a title that follows without a jump, a handle drag on it, preview against still');
+    {
+      // the synthetic tracking fixture (a textured disc; no real face) at speed 2, so timeline frame t shows source frame 2t
+      const tfx = await generateTrackingFixture({ out: path.join(art, 'tracking.mp4') });
+      const longFile = path.join(art, 'long.mp4');
+      ff(['-f', 'lavfi', '-t', '60', '-i', 'testsrc2=s=640x360:r=30', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', longFile]);
+      const tp = (await call('/projects', { name: 'tracking', width: 1280, height: 720 })).body.project.id as string;
+      const ta = await upload(tp, tfx.file);
+      const tadd = await txs(tp, [{ op: 'add_clip', args: { assetId: ta.assetId, start: f(0), withLinkedAudio: false } }]);
+      const vclip = tadd.results[0].output.clipId as string, vtrack = tadd.results[0].output.trackId as string;
+      await txs(tp, [{ op: 'set_clip_speed', args: { clipId: vclip, speed: 2 } }]);
+      const tdoc = async () => (await call(`/projects/${tp}`)).body.project;
+      const tuntil = async (pred: (d: any) => boolean, ms = 10000) => { const t0 = Date.now(); for (;;) { const d2 = await tdoc(); if (pred(d2)) return d2; if (Date.now() - t0 > ms) return null; await sleep(100); } };
+      const tracksNow = (d2: any) => Object.values(d2?.motionTracks ?? {}) as any[];
+      const tjob = async (id: string, ms = 120000) => { const t0 = Date.now(); for (;;) { const j = (await call(`/jobs/${id}`)).body; if (['succeeded', 'failed', 'canceled'].includes(j.status) || Date.now() - t0 > ms) return j; await sleep(100); } };
+      const tctx = await browser.newContext({ viewport: { width: 1500, height: 1800 }, reducedMotion: 'reduce' });
+      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+      const tpage = await tctx.newPage();
+      const tErrors: string[] = [];
+      tpage.on('pageerror', (e) => tErrors.push(String(e)));
+      await tpage.goto(`${s.ownerUrl}&project=${tp}`);
+      const seek = async (frame: number) => {
+        await tpage.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, (frame / 30) * 90 + 0.5);
+        await tpage.waitForFunction((t) => { const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return c?.dataset.frame === String(t) && c?.dataset.quality === 'full'; }, frame, { timeout: 15000 }).catch(() => {});
+      };
+      await tpage.locator(`.clip[data-clip-id="${vclip}"]`).click();
+      await seek(30); // source frame 60
+      await tpage.getByTestId('mtrack-new-point').waitFor({ timeout: 10000 });
+
+      // 1. a point picked with the keyboard only: the button by Enter, the pick moved by arrows, confirmed by Enter
+      await tpage.getByTestId('mtrack-new-point').focus();
+      await tpage.keyboard.press('Enter');
+      await tpage.getByTestId('track-picker').waitFor({ timeout: 5000 });
+      await tpage.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'track-picker', undefined, { timeout: 5000 }).catch(() => {});
+      const pickerFocused = await tpage.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'track-picker');
+      for (let i = 0; i < 10; i++) await tpage.keyboard.press('Shift+ArrowRight');
+      for (let i = 0; i < 5; i++) await tpage.keyboard.press('ArrowDown');
+      const said = ((await tpage.getByTestId('track-picker-live').textContent()) ?? '').trim();
+      await tpage.keyboard.press('Enter');
+      const afterPoint = await tuntil((d2) => tracksNow(d2).length === 1);
+      const pt = tracksNow(afterPoint)[0];
+      await tpage.getByTestId('track-picker').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      await tpage.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'mtrack-new-point', undefined, { timeout: 3000 }).catch(() => {});
+      const focusBack = await tpage.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
+      const status = ((await tpage.getByTestId('mtrack-status').textContent().catch(() => '')) ?? '').trim();
+      const wantPoint = { kind: 'point', from: 60, x: Math.round((740 / 1280) * 1e4), y: Math.round((365 / 720) * 1e4) };
+      check('tracking, keyboard only: the "new point" button opens the picker with the focus on the picture; ten Shift+→ and five ↓ move the pick 100 and 5 frame pixels from the centre, announced in Hebrew; Enter commits create_motion_track at the SOURCE frame the playhead shows (60 at timeline frame 30, speed 2); the focus goes back and the panel says so', pickerFocused && !!pt && pt.kind === wantPoint.kind && pt.from === wantPoint.from && pt.x[0] === wantPoint.x && pt.y[0] === wantPoint.y && /[א-ת]/.test(said) && focusBack === 'mtrack-new-point' && /[א-ת]/.test(status), { got: pt && { kind: pt.kind, from: pt.from, x: pt.x[0], y: pt.y[0] }, want: wantPoint, said, focusBack, status });
+
+      // 2. an area picked by dragging over the disc of source frame 60
+      const disc = trackingTruth(60);
+      await tpage.getByTestId('mtrack-new-region').click();
+      await tpage.getByTestId('track-picker').waitFor({ timeout: 5000 });
+      const cb = (await tpage.getByTestId('preview').boundingBox())!;
+      const k = cb.width / 1280;
+      const A = { x: cb.x + (disc.cx - disc.r) * k, y: cb.y + (disc.cy - disc.r) * k }, B = { x: cb.x + (disc.cx + disc.r) * k, y: cb.y + (disc.cy + disc.r) * k };
+      await tpage.mouse.move(A.x, A.y);
+      await tpage.mouse.down();
+      await tpage.mouse.move((A.x + B.x) / 2, (A.y + B.y) / 2, { steps: 4 });
+      await tpage.mouse.move(B.x, B.y, { steps: 4 });
+      await tpage.mouse.up();
+      const markKind = await tpage.getByTestId('track-picker-mark').getAttribute('data-kind').catch(() => null);
+      await tpage.getByTestId('track-picker-confirm').click();
+      const afterBox = await tuntil((d2) => tracksNow(d2).length === 2);
+      const box = tracksNow(afterBox).find((x) => x.kind === 'region');
+      const want = { x: (disc.cx / 1280) * 1e4, y: (disc.cy / 720) * 1e4, w: ((2 * disc.r) / 1280) * 1e4, h: ((2 * disc.r) / 720) * 1e4 };
+      const tol = 2 * (1e4 / 720); // two frame pixels
+      check('tracking, box drag: dragging over the disc picks an area; confirming commits a region track whose centre and size are the dragged box in 1/10000 of the picture (within 2 frame pixels), on source frame 60', markKind === 'region' && !!box && box.from === 60 && Math.abs(box.x[0] - want.x) <= tol && Math.abs(box.y[0] - want.y) <= tol && Math.abs(box.box?.w - want.w) <= tol && Math.abs(box.box?.h - want.h) <= tol, { got: box && { x: box.x[0], y: box.y[0], box: box.box, from: box.from }, want: { x: Math.round(want.x), y: Math.round(want.y), w: Math.round(want.w), h: Math.round(want.h) }, markKind });
+
+      // 3. progress that rises, then Stop: a minute of moving test picture after the fixture on the same track
+      const la = await upload(tp, longFile);
+      const lc = (await txs(tp, [{ op: 'add_clip', args: { assetId: la.assetId, start: f(130), trackId: vtrack, withLinkedAudio: false } }])).results[0].output.clipId as string;
+      const lt = (await txs(tp, [{ op: 'create_motion_track', args: { assetId: la.assetId, name: 'ארוך', kind: 'region', frame: 0, x: 5000, y: 5000, w: 2000, h: 2000 } }])).results[0].output.motionTrackId as string;
+      await tpage.locator(`.clip[data-clip-id="${lc}"]`).click({ position: { x: 20, y: 10 } });
+      const item = tpage.locator(`[data-testid=mtrack-item][data-motion-track-id="${lt}"]`);
+      await item.waitFor({ timeout: 10000 });
+      await item.getByTestId('mtrack-run').click();
+      const seen: number[] = [];
+      let role: string | null = null, valueText = '';
+      for (let t0 = Date.now(); Date.now() - t0 < 30000;) {
+        const bar = item.getByTestId('mtrack-progress');
+        if (await bar.count()) {
+          const v = await bar.getAttribute('aria-valuenow').catch(() => null);
+          role = await bar.getAttribute('role').catch(() => role);
+          valueText = (await bar.getAttribute('aria-valuetext').catch(() => null)) ?? valueText;
+          if (v !== null && Number(v) !== seen.at(-1)) seen.push(Number(v));
+          if (seen.length >= 2 && seen.at(-1)! > seen[0]!) break;
+        }
+        await sleep(100);
+      }
+      await item.getByTestId('mtrack-stop').click().catch(() => {});
+      await tpage.waitForFunction((id) => document.querySelector(`[data-testid=mtrack-item][data-motion-track-id="${id}"] [data-testid=mtrack-job-status]`)?.getAttribute('data-status') === 'canceled', lt, { timeout: 15000 }).catch(() => {});
+      const jobStatus = await item.getByTestId('mtrack-job-status').getAttribute('data-status').catch(() => null);
+      const ltNow = (await tdoc()).motionTracks?.[lt];
+      check('tracking, progress and Stop: "Track" starts the job; the role=progressbar rises (aria-valuenow), its value text is the stage in Hebrew; "Stop" ends it canceled and nothing is attached', role === 'progressbar' && seen.length >= 2 && seen.at(-1)! > seen[0]! && /עוקב|קורא/.test(valueText) && jobStatus === 'canceled' && ltNow?.st.length === 1, { seen, role, valueText, jobStatus, samples: ltNow?.st.length });
+
+      // 4. a magenta title attached to the tracked area without a jump (stills of timeline frame 30, before and after)
+      const run = await call(`/projects/${tp}/motion-tracks/${box?.id}/track`, {});
+      const tracked = run.status === 202 ? await tjob(run.body.jobId) : { status: `refused ${run.status}` };
+      const title = (await txs(tp, [{ op: 'add_text', args: { text: 'מעקב', start: f(0), duration: f(120), style: { color: '#ff00ff', sizeFrac: 0.06, stroke: null, background: null }, transform: { x: 0.1, y: -0.15 } } }])).results[0].output.clipId as string;
+      const stillPng = async (index: number) => { const r = await fetch(`${s.url}/api/v1/projects/${tp}/frame?index=${index}`, { headers: h }); return Buffer.from(await r.arrayBuffer()); };
+      const magentaOf = (rgb: Uint8Array, w: number, hgt: number, stride = 3) => { let n = 0, sx = 0, sy = 0; for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * stride; if (rgb[i]! > 150 && rgb[i + 2]! > 150 && rgb[i + 1]! < 110) { n++; sx += x + 0.5; sy += y + 0.5; } } return n ? { x: sx / n, y: sy / n } : null; };
+      const stillMagenta = async (index: number) => magentaOf(execFileSync('ffmpeg', ['-v', 'error', '-f', 'png_pipe', '-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: await stillPng(index), maxBuffer: 1 << 26 }), 1280, 720);
+      const before = await stillMagenta(30);
+      await tpage.locator(`.clip[data-clip-id="${title}"]`).click();
+      await seek(30);
+      const opt = `${box?.id}|${vtrack}`;
+      await tpage.getByTestId('follow-track').waitFor({ timeout: 10000 });
+      await tpage.getByTestId('follow-track').selectOption(opt).catch(() => {});
+      await tpage.getByTestId('follow-attach').click();
+      const attached = await tuntil((d2) => !!d2.sequences.seq_main.tracks.flatMap((t2: any) => t2.clips).find((c: any) => c.id === title)?.follow);
+      const after = await stillMagenta(30);
+      const jump = before && after ? Math.hypot(after.x - before.x, after.y - before.y) : Infinity;
+      check('tracking, follow: after tracking the area, "attach without a jump" on a magenta title commits set_clip_follow with an offset that keeps it where it was: its centre on the still of the same frame moves at most 1 px', tracked.status === 'succeeded' && !!attached && jump <= 1, { tracked: tracked.status, jumpPx: Number(jump.toFixed(3)), before, after });
+
+      // 5. a handle drag on the follower writes its offset (Δ/m, m = 1 here): the still moves by the drag
+      await tpage.waitForFunction(() => !!document.querySelector('[data-testid=canvas-handles] [data-handle=move]'), undefined, { timeout: 8000 }).catch(() => {});
+      const mv = tpage.locator('[data-testid=canvas-handles] [data-handle=move]');
+      const mb = (await mv.boundingBox())!;
+      const own0 = attached?.sequences.seq_main.tracks.flatMap((t2: any) => t2.clips).find((c: any) => c.id === title)?.transform;
+      await tpage.mouse.move(mb.x + mb.width / 2, mb.y + mb.height / 2);
+      await tpage.mouse.down();
+      await tpage.mouse.move(mb.x + mb.width / 2 + 40, mb.y + mb.height / 2 + 30, { steps: 6 });
+      await tpage.mouse.up();
+      const moved = await tuntil((d2) => { const c = d2.sequences.seq_main.tracks.flatMap((t2: any) => t2.clips).find((x: any) => x.id === title); return !!own0 && !!c && (c.transform.x !== own0.x || c.transform.y !== own0.y); });
+      const own1 = moved?.sequences.seq_main.tracks.flatMap((t2: any) => t2.clips).find((c: any) => c.id === title)?.transform;
+      const dragged = await stillMagenta(30);
+      const shift = after && dragged ? { x: dragged.x - after.x, y: dragged.y - after.y } : null;
+      const wantShift = { x: 40 / k, y: 30 / k };
+      const stillFollows = !!moved?.sequences.seq_main.tracks.flatMap((t2: any) => t2.clips).find((c: any) => c.id === title)?.follow;
+      check('tracking, handle drag on a follower: dragging its move handle by 40×30 screen px changes its own offset by that fraction of the frame and moves it on the still by 40/k × 30/k frame px (within 2 px); it still follows', !!own0 && !!own1 && Math.abs(own1.x - own0.x - 40 / cb.width) < 0.004 && Math.abs(own1.y - own0.y - 30 / cb.height) < 0.004 && !!shift && Math.hypot(shift.x - wantShift.x, shift.y - wantShift.y) <= 2 && stillFollows, { own0: own0 && { x: own0.x, y: own0.y }, own1: own1 && { x: own1.x, y: own1.y }, shift: shift && { x: Number(shift.x.toFixed(2)), y: Number(shift.y.toFixed(2)) }, wantShift: { x: Number(wantShift.x.toFixed(2)), y: Number(wantShift.y.toFixed(2)) } });
+
+      // 6. the editor preview puts the follower where the still does
+      await sleep(500);
+      await seek(31);
+      await seek(30);
+      const preview = await tpage.evaluate(() => {
+        const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement;
+        const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+        let n = 0, sx = 0, sy = 0;
+        for (let y = 0, i = 0; y < c.height; y++) for (let x = 0; x < c.width; x++, i += 4) if (d[i]! > 150 && d[i + 2]! > 150 && d[i + 1]! < 110) { n++; sx += x + 0.5; sy += y + 0.5; }
+        return n ? { x: (sx / n) * (1280 / c.width), y: (sy / n) * (720 / c.height) } : null;
+      });
+      const pv = preview && dragged ? Math.hypot(preview.x - dragged.x, preview.y - dragged.y) : Infinity;
+      check('tracking, preview: the follower\'s centre in the editor preview is within 2 px of the still of the same frame (one evaluator); no page errors', pv <= 2 && tErrors.length === 0, { px: Number(pv.toFixed(3)), preview, still: dragged, errors: tErrors.slice(0, 3) });
+      await tctx.close();
     }
 
     await page.close();
