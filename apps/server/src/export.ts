@@ -21,6 +21,7 @@ import { limiter } from './analysis.ts';
 
 const stillLimit = limiter(2, 32);
 import { ffprobe } from './ingest.ts';
+import { assertStorageRoom } from './storage.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
 const exec = promisify(execFile);
@@ -197,8 +198,16 @@ export class Exporter {
     }
     return f;
   }
-  /** Create the durable job (or refuse with the blockers). The single entry point for UI, REST and MCP. */
-  start(projectId: string, actor: string, rawOptions: unknown, retryOf?: JobRow): JobRow {
+  /**
+   * Create the durable job (or refuse with the blockers). The single entry point for UI, REST and MCP.
+   * `roomChecked`: the caller has just made the storage check below for a whole group of jobs (the batch route); repeating it per
+   * job could refuse a later job of the group after the first was created, when the ceiling is within a few kilobytes.
+   */
+  start(projectId: string, actor: string, rawOptions: unknown, retryOf?: JobRow, opts: { roomChecked?: boolean } = {}): JobRow {
+    // The output size is not known in advance, so an export (or a retry, which writes a new file) is refused once the storage
+    // ceiling is reached. Checked here rather than in the route: the REST route, the batch route, retries and the MCP tool all
+    // start exports through this function (the MCP tool used to skip the check that only the REST route made).
+    if (!opts.roomChecked) assertStorageRoom(this.store, 1, retryOf ? 'retry this export' : 'start an export');
     const p = retryOf ? { doc: retryOf.input.snapshot as ProjectDocument, revision: retryOf.input.revision as number } : this.store.getProject(projectId);
     const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, 'Fix the listed blockers (relink media, change the font or the range) and try again.');

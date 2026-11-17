@@ -302,7 +302,8 @@ describe('strobe: the three-a-second limit as a property', () => {
       flashes += expectSafe(doc, m.titleStart, 20);
       runs++;
     }), { numRuns: RUNS, endOnFailure: true });
-    expect(flashes / runs).toBeGreaterThan(10); // the property is not satisfied by never flashing
+    // the property is not satisfied by never flashing: on average a run flashes many times (about 9 to 15 over random seeds; 8.8 was seen once, so the floor is set well under that)
+    expect(flashes / runs).toBeGreaterThan(5);
   }, 60_000 + RUNS * 2000);
 
   it('steady: any rate the schema allows, any place on the timeline, any frame rate, cuts of the title, with or without music under it', () => {
