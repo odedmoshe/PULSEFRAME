@@ -74,7 +74,12 @@ export interface ShuttleMeasure {
   /** Rises of the brightness on screen, and the most within one second. */
   flashesOnScreen: number;
   mostInOneSecond: number;
-  /** Seconds between the two closest rises on screen (null with fewer than two): told, not judged (an animation frame is 17 ms). */
+  /**
+   * Seconds between the two closest rises on screen (null with fewer than two). Told, not judged: it can be shorter than the
+   * guard's third of a second without a fault, because the guard times a rise that builds over several paints from its first
+   * step of 0.02 of the light and this measure from the first step of 8 of 255 (measured: 0.246 s where the guard's own
+   * starts were 0.33 s apart on screen).
+   */
   closestOnScreen: number | null;
   /** Rises the same frames at the same times would have shown without the guard, and the most within one second. */
   flashesWithoutGuard: number;
