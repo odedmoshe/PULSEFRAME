@@ -4,7 +4,7 @@
  * their values, explanations behind "?". Every control commits a registered operation through the store, as before; the
  * controls that proofs drive keep their test ids on the same native elements.
  */
-import { useContext, useEffect, useId, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import {
   Activity, Blend as BlendIcon, Captions, ChevronRight, Contrast, Droplet, Ellipsis, Film, Gauge, Layers, Maximize2, Minimize2, Move, Music,
   Scissors, SlidersHorizontal, Sparkles, Spline, SquareDashed, Timer, Trash2, Type, Volume2, type LucideProps,
@@ -245,6 +245,7 @@ function TimeBlock({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
         <button className="ghost" disabled={!inside} onClick={() => run(editor, 'edit.split')} data-testid="split">{t('split')} {hint(keymap, 'edit.split')}</button>
         <button className="ghost" disabled={!inside} onClick={() => run(editor, 'edit.trimStart')}>{t('trim.start')} {hint(keymap, 'edit.trimStart')}</button>
         <button className="ghost" disabled={!inside} onClick={() => run(editor, 'edit.trimEnd')}>{t('trim.end')} {hint(keymap, 'edit.trimEnd')}</button>
+        <button className="ghost danger" onClick={() => run(editor, 'edit.delete')} data-testid="delete">{t('delete')} {hint(keymap, 'edit.delete')}</button>
       </div>
     </>
   );
@@ -298,7 +299,9 @@ function BeatRow({ clip, onOpen }: { clip: Clip; onOpen: () => void }) {
   const { editor, state } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   const doc = state.doc;
-  if (!doc || clip.type === 'caption' || !musicUnder(doc, clip, editor.rate)) return null;
+  // looked up when the project or the clip changes, not on every painted frame
+  const music = useMemo(() => !!doc && musicUnder(doc, clip, editor.rate), [doc, clip, editor.rate]);
+  if (!doc || clip.type === 'caption' || !music) return null;
   const following = (clip.effects ?? []).flatMap((fx) => Object.entries(fx.modulate ?? {}).map(([param, m]) => ({ fx, param, m })));
   return (
     <button type="button" className="pf-card is-pulse beat-row" data-testid="insp-beat-row" data-following={following.length} onClick={onOpen}>
@@ -547,7 +550,7 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
       <BeatRow clip={clip} onOpen={() => openInspectorTab('effects')} />
       {media && !variantId && <CutLink clip={media} />}
       <Section id="keys" title={S.secKeys} defaultOpen={false} summary={ks.count ? S.keysCount(ks.count) : S.keysNone}><KeyframeButtons clip={clip} keymap={keymap} /></Section>
-      <Section id="blend" title={S.secBlend} defaultOpen={false} summary={blend === 'normal' ? S.blendNormal : blend}><BlendField clip={clip} /></Section>
+      <Section id="blend" title={S.secBlend} defaultOpen={false} summary={S.blend[blend] ?? blend}><BlendField clip={clip} /></Section>
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${shortTimecode(T.frameIndexAt(clip.start, editor.rate), fps)} · ${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>
       {media && !variantId && (
         <Section id="media" title={S.secMedia} defaultOpen={false} summary={(state.doc?.assets[media.assetId]?.name ?? '').replace(/\.[a-z0-9]{2,5}$/i, '')}>
@@ -919,6 +922,8 @@ export function ObjectPanels({ kind, tab, onTab, keymap, firstIsClipTab }: { kin
   const variantId = state.viewVariantId;
   const viewClip = clip && variantId ? editor.viewDoc?.sequences[editor.viewDoc.mainSequenceId]?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clip.id) ?? clip : clip;
   const narrow = useNarrow();
+  // As drawn at the playhead, worked out once for all the tabs: for a clip that follows a motion track (ADR-0015) the resolved values, edited as its offset.
+  const shown = clip && viewClip ? editor.resolvedTransformNow(variantId ? viewClip : clip) : null;
   const count = clip && clip.type !== 'caption' ? clip.effects?.length ?? 0 : 0;
   const specs: TabSpec[] = tabs.map((id, i) => ({ id, label: S[TAB_LABEL[id]] as string, icon: ico(TAB_ICON[id]), count: id === 'effects' && count ? count : undefined, testId: i === 0 && firstIsClipTab ? `inspector-tab-${CLIP_PAGE}` : `insp-tab-${id}` }));
   return (
@@ -930,7 +935,7 @@ export function ObjectPanels({ kind, tab, onTab, keymap, firstIsClipTab }: { kin
           {flat && tabs.length > 1 && <h3 className="insp-flat-title">{ico(TAB_ICON[id], 16)} {S[TAB_LABEL[id]] as string}</h3>}
           {kind === 'none' ? <ProjectPanel /> : kind === 'multi' ? <SharedTab /> : kind === 'cut' && clip?.type === 'media'
             ? (id === 'cut' ? <CutPanel clip={clip} /> : <TransitionPanel clip={clip} />)
-            : clip && viewClip && sel ? <ObjectTabBody id={id} kind={kind} clip={clip} viewClip={viewClip} keymap={keymap} trackKind={sel.track.kind} /> : null}
+            : clip && viewClip && sel && shown ? <ObjectTabBody id={id} kind={kind} clip={clip} viewClip={viewClip} shown={shown} keymap={keymap} trackKind={sel.track.kind} /> : null}
         </div>
       ))}
       {/* all tools on one screen: the transition at the start of a picture clip stands with the clip (in tabs it belongs to the cut) */}
@@ -945,11 +950,7 @@ export function ObjectPanels({ kind, tab, onTab, keymap, firstIsClipTab }: { kin
 }
 
 /** One tab's content. The look state is made here, per clip, so the colour and effects tabs of one object share it. */
-function ObjectTabBody({ id, kind, clip, viewClip, keymap, trackKind }: { id: ObjectTab; kind: ObjectKind; clip: Clip; viewClip: Clip; keymap: Keymap; trackKind: string }) {
-  const { editor, state } = useEditorState();
-  const variantId = state.viewVariantId;
-  // As drawn at the playhead: for a clip that follows a motion track (ADR-0015) the resolved values, edited as its offset.
-  const shown = editor.resolvedTransformNow(variantId ? viewClip : clip);
+function ObjectTabBody({ id, kind, clip, viewClip, shown, keymap, trackKind }: { id: ObjectTab; kind: ObjectKind; clip: Clip; viewClip: Clip; shown: ResolvedNow; keymap: Keymap; trackKind: string }) {
   const look = useSharedLook(clip, trackKind);
   const p: PanelProps = { clip, viewClip, shown, keymap, look, trackKind };
   switch (id) {

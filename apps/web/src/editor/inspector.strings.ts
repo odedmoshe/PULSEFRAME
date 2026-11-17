@@ -30,6 +30,7 @@ const he = {
   secFill: 'מילוי מסגרת', fit: 'התאמה', fill: 'מילוי', fitHint: 'כל התמונה נראית', fillHint: 'התמונה ממלאת את המסגרת',
   secKeys: 'מפתחות אנימציה', keysNone: 'אין מפתחות', keysCount: (n: number) => `${n} מפתחות`,
   secBlend: 'מיזוג', blendNormal: 'רגיל',
+  blend: { normal: 'רגיל', multiply: 'הכפלה', screen: 'מסך', overlay: 'שכבת־על', 'soft-light': 'אור רך', 'hard-light': 'אור קשה', add: 'חיבור', difference: 'הפרש', exclusion: 'הוצאה', darken: 'הכהיה', lighten: 'הבהרה', 'color-dodge': 'הבהרת צבע', 'color-burn': 'צריבת צבע', hue: 'גוון', saturation: 'רוויה', color: 'צבע', luminosity: 'בהירות' } as Record<string, string>,
   secTime: 'זמן וחיתוך', startsAt: 'מתחיל ב־', lasts: 'אורך',
   secMedia: 'קובץ המקור', secLayout: 'פריסת מסך מפוצל', secAnalysis: 'ניתוח התוכן',
   cutBefore: 'החיתוך שלפני הקליפ', cutNone: 'ללא מעבר', cutOpen: 'פתיחה',
@@ -83,7 +84,7 @@ const he = {
   secLength: 'משך', lengthFrames: 'אורך', secBeatLock: 'קצב', secVelocity: 'תאוצה', removeTransition: 'הסרת המעבר',
 } as const;
 
-const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => string ? (...a: A) => string : string } = {
+const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => string ? (...a: A) => string : (typeof he)[K] extends string ? string : Record<string, string> } = {
   inspector: 'Properties',
   pageClip: 'Clip', pageObject: 'Selected', pageSound: 'Mixer', pageCaptions: 'Captions', pageSpeech: 'Transcript', pageDeliver: 'Deliver', pageReview: 'Review', pageRecipes: 'Recipes',
   pages: 'Panels',
@@ -105,6 +106,7 @@ const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => st
   secFill: 'Frame fill', fit: 'Fit', fill: 'Fill', fitHint: 'The whole picture shows', fillHint: 'The picture fills the frame',
   secKeys: 'Keyframes', keysNone: 'No keyframes', keysCount: (n) => `${n} keyframes`,
   secBlend: 'Blend', blendNormal: 'Normal',
+  blend: { normal: 'Normal', multiply: 'Multiply', screen: 'Screen', overlay: 'Overlay', 'soft-light': 'Soft light', 'hard-light': 'Hard light', add: 'Add', difference: 'Difference', exclusion: 'Exclusion', darken: 'Darken', lighten: 'Lighten', 'color-dodge': 'Colour dodge', 'color-burn': 'Colour burn', hue: 'Hue', saturation: 'Saturation', color: 'Colour', luminosity: 'Luminosity' },
   secTime: 'Time and cuts', startsAt: 'Starts at ', lasts: 'Length',
   secMedia: 'Source file', secLayout: 'Split-screen layout', secAnalysis: 'Content analysis',
   cutBefore: 'The cut before this clip', cutNone: 'No transition', cutOpen: 'Open',

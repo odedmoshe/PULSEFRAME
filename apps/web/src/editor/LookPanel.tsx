@@ -10,6 +10,7 @@ import { wholeEditAdjustment, type WholeEditPick } from './commands.ts';
 import { flashSchedule } from '@pulseframe/engine';
 import { TRANSITION_OPTION_TESTIDS } from './trendTestIds.ts';
 import { SectionsContext } from './Section.tsx';
+import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } from './icons.tsx';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
@@ -611,12 +612,12 @@ export function LooksField({ look }: { look: LookState }) {
 
 /** How the clip is mixed with what lies under it. */
 export function BlendField({ clip }: { clip: Clip }) {
-  const { editor, t } = useEditorState();
+  const { editor, state, t } = useEditorState();
   const blend = clip.type === 'caption' ? 'normal' : clip.blend ?? 'normal';
   return (
     <label className="blend-field">{t('look.blend')}
       <select value={blend} data-testid="blend-mode" onChange={(e) => void editor.commit([{ op: 'set_clip_blend', args: { clipId: clip.id, mode: e.target.value } }], 'Blend mode')}>
-        {BLEND_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+        {BLEND_MODES.map((m) => <option key={m} value={m}>{INSPECTOR_STRINGS[state.lang].blend[m] ?? m}</option>)}
       </select>
     </label>
   );

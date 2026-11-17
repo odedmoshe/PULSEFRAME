@@ -27,7 +27,7 @@
 .pf-insp .sc-tile { border: 0; border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-strong); padding: var(--pf-sp-3) var(--pf-sp-2); }
 .pf-insp .sc-tile:hover:not(:disabled) { background: var(--pf-surface-3); box-shadow: inset 0 0 0 1.5px var(--pf-frame); border: 0; }
 .pf-insp .sc-name { font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); }
-.pf-insp .sc-len { direction: ltr; unicode-bidi: isolate; font-family: var(--pf-font-mono); }
+.pf-insp .sc-len { font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
 .pf-insp .sc-graph { border: 0; box-shadow: inset 0 0 0 1px var(--pf-line-strong); border-radius: var(--pf-r-md); max-width: none; }
 .pf-insp .sc-custom summary { font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); color: var(--pf-text-2); }
 .pf-insp .sc-status:empty { display: none; }
