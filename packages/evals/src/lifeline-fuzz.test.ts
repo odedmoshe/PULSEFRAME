@@ -4,12 +4,13 @@
  * fuzz (ops-fuzz.test.ts, store-fuzz.test.ts) when W1 sets LIFE_OPS_BUILT; this test does not run any operation body.
  */
 import { describe, expect, it } from 'vitest';
-import { applyTransaction, createProject, getOp, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, CaptureSchema, createProject, getOp, type ProjectDocument } from '@pulseframe/core';
 import { createFuzz, LIFE_FUZZ_OPS } from './ops-fuzz.gen.ts';
 
 describe('fuzz rows of the life line', () => {
   it('every generated call is well-formed for its operation, and each of the seven public operations is drawn', () => {
     const seen = new Set<string>();
+    const steps = new Set<number>();
     for (let seed = 1; seed <= 12; seed++) {
       const fz = createFuzz(seed);
       let n = 0;
@@ -26,10 +27,14 @@ describe('fuzz rows of the life line', () => {
         const parsed = def!.args.safeParse(call.args);
         expect(parsed.success, `seed ${seed}: ${JSON.stringify(call)}`).toBe(true);
         seen.add(call.op);
+        if (call.op === 'shift_asset_captures') steps.add((call.args as { minutes: number }).minutes);
       }
     }
     for (const op of LIFE_FUZZ_OPS) expect(seen.has(op), op).toBe(true);
     expect([...seen].filter((op) => !(LIFE_FUZZ_OPS as readonly string[]).includes(op))).toEqual(['update_text']);
+    // the fuzz moves one file more than once: the total of any two steps it draws (the largest step among them) is one a capture can remember
+    expect(steps.has(-5256000)).toBe(true);
+    for (const a of steps) for (const b of steps) expect(CaptureSchema.safeParse({ at: '2014-12-28T17:30:00', utcOffsetMinutes: 120, source: 'container', shiftedMinutes: a + b }).success, `${a} then ${b}`).toBe(true);
   });
   // W1: with LIFE_OPS_BUILT the same rows run inside ops-fuzz.test.ts and store-fuzz.test.ts, where each operation must be accepted at least once
   it.todo('each life-line operation is accepted at least once in the operations fuzz and survives undo, redo and replay in the store fuzz');
