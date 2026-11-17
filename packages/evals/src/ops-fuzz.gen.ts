@@ -393,6 +393,10 @@ export function createFuzz(seed: number) {
       // replace media (ADR-0016): another of the files for a clip, its linked sound following or detached; refused for a file
       // without what the clip plays, too short, or a still in place of a clip at another speed
       () => ({ op: 'replace_clip_media', args: { clipId: media.length && rnd() < 0.9 ? pick(media).c.id : any(), assetId: pick(assetIds), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(150), SRC) } : {}), ...(rnd() < 0.4 ? { linked: pick(['follow', 'detach'] as const) } : {}) } }),
+      // timeline behaviour (UX redesign wave A): the per-project magnet and ripple-delete switches, and ripple delete itself on
+      // clips of the main track mostly, sometimes of any track, with the picture alone or an unknown clip (refused)
+      () => ({ op: 'set_timeline_behaviour', args: rnd() < 0.1 ? {} : { ...(rnd() < 0.6 ? { mainMagnet: rnd() < 0.5 } : {}), ...(rnd() < 0.6 ? { rippleDelete: rnd() < 0.5 } : {}) } }),
+      () => ({ op: 'ripple_delete_clips', args: { clipIds: Array.from({ length: 1 + int(2) }, () => (videoClips.length && rnd() < 0.75 ? pick(videoClips).c.id : any())), ...(rnd() < 0.15 ? { includeLinked: false } : {}) } }),
       // life line (ADR-0021): capture dates, events and title fields, once their operations are built
       ...(LIFE_OPS_BUILT ? lifeMenu(doc) : []),
       // people (ADR-0021, people section): once their operations are built

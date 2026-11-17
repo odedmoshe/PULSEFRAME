@@ -215,10 +215,22 @@ const HE_TEMPLATES: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^run \S+ is a run of \S+, not of \S+$/, () => 'ההחלה הקודמת שייכת לתבנית אחרת, ולכן אי אפשר ליצור אותה מחדש בתבנית הזו'],
   [/^template \S+ needs a model that is not installed, so it is never applied$/, () => 'התבנית הזו צריכה מודל שאינו מותקן במחשב הזה, ולכן היא לעולם אינה מוחלת. תבנית לעולם אינה מורידה מודלים'],
 ];
+/**
+ * Refusals of the timeline-behaviour operations (UX redesign wave A: set_timeline_behaviour, ripple_delete_clips), with their own
+ * case in packages/evals/src/refusal-wording.test.ts, which provokes each of them. Refusals they share with other edits (a locked
+ * track, a linked clip on a locked track) are worded in the tables above.
+ */
+const HE_TIMELINE: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^nothing to change: give mainMagnet or rippleDelete$/, () => 'לא צוין מה לשנות בהתנהגות ציר הזמן'],
+  [/^clip \S+ not found$/, () => 'הקליפ לא נמצא; ייתכן שכבר נמחק'],
+  [/^linked clips \S+ and \S+ would move by different amounts$/, () => 'שני קליפים מקושרים היו צריכים לזוז בכמות שונה, ולכן הרווח לא נסגר. אפשר למחוק קליפים מרצועה אחת בכל פעם, או לנתק את הקישור ביניהם'],
+  [/^closing the gap would put clip \S+ over clip \S+ on track \S+$/, () => `סגירת הרווח הייתה מניחה קליפ על קליפ אחר שנשאר במקומו. אפשר למחוק ולהשאיר את הרווח (${ltr('Shift+Delete')}), או להזיז קודם את הקליפ שמפריע`],
+  [/^clip \S+ on locked track \S+ is linked to a clip this edit removes or divides, and would be left linked to nothing$/, () => 'קליפ ברצועה נעולה מקושר לקליפ שהפעולה מוחקת או מחלקת, והקישור שלו היה נשאר בלי בן זוג. יש לבטל קודם את נעילת הרצועה'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE]) { const m = re.exec(message); if (m) return say(m); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
@@ -241,3 +253,5 @@ export const LIFE_REFUSAL_PATTERNS: readonly RegExp[] = HE_LIFE.map(([re]) => re
 export const PACK_REFUSAL_PATTERNS: readonly RegExp[] = HE_PACKS.map(([re]) => re);
 /** The patterns of the people operations (ADR-0021, people section; the table is in people.ts), for packages/evals/src/people-wording.test.ts. */
 export const PEOPLE_REFUSAL_PATTERNS: readonly RegExp[] = HE_PEOPLE.map(([re]) => re);
+/** The patterns of the timeline-behaviour operations (set_timeline_behaviour, ripple_delete_clips), for their own case of refusal-wording.test.ts. */
+export const TIMELINE_REFUSAL_PATTERNS: readonly RegExp[] = HE_TIMELINE.map(([re]) => re);

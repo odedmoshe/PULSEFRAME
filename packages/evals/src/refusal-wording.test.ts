@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, effectParams, LIFE_REFUSALS, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS, type Capture, type LifeEvent, type LifeRefusalKey } from '@pulseframe/core';
-import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, TEMPLATE_REFUSAL_PATTERNS, LIFE_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
+import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, TEMPLATE_REFUSAL_PATTERNS, LIFE_REFUSAL_PATTERNS, TIMELINE_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -418,5 +418,40 @@ describe('Hebrew wording of common refusals', () => {
     expect(translateRefusal('he', messages.eventTooManyFiles![0]!)).toContain(String(MAX_EVENT_FILES));
     expect(translateRefusal('he', messages.tooManyEvents![0]!)).toContain(String(MAX_LIFE_EVENTS));
     expect(translateRefusal('he', messages.fieldsAlready![0]!)).not.toBe(translateRefusal('he', messages.fieldsAlready![1]!)); // off, and on
+  });
+  it('timeline behaviour (UX redesign wave A): every refusal of set_timeline_behaviour and ripple_delete_clips is provoked and worded in Hebrew', () => {
+    const sound = { kind: 'audio' as const, name: 's.wav', contentHash: `sha256:${'3'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(8, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: prov };
+    let r = tx(createProject({ id: 'prj_tl', name: 'TL' }), [{ op: 'import_asset', args: { asset: video } }, { op: 'import_asset', args: { asset: sound } }], true);
+    const assetId = r.results[0]!.output!.assetId as string, soundId = r.results[1]!.output!.assetId as string;
+    // three clips with their sounds, the third after a gap: 0..60, 60..120, 160..220
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(0), sourceIn: f(0), duration: f(60) } }, { op: 'add_clip', args: { assetId, start: f(60), sourceIn: f(60), duration: f(60) } }, { op: 'add_clip', args: { assetId, start: f(160), sourceIn: f(120), duration: f(60) } }]);
+    const b = (r.results[1]!.output as any).clipId as string, bSound = (r.results[1]!.output as any).audioClipId as string;
+    const d = r.doc;
+    const soundTrack = Object.values(d.sequences)[0]!.tracks.find((t) => t.clips.some((c) => c.id === bSound))!.id;
+    // a loose sound in the gap on the same sound track: deleting it with the middle clip would move the last picture and its sound by different amounts
+    const loose = tx(d, [{ op: 'add_clip', args: { assetId: soundId, start: f(125), duration: f(10), trackId: soundTrack } }]);
+    const looseId = (loose.results[0]!.output as any).clipId as string;
+    const lockedSound = tx(d, [{ op: 'update_track', args: { trackId: soundTrack, locked: true } }]).doc;
+    const cases: [string, ProjectDocument, OpCall[]][] = [
+      ['a behaviour change that changes nothing', d, [{ op: 'set_timeline_behaviour', args: {} }]],
+      ['a ripple delete of a clip that is gone', d, [{ op: 'ripple_delete_clips', args: { clipIds: ['clp_gone'] } }]],
+      ['linked clips that would move by different amounts', loose.doc, [{ op: 'ripple_delete_clips', args: { clipIds: [b, looseId] } }]],
+      ['a sound slid over a sound that stays', d, [{ op: 'ripple_delete_clips', args: { clipIds: [b], includeLinked: false } }]],
+      ['a picture deleted alone while its sound is on a locked track', lockedSound, [{ op: 'ripple_delete_clips', args: { clipIds: [b], includeLinked: false } }]],
+    ];
+    const matched = new Set<number>();
+    const unrecognised: string[] = [];
+    for (const [what, doc, ops] of cases) {
+      let message = '';
+      try { tx(doc, ops); message = '(not refused)'; } catch (e) { if (!(e instanceof OpError)) throw e; message = e.message; }
+      const he = translateRefusal('he', message);
+      if (!he || !/[֐-׿]/.test(he)) unrecognised.push(`${what}: ${message}`);
+      const hits = TIMELINE_REFUSAL_PATTERNS.map((re, i) => (re.test(message) ? i : -1)).filter((i) => i >= 0);
+      expect(hits.length, `${what}: ${message}`).toBe(1);
+      matched.add(hits[0]!);
+      expect(translateRefusal('en', message)).toBeUndefined();
+    }
+    expect(unrecognised).toEqual([]);
+    expect(TIMELINE_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
   });
 });
