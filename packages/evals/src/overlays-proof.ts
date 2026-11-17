@@ -8,7 +8,9 @@
  *  - the confetti burst: centroid within 2 px of the closed form at 0.5 s, nothing left after 1.6 s;
  *  - the date stamp: segment mask IoU ≥ 0.95 against the model polygons at 16:9 and 9:16; text outside its alphabet is refused;
  *  - flash safety (ADR-0009): the flash analyser passes on a 3-second export of every overlay at its defaults, of speed lines
- *    at their extremes, and of snow at its extremes (largest flakes, top speed, full density: held by its speed limit).
+ *    at their extremes, and of snow, confetti and hearts at their extremes and at the mid sizes that flashed at top speed
+ *    before their speed limit (overlays.ts speedLimit), and of snow made heavier or larger by keys during the clip (the
+ *    limit and the lattice held for the whole clip, overlays.ts heldOverlayParams).
  * CPU only: no graphics adapter is used or needed (these are Canvas2D effects).
  *   pnpm build && pnpm proof:overlays
  */
@@ -320,19 +322,30 @@ async function main() {
     console.log('\n# flash safety (ADR-0009): the flash analyser on 3-second exports');
     {
       const ext = { amount: 1, lines: 240, thickness: 2, rate: 2, reach: 1 };
-      const items: [string, string, Record<string, unknown>][] = [
+      // optional keys: parameter → [clip-local frame, value][]
+      const items: [string, string, Record<string, unknown>, Record<string, [number, number][]>?][] = [
         ['snow at defaults', 'overlay.snow', {}], ['confetti at defaults', 'overlay.confetti', {}], ['confetti burst', 'overlay.confetti', { mode: 'burst' }], ['hearts at defaults', 'overlay.hearts', {}],
         ['bokeh at defaults', 'overlay.bokeh', {}], ['speed lines at defaults', 'overlay.speed-lines', {}], ['date stamp at defaults', 'stylize.date-stamp', {}],
         ['speed lines at their extremes (every number at its maximum)', 'overlay.speed-lines', { ...ext, focus: 1, x: 1, y: 1 }], ['speed lines at their extremes, sweeping the whole frame (focus 0)', 'overlay.speed-lines', { ...ext, focus: 0 }],
-        // snow at the settings that flashed before its speed limit (overlays.ts snowSpeedLimit): the largest flakes, and the mid size that flashed worst
+        // the settings that flashed before the speed limit (overlays.ts speedLimit): the largest particles, and the mid sizes that flashed worst
         ['snow at its extremes (largest flakes, top speed, full density and opacity)', 'overlay.snow', { size: 0.04, speed: 1, density: 1, amount: 1 }],
         ['snow with mid-size flakes at top speed, full density and opacity, wind to the left', 'overlay.snow', { size: 0.018, speed: 1, density: 1, amount: 1, wind: -1 }],
+        ['hearts at their extremes (every number at its maximum)', 'overlay.hearts', { size: 0.1, speed: 0.5, density: 1, amount: 1 }],
+        ['hearts of mid size at top speed, full density and opacity, in their own red', 'overlay.hearts', { size: 0.02, speed: 0.5, density: 1, amount: 1 }],
+        ['pure red hearts of size 0.015 at top speed, full density and opacity', 'overlay.hearts', { size: 0.015, speed: 0.5, density: 1, amount: 1, color: '#FF0000' }],
+        ['confetti at its extremes (every number at its maximum)', 'overlay.confetti', { size: 0.05, speed: 1, density: 1, amount: 1 }],
+        ['red confetti of mid size at top speed, full density and opacity', 'overlay.confetti', { size: 0.02, speed: 1, density: 1, amount: 1, palette: 'single', color: '#FF0000' }],
+        // keys during the clip (late on the timeline, where a changing speed would move the lattice by seconds × the change)
+        ['snow getting heavier (density keyed 0.3 → 1 over the clip)', 'overlay.snow', { size: 0.02, speed: 0.2, density: 0.3 }, { density: [[0, 0.3], [89, 1]] }],
+        ['snowflakes growing (size keyed 0.008 → 0.03 over the clip)', 'overlay.snow', { size: 0.008, speed: 0.4, density: 0.8 }, { size: [[0, 0.008], [89, 0.03]] }],
       ];
       const pid = (await call('/projects', { name: 'overlays-flash', width: 640, height: 360 })).body.project.id as string;
       const assetId = await upload(pid, black360);
-      for (const [k, [, type, params]] of items.entries()) {
+      for (const [k, [, type, params, keys]] of items.entries()) {
         const clipId = (await tx(pid, [{ op: 'add_clip', args: { assetId, start: f(k * 90), duration: f(90), withLinkedAudio: false } }])).results[0].output.clipId as string;
-        await addFx(pid, clipId, type, params);
+        const { effectId } = await addFx(pid, clipId, type, params);
+        const keyOps = Object.entries(keys ?? {}).flatMap(([param, ks]) => ks.map(([at, value]) => ({ op: 'set_effect_keyframe', args: { clipId, effectId, param, time: f(at), value } })));
+        if (keyOps.length) await tx(pid, keyOps);
       }
       const reports: Record<string, unknown> = {};
       for (const [k, [name]] of items.entries()) {
