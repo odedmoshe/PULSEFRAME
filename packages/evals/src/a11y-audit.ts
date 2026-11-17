@@ -2,7 +2,8 @@
  * Accessibility audit of the editor (SPEC §3, Appendix C3): an automated HEURISTIC pass in Hebrew (RTL) and English (LTR).
  * It checks things a script can decide: every control has an accessible name, text contrast, visible keyboard focus,
  * document language/direction, tab semantics. It is not a WCAG conformance statement and does not replace testing with a
- * screen reader or with users. Findings are written to docs/evidence/a11y-audit.json.
+ * screen reader or with users. Findings are written to docs/evidence/a11y-audit.json. The transient states include the
+ * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator).
  *   pnpm build && pnpm audit:a11y
  */
 import fs from 'node:fs';
@@ -212,6 +213,26 @@ async function main() {
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
       await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);
       Object.assign(states.at(-1), await cp.close());
+      // the effect gallery (ADR-0011: its time and overlay tiles animate on hover, through a FlashGuard); opened from the look panel of the selected clip
+      await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
+      await page.getByTestId('gallery-open').waitFor({ timeout: 8000 });
+      const gd = await dialogBehaviour('effect-gallery', async () => { await page.getByTestId('gallery-open').click(); }, '[data-testid=gallery-open]');
+      await auditState('effect-gallery', { startsInside: gd.startsInside, tabStepsThatLeftTheDialog: gd.tabStepsThatLeftTheDialog }, true);
+      Object.assign(states.at(-1), await gd.close());
+      // the look panel with the visual wave's controls (ADR-0011): a blur whose radius follows the beat (its fieldset open), a
+      // date stamp (its text field and hint) and an echo (first, with the separator that names the rule); no music here, so the
+      // ♪ toggles are off with their note. The focus walk starts in the fieldset. The effects are removed again afterwards.
+      const added = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian', params: { radius: 0.01 } } }, { op: 'add_effect', args: { clipId, type: 'stylize.date-stamp' } }, { op: 'add_effect', args: { clipId, type: 'time.echo' } }] });
+      const waveFx: string[] = (added.results ?? []).map((r: any) => r.output.effectId as string);
+      if (waveFx.length !== 3) throw new Error(`adding the visual-wave effects failed: ${JSON.stringify(added).slice(0, 300)}`);
+      await post(`/projects/${pid}/transactions`, { ops: [{ op: 'set_effect_modulator', args: { clipId, effectId: waveFx[0], param: 'radius', modulator: { depth: 0.02 } } }] });
+      await page.getByTestId('beat-fieldset').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('beat-fieldset').scrollIntoViewIfNeeded().catch(() => {});
+      await page.getByTestId('beat-every').focus().catch(() => {});
+      const lookShown = { fieldset: await page.getByTestId('beat-fieldset').count(), separator: await page.getByTestId('time-separator').count(), stampField: await page.getByTestId('effect-stamp').count(), beatToggles: await page.getByTestId('beat-toggle').count() };
+      await auditState('look-visual-wave', { shown: lookShown.fieldset === 1 && lookShown.separator === 1 && lookShown.stampField === 1 && lookShown.beatToggles >= 1, ...lookShown }, true);
+      await post(`/projects/${pid}/transactions`, { ops: waveFx.map((effectId) => ({ op: 'remove_effect', args: { clipId, effectId } })) });
+      await page.getByTestId('beat-fieldset').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);

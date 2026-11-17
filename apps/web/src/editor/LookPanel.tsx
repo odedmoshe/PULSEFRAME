@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
@@ -186,6 +186,9 @@ function StampControl({ value, onCommit }: { value: string; onCommit: (text: str
   const [tried, setTried] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const hintId = useId(), refusalId = useId();
+  const input = useRef<HTMLInputElement>(null);
+  // a change from elsewhere (undo, another participant) shows in the field unless the person is typing in it
+  useEffect(() => { if (document.activeElement !== input.current) { setDraft(value); setRefusal(null); setTried(null); } }, [value]);
   const commit = async (text: string) => {
     if (text === value || text === tried) return;
     setTried(text);
@@ -196,7 +199,7 @@ function StampControl({ value, onCommit }: { value: string; onCommit: (text: str
   return (
     <div className="effect-stamp" data-testid="effect-stamp-control">
       <label><span><bdi>{effectParamLabel('text', state.lang, 'stylize.date-stamp')}</bdi></span>
-        <input type="text" dir="ltr" data-testid="effect-stamp" data-param="text" value={draft} pattern="[0-9 .:'\/\-]{0,20}" spellCheck={false} autoComplete="off"
+        <input ref={input} type="text" dir="ltr" data-testid="effect-stamp" data-param="text" value={draft} pattern="[0-9 .:'\/\-]{0,20}" spellCheck={false} autoComplete="off"
           aria-describedby={refusal ? `${hintId} ${refusalId}` : hintId} aria-invalid={!!refusal}
           onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void commit(e.currentTarget.value); }} onBlur={(e) => void commit(e.currentTarget.value)} />
       </label>
