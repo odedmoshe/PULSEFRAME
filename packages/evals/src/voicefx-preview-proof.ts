@@ -129,7 +129,7 @@ async function main() {
     await page1.close();
     const gotOnsets: number[] = (run1.stats.audioOnsetsTimelineSeconds ?? []).map(r3);
     const pairs = wantOnsets.map((w) => { const g = gotOnsets.reduce((b, x) => (Math.abs(x - w) < Math.abs(b - w) ? x : b), Infinity); return { export: w, preview: g, ms: r3((g - w) * 1000) }; });
-    measurements.onsets = { pairs, previewOnsets: gotOnsets, clock: run1.stats.clock, fxPrimeMs: run1.stats.fxPrimeMs, unavailable: run1.stats.unavailableAudioFx };
+    measurements.onsets = { pairs, previewOnsets: gotOnsets, clock: run1.stats.clock, fxPrimeMs: run1.stats.fxPrimeMs, fxPrimeTimedOut: run1.stats.fxPrimeTimedOut, unavailable: run1.stats.unavailableAudioFx };
     check('D1 telephone + echo on 1 kHz beeps: every onset of the server export is heard in the preview within one frame (and 50 ms), on the audio clock, with the effects running in the browser', effectsRan(run1, 1) && wantOnsets.length === 6 && gotOnsets.length === wantOnsets.length && pairs.every((x) => Math.abs(x.preview - x.export) <= Math.min(0.05, 1 / FPS)), measurements.onsets);
 
     // D2: 50 ms window levels of a sweep through bass boost + hall reverb, ringing on past the clip
@@ -160,8 +160,8 @@ async function main() {
     await page4.close();
     const doc4 = await p4.doc();
     const c4 = audioPlan(doc4).clips[0]!;
-    measurements.priming = { fxPrimeMs: run4.stats.fxPrimeMs, fxLateStarts: run4.stats.fxLateStarts, warmUpSeconds: c4.voice ? r3((c4.voice.warmRing + c4.voice.warmWindow) / SR) : null };
-    check('D4 starting the preview 20 s into a clip with a 3 s hall reverb: the effects are rendered ahead (their whole warm-up) in at most 500 ms, and the first sound is on time', effectsRan(run4, 1) && run4.stats.fxPrimeMs <= 500 && run4.stats.fxLateStarts === 0, measurements.priming);
+    measurements.priming = { fxPrimeMs: run4.stats.fxPrimeMs, fxPrimeTimedOut: run4.stats.fxPrimeTimedOut, fxLateStarts: run4.stats.fxLateStarts, warmUpSeconds: c4.voice ? r3((c4.voice.warmRing + c4.voice.warmWindow) / SR) : null };
+    check('D4 starting the preview 20 s into a clip with a 3 s hall reverb: the effects are rendered ahead (their whole warm-up) in at most 500 ms, and the first sound is on time', effectsRan(run4, 1) && run4.stats.fxPrimeTimedOut === false && run4.stats.fxPrimeMs <= 500 && run4.stats.fxLateStarts === 0, measurements.priming); // fxPrimeTimedOut: the clock started at the cap without the voice (fxPrimeMs alone could not tell: the clock waits at most 500 ms)
 
     console.log('# K: cost');
     // K1: every voice through the shared runtime in Node, on 30 s of speech-like sound

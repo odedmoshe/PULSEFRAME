@@ -8,7 +8,7 @@ import { Player } from './player.ts';
 // Node has no audio device and no decoder. A fake AudioContext runs on performance.now() and counts the buffers started on it;
 // a fake decoder yields 1024-frame buffers, one every `decodeMs` (decoding takes time in a browser). The engine's plan is
 // replaced by two 10 s effect clips at 0 and their voice by an identity voice: what is tested here is how the player schedules
-// and ends auditions, not the effects themselves (those have their own tests in packages/engine).
+// and ends auditions and how it reports priming, not the effects themselves (those have their own tests in packages/engine).
 const fake = vi.hoisted(() => ({ SR: 48000, starts: 0, opens: 0, decodeMs: 20, onOutput: null as null | (() => void) }));
 const SR = fake.SR;
 
@@ -74,6 +74,7 @@ async function until(cond: () => boolean, ms = 3000) {
   const end = performance.now() + ms;
   while (!cond()) { if (performance.now() > end) throw new Error('timed out waiting'); await sleep(5); }
 }
+type Stats = ReturnType<Player['syncStats']>;
 const players: Player[] = [];
 const player = () => { const p = new Player({} as HTMLCanvasElement, pool, () => {}, (e) => { throw e; }); players.push(p); return p; };
 
@@ -110,5 +111,30 @@ describe('audition', () => {
     void p.audition(draft, 'c1', 0.3).then(() => { done = true; });
     await until(() => done, 3000);
     expect({ auditioning: p.auditioning, started: fake.starts > 0 }).toEqual({ auditioning: false, started: true });
+  });
+});
+
+describe('priming statistics', () => {
+  it('priming within the cap: not timed out, and its time is measured', async () => {
+    fake.decodeMs = 5; // the first 0.25 s of output is rendered in about 60 ms
+    const p = player();
+    const seen: { stats?: Stats } = {};
+    fake.onOutput = () => { seen.stats ??= p.syncStats(); };
+    void p.audition(draft, 'c1', 1);
+    await until(() => seen.stats !== undefined);
+    expect(seen.stats!.fxPrimeTimedOut).toBe(false);
+    expect(seen.stats!.fxPrimeMs).toBeLessThan(Player.FX_PRIME_MAX_MS);
+  });
+
+  it('priming slower than the cap: the clock starts at the cap, the stats say it timed out, and fxPrimeMs then gives the real time', async () => {
+    fake.decodeMs = 100; // 1024 frames per 100 ms: the first 0.25 s of output needs about 1.2 s
+    const p = player();
+    const seen: { stats?: Stats } = {};
+    fake.onOutput = () => { seen.stats ??= p.syncStats(); };
+    void p.audition(draft, 'c1', 4);
+    await until(() => seen.stats !== undefined);
+    expect(seen.stats!.fxPrimeTimedOut).toBe(true);
+    await until(() => p.syncStats().fxPrimeMs >= 1000, 5000); // not the cap: the time the voice really needed
+    expect(p.syncStats().fxPrimeTimedOut).toBe(true);
   });
 });

@@ -108,8 +108,14 @@ export class Player {
   unavailableAudioFx: Record<string, string> = {};
   /** Voices that failed during this session (by clip and chain): played dry from then on, with their reason. */
   private fxFailed = new Map<string, string>();
-  /** Instrumentation of the last playback: time spent rendering effects ahead before the clock started, and voices whose first sound came late. */
+  /**
+   * Instrumentation of the last playback. fxPrimeMs: how long the voices sounding at the start took to render their warm-up and
+   * first output, measured to the end even when the clock did not wait for them; fxPrimeTimedOut: the clock started at
+   * FX_PRIME_MAX_MS before they were ready (fxPrimeMs then grows to the real time once they are). fxLateStarts: voices whose
+   * first sound came late; fxLateSkips: parts of voices skipped because they came late.
+   */
   private fxPrimeMs = 0;
+  private fxPrimeTimedOut = false;
   private fxLateStarts = 0;
   private fxLateSkips = 0;
   private fxVoices = 0;
@@ -343,7 +349,7 @@ export class Player {
     let markReady!: () => void;
     const s: SoundSession = { gen, sr, t0, t0Sample, now, ready: new Promise<void>((r) => { markReady = r; }), originClock: 0, K: 0, master: null, ...(until !== undefined ? { until } : {}) };
     this.scheduledAheadMax = 0;
-    this.fxPrimeMs = 0; this.fxLateStarts = 0; this.fxLateSkips = 0; this.fxVoices = 0;
+    this.fxPrimeMs = 0; this.fxPrimeTimedOut = false; this.fxLateStarts = 0; this.fxLateSkips = 0; this.fxVoices = 0;
     this.unavailableAudioFx = {};
     const rateOk = ctx.sampleRate === sr;
     const dry: PlannedAudioClip[] = [];
@@ -365,8 +371,11 @@ export class Player {
     if (Object.keys(this.unavailableAudioFx).length) this.onTick();
     if (primes.length) {
       const started = performance.now();
-      await Promise.race([Promise.all(primes), sleep(Player.FX_PRIME_MAX_MS)]);
-      this.fxPrimeMs = Math.round(performance.now() - started);
+      let primedAll = false;
+      // measured to the end, not to the cap: a voice that is not ready by then still marks itself primed when it is (pumpVoice)
+      const all = Promise.all(primes).then(() => { primedAll = true; if (gen === this.generation) this.fxPrimeMs = Math.round(performance.now() - started); });
+      await Promise.race([all, sleep(Player.FX_PRIME_MAX_MS)]);
+      if (!primedAll && gen === this.generation) { this.fxPrimeTimedOut = true; this.fxPrimeMs = Math.round(performance.now() - started); }
     }
     if (gen !== this.generation) { markReady(); return null; }
     const lead = 0.12;
@@ -473,11 +482,13 @@ export class Player {
         };
         const take = async (out: Float32Array, last = false) => {
           if (out.length) { pending.push(out.slice()); pendingFrames += out.length >> 1; produced += out.length >> 1; } // copied: the voice may reuse its output buffer
-          if (!s.master && (produced - from >= PRIME || last)) {
-            // enough is rendered ahead of the start: wait for the clock to be set
-            markPrimed();
-            await s.ready;
-            if (!live()) return;
+          if (produced - from >= PRIME || last) {
+            markPrimed(); // also when the clock did not wait for it: priming is measured to the end (startSound)
+            if (!s.master) {
+              // enough is rendered ahead of the start: wait for the clock to be set
+              await s.ready;
+              if (!live()) return;
+            }
           }
           if (s.master) {
             if (pendingFrames >= CHUNK || last) schedule();
@@ -748,7 +759,7 @@ export class Player {
   syncStats() {
     const v = [...this.late].sort((a, b) => a - b);
     const q = (p: number) => (v.length ? +(v[Math.min(v.length - 1, Math.floor(v.length * p))]! * 1000).toFixed(2) : null);
-    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', audioSampleRate: this.actx?.sampleRate ?? null, outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, loops: this.loops, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) }, fxVoices: this.fxVoices, fxPrimeMs: this.fxPrimeMs, fxLateStarts: this.fxLateStarts, fxLateSkips: this.fxLateSkips, bypassAudioFx: this.bypassAudioFx, auditioning: this.auditioning, unavailableAudioFx: { ...this.unavailableAudioFx } };
+    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', audioSampleRate: this.actx?.sampleRate ?? null, outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, loops: this.loops, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) }, fxVoices: this.fxVoices, fxPrimeMs: this.fxPrimeMs, fxPrimeTimedOut: this.fxPrimeTimedOut, fxLateStarts: this.fxLateStarts, fxLateSkips: this.fxLateSkips, bypassAudioFx: this.bypassAudioFx, auditioning: this.auditioning, unavailableAudioFx: { ...this.unavailableAudioFx } };
   }
   dispose() {
     this.pause();
