@@ -32,5 +32,11 @@ Consequence: the worker's launch mode is found by the render host for projects t
 3. Capability reporting (editor and worker), gating in the catalogue and in export, wording in both languages.
 4. The owner checks the two effects on the laptop. Only then more effects.
 
+## Addendum: an effect with a second texture (colour tables, `color.lut`)
+- An effect may sample one auxiliary texture besides the layer: `color.lut` binds the colour table at binding 3, where transitions bind their second picture, through the same sampler (linear, clamp). Only that effect's shader declares the binding (pipelines use the automatic layout).
+- The table is not a parameter. The compositor's `FrameProvider` has an optional `lut(assetId)`; `drawGraph` loads the tables a frame names before the GPU gate and passes them through the effect environment. The texture is made once per table (keyed by content hash), kept on the GPU state (at most 8) and gone with the device.
+- The pass has a tested model: core's `sampleStrip` is the same arithmetic in JavaScript, and `pnpm proof:gpu` compares stills against it. Every context turns file text into the strip with the one function `lutStrip` (which also resamples a non-unit input domain).
+- Decision 3 extended: an effect whose own material is missing (a table that was named but could not be loaded) is unavailable in the same way, with its own reason (`unavailableReasons`), so a still or an export refuses and says it is the table, not the adapter. With no table chosen the effect is the picture unchanged and is not reported.
+
 ## What this does not decide
 Performance targets (SPEC Appendix C2), HDR output, video memory budgets, use of the RTX 3050, and decoding straight to GPU textures. Each needs its own measurements.

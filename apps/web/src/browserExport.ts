@@ -294,9 +294,13 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
       check();
       if (opts.freezeAfterFrames !== undefined && i === opts.freezeAfterFrames) await new Promise(() => {}); // stuck-render simulation: heartbeats keep running until the page is closed
       const g = evaluate(doc, T.frameTime(out.firstFrame + i, rate));
-      const { missing, unavailableEffects } = await drawGraph(ctx, { ...g, width: out.width, height: out.height }, pool.frames);
+      const { missing, unavailableEffects, unavailableReasons } = await drawGraph(ctx, { ...g, width: out.width, height: out.height }, pool.frames);
       if (missing.length) throw new BrowserExportError('export_failed', `frame ${i}: source frame unavailable for clips ${missing.join(', ')}`, { jobId });
-      if (unavailableEffects.length) throw new BrowserExportError('export_failed', `frame ${i} uses ${unavailableEffects.join(', ')}, which need a graphics adapter (WebGPU) in this browser`, { jobId });
+      // An effect whose own material is missing (a colour table that could not be loaded) says so; the others need the adapter.
+      const told = unavailableEffects.filter((id) => unavailableReasons?.[id]);
+      const adapter = unavailableEffects.filter((id) => !unavailableReasons?.[id]);
+      if (adapter.length) throw new BrowserExportError('export_failed', `frame ${i} uses ${adapter.join(', ')}, which need a graphics adapter (WebGPU) in this browser${told.map((id) => `; ${id}: ${unavailableReasons![id]}`).join('')}`, { jobId });
+      if (told.length) throw new BrowserExportError('export_failed', `frame ${i} cannot be drawn faithfully: ${told.map((id) => `${id}: ${unavailableReasons![id]}`).join('; ')}`, { jobId });
       await video.add(frameSeconds(i), frameSeconds(i + 1) - frameSeconds(i)); // awaited: encoder + muxer backpressure
       framesDone = i + 1;
       if (i % 4 === 0 || framesDone === out.frames) progress('rendering', framesDone, out.frames);

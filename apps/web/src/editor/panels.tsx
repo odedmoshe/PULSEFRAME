@@ -119,7 +119,7 @@ export function Library() {
       <h2>{t('media')}</h2>
       <label className="primary file">
         {uploading ? t('media.uploading') : t('media.import')}
-        <input type="file" multiple accept="video/*,audio/*,image/png,image/jpeg,image/webp" disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
+        <input type="file" multiple accept="video/*,audio/*,image/png,image/jpeg,image/webp,.cube" disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
       </label>
       {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`)?.focus(), 0); }} />}
       <MediaGrid onView={setViewing} />

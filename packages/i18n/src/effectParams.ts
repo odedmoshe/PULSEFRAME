@@ -14,6 +14,7 @@ export const EFFECT_PARAM_LABELS: Record<string, L> = {
   exposure: { he: 'חשיפה (סטופים)', en: 'Exposure (stops)' }, temperature: { he: 'טמפרטורת צבע', en: 'Temperature' }, tint: { he: 'גוון ירוק–מגנטה', en: 'Tint' }, shadows: { he: 'צבע הצללים', en: 'Shadow colour' }, highlights: { he: 'צבע האורות', en: 'Highlight colour' }, fade: { he: 'דהייה', en: 'Fade' },
   dark: { he: 'צבע הכהים', en: 'Dark colour' }, light: { he: 'צבע הבהירים', en: 'Light colour' }, lines: { he: 'מספר קווים', en: 'Lines' }, segments: { he: 'מספר פלחים', en: 'Segments' }, position: { he: 'גובה הרצועה החדה', en: 'Position of the sharp band' }, width: { he: 'רוחב הרצועה החדה', en: 'Width of the sharp band' }, threshold: { he: 'סף בהירות', en: 'Brightness threshold' },
   spacing: { he: 'מרחק בין נקודות', en: 'Dot spacing' },
+  lut: { he: 'טבלת צבע', en: 'Colour table' }, intensity: { he: 'עוצמת הטבלה', en: 'Intensity' },
   bpm: { he: 'קצב (פעימות לדקה)', en: 'Tempo (beats per minute)' }, offset: { he: 'הזזת הפעימה', en: 'Beat offset' }, decay: { he: 'מהירות הדעיכה', en: 'Settling speed' }, rate: { he: 'קצב', en: 'Rate' }, zoom: { he: 'גודל', en: 'Size' }, length: { he: 'אורך הקרניים', en: 'Streak length' },
   follow: { he: 'מה מניע את האפקט', en: 'Driven by' }, every: { he: 'פגיעה כל כמה פעימות', en: 'Hit on every Nth beat' },
   bands: { he: 'מספר פסים', en: 'Bands' }, density: { he: 'שיעור הפסים שקופצים', en: 'Share of bands that jump' }, split: { he: 'פיצול צבעים', en: 'Colour split' },

@@ -4,11 +4,13 @@ import {
   LUT_MAX_TEXT_LENGTH,
   LutError,
   identityLut,
+  lutStrip,
   lutToRgba8Strip,
   parseCube,
   sampleLut,
   sampleStrip,
   serializeCube,
+  unitDomainLut,
   type Lut3D,
 } from './lut.js';
 
@@ -223,5 +225,82 @@ describe('strip', () => {
         for (let i = 0; i < 3; i++) expect(Math.abs(a[i]! - b[i]!)).toBeLessThanOrEqual(3 / 255);
       }),
     );
+  });
+});
+
+/** A non-separable table over an arbitrary domain: output = rotated channels of the domain-normalised input, with a gamma. */
+function rotatedGamma(n: number, lo: number, hi: number): Lut3D {
+  const data = new Float32Array(n ** 3 * 3);
+  let i = 0;
+  for (let b = 0; b < n; b++) for (let g = 0; g < n; g++) for (let r = 0; r < n; r++) {
+    const x = [r, g, b].map((v) => lo + ((hi - lo) * v) / (n - 1)); // the input this entry stands for
+    const u = x.map((v) => (v - lo) / (hi - lo));
+    data[i++] = Math.pow(u[2]!, 1 / 2.2);
+    data[i++] = Math.pow(u[0]!, 1 / 2.2);
+    data[i++] = Math.pow(u[1]!, 1 / 2.2);
+  }
+  return { title: 'rot', size: n, data, domainMin: [lo, lo, lo], domainMax: [hi, hi, hi] };
+}
+
+describe('unit domain and the strip every context uses', () => {
+  it('unitDomainLut returns the very same table when the domain is already 0..1', () => {
+    const lut = rotatedGamma(9, 0, 1);
+    expect(unitDomainLut(lut)).toBe(lut);
+  });
+
+  it('unitDomainLut resamples another domain onto a 0..1 grid of the same size, keeping title and what sampleLut answers', () => {
+    const lut = rotatedGamma(17, 0, 2);
+    const unit = unitDomainLut(lut);
+    expect(unit).not.toBe(lut);
+    expect([unit.size, unit.title, unit.domainMin, unit.domainMax]).toEqual([17, 'rot', [0, 0, 0], [1, 1, 1]]);
+    expect(unit.data.length).toBe(lut.data.length);
+    // grid points of the new table are the old table sampled there
+    expect(Array.from(unit.data.slice(0, 3))).toEqual(sampleLut(lut, [0, 0, 0]).map((v) => Math.fround(v)));
+    const last = 17 ** 3 - 1;
+    expect(Array.from(unit.data.slice(last * 3, last * 3 + 3))).toEqual(sampleLut(lut, [1, 1, 1]).map((v) => Math.fround(v)));
+    fc.assert(
+      fc.property(rgbArb, (c) => {
+        const a = sampleLut(unit, c);
+        const b = sampleLut(lut, c);
+        for (let i = 0; i < 3; i++) expect(Math.abs(a[i]! - b[i]!)).toBeLessThanOrEqual(1e-5);
+      }),
+    );
+  });
+
+  it('a table with domain 0..2 samples, through lutStrip, like sampleLut on the original within 3/255', () => {
+    const lut = rotatedGamma(33, 0, 2);
+    const strip = lutStrip(serializeCube(lut));
+    expect([strip.size, strip.width, strip.height, strip.data.length]).toEqual([33, 33 * 33, 33, 33 * 33 * 33 * 4]);
+    // ignoring the domain would be far off: the plain strip of the same file answers differently
+    const naive = lutToRgba8Strip(lut);
+    const far = sampleStrip(naive, 33, [0.5, 0.5, 0.5]).map((v, i) => Math.abs(v - sampleLut(lut, [0.5, 0.5, 0.5])[i]!));
+    expect(Math.max(...far)).toBeGreaterThan(20 / 255);
+    fc.assert(
+      fc.property(rgbArb, (c) => {
+        const a = sampleStrip(strip, strip.size, c);
+        const b = sampleLut(lut, c);
+        for (let i = 0; i < 3; i++) expect(Math.abs(a[i]! - b[i]!)).toBeLessThanOrEqual(3 / 255);
+      }),
+    );
+  });
+
+  it('LUT_3D_INPUT_RANGE is honoured the same way, and a unit-domain file gives exactly the plain strip', () => {
+    const wide = rotatedGamma(9, 0, 4);
+    const text = `LUT_3D_SIZE 9\nLUT_3D_INPUT_RANGE 0 4\n${serializeCube(wide).split('\n').slice(4).join('\n')}`;
+    const strip = lutStrip(text);
+    for (const c of [[0, 0, 0], [1, 1, 1], [0.25, 0.5, 0.75], [0.9, 0.1, 0.4]] as const) {
+      const a = sampleStrip(strip, 9, c);
+      const b = sampleLut(wide, c);
+      for (let i = 0; i < 3; i++) expect(Math.abs(a[i]! - b[i]!)).toBeLessThanOrEqual(3 / 255);
+    }
+    const plain = rotatedGamma(9, 0, 1);
+    const viaText = lutStrip(serializeCube(plain));
+    expect(viaText.size).toBe(9);
+    expect(Array.from(viaText.data)).toEqual(Array.from(lutToRgba8Strip(plain).data));
+  });
+
+  it('lutStrip throws only LutError on text that is not a 3D table', () => {
+    expect(err(() => lutStrip('hello')).code).toBe('malformed');
+    expect(err(() => lutStrip('LUT_1D_SIZE 4\n0 0 0\n')).code).toBe('unsupported');
   });
 });

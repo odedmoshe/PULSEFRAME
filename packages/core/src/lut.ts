@@ -306,3 +306,30 @@ export function sampleStrip(
     (a[2] * (1 - fb) + b[2] * fb) / 255,
   ];
 }
+
+/** The same table over the unit domain: unchanged when its domain is already 0..1, otherwise resampled (trilinear, sampleLut) onto a 0..1 grid of the same size. Inputs outside the file's domain take its edge values. */
+export function unitDomainLut(lut: Lut3D): Lut3D {
+  const unit = lut.domainMin.every((v) => v === 0) && lut.domainMax.every((v) => v === 1);
+  if (unit) return lut;
+  const n = lut.size;
+  const d = n - 1;
+  const data = new Float32Array(n * n * n * 3);
+  let i = 0;
+  for (let b = 0; b < n; b++) {
+    for (let g = 0; g < n; g++) {
+      for (let r = 0; r < n; r++) {
+        const v = sampleLut(lut, [r / d, g / d, b / d]);
+        data[i++] = v[0];
+        data[i++] = v[1];
+        data[i++] = v[2];
+      }
+    }
+  }
+  return { title: lut.title, size: n, data, domainMin: [0, 0, 0], domainMax: [1, 1, 1] };
+}
+
+/** File text to the strip a render pass samples: parseCube, unitDomainLut, lutToRgba8Strip. Every context (editor, render worker, browser export, proofs) uses this one function. Throws LutError. */
+export function lutStrip(text: string): { key?: undefined } & { size: number; width: number; height: number; data: Uint8Array } {
+  const lut = unitDomainLut(parseCube(text));
+  return { size: lut.size, ...lutToRgba8Strip(lut) };
+}

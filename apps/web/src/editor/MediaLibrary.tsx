@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { AudioLines, Eye, FileMusic, Film, Image as ImageIcon, Plus, Trash, Upload, CircleCheck } from 'lucide-react';
+import { AudioLines, Eye, FileMusic, Film, Image as ImageIcon, Palette, Plus, Trash, Upload, CircleCheck } from 'lucide-react';
 import * as T from '@pulseframe/time';
-import { assetNotices, type Asset, type ProjectDocument } from '@pulseframe/core';
+import { assetNotices, lutUsers, type Asset, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { peaksForColumns, pickWaveformLevel } from '../clipVisuals.math.ts';
 import { ASSET_DRAG_TYPE, useEditorState } from './store.ts';
@@ -76,6 +76,7 @@ function Thumb({ projectId, a, refreshKey }: { projectId: string; a: Asset; refr
     c.setAttribute('data-drawn', '1');
   };
   useEffect(() => { draw(0); }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (a.kind === 'lut') return <Palette size={24} aria-hidden="true" />;
   if (a.kind === 'image') return <img src={`/api/v1/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(a.id)}/content`} alt="" loading="lazy" draggable={false} />;
   if (loaded) {
     const scrub = loaded.kind === 'thumbnails' && loaded.meta.frameIndices.length > 1 && !reduced();
@@ -97,17 +98,22 @@ export function MediaGrid({ onView }: { onView: (id: string) => void }) {
   return (
     <ul className="assets media-grid" aria-label={S.grid}>
       {assets.map((a) => {
-        const isUsed = used.has(a.id);
-        const KindIcon = a.kind === 'image' ? ImageIcon : a.kind === 'video' ? Film : AudioLines;
+        // A colour table (LUT) is not timeline material: it is applied to clips as an effect, and counts as used while an effect names it.
+        const isLut = a.kind === 'lut';
+        const isUsed = isLut ? lutUsers(doc, a.id).length > 0 : used.has(a.id);
+        const usedLabel = isLut ? S.lutInUse : S.inUse;
+        const KindIcon = isLut ? Palette : a.kind === 'image' ? ImageIcon : a.kind === 'video' ? Film : AudioLines;
         const add = () => void editor.addAsset(a.id);
         return (
-          <li key={a.id} className="media-card" draggable data-testid={`asset-${a.id}`} title={t('media.dragHint')}
-            onDragStart={(e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
-            <div className="mc-thumb" onDoubleClick={add}>
+          <li key={a.id} className="media-card" draggable={!isLut} data-testid={`asset-${a.id}`} data-kind={a.kind} title={isLut ? S.lutHint : t('media.dragHint')}
+            onDragStart={isLut ? undefined : (e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
+            <div className="mc-thumb" onDoubleClick={isLut ? undefined : add}>
               <Thumb projectId={doc.id} a={a} refreshKey={derivativeTick} />
               <span className="mc-kind" aria-hidden="true"><KindIcon size={12} /></span>
-              <span className="mc-badge mc-dur" dir="ltr">{a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : fmtDur(T.toSeconds(a.duration))}</span>
-              {isUsed && <span className="mc-used" title={S.inUse} role="img" aria-label={S.inUse} data-testid={`used-${a.id}`}><CircleCheck size={12} aria-hidden="true" /></span>}
+              {isLut
+                ? <span className="mc-badge mc-dur" dir="ltr" data-testid={`lut-size-${a.id}`} title={`${S.lut}: ${S.lutSize}`}>{a.lut ? `${a.lut.size}³` : 'LUT'}</span>
+                : <span className="mc-badge mc-dur" dir="ltr">{a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : fmtDur(T.toSeconds(a.duration))}</span>}
+              {isUsed && <span className="mc-used" title={usedLabel} role="img" aria-label={usedLabel} data-testid={`used-${a.id}`}><CircleCheck size={12} aria-hidden="true" /></span>}
             </div>
             <span className="mc-name"><span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
               <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
@@ -134,9 +140,9 @@ export function MediaGrid({ onView }: { onView: (id: string) => void }) {
             </details>
             )}
             <div className="mc-actions">
-              <button className="ghost" onClick={add} data-testid={`add-${a.id}`} aria-label={`${t('media.add')}: ${a.name}`} title={t('media.add')}><Plus size={16} aria-hidden="true" /></button>
-              {a.kind !== 'image' && <button className="ghost" onClick={() => onView(a.id)} data-testid={`view-${a.id}`} aria-label={`${t('source.open')}: ${a.name}`} title={t('source.open')}><Eye size={16} aria-hidden="true" /></button>}
-              <button className="ghost danger" disabled={isUsed} title={isUsed ? t('media.remove.used') : t('media.remove')} aria-label={`${t('media.remove')}: ${a.name}`} onClick={() => void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file')} data-testid={`remove-${a.id}`}><Trash size={16} aria-hidden="true" /></button>
+              {!isLut && <button className="ghost" onClick={add} data-testid={`add-${a.id}`} aria-label={`${t('media.add')}: ${a.name}`} title={t('media.add')}><Plus size={16} aria-hidden="true" /></button>}
+              {a.kind !== 'image' && !isLut && <button className="ghost" onClick={() => onView(a.id)} data-testid={`view-${a.id}`} aria-label={`${t('source.open')}: ${a.name}`} title={t('source.open')}><Eye size={16} aria-hidden="true" /></button>}
+              <button className="ghost danger" disabled={isUsed} title={isUsed ? (isLut ? S.lutRemoveUsed : t('media.remove.used')) : t('media.remove')} aria-label={`${t('media.remove')}: ${a.name}`} onClick={() => void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file')} data-testid={`remove-${a.id}`}><Trash size={16} aria-hidden="true" /></button>
             </div>
           </li>
         );

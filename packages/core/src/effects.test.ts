@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, describeCatalog, EFFECTS, effectParams, effectParamsAt, findClip, migrateProject, OpError, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, createProject, describeCatalog, diffEntities, EFFECTS, effectParams, effectParamsAt, findClip, GPU_EFFECT_IDS, lutUsers, migrateProject, OpError, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -113,5 +113,128 @@ describe('look ops', () => {
     expect((findClip(split2.doc, split2.results[0]!.output!.rightClipId as string)!.clip as any).transition).toBeUndefined();
     const cleared = tx(t.doc, [{ op: 'set_transition', args: { clipId: right, type: null } }]).doc;
     expect(findClip(cleared, right)!.clip).not.toHaveProperty('transition');
+  });
+});
+
+describe('colour tables (LUT assets) and the color.lut effect', () => {
+  const lutAsset = (hex: string, name = 'film.cube') => ({
+    kind: 'lut' as const, name, contentHash: `sha256:${hex.repeat(64)}`, byteSize: 100, container: 'cube', mimeType: 'text/plain', duration: T.ZERO,
+    lut: { size: 17, title: null }, provenance: { origin: 'upload' as const, importedAt: '2026-11-16T00:00:00Z', importedBy: 'test' },
+  });
+  const failure = (fn: () => unknown) => { try { fn(); } catch (e) { if (e instanceof OpError) return e; throw e; } throw new Error('expected an OpError'); };
+  function withLut() {
+    const p = project();
+    const before = p.doc;
+    const r = tx(p.doc, [{ op: 'import_asset', args: { asset: lutAsset('a') } }], true);
+    return { ...p, before, doc: r.doc, lutId: r.results[0]!.output!.assetId as string };
+  }
+
+  it('is registered as a GPU colour effect whose defaults name no table', () => {
+    const e = describeCatalog().effects.find((x) => x.id === 'color.lut')!;
+    expect([e.category, e.cost, e.defaults]).toEqual(['color', 'gpu', { lut: '', intensity: 1 }]);
+    expect(GPU_EFFECT_IDS).toContain('color.lut');
+    expect(() => effectParams('color.lut', { lut: 'x'.repeat(65) })).toThrow();
+    expect(() => effectParams('color.lut', { intensity: 1.5 })).toThrow();
+  });
+
+  it('a LUT asset parses through the document schema and survives a JSON round trip', () => {
+    const { doc, lutId } = withLut();
+    expect(doc.assets[lutId]).toMatchObject({ kind: 'lut', lut: { size: 17, title: null } });
+    expect(migrateProject(JSON.parse(JSON.stringify(doc)))).toEqual(doc);
+    expect(validateProject(doc)).toEqual([]);
+  });
+
+  it('add_effect with no table chosen is allowed; an unknown id or a file that is not a table is refused with the list of tables', () => {
+    const { doc, clipId, assetId, lutId } = withLut();
+    const none = tx(doc, [{ op: 'add_effect', args: { clipId, type: 'color.lut' } }]);
+    expect(findClip(none.doc, clipId)!.clip.effects![0]!.params).toEqual({ lut: '', intensity: 1 });
+    expect(validateProject(none.doc)).toEqual([]);
+    const unknown = failure(() => tx(doc, [{ op: 'add_effect', args: { clipId, type: 'color.lut', params: { lut: 'ast_nope' } } }]));
+    expect(unknown.code).toBe('not_found');
+    expect(unknown.details).toMatchObject({ lut: 'ast_nope', available: [{ id: lutId, name: 'film.cube' }] });
+    expect(unknown.hint).toBeTruthy();
+    const video = failure(() => tx(doc, [{ op: 'add_effect', args: { clipId, type: 'color.lut', params: { lut: assetId } } }]));
+    expect(video.code).toBe('not_found');
+    expect(video.details).toMatchObject({ available: [{ id: lutId, name: 'film.cube' }] });
+    const ok = tx(doc, [{ op: 'add_effect', args: { clipId, type: 'color.lut', params: { lut: lutId, intensity: 0.5 } } }]);
+    expect(findClip(ok.doc, clipId)!.clip.effects![0]!.params).toEqual({ lut: lutId, intensity: 0.5 });
+    // update_effect is checked the same way, and may clear the choice
+    const fxId = ok.results[0]!.output!.effectId as string;
+    expect(code(() => tx(ok.doc, [{ op: 'update_effect', args: { clipId, effectId: fxId, params: { lut: 'ast_nope' } } }]))).toBe('not_found');
+    expect(code(() => tx(ok.doc, [{ op: 'update_effect', args: { clipId, effectId: fxId, params: { lut: assetId } } }]))).toBe('not_found');
+    const cleared = tx(ok.doc, [{ op: 'update_effect', args: { clipId, effectId: fxId, params: { lut: '' } } }]).doc;
+    expect(findClip(cleared, clipId)!.clip.effects![0]!.params).toEqual({ lut: '', intensity: 0.5 });
+    expect(lutUsers(cleared, lutId)).toEqual([]);
+  });
+
+  it('add_clip refuses a LUT asset with a message that says how it is applied', () => {
+    const { doc, lutId } = withLut();
+    const e = failure(() => tx(doc, [{ op: 'add_clip', args: { assetId: lutId, start: f(300) } }]));
+    expect(e.code).toBe('incompatible');
+    expect(e.message).toMatch(/not placed on the timeline/);
+    expect(e.hint).toMatch(/apply_lut/);
+  });
+
+  it('remove_asset is refused while an effect refers to the table (enabled or bypassed) and allowed after the effect is removed', () => {
+    const { doc, clipId, lutId } = withLut();
+    expect(lutUsers(doc, lutId)).toEqual([]);
+    const a = tx(doc, [{ op: 'add_effect', args: { clipId, type: 'color.lut', params: { lut: lutId } } }]);
+    const fxId = a.results[0]!.output!.effectId as string;
+    expect(lutUsers(a.doc, lutId)).toEqual([clipId]);
+    const e = failure(() => tx(a.doc, [{ op: 'remove_asset', args: { assetId: lutId } }]));
+    expect(e.code).toBe('incompatible');
+    expect(e.details).toMatchObject({ assetId: lutId, clipIds: [clipId] });
+    const bypassed = tx(a.doc, [{ op: 'update_effect', args: { clipId, effectId: fxId, enabled: false } }]).doc;
+    expect(code(() => tx(bypassed, [{ op: 'remove_asset', args: { assetId: lutId } }]))).toBe('incompatible');
+    // a split copies the reference: both halves count
+    const split = tx(a.doc, [{ op: 'split_clip', args: { clipId, at: f(60) } }]).doc;
+    expect(lutUsers(split, lutId)).toHaveLength(2);
+    const freed = tx(a.doc, [{ op: 'remove_effect', args: { clipId, effectId: fxId } }]).doc;
+    const gone = tx(freed, [{ op: 'remove_asset', args: { assetId: lutId } }]).doc;
+    expect(gone.assets[lutId]).toBeUndefined();
+    expect(validateProject(gone)).toEqual([]);
+  });
+
+  it('apply_lut sets the single color.lut effect of the clip: adds it, then replaces it instead of stacking, and re-enables it', () => {
+    const { doc, clipId, assetId, audioId, lutId } = withLut();
+    const second = tx(doc, [{ op: 'import_asset', args: { asset: lutAsset('b', 'other.cube') } }], true);
+    const otherId = second.results[0]!.output!.assetId as string;
+    const a = tx(second.doc, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian' } }, { op: 'apply_lut', args: { clipId, assetId: lutId, intensity: 0.4 } }]);
+    const fxId = a.results[1]!.output!.effectId as string;
+    expect(findClip(a.doc, clipId)!.clip.effects!.map((e) => [e.type, e.params.lut ?? null, e.params.intensity ?? null])).toEqual([['blur.gaussian', null, null], ['color.lut', lutId, 0.4]]);
+    const off = tx(a.doc, [{ op: 'update_effect', args: { clipId, effectId: fxId, enabled: false } }]).doc;
+    const b = tx(off, [{ op: 'apply_lut', args: { clipId, assetId: otherId } }]);
+    const fx = findClip(b.doc, clipId)!.clip.effects!;
+    expect(fx.filter((e) => e.type === 'color.lut')).toHaveLength(1);
+    expect(fx[1]).toMatchObject({ id: fxId, enabled: true, params: { lut: otherId, intensity: 0.4 } }); // intensity kept when not given
+    expect(b.results[0]!.output!.effectId).toBe(fxId);
+    expect(lutUsers(b.doc, lutId)).toEqual([]);
+    expect(lutUsers(b.doc, otherId)).toEqual([clipId]);
+    expect(validateProject(b.doc)).toEqual([]);
+    expect(code(() => tx(doc, [{ op: 'apply_lut', args: { clipId, assetId: 'ast_nope' } }]))).toBe('not_found');
+    expect(code(() => tx(doc, [{ op: 'apply_lut', args: { clipId, assetId } }]))).toBe('not_found'); // a video file is not a table
+    expect(code(() => tx(doc, [{ op: 'apply_lut', args: { clipId: audioId, assetId: lutId } }]))).toBe('incompatible');
+    expect(code(() => tx(doc, [{ op: 'apply_lut', args: { clipId, assetId: lutId, intensity: 2 } }]))).toBe('invalid_args');
+  });
+
+  it('undoing the import while an effect uses the table is refused by validation; so is any document with a dangling or wrong-kind reference', () => {
+    const { before, doc, clipId, assetId, lutId } = withLut();
+    const used = tx(doc, [{ op: 'apply_lut', args: { clipId, assetId: lutId } }]).doc;
+    // what undo of the import issues: restore the entities the import changed to their earlier state (the asset did not exist)
+    const undoImport = diffEntities(before, doc).map((c) => ({ id: c.id, state: c.before }));
+    expect(undoImport.map((c) => [c.id, c.state])).toEqual([[lutId, null]]);
+    const e = failure(() => tx(used, [{ op: 'restore_entities', args: { targets: undoImport } }], true));
+    expect(e.code).toBe('invalid_result');
+    expect(JSON.stringify(e.details)).toMatch(/missing_lut/);
+    // with no effect using it, the same undo is fine and leaves a valid project
+    const undone = tx(doc, [{ op: 'restore_entities', args: { targets: undoImport } }], true).doc;
+    expect(undone.assets[lutId]).toBeUndefined();
+    expect(validateProject(undone)).toEqual([]);
+    const dangling = structuredClone(used);
+    delete dangling.assets[lutId];
+    expect(validateProject(dangling).map((i) => i.code)).toEqual(['missing_lut']);
+    const wrongKind = structuredClone(used);
+    findClip(wrongKind, clipId)!.clip.effects![0]!.params.lut = assetId;
+    expect(validateProject(wrongKind).map((i) => i.code)).toEqual(['missing_lut']);
   });
 });

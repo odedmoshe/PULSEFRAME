@@ -75,6 +75,9 @@ dt { color: var(--pf-text-muted); } dd { margin: 0; font-family: var(--pf-mono);
 .effect-key[aria-pressed="true"] { color: var(--pf-warn); }
 .effect-param-row { display: flex; align-items: flex-end; gap: 6px; }
 .effect-param-row > label { flex: 1; min-width: 0; }
+.effect-lut { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
+.effect-lut > label:first-child { flex: 1; min-width: 0; }
+.effect-lut > p { flex: 1 1 100%; margin: 0; }
 .clip.ghost-selected { outline: 2px dashed var(--pf-accent-3); outline-offset: 1px; }
 .check { display: flex !important; flex-direction: row; gap: 8px; align-items: center; font-size: var(--pf-fs-sm); color: var(--pf-text-muted); margin-bottom: var(--pf-s-2); }
 .canvas-wrap { position: relative; }

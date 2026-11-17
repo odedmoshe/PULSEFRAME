@@ -1,18 +1,31 @@
 {
-  "ranAt": "2026-11-16T22:54:46.445Z",
+  "ranAt": "2026-11-17T00:02:49.312Z",
   "result": "PASSED",
-  "passed": 55,
-  "total": 55,
+  "passed": 70,
+  "total": 70,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v470 x64",
+    "platform": "Linux 6.18.44-fc-v509 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
-  "scope": "Twenty-eight effects, the colour looks and thirty-three transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
+  "scope": "Twenty-nine effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and thirty-three transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
   "measurements": {
     "previewVsStill": {
       "meanDifference": 0,
       "maxDifference": 0
+    },
+    "lut": {
+      "gridPoints": 288,
+      "worstFromModel": 0.5,
+      "meanChange": 77.563
+    },
+    "lutPreviewVsStill": {
+      "meanDifference": 0,
+      "maxDifference": 0
+    },
+    "lutExportVsStill": {
+      "meanDifferenceFromStill": 1.385,
+      "meanDifferenceFromPlain": 77.617
     }
   },
   "checks": [
@@ -660,6 +673,137 @@
         "disabled": false,
         "text": "מסך ירוק (הסרת צבע רקע)"
       }
+    },
+    {
+      "name": "A .cube file uploaded through the asset route becomes a library entry of kind lut with its size; a junk file and a 1D table named .cube are refused with a typed error and add nothing",
+      "ok": true,
+      "detail": {
+        "upload": 201,
+        "kind": "lut",
+        "size": 17,
+        "junk": 415,
+        "junkCode": "unsupported_media",
+        "oneD": 415,
+        "assets": 2
+      }
+    },
+    {
+      "name": "color.lut with no table chosen: the still is delivered and is exactly the plain picture",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "color.lut, intensity 1: every grid pixel of the still is what core sampleStrip gives for the plain still's pixel (within 3 of 255), and the picture did change",
+      "ok": true,
+      "detail": {
+        "gridPoints": 288,
+        "worstFromModel": 0.5,
+        "meanChange": 77.563
+      }
+    },
+    {
+      "name": "color.lut: the same still rendered again is identical",
+      "ok": true
+    },
+    {
+      "name": "color.lut, intensity 0.5: every grid pixel lies half-way between the plain picture and the table (within 3 of 255); apply_lut replaced the effect instead of stacking a second one",
+      "ok": true,
+      "detail": {
+        "worstFromModel": 0.5,
+        "effectsOnClip": 1
+      }
+    },
+    {
+      "name": "color.lut, intensity 0: the plain picture (largest difference 1 of 255)",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "Removing the table while the effect uses it is refused, so is placing a table on the timeline, and so is naming a table that does not exist (the refusal lists the tables there are)",
+      "ok": true,
+      "detail": {
+        "remove": 422,
+        "removeCode": "incompatible",
+        "place": 422,
+        "unknown": 404
+      }
+    },
+    {
+      "name": "A table that cannot be read is not rendered around: the still is refused and the reason names the colour table, not a missing graphics adapter; a table whose bytes are gone blocks the render up front; with the bytes back the still is as before",
+      "ok": true,
+      "detail": {
+        "unreadable": 503,
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_32354c98af0 could not be loaded: Missing LUT_",
+        "gone": 422,
+        "blocker": "missing_media"
+      }
+    },
+    {
+      "name": "color.lut: the editor preview and the still agree (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "meanDifference": 0,
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
+      "ok": true,
+      "detail": {
+        "value": "ast_32354c98af0",
+        "options": [
+          "",
+          "ast_32354c98af0"
+        ],
+        "badge": "17³",
+        "addButtons": 0,
+        "removeDisabled": true,
+        "used": 1,
+        "intensity": true
+      }
+    },
+    {
+      "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
+      "ok": true,
+      "detail": {
+        "selected": "ast_3e2fbdf25a0",
+        "kind": "lut",
+        "maxDifferenceFromPlain": 0,
+        "worstFromModel": 0.47
+      }
+    },
+    {
+      "name": "Once no effect refers to it, the first table can be removed (and the removal undone)",
+      "ok": true,
+      "detail": {
+        "remove": 200,
+        "undo": 200
+      }
+    },
+    {
+      "name": "color.lut with a table declared over the domain 0..2: the still follows the strip model (within 3 of 255) and the file's own definition, core sampleLut (within 4 of 255)",
+      "ok": true,
+      "detail": {
+        "worstFromModel": 0.5,
+        "worstFromDefinition": 0.88
+      }
+    },
+    {
+      "name": "color.lut (export): the exported frame is the graded picture (within video compression), far from the plain one",
+      "ok": true,
+      "detail": {
+        "meanDifferenceFromStill": 1.385,
+        "meanDifferenceFromPlain": 77.617
+      }
+    },
+    {
+      "name": "No uncaught errors in the editor page with a colour table",
+      "ok": true,
+      "detail": []
     },
     {
       "name": "Editor without an adapter: the clip is shown WITHOUT the effect (green still there), a warning says why, and the effect cannot be added",

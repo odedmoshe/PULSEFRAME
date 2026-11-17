@@ -13,7 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
@@ -140,17 +140,23 @@ export class Exporter {
       for (const c of tr.clips) {
         if (!T.lt(c.start, to) || !T.lt(from, T.add(c.start, c.duration))) continue; // outside the exported range
         if (c.type === 'media') used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
-        for (const fx of c.effects ?? []) if (fx.enabled) fxUsed.set(fx.type, (fxUsed.get(fx.type) ?? 0) + 1);
+        for (const fx of c.effects ?? []) if (fx.enabled) {
+          fxUsed.set(fx.type, (fxUsed.get(fx.type) ?? 0) + 1);
+          // A colour table named by a colour-table effect is source material of the render like any clip's file.
+          const table = lutRef(fx);
+          if (table) used.set(table, (used.get(table) ?? 0) + 1);
+        }
         if (c.type === 'media' && c.transition) trUsed.set(c.transition.type, (trUsed.get(c.transition.type) ?? 0) + 1);
         else if (c.type === 'text') families.add(c.style.fontFamily);
         if (tr.caption) families.add(tr.caption.style.fontFamily);
       }
-    const assets = [...used].map(([id, clips]) => {
-      const a = doc.assets[id]!;
+    const assets = [...used].flatMap(([id, clips]) => {
+      const a = doc.assets[id];
+      if (!a) { blockers.push({ code: 'missing_media', message: `colour table ${id} named by an effect is not in the project library`, ids: [id] }); return []; }
       let present = false;
       try { present = fs.statSync(this.store.blobPath(a.contentHash)).size === a.byteSize; } catch { /* missing */ }
       if (!present) blockers.push({ code: 'missing_media', message: `source media for "${a.name}" is not available to the render worker`, ids: [id] });
-      return { id, contentHash: a.contentHash, byteSize: a.byteSize, kind: a.kind, clips };
+      return [{ id, contentHash: a.contentHash, byteSize: a.byteSize, kind: a.kind, clips }];
     });
     for (const fam of families) if (!ENGINE.fontFamilies.includes(fam)) blockers.push({ code: 'missing_font', message: `font "${fam}" is not bundled with the renderer; text would silently fall back`, ids: [] });
     const fonts = [...families].filter((f) => ENGINE.fontFamilies.includes(f)).map((family) => ({ family, files: this.fontFiles(family) }));

@@ -4,7 +4,8 @@
  * pipeline; random requests seek from the proper keyframe (Mediabunny handles B-frame/presentation order).
  */
 import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type VideoSample } from 'mediabunny';
-import type { FrameImage, FrameProvider, PictureLayer } from '@pulseframe/engine';
+import { lutStrip } from '@pulseframe/core';
+import type { FrameImage, FrameProvider, LutStrip, PictureLayer } from '@pulseframe/engine';
 
 class ClipDecoder {
   private cur: VideoSample | null = null;
@@ -78,11 +79,13 @@ export interface MediaPoolOptions {
 }
 export interface MediaPoolStats { decoders: number; stills: number; maxDecoders: number; maxStills: number; decoderByteCacheBytes: number; sources: Record<string, 'local' | 'proxy' | 'original'>; sourcesUsed: Record<string, string[]>; opened: number; disposed: number }
 
+let pools = 0;
 export class MediaPool {
   private local = new Map<string, Blob>();
   private blobs = new Map<string, Promise<Blob>>();
   private decoders = new Map<string, { assetId: string; dec: Promise<ClipDecoder> }>();
   private stills = new Map<string, { used: number; img: Promise<{ bmp: ImageBitmap; image: FrameImage }> }>();
+  private luts = new Map<string, Promise<LutStrip>>();
   private sources: Record<string, 'local' | 'proxy' | 'original'> = {};
   /** Every kind of source a decoder was opened on, per asset (for diagnostics and tests). */
   private used: Record<string, string[]> = {};
@@ -138,10 +141,31 @@ export class MediaPool {
     s.used = performance.now();
     return s.img.then((x) => x.image);
   }
+  /**
+   * A colour table asset (.cube) as the strip a render pass samples: the file's bytes, read as text and turned into the strip
+   * by core's lutStrip, the one function every context uses. Parsed once per asset; a failed load is not remembered, so the
+   * next frame tries again. `key` is the content hash of the bytes, or, where the browser offers no digest (a page that is
+   * not a secure context), this pool's own name for the asset: an asset id never changes its content.
+   */
+  lut(assetId: string): Promise<LutStrip> {
+    let l = this.luts.get(assetId);
+    if (!l) {
+      l = this.blob(assetId).then(async (b) => {
+        const bytes = await b.arrayBuffer();
+        const strip = lutStrip(new TextDecoder('utf-8').decode(bytes));
+        const digest = globalThis.crypto?.subtle ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (v) => v.toString(16).padStart(2, '0')).join('') : null;
+        return { ...strip, key: digest ? `sha256:${digest}` : `${this.name}:${assetId}` };
+      });
+      this.luts.set(assetId, l);
+      l.catch(() => this.luts.delete(assetId));
+    }
+    return l;
+  }
+  private readonly name = `pool${++pools}`;
   /** Full quality: always the original media (export, agent stills, paused preview). */
-  readonly frames: FrameProvider = (layer: PictureLayer) => this.frame(layer, 'full');
-  /** Draft quality: the frame-identical proxy when one exists (playback). */
-  readonly draftFrames: FrameProvider = (layer: PictureLayer) => this.frame(layer, 'draft');
+  readonly frames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'full'), { lut: (assetId: string) => this.lut(assetId) });
+  /** Draft quality: the frame-identical proxy when one exists (playback). A colour table has no proxy: both providers give the same one. */
+  readonly draftFrames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'draft'), { lut: (assetId: string) => this.lut(assetId) });
   private async frame(layer: PictureLayer, quality: 'draft' | 'full'): Promise<FrameImage | null> {
     if (layer.kind === 'image') return this.still(layer.assetId);
     const key = `${layer.clipId}:${quality}`;
@@ -194,6 +218,7 @@ export class MediaPool {
     for (const v of this.stills.values()) void v.img.then((x) => x.bmp.close()).catch(() => {});
     this.decoders.clear();
     this.stills.clear();
+    this.luts.clear();
     this.blobs.clear();
   }
 }

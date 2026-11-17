@@ -59,6 +59,7 @@ export class Derivatives {
 
   /** Idempotent: queue missing derivatives for this asset. Returns immediately. */
   ensure(asset: Asset): DerivativeRow[] {
+    if (asset.kind === 'lut') return []; // a colour table has no picture or sound to derive from
     const hash = asset.contentHash;
     const applicable: Record<DerivativeKind, boolean> = { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video', waveform: asset.kind !== 'image' && !!asset.audio };
     for (const kind of KINDS) {

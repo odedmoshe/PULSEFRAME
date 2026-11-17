@@ -20,7 +20,7 @@ import { lookParams } from './looks.ts';
 import { findTextPreset } from './textPresets.ts';
 import { CAPTION_LOOK_IDS, findCaptionLook } from './captionPresets.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
-import { clipEnd, forbidsOverlap, sequenceDuration, validateProject } from './validate.ts';
+import { clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 
@@ -225,13 +225,15 @@ defineOp({
 defineOp({
   name: 'remove_asset',
   version: 1,
-  description: 'Remove a file from the project library, together with its transcript and analysis results. Refused while any clip uses it. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  description: 'Remove a file from the project library, together with its transcript and analysis results. Refused while any clip uses it, or while a colour table (LUT) effect on any clip refers to it. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
     const asset = d.assets[a.assetId];
     if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
     const users = Object.values(d.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'media' && c.assetId === asset.id).map((c) => c.id);
     if (users.length) throw new OpError('incompatible', `${users.length} clip(s) on the timeline still use this file`, { assetId: asset.id, clipIds: users.slice(0, 50) }, 'Delete those clips first.');
+    const graded = lutUsers(d, asset.id);
+    if (graded.length) throw new OpError('incompatible', `${graded.length} clip(s) still use this colour table in a colour table (LUT) effect`, { assetId: asset.id, clipIds: graded.slice(0, 50) }, 'Remove that effect from those clips, or choose another table for it, first.');
     const affected = [asset.id];
     if (d.transcripts?.[asset.id]) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
     if (d.analyses?.[asset.id]) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
@@ -325,6 +327,7 @@ defineOp({
     const seq = seqOf(d, a.sequenceId);
     const asset = d.assets[a.assetId];
     if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId }, 'Call get_summary to list assets.');
+    if (asset.kind === 'lut') throw new OpError('incompatible', 'a colour table (LUT) is not placed on the timeline; it is applied to a clip as an effect', { assetId: asset.id }, 'Use apply_lut with a clipId, or add the effect color.lut with this id as its lut parameter.');
     const rate = d.settings.frameRate;
     const sourceIn = a.sourceIn ?? T.ZERO;
     if (asset.kind !== 'image' && (T.isNegative(sourceIn) || !T.lt(sourceIn, asset.duration))) throw new OpError('out_of_bounds', 'sourceIn is outside the asset', { sourceIn, assetDuration: asset.duration });
@@ -1717,6 +1720,13 @@ const parseEffect = (type: string, params: unknown) => {
   if (!findEffect(type)) throw new OpError('not_found', `effect "${type}" does not exist`, { type, available: EFFECTS.map((e) => e.id) }, 'Call list_catalog for the available effects and their parameters.');
   try { return effectParams(type, params); } catch (e: any) { throw new OpError('invalid_args', `invalid parameters for ${type}`, { issues: e.issues?.slice(0, 8) }, 'Call list_catalog for the parameter schema.'); }
 };
+/** A color.lut effect that names a table must name a colour table (asset of kind 'lut') of this project. */
+const assertLutRef = (d: ProjectDocument, type: string, params: Record<string, unknown>) => {
+  if (type !== 'color.lut' || typeof params.lut !== 'string' || params.lut === '') return;
+  if (d.assets[params.lut]?.kind === 'lut') return;
+  const known = d.assets[params.lut];
+  throw new OpError('not_found', known ? `"${known.name.slice(0, 60)}" is a ${known.kind} file, not a colour table (LUT)` : `colour table ${params.lut} is not in this project's library`, { lut: params.lut, available: lutAssets(d).slice(0, 100).map((x) => ({ id: x.id, name: x.name })) }, 'Upload a .cube file to the project library first; get_summary lists the colour tables (assets of kind lut) with their ids.');
+};
 defineOp({
   name: 'apply_look',
   version: 1,
@@ -1741,6 +1751,33 @@ defineOp({
 });
 
 defineOp({
+  name: 'apply_lut',
+  version: 1,
+  description: 'Give a picture or title clip a colour table (a 3D LUT imported from a .cube file into the project library; get_summary lists them as assets of kind lut). Sets the clip\'s single color.lut effect: an existing one is replaced (and re-enabled), otherwise one is added at the end of its effect list. intensity 0..1 mixes the table with the original picture (default 1; when replacing, the current value is kept unless given). Needs a graphics adapter (WebGPU) to be shown and exported.',
+  args: z.object({ clipId: z.string(), assetId: z.string().min(1).max(64), intensity: z.number().min(0).max(1).optional() }).strict(),
+  apply(d, a, ctx) {
+    const { clip } = pictureClip(d, a.clipId);
+    const list = [...(clip.effects ?? [])];
+    const at = list.findIndex((e) => e.type === 'color.lut');
+    const params = parseEffect('color.lut', { lut: a.assetId, intensity: a.intensity ?? (at >= 0 ? list[at]!.params.intensity : undefined) });
+    assertLutRef(d, 'color.lut', params);
+    let effectId: string;
+    if (at >= 0) {
+      const { keyframes, ...rest } = list[at]!;
+      // An explicit intensity replaces an animated one; otherwise the animation is kept.
+      list[at] = { ...rest, enabled: true, params, ...(keyframes && a.intensity === undefined ? { keyframes } : {}) };
+      effectId = list[at]!.id;
+    } else {
+      if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
+      effectId = ctx.newId('fx');
+      list.push({ id: effectId, type: 'color.lut', enabled: true, params });
+    }
+    clip.effects = list;
+    return { affectedIds: [clip.id], summary: `Applied colour table "${d.assets[a.assetId]!.name.slice(0, 60)}"`, output: { effectId, params } };
+  },
+});
+
+defineOp({
   name: 'add_effect',
   version: 1,
   description: 'Add an effect to a picture or title clip. Effects run in list order on the clip, before its mask, blend mode and opacity. Unspecified parameters take the effect\'s defaults. Discover effects with list_catalog.',
@@ -1750,6 +1787,7 @@ defineOp({
     const list = [...(clip.effects ?? [])];
     if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
     const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
+    assertLutRef(d, fx.type, fx.params);
     list.splice(Math.min(a.index ?? list.length, list.length), 0, fx);
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Added effect ${a.type}`, output: { effectId: fx.id, params: fx.params } };
@@ -1770,7 +1808,7 @@ defineOp({
     const i = mustEffect(clip, a.effectId);
     const list = [...clip.effects!];
     const fx = { ...list[i]! };
-    if (a.params) fx.params = parseEffect(fx.type, { ...fx.params, ...a.params });
+    if (a.params) { fx.params = parseEffect(fx.type, { ...fx.params, ...a.params }); assertLutRef(d, fx.type, fx.params); }
     if (a.enabled !== undefined) fx.enabled = a.enabled;
     list.splice(i, 1);
     list.splice(Math.min(a.index ?? i, list.length), 0, fx);

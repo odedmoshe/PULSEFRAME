@@ -23,7 +23,7 @@ const Color = z.string().regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/).describe('#
 export const AssetSchema = z
   .object({
     id: Id,
-    kind: z.enum(['video', 'audio', 'image']),
+    kind: z.enum(['video', 'audio', 'image', 'lut']),
     name: z.string().max(256),
     contentHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
     byteSize: z.number().int().nonnegative(),
@@ -51,6 +51,8 @@ export const AssetSchema = z
      */
     timeOrigin: RationalTimeSchema.optional(),
     image: z.object({ width: z.number().int().positive(), height: z.number().int().positive(), codec: z.string(), hasAlpha: z.boolean() }).strict().optional(),
+    /** Present for kind 'lut': a 3D colour lookup table (.cube). The stored bytes are the original file text; `size` is its entries per axis. It is applied to clips as the effect color.lut and never placed on the timeline. */
+    lut: z.object({ size: z.number().int().min(2).max(65), title: z.string().max(256).nullable() }).strict().optional(),
     /**
      * Present when the stored media is a conformed copy (SPEC §7): the original could not be edited directly
      * (variable frame rate, rotation metadata, or a codec the editor cannot decode). The original bytes are kept.

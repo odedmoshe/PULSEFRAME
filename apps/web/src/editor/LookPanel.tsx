@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import * as T from '@pulseframe/time';
-import { beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
+import { beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { EffectGalleryButton } from './EffectGallery.tsx';
@@ -60,6 +60,39 @@ function ParamControl({ name, prop, value, onCommit, keyer }: { name: string; pr
   return null;
 }
 
+/** Strings of the colour table chooser (kept here, like the other notes of this panel). */
+const LUT_STRINGS = {
+  he: { none: 'ללא טבלה', import: 'ייבוא ‎.cube', importing: 'מייבא…', importTitle: 'ייבוא קובץ ‎.cube (טבלת צבע תלת־ממדית) לספריית הפרויקט ובחירתו לאפקט הזה', notCube: 'יש לבחור קובץ ‎.cube', empty: 'אין עדיין טבלאות צבע בפרויקט. ייבאו קובץ ‎.cube כדי שהאפקט ישנה את התמונה.' },
+  en: { none: 'None', import: 'Import .cube', importing: 'Importing…', importTitle: 'Import a .cube file (a 3D colour table) into the project library and choose it for this effect', notCube: 'Choose a .cube file', empty: 'This project has no colour tables yet. Import a .cube file for the effect to change the picture.' },
+} as const;
+/** The `lut` parameter of a colour table effect: one of the project's colour tables (library entries of kind lut), or none, plus import of a new one. */
+function LutControl({ value, onCommit }: { value: string; onCommit: (assetId: string) => void }) {
+  const { editor, state } = useEditorState();
+  const S = LUT_STRINGS[state.lang];
+  const tables = editor.doc ? lutAssets(editor.doc) : [];
+  const take = async (file: File) => {
+    if (!/\.cube$/i.test(file.name)) { editor.fail(new Error(S.notCube)); return; }
+    // the existing upload path: the table joins the library, then this effect is pointed at it (update_effect)
+    const assetId = await editor.importFile(file);
+    if (assetId && editor.doc?.assets[assetId]?.kind === 'lut') onCommit(assetId);
+  };
+  return (
+    <div className="effect-lut" data-testid="effect-lut-control">
+      <label><span><bdi>{effectParamLabel('lut', state.lang)}</bdi></span>
+        <select data-testid="effect-lut" data-param="lut" value={tables.some((a) => a.id === value) ? value : ''} onChange={(e) => onCommit(e.target.value)}>
+          <option value="">{S.none}</option>
+          {tables.map((a) => <option key={a.id} value={a.id}>{a.name}{a.lut ? ` (${a.lut.size}³)` : ''}</option>)}
+        </select>
+      </label>
+      <label className="ghost file" title={S.importTitle}>
+        {state.uploading ? S.importing : S.import}
+        <input type="file" accept=".cube" disabled={state.uploading} data-testid="effect-lut-import" aria-label={S.importTitle} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void take(f); }} />
+      </label>
+      {tables.length === 0 && <p className="muted" role="note" data-testid="effect-lut-empty">{S.empty}</p>}
+    </div>
+  );
+}
+
 function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectInstance; index: number; count: number }) {
   const { editor, state, t } = useEditorState();
   const def = findEffect(fx.type);
@@ -82,6 +115,7 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
       </div>
       <div className="fields">
         {Object.entries(props).map(([name, prop]) => {
+          if (fx.type === 'color.lut' && name === 'lut') return <LutControl key={name} value={typeof fx.params.lut === 'string' ? fx.params.lut : ''} onCommit={(assetId) => update({ params: { lut: assetId } })} />;
           if (!animatable.has(name) || prop.type !== 'number') return <ParamControl key={name} name={name} prop={prop} value={fx.params[name]} onCommit={(v) => update({ params: { [name]: v } })} />;
           const keys = fx.keyframes?.[name] ?? [];
           const animated = keys.length > 0;
