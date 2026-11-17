@@ -11,8 +11,10 @@
  *   5. the exported frame count equals the predicted end (±0);  6. the export's flash check reports no failing range;
  *   7. one undo gives an equal creativeProjection, and replay equals the live document;
  *   8. a shuffle regeneration keeps one hand-edited slot (with what is linked to it) and replaces the rest, leaving no frame of
- *      the run without a picture and nothing new over the kept one (counts recorded); at another tempo it is refused
- *      (409 template_blocked naming the slot) and changes nothing.
+ *      the run without a slot picture and no picture over the kept one; the template's own graphic elements (the run's slots of
+ *      kind 'element', which the planner places on a track above the pictures) are not slot pictures: they fill no frame, and
+ *      the ones over the kept picture must be the same, in the same place, as before the shuffle (counts recorded); at another
+ *      tempo it is refused (409 template_blocked naming the slot) and changes nothing.
  * Also recorded: plan time (median and p95 over 20 runs per template), export seconds per template, and the MCP
  * plan_template / apply_template round trip (one revision). Rule-based; no model is used anywhere.
  *   pnpm build && pnpm proof:templates
@@ -204,27 +206,45 @@ async function main() {
       await call(`/projects/${m.pid}/redo`, {});
 
       // 8. shuffle keeps a hand-edited slot (with whatever is linked to it, such as its own sound) and replaces the rest,
-      //    leaving no frame of the run without a picture and nothing new over the kept picture
+      //    leaving no frame of the run without a slot picture and no picture over the kept one. A graphic element of the template
+      //    (pin, star, divider, badge: an image the planner places on a track above the pictures, recorded as a run slot of kind
+      //    'element') is not a slot picture: it does not fill a frame, and lying over the kept picture is its place. What must hold
+      //    for it is that a shuffle, which re-times nothing, leaves the same elements at the same place over the kept picture.
+      type AnyClip = Doc['sequences'][string]['tracks'][number]['clips'][number];
+      const elementKeys = (d: Doc) => new Map((d.recipeRuns[runId]!.slots ?? []).filter((x) => x.kind === 'element').map((x) => [x.clipId, x.key]));
+      const showsPicture = (d: Doc, c: AnyClip) => c.type === 'media' && ['video', 'image'].includes(d.assets[c.assetId]?.kind ?? '');
+      /** What lies over a clip (on a video track above its own, sharing time with it): the run's graphic elements, and every other picture. */
+      const over = (d: Doc, clipId: string) => {
+        const k = clipOf(d, clipId);
+        if (!k) return null;
+        const tracks = d.sequences[d.mainSequenceId]!.tracks.filter((t) => t.kind === 'video'), keys = elementKeys(d);
+        const clips = tracks.slice(tracks.indexOf(k.track) + 1).flatMap((t) => t.clips.filter((c) => showsPicture(d, c) && T.lt(c.start, T.add(k.clip.start, k.clip.duration)) && T.lt(k.clip.start, T.add(c.start, c.duration))));
+        const elements = clips.filter((c) => keys.has(c.id)).map((c) => ({ key: keys.get(c.id)!, assetId: c.type === 'media' ? c.assetId : null, from: fr(c.start), to: fr(T.add(c.start, c.duration)), transform: c.type === 'media' ? c.transform : null }));
+        return { elements: elements.sort((x, y) => (x.key < y.key ? -1 : 1)), pictures: clips.filter((c) => !keys.has(c.id)).length };
+      };
       const handSlot = slots[1] ?? slots[0]!;
       await txs(m.pid, [{ op: 'set_clip_transform', args: { clipId: handSlot.clipId, transform: { rotation: 3 } } }]);
       const editedDoc = (await get(m.pid)).project;
       const edited = clipOf(editedDoc, handSlot.clipId)!.clip;
       const link = edited.type === 'media' ? edited.linkGroupId : null;
       const group = link ? editedDoc.sequences[editedDoc.mainSequenceId]!.tracks.flatMap((t) => t.clips).filter((c) => c.type === 'media' && c.linkGroupId === link) : [edited];
+      const overBefore = over(editedDoc, handSlot.clipId);
       const r0 = (await get(m.pid)).revision;
       const regen = await call(`/projects/${m.pid}/template-runs/${runId}/regenerate`, { params: { order: 'shuffle', seed: 2 } });
       const regenerated = await get(m.pid);
       const newSlots = pictureSlots(regenerated.project, runId);
       const rd = regenerated.project, videoTracks = rd.sequences[rd.mainSequenceId]!.tracks.filter((t) => t.kind === 'video');
-      const isPicture = (c: Doc['sequences'][string]['tracks'][number]['clips'][number]) => c.type === 'media' && ['video', 'image'].includes(rd.assets[c.assetId]?.kind ?? '');
+      const elementsAfter = elementKeys(rd);
+      const isSlotPicture = (c: AnyClip) => showsPicture(rd, c) && !elementsAfter.has(c.id);
       const spans = newSlots.map((x) => clipOf(rd, x.clipId)?.clip).filter((c) => !!c).map((c) => [fr(c.start), fr(T.add(c.start, c.duration))] as const);
       let holes = 0;
-      if (spans.length) for (let f = Math.min(...spans.map((x) => x[0])); f < Math.max(...spans.map((x) => x[1])); f++) if (!videoTracks.some((t) => t.clips.some((c) => isPicture(c) && fr(c.start) <= f && f < fr(T.add(c.start, c.duration))))) holes++;
-      const keptAt = clipOf(rd, handSlot.clipId);
-      const covered = !keptAt || videoTracks.slice(videoTracks.indexOf(keptAt.track) + 1).some((t) => t.clips.some((c) => isPicture(c) && T.lt(c.start, T.add(keptAt.clip.start, keptAt.clip.duration)) && T.lt(keptAt.clip.start, T.add(c.start, c.duration))));
+      if (spans.length) for (let f = Math.min(...spans.map((x) => x[0])); f < Math.max(...spans.map((x) => x[1])); f++) if (!videoTracks.some((t) => t.clips.some((c) => isSlotPicture(c) && fr(c.start) <= f && f < fr(T.add(c.start, c.duration))))) holes++;
+      const overAfter = over(rd, handSlot.clipId);
+      const covered = !overAfter || overAfter.pictures > 0;
+      const elementsOverSame = !!overBefore && !!overAfter && JSON.stringify(overAfter.elements) === JSON.stringify(overBefore.elements);
       const groupKept = group.every((c) => JSON.stringify(clipOf(rd, c.id)?.clip) === JSON.stringify(c));
-      rec.shuffle = regen.status === 200 ? { replaced: regen.body.replaced, protected: regen.body.protected.length, linked: group.length - 1, slotsAfter: newSlots.length, holes, covered } : regen.body.error;
-      check(`${def.id}: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a picture`, regen.status === 200 && regenerated.revision === r0 + 1 && JSON.stringify([...regen.body.protected].sort()) === JSON.stringify(group.map((c) => c.id).sort()) && regen.body.replaced > 0 && groupKept && newSlots.filter((x) => x.key !== handSlot.key).every((x) => !slots.some((o) => o.clipId === x.clipId)) && holes === 0 && !covered, rec.shuffle);
+      rec.shuffle = regen.status === 200 ? { replaced: regen.body.replaced, protected: regen.body.protected.length, linked: group.length - 1, slotsAfter: newSlots.length, holes, covered, elementsOver: overAfter?.elements.map((e) => e.key) ?? null, elementsOverSame } : regen.body.error;
+      check(`${def.id}: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were`, regen.status === 200 && regenerated.revision === r0 + 1 && JSON.stringify([...regen.body.protected].sort()) === JSON.stringify(group.map((c) => c.id).sort()) && regen.body.replaced > 0 && groupKept && newSlots.filter((x) => x.key !== handSlot.key).every((x) => !slots.some((o) => o.clipId === x.clipId)) && holes === 0 && !covered && elementsOverSame, rec.shuffle);
       // another tempo would move the kept slot: refused, naming it, and nothing changes
       const moved = await call(`/projects/${m.pid}/template-runs/${runId}/regenerate`, { params: { tempo: 'half' } });
       const afterMoved = await get(m.pid);

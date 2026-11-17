@@ -1,0 +1,1027 @@
+{
+  "ranAt": "2026-11-17T16:55:16.737Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v553 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none (Canvas2D software rendering)"
+  },
+  "scope": "The built-in templates (ADR-0016) at 540×960, 30 fps on in-house fixtures: barcode videos (pixel truth), ffmpeg test videos and pictures (mandelbrot, testsrc2, smptebars) and a synthetic 120 BPM drum loop analysed by the product. Rule-based; no model. Not judged by a person: nobody has watched these edits for taste.",
+  "passed": 70,
+  "total": 70,
+  "measurements": {
+    "mcp": {
+      "template": "tpl.travel-montage",
+      "planRevision": 6,
+      "revisions": [
+        6,
+        6,
+        7
+      ],
+      "runId": "run_5e53b30f71m"
+    },
+    "planMs": {
+      "runs": 120,
+      "median": 3.37,
+      "p95": 12.53,
+      "max": 23.78
+    },
+    "perTemplate": {
+      "tpl.travel-montage": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 7.23,
+          "p95": 17.25,
+          "max": 23.78
+        },
+        "exportSeconds": 8.088,
+        "shuffle": {
+          "replaced": 13,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 6,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "pin"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "shot2",
+              "clipId": "clp_7a07a840623",
+              "startFrame": 30,
+              "frames": 30,
+              "plannedStartFrame": 60,
+              "plannedFrames": 60
+            }
+          ]
+        },
+        "barcodeExportSeconds": 6.45
+      },
+      "tpl.photo-dump": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 3,
+          "p95": 4.17,
+          "max": 12.53
+        },
+        "exportSeconds": 5.346,
+        "shuffle": {
+          "replaced": 11,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 6,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "photo2",
+              "clipId": "clp_f376b541c62",
+              "startFrame": 15,
+              "frames": 15,
+              "plannedStartFrame": 30,
+              "plannedFrames": 30
+            }
+          ]
+        },
+        "barcodeExportSeconds": 3.319
+      },
+      "tpl.birthday": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 3.96,
+          "p95": 6.23,
+          "max": 7.46
+        },
+        "exportSeconds": 14.98,
+        "shuffle": {
+          "replaced": 14,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 6,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "star"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "moment2",
+              "clipId": "clp_944232b81c5",
+              "startFrame": 60,
+              "frames": 60,
+              "plannedStartFrame": 120,
+              "plannedFrames": 120
+            }
+          ]
+        },
+        "barcodeExportSeconds": 9.031
+      },
+      "tpl.quote-card": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.63,
+          "p95": 3.41,
+          "max": 5.33
+        },
+        "exportSeconds": 9.411,
+        "shuffle": {
+          "replaced": 5,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 1,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "rule"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "backdrop",
+              "clipId": "clp_6961ffbf461",
+              "startFrame": 0,
+              "frames": 180,
+              "plannedStartFrame": 0,
+              "plannedFrames": 360
+            }
+          ]
+        },
+        "barcodeExportSeconds": 4.825
+      },
+      "tpl.countdown-list": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.73,
+          "p95": 5.02,
+          "max": 5.98
+        },
+        "exportSeconds": 14.652,
+        "shuffle": {
+          "replaced": 22,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 5,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "badge--2"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "item2",
+              "clipId": "clp_2bea8752f04",
+              "startFrame": 60,
+              "frames": 60,
+              "plannedStartFrame": 120,
+              "plannedFrames": 120
+            }
+          ]
+        },
+        "barcodeExportSeconds": 9.308
+      },
+      "tpl.home-video": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 3.21,
+          "p95": 5.33,
+          "max": 5.76
+        },
+        "exportSeconds": 48.937,
+        "shuffle": {
+          "replaced": 9,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 6,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "clip2",
+              "clipId": "clp_dc27cad1582",
+              "startFrame": 90,
+              "frames": 90,
+              "plannedStartFrame": 180,
+              "plannedFrames": 180
+            }
+          ]
+        },
+        "barcodeExportSeconds": 26.521
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "the gallery lists the built-in templates (rule-based; no model) and then the model-gated ones as unavailable with their reason",
+      "ok": true,
+      "detail": {
+        "builtins": [
+          "tpl.travel-montage",
+          "tpl.photo-dump",
+          "tpl.birthday",
+          "tpl.quote-card",
+          "tpl.countdown-list",
+          "tpl.home-video"
+        ],
+        "gated": [
+          "tpl.text-behind-subject",
+          "tpl.3d-zoom"
+        ]
+      }
+    },
+    {
+      "name": "planning a model-gated template is refused with 409 needs_capability and nothing is downloaded",
+      "ok": true,
+      "detail": {
+        "code": "needs_capability",
+        "message": "template tpl.text-behind-subject needs a video subject-segmentation model (a matte of the person in every frame), which is not installed on this machine; templates never download models",
+        "details": {},
+        "hint": "Choose one of the available templates (GET /api/v1/templates)."
+      }
+    },
+    {
+      "name": "every built-in template is available on this machine (graphic elements need an ffmpeg with librsvg)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "tpl.travel-montage: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 8,
+        "warnings": [
+          "media_reused"
+        ],
+        "operations": 37
+      }
+    },
+    {
+      "name": "tpl.travel-montage: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_7a07a84062m",
+        "created": 21
+      }
+    },
+    {
+      "name": "tpl.travel-montage: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          30,
+          60,
+          90,
+          120,
+          150,
+          180
+        ],
+        "boundaryErrors": 0,
+        "minGap": 30,
+        "slots": 6
+      }
+    },
+    {
+      "name": "tpl.travel-montage: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.travel-montage: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 180,
+        "predicted": 180
+      }
+    },
+    {
+      "name": "tpl.travel-montage: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 180
+      }
+    },
+    {
+      "name": "tpl.travel-montage: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.travel-montage: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.travel-montage: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 13,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 6,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "pin"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.travel-montage: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "shot2",
+            "clipId": "clp_7a07a840623",
+            "startFrame": 30,
+            "frames": 30,
+            "plannedStartFrame": 60,
+            "plannedFrames": 60
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.travel-montage: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 98,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "video",
+          "adjustment",
+          "text",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.photo-dump: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 6,
+        "warnings": [
+          "media_reused"
+        ],
+        "operations": 21
+      }
+    },
+    {
+      "name": "tpl.photo-dump: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_f376b541c6h",
+        "created": 17
+      }
+    },
+    {
+      "name": "tpl.photo-dump: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          15,
+          30,
+          45,
+          60,
+          75,
+          90
+        ],
+        "boundaryErrors": 0,
+        "minGap": 15,
+        "slots": 6
+      }
+    },
+    {
+      "name": "tpl.photo-dump: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.photo-dump: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 90,
+        "predicted": 90
+      }
+    },
+    {
+      "name": "tpl.photo-dump: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 90
+      }
+    },
+    {
+      "name": "tpl.photo-dump: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.photo-dump: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.photo-dump: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 11,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 6,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.photo-dump: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "photo2",
+            "clipId": "clp_f376b541c62",
+            "startFrame": 15,
+            "frames": 15,
+            "plannedStartFrame": 30,
+            "plannedFrames": 30
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.photo-dump: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 60,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.birthday: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 8,
+        "warnings": [
+          "media_reused"
+        ],
+        "operations": 43
+      }
+    },
+    {
+      "name": "tpl.birthday: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_944232b81cq",
+        "created": 22
+      }
+    },
+    {
+      "name": "tpl.birthday: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          60,
+          120,
+          180,
+          240,
+          300,
+          360
+        ],
+        "boundaryErrors": 0,
+        "minGap": 60,
+        "slots": 6
+      }
+    },
+    {
+      "name": "tpl.birthday: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.birthday: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 360,
+        "predicted": 360
+      }
+    },
+    {
+      "name": "tpl.birthday: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 360
+      }
+    },
+    {
+      "name": "tpl.birthday: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.birthday: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.birthday: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 14,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 6,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "star"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.birthday: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "moment2",
+            "clipId": "clp_944232b81c5",
+            "startFrame": 60,
+            "frames": 60,
+            "plannedStartFrame": 120,
+            "plannedFrames": 120
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.birthday: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 207,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "video",
+          "adjustment",
+          "adjustment",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.quote-card: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 6,
+        "warnings": [
+          "media_unused",
+          "designed_for_other_shape"
+        ],
+        "operations": 21
+      }
+    },
+    {
+      "name": "tpl.quote-card: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_6961ffbf46d",
+        "created": 12
+      }
+    },
+    {
+      "name": "tpl.quote-card: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          180
+        ],
+        "boundaryErrors": 0,
+        "minGap": 180,
+        "slots": 1
+      }
+    },
+    {
+      "name": "tpl.quote-card: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 1,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.quote-card: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 180,
+        "predicted": 180
+      }
+    },
+    {
+      "name": "tpl.quote-card: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 180
+      }
+    },
+    {
+      "name": "tpl.quote-card: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.quote-card: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.quote-card: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 5,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 1,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "rule"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.quote-card: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "backdrop",
+            "clipId": "clp_6961ffbf461",
+            "startFrame": 0,
+            "frames": 180,
+            "plannedStartFrame": 0,
+            "plannedFrames": 360
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.quote-card: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 180,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "video",
+          "adjustment",
+          "text",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.countdown-list: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 8,
+        "warnings": [
+          "media_unused",
+          "media_reused"
+        ],
+        "operations": 67
+      }
+    },
+    {
+      "name": "tpl.countdown-list: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_2bea8752f0w",
+        "created": 31
+      }
+    },
+    {
+      "name": "tpl.countdown-list: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          60,
+          120,
+          180,
+          240,
+          300
+        ],
+        "boundaryErrors": 0,
+        "minGap": 60,
+        "slots": 5
+      }
+    },
+    {
+      "name": "tpl.countdown-list: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.countdown-list: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 300,
+        "predicted": 300
+      }
+    },
+    {
+      "name": "tpl.countdown-list: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 300
+      }
+    },
+    {
+      "name": "tpl.countdown-list: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.countdown-list: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.countdown-list: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 22,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 5,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "badge--2"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.countdown-list: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "item2",
+            "clipId": "clp_2bea8752f04",
+            "startFrame": 60,
+            "frames": 60,
+            "plannedStartFrame": 120,
+            "plannedFrames": 120
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.countdown-list: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 213,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "video",
+          "adjustment",
+          "text",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.home-video: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 6,
+        "warnings": [
+          "media_reused",
+          "designed_for_other_shape"
+        ],
+        "operations": 20
+      }
+    },
+    {
+      "name": "tpl.home-video: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_dc27cad158i",
+        "created": 15
+      }
+    },
+    {
+      "name": "tpl.home-video: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          90,
+          180,
+          270,
+          360,
+          450,
+          540
+        ],
+        "boundaryErrors": 0,
+        "minGap": 90,
+        "slots": 6
+      }
+    },
+    {
+      "name": "tpl.home-video: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.home-video: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 540,
+        "predicted": 540
+      }
+    },
+    {
+      "name": "tpl.home-video: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 540
+      }
+    },
+    {
+      "name": "tpl.home-video: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.home-video: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.home-video: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 9,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 6,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.home-video: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "clip2",
+            "clipId": "clp_dc27cad1582",
+            "startFrame": 90,
+            "frames": 90,
+            "plannedStartFrame": 180,
+            "plannedFrames": 180
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.home-video: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 315,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "MCP: plan_template changes nothing and apply_template adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "template": "tpl.travel-montage",
+        "planRevision": 6,
+        "revisions": [
+          6,
+          6,
+          7
+        ],
+        "runId": "run_5e53b30f71m"
+      }
+    }
+  ]
+}

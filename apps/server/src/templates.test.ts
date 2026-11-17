@@ -77,21 +77,30 @@ const revision = (pid: string) => store.getProject(pid).revision;
 const grantToken = (input: Record<string, unknown>) => gov.createGrant({ name: `g${n++}`, ...input }, USER).token;
 const mainTracks = (doc: ProjectDocument) => doc.sequences[doc.mainSequenceId]!.tracks;
 const isPictureClip = (doc: ProjectDocument, c: Clip) => c.type === 'media' && ['video', 'image'].includes(doc.assets[c.assetId]?.kind ?? '');
-/** The run's picture slots: their clips, the frames from the first slot's start to the last one's end that no picture covers, and kept clips a picture on a higher track covers. */
+/**
+ * The run's picture slots: the frames from the first slot's start to the last one's end that no slot picture covers, kept clips a
+ * picture on a higher track covers, and the run's graphic elements over each kept clip. A graphic element of the template (a run
+ * slot of kind 'element', placed by the planner on a track above the pictures) is not a slot picture: it fills no frame, and
+ * lying over a picture is its place.
+ */
 function pictureCoverage(doc: ProjectDocument, runId: string, keptIds: readonly string[] = []) {
   const tracks = mainTracks(doc).filter((t) => t.kind === 'video');
-  const slotClips = doc.recipeRuns[runId]!.slots!.filter((s) => s.kind === 'picture').map((s) => findClip(doc, s.clipId)!.clip);
+  const run = doc.recipeRuns[runId]!;
+  const elementKey = new Map(run.slots!.filter((s) => s.kind === 'element').map((s) => [s.clipId, s.key]));
+  const isSlotPicture = (c: Clip) => isPictureClip(doc, c) && !elementKey.has(c.id);
+  const slotClips = run.slots!.filter((s) => s.kind === 'picture').map((s) => findClip(doc, s.clipId)!.clip);
   const fi = (t: T.RationalTime) => T.nearestFrameIndex(t, R);
   const from = Math.min(...slotClips.map((c) => fi(c.start))), to = Math.max(...slotClips.map((c) => fi(clipEnd(c))));
   const holes: number[] = [];
-  for (let f = from; f < to; f++) if (!tracks.some((t) => t.clips.some((c) => isPictureClip(doc, c) && fi(c.start) <= f && f < fi(clipEnd(c))))) holes.push(f);
-  const covered = keptIds.filter((id) => {
+  for (let f = from; f < to; f++) if (!tracks.some((t) => t.clips.some((c) => isSlotPicture(c) && fi(c.start) <= f && f < fi(clipEnd(c))))) holes.push(f);
+  const over = (id: string) => {
     const k = findClip(doc, id);
-    if (!k || k.track.kind !== 'video') return false;
-    const below = tracks.indexOf(k.track);
-    return tracks.slice(below + 1).some((t) => t.clips.some((c) => isPictureClip(doc, c) && T.lt(c.start, clipEnd(k.clip)) && T.lt(k.clip.start, clipEnd(c))));
-  });
-  return { from, to, holes, covered };
+    if (!k || k.track.kind !== 'video') return [];
+    return tracks.slice(tracks.indexOf(k.track) + 1).flatMap((t) => t.clips.filter((c) => isPictureClip(doc, c) && T.lt(c.start, clipEnd(k.clip)) && T.lt(k.clip.start, clipEnd(c))));
+  };
+  const covered = keptIds.filter((id) => over(id).some((c) => !elementKey.has(c.id)));
+  const elementsOver = keptIds.flatMap((id) => over(id).filter((c) => elementKey.has(c.id)).map((c) => ({ key: elementKey.get(c.id)!, assetId: c.type === 'media' ? c.assetId : null, from: fi(c.start), to: fi(clipEnd(c)), transform: c.type === 'media' ? c.transform : null })));
+  return { from, to, holes, covered, elementsOver };
 }
 /** The clips linked to `clipId` (its link group, itself excluded). */
 const partners = (doc: ProjectDocument, clipId: string) => {
@@ -375,5 +384,37 @@ describe('regenerate', () => {
       const again = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, {});
       expect([...again.body.protected].sort(), edit).toEqual([pic, aud!.id].sort());
     }
+  }, 60_000);
+
+  it('a graphic element of the template is not a slot picture: after a shuffle the same element lies over the kept picture, where it was, and no slot picture covers it', async (ctx) => {
+    const def = TEMPLATES.find((t) => t.id === 'tpl.travel-montage')!; // a location pin over its first two shots
+    const listed = (await rest('GET', '/templates')).body.templates as { id: string; available: boolean }[];
+    if (!listed.find((t) => t.id === def.id)!.available) return ctx.skip(); // graphic elements need an ffmpeg with librsvg
+    const s = seed('regen-element');
+    const applied = await rest('POST', `/projects/${s.pid}/templates/${def.id}/apply`, { params: { media: [s.a, s.b, s.c], musicAssetId: s.mus } });
+    expect(applied.status).toBe(200);
+    const runId = applied.body.runId as string;
+    const doc0 = store.getProject(s.pid).doc;
+    const shot2 = doc0.recipeRuns[runId]!.slots!.find((x) => x.key === 'shot2')!.clipId;
+    const pin0 = doc0.recipeRuns[runId]!.slots!.find((x) => x.key === 'pin')!.clipId;
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'set_clip_transform', args: { clipId: shot2, transform: { rotation: 5 } } }] });
+    const d1 = store.getProject(s.pid).doc;
+    const kept = structuredClone(findClip(d1, shot2)!.clip);
+    const before = pictureCoverage(d1, runId, [shot2]);
+    expect([before.holes, before.covered, before.elementsOver.map((e) => e.key)], 'the pin lies over the second shot as the template placed it').toEqual([[], [], ['pin']]);
+    const r = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, { params: { order: 'shuffle', seed: 7 } });
+    expect([r.status, r.body.protected]).toEqual([200, [shot2]]);
+    const doc = store.getProject(s.pid).doc;
+    expect(validateProject(doc)).toEqual([]);
+    expect(findClip(doc, shot2)!.clip).toEqual(kept);
+    // the pin was untouched, so it is made again (a new clip) at the same place, over the kept picture; the new slot pictures
+    // share the kept picture's track and none lies over it; the element fills no frame, so every frame still has a slot picture
+    const pin = doc.recipeRuns[runId]!.slots!.find((x) => x.key === 'pin')?.clipId;
+    expect([typeof pin, pin === pin0, findClip(doc, pin0)]).toEqual(['string', false, undefined]);
+    const after = pictureCoverage(doc, runId, [shot2]);
+    expect(after).toMatchObject({ holes: [], covered: [] });
+    expect(after.elementsOver).toEqual(before.elementsOver);
+    const track = findClip(doc, shot2)!.track.id;
+    for (const sl of doc.recipeRuns[runId]!.slots!.filter((x) => x.kind === 'picture')) expect(findClip(doc, sl.clipId)!.track.id, sl.key).toBe(track);
   }, 60_000);
 });
