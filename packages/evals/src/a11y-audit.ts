@@ -3,7 +3,9 @@
  * It checks things a script can decide: every control has an accessible name, text contrast, visible keyboard focus,
  * document language/direction, tab semantics. It is not a WCAG conformance statement and does not replace testing with a
  * screen reader or with users. Findings are written to docs/evidence/a11y-audit.json. The transient states include the
- * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator).
+ * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator),
+ * and the trend pack's panels (ADR-0012): the title effects panel with all six look fields on, and the transition options
+ * of a light transition (beat lock, velocity, colour, seed, light status).
  *   pnpm build && pnpm audit:a11y
  */
 import fs from 'node:fs';
@@ -233,6 +235,33 @@ async function main() {
       await auditState('look-visual-wave', { shown: lookShown.fieldset === 1 && lookShown.separator === 1 && lookShown.stampField === 1 && lookShown.beatToggles >= 1, ...lookShown }, true);
       await post(`/projects/${pid}/transactions`, { ops: waveFx.map((effectId) => ({ op: 'remove_effect', args: { clipId, effectId } })) });
       await page.getByTestId('beat-fieldset').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+      // the title effects panel (ADR-0012): the title selected and all six look fields on, so every control shows; the focus walk starts in the panel
+      const textClipId = tx.results[1].output.clipId as string;
+      const looks = { gradient: { colors: ['#FFD166', '#3A5BFF', '#8A2BE2'], angle: 90 }, tracking: 0.1, stroke2: { color: '#111111', widthFrac: 0.06 }, glow: { color: '#FF2BD6', radiusFrac: 0.5, intensity: 0.8 }, extrude: { color: '#1D3557', depthFrac: 0.15, angle: 45, shade: 0.5 }, longShadow: { color: '#0000004D', lengthFrac: 1.5, angle: 45 } };
+      const fxOn = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: textClipId, style: looks } }] });
+      if (!fxOn.results) throw new Error(`turning the title looks on failed: ${JSON.stringify(fxOn).slice(0, 300)}`);
+      await page.locator(`.clip[data-clip-id="${textClipId}"]`).click();
+      await page.getByTestId('text-effects').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid=text-effects] input[type=checkbox]:checked').length >= 7, undefined, { timeout: 8000 }).catch(() => {});
+      await page.getByTestId('text-effects').scrollIntoViewIfNeeded().catch(() => {});
+      await page.getByTestId('text-fx-gradient').focus().catch(() => {});
+      const fxShown = { panel: await page.getByTestId('text-effects').count(), checked: await page.locator('[data-testid=text-effects] input[type=checkbox]:checked').count(), status: await page.getByTestId('text-fx-status').count(), removeAll: await page.getByTestId('text-fx-remove-all').count(), colourFields: await page.locator('[data-testid=text-effects] input[type=color]').count() };
+      await auditState('text-effects', { shown: fxShown.panel === 1 && fxShown.checked >= 6 && fxShown.status === 1 && fxShown.removeAll === 1 && fxShown.colourFields >= 7, ...fxShown }, true);
+      await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: textClipId, style: Object.fromEntries(Object.keys(looks).map((k) => [k, null])) } }] });
+      // the transition options (ADR-0012) of a light transition between two short clips of the fixture (film-burn declares colour,
+      // seed and light, so every control of the panel shows); the clips are removed again afterwards
+      const pair = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(200), duration: f(40), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: up.assetId, start: f(240), duration: f(40), withLinkedAudio: false } }] });
+      const [pairA, pairB] = (pair.results ?? []).map((r: any) => r.output.clipId as string);
+      const trSet = pairB ? await post(`/projects/${pid}/transactions`, { ops: [{ op: 'set_transition', args: { clipId: pairB, type: 'film-burn', frames: 10 } }] }) : null;
+      if (pairB && trSet?.results) {
+        await page.locator(`.clip[data-clip-id="${pairB}"]`).click();
+        await page.getByTestId('transition-options').waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('transition-options').scrollIntoViewIfNeeded().catch(() => {});
+        await page.getByTestId('transition-sync').focus().catch(() => {});
+      }
+      const trShown = { options: await page.getByTestId('transition-options').count(), sync: await page.getByTestId('transition-sync').count(), velocity: await page.getByTestId('transition-velocity').count(), colour: await page.getByTestId('transition-color').count(), seed: await page.getByTestId('transition-seed').count(), lightStatus: await page.getByTestId('transition-light-status').count(), transitionSet: !!trSet?.results };
+      await auditState('transition-options', { shown: trShown.transitionSet && trShown.options === 1 && trShown.sync === 1 && trShown.velocity === 1 && trShown.colour >= 1 && trShown.seed >= 1 && trShown.lightStatus === 1, ...trShown }, true);
+      if (pairA || pairB) await post(`/projects/${pid}/transactions`, { ops: [pairA, pairB].filter(Boolean).map((id) => ({ op: 'delete_clip', args: { clipId: id } })) });
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
