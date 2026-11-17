@@ -10,7 +10,6 @@
 }
 .clip.adjust-clip.selected { border-color: #fff; }
 .track-kind { font-size: 11px; font-weight: 600; color: var(--pf-accent-3); }
-.adjust-badge { opacity: 0.9; }
 
 /* ---------- "apply to" (Look panel, effects gallery) and the inspector blocks ---------- */
 .pf-apply-to { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 4px 0; padding: 6px 8px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); }

@@ -57,6 +57,33 @@
   --pf-hilite:inset 0 1px 0 rgba(255,255,255,.7);
   --pf-scrim:rgba(20,24,32,.38);
 }
+/* A subtree that stays dark whatever the theme (the stage, its overlays and the transport; also anything that sits over video).
+   The dark values of the first rule, minus --pf-canvas and --pf-stage (those belong to the theme: the stage surround is the same in
+   both). Custom properties that refer to other tokens are declared again here, because a var() is resolved where it is declared,
+   so inheriting the light root's resolved --pf-e1/--pf-glow-* would keep the light colours inside the subtree. Under
+   :root[data-theme="light"] editor/stage.css refines this with mixes over --pf-stage for the surfaces and accents (it has the higher
+   specificity and wins). */
+.pf-force-dark {
+  color-scheme: dark;
+  --pf-surface-1:#111216; --pf-surface-2:#181A1F; --pf-surface-3:#1F2228; --pf-surface-4:#282B32;
+  --pf-line:rgba(255,255,255,.075); --pf-line-strong:rgba(255,255,255,.13); --pf-line-strong-solid:#2A2D34; --pf-line-control:#666D7A;
+  --pf-text:#EDEFF3; --pf-text-2:#AEB4BF; --pf-text-3:#959CA8; --pf-text-disabled:#5C626D;
+  --pf-frame:#45E6D0; --pf-frame-strong:#86F3E3; --pf-frame-ink:#04211D; --pf-frame-soft:rgba(69,230,208,.14); --pf-frame-glow:rgba(69,230,208,.42);
+  --pf-pulse:#FFC54D; --pf-pulse-hot:#FF9A3D; --pf-pulse-ink:#2A1A00; --pf-pulse-soft:rgba(255,197,77,.13); --pf-pulse-glow:rgba(255,184,64,.5);
+  --pf-agent:#C3A6FF; --pf-agent-soft:rgba(195,166,255,.14);
+  --pf-ok:#62DB98; --pf-attention:#FF9F5A; --pf-info:#73C9FF; --pf-neutral:#AEB4BF;
+  --pf-danger:#FF6B81; --pf-danger-soft:rgba(255,107,129,.12); --pf-danger-fill:#B83039; --pf-on-danger:#FFFFFF;
+  --pf-focus:#86F3E3;
+  --pf-m-edit:#45E6D0; --pf-m-look:#FFA88A; --pf-m-sound:#7EE08A; --pf-m-captions:#C9A8FF; --pf-m-deliver:#73C9FF;
+  --pf-e1:0 0 0 1px var(--pf-line),0 10px 30px -18px rgba(0,0,0,.8);
+  --pf-e2:0 0 0 1px var(--pf-line-strong),0 14px 36px -10px rgba(0,0,0,.7);
+  --pf-e3:0 0 0 1px var(--pf-line-strong),0 40px 90px -20px rgba(0,0,0,.85);
+  --pf-hilite:inset 0 1px 0 rgba(255,255,255,.045);
+  --pf-glow-frame:0 0 0 1.5px var(--pf-frame),0 0 22px -4px var(--pf-frame-glow);
+  --pf-glow-pulse:0 0 14px var(--pf-pulse-glow);
+  --pf-scrim:rgba(4,5,7,.62);
+  color:var(--pf-text);
+}
 :root {
   /* type */
   --pf-font:'IBM Plex Sans Hebrew','Heebo',system-ui,sans-serif;
