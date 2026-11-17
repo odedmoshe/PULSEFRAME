@@ -5,7 +5,7 @@
  *   P1  the frame reader's index equals the frame barcode on every frame: proxy, original, a file whose picture starts late;
  *   P2  accuracy on usable frames (median ≤ 1 px, p95 ≤ 3 px; size median ≤ 5 %);
  *   P3  occlusion: ≥ 90 % of frames 150–169 weak or lost, no usable sample > 8 px off, re-acquired by frame 175;
- *   P4  the look-alike: no usable sample within 100 px of it;
+ *   P4  the look-alike: no usable sample within 100 px of it on the frames where it is shown;
  *   P5  two runs give the same SHA-256 of the sample arrays;
  *   P6  cancel: canceled within 2 s, no ffmpeg left, the revision unchanged;
  *   P7  a magenta sticker that follows the disc, on stills (median ≤ 2 px, max ≤ 5 px from the truth projected here); the
@@ -14,7 +14,7 @@
  *   P9  blur: the disc's |Laplacian| energy drops ≥ 80 %; outside the padded box the picture is byte-identical; full cover is
  *       the exact colour; on occluded frames the whole picture's energy drops ≥ 60 %;
  *   P10 echo on a redacted clip: each ghost's energy drops ≥ 80 % (flat-background variant, the region on hand-placed samples);
- *   P11 FlashAnalyser passes the loss fallback at speed 1 and speed 4;
+ *   P11 FlashAnalyser passes the loss fallback at speed 1 and speed 4 (the fixture's own barcode strip left out, with a control);
  *   P12 preflight ranges equal the lost and weak runs mapped to the timeline (speed 1 and 2);
  *   P13 recorded only: tracking frames/s, frames decoded, event-loop lag p99 (budget 100 ms), commit p95 at 43,200 samples (budget +15 ms).
  * The truth is the fixture's own formulas; positions are projected through the document's fit and transform written out here
@@ -30,7 +30,7 @@ import path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
-import { generateTrackingFixture, readBarcode, TRACKING_FIXTURE, trackingTruth } from '@pulseframe/fixtures';
+import { BARCODE, generateTrackingFixture, readBarcode, TRACKING_FIXTURE, trackingTruth } from '@pulseframe/fixtures';
 import { FlashAnalyser, flashCells } from '@pulseframe/engine';
 import { startServer } from '@pulseframe/server';
 import type { FrameSource, GreyFrame, ReadFrames } from '../../../apps/server/src/vision/types.ts';
@@ -200,8 +200,14 @@ async function main() {
       const weakOrLost = occ.filter((fr) => { const v = at(A, fr); return !!v && (v.st === 2 || v.st === 3); }).length;
       const back = Array.from({ length: N - FX.occluded.to - 1 }, (_, k) => FX.occluded.to + 1 + k).find((fr) => usableAt(A, fr)) ?? null;
       check('P3 occlusion: at least 90% of frames 150–169 are weak or lost; no usable sample anywhere is more than 8 px off; re-acquired by frame 175', weakOrLost >= 18 && worstUsable <= 8 && back !== null && back <= 175, { weakOrLost, of: 20, worstUsablePx: r2(worstUsable), firstUsableAfter: back, stateThere: back !== null ? at(A, back)?.st : null });
-      const nearDecoy = Array.from({ length: N }, (_, fr) => fr).filter((fr) => { const v = at(A, fr); return !!v && USABLE.has(v.st) && Math.hypot(v.x - FX.decoy.cx, v.y - FX.decoy.cy) < 100; });
-      check('P4 the look-alike: no usable sample within 100 px of it', nearDecoy.length === 0, { nearDecoy: nearDecoy.slice(0, 8) });
+      // The look-alike is on screen on frames decoy.from..decoy.to only. Before that the disc's own path crosses the place where it
+      // will appear (frames 120–128), so a check over all frames would fail a perfect tracker; the frames where the true path is
+      // near that place and no look-alike exists yet are recorded as a control (corrected with the owner's approval, 2026-11-17).
+      const near = (fr: number) => { const v = at(A, fr); return !!v && USABLE.has(v.st) && Math.hypot(v.x - FX.decoy.cx, v.y - FX.decoy.cy) < 100; };
+      const shown = Array.from({ length: FX.decoy.to - FX.decoy.from + 1 }, (_, k) => FX.decoy.from + k);
+      const nearDecoy = shown.filter(near);
+      const truePathNearItsPlaceBefore = Array.from({ length: FX.decoy.from }, (_, fr) => fr).filter((fr) => { const t = trackingTruth(fr); return Math.hypot(t.cx - FX.decoy.cx, t.cy - FX.decoy.cy) < 100; });
+      check(`P4 the look-alike (shown on frames ${FX.decoy.from}–${FX.decoy.to}): no usable sample within 100 px of it while it is shown`, nearDecoy.length === 0 && shown.length > 0, { nearDecoy: nearDecoy.slice(0, 8), framesChecked: shown.length, truePathNearItsPlaceBeforeItAppears: truePathNearItsPlaceBefore.length ? [truePathNearItsPlaceBefore[0], truePathNearItsPlaceBefore.at(-1)] : [] });
     }
 
     console.log('\n# P5 the same seed tracked again gives the same arrays');
@@ -411,21 +417,34 @@ async function main() {
       measurements.P9 = { drops, wholeDrops, fills };
     }
 
-    console.log('\n# P11 the loss fallback is not a flash (FlashAnalyser on the export, speed 1 and speed 4)');
+    console.log('\n# P11 the loss fallback is not a flash (FlashAnalyser on the export, speed 1 and speed 4; the barcode strip left out)');
     {
+      // The fixture's frame barcode (the top sixth of the picture) changes on every frame and is by itself a flash for the analyser:
+      // the source file fails with no project and no region at all (the control below). The check is about the whole-picture loss
+      // fallback switching on and off, so the strip is painted mid-grey before analysis, in the source and in the exports alike;
+      // what the blur spreads of the strip's flicker BELOW the strip is still measured (corrected with the owner's approval, 2026-11-17).
+      const w = 160, hh = 90, fb = w * hh * 4, strip = Math.round(hh * BARCODE.stripFrac);
+      const analyse = (file: string, withoutStrip: boolean) => {
+        const raw = ff(['-i', file, '-vf', `scale=${w}:${hh}`, '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+        const fa = new FlashAnalyser(30);
+        for (let k = 0; k < raw.length / fb; k++) {
+          const frame = raw.subarray(k * fb, (k + 1) * fb);
+          if (withoutStrip) frame.fill(128, 0, strip * w * 4);
+          fa.push(flashCells(frame, w, hh));
+        }
+        const rep = fa.report();
+        return { frames: rep.frames, verdict: rep.verdict, ranges: rep.ranges.slice(0, 3), peak: fa.peak() };
+      };
+      const control = { sourceWithStrip: analyse(fixture.file, false), sourceWithoutStrip: analyse(fixture.file, true) };
       const rows: Record<string, unknown>[] = [];
       for (const speed of [1, 4]) {
         if (speed !== 1) await txs(pid, [{ op: 'set_clip_speed', args: { clipId: v1, speed } }]);
         const { file, job } = await exportFile(pid);
-        const w = 160, hh = 90;
-        const raw = ff(['-i', file, '-vf', `scale=${w}:${hh}`, '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
-        const fa = new FlashAnalyser(30), fb = w * hh * 4;
-        for (let k = 0; k < raw.length / fb; k++) fa.push(flashCells(raw.subarray(k * fb, (k + 1) * fb), w, hh));
-        const rep = fa.report();
-        rows.push({ speed, frames: rep.frames, verdict: rep.verdict, ranges: rep.ranges.slice(0, 3), exportsOwnCheck: job.output?.photosensitivity?.verdict ?? null });
+        rows.push({ speed, ...analyse(file, true), withStrip: analyse(file, false).verdict, exportsOwnCheck: job.output?.photosensitivity?.verdict ?? null });
         if (speed !== 1) await call(`/projects/${pid}/undo`, {});
       }
-      check('P11 FlashAnalyser passes the exported picture with the whole-picture loss fallback, at speed 1 and at speed 4', rows.every((r: any) => r.verdict === 'pass' && r.frames > 0), rows);
+      check('P11 control: the fixture alone passes the analyser once its barcode strip is left out (so the check below is about the fallback, not the barcode)', control.sourceWithoutStrip.verdict === 'pass' && control.sourceWithoutStrip.frames > 0, control);
+      check('P11 FlashAnalyser passes the exported picture with the whole-picture loss fallback, at speed 1 and at speed 4 (barcode strip left out)', rows.every((r: any) => r.verdict === 'pass' && r.frames > 0), rows);
     }
 
     console.log('\n# P10 echo on a redacted clip: every ghost is covered at its own frame');
