@@ -886,3 +886,8 @@ Notes on the canvas:
 5. Song-section labels need a section analysis that does not exist yet. Should it be built in wave C, or should the strip show only bars and beats permanently?
 6. Agent proposals drawn on the timeline need an ADR and a new MCP tool. Should that go on the roadmap now?
 7. Is light theme a priority, or dark only for the first release (light kept token-complete but less polished)?
+
+---
+
+## Owner decisions (2026-11-17)
+The owner approved the lead's recommendations: IBM Plex Sans Hebrew as the interface font (bundled offline, OFL-1.1; canvas and export fonts unchanged); Export always opens the export sheet; the dark theme is polished first and the light theme ships complete as tokens under the same contrast test; ripple delete and the main-track magnet are on by default for new projects only. Lead decisions: gold for time and beat, violet reserved for the agent, captions light pink; song-section labels only when a section analysis exists; agent proposals drawn on the timeline are on the roadmap, not in this build; the command bar lands with a model-free grammar and an honest "model not connected" state until the owner supplies a key (BLOCKERS B-9).
