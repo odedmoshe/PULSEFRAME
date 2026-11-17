@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, projectVariant, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { clipEnd, findClip, projectVariant, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument, type TemplateInput } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -16,6 +16,7 @@ import { Player } from '../player.ts';
 import { timelineDerivatives } from '../clipVisuals.cache.ts';
 import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
 import { addAssetArgs, dropAssetArgs } from './placement.ts';
+import { wholeEditOps, type WholeEditPick } from './commands.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -69,6 +70,22 @@ export interface EditorState {
   clipboard: string[];
   /** Clips marked by Cut; they move on the next Paste (nothing is committed until then). */
   cutPending: string[];
+  /** The Templates drawer of the library is expanded (session view state). */
+  templatesOpen: boolean;
+  /** The template run applied from this tab, for the post-apply bar (shuffle, another tempo, undo); session state only. */
+  templateRun: TemplateRunInfo | null;
+}
+/** What the post-apply bar knows of the last template applied here (ADR-0016): its run, the params it ran with and the plan's alternatives. */
+export interface TemplateRunInfo {
+  runId: string;
+  templateId: string;
+  name: { he: string; en: string };
+  params: Partial<TemplateInput>;
+  alternatives: { label: string; params: Partial<TemplateInput> }[];
+  /** Items the run placed. */
+  created: number;
+  /** The revision the apply (or the last regenerate) made. */
+  revision: number;
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
@@ -90,6 +107,7 @@ export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
     provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
+    templatesOpen: false, templateRun: null,
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -566,6 +584,28 @@ export class Editor {
     const end = clips.reduce((m, c) => T.max(m, clipEnd(c)), clips[0]!.start);
     return this.duplicate(clips.map((c) => c.id), T.snapToFrame(end, this.rate), 'Duplicate');
   }
+  // ---------- adjustment layers and templates (ADR-0016) ----------
+  /** An adjustment layer over the whole edit, selected so its Look panel is in view (palette: cmd.addAdjustment). */
+  async addWholeEditAdjustment() {
+    const r = await this.commit([{ op: 'add_adjustment', args: { span: 'edit' } }], 'Adjustment layer');
+    const id = r?.results[0]?.output?.clipId;
+    if (typeof id === 'string') this.select(id);
+    return r;
+  }
+  /**
+   * "Apply to: the whole edit": the effect or look goes on the existing whole-edit adjustment, or on a new one made over the
+   * edit (commands.ts wholeEditOps). Decided when the write's turn comes; one transaction either way.
+   */
+  applyToWholeEdit(pick: WholeEditPick, label = 'Adjust the whole edit') {
+    return this.commit(() => (this.state.doc ? wholeEditOps(this.state.doc, pick) : null), label);
+  }
+  /** Expand the Templates drawer of the library and move the keyboard focus to it (palette, Welcome). */
+  openTemplates() {
+    this.set({ templatesOpen: true });
+    setTimeout(() => document.querySelector<HTMLElement>('[data-testid=templates-drawer] [data-testid=template-card], [data-testid=templates-drawer] [data-testid=templates-toggle]')?.focus(), 0);
+  }
+  setTemplateRun(run: TemplateRunInfo | null) { this.set({ templateRun: run }); }
+
   /** The selected clip's transform as rendered at the playhead (keyframes applied). */
   transformNow(clip: Clip) { return transformAt(clip, T.max(clip.start, T.min(this.playhead, clipEnd(clip)))); }
 }

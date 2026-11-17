@@ -1,9 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { adjustmentRefusal, beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
-import { EffectGalleryButton } from './EffectGallery.tsx';
+import { ApplyToGroup, EffectGalleryButton, type ApplyTo } from './EffectGallery.tsx';
+import { ADJUST_STRINGS } from './adjust.strings.ts';
+import { wholeEditAdjustment, type WholeEditPick } from './commands.ts';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
@@ -371,6 +373,22 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
   const effects = clip.type === 'caption' ? [] : clip.effects ?? [];
   const blend = clip.type === 'caption' ? 'normal' : clip.blend ?? 'normal';
   const media = clip.type === 'media' && trackKind === 'video';
+  // Adjustment layers (ADR-0016): an adjustment clip's own look acts on everything below it; for any other clip the look can
+  // go on this clip or, through an adjustment layer over the whole edit, on everything (one transaction either way).
+  const adjustment = clip.type === 'adjustment';
+  const A = ADJUST_STRINGS[state.lang];
+  const [applyTo, setApplyTo] = useState<ApplyTo>('clip');
+  const toEdit = !adjustment && applyTo === 'edit';
+  /** Why this effect cannot be picked here: an adjustment (this clip, or the whole-edit layer) refuses time effects, the chroma key and the shadow. */
+  const refusedHere = (type: string) => (adjustment || toEdit ? adjustmentRefusal(type) : null);
+  const whole = state.doc ? wholeEditAdjustment(state.doc) : null;
+  const [editStatus, setEditStatus] = useState<string | null>(null);
+  const toWholeEdit = async (pick: WholeEditPick) => {
+    const r = await editor.applyToWholeEdit(pick);
+    const why = r ? null : editor.getState().error;
+    setRefusal(why);
+    setEditStatus(r ? A.appliedToEdit : null);
+  };
   const timeFirst = effects.length > 0 && isTimeEffect(effects[0]!.type);
   // A refusal of an edit made here is shown here too (besides the editor's error bar), in the interface language: the editor
   // words the server's refusal with translateRefusal (store.ts fail).
@@ -385,7 +403,15 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
   return (
     <div className="look-panel" data-testid="look-panel">
       <h3>{t('look')}</h3>
-      <EffectGalleryButton clip={clip} trackKind={trackKind} />
+      {adjustment && <p className="muted" role="note" data-testid="adjust-note">{A.adjustNote}</p>}
+      {!adjustment && clip.type !== 'caption' && <ApplyToGroup value={applyTo} onChange={(v) => { setApplyTo(v); setEditStatus(null); }} />}
+      <EffectGalleryButton clip={clip} trackKind={trackKind} applyTo={adjustment ? 'clip' : applyTo} onApplyTo={setApplyTo} />
+      {toEdit && whole && (
+        <p className="row">
+          <button type="button" className="ghost" data-testid="adjust-select" onClick={() => editor.select(whole.clip.id)}>{A.showAdjustment}</button>
+        </p>
+      )}
+      {toEdit && editStatus && <p className="muted" role="status" data-testid="adjust-status">{editStatus}</p>}
       <div className="fields">
         <h4>{t('look.effects')}</h4>
         {effects.length === 0 ? <p className="muted">{t('look.effects.none')}</p> : (
@@ -397,17 +423,20 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
           <p className="muted danger" role="status" data-testid="gpu-unavailable">{t('look.gpu.unavailable')} <bdi>{state.gpu.reason}</bdi></p>
         )}
         <label>{t('look.looks')}
-          <select data-testid="look-apply" value="" disabled={!state.gpu?.available} title={state.gpu?.available ? t('look.looks.hint') : t('look.gpu.needed')} onChange={(e) => { const lookId = e.target.value; if (lookId) void editor.commit([{ op: 'apply_look', args: { clipId: clip.id, lookId } }], 'Apply colour look'); }}>
+          <select data-testid="look-apply" value="" disabled={!state.gpu?.available} title={state.gpu?.available ? t('look.looks.hint') : t('look.gpu.needed')} onChange={(e) => { const lookId = e.target.value; if (!lookId) return; if (toEdit) void toWholeEdit({ kind: 'look', lookId }); else void editor.commit([{ op: 'apply_look', args: { clipId: clip.id, lookId } }], 'Apply colour look'); }}>
             <option value="">{state.gpu?.available ? t('look.looks.pick') : `${t('look.looks.pick')} — ${t('look.gpu.needed')}`}</option>
             {COLOR_LOOKS.map((l) => <option key={l.id} value={l.id}>{l.name[state.lang]}</option>)}
           </select>
         </label>
         <label className="sr-only" htmlFor="look-effect-add">{t('look.effect.add')}</label>
-        <select id="look-effect-add" data-testid="effect-add" value="" aria-describedby={refusal ? refusalId : undefined} onChange={(e) => { const type = e.target.value; if (type) void run([{ op: 'add_effect', args: { clipId: clip.id, type } }], 'Add effect'); }}>
+        <select id="look-effect-add" data-testid="effect-add" value="" aria-describedby={refusal ? refusalId : undefined} onChange={(e) => { const type = e.target.value; if (!type) return; if (toEdit) void toWholeEdit({ kind: 'effect', type }); else void run([{ op: 'add_effect', args: { clipId: clip.id, type } }], 'Add effect'); }}>
           <option value="">{t('look.effect.add')}</option>
           {CATEGORIES.map((c) => (
             <optgroup key={c} label={t(`look.cat.${c}` as Key)}>
-              {EFFECTS.filter((e) => e.category === c).map((e) => <option key={e.id} value={e.id} disabled={e.cost === 'gpu' && !state.gpu?.available}>{e.name[state.lang]}{e.cost === 'gpu' && !state.gpu?.available ? ` — ${t('look.gpu.needed')}` : ''}</option>)}
+              {EFFECTS.filter((e) => e.category === c).map((e) => {
+                const noGpu = e.cost === 'gpu' && !state.gpu?.available, refused = !!refusedHere(e.id);
+                return <option key={e.id} value={e.id} disabled={noGpu || refused}>{e.name[state.lang]}{refused ? ` — ${A.notOnAdjustment}` : noGpu ? ` — ${t('look.gpu.needed')}` : ''}</option>;
+              })}
             </optgroup>
           ))}
         </select>
@@ -419,6 +448,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
         </label>
       </div>
       {media && clip.type === 'media' && <MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} />}
+      {adjustment && clip.type === 'adjustment' && <><MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} /><p className="muted" role="note" data-testid="adjust-mask-note">{A.maskNote}</p></>}
       {media && clip.type === 'media' && <TransitionControls key={`tr:${clip.id}:${clip.transition?.type ?? ''}:${clip.transition?.frames ?? ''}`} clip={clip} />}
     </div>
   );
