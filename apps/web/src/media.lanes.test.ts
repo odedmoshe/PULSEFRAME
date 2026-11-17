@@ -99,6 +99,30 @@ describe('decode lanes', () => {
     expect(disposed).toContain('clp_main:full:0');
   });
 
+  it('reported (Phase 3, second path): a decoder retired while a drawing holds it (a proxy became ready, or its clip now shows another file) is closed only when that drawing ends', async () => {
+    const { pool, disposed, opened } = stubPool(4);
+    const a = pool.frames.begin!();
+    await pool.frames(layer('clp_a', 0, 5));
+    pool.invalidate('ast_v'); // the proxy of the file became ready while the frame is still being drawn
+    await settle();
+    expect(disposed).toEqual([]); // closing it now would release the picture about to be painted
+    expect(pool.stats().decoders).toBe(0); // but it is out of use: the next request opens a new one
+    await draw(pool, [layer('clp_a', 0, 6)]);
+    expect(opened).toEqual(['clp_a:full:0', 'clp_a:full:0']);
+    pool.frames.end!(a);
+    await settle();
+    expect(disposed).toEqual(['clp_a:full:0']);
+    // the same when the clip now shows another file
+    const b = pool.frames.begin!();
+    await pool.frames(layer('clp_b', 0, 1, 'ast_one'));
+    await draw(pool, [layer('clp_b', 0, 1, 'ast_two')]);
+    await settle();
+    expect(disposed).toEqual(['clp_a:full:0']);
+    pool.frames.end!(b);
+    await settle();
+    expect(disposed).toEqual(['clp_a:full:0', 'clp_b:full:0']);
+  });
+
   it('three overlapping clips with five lanes each do not fit a budget of 12: the layers\' own pictures come first and the refused ones are the extra lanes', async () => {
     const { pool } = stubPool(12);
     const clips = ['clp_a', 'clp_b', 'clp_c'];

@@ -241,7 +241,21 @@ export class MediaPool {
   private end(token: unknown) {
     if (typeof token !== 'number') return;
     for (const d of this.decoders.values()) d.pins.delete(token);
+    for (const d of [...this.retiring]) { d.pins.delete(token); if (d.pins.size === 0) { this.retiring.delete(d); void d.dec.then((x) => x.dispose()).catch(() => {}); } }
     if (this.drawing === token) this.drawing = 0;
+  }
+  /** Decoders taken out of use while a drawing still held their picture: disposed when the last such drawing ends. */
+  private retiring = new Set<{ assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number> }>();
+  /**
+   * Take a decoder out of use (its asset was replaced, or a proxy became ready). One that a drawing in progress holds is
+   * closed only when that drawing ends: closing it at once released the picture that drawing was about to paint
+   * ('VideoSample is closed', seen in the editor when a proxy finished while a frame was being drawn).
+   */
+  private retire(key: string, v: { assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number> }) {
+    this.decoders.delete(key);
+    this.disposed++;
+    if (v.pins.size) this.retiring.add(v);
+    else void v.dec.then((x) => x.dispose()).catch(() => {});
   }
   private keyOf(layer: PictureLayer, quality: 'draft' | 'full') { return `${layer.clipId}:${quality}:${layer.kind === 'video' ? layer.lane ?? 0 : 0}`; }
   private refusal(layer: PictureLayer, quality: 'draft' | 'full'): string | null { return layer.kind === 'image' ? null : this.refusals.get(this.keyOf(layer, quality)) ?? null; }
@@ -251,7 +265,7 @@ export class MediaPool {
    */
   private decoderFor(layer: Extract<PictureLayer, { kind: 'video' }>, quality: 'draft' | 'full', key: string): Promise<PoolDecoder> | null {
     let d = this.decoders.get(key);
-    if (d && d.assetId !== layer.assetId) { this.decoders.delete(key); this.disposed++; void d.dec.then((x) => x.dispose()).catch(() => {}); d = undefined; }
+    if (d && d.assetId !== layer.assetId) { this.retire(key, d); d = undefined; }
     if (!d) {
       if (!this.makeRoom()) return null;
       const lane = layer.lane ?? 0;
@@ -329,13 +343,15 @@ export class MediaPool {
   }
   /** Drop decoders of one asset (e.g. its proxy just became ready, or the asset was replaced). */
   invalidate(assetId: string) {
-    for (const [k, v] of this.decoders) if (v.assetId === assetId) { this.decoders.delete(k); this.disposed++; void v.dec.then((d) => d.dispose()).catch(() => {}); }
+    for (const [k, v] of [...this.decoders]) if (v.assetId === assetId) this.retire(k, v);
   }
   stats(): MediaPoolStats {
     return { decoders: this.decoders.size, stills: this.stills.size, maxDecoders: this.maxDecoders, maxStills: this.maxStills, decoderByteCacheBytes: this.byteCache, sources: { ...this.sources }, sourcesUsed: structuredClone(this.used), opened: this.opened, disposed: this.disposed, peakDecoders: this.peak, refused: this.refused };
   }
   async dispose() {
     for (const v of this.decoders.values()) void v.dec.then((d) => d.dispose()).catch(() => {});
+    for (const v of this.retiring) void v.dec.then((d) => d.dispose()).catch(() => {});
+    this.retiring.clear();
     for (const v of this.stills.values()) void v.img.then((x) => x.bmp.close()).catch(() => {});
     this.decoders.clear();
     this.refusals.clear();

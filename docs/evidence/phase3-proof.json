@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-17T09:29:00.770Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-17T10:21:51.522Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": "baseline written",
-        "editor-en": "baseline written",
-        "palette-en": "baseline written"
+        "editor-he": 1,
+        "editor-en": 1,
+        "palette-en": 1
       }
     },
     {
@@ -607,7 +607,7 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 30,
+        "differentSourceFrames": 29,
         "firstFrames": [
           {
             "frame": 1,
@@ -620,14 +620,14 @@
             "code": 8
           },
           {
-            "frame": 9,
+            "frame": 10,
             "quality": "draft",
-            "code": 9
+            "code": 10
           },
           {
-            "frame": 15,
+            "frame": 14,
             "quality": "draft",
-            "code": 15
+            "code": 14
           },
           {
             "frame": 19,
@@ -635,9 +635,9 @@
             "code": 19
           },
           {
-            "frame": 22,
+            "frame": 23,
             "quality": "draft",
-            "code": 22
+            "code": 23
           }
         ],
         "mismatches": []
@@ -765,11 +765,9 @@
     },
     {
       "name": "no uncaught errors in the editor page (404s for derived files of library files this proof had just removed are left out)",
-      "ok": false,
+      "ok": true,
       "detail": {
-        "unexpected": [
-          "Error: VideoSample is closed.\n    at e.draw (http://127.0.0.1:8794/assets/media-D2b4EB2_.js:2:81719)\n    at Object.draw (http://127.0.0.1:8794/assets/media-D2b4EB2_.js:4:1068)\n    at http://127.0.0.1:8794/assets/src-CnTGdIZq.js:470:5301\n    at px (http://127.0.0.1:8794/assets/src-CnTGdIZq.js:469:63762)\n    at bx (http://127.0.0.1:8794/assets/src-CnTGdIZq.js:470:5286)\n    at Cx (http://127.0.0.1:8794/assets/src-CnTGdIZq.js:470:7217)\n    at async e.pump (http://127.0.0.1:8794/assets/index-zTNXlw7A.js:9:146275) [/assets/index-zTNXlw7A.js]"
-        ],
+        "unexpected": [],
         "leftOut": 0
       }
     }
