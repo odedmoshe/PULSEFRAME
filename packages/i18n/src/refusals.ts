@@ -118,10 +118,51 @@ const HE_PORTRAIT: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the cut-out was not made from the picture this clip shows$/, () => 'החיתוך לא נוצר מהתמונה שהקליפ מציג. יש להריץ את הסרת הרקע על התמונה של הקליפ הזה'],
   [/^remove the transition into the next clip first$/, () => 'יש להסיר קודם את המעבר אל הקליפ הבא'],
 ];
+/**
+ * Refusals of the motion tracking operations («מעקב תנועה», ADR-0015): motion tracks, following them and privacy regions.
+ * Their own list, so the inventory of the list above stays as it is; packages/evals/src/refusal-wording.test.ts provokes
+ * every one of them in a case of its own. A motion track is «מסלול מעקב» (a timeline track stays «רצועה»).
+ */
+const TIME_EFFECTS_HE = '(הד, פיצול זמן, צמצם או קפיצות פריים)';
+const HE_TRACKING: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^motion track \S+ not found$/, () => 'מסלול המעקב לא נמצא'],
+  [/^track \S+ not found$/, () => 'הרצועה לא נמצאה'],
+  [/^a motion track follows something in a video; this file has no video$/, () => 'מסלול מעקב עוקב אחרי משהו בתוך וידאו, ולקובץ הזה אין וידאו'],
+  [/^frame (\d+) is past the last frame of the video \((\d+)\)$/, (m) => `הפריים ${m[1]} נמצא אחרי הפריים האחרון של הווידאו (${m[2]})`],
+  [/^the samples reach past the last frame of the video \((\d+)\)$/, (m) => `הדגימות מגיעות אל מעבר לפריים האחרון של הווידאו (${m[1]})`],
+  [/^a region track needs the size of its box \(w and h\)$/, () => 'מעקב אחרי אזור צריך את גודל המסגרת שלו (רוחב וגובה)'],
+  [/^a point track has no box: w and h belong to region tracks$/, () => 'למעקב אחרי נקודה אין מסגרת: רוחב וגובה שייכים למעקב אחרי אזור'],
+  [/^a region track needs sizes \(s\)$/, () => 'במעקב אחרי אזור חסרים הגדלים של הדגימות'],
+  [/^a point track has no sizes \(s\)$/, () => 'למעקב אחרי נקודה אין גודל'],
+  [/^x, y, s, q and st must have the same length$/, () => 'עמודות הדגימות שהתקבלו אינן באותו אורך'],
+  [/^measured samples cannot be marked manual$/, () => 'דגימות שנמדדו אינן יכולות להיות מסומנות כמיקום שנקבע ביד'],
+  [/^a project can hold at most (\d+) motion tracks$/, (m) => `בפרויקט יכולים להיות עד ${m[1]} מסלולי מעקב. אפשר למחוק מסלול שכבר אינו בשימוש`],
+  [/^a motion track can hold at most (\d+) samples; this edit would make (\d+)$/, (m) => `מסלול מעקב יכול להכיל עד ${m[1]} דגימות, והעריכה הזו הייתה מגיעה ל־${m[2]}. אפשר לעקוב אחרי קטע קצר יותר`],
+  [/^the motion tracks of a project can hold at most (\d+) samples in all; this edit would make (\d+)$/, (m) => `כל מסלולי המעקב בפרויקט יחד יכולים להכיל עד ${m[1]} דגימות, והעריכה הזו הייתה מגיעה ל־${m[2]}. אפשר למחוק מסלול שכבר אינו בשימוש`],
+  [/^nothing to change: give name, set, markLost or interpolate$/, () => 'לא צוין מה לשנות במסלול המעקב'],
+  [/^frame (\d+) is set twice$/, (m) => `הפריים ${m[1]} נקבע פעמיים באותה עריכה`],
+  [/^(markLost|interpolate): the stretch must end after it starts \(to is one past its last frame\)$/, () => 'הקטע חייב להסתיים אחרי שהוא מתחיל'],
+  [/^(markLost|interpolate): the stretch must lie inside the track \(source frames (\d+) to (\d+)\)$/, (m) => `הקטע חייב להיות בתוך מסלול המעקב (פריימי מקור ${m[2]} עד ${m[3]})`],
+  [/^filling in needs a usable sample before the stretch and another after it$/, () => 'כדי להשלים קטע צריך מיקום אמין לפניו ומיקום אמין אחריו. אפשר לסמן מיקום ביד בכל צד'],
+  [/^(\d+) clip\(s\) follow this motion track or hide a region with it$/, (m) => `${m[1]} קליפים עוקבים אחרי מסלול המעקב הזה או מסתירים אזור בעזרתו; יש לנתק אותם קודם, או למחוק עם ניתוק`],
+  [/^(\d+) clip\(s\) still follow a motion track of this file or hide a region with one$/, (m) => `${m[1]} קליפים עדיין עוקבים אחרי מסלול מעקב של הקובץ הזה או מסתירים אזור בעזרתו; יש לנתק אותם קודם`],
+  [/^only a title, or a picture on a video track, can follow a motion track$/, () => 'רק כותרת, או תמונה ברצועת וידאו, יכולות לעקוב אחרי מסלול מעקב'],
+  [/^a clip follows a picture on a video track; track \S+ is a \S+ track$/, () => 'קליפ עוקב אחרי תמונה ברצועת וידאו, והרצועה שנבחרה אינה רצועת וידאו'],
+  [/^a clip cannot follow the picture on its own track$/, () => 'קליפ אינו יכול לעקוב אחרי התמונה שברצועה שלו עצמו; אפשר להעביר אותו לרצועה שמעליה'],
+  [/^a clip with a time effect \(echo, time split, shutter or stutter\) cannot follow a motion track yet$/, () => `קליפ עם אפקט זמן ${TIME_EFFECTS_HE} עדיין אינו יכול לעקוב אחרי מסלול מעקב`],
+  [/^clip \S+ on that track follows a motion track itself; follows cannot be chained$/, () => 'קליפ ברצועה שנבחרה עוקב בעצמו אחרי מסלול מעקב, ואי אפשר לשרשר מעקבים; אפשר לעקוב ישירות אחרי אותו מסלול'],
+  [/^clip \S+ follows the picture on this clip's track; follows cannot be chained$/, () => 'קליפ אחר עוקב אחרי התמונה שברצועה של הקליפ הזה, ואי אפשר לשרשר מעקבים'],
+  [/^privacy regions apply to video clips on video tracks$/, () => 'אזורי פרטיות חלים על קליפי וידאו ברצועות וידאו'],
+  [/^privacy regions are drawn on video pictures only; this clip shows a still image$/, () => 'אזורי פרטיות מצוירים רק על וידאו, והקליפ הזה מציג תמונה סטטית. לתמונה סטטית אפשר לשים עותק שלה ברצועה שמעליה עם אפקט טשטוש ומסכה'],
+  [/^name the region to delete \(regionId\)$/, () => 'יש לציין איזה אזור פרטיות למחוק'],
+  [/^region \S+ not found on clip \S+$/, () => 'אזור הפרטיות לא נמצא בקליפ הזה'],
+  [/^a clip can carry at most (\d+) privacy regions$/, (m) => `לקליפ אפשר להוסיף עד ${m[1]} אזורי פרטיות`],
+  [/^a privacy region follows a motion track of the clip's own video file$/, () => 'אזור פרטיות יכול לעקוב רק אחרי מסלול מעקב של קובץ הווידאו של הקליפ עצמו'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING]) { const m = re.exec(message); if (m) return say(m); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
@@ -134,3 +175,5 @@ export const AI_REFUSAL_PATTERNS: readonly RegExp[] = HE_AI.map(([re]) => re);
 export const TREND_REFUSAL_PATTERNS: readonly RegExp[] = HE_TREND.map(([re]) => re);
 /** The portrait-blur patterns (ADR-0017), for their own test (packages/core/src/recipes.test.ts). */
 export const PORTRAIT_REFUSAL_PATTERNS: readonly RegExp[] = HE_PORTRAIT.map(([re]) => re);
+/** The motion tracking patterns (ADR-0015), for their own case of refusal-wording.test.ts. */
+export const TRACKING_REFUSAL_PATTERNS: readonly RegExp[] = HE_TRACKING.map(([re]) => re);

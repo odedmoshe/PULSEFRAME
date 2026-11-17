@@ -21,7 +21,11 @@ const ASSETS = [
   { kind: 'video' as const, name: 'late.mkv', contentHash: `sha256:${'4'.repeat(64)}`, byteSize: 1, container: 'matroska', mimeType: 'video/x-matroska', duration: T.frameTime(135, SRC), video: { width: 640, height: 360, frameRate: SRC, codec: 'h264', rotation: 0, frameCount: 120, startTime: T.fromSeconds('0.5'), untaggedColour: true as const }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: prov },
 ];
 
-/** `setup(assetIds)` returns the operations that add analysis data and a transcript; `gen(doc)` returns the next random call. */
+/**
+ * `setup(doc)` returns the operations that add analysis data, a transcript and a motion track; `gen(doc)` returns the next random
+ * call. `setupInternal(doc)` returns the internal operation (needs allowInternal) that attaches measured samples to that motion
+ * track, as the tracking job does (ADR-0015); a driver that commits it after `setup` exercises attach_motion_track as well.
+ */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
   const int = (n: number) => Math.floor(rnd() * n);
@@ -41,6 +45,8 @@ export function createFuzz(seed: number) {
       { op: 'edit_analysis', args: { assetId: vid, kind: 'scenes', add: [T.rt(2, 1), T.rt(4, 1), T.rt(13, 2)] } },
       { op: 'edit_analysis', args: { assetId: aud, kind: 'beats', add: Array.from({ length: 12 }, (_, i) => T.rt(1 + i, 2)), bpm: 120 } },
       { op: 'set_transcript', args: { assetId: vid, language: 'he', segments: [0, 1, 2, 3].map((k) => ({ start: T.rt(k * 2, 1), duration: T.rt(2, 1), text: `מילה ${k} word`, words: [{ start: T.rt(k * 2, 1), duration: T.rt(1, 1), text: 'מילה' }, { start: T.rt(k * 2 + 1, 1), duration: T.rt(1, 1), text: `word${k}` }] })) } },
+      // a region track on the video (ADR-0015), seeded by hand at its first frame
+      { op: 'create_motion_track', args: { assetId: vid, kind: 'region', frame: 0, x: 5000, y: 5000, w: 2000, h: 2500, name: 'fuzz' } },
     ];
   };
   /**
@@ -59,6 +65,13 @@ export function createFuzz(seed: number) {
       { op: 'import_asset', args: { asset: { ...m, name: 'm-clean.wav', contentHash: `sha256:${'7'.repeat(64)}`, provenance: derived(aud, { sourceRangeStart: T.ZERO, audio: 'processed' }) } } },
       ...(segs.length ? [{ op: 'attach_translation', args: { baseVariantId: null, name: 'EN', language: 'en', translation: { from: 'he', to: 'en', engine: 'fixture', model: 'fixture', createdAt: '2026-11-17T00:00:00Z', createdBy: 'fuzz', sources: Object.fromEntries(segs.map((sg) => [sg.id, sha256Hex(sg.text)])) }, phraseText: Object.fromEntries(segs.map((sg, i) => [sg.id, `phrase ${i}`])), cueText: {} } }] : []),
     ];
+  };
+  /** Measured samples for the motion track `setup` made: source frames 1..199, mostly tracked, with lost, weak and unknown stretches. */
+  const setupInternal = (doc: ProjectDocument): OpCall[] => {
+    const t = Object.values(doc.motionTracks ?? {}).find((m) => m.assetId === vid);
+    if (!t) return [];
+    const k = 199, st = Array.from({ length: k }, (_, i) => (i % 50 >= 40 ? 3 : i % 50 >= 35 ? 2 : i % 97 === 5 ? 0 : 1));
+    return [{ op: 'attach_motion_track', args: { motionTrackId: t.id, from: 1, x: Array.from({ length: k }, (_, i) => 3000 + i * 20), y: Array.from({ length: k }, (_, i) => 5000 + Math.round(1500 * Math.sin(i / 15))), s: Array.from({ length: k }, (_, i) => 900 + (i % 40) * 5), q: st.map((v) => (v === 1 ? 90 : 30)), st, method: 'fuzz', params: {}, createdAt: '2026-11-17T00:00:00Z' } }];
   };
   const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.adjust', 'light.vignette', 'time.echo', 'overlay.snow'];
   const SOUND_FX = AUDIO_EFFECTS.map((e) => e.id);
@@ -106,6 +119,11 @@ export function createFuzz(seed: number) {
     const wordList = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((sg) => (sg.words ?? []).map((w) => w.id)));
     const words = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((s) => (s.words ?? []).map((w) => w.id)));
     const derivedAssets = Object.values(doc.assets).filter((x) => x.provenance.derived);
+    // motion tracking (ADR-0015): tracks, clips that can follow one, and video clips that can carry privacy regions
+    const motionTracks = Object.values(doc.motionTracks ?? {});
+    const mtId = () => (motionTracks.length && rnd() < 0.9 ? pick(motionTracks).id : 'mtk_none');
+    const videoTracks = tracks.filter((t) => t.kind === 'video');
+    const followers = clips.filter((x) => x.c.type === 'text' || (x.c.type === 'media' && x.t.kind === 'video'));
     const menu: (() => OpCall)[] = [
       // ADR-0017: a derived copy in place of a clip's file; mostly a copy made from the clip's own file, sometimes any copy or file (refused)
       () => {
@@ -241,8 +259,36 @@ export function createFuzz(seed: number) {
       () => ({ op: 'clean_voice', args: { clipId: soundTarget(), strength: pick([0, 0.25, 0.6, 0.6, 1, 1.5]), ...(rnd() < 0.5 ? { mainsHz: pick(['50', '60', null] as const) } : {}), ...(rnd() < 0.4 ? { profile: rnd() < 0.1 ? 'not-a-profile' : rnd() < 0.5 ? GENERIC_NOISE_PROFILE : encodeNoiseProfile(Array.from({ length: 24 }, () => -40 - int(40))), source: pick(assetIds) } : {}), ...(rnd() < 0.15 ? { denoise: false } : {}), ...(rnd() < 0.15 ? { speech: false } : {}), ...(rnd() < 0.1 ? { includeLinked: false } : {}) } }),
       // colour match writes its grade with set_colour_grade (ADR-0014): replace or merge, out-of-range values refused, animated values refused unless dropped
       () => ({ op: 'set_colour_grade', args: { clipId: rnd() < 0.8 ? videoId() : any(), params: { exposure: Number((rnd() * 2 - 1).toFixed(3)), temperature: Number((rnd() * 1.2 - 0.6).toFixed(3)), ...(rnd() < 0.5 ? { saturation: rnd() < 0.08 ? 3 : Number((0.5 + rnd()).toFixed(3)) } : {}) }, ...(rnd() < 0.4 ? { mode: pick(['replace', 'merge'] as const) } : {}), ...(rnd() < 0.2 ? { dropKeyframes: true } : {}) } }),
+      // motion tracking (ADR-0015): tracks made and corrected by hand, clips that follow them, privacy regions; refused cases too
+      // (a still or a sound file, a frame past the end, a region without its box, a track of another file, chains)
+      () => { const region = rnd() < 0.5; return { op: 'create_motion_track', args: { assetId: rnd() < 0.85 ? vid : pick(assetIds), kind: region ? 'region' : 'point', frame: int(rnd() < 0.9 ? 240 : 400), x: int(10_001), y: int(10_001), ...(region && rnd() < 0.9 ? { w: 10 + int(4000), h: 10 + int(4000) } : {}) } }; },
+      () => {
+        const t = motionTracks.length && rnd() < 0.9 ? pick(motionTracks) : null;
+        const lo = t?.from ?? 0, hi = t ? t.from + t.x.length : 1;
+        const span = () => { const a = lo + int(Math.max(1, hi - lo)); return { from: a, to: Math.min(hi + (rnd() < 0.1 ? 5 : 0), a + 1 + int(20)) }; };
+        const base = Math.max(0, lo + int(hi - lo + 40) - 20), step = 1 + int(5);
+        const set = () => Array.from({ length: 1 + int(6) }, (_, i) => ({ frame: base + i * step, x: int(10_001), y: int(10_001), ...(t?.kind === 'region' && rnd() < 0.6 ? { s: 300 + int(2000) } : {}) }));
+        const what = int(5);
+        return { op: 'edit_motion_track', args: { motionTrackId: t?.id ?? 'mtk_none', ...(what === 0 ? { set: set() } : what === 1 ? { markLost: span() } : what === 2 ? { interpolate: span() } : what === 3 ? { name: pick(['פנים', 'ball', 'x']) } : { set: set(), interpolate: span() }) } };
+      },
+      () => ({ op: 'remove_motion_track', args: { motionTrackId: mtId(), ...(rnd() < 0.6 ? { unbind: true } : {}) } }),
+      () => {
+        const x = followers.length && rnd() < 0.9 ? pick(followers) : null;
+        const targets = videoTracks.filter((t) => t.id !== x?.t.id);
+        return { op: 'set_clip_follow', args: { clipId: x?.c.id ?? any(), follow: rnd() < 0.15 ? null : { motionTrackId: mtId(), targetTrackId: targets.length && rnd() < 0.9 ? pick(targets).id : trackId(), scale: rnd() < 0.5, smooth: int(5) }, ...(rnd() < 0.4 ? { offset: { x: Number((rnd() * 0.6 - 0.3).toFixed(3)), y: Number((rnd() * 0.6 - 0.3).toFixed(3)) } } : {}) } };
+      },
+      () => {
+        const x = movingVideo.length && rnd() < 0.9 ? pick(movingVideo).c : videoClips.length ? pick(videoClips).c : null;
+        const own = x?.type === 'media' ? x.redact ?? [] : [];
+        const ofAsset = motionTracks.filter((t) => x?.type === 'media' && t.assetId === x.assetId);
+        const look = () => ({ style: pick(['blur', 'pixelate', 'fill'] as const), strength: Number(rnd().toFixed(2)), ...(rnd() < 0.5 ? { onLoss: pick(['frame', 'hold'] as const), weakIsLost: rnd() < 0.5 } : {}) });
+        const mode = rnd();
+        if (own.length && mode < 0.2) return { op: 'set_redact_region', args: { clipId: x!.id, regionId: pick(own).id, region: null } };
+        if (own.length && mode < 0.45) return { op: 'set_redact_region', args: { clipId: x!.id, regionId: pick(own).id, region: look() } };
+        return { op: 'set_redact_region', args: { clipId: x?.id ?? any(), region: { motionTrackId: ofAsset.length && rnd() < 0.7 ? pick(ofAsset).id : rnd() < 0.1 ? mtId() : null, ...look() } } };
+      },
     ];
     return pick(menu)();
   };
-  return { rate, f, int, importOps, setup, aiSetup, gen };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen };
 }

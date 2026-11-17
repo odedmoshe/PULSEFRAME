@@ -8,7 +8,7 @@ import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
   normaliseTextStyle, TEXT_LOOK_FIELDS,
   CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
-  type AdjustmentClip, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
+  type AdjustmentClip, type Asset, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
@@ -28,6 +28,7 @@ import { velocityNeeds } from './transitionTiming.ts';
 import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
+import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
@@ -325,7 +326,7 @@ defineOp({
 defineOp({
   name: 'remove_asset',
   version: 1,
-  description: 'Remove a file from the project library, together with its transcript and analysis results. Refused while any clip uses it, or while a colour table (LUT) effect on any clip refers to it. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
     const asset = d.assets[a.assetId];
@@ -334,7 +335,13 @@ defineOp({
     if (users.length) throw new OpError('incompatible', `${users.length} clip(s) on the timeline still use this file`, { assetId: asset.id, clipIds: users.slice(0, 50) }, 'Delete those clips first.');
     const graded = lutUsers(d, asset.id);
     if (graded.length) throw new OpError('incompatible', `${graded.length} clip(s) still use this colour table in a colour table (LUT) effect`, { assetId: asset.id, clipIds: graded.slice(0, 50) }, 'Remove that effect from those clips, or choose another table for it, first.');
+    // motion tracks of the file (ADR-0015) go with it, unless a clip still follows one or hides a region with one
+    const tracks = Object.values(d.motionTracks ?? {}).filter((t) => t.assetId === asset.id).map((t) => t.id);
+    const bound = motionTrackUsers(d, new Set(tracks));
+    const boundIds = [...new Set([...bound.follow, ...bound.redact])];
+    if (boundIds.length) throw new OpError('incompatible', `${boundIds.length} clip(s) still follow a motion track of this file or hide a region with one`, { assetId: asset.id, clipIds: boundIds.slice(0, 50), motionTrackIds: tracks.slice(0, 64) }, 'Detach those clips first (set_clip_follow follow=null, set_redact_region region=null), or delete the motion track with remove_motion_track unbind=true.');
     const affected = [asset.id];
+    for (const id of tracks) { delete d.motionTracks[id]; affected.push(id); }
     if (d.transcripts?.[asset.id]) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
     if (d.analyses?.[asset.id]) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
     delete d.assets[asset.id];
@@ -1244,6 +1251,8 @@ defineOp({
       transform: { ...transformAt(src, a.at) },
       ...(src.effects ? { effects: src.effects.map((fx) => { const { keyframes: _k, ...rest } = fx; return { ...structuredClone(rest), id: ctx.newId('fx'), params: { ...effectParamsAt(fx, local) } }; }) } : {}),
       ...(src.blend ? { blend: src.blend } : {}), ...(src.mask ? { mask: structuredClone(src.mask) } : {}),
+      // privacy regions (ADR-0015) stay on the held picture, resolved at its own source frame; a follow goes on too
+      ...(src.redact ? { redact: structuredClone(src.redact) } : {}), ...(src.follow ? { follow: { ...src.follow } } : {}),
     };
     const affected = new Set<string>([held.id]);
     const created: string[] = [held.id];
@@ -2340,10 +2349,16 @@ defineOp({
     const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
     assertLutRef(d, fx.type, fx.params);
     list.splice(effectSlot(list, a.type, a.index), 0, fx);
+    refuseFollowTimeEffect(clip, list);
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Added effect ${a.type}`, output: { effectId: fx.id, params: fx.params } };
   },
 });
+/** A clip that follows a motion track (ADR-0015) cannot have a time effect as its first enabled effect (wave 1: the follow is resolved per frame, not per earlier picture). */
+const refuseFollowTimeEffect = (clip: Clip, list: readonly EffectInstance[]) => {
+  const first = list.find((e) => e.enabled);
+  if (clip.follow && first && isTimeEffect(first.type)) throw new OpError('incompatible', FOLLOW_TIME_EFFECT, { clipId: clip.id, effect: first.type }, 'Detach the clip from its motion track first (set_clip_follow follow=null), or put the time effect on another clip.');
+};
 const mustEffect = (clip: Clip, effectId: string) => {
   const i = (clip.effects ?? []).findIndex((e) => e.id === effectId);
   if (i < 0) throw new OpError('not_found', `effect ${effectId} not found on clip ${clip.id}`, { effectId, clipId: clip.id });
@@ -2364,6 +2379,7 @@ defineOp({
     if (a.enabled !== undefined) fx.enabled = a.enabled;
     list.splice(i, 1);
     list.splice(effectSlot(list, fx.type, a.index ?? i), 0, fx);
+    refuseFollowTimeEffect(clip, list);
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Updated effect ${fx.type}${a.enabled === false ? ' (bypassed)' : ''}`, output: { params: fx.params } };
   },
@@ -2638,6 +2654,311 @@ export function velocityLimit(d: ProjectDocument, clipId: string): { maxVelocity
   }
   return { maxVelocity, haveOutFrames: haveOut, haveHeadFrames: haveHead, refusal: maxVelocity > 1 ? null : refusal };
 }
+
+// ---------- motion tracking (ADR-0015) ----------
+/** Last source frame of a video asset, numbered as sourceFrameIndexAt (speed.ts) numbers the frames a clip shows. */
+export const lastSourceFrame = (asset: Asset): number => {
+  const v = asset.video;
+  if (!v) return -1;
+  return v.frameCount !== null ? v.frameCount - 1 : Math.max(0, T.frameIndexAt(asset.duration, v.frameRate) - 1);
+};
+const mustMotionTrack = (d: ProjectDocument, id: string): MotionTrack => {
+  // an own entry only: refuseInheritedIds already refuses names such as "__proto__"; this keeps the lookup honest on its own too
+  const t = Object.hasOwn(d.motionTracks ?? {}, id) ? d.motionTracks[id] : undefined;
+  if (!t) throw new OpError('not_found', `motion track ${id} not found`, { motionTrackId: id }, 'get_motion_track describes a track; motion track ids start with mtk_.');
+  return t;
+};
+/** The clips (in every sequence) that follow a motion track, or carry a privacy region that follows it. */
+export function motionTrackUsers(d: ProjectDocument, motionTrackIds: ReadonlySet<string>): { follow: string[]; redact: string[] } {
+  const follow: string[] = [], redact: string[] = [];
+  for (const seq of Object.values(d.sequences))
+    for (const t of seq.tracks)
+      for (const c of t.clips) {
+        if (c.follow && motionTrackIds.has(c.follow.motionTrackId)) follow.push(c.id);
+        if (c.type === 'media' && c.redact?.some((r) => r.motionTrackId !== null && motionTrackIds.has(r.motionTrackId))) redact.push(c.id);
+      }
+  return { follow, redact };
+}
+/** Refuse a track of n samples, past the per-track cap. Edits that grow a track call it with the final span BEFORE growing the columns, so a far-away frame is refused without building millions of samples first. */
+function assertTrackLength(motionTrackId: string, n: number) {
+  if (n > MAX_TRACK_SAMPLES) throw new OpError('out_of_bounds', `a motion track can hold at most ${MAX_TRACK_SAMPLES} samples; this edit would make ${n}`, { motionTrackId, samples: n, max: MAX_TRACK_SAMPLES }, 'Track a shorter stretch of the video.');
+}
+/** Refuse a track that would hold too many samples, alone or with the project's other tracks (tracking.ts caps). */
+function assertTrackCaps(d: ProjectDocument, t: MotionTrack) {
+  const n = t.x.length;
+  assertTrackLength(t.id, n);
+  const total = Object.values(d.motionTracks ?? {}).reduce((sum, x) => sum + (x.id === t.id ? 0 : x.x.length), n);
+  if (total > MAX_PROJECT_TRACK_SAMPLES) throw new OpError('out_of_bounds', `the motion tracks of a project can hold at most ${MAX_PROJECT_TRACK_SAMPLES} samples in all; this edit would make ${total}`, { samples: total, max: MAX_PROJECT_TRACK_SAMPLES }, 'Delete a motion track that is no longer needed (remove_motion_track), or track a shorter stretch.');
+}
+/** The sample columns of a track being edited. `filled` marks samples made only to close a gap (unknown, placed later at the nearest known sample). */
+interface Columns { from: number; x: number[]; y: number[]; s: number[] | null; q: number[]; st: number[]; filled: boolean[] }
+const columnsOf = (t: MotionTrack): Columns => ({ from: t.from, x: [...t.x], y: [...t.y], s: t.s ? [...t.s] : null, q: [...t.q], st: [...t.st], filled: t.x.map(() => false) });
+/** Grow the columns to cover [lo, hi) with gap samples (unknown, confidence 0). */
+function extendColumns(c: Columns, lo: number, hi: number) {
+  if (lo < c.from) {
+    const k = c.from - lo;
+    // concat, never unshift(...spread): a spread passes one argument per frame and overflows the call stack past ~125,000 frames
+    const gap = <X,>(v: X): X[] => new Array<X>(k).fill(v);
+    c.x = gap(0).concat(c.x); c.y = gap(0).concat(c.y); if (c.s) c.s = gap(SIZE_UNIT).concat(c.s); c.q = gap(0).concat(c.q); c.st = gap<number>(ST.unknown).concat(c.st); c.filled = gap(true).concat(c.filled);
+    c.from = lo;
+  }
+  const end = c.from + c.x.length;
+  if (hi > end) for (let f = end; f < hi; f++) { c.x.push(0); c.y.push(0); c.s?.push(SIZE_UNIT); c.q.push(0); c.st.push(ST.unknown); c.filled.push(true); }
+}
+/** Place every gap sample at the nearest sample that is not a gap sample (the earlier one on a tie). */
+function settleGaps(c: Columns) {
+  const n = c.x.length;
+  const prev = new Array<number>(n).fill(-1), next = new Array<number>(n).fill(-1);
+  for (let i = 0, p = -1; i < n; i++) { if (!c.filled[i]) p = i; prev[i] = p; }
+  for (let i = n - 1, q = -1; i >= 0; i--) { if (!c.filled[i]) q = i; next[i] = q; }
+  for (let i = 0; i < n; i++) {
+    if (!c.filled[i]) continue;
+    const a = prev[i]!, b = next[i]!;
+    const j = a < 0 ? b : b < 0 ? a : i - a <= b - i ? a : b;
+    if (j < 0) continue;
+    c.x[i] = c.x[j]!; c.y[i] = c.y[j]!; if (c.s) c.s[i] = c.s[j]!;
+  }
+}
+const writeColumns = (t: MotionTrack, c: Columns) => {
+  t.from = c.from; t.x = c.x; t.y = c.y; t.q = c.q; t.st = c.st;
+  if (c.s) t.s = c.s; else delete t.s;
+};
+/** The source stretch [from, to) of a track edit, which must lie inside the track. */
+function spanIn(c: Columns, span: { from: number; to: number }, what: string): [number, number] {
+  const end = c.from + c.x.length;
+  if (!(span.from < span.to)) throw new OpError('invalid_args', `${what}: the stretch must end after it starts (to is one past its last frame)`, { from: span.from, to: span.to });
+  if (span.from < c.from || span.to > end) throw new OpError('out_of_bounds', `${what}: the stretch must lie inside the track (source frames ${c.from} to ${end - 1})`, { from: span.from, to: span.to, trackFrom: c.from, trackTo: end }, 'Add samples with set first, or choose a stretch inside the track.');
+  return [span.from - c.from, span.to - c.from];
+}
+
+defineOp({
+  name: 'create_motion_track',
+  version: 1,
+  description: 'Start a motion track on a video file (ADR-0015): one hand-placed sample at a SOURCE frame of the file (frame 0 = its first picture; describe_moment gives the sourceFrameIndex a clip shows). x and y are the point (or the centre of the box) in 1/10000 of the picture\'s width and height; kind=region also takes the box size w, h in the same units. The tracking job (track_motion) then follows it through the video without any AI model. Output: motionTrackId.',
+  args: TrackOpArgs.create_motion_track,
+  apply(d, a, ctx) {
+    const asset = mustAsset(d, a.assetId);
+    if (!asset.video) throw new OpError('incompatible', 'a motion track follows something in a video; this file has no video', { assetId: asset.id, kind: asset.kind }, 'Choose a video file.');
+    const last = lastSourceFrame(asset);
+    if (a.frame > last) throw new OpError('out_of_bounds', `frame ${a.frame} is past the last frame of the video (${last})`, { frame: a.frame, lastFrame: last });
+    if (a.kind === 'region' && (a.w === undefined || a.h === undefined)) throw new OpError('invalid_args', 'a region track needs the size of its box (w and h)', { kind: a.kind });
+    if (a.kind === 'point' && (a.w !== undefined || a.h !== undefined)) throw new OpError('invalid_args', 'a point track has no box: w and h belong to region tracks', { kind: a.kind });
+    const count = Object.keys(d.motionTracks ?? {}).length;
+    if (count >= MAX_MOTION_TRACKS) throw new OpError('out_of_bounds', `a project can hold at most ${MAX_MOTION_TRACKS} motion tracks`, { max: MAX_MOTION_TRACKS }, 'Delete a motion track that is no longer needed (remove_motion_track).');
+    const id = ctx.newId('mtk');
+    const track: MotionTrack = {
+      id, assetId: asset.id, name: a.name ?? `Track ${count + 1}`, kind: a.kind, from: a.frame,
+      ...(a.kind === 'region' ? { box: { w: a.w!, h: a.h! } } : {}),
+      x: [a.x], y: [a.y], ...(a.kind === 'region' ? { s: [SIZE_UNIT] } : {}), q: [100], st: [ST.manual],
+      origin: { method: 'manual', params: {}, createdAt: 'op', createdBy: ctx.actor, edited: false },
+    };
+    assertTrackCaps(d, track);
+    (d.motionTracks ??= {})[id] = track;
+    return { affectedIds: [id], summary: `Started ${a.kind} motion track "${track.name.slice(0, 40)}" at source frame ${a.frame}`, output: { motionTrackId: id } };
+  },
+});
+defineOp({
+  name: 'attach_motion_track',
+  version: 1,
+  internal: true,
+  description: 'Attach tracked samples measured by the server\'s tracking job (ADR-0015) for source frames [from, from+n). Hand-placed (manual) samples are kept; the track grows to cover the new stretch, and frames between the old and the new stretch become unknown.',
+  args: TrackOpArgs.attach_motion_track,
+  apply(d, a, ctx) {
+    const t = mustMotionTrack(d, a.motionTrackId);
+    const asset = mustAsset(d, t.assetId);
+    const n = a.x.length;
+    if (a.y.length !== n || a.q.length !== n || a.st.length !== n || (a.s && a.s.length !== n)) throw new OpError('invalid_args', 'x, y, s, q and st must have the same length', { x: n, y: a.y.length, s: a.s?.length ?? null, q: a.q.length, st: a.st.length });
+    if (!!a.s !== (t.kind === 'region')) throw new OpError('invalid_args', t.kind === 'region' ? 'a region track needs sizes (s)' : 'a point track has no sizes (s)', { kind: t.kind });
+    if (a.st.includes(ST.manual)) throw new OpError('invalid_args', 'measured samples cannot be marked manual', {});
+    const last = lastSourceFrame(asset);
+    if (a.from + n - 1 > last) throw new OpError('out_of_bounds', `the samples reach past the last frame of the video (${last})`, { from: a.from, samples: n, lastFrame: last });
+    const oldEnd = t.from + t.x.length, newEnd = a.from + n;
+    assertTrackLength(t.id, Math.max(oldEnd, newEnd) - Math.min(t.from, a.from)); // before the columns are built
+    const c: Columns = { from: Math.min(t.from, a.from), x: [], y: [], s: t.s ? [] : null, q: [], st: [], filled: [] };
+    for (let f = c.from, hi = Math.max(oldEnd, newEnd); f < hi; f++) {
+      const o = f >= t.from && f < oldEnd ? f - t.from : -1, k = f >= a.from && f < newEnd ? f - a.from : -1;
+      if (k >= 0 && !(o >= 0 && t.st[o] === ST.manual)) { c.x.push(a.x[k]!); c.y.push(a.y[k]!); c.s?.push(a.s![k]!); c.q.push(a.q[k]!); c.st.push(a.st[k]!); c.filled.push(false); }
+      else if (o >= 0) { c.x.push(t.x[o]!); c.y.push(t.y[o]!); c.s?.push(t.s![o]!); c.q.push(t.q[o]!); c.st.push(t.st[o]!); c.filled.push(false); }
+      else { c.x.push(0); c.y.push(0); c.s?.push(SIZE_UNIT); c.q.push(0); c.st.push(ST.unknown); c.filled.push(true); }
+    }
+    settleGaps(c);
+    // hand edits survive only outside the stretch measured now (manual samples are kept everywhere: they are anchors, not edits)
+    const edited = t.origin.edited && (t.from < a.from || oldEnd > newEnd);
+    const next: MotionTrack = { ...t, origin: { method: a.method, params: a.params, createdAt: a.createdAt, createdBy: ctx.actor, edited } };
+    writeColumns(next, c);
+    assertTrackCaps(d, next);
+    d.motionTracks[t.id] = next;
+    return { affectedIds: [t.id], summary: `Attached ${n} tracked samples to "${t.name.slice(0, 40)}"` };
+  },
+});
+defineOp({
+  name: 'edit_motion_track',
+  version: 1,
+  description: 'Correct a motion track by hand (ADR-0015), in this order: rename it; `set` places samples at SOURCE frames (state manual, kept by later tracking runs; a frame outside the track extends it, and the frames between become unknown); `markLost` marks the stretch [from, to) lost, holding the last usable position before it; `interpolate` fills [from, to) on a straight line between the usable samples on either side (hand-placed samples inside are kept). Frames are source frames; `to` is one past the last frame. Any change of samples marks the track as edited.',
+  args: TrackOpArgs.edit_motion_track,
+  apply(d, a) {
+    const t = mustMotionTrack(d, a.motionTrackId);
+    if (a.name === undefined && !a.set && !a.markLost && !a.interpolate) throw new OpError('invalid_args', 'nothing to change: give name, set, markLost or interpolate');
+    const next: MotionTrack = { ...t };
+    if (a.name !== undefined) next.name = a.name;
+    const changesSamples = !!(a.set || a.markLost || a.interpolate);
+    if (changesSamples) {
+      const c = columnsOf(t);
+      if (a.set) {
+        const asset = mustAsset(d, t.assetId), last = lastSourceFrame(asset);
+        const frames = new Set<number>();
+        for (const p of a.set) {
+          if (frames.has(p.frame)) throw new OpError('invalid_args', `frame ${p.frame} is set twice`, { frame: p.frame });
+          frames.add(p.frame);
+          if (p.frame > last) throw new OpError('out_of_bounds', `frame ${p.frame} is past the last frame of the video (${last})`, { frame: p.frame, lastFrame: last });
+          if (p.s !== undefined && t.kind !== 'region') throw new OpError('invalid_args', 'a point track has no sizes (s)', { kind: t.kind });
+        }
+        // the span the track would cover, checked before any column grows
+        let lo = c.from, hi = c.from + c.x.length;
+        for (const p of a.set) { lo = Math.min(lo, p.frame); hi = Math.max(hi, p.frame + 1); }
+        assertTrackLength(t.id, hi - lo);
+        for (const p of [...a.set].sort((x, y) => x.frame - y.frame)) {
+          const s = p.s ?? trackSampleAt(t, p.frame).s; // a region sample without a size keeps the size the track has there (or at its nearest end)
+          extendColumns(c, Math.min(c.from, p.frame), Math.max(c.from + c.x.length, p.frame + 1));
+          const i = p.frame - c.from;
+          c.x[i] = p.x; c.y[i] = p.y; if (c.s) c.s[i] = s; c.q[i] = 100; c.st[i] = ST.manual; c.filled[i] = false;
+        }
+        settleGaps(c);
+      }
+      if (a.markLost) {
+        const [i0, i1] = spanIn(c, a.markLost, 'markLost');
+        let h = -1;
+        for (let i = i0 - 1; i >= 0 && h < 0; i--) if (isUsable(c.st[i]!)) h = i;
+        for (let i = i1; i < c.x.length && h < 0; i++) if (isUsable(c.st[i]!)) h = i;
+        for (let i = i0; i < i1; i++) {
+          if (h >= 0) { c.x[i] = c.x[h]!; c.y[i] = c.y[h]!; if (c.s) c.s[i] = c.s[h]!; }
+          c.q[i] = 0; c.st[i] = ST.lost;
+        }
+      }
+      if (a.interpolate) {
+        const [i0, i1] = spanIn(c, a.interpolate, 'interpolate');
+        let left = -1, right = -1;
+        for (let i = i0 - 1; i >= 0 && left < 0; i--) if (isUsable(c.st[i]!)) left = i;
+        for (let i = i1; i < c.x.length && right < 0; i++) if (isUsable(c.st[i]!)) right = i;
+        if (left < 0 || right < 0) throw new OpError('incompatible', 'filling in needs a usable sample before the stretch and another after it', { from: a.interpolate.from, to: a.interpolate.to }, 'Place a sample by hand on each side first (set), or track the video around the stretch.');
+        // hand-placed samples inside the stretch stay; the line runs from one kept sample to the next
+        const anchors = [left];
+        for (let i = i0; i < i1; i++) if (c.st[i] === ST.manual) anchors.push(i);
+        anchors.push(right);
+        for (let k = 0; k + 1 < anchors.length; k++) {
+          const p = anchors[k]!, q = anchors[k + 1]!, len = q - p, conf = Math.min(c.q[p]!, c.q[q]!);
+          for (let i = Math.max(p + 1, i0); i < Math.min(q, i1); i++) {
+            c.x[i] = c.x[p]! + roundHalfUp((c.x[q]! - c.x[p]!) * (i - p), len);
+            c.y[i] = c.y[p]! + roundHalfUp((c.y[q]! - c.y[p]!) * (i - p), len);
+            if (c.s) c.s[i] = c.s[p]! + roundHalfUp((c.s[q]! - c.s[p]!) * (i - p), len);
+            c.q[i] = conf; c.st[i] = ST.interpolated;
+          }
+        }
+      }
+      writeColumns(next, c);
+      next.origin = { ...t.origin, edited: true };
+      assertTrackCaps(d, next);
+    }
+    d.motionTracks[t.id] = next;
+    const parts = [a.name !== undefined ? 'renamed' : null, a.set ? `${a.set.length} sample(s) placed` : null, a.markLost ? `frames ${a.markLost.from}–${a.markLost.to - 1} marked lost` : null, a.interpolate ? `frames ${a.interpolate.from}–${a.interpolate.to - 1} filled in` : null].filter(Boolean);
+    return { affectedIds: [t.id], summary: `Motion track "${next.name.slice(0, 40)}": ${parts.join(', ')}` };
+  },
+});
+defineOp({
+  name: 'remove_motion_track',
+  version: 1,
+  description: 'Delete a motion track (ADR-0015). Refused while a clip follows it or a privacy region on a clip follows it, unless unbind=true: then those clips stop following it and those regions are removed, in the same step (a clip that follows keeps its own position, which was an offset from the tracked point).',
+  args: TrackOpArgs.remove_motion_track,
+  apply(d, a) {
+    const t = mustMotionTrack(d, a.motionTrackId);
+    const users = motionTrackUsers(d, new Set([t.id]));
+    const ids = [...new Set([...users.follow, ...users.redact])];
+    if (ids.length && !a.unbind) throw new OpError('incompatible', `${ids.length} clip(s) follow this motion track or hide a region with it`, { motionTrackId: t.id, follow: users.follow.slice(0, 50), redact: users.redact.slice(0, 50) }, 'Pass unbind=true to detach them in the same step, or detach them first (set_clip_follow follow=null, set_redact_region region=null).');
+    for (const id of ids) {
+      const { clip } = mustClip(d, id); // a clip on a locked track cannot be changed
+      if (clip.follow?.motionTrackId === t.id) delete clip.follow;
+      if (clip.type === 'media' && clip.redact) {
+        const keep = clip.redact.filter((r) => r.motionTrackId !== t.id);
+        if (keep.length) clip.redact = keep; else delete clip.redact;
+      }
+    }
+    delete d.motionTracks[t.id];
+    return { affectedIds: [t.id, ...ids], summary: `Deleted motion track "${t.name.slice(0, 40)}"${ids.length ? ` and detached ${ids.length} clip(s)` : ''}`, output: { detachedClipIds: ids } };
+  },
+});
+/** Why a clip cannot follow a motion track, or carry a time effect while it follows one: the follow is resolved per frame, not per earlier picture. */
+const FOLLOW_TIME_EFFECT = 'a clip with a time effect (echo, time split, shutter or stutter) cannot follow a motion track yet';
+defineOp({
+  name: 'set_clip_follow',
+  version: 1,
+  description: 'Make a title, or a picture on a video track, follow a motion track (ADR-0015): the clip moves with the tracked point as the picture of the track\'s video file on timeline track targetTrackId shows it (through every cut, speed change, reverse, freeze and format). The clip\'s own position becomes an offset from the tracked point (offset, when given, sets it in the same step: compute it from describe_moment so nothing jumps). scale=true also scales the clip with the tracked size and with the target clip\'s scale; smooth averages the usable samples within ±smooth source frames. follow=null detaches it. Refused for a clip whose first effect is a time effect, and for chains (a clip cannot follow a picture that itself follows, or be followed while it follows).',
+  args: TrackOpArgs.set_clip_follow,
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    const { clip, track } = f;
+    if (!(clip.type === 'text' || (clip.type === 'media' && track.kind === 'video')))
+      throw new OpError('incompatible', 'only a title, or a picture on a video track, can follow a motion track', { clipId: clip.id, type: clip.type, trackKind: track.kind });
+    const offset = () => { if (a.offset) clip.transform = { ...clip.transform, x: a.offset.x, y: a.offset.y }; };
+    if (a.follow === null) {
+      const had = !!clip.follow;
+      delete clip.follow;
+      offset();
+      return { affectedIds: [clip.id], summary: had ? 'Clip no longer follows a motion track' : 'Clip did not follow a motion track' };
+    }
+    const mt = mustMotionTrack(d, a.follow.motionTrackId);
+    const target = f.seq.tracks.find((t) => t.id === a.follow!.targetTrackId);
+    if (!target) throw new OpError('not_found', `track ${a.follow.targetTrackId} not found`, { trackId: a.follow.targetTrackId }, 'Name the video track whose clip shows the tracked file (get_timeline lists the tracks).');
+    if (target.kind !== 'video') throw new OpError('incompatible', `a clip follows a picture on a video track; track ${target.id} is a ${target.kind} track`, { trackId: target.id, kind: target.kind });
+    if (target.id === track.id) throw new OpError('incompatible', 'a clip cannot follow the picture on its own track', { trackId: target.id }, 'Put the clip on a track above the picture it follows.');
+    const first = clip.effects?.find((e) => e.enabled);
+    if (first && isTimeEffect(first.type)) throw new OpError('incompatible', FOLLOW_TIME_EFFECT, { clipId: clip.id, effect: first.type }, 'Remove or turn off the time effect first.');
+    const leader = target.clips.find((c) => c.follow);
+    if (leader) throw new OpError('incompatible', `clip ${leader.id} on that track follows a motion track itself; follows cannot be chained`, { clipId: leader.id, trackId: target.id }, 'Follow the same motion track directly instead.');
+    const follower = f.seq.tracks.flatMap((t) => t.clips).find((c) => c.id !== clip.id && c.follow?.targetTrackId === track.id);
+    if (follower) throw new OpError('incompatible', `clip ${follower.id} follows the picture on this clip's track; follows cannot be chained`, { clipId: follower.id, trackId: track.id }, 'Detach that clip first, or let both follow the motion track directly.');
+    clip.follow = { motionTrackId: mt.id, targetTrackId: target.id, scale: a.follow.scale, smooth: a.follow.smooth };
+    offset();
+    return { affectedIds: [clip.id], summary: `Clip follows motion track "${mt.name.slice(0, 40)}"`, output: { follow: clip.follow, transform: clip.transform } };
+  },
+});
+defineOp({
+  name: 'set_redact_region',
+  version: 1,
+  description: 'Add, change or delete (region=null) a privacy region on a video clip (ADR-0015): a blurred, pixelated or fully covered part of the picture, fixed or following a motion track of the clip\'s own video file. Position and size are fractions of the clip\'s own picture (as for masks); for a track they are an offset from the tracked point, and a region track also gives the size. The region is drawn on every picture the clip shows, before its effects, also on each earlier picture an echo shows. onLoss=frame blurs the whole picture while the track is lost (and while it is weak, when weakIsLost); hold keeps the region where it was last seen. Automatic tracking is not guaranteed redaction: check the lost and weak frames before publishing. Omit regionId to add one (output: regionId). A still image is refused.',
+  args: TrackOpArgs.set_redact_region,
+  apply(d, a, ctx) {
+    const { clip, track } = pictureClip(d, a.clipId);
+    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'privacy regions apply to video clips on video tracks', { clipId: clip.id });
+    const asset = mustAsset(d, clip.assetId);
+    if (!asset.video) throw new OpError('incompatible', 'privacy regions are drawn on video pictures only; this clip shows a still image', { clipId: clip.id, assetId: asset.id }, 'For a still, put a copy of the clip on the track above with a blur effect (blur.gaussian) and a mask over the area, or edit the image before importing it.');
+    const list = [...(clip.redact ?? [])];
+    if (a.region === null) {
+      if (a.regionId === undefined) throw new OpError('invalid_args', 'name the region to delete (regionId)');
+      const at = list.findIndex((r) => r.id === a.regionId);
+      if (at < 0) throw new OpError('not_found', `region ${a.regionId} not found on clip ${clip.id}`, { regionId: a.regionId, clipId: clip.id });
+      list.splice(at, 1);
+      if (list.length) clip.redact = list; else delete clip.redact; // never an empty list
+      return { affectedIds: [clip.id], summary: 'Removed privacy region', output: { regionId: a.regionId } };
+    }
+    let region: RedactRegion;
+    if (a.regionId !== undefined) {
+      const at = list.findIndex((r) => r.id === a.regionId);
+      if (at < 0) throw new OpError('not_found', `region ${a.regionId} not found on clip ${clip.id}`, { regionId: a.regionId, clipId: clip.id });
+      region = { ...list[at]!, ...a.region };
+      list[at] = region;
+    } else {
+      if (list.length >= MAX_REDACT_REGIONS) throw new OpError('out_of_bounds', `a clip can carry at most ${MAX_REDACT_REGIONS} privacy regions`, { clipId: clip.id, max: MAX_REDACT_REGIONS });
+      region = { id: ctx.newId('rgn'), motionTrackId: null, ...DEFAULT_REDACT_REGION, ...a.region };
+      list.push(region);
+    }
+    if (region.motionTrackId !== null) {
+      const mt = mustMotionTrack(d, region.motionTrackId);
+      if (mt.assetId !== clip.assetId) throw new OpError('incompatible', 'a privacy region follows a motion track of the clip\'s own video file', { motionTrackId: mt.id, trackAssetId: mt.assetId, clipAssetId: clip.assetId }, 'Track the person or object in this clip\'s file (create_motion_track with its assetId).');
+    }
+    clip.redact = list;
+    return { affectedIds: [clip.id], summary: `Privacy region ${region.style}${region.motionTrackId ? ' following a motion track' : ''}`, output: { regionId: region.id, region } };
+  },
+});
 
 // ---------- adjustment clips (ADR-0016) ----------
 export const AddAdjustmentArgsSchema = z.object({

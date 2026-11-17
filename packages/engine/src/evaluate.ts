@@ -18,6 +18,7 @@ import { pieceAt, runStart, stutterFrame, tapOffsets, tapWeights } from './taps.
 import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, sourceFrameIndexAt, transformAt, type BlendMode, type Clip, type FollowInfo, type Mask, type ProjectDocument, type ResolvedRegion, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 import { beatSwitchFrame, lightEnvelope, switchFrame, transitionDef, transitionProgress, velocityOffsets } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
+import { resolveFollows, resolveRegions, type Follower } from './follow.ts';
 
 /**
  * One picture a time effect of kind 'taps' merges (ADR-0011). Built by the same path as the clip's own layer, at `time`.
@@ -143,6 +144,8 @@ function barePicture(doc: ProjectDocument, track: Track, clip: Extract<Clip, { t
     sourceSeekSeconds: ((idx + 0.5) * rate.den) / rate.num,
     ...(asset.video.untaggedColour && asset.video.readColourAs === 'bt601' && !asset.conform ? { colourFix: 'bt709-as-bt601' as const } : {}),
     sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: transformAt(clip, time),
+    // privacy regions (ADR-0015) at THIS picture's source frame: a time tap or the stutter picture is built here too, with its own
+    ...(clip.redact ? { regions: resolveRegions(doc, clip, { video: asset.video }, idx) } : {}),
   };
 }
 /** A title at `time` without any look; its letter animation is placed at `time` too. */
@@ -218,7 +221,10 @@ function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): Vid
  */
 function withPictureOf<L extends VideoLayer | ImageLayer | TextLayer>(layer: L, from: Bare | null): L {
   if (layer.kind !== 'video' || !from || from.kind !== 'video' || layer.time || layer.remap) return layer;
-  return { ...layer, sourceTime: from.sourceTime, sourceFrameIndex: from.sourceFrameIndex, sourceSeekSeconds: from.sourceSeekSeconds };
+  // the privacy regions go with the picture (ADR-0015): they were resolved at the picture's own source frame, so a velocity ramp
+  // that shows another frame must hide what is in THAT frame
+  const { regions: _own, ...rest } = layer as VideoLayer;
+  return { ...rest, sourceTime: from.sourceTime, sourceFrameIndex: from.sourceFrameIndex, sourceSeekSeconds: from.sourceSeekSeconds, ...(from.regions ? { regions: from.regions } : {}) } as L;
 }
 
 export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId = doc.mainSequenceId): RenderGraph {
@@ -232,13 +238,16 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
   const flash = (clipId: string, effectId: string) => flashSince(flashSchedule(doc, sequenceId), clipId, effectId, graph.frameIndex);
   const cx: Ctx = { doc, sequenceId, flash, beat: graph.beat };
   const captions: CaptionLayer[] = [];
+  /** Layers whose clip follows a motion track (ADR-0015): resolved after the loop, when every target is known. */
+  const followers: Follower[] = [];
+  const follows = (layer: Follower['layer'], clip: Clip) => { if (clip.follow) followers.push({ layer, clip: clip as Follower['clip'] }); };
   for (const track of seq.tracks) {
     if (track.kind === 'caption') { const c = captionAt(doc, seq, track, time); if (c) captions.push(c); continue; }
     for (const clip of track.clips) {
       // half-open [start, start+duration)
       if (T.lt(time, clip.start) || !T.lt(time, T.add(clip.start, clip.duration))) continue;
       if (clip.type === 'text') {
-        if (!track.hidden) { const l = clipLayer(cx, track, clip, time); if (l) graph.layers.push(l); }
+        if (!track.hidden) { const l = clipLayer(cx, track, clip, time); if (l) { graph.layers.push(l); follows(l, clip); } }
         continue;
       }
       if (clip.type !== 'media') continue;
@@ -267,12 +276,14 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
         let out = prev && prev.type === 'media' ? clipLayer(cx, track, prev, time) : null;
         if (out && prev && sh.out) out = withPictureOf(out, bareLayer(doc, track, prev, T.add(time, T.frameTime(sh.out, frameRate))));
         if (sh.in) layer = withPictureOf(layer, bareLayer(doc, track, clip, T.sub(time, T.frameTime(sh.in, frameRate))));
-        if (out) graph.layers.push({ ...out, transition: { ...base, role: 'out', light: 0 } });
+        if (out) { const o = { ...out, transition: { ...base, role: 'out' as const, light: 0 } }; graph.layers.push(o); follows(o, prev!); }
         layer.transition = { ...base, role: 'in', light };
       }
       graph.layers.push(layer);
+      follows(layer, clip);
     }
   }
+  resolveFollows(doc, seq, graph, followers, (track, clip, at) => clipLayer(cx, track, clip, at));
   graph.layers.push(...captions); // captions always draw above picture and titles
   holdOverlays(doc, seq.tracks, graph);
   return graph;
@@ -347,6 +358,8 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
   const sound = soundAt(plan, T.nearestSampleIndex(time, plan.sampleRate), new Set(g.audio.map((a) => a.clipId)));
   const seq = doc.sequences[doc.mainSequenceId];
   const clipOf = (l: { clipId: string; trackId: string }) => seq?.tracks.find((t) => t.id === l.trackId)?.clips.find((c) => c.id === l.clipId);
+  /** A privacy region as resolved on a picture (ADR-0015): whether it covers the whole layer (loss fallback) and its track state there. */
+  const regionOf = (r: ResolvedRegion) => ({ id: r.id, state: r.state, whole: r.whole, style: r.style, sourceFrame: r.sourceFrame });
   const lookOf = (l: Exclude<Layer, CaptionLayer>) => {
     // the effect instances behind the layer's effects: the clip's enabled effects, without the time effect the evaluator took out
     const clip = clipOf(l);
@@ -356,7 +369,9 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
       return names.length ? [{ effect: e.type, index: i, params: Object.fromEntries(names.map((n) => [n, e.params[n]])) }] : [];
     });
     return {
-      ...(l.time ? { time: { type: l.time.type, taps: l.time.taps.map((t) => ({ lane: t.lane, ...(t.layer.kind === 'video' ? { sourceFrameIndex: t.layer.sourceFrameIndex } : {}), weight: t.weight })) } } : {}),
+      ...(l.follow ? { follow: { ...l.follow, transform: l.transform } } : {}),
+      ...(l.kind === 'video' && l.regions ? { regions: l.regions.map(regionOf) } : {}),
+      ...(l.time ? { time: { type: l.time.type, taps: l.time.taps.map((t) => ({ lane: t.lane, ...(t.layer.kind === 'video' ? { sourceFrameIndex: t.layer.sourceFrameIndex, ...(t.layer.regions ? { regions: t.layer.regions.map(regionOf) } : {}) } : {}), weight: t.weight })) } } : {}),
       ...(l.remap ? { remap: { type: l.remap.type, shownFrame: l.remap.shownFrame } } : {}),
       ...(l.effects ? { effects: l.effects.map((e) => e.type) } : {}), ...(modulated.length ? { modulated } : {}), ...(l.blend ? { blend: l.blend } : {}), ...(l.mask ? { mask: l.mask.shape } : {}),
       ...(l.transition ? { transition: { type: l.transition.type, role: l.transition.role, progress: Number(l.transition.progress.toFixed(4)) } } : {}),

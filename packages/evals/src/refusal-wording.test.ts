@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
+import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES } from '@pulseframe/core';
+import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -166,5 +166,83 @@ describe('Hebrew wording of common refusals', () => {
       TREND_REFUSAL_PATTERNS.forEach((re, i) => { if (re.test(message)) matched.add(i); });
     }
     expect(TREND_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
+  });
+
+  it('every refusal of the motion tracking operations (ADR-0015) is provoked and worded in Hebrew; none of their patterns is left unprovoked', () => {
+    const long = { ...video, name: 'long.mp4', contentHash: `sha256:${'5'.repeat(64)}`, duration: T.frameTime(20_000, R), video: { ...video.video, frameCount: 20_000 } };
+    let r = tx(createProject({ id: 'prj_t', name: 'T' }), [{ op: 'import_asset', args: { asset: video } }, { op: 'import_asset', args: { asset: still } }, { op: 'import_asset', args: { asset: long } }], true);
+    const assetId = r.results[0]!.output!.assetId as string, stillId = r.results[1]!.output!.assetId as string, longId = r.results[2]!.output!.assetId as string;
+    r = tx(r.doc, [
+      { op: 'add_clip', args: { assetId, start: f(0), duration: f(60) } }, { op: 'add_clip', args: { assetId: stillId, start: f(0), duration: f(60) } }, { op: 'add_text', args: { text: 'כותרת', start: f(0), duration: f(60) } },
+      { op: 'create_motion_track', args: { assetId, kind: 'point', frame: 10, x: 5000, y: 5000 } }, { op: 'create_motion_track', args: { assetId, kind: 'region', frame: 10, x: 5000, y: 5000, w: 1000, h: 1000 } }, { op: 'create_motion_track', args: { assetId: longId, kind: 'point', frame: 0, x: 1, y: 1 } },
+    ]);
+    const clip = (r.results[0]!.output as any).clipId as string, sound = (r.results[0]!.output as any).audioClipId as string, V1 = (r.results[0]!.output as any).trackId as string;
+    const pic = (r.results[1]!.output as any).clipId as string, V2 = (r.results[1]!.output as any).trackId as string, title = (r.results[2]!.output as any).clipId as string;
+    const [point, region, longTrack] = [3, 4, 5].map((i) => r.results[i]!.output!.motionTrackId as string) as [string, string, string];
+    const d = r.doc;
+    const follow = (motionTrackId: string, targetTrackId: string) => ({ motionTrackId, targetTrackId, scale: false, smooth: 0 });
+    const attach = (motionTrackId: string, from: number, k: number, extra: Record<string, unknown> = {}): OpCall[] => [{ op: 'attach_motion_track', args: { motionTrackId, from, x: Array(k).fill(1), y: Array(k).fill(1), q: Array(k).fill(90), st: Array(k).fill(1), method: 'test', params: {}, createdAt: 'test', ...extra } }];
+    // a track at its cap, and a project whose tracks hold exactly the project cap (the two one-sample tracks included)
+    const fullTrack = tx(d, attach(longTrack, 0, MAX_TRACK_SAMPLES), true).doc;
+    let fullProject = fullTrack;
+    for (const k of [MAX_TRACK_SAMPLES, MAX_TRACK_SAMPLES, MAX_PROJECT_TRACK_SAMPLES - 3 * MAX_TRACK_SAMPLES - 2]) { const c = tx(fullProject, [{ op: 'create_motion_track', args: { assetId: longId, kind: 'point', frame: 0, x: 1, y: 1 } }]); fullProject = tx(c.doc, attach(c.results[0]!.output!.motionTrackId as string, 0, k), true).doc; }
+    let manyTracks = d;
+    for (let i = Object.keys(d.motionTracks).length; i < MAX_MOTION_TRACKS; i++) manyTracks = tx(manyTracks, [{ op: 'create_motion_track', args: { assetId, kind: 'point', frame: 0, x: 1, y: 1 } }]).doc;
+    const lostStart = tx(d, [{ op: 'edit_motion_track', args: { motionTrackId: point, set: [{ frame: 20, x: 1, y: 1 }], markLost: { from: 10, to: 15 } } }]).doc;
+    const following = tx(d, [{ op: 'set_clip_follow', args: { clipId: title, follow: follow(point, V1) } }]).doc;
+    const picFollows = tx(d, [{ op: 'set_clip_follow', args: { clipId: pic, follow: follow(point, V1) } }]).doc;
+    const echoed = tx(d, [{ op: 'add_effect', args: { clipId: title, type: 'time.echo' } }]).doc;
+    const regions = tx(d, Array.from({ length: MAX_REDACT_REGIONS }, () => ({ op: 'set_redact_region', args: { clipId: clip, region: {} } }))).doc;
+    const unused = tx(following, [{ op: 'delete_clip', args: { clipId: clip } }]).doc;
+    const cases: [string, ProjectDocument, OpCall[], boolean?][] = [
+      ['a motion track that does not exist', d, [{ op: 'edit_motion_track', args: { motionTrackId: 'mtk_none', name: 'x' } }]],
+      ['following a track that does not exist', d, [{ op: 'set_clip_follow', args: { clipId: title, follow: follow(point, 'trk_none') } }]],
+      ['tracking a still', d, [{ op: 'create_motion_track', args: { assetId: stillId, kind: 'point', frame: 0, x: 1, y: 1 } }]],
+      ['a seed past the end', d, [{ op: 'create_motion_track', args: { assetId, kind: 'point', frame: 240, x: 1, y: 1 } }]],
+      ['measured samples past the end', d, attach(point, 239, 2), true],
+      ['a region without its box', d, [{ op: 'create_motion_track', args: { assetId, kind: 'region', frame: 0, x: 1, y: 1 } }]],
+      ['a point with a box', d, [{ op: 'create_motion_track', args: { assetId, kind: 'point', frame: 0, x: 1, y: 1, w: 100, h: 100 } }]],
+      ['measured region samples without sizes', d, attach(region, 10, 1), true],
+      ['a size on a point track', d, [{ op: 'edit_motion_track', args: { motionTrackId: point, set: [{ frame: 11, x: 1, y: 1, s: 1000 }] } }]],
+      ['columns of different lengths', d, attach(point, 10, 1, { y: [1, 2] }), true],
+      ['measured samples marked manual', d, attach(point, 10, 1, { st: [4] }), true],
+      ['one track too many', manyTracks, [{ op: 'create_motion_track', args: { assetId, kind: 'point', frame: 0, x: 1, y: 1 } }]],
+      ['a track over its cap', fullTrack, attach(longTrack, MAX_TRACK_SAMPLES, 1), true],
+      ['a project over its cap', fullProject, [{ op: 'create_motion_track', args: { assetId, kind: 'point', frame: 0, x: 1, y: 1 } }]],
+      ['an edit that changes nothing', d, [{ op: 'edit_motion_track', args: { motionTrackId: point } }]],
+      ['a frame placed twice', d, [{ op: 'edit_motion_track', args: { motionTrackId: point, set: [{ frame: 3, x: 1, y: 1 }, { frame: 3, x: 2, y: 2 }] } }]],
+      ['an empty stretch', d, [{ op: 'edit_motion_track', args: { motionTrackId: point, markLost: { from: 10, to: 10 } } }]],
+      ['a stretch outside the track', d, [{ op: 'edit_motion_track', args: { motionTrackId: point, interpolate: { from: 0, to: 12 } } }]],
+      ['filling in without a usable sample before', lostStart, [{ op: 'edit_motion_track', args: { motionTrackId: point, interpolate: { from: 10, to: 12 } } }]],
+      ['deleting a track a title follows', following, [{ op: 'remove_motion_track', args: { motionTrackId: point } }]],
+      ['removing a file a title follows a track of', unused, [{ op: 'remove_asset', args: { assetId } }]],
+      ['a sound that would follow', d, [{ op: 'set_clip_follow', args: { clipId: sound, follow: follow(point, V1) } }]],
+      ['following a sound track', d, [{ op: 'set_clip_follow', args: { clipId: title, follow: follow(point, Object.values(d.sequences)[0]!.tracks.find((t) => t.kind === 'audio')!.id) } }]],
+      ['following its own track', d, [{ op: 'set_clip_follow', args: { clipId: pic, follow: follow(point, V2) } }]],
+      ['a title with a time effect that would follow', echoed, [{ op: 'set_clip_follow', args: { clipId: title, follow: follow(point, V1) } }]],
+      ['following a picture that follows', picFollows, [{ op: 'set_clip_follow', args: { clipId: title, follow: follow(point, V2) } }]],
+      ['a followed picture that would follow', following, [{ op: 'set_clip_follow', args: { clipId: clip, follow: follow(point, V2) } }]],
+      ['a privacy region on a title', d, [{ op: 'set_redact_region', args: { clipId: title, region: {} } }]],
+      ['a privacy region on a still', d, [{ op: 'set_redact_region', args: { clipId: pic, region: {} } }]],
+      ['deleting a region without naming it', d, [{ op: 'set_redact_region', args: { clipId: clip, region: null } }]],
+      ['a region that does not exist', d, [{ op: 'set_redact_region', args: { clipId: clip, regionId: 'rgn_none', region: null } }]],
+      ['one region too many', regions, [{ op: 'set_redact_region', args: { clipId: clip, region: {} } }]],
+      ['a region on a track of another file', d, [{ op: 'set_redact_region', args: { clipId: clip, region: { motionTrackId: longTrack } } }]],
+    ];
+    const matched = new Set<number>();
+    const unrecognised: string[] = [];
+    for (const [what, doc, ops, internal] of cases) {
+      let message = '';
+      try { tx(doc, ops, internal); message = '(not refused)'; } catch (e) { if (!(e instanceof OpError)) throw e; message = e.message; }
+      const he = translateRefusal('he', message);
+      if (!he || !/[֐-׿]/.test(he)) unrecognised.push(`${what}: ${message}`);
+      TRACKING_REFUSAL_PATTERNS.forEach((re, i) => { if (re.test(message)) matched.add(i); });
+      expect(translateRefusal('en', message)).toBeUndefined();
+    }
+    expect(unrecognised).toEqual([]);
+    expect(TRACKING_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
+    // the numbers are kept
+    expect(translateRefusal('he', 'frame 240 is past the last frame of the video (239)')).toBe('הפריים 240 נמצא אחרי הפריים האחרון של הווידאו (239)');
+    expect(translateRefusal('he', 'interpolate: the stretch must lie inside the track (source frames 10 to 20)')).toBe('הקטע חייב להיות בתוך מסלול המעקב (פריימי מקור 10 עד 20)');
   });
 });
