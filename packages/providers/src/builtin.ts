@@ -2,7 +2,7 @@
  * Built-in reviewed capabilities. Phase G0 ships exactly one: a model-free smoke graph that proves
  * the provider path (submit → progress → collect → validate) without any model download or GPU.
  */
-import { DescriptorSchema, graphDigest, type CapabilityDescriptor, type ComfyGraph } from './descriptor.ts';
+import { ComfyDescriptorSchema, graphDigest, type ComfyDescriptor, type ComfyGraph } from './descriptor.ts';
 
 const smokeGraph: ComfyGraph = {
   '1': { class_type: 'EmptyImage', inputs: { width: 256, height: 256, batch_size: 1, color: 0x3de0c8 } },
@@ -10,7 +10,7 @@ const smokeGraph: ComfyGraph = {
 };
 const NA = { status: 'not_applicable' as const };
 /** Qualification evidence for `executed`/`hardwareQualified` is attached at runtime from a real run, not asserted here. */
-export const SMOKE_SOLID_IMAGE: CapabilityDescriptor = DescriptorSchema.parse({
+export const SMOKE_SOLID_IMAGE: ComfyDescriptor = ComfyDescriptorSchema.parse({
   id: 'comfy.smoke.solid-image',
   version: '1.0.0',
   provider: 'comfyui',
@@ -53,7 +53,7 @@ const blurGraph: ComfyGraph = {
  * First reviewed MEDIA-INPUT workflow (G0): model-free Gaussian blur of a project still.
  * It exists to qualify source staging, lineage and output contracts with a real source asset; it needs no weights.
  */
-export const IMAGE_SOFT_BLUR: CapabilityDescriptor = DescriptorSchema.parse({
+export const IMAGE_SOFT_BLUR: ComfyDescriptor = ComfyDescriptorSchema.parse({
   id: 'comfy.image.soft-blur',
   version: '1.0.0',
   provider: 'comfyui',
@@ -101,7 +101,7 @@ const matteGraph: ComfyGraph = {
  * First MODEL-BASED candidate (Amendment A1 G1): BiRefNet still-image matting through ComfyUI core nodes.
  * EXPERIMENTAL: executed only as a bounded CPU functional trial. Not quality-reviewed, not GPU-qualified.
  */
-export const IMAGE_REMOVE_BACKGROUND: CapabilityDescriptor = DescriptorSchema.parse({
+export const IMAGE_REMOVE_BACKGROUND: ComfyDescriptor = ComfyDescriptorSchema.parse({
   id: 'comfy.image.remove-background',
   version: '0.1.0',
   provider: 'comfyui',
@@ -163,7 +163,7 @@ const upscaleGraph: ComfyGraph = {
  * EXPERIMENTAL: implemented only. Never executed, not quality-reviewed, not hardware-qualified.
  * The output is 4x the input size; the descriptor schema cannot express a size multiple, so `expectSize` is left unset.
  */
-export const IMAGE_UPSCALE_4X: CapabilityDescriptor = DescriptorSchema.parse({
+export const IMAGE_UPSCALE_4X: ComfyDescriptor = ComfyDescriptorSchema.parse({
   id: 'comfy.image.upscale-4x',
   version: '0.1.0',
   provider: 'comfyui',
@@ -215,4 +215,4 @@ export const IMAGE_UPSCALE_4X: CapabilityDescriptor = DescriptorSchema.parse({
     hardwareQualified: { status: 'not_assessed', evidence: 'never run on any profile' },
   },
 });
-export const BUILTIN_CAPABILITIES: CapabilityDescriptor[] = [SMOKE_SOLID_IMAGE, IMAGE_SOFT_BLUR, IMAGE_REMOVE_BACKGROUND, IMAGE_UPSCALE_4X];
+export const BUILTIN_CAPABILITIES: ComfyDescriptor[] = [SMOKE_SOLID_IMAGE, IMAGE_SOFT_BLUR, IMAGE_REMOVE_BACKGROUND, IMAGE_UPSCALE_4X];

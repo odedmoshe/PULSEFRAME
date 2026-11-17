@@ -9,10 +9,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
-import type { CapabilityDescriptor } from '@pulseframe/providers';
+import type { CapabilityModel } from '@pulseframe/providers';
 import { ApiError } from './store.ts';
 
-type Model = CapabilityDescriptor['models'][number];
+/** The fields of a reviewed model record the store reads (ComfyUI, speech and local-tool records all have them). */
+type Model = Pick<CapabilityModel, 'path' | 'sha256' | 'bytes' | 'source'>;
 export type ModelState = 'ready' | 'missing' | 'partial-download' | 'corrupt' | 'unverifiable' | 'unresolved';
 export interface ModelStatus { path: string; state: ModelState; expectedBytes: number | null; presentBytes: number; missingBytes: number; detail: string }
 

@@ -35,14 +35,14 @@ const IVRIT_REV = '72ad623a37947395efcc3933132353790e5a12f5';
 const ivrit = (name: string, bytes: number, sha256: string): ModelFile => ({
   role: 'asr', path: `asr/ivrit-ai-whisper-large-v3-turbo-ct2/${name}`, publisher: 'ivrit-ai', revision: IVRIT_REV, sha256, bytes,
   license: 'Apache-2.0', licenseEvidence: `model card of ivrit-ai/whisper-large-v3-turbo-ct2@${IVRIT_REV.slice(0, 8)} is tagged license:apache-2.0 (metadata-level check; training-data terms not reviewed)`,
-  commercialUse: 'allowed', gated: false, source: `https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ct2/resolve/${IVRIT_REV}/${name}`,
+  commercialUse: 'allowed', gated: false, source: `https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ct2/resolve/${IVRIT_REV}/${name}`, attribution: null,
 });
 const NIKUD_REV = 'b806189fe1fc0085b1012b7560ffb5e8ecfd72a2', NIKUD_PATH = 'tts/phonikud/phonikud-1.0.int8.onnx';
 const CHATTERBOX_REV = '5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18';
 const chatterbox = (name: string, bytes: number, sha256: string): ModelFile => ({
   role: 'tts', path: `tts/chatterbox-multilingual/${name}`, publisher: 'ResembleAI', revision: CHATTERBOX_REV, sha256, bytes,
   license: 'MIT', licenseEvidence: `model card of ResembleAI/chatterbox@${CHATTERBOX_REV.slice(0, 8)} is tagged license:mit (metadata-level check; training-data terms not reviewed)`,
-  commercialUse: 'allowed', gated: false, source: `https://huggingface.co/ResembleAI/chatterbox/resolve/${CHATTERBOX_REV}/${name}`,
+  commercialUse: 'allowed', gated: false, source: `https://huggingface.co/ResembleAI/chatterbox/resolve/${CHATTERBOX_REV}/${name}`, attribution: null,
 });
 /** Reviewed, pinned models. Adding one means reviewing its licence and recording size and digest of every file here. */
 export const SPEECH_MODELS: SpeechModel[] = [{
@@ -69,7 +69,7 @@ export const SPEECH_MODELS: SpeechModel[] = [{
     chatterbox('conds.pt', 107374, '6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e'),
     chatterbox('grapheme_mtl_merged_expanded_v1.json', 69989, '69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf'),
     // Hebrew vowel pointing: without it this voice model garbles unpointed Hebrew (measured: see docs/evidence/voice-proof.json).
-    { role: 'hebrew-pointing', path: NIKUD_PATH, publisher: 'Phonikud', revision: NIKUD_REV, sha256: '113afb58d3140502aa1e7691cdc6b240b56cf97e5852fc870e1a7fb5a400dd62', bytes: 307844158, license: 'MIT', licenseEvidence: `model card of Phonikud/phonikud-onnx@${NIKUD_REV.slice(0, 8)} is tagged license:mit (metadata-level check; training-data terms not reviewed)`, commercialUse: 'allowed', gated: false, source: `https://huggingface.co/Phonikud/phonikud-onnx/resolve/${NIKUD_REV}/phonikud-1.0.int8.onnx` },
+    { role: 'hebrew-pointing', path: NIKUD_PATH, publisher: 'Phonikud', revision: NIKUD_REV, sha256: '113afb58d3140502aa1e7691cdc6b240b56cf97e5852fc870e1a7fb5a400dd62', bytes: 307844158, license: 'MIT', licenseEvidence: `model card of Phonikud/phonikud-onnx@${NIKUD_REV.slice(0, 8)} is tagged license:mit (metadata-level check; training-data terms not reviewed)`, commercialUse: 'allowed', gated: false, source: `https://huggingface.co/Phonikud/phonikud-onnx/resolve/${NIKUD_REV}/phonikud-1.0.int8.onnx`, attribution: null },
   ],
 }];
 
