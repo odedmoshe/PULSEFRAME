@@ -19,6 +19,8 @@ import './copilot.css';
 
 type CopTab = 'chat' | 'receipts';
 type Mode = 'guide' | 'run';
+/** The agent's own name when its credential has one (agent:name); the shared local agent has none, so the receipt says only "an agent". */
+export const agentName = (actor: string): string | null => { const n = actor.replace(/^agent:?/, '').trim(); return n && n !== 'local' ? n : null; };
 export const isAgentEvent = (e: Pick<RevisionEvent, 'actor'>) => e.actor.startsWith('agent');
 
 export function Copilot() {
@@ -110,7 +112,7 @@ function Receipts({ editor, receipts }: { editor: Editor; receipts: RevisionEven
           return (
             <li key={e.revision} className="pf-cop-receipt" data-testid="copilot-receipt" data-revision={e.revision}>
               <b dir="auto">{what(e)}</b>
-              <span className="pf-cop-meta">{H.by} <bdi dir="auto">{H.agent}</bdi> · {H.ago(Math.max(0, Math.round((now - Date.parse(e.at)) / 1000)))}</span>
+              <span className="pf-cop-meta">{H.by} <bdi dir="auto">{agentName(e.actor) ?? H.agent}</bdi> · {H.ago(Math.max(0, Math.round((now - Date.parse(e.at)) / 1000)))}</span>
               <span className="pf-cop-chips">
                 {m && <button type="button" className="pf-cop-chip" onClick={() => editor.seek(m.frame)} aria-label={`${H.jump} ${m.clock}`}><span className="num">{m.clock}</span></button>}
                 <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void undoReceipt(e)} data-testid="copilot-undo">{H.undo}</Button>

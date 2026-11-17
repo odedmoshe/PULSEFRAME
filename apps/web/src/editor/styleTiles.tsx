@@ -103,6 +103,7 @@ export function StyleTiles({ items, value, onPick, label, testId, disabledReason
       const bitmaps = new Map<string, ImageBitmap>();
       if (snap) { bitmaps.set(scene.a, snap.dim); bitmaps.set(scene.b, snap.bitmap); }
       const provider = async (l: { assetId: string }): Promise<FrameImage | null> => { const bm = bitmaps.get(l.assetId); return bm ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(bm, dx, dy, dw, dh) } : null; };
+      const poster = (c: HTMLCanvasElement) => { const g2 = c.getContext('2d'); if (!g2) return; g2.clearRect(0, 0, c.width, c.height); if (snap) g2.drawImage(snap.dim, 0, 0, c.width, c.height); };
       const done = new Set<string>();
       for (const it of items) {
         if (stop) return;
@@ -116,10 +117,10 @@ export function StyleTiles({ items, value, onPick, label, testId, disabledReason
           const { doc, frame } = it.build(scene, '#202020');
           const r = await drawGraph(g, evaluate(doc, f(frame)), provider);
           if (stop) return;
-          if (r.missing.length || r.unavailableEffects.length) continue;
+          if (r.missing.length || r.unavailableEffects.length) { poster(c); continue; }
           done.add(it.id); setDrawn(new Set(done));
           void createImageBitmap(c).then((bm) => put(ck, bm)).catch(() => undefined);
-        } catch { /* this tile keeps its poster */ }
+        } catch { poster(c); /* this tile keeps its poster */ }
         await new Promise((r) => setTimeout(r));
       }
     })();

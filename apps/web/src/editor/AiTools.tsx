@@ -46,6 +46,9 @@ function sayFailure(lang: 'he' | 'en', f: { code?: string | null; message?: stri
 /** What the engine setting is called for a tool (the variable the operator sets), for the setup steps. */
 const engineVar = (c: CapInfo) => (c.task === 'translate' ? 'PF_TOOLS_PYTHON' : c.task === 'voice-clean' ? 'PF_DENOISE_BIN' : c.task === 'vocals-classic' ? 'ffmpeg (PATH)' : 'PF_COMFYUI_URL');
 
+/** The connection check (a graph with no model): shown to whoever installs, under a disclosure, not as a tool among the owner's tools. */
+export const isConnectionCheck = (c: { id: string }) => /\.smoke\./.test(c.id);
+
 export function AiTools() {
   const { editor, state, t } = useEditorState();
   const { provider, lang } = state;
@@ -127,7 +130,7 @@ export function AiTools() {
 
   const H = HUB_STRINGS[lang];
   const isSmoke = (c: CapInfo) => !c.inputs?.length && (c.provider ?? 'comfyui') === 'comfyui';
-  const kinds = caps.filter((c) => !isSmoke(c)).map((c) => { const st = setupOf(c, pr); const j = cardJob(c.id, mine, state.capJobs); return pillKind(st.code, c.runnable, !!j && OPEN.includes(j.status), st.missingBytes ?? c.missingDownloadBytes ?? 0); });
+  const kinds = caps.filter((c) => !isSmoke(c) && !isConnectionCheck(c)).map((c) => { const st = setupOf(c, pr); const j = cardJob(c.id, mine, state.capJobs); return pillKind(st.code, c.runnable, !!j && OPEN.includes(j.status), st.missingBytes ?? c.missingDownloadBytes ?? 0); });
   const nReady = kinds.filter((k) => k === 'ready' || k === 'running').length, nOff = kinds.filter((k) => k === 'off').length, nSetup = kinds.length - nReady - nOff;
   const running = Object.values(state.capJobs).filter((j) => OPEN.includes(j.status));
   const capTitle = (id: string | undefined) => caps.find((c) => c.id === id)?.title[lang] ?? id ?? '';
@@ -160,7 +163,7 @@ export function AiTools() {
         {AI_TABS.map((x) => (
           <button key={x} type="button" role="tab" id={`${uid}-tab-${x}`} aria-selected={x === current} aria-controls={`${uid}-panel-${x}`} tabIndex={x === current ? 0 : -1}
             onClick={() => choose(x)} data-testid="ai-tab" data-tab={x}>
-            {S.tabs[x]} <bdi className="muted">({byTab[x].filter((c) => !isSmoke(c)).length + (x === 'image' ? 1 : 0)})</bdi>
+            {S.tabs[x]} <bdi className="muted">({byTab[x].filter((c) => !isConnectionCheck(c)).length + (x === 'image' ? 1 : 0)})</bdi>
           </button>
         ))}
       </div>
@@ -168,17 +171,17 @@ export function AiTools() {
         <div key={x} role="tabpanel" id={`${uid}-panel-${x}`} aria-labelledby={`${uid}-tab-${x}`} hidden={x !== current} className="pf-ai-panel" data-testid="ai-tabpanel" data-tab={x}>
           {x === current && (
             <>
-              {byTab[x].filter((c) => !isSmoke(c)).length === 0 && x !== 'image' && <p className="muted">{S.emptyTab}</p>}
-              {byTab[x].filter((c) => !isSmoke(c)).map((c) => (
+              {byTab[x].filter((c) => !isConnectionCheck(c)).length === 0 && x !== 'image' && <p className="muted">{S.emptyTab}</p>}
+              {byTab[x].filter((c) => !isConnectionCheck(c)).map((c) => (
                 <ToolCard key={c.id} cap={c} tab={x} S={S} editor={editor} job={cardJob(c.id, mine, state.capJobs)} run={runs[mine[c.id] ?? ''] ?? null}
                   onStarted={(jobId, info) => { setMine((m) => ({ ...m, [c.id]: jobId })); setRuns((r) => ({ ...r, [jobId]: info })); }} />
               ))}
               {x === 'image' && <PortraitCard S={S} editor={editor} />}
-              {byTab[x].some(isSmoke) && (
+              {byTab[x].some(isConnectionCheck) && (
                 <details className="pf-hub-how pf-hub-installer" data-testid="ai-installer-check">
                   <summary>{H.installerCheck}</summary>
                   <p className="muted">{H.installerCheckHint}</p>
-                  {byTab[x].filter(isSmoke).map((c) => (
+                  {byTab[x].filter(isConnectionCheck).map((c) => (
                     <ToolCard key={c.id} cap={c} tab={x} S={S} editor={editor} job={cardJob(c.id, mine, state.capJobs)} run={runs[mine[c.id] ?? ''] ?? null}
                       onStarted={(jobId, info) => { setMine((m) => ({ ...m, [c.id]: jobId })); setRuns((r) => ({ ...r, [jobId]: info })); }} />
                   ))}
@@ -283,10 +286,10 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
     <article className={`pf-ai-card pf-hub-card is-${kind}`} data-testid="ai-tool" data-id={c.id} data-runnable={c.runnable ? 'true' : 'false'} data-setup={setup.code} data-tab={tab} aria-labelledby={`${uid}-h`}>
       <div className="pf-hub-card-top">
         <span className="pf-hub-ico" aria-hidden="true"><Icon size={20} strokeWidth={1.75} /></span>
-        <h3 id={`${uid}-h`}>{smoke ? H.connectTest : title}</h3>
+        <h3 id={`${uid}-h`}>{isConnectionCheck(c) ? H.connectTest : title}</h3>
         {kind === 'running' && <Ring value={pct} label={title} size={28} />}
       </div>
-      {c.description && !smoke && <p className="pf-hub-purpose">{c.description[lang]}</p>}
+      {c.description && !isConnectionCheck(c) && <p className="pf-hub-purpose">{c.description[lang]}</p>}
       <div className="pf-ai-badges">
         {c.experimental && <span className="pf-ai-badge" title={S.experimentalHint} data-testid="ai-badge-experimental">{S.experimental}</span>}
         {open_.includes('qualityReviewed') && <span className="pf-ai-badge" title={S.badgeQualityHint} data-testid="ai-badge-quality">{S.badgeQuality}</span>}

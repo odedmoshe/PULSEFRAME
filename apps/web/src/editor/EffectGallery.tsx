@@ -291,6 +291,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
       const scene = makeScene(tw, th);
       const bitmaps = new Map<string, ImageBitmap>();
       if (snap) { bitmaps.set(scene.a, tab === 'transitions' ? snap.dim : snap.bitmap); bitmaps.set(scene.b, snap.bitmap); }
+      const repaint = (c: HTMLCanvasElement) => { const g = c.getContext('2d'); if (!g) return; g.clearRect(0, 0, c.width, c.height); if (snap) g.drawImage(snap.dim, 0, 0, c.width, c.height); };
       for (const it of tabItems.filter(matches)) {
         if (cancelled) return;
         if (done.current.has(it.key) || (it.gpu && !gpuOk)) continue;
@@ -312,12 +313,13 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
           };
           const r = await drawGraph(canvas.getContext('2d')!, evaluate(doc, f(frame)), provider);
           if (cancelled) return;
-          if (r.missing.length || r.unavailableEffects.length) continue;
+          // a tile that could not be drawn goes back to its poster (the dimmed frame): a half-drawn canvas would show black
+          if (r.missing.length || r.unavailableEffects.length) { repaint(canvas); continue; }
           done.current.add(it.key);
           mirror(it.key);
           void createImageBitmap(canvas).then((bm) => cachePut(ck, bm)).catch(() => undefined);
           setRendered(new Set(done.current));
-        } catch { /* this tile stays blank and unmarked */ }
+        } catch { repaint(canvas); /* this tile keeps its poster and stays unmarked */ }
         await new Promise((r) => setTimeout(r));
       }
     })();
