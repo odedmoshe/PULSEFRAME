@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { handleAfterEnd, sequenceDuration, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, captionCues } from '@pulseframe/engine';
+import { audioPlan, captionCues, maxDecodeLanes } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { variantDoc } from './export.ts';
 
@@ -19,6 +19,8 @@ export interface PreflightIssue {
   fix?: { label: string; ops: OpCall[] };
 }
 export interface PreflightOptions { variantId?: string; maxCharsPerSecond?: number }
+/** Video decoders the render worker and browser export open at most (apps/web render.ts, browserExport.ts). */
+const RENDER_DECODERS = 12;
 
 export function preflight(exporter: Exporter, master: ProjectDocument, revision: number, opts: PreflightOptions = {}) {
   const issues: PreflightIssue[] = [];
@@ -45,6 +47,15 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   const ap = audioPlan(doc);
   if (total > 0 && ap.clips.length === 0) issues.push({ code: 'no_sound', severity: 'note', message: 'the programme has no audible sound', ids: [] });
   else if (!doc.settings.loudness && ap.clips.length > 0) issues.push({ code: 'no_loudness_target', severity: 'note', message: 'no loudness target is set, so the export keeps the mix level as it is', ids: [doc.id], fix: { label: 'Normalise to -14 LUFS (common for social video)', ops: [{ op: 'set_loudness_target', args: { target: -14 } }] } });
+
+  // 4a. more pictures to decode at once than the renderer opens decoders for (time effects decode each earlier picture
+  // separately, ADR-0011): those frames would refuse with effect_unavailable (decode_budget)
+  const lanes = maxDecodeLanes(doc);
+  if (lanes.lanes > RENDER_DECODERS) {
+    const at = T.frameTime(lanes.fromFrame, rate), until = T.frameTime(lanes.toFrame, rate);
+    const ids = seq.tracks.filter((t) => t.kind === 'video' && !t.hidden).flatMap((t) => t.clips.filter((c) => c.type === 'media' && T.lt(c.start, until) && T.lt(at, T.add(c.start, c.duration))).map((c) => c.id));
+    issues.push({ code: 'decode_budget', severity: 'warning', message: `frames ${lanes.fromFrame}–${lanes.toFrame - 1} need ${lanes.lanes} video pictures decoded at once, more than the ${RENDER_DECODERS} the renderer can open; those frames would be refused (time effects such as echo and time split decode each earlier picture separately). Lower the count of a time effect, remove one, or move the overlapping clips apart`, ids, range: { startFrame: lanes.fromFrame, endFrame: lanes.toFrame } });
+  }
 
   for (const track of seq.tracks) {
     for (const c of track.clips) {
@@ -103,6 +114,6 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   return {
     revision, variantId: opts.variantId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: variant?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, transition handles, upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), accessibility contrast, platform rules.',
+    scope: 'Checked: render blockers, empty picture, loudness setup, video decoders needed at once, transition handles, upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), accessibility contrast, platform rules.',
   };
 }
