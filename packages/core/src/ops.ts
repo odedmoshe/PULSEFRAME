@@ -2025,7 +2025,7 @@ defineOp({
 defineOp({
   name: 'set_effect_modulator',
   version: 1,
-  description: "Make a numeric effect parameter kick on the beats of the music under the clip and settle back: value = base + depth·e^(−decay·seconds since the beat), kept inside the parameter's range. `every` counts beats from the start of the bar (default 2). modulator=null removes it. Only geometry and texture parameters can follow the beat (list_catalog → effects[].modulatable); brightness and colour cannot, because a beat-driven change of brightness is a flash. Without analysed music the parameter keeps its base value.",
+  description: "Make a numeric effect parameter kick on the beats of the music under the clip and settle back: value = base + depth·e^(−decay·seconds since the beat), kept inside the parameter's range. `every` counts beats from the first bar start of the music, as the strobe's `every` does (default 2). modulator=null removes it. Only geometry and texture parameters can follow the beat (list_catalog → effects[].modulatable); brightness and colour cannot, because a beat-driven change of brightness is a flash. Without analysed music the parameter keeps its base value.",
   args: z.object({ clipId: z.string(), effectId: z.string(), param: z.string().max(48), modulator: z.object({ every: z.number().int().min(1).max(16).optional(), depth: z.number(), decay: z.number().min(1).max(30).optional() }).strict().nullable() }).strict(),
   apply(d, a) {
     const { clip } = pictureClip(d, a.clipId);
