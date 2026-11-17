@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -191,6 +191,10 @@ export function createFuzz(seed: number) {
         const to = () => (others.length && rnd() < 0.8 ? pick(others).c.id : soundTarget()); // mostly another sound clip; sometimes a picture, the source itself or a clip without sound (refused)
         return { op: 'copy_audio_effects', args: { fromClipId: clipId, toClipIds: [to(), ...(rnd() < 0.3 ? [to()] : [])], ...(rnd() < 0.5 ? { replace: rnd() < 0.7 } : {}) } };
       },
+      // voice cleanup (ADR-0013): one strength sets the three cleanup effects; strength 0 removes them; a bad profile or strength is refused
+      () => ({ op: 'clean_voice', args: { clipId: soundTarget(), strength: pick([0, 0.25, 0.6, 0.6, 1, 1.5]), ...(rnd() < 0.5 ? { mainsHz: pick(['50', '60', null] as const) } : {}), ...(rnd() < 0.4 ? { profile: rnd() < 0.1 ? 'not-a-profile' : rnd() < 0.5 ? GENERIC_NOISE_PROFILE : encodeNoiseProfile(Array.from({ length: 24 }, () => -40 - int(40))), source: pick(assetIds) } : {}), ...(rnd() < 0.15 ? { denoise: false } : {}), ...(rnd() < 0.15 ? { speech: false } : {}), ...(rnd() < 0.1 ? { includeLinked: false } : {}) } }),
+      // colour match writes its grade with set_colour_grade (ADR-0014): replace or merge, out-of-range values refused, animated values refused unless dropped
+      () => ({ op: 'set_colour_grade', args: { clipId: rnd() < 0.8 ? videoId() : any(), params: { exposure: Number((rnd() * 2 - 1).toFixed(3)), temperature: Number((rnd() * 1.2 - 0.6).toFixed(3)), ...(rnd() < 0.5 ? { saturation: rnd() < 0.08 ? 3 : Number((0.5 + rnd()).toFixed(3)) } : {}) }, ...(rnd() < 0.4 ? { mode: pick(['replace', 'merge'] as const) } : {}), ...(rnd() < 0.2 ? { dropKeyframes: true } : {}) } }),
     ];
     return pick(menu)();
   };

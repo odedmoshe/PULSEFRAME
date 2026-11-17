@@ -80,14 +80,22 @@ export const AUDIO_FX_PARAM_LABELS: Record<string, L> = {
   pingPong: { he: 'החזרות קופצות בין ימין לשמאל', en: 'Repeats bounce between left and right' }, tone: { he: 'כהות החזרות', en: 'Darkness of the repeats' },
   room: { he: 'סוג החלל', en: 'Space' }, decaySeconds: { he: 'זמן דעיכה', en: 'Decay time' }, predelayMs: { he: 'השהיה לפני ההדהוד', en: 'Pre-delay' },
   damping: { he: 'ריכוך הגבוהים', en: 'High damping' }, spread: { he: 'פיזור סטריאו', en: 'Stereo spread' }, stereoWidth: { he: 'רוחב', en: 'Width' },
+  // voice cleanup «ניקוי קול» (ADR-0013); profile and source are set by measure_voice and are never shown as controls
+  mainsHz: { he: 'תדר רשת החשמל', en: 'Mains frequency' }, harmonics: { he: 'מספר ההרמוניות', en: 'Harmonics' }, width: { he: 'רוחב החריצים', en: 'Notch width' },
+  reductionDb: { he: 'עומק ההפחתה', en: 'Reduction' }, sensitivityDb: { he: 'רגישות', en: 'Sensitivity' }, profile: { he: 'פרופיל הרעש', en: 'Noise profile' }, source: { he: 'נמדד על', en: 'Measured on' },
+  lowCutHz: { he: 'חיתוך נמוכים', en: 'Low cut' }, presence: { he: 'נוכחות', en: 'Presence' }, levelDb: { he: 'יישור עוצמה', en: 'Levelling' },
+  targetDb: { he: 'עוצמת יעד', en: 'Target level' }, ceilingDb: { he: 'תקרה', en: 'Ceiling' },
 };
 export const AUDIO_FX_OPTION_LABELS: Record<string, L> = {
   room: { he: 'חדר', en: 'Room' }, hall: { he: 'אולם', en: 'Hall' }, cave: { he: 'מערה', en: 'Cave' }, bathroom: { he: 'מקלחת', en: 'Shower' },
+  '50': { he: '50 הרץ (ישראל, אירופה)', en: '50 Hz (Israel, Europe)' }, '60': { he: '60 הרץ (צפון אמריקה)', en: '60 Hz (North America)' },
 };
 /** Unit words of the sound-effect parameters that have one. */
 export const AUDIO_FX_PARAM_UNITS: Record<string, L> = {
   gainDb: { he: 'דציבל', en: 'dB' }, freqHz: { he: 'הרץ', en: 'Hz' }, pitchHz: { he: 'הרץ', en: 'Hz' }, bits: { he: 'ביט', en: 'bits' }, rateKhz: { he: 'קילוהרץ', en: 'kHz' },
   delayMs: { he: 'אלפיות שנייה', en: 'milliseconds' }, predelayMs: { he: 'אלפיות שנייה', en: 'milliseconds' }, decaySeconds: { he: 'שניות', en: 'seconds' },
+  mainsHz: { he: 'הרץ', en: 'Hz' }, lowCutHz: { he: 'הרץ', en: 'Hz' }, reductionDb: { he: 'דציבל', en: 'dB' }, sensitivityDb: { he: 'דציבל', en: 'dB' }, levelDb: { he: 'דציבל', en: 'dB' },
+  targetDb: { he: 'דציבל מתחת לשיא', en: 'dBFS' }, ceilingDb: { he: 'דציבל מתחת לשיא', en: 'dBFS' },
 };
 export const audioFxParamLabel = (name: string, lang: 'he' | 'en') => AUDIO_FX_PARAM_LABELS[name]?.[lang] ?? name;
 export const audioFxOptionLabel = (value: string, lang: 'he' | 'en') => AUDIO_FX_OPTION_LABELS[value]?.[lang] ?? value;

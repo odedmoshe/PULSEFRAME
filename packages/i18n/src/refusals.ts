@@ -46,6 +46,8 @@ const HE: [RegExp, (m: RegExpExecArray) => string][] = [
     const names = m[2] ? m[2].split(', ').map((p) => `"${effectParamLabel(p, 'he', m[1])}"`) : [];
     return names.length === 0 ? 'ערכי הפרמטרים של האפקט אינם תקינים' : names.length === 1 ? `הערך של ${names[0]} אינו תקין` : `הערכים של ${names.join(', ')} אינם תקינים`;
   }],
+  // set_colour_grade (colour match, ADR-0014): a fixed value would be ignored where the value is animated
+  [/^these colour values are animated with keyframes, so a fixed setting would be ignored$/, () => 'ערכי הצבע האלה מונפשים בנקודות מפתח, ולכן ערך קבוע לא ישפיע עליהם. אפשר להחליף את ההנפשה בערך הזה או לשנות את נקודות המפתח'],
   // from the render worker and the browser export (ADR-0011): a frame needs more video decoders at once than they open
   [/^decode_budget: this frame needs more than (\d+) video decoders$/, (m) => `הפריים הזה צריך יותר מ־${m[1]} מפענחי וידאו בבת אחת`],
 ];

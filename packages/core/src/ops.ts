@@ -14,6 +14,7 @@ import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, speedValue, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { AUDIO_EFFECTS, AUDIO_PRESETS, findAudioEffect, MAX_AUDIO_FX, sortAudioFx, type AudioFxInstance, type AudioFxParams } from './audioEffects.ts';
 import { soundTails } from './queries.ts';
+import { cleanVoiceEffects, isCleanupType, NOISE_PROFILE_PATTERN } from './voiceClean.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
 import { ANIMATE_CLIP_MOTIONS, animateClipKeys, defaultMotionFrames, MOTION_PRESETS, motionKeys, previousMotion, shortestSafeLoopFrames } from './motionPresets.ts';
 import { findLayout, layoutPlacements, LAYOUT_IDS, LAYOUTS } from './layouts.ts';
@@ -1927,7 +1928,7 @@ const fxOut = (clip: MediaClip) => (clip.audioFx ?? []).map((x) => ({ clipId: cl
 defineOp({
   name: 'add_audio_effect',
   version: 1,
-  description: 'Add a sound effect to a sound clip: a character voice (voice.telephone, voice.megaphone, voice.radio, voice.robot), texture.8bit, space.echo, space.reverb (room, hall, cave, bathroom), tone.bassboost or utility.width. Give the sound clip, or a picture clip to put it on the sound linked to it (includeLinked=false keeps a sound clip\'s linked sound clips out). Unspecified parameters take the effect\'s defaults; amount 0 is the dry sound. Effects always run in a fixed order whatever order they were added in; a clip has each effect at most once and one character voice. An echo or reverb rings on past the end of the clip and is cut at the end of the video (the video is never lengthened). These are DSP effects, not voice conversion. Not yet for a sound that keeps its pitch at another speed or changes speed gradually. Discover effects and presets with list_catalog (audioEffects, audioPresets).',
+  description: 'Add a sound effect to a sound clip: a voice cleanup effect (cleanup.dehum, cleanup.denoise, cleanup.speech; usually set all at once from a measurement with clean_voice), a character voice (voice.telephone, voice.megaphone, voice.radio, voice.robot), texture.8bit, space.echo, space.reverb (room, hall, cave, bathroom), tone.bassboost or utility.width. Give the sound clip, or a picture clip to put it on the sound linked to it (includeLinked=false keeps a sound clip\'s linked sound clips out). Unspecified parameters take the effect\'s defaults; amount 0 is the dry sound. Effects always run in a fixed order whatever order they were added in; a clip has each effect at most once and one character voice. An echo or reverb rings on past the end of the clip and is cut at the end of the video (the video is never lengthened). These are DSP effects, not voice conversion. Not yet for a sound that keeps its pitch at another speed or changes speed gradually. Discover effects and presets with list_catalog (audioEffects, audioPresets).',
   args: z.object({ clipId: z.string(), type: z.string().min(1).max(48), params: z.record(z.string(), z.unknown()).optional(), enabled: z.boolean().optional(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const params = parseAudioFx(a.type, a.params);
@@ -2034,6 +2035,39 @@ defineOp({
   },
 });
 
+defineOp({
+  name: 'clean_voice',
+  version: 1,
+  description: 'Voice cleanup «ניקוי קול» in one step (ADR-0013): hum removal (cleanup.dehum) when mainsHz is given, noise reduction (cleanup.denoise) with the measured noise profile, and the speech enhancer (cleanup.speech: low cut, presence, phrase leveller, peak ceiling), all set from one strength 0..1. Get profile, source and mainsHz from measure_voice, which returns this op ready to send; without a profile a generic quiet floor is used. strength 0 removes the cleanup. Other sound effects are kept; existing cleanup effects are replaced in place with the same ids; fine-tune afterwards with update_audio_effect. Give the sound clip, or a picture clip to clean the sound linked to it. Steady noise only (hiss, fan, room tone), not other voices or music; no AI model; measured, not yet listened to. Not yet for a sound that keeps its pitch at another speed or changes speed gradually.',
+  args: z.object({
+    clipId: z.string(), includeLinked: z.boolean().optional(),
+    strength: z.number().min(0).max(1).default(0.6).describe('0 removes the cleanup, 1 is the strongest; measure_voice recommends one'),
+    profile: z.string().regex(NOISE_PROFILE_PATTERN).optional().describe('noise profile from measure_voice (48 characters); omitted = a generic quiet floor'),
+    source: z.string().max(64).optional().describe('asset id the profile was measured on'),
+    mainsHz: z.enum(['50', '60']).nullable().optional().describe('mains hum found by measure_voice; null or omitted = no hum removal'),
+    denoise: z.boolean().optional().describe('false leaves noise reduction out'),
+    speech: z.boolean().optional().describe('false leaves the speech enhancer out'),
+  }).strict(),
+  apply(d, a, ctx) {
+    const wanted = cleanVoiceEffects({ strength: a.strength, profile: a.profile, source: a.source, mainsHz: a.mainsHz, denoise: a.denoise, speech: a.speech });
+    const targets = unlockedTargets(soundTargets(d, a.clipId, a.includeLinked));
+    const effects: { clipId: string; effectId: string; type: string; params: AudioFxParams }[] = [];
+    const removed: { clipId: string; effectId: string; type: string }[] = [];
+    for (const { clip } of targets) {
+      const list = clip.audioFx ?? [];
+      const kept = list.filter((x) => !isCleanupType(x.type)), old = list.filter((x) => isCleanupType(x.type));
+      const next: AudioFxInstance[] = wanted.map((w) => ({ id: old.find((x) => x.type === w.type)?.id ?? ctx.newId('afx'), type: w.type, enabled: true, params: parseAudioFx(w.type, w.params) }));
+      if (kept.length + next.length > MAX_AUDIO_FX) throw new OpError('out_of_bounds', `a clip can carry at most ${MAX_AUDIO_FX} sound effects`, { clipId: clip.id });
+      for (const x of old) if (!next.some((y) => y.id === x.id)) removed.push({ clipId: clip.id, effectId: x.id, type: x.type });
+      setAudioFx(clip, [...kept, ...next]);
+      refuseFxTimeMap(clip, 'effects');
+      for (const y of next) effects.push({ clipId: clip.id, effectId: y.id, type: y.type, params: y.params });
+    }
+    const ids = targets.map((t) => t.clip.id);
+    return { affectedIds: ids, summary: wanted.length ? `Voice cleanup at strength ${a.strength}` : 'Removed the voice cleanup', output: { effects, removed, tailSeconds: tailSecondsOf(d, ids) } };
+  },
+});
+
 // ---------- effects, blend, mask, transitions (SPEC §8, §13) ----------
 const pictureClip = (d: ProjectDocument, clipId: string) => {
   const f = mustClip(d, clipId);
@@ -2093,6 +2127,41 @@ defineOp({
     }
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Applied colour look ${a.lookId}`, output: { effectId, params } };
+  },
+});
+const GRADE_KEYS = ['exposure', 'temperature', 'tint', 'contrast', 'saturation', 'shadows', 'highlights', 'fade'] as const;
+defineOp({
+  name: 'set_colour_grade',
+  version: 1,
+  description: 'Set the values of a picture or title clip\'s colour grade (color.grade) directly, where apply_look would put it: the clip\'s first colour grade is replaced in place (same id, turned on), or one is added first in its effect list (after a time effect). mode replace (default): values not given return to their defaults; merge: they are kept. Values out of range are refused. Used by colour match and auto balance (match_colour returns this op); every value stays editable with update_effect. A value animated with keyframes would ignore a fixed setting, so it is refused unless dropKeyframes=true, which removes those keyframes. Needs a graphics adapter (WebGPU) to be shown and exported.',
+  args: z.object({
+    clipId: z.string(),
+    params: z.object({ exposure: z.number(), temperature: z.number(), tint: z.number(), contrast: z.number(), saturation: z.number(), shadows: z.number(), highlights: z.number(), fade: z.number() }).partial().strict(),
+    mode: z.enum(['replace', 'merge']).default('replace').describe('replace: values not given return to their defaults; merge: they are kept'),
+    dropKeyframes: z.boolean().optional(),
+  }).strict(),
+  apply(d, a, ctx) {
+    const { clip } = pictureClip(d, a.clipId);
+    const list = [...(clip.effects ?? [])];
+    const at = list.findIndex((e) => e.type === 'color.grade');
+    const old = at >= 0 ? list[at]! : undefined;
+    const params = parseEffect('color.grade', { ...(a.mode === 'merge' && old ? old.params : {}), ...a.params });
+    const keyed = Object.keys(old?.keyframes ?? {}).filter((k) => (GRADE_KEYS as readonly string[]).includes(k));
+    const clash = a.mode === 'merge' ? keyed.filter((k) => k in a.params) : keyed;
+    if (clash.length && !a.dropKeyframes) throw new OpError('incompatible', 'these colour values are animated with keyframes, so a fixed setting would be ignored', { clipId: clip.id, params: clash }, 'Pass dropKeyframes=true to replace the animation with this setting, or change the keyframes with set_effect_keyframe.');
+    let effectId: string;
+    if (old) {
+      const { keyframes, ...rest } = old;
+      const kept = Object.entries(keyframes ?? {}).filter(([k]) => !clash.includes(k));
+      list[at] = { ...rest, enabled: true, params, ...(kept.length ? { keyframes: Object.fromEntries(kept) } : {}) };
+      effectId = old.id;
+    } else {
+      if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
+      effectId = ctx.newId('fx');
+      list.splice(effectSlot(list, 'color.grade', 0), 0, { id: effectId, type: 'color.grade', enabled: true, params });
+    }
+    clip.effects = list;
+    return { affectedIds: [clip.id], summary: 'Set colour grade', output: { effectId, params, droppedKeyframes: clash } };
   },
 });
 

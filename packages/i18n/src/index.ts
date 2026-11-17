@@ -1,5 +1,6 @@
 /** Bilingual UI strings (SPEC §3, §29). Hebrew is the default. Keys are stable ids. */
 import { VISUAL_WAVE_EN, VISUAL_WAVE_HE } from './visualWave.ts';
+import { CLEANUP_WAVE_EN, CLEANUP_WAVE_HE } from './cleanupWave.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -155,6 +156,7 @@ export const he = {
   'sound.fx.seconds': 'שניות', 'timeline.fx': 'אפקטים', 'timeline.fx.tail': 'זנב',
   'op.add_audio_effect': 'הוספת אפקט קול', 'op.update_audio_effect': 'עדכון אפקט קול', 'op.remove_audio_effect': 'הסרת אפקט קול', 'op.apply_audio_preset': 'מתכון אפקטי קול', 'op.copy_audio_effects': 'העתקת אפקטי קול',
   ...VISUAL_WAVE_HE,
+  ...CLEANUP_WAVE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -310,6 +312,7 @@ export const en: Record<keyof typeof he, string> = {
   'sound.fx.seconds': 'seconds', 'timeline.fx': 'Effects', 'timeline.fx.tail': 'tail',
   'op.add_audio_effect': 'Added sound effect', 'op.update_audio_effect': 'Updated sound effect', 'op.remove_audio_effect': 'Removed sound effect', 'op.apply_audio_preset': 'Sound effect preset', 'op.copy_audio_effects': 'Copied sound effects',
   ...VISUAL_WAVE_EN,
+  ...CLEANUP_WAVE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -318,3 +321,4 @@ export const dirOf = (lang: Lang) => (lang === 'he' ? 'rtl' : 'ltr');
 export * from './refusals.ts';
 export * from './effectParams.ts';
 export * from './visualWave.ts';
+export * from './cleanupWave.ts';
