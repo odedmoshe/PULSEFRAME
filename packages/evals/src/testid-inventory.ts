@@ -380,7 +380,14 @@ async function main() {
     result: ok ? 'PASS' : 'FAIL',
   };
   console.log(`in the DOM of a driven state: ${report.summary.inTheDomOfAState} of ${ids.length}; lost since the last report: ${lost.length}`);
-  if (ok) { fs.writeFileSync(REPORT, JSON.stringify(report, null, 2) + '\n'); console.log(`test-id inventory: PASS. Evidence: docs/evidence/testid-inventory.json`); }
+  if (ok) {
+    // one id per line, so the report can be read and compared line by line
+    const lines = (list: unknown[]) => (list.length ? `[\n${list.map((x) => `    ${JSON.stringify(x)}`).join(',\n')}\n  ]` : '[]');
+    const { ids: idList, unreadableReferences, ...head } = report;
+    const text = JSON.stringify({ ...head, ids: '@ids', unreadableReferences: '@unreadable' }, null, 2).replace('"@ids"', () => lines(idList)).replace('"@unreadable"', () => lines(unreadableReferences));
+    fs.writeFileSync(REPORT, text + '\n');
+    console.log(`test-id inventory: PASS. Evidence: docs/evidence/testid-inventory.json`);
+  }
   else { console.log('test-id inventory: FAIL (the committed report is left as it was)'); process.exitCode = 1; }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch((e) => { console.error(e); process.exit(1); });
