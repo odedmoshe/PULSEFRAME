@@ -180,7 +180,8 @@ async function main() {
     await page.getByTestId('timecode').waitFor();
     if ((await page.evaluate(() => document.documentElement.lang)) !== 'he') await page.getByTestId('lang-toggle').click();
     const uiRev = async () => Number((await page.getByTestId('revision').textContent())!.replace(/\D+/g, ''));
-    const waitRev = (rev: number) => page.waitForFunction((r) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) >= r, rev, { timeout: 15000 });
+    /** Waits for the editor to show revision `rev` (gives up after 15 s; the check that follows then says what it saw). */
+    const waitRev = (rev: number) => page.waitForFunction((r) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) >= r, rev, { timeout: 15000 }).then(() => true, () => false);
     const active = () => page.evaluate(() => { const el = document.activeElement as HTMLElement | null; return el && el !== document.body ? { testid: el.dataset.testid ?? null, role: el.getAttribute('role'), value: el.dataset.value ?? null, group: el.closest('[role=radiogroup]')?.getAttribute('data-testid') ?? null, inBlock: !!el.closest('[data-testid=afx-block]') } : null; });
     const sync = () => page.evaluate(() => (window as any).__pfSync?.() ?? null);
     const playing = async () => (await page.getByTestId('play').getAttribute('data-playing')) === 'true';
