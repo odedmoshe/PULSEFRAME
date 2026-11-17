@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, type Clip, type EffectInstance, type Mask } from '@pulseframe/core';
+import { beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { EffectGalleryButton } from './EffectGallery.tsx';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
-const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'distort', 'motion'] as const;
+// time and overlay (ADR-0011) need no graphics adapter: only effects of cost 'gpu' are ever disabled for a missing one
+const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'distort', 'motion', 'time', 'overlay'] as const;
 const CATALOG = describeCatalog();
 const schemaCache = new Map<string, Record<string, Prop>>();
 function propsOf(type: string): Record<string, Prop> {
@@ -23,10 +24,64 @@ const stepOf = (min: number, max: number) => { const s = (max - min) / 200; retu
 
 /** One control generated from a JSON-Schema property. Commits on pointer-up / key-up / change, never on drag ticks. */
 interface Keyer { animated: boolean; pressed: boolean; enabled: boolean; title: string; animatedTitle: string; onToggle: () => void }
-function ParamControl({ name, prop, value, onCommit, keyer }: { name: string; prop: Prop; value: number | string | boolean | undefined; onCommit: (v: number | string) => void; keyer?: Keyer }) {
+/**
+ * The ♪ of a parameter that may follow the beat (core MODULATABLE; ADR-0011): on, it makes the parameter kick on the beats of
+ * the music under the clip and settle back (op set_effect_modulator); its settings are shown in a fieldset under the slider.
+ */
+interface Beater {
+  modulator: Modulator | undefined;
+  /** Analysed music plays somewhere under the clip. Without it the toggle cannot be turned on (an existing one can be turned off). */
+  music: boolean;
+  /** Id of the note that says why the toggle is off, when it is. */
+  noteId: string;
+  range: { min: number; max: number };
+  set: (m: { every: number; depth: number; decay: number } | null) => void;
+}
+const BEAT_EVERY = [1, 2, 4, 8] as const;
+/** A new beat modulator: every second beat (ADR-0009 decision 3: safe at its defaults on fast music), a kick of a quarter of the parameter's range. */
+const BEAT_DEFAULT = (r: { min: number; max: number }) => ({ every: 2, depth: +((r.max - r.min) / 4).toPrecision(2), decay: 6 });
+function BeatFieldset({ name, label, beat }: { name: string; label: string; beat: Beater & { modulator: Modulator } }) {
+  const { t } = useEditorState();
+  const m = beat.modulator;
+  const [depth, setDepth] = useState<number | null>(null);
+  const [decay, setDecay] = useState<number | null>(null);
+  const zeroId = useId();
+  const span = beat.range.max - beat.range.min;
+  const commit = (patch: Partial<{ every: number; depth: number; decay: number }>) => beat.set({ every: m.every, depth: m.depth, decay: m.decay, ...patch });
+  const fmt = (v: number) => String(+v.toFixed(4)).replace('-', '−');
+  // only keys that move a slider commit (Tab arriving on it must not)
+  const moves = (key: string) => key.startsWith('Arrow') || key === 'Home' || key === 'End' || key === 'PageUp' || key === 'PageDown';
+  return (
+    <fieldset className="beat-fieldset" data-testid="beat-fieldset" data-param={name}>
+      <legend>{t('look.beat.toggle')} <bdi>{label}</bdi></legend>
+      <label><span>{t('look.beat.every')}</span>
+        <select data-testid="beat-every" value={m.every} onChange={(e) => commit({ every: Number(e.target.value) })}>
+          {[...new Set<number>([...BEAT_EVERY, m.every])].sort((a, b) => a - b).map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+      </label>
+      <label><span>{t('look.beat.depth')}<bdi className="val" dir="ltr" data-testid="beat-depth-value">{fmt(depth ?? m.depth)}</bdi></span>
+        <input type="range" data-testid="beat-depth" min={-span} max={span} step={stepOf(-span, span)} list={zeroId} defaultValue={m.depth} key={m.depth}
+          onInput={(e) => setDepth(Number(e.currentTarget.value))}
+          onPointerUp={(e) => { setDepth(null); const v = Number(e.currentTarget.value); if (v !== m.depth) commit({ depth: v }); }}
+          onKeyUp={(e) => { if (!moves(e.key)) return; setDepth(null); const v = Number(e.currentTarget.value); if (v !== m.depth) commit({ depth: v }); }} />
+      </label>
+      {/* the 0 tick of the signed depth: above it the parameter kicks up on the beat, below it down */}
+      <datalist id={zeroId}><option value={0} /></datalist>
+      <label><span>{t('look.beat.decay')}<bdi className="val" data-testid="beat-decay-value">{fmt(decay ?? m.decay)}</bdi></span>
+        <input type="range" data-testid="beat-decay" min={1} max={30} step={0.5} defaultValue={m.decay} key={m.decay}
+          onInput={(e) => setDecay(Number(e.currentTarget.value))}
+          onPointerUp={(e) => { setDecay(null); const v = Number(e.currentTarget.value); if (v !== m.decay) commit({ decay: v }); }}
+          onKeyUp={(e) => { if (!moves(e.key)) return; setDecay(null); const v = Number(e.currentTarget.value); if (v !== m.decay) commit({ decay: v }); }} />
+      </label>
+      <p className="muted">{t('look.beat.note')}</p>
+      <button type="button" className="ghost" data-testid="beat-remove" onClick={() => beat.set(null)}>{t('look.beat.remove')}</button>
+    </fieldset>
+  );
+}
+function ParamControl({ name, prop, value, onCommit, keyer, effectType, beat }: { name: string; prop: Prop; value: number | string | boolean | undefined; onCommit: (v: number | string) => void; keyer?: Keyer; effectType: string; beat?: Beater }) {
   const [live, setLive] = useState<number | null>(null);
-  const { state } = useEditorState();
-  const shown = effectParamLabel(name, state.lang);
+  const { state, t } = useEditorState();
+  const shown = effectParamLabel(name, state.lang, effectType);
   const cur = value ?? prop.default;
   const tid = { 'data-testid': 'effect-param', 'data-param': name } as const;
   if (prop.enum) {
@@ -50,12 +105,20 @@ function ParamControl({ name, prop, value, onCommit, keyer }: { name: string; pr
       </label>
     );
     if (!keyer) return slider;
-    return (
+    const row = (
       <div className="effect-param-row">
         {slider}
         <button type="button" className="ghost effect-key" data-testid="effect-key" data-param={name} aria-pressed={keyer.pressed} disabled={!keyer.enabled} title={keyer.title} aria-label={`${keyer.title}: ${name}`} onClick={keyer.onToggle}>◆</button>
+        {beat && (
+          <button type="button" className="ghost effect-beat" data-testid="beat-toggle" data-param={name} aria-pressed={!!beat.modulator}
+            disabled={!beat.modulator && !beat.music} aria-describedby={!beat.music ? beat.noteId : undefined}
+            aria-label={`${t('look.beat.toggle')} ${shown}`} title={`${t('look.beat.toggle')} ${shown}`}
+            onClick={() => beat.set(beat.modulator ? null : BEAT_DEFAULT(beat.range))}>♪</button>
+        )}
       </div>
     );
+    if (!beat?.modulator) return row;
+    return <div className="effect-param-block">{row}<BeatFieldset name={name} label={shown} beat={{ ...beat, modulator: beat.modulator }} /></div>;
   }
   return null;
 }
@@ -110,7 +173,54 @@ function LutControl({ value, onCommit }: { value: string; onCommit: (assetId: st
   );
 }
 
-function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectInstance; index: number; count: number }) {
+/** Today's date as the stamp writes it: 'YY M D (two-digit year, month and day without leading zeros, like '05 7 14). */
+const todayStamp = (d = new Date()) => `'${String(d.getFullYear() % 100).padStart(2, '0')} ${d.getMonth() + 1} ${d.getDate()}`;
+/**
+ * The `text` of stylize.date-stamp (ADR-0011), modelled on the colour table control: ParamControl renders no free text. The
+ * text is always drawn left to right, so the field is too. It is committed on Enter or when the field is left, through
+ * update_effect; the effect's schema is the only judge of what is allowed, and its refusal is shown under the field.
+ */
+function StampControl({ value, onCommit }: { value: string; onCommit: (text: string) => Promise<string | null> }) {
+  const { state, t } = useEditorState();
+  const [draft, setDraft] = useState(value);
+  const [tried, setTried] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const hintId = useId(), refusalId = useId();
+  const commit = async (text: string) => {
+    if (text === value || text === tried) return;
+    setTried(text);
+    const r = await onCommit(text);
+    setRefusal(r);
+    if (!r) setTried(null);
+  };
+  return (
+    <div className="effect-stamp" data-testid="effect-stamp-control">
+      <label><span><bdi>{effectParamLabel('text', state.lang, 'stylize.date-stamp')}</bdi></span>
+        <input type="text" dir="ltr" data-testid="effect-stamp" data-param="text" value={draft} pattern="[0-9 .:'\/\-]{0,20}" spellCheck={false} autoComplete="off"
+          aria-describedby={refusal ? `${hintId} ${refusalId}` : hintId} aria-invalid={!!refusal}
+          onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void commit(e.currentTarget.value); }} onBlur={(e) => void commit(e.currentTarget.value)} />
+      </label>
+      <button type="button" className="ghost" data-testid="effect-stamp-today" onClick={() => { const s = todayStamp(); setDraft(s); void commit(s); }}>{t('look.stamp.today')}</button>
+      <p id={hintId} className="muted" data-testid="effect-stamp-hint">{t('look.stamp.hint')}</p>
+      {refusal && <p id={refusalId} className="danger" role="alert" data-testid="effect-stamp-refusal">{refusal}</p>}
+    </div>
+  );
+}
+
+/** Whether music with detected beats plays anywhere under the clip: what a beat modulator follows (core beatPositionAt, sampled over the clip). */
+function musicUnder(doc: ProjectDocument, clip: Clip, rate: T.Rate): boolean {
+  const start = T.frameIndexAt(clip.start, rate), frames = Math.max(1, T.frameIndexAt(clip.duration, rate));
+  for (let k = 0; k <= 8; k++) if (beatPositionAt(doc, T.frameTime(start + Math.min(frames - 1, Math.round((k * frames) / 8)), rate))) return true;
+  return false;
+}
+
+/**
+ * Commits an edit of the panel and gives back its refusal (null when it went through or nothing was refused). The refusal is
+ * shown under the add-effect control unless `own` says the control shows it next to itself.
+ */
+type RunFx = (ops: OpCall[], label: string, own?: boolean) => Promise<string | null>;
+
+function EffectRow({ clipId, fx, index, count, timeFirst, run }: { clipId: string; fx: EffectInstance; index: number; count: number; timeFirst: boolean; run: RunFx }) {
   const { editor, state, t } = useEditorState();
   const def = findEffect(fx.type);
   const props = propsOf(fx.type);
@@ -120,20 +230,36 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
   const inside = !!clip && T.lte(clip.start, editor.playhead) && T.lt(editor.playhead, clipEnd(clip));
   const local = clip ? T.frameTime(editor.frame - T.frameIndexAt(clip.start, editor.rate), editor.rate) : T.ZERO;
   const current = effectParamsAt(fx, local);
-  const update = (args: Record<string, unknown>) => void editor.commit([{ op: 'update_effect', args: { clipId, effectId: fx.id, ...args } }], 'Update effect');
+  const update = (args: Record<string, unknown>) => void run([{ op: 'update_effect', args: { clipId, effectId: fx.id, ...args } }], 'Update effect');
+  // Time effects (ADR-0011): a time effect is always the first of its clip, so a move that would put another effect above it
+  // is not offered (aria-disabled: still reachable, with the reason as its title).
+  const time = isTimeEffect(fx.type);
+  const upBlocked = timeFirst && index === 1, downBlocked = time && index === 0;
+  const temporal = temporalOf(fx.type);
+  const pictures = temporal && temporal.kind === 'taps' && temporal.decodes ? (fx.type === 'time.echo' ? Number(current.count ?? temporal.maxTaps) : temporal.maxTaps) : null;
+  // Beat on a parameter (ADR-0011): the parameters this effect lets follow the beat, and whether analysed music plays under the clip
+  const beatable = useMemo(() => new Set(modulatableParams(fx.type)), [fx.type]);
+  const music = useMemo(() => (beatable.size > 0 && editor.doc && clip ? musicUnder(editor.doc, clip, editor.rate) : false), [beatable, editor.doc, clip, editor.rate]);
+  const beatNoteId = useId();
+  const setModulator = (param: string, modulator: { every: number; depth: number; decay: number } | null) => void run([{ op: 'set_effect_modulator', args: { clipId, effectId: fx.id, param, modulator } }], 'Beat on a parameter');
+  const blockedTitle = t('look.time.first');
   return (
-    <li className="effect-row" data-testid="effect-row" data-effect-type={fx.type} data-effect-id={fx.id}>
+    <li className={`effect-row${time ? ' time-effect' : ''}`} data-testid="effect-row" data-effect-type={fx.type} data-effect-id={fx.id}>
       <div className="row effect-head">
         <label className="check"><input type="checkbox" checked={fx.enabled} data-testid="effect-enabled" aria-label={`${t('look.effect.bypass')}: ${label}`} onChange={(e) => update({ enabled: e.target.checked })} /> <strong>{label}</strong></label>
         <span className="spacer" />
-        <button type="button" className="ghost" data-testid="effect-up" disabled={index === 0} aria-label={t('look.effect.up')} title={t('look.effect.up')} onClick={() => update({ index: index - 1 })}>↑</button>
-        <button type="button" className="ghost" data-testid="effect-down" disabled={index === count - 1} aria-label={t('look.effect.down')} title={t('look.effect.down')} onClick={() => update({ index: index + 1 })}>↓</button>
-        <button type="button" className="ghost danger" data-testid="effect-remove" aria-label={t('look.effect.remove')} title={t('look.effect.remove')} onClick={() => void editor.commit([{ op: 'remove_effect', args: { clipId, effectId: fx.id } }], 'Remove effect')}>×</button>
+        <button type="button" className="ghost" data-testid="effect-up" disabled={index === 0} aria-disabled={upBlocked || undefined} aria-label={t('look.effect.up')} title={upBlocked ? blockedTitle : t('look.effect.up')} onClick={() => { if (!upBlocked) update({ index: index - 1 }); }}>↑</button>
+        <button type="button" className="ghost" data-testid="effect-down" disabled={index === count - 1} aria-disabled={downBlocked || undefined} aria-label={t('look.effect.down')} title={downBlocked ? blockedTitle : t('look.effect.down')} onClick={() => { if (!downBlocked) update({ index: index + 1 }); }}>↓</button>
+        <button type="button" className="ghost danger" data-testid="effect-remove" aria-label={t('look.effect.remove')} title={t('look.effect.remove')} onClick={() => void run([{ op: 'remove_effect', args: { clipId, effectId: fx.id } }], 'Remove effect')}>×</button>
       </div>
       <div className="fields">
+        {pictures !== null && <p className="muted" data-testid="time-cost">{t('look.time.cost')} <bdi>{pictures}</bdi></p>}
+        {fx.type === 'time.shutter' && <p className="muted" role="note" data-testid="time-note">{t('look.time.shutterNote')}</p>}
+        {fx.type === 'time.stutter' && <p className="muted" role="note" data-testid="time-note">{t('look.time.stutterNote')}</p>}
         {Object.entries(props).map(([name, prop]) => {
           if (fx.type === 'color.lut' && name === 'lut') return <LutControl key={name} value={typeof fx.params.lut === 'string' ? fx.params.lut : ''} onCommit={(assetId) => update({ params: { lut: assetId } })} />;
-          if (!animatable.has(name) || prop.type !== 'number') return <ParamControl key={name} name={name} prop={prop} value={fx.params[name]} onCommit={(v) => update({ params: { [name]: v } })} />;
+          if (fx.type === 'stylize.date-stamp' && name === 'text') return <StampControl key={name} value={typeof fx.params.text === 'string' ? fx.params.text : String(prop.default ?? '')} onCommit={(text) => run([{ op: 'update_effect', args: { clipId, effectId: fx.id, params: { text } } }], 'Date stamp', true)} />;
+          if (!animatable.has(name) || prop.type !== 'number') return <ParamControl key={name} name={name} prop={prop} effectType={fx.type} value={fx.params[name]} onCommit={(v) => update({ params: { [name]: v } })} />;
           const keys = fx.keyframes?.[name] ?? [];
           const animated = keys.length > 0;
           const hasKey = inside && keys.some((k) => T.eq(k.time, local));
@@ -154,7 +280,9 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
               }, 'Effect keyframe');
             },
           };
-          return <ParamControl key={name} name={name} prop={prop} keyer={keyer} value={animated ? current[name] : fx.params[name]}
+          const range = beatable.has(name) ? paramRange(fx.type, name) : null;
+          const beat: Beater | undefined = range ? { modulator: fx.modulate?.[name], music, noteId: beatNoteId, range, set: (m) => setModulator(name, m) } : undefined;
+          return <ParamControl key={name} name={name} prop={prop} keyer={keyer} beat={beat} effectType={fx.type} value={animated ? current[name] : fx.params[name]}
             onCommit={(v) => {
               const at = liveLocal();
               void editor.commit(() => {
@@ -169,8 +297,11 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
           <p className="muted" role="note" data-testid="effect-follow-note">{fx.type === 'light.strobe' ? STROBE_STRINGS[state.lang].noMusic
             : state.lang === 'he' ? 'אין כאן מוזיקה עם פעימות מזוהות, אז האפקט פועל בקצב הקבוע שלו. מנתחים פעימות בלשונית קליפ ← ניתוח, כשקליפ המוזיקה נבחר.' : 'No music with detected beats plays here, so the effect uses its own steady tempo. Detect beats in the Clip tab → Analysis with the music clip selected.'}</p>
         )}
+        {beatable.size > 0 && !music && editor.doc && <p className="muted" role="note" id={beatNoteId} data-testid="effect-beat-note">{t('look.beat.noMusic')}</p>}
         {fx.type === 'light.strobe' && <p className="muted" role="note" data-testid="effect-strobe-limit">{STROBE_STRINGS[state.lang].limit}</p>}
       </div>
+      {/* a separator that names the rule; its children are presentational, so the rule is its accessible name */}
+      {time && index === 0 && <div className="time-separator" role="separator" data-testid="time-separator" aria-label={t('look.time.first')}>{t('look.time.first')}</div>}
     </li>
   );
 }
@@ -237,6 +368,17 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
   const effects = clip.type === 'caption' ? [] : clip.effects ?? [];
   const blend = clip.type === 'caption' ? 'normal' : clip.blend ?? 'normal';
   const media = clip.type === 'media' && trackKind === 'video';
+  const timeFirst = effects.length > 0 && isTimeEffect(effects[0]!.type);
+  // A refusal of an edit made here is shown here too (besides the editor's error bar), in the interface language: the editor
+  // words the server's refusal with translateRefusal (store.ts fail).
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const refusalId = useId();
+  const run: RunFx = async (ops, label, own = false) => {
+    const r = await editor.commit(ops, label);
+    const why = r ? null : editor.getState().error;
+    setRefusal(own ? null : why);
+    return why;
+  };
   return (
     <div className="look-panel" data-testid="look-panel">
       <h3>{t('look')}</h3>
@@ -245,7 +387,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
         <h4>{t('look.effects')}</h4>
         {effects.length === 0 ? <p className="muted">{t('look.effects.none')}</p> : (
           <ul className="effect-list" data-testid="effect-list">
-            {effects.map((fx, i) => <EffectRow key={fx.id} clipId={clip.id} fx={fx} index={i} count={effects.length} />)}
+            {effects.map((fx, i) => <EffectRow key={fx.id} clipId={clip.id} fx={fx} index={i} count={effects.length} timeFirst={timeFirst} run={run} />)}
           </ul>
         )}
         {(effects.some((fx) => GPU_EFFECT_IDS.includes(fx.type)) || (clip.type === 'media' && !!clip.transition && GPU_TRANSITION_IDS.includes(clip.transition.type))) && !state.gpu?.available && state.gpu && (
@@ -258,7 +400,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
           </select>
         </label>
         <label className="sr-only" htmlFor="look-effect-add">{t('look.effect.add')}</label>
-        <select id="look-effect-add" data-testid="effect-add" value="" onChange={(e) => { const type = e.target.value; if (type) void editor.commit([{ op: 'add_effect', args: { clipId: clip.id, type } }], 'Add effect'); }}>
+        <select id="look-effect-add" data-testid="effect-add" value="" aria-describedby={refusal ? refusalId : undefined} onChange={(e) => { const type = e.target.value; if (type) void run([{ op: 'add_effect', args: { clipId: clip.id, type } }], 'Add effect'); }}>
           <option value="">{t('look.effect.add')}</option>
           {CATEGORIES.map((c) => (
             <optgroup key={c} label={t(`look.cat.${c}` as Key)}>
@@ -266,6 +408,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
             </optgroup>
           ))}
         </select>
+        {refusal && <p id={refusalId} className="danger" role="alert" data-testid="look-refusal">{refusal}</p>}
         <label>{t('look.blend')}
           <select value={blend} data-testid="blend-mode" onChange={(e) => void editor.commit([{ op: 'set_clip_blend', args: { clipId: clip.id, mode: e.target.value } }], 'Blend mode')}>
             {BLEND_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
