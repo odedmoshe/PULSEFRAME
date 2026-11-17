@@ -252,6 +252,7 @@ export function runTrackingJob(store: Store, jobId: string, deps: TrackingDeps =
     } catch (e) {
       if (r.shutdown) return;
       try {
+        if (['succeeded', 'failed', 'canceled'].includes(store.getJob(jobId).status)) return; // e.g. canceled while it was queued: keep that record
         if (e instanceof TrackingCanceled || store.getJob(jobId).status === 'cancel-requested') store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled; nothing attached' } });
         else {
           if (!(e instanceof ApiError)) console.error(e);
@@ -372,7 +373,7 @@ async function work(store: Store, jobId: string, deps: TrackingDeps, signal: Abo
       const release = await holdHeavy(signal);
       try {
         const chunk: GreyFrame[] = [];
-        const r = await read(src, start, end, TRACK_WORK_HEIGHT, (_f, frame) => { chunk.push({ width: frame.width, height: frame.height, data: Uint8Array.from(frame.data) }); }, signal);
+        const r = await read(src, start, end, TRACK_WORK_HEIGHT, (_f, frame) => { chunk.push({ width: frame.width, height: frame.height, data: frame.data.slice() }); }, signal);
         decoded += end; digests.push(r.digest);
         for (let f = end - 1; f >= start; f--) {
           feed(f, chunk[f - start]!);

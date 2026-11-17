@@ -363,7 +363,8 @@ describe('tracking job', () => {
     const p2 = store.createProject({ name: 'pan', width: 640, height: 360, frameRate: { num: 30, den: 1 } }).doc.id;
     const assetId = await importInto(p2, panFile);
     store.commit({ projectId: p2, actor: 'user:local', ops: [{ op: 'add_clip', args: { assetId, start: { value: '0', timescale: 30 } } }] });
-    seedTrack(p2, 'mtk_pan', assetId, 0, 590, 290, 640, 360, { w: 80, h: 80 });
+    // anchored mid-clip, so both the forward read and the backward chunks (read forward, walked in reverse) are measured
+    seedTrack(p2, 'mtk_pan', assetId, 150, 590 - Math.floor(1.7 * 150), 290 - Math.floor(0.4 * 150), 640, 360, { w: 80, h: 80 });
     const h = monitorEventLoopDelay({ resolution: 10 });
     h.enable();
     const r = await rest('POST', `/projects/${p2}/motion-tracks/mtk_pan/track`, {});
@@ -375,11 +376,13 @@ describe('tracking job', () => {
     console.log(`tracking 300 frames of 640×360: ${job.output.trackingFps} frames/s; event-loop delay p50 ${(h.percentile(50) / 1e6).toFixed(1)} ms, p99 ${p99.toFixed(1)} ms, max ${(h.max / 1e6).toFixed(1)} ms`);
     expect(p99).toBeLessThanOrEqual(100);
     // the picture pans by whole pixels, so the truth is exact: the feature at (590, 290) of frame 0 is at (590 − ⌊1.7n⌋, 290 − ⌊0.4n⌋)
+    expect(job.output.decodedFrames).toBe(300 + 151); // forward [150, 300) and one backward chunk [0, 151), each decoded from the start
     const t = trackOf(p2, 'mtk_pan');
     expect(t.x).toHaveLength(300);
     let worst = 0, used = 0;
-    for (let n = 1; n < 300; n++) {
-      if (t.st[n] !== ST.tracked) continue;
+    expect(t.st[150]).toBe(ST.manual);
+    for (let n = 0; n < 300; n++) {
+      if (n === 150 || t.st[n] !== ST.tracked) continue;
       used++;
       worst = Math.max(worst, Math.hypot((t.x[n]! / 1e4) * 640 - 0.5 - (590 - Math.floor(1.7 * n)), (t.y[n]! / 1e4) * 360 - 0.5 - (290 - Math.floor(0.4 * n))));
     }
