@@ -1,7 +1,8 @@
 /**
  * Editor interactions that were built but not yet exercised in a real browser (listed as unverified in docs/PROGRESS.md):
  * canvas drag that creates a format-only override, hide-in-format, clip moves snapping to beats, manual beat edits at the
- * playhead, the batch-export job list, and the level meter during playback.
+ * playhead, the batch-export job list, and the level meter during playback. The visual wave's look panel (ADR-0011): the ♪
+ * beat toggle with its fieldset and undo, the date-stamp field with its inline refusal, and the time-first separator.
  * Still not covered here: audible fades/ducking during live playback (only the offline WebAudio chain is measured).
  *   pnpm build && pnpm proof:editor-interactions
  */
@@ -14,6 +15,7 @@ import * as T from '@pulseframe/time';
 import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
+import { effectParamLabel, translateRefusal } from '../../i18n/src/index.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
@@ -565,6 +567,98 @@ async function main() {
       await page3.locator(`.clip[data-clip-id="${c3}"]`).waitFor();
       check('a clip is removed from the timeline in one step three ways: the action bar above the tracks (disabled until a clip is selected), the right-click menu (opens with the keyboard focus inside and closes after use), and a button in the clip panel; undo brings it back', idle && armed && !(await has(c1)) && !(await has(c2)) && (await has(c3)) && menuClosed && !!focused?.startsWith('menu-'), { idle, armed, focused, menuClosed });
       await page3.close();
+    }
+
+    console.log('\n# visual wave (ADR-0011): beat on a parameter, the date stamp, the time-first rule');
+    {
+      // A clip under analysed music with a gaussian blur, whose radius may follow the beat (core MODULATABLE). Hebrew interface.
+      const vp = (await call('/projects', { name: 'visual', width: 640, height: 360 })).body.project.id as string;
+      const vm = await upload(vp, musicFile), vpic = await upload(vp, picFile);
+      await txs(vp, [{ op: 'add_clip', args: { assetId: vm.assetId, start: f(0) } }]);
+      const analysed = await call(`/projects/${vp}/assets/${vm.assetId}/analyze`, { kind: 'beats' });
+      const vclip = (await txs(vp, [{ op: 'add_clip', args: { assetId: vpic.assetId, start: f(0), duration: f(90), withLinkedAudio: false } }])).results[0].output.clipId as string;
+      await txs(vp, [{ op: 'add_effect', args: { clipId: vclip, type: 'blur.gaussian', params: { radius: 0.01 } } }]);
+      const vclipNow = async () => clipOf((await call(`/projects/${vp}`)).body.project, vclip);
+      const vuntil = async (pred: (c: any) => boolean, ms = 8000) => { const t0 = Date.now(); for (;;) { const c = await vclipNow(); if (c && pred(c)) return true; if (Date.now() - t0 > ms) return false; await sleep(100); } };
+      const vctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await vctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+      const vpage = await vctx.newPage();
+      const vErrors: string[] = [];
+      vpage.on('pageerror', (e) => vErrors.push(String(e)));
+      await vpage.goto(`${s.ownerUrl}&project=${vp}`);
+      await vpage.locator(`.clip[data-clip-id="${vclip}"]`).click();
+
+      // ♪: on commits set_effect_modulator (every 2 by default); the fieldset changes it; undo takes each step back
+      const toggle = vpage.locator('[data-testid=beat-toggle][data-param=radius]');
+      await toggle.waitFor({ timeout: 10000 });
+      await vpage.waitForFunction(() => document.querySelector('[data-testid=beat-toggle][data-param=radius]')?.hasAttribute('disabled') === false, undefined, { timeout: 10000 }).catch(() => {});
+      const plainClip = await vclipNow();
+      const toggleName = await toggle.getAttribute('aria-label');
+      await toggle.click();
+      const on = await vuntil((c) => c.effects[0].modulate?.radius?.every === 2 && c.effects[0].modulate.radius.depth > 0);
+      await vpage.getByTestId('beat-fieldset').waitFor({ timeout: 5000 }).catch(() => {});
+      const pressedOn = await toggle.getAttribute('aria-pressed');
+      const legend = ((await vpage.locator('[data-testid=beat-fieldset] legend').textContent().catch(() => '')) ?? '').trim();
+      await vpage.getByTestId('beat-every').selectOption('4');
+      const every4 = await vuntil((c) => c.effects[0].modulate?.radius?.every === 4);
+      await vpage.getByTestId('undo').click();
+      const undo1 = await vuntil((c) => c.effects[0].modulate?.radius?.every === 2);
+      await vpage.getByTestId('undo').click();
+      const undo2 = await vuntil((c) => JSON.stringify(c) === JSON.stringify(plainClip));
+      await vpage.getByTestId('beat-fieldset').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      const pressedOff = await toggle.getAttribute('aria-pressed');
+      const wantName = `פעימה על ${effectParamLabel('radius', 'he', 'blur.gaussian')}`;
+      check('♪ on the blur radius (music with detected beats under the clip): it is named "פעימה על <label>", turning it on commits set_effect_modulator (every second beat) and opens its fieldset; choosing every 4 commits that; one undo takes back the change, a second the modulator, and the clip is as before', analysed.status === 200 && toggleName === wantName && on && pressedOn === 'true' && legend.includes('פעימה על') && every4 && undo1 && undo2 && pressedOff === 'false', { toggleName, wantName, on, pressedOn, legend, every4, undo1, undo2, pressedOff });
+
+      // the date stamp: added from the select, its text committed on Enter; bad text is refused by the op and the refusal shown under the field, in Hebrew
+      await vpage.getByTestId('effect-add').selectOption('stylize.date-stamp');
+      const stampAdded = await vuntil((c) => c.effects.some((e: any) => e.type === 'stylize.date-stamp'));
+      const stampText = async () => (await vclipNow()).effects.find((e: any) => e.type === 'stylize.date-stamp')?.params.text;
+      const field = vpage.getByTestId('effect-stamp');
+      await field.waitFor({ timeout: 5000 });
+      const fieldDir = await field.getAttribute('dir');
+      await field.fill("'26 1 2");
+      await field.press('Enter');
+      const typed = await vuntil((c) => c.effects.find((e: any) => e.type === 'stylize.date-stamp')?.params.text === "'26 1 2");
+      await field.fill('12/AB');
+      await field.blur();
+      await vpage.getByTestId('effect-stamp-refusal').waitFor({ timeout: 8000 }).catch(() => {});
+      const refusal = ((await vpage.getByTestId('effect-stamp-refusal').textContent().catch(() => '')) ?? '').trim();
+      const wantRefusal = translateRefusal('he', 'invalid parameters for stylize.date-stamp: text') ?? '(no Hebrew wording)';
+      const invalid = await field.getAttribute('aria-invalid');
+      const kept = (await stampText()) === "'26 1 2";
+      await vpage.getByTestId('effect-stamp-today').click();
+      const d0 = new Date(), today = `'${String(d0.getFullYear() % 100).padStart(2, '0')} ${d0.getMonth() + 1} ${d0.getDate()}`;
+      const todaySet = await vuntil((c) => c.effects.find((e: any) => e.type === 'stylize.date-stamp')?.params.text === today);
+      await vpage.getByTestId('effect-stamp-refusal').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      const refusalGone = (await vpage.getByTestId('effect-stamp-refusal').count()) === 0;
+      check('date stamp: its text field reads left to right; typed text is committed on Enter; letters are refused by the op and the refusal is shown under the field in Hebrew (the field marked invalid, the stored text kept); "תאריך היום" commits today as \'YY M D and the refusal goes', stampAdded && fieldDir === 'ltr' && typed && refusal.includes(wantRefusal) && /[א-ת]/.test(refusal) && invalid === 'true' && kept && todaySet && refusalGone, { fieldDir, typed, refusal, wantRefusal, invalid, kept, today, todaySet, refusalGone });
+
+      // the time-first rule: echo added from the select goes first; a separator named by the rule follows it; the moves that
+      // would put an effect above it are aria-disabled and do nothing; a second time effect is refused, the refusal shown in the panel
+      await vpage.getByTestId('effect-add').selectOption('time.echo');
+      const echoFirst = await vuntil((c) => c.effects[0]?.type === 'time.echo' && c.effects.length === 3);
+      await vpage.getByTestId('time-separator').waitFor({ timeout: 5000 }).catch(() => {});
+      const rows = vpage.getByTestId('effect-row');
+      await vpage.waitForFunction(() => document.querySelector('[data-testid=effect-row]')?.getAttribute('data-effect-type') === 'time.echo', undefined, { timeout: 5000 }).catch(() => {});
+      const sep = vpage.getByTestId('time-separator');
+      const sepInfo = { count: await sep.count(), role: await sep.getAttribute('role').catch(() => null), name: await sep.getAttribute('aria-label').catch(() => null), inFirstRow: await rows.first().getByTestId('time-separator').count() };
+      const upSecond = rows.nth(1).getByTestId('effect-up'), downTime = rows.first().getByTestId('effect-down');
+      const blocked = { up: await upSecond.getAttribute('aria-disabled'), down: await downTime.getAttribute('aria-disabled'), otherDown: await rows.nth(1).getByTestId('effect-down').getAttribute('aria-disabled') };
+      const order0 = (await vclipNow()).effects.map((e: any) => e.type), rev0 = (await call(`/projects/${vp}`)).body.revision as number;
+      await upSecond.click({ force: true }); // aria-disabled: still reachable, does nothing
+      await downTime.click({ force: true });
+      await sleep(700);
+      const order1 = (await vclipNow()).effects.map((e: any) => e.type), rev1 = (await call(`/projects/${vp}`)).body.revision as number;
+      const cost = ((await rows.first().getByTestId('time-cost').textContent().catch(() => '')) ?? '').trim();
+      await vpage.getByTestId('effect-add').selectOption('time.split');
+      await vpage.getByTestId('look-refusal').waitFor({ timeout: 8000 }).catch(() => {});
+      const panelRefusal = ((await vpage.getByTestId('look-refusal').textContent().catch(() => '')) ?? '').trim();
+      const wantTime = translateRefusal('he', 'a clip can carry one time effect (echo, time split, shutter or stutter)') ?? '(no Hebrew wording)';
+      const stillOne = (await vclipNow()).effects.filter((e: any) => e.type.startsWith('time.')).length === 1;
+      check('time effect first: echo added after two effects is placed first; a separator (role separator, named by the rule) closes its row; moving the next effect up and the echo down are aria-disabled and change nothing; the cost line counts its pictures; a second time effect is refused and the refusal is shown in the panel in Hebrew', echoFirst && sepInfo.count === 1 && sepInfo.role === 'separator' && sepInfo.inFirstRow === 1 && !!sepInfo.name && blocked.up === 'true' && blocked.down === 'true' && blocked.otherDown === null && JSON.stringify(order1) === JSON.stringify(order0) && rev1 === rev0 && /4/.test(cost) && panelRefusal.includes(wantTime) && stillOne, { order0, order1, revisions: [rev0, rev1], separator: sepInfo, blocked, cost, panelRefusal, wantTime });
+      check('no uncaught errors in the page with the visual-wave controls', vErrors.length === 0, vErrors.slice(0, 4));
+      await vctx.close();
     }
 
     await page.close();
