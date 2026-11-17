@@ -234,15 +234,23 @@ const RANGE: Readonly<Record<keyof GradeParams, { min: number; max: number }>> =
  * notice. It settles the values a picture cannot decide, so it has to outweigh what the statistics cannot measure: a still stored
  * in 8 bits moves them by about 0.05, and on a picture that hides a value (tint, where green is absent or clipped in the
  * mid-tones) the whole range of that value moves them by less than that. With a weaker pull (it was 0.01) the rounding chose such
- * a value, anywhere up to the edge of its range. A pull this strong would also hold back the values a picture does show (tint by
- * up to 0.03), so the last refinement pulls toward the estimate it starts from instead of toward no change (see `search`).
+ * a value, anywhere up to the edge of its range. A pull this strong also holds back the values a picture does show a little; a match
+ * finishes with a pull toward the estimate instead of toward no change (see `search`).
  */
 const PULL = 0.25;
 /**
- * After the first refinement the pull is made stronger by these factors in turn, each stage starting from the one before, and
- * then relaxed to its own weight (see `search`): a value the statistics do not hold is brought back toward no change.
+ * The match's last stage (see `search`): rounds of reweighting, refinement iterations per round, the smallest residual a weight is
+ * taken from, and the pull toward the estimate, per ((value − estimate)/range)², in the distance's own units (without it, tint
+ * on colour bars, which they hide, drifts to 0.25). The floor, in CIELAB units, keeps the finish from chasing minima sharper than
+ * an 8-bit render holds. It was chosen on 25 matches (15 on stills the proof's first run took through the real render, 10 on
+ * ffmpeg decodes of its fixtures), each also measured with the graded points rounded to 8 bits: with 0.05 the rounded result was
+ * worse than the sum-of-squares fit's (by more than 0.02) in 3 matches, with 0.3 in 1,
+ * and the reported distance sat on average 0.076 from the rounded one against 0.045. No unit test tells 0.3 from 0.01.
  */
-const PULL_PATH = [16, 4];
+const FINISH_ROUNDS = 2;
+const FINISH_ITERATIONS = 8;
+const FINISH_FLOOR = 0.3;
+const FINISH_PULL = 5;
 /** Halvings of the search step after the first (¼ of each range). */
 const HALVINGS = 8;
 /** Halvings of the first, saturation-free stage of the coordinate search: it only has to point temperature and tint the right way. */
@@ -256,7 +264,7 @@ const MAX_SWEEPS = 6;
 const DIFF_STEP = 2e-3;
 /** Iterations of the refinement, at most. */
 const MAX_REFINE = 40;
-/** The search and refinement measure at most this many points (`thinned`); a larger sample then gets FINAL_REFINE iterations on every point. */
+/** The search and refinement measure at most this many points (`thinned`); a match then finishes on every point, and balance gets FINAL_REFINE iterations on every point of a larger sample. */
 const FIT_POINTS = 4096;
 const FINAL_REFINE = 3;
 
@@ -391,32 +399,48 @@ function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], star
     const found = refine(coordinate(coordinate(s0, colourFirst, coarseLoss, ORIENT_HALVINGS), keys, coarseLoss), coarse);
     if (!best || found.f < best.f) best = found;
   }
-  let { p, f } = refine(best!.p, residuals);
-  // The coarse search moves each value in steps of up to a quarter of its range to make up for the ones that are not settled yet.
-  // Where the statistics hardly see a value, nothing brings it back afterwards: the valley is flat along it, and the refinement
-  // stops where it stands (a match of flat saturated colours ended with tint at −0.996 where −0.2 or 0 fitted as well). So the
-  // pull is made stronger and relaxed in steps (on the coarse points), each stage from the result before, and the refinement
-  // repeated from there: values the picture holds come back as the pull relaxes, the others stay near no change. The lower loss
-  // of the two results wins, so this never ends worse by the fit's own measure.
-  let mild = p;
-  for (const w of PULL_PATH) mild = refine(mild, residualsOver(coarsePoints, PULL * w)).p;
-  const relaxed = refine(mild, residuals);
-  if (relaxed.f < f) ({ p, f } = relaxed);
-  // The pull has also held back the values the picture does show. One more refinement with the pull toward this estimate, not
-  // toward no change (a proximal step), takes that back: a value the statistics hold moves on to where they put it, and one they
-  // do not hold stays where it is, because the same pull now keeps it there.
-  const estimate = p;
-  let full = residualsOver(fitPoints, PULL, estimate);
-  ({ p, f } = refine(p, full));
-  // A larger sample: a few more iterations on every point, so the result fits the same points the reference statistics describe
-  // (a part of a picture with large flat areas can sit a little off them).
-  if (target.count > FIT_POINTS) { full = residualsOver(target, PULL, estimate); ({ p, f } = refine(p, full, FINAL_REFINE)); }
-  const loss = (q: GradeParams) => sq(full(q));
-  // A value at the edge of its range while the loss still falls beyond it: the grade cannot reach the goal (reported as limitedBy).
+  let { p } = refine(best!.p, residuals);
+  /** What the result is judged by, and limitedBy with it. */
+  let cost: (q: GradeParams) => number;
+  if (goal.useSpread) {
+    // A match finishes on the distance it reports (statsDistance), over every point, not on the sum of squares above: that sum
+    // spreads an error over all five L* percentiles, where the distance (their mean absolute error) would rather leave one off and
+    // meet the others. The two disagree on a picture whose percentiles no grade meets all at once: the sum-of-squares fit of the
+    // proof's first M3 stills (flat colours) stopped at 0.55 where a search found 0.28, and a picture with a lighter middle ended
+    // further than no change (unit test). Each round weights the residuals so that their squared length equals the distance where
+    // the round starts (iteratively reweighted least squares), every residual taken as at least FINISH_FLOOR. The pull toward the
+    // estimate keeps values the statistics do not hold where the estimate put them. The result is kept only if it is lower by this
+    // measure, so this never ends worse by it. Limit: on flat colours the distance has minima narrower than the 0.001 steps of a
+    // value and than an 8-bit render; this reaches 0.41 on those M3 stills (0.42 rounded to 8 bits), not 0.28 (0.40 rounded).
+    const meter = new Meter(target.count), estimate = p;
+    const toGoal = (q: GradeParams): number[] => {
+      const m = meter.measure(target.rgb, constantsOf(q), lp), r = lp.map((l, j) => l - goal.lPct[j]!);
+      r.push(m.a - goal.a, m.b - goal.b, colourSpread({ meanA: m.a, meanB: m.b, meanC: m.c }) - goal.spread);
+      return r;
+    };
+    const colour = (r: readonly number[]) => Math.hypot(r[5]!, r[6]!, r[7]!);
+    const moved = (q: GradeParams) => keys.map((k) => (q[k] - estimate[k]) / span(k));
+    cost = (q) => { const r = toGoal(q); return colour(r) + r.slice(0, 5).reduce((s, v) => s + Math.abs(v), 0) / 5 + FINISH_PULL * sq(moved(q)); };
+    let q = p;
+    for (let round = 0; round < FINISH_ROUNDS; round++) {
+      const r0 = toGoal(q), wc = 1 / Math.sqrt(Math.max(colour(r0), FINISH_FLOOR));
+      const w = [...r0.slice(0, 5).map((v) => 1 / Math.sqrt(5 * Math.max(Math.abs(v), FINISH_FLOOR))), wc, wc, wc];
+      q = refine(q, (x) => [...toGoal(x).map((v, i) => v * w[i]!), ...moved(x).map((v) => v * Math.sqrt(FINISH_PULL))], FINISH_ITERATIONS).p;
+    }
+    if (cost(q) < cost(p)) p = q;
+  } else {
+    // Balance aims at a goal that is only a direction for lightness (see BALANCE_AB_WEIGHT): it stays on its weighted squares. A
+    // larger sample gets a few more iterations on every point, so the result fits the points the goal was taken from.
+    const full = target.count > FIT_POINTS ? residualsOver(target) : residuals;
+    if (target.count > FIT_POINTS) p = refine(p, full, FINAL_REFINE).p;
+    cost = (q) => sq(full(q));
+  }
+  const f = cost(p);
+  // A value at the edge of its range while the cost still falls beyond it: the grade cannot reach the goal (reported as limitedBy).
   const limitedBy: (keyof GradeParams)[] = [];
   for (const k of keys) {
     const edge = p[k] >= RANGE[k].max ? 1 : p[k] <= RANGE[k].min ? -1 : 0;
-    if (edge && loss({ ...p, [k]: p[k] + (edge * span(k)) / 100 }) < f) limitedBy.push(k);
+    if (edge && cost({ ...p, [k]: p[k] + (edge * span(k)) / 100 }) < f) limitedBy.push(k);
   }
   // Blend toward no change by `amount`, then round to 0.001 (inside the range, because both ends are).
   const params = Object.fromEntries(GRADE_KEYS.map((k) => [k, round3(inRange(k, GRADE_DEFAULTS[k] + amount * (p[k] - GRADE_DEFAULTS[k])))])) as unknown as GradeParams;

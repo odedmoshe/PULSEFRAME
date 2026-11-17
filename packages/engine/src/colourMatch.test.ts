@@ -198,6 +198,28 @@ describe('fitGrade', { timeout: 60_000 }, () => {
     }
     console.log('fitGrade on colour bars:', found);
   });
+  // The distance a match reports is the mean absolute error of the five L* percentiles plus the mid-tone colour difference; the
+  // fit's stages before the last minimise a sum of squares instead, which spreads one percentile it cannot meet over all five. A
+  // picture whose middle is lighter than the reference's while its ends are the same: no grade value moves only the median, so the
+  // best by the reported distance meets the other four and leaves the median off. The sum-of-squares fit alone ended further from
+  // the reference than no change at all (bump 0.06: 1.56 before, 2.03 after, verdict 'noticeable').
+  it('a match finishes on the distance it reports: a picture with a lighter middle ends nearer than no change', () => {
+    const ramp = (seed: number, bump: number, n = 4096): PictureSample => {
+      const r = rng(seed), pts: number[][] = [];
+      for (let i = 0; i < n; i++) {
+        const u = (i + r()) / n, g = 0.08 + 0.84 * u + (u > 0.3 && u < 0.7 ? bump * Math.sin(((u - 0.3) / 0.4) * Math.PI) : 0);
+        pts.push([0, 1, 2].map(() => Math.min(1, Math.max(0, g * (1 + (r() - 0.5) * 0.2)))));
+      }
+      return sampleOf(pts);
+    };
+    for (const seed of [1, 2]) {
+      const reference = pictureStats(ramp(100 + seed, 0)), target = ramp(seed, 0.06);
+      const before = statsDistance(pictureStats(target), reference), fit = fitGrade(target, reference, { hold: hold0, amount: 1 });
+      expect(fit.residual, `seed ${seed}: before ${before.toFixed(3)}`).toBeLessThanOrEqual(0.9 * before);
+      expect(fit.verdict).toBe('close');
+      expect(fit.limitedBy).toEqual([]);
+    }
+  });
   it('holds shadows, highlights and fade at the given values and fits the rest around them', () => {
     const truth: GradeParams = { ...GRADE_DEFAULTS, exposure: 0.3, temperature: 0.4, contrast: 1.1, shadows: 0.5, highlights: -0.3, fade: 0.2 };
     const target = sceneFor(truth, 77), fit = fitGrade(target, pictureStats(gradeSample(target, truth)), { hold: { shadows: 0.5, highlights: -0.3, fade: 0.2 }, amount: 1 });
