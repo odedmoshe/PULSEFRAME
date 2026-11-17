@@ -1,6 +1,6 @@
 {
- "ranAt": "2026-11-17T19:51:03.119Z",
- "commit": "b12691701b53c7a666b5e7eb1d3e4fc6dc3b0ee6",
+ "ranAt": "2026-11-17T20:59:42.015Z",
+ "commit": "e81b22a3f5e1022bf2781e1ea326fcf742ca9353",
  "baselineCommit": "33a78fce3ea78f9c37867a3d07efdf5722f3be05",
  "machine": {
   "platform": "Linux 6.18.44-fc-v553 x64",
@@ -637,23 +637,26 @@
    "ok": true,
    "detail": {
     "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-    "plainStillMs": 785.3,
+    "plainStillMs": 626.5,
     "addedMsPerFrame": {
-     "neon-tube-pink": 391.8,
-     "neon-tube-cyan": 128.2,
-     "gradient-sunset": -338.2,
-     "gradient-ocean": -149,
-     "gradient-gold": -132.6,
-     "double-outline-pop": 109.5,
-     "extrude-retro": -34.7,
-     "extrude-block": 7.3,
-     "long-shadow-flat": -159.2,
-     "wide-minimal": -102.3
+     "neon-tube-pink": 283.5,
+     "neon-tube-cyan": 218.3,
+     "gradient-sunset": 8.4,
+     "gradient-ocean": 33.5,
+     "gradient-gold": -43.3,
+     "double-outline-pop": 123.3,
+     "extrude-retro": 1,
+     "extrude-block": 169.5,
+     "long-shadow-flat": 147,
+     "wide-minimal": -61.4
     },
     "over25ms": [
      "neon-tube-pink",
      "neon-tube-cyan",
-     "double-outline-pop"
+     "gradient-ocean",
+     "double-outline-pop",
+     "extrude-block",
+     "long-shadow-flat"
     ]
    }
   },
@@ -1335,23 +1338,26 @@
   },
   "x8": {
    "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-   "plainStillMs": 785.3,
+   "plainStillMs": 626.5,
    "addedMsPerFrame": {
-    "neon-tube-pink": 391.8,
-    "neon-tube-cyan": 128.2,
-    "gradient-sunset": -338.2,
-    "gradient-ocean": -149,
-    "gradient-gold": -132.6,
-    "double-outline-pop": 109.5,
-    "extrude-retro": -34.7,
-    "extrude-block": 7.3,
-    "long-shadow-flat": -159.2,
-    "wide-minimal": -102.3
+    "neon-tube-pink": 283.5,
+    "neon-tube-cyan": 218.3,
+    "gradient-sunset": 8.4,
+    "gradient-ocean": 33.5,
+    "gradient-gold": -43.3,
+    "double-outline-pop": 123.3,
+    "extrude-retro": 1,
+    "extrude-block": 169.5,
+    "long-shadow-flat": 147,
+    "wide-minimal": -61.4
    },
    "over25ms": [
     "neon-tube-pink",
     "neon-tube-cyan",
-    "double-outline-pop"
+    "gradient-ocean",
+    "double-outline-pop",
+    "extrude-block",
+    "long-shadow-flat"
    ]
   },
   "x9": {
