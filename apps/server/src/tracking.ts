@@ -106,6 +106,7 @@ export const readFrames: ReadFrames = async (src, from, to, workHeight, onFrame,
     clearTimeout(timer);
     signal.removeEventListener('abort', onAbort);
     kill();
+    await Promise.race([closed, new Promise((r) => setTimeout(r, 5000))]); // return only once ffmpeg is gone
   }
 };
 
@@ -267,19 +268,28 @@ export function runTrackingJob(store: Store, jobId: string, deps: TrackingDeps =
 /** One pass's result for a frame, in work px; sPm = size per mille of the track's box. */
 interface Rec { cx: number; cy: number; sPm: number; q: number; st: number }
 
-/** Hold the shared heavy slot until the returned release is called; waits (and asks again) while its queue is full. */
+/**
+ * Hold the shared heavy slot until the returned release is called; waits (and asks again) while its queue is full. A cancel
+ * while waiting rejects at once; a slot granted after that is handed straight back.
+ */
 function holdHeavy(signal: AbortSignal): Promise<() => void> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (fn: () => void) => { if (settled) return false; settled = true; signal.removeEventListener('abort', onAbort); fn(); return true; };
+    const onAbort = () => settle(() => reject(new TrackingCanceled()));
+    if (signal.aborted) return onAbort();
+    signal.addEventListener('abort', onAbort, { once: true });
     const attempt = () => {
-      if (signal.aborted) return reject(new TrackingCanceled());
-      heavy(() => new Promise<void>((release) => { if (signal.aborted) { release(); reject(new TrackingCanceled()); } else resolve(release); }))
-        .catch((e) => { if (e instanceof ApiError && e.code === 'busy') setTimeout(attempt, 250); else reject(e); });
+      if (settled) return;
+      heavy(() => new Promise<void>((release) => { if (!settle(() => resolve(release))) release(); }))
+        .catch((e) => { if (settled) return; if (e instanceof ApiError && e.code === 'busy') setTimeout(attempt, 250); else settle(() => reject(e)); });
     };
     attempt();
   });
 }
 
 async function work(store: Store, jobId: string, deps: TrackingDeps, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw new TrackingCanceled(); // canceled or shut down while it waited for the lane
   const job = store.getJob(jobId);
   if (job.status !== 'queued') return; // canceled while it waited
   const input = job.input as TrackingJobInput;

@@ -39,6 +39,7 @@ vi.mock('@pulseframe/core', async (importOriginal) => {
 
 import { defineOp, getOp, ST, TRACKER_METHOD, TrackOpArgs, TrackRunBody, type MotionTrack } from '@pulseframe/core';
 import { generateBarcodeFixture, readBarcodeChannel } from '../../../packages/fixtures/src/index.ts';
+import { heavy } from './analysis.ts';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
@@ -305,6 +306,28 @@ describe('tracking job', () => {
     expect(store.getProject(pid).revision).toBe(rev);
     expect(trackOf(pid, 'mtk_cancel').x).toHaveLength(1);
     expect((await rest('POST', `/jobs/${job.id}/cancel`, {})).body.outcome).toBe('already-finished');
+  }, 60_000);
+
+  it('a job waiting for the shared heavy slot (still renders, loudness) waits without working, and a cancel ends it at once', async () => {
+    seedTrack(pid, 'mtk_wait', discAsset, 0, disc.truth[0]!.cx, disc.truth[0]!.cy, 320, 240, { w: 2 * disc.radius, h: 2 * disc.radius });
+    // both heavy slots held by stand-ins for long still renders
+    const releases: (() => void)[] = [];
+    const holders = [0, 1].map(() => heavy(() => new Promise<void>((r) => releases.push(r))));
+    await sleep(10);
+    try {
+      const job = startTrackingJob(store, gov, agent, pid, 'mtk_wait', TrackRunBody.parse({}));
+      await sleep(300);
+      expect(store.getJob(job.id)).toMatchObject({ status: 'running', stage: 'reading frames' });
+      const file = store.blobPath(store.getProject(pid).doc.assets[discAsset]!.contentHash);
+      expect(ffmpegOn(file)).toEqual([]); // nothing decoded while it waits
+      const t0 = performance.now();
+      await rest('POST', `/jobs/${job.id}/cancel`, {});
+      expect((await settle(job.id, 5000)).status).toBe('canceled');
+      expect(performance.now() - t0).toBeLessThan(500);
+    } finally {
+      for (const r of releases) r();
+      await Promise.all(holders);
+    }
   }, 60_000);
 
   it('the track edited while the job runs: the job fails with track_changed and attaches nothing', async () => {
