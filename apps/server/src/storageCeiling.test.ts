@@ -163,6 +163,24 @@ describe('generated media: the agent tools and the routes refuse a new file past
 });
 
 describe('project import: a body of unknown size is cut off at the room left', () => {
+  it('provider runs: past the ceiling a run is refused with 507 before a job exists, on REST and MCP alike', async () => {
+    fill();
+    try {
+      const jobs = () => ((store as unknown as { db: { prepare(q: string): { get(): { n: number } } } }).db.prepare('SELECT count(*) AS n FROM jobs').get().n);
+      const jobsBefore = jobs();
+      const r = await rest('POST', `/projects/${pid}/capabilities/comfy.smoke.solid-image/runs`, { params: {} });
+      expect(r.status).toBe(507);
+      expect(r.body.error.code).toBe('storage_quota_exceeded');
+      const t = await tool('run_capability', { projectId: pid, capabilityId: 'comfy.smoke.solid-image', params: {} });
+      expect(t.isError).toBe(true);
+      expect(errorOf(t.body)).toEqual(errorOf(r.body));
+      expect(jobs()).toBe(jobsBefore);
+    } finally { unfill(); }
+    // below the ceiling it gets as far as the honest setup state (no ComfyUI here)
+    const ok = await rest('POST', `/projects/${pid}/capabilities/comfy.smoke.solid-image/runs`, { params: {} });
+    expect(ok.status).not.toBe(507);
+  });
+
   it('a chunked body larger than the room is refused with 413 while streaming, and its temporary file is removed', async () => {
     const room = QUOTA - (await import('./storage.ts')).dataDirBytes(dir);
     expect(room).toBeGreaterThan(200_000);
