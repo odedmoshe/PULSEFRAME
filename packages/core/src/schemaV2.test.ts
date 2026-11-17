@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
   applyTransaction, ApplyTemplateArgsSchema, BindName, createProject, creativeProjection, diffEntities, findGatedTemplate, findTemplate, gatedTemplateError, gatedTemplateSummary,
-  migrateProject, MODEL_GATED_TEMPLATES, OpError, planTemplate, ProjectSchema, RecipeRunSchema, RefSchema, restoreEntities, SCHEMA_VERSION, TemplateError, TEMPLATES, validateProject,
+  migrateProject, MODEL_GATED_TEMPLATES, OpError, ProjectSchema, RecipeRunSchema, RefSchema, restoreEntities, SCHEMA_VERSION, TemplateDefSchema, TEMPLATES, validateProject,
   type AdjustmentClip, type OpCall, type ProjectDocument,
 } from './index.ts';
 
@@ -136,17 +136,21 @@ describe('template contract', () => {
     expect(ApplyTemplateArgsSchema.safeParse({ ...base, ops: Array.from({ length: 2001 }, () => step) }).success).toBe(false);
     expect(ApplyTemplateArgsSchema.safeParse({ ...base, templateId: 'x', ops: [step] }).success).toBe(false);
   });
-  it('apply_template is internal and, until it is built, refuses and changes nothing', () => {
+  // Only checks that stay true once the workers fill the stubs (templateOps.ts, templateCatalog.ts, templatePlan.ts). What the
+  // built op, catalogue and planner do is tested in the workers' own suites (applyTemplate.test.ts, templateCatalog.test.ts,
+  // templatePlan.test.ts), not here.
+  it('apply_template is internal: a call without allowInternal is refused and the document is untouched', () => {
     const { doc } = edit();
+    const before = structuredClone(doc);
     const call: OpCall = { op: 'apply_template', args: { templateId: 'tpl.x', templateVersion: 1, params: {}, steps: [], slots: [], ops: [{ op: 'add_text', args: { text: 'x', start: f(0), duration: f(30) } }] } };
     expect(fail(() => tx(doc, [call])).code).toBe('forbidden_op');
-    expect(fail(() => tx(doc, [call], true)).code).toBe('unknown_op');
+    expect(doc).toEqual(before);
   });
-  it('the planner is not built yet and says so', () => {
-    expect(TEMPLATES).toEqual([]);
-    expect(findTemplate('tpl.travel-montage')).toBeUndefined();
-    const def = { id: 'tpl.x' } as Parameters<typeof planTemplate>[1];
-    expect(() => planTemplate(edit().doc, def, {})).toThrow(TemplateError);
+  it('every built-in template parses with TemplateDefSchema, ids are unique, and an unknown id finds nothing', () => {
+    for (const t of TEMPLATES) expect(TemplateDefSchema.safeParse(t).success, t.id).toBe(true);
+    expect(new Set(TEMPLATES.map((t) => t.id)).size).toBe(TEMPLATES.length);
+    for (const t of TEMPLATES) expect(findTemplate(t.id)).toBe(t);
+    expect(findTemplate('tpl.no-such-template')).toBeUndefined();
   });
   it('Text-Behind-Subject and 3D-Zoom are listed as unavailable, naming the missing model, and are never built-ins', () => {
     expect(MODEL_GATED_TEMPLATES.map((t) => t.id)).toEqual(['tpl.text-behind-subject', 'tpl.3d-zoom']);
