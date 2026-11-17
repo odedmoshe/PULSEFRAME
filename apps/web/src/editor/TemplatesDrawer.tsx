@@ -9,12 +9,12 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { TEMPLATE_GENRES, type TemplateSummary } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { LayoutTemplate } from 'lucide-react';
-import { ApiFailure } from '../api.ts';
 import { useEditorState, type TemplateRunInfo } from './store.ts';
 import { TEMPLATE_STRINGS } from './templates.strings.ts';
 import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
 import { clock, filterByGenre, nextTempo, shuffleParams, templateApi, toggleGenre } from './templateDialog.logic.ts';
 import { TemplateDialog, type AppliedTemplate } from './TemplateDialog.tsx';
+import { templateRefusal } from './templateRefusals.ts';
 import './templates.css';
 
 const focusCard = (id: string) => setTimeout(() => document.querySelector<HTMLElement>(`[data-testid=${TID.card}][data-template-id="${CSS.escape(id)}"]`)?.focus(), 0);
@@ -29,7 +29,7 @@ export function TemplatesDrawer() {
   const [failed, setFailed] = useState<string | null>(null);
   const [genres, setGenres] = useState<string[]>([]);
   const [dialog, setDialog] = useState<TemplateSummary | null>(null);
-  const load = () => { setFailed(null); templateApi.list().then((r) => setList(r.templates)).catch((e) => setFailed(e instanceof ApiFailure ? `${e.message} (${e.code})` : String(e))); };
+  const load = () => { setFailed(null); templateApi.list().then((r) => setList(r.templates)).catch((e) => { const f = templateRefusal(lang, e); setFailed(f.hint ? `${f.message} — ${f.hint}` : f.message); }); };
   useEffect(() => { if (open && !list) load(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   // opened from the palette or Welcome: the focus goes to the first card once the cards are there (to the toggle if none load)
   const focused = useRef(0);
@@ -123,7 +123,8 @@ function AppliedBar() {
       const tempo = kind === 'tempo' && change.tempo ? ` ${S.tempoNow(S.tempoNames[change.tempo])}` : '';
       setSaid(`${S.regenerated(r.replaced, r.protected.length)}${tempo}`);
     } catch (e) {
-      setFailed(e instanceof ApiFailure ? `${e.message}${e.hint ? ` — ${e.hint}` : ''}` : String(e));
+      const f = templateRefusal(lang, e); // worded in the interface language, as the dialog and the editor's refusals are
+      setFailed(f.hint ? `${f.message} — ${f.hint}` : f.message);
     } finally { setBusy(null); }
   };
   return (
