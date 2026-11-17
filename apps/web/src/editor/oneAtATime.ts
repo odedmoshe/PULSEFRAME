@@ -20,3 +20,10 @@ export function singleFlight() {
 
 /** The same ids, in any order. */
 export const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
+/**
+ * The second (third…) click of a double-click, from the click count the browser puts in `event.detail`. A keyboard
+ * activation counts 0 and a single click 1. A control that commits an edit ignores such a click whether or not the first
+ * click's commit has already landed: nobody double-clicks to ask for the edit twice.
+ */
+export const repeatClick = (detail: number) => detail > 1;

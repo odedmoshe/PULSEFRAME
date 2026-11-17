@@ -3,7 +3,7 @@
  * SPECIFICITY decides what the user sees: an error message must stay red, a toggle that is on must look on, a dialog
  * opened from the header must not be trapped under other layers, and the zoom control must sit in the flow of its bar.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 interface Rule { file: string; order: number; selectors: string[]; decls: Record<string, string>; media: string | null }
@@ -79,7 +79,9 @@ const winner = (rules: { rule: Rule; selector: string }[], prop: string) =>
 // The order main.tsx loads them in: the base sheet, the components' own sheets (through App.tsx), then the visual layer.
 const main = read('./main.tsx');
 const styles = parse('./styles.css');
-const components = ['sfxBrowser.css', 'effectGallery.css', 'elementsBrowser.css', 'speedCurves.css', 'timelineZoom.css', 'welcome.css', 'command-palette.css'].flatMap((f) => parse(`./editor/${f}`));
+// every component sheet, so a rule added in any of them is weighed too
+const componentFiles = [...readdirSync(new URL('./editor/', import.meta.url)).filter((f) => f.endsWith('.css')).sort().map((f) => `./editor/${f}`), './clip-visuals.css'];
+const components = componentFiles.flatMap((f) => parse(f));
 const theme = parse('./theme.css');
 const all = [...styles, ...components, ...theme];
 const pick = (rules: Rule[], test: (selector: string) => boolean) => rules.flatMap((rule) => rule.selectors.filter(test).map((selector) => ({ rule, selector })));
@@ -153,6 +155,29 @@ describe('editor stylesheets', () => {
     }
   });
 
+  it('what the preview draws above the stage is cut off at the stage edge, so the handles of an enlarged clip cannot lie over the header', () => {
+    expect(componentFiles).toContain('./editor/interactions.css');
+    // The handle box is not kept inside the preview (its size is the layer's: natural size × fit × scale) and its move
+    // handle fills it. The header is positioned without a z-index (pinned above) and comes first in the page, so the box
+    // would paint over it and take its clicks. The stage therefore clips what its children draw above and below it.
+    const app = read('./App.tsx');
+    expect(app.indexOf('<Header />')).toBeGreaterThan(-1);
+    expect(app.indexOf('<Header />')).toBeLessThan(app.indexOf('className="stage"'));
+    expect(app.indexOf('className="stage"')).toBeLessThan(app.indexOf('<CanvasHandles'));
+    const stage = pick(all, (s) => s === '.stage');
+    expect(winner(stage, 'overflow-y')?.rule.decls['overflow-y']).toBe('clip');
+    // one axis only: sideways the handles stay in reach, and the stage does not turn into a scroll container
+    for (const r of stage) for (const prop of ['overflow', 'overflow-x', 'overflow-block', 'overflow-inline']) expect(r.rule.decls[prop], `.stage { ${prop} } in ${r.rule.file}`).toBeUndefined();
+    // the clip reaches the handles only while their containing blocks are inside the stage: absolute in the relative wrap, never fixed
+    for (const sel of ['.ch-root', '.ch-box', '.ch-move', '.ch-handle']) {
+      const rules = pick(all, (s) => s === sel);
+      expect(winner(rules, 'position')?.rule.decls.position, sel).toBe('absolute');
+    }
+    expect(winner(pick(all, (s) => s === '.canvas-wrap'), 'position')?.rule.decls.position).toBe('relative');
+    // nothing lets the handles out again: no rule puts them or the wrap in the top layer or gives them a z-index above the page
+    for (const sel of ['.ch-root', '.ch-box', '.canvas-wrap']) for (const r of pick(all, (s) => s === sel)) expect(r.rule.decls['z-index'], sel).toBeUndefined();
+  });
+
   it('the zoom control is in the normal flow of the timeline bar, not laid over it', () => {
     const zoom = pick(all, (s) => s === '.tl-zoom');
     expect(zoom.length).toBeGreaterThan(0);
@@ -165,5 +190,47 @@ describe('editor stylesheets', () => {
     const base = zoom.find((r) => !r.rule.media)!;
     expect(base.rule.decls.display).toBe('flex');
     expect(base.rule.decls['inline-size']).toBe('fit-content');
+  });
+
+  it('the zoom control costs the tracks no height where it can share the clip actions line, and pushes nothing under the pinned controls from 1024 to 1920px', () => {
+    const sheet = parse('./editor/timelineZoom.css');
+    const px = (media: string | null, edge: 'min' | 'max') => Number(new RegExp(`${edge}-width:\\s*([\\d.]+)px`).exec(media ?? '')?.[1] ?? NaN);
+    // the three forms, read from the sheet
+    const inline = sheet.filter((r) => r.selectors.includes('.tl-zoom') && r.decls.display === 'inline-flex');
+    expect(inline.length).toBe(1);
+    const inlineFrom = px(inline[0]!.media, 'min');
+    const short = sheet.filter((r) => r.selectors.includes('.tl-zoom-slider') && r.decls.display === 'none');
+    expect(short.length).toBe(1);
+    expect(short[0]!.selectors).toContain('.tl-zoom-fit-label');
+    expect(px(short[0]!.media, 'min')).toBe(inlineFrom); // the short form starts where the control joins the clip actions line
+    const wholeFrom = Math.ceil(px(short[0]!.media, 'max'));
+    expect(wholeFrom).toBeGreaterThan(inlineFrom);
+    // Fit always shows something: the icon exactly where the label is hidden, and nowhere else
+    const icon = sheet.filter((r) => r.selectors.includes('.tl-zoom-fit-ico'));
+    expect(icon.map((r) => [r.media, r.decls.display])).toEqual([[null, 'none'], [short[0]!.media, 'block']]);
+    const tsx = read('./editor/TimelineZoom.tsx');
+    expect(tsx).toMatch(/data-testid="tl-zoom-fit" aria-label=\{s\.fit\}/); // named by its label at every width
+    expect(tsx).toContain('className="tl-zoom-fit-ico"');
+    expect(tsx).toContain('className="tl-zoom-fit-label"');
+
+    // Widths in px. MEASURED, not live: read off a 1280px screenshot of the Hebrew editor (the 3ad2e49 build:
+    // clip actions 12-425, zoom 507-751, add-track box 827-1030) and reproduced from the Heebo advance widths, which also
+    // give the English labels and the marker bar. Hebrew has the widest Fit label, English the widest marker bar.
+    const BTN = 28, GAP = 4, SLIDER = 100, MARGIN = 12, ROOM = 8;
+    const FIT = { he: 77, en: 27 }, ACTIONS = { he: 414, en: 416 }, MARKER_BAR = { he: 388, en: 427 };
+    const addTrackFrom = (w: number) => w - 250 - 203, markerBarFrom = (w: number, lang: 'he' | 'en') => w - 200 - MARKER_BAR[lang];
+    const tiers = new Set<string>();
+    for (const lang of ['he', 'en'] as const) for (let w = 1024; w <= 1920; w++) {
+      const tier = w < inlineFrom ? 'own line' : w < wholeFrom ? 'short' : 'whole';
+      tiers.add(tier);
+      const zoomEnd = MARGIN + (tier === 'short' ? 3 * BTN + 2 * GAP : 2 * BTN + SLIDER + FIT[lang] + 3 * GAP);
+      const pinned = Math.min(addTrackFrom(w), markerBarFrom(w, lang)); // both sit on the bar's first line, where the zoom always is
+      expect(zoomEnd + ROOM, `zoom, ${lang} ${w}px (${tier})`).toBeLessThanOrEqual(pinned);
+      if (tier === 'own line') continue; // the clip actions are where they were before the zoom control existed
+      expect(zoomEnd + MARGIN + ACTIONS[lang] + ROOM, `clip actions, ${lang} ${w}px (${tier})`).toBeLessThanOrEqual(pinned);
+    }
+    expect([...tiers].sort()).toEqual(['own line', 'short', 'whole']);
+    // the common laptop width keeps the bar on one line (at 1280x720 a second line cut the bottom track of four)
+    expect(inlineFrom).toBeLessThanOrEqual(1280);
   });
 });

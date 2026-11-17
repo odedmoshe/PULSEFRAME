@@ -2,11 +2,12 @@
  * Speed curves for the selected clip: twelve named shapes and a hand-made curve drawn on a small graph.
  * Applying one is the registered `apply_speed_curve` op through editor.commit; nothing here keeps project state.
  */
-import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import * as T from '@pulseframe/time';
-import { curvePolyline, segmentsFromPoints, SPEED_CURVES, toSourceSpan, type Clip, type CurvePoint, type CurveSegment } from '@pulseframe/core';
+import { curvePolyline, findClip, segmentsFromPoints, SPEED_CURVES, toSourceSpan, type Clip, type CurvePoint, type CurveSegment } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
-import { curveApplier } from './speedCurves.apply.ts';
+import { repeatClick } from './oneAtATime.ts';
+import { clipsLook, curveApplier } from './speedCurves.apply.ts';
 import './speedCurves.css';
 
 type Media = Extract<Clip, { type: 'media' }>;
@@ -18,6 +19,7 @@ const STR = {
     point: (i: number, at: string, v: string) => `נקודה ${i}: מיקום ${at}%, מהירות ${v}×`, graph: 'גרף מהירות: מיקום בקליפ מול מהירות',
     blocked: { keyframes: 'יש בקליפ נקודות מפתח או עוצמת קול משתנה. יש להסיר אותן קודם.', transition: 'יש מעבר בקליפ הזה או אחריו. יש להסיר אותו קודם.', reverse: 'קליפ שמתנגן לאחור לא יכול לקבל עקומת מהירות.' },
     done: (n: number) => `העקומה הוחלה: ${n} חלקים נבחרו בציר הזמן. Ctrl+Z מבטל. כדי לנסות עקומה אחרת, מבטלים קודם.`,
+    doneOne: 'העקומה הוחלה על הקליפ. Ctrl+Z מבטל; עקומה אחרת תחליף אותה.',
     repeat: 'העקומה כבר הוחלה והחלקים שלה נבחרו. כדי לנסות עקומה אחרת מבטלים קודם (Ctrl+Z); כדי לתת עקומה לחלק אחד, בוחרים אותו בציר הזמן.',
   },
   en: {
@@ -27,6 +29,7 @@ const STR = {
     point: (i: number, at: string, v: string) => `Point ${i}: position ${at}%, speed ${v}×`, graph: 'Speed graph: position in the clip against speed',
     blocked: { keyframes: 'The clip has keyframes or volume keys. Remove them first.', transition: 'There is a transition on this clip or after it. Remove it first.', reverse: 'A clip that plays backwards cannot take a speed curve.' },
     done: (n: number) => `Curve applied: ${n} parts selected on the timeline. Ctrl+Z undoes it. To try another curve, undo first.`,
+    doneOne: 'Curve applied to the clip. Ctrl+Z undoes it; another curve replaces this one.',
     repeat: 'The curve is already applied and its parts are selected. To try another curve, undo first (Ctrl+Z); to give one part a curve of its own, choose that part on the timeline.',
   },
 } as const;
@@ -62,8 +65,21 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
   const [smooth, setSmooth] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   // One action at a time: see speedCurves.apply.ts. `busy` only repaints the controls; the guard itself reads live state.
-  const [curve] = useState(() => curveApplier({ commit: (ops, label) => editor.commit(ops, label), select: (id, mode) => editor.select(id, mode), selection: () => editor.getState().selection }));
+  const [curve] = useState(() => curveApplier({
+    commit: (ops, label) => editor.commit(ops, label), select: (id, mode) => editor.select(id, mode), selection: () => editor.getState().selection,
+    hasClip: (id) => { const d = editor.getState().doc; return !!d && !!findClip(d, id); },
+  }));
   const [busy, setBusy] = useState(false);
+  // The status line speaks of certain clips as they were when it was written. When they change (an undo, above all) it goes;
+  // edits elsewhere in the project leave it.
+  const about = useRef<{ ids: readonly string[]; was: string } | null>(null);
+  const look = (ids: readonly string[]) => { const d = editor.getState().doc; return clipsLook((id) => d && findClip(d, id)?.clip, ids); };
+  const say = (text: string, ids: readonly string[]) => { about.current = { ids, was: look(ids) }; setStatus(text); };
+  // A redo brings the parts of an undone curve back; they are selected again, as the apply left them: see documentChanged.
+  useEffect(() => {
+    if (curve.documentChanged() === 'back') { say(STR[editor.getState().lang].repeat, editor.getState().selection); return; }
+    if (about.current && look(about.current.ids) !== about.current.was) { about.current = null; setStatus(null); }
+  }, [curve, editor, state.doc]);
   const svg = useRef<SVGSVGElement>(null);
   const drag = useRef<number | null>(null);
   const doc = editor.doc;
@@ -77,13 +93,14 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
 
   // Not the `disabled` attribute: a tile that disables itself under the keyboard focus would drop the focus (and with it Ctrl+Z).
   const held = busy || curve.repeat();
-  const apply = async (args: Record<string, unknown>, label: string) => {
+  const apply = async (args: Record<string, unknown>, label: string, clicks: number) => {
+    if (repeatClick(clicks)) return; // the second click of a double-click, before or after the first one's commit has landed
     if (curve.busy) return; // a commit is on its way: this click is not a second edit
-    if (curve.repeat()) { setStatus(S.repeat); return; }
-    setStatus(null); setBusy(true);
+    if (curve.repeat()) { say(S.repeat, editor.getState().selection); return; }
+    about.current = null; setStatus(null); setBusy(true);
     try {
       const r = await curve.apply(clip.id, { ...args, ...(ripple ? {} : { ripple: false }) }, label);
-      if (r.kind === 'applied') setStatus(S.done(r.partIds.length));
+      if (r.kind === 'applied') say(r.partIds.length > 1 ? S.done(r.partIds.length) : S.doneOne, r.partIds);
     } finally { setBusy(false); }
   };
 
@@ -154,7 +171,7 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
       <div className="sc-grid" role="group" aria-label={S.title}>
         {SPEED_CURVES.map((c) => (
           <button key={c.id} type="button" className="sc-tile" data-testid="speed-curve" data-id={c.id} title={c.hint[state.lang]} aria-label={`${c.name[state.lang]}: ${c.hint[state.lang]}`}
-            aria-disabled={held || undefined} aria-busy={busy || undefined} onClick={() => void apply({ preset: c.id }, `Speed curve ${c.id}`)}>
+            aria-disabled={held || undefined} aria-busy={busy || undefined} onClick={(e) => void apply({ preset: c.id }, `Speed curve ${c.id}`, e.detail)}>
             <Thumb segments={c.segments} smooth={c.smooth} />
             <span className="sc-name">{c.name[state.lang]}</span>
             <span className="sc-len"><bdi>{S.length(num(lengthFactor(c.segments), 2))}</bdi></span>
@@ -180,7 +197,7 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
         <p className="muted" data-testid="speed-curve-length" aria-live="polite">{segments && line.length ? S.newLength(num(sourceSeconds * lengthFactor(segments), 1), num(nowSeconds, 1)) : ''}</p>
         <label className="check"><input type="checkbox" checked={smooth} onChange={(e) => setSmooth(e.target.checked)} data-testid="speed-curve-smooth" /> {S.smooth}</label>
         <div className="row">
-          <button type="button" className="primary" disabled={!segments || flat} aria-disabled={held || undefined} aria-busy={busy || undefined} data-testid="speed-curve-apply" onClick={() => void apply({ points, ...(smooth ? {} : { smooth: false }) }, 'Speed curve')}>{S.apply}</button>
+          <button type="button" className="primary" disabled={!segments || flat} aria-disabled={held || undefined} aria-busy={busy || undefined} data-testid="speed-curve-apply" onClick={(e) => void apply({ points, ...(smooth ? {} : { smooth: false }) }, 'Speed curve', e.detail)}>{S.apply}</button>
           <button type="button" className="ghost" data-testid="speed-curve-reset" onClick={() => setPoints(DEFAULT_POINTS)}>{S.reset}</button>
         </div>
       </details>
