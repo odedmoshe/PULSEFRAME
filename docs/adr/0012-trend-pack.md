@@ -62,11 +62,9 @@ laptop).
    exit `blur`, were added to the text animations. Ten text presets (40 to 50, `TREND_TEXT_PRESET_IDS`) are built on the fields; the inspector has a
    title-effects block (`TextEffectsField`).
 
-## Where the build differs from the plan
-- The light envelope's scalar is computed in core, once, and read by the schedule, `evaluate` and the inspector; the plan's `flashSafety.ts` gap
-  function is reused as is.
-- The beat-lock and velocity status strings and the options fieldset are in `LookPanel.tsx`; the gallery loop is 56–78, not a separate player.
-- Not built, as planned: bloom-cut, title templates, emoji, text on a path, the sweep caption preset, hexagram shape, a reduced-flashing export
+## Not in this wave
+- The build follows the plan; no deviation was found when the merged code was read against it.
+- Left out on purpose: bloom-cut, title templates, emoji, text on a path, the sweep caption preset, the hexagram shape, a reduced-flashing export
   option, a ramped sound crossfade.
 
 ## Consequences / what is not promised
