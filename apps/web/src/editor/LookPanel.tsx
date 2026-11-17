@@ -60,6 +60,23 @@ function ParamControl({ name, prop, value, onCommit, keyer }: { name: string; pr
   return null;
 }
 
+/**
+ * What the strobe does, as the renderer does it (packages/engine/src/strobeSchedule.ts): every strobe of the timeline takes its
+ * flashes from one schedule, which starts at most three flashes in any second, so with several strobes, or with fast music,
+ * some flashes are left out; a strobe that follows the music flashes on analysed beats only, so it shows nothing where no
+ * analysed music plays (other effects fall back to their own tempo there).
+ */
+const STROBE_STRINGS = {
+  he: {
+    limit: 'מגבלת בטיחות לכל ציר הזמן: בכל שנייה מתחילים לכל היותר שלושה הבזקים, מכל אפקטי ההבזקים יחד. לכן, כשיש כמה אפקטים כאלה או מוזיקה מהירה, חלק מההבזקים לא יופיעו.',
+    noMusic: 'אין כאן מוזיקה עם פעימות מזוהות, ולכן לא יופיעו כאן הבזקים. מנתחים פעימות בלשונית קליפ ← ניתוח, כשקליפ המוזיקה נבחר.',
+  },
+  en: {
+    limit: 'Safety limit for the whole timeline: at most three flashes start in any second, from all strobes together. So with several strobes, or with fast music, some flashes are left out.',
+    noMusic: 'No music with detected beats plays here, so this strobe shows no flashes here. Detect beats in the Clip tab → Analysis with the music clip selected.',
+  },
+} as const;
+
 /** Strings of the colour table chooser (kept here, like the other notes of this panel). */
 const LUT_STRINGS = {
   he: { none: 'ללא טבלה', import: 'ייבוא ‎.cube', importing: 'מייבא…', importTitle: 'ייבוא קובץ ‎.cube (טבלת צבע תלת־ממדית) לספריית הפרויקט ובחירתו לאפקט הזה', notCube: 'יש לבחור קובץ ‎.cube', empty: 'אין עדיין טבלאות צבע בפרויקט. ייבאו קובץ ‎.cube כדי שהאפקט ישנה את התמונה.' },
@@ -149,8 +166,10 @@ function EffectRow({ clipId, fx, index, count }: { clipId: string; fx: EffectIns
             }} />;
         })}
         {fx.params.follow === 'music' && editor.doc && !beatPositionAt(editor.doc, editor.playhead) && (
-          <p className="muted" role="note" data-testid="effect-follow-note">{state.lang === 'he' ? 'אין כאן מוזיקה עם פעימות מזוהות, אז האפקט פועל בקצב הקבוע שלו. מנתחים פעימות בלשונית קליפ ← ניתוח, כשקליפ המוזיקה נבחר.' : 'No music with detected beats plays here, so the effect uses its own steady tempo. Detect beats in the Clip tab → Analysis with the music clip selected.'}</p>
+          <p className="muted" role="note" data-testid="effect-follow-note">{fx.type === 'light.strobe' ? STROBE_STRINGS[state.lang].noMusic
+            : state.lang === 'he' ? 'אין כאן מוזיקה עם פעימות מזוהות, אז האפקט פועל בקצב הקבוע שלו. מנתחים פעימות בלשונית קליפ ← ניתוח, כשקליפ המוזיקה נבחר.' : 'No music with detected beats plays here, so the effect uses its own steady tempo. Detect beats in the Clip tab → Analysis with the music clip selected.'}</p>
         )}
+        {fx.type === 'light.strobe' && <p className="muted" role="note" data-testid="effect-strobe-limit">{STROBE_STRINGS[state.lang].limit}</p>}
       </div>
     </li>
   );
