@@ -33,7 +33,7 @@ describe('one registry, two providers', () => {
     expect(LOCAL_FIXTURE.provider).toBe('local');
     expect(LOCAL_FIXTURE.engine.verifiedBinaries).toEqual([]);
     expect(LOCAL_FIXTURE.outputs[0]).toMatchObject({ expectSize: null, expectFrames: null, dataSchema: null, encoding: 'display' });
-    for (const d of BUILTIN_CAPABILITIES) { expect(d.frames).toBeNull(); for (const m of d.models) expect(m.attribution).toBeNull(); }
+    for (const d of BUILTIN_CAPABILITIES) { expect(d.frames === null, d.id).toBe(d.outputs.every((o) => o.expectFrames === null)); for (const m of d.models) expect(m.attribution).toBeNull(); } // a frame plan exactly on the frame jobs (W1)
     expect(ALL_CAPABILITIES).toEqual([...BUILTIN_CAPABILITIES, ...LOCAL_TOOLS]);
     expect(logicDigest(IMAGE_SOFT_BLUR)).toBe(IMAGE_SOFT_BLUR.graphDigest);
     expect(logicDigest(LOCAL_FIXTURE)).toBe(LOCAL_FIXTURE.codeDigest);
