@@ -6,18 +6,20 @@
  *     video it needs is amber;
  *   - the end of the band is a handle: dragging it (or the arrow keys on it) changes the transition's length;
  *   - a "+" on a cut with no transition (shown while the lane is hovered or the button has the focus);
+ *   - the chip, its handle and the "+" only where the clips on both sides are wide enough to keep their own click (cutRoom):
+ *     on a short clip only the band is drawn, and the transition is reached from the clip's ride bar;
  *   - a gold diamond on a cut that lands on an analysed beat.
  * Every change is the registered op set_transition through the editor's commit. Nothing here is stored outside the project,
  * except which cut is selected: a view state of this browser tab, held in `cutSelection` below until the store has a field
  * for it (the cut inspector and the ride bar read it).
  */
 import { memo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { Plus, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { transitionDef, type Clip } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
 import { Tooltip } from '../ds/index.ts';
-import { IconBeatLock, IconOnBeat } from './icons.tsx';
+import { IconBeatLock, IconCutPlus, IconFlashShield, IconOnBeat } from './icons.tsx';
 import type { Editor } from './store.ts';
 import { TL_STRINGS } from './timeline.strings.ts';
 
@@ -77,9 +79,12 @@ export interface CutChipProps {
   dropping: boolean;
   /** A clip on either side of the cut is selected: its edge is being worked on, so the "+" stays out of the way of the grip (a dragged tile still shows it). */
   nearSelected: boolean;
+  /** What the clips on either side leave room for (interactions.math cutRoom): the "+", and the chip with its length handle. */
+  roomAdd: boolean;
+  roomChip: boolean;
 }
 
-export const CutChip = memo(function CutChip({ editor, lang, clip, before, beforeName, afterName, x, pps, rate, locked, onBeat, held, spare, selected, dropping, nearSelected }: CutChipProps) {
+export const CutChip = memo(function CutChip({ editor, lang, clip, before, beforeName, afterName, x, pps, rate, locked, onBeat, held, spare, selected, dropping, nearSelected, roomAdd, roomChip }: CutChipProps) {
   const s = TL_STRINGS[lang];
   const tr = clip.transition;
   const def = tr ? transitionDef(tr.type) : undefined;
@@ -135,26 +140,26 @@ export const CutChip = memo(function CutChip({ editor, lang, clip, before, befor
     <div className={`cut${tr ? ' has-transition' : ''}${selected ? ' selected' : ''}${dropping ? ' dropping' : ''}`} style={{ left: x }} data-cut-of={clip.id} data-testid="cut" data-frame={T.frameIndexAt(clip.start, rate)} data-on-beat={onBeat ? 'true' : undefined}>
       {onBeat && <span className="cut-beat" title={s.cutOnBeat} role="img" aria-label={s.cutOnBeat}><IconOnBeat size={12} /></span>}
       {tr && <i className={`cut-band${tr.sync === 'beat' ? ' beat' : ''}${short ? ' short' : ''}`} style={{ width: Math.max(4, frames * pxPerFrame) }} aria-hidden="true" data-testid="cut-band" />}
-      {tr ? (
+      {tr && (roomChip || dropping) ? (
         <Tooltip label={facts}>
           <button type="button" className={`cut-chip${tr.sync === 'beat' ? ' beat' : ''}${held ? ' held' : ''}${short ? ' short' : ''}`} data-testid="cut-chip" data-transition={tr.type} data-frames={tr.frames} data-sync={tr.sync ?? undefined} data-held={held ? 'true' : undefined} data-short={short ? 'true' : undefined}
             aria-pressed={selected} aria-label={`${s.cutAt(tcAt)} · ${facts}`}
             onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); select(); }}>
             <TransitionGlyph size={14} />
             {tr.sync === 'beat' && <IconBeatLock size={12} />}
-            {held && <ShieldAlert size={12} strokeWidth={1.75} aria-hidden="true" />}
+            {held && <IconFlashShield size={12} />}
             {short && <TriangleAlert size={12} strokeWidth={1.75} aria-hidden="true" />}
           </button>
         </Tooltip>
-      ) : before && (!nearSelected || dropping) ? (
+      ) : !tr && before && ((roomAdd && !nearSelected) || dropping) ? (
         <Tooltip label={spare === 0 ? s.cutNoHandles : s.cutAdd} reason={spare === 0}>
           <button type="button" className="cut-add" data-testid="cut-add" aria-disabled={spare === 0 || locked ? true : undefined} aria-label={`${s.cutAddAt(beforeName, afterName)} · ${tcAt}`}
             onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); add(); }}>
-            <Plus size={13} strokeWidth={2} aria-hidden="true" />
+            <IconCutPlus size={14} />
           </button>
         </Tooltip>
       ) : null}
-      {tr && !locked && (
+      {tr && !locked && roomChip && (
         <button type="button" className="cut-len" data-testid="cut-len" role="slider" aria-orientation="horizontal" aria-label={s.cutLength} aria-valuemin={1} aria-valuemax={maxFrames} aria-valuenow={frames} aria-valuetext={`${lenText} · ${s.frames(frames)}`} title={s.cutLengthHelp}
           style={{ left: Math.max(4, frames * pxPerFrame) }} onPointerDown={lenDown} onPointerMove={lenMove} onPointerUp={lenUp} onPointerCancel={() => { session.current = null; setDragFrames(null); }} onKeyDown={lenKey} onClick={(e) => e.stopPropagation()} />
       )}

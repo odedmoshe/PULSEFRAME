@@ -1,6 +1,6 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
-  AudioLines, Captions, Clapperboard, Film, Layers, Link2, MapPin, Mic, MousePointer2, Music, Pencil, Plus, Rewind, Scissors, Snowflake, Sparkles, TrendingUp, Type, Zap,
+  AudioLines, Captions, Clapperboard, Film, Layers, Link2, MapPin, Metronome, Mic, MousePointer2, Music, Pencil, Plus, Rewind, Scissors, Snowflake, Sparkles, TrendingUp, Type, Zap,
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import {
@@ -23,7 +23,7 @@ import { soundTailsFor } from './AudioFxBlock.tsx';
 import { CutChip, cutSelection, useSelectedCut } from './CutChip.tsx';
 import { PulseStrip, TempoHead, type PulseModel } from './PulseStrip.tsx';
 import { RideBar } from './RideBar.tsx';
-import { barGrid, catalogDragFrom, cutsOf, laneOrder, lastAtOrBefore, rulerLabel, rulerStep, signedTimecode, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
+import { barGrid, capPlacement, catalogDragFrom, cutRoom, cutsOf, labelsUnder, laneOrder, lastAtOrBefore, pickSpoken, rulerLabel, rulerStep, signedTimecode, type SpokenChip, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
 import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
 import './templates.css';
 import './timeline.css';
@@ -108,16 +108,39 @@ function useCalmState(editor: Editor): EditorState {
 const shortTimecode = (frame: number, rate: T.Rate) => signedTimecode(frame, rate).slice(1);
 
 /**
- * What is said in a sound clip, placed on the clip where it is said: each word when the words are timed and wide enough to
- * read at this zoom, otherwise each phrase. From the transcript of the clip's file (or of the file it was made from).
+ * How wide a spoken chip's text is, in the chip's font (--pf-fs-xs in --pf-font, the tokens timeline.css gives .word-chip).
+ * Measured on a canvas once per text; 1 px is added for the difference between the canvas and the page's text layout.
  */
-function spokenChips(doc: ProjectDocument, c: MediaClip, pps: number): { key: string; left: number; width: number; text: string }[] {
-  if (c.reverse || c.freeze) return [];
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+const textWidths = new Map<string, number>();
+function chipTextWidth(text: string): number {
+  if (measureCtx === undefined) {
+    measureCtx = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+    if (measureCtx) {
+      const cs = getComputedStyle(document.documentElement);
+      measureCtx.font = `${cs.getPropertyValue('--pf-fs-xs').trim() || '13px'} ${cs.getPropertyValue('--pf-font').trim() || 'sans-serif'}`;
+      // the interface font may still be loading: what was measured with the fallback font is measured again once it is in
+      void document.fonts?.ready.then(() => textWidths.clear());
+    }
+  }
+  let w = textWidths.get(text);
+  if (w === undefined) { w = measureCtx ? Math.ceil(measureCtx.measureText(text).width) + 1 : text.length * 8; textWidths.set(text, w); }
+  return w;
+}
+
+/**
+ * What is said in a sound clip, placed on the clip where it is said: each word when the words are timed and most fit whole at
+ * this zoom (interactions.math pickSpoken), otherwise each phrase, shortened with an ellipsis. From the transcript of the
+ * clip's file (or of the file it was made from).
+ */
+function spokenChips(doc: ProjectDocument, c: MediaClip, pps: number): { mode: 'word' | 'phrase'; chips: SpokenChip[] } {
+  const none = { mode: 'word' as const, chips: [] };
+  if (c.reverse || c.freeze) return none;
   const spoken = transcriptFor(doc, c.assetId);
-  if (!spoken) return [];
+  if (!spoken) return none;
   const srcIn = T.add(c.sourceIn, spoken.offset), srcEnd = T.add(sourceEnd(c), spoken.offset);
   const x = (t: T.RationalTime) => T.toSeconds(T.sub(timelineAt(c, T.sub(t, spoken.offset)), c.start)) * pps;
-  const words: { key: string; left: number; width: number; text: string }[] = [], phrases: typeof words = [];
+  const words: SpokenChip[] = [], phrases: SpokenChip[] = [];
   for (const seg of spoken.transcript.segments) {
     const a = T.max(seg.start, srcIn), b = T.min(T.add(seg.start, seg.duration), srcEnd);
     if (!T.lt(a, b)) continue;
@@ -127,8 +150,7 @@ function spokenChips(doc: ProjectDocument, c: MediaClip, pps: number): { key: st
       words.push({ key: w.id, left: x(w.start), width: x(T.min(T.add(w.start, w.duration), srcEnd)) - x(w.start), text: w.text });
     }
   }
-  const readable = words.length > 0 && words.reduce((n, w) => n + w.width, 0) / words.length >= 26;
-  return (readable ? words : phrases).slice(0, 400);
+  return pickSpoken(words, phrases, chipTextWidth);
 }
 
 // ---------- markers ----------
@@ -163,8 +185,12 @@ function PlayheadLine({ pps, head }: { pps: number; head: number }) {
   void state.tick;
   return <div className="playhead" data-testid="playhead" data-frame={editor.frame} style={{ left: head + T.toSeconds(editor.playhead) * pps }} />;
 }
-/** The cap on the ruler with the timecode, the part of the line over the top rows, and the lit beat on the Pulse Strip. */
-function PlayheadCap({ pps, beatSeconds }: { pps: number; beatSeconds: number[] }) {
+/**
+ * The cap on the ruler with the timecode, the part of the line over the top rows, and the lit beat on the Pulse Strip.
+ * The timecode is centred on the line (interactions.math capPlacement); it ends at the line when a marker is there, so the
+ * marker's flag stays readable; the ruler labels it or a marker's flag covers are hidden while covered, so no stray digit shows.
+ */
+function PlayheadCap({ pps, beatSeconds, markerFrames }: { pps: number; beatSeconds: number[]; markerFrames: ReadonlySet<number> }) {
   const { editor, state } = useEditorState();
   void state.tick;
   const at = T.toSeconds(editor.playhead);
@@ -172,10 +198,28 @@ function PlayheadCap({ pps, beatSeconds }: { pps: number; beatSeconds: number[] 
   const next = i >= 0 ? beatSeconds[i + 1] : undefined;
   // lit while the playhead is inside the beat that starts here (never past the analysed grid)
   const lit = i >= 0 && (next !== undefined ? at < next : at - beatSeconds[i]! < (i > 0 ? beatSeconds[i]! - beatSeconds[i - 1]! : 0));
+  const code = useRef<HTMLElement>(null);
+  const onMarker = markerFrames.has(editor.frame);
+  const text = shortTimecode(editor.frame, editor.rate);
+  useLayoutEffect(() => {
+    const el = code.current, ruler = el?.closest('.tl-top-lanes')?.querySelector<HTMLElement>(':scope > .ruler');
+    if (!el || !ruler) return;
+    const x = at * pps, w = el.offsetWidth;
+    const place = capPlacement(x, w, onMarker);
+    if (el.dataset.place !== place) el.dataset.place = place;
+    const from = place === 'centre' ? x - w / 2 : place === 'start' ? x : x - w;
+    const spans = [...ruler.querySelectorAll<HTMLElement>(':scope > span')];
+    // a label's text starts after its tick and padding (timeline.css: 5 px)
+    const boxes = spans.map((sp) => ({ left: sp.offsetLeft + 5, width: Math.max(0, sp.offsetWidth - 5) }));
+    const under = new Set(labelsUnder(boxes, from - 2, from + w + 2));
+    // a marker's flag hides the labels it lies over too
+    for (const m of ruler.querySelectorAll<HTMLElement>(':scope > .user-marker')) for (const k of labelsUnder(boxes, m.offsetLeft - 2, m.offsetLeft + m.offsetWidth + 2)) under.add(k);
+    spans.forEach((sp, k) => sp.classList.toggle('under-cap', under.has(k)));
+  });
   return (
     <>
       {lit && <i className={`pulse-now${editor.player?.playing ? ' playing' : ''}`} key={i} data-testid="pulse-now" style={{ left: beatSeconds[i]! * pps }} aria-hidden="true" />}
-      <div className="playhead-cap" style={{ left: at * pps }} aria-hidden="true"><bdi className="num">{shortTimecode(editor.frame, editor.rate)}</bdi></div>
+      <div className="playhead-cap" style={{ left: at * pps }} aria-hidden="true"><bdi ref={code} className="num">{text}</bdi></div>
     </>
   );
 }
@@ -352,13 +396,14 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
           const onBeatFx = c.type !== 'caption' && (c.effects ?? []).some((x) => x.enabled && x.modulate && Object.keys(x.modulate).length > 0);
           const before = beforeOf.get(c.id) ?? null;
           const hasCut = isVideo && c.type === 'media' && (!!c.transition || !!before);
+          const room = cutRoom(before ? T.toSeconds(before.duration) * pps : null, T.toSeconds(c.duration) * pps);
           const kfs = c.keyframes ? [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.frameIndexAt(k.time, rate))))].filter((f) => f >= 0 && f <= T.frameIndexAt(c.duration, rate)) : [];
           const startFrame = T.frameIndexAt(c.start, rate);
-          const said = tr.kind === 'audio' && c.type === 'media' && clipH >= 30 ? spokenChips(doc, c, pps) : [];
+          const said = tr.kind === 'audio' && c.type === 'media' && clipH >= 30 ? spokenChips(doc, c, pps) : null;
           return (
             <Fragment key={c.id}>
               <button role="listitem" type="button" tabIndex={p.anchorClip === c.id ? 0 : -1}
-                className={`clip k-${kind}${c.type === 'caption' ? ' caption-cue' : ''}${c.type === 'adjustment' ? ' adjust-clip' : ''}${selected ? ' selected' : ''}${p.selectedCut === c.id ? ' via-cut' : ''}${p.ghostSel.has(c.id) ? ' ghost-selected' : ''}${p.cutPending.includes(c.id) ? ' cut-pending' : ''}${missing ? ' missing' : ''}${width < 36 ? ' tiny' : ''}${p.dropClip === c.id ? ' drop-target' : ''}`}
+                className={`clip k-${kind}${c.type === 'caption' ? ' caption-cue' : ''}${c.type === 'adjustment' ? ' adjust-clip' : ''}${selected ? ' selected' : ''}${p.selectedCut === c.id ? ' via-cut' : ''}${p.ghostSel.has(c.id) ? ' ghost-selected' : ''}${p.cutPending.includes(c.id) ? ' cut-pending' : ''}${missing ? ' missing' : ''}${width < 36 ? ' tiny' : ''}${left < 4 ? ' at-origin' : ''}${p.dropClip === c.id ? ' drop-target' : ''}`}
                 data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-ramp={c.type === 'media' && c.speedEnd ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
                 style={{ left, width, top: CLIP_PAD, height: clipH }} aria-pressed={selected}
                 onClick={(e) => {
@@ -392,7 +437,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                     {ai && <span className="clip-badge is-ai num" title={s.clipAi}>AI</span>}
                   </span>
                 )}
-                {said.map((w) => <span key={w.key} className="word-chip" dir="auto" style={{ left: w.left + 1, maxWidth: Math.max(0, w.width - 2) }}>{w.text}</span>)}
+                {said?.chips.map((w) => <span key={w.key} className={`word-chip is-${said.mode}`} dir="auto" style={{ left: w.left + 1, maxWidth: Math.max(0, w.width - 2) }}>{w.text}</span>)}
                 {kfs.map((f) => <i key={f} className={`kf${p.grid?.at(startFrame + f)?.onBeat ? ' on-beat' : ''}`} style={{ left: T.toSeconds(T.frameTime(f, rate)) * pps }} aria-hidden="true" />)}
                 {selected && p.selectedCut !== c.id && !tr.locked && width >= 16 && <><i className="clip-grip start" data-grip="start" aria-hidden="true" /><i className="clip-grip end" data-grip="end" aria-hidden="true" /></>}
               </button>
@@ -401,7 +446,8 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
               {hasCut && (
                 <CutChip editor={editor} lang={lang} clip={c as MediaClip} before={before} beforeName={before ? bare(clipLabel(doc, before)) : ''} afterName={label} x={left} pps={pps} rate={rate} locked={tr.locked}
                   onBeat={!!before && !!p.grid?.at(startFrame)?.onBeat} held={p.heldLights.has(c.id)} spare={(c as MediaClip).transition || before ? velocityLimit(doc, c.id).haveOutFrames : null}
-                  selected={p.selectedCut === c.id} dropping={p.dropCut === c.id} nearSelected={selected || (!!before && selection.includes(before.id))} />
+                  selected={p.selectedCut === c.id} dropping={p.dropCut === c.id} nearSelected={selected || (!!before && selection.includes(before.id))}
+                  roomAdd={room.add} roomChip={room.chip} />
               )}
             </Fragment>
           );
@@ -442,6 +488,13 @@ export function Timeline() {
   const [metrics, setMetrics] = useState(DEFAULT_METRICS);
   const [view, setView] = useState({ left: 0, width: 0 });
   const [drop, setDrop] = useState<Drop | null>(null);
+  // a drag that ends anywhere (dropped elsewhere, cancelled, left the window) takes its tip and its target lights with it
+  useEffect(() => {
+    const clear = () => setDrop(null);
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    return () => { window.removeEventListener('dragend', clear); window.removeEventListener('drop', clear); };
+  }, []);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [analysing, setAnalysing] = useState(false);
   const selectedCut = useSelectedCut();
@@ -502,6 +555,7 @@ export function Timeline() {
   const tails = useMemo(() => (doc ? soundTailsFor(doc) : new Map<string, { seconds: number; cut: boolean }>()), [doc]);
   const heldLights = useMemo(() => { const out = new Set<string>(); if (doc) for (const [id, plan] of flashSchedule(doc).lights) if (!plan.kept) out.add(id); return out; }, [doc]);
   const userMarkers = useMemo(() => (doc ? Object.values(doc.markers ?? {}).filter((m) => m.sequenceId === doc.mainSequenceId).sort((a, b) => T.cmp(a.time, b.time)) : []), [doc]);
+  const markerFrames = useMemo(() => new Set(userMarkers.map((m) => T.frameIndexAt(m.time, rate))), [userMarkers, rate]);
   const ghostSel = useMemo(() => new Set(ghosts.flatMap((g) => g.selection)), [ghosts]);
   const flavours = useMemo(() => new Map(lanes.map((l) => [l.track.id, doc && l.track.kind === 'audio' ? trackFlavour(doc, l.track) : 'sound' as Flavour])), [lanes, doc]);
   const lastMarkerS = userMarkers.length ? T.toSeconds(userMarkers[userMarkers.length - 1]!.time) : 0;
@@ -688,7 +742,7 @@ export function Timeline() {
           <IconButton size="sm" className="tl-magnet" data-testid="tl-magnet" label={s.magnet} pressed={!!behaviour?.mainMagnet} disabledReason={!doc ? s.needClip : canBehave ? undefined : s.magnetSoon} icon={<IconMainMagnet size={16} />} onClick={() => setBehaviour({ mainMagnet: !behaviour?.mainMagnet })} />
           <IconButton size="sm" className="tl-ripple" data-testid="tl-ripple" label={s.ripple} pressed={!!behaviour?.rippleDelete} disabledReason={!doc ? s.needClip : canBehave ? undefined : s.magnetSoon} icon={<IconRippleDelete size={16} />} onClick={() => setBehaviour({ rippleDelete: !behaviour?.rippleDelete })} />
           <Tooltip label={s.snapBeats}>
-            <button type="button" role="switch" aria-checked={snapBeats} aria-label={s.snapBeats} className={`pf-btn pf-btn-ghost pf-btn-sm pf-iconbtn tl-snap${snapBeats ? ' is-on' : ''}`} data-testid="snap-beats" onClick={() => { setSnapBeats(!snapBeats); writeSnapBeats(!snapBeats); }}><IconBeatLock size={16} /></button>
+            <button type="button" role="switch" aria-checked={snapBeats} aria-label={s.snapBeats} className={`pf-btn pf-btn-ghost pf-btn-sm pf-iconbtn tl-snap${snapBeats ? ' is-on' : ''}`} data-testid="snap-beats" onClick={() => { setSnapBeats(!snapBeats); writeSnapBeats(!snapBeats); }}><Metronome size={16} strokeWidth={1.75} aria-hidden="true" /></button>
           </Tooltip>
           <span className="tl-sep" aria-hidden="true" />
           <ToolbarActions s={s} />
@@ -732,7 +786,7 @@ export function Timeline() {
               <div className="tl-flash" data-testid="flash-lane" role="img" aria-label={s.flashLane}>
                 {flashRanges.map((r, i) => <i key={i} data-testid="flash-risk" style={{ left: r.from * pps, width: Math.max(3, (r.to - r.from) * pps) }} title={s.flashRisk(rulerLabel(r.from, 1), rulerLabel(r.to, 1), String(r.perSecond))} />)}
               </div>
-              <PlayheadCap pps={pps} beatSeconds={pulse.beatSeconds} />
+              <PlayheadCap pps={pps} beatSeconds={pulse.beatSeconds} markerFrames={markerFrames} />
             </div>
           </div>
           {doc && lanes.map((lane, i) => (

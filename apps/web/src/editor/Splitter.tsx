@@ -7,20 +7,20 @@
  * the shell element (`.app`, this element's parent); the splitter is the one that sets it:
  *   - a height the viewer chose: remembered in this browser (never in the project), and kept within the window;
  *   - otherwise the usual height: as tall as the timeline's lanes need (--pf-tl-natural, set by Timeline.tsx), between the
- *     design's least height and a little under half the window (48%); in Sound mode the timeline takes 52% of the window.
+ *     design's least height and a little under half the window (48%); in Sound mode the timeline takes 52% of the window,
+ *     or more when its taller sound lanes need it (never less than the lanes, never more than the window leaves).
  * Keep the root element and its data-shell-slot: the shell finds the mount by it.
  */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Tooltip } from '../ds/index.ts';
-import { splitterHeight } from './interactions.math.ts';
+import { splitterHeight, TL_USUAL as USUAL, TL_USUAL_SOUND as USUAL_SOUND } from './interactions.math.ts';
 import { useEditorState } from './store.ts';
 import { TL_STRINGS } from './timeline.strings.ts';
 
 const KEY = 'pf.tl.height.v1';
 const MIN_H = 200;       // toolbar, Pulse Strip, ruler and the main lane still fit
 const KEEP_ABOVE = 260;  // what the top bar and the viewer above keep, whatever is asked for
-const USUAL = 'clamp(248px, var(--pf-tl-natural, var(--pf-tl-h, 38dvh)), 48dvh)';
-const USUAL_SOUND = 'clamp(248px, 52dvh, calc(100dvh - 260px))';
+
 const readStored = (): number | null => { try { const v = Number(localStorage.getItem(KEY)); return Number.isFinite(v) && v >= MIN_H ? v : null; } catch { return null; } };
 
 export function Splitter() {

@@ -169,7 +169,7 @@
 .timeline.pf-ds .track-bar { position: absolute; left: 0; inset-block: 2px; inline-size: 3px; border-radius: 0 2px 2px 0; background: var(--k); }
 .timeline.pf-ds .track-ico { flex: none; color: var(--k); }
 .timeline.pf-ds .track-code { flex: none; min-inline-size: 22px; color: var(--pf-text-3); font-size: var(--pf-fs-digits); }
-.timeline.pf-ds .track-head .track-name { position: static; flex: 1 1 0; min-inline-size: 0; inline-size: auto; top: auto; color: var(--pf-text); font: var(--pf-fw-medium) var(--pf-fs-xs)/var(--pf-lh-xs) var(--pf-font); text-align: end; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timeline.pf-ds .track-head .track-name { position: static; flex: 1 1 0; min-inline-size: 0; inline-size: auto; top: auto; color: var(--pf-text); font: var(--pf-fw-medium) var(--pf-fs-xs)/var(--pf-lh-xs) var(--pf-font); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .timeline.pf-ds .track-kind { color: var(--pf-text-2); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); }
 .timeline.pf-ds .track-state { flex: none; display: inline-flex; align-items: center; gap: var(--pf-sp-2); color: var(--pf-text-2); }
 .timeline.pf-ds .track-state:empty { display: none; }
@@ -184,6 +184,8 @@
 .timeline.pf-ds button.track-btn[aria-pressed='true'] { background: var(--pf-frame-soft); color: var(--pf-frame); border: 0; }
 .timeline.pf-ds button.track-btn:disabled { color: var(--pf-text-disabled); cursor: not-allowed; }
 .timeline.pf-ds button.track-btn:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: -2px; }
+/* while a track is renamed, the field takes the header's whole width (the buttons' box is only as wide as its buttons) */
+.timeline.pf-ds .track-buttons:has(.track-rename-input) { position: static; }
 .timeline.pf-ds .track-rename-input { position: absolute; inset-block: 2px; left: 8px; right: 4px; z-index: 2; padding: 0 var(--pf-sp-3); border: 1px solid var(--pf-frame); border-radius: var(--pf-r-xs); background: var(--pf-surface-4); color: var(--pf-text); font: var(--pf-fs-xs)/1 var(--pf-font); }
 @media (max-width: 1366px) { .timeline.pf-ds .track-tempo { display: none; } .timeline.pf-ds .track-code { min-inline-size: 18px; } .timeline.pf-ds .track-head { gap: var(--pf-sp-2); padding-inline-start: 9px; } }
 
@@ -218,7 +220,7 @@
 .timeline.pf-ds .track.lane-a3 .clip, .timeline.pf-ds .track.lane-v2 .clip, .timeline.pf-ds .track.lane-fx .clip { align-items: center; }
 .timeline.pf-ds .track.lane-a3 .clip-badges, .timeline.pf-ds .track.lane-v2 .clip-badges, .timeline.pf-ds .track.lane-fx .clip-badges { inset-block-start: 50%; transform: translateY(-50%); }
 /* what is said in a voice clip, word by word where it is said (Hebrew words keep their own direction on the left-to-right time axis) */
-.timeline.pf-ds .word-chip { position: absolute; z-index: 1; inset-block-end: 1px; block-size: 15px; padding: 0 5px; border-radius: var(--pf-r-xs); background: var(--pf-plate); color: var(--pf-text); font-size: var(--pf-fs-xs); line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: clip; pointer-events: none; }
+.timeline.pf-ds .word-chip { position: absolute; z-index: 1; inset-block-end: 1px; block-size: 15px; padding: 0 5px; border-radius: var(--pf-r-xs); background: var(--pf-plate); color: var(--pf-text); font-size: var(--pf-fs-xs); line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 /* a still picture: the picture itself, repeated along the clip like a filmstrip */
 .timeline.pf-ds .clip-still { position: absolute; inset: 2px 0 0; background-size: auto 100%; background-repeat: repeat-x; background-position: left center; pointer-events: none; }
 /* sound lanes are low: the plate and the spoken words share the clip's height */
@@ -233,6 +235,8 @@
 .timeline.pf-ds .track .clip.selected.via-cut, .timeline.pf-ds .track .clip.selected.via-cut:hover { box-shadow: inset 0 2px 0 var(--k), inset 0 0 0 1px color-mix(in srgb, var(--pf-frame) 55%, transparent); }
 .timeline.pf-ds .track .clip.selected.via-cut .clip-plate { margin-left: 3px; }
 .timeline.pf-ds .track .clip:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; z-index: 3; }
+/* a clip at the time origin: the ring is drawn inside, so the sticky header does not hide its left side */
+.timeline.pf-ds .track .clip.at-origin:focus-visible { outline-offset: -2px; }
 .timeline.pf-ds .track .clip.cut-pending { opacity: .45; }
 .timeline.pf-ds .track .clip.ghost-selected { outline: 2px dashed var(--pf-agent); outline-offset: 1px; }
 .timeline.pf-ds .track .clip.drop-target { outline: 2px dashed var(--pf-frame); outline-offset: 1px; box-shadow: inset 0 0 0 100vmax var(--pf-frame-soft); }
@@ -287,6 +291,9 @@
 .timeline.pf-ds .cut.dropping button.cut-chip, .timeline.pf-ds .cut.dropping button.cut-add { opacity: 1; color: var(--pf-frame-ink); background: var(--pf-frame); box-shadow: var(--pf-glow-frame); transform: scale(1.25); }
 .timeline.pf-ds button.cut-add { display: inline-grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 50%; background: var(--pf-surface-1); color: var(--pf-frame); box-shadow: 0 0 0 1.5px var(--pf-frame); cursor: pointer; opacity: 0; transition: opacity var(--pf-dur-fast) var(--pf-ease-out), transform var(--pf-dur-fast) var(--pf-ease-snap); }
 .timeline.pf-ds .track-lane:hover button.cut-add, .timeline.pf-ds button.cut-add:focus-visible { opacity: 1; }
+/* at rest the "+" is invisible, and so it never takes a click meant for the clip under it */
+.timeline.pf-ds .cut .pf-tip-anchor > button.cut-add { pointer-events: none; }
+.timeline.pf-ds .track-lane:hover .cut .pf-tip-anchor > button.cut-add, .timeline.pf-ds .cut .pf-tip-anchor > button.cut-add:focus-visible { pointer-events: auto; }
 .timeline.pf-ds button.cut-add:hover { background: var(--pf-frame); color: var(--pf-frame-ink); transform: scale(1.1); }
 .timeline.pf-ds button.cut-add[aria-disabled='true'] { color: var(--pf-attention); box-shadow: 0 0 0 1.5px var(--pf-attention); cursor: not-allowed; }
 .timeline.pf-ds button.cut-add[aria-disabled='true']:hover { background: var(--pf-surface-1); color: var(--pf-attention); transform: none; }
@@ -303,7 +310,12 @@
 .timeline.pf-ds .playhead { position: absolute; inset-block: 0; inline-size: 2px; margin-left: -1px; background: var(--pf-frame); box-shadow: 0 0 8px var(--pf-frame-glow); pointer-events: none; z-index: 4; }
 .timeline.pf-ds .playhead::before { content: none; }
 .timeline.pf-ds .playhead-cap { position: absolute; inset-block: 0; inline-size: 2px; margin-left: -1px; background: var(--pf-frame); pointer-events: none; z-index: 3; }
-.timeline.pf-ds .playhead-cap .num { position: absolute; inset-block-start: calc(var(--pf-lane-pulse) + 3px); left: 0; padding: 0 6px; block-size: 18px; display: inline-flex; align-items: center; border-radius: 0 var(--pf-r-xs) var(--pf-r-xs) 0; background: var(--tl-mode); color: var(--pf-frame-ink); font-size: var(--pf-fs-digits); font-weight: var(--pf-fw-medium); line-height: 1; white-space: nowrap; }
+/* the timecode: centred on the line; at the time origin it starts at the line; on a marker it ends at the line (the flag runs right) */
+.timeline.pf-ds .playhead-cap .num { position: absolute; inset-block-start: calc(var(--pf-lane-pulse) + 3px); left: 1px; transform: translateX(-50%); padding: 0 6px; block-size: 18px; display: inline-flex; align-items: center; border-radius: var(--pf-r-xs); background: var(--tl-mode); color: var(--pf-frame-ink); font-size: var(--pf-fs-digits); font-weight: var(--pf-fw-medium); line-height: 1; white-space: nowrap; }
+.timeline.pf-ds .playhead-cap .num[data-place='start'] { transform: none; left: 0; border-radius: 0 var(--pf-r-xs) var(--pf-r-xs) 0; }
+.timeline.pf-ds .playhead-cap .num[data-place='end'] { transform: translateX(-100%); left: 2px; border-radius: var(--pf-r-xs) 0 0 var(--pf-r-xs); }
+/* a ruler label the timecode covers is hidden while it is covered (its tick stays) */
+.timeline.pf-ds .ruler > span.under-cap { color: transparent; }
 /* other participants: a labelled marker only */
 .timeline.pf-ds .ghost-playhead { position: absolute; inset-block: 0; inline-size: 0; margin: 0; border-left: 2px dashed var(--pf-agent); pointer-events: none; z-index: 4; }
 .timeline.pf-ds .ghost-playhead.user { border-color: var(--pf-info); }
@@ -320,9 +332,11 @@
 .timeline.pf-ds .trim-chip .num { font-size: var(--pf-fs-digits); }
 .timeline.pf-ds .trim-chip.at-start { left: 0; } .timeline.pf-ds .trim-chip.at-end { right: 0; }
 .timeline.pf-ds .track:nth-child(2) .trim-chip { inset-block-end: auto; inset-block-start: calc(100% + 4px); } /* the first lane: the chip goes below, clear of the ruler */
-.timeline.pf-ds .tether { position: absolute; inset-block: 0; inline-size: 0; border-left: 1px solid var(--pf-frame); pointer-events: none; z-index: 5; }
+/* the tether runs over the top rows too (above the sticky Pulse Strip and ruler), and says what it snapped to on the ruler row,
+   where it covers no clip */
+.timeline.pf-ds .tether { position: absolute; inset-block: 0; inline-size: 0; border-left: 1px solid var(--pf-frame); pointer-events: none; z-index: 7; }
 .timeline.pf-ds .tether.is-beat, .timeline.pf-ds .tether.is-bar { border-left: 1px dashed var(--pf-pulse); }
-.timeline.pf-ds .tether span { position: sticky; inset-block-start: calc(var(--pf-lane-pulse) + var(--pf-lane-ruler) + var(--pf-lane-flash) + 4px); display: inline-block; margin-left: 5px; padding: 1px 7px; border-radius: var(--pf-r-xs); background: var(--pf-frame); color: var(--pf-frame-ink); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); white-space: nowrap; }
+.timeline.pf-ds .tether span { position: sticky; inset-block-start: calc(var(--pf-lane-pulse) + 3px); display: inline-block; margin-left: 5px; padding: 0 7px; block-size: 18px; line-height: 18px; border-radius: var(--pf-r-xs); background: var(--pf-frame); color: var(--pf-frame-ink); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); white-space: nowrap; }
 .timeline.pf-ds .tether.is-beat span, .timeline.pf-ds .tether.is-bar span { background: var(--pf-pulse); color: var(--pf-pulse-ink); }
 .timeline.pf-ds .marquee { position: absolute; z-index: 5; border: 1px solid var(--pf-frame); background: var(--pf-frame-soft); pointer-events: none; }
 
@@ -347,7 +361,9 @@
 .clip-menu.pf-ds button:disabled.danger { color: var(--pf-text-disabled); }
 .clip-menu.pf-ds button .pf-ico { opacity: 1; color: var(--pf-text-2); }
 .clip-menu.pf-ds button.danger:not(:disabled) .pf-ico { color: inherit; }
-.clip-menu.pf-ds kbd { margin-inline-start: auto; padding: 1px 6px; border: 0; border-radius: 5px; background: var(--pf-surface-1); color: var(--pf-text-2); font-size: var(--pf-fs-digits); opacity: 1; }
+/* the name takes the room, so the key cap sits at the end side (a cap is a left-to-right island: its own margin would point the wrong way in Hebrew) */
+.clip-menu.pf-ds button > span { flex: 1 1 auto; min-inline-size: 0; }
+.clip-menu.pf-ds kbd { flex: none; margin-inline-start: 0; padding: 1px 6px; border: 0; border-radius: 5px; background: var(--pf-surface-1); color: var(--pf-text-2); font-size: var(--pf-fs-digits); opacity: 1; }
 
 /* the ride bar's menus (ds Menu, rendered at the end of the page): an opaque surface of their own, so they read over the lanes
    whatever the legacy sheet makes of the middle surface tokens */
