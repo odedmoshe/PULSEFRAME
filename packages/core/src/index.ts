@@ -31,3 +31,7 @@ export * from './audioEffects.ts';
 export * from './tracking.ts';
 export * from './trackingApi.ts';
 export * from './geometry.ts';
+export * from './templateContract.ts';
+export * from './templateCatalog.ts';
+export * from './templatePlan.ts';
+export * from './templateOps.ts';

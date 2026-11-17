@@ -17,6 +17,17 @@ export function sequenceDuration(doc: ProjectDocument, sequenceId = doc.mainSequ
   return end;
 }
 
+/**
+ * Why an effect cannot go on an adjustment clip, or null when it can (ADR-0016). An adjustment has no picture of its own:
+ * it acts on the picture already drawn below it.
+ */
+export function adjustmentRefusal(type: string): string | null {
+  if (isTimeEffect(type)) return 'a time effect needs a clip\'s own source; it cannot act on the picture below';
+  if (type === 'key.chroma') return 'a chroma key over the whole picture below would cut holes through to the background';
+  if (type === 'stylize.shadow') return 'a drop shadow has no visible result on a full-frame picture';
+  return null;
+}
+
 /** The project's colour tables: library entries of kind 'lut' (imported .cube files). */
 export const lutAssets = (doc: ProjectDocument) => Object.values(doc.assets).filter((a) => a.kind === 'lut');
 /** The colour table an effect instance names: the asset id of a color.lut effect, or '' when it names none (or is another effect). */
@@ -129,6 +140,19 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         }
         if ((c.effects?.length || c.blend) && (tr.kind === 'audio' || tr.kind === 'caption')) issues.push({ code: 'incompatible_track', message: `clip ${c.id} on a ${tr.kind} track cannot carry picture effects`, ids: [c.id, tr.id] });
         if (c.type === 'media' && (c.mask || c.transition) && tr.kind !== 'video') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: masks and transitions belong to picture clips`, ids: [c.id, tr.id] });
+        // Adjustment clips live only on adjustment tracks and use opacity alone (ADR-0016). This rule can only fire on
+        // documents that use them (schema v2), so an older project stays editable.
+        if (c.type === 'adjustment' || tr.kind === 'adjustment') {
+          if (c.type !== 'adjustment' || tr.kind !== 'adjustment')
+            issues.push({ code: 'incompatible_track', message: c.type === 'adjustment' ? `adjustment clip ${c.id} on ${tr.kind} track` : `${c.type} clip ${c.id} on adjustment track ${tr.id}`, ids: [c.id, tr.id] });
+          if (c.type === 'adjustment') {
+            const t = c.transform;
+            if (t.x !== 0 || t.y !== 0 || t.scale !== 1 || t.rotation !== 0 || (['x', 'y', 'scale', 'rotation'] as const).some((p) => c.keyframes?.[p]?.length))
+              issues.push({ code: 'adjustment_transform', message: `adjustment clip ${c.id}: only opacity can be set or animated`, ids: [c.id] });
+            for (const fx of c.effects ?? []) { const why = adjustmentRefusal(fx.type); if (why) issues.push({ code: 'adjustment_effect', message: `adjustment clip ${c.id}: ${fx.type}: ${why}`, ids: [c.id] }); }
+          }
+          continue;
+        }
         if (c.type === 'text' || c.type === 'caption') {
           if (tr.kind !== c.type) issues.push({ code: 'incompatible_track', message: `${c.type} clip ${c.id} on ${tr.kind} track`, ids: [c.id, tr.id] });
           continue;
