@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { ANIMATE_CLIP_MOTIONS, animateClipKeys, MOTION_PRESETS, motionKeys, previousMotion, type AnimateClipMotion, type MotionContext, type MotionKey, type MotionPreset, type MotionProperty } from './motionPresets.ts';
-import { applyTransaction, createProject, diffEntities, findClip, restoreEntities, transformAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { ANIMATE_CLIP_MOTIONS, animateClipKeys, MOTION_PRESETS, motionKeys, previousMotion, shortestSafeLoopFrames, type AnimateClipMotion, type MotionContext, type MotionKey, type MotionPreset, type MotionProperty } from './motionPresets.ts';
+import { applyTransaction, createProject, diffEntities, findClip, OpError, restoreEntities, transformAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 import * as T from '@pulseframe/time';
 import { sampleKeyframes } from './animation.ts';
 
@@ -608,4 +608,63 @@ describe('apply_motion_preset: a new entrance replaces the previous entrance, a 
       },
     ), { numRuns: 1500 });
   }, 180_000);
+});
+
+describe('motion presets at any frame rate, and opacity loops within the flash limit', () => {
+  let n = 0;
+  const tx = (doc: ProjectDocument, ops: OpCall[]) => applyTransaction(doc, ops, { idSeed: `fr${n++}_`, actor: 'test' });
+  const titled = (num: number, den = 1, seconds = 12) => {
+    const rate = { num, den };
+    const r = tx(createProject({ id: 'prj_fr', name: 'FR', frameRate: rate }), [{ op: 'add_text', args: { text: 'X', start: T.frameTime(0, rate), duration: T.frameTime(Math.round((seconds * num) / den), rate) } }]);
+    return { doc: r.doc, clipId: r.results[0]!.output!.clipId as string, rate };
+  };
+  /** Opacity on every frame of the clip, through the keys the op wrote. */
+  const opacities = (doc: ProjectDocument, clipId: string) => {
+    const { clip } = findClip(doc, clipId)!;
+    const rate = doc.settings.frameRate, total = T.frameIndexAt(clip.duration, rate);
+    return Array.from({ length: total }, (_, k) => transformAt(clip, T.frameTime(k, rate)).opacity);
+  };
+  /** Dips (local minima at least 0.05 below the highest since the last dip, with hysteresis) and the most of them in one second. */
+  const mostDipsInASecond = (o: number[], fps: number) => {
+    const at: number[] = [];
+    let high = o[0]!, low = Infinity, falling = false;
+    o.forEach((v, k) => {
+      if (!falling && v < high - 0.05) { falling = true; low = v; }
+      if (falling) { if (v < low) low = v; if (v > low + 0.05) { at.push(k); falling = false; high = v; } }
+      else high = Math.max(high, v);
+    });
+    let most = 0; for (let i = 0, j = 0; i < at.length; i++) { while (at[i]! - at[j]! >= fps) j++; most = Math.max(most, i - j + 1); }
+    return most;
+  };
+
+  it('a default entrance lasts the same time at 24, 30 and 60 frames a second (it used to be twice as fast at 60)', () => {
+    for (const [num, den] of [[24, 1], [30, 1], [60, 1], [30000, 1001]] as const) {
+      const { doc, clipId, rate } = titled(num, den);
+      const d = tx(doc, [{ op: 'apply_motion_preset', args: { clipId, presetId: 'motion.in.fade' } }]).doc;
+      const keys = findClip(d, clipId)!.clip.keyframes!.opacity!;
+      const seconds = T.toSeconds(keys[keys.length - 1]!.time);
+      expect(seconds, `${num}/${den}`).toBeCloseTo(0.5, 1); // 15 frames at 30 frames a second
+    }
+  });
+
+  it('flicker and opacity pulse: no period the op accepts dims more than three times a second, at any frame rate; a faster one is refused with the shortest period offered', () => {
+    for (const presetId of ['motion.loop.flicker', 'motion.loop.fade-pulse'] as const) {
+      for (const fps of [12, 24, 25, 30, 50, 60, 120]) {
+        const { doc, clipId } = titled(fps);
+        const safe = shortestSafeLoopFrames(presetId, fps)!;
+        expect(safe).toBeGreaterThan(0);
+        let refused: unknown;
+        try { tx(doc, [{ op: 'apply_motion_preset', args: { clipId, presetId, frames: safe - 1 } }]); } catch (e) { refused = e; }
+        expect(refused, `${presetId} ${fps} fps ${safe - 1} frames`).toBeInstanceOf(OpError);
+        expect((refused as OpError).details).toMatchObject({ shortest: safe });
+        for (const frames of [safe, safe + 1, safe + 7, undefined]) {
+          for (const amount of [0.5, 1, 2]) {
+            const d = tx(doc, [{ op: 'apply_motion_preset', args: { clipId, presetId, amount, ...(frames ? { frames } : {}) } }]).doc;
+            expect(mostDipsInASecond(opacities(d, clipId), fps), `${presetId} ${fps} fps, ${frames ?? 'default'} frames, amount ${amount}`).toBeLessThanOrEqual(3);
+          }
+        }
+      }
+    }
+    expect(shortestSafeLoopFrames('motion.loop.pulse', 30)).toBeNull(); // scale only: no flash
+  });
 });

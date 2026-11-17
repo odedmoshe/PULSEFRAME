@@ -13,7 +13,7 @@ import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
-import { ANIMATE_CLIP_MOTIONS, animateClipKeys, MOTION_PRESETS, motionKeys, previousMotion } from './motionPresets.ts';
+import { ANIMATE_CLIP_MOTIONS, animateClipKeys, defaultMotionFrames, MOTION_PRESETS, motionKeys, previousMotion, shortestSafeLoopFrames } from './motionPresets.ts';
 import { findLayout, layoutPlacements, LAYOUT_IDS, LAYOUTS } from './layouts.ts';
 const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[]];
 import { lookParams } from './looks.ts';
@@ -1392,7 +1392,13 @@ defineOp({
     const rate = d.settings.frameRate;
     const total = T.frameIndexAt(clip.duration, rate);
     if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
-    const made = motionKeys(preset.id, { totalFrames: total, rest: clip.transform, ...(a.frames !== undefined ? { frames: a.frames } : {}), ...(a.amount !== undefined ? { amount: a.amount } : {}) });
+    const fps = rate.num / rate.den;
+    // Default lengths keep their duration in seconds at any frame rate (they were designed at 30 frames a second).
+    const frames = a.frames ?? (preset.kind === 'move' ? undefined : defaultMotionFrames(preset.id, fps));
+    const safe = shortestSafeLoopFrames(preset.id, fps);
+    if (safe !== null && frames !== undefined && frames < safe)
+      throw new OpError('invalid_args', `${preset.name.en} with a period of ${frames} frames would dim and return more than three times a second, a seizure risk for some viewers; at ${Number(fps.toFixed(3))} frames a second the shortest period offered is ${safe} frames`, { frames, shortest: safe }, `Use frames >= ${safe}.`);
+    const made = motionKeys(preset.id, { totalFrames: total, rest: clip.transform, ...(frames !== undefined ? { frames } : {}), ...(a.amount !== undefined ? { amount: a.amount } : {}) });
     placeMotion(clip, rate, preset.kind, made);
     return { affectedIds: [clip.id], summary: `Motion ${preset.id}`, output: { properties: Object.keys(made), kind: preset.kind } };
   },

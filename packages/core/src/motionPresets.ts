@@ -233,6 +233,38 @@ function wrapTurns(keys: MotionKey[]): MotionKey[] {
   return out;
 }
 
+/** Frame rate at which the default lengths of the presets were designed; at another rate they keep their length in seconds. */
+export const MOTION_DESIGN_FPS = 30;
+/** A preset's default length (in/out) or period (loop) in frames of a project at `fps`: the same seconds as at 30 frames a second. */
+export function defaultMotionFrames(presetId: string, fps: number): number {
+  const def = BY_ID.get(presetId);
+  if (!def) throw new Error(`unknown motion preset: ${presetId}`);
+  return def.frames > 0 ? Math.max(1, Math.round((def.frames * fps) / MOTION_DESIGN_FPS)) : 0;
+}
+/**
+ * SAFETY: the shortest period (in frames at `fps`) at which an opacity loop (flicker, opacity pulse) dims and returns at
+ * most three times in any one second; null for a loop that does not change opacity. Each dip (a local minimum of the
+ * opacity over one period) is a flash: a pair of opposing changes. Four dips in a row must span more than a second, so
+ * the period P must make the shortest span of four consecutive dips longer than one second, with a frame to spare for
+ * the rounding of keys to frames. (A preset is offered faster than that by no route: apply_motion_preset refuses it.)
+ */
+export function shortestSafeLoopFrames(presetId: string, fps: number): number | null {
+  const def = BY_ID.get(presetId);
+  if (!def || def.kind !== 'loop' || !def.spec.opacity) return null;
+  const keys = def.spec.opacity, values = keys.map((k) => k[1]);
+  const dips: number[] = [];
+  for (let i = 0; i < keys.length - 1; i++) { // the last key repeats the first (a period ends where it began)
+    const prev = values[(i - 1 + keys.length - 1) % (keys.length - 1)]!, here = values[i]!, next = values[i + 1]!;
+    if (here < prev && here <= next) dips.push(keys[i]![0]);
+  }
+  if (!dips.length) return null;
+  // phases of the dips over four periods; the shortest span (in periods) of any four consecutive ones
+  const all = [0, 1, 2, 3, 4].flatMap((c) => dips.map((t) => c + t));
+  let span = Infinity;
+  for (let i = 0; i + 3 < all.length; i++) span = Math.min(span, all[i + 3]! - all[i]!);
+  return Math.floor(fps / span) + 2;
+}
+
 export function motionKeys(presetId: string, ctx: MotionContext): Partial<Record<MotionProperty, MotionKey[]>> {
   const def = BY_ID.get(presetId);
   if (!def) throw new Error(`unknown motion preset: ${presetId}`);
