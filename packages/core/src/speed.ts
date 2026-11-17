@@ -127,6 +127,8 @@ export const pictureSourceAt = (c: MediaClip, t: T.RationalTime, frame: T.Ration
  */
 export const handleAfterEnd = (c: MediaClip, assetDuration: T.RationalTime): T.RationalTime =>
   isRamped(c) ? T.sub(toTimelineSpan(c, T.sub(assetDuration, c.sourceIn)), c.duration) : c.reverse ? toTimelineSpan(c, c.sourceIn) : toTimelineSpan(c, T.sub(assetDuration, sourceEnd(c)));
+/** Timeline time a forward, constant-speed clip could start earlier before its source runs out (the head a velocity ramp reads, ADR-0012). */
+export const handleBeforeStart = (c: MediaClip): T.RationalTime => toTimelineSpan(c, c.sourceIn);
 /**
  * Timeline time at which source time `s` of the clip's stretch is played, whichever way the clip runs.
  * Forward: `timelineAt`. Reversed: the clip starts at the END of its stretch, so source time s is reached (sourceEnd − s) later.

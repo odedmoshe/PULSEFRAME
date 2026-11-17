@@ -1,5 +1,5 @@
 import * as T from '@pulseframe/time';
-import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange } from './effects.ts';
+import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange, transitionDef } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
@@ -129,6 +129,18 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         }
         if ((c.effects?.length || c.blend) && (tr.kind === 'audio' || tr.kind === 'caption')) issues.push({ code: 'incompatible_track', message: `clip ${c.id} on a ${tr.kind} track cannot carry picture effects`, ids: [c.id, tr.id] });
         if (c.type === 'media' && (c.mask || c.transition) && tr.kind !== 'video') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: masks and transitions belong to picture clips`, ids: [c.id, tr.id] });
+        if (c.type === 'media' && c.transition) {
+          // Transition options (ADR-0012): new optional fields, so these rules can only fire on documents that use them.
+          const t = c.transition, options = transitionDef(t.type)?.options ?? [];
+          for (const option of ['color', 'seed'] as const) if (t[option] !== undefined && !options.includes(option)) issues.push({ code: 'invalid_transition_option', message: `clip ${c.id}: the ${t.type} transition has no ${option} option`, ids: [c.id] });
+          if (t.sync && t.frames < 3) issues.push({ code: 'invalid_transition_sync', message: `clip ${c.id}: a transition locked to the beat needs at least 3 frames`, ids: [c.id] });
+          if (t.velocity) {
+            const prev = tr.clips.find((o) => o.type === 'media' && o.id !== c.id && T.eq(clipEnd(o), c.start));
+            const timeFirst = (x: Clip) => { const first = x.effects?.find((e) => e.enabled); return !!first && isTimeEffect(first.type); };
+            const bad = [c, ...(prev ? [prev] : [])].filter((x) => x.type === 'media' && (x.reverse || x.freeze || timeFirst(x)));
+            if (bad.length) issues.push({ code: 'incompatible_velocity', message: `clip ${c.id}: a velocity ramp cannot remap a clip that plays backwards, is a freeze frame or starts with a time effect`, ids: [c.id, ...bad.filter((x) => x.id !== c.id).map((x) => x.id)] });
+          }
+        }
         if (c.type === 'text' || c.type === 'caption') {
           if (tr.kind !== c.type) issues.push({ code: 'incompatible_track', message: `${c.type} clip ${c.id} on ${tr.kind} track`, ids: [c.id, tr.id] });
           continue;

@@ -6,12 +6,13 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
+  normaliseTextStyle, TEXT_LOOK_FIELDS,
   CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS,
   type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, speedValue, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
+import { handleAfterEnd, handleBeforeStart, isFreeze, isRamped, isReverse, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, speedValue, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { AUDIO_EFFECTS, AUDIO_PRESETS, findAudioEffect, MAX_AUDIO_FX, sortAudioFx, type AudioFxInstance, type AudioFxParams } from './audioEffects.ts';
 import { soundTails } from './queries.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
@@ -21,7 +22,8 @@ const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[
 import { lookParams } from './looks.ts';
 import { findTextPreset } from './textPresets.ts';
 import { CAPTION_LOOK_IDS, findCaptionLook } from './captionPresets.ts';
-import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, isTimeEffect, MaskSchema, modulatableParams, ModulatorSchema, paramRange, TRANSITION_IDS, type EffectInstance, type Modulator } from './effects.ts';
+import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, isTimeEffect, MaskSchema, modulatableParams, ModulatorSchema, paramRange, TRANSITION_IDS, TransitionColor, transitionDef, type EffectInstance, type Modulator, type Transition } from './effects.ts';
+import { velocityNeeds } from './transitionTiming.ts';
 import { clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
@@ -477,7 +479,7 @@ defineOp({
     const track = a.trackId ? mustTrack(seq, a.trackId) : placeTrack(seq, 'text', a.start, end, ctx);
     if (track.kind !== 'text') throw new OpError('incompatible', `text cannot go on ${track.kind} track`, { trackId: track.id });
     assertFree(track, a.start, end);
-    const clip: Clip = { id: ctx.newId('clp'), type: 'text', text: a.text, start: a.start, duration: a.duration, style: { ...DEFAULT_TEXT_STYLE, ...a.style }, transform: { ...DEFAULT_TRANSFORM, ...a.transform } };
+    const clip: Clip = { id: ctx.newId('clp'), type: 'text', text: a.text, start: a.start, duration: a.duration, style: normaliseTextStyle({ ...DEFAULT_TEXT_STYLE, ...a.style }), transform: { ...DEFAULT_TRANSFORM, ...a.transform } };
     track.clips.push(clip);
     sortClips(track);
     return { affectedIds: [clip.id], summary: `Added text "${a.text.slice(0, 40)}" at ${fmt(a.start)}`, output: { clipId: clip.id, trackId: track.id } };
@@ -487,14 +489,17 @@ defineOp({
 defineOp({
   name: 'apply_text_preset',
   version: 1,
-  description: 'Give a text clip one of the named text styles (see list_catalog → textPresets): font, weight, size, colours, box, outline and an optional shadow or glow. The text itself, its position, alignment and direction are kept, and every value stays editable (update_text, update_effect).',
+  description: 'Give a text clip one of the named text styles (see list_catalog → textPresets): font, weight, size, colours, box, outline, an optional shadow or glow, and the look fields it lists (gradient, tracking, second outline, glow, extrude, long shadow; the ones it does not list are cleared). The text itself, its position, alignment and direction are kept, and every value stays editable (update_text, update_effect).',
   args: z.object({ clipId: z.string(), presetId: z.string() }).strict(),
   apply(d, a, ctx) {
     const { clip } = mustClip(d, a.clipId);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
     const preset = findTextPreset(a.presetId);
     if (!preset) throw new OpError('not_found', `text style "${a.presetId}" does not exist`, { presetId: a.presetId }, 'Call list_catalog for the text styles.');
-    clip.style = { ...clip.style, ...preset.style };
+    // The preset owns the look fields (ADR-0012): a look from an earlier preset or edit is cleared, then the preset's own are set.
+    const base: Record<string, unknown> = { ...clip.style };
+    for (const k of TEXT_LOOK_FIELDS) delete base[k];
+    clip.style = normaliseTextStyle({ ...(base as typeof clip.style), ...preset.style });
     // The preset owns the clip's drop shadow: replaced, added or removed. Other effects are left alone.
     const others = (clip.effects ?? []).filter((e) => e.type !== 'stylize.shadow');
     const list = preset.shadow ? [...others, { id: ctx.newId('fx'), type: 'stylize.shadow', enabled: true, params: parseEffect('stylize.shadow', preset.shadow) }] : others;
@@ -506,13 +511,13 @@ defineOp({
 defineOp({
   name: 'update_text',
   version: 1,
-  description: 'Change the content and/or style of a text clip. Unspecified fields are kept.',
+  description: 'Change the content and/or style of a text clip. Unspecified fields are kept. A look field (gradient, tracking, stroke2, glow, extrude, longShadow) set to null is removed.',
   args: z.object({ clipId: z.string(), text: z.string().min(1).max(2000).optional(), style: TextStyleSchema.partial().optional() }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
     if (a.text !== undefined) clip.text = a.text;
-    if (a.style) clip.style = { ...clip.style, ...a.style };
+    if (a.style) clip.style = normaliseTextStyle({ ...clip.style, ...a.style });
     return { affectedIds: [clip.id], summary: `Updated text "${clip.text.slice(0, 40)}"` };
   },
 });
@@ -2307,33 +2312,134 @@ export function previousAdjacent(track: Track, clip: Clip): MediaClip | null {
   for (const c of track.clips) if (c.type === 'media' && c.id !== clip.id && T.eq(clipEnd(c), clip.start)) return c;
   return null;
 }
+type Velocity = NonNullable<Transition['velocity']>;
+const VELOCITIES: readonly Velocity[] = [2, 3, 4];
+/**
+ * Source a transition at the start of `clip` has to play with (ADR-0012), in whole frames: after the previous clip's end
+ * (null when there is no previous picture clip, or it is a still image, which never runs out) and before the clip's own
+ * sourceIn (null when the clip is a still image).
+ */
+function transitionSource(d: ProjectDocument, track: Track, clip: MediaClip): { prev: MediaClip | null; haveOut: number | null; haveHead: number | null } {
+  const rate = d.settings.frameRate;
+  const prev = previousAdjacent(track, clip);
+  const prevAsset = prev ? d.assets[prev.assetId] : undefined;
+  const ownAsset = d.assets[clip.assetId];
+  const haveOut = prev && prevAsset && prevAsset.kind !== 'image' ? T.frameIndexAt(handleAfterEnd(prev, prevAsset.duration), rate) : null;
+  const haveHead = ownAsset && ownAsset.kind !== 'image' ? T.frameIndexAt(handleBeforeStart(clip), rate) : null;
+  return { prev, haveOut, haveHead };
+}
+/** The largest velocity the handles allow for a transition of n frames (1 = none): the velocityNeeds arithmetic, nothing else. */
+const maxVelocityFor = (n: number, haveOut: number | null, haveHead: number | null): 1 | Velocity => {
+  let best: 1 | Velocity = 1;
+  for (const v of VELOCITIES) { const need = velocityNeeds(n, v); if ((haveOut === null || need.outFrames <= haveOut) && (haveHead === null || need.headFrames <= haveHead)) best = v; }
+  return best;
+};
+/** True when the clip's first enabled effect is a time effect (its picture is already remapped in time). */
+const startsWithTimeEffect = (c: MediaClip) => { const first = c.effects?.find((e) => e.enabled); return !!first && isTimeEffect(first.type); };
+/**
+ * The one check of a transition at the start of a picture clip, shared by set_transition and set_transition_options
+ * (ADR-0012). Without options its codes and messages are exactly those set_transition always had.
+ */
+function checkTransition(d: ProjectDocument, track: Track, clip: MediaClip, tr: Transition): void {
+  const rate = d.settings.frameRate;
+  const n = tr.frames, v = tr.velocity;
+  const own = T.frameIndexAt(clip.duration, rate);
+  if (n > own) throw new OpError('out_of_bounds', `the transition (${n} frames) is longer than the clip (${own} frames)`, { maxFrames: own }, 'Use at most maxFrames.');
+  const { prev, haveOut, haveHead } = transitionSource(d, track, clip);
+  refuseRamped(clip, 'given a transition');
+  if (prev) refuseRamped(prev, 'followed by a transition');
+  if (v) {
+    // A velocity ramp remaps forward pictures only: the sides that are video, not reversed, not held, not already remapped in time.
+    for (const side of prev ? [prev, clip] : [clip]) {
+      if (isReverse(side) || isFreeze(side)) throw new OpError('incompatible', 'a velocity ramp cannot remap a clip that plays backwards or is a freeze frame', { clipId: side.id }, 'Remove the velocity (set_transition_options velocity=null), or make the clip play forwards first.');
+      if (startsWithTimeEffect(side)) throw new OpError('incompatible', 'a velocity ramp cannot remap a clip whose first effect is a time effect', { clipId: side.id }, 'Remove the velocity (set_transition_options velocity=null), or remove or turn off the time effect first.');
+    }
+    const video = (c: MediaClip) => d.assets[c.assetId]?.kind === 'video';
+    if (!video(clip) && !(prev && video(prev))) throw new OpError('incompatible', 'a velocity ramp needs a video on at least one side of the transition', { clipId: clip.id }, 'Still pictures have no motion to speed up.');
+  }
+  const maxVelocity = maxVelocityFor(n, haveOut, haveHead);
+  if (prev && haveOut !== null) {
+    const need = v ? velocityNeeds(n, v).outFrames : n;
+    if (haveOut < need) {
+      if (!v) throw new OpError('out_of_bounds', `the previous clip has only ${haveOut} unused source frames after its end; the transition needs ${n}`, { maxFrames: haveOut, previousClipId: prev.id, maxVelocity }, haveOut > 0 ? 'Use at most maxFrames, or trim the end of the previous clip to free more source.' : 'Trim the end of the previous clip to free source frames for the transition.');
+      let maxFrames = 0;
+      for (let m = 1; m <= Math.min(own, 150); m++) if (velocityNeeds(m, v).outFrames <= haveOut && (haveHead === null || velocityNeeds(m, v).headFrames <= haveHead)) maxFrames = m;
+      throw new OpError('out_of_bounds', `the previous clip has only ${haveOut} unused source frames after its end; the transition at velocity ×${v} needs ${need}`, { maxFrames, previousClipId: prev.id, maxVelocity, needOutFrames: need, haveOutFrames: haveOut }, maxVelocity > 1 ? 'Use at most maxVelocity, a shorter transition (maxFrames), or trim the end of the previous clip to free more source.' : 'Remove the velocity, or trim the end of the previous clip to free more source.');
+    }
+  }
+  if (v && haveHead !== null) {
+    const need = velocityNeeds(n, v);
+    if (haveHead < need.headFrames) throw new OpError('out_of_bounds', `the clip has only ${haveHead} source frames before its start; the transition at velocity ×${v} needs ${need.headFrames}`, { maxVelocity, needOutFrames: need.outFrames, needHeadFrames: need.headFrames, haveOutFrames: haveOut, haveHeadFrames: haveHead }, maxVelocity > 1 ? 'Use at most maxVelocity, or trim the start of the clip to free source before it.' : 'Remove the velocity, or trim the start of the clip to free source before it.');
+  }
+  if (tr.sync && n < 3) throw new OpError('out_of_bounds', `a transition locked to the beat needs at least 3 frames; this one has ${n}`, { minFrames: 3 }, 'Use 3 frames or more, or turn the beat lock off.');
+  const options = transitionDef(tr.type)?.options ?? [];
+  for (const option of ['color', 'seed'] as const) if (tr[option] !== undefined && !options.includes(option)) throw new OpError('incompatible', `the ${tr.type} transition has no ${option} option`, { option, type: tr.type, options: [...options] }, 'list_catalog → transitions[].options lists the options of each type.');
+}
+const transitionTarget = (d: ProjectDocument, clipId: string): { clip: MediaClip; track: Track } => {
+  const { clip, track } = pictureClip(d, clipId);
+  if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
+  return { clip, track };
+};
 defineOp({
   name: 'set_transition',
   version: 1,
-  description: 'Put a transition at the START of a picture clip (type=null removes it). It plays over the clip\'s first frames while the previous clip on the same track keeps playing underneath, which needs that many unused source frames after the previous clip\'s out point. With no previous clip the transition reveals the clip over the layers below. Sound is not crossfaded.',
+  description: 'Put a transition at the START of a picture clip (type=null removes it). It plays over the clip\'s first frames while the previous clip on the same track keeps playing underneath, which needs that many unused source frames after the previous clip\'s out point. With no previous clip the transition reveals the clip over the layers below. Sound is not crossfaded. Changing the type keeps the beat lock and the velocity (set_transition_options), and keeps the colour and seed only where the new type has them.',
   args: z.object({ clipId: z.string(), type: z.enum(TRANSITION_IDS).nullable(), frames: z.number().int().min(1).max(150).optional() }).strict(),
   apply(d, a) {
-    const { clip, track } = pictureClip(d, a.clipId);
-    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
+    const { clip, track } = transitionTarget(d, a.clipId);
     if (a.type === null) { delete clip.transition; return { affectedIds: [clip.id], summary: 'Removed transition' }; }
-    const rate = d.settings.frameRate;
     const frames = a.frames ?? 15;
-    const own = T.frameIndexAt(clip.duration, rate);
-    if (frames > own) throw new OpError('out_of_bounds', `the transition (${frames} frames) is longer than the clip (${own} frames)`, { maxFrames: own }, 'Use at most maxFrames.');
-    const prev = previousAdjacent(track, clip);
-    refuseRamped(clip, 'given a transition');
-    if (prev) refuseRamped(prev, 'followed by a transition');
-    if (prev) {
-      const asset = d.assets[prev.assetId]!;
-      if (asset.kind !== 'image') {
-        const handle = T.frameIndexAt(handleAfterEnd(prev, asset.duration), rate);
-        if (handle < frames) throw new OpError('out_of_bounds', `the previous clip has only ${handle} unused source frames after its end; the transition needs ${frames}`, { maxFrames: handle, previousClipId: prev.id }, handle > 0 ? 'Use at most maxFrames, or trim the end of the previous clip to free more source.' : 'Trim the end of the previous clip to free source frames for the transition.');
-      }
-    }
-    clip.transition = { type: a.type, frames };
-    return { affectedIds: [clip.id], summary: `Transition ${a.type} (${frames} frames)`, output: { previousClipId: prev?.id ?? null } };
+    const old = clip.transition, options = transitionDef(a.type)?.options ?? [];
+    const next: Transition = { type: a.type, frames };
+    if (old?.sync) next.sync = old.sync;
+    if (old?.velocity) next.velocity = old.velocity;
+    if (old?.color !== undefined && options.includes('color')) next.color = old.color;
+    if (old?.seed !== undefined && options.includes('seed')) next.seed = old.seed;
+    checkTransition(d, track, clip, next);
+    clip.transition = next;
+    return { affectedIds: [clip.id], summary: `Transition ${a.type} (${frames} frames)`, output: { previousClipId: previousAdjacent(track, clip)?.id ?? null } };
   },
 });
+defineOp({
+  name: 'set_transition_options',
+  version: 1,
+  description: 'Options of the transition at the start of a picture clip (null removes one). sync=beat: its decisive moment lands on the analysed beat nearest the middle of its window; with no beat there it plays as usual. velocity 2|3|4: the outgoing shot speeds up to about that many times into the cut and the incoming one slows back to normal; only the picture is remapped, sound stays a hard cut, and both sides need more source. color, seed: only for types that list them (list_catalog → transitions[].options).',
+  args: z.object({
+    clipId: z.string(),
+    sync: z.literal('beat').nullable().optional(),
+    velocity: z.union([z.literal(2), z.literal(3), z.literal(4)]).nullable().optional(),
+    color: TransitionColor.nullable().optional(),
+    seed: z.number().int().min(0).max(9999).nullable().optional(),
+  }).strict(),
+  apply(d, a) {
+    const { clip, track } = transitionTarget(d, a.clipId);
+    if (!clip.transition) throw new OpError('not_found', `clip ${clip.id} has no transition`, { clipId: clip.id }, 'Put one at the start of the clip first (set_transition).');
+    const next: Record<string, unknown> = { ...clip.transition };
+    for (const k of ['sync', 'velocity', 'color', 'seed'] as const) { const v = a[k]; if (v === null) delete next[k]; else if (v !== undefined) next[k] = v; }
+    checkTransition(d, track, clip, next as Transition);
+    clip.transition = next as Transition;
+    const said = (['sync', 'velocity', 'color', 'seed'] as const).filter((k) => a[k] !== undefined).map((k) => `${k} ${a[k] === null ? 'off' : String(a[k])}`);
+    return { affectedIds: [clip.id], summary: `Transition options: ${said.join(', ') || 'unchanged'}`, output: { transition: clip.transition } };
+  },
+});
+/**
+ * For the editor (ADR-0012): the largest velocity the transition at the start of `clipId` can take as it is now (1 = none),
+ * the source frames there are after the previous clip and before the clip (null where a side has no limit: no previous
+ * picture, or a still image), and why not even ×2 when that is the case. Pure; nothing is changed.
+ */
+export function velocityLimit(d: ProjectDocument, clipId: string): { maxVelocity: 1 | 2 | 3 | 4; haveOutFrames: number | null; haveHeadFrames: number | null; refusal: string | null } {
+  const f = findClip(d, clipId);
+  if (!f || f.clip.type !== 'media' || f.track.kind !== 'video') return { maxVelocity: 1, haveOutFrames: null, haveHeadFrames: null, refusal: `clip ${clipId} is not a picture clip on a video track` };
+  const clip = f.clip, track = f.track;
+  const { haveOut, haveHead } = transitionSource(d, track, clip);
+  if (!clip.transition) return { maxVelocity: 1, haveOutFrames: haveOut, haveHeadFrames: haveHead, refusal: `clip ${clip.id} has no transition` };
+  let maxVelocity: 1 | Velocity = 1, refusal: string | null = null;
+  for (const v of VELOCITIES) {
+    try { checkTransition(d, track, clip, { ...clip.transition, velocity: v }); maxVelocity = v; }
+    catch (e) { if (!(e instanceof OpError)) throw e; if (v === 2) refusal = e.message; }
+  }
+  return { maxVelocity, haveOutFrames: haveOut, haveHeadFrames: haveHead, refusal: maxVelocity > 1 ? null : refusal };
+}
 
 // ---------- captions, transcripts and range cuts (SPEC §16) ----------
 function newCaptionTrack(seq: Sequence, ctx: OpContext, mode: 'manual' | 'transcript', linkedTrackId: string | null, style?: Partial<CaptionStyle>, name?: string): Track {

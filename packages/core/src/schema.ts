@@ -108,6 +108,7 @@ export const TransformSchema = z
   .strict();
 export const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 } as const;
 
+const Gradient = z.object({ colors: z.array(Color).min(2).max(3), angle: z.number().int().min(0).max(359) }).strict();
 export const TextStyleSchema = z
   .object({
     fontFamily: z.string().max(64),
@@ -120,8 +121,36 @@ export const TextStyleSchema = z
     background: Color.nullable(),
     stroke: Color.nullable(),
     strokeFrac: z.number().min(0).max(0.5).describe('Stroke width as a fraction of font size'),
+    // ---- look fields (ADR-0012): optional, absent and null both mean off; a title with none of them is drawn exactly as before ----
+    /** The letters' fill: 2–3 evenly spaced colours along an angle (0° = left to right, 90° = top to bottom; the angle turns with the title). Each letter keeps its colours while it moves. */
+    gradient: Gradient.nullable().optional(),
+    /** Extra space between letters, as a fraction of the font size; drawn as 0 on lines with Arabic script (joined letters). */
+    tracking: z.number().min(-0.05).max(0.5).nullable().optional(),
+    /** A second outline outside the first one (`stroke`), as a fraction of the font size. */
+    stroke2: z.object({ color: Color, widthFrac: z.number().min(0.01).max(0.5) }).strict().nullable().optional(),
+    /** A soft light around the letters: radius as a fraction of the font size, intensity 0.1–1. It does not change over time. */
+    glow: z.object({ color: Color, radiusFrac: z.number().min(0.05).max(1), intensity: z.number().min(0.1).max(1) }).strict().nullable().optional(),
+    /** Solid depth behind the letters toward `angle` (degrees, 0 = right, 90 = down), darkened by up to `shade` toward the back. */
+    extrude: z.object({ color: Color, depthFrac: z.number().min(0.02).max(0.6), angle: z.number().int().min(0).max(359), shade: z.number().min(0).max(0.8) }).strict().nullable().optional(),
+    /** A flat shadow of the letters stretched toward `angle` over `lengthFrac` font sizes. */
+    longShadow: z.object({ color: Color, lengthFrac: z.number().min(0.1).max(4), angle: z.number().int().min(0).max(359) }).strict().nullable().optional(),
   })
   .strict();
+/** The optional look fields of a title (ADR-0012). Text styles (textPresets.ts) own them: applying a style clears the ones it does not set. */
+export const TEXT_LOOK_FIELDS = ['gradient', 'tracking', 'stroke2', 'glow', 'extrude', 'longShadow'] as const;
+export type TextLookField = (typeof TEXT_LOOK_FIELDS)[number];
+/**
+ * A title's style with its look fields that mean "off" removed (null, and tracking 0), so a title without a look is stored
+ * exactly like one from before the look fields existed. Used on the master style; a format override keeps its nulls, where
+ * they mean "off in this format".
+ */
+export function normaliseTextStyle<S extends Partial<TextStyle>>(s: S): S {
+  const o: Record<string, unknown> = { ...s };
+  for (const k of TEXT_LOOK_FIELDS) if (o[k] === null || (k === 'tracking' && o[k] === 0)) delete o[k];
+  return o as S;
+}
+/** True when a style has at least one look field that is on (null and tracking 0 are off). */
+export const hasTextLook = (s: Partial<TextStyle>): boolean => TEXT_LOOK_FIELDS.some((k) => s[k] != null && !(k === 'tracking' && s[k] === 0));
 export const DEFAULT_TEXT_STYLE = {
   fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.06, color: '#FFFFFF', align: 'center', direction: 'auto', lineHeight: 1.2, background: null, stroke: '#000000', strokeFrac: 0.08,
 } as const satisfies z.infer<typeof TextStyleSchema>;
@@ -183,11 +212,12 @@ export const MediaClipSchema = z
 /**
  * How the letters, words or lines of a title come in, go out and move while it is shown. The units animate one after
  * another in reading order. Entrance: fade, typewriter (each unit simply appears), rise (from below), drop (from above),
- * pop (grows with a small overshoot), slide (from the side reading starts on), zoom (settles from larger).
- * Exit: fade, sink (down), lift (up), shrink, slide (toward the side reading ends on). Loop: wave, bounce, pulse, jitter.
+ * pop (grows with a small overshoot), slide (from the side reading starts on), zoom (settles from larger), blur (comes into
+ * focus), write (each unit is drawn on from its reading-start side, one after another; ADR-0012).
+ * Exit: fade, sink (down), lift (up), shrink, slide (toward the side reading ends on), blur (goes out of focus). Loop: wave, bounce, pulse, jitter.
  */
-export const TEXT_ANIM_IN = ['fade', 'typewriter', 'rise', 'drop', 'pop', 'slide', 'zoom'] as const;
-export const TEXT_ANIM_OUT = ['fade', 'sink', 'lift', 'shrink', 'slide'] as const;
+export const TEXT_ANIM_IN = ['fade', 'typewriter', 'rise', 'drop', 'pop', 'slide', 'zoom', 'blur', 'write'] as const;
+export const TEXT_ANIM_OUT = ['fade', 'sink', 'lift', 'shrink', 'slide', 'blur'] as const;
 export const TEXT_ANIM_LOOP = ['wave', 'bounce', 'pulse', 'jitter'] as const;
 export const TextAnimationSchema = z
   .object({
