@@ -2,6 +2,8 @@
  * The model-free tracker (ADR-0015): pyramidal Lucas–Kanade median flow with a forward-backward check, verified by NCC
  * against the seed template and up to seven adaptive templates, with a state machine that holds the last usable position
  * when the target is lost and finds it again only on a unique match confirmed on several frames (it never jumps silently).
+ * While lost it looks only where the target can be (gate()): around the place it would have reached at its last trusted
+ * velocity. A look-alike elsewhere is neither accepted nor counted as a rival; a look-alike in that region keeps it lost.
  * No AI model. Pure and deterministic (vision/types.ts): + − × / and Math.floor|sqrt|abs|round only, a fixed order, ties to
  * the lowest (y, x); no randomness, clocks or threads.
  *
@@ -16,7 +18,7 @@ import { boxGrid, centreOf, dot, ellipseNormal, fromLevel, grid, levelFor, norma
 import { DEFAULT_TRACKER_PARAMS, type CreateTracker, type GreyFrame, type Tracker, type TrackerParams, type TrackerSeed, type TrackerStep } from './types.ts';
 
 /** Algorithm version recorded with every track (origin.params.algo). Change it whenever results can change. */
-export const TRACKER_ALGO = 'pf-track 1';
+export const TRACKER_ALGO = 'pf-track 2';
 /** Samples per side of the resampled box a region's confidence is measured on, and of a point's patch. */
 export const BOX_N = 32;
 export const POINT_N = 15;
@@ -36,11 +38,26 @@ const CONFIRM_PX = 2;
 const COARSE_MIN = 12;
 /** Multiply-adds the coarse search may spend per frame; above it the search moves one level coarser (at most quarter scale). */
 const COARSE_BUDGET = 12_000_000;
+/** The velocity at a loss is measured over the trusted (tracked) poses of at most this many frames before it. */
+const VELOCITY_SPAN = 5;
+/**
+ * The gate a lost target is looked for in (gate()): a disc around the place it would have reached at its last trusted velocity.
+ * Its radius is GATE_BOX box sizes at the loss and grows every frame by GATE_SPEED of the last trusted speed plus GATE_DRIFT of
+ * the box: while unseen the target may have changed its velocity by up to half its speed, or drifted 3% of its size a frame.
+ * Rivals are also looked for RIVAL_BOX box sizes beyond the gate, so a look-alike on its edge still makes the match ambiguous.
+ */
+const GATE_BOX = 1.5;
+const GATE_SPEED = 0.5;
+const GATE_DRIFT = 0.03;
+const RIVAL_BOX = 0.5;
 
 interface Pose { cx: number; cy: number; s: number }
 /** A picture of the target: the raw grid (searched for while lost) and its normalised verification vector (a region: inside the box's inscribed ellipse). */
 interface Picture { grid: Float64Array; vec: Normed }
-interface Found extends Pose { ncc: number; margin: number }
+/** The best match in the search region: its NCC against all templates, against the trusted ones, and its lead over the runner-up. */
+interface Found extends Pose { ncc: number; trusted: number; margin: number }
+/** Where a lost target may be: within r of (cx, cy), work px. */
+interface Gate { cx: number; cy: number; r: number }
 
 export const createTracker: CreateTracker = (first: GreyFrame, seed: TrackerSeed, params?: Partial<TrackerParams>): Tracker => new MedianFlowTracker(first, seed, { ...DEFAULT_TRACKER_PARAMS, ...params });
 
@@ -58,10 +75,15 @@ export class MedianFlowTracker implements Tracker {
   private good: Pose;
   private readonly templates: Picture[] = [];
   private nextSlot = 1;
+  /** Pictures a person vouched for: the seed and the latest hand-placed samples (anchor()). A drifted adaptive template is not one. */
+  private readonly trusted: Picture[] = [];
   private frame = 0;
   private lastTemplateFrame = 0;
   private lost = false;
-  private lostFrames = 0;
+  /** Frame of `good`, the trusted poses of the last VELOCITY_SPAN frames up to it, and the velocity (work px per frame) they gave at the loss. */
+  private goodFrame = 0;
+  private recent: { f: number; cx: number; cy: number }[] = [];
+  private vel = { x: 0, y: 0 };
   private cand: (Found & { count: number }) | null = null;
 
   constructor(first: GreyFrame, seed: TrackerSeed, P: TrackerParams) {
@@ -73,7 +95,9 @@ export class MedianFlowTracker implements Tracker {
     this.prevFrame = first;
     this.pose = { cx: seed.cx, cy: seed.cy, s: 1 };
     this.good = { ...this.pose };
+    this.recent = [{ f: 0, cx: seed.cx, cy: seed.cy }];
     this.templates.push(this.sample(this.prev, this.pose));
+    this.trusted.push(this.templates[0]!);
   }
 
   /** Box size (work px) at scale s. */
@@ -90,6 +114,20 @@ export class MedianFlowTracker implements Tracker {
     let b = -1;
     for (const tm of this.templates) { const v = dot(t.vec, tm.vec); if (v > b) b = v; }
     return b;
+  }
+  /** Best NCC of a picture against the trusted pictures (the seed and hand-placed samples). */
+  private trustedNcc(t: Picture): number {
+    let b = -1;
+    for (const tm of this.trusted) { const v = dot(t.vec, tm.vec); if (v > b) b = v; }
+    return b;
+  }
+  /** A pose the tracker stands behind (tracked, re-acquired or hand-placed) on the current frame. `fresh`: nothing before it says how the target moves. */
+  private trust(p: Pose, fresh: boolean) {
+    this.good = { ...p };
+    this.goodFrame = this.frame;
+    if (fresh) this.recent = [];
+    this.recent.push({ f: this.frame, cx: p.cx, cy: p.cy });
+    while (this.recent[0]!.f < this.frame - VELOCITY_SPAN) this.recent.shift();
   }
   private addTemplate(t: Picture) {
     if (!t.vec) return;
@@ -124,19 +162,25 @@ export class MedianFlowTracker implements Tracker {
   anchor(frame: GreyFrame, at: { cx: number; cy: number; s: number }): void {
     if (frame !== this.prevFrame) { this.prev = buildPyramid(frame, this.P.levels, this.spare); this.spare = null; this.prevFrame = frame; }
     this.pose = { cx: at.cx, cy: at.cy, s: at.s };
-    this.good = { ...this.pose };
+    this.trust(this.pose, true);
     this.lost = false;
-    this.lostFrames = 0;
     this.cand = null;
-    this.addTemplate(this.sample(this.prev, this.pose));
+    const t = this.sample(this.prev, this.pose);
+    this.addTemplate(t);
+    if (t.vec) { this.trusted.push(t); if (this.trusted.length > this.P.maxTemplates) this.trusted.splice(1, 1); } // the seed stays; the oldest hand-placed one goes
     this.lastTemplateFrame = this.frame;
   }
 
-  /** Lost from this frame on: report the last usable pose, with a confidence below the weak threshold. */
+  /**
+   * Lost from this frame on: report the last usable pose, with a confidence below the weak threshold. The velocity the search
+   * gate is built on is fixed here: the mean displacement per frame over the trusted poses of the last VELOCITY_SPAN frames
+   * (0 when there is only one, as right after the seed, a hand-placed sample or a re-acquisition).
+   */
   private lose(q: number): TrackerStep {
     this.lost = true;
-    this.lostFrames = 0;
     this.cand = null;
+    const a = this.recent[0]!, b = this.recent[this.recent.length - 1]!;
+    this.vel = b.f > a.f ? { x: (b.cx - a.cx) / (b.f - a.f), y: (b.cy - a.cy) / (b.f - a.f) } : { x: 0, y: 0 };
     return { cx: this.good.cx, cy: this.good.cy, s: this.good.s, q: Math.min(q, this.P.weakQ - 1), st: 3 };
   }
 
@@ -165,8 +209,8 @@ export class MedianFlowTracker implements Tracker {
     if (q < P.weakQ) return this.lose(q);
     const st: 1 | 2 = q >= P.trackedQ ? 1 : 2;
     this.pose = moved;
-    if (st === 1) this.good = { ...moved };
-    if (q >= TEMPLATE_Q && this.frame - this.lastTemplateFrame >= P.templateEvery && dot(t.vec, this.templates[0]?.vec ?? null) >= TEMPLATE_SEED_NCC) {
+    if (st === 1) this.trust(moved, false);
+    if (q >= TEMPLATE_Q && this.frame - this.lastTemplateFrame >= P.templateEvery && this.trustedNcc(t) >= TEMPLATE_SEED_NCC) {
       this.addTemplate(t);
       this.lastTemplateFrame = this.frame;
     }
@@ -235,18 +279,38 @@ export class MedianFlowTracker implements Tracker {
     return { dx, dy, scale };
   }
 
-  /** While lost: search near the last usable pose, and accept only a unique match confirmed on reacquireConfirm frames. */
+  /**
+   * Where a target lost since frame goodFrame can be on this frame: within r of the place it would have reached at the
+   * velocity it had when it was last trusted. r = GATE_BOX·box + (GATE_SPEED·speed + GATE_DRIFT·box)·frames since then.
+   * A target that moved keeps a gate ahead of it, so something that looks like it but would have needed a reversal to get
+   * there is outside; a target that stood still gets a slowly widening disc around where it stood.
+   */
+  private gate(): Gate {
+    const n = this.frame - this.goodFrame;
+    const { w, h } = this.dims(this.good.s);
+    const box = Math.max(w, h);
+    const speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y);
+    return { cx: this.good.cx + this.vel.x * n, cy: this.good.cy + this.vel.y * n, r: GATE_BOX * box + (GATE_SPEED * speed + GATE_DRIFT * box) * n };
+  }
+
+  /**
+   * While lost: search the gate, and accept only a match that is strong (NCC ≥ reacquireNcc against the templates), still
+   * looks like what a person marked (NCC ≥ TEMPLATE_SEED_NCC against the seed or a hand-placed sample), lies inside the gate,
+   * is unique (reacquireMargin above the runner-up in and just around the gate) and is confirmed on reacquireConfirm
+   * consecutive frames. Anything less stays lost at the last usable pose.
+   */
   private redetect(next: Pyramid): TrackerStep {
     const P = this.P;
-    this.lostFrames++;
     // carry the previous frame's candidate forward by optical flow, so a moving target can be confirmed
     let carried: { x: number; y: number } | null = null;
     if (this.cand) {
       const c = trackPoint(this.prev, next, this.cand.cx, this.cand.cy, this.lk(P.pointWindow));
       if (c.ok) carried = { x: c.x, y: c.y };
     }
-    const found = this.search(next);
-    const accepted = found && found.ncc >= P.reacquireNcc && found.margin >= P.reacquireMargin ? found : null;
+    const gate = this.gate();
+    const found = this.search(next, gate);
+    const inGate = !!found && (found.cx - gate.cx) * (found.cx - gate.cx) + (found.cy - gate.cy) * (found.cy - gate.cy) <= gate.r * gate.r;
+    const accepted = found && inGate && found.ncc >= P.reacquireNcc && found.trusted >= TEMPLATE_SEED_NCC && found.margin >= P.reacquireMargin ? found : null;
     if (!accepted) this.cand = null;
     else {
       const agrees = carried && Math.sqrt((carried.x - accepted.cx) * (carried.x - accepted.cx) + (carried.y - accepted.cy) * (carried.y - accepted.cy)) <= CONFIRM_PX;
@@ -256,9 +320,8 @@ export class MedianFlowTracker implements Tracker {
     if (this.cand && this.cand.count >= P.reacquireConfirm) {
       const pose = { cx: this.cand.cx, cy: this.cand.cy, s: this.cand.s };
       this.pose = pose;
-      this.good = { ...pose };
+      this.trust(pose, true);
       this.lost = false;
-      this.lostFrames = 0;
       this.cand = null;
       return { ...pose, q, st: 6 };
     }
@@ -266,29 +329,27 @@ export class MedianFlowTracker implements Tracker {
   }
 
   /**
-   * NCC search around the last usable pose. Coarse: on the coarsest level (at most quarter scale) on which the box still spans
-   * COARSE_MIN pixels (coarser while the work would exceed COARSE_BUDGET), at three scales, with the seed template and the
-   * newest adaptive one; the radius starts at 1.5× the box, grows 2% per lost frame and is capped at the whole picture.
+   * NCC search of the gate and RIVAL_BOX box sizes around it (clipped to the picture). Coarse: on the coarsest level (at most
+   * quarter scale) on which the box still spans COARSE_MIN pixels (coarser while the work would exceed COARSE_BUDGET), at
+   * three scales, with the seed template and the newest adaptive one.
    * Fine: the best coarse peak and the best peaks farther than half the box from those already taken (up to PEAKS) are each
    * refined on level 0 against all templates (position, then scale, then position on whole and on quarter pixels).
    * The match is the best refined peak; margin = its score − the second refined peak's score (coarse scores alone vary too
    * much with sub-pixel phase to tell two lookalikes apart).
    */
-  private search(next: Pyramid): Found | null {
+  private search(next: Pyramid, gate: Gate): Found | null {
     const g = this.good;
     const { w: bw, h: bh } = this.dims(g.s);
     const l0 = next.levels[0]!;
-    let grow = 1;
-    for (let i = 0; i < this.lostFrames; i++) grow *= 1.02;
-    const radius = Math.min(Math.max(l0.width, l0.height), 1.5 * Math.max(bw, bh) * grow);
+    const radius = gate.r + RIVAL_BOX * Math.max(bw, bh);
     const use = this.templates.length > 1 ? [this.templates[0]!, this.templates[this.templates.length - 1]!] : [this.templates[0]!];
     const maxL = Math.min(2, next.levels.length - 1);
     let L = levelFor(next, bw * SEARCH_SCALES[0], bh * SEARCH_SCALES[0], COARSE_MIN, maxL);
-    const cost = (l: number) => { const m = pow2(l), side = (2 * radius) / m + 1; return side * side * ((bw * bh) / (m * m)) * SEARCH_SCALES.length * use.length; };
+    const cost = (l: number) => { const m = pow2(l), sx = Math.min(2 * radius, l0.width) / m + 1, sy = Math.min(2 * radius, l0.height) / m + 1; return sx * sy * ((bw * bh) / (m * m)) * SEARCH_SCALES.length * use.length; };
     while (L < maxL && cost(L) > COARSE_BUDGET) L++;
     const plane = next.levels[L]!;
     const k = pow2(L);
-    const cx = toLevel(g.cx, L), cy = toLevel(g.cy, L), r = radius / k;
+    const cx = toLevel(gate.cx, L), cy = toLevel(gate.cy, L), r = radius / k;
     const n = this.kind === 'point' ? POINT_N : BOX_N;
     const hits: { x: number; y: number; v: number; f: number }[] = [];
     for (const f of SEARCH_SCALES) {
@@ -298,7 +359,11 @@ export class MedianFlowTracker implements Tracker {
         if (!tt) continue;
         const map = slide(plane, tt, tw, th, cx - r, cx + r, cy - r, cy + r);
         if (!map) continue;
-        for (let i = 0; i < map.scores.length; i++) { const c = centreOf(map, i); hits.push({ x: c.x, y: c.y, v: map.scores[i]!, f }); }
+        for (let i = 0; i < map.scores.length; i++) {
+          const c = centreOf(map, i);
+          if ((c.x - cx) * (c.x - cx) + (c.y - cy) * (c.y - cy) > r * r) continue; // the region is a disc
+          hits.push({ x: c.x, y: c.y, v: map.scores[i]!, f });
+        }
       }
     }
     // distinct coarse peaks: each the best hit farther than half the box from every peak already taken (first best wins ties)
@@ -322,7 +387,7 @@ export class MedianFlowTracker implements Tracker {
     let second = 0;
     for (let i = 0; i < refined.length; i++) if (i !== a && refined[i]!.v > second) second = refined[i]!.v;
     const m = refined[a]!;
-    return { cx: m.x, cy: m.y, s: m.s, ncc: m.v, margin: m.v - second };
+    return { cx: m.x, cy: m.y, s: m.s, ncc: m.v, trusted: this.trustedNcc(this.sample(next, { cx: m.x, cy: m.y, s: m.s })), margin: m.v - second };
   }
 
   /**

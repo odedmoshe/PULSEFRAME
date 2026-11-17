@@ -263,7 +263,7 @@ describe('tracking job', () => {
 
     const t = trackOf(pid, 'mtk_disc');
     expect([t.from, t.x.length, t.st[30]]).toEqual([0, 90, ST.manual]);
-    expect(t.origin).toMatchObject({ method: TRACKER_METHOD, params: { algo: 'pf-track 1', input: 'original', workWidth: 320, workHeight: 240, direction: 'both' } });
+    expect(t.origin).toMatchObject({ method: TRACKER_METHOD, params: { algo: 'pf-track 2', input: 'original', workWidth: 320, workHeight: 240, direction: 'both' } });
     expect(String(t.origin.params.inputDigest)).toMatch(/^[0-9a-f]{64}$/);
     expect(String(t.origin.params.ffmpeg)).toMatch(/^ffmpeg version /);
     const err: number[] = [];

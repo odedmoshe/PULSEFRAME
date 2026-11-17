@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { MotionTrack, TrackProblem, TrackStateName } from './tracking.ts';
 
 export const TRACKING_JOB_TYPE = 'tracking';
-export const TRACKER_METHOD = 'pf-track 1: pyramidal Lucas-Kanade median flow with forward-backward check and NCC verification (no model)';
+export const TRACKER_METHOD = 'pf-track 2: pyramidal Lucas-Kanade median flow with forward-backward check and NCC verification (no model)';
 export const TRACK_WORK_HEIGHT = 360;
 export const TRACK_MARGIN_FRAMES = 15;
 /** POST /api/v1/projects/:id/motion-tracks/:motionTrackId/track → 202 { jobId, status }. Source frames, [from, to). */
