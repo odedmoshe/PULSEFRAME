@@ -21,12 +21,13 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, findClip, OpError, type Asset, type OpCall } from '@pulseframe/core';
+import { applyTransaction, findClip, OpError, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
+import { applyTemplateFor, listTemplates, planTemplateFor, probeElements, regenerateTemplateFor, templateCatalog } from './templates.ts';
 import { variantDoc } from './export.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
@@ -113,6 +114,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return parsed.data;
   };
   const need = (c: Context<Env>, scope: Scope) => { auth.require(c.var.principal, scope); return c.var.principal; };
+  // Templates with graphic elements are available only where ffmpeg can draw SVG: ask once now, so catalog() knows (ADR-0016).
+  void probeElements();
 
   app.onError((e, c) => {
     if (e instanceof ApiError) { if (e.status === 429 && typeof e.details.retryAfterSeconds === 'number') c.header('Retry-After', String(e.details.retryAfterSeconds)); return c.json(e.toJSON(), e.status as any); }
@@ -322,6 +325,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params)); });
   app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/recipe-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await regenerateRecipe(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params)); });
+  // Templates (ADR-0016): the gallery, a read-only plan, apply as one undoable step, regenerate keeping hand edits. Edit rights and
+  // the propose-mode refusal are checked inside (templates.ts), so the refusal names the mode.
+  app.get('/api/v1/templates', async (c) => { need(c, 'observe'); return c.json({ templates: await listTemplates() }); });
+  app.post('/api/v1/projects/:id/templates/:templateId/plan', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await planTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params)); });
+  app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
+  app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
   app.get('/api/v1/projects/:id/preflight', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
@@ -770,6 +779,7 @@ export const catalog = () => ({
   motionPresets: MOTION_PRESETS.map((m) => ({ id: m.id, kind: m.kind, name: m.name, defaultFrames: m.defaultFrames, properties: m.properties, note: 'Apply with apply_motion_preset. Written as keyframe recipes; not judged on a video.' })),
   textPresets: TEXT_PRESETS.map((p) => ({ id: p.id, name: p.name, style: p.style, shadow: p.shadow, note: 'Apply with apply_text_preset. Written from descriptions, not judged on a video.' })),
   recipes: describeRecipes(),
+  templates: templateCatalog(),
   formatProfiles: FORMAT_PROFILES.map((p) => ({ ...p, note: 'Generic safe-area guide, editable per variant; not a platform specification.' })),
   soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, category: s.category, source: 'synthesised by formula in this build; no third-party content' })),
   fonts: FONT_CATALOG,
