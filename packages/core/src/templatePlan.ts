@@ -32,9 +32,9 @@
  *   input.fields, and live fields of the life line ({hebrewDate} and the others), which stay in the text: the title is made
  *   with its live fields on (set_text_fields). When a pack field has no value, or a picture under the title has no capture
  *   date for its live fields to read, the title's fallback words are used instead and a notice says so. Text the caller
- *   typed (input.texts) is literal: nothing in it is read as a field. {n} stays the per-slot counter and is written in
- *   after the fields. {night} is worked out from input.fields.date and atLighting when it is not given (the date is an
- *   input; nothing reads a clock).
+ *   typed (input.texts) is literal: nothing in it is read as a field. {n} stays the per-slot counter; in the template's own
+ *   words it is written in BEFORE the field values, so a value that holds "{n}" stays as typed. {night} is worked out
+ *   from input.fields.date and atLighting when it is not given (the date is an input; nothing reads a clock).
  * - Two graphic elements of one plan that would lie on the same track range: the earlier one is left out (notice
  *   element_dropped), so apply never fails with an overlap the plan did not show.
  */
@@ -600,11 +600,11 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
       // Words the caller typed are literal. The template's own words may hold fields (ADR-0022): pack fields are written in,
       // live fields stay and the title is made with them on; without a value or a capture date the fallback words are used.
       const dated = kept.filter((k) => k.startFrame < c.end && c.start < k.endFrame).every((k) => captureOf(doc, k.assetId) !== null);
-      const own = given === undefined ? resolveTitleText(t.default[lang], t.fallback?.[lang], fieldValues, dated, { counter }) : null;
+      const own = given === undefined ? resolveTitleText(t.default[lang], t.fallback?.[lang], fieldValues, dated, { counter, ...(c.suffix ? { n: c.n } : {}) }) : null;
       if (own?.usedFallback && own.missing.length && !told.has('field_missing')) { told.add('field_missing'); notice('field_missing', `title ${t.key} has no value for ${own.missing.map((k) => `{${k}}`).join(', ')}; its fallback words were used`, { key: t.key, fields: own.missing }); }
       else if (own?.usedFallback && own.noDate && !told.has('field_no_date')) { told.add('field_no_date'); notice('field_no_date', `title ${t.key} shows the capture date of the picture under it, and a picture under it has no capture date; its fallback words were used`, { key: t.key }); }
-      const value = given ?? own!.text;
-      const text = c.suffix ? value.replaceAll('{n}', String(c.n)) : value;
+      // the counter of the template's own words was written in before the field values (resolveTitleText); the caller's typed words get it here
+      const text = given === undefined ? own!.text : c.suffix ? given.replaceAll('{n}', String(c.n)) : given;
       ops.push({ op: 'add_text', args: { text, start: ft(c.start), duration: ft(c.end - c.start), transform: { x: t.place.x, y: t.place.y } }, bind });
       ops.push({ op: 'apply_text_preset', args: { clipId: ref(bind), presetId: t.presetId } });
       if (t.place.sizeFrac !== undefined) ops.push({ op: 'update_text', args: { clipId: ref(bind), style: { sizeFrac: t.place.sizeFrac } } });

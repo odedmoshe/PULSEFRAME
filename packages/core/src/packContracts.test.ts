@@ -246,10 +246,23 @@ describe('planner: pack fields in a template\'s own titles', () => {
     expect(titles(planTemplate(project(), def, { media: MEDIA, fields: { date: '2026-12-04', atLighting: false } }))).toEqual(['חנוכה']); // its daytime is not Hanukkah yet
     expect(titles(planTemplate(project(), def, { media: MEDIA, fields: { night: '5', date: '2026-12-04' } }))).toEqual(['נר 5 של חנוכה']);
   });
-  it('the per-slot counter {n} stays the planner\'s own and is written after the fields', () => {
+  it('the per-slot counter {n} stays the planner\'s own and is written into the template\'s words before the fields', () => {
     const def = TPL({ texts: [text('t', { he: '{name} {n}', en: '{name} {n}' }, { he: 'מספר {n}', en: 'Number {n}' }, { perSlot: 'count-up' })] });
     expect(titles(planTemplate(project(), def, { media: MEDIA, fields: { name: 'דן' } }))).toEqual(['דן 1', 'דן 2', 'דן 3', 'דן 4']);
     expect(titles(planTemplate(project(), def, { media: MEDIA }))).toEqual(['מספר 1', 'מספר 2', 'מספר 3', 'מספר 4']);
+  });
+  it('a field value that holds "{n}" is written once: the counter is not read in it, and apply succeeds after a clean plan', () => {
+    const plain = TPL({ texts: [text('t', { he: '{name} מספר {n}', en: '{name} number {n}' }, { he: 'מספר {n}', en: 'Number {n}' }, { perSlot: 'count-up' })] });
+    expect(titles(planTemplate(project(), plain, { media: MEDIA, lang: 'en', fields: { name: 'Dana {n}' } }))).toEqual(['Dana {n} number 1', 'Dana {n} number 2', 'Dana {n} number 3', 'Dana {n} number 4']);
+    // with a live field the value is escaped ({{n}}); the counter must not turn it into the brace group {1}, which is not a field
+    const live = TPL({ texts: [text('t', { he: '{name} {n} · {hebrewDate}', en: '{name} {n} · {hebrewDate}' }, { he: 'יום {n}', en: 'Day {n}' }, { perSlot: 'count-up' })] });
+    const dated = project(R, true);
+    const plan = planTemplate(dated, live, { media: MEDIA, lang: 'en', fields: { name: 'Dana {n}' } });
+    expect(plan.blocking).toEqual([]);
+    expect(titles(plan)).toEqual(['Dana {{n}} 1 · {hebrewDate}', 'Dana {{n}} 2 · {hebrewDate}', 'Dana {{n}} 3 · {hebrewDate}', 'Dana {{n}} 4 · {hebrewDate}']);
+    apply(dated, plan);
+    // the fallback words get the counter too
+    expect(titles(planTemplate(project(), live, { media: MEDIA, lang: 'en', fields: { name: 'Dana {n}' } }))).toEqual(['Day 1', 'Day 2', 'Day 3', 'Day 4']);
   });
   it('a live field stays live over dated pictures (the title is made with fields on) and falls back over undated ones', () => {
     const def = TPL({ texts: [text('t', { he: '{hebrewDate}', en: '{hebrewDate}' }, { he: 'חג שמח', en: 'Happy holiday' })] });

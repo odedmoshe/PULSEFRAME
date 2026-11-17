@@ -22,13 +22,17 @@ export interface TitleFieldUse {
   /** brace groups that are neither a pack field nor a live field (nor the per-slot counter, when allowed), as written */ notFields: string[];
   /** people fields ({age:…}, {name:…}), which no ready-made title may hold */ people: string[];
 }
-const COUNTER = /\{n\}/g;
+/**
+ * Write the planner's per-slot counter `{n}` into a template's own words. Doubled braces are passed over as they stand, so
+ * in a text with live fields (plain braces doubled) `{{n}}` stays the plain words `{n}`.
+ */
+const writeCounter = (text: string, n: string): string => text.replace(/\{\{|\}\}|\{n\}/g, (m) => (m === '{n}' ? n : m));
 /** Read a title's text. `counter`: the planner's own per-slot counter `{n}` is allowed in it (count-down and count-up titles). */
 export function titleFieldUse(text: string, opts: { counter?: boolean } = {}): TitleFieldUse {
   const pack = packFieldsIn(text);
   // the pack tokens (and the counter) are taken out before the live grammar is read: to it they would be unknown groups
   let rest = fillFields(text, Object.fromEntries(pack.map((k) => [k, '\u0001'])) as PackFieldValues).text;
-  if (opts.counter) rest = rest.replace(COUNTER, '\u0001');
+  if (opts.counter) rest = writeCounter(rest, '\u0001');
   const parts = parseFields(rest);
   const live = parts.some((p) => 'token' in p && !isPersonToken(p.token));
   return {
@@ -61,9 +65,17 @@ export interface ResolvedTitleText {
  * The words of a title for these field values. `dated`: every picture the title lies over has a capture date, so its live
  * fields will have words. The fallback is used when a pack field of the text has no value, or when the text holds a live
  * field and `dated` is false; never both texts mixed. A text without a fallback keeps its tokens as written.
+ * `n`: the per-slot counter of this copy (count-down and count-up titles). It is written into the template's own words
+ * (text and fallback) BEFORE the field values, so a value that holds `{n}` is never read as the counter (fillFields: a
+ * value is written once and never read again as text with tokens).
  */
-export function resolveTitleText(text: string, fallback: string | undefined, values: PackFieldValues, dated: boolean, opts: { counter?: boolean } = {}): ResolvedTitleText {
+export function resolveTitleText(text: string, fallback: string | undefined, values: PackFieldValues, dated: boolean, opts: { counter?: boolean; n?: number } = {}): ResolvedTitleText {
   const use = titleFieldUse(text, opts);
+  if (opts.n !== undefined) {
+    const n = String(opts.n);
+    text = writeCounter(text, n);
+    if (fallback !== undefined) fallback = writeCounter(fallback, n);
+  }
   const filled = fillFields(text, values, use.live ? escapeFieldText : undefined);
   const noDate = use.live && !dated;
   if ((filled.missing.length || noDate) && fallback !== undefined) return { text: fallback, fields: false, usedFallback: true, missing: filled.missing, noDate };
