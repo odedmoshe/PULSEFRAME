@@ -27,11 +27,11 @@ export interface FlashSchedule {
   /** The least number of frames between two flash starts anywhere on the timeline. */
   gapFrames: number;
   /** Per strobe (clip id, effect id): the frames on which one of its flashes starts, ascending. */
-  shown: Map<string, Int32Array>;
+  shown: Map<string, Float64Array>;
   /**
    * The pieces of a cut clip carry copies of the same strobe (the same effect id) and lie back to back on one track.
    * They flash as one: each piece is listed here under the first piece of its run, so a flash that starts just before
-   * a cut fades on across it instead of being cut off. Copies that are not back to back stay separate.
+   * a cut fades on across it instead of being cut off. Copies that are not back to back, or whose settings differ, stay separate.
    */
   runOf: Map<string, string>;
 }
@@ -61,8 +61,8 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
   const thinned = new Map<number, number[]>(); // the beats a following strobe may flash on, per `every`
   for (const track of seq.tracks) {
     if (track.hidden || track.kind === 'audio' || track.kind === 'caption') continue;
-    // effect id -> the run it currently belongs to on this track and the frame at which that run ends
-    const open = new Map<string, { key: string; end: number }>();
+    // effect id -> the run it currently belongs to on this track, the frame at which that run ends, and its settings
+    const open = new Map<string, { key: string; end: number; settings: string }>();
     for (const clip of [...track.clips].sort((a, b) => T.cmp(a.start, b.start))) {
       for (const fx of clip.type === 'caption' ? [] : clip.effects ?? []) {
         if (fx.type !== 'light.strobe' || !fx.enabled) continue;
@@ -81,9 +81,12 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
           times = [];
           if (r > 0) for (let k = Math.ceil(from * r - 1e-9); k / r < to; k++) if (k / r > from - 1e-6) times.push(k / r); // never a flash time from before the clip (a rate near zero has none inside it)
         }
+        // Pieces join a run only with exactly the same settings: a later piece that shows the age of an earlier piece's flash
+        // with a higher amount (or another colour) would make the light rise at the cut without a scheduled start.
+        const settings = JSON.stringify([fx.params.amount, fx.params.color, fx.params.rate, fx.params.follow, fx.params.every]);
         const run = open.get(fx.id);
-        const key = run && run.end === first ? run.key : keyOf(clip.id, fx.id);
-        open.set(fx.id, { key, end });
+        const key = run && run.end === first && run.settings === settings ? run.key : keyOf(clip.id, fx.id);
+        open.set(fx.id, { key, end, settings });
         schedule.runOf.set(keyOf(clip.id, fx.id), key);
         for (const t of times) { const frame = Math.max(first, Math.ceil(t * fps - 1e-6)); if (frame < end) wanted.push({ frame, key }); }
       }
@@ -98,7 +101,7 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
     for (; i < wanted.length && wanted[i]!.frame === frame; i++) if (keep) { const k = wanted[i]!.key; let list = kept.get(k); if (!list) kept.set(k, (list = [])); if (list[list.length - 1] !== frame) list.push(frame); }
     if (keep) last = frame;
   }
-  for (const [k, frames] of kept) schedule.shown.set(k, Int32Array.from(frames));
+  for (const [k, frames] of kept) schedule.shown.set(k, Float64Array.from(frames)); // whole numbers, exact up to 2^53 (an Int32Array wrapped at absurd frame rates)
   return schedule;
 }
 
