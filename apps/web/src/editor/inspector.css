@@ -365,3 +365,9 @@
 .pf-insp .pf-apply-to > legend + * { clear: none; }
 .pf-insp .pf-apply-to > p { flex: 1 1 100%; }
 .pf-insp .pf-apply-to .check { min-block-size: 24px; }
+
+/* "on the beat": what of the clip follows the music (pulse style), and the way to the effects tab */
+.pf-insp button.beat-row { display: flex; align-items: center; gap: var(--pf-sp-4); inline-size: 100%; border: 0; color: var(--pf-text); text-align: start; cursor: pointer; font: inherit; }
+.pf-insp button.beat-row:hover { background: color-mix(in srgb, var(--pf-pulse) 12%, var(--pf-surface-2)); border: 0; }
+.pf-insp .beat-row > .pf-ico:first-child { flex: none; color: var(--pf-pulse); }
+.pf-insp .beat-row strong { color: var(--pf-pulse); }

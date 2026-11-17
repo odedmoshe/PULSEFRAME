@@ -6,12 +6,12 @@
  */
 import { useContext, useEffect, useId, useState, type ReactNode } from 'react';
 import {
-  Activity, Blend as BlendIcon, Captions, ChevronLeft, Contrast, Droplet, Ellipsis, Film, Gauge, Layers, Maximize2, Minimize2, Move, Music,
+  Activity, Blend as BlendIcon, Captions, ChevronRight, Contrast, Droplet, Ellipsis, Film, Gauge, Layers, Maximize2, Minimize2, Move, Music,
   Scissors, SlidersHorizontal, Sparkles, Spline, SquareDashed, Timer, Trash2, Type, Volume2, type LucideProps,
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import type { Clip, OpCall, ProjectDocument } from '@pulseframe/core';
-import { beatPositionAt, clipEnd, findClip, fitScale, FONT_CATALOG, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
+import { beatPositionAt, clipEnd, findClip, findEffect, fitScale, FONT_CATALOG, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, coverEditOps, keyframeProps, type Keymap } from './commands.ts';
 import { ADJUST_STRINGS } from './adjust.strings.ts';
@@ -23,7 +23,7 @@ import { TrackingPanel } from './TrackingPanel.tsx';
 import { FollowControls } from './FollowControls.tsx';
 import { RedactControls } from './RedactControls.tsx';
 import { trackingT } from './tracking.strings.ts';
-import { BlendField, EffectsBlock, LOOK_CATALOG_COUNTS, LooksField, LookTarget, MaskControls, useLook, type LookState } from './LookPanel.tsx';
+import { BlendField, EffectsBlock, LOOK_CATALOG_COUNTS, LooksField, LookTarget, MaskControls, musicUnder, useLook, type LookState } from './LookPanel.tsx';
 import { ColourMatchPanel } from './ColourMatchPanel.tsx';
 import { ClipSound, DuckSwitch } from './SoundPanel.tsx';
 import { AudioFxBlock, LinkedSoundFx } from './AudioFxBlock.tsx';
@@ -37,7 +37,7 @@ import { Menu, ScrubField, Tabs, type MenuItem, type TabSpec } from '../ds/index
 import { isolate } from '../ds/util.tsx';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { cutBefore, keyframeSummary, secondsText, shortTimecode, tabsFor, type InspectorPage, type ObjectKind, type ObjectTab } from './inspector.model.ts';
-import { selectCut } from './inspector.bus.ts';
+import { openInspectorTab, selectCut } from './inspector.bus.ts';
 import { CutPanel, TransitionPanel } from './InspectorCut.tsx';
 import { ProjectPanel } from './InspectorProject.tsx';
 
@@ -180,7 +180,8 @@ function TransformRows({ clip, viewClip, shown, only }: { clip: Clip; viewClip: 
               {here && beat ? <IconOnBeat size={16} /> : <Kf size={16} />}</button>}>
             <span className="sr-only val">{+now[fld.prop].toFixed(3)}{animated ? ` ${t('keyframes.animated')}` : ''}</span>
             <input type="range" dir={fld.spatial ? 'ltr' : undefined} className={fld.spatial ? 'is-bipolar' : undefined} min={fld.min} max={fld.max} step={fld.step} defaultValue={now[fld.prop]} disabled={!on} aria-label={label}
-              data-testid={clip.type === 'adjustment' ? TID.adjustOpacity : `transform-${fld.prop}`}
+              data-testid={clip.type === 'adjustment' ? TID.adjustOpacity : `transform-${fld.prop}`} aria-valuetext={`${+(now[fld.prop] * fld.show).toFixed(fld.decimals)}${fld.unit}`}
+              onInput={(e) => e.currentTarget.setAttribute('aria-valuetext', `${+(Number(e.currentTarget.value) * fld.show).toFixed(fld.decimals)}${fld.unit}`)}
               onPointerUp={(e) => commit(Number(e.currentTarget.value))} onKeyUp={(e) => commit(Number(e.currentTarget.value))} />
           </Row>
         );
@@ -283,7 +284,30 @@ function CutLink({ clip }: { clip: Media }) {
     <button type="button" className="insp-link" data-testid="insp-cut-open" onClick={() => selectCut(clip.id)}>
       <Scissors size={16} strokeWidth={1.75} aria-hidden="true" />
       <span className="insp-link-text"><span>{S.cutBefore}</span><span className="muted">{tr ? <bdi>{transitionDef(tr.type)?.name[state.lang] ?? tr.type} · <span className="num">{tr.frames}</span> {S.frames}</bdi> : S.cutNone}</span></span>
-      <ChevronLeft size={16} strokeWidth={1.75} aria-hidden="true" className="pf-ico-flip" />
+      <ChevronRight size={16} strokeWidth={1.75} aria-hidden="true" className="pf-ico pf-ico-flip" />
+    </button>
+  );
+}
+
+/**
+ * "On the beat": what of this clip follows the music, in the pulse style. Shown only where analysed music plays under the
+ * clip. It lists the effect parameters that kick on the beat (set with the ♪ beside a parameter) and leads to the effects tab;
+ * nothing here is invented when nothing follows the beat yet.
+ */
+function BeatRow({ clip, onOpen }: { clip: Clip; onOpen: () => void }) {
+  const { editor, state } = useEditorState();
+  const S = INSPECTOR_STRINGS[state.lang];
+  const doc = state.doc;
+  if (!doc || clip.type === 'caption' || !musicUnder(doc, clip, editor.rate)) return null;
+  const following = (clip.effects ?? []).flatMap((fx) => Object.entries(fx.modulate ?? {}).map(([param, m]) => ({ fx, param, m })));
+  return (
+    <button type="button" className="pf-card is-pulse beat-row" data-testid="insp-beat-row" data-following={following.length} onClick={onOpen}>
+      <IconOnBeat size={18} />
+      <span className="pf-card-text">
+        <strong>{S.onTheBeat}</strong>
+        <span className="muted">{following.length === 0 ? S.beatNothing : following.map(({ fx, param, m }) => `${findEffect(fx.type)?.name[state.lang] ?? fx.type} · ${effectParamLabel(param, state.lang, fx.type)} · ${S.everyBeats(m.every)}`).join(' · ')}</span>
+      </span>
+      <ChevronRight size={16} strokeWidth={1.75} aria-hidden="true" className="pf-ico pf-ico-flip" />
     </button>
   );
 }
@@ -520,6 +544,7 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
         <TransformRows clip={clip} viewClip={viewClip} shown={shown} />
       </Section>
       {media && <Section id="fill" title={S.secFill}><FrameFill clip={media} shown={shown} /></Section>}
+      <BeatRow clip={clip} onOpen={() => openInspectorTab('effects')} />
       {media && !variantId && <CutLink clip={media} />}
       <Section id="keys" title={S.secKeys} defaultOpen={false} summary={ks.count ? S.keysCount(ks.count) : S.keysNone}><KeyframeButtons clip={clip} keymap={keymap} /></Section>
       <Section id="blend" title={S.secBlend} defaultOpen={false} summary={blend === 'normal' ? S.blendNormal : blend}><BlendField clip={clip} /></Section>
@@ -826,7 +851,7 @@ function SoundFxTab({ clip }: PanelProps) {
 }
 
 function BeatTab({ clip, keymap }: PanelProps) {
-  const { state } = useEditorState();
+  const { editor, state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   if (clip.type !== 'media') return null;
   const beats = state.doc?.analyses?.[clip.assetId]?.beats;
@@ -838,9 +863,13 @@ function BeatTab({ clip, keymap }: PanelProps) {
         <span>{beats ? isolate(S.bpmMeasured(bpm === null ? '—' : String(Math.round(bpm)), beats.beats.length)) : S.bpmNone}</span>
       </div>
       <Section id="analysis" title={S.secBeat} help><AnalysisPanel key={`analysis:${clip.id}`} /></Section>
-      <Section id="speed" title={S.secSpeed} defaultOpen={false} help summary={S.speedNow(String(+speedValue(clip).toFixed(2)))}><SpeedField clip={clip} /></Section>
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>
-      {!state.viewVariantId && <Section id="media" title={S.secMedia} defaultOpen={false}><ReplaceMedia key={`replace:${clip.id}`} clip={clip} /></Section>}
+      {!state.viewVariantId && (
+        <Section id="media" title={S.secMedia} defaultOpen={false}>
+          <ReplaceMedia key={`replace:${clip.id}`} clip={clip} />
+          {clip.linkGroupId && <div className="row"><button type="button" className="ghost" data-testid="unlink-clip" title={t('unlink.hint')} onClick={() => void editor.commit([{ op: 'unlink_clip', args: { clipId: clip.id } }], 'Detach clip')}>{t('unlink.label')}</button></div>}
+        </Section>
+      )}
     </>
   );
 }
@@ -868,14 +897,7 @@ function RangeTab({ clip, viewClip, shown }: PanelProps) {
 }
 
 function SharedTab() {
-  const { state } = useEditorState();
-  const S = INSPECTOR_STRINGS[state.lang];
-  return (
-    <>
-      <p className="muted insp-note">{S.sharedNote}</p>
-      <LayoutPicker />
-    </>
-  );
+  return <LayoutPicker />;
 }
 
 /* ------------------------------------------------------------------ the object ------------------------------------------------------------------ */
@@ -911,6 +933,13 @@ export function ObjectPanels({ kind, tab, onTab, keymap, firstIsClipTab }: { kin
             : clip && viewClip && sel ? <ObjectTabBody id={id} kind={kind} clip={clip} viewClip={viewClip} keymap={keymap} trackKind={sel.track.kind} /> : null}
         </div>
       ))}
+      {/* all tools on one screen: the transition at the start of a picture clip stands with the clip (in tabs it belongs to the cut) */}
+      {flat && (kind === 'video' || kind === 'image') && clip?.type === 'media' && (
+        <div role="group" aria-label={S.tabTransition} className="insp-tabpanel" data-testid="insp-panel-transition">
+          <h3 className="insp-flat-title">{ico(TAB_ICON.transition, 16)} {S.tabTransition}</h3>
+          <TransitionPanel clip={clip} />
+        </div>
+      )}
     </div>
   );
 }
@@ -976,10 +1005,9 @@ export function ObjectFooter({ kind }: { kind: ObjectKind }) {
   const { editor, state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   if (kind === 'none') return null;
-  const n = state.selection.length;
   return (
     <div className="insp-foot" data-testid="insp-footer">
-      {n > 1 ? <span className="insp-foot-note">{S.sharedNote}</span> : <button type="button" className="insp-foot-main" data-testid="insp-duplicate" onClick={() => run(editor, 'edit.duplicate')}>{S.duplicate}</button>}
+      <button type="button" className="insp-foot-main" data-testid="insp-duplicate" onClick={() => run(editor, 'edit.duplicate')}>{S.duplicate}</button>
       <button type="button" className="insp-foot-del" data-testid="clip-delete" aria-label={t('clip.delete')} title={t('clip.delete')} onClick={() => run(editor, 'edit.delete')}><Trash2 size={16} strokeWidth={1.75} aria-hidden="true" /></button>
     </div>
   );

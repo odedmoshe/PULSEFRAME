@@ -30,6 +30,7 @@ import { activeTab, INSPECTOR_PAGES, objectKind, pagesFor, pinnedTab, REAL_PAGES
 import { sayOnStage, selectCut, useInspectorView } from './inspector.bus.ts';
 import { ObjectFooter, ObjectHeader, ObjectPanels } from './InspectorObject.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
+import { useWideStage } from './Transport.tsx';
 import './inspector.css';
 
 const TAB_KEY = 'pf.inspector.tab.v1';
@@ -166,6 +167,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   });
   const pageLabel = (id: InspectorPage) => (id === 'all' ? S.allTools : id === 'clip' ? S.pageObject : id === 'sound' ? S.pageSound : id === 'speech' ? S.pageSpeech : t(`inspector.tab.${id}` as Key));
   const colour = state.workspace === 'color';
+  const wide = useWideStage(); // at wide windows the scopes dock beside the viewer (Transport.tsx)
   const motionOnly = state.workspace === 'motion';
   const noColour = colour && pinnedTab('color', kind) === null;
   return (
@@ -213,7 +215,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
           </div>
         )}
         {/* Look mode: the scopes of the frame on screen stand above the colour tab (at wide windows they dock beside the viewer instead: Transport.tsx) */}
-        {colour && !flat && <div className="insp-scopes" data-testid="insp-scopes"><Section id="scopes" title={S.secScopes} help><Scopes /></Section></div>}
+        {colour && !flat && !wide && <div className="insp-scopes" data-testid="insp-scopes"><Section id="scopes" title={S.secScopes} help><Scopes /></Section></div>}
         {(colour || motionOnly) && <p className="sr-only" data-testid="clip-focus-note">{t(motionOnly ? 'workspace.motion.note' : 'workspace.color.note')}</p>}
         {noColour && sel ? <p className="muted insp-note" data-testid="color-none">{t('workspace.color.none')}</p> : null}
         <ObjectPanels key={`${kind}:${sel?.clip.id ?? ''}`} kind={kind} tab={tab} onTab={setChosen} keymap={keymap} firstIsClipTab={!(pages.includes('clip') && pages.length > 1)} />

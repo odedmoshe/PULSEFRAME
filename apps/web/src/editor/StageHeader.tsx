@@ -29,9 +29,9 @@ export function StageHeader() {
     const el = document.querySelector<HTMLElement>('.app > .stage');
     if (document.fullscreenElement) void document.exitFullscreen(); else void el?.requestFullscreen?.().catch(() => { /* the browser refused: the stage stays as it is */ });
   };
-  if (!doc) return <div className="stage-head pf-ds" />;
+  if (!doc) return <div className="stage-head pf-ds pf-force-dark" />;
   return (
-    <div className="stage-head pf-ds" role="toolbar" aria-label={S.stageTools} data-testid="stage-head">
+    <div className="stage-head pf-ds pf-force-dark" role="toolbar" aria-label={S.stageTools} data-testid="stage-head">
       <Seg label={S.view} size="sm" value={source ? 'source' : 'program'} className="stage-view"
         options={[{ value: 'program', label: S.program, testId: 'stage-view-program' }, { value: 'source', label: S.source, disabled: !assetId, ariaLabel: assetId ? undefined : `${S.source}: ${S.sourceNone}`, testId: 'stage-view-source' }]}
         onChange={(v) => setSource(v === 'source' ? assetId : null)} />

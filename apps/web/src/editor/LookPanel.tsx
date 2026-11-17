@@ -218,7 +218,7 @@ function StampControl({ value, onCommit }: { value: string; onCommit: (text: str
 }
 
 /** Whether music with detected beats plays anywhere under the clip: what a beat modulator follows (core beatPositionAt, sampled over the clip). */
-function musicUnder(doc: ProjectDocument, clip: Clip, rate: T.Rate): boolean {
+export function musicUnder(doc: ProjectDocument, clip: Clip, rate: T.Rate): boolean {
   const start = T.frameIndexAt(clip.start, rate), frames = Math.max(1, T.frameIndexAt(clip.duration, rate));
   for (let k = 0; k <= 8; k++) if (beatPositionAt(doc, T.frameTime(start + Math.min(frames - 1, Math.round((k * frames) / 8)), rate))) return true;
   return false;

@@ -61,7 +61,7 @@ function StageOverlay() {
   return (
     <>
       <CutLoupe />
-      <div className="stage-over pf-ds">
+      <div className="stage-over pf-ds pf-force-dark">
         {noClips && <p className="stage-empty" data-testid="stage-empty"><strong>{S.emptyStage}</strong><span>{S.emptyOr} <b className="num">+</b> {S.emptyKeyHint}</span></p>}
         <p className="stage-note" role="status" data-testid="stage-note" data-on={note ? 'true' : 'false'}>{note?.text ?? ''}</p>
       </div>
@@ -86,8 +86,8 @@ export function Transport() {
     <>
       <StageHeader />
       <StageOverlay />
-      {state.workspace === 'color' && wide && <aside className="stage-side pf-ds pf-insp" aria-label={S.scopes} data-testid="stage-scopes"><Scopes /></aside>}
-      <div className="transport pf-ds" dir="ltr" role="group" aria-label={t('cmd.playPause')}>
+      {state.workspace === 'color' && wide && <aside className="stage-side pf-ds pf-insp pf-force-dark" aria-label={S.scopes} data-testid="stage-scopes"><Scopes /></aside>}
+      <div className="transport pf-ds pf-force-dark" dir="ltr" role="group" aria-label={t('cmd.playPause')}>
         <div className="tp-time">
           <span className="timecode tc" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>
           <span className="tp-total tc" aria-label={`${S.of} ${T.toTimecode(editor.duration, rate)}`}>/ {T.toTimecode(editor.duration, rate)}</span>

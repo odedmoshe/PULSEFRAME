@@ -50,6 +50,7 @@ describe('what the inspector shows for a selection', () => {
     expect(tabsFor('video')).toEqual(['basic', 'motion', 'speed', 'colour', 'effects', 'mask', 'audio']);
     expect(tabsFor('text')[0]).toBe('text');
     expect(tabsFor('cut')).toEqual(['cut', 'transition']);
+    expect(tabsFor('sound')).toEqual(['audio', 'soundfx', 'speed', 'beat']);
     for (const k of ['none', 'multi', 'video', 'image', 'text', 'caption', 'sound', 'adjustment', 'cut'] as const) expect(firstTab(k)).toBe(tabsFor(k)[0]);
   });
   it('opens the first tab unless the person chose one the object has; Look opens colour, Motion opens motion', () => {

@@ -23,6 +23,7 @@ const he = {
   tabClean: 'ניקוי קול', tabSoundFx: 'אפקטים', tabBeat: 'קצב', tabRange: 'טווח', tabCut: 'חיתוך', tabTransition: 'מעבר', tabProject: 'פרויקט', tabShared: 'משותף',
   objectTabs: 'מאפייני הנבחר',
   // basic
+  onTheBeat: 'על הפעימה', beatNothing: 'שום דבר בקליפ לא עוקב אחרי המוזיקה עדיין. הסימן ♪ ליד פרמטר של אפקט מחבר אותו לקצב.', everyBeats: (n: number) => (n === 1 ? 'בכל פעימה' : `כל ${n} פעימות`),
   secPlace: 'מיקום וגודל', size: 'גודל', posX: 'מיקום X', posY: 'מיקום Y', rotation: 'סיבוב', opacity: 'שקיפות',
   kfToggle: 'מפתח אנימציה', kfHere: 'יש מפתח בנקודה הזו', kfAnimated: 'מונפש',
   outsideClip: 'הסמן מחוץ לקליפ. הזיזו אותו לתוך הקליפ כדי לשנות ערכים.',
@@ -97,6 +98,7 @@ const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => st
   tabText: 'Text', tabStyle: 'Style', tabAnim: 'Animation', tabPlace: 'Position', tabCue: 'Caption', tabTiming: 'Timing',
   tabClean: 'Cleanup', tabSoundFx: 'Effects', tabBeat: 'Beat', tabRange: 'Range', tabCut: 'Cut', tabTransition: 'Transition', tabProject: 'Project', tabShared: 'Shared',
   objectTabs: 'Properties of the selection',
+  onTheBeat: 'On the beat', beatNothing: 'Nothing on this clip follows the music yet. The ♪ beside an effect parameter ties it to the beat.', everyBeats: (n) => (n === 1 ? 'every beat' : `every ${n} beats`),
   secPlace: 'Position and size', size: 'Size', posX: 'Position X', posY: 'Position Y', rotation: 'Rotation', opacity: 'Opacity',
   kfToggle: 'Keyframe', kfHere: 'A keyframe is at this point', kfAnimated: 'Animated',
   outsideClip: 'The playhead is outside the clip. Move it inside the clip to change values.',

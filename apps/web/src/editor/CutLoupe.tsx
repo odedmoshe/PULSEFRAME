@@ -91,7 +91,7 @@ export function CutLoupe() {
     );
   };
   return (
-    <div className="stage-loupe pf-ds" role="group" aria-label={S.loupe} data-testid="cut-loupe" dir="ltr" data-cut-frame={cut.frame}>
+    <div className="stage-loupe pf-ds pf-force-dark" role="group" aria-label={S.loupe} data-testid="cut-loupe" dir="ltr" data-cut-frame={cut.frame}>
       <div className="loupe-bar" dir={state.lang === 'he' ? 'rtl' : 'ltr'}>
         <span className="loupe-chip"><IconCutPlus size={16} /> {S.loupe}</span>
         <span className="loupe-keys"><Kbd k="," he={false} /><Kbd k="." he={false} /> {S.rollKeys} · <Kbd k="Shift" /><Kbd k="B" /> {S.toBeat}</span>

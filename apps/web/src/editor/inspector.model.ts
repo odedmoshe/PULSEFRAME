@@ -56,7 +56,7 @@ const TABS: Record<ObjectKind, readonly ObjectTab[]> = {
   image: ['basic', 'motion', 'colour', 'effects', 'mask'],
   text: ['text', 'style', 'anim', 'place', 'effects'],
   caption: ['cue', 'timing'],
-  sound: ['audio', 'soundfx', 'beat'],
+  sound: ['audio', 'soundfx', 'speed', 'beat'],
   adjustment: ['effects', 'colour', 'range'],
   cut: ['cut', 'transition'],
 };
