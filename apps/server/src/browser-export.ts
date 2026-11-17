@@ -15,8 +15,10 @@
  */
 import type { Hono } from 'hono';
 import { z } from 'zod';
+import { RationalTimeSchema } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import type { Exporter, Manifest } from './export.ts';
+import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
 export const LEASE_SECONDS = 15;
@@ -35,6 +37,12 @@ const CompleteBody = z
     audioCodec: z.string().min(1).max(32),
     frames: z.number().int().nonnegative(),
     container: z.string().min(1).max(32),
+    /** The tab's photosensitivity check of the frames it encoded (ADR-0009 decision 4); optional for older tabs. */
+    photosensitivity: z.object({
+      verdict: z.enum(['pass', 'fail']),
+      frames: z.number().int().nonnegative(),
+      ranges: z.array(z.object({ from: RationalTimeSchema, to: RationalTimeSchema, kind: z.enum(['general', 'red']), flashesPerSecond: z.number().int().nonnegative().max(1000), area: z.number().min(0).max(1) }).strict()).max(10_000),
+    }).strict().optional(),
   })
   .strict();
 const AbandonBody = z.object({ sessionId: SessionId }).strict();
@@ -165,6 +173,8 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     if (job.status === 'cancel-requested') throw new ApiError(409, 'job_canceled', 'a cancel was requested for this job; acknowledge it with /abandon');
     const manifest: Manifest = job.input.manifest;
     if (b.frames !== manifest.output.frames) throw new ApiError(422, 'frames_mismatch', `the tab reports ${b.frames} frames but the snapshot has ${manifest.output.frames}`, { expected: manifest.output.frames, got: b.frames });
+    const ps = b.photosensitivity;
+    if (ps && (ps.frames !== b.frames || (ps.verdict === 'fail') !== ps.ranges.length > 0)) throw new ApiError(422, 'invalid_photosensitivity', 'the photosensitivity report does not match the export (frames, or verdict and ranges, disagree)', { frames: ps.frames, expected: b.frames, verdict: ps.verdict, ranges: ps.ranges.length });
     leases.delete(job.id);
     const { width, height, firstFrame, frames, frameRate, sampleRate } = manifest.output;
     store.updateJob(job.id, {
@@ -173,6 +183,8 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
         route: 'browser', location: 'client-download', note: 'the media bytes were produced and stay in the browser tab that held the lease; the server stores only this record',
         bytes: b.bytes, sha256: b.sha256, videoCodec: b.videoCodec, audioCodec: b.audioCodec, frames: b.frames, container: b.container,
         mimeType: b.container === 'webm' ? 'video/webm' : 'video/mp4', revision: job.input.revision, options: manifest.options,
+        // measured by the tab on the frames it encoded, with the same analyser as the server export; the method text is the server's
+        ...(ps ? { photosensitivity: { method: PHOTOSENSITIVITY_METHOD, measuredBy: 'browser', ...ps } } : {}),
         manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output: { width, height, firstFrame, frames, frameRate, sampleRate } },
       },
     });

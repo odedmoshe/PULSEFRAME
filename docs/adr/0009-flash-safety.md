@@ -1,6 +1,6 @@
 # ADR-0009: Flash safety — a schedule for the strobe, a guard for the screen, and a check of the rendered result
 
-Status: **accepted** (2026-11-17). Steps 1–3 built and tested. Step 4 is built for server exports: every multi-frame export runs the check on the frames it encodes, records `photosensitivity` in the job output, and the Deliver tab lists failing stretches with jump-to (Phase 4 proof). Not built yet: the check on the browser export route, the on-demand "check flashing" job, and a preflight warning. Amended by ADR-0012 (light transitions join the schedule of decision 1).
+Status: **accepted** (2026-11-17). Steps 1–3 built and tested. Step 4 is built for both export routes: every multi-frame server export runs the check on the frames it encodes, records `photosensitivity` in the job output, and the Deliver tab lists failing stretches with jump-to (Phase 4 proof); the browser export runs the same analyser on every frame it hands its encoder and sends the result with its completion, which the server validates and records with its own method text (browser-export proof: a 5-per-second flashing timeline gives the same stretch on both routes). Not built yet: the on-demand "check flashing" job and a preflight warning. Amended by ADR-0012 (light transitions join the schedule of decision 1).
 
 ## Context (measured, with where each fact comes from)
 - Flashing faster than three times a second can trigger seizures in people with photosensitive epilepsy. The guidelines

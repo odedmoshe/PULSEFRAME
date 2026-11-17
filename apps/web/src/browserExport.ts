@@ -13,11 +13,14 @@
  *    the rate the context renders at.
  *  - Clips with sound effects (ADR-0010) are not mixed by WebAudio: the shared engine voice (the same code as the server export
  *    and the preview) renders them from the decoded pieces, and its output is added sample by sample to the rendered buffer.
+ *  - Every frame handed to the encoder is also read back and fed to the engine's FlashAnalyser (ADR-0009 decision 4), the same
+ *    analysis the server export runs; the result goes to the server with the completion and is recorded on the job. It never
+ *    changes or blocks the export.
  */
 import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Input, Mp4OutputFormat, Output, Quality, UrlSource, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, fillPlayingOrder, initGpu, openClipVoice, RampResampler, rampSpanOf, soundEnd, stretchKeepingPitch, type PlannedAudioClip } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, FlashAnalyser, flashCells, fillPlayingOrder, initGpu, openClipVoice, RampResampler, rampSpanOf, soundEnd, stretchKeepingPitch, type PlannedAudioClip } from '@pulseframe/engine';
 import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
@@ -41,7 +44,11 @@ export interface BrowserExportPlan { container: 'mp4' | 'webm'; videoCodec: 'avc
 export interface BrowserExportProgress { stage: 'planning' | 'leased' | 'fonts' | 'audio' | 'rendering' | 'finalizing' | 'completing'; framesDone: number; total: number }
 export interface BrowserExportResult { blob: Blob; jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number;
   /** Video decoders of this export: the most open at once, the budget, and how many pictures the budget refused (ADR-0011). */
-  decoders: { peak: number; max: number; opened: number; disposed: number; refused: number } }
+  decoders: { peak: number; max: number; opened: number; disposed: number; refused: number };
+  /** The photosensitivity check of the encoded frames (ADR-0009), as sent to the server with the completion. */
+  photosensitivity: BrowserPhotosensitivity }
+/** Failing stretches in timeline time (exact rationals). The server adds the method text when it records it. */
+export interface BrowserPhotosensitivity { verdict: 'pass' | 'fail'; frames: number; ranges: { from: T.RationalTime; to: T.RationalTime; kind: 'general' | 'red'; flashesPerSecond: number; area: number }[] }
 export interface BrowserExportRun {
   projectId: string;
   options?: Record<string, unknown>;
@@ -357,6 +364,7 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
     audioDone.catch(() => {});
 
     const frameSeconds = (k: number) => (k * rate.den) / rate.num; // absolute, from the integer index: no accumulated rounding
+    const flash = new FlashAnalyser(rate.num / rate.den);
     for (let i = 0; i < out.frames; i++) {
       check();
       if (opts.freezeAfterFrames !== undefined && i === opts.freezeAfterFrames) await new Promise(() => {}); // stuck-render simulation: heartbeats keep running until the page is closed
@@ -368,6 +376,8 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
       const adapter = unavailableEffects.filter((id) => !unavailableReasons?.[id]);
       if (adapter.length) throw new BrowserExportError('export_failed', `frame ${i} uses ${adapter.join(', ')}, which need a graphics adapter (WebGPU) in this browser${told.map((id) => `; ${id}: ${unavailableReasons![id]}`).join('')}`, { jobId });
       if (told.length) throw new BrowserExportError('export_failed', `frame ${i} cannot be drawn faithfully: ${told.map((id) => `${id}: ${unavailableReasons![id]}`).join('; ')}`, { jobId });
+      // the picture the encoder receives, checked for flashing (same cells and thresholds as the server export)
+      flash.push(flashCells(ctx.getImageData(0, 0, out.width, out.height).data, out.width, out.height));
       await video.add(frameSeconds(i), frameSeconds(i + 1) - frameSeconds(i)); // awaited: encoder + muxer backpressure
       framesDone = i + 1;
       if (i % 4 === 0 || framesDone === out.frames) progress('rendering', framesDone, out.frames);
@@ -383,9 +393,11 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
     const mime = decision.container === 'mp4' ? 'video/mp4' : 'video/webm';
     progress('completing', framesDone, out.frames);
     clearInterval(timer);
-    await api(apiBase, `/jobs/${jobId}/complete`, { sessionId, bytes: buffer.byteLength, sha256, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, frames: framesDone, container: decision.container });
+    const fr = flash.report(), at = (k: number) => T.frameTime(out.firstFrame + k, rate);
+    const photosensitivity: BrowserPhotosensitivity = { verdict: fr.verdict, frames: fr.frames, ranges: fr.ranges.map((x) => ({ from: at(x.from), to: at(x.to + 1), kind: x.kind, flashesPerSecond: x.flashesPerSecond, area: x.area })) };
+    await api(apiBase, `/jobs/${jobId}/complete`, { sessionId, bytes: buffer.byteLength, sha256, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, frames: framesDone, container: decision.container, photosensitivity });
     const media = pool.stats();
-    return { blob: new Blob([buffer], { type: mime }), jobId, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, container: decision.container, frames: framesDone, sha256, bytes: buffer.byteLength, substitutions: decision.substitutions, capabilities: caps, wallMs: performance.now() - started, decoders: { peak: media.peakDecoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed, refused: media.refused } };
+    return { blob: new Blob([buffer], { type: mime }), jobId, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, container: decision.container, frames: framesDone, sha256, bytes: buffer.byteLength, substitutions: decision.substitutions, capabilities: caps, wallMs: performance.now() - started, decoders: { peak: media.peakDecoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed, refused: media.refused }, photosensitivity };
   } catch (e: any) {
     const err = stopReason ?? (e instanceof BrowserExportError ? e : new BrowserExportError('export_failed', String(e?.message ?? e), { jobId }));
     await output?.cancel().catch(() => {});
