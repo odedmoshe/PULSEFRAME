@@ -282,6 +282,27 @@ function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | T
 }
 /** Key under which a decoded picture can serve every layer and tap of one frame that shows the same source frame. */
 const pictureKey = (l: PictureLayer) => (l.kind === 'video' ? `v\n${l.assetId}\n${l.sourceFrameIndex}` : `i\n${l.assetId}`);
+/**
+ * The video decoders drawing `g` asks its frame provider for at once, as drawGraph asks (ADR-0011): every video layer's
+ * own picture, then each time tap whose source frame no earlier request of the frame shows (it shares that image, see
+ * pictureKey). Counted as distinct decode lanes (clip id and lane: the media pool's decoder key within one quality), so a
+ * pool with fewer decoders than `count` refuses some of these pictures (decode_budget). `clipIds`: the clips they are
+ * decoded for (a tap is decoded for its carrier clip). Pure; decodeBudget.test.ts holds it equal to drawGraph's requests.
+ */
+export function frameDecoders(g: RenderGraph): { count: number; clipIds: string[] } {
+  const lanes = new Set<string>(), shown = new Set<string>(), clipIds = new Set<string>();
+  const take = (l: PictureLayer) => { if (l.kind === 'video') { lanes.add(`${l.clipId}\n${l.lane ?? 0}`); clipIds.add(l.clipId); } };
+  for (const l of g.layers) if (l.kind === 'video' || l.kind === 'image') { take(l); shown.add(pictureKey(l)); }
+  for (const l of g.layers) {
+    if (l.kind === 'caption' || !l.time) continue;
+    for (const tap of l.time.taps) {
+      if (tap.layer.kind === 'text' || shown.has(pictureKey(tap.layer))) continue;
+      shown.add(pictureKey(tap.layer));
+      take(tap.layer);
+    }
+  }
+  return { count: lanes.size, clipIds: [...clipIds] };
+}
 
 /** Draw one evaluated frame. Awaits source frames; drawing order equals graph.layers order. */
 /**

@@ -285,13 +285,12 @@ function clipDecoders(doc: ProjectDocument, clip: Clip): number {
 }
 
 /**
- * Most video decoders any frame of the sequence needs (picture layers, transition outgoing sides, decoding taps), and where.
- * `fromFrame` is the first frame that needs that many and `toFrame` the first frame after that stretch (exclusive).
- * Counted per clip and frame range, never by evaluating frames, so it is cheap for long timelines.
+ * The upper bound of video decoders per frame (see maxDecodeLanes) as steps: [frame, lanes] in frame order, each value
+ * holding until the next step's frame (the last step is 0).
  */
-export function maxDecodeLanes(doc: ProjectDocument, sequenceId = doc.mainSequenceId): { lanes: number; fromFrame: number; toFrame: number } {
+export function decodeLaneSteps(doc: ProjectDocument, sequenceId = doc.mainSequenceId): [number, number][] {
   const seq = doc.sequences[sequenceId];
-  if (!seq) return { lanes: 0, fromFrame: 0, toFrame: 0 };
+  if (!seq) return [];
   const rate = doc.settings.frameRate;
   const events = new Map<number, number>();
   const span = (from: number, to: number, n: number) => { if (n <= 0 || to <= from) return; events.set(from, (events.get(from) ?? 0) + n); events.set(to, (events.get(to) ?? 0) - n); };
@@ -309,9 +308,21 @@ export function maxDecodeLanes(doc: ProjectDocument, sequenceId = doc.mainSequen
       }
     }
   }
-  let cur = 0, best = 0, from = 0, to = 0, open = false;
-  for (const f of [...events.keys()].sort((a, b) => a - b)) {
-    cur += events.get(f)!;
+  let cur = 0;
+  return [...events.keys()].sort((a, b) => a - b).map((f) => [f, (cur += events.get(f)!)]);
+}
+
+/**
+ * Most video decoders any frame of the sequence may need (picture layers, transition outgoing sides, decoding taps), and
+ * where. An UPPER BOUND: drawGraph decodes a source frame once however many layers and taps of one frame show it (stacked
+ * copies of a clip, a freeze frame, taps held at the run start, slow motion), so a frame can need fewer; decodeOverBudget
+ * (decodeBudget.ts) counts exactly. `fromFrame` is the first frame where the bound is that high and `toFrame` the first
+ * frame after that stretch (exclusive). Counted per clip and frame range, never by evaluating frames, so it is cheap for
+ * long timelines.
+ */
+export function maxDecodeLanes(doc: ProjectDocument, sequenceId = doc.mainSequenceId): { lanes: number; fromFrame: number; toFrame: number } {
+  let best = 0, from = 0, to = 0, open = false;
+  for (const [f, cur] of decodeLaneSteps(doc, sequenceId)) {
     if (open && cur < best) { to = f; open = false; }
     if (cur > best) { best = cur; from = f; open = true; }
   }
