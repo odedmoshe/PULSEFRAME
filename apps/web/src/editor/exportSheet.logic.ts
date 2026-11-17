@@ -157,3 +157,17 @@ export function formatLength(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/**
+ * The "also in another shape" suggestion after an export: the first format of the other orientation (a vertical one for a wide
+ * project and the reverse) that this run did not export. A linked format is preferred over one that would be created. null when
+ * the run already covered every other shape, or the project is square.
+ */
+export function alsoSuggestion(targets: ExportTarget[], exportedVariantIds: ReadonlySet<string | null>): ExportTarget | null {
+  const master = targets[0];
+  if (!master || master.width === master.height) return null;
+  const tall = master.height > master.width;
+  const done = (t: ExportTarget) => (t.kind === 'master' ? exportedVariantIds.has(null) : t.variantId !== null && exportedVariantIds.has(t.variantId));
+  const other = targets.filter((t) => t.kind !== 'master' && (t.height > t.width) !== tall && t.height !== t.width && !done(t));
+  return other.find((t) => t.kind === 'variant') ?? other[0] ?? null;
+}

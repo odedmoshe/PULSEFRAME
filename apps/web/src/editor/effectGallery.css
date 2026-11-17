@@ -63,3 +63,24 @@
 @media (max-width: 900px) { .pf-gal-dialog { inline-size: 100%; } .pf-gal-backdrop { padding: 8px; } }
 /* a pressed tile draws its state on its picture (above); the button itself stays flat */
 .pf-gal-tile[aria-pressed='true'] { border-color: transparent; background-color: transparent; }
+
+/* ---- spread beside the live picture, with light tabs (UX_REDESIGN §4.4; canvas Gallery-Transitions) ---- */
+/* the editor stays sharp and visible next to the spread: no blur, no dimming (the blur rule in theme.css is legacy and is beaten here) */
+.pf-ds.pf-gal-backdrop { background: transparent; backdrop-filter: blur(0px); }
+.pf-gal-dialog { box-shadow: var(--pf-e3), 0 0 0 1px var(--pf-line-strong); }
+.pf-gal-chip { display: inline-flex; align-items: center; gap: var(--pf-sp-3); }
+.pf-gal-chip-arrow { flex: none; color: var(--pf-text-3); }
+/* light tabs: a quiet underline, not heavy blocks */
+.pf-gal-dialog .pf-tabs { gap: var(--pf-sp-6); padding: 0; border-radius: 0; background: transparent; box-shadow: none; border-block-end: 1px solid var(--pf-line); }
+.pf-gal-dialog .pf-tab { flex: 0 0 auto; flex-direction: row; min-block-size: 36px; padding: 0 var(--pf-sp-3); border-radius: 0; background: transparent; color: var(--pf-text-2); font-size: var(--pf-fs-sm); }
+.pf-gal-dialog .pf-tab:hover:not(:disabled) { background: transparent; color: var(--pf-text); }
+.pf-gal-dialog .pf-tab.is-on { background: transparent; box-shadow: none; color: var(--pf-text); font-weight: var(--pf-fw-semibold); }
+.pf-gal-dialog .pf-tab.is-on::after { inset-inline: 0; inset-block-end: -1px; }
+/* the filter chips scroll with the tiles, so headings never slide under them */
+.pf-gal-filters { position: static; }
+.pf-gal-heading { scroll-margin-block-start: var(--pf-sp-6); position: static; }
+/* the name sits under the picture; the star sits on the picture's corner, clear of the "not saved" label */
+.pf-gal-unsaved { inset-inline-start: auto; inset-inline-end: 6px; }
+.pf-gal-star { inset-inline-end: 6px; inset-block-start: 6px; }
+.pf-gal-cell:hover .pf-gal-unsaved { inset-block-end: 6px; }
+.pf-gal-fitnote { color: var(--pf-attention); }

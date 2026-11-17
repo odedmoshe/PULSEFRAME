@@ -15,9 +15,9 @@ import { fillIn, type Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
 import { useEditorState } from './store.ts';
 import { GALLERY_STRINGS, SPREAD_STRINGS } from './gallery.strings.ts';
-import { Star, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Star, X } from 'lucide-react';
 import { Button, Tabs } from '../ds/index.ts';
-import { CheckIcon, isolate } from '../ds/util.tsx';
+import { CheckIcon } from '../ds/util.tsx';
 import { DEFAULT_TRANSITION_FRAMES, isOn, pickCall, pickRefusal, thumbSize, transitionLength, transitionRoom } from './gallery.pick.ts';
 import { singleFlight } from './oneAtATime.ts';
 import { ADJUST_STRINGS } from './adjust.strings.ts';
@@ -600,7 +600,11 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
   // the cut the transition tiles are drawn on: "A ← B 0:08"
   const prevClip = (() => { const d = editor.doc; const f = d ? findClip(d, clip.id) : undefined; if (!d || !f || clip.type !== 'media') return null; const i = f.track.clips.findIndex((c) => c.id === clip.id); const p = i > 0 ? f.track.clips[i - 1] : null; return p && p.type === 'media' ? p : null; })();
   const nameOfClip = (c: Clip) => (c.type === 'media' ? stripExt(editor.doc?.assets[c.assetId]?.name ?? c.id) : c.type === 'text' ? c.text.slice(0, 24) : c.id);
-  const chipText = tab === 'transitions' && prevClip ? SP.cutChip(nameOfClip(prevClip), nameOfClip(clip), clockOf(T.toSeconds(clip.start))) : SP.clipChip(nameOfClip(clip));
+  /** "previewed on the cut: A -> B 0:05": the arrow follows the reading direction (previous clip first), so it points at the clip that comes next */
+  const Next = lang === 'he' ? ArrowLeft : ArrowRight;
+  const chipBody = tab === 'transitions' && prevClip
+    ? <>{SP.cutLead} <bdi>{nameOfClip(prevClip)}</bdi> <Next size={12} strokeWidth={2} aria-hidden="true" className="pf-gal-chip-arrow" /> <bdi>{nameOfClip(clip)}</bdi> <bdi className="num">{clockOf(T.toSeconds(clip.start))}</bdi></>
+    : <bdi>{SP.clipChip(nameOfClip(clip))}</bdi>;
   const total = tabAll.length;
   const cutList = tab === 'transitions' ? cuts() : [];
   const pickedId = picked ?? (clip.type === 'media' ? clip.transition?.type ?? null : null);
@@ -611,7 +615,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
       <div ref={dialogRef} className="pf-gal-dialog pf-gal-spread" role="dialog" aria-modal="true" aria-labelledby="pf-gal-title" dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang} data-testid="effect-gallery" data-flashes-held={guard.leftOut} tabIndex={-1} onKeyDown={onKey}>
         <div className="pf-gal-head">
           <h2 className="pf-gal-title" id="pf-gal-title">{G[tab]} <span className="num pf-gal-total">{total}</span></h2>
-          <span className="pf-gal-chip" data-testid="gallery-cut-chip">{isolate(chipText)}</span>
+          <span className="pf-gal-chip" data-testid="gallery-cut-chip">{chipBody}</span>
           <input ref={searchRef} className="pf-gal-search" type="search" data-testid="gallery-search" aria-label={G.search} placeholder={G.searchPlaceholder} autoComplete="off" spellCheck={false} value={query} onChange={(e) => setQuery(e.target.value)} />
           <button type="button" className="pf-gal-close" data-testid="gallery-close" aria-label={G.close} title={G.close} onClick={onClose}><X size={18} strokeWidth={1.75} aria-hidden="true" /></button>
         </div>

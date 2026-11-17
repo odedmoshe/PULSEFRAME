@@ -20,7 +20,7 @@ import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../a
 import { useEditorState, type Editor } from './store.ts';
 import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
 import {
-  DEFAULT_CHOICES, DESTINATIONS, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
+  alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
 } from './exportSheet.logic.ts';
 import './exportSheet.css';
@@ -101,7 +101,7 @@ function Sheet({ editor }: { editor: Editor }) {
   const phase: 'settings' | 'running' | 'done' = s.jobs.length === 0 ? 'settings' : s.starting || s.jobs.some((j) => isActiveJob(j.status)) ? 'running' : 'done';
   const step = phase === 'settings' ? 0 : phase === 'running' ? 1 : 2;
   return (
-    <Dialog open={s.open} onClose={closeExportSheet} title={S.title} closeLabel={S.close} size="lg" className="pf-xs" testId="export-sheet" dismissOnBackdrop={phase !== 'running'}
+    <Dialog open={s.open} onClose={closeExportSheet} title={S.title} closeLabel={S.close} variant="sheet" size="lg" className="pf-xs" testId="export-sheet" dismissOnBackdrop={phase !== 'running'}
       footer={phase === 'settings' ? <SettingsFooter editor={editor} S={S} /> : undefined}>
       <ol className="pf-xs-steps" aria-label={S.title}>
         {S.steps.map((x, i) => <li key={x} aria-current={i === step ? 'step' : undefined} className={i === step ? 'is-on' : i < step ? 'is-past' : ''}><span className="num">{i + 1}</span>{x}</li>)}
@@ -116,7 +116,9 @@ function Sheet({ editor }: { editor: Editor }) {
 // ---------------------------------------------------------------- settings
 /** The choices live above the footer and the body so the primary button can read them. */
 interface Pick { keys: string[]; choices: ExportChoices; dest: Destination['id'] | null }
-let pick: Pick = { keys: ['master'], choices: DEFAULT_CHOICES, dest: null };
+// a destination is chosen from the start (saving a file on this computer: the original shape, full quality), so the sheet never opens on nothing
+const FIRST = DESTINATIONS.find((d) => d.id === 'computer')!;
+let pick: Pick = { keys: ['master'], choices: { ...DEFAULT_CHOICES, ...FIRST.choices }, dest: FIRST.id };
 const pickListeners = new Set<() => void>();
 const setPick = (p: Partial<Pick>) => { pick = { ...pick, ...p }; for (const l of pickListeners) l(); };
 const usePick = () => useSyncExternalStore((l) => { pickListeners.add(l); return () => { pickListeners.delete(l); }; }, () => pick);
@@ -241,7 +243,7 @@ function FormatCard({ t, on, onToggle, S, lang }: { t: ExportTarget; on: boolean
     <label className={`pf-xs-fmt${on ? ' is-on' : ''}`} data-testid="export-format" data-key={t.key}>
       <input type="checkbox" checked={on} onChange={onToggle} />
       <span className="pf-xs-fmt-box" style={aspectBox} aria-hidden="true">
-        {t.kind !== 'profile' ? <FrameImg src={src} cover={t.fit === 'cover'} rev={state.revision} /> : <i />}
+        {t.kind !== 'profile' ? <FrameImg src={src} cover={t.fit === 'cover'} rev={state.revision} /> : <><FrameImg src={`/api/v1/projects/${doc.id}/frame?index=${editor.frame}`} cover rev={state.revision} /><i /></>}
       </span>
       <span className="pf-xs-fmt-text"><b>{isolate(name)}</b><span className="num">{t.width}×{t.height}</span>{t.kind === 'profile' && <em>{S.willLink}</em>}</span>
     </label>
@@ -283,14 +285,15 @@ function Preview({ lead, S, lang, frame, revision, sec, frames, choices, ...rest
     <aside className="pf-xs-preview" aria-label={S.preview} data-testid="export-preview">
       <div className="pf-xs-pv-title">{S.preview} · {isolate(lead.name[lang])}</div>
       <div className="pf-xs-pv-frame" style={{ aspectRatio: `${lead.width} / ${lead.height}` }}>
-        {lead.kind === 'profile' ? <p className="pf-xs-note">{S.willLink}</p> : <FrameImg src={src} cover={lead.fit === 'cover'} rev={revision} />}
+        {lead.kind === 'profile' ? <FrameImg src={`/api/v1/projects/${id}/frame?index=${frame}`} cover rev={revision} /> : <FrameImg src={src} cover={lead.fit === 'cover'} rev={revision} />}
         {safe && <span className="pf-xs-zone" aria-hidden="true" style={{ insetBlockStart: 0, insetInline: 0, blockSize: `${safe.top * 100}%` }} />}
         {safe && <span className="pf-xs-zone" aria-hidden="true" style={{ insetBlockEnd: 0, insetInline: 0, blockSize: `${safe.bottom * 100}%` }} />}
       </div>
+      {lead.kind === 'profile' && <p className="pf-xs-note">{S.willLink}</p>}
       <dl className="pf-xs-facts">
         <div><dt>{S.length}</dt><dd className="num">{formatLength(sec)}</dd></div>
         <div><dt>{lang === 'he' ? 'גודל תמונה' : 'Picture size'}</dt><dd className="num">{out.width}×{out.height}</dd></div>
-        {bytes != null && <div><dt>{S.size}</dt><dd><span className="num">≈ {formatFileSize(bytes)}</span> <small>{S.sizeNote}</small></dd></div>}
+        {bytes != null && <div><dt>{S.size}</dt><dd><span className="num">≈ {formatFileSize(bytes)}</span><small>{S.sizeNote}</small></dd></div>}
         {frames > 0 && <div><dt>{S.frames}</dt><dd className="num">{frames}</dd></div>}
       </dl>
     </aside>
@@ -477,9 +480,32 @@ function Done({ editor, S }: { editor: Editor; S: ExportStrings }) {
           <Button variant="secondary" size="sm" onClick={() => void retry(j)} data-testid="export-retry">{S.retry}</Button>
         </div>
       ))}
+      <AlsoCard S={S} ok={ok} />
       <div className="pf-xs-run-actions">
         <Button variant="secondary" size="lg" onClick={closeExportSheet}>{S.backToEdit}</Button>
       </div>
+    </div>
+  );
+}
+
+/** After a finished export: the other shape of the video (vertical for a wide project, and the reverse), one press back to the settings with it chosen. */
+function AlsoCard({ S, ok }: { S: ExportStrings; ok: SheetJob[] }) {
+  const { state } = useEditorState();
+  const doc = state.doc!;
+  const lang = state.lang;
+  const targets = useMemo(() => exportTargets(doc), [doc]);
+  const next = ok.length > 0 ? alsoSuggestion(targets, new Set(ok.map((j) => j.variantId))) : null;
+  if (!next) return null;
+  const shape = next.name[lang].split(' ').slice(-1)[0] ?? '';
+  const go = () => {
+    setPick({ keys: [next.key], dest: next.height > next.width ? 'reels' : 'youtube' });
+    setSheet({ jobs: [], error: null, blockers: [] });
+  };
+  return (
+    <div className="pf-xs-card is-also" data-testid="export-also">
+      <span className="pf-xs-card-thumb" aria-hidden="true"><FrameImg src={`/api/v1/projects/${doc.id}/frame?index=0${next.variantId ? `&variant=${encodeURIComponent(next.variantId)}` : ''}`} cover rev={state.revision} /></span>
+      <div className="pf-xs-card-text"><b>{S.alsoTitle(shape)}</b><span>{next.kind === 'variant' ? S.alsoLinked : S.alsoNew}</span></div>
+      <Button variant="primary" size="sm" onClick={go} data-testid="export-also-go">{S.alsoGo(shape)}</Button>
     </div>
   );
 }

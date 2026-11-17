@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createProject } from '@pulseframe/core';
-import { destinationKey, DESTINATIONS, exportOptions, DEFAULT_CHOICES, exportTargets, fourKReachable, formatFileSize, jobFraction, mergeJobViews, overallFraction, parseStage, scaledSize, shortSideLabel } from './exportSheet.logic.ts';
+import { destinationKey, DESTINATIONS, exportOptions, DEFAULT_CHOICES, exportTargets, fourKReachable, formatFileSize, alsoSuggestion, jobFraction, mergeJobViews, overallFraction, parseStage, scaledSize, shortSideLabel } from './exportSheet.logic.ts';
 
 describe('export sheet logic', () => {
   it('reads the stage words and frame counts the server reports', () => {
@@ -53,5 +53,21 @@ describe('mergeJobViews (a poll that was in flight must not drop a file started 
   it('does not take a finished job back to running', () => {
     const out = mergeJobViews([job('a', 'succeeded')], [{ id: 'a', status: 'running', stage: 'encoding', output: null, error: null }]);
     expect(out[0]!.status).toBe('succeeded');
+  });
+});
+
+describe('alsoSuggestion', () => {
+  const t = (key: string, w: number, h: number, kind: 'master' | 'variant' | 'profile', variantId: string | null = null) => ({ key, kind, variantId, profileId: null, width: w, height: h, fit: 'cover' as const, name: { he: key, en: key } });
+  it('offers the vertical shape after a wide export, a linked one first', () => {
+    const targets = [t('master', 1920, 1080, 'master'), t('profile:r', 1080, 1920, 'profile'), t('variant:v', 1080, 1920, 'variant', 'v')];
+    expect(alsoSuggestion(targets, new Set([null]))?.key).toBe('variant:v');
+  });
+  it('offers nothing when the other shape was exported, or the project is square', () => {
+    const targets = [t('master', 1920, 1080, 'master'), t('variant:v', 1080, 1920, 'variant', 'v')];
+    expect(alsoSuggestion(targets, new Set([null, 'v']))).toBeNull();
+    expect(alsoSuggestion([t('master', 1080, 1080, 'master'), t('profile:r', 1080, 1920, 'profile')], new Set([null]))).toBeNull();
+  });
+  it('offers the wide shape after a vertical export', () => {
+    expect(alsoSuggestion([t('master', 1080, 1920, 'master'), t('profile:y', 1920, 1080, 'profile')], new Set([null]))?.key).toBe('profile:y');
   });
 });

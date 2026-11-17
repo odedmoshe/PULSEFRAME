@@ -34,7 +34,7 @@ export const GALLERY_STRINGS = {
 /** Words of the catalogue spread (UX_REDESIGN §4.4): sections, filters, notes on tiles and the footer. */
 export const SPREAD_STRINGS = {
   he: {
-    count: (n: number) => String(n), cutChip: (a: string, b: string, at: string) => `התצוגה המקדימה בחיתוך: ${a} ← ${b} ${at}`, clipChip: (name: string) => `על: ${name}`,
+    count: (n: number) => String(n), cutLead: 'התצוגה המקדימה בחיתוך:', clipChip: (name: string) => `על: ${name}`,
 recent: 'השתמשת לאחרונה', all: (what: string, n: number) => `כל ${what} ${n}`,
     allWord: { effects: 'האפקטים', looks: 'המראות', transitions: 'המעברים', text: 'הסגנונות', motion: 'התנועות' },
     filterAll: 'הכול', filterFav: 'מועדפים', favourite: 'הוספה למועדפים', unfavourite: 'הסרה מהמועדפים',
@@ -48,7 +48,7 @@ recent: 'השתמשת לאחרונה', all: (what: string, n: number) => `כל $
     sampleText: 'סוף שבוע',
   },
   en: {
-    count: (n: number) => String(n), cutChip: (a: string, b: string, at: string) => `Previewed on the cut: ${a} ← ${b} ${at}`, clipChip: (name: string) => `On: ${name}`,
+    count: (n: number) => String(n), cutLead: 'Previewed on the cut:', clipChip: (name: string) => `On: ${name}`,
 recent: 'Used recently', all: (what: string, n: number) => `All ${what} ${n}`,
     allWord: { effects: 'effects', looks: 'looks', transitions: 'transitions', text: 'styles', motion: 'motions' },
     filterAll: 'All', filterFav: 'Favourites', favourite: 'Add to favourites', unfavourite: 'Remove from favourites',
