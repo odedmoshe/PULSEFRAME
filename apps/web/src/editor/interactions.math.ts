@@ -331,7 +331,58 @@ export function catalogDragFrom(types: readonly string[]): CatalogDragItem | nul
 
 // ---- the splitter between the viewer and the timeline ----
 /** The timeline's height after a splitter move: at least `min`, and never so tall that the viewer above keeps less than `keepAbove`. */
+/** The timeline's usual height in the shell (CSS), as tall as its lanes (--pf-tl-natural, set by Timeline.tsx) within bounds. */
+export const TL_USUAL = 'clamp(248px, var(--pf-tl-natural, var(--pf-tl-h, 38dvh)), 48dvh)';
+/** In Sound mode: 52% of the window, or what the taller sound lanes need, whichever is more; the viewer keeps 260 px. */
+export const TL_USUAL_SOUND = 'clamp(248px, max(52dvh, var(--pf-tl-natural, 0px)), calc(100dvh - 260px))';
 export function splitterHeight(wanted: number, a: { min: number; available: number; keepAbove: number }): number {
   const max = Math.max(a.min, a.available - a.keepAbove);
   return Math.round(Math.min(max, Math.max(a.min, wanted)));
+}
+
+/**
+ * What the controls on a cut may cover. The cut's buttons are centred on the cut, so each takes half its width from the clip
+ * on either side. A clip must keep most of its width for its own click and drag, so the "+" (24 px, a hover affordance) needs
+ * 48 px on both sides, and the chip of an existing transition (24 px or more) and its length handle need 32 px; under that
+ * only the hatched band is drawn (pointer-transparent) and the transition is reached from the clip's ride bar.
+ */
+export const CUT_ADD_ROOM_PX = 48;
+export const CUT_CHIP_ROOM_PX = 32;
+export function cutRoom(beforePx: number | null, afterPx: number): { add: boolean; chip: boolean } {
+  const room = Math.min(beforePx ?? Infinity, afterPx);
+  return { add: beforePx !== null && room >= CUT_ADD_ROOM_PX, chip: room >= CUT_CHIP_ROOM_PX };
+}
+
+/** A stretch of speech on a sound clip, in pixels from the clip's left edge. */
+export interface SpokenChip { key: string; left: number; width: number; text: string }
+/** Horizontal room a word chip's text loses to its padding (5 px each side) and its 1 px gap to the neighbours. */
+export const SPOKEN_CHIP_PAD_PX = 12;
+/** A phrase chip narrower than this cannot show a letter and its ellipsis: it is left out. */
+export const SPOKEN_PHRASE_MIN_PX = 30;
+/**
+ * Which spoken chips a sound clip shows at this zoom. Word by word when most words fit whole in the time they are said; then
+ * only the words that fit (a word is never cut). Otherwise phrase by phrase, each shortened with an ellipsis at its end
+ * (`mode: 'phrase'`), leaving out the phrases too short to hold one letter.
+ */
+export function pickSpoken(words: readonly SpokenChip[], phrases: readonly SpokenChip[], textWidth: (text: string) => number, max = 400): { mode: 'word' | 'phrase'; chips: SpokenChip[] } {
+  const fit = words.filter((w) => w.width - SPOKEN_CHIP_PAD_PX >= textWidth(w.text));
+  if (words.length > 0 && fit.length >= 0.6 * words.length) return { mode: 'word', chips: fit.slice(0, max) };
+  return { mode: 'phrase', chips: phrases.filter((p) => p.width >= SPOKEN_PHRASE_MIN_PX).slice(0, max) };
+}
+
+/**
+ * Where the playhead's timecode sits on the ruler, from the playhead (px from the time origin), the timecode's width and the
+ * user markers there: centred on the line; started at the line near the origin (it would leave the lane); ended at the line
+ * when a marker is at the playhead, whose flag runs to the right of its line and must stay visible.
+ */
+export function capPlacement(atPx: number, capPx: number, onMarker: boolean): 'centre' | 'start' | 'end' {
+  if (onMarker && atPx >= capPx) return 'end';
+  if (atPx < capPx / 2 + 2) return 'start';
+  return onMarker ? 'end' : 'centre';
+}
+/** The ruler labels (left edge and width in px) the timecode box [from, to] covers, by index. */
+export function labelsUnder(labels: readonly { left: number; width: number }[], from: number, to: number): number[] {
+  const out: number[] = [];
+  labels.forEach((l, i) => { if (l.left < to && l.left + l.width > from) out.push(i); });
+  return out;
 }

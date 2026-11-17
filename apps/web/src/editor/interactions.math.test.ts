@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { boxToScreen, edgeProxies, handlePoints, layerBox, overlapsOnTrack, pxToFrameTime, rotationFromDrag, scaleFromDrag, screenDeltaToFrameFraction, snapTime, markerSnapCandidates, type LayerBox, type ViewRect } from './interactions.math.ts';
 import { barGrid, barLabelEvery, beatSnapTargets, CATALOG_DRAG_PREFIX, catalogDragFrom, catalogDragType, cutsOf, laneOrder, rulerLabel, rulerStep, signedTimecode, snapToTargets, splitterHeight } from './interactions.math.ts';
+import { capPlacement, cutRoom, labelsUnder, pickSpoken, SPOKEN_CHIP_PAD_PX, TL_USUAL_SOUND } from './interactions.math.ts';
 
 const s = (v: number) => T.rt(v, 1);
 
@@ -347,4 +348,54 @@ describe('splitterHeight', () => {
     expect(splitterHeight(5000, lim)).toBe(640);
   });
   it('a window too small for both keeps the least height', () => { expect(splitterHeight(400, { min: 200, available: 380, keepAbove: 260 })).toBe(200); });
+});
+
+describe('cut controls never cover a short clip', () => {
+  it('the "+" needs room on both sides; a cut with nothing before it has none', () => {
+    expect(cutRoom(14, 14)).toEqual({ add: false, chip: false }); // a beat cut at the whole-edit zoom
+    expect(cutRoom(200, 20)).toEqual({ add: false, chip: false });
+    expect(cutRoom(40, 300)).toEqual({ add: false, chip: true });
+    expect(cutRoom(48, 48)).toEqual({ add: true, chip: true });
+    expect(cutRoom(null, 300)).toEqual({ add: false, chip: true });
+  });
+});
+
+describe('spoken chips: whole words or shortened phrases, never a word cut mid-way', () => {
+  const w = (text: string, left: number, width: number) => ({ key: text, left, width, text });
+  const px7 = (t: string) => t.length * 7;
+  it('word by word when the words fit, dropping a word that does not', () => {
+    const words = [w('כשהייתי', 0, 70), w('ילדה', 70, 50), w('קטנה', 120, 50), w('היינו', 170, 30), w('קופצים', 200, 70)];
+    const r = pickSpoken(words, [w('כשהייתי ילדה קטנה היינו קופצים', 0, 270)], px7);
+    expect(r.mode).toBe('word');
+    expect(r.chips.map((c) => c.text)).toEqual(['כשהייתי', 'ילדה', 'קטנה', 'קופצים']);
+    for (const c of r.chips) expect(c.width - SPOKEN_CHIP_PAD_PX).toBeGreaterThanOrEqual(px7(c.text));
+  });
+  it('phrases (with an ellipsis) when most words would be cut; a phrase too short for a letter is left out', () => {
+    const words = [w('קופצים', 0, 26), w('המזח', 26, 26), w('הקיץ', 52, 26), w('שלנו', 78, 26)];
+    const r = pickSpoken(words, [w('קופצים מהמזח', 0, 52), w('כל הקיץ שלנו', 52, 52), w('כן', 104, 20)], px7);
+    expect(r.mode).toBe('phrase');
+    expect(r.chips.map((c) => c.text)).toEqual(['קופצים מהמזח', 'כל הקיץ שלנו']);
+  });
+});
+
+describe('the playhead timecode on the ruler', () => {
+  it('is centred on the line, starts at it near the origin, and ends at it on a marker (the flag runs right)', () => {
+    expect(capPlacement(300, 60, false)).toBe('centre');
+    expect(capPlacement(10, 60, false)).toBe('start');
+    expect(capPlacement(300, 60, true)).toBe('end');
+    expect(capPlacement(10, 60, true)).toBe('start');
+  });
+  it('names the ruler labels it covers, so none shows a stray digit', () => {
+    const labels = [{ left: 0, width: 30 }, { left: 65, width: 30 }, { left: 130, width: 30 }];
+    expect(labelsUnder(labels, 70, 120)).toEqual([1]);
+    expect(labelsUnder(labels, 90, 140)).toEqual([1, 2]);
+    expect(labelsUnder(labels, 31, 64)).toEqual([]);
+  });
+});
+
+describe('the timeline in Sound mode', () => {
+  it('is never shorter than its lanes (the last sound lane was cut at 1440x900), and leaves the viewer its room', () => {
+    expect(TL_USUAL_SOUND).toMatch(/max\(52dvh, var\(--pf-tl-natural/);
+    expect(TL_USUAL_SOUND).toMatch(/calc\(100dvh - 260px\)\)$/);
+  });
 });
