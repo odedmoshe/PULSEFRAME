@@ -13,7 +13,7 @@ import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
-import { MOTION_PRESETS, motionKeys, previousMotion } from './motionPresets.ts';
+import { ANIMATE_CLIP_MOTIONS, animateClipKeys, MOTION_PRESETS, motionKeys, previousMotion } from './motionPresets.ts';
 import { findLayout, layoutPlacements, LAYOUT_IDS, LAYOUTS } from './layouts.ts';
 const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[]];
 import { lookParams } from './looks.ts';
@@ -1288,22 +1288,54 @@ defineOp({
 
 // ---------- transactions ----------
 
-const MOTION = ['none', 'fade', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right'] as const;
+const MOTION = ['none', ...ANIMATE_CLIP_MOTIONS] as const;
 export const CLIP_MOTIONS = MOTION;
-/** Offset from the resting transform at the far end of an entrance/exit. */
-const MOTION_FROM: Record<(typeof MOTION)[number], Partial<Record<'opacity' | 'scale' | 'x' | 'y', (rest: number) => number>>> = {
-  none: {},
-  fade: { opacity: () => 0 },
-  pop: { opacity: () => 0, scale: (r) => Math.max(0.01, r * 0.6) },
-  'slide-up': { opacity: () => 0, y: (r) => r + 0.08 },
-  'slide-down': { opacity: () => 0, y: (r) => r - 0.08 },
-  'slide-left': { opacity: () => 0, x: (r) => r + 0.1 },
-  'slide-right': { opacity: () => 0, x: (r) => r - 0.1 },
-};
+type MotionKeyList = { frame: number; value: number; easing: (typeof EASINGS)[number] }[];
+/**
+ * Write one motion's keys (motionKeys / animateClipKeys, in whole clip-local frames) on a clip: the single way entrances,
+ * exits, loops and moves are placed, by apply_motion_preset and animate_clip alike, so whichever of the two runs last owns
+ * the part of the clip it writes and replaces what either of them wrote there.
+ *  - An entrance ('in') replaces the entrance the clip already has, and an exit ('out') its exit, as a whole: on every
+ *    property the earlier one used, not only on those of the new one (previousMotion says how it is recognised and how
+ *    many keys go: the key that later animation on a property starts from, or that the motion shares with the one at the
+ *    other end, stays). On its own properties it then replaces the keys in its own frames and keeps those after an
+ *    entrance or before an exit.
+ *  - A loop or a move replaces all keys of its properties.
+ */
+function placeMotion(clip: Clip, rate: T.Rate, kind: 'in' | 'out' | 'loop' | 'move', made: Partial<Record<(typeof ANIMATABLE)[number], MotionKeyList>>) {
+  const total = T.frameIndexAt(clip.duration, rate);
+  const keyframes = { ...clip.keyframes };
+  const frameOf = (t: T.RationalTime) => T.toSeconds(t) * (rate.num / rate.den);
+  if (kind === 'in' || kind === 'out') {
+    const now: Parameters<typeof previousMotion>[1] = {};
+    for (const p of ANIMATABLE) if (keyframes[p]?.length) now[p] = keyframes[p]!.map((k) => ({ frame: frameOf(k.time), value: k.value, easing: k.easing }));
+    for (const [p, count] of Object.entries(previousMotion(kind, now, total, clip.transform)) as [(typeof ANIMATABLE)[number], number][]) {
+      const rest = kind === 'in' ? keyframes[p]!.slice(count) : keyframes[p]!.slice(0, keyframes[p]!.length - count);
+      // the easing on the key an exit started from shaped the exit; with the exit gone that key is the last one and shapes nothing
+      if (kind === 'out' && rest.length) rest[rest.length - 1] = { ...rest[rest.length - 1]!, easing: 'linear' };
+      if (rest.length) keyframes[p] = rest; else delete keyframes[p];
+    }
+  }
+  for (const [p, keys] of Object.entries(made) as [(typeof ANIMATABLE)[number], MotionKeyList][]) {
+    const lo = keys[0]!.frame, hi = keys[keys.length - 1]!.frame;
+    // keys the motion does not cover stay: after an entrance, before an exit; a loop or a move covers the whole clip
+    const kept = kind === 'in' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) > hi + 1e-9)
+      : kind === 'out' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) < lo - 1e-9) : [];
+    const fresh = keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }));
+    // The key an entrance ends on is also the key that what follows starts from (an exit that begins right there, a slow zoom):
+    // where one was there already, it keeps its easing, so the entrance does not change the shape of what comes after it.
+    const meets = kind === 'in' && kept.length ? (keyframes[p] ?? []).find((k) => Math.abs(frameOf(k.time) - hi) <= 1e-9) : undefined;
+    if (meets) fresh[fresh.length - 1]!.easing = meets.easing;
+    const next = [...kept, ...fresh].sort((x, y) => T.cmp(x.time, y.time));
+    if (next.length > 2000) throw new OpError('out_of_bounds', 'this motion would need more keyframes than a property can hold on a clip this long', { keyframes: next.length }, 'Use a longer period (frames), or a shorter clip.');
+    keyframes[p] = next;
+  }
+  clip.keyframes = keyframes;
+}
 defineOp({
   name: 'animate_clip',
   version: 1,
-  description: 'Give a text or picture clip an entrance and/or exit (fade, pop, slide). Writes ordinary keyframes on opacity/scale/x/y, replacing existing keys on the properties it uses, so the result stays editable with set_keyframe. The exit is placed against the current clip end; run again after changing the duration.',
+  description: 'Give a text or picture clip an entrance and/or exit (fade, pop, slide), written as ordinary keyframes on opacity, scale, x or y, so the result stays editable with set_keyframe. Each is placed exactly as an entrance or exit from the motion library is (apply_motion_preset): it replaces the entrance (or exit) the clip already has, whether that came from this operation or from the library, on every property it used, and keeps the other end, a slow move and keys made by hand further in. A side that is left out (or none) stays as it is. Entrance plus exit may not be longer than the clip. The exit is placed against the current clip end; run again after changing the duration.',
   args: z.object({ clipId: z.string(), in: z.enum(MOTION).optional(), out: z.enum(MOTION).optional(), inFrames: z.number().int().min(1).max(600).optional(), outFrames: z.number().int().min(1).max(600).optional() }).strict(),
   apply(d, a) {
     const { clip, track } = mustClip(d, a.clipId);
@@ -1311,34 +1343,21 @@ defineOp({
     const rate = d.settings.frameRate;
     const total = T.frameIndexAt(clip.duration, rate);
     const enter = a.in ?? 'none', exit = a.out ?? 'none';
+    if (enter === 'none' && exit === 'none') throw new OpError('invalid_args', 'choose an entrance and/or an exit');
     const nIn = enter === 'none' ? 0 : a.inFrames ?? 12, nOut = exit === 'none' ? 0 : a.outFrames ?? 12;
+    if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
     if (nIn + nOut > total) throw new OpError('out_of_bounds', `entrance (${nIn}) plus exit (${nOut}) frames exceed the clip length (${total} frames)`, { clipFrames: total }, 'Use fewer frames.');
-    const props = new Set([...Object.keys(MOTION_FROM[enter]), ...Object.keys(MOTION_FROM[exit])]) as Set<'opacity' | 'scale' | 'x' | 'y'>;
-    if (props.size === 0) throw new OpError('invalid_args', 'choose an entrance and/or an exit');
-    const keyframes = { ...clip.keyframes };
-    for (const p of props) {
-      const rest = clip.transform[p];
-      const keys: { time: T.RationalTime; value: number; easing: (typeof EASINGS)[number] }[] = [];
-      const from = MOTION_FROM[enter][p], to = MOTION_FROM[exit][p];
-      if (from) keys.push({ time: T.ZERO, value: from(rest), easing: 'ease-out' });
-      keys.push({ time: T.frameTime(nIn, rate), value: rest, easing: 'linear' });
-      if (to) {
-        if (total - nOut > nIn) keys.push({ time: T.frameTime(total - nOut, rate), value: rest, easing: 'ease-in' });
-        else keys[keys.length - 1]!.easing = 'ease-in';
-        keys.push({ time: T.frameTime(total, rate), value: to(rest), easing: 'linear' });
-      }
-      keyframes[p] = keys;
+    const props = new Set<string>();
+    // the entrance first, then the exit: where the two meet, the exit's first key is the one that stays, as with two library motions
+    for (const [kind, name, frames] of [['in', enter, nIn], ['out', exit, nOut]] as const) {
+      if (name === 'none') continue;
+      const made = animateClipKeys(kind, name, { totalFrames: total, rest: clip.transform, frames });
+      placeMotion(clip, rate, kind, made);
+      for (const p of Object.keys(made)) props.add(p);
     }
-    clip.keyframes = keyframes;
     return { affectedIds: [clip.id], summary: `Animated clip (${enter === 'none' ? '' : `in: ${enter}`}${enter !== 'none' && exit !== 'none' ? ', ' : ''}${exit === 'none' ? '' : `out: ${exit}`})`, output: { properties: [...props] } };
   },
 });
-
-
-
-
-
-
 
 defineOp({
   name: 'apply_motion_preset',
@@ -1353,36 +1372,7 @@ defineOp({
     const total = T.frameIndexAt(clip.duration, rate);
     if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
     const made = motionKeys(preset.id, { totalFrames: total, rest: clip.transform, ...(a.frames !== undefined ? { frames: a.frames } : {}), ...(a.amount !== undefined ? { amount: a.amount } : {}) });
-    const keyframes = { ...clip.keyframes };
-    const frameOf = (t: T.RationalTime) => T.toSeconds(t) * (rate.num / rate.den);
-    // A new entrance replaces the entrance the clip already has, and a new exit its exit, as a whole: on every property the
-    // earlier one used, not only on those of the new one. previousMotion says how it is recognised and how many keys go: the
-    // key that later animation on a property starts from, or that the motion shares with the one at the other end, stays.
-    if (preset.kind === 'in' || preset.kind === 'out') {
-      const now: Parameters<typeof previousMotion>[1] = {};
-      for (const p of ANIMATABLE) if (keyframes[p]?.length) now[p] = keyframes[p]!.map((k) => ({ frame: frameOf(k.time), value: k.value, easing: k.easing }));
-      for (const [p, count] of Object.entries(previousMotion(preset.kind, now, total, clip.transform)) as [(typeof ANIMATABLE)[number], number][]) {
-        const rest = preset.kind === 'in' ? keyframes[p]!.slice(count) : keyframes[p]!.slice(0, keyframes[p]!.length - count);
-        // the easing on the key an exit started from shaped the exit; with the exit gone that key is the last one and shapes nothing
-        if (preset.kind === 'out' && rest.length) rest[rest.length - 1] = { ...rest[rest.length - 1]!, easing: 'linear' };
-        if (rest.length) keyframes[p] = rest; else delete keyframes[p];
-      }
-    }
-    for (const [p, keys] of Object.entries(made) as [(typeof ANIMATABLE)[number], { frame: number; value: number; easing: (typeof EASINGS)[number] }[]][]) {
-      const lo = keys[0]!.frame, hi = keys[keys.length - 1]!.frame;
-      // keys the motion does not cover stay: after an entrance, before an exit; a loop or a move covers the whole clip
-      const kept = preset.kind === 'in' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) > hi + 1e-9)
-        : preset.kind === 'out' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) < lo - 1e-9) : [];
-      const fresh = keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }));
-      // The key an entrance ends on is also the key that what follows starts from (an exit that begins right there, a slow zoom):
-      // where one was there already, it keeps its easing, so the entrance does not change the shape of what comes after it.
-      const meets = preset.kind === 'in' && kept.length ? (keyframes[p] ?? []).find((k) => Math.abs(frameOf(k.time) - hi) <= 1e-9) : undefined;
-      if (meets) fresh[fresh.length - 1]!.easing = meets.easing;
-      const next = [...kept, ...fresh].sort((x, y) => T.cmp(x.time, y.time));
-      if (next.length > 2000) throw new OpError('out_of_bounds', 'this motion would need more keyframes than a property can hold on a clip this long', { keyframes: next.length }, 'Use a longer period (frames), or a shorter clip.');
-      keyframes[p] = next;
-    }
-    clip.keyframes = keyframes;
+    placeMotion(clip, rate, preset.kind, made);
     return { affectedIds: [clip.id], summary: `Motion ${preset.id}`, output: { properties: Object.keys(made), kind: preset.kind } };
   },
 });

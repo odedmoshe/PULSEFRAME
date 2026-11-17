@@ -236,6 +236,23 @@ function wrapTurns(keys: MotionKey[]): MotionKey[] {
 export function motionKeys(presetId: string, ctx: MotionContext): Partial<Record<MotionProperty, MotionKey[]>> {
   const def = BY_ID.get(presetId);
   if (!def) throw new Error(`unknown motion preset: ${presetId}`);
+  return keysFor(def, ctx);
+}
+
+/** The entrances and exits animate_clip offers (besides 'none'). */
+export const ANIMATE_CLIP_MOTIONS = ['fade', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right'] as const;
+export type AnimateClipMotion = (typeof ANIMATE_CLIP_MOTIONS)[number];
+/**
+ * The keys animate_clip writes for one entrance ('in') or exit ('out'), as motionKeys gives them for a preset: the shapes
+ * below (ANIMATE_CLIP_SHAPES), which previousMotion also recognises, at full strength, `ctx.frames` long (default 12).
+ */
+export function animateClipKeys(kind: 'in' | 'out', name: AnimateClipMotion, ctx: MotionContext): Partial<Record<MotionProperty, MotionKey[]>> {
+  const def = ANIMATE_CLIP_SHAPES.find((d) => d.id === `animate_clip.${kind}.${name}`);
+  if (!def) throw new Error(`unknown animate_clip motion: ${kind} ${name}`);
+  return keysFor(def, { ...ctx, amount: def.amount });
+}
+
+function keysFor(def: Def, ctx: MotionContext): Partial<Record<MotionProperty, MotionKey[]>> {
   const total = Math.max(2, Math.floor(ctx.totalFrames));
   const amt = ctx.amount === undefined || !Number.isFinite(ctx.amount) ? 1 : Math.min(2, Math.max(0, ctx.amount));
   const req = ctx.frames !== undefined && Number.isFinite(ctx.frames) ? Math.floor(ctx.frames) : def.frames;
@@ -294,9 +311,11 @@ const sameValue = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1
  * The entrances and exits that animate_clip writes (the inspector's Animate control): fade, pop and four slides, two keys per
  * property, the first eased out (entrance) or in (exit). They are not presets of this library, but a clip may carry one, and
  * a library entrance or exit has to replace it like one of its own. animate_clip has no strength setting: its values are
- * exactly these.
+ * exactly these. It writes them with animateClipKeys and places them exactly as a library entrance or exit is placed
+ * (ops.ts placeMotion), so it replaces a library motion at its end of the clip as well.
  */
-const ANIMATE_CLIP_SHAPES: readonly (Def & { amount: number })[] = ([['fade', {}], ['pop', { scale: 0.6 }], ['slide-up', { y: 0.08 }], ['slide-down', { y: -0.08 }], ['slide-left', { x: 0.1 }], ['slide-right', { x: -0.1 }]] as const).flatMap(([name, far]) =>
+const ANIMATE_CLIP_FAR: Readonly<Record<AnimateClipMotion, Partial<Record<MotionProperty, number>>>> = { fade: {}, pop: { scale: 0.6 }, 'slide-up': { y: 0.08 }, 'slide-down': { y: -0.08 }, 'slide-left': { x: 0.1 }, 'slide-right': { x: -0.1 } };
+const ANIMATE_CLIP_SHAPES: readonly (Def & { amount: number })[] = ANIMATE_CLIP_MOTIONS.map((name) => [name, ANIMATE_CLIP_FAR[name]] as const).flatMap(([name, far]) =>
   (['in', 'out'] as const).map((kind) => ({
     id: `animate_clip.${kind}.${name}`, kind, he: '', en: '', frames: 12, amount: 1,
     spec: Object.fromEntries(Object.entries({ ...far, opacity: 0 }).map(([p, v]) => {
