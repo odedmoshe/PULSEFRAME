@@ -95,6 +95,7 @@ function drawText(ctx: Ctx2D, g: RenderGraph, layer: TextLayer) {
   });
 }
 
+import { mixesDirections, pieceRects, unitRanges, widenStretches, type Stretch } from './textAnimation.ts';
 const GRAPHEMES = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
 /** User-perceived characters: a letter stays with its vowel points and other combining marks. */
 const graphemes = (w: string): string[] => (GRAPHEMES ? Array.from(GRAPHEMES.segment(w), (x) => x.segment) : Array.from(w));
@@ -113,16 +114,31 @@ function directionRuns(word: string, base: 'rtl' | 'ltr'): { text: string; dir: 
  * A title whose letters, words or lines are animating: each unit is placed where the whole line would put it (word-level
  * visual order as for captions; letters by the measured width of the text before them, per direction run) and drawn with
  * the pose textAnimation.ts computes for it. All outlines are drawn before all fills, so a thick outline never covers a neighbour.
+ *
+ * A line with both directions in it (textAnimation.ts mixesDirections) is not placed by that word-level order, which can
+ * differ from the browser's own layout of the line at rest. Its units are the places the browser reports for them in the
+ * whole line (pieceRects), and each is drawn as the whole line seen through a window on those places: nothing can be in
+ * another place than at rest. Where the browser cannot report them, the line animates as one unit.
  */
 function drawTextUnits(ctx: Ctx2D, layer: TextLayer, lines: { line: string; dir: 'rtl' | 'ltr'; width: number }[], geo: { px: number; lineH: number; blockW: number; blockH: number }) {
   const s = layer.style, a = layer.animation!, { px, lineH, blockW, blockH } = geo;
-  const units: { text: string; left: number; width: number; baseline: number; dir: 'rtl' | 'ltr'; rtl: boolean }[] = [];
+  const units: { text: string; left: number; width: number; baseline: number; dir: 'rtl' | 'ltr'; rtl: boolean; /** the unit is these stretches of the whole line `text`, whose left edge is at `lineLeft` */ window?: { lineLeft: number; stretches: Stretch[] } }[] = [];
   lines.forEach((m, li) => {
     const rtl = m.dir === 'rtl';
     const left = s.align === 'center' ? -m.width / 2 : (s.align === 'start') === rtl ? blockW / 2 - m.width : -blockW / 2;
     const baseline = -blockH / 2 + lineH * li + lineH / 2 + px * 0.34;
-    if (a.by === 'line') { if (m.line.trim()) units.push({ text: m.line, left, width: m.width, baseline, dir: m.dir, rtl }); return; }
+    const whole = () => { if (m.line.trim()) units.push({ text: m.line, left, width: m.width, baseline, dir: m.dir, rtl }); };
+    if (a.by === 'line') { whole(); return; }
     ctx.direction = m.dir;
+    if (mixesDirections(m.line)) {
+      const places = pieceRects(ctx.measureText(m.line), m.line, unitRanges(m.line, a.by, graphemes), m.width);
+      if (!places) { whole(); return; }
+      widenStretches(places, px * 0.25).forEach((stretches, k) => {
+        const from = Math.min(...places[k]!.map((r) => r.x)), to = Math.max(...places[k]!.map((r) => r.x + r.width));
+        units.push({ text: m.line, left: left + from, width: to - from, baseline, dir: m.dir, rtl, window: { lineLeft: left, stretches } });
+      });
+      return;
+    }
     const words = m.line.split(' ');
     const widths = words.map((w) => ctx.measureText(w).width), space = ctx.measureText(' ').width;
     const lefts: number[] = [];
@@ -153,15 +169,25 @@ function drawTextUnits(ctx: Ctx2D, layer: TextLayer, lines: { line: string; dir:
     });
   });
   const poses = units.map((_, i) => unitPose(a, i, units.length, units[i]!.rtl));
+  // half a device pixel: windows that touch overlap by it, so no hairline shows between them
+  const seam = units.some((u) => u.window) ? 0.5 / Math.max(1e-6, Math.hypot(ctx.getTransform().a, ctx.getTransform().b)) : 0;
   const paint = (outline: boolean) => units.forEach((u, i) => {
     const p = poses[i]!;
     if (p.alpha <= 0) return;
     ctx.save();
     ctx.globalAlpha *= p.alpha;
     ctx.direction = u.dir;
-    ctx.translate(u.left + u.width / 2 + p.dx * px, u.baseline + p.dy * px - px * 0.34);
+    const middle = u.left + u.width / 2;
+    ctx.translate(middle + p.dx * px, u.baseline + p.dy * px - px * 0.34);
     ctx.scale(p.scale, p.scale); // about the middle of the unit, a third of the font size above the baseline
-    if (outline) ctx.strokeText(u.text, -u.width / 2, px * 0.34); else ctx.fillText(u.text, -u.width / 2, px * 0.34);
+    let x = -u.width / 2;
+    if (u.window) {
+      ctx.beginPath();
+      for (const r of u.window.stretches) ctx.rect(u.window.lineLeft + r.x - middle - seam, -px * 1.5, r.width + 2 * seam, px * 3);
+      ctx.clip();
+      x = u.window.lineLeft - middle;
+    }
+    if (outline) ctx.strokeText(u.text, x, px * 0.34); else ctx.fillText(u.text, x, px * 0.34);
     ctx.restore();
   });
   if (s.stroke && s.strokeFrac > 0) { ctx.strokeStyle = s.stroke; ctx.lineWidth = px * s.strokeFrac * 2; paint(true); }

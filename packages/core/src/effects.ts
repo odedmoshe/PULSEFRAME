@@ -204,12 +204,21 @@ export const EffectInstanceSchema = z
     keyframes: z.record(z.string(), z.array(EffectKeySchema).min(1).max(500)).optional(),
   })
   .strict();
+/**
+ * Numeric parameters that must keep one value for the whole clip, per effect type: no keyframes are accepted for them, and
+ * keys that a document carries anyway are not used (animation.ts).
+ * The strobe: its flashes are at most three a second only while nothing about them changes over time. A rate that changes
+ * moves the flash times closer together, and a brightness that changes is itself a flash.
+ */
+export const NOT_ANIMATABLE: Readonly<Record<string, readonly string[]>> = {
+  'light.strobe': ['rate', 'amount', 'every'],
+};
 /** Names of an effect's parameters that are numbers and can therefore be animated. */
 export function animatableParams(type: string): string[] {
   const d = findEffect(type);
   if (!d) return [];
   const defaults = d.params.parse({}) as Record<string, unknown>;
-  return Object.keys(defaults).filter((k) => typeof defaults[k] === 'number' && k !== 'seed');
+  return Object.keys(defaults).filter((k) => typeof defaults[k] === 'number' && k !== 'seed' && !NOT_ANIMATABLE[type]?.includes(k));
 }
 export type EffectInstance = z.infer<typeof EffectInstanceSchema>;
 

@@ -36,18 +36,84 @@ export function smoothNoise(seed: number, t: number): number {
  * The movement of the time-driven "motion" effects as plain numbers: zoom, rotation (radians) and offset (fractions of the
  * frame height) at a moment. The shader only applies them, so the picture can be checked against these numbers.
  */
+import { BEAT_WINDOW_SECONDS } from '@pulseframe/core';
 /**
- * For an effect set to follow the music: how far the moment is into the current hit (0 on the hit, rising to 1 just
- * before the next) and the seconds between hits. Null when the effect keeps its own steady setting or no analysed music
- * plays there. `maxPerSecond` thins the hits (every second beat, every third…) until they are no more frequent than that.
+ * For an effect set to follow the music: how far the moment is into the current hit (`phase`: 0 on the hit, rising to 1
+ * just before the next), the seconds between the two hits (`period`) and the seconds since the hit (`since`). Null when
+ * the effect keeps its own steady setting or no analysed music plays there.
+ *
+ * The hits are the beats whose running number (counted from the first bar start, not from each bar) is a multiple of
+ * `every`. Without `minGapSeconds` the place between two hits is read from the beat count, which continues the grid
+ * before the first beat and after the last.
+ *
+ * With `minGapSeconds` (the strobe) only real beats inside the music clip are hits, and two hits that count are never
+ * closer together than that. A hit counts when all of this holds:
+ *  1. it is not thinned out: `every` is multiplied by the smallest whole number that makes the median gap between the
+ *     remaining hits at least `minGapSeconds` (the lower median, and a hair more than the gap), judged over the half
+ *     second of timeline the hit lies in together with the half second before and after it (so music played fast keeps
+ *     a regular flash on every second, third… hit);
+ *  2. it is at least `minGapSeconds` after the last moment other music was followed (BeatPosition.musicBefore);
+ *  3. no other hit that passes 1 and 2 lies less than `minGapSeconds` before it, whether or not that one counts.
+ * Each rule looks only at the beats near the hit, never at the moment being drawn, so a hit counts at one moment exactly
+ * when it counts at every other: the hits that count are one fixed list, and by rule 3 any two of them are at least
+ * `minGapSeconds` apart. Before the first hit that counts, `since` is Infinity.
  */
-export function musicHit(p: Record<string, unknown>, beat: BeatPosition | null | undefined, maxPerSecond = Infinity): { phase: number; period: number } | null {
+export function musicHit(p: Record<string, unknown>, beat: BeatPosition | null | undefined, minGapSeconds = 0): { phase: number; period: number; since: number } | null {
   if (p.follow !== 'music' || !beat) return null;
-  let every = Math.max(1, Math.round(n(p.every, 1)));
-  if (1 / (beat.period * every) > maxPerSecond) every *= Math.ceil(1 / (beat.period * every * maxPerSecond) - 1e-9);
-  const x = beat.sinceBar / every + n(p.offset, 0);
-  return { phase: x - Math.floor(x + 1e-9), period: beat.period * every };
+  const every = Math.max(1, Math.round(n(p.every, 1)));
+  if (!(minGapSeconds > 0)) {
+    const x = beat.sinceFirstBar / every + n(p.offset, 0), phase = x - Math.floor(x + 1e-9), period = beat.period * every;
+    return { phase, period, since: phase * period };
+  }
+  const gap = minGapSeconds, now = beat.at;
+  const base = beat.hits.filter((h) => mod(h.index, every) === 0); // consecutive hits of this effect, in time order
+  const earliest = beat.musicBefore === null ? -Infinity : beat.musicBefore + gap;
+  const factors = new Map<number, number>();
+  const factorAt = (t: number): number => {
+    const block = Math.floor(t / THIN_BLOCK);
+    let k = factors.get(block);
+    if (k === undefined) { const from = (block - 1) * THIN_BLOCK, to = (block + 2) * THIN_BLOCK; factors.set(block, (k = thinning(base.filter((h) => h.t >= from && h.t < to).map((h) => h.t), base.find((h) => h.t >= from)?.index ?? 0, every, gap))); }
+    return k;
+  };
+  const kept = (h: { t: number; index: number }) => h.t >= earliest && mod(h.index, every * factorAt(h.t)) === 0; // rules 1 and 2
+  const counts = (i: number): boolean => {
+    if (!kept(base[i]!)) return false;
+    for (let j = i - 1; j >= 0 && base[i]!.t - base[j]!.t < gap; j--) if (kept(base[j]!)) return false; // rule 3
+    return true;
+  };
+  // Only hits well inside the listed window are judged, so that every beat their rules look at is listed too: a hit's
+  // rules reach back by the gap, then to the start of that hit's block and half a second before it (two blocks at most),
+  // and ahead to a second after the start of its own block. A hit further back than `back` no longer shows anyway (its
+  // flash has faded to nothing long before); with a gap too long for the window nothing counts.
+  const ahead = BEAT_WINDOW_SECONDS - 2 * THIN_BLOCK - 0.05, back = ahead - gap;
+  let last = -1, next = -1;
+  for (let i = base.length - 1; i >= 0 && now - base[i]!.t <= back; i--) if (base[i]!.t <= now && counts(i)) { last = i; break; }
+  for (let i = 0; back > 0 && i < base.length && base[i]!.t - now <= ahead; i++) if (base[i]!.t > now && counts(i)) { next = i; break; }
+  const since = last >= 0 ? now - base[last]!.t : Infinity;
+  const period = last >= 0 && next >= 0 ? base[next]!.t - base[last]!.t : Math.max(gap, beat.period * every * factorAt(now));
+  return { phase: Math.min(1, since / period), period, since };
 }
+const mod = (a: number, m: number) => ((a % m) + m) % m;
+/** Thinning is judged per half second of timeline (see musicHit). */
+const THIN_BLOCK = 0.5;
+/**
+ * The smallest whole factor k for which the hits whose running number is a multiple of every * k have a median gap of at
+ * least `gap` seconds. `times` are consecutive hits of the effect in time order and `firstIndex` the running number of the first.
+ */
+function thinning(times: number[], firstIndex: number, every: number, gap: number): number {
+  const first = Math.round(firstIndex / every); // the hits are numbers first, first + 1, … of the effect's own count
+  for (let k = 1; ; k++) {
+    const gaps: number[] = [];
+    for (let i = mod(-first, k); i + k < times.length; i += k) gaps.push(times[i + k]! - times[i]!);
+    if (!gaps.length) return k;
+    gaps.sort((x, y) => x - y);
+    if (gaps[(gaps.length - 1) >> 1]! >= gap * (1 + 1e-9)) return k; // a hair more than the gap itself, so that rounding in an even grid exactly at the limit cannot drop some of its hits by rule 3 and keep others
+  }
+}
+/** Two flashes of a strobe are never closer together than this many seconds: three a second at most. */
+export const STROBE_MIN_GAP = 1 / 3;
+/** How fast a flash that follows the music fades, per second (the same as a steady strobe at two flashes a second). */
+const STROBE_FADE = 20;
 export function motionAt(type: string, p: Record<string, unknown>, seconds: number, beat?: BeatPosition | null): { scale: number; rotation: number; dx: number; dy: number } {
   const amount = n(p.amount, 0), speed = n(p.speed, 1), seed = Math.round(n(p.seed, 1));
   const hit = musicHit(p, beat);
@@ -335,9 +401,21 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       let c = s.rgb / max(s.a, 0.0001);
       return vec4f((vec3f(1.0) - (vec3f(1.0) - c) * (vec3f(1.0) - leak)) * s.a, s.a);`,
   },
-  // Brief flashes of light at a steady rate. The rate is limited to three per second (flashing faster than that is a seizure risk).
+  // Brief flashes of light. Never more than three in any one second (flashing faster than that is a seizure risk): the
+  // strength only ever rises at a flash time, and two flash times are at least a third of a second apart.
+  //  - steady: the flash times are k / rate on the timeline, rate at most 3; no parameter of the strobe can be animated
+  //    (core effects.ts NOT_ANIMATABLE), so neither the rate nor the brightness changes during the clip.
+  //  - following the music: the flash times are the hits that count (musicHit with STROBE_MIN_GAP), and the strength
+  //    depends only on the time since the last of them. With no analysed music at the moment there is no flash: a
+  //    fallback to the steady rate could put a steady flash right next to a music hit where the music starts or stops.
+  // The first frame of a clip can still show the end of a flash that fell just before the clip began.
   'light.strobe': {
-    params: (p, env) => { const hit = musicHit(p, env.beat, 3); const ph = (env.seconds ?? 0) * Math.min(3, Math.max(0, n(p.rate, 2))); const f = hit ? hit.phase : ph - Math.floor(ph + 1e-9); return [...rgb(p.color, '#FFFFFF'), n(p.amount, 0.6) * Math.exp(-f * 10)]; },
+    params: (p, env) => {
+      let strength: number;
+      if (p.follow === 'music') strength = Math.exp(-(musicHit(p, env.beat, STROBE_MIN_GAP)?.since ?? Infinity) * STROBE_FADE);
+      else { const ph = (env.seconds ?? 0) * Math.min(3, Math.max(0, n(p.rate, 2))); strength = Math.exp(-(ph - Math.floor(ph + 1e-9)) * 10); }
+      return [...rgb(p.color, '#FFFFFF'), n(p.amount, 0.6) * strength];
+    },
     wgsl: `
       let s = textureSampleLevel(src, smp, uv, 0.0);
       return vec4f(mix(s.rgb, vec3f(P.a.x, P.a.y, P.a.z) * s.a, P.a.w), s.a);`,
