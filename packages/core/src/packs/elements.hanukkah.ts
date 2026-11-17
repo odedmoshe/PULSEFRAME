@@ -5,7 +5,7 @@
  * lozenge, not a letter), no text, no gradient, no six-point star; at most two colours, the second one for the accents.
  * Pure: the same arguments always give the same markup.
  */
-import { both, box, boxS, disc, fillD, g, n, poly, polar, regular, rot, smoothClosed, star, strokeD, type Body, type PackElementEntry, type Pt } from '../elementKit.ts';
+import { box, boxS, disc, fillD, g, n, poly, polar, smoothClosed, star, strokeD, type Body, type PackElementEntry, type Pt } from '../elementKit.ts';
 
 const GOLD = '#F5C542', WAX = '#D6E6FF', BLUE = '#3A6BD8', CREAM = '#FFF4D6';
 const EVENODD = ' fill-rule="evenodd"';
@@ -176,5 +176,3 @@ export const HANUKKAH_ELEMENTS: readonly PackElementEntry[] = [
   e('lights-garland', 'שרשרת אורות', 'String of lights', 200, 60, 2, { color: GOLD, color2: '#8FA6C9' }, garland),
   e('frame-candles', 'מסגרת נרות', 'Frame with candles', 160, 100, 2, { color: GOLD, color2: WAX }, frameCandles),
 ];
-// unused helpers are kept out of the build by the compiler's noUnusedLocals: nothing below this line
-void both; void boxS; void regular; void rot;

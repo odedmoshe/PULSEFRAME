@@ -3,7 +3,7 @@
  * No letters, no digits, no text on any of them (the badge and the banner are empty on purpose: the title goes on top), no
  * gradient; at most two colours, the second one for the accents. Pure: the same arguments always give the same markup.
  */
-import { box, boxS, disc, fillD, g, n, poly, polar, ringC, smoothClosed, star, strokeD, type Body, type PackElementEntry, type Pt } from '../elementKit.ts';
+import { box, boxS, disc, fillD, g, n, poly, polar, ringC, star, strokeD, type Body, type PackElementEntry, type Pt } from '../elementKit.ts';
 
 const PINK = '#FF4D8D', WHITE = '#FFFFFF', SUN = '#FFC83D', SKY = '#35B6FF', MINT = '#3DDC97', CREAMY = '#FFF1D0', INK = '#3B2A12';
 const EVENODD = ' fill-rule="evenodd"';
@@ -174,4 +174,3 @@ export const BIRTHDAY_ELEMENTS: readonly PackElementEntry[] = [
   e('ice-cream', 'גלידה', 'Ice cream', 100, 100, 2, '#FF8FB1', '#E8B66E', iceCream),
   e('party-face', 'פרצוף חוגג', 'Party face', 100, 100, 2, SUN, INK, partyFace),
 ];
-void smoothClosed; void box;
