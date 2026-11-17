@@ -109,6 +109,25 @@ describe('timeline clip visuals: one derivative per file, loaded once', () => {
     end();
   });
 
+  it('review note: a derivative finished while the event stream was down is picked up when the stream reconnects; held and inapplicable ones ask nothing', async () => {
+    const w = world();
+    w.set('v', 'running'); w.set('done', 'ready'); w.set('other', 'running');
+    const ends = [w.cache.use(w.key('v')), w.cache.use(w.key('done'))];
+    await settle();
+    for (let i = 0; i < 3; i++) { w.fireTimer(); await settle(); } // the bounded retries are spent
+    expect(w.timers).toEqual([]);
+    const lists = w.count.list;
+    w.set('v', 'ready'); // ready while the stream was down: no event reaches the page
+    w.cache.reconnected('p2'); // another project: nothing
+    await settle();
+    expect(w.count.list).toBe(lists);
+    w.cache.reconnected('p1');
+    await settle();
+    expect(w.peek(w.key('v'))).toMatchObject({ state: 'ready' });
+    expect(w.count.list).toBe(lists + 1); // only the waiting one asked; the held one did not
+    for (const end of ends) end();
+  });
+
   it('an event that arrives while a look is in flight is not lost: one more look follows, not one per event', async () => {
     const w = world();
     w.set('v', 'running');
