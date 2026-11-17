@@ -218,7 +218,7 @@ export class Editor {
     });
     es.addEventListener('derivative', (m) => {
       const d: { assetId: string; kind: string; status: string } = JSON.parse((m as MessageEvent).data);
-      timelineDerivatives.changed(projectId, d.assetId); // only timeline clips of that file that are still waiting look again
+      timelineDerivatives.changed(projectId, d.assetId, d.kind); // only timeline clips of that file and kind that are still waiting look again
       this.set({ derivativeTick: this.state.derivativeTick + 1 });
       if (d.kind === 'proxy' && d.status === 'ready') { this.pool?.invalidate(d.assetId); if (this.player && !this.player.playing) this.player.seek(this.player.frame); }
     });

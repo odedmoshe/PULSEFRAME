@@ -93,6 +93,7 @@ describe('timeline clip visuals: one derivative per file, loaded once', () => {
     expect(w.peek(w.key('v'))).toEqual({ state: 'processing' });
     expect(w.count).toMatchObject({ list: 1, blob: 0 });
     w.cache.changed('p1', 'other');
+    w.cache.changed('p1', 'v', 'proxy'); // the preview proxy of the same file: no clip visual waits for it
     await settle();
     expect(w.count).toMatchObject({ list: 1, blob: 0 });
     // no event: it looks again after 1, 3 and 8 seconds, then waits for an event
@@ -101,7 +102,7 @@ describe('timeline clip visuals: one derivative per file, loaded once', () => {
     expect(w.timers).toEqual([]);
     expect(w.count).toMatchObject({ list: 4, blob: 0 });
     w.set('v', 'ready');
-    w.cache.changed('p1', 'v');
+    w.cache.changed('p1', 'v', 'thumbnails');
     await settle();
     expect(w.peek(w.key('v'))).toMatchObject({ state: 'ready' });
     expect(w.count).toMatchObject({ list: 5, blob: 1, decoded: 1 });

@@ -102,13 +102,14 @@ export class ClipDerivativeCache<P extends { close(): void }> {
   /**
    * The server announced that a derivative of this asset changed state. Entries of that asset (and of other assets with the
    * same file, which share its derivatives on the server) that are still waiting look again; entries that hold their
-   * derivative, or know it does not apply, ask nothing.
+   * derivative, or know it does not apply, ask nothing. With `kind`, only entries of that kind (a proxy file being made
+   * concerns no clip visual).
    */
-  changed(projectId: string, assetId: string): void {
+  changed(projectId: string, assetId: string, kind?: string): void {
     const hashes = new Set<string>();
     for (const e of this.entries.values()) if (e.key.projectId === projectId && e.key.assetId === assetId) hashes.add(e.key.contentHash);
     for (const e of this.entries.values()) {
-      if (e.key.projectId !== projectId || (e.key.assetId !== assetId && !hashes.has(e.key.contentHash))) continue;
+      if (e.key.projectId !== projectId || (e.key.assetId !== assetId && !hashes.has(e.key.contentHash)) || (kind !== undefined && kind !== e.key.kind)) continue;
       if (e.value?.state === 'ready' || e.value?.state === 'none') continue;
       if (e.busy) { e.again = true; continue; }
       this.stopTimer(e);
