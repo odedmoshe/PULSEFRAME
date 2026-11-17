@@ -117,4 +117,56 @@ describe('occlusion, decoy and re-acquisition', () => {
   });
 });
 
+describe('a look-alike nearer to where the target was last seen than the target is when it comes out', () => {
+  // The geometry of the tracking proof's fixture at work size: a disc moving 7.3 px a frame is hidden on frames 25–44 (it
+  // travels about 147 px meanwhile); on frame 35 an identical disc appears 150 px BEHIND where the target was last seen and
+  // stays. A search that only looks around the last seen place never sees the target again and finds the look-alike alone.
+  const R = 30, start = { x: 70, y: 270 }, v = { x: 7, y: -2.1 }, c = { x: 0, y: -0.01 };
+  const pos = (k: number) => ({ cx: start.x + v.x * k + c.x * k * k, cy: start.y + v.y * k + c.y * k * k });
+  const place = { cx: pos(24).cx - 150, cy: pos(24).cy + 6 };
+  const scene = discScene({ width: 640, height: 360, frames: 80, radius: R, start, velocity: v, curve: c, occlude: { from: 25, to: 45 }, decoy: { from: 35, to: 80, offset: { x: place.cx - pos(35).cx, y: place.cy - pos(35).cy } } });
+  const steps = run(scene);
+  const at = (k: number) => steps[k - 1]!;
+
+  it('the scene is what it says: the look-alike is 150 px from the last seen place, the target at least as far when it comes out', () => {
+    expect(dist(scene.decoy[40]!, scene.truth[24]!)).toBeCloseTo(150.1, 1);
+    expect(dist(scene.truth[45]!, scene.truth[24]!)).toBeGreaterThan(150);
+    for (let k = 35; k < 80; k++) expect(dist(scene.decoy[k]!, scene.truth[k]!)).toBeGreaterThan(200);
+  });
+  it('no usable sample is more than 4 px from the truth (8 px of the 1280-wide source), on any frame', () => {
+    for (let k = 1; k < 80; k++) if (usable(at(k).st)) expect(dist(at(k), scene.truth[k]!), `frame ${k}`).toBeLessThanOrEqual(4);
+  });
+  it('while the target is hidden at least 90% of the frames are weak or lost, and none is usable at the look-alike', () => {
+    let bad = 0;
+    for (let k = 25; k < 45; k++) if (at(k).st === 2 || at(k).st === 3) bad++;
+    expect(bad / 20).toBeGreaterThanOrEqual(0.9);
+    for (let k = 35; k < 80; k++) if (usable(at(k).st)) expect(dist(at(k), scene.decoy[k]!), `frame ${k}`).toBeGreaterThan(100);
+  });
+  it('it is found again at the true target within 5 frames of coming out, marked as re-acquired, then tracked', () => {
+    const first = steps.findIndex((s, i) => i + 1 >= 45 && usable(s.st)) + 1;
+    expect(first).toBeGreaterThanOrEqual(45);
+    expect(first - 45).toBeLessThanOrEqual(5);
+    expect(at(first).st).toBe(6);
+    expect(dist(at(first), scene.truth[first]!)).toBeLessThanOrEqual(2);
+    for (let k = first + 1; k < 80; k++) expect(at(k).st, `frame ${k}`).toBe(1);
+  });
+});
+
+describe('a look-alike beside the path of a target that is being tracked', () => {
+  it('passing 8 px clear of an identical disc: tracked on every frame, within 1 px', () => {
+    // the look-alike is there from the start; on frame 25 the discs are 44 px apart centre to centre (radius 18 each)
+    const sc = discScene({ frames: 60, decoy: { from: 0, to: 60, offset: { x: 57.5, y: 49 } } });
+    expect(dist(sc.decoy[25]!, sc.truth[25]!)).toBeCloseTo(44, 0);
+    const s = run(sc);
+    for (let k = 1; k < 60; k++) { expect(s[k - 1]!.st, `frame ${k}`).toBe(1); expect(dist(s[k - 1]!, sc.truth[k]!), `frame ${k}`).toBeLessThanOrEqual(1); }
+  });
+  it('passing over an identical disc (the target in front): never usable more than 2 px from the truth', () => {
+    const sc = discScene({ frames: 60, decoy: { from: 0, to: 60, offset: { x: 57.5, y: 15 } } });
+    expect(dist(sc.decoy[25]!, sc.truth[25]!)).toBeLessThan(12);
+    const s = run(sc);
+    for (let k = 1; k < 60; k++) if (usable(s[k - 1]!.st)) expect(dist(s[k - 1]!, sc.truth[k]!), `frame ${k}`).toBeLessThanOrEqual(2);
+    expect(s.filter((x) => usable(x.st)).length).toBeGreaterThanOrEqual(40);
+  });
+});
+
 const GOLDEN = '2ff85a64ecccd62c64725cec976dfde68746cb282c63ab010ee5c759da423d13';
