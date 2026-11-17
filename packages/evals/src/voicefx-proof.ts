@@ -454,9 +454,14 @@ async function main() {
       // crackle is measured on the radio alone: the telephone clip is muted for that export
       const server = await exportPcm(pid, 'browser-radio-server.wav');
       const b = await browserRun(pid, 'browser-radio-browser');
-      const ls = thirdOctaveLevelsDb(server, SR, 1, 5), lb = thirdOctaveLevelsDb(b.encoded, SR, 1, 5);
-      const bands = ls.map((v, i) => ({ v, d: lb[i]! - v })).filter((x) => x.v > Math.max(...ls) - 50);
+      // The effect's sound is compared on the browser's mix before encoding (the same DSP on both routes), over every band
+      // within 50 dB of the loudest; the encoded file only within 30 dB, because below that a lossy codec's own noise floor
+      // decides the level (measured: the 25–80 Hz bands, which the telephone removes, sit 30–45 dB down at the codec's floor).
+      const ls = thirdOctaveLevelsDb(server, SR, 1, 5), lm = thirdOctaveLevelsDb(b.mix, b.sampleRate, 1, 5), lb = thirdOctaveLevelsDb(b.encoded, SR, 1, 5);
+      const bands = ls.map((v, i) => ({ v, d: lm[i]! - v })).filter((x) => x.v > Math.max(...ls) - 50);
       const worstBand = Math.max(...bands.map((x) => Math.abs(x.d)));
+      const codecBands = ls.map((v, i) => ({ v, d: lb[i]! - v })).filter((x) => x.v > Math.max(...ls) - 30);
+      const worstCodecBand = Math.max(...codecBands.map((x) => Math.abs(x.d)));
       const d0 = await docOf(pid);
       const telTrack = d0.sequences[d0.mainSequenceId]!.tracks.find((t) => t.clips.some((c) => c.id === tel))!.id;
       await tx(pid, [{ op: 'set_track_audio', args: { trackId: telTrack, muted: true } }]);
@@ -465,8 +470,8 @@ async function main() {
       const thr = crackleThreshold(sr2, SR, 5 * SR);
       const cs = crackles(sr2, SR, 5 * SR, thr), cb = crackles(b2.mix, SR, 5 * SR, thr);
       const crackleOk = cs.length > 0 && cs.length === cb.length && cs.every((n, i) => Math.abs(n - cb[i]!) <= 1);
-      C.radio = { codec: b.codec, crackleServer: cs.length, crackleBrowser: cb.length, worstCrackleOffset: cs.length === cb.length ? Math.max(0, ...cs.map((n, i) => Math.abs(n - cb[i]!))) : null, telephoneBands: bands.length, worstBandDifferenceDb: r3(worstBand) };
-      check('C seeded and nonlinear effects: radio crackle positions in the browser mix agree with the server export within ± 1 sample; with a telephone voice, third-octave levels within ± 1.5 dB', crackleOk && worstBand <= 1.5, C.radio);
+      C.radio = { codec: b.codec, crackleServer: cs.length, crackleBrowser: cb.length, worstCrackleOffset: cs.length === cb.length ? Math.max(0, ...cs.map((n, i) => Math.abs(n - cb[i]!))) : null, telephoneBands: bands.length, worstBandDifferenceDb: r3(worstBand), encodedBands: codecBands.length, worstEncodedBandDifferenceDb: r3(worstCodecBand) };
+      check('C seeded and nonlinear effects: radio crackle positions in the browser mix agree with the server export within ± 1 sample; with a telephone voice, third-octave levels of the browser mix (before encoding) within ± 1.5 dB of the server export in every band within 50 dB of the loudest, and of the encoded file within ± 1.5 dB in every band within 30 dB', crackleOk && worstBand <= 1.5 && worstCodecBand <= 1.5, C.radio);
     });
     check('C the browser export page raised no errors', pageErrors.length === 0, pageErrors.slice(0, 3));
 
