@@ -71,7 +71,7 @@ async function main() {
   try {
     console.log('\n# catalog');
     const cat = (await call('/catalog')).body;
-    check(`catalog lists exactly what is registered: ${EFFECTS.length} effects with parameter schemas and defaults, ${TRANSITIONS.length} transitions, ${BLEND_MODES.length} blend modes`, cat.effects.length === EFFECTS.length && cat.transitions.length === TRANSITIONS.length && cat.blendModes.length === BLEND_MODES.length && cat.effects.every((e: any) => e.paramsSchema?.type === 'object' && e.defaults && e.name.he && e.implementation === 'canvas2d'), { effects: cat.effects.map((e: any) => e.id) });
+    check(`catalog lists exactly what is registered: ${EFFECTS.length} effects with parameter schemas and defaults, ${TRANSITIONS.length} transitions, ${BLEND_MODES.length} blend modes`, cat.effects.length === EFFECTS.length && cat.transitions.length === TRANSITIONS.length && cat.blendModes.length === BLEND_MODES.length && cat.effects.every((e: any) => e.paramsSchema?.type === 'object' && e.defaults && e.name.he && e.implementation === (e.cost === 'gpu' ? 'webgpu pass (needs a graphics adapter)' : e.cost === 'time' ? 'evaluator time taps + canvas2d (no graphics adapter)' : 'canvas2d')), { effects: cat.effects.map((e: any) => e.id) });
 
     console.log('\n# effects: each one is checked by what it does to pixels');
     const { pid, clipId } = await mk('phase7-effects');

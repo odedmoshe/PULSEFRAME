@@ -18,14 +18,49 @@ export const EFFECT_PARAM_LABELS: Record<string, L> = {
   bpm: { he: 'קצב (פעימות לדקה)', en: 'Tempo (beats per minute)' }, offset: { he: 'הזזת הפעימה', en: 'Beat offset' }, decay: { he: 'מהירות הדעיכה', en: 'Settling speed' }, rate: { he: 'קצב', en: 'Rate' }, zoom: { he: 'גודל', en: 'Size' }, length: { he: 'אורך הקרניים', en: 'Streak length' },
   follow: { he: 'מה מניע את האפקט', en: 'Driven by' }, every: { he: 'פגיעה כל כמה פעימות (בספירה מהתיבה הראשונה של המוזיקה)', en: 'Hit on every Nth beat (counted from the first bar of the music)' },
   bands: { he: 'מספר פסים', en: 'Bands' }, density: { he: 'שיעור הפסים שקופצים', en: 'Share of bands that jump' }, split: { he: 'פיצול צבעים', en: 'Colour split' },
+  // time effects
+  count: { he: 'מספר התמונות', en: 'Pictures' }, delay: { he: 'מרווח בין התמונות (פריימים)', en: 'Frames between pictures' }, lag: { he: 'פער בין הצבעים (פריימים)', en: 'Frames between the colours' },
+  order: { he: 'סדר הצבעים', en: 'Colour order' }, samples: { he: 'מספר הדגימות', en: 'Samples' }, timing: { he: 'תזמון הצמצם', en: 'Shutter timing' },
+  hold: { he: 'פריימים לכל תמונה', en: 'Frames per picture' }, pattern: { he: 'דפוס', en: 'Pattern' }, motion: { he: 'תנועה מהעורך', en: 'Movement made in the editor' },
+  // overlays
+  wind: { he: 'רוח', en: 'Wind' }, area: { he: 'אזור', en: 'Area' }, palette: { he: 'ערכת צבעים', en: 'Palette' }, shape: { he: 'צורה', en: 'Shape' },
+  focus: { he: 'גודל המרכז הנקי', en: 'Clear centre size' }, reach: { he: 'תנודת קצות הקווים', en: 'Line tip wander' }, thickness: { he: 'עובי', en: 'Thickness' },
+  // date stamp
+  text: { he: 'טקסט', en: 'Text' }, corner: { he: 'פינה', en: 'Corner' }, glow: { he: 'זוהר', en: 'Glow' },
+  // old digicam, CRT
+  sharpen: { he: 'חידוד', en: 'Sharpening' }, noise: { he: 'רעש צבעוני', en: 'Colour noise' }, bloom: { he: 'זליגת אורות', en: 'Highlight bloom' }, cool: { he: 'גוון קר', en: 'Cool cast' },
+  curvature: { he: 'עקמומיות המסך', en: 'Screen curvature' }, phosphor: { he: 'מסכת זרחן', en: 'Phosphor mask' }, pitch: { he: 'רוחב שלישיית הצבעים', en: 'Triad width' },
 };
 export const EFFECT_OPTION_LABELS: Record<string, L> = {
   color: { he: 'צבע', en: 'Colour' }, multiply: { he: 'הכפלה', en: 'Multiply' }, screen: { he: 'מסך', en: 'Screen' }, overlay: { he: 'שכבת־על', en: 'Overlay' }, 'soft-light': { he: 'אור רך', en: 'Soft light' },
   steady: { he: 'קצב קבוע משלו', en: 'Its own steady tempo' }, music: { he: 'פעימות המוזיקה', en: 'The beats of the music' },
   horizontal: { he: 'אופקי', en: 'Horizontal' }, vertical: { he: 'אנכי', en: 'Vertical' }, left: { he: 'שמאל', en: 'Left' }, right: { he: 'ימין', en: 'Right' }, top: { he: 'עליון', en: 'Top' }, bottom: { he: 'תחתון', en: 'Bottom' },
+  // time effects
+  blend: { he: 'ממוצע משוקלל', en: 'Weighted average' }, trail: { he: 'שובל מאחור', en: 'Trail behind' }, lighten: { he: 'הבהיר מכולם', en: 'Brightest' },
+  'red-now': { he: 'האדום הוא עכשיו', en: 'Red is now' }, 'blue-now': { he: 'הכחול הוא עכשיו', en: 'Blue is now' },
+  centred: { he: 'סביב הפריים', en: 'Centred on the frame' }, trailing: { he: 'לפני הפריים', en: 'Trailing the frame' },
+  steps: { he: 'צעדים', en: 'Steps' }, freeze: { he: 'עצירה על הפעימה', en: 'Freeze on the beat' }, held: { he: 'מוחזקת עם התמונה', en: 'Held with the picture' }, live: { he: 'רציפה', en: 'Continuous' },
+  // overlays
+  layer: { he: 'הקליפ בלבד', en: 'This clip only' }, frame: { he: 'כל הפריים', en: 'Whole frame' }, fall: { he: 'נפילה', en: 'Falling' }, burst: { he: 'פיצוץ בתחילת הקליפ', en: 'Burst at the clip start' },
+  party: { he: 'מסיבה', en: 'Party' }, gold: { he: 'זהב', en: 'Gold' }, pastel: { he: 'פסטל', en: 'Pastel' }, single: { he: 'צבע אחד', en: 'One colour' },
+  circle: { he: 'עיגול', en: 'Circle' }, hexagon: { he: 'משושה', en: 'Hexagon' },
+  // date stamp
+  'bottom-right': { he: 'למטה מימין', en: 'Bottom right' }, 'bottom-left': { he: 'למטה משמאל', en: 'Bottom left' }, 'top-right': { he: 'למעלה מימין', en: 'Top right' }, 'top-left': { he: 'למעלה משמאל', en: 'Top left' },
+  // CRT
+  grille: { he: 'סורג אנכי', en: 'Aperture grille' }, dots: { he: 'נקודות', en: 'Dots' }, slot: { he: 'חריצים', en: 'Slot mask' },
 };
-/** The name to show for a parameter; the key itself when none is registered (never an empty label). */
-export const effectParamLabel = (name: string, lang: 'he' | 'en') => EFFECT_PARAM_LABELS[name]?.[lang] ?? name;
+/** Per-effect names where the shared name would carry another effect's meaning (size = "Centre size", density = "share of bands that jump", …). */
+export const EFFECT_PARAM_LABELS_BY_EFFECT: Record<string, Record<string, L>> = {
+  'time.echo': { mode: { he: 'אופן המיזוג', en: 'Merge' }, decay: { he: 'משקל כל תמונה קודמת', en: 'Weight of each older picture' } },
+  'time.shutter': { angle: { he: 'זווית הצמצם (מעלות)', en: 'Shutter angle (degrees)' } },
+  'overlay.snow': { size: { he: 'גודל', en: 'Size' }, density: { he: 'צפיפות', en: 'Density' } },
+  'overlay.confetti': { size: { he: 'גודל', en: 'Size' }, density: { he: 'צפיפות', en: 'Density' }, mode: { he: 'תנועה', en: 'Movement' }, x: { he: 'נקודת הפיצוץ (אופקי)', en: 'Burst point (horizontal)' }, y: { he: 'נקודת הפיצוץ (אנכי)', en: 'Burst point (vertical)' } },
+  'overlay.hearts': { size: { he: 'גודל', en: 'Size' }, density: { he: 'צפיפות', en: 'Density' } },
+  'overlay.bokeh': { size: { he: 'גודל', en: 'Size' }, density: { he: 'צפיפות', en: 'Density' } },
+  'stylize.date-stamp': { size: { he: 'גובה הספרות', en: 'Digit height' } },
+};
+/** The name to show for a parameter (of `effectId` when given); the key itself when none is registered (never an empty label). */
+export const effectParamLabel = (name: string, lang: 'he' | 'en', effectId?: string) => (effectId ? EFFECT_PARAM_LABELS_BY_EFFECT[effectId]?.[name]?.[lang] : undefined) ?? EFFECT_PARAM_LABELS[name]?.[lang] ?? name;
 export const effectOptionLabel = (value: string, lang: 'he' | 'en') => EFFECT_OPTION_LABELS[value]?.[lang] ?? value;
 
 /** Stage words a job reports, as shown to a person. The counts after the word ("18/380") are kept as they are. */

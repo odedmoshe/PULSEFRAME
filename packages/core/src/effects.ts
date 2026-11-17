@@ -22,21 +22,36 @@ const FOLLOW = {
   every: z.number().int().min(1).max(16).default(1).describe('with follow=music: hit on every Nth beat, counting the beats from the first bar start of the music'),
 };
 
+export type EffectCategory = 'color' | 'blur' | 'light' | 'stylize' | 'digital' | 'key' | 'distort' | 'motion' | 'time' | 'overlay';
+/**
+ * How an effect reads other moments of its clip (SPEC §8: temporal effects sample explicit neighbouring times with bounded
+ * windows; random seek equals sequential; ADR-0011, time effects on the shared evaluator). Windows are whole frames of the timeline: nothing in seconds is stored.
+ * `false`: depends only on the current frame (no neighbouring frames).
+ */
+export type Temporal =
+  | false
+  | { kind: 'taps'; /** most pictures merged per output frame, the current one included */ maxTaps: number; pastFrames: number; futureFrames: number; /** each extra picture of a video clip has its own decode lane */ decodes: boolean }
+  | { kind: 'remap'; /** furthest back (frames) the shown picture can lie behind the frame drawn */ pastFrames: number; /** with follow=music it moves on planned beats (taps.ts beatStepFrames) */ followsBeats: boolean };
 export interface EffectDef<S extends z.ZodObject = z.ZodObject> {
   id: string;
   version: number;
-  category: 'color' | 'blur' | 'light' | 'stylize' | 'digital' | 'key' | 'distort' | 'motion';
+  category: EffectCategory;
   name: { he: string; en: string };
   description: string;
   params: S;
-  /** filter = one compositor filter pass; layer = needs its own layer buffer pass (costlier); gpu = a WebGPU pass (ADR-0008): available only where the browser and the render worker both have a working adapter. */
-  cost: 'filter' | 'layer' | 'gpu';
-  /** Depends only on the current frame (no neighbouring frames), so random seek equals sequential playback. */
-  temporal: false;
+  /**
+   * filter = one compositor filter pass; layer = needs its own layer buffer pass (costlier); gpu = a WebGPU pass (ADR-0008): available only where the browser and the render worker both have a working adapter;
+   * time = evaluated by the evaluator (taps or remap) and merged in exact integer arithmetic by the Canvas2D compositor; needs no graphics adapter.
+   */
+  cost: 'filter' | 'layer' | 'gpu' | 'time';
+  temporal: Temporal;
   /** Uses seeded noise that varies per frame. */
   seeded: boolean;
 }
 const def = <S extends z.ZodObject>(d: EffectDef<S>) => d;
+export const SEED = z.number().int().min(0).max(1_000_000).default(1);
+/** Integer weights of the pictures a time effect merges add up to this (packages/engine/src/taps.ts). */
+export const TAP_WEIGHT_TOTAL = 4096;
 
 export const EFFECTS = [
   def({ id: 'color.adjust', version: 1, category: 'color', name: { he: 'כיוון צבע', en: 'Color adjust' }, description: 'Brightness, contrast, saturation and hue rotation.', cost: 'filter', temporal: false, seeded: false,
@@ -116,11 +131,38 @@ export const EFFECTS = [
     params: z.object({ amount: frac(0.1, 0.01, 'largest split, fraction of frame height'), speed: z.number().min(0).max(60).default(14).describe('changes per second'), seed: z.number().int().min(0).max(1_000_000).default(1), ...FOLLOW }).strict() }),
   def({ id: 'light.sparkle', version: 1, category: 'light', name: { he: 'נצנוצים', en: 'Sparkle' }, description: 'Bright spots send out short star-shaped streaks. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
     params: z.object({ threshold: frac(1, 0.8, 'how bright a spot must be'), length: frac(0.3, 0.04, 'length of the streaks, fraction of frame height'), amount: frac(4, 1, 'strength') }).strict() }),
+  def({ id: 'time.echo', version: 1, category: 'time', name: { he: 'הד ושובל', en: 'Echo trails' }, description: 'Earlier moments of the clip are drawn together with the current one, so whatever moves (the picture, a title, a keyframed move) leaves fading copies behind. Draws `count` pictures per frame; on a video clip each is decoded separately. Always the first effect of its clip; the effects after it apply to the merged picture.', cost: 'time', temporal: { kind: 'taps', maxTaps: 5, pastFrames: 60, futureFrames: 0, decodes: true }, seeded: false,
+    params: z.object({ count: z.number().int().min(2).max(5).default(4).describe('pictures merged, the current one included'), delay: z.number().int().min(1).max(15).default(3).describe('frames between two pictures'), decay: z.number().min(0.05).max(1).default(0.6).describe('weight of each older picture relative to the next newer one'), mode: z.enum(['blend', 'trail', 'lighten']).default('blend').describe('blend = weighted average; trail = the current picture over its fading past; lighten = the brightest of the weighted pictures') }).strict() }),
+  def({ id: 'time.split', version: 1, category: 'time', name: { he: 'פיצול זמן צבעוני', en: 'Time-split RGB' }, description: 'Red shows this moment, green a moment ago, blue a moment before that (or the other way round): still areas look normal, moving ones leave coloured ghosts. Three pictures per frame; on a video clip each is decoded separately. Always the first effect of its clip.', cost: 'time', temporal: { kind: 'taps', maxTaps: 3, pastFrames: 30, futureFrames: 0, decodes: true }, seeded: false,
+    params: z.object({ lag: z.number().int().min(1).max(15).default(4).describe('frames between the colour channels'), order: z.enum(['red-now', 'blue-now']).default('red-now') }).strict() }),
+  def({ id: 'time.shutter', version: 1, category: 'time', name: { he: 'טשטוש תנועה (צמצם)', en: 'Shutter motion blur' }, description: 'Motion blur for movement made in the editor (keyframed position, size and rotation, motion presets, animated titles), sampled between frames like a camera shutter. It does not blur movement filmed in the video (no optical flow). Always the first effect of its clip.', cost: 'time', temporal: { kind: 'taps', maxTaps: 16, pastFrames: 2, futureFrames: 1, decodes: false }, seeded: false,
+    params: z.object({ angle: z.number().int().min(0).max(720).default(180).describe('shutter angle in degrees; 360 spreads the samples over one whole frame'), samples: z.number().int().min(2).max(16).default(8).describe('pictures averaged per frame'), timing: z.enum(['centred', 'trailing']).default('centred') }).strict() }),
+  def({ id: 'time.stutter', version: 1, category: 'time', name: { he: 'קפיצות פריים (סטופ־מושן)', en: 'Stutter / stop-motion' }, description: 'The picture moves on only every few frames, for a stop-motion or dropped-frame look; following the music it moves on (steps) or stops for a moment (freeze) on the beats, never more than three times a second. The sound is not held. Always the first effect of its clip.', cost: 'time', temporal: { kind: 'remap', pastFrames: 60, followsBeats: true }, seeded: false,
+    params: z.object({ hold: z.number().int().min(2).max(12).default(3).describe('frames each picture is held'), pattern: z.enum(['steps', 'freeze']).default('steps').describe('steps = the picture moves on every `hold` frames, or on the beats; freeze = following the music, the picture stops for `hold` frames on each beat and then plays on'), motion: z.enum(['held', 'live']).default('held').describe('whether keyframed movement is held with the picture'), ...FOLLOW }).strict() }),
+  def({ id: 'overlay.snow', version: 1, category: 'overlay', name: { he: 'שלג', en: 'Snow' }, description: 'Soft snowflakes fall in three depths and sway. A function of the seed and the timeline time: neighbouring clips with the same seed continue the same snow across a cut. area=frame draws over the whole frame.', cost: 'layer', temporal: false, seeded: true,
+    params: z.object({ amount: frac(1, 0.9, 'opacity of the flakes'), density: frac(1, 0.5, 'share of places that hold a flake'), size: z.number().min(0.002).max(0.04).default(0.008).describe('flake radius, fraction of frame height'), speed: z.number().min(0).max(1).default(0.15).describe('frame heights per second'), wind: z.number().min(-1).max(1).default(0.1).describe('sideways drift; negative blows left'), area: z.enum(['layer', 'frame']).default('frame'), seed: SEED }).strict() }),
+  def({ id: 'overlay.confetti', version: 1, category: 'overlay', name: { he: 'קונפטי', en: 'Confetti' }, description: 'Coloured confetti falling and tumbling, or one burst from a point at the start of the clip.', cost: 'layer', temporal: false, seeded: true,
+    params: z.object({ amount: frac(1, 0.9, 'opacity'), density: frac(1, 0.35, 'share of places that hold a piece'), size: z.number().min(0.004).max(0.05).default(0.014).describe('piece size, fraction of frame height'), speed: z.number().min(0).max(1).default(0.2).describe('frame heights per second'), mode: z.enum(['fall', 'burst']).default('fall'), palette: z.enum(['party', 'gold', 'pastel', 'single']).default('party'), color: Color.default('#FFD166'), x: frac(1, 0.5, 'burst point, fraction of the frame width from the left'), y: frac(1, 0.85, 'burst point, fraction of the frame height from the top'), area: z.enum(['layer', 'frame']).default('frame'), seed: SEED }).strict() }),
+  def({ id: 'overlay.hearts', version: 1, category: 'overlay', name: { he: 'לבבות מרחפים', en: 'Floating hearts' }, description: 'Hearts rise, wobble gently and fade near the top; following the music they swell a little on the beats.', cost: 'layer', temporal: false, seeded: true,
+    params: z.object({ amount: frac(1, 0.9, 'opacity'), density: frac(1, 0.3, 'share of places that hold a heart'), size: z.number().min(0.01).max(0.1).default(0.035).describe('heart size, fraction of frame height'), speed: z.number().min(0).max(0.5).default(0.12).describe('frame heights per second'), color: Color.default('#FF4D6D'), area: z.enum(['layer', 'frame']).default('frame'), seed: SEED, ...FOLLOW }).strict() }),
+  def({ id: 'overlay.bokeh', version: 1, category: 'overlay', name: { he: 'אורות בוקה', en: 'Bokeh lights' }, description: 'Large soft out-of-focus discs of light drift slowly and twinkle gently (slower than once a second).', cost: 'layer', temporal: false, seeded: true,
+    params: z.object({ amount: frac(1, 0.6, 'strength of the light'), density: frac(1, 0.4, 'share of places that hold a light'), size: z.number().min(0.02).max(0.15).default(0.06).describe('disc radius, fraction of frame height'), speed: z.number().min(0).max(0.2).default(0.03).describe('frame heights per second'), shape: z.enum(['circle', 'hexagon']).default('circle'), color: Color.default('#FFD9A0'), area: z.enum(['layer', 'frame']).default('frame'), seed: SEED }).strict() }),
+  def({ id: 'overlay.speed-lines', version: 1, category: 'overlay', name: { he: 'קווי מהירות', en: 'Speed lines' }, description: 'Lines streak in from the edges toward a clear centre, as in comics and anime. They move smoothly and are never re-drawn at random.', cost: 'layer', temporal: false, seeded: true,
+    params: z.object({ amount: frac(1, 0.7, 'opacity'), lines: z.number().int().min(16).max(240).default(90), focus: frac(1, 0.35, 'radius of the clear centre, fraction of the half-diagonal'), reach: frac(1, 0.25, 'how far the line tips wander'), thickness: z.number().min(0.1).max(2).default(1), rate: z.number().min(0).max(2).default(1).describe('wanders per second'), x: frac(1, 0.5, 'centre, fraction of the frame width from the left'), y: frac(1, 0.5, 'centre, fraction of the frame height from the top'), color: Color.default('#FFFFFF'), seed: SEED }).strict() }),
+  def({ id: 'stylize.date-stamp', version: 1, category: 'stylize', name: { he: 'חותמת תאריך', en: 'Date stamp' }, description: "An orange seven-segment date in a corner with a faint glow, like a camera of the 1990s. Digits, space and . : ' / - only; always drawn left to right. Needs no font.", cost: 'layer', temporal: false, seeded: false,
+    params: z.object({ text: z.string().regex(/^[0-9 .:'\/-]{0,20}$/).default("'05 7 14").describe("digits, space and . : ' / -"), size: z.number().min(0.02).max(0.12).default(0.045).describe('digit height, fraction of frame height'), corner: z.enum(['bottom-right', 'bottom-left', 'top-right', 'top-left']).default('bottom-right'), color: Color.default('#FF9A2E'), glow: frac(1, 0.5, 'softness of the glow') }).strict() }),
+  def({ id: 'stylize.digicam', version: 1, category: 'stylize', name: { he: 'מצלמה דיגיטלית ישנה', en: 'Old digicam (CCD)' }, description: 'The look of a mid-2000s pocket camera: oversharpened, highlights that bloom, a cool cast, blocky colour and fine coloured noise kept far below a flash. Seeded. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true,
+    params: z.object({ amount: frac(1, 0.8, 'strength'), sharpen: z.number().min(0).max(2).default(0.7), noise: frac(1, 0.3, 'coloured noise'), bloom: frac(1, 0.35, 'highlight bloom'), cool: z.number().min(-1).max(1).default(0.4).describe('negative is warmer'), seed: SEED }).strict() }),
+  def({ id: 'stylize.crt', version: 1, category: 'stylize', name: { he: 'מסך שפופרת', en: 'CRT screen' }, description: 'An old picture-tube screen in one pass: curved glass with rounded corners, beam lines that widen in bright areas, an RGB phosphor mask and a slight glow. Does not flicker. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ curvature: z.number().min(0).max(0.3).default(0.12), phosphor: z.enum(['grille', 'dots', 'slot']).default('grille'), pitch: z.number().min(0.001).max(0.01).default(0.0028).describe('width of one RGB triad, fraction of frame height'), lines: z.number().int().min(120).max(1080).default(480).describe('beam lines over the frame height'), amount: frac(1, 0.8, 'strength'), glow: frac(1, 0.3, 'glow') }).strict() }),
 ] as const;
 /** Effects that run as WebGPU passes (ADR-0008). */
 export const GPU_EFFECT_IDS: readonly string[] = (EFFECTS as readonly EffectDef[]).filter((e) => e.cost === 'gpu').map((e) => e.id);
 export type EffectType = (typeof EFFECTS)[number]['id'];
 export const findEffect = (type: string): EffectDef | undefined => (EFFECTS as readonly EffectDef[]).find((e) => e.id === type);
+/** A time effect (echo, time split, shutter, stutter): at most one per clip, always first in its effect list (ops.ts effectSlot). */
+export const isTimeEffect = (type: string): boolean => findEffect(type)?.cost === 'time';
+export const temporalOf = (type: string): Temporal => findEffect(type)?.temporal ?? false;
 /** Validate and complete parameters for an effect type. Throws ZodError on bad input. */
 export const effectParams = (type: string, params: unknown): Record<string, number | string | boolean> => findEffect(type)!.params.parse(params ?? {}) as Record<string, number | string | boolean>;
 
@@ -193,6 +235,12 @@ export const TRANSITIONS = [
   { id: 'bars-h', kernel: 'bars', gpu: true, name: { he: "פסים אקראיים אופקיים", en: 'Random horizontal bars' }, usesOutgoing: true },
   { id: 'bars-v', kernel: 'bars', gpu: true, name: { he: "פסים אקראיים אנכיים", en: 'Random vertical bars' }, usesOutgoing: true },
   { id: 'ripple', kernel: 'ripple', gpu: true, name: { he: "אדווה", en: 'Ripple' }, usesOutgoing: true },
+  { id: 'whip-left', kernel: 'whip', gpu: true, name: { he: 'הצלפה שמאלה', en: 'Whip pan left' }, usesOutgoing: true },
+  { id: 'whip-right', kernel: 'whip', gpu: true, name: { he: 'הצלפה ימינה', en: 'Whip pan right' }, usesOutgoing: true },
+  { id: 'whip-up', kernel: 'whip', gpu: true, name: { he: 'הצלפה למעלה', en: 'Whip pan up' }, usesOutgoing: true },
+  { id: 'whip-down', kernel: 'whip', gpu: true, name: { he: 'הצלפה למטה', en: 'Whip pan down' }, usesOutgoing: true },
+  { id: 'spin-cw', kernel: 'spin', gpu: true, name: { he: 'סיבוב מהיר עם השעון', en: 'Spin clockwise' }, usesOutgoing: true },
+  { id: 'spin-ccw', kernel: 'spin', gpu: true, name: { he: 'סיבוב מהיר נגד השעון', en: 'Spin counter-clockwise' }, usesOutgoing: true },
 ] as const;
 export const TRANSITION_IDS = TRANSITIONS.map((t) => t.id) as [TransitionType, ...TransitionType[]];
 /** Transitions that run as WebGPU passes (ADR-0008). */
@@ -204,11 +252,21 @@ export type Transition = z.infer<typeof TransitionSchema>;
 
 /** Same shape as a transform keyframe (schema.ts); repeated here because schema.ts imports this file. */
 const EffectKeySchema = z.object({ time: z.object({ value: z.string().regex(/^-?\d+$/), timescale: z.number().int().positive() }).strict(), value: z.number(), easing: z.enum(['linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out']) }).strict();
+/** A beat modulator on one numeric parameter of an effect instance: value = clamp(base + depth·e^(−decay·seconds since the hit)). */
+export const ModulatorSchema = z.object({
+  by: z.literal('beat'),
+  every: z.number().int().min(1).max(16).default(2), // 2: at most one kick per two beats by default (ADR-0009 decision 3: safe at defaults on fast music)
+  depth: z.number().min(-1e6).max(1e6),
+  decay: z.number().min(1).max(30).default(6),
+}).strict();
+export type Modulator = z.infer<typeof ModulatorSchema>;
 export const EffectInstanceSchema = z
   .object({
     id: z.string().min(1).max(64), type: z.string().min(1).max(48), enabled: z.boolean(), params: z.record(z.string(), z.union([z.number(), z.string().max(64), z.boolean()])),
     /** Animation of numeric parameters: clip-local times, strictly increasing. A parameter with keys ignores its static value. */
     keyframes: z.record(z.string(), z.array(EffectKeySchema).min(1).max(500)).optional(),
+    /** Parameters that kick on the beats of the music under the clip (render-time; nothing computed is stored). At most 4. */
+    modulate: z.record(z.string().max(48), ModulatorSchema).refine((m) => Object.keys(m).length <= 4, 'at most 4 modulated parameters').optional(),
   })
   .strict();
 /**
@@ -219,6 +277,9 @@ export const EffectInstanceSchema = z
  */
 export const NOT_ANIMATABLE: Readonly<Record<string, readonly string[]>> = {
   'light.strobe': ['rate', 'amount', 'every'],
+  // windows and counts of time effects are whole numbers that define which pictures are read; interpolating them would read fractional frames
+  'time.echo': ['count', 'delay'], 'time.split': ['lag'], 'time.shutter': ['angle', 'samples'], 'time.stutter': ['hold', 'every'],
+  'overlay.speed-lines': ['lines'],
 };
 /** Names of an effect's parameters that are numbers and can therefore be animated. */
 export function animatableParams(type: string): string[] {
@@ -228,11 +289,41 @@ export function animatableParams(type: string): string[] {
   return Object.keys(defaults).filter((k) => typeof defaults[k] === 'number' && k !== 'seed' && !NOT_ANIMATABLE[type]?.includes(k));
 }
 export type EffectInstance = z.infer<typeof EffectInstanceSchema>;
+/**
+ * Parameters that may follow the beat (default-deny). Geometry and texture only: a beat-driven change of brightness or colour
+ * is a flash and must join the flash schedule first (wave 2, ADR-0009).
+ */
+export const MODULATABLE: Readonly<Record<string, readonly string[]>> = {
+  'blur.gaussian': ['radius'], 'blur.zoom': ['amount'], 'blur.directional': ['amount'],
+  'distort.bulge': ['amount', 'radius'], 'distort.swirl': ['angle'], 'distort.wave': ['amplitude'], 'distort.fisheye': ['amount'], 'distort.kaleidoscope': ['angle'],
+  'digital.rgb-split': ['amount'], 'digital.glitch': ['amount'], 'digital.rgb-shake': ['amount'],
+  'stylize.pixelate': ['size'], 'motion.shake': ['amount'], 'motion.sway': ['amount'],
+};
+/** The parameters of an effect type that a beat modulator may drive (set_effect_modulator, list_catalog → effects[].modulatable). */
+export const modulatableParams = (type: string): string[] => (MODULATABLE[type] ?? []).filter((p) => animatableParams(type).includes(p));
+const ranges = new Map<string, Record<string, { min: number; max: number }>>();
+/** The declared numeric range of a parameter (from its zod schema), or null. */
+export function paramRange(type: string, param: string): { min: number; max: number } | null {
+  let r = ranges.get(type);
+  if (!r) {
+    const d = findEffect(type);
+    if (!d) return null;
+    const props = (z.toJSONSchema(d.params) as { properties: Record<string, { type?: string; minimum?: number; maximum?: number }> }).properties;
+    r = Object.fromEntries(Object.entries(props).filter(([, p]) => (p.type === 'number' || p.type === 'integer') && p.minimum !== undefined && p.maximum !== undefined).map(([k, p]) => [k, { min: p.minimum!, max: p.maximum! }]));
+    ranges.set(type, r);
+  }
+  return Object.hasOwn(r, param) ? r[param]! : null;
+}
 
 /** Discovery payload for REST/MCP/Lab: everything registered, with JSON Schemas and defaults. */
 export function describeCatalog() {
   return {
-    effects: (EFFECTS as readonly EffectDef[]).map((e) => ({ id: e.id, version: e.version, category: e.category, name: e.name, description: e.description, cost: e.cost, seeded: e.seeded, temporal: e.temporal, implementation: 'canvas2d', defaults: e.params.parse({}), paramsSchema: z.toJSONSchema(e.params) })),
+    effects: (EFFECTS as readonly EffectDef[]).map((e) => ({
+      id: e.id, version: e.version, category: e.category, name: e.name, description: e.description, cost: e.cost, seeded: e.seeded, temporal: e.temporal,
+      implementation: e.cost === 'gpu' ? 'webgpu pass (needs a graphics adapter)' : e.cost === 'time' ? 'evaluator time taps + canvas2d (no graphics adapter)' : 'canvas2d',
+      modulatable: modulatableParams(e.id),
+      defaults: e.params.parse({}), paramsSchema: z.toJSONSchema(e.params),
+    })),
     transitions: TRANSITIONS.map((t) => ({ ...t, version: 1, implementation: t.gpu ? 'webgpu pass (needs a graphics adapter)' : 'canvas2d', audio: 'unchanged (hard cut)' })),
     blendModes: [...BLEND_MODES],
     mask: { shapes: ['rect', 'ellipse'], defaults: DEFAULT_MASK, paramsSchema: z.toJSONSchema(MaskSchema) },
