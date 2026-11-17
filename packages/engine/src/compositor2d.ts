@@ -138,7 +138,7 @@ function drawText(ctx: Ctx2D, g: RenderGraph, layer: TextLayer, note?: TextNote)
     if (look) {
       // ADR-0012: the lines as units at rest, through the title painter (textEffects.ts)
       const units: TitleUnit[] = measured.map((m, i) => ({ text: m.line, left: lineLeft(m), width: m.width, baseline: lineBaseline(i), dir: m.dir, rtl: m.dir === 'rtl', ...(m.spacing !== undefined ? { spacing: m.spacing } : {}) }));
-      paintTitle(ctx, units, restPoses(units.length), s, { px, width: g.width, height: g.height, ink: ink() }, note);
+      paintTitle(ctx, units, restPoses(units.length), s, { px, width: g.width, height: g.height, ink: ink(), still: true }, note);
       return;
     }
     measured.forEach((m, i) => {
@@ -227,8 +227,8 @@ function drawTextUnits(ctx: Ctx2D, layer: TextLayer, lines: MeasuredLine[], geo:
     const p = poses[i]!;
     if (p.alpha <= 0) return;
     ctx.save();
-    const x = enterUnit(ctx, u, p, px, seam, revealPad);
-    if (outline) ctx.strokeText(u.text, x, px * 0.34); else ctx.fillText(u.text, x, px * 0.34);
+    const { x, y } = enterUnit(ctx, u, p, px, seam, revealPad);
+    if (outline) ctx.strokeText(u.text, x, y); else ctx.fillText(u.text, x, y);
     ctx.restore();
   });
   if (s.stroke && s.strokeFrac > 0) { ctx.strokeStyle = s.stroke; ctx.lineWidth = px * s.strokeFrac * 2; paint(true); }

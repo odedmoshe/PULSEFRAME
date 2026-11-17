@@ -44,6 +44,12 @@ export interface TitleGeo {
   /** size of the frame (and of the canvas drawn into) */ width: number; height: number;
   /** the ink box of the whole block at rest, in block coordinates (gradient) */ ink: Box;
   /** half a device pixel where windows touch (drawTextUnits) */ seam?: number;
+  /**
+   * A still title (compositor2d drawText): its lines are drawn where they stand, without moving the context, with the very
+   * calls a title without look fields makes, so a look that does not change the letters (tracking 0 on an Arabic line)
+   * gives the same picture to the bit.
+   */
+  still?: boolean;
 }
 /** Records a look that this browser cannot draw (drawGraph then reports it as unavailable, so a still or an export refuses). */
 export type TextNote = (id: string, why: string) => void;
@@ -160,7 +166,7 @@ export function darken(c: string, f: number): string {
 /** Line widths: the outline (`stroke`, 2·px·strokeFrac, 0 without a colour) and the second outline outside it; `total` is the outer edge's line width. */
 export function outlineWidths(s: Pick<TextStyle, 'stroke' | 'strokeFrac' | 'stroke2'>, px: number): { stroke: number; total: number } {
   const inner = s.stroke && s.strokeFrac > 0 ? s.strokeFrac : 0;
-  const stroke = 2 * px * inner;
+  const stroke = px * inner * 2; // multiplied in the order the title without look fields does it (the same float)
   return { stroke, total: s.stroke2 ? 2 * px * (inner + s.stroke2.widthFrac) : stroke };
 }
 
@@ -169,13 +175,15 @@ export function outlineWidths(s: Pick<TextStyle, 'stroke' | 'strokeFrac' | 'stro
 const REST_POSE: UnitPose = { alpha: 1, dx: 0, dy: 0, scale: 1 };
 /**
  * Places a unit for drawing (the caller has saved the context): its opacity, direction, letter spacing, pose, its windows,
- * the write-on reveal and the blur. Returns the x to draw its text at (y is px·0.34). The calls that the titles before the
- * look fields made are made in the same order, so drawTextUnits uses it too and stays as it was.
+ * the write-on reveal and the blur. Returns where to draw its text. The calls that the titles before the look fields made
+ * are made in the same order, so drawTextUnits uses it too and stays as it was. `still`: a line of a still title, drawn
+ * where it stands (no pose, no window), as compositor2d drawText draws a title without look fields.
  */
-export function enterUnit(c: Ctx2D, u: TitleUnit, p: UnitPose, px: number, seam: number, revealPad = px * 0.25): number {
+export function enterUnit(c: Ctx2D, u: TitleUnit, p: UnitPose, px: number, seam: number, revealPad = px * 0.25, still = false): { x: number; y: number } {
   c.globalAlpha *= p.alpha;
   c.direction = u.dir;
-  if (u.spacing) c.letterSpacing = `${u.spacing}px`;
+  if (u.spacing !== undefined) c.letterSpacing = `${u.spacing}px`;
+  if (still) return { x: u.left, y: u.baseline };
   const middle = u.left + u.width / 2;
   c.translate(middle + p.dx * px, u.baseline + p.dy * px - px * 0.34);
   c.scale(p.scale, p.scale); // about the middle of the unit, a third of the font size above the baseline
@@ -197,7 +205,7 @@ export function enterUnit(c: Ctx2D, u: TitleUnit, p: UnitPose, px: number, seam:
     const t = c.getTransform();
     c.filter = `blur(${(p.blur * px * Math.hypot(t.a, t.b)).toFixed(3)}px)`; // in device px: the filter does not follow the transform
   }
-  return x;
+  return { x, y: px * 0.34 };
 }
 
 /** Draws `buf`'s box onto `ctx` in device space, with the context's opacity (the title's). */
@@ -300,7 +308,7 @@ function glow(ctx: Ctx2D, S: Buf, b: Box, gl: NonNullable<TextStyle['glow']>, ra
  * title's), after its background box. `note` records a look this browser cannot draw.
  */
 export function paintTitle(ctx: Ctx2D, units: readonly TitleUnit[], poses: readonly UnitPose[], style: TextStyle, geo: TitleGeo, note?: TextNote): void {
-  const { px } = geo, seam = geo.seam ?? 0;
+  const { px } = geo, seam = geo.seam ?? 0, still = !!geo.still;
   const widths = outlineWidths(style, px);
   const canFilter = 'filter' in ctx;
   if (!canFilter && style.glow) note?.('text.glow', "this browser's canvas has no filter, so the glow cannot be drawn");
@@ -324,9 +332,9 @@ export function paintTitle(ctx: Ctx2D, units: readonly TitleUnit[], poses: reado
         if (p.alpha <= 0) return;
         s.save();
         s.letterSpacing = '0px';
-        const x = enterUnit(s, u, p, px, seam, revealPad);
-        if (widths.total > 0) s.strokeText(u.text, x, px * 0.34);
-        s.fillText(u.text, x, px * 0.34);
+        const at = enterUnit(s, u, p, px, seam, revealPad, still);
+        if (widths.total > 0) s.strokeText(u.text, at.x, at.y);
+        s.fillText(u.text, at.x, at.y);
         s.restore();
       });
       if (ls) longShadow(ctx, S, box, ls, lengthPx);
@@ -339,17 +347,18 @@ export function paintTitle(ctx: Ctx2D, units: readonly TitleUnit[], poses: reado
     const p = poses[i]!;
     if (p.alpha <= 0) return;
     ctx.save();
-    const x = enterUnit(ctx, u, p, px, seam, revealPad);
-    if (outline) ctx.strokeText(u.text, x, px * 0.34);
+    const at = enterUnit(ctx, u, p, px, seam, revealPad, still);
+    if (outline) ctx.strokeText(u.text, at.x, at.y);
     else {
       if (gradient && style.gradient) {
-        const g = unitGradientLine(gradient, unitOrigin(u, px));
+        // a still line is drawn in block coordinates: the block's gradient itself; a unit gets it shifted to its own place
+        const g = still ? gradient : unitGradientLine(gradient, unitOrigin(u, px));
         const fill = ctx.createLinearGradient(g.x0, g.y0, g.x1, g.y1);
         const n = style.gradient.colors.length;
         style.gradient.colors.forEach((c, k) => fill.addColorStop(n > 1 ? k / (n - 1) : 0, c));
         ctx.fillStyle = fill;
       }
-      ctx.fillText(u.text, x, px * 0.34);
+      ctx.fillText(u.text, at.x, at.y);
     }
     ctx.restore();
   });
