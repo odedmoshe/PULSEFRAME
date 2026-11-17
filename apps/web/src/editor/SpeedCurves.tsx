@@ -7,7 +7,7 @@ import * as T from '@pulseframe/time';
 import { curvePolyline, findClip, segmentsFromPoints, SPEED_CURVES, toSourceSpan, type Clip, type CurvePoint, type CurveSegment } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
 import { repeatClick } from './oneAtATime.ts';
-import { clipsLook, curveApplier } from './speedCurves.apply.ts';
+import { clipsLook, curveApplier, curveBlocker } from './speedCurves.apply.ts';
 import './speedCurves.css';
 
 type Media = Extract<Clip, { type: 'media' }>;
@@ -17,7 +17,14 @@ const STR = {
     ripple: 'להזיז את הקליפים שאחריו באותו ערוץ', length: (x: string) => `אורך ×${x}`, custom: 'עקומה משלך', customHint: 'גוררים נקודה למעלה כדי להאיץ ולמטה כדי להאט. לחיצה כפולה על הגרף מוסיפה נקודה; Delete מוחק את הנקודה שבמיקוד.',
     smooth: 'מעברים רכים בין המהירויות', apply: 'החלת העקומה', reset: 'איפוס', newLength: (a: string, b: string) => `אורך אחרי ההחלה: כ-${a} שנ׳ (עכשיו ${b} שנ׳)`,
     point: (i: number, at: string, v: string) => `נקודה ${i}: מיקום ${at}%, מהירות ${v}×`, graph: 'גרף מהירות: מיקום בקליפ מול מהירות',
-    blocked: { keyframes: 'יש בקליפ נקודות מפתח או עוצמת קול משתנה. יש להסיר אותן קודם.', transition: 'יש מעבר בקליפ הזה או אחריו. יש להסיר אותו קודם.', reverse: 'קליפ שמתנגן לאחור לא יכול לקבל עקומת מהירות.' },
+    blocked: {
+      keyframes: 'יש בקליפ נקודות מפתח או עוצמת קול משתנה. יש להסיר אותן קודם.',
+      transition: 'יש מעבר בתחילת התמונה של הקליפ הזה או של הקליפ שמיד אחריו, ועקומת מהירות לא יכולה לשמור עליו: קודם בוחרים "ללא" בסוג המעבר (במקטע "מראה ואפקטים"), ואחר כך מחילים את העקומה.',
+      crossfade: 'הצליל של הקליפ הזה עובר במעבר חלק לקליפ הסמוך לו באותו ערוץ, ועקומת מהירות לא יכולה לשמור עליו: קודם מאפסים את המעבר החלק בלשונית "סאונד" (בקליפ המאוחר מבין השניים), ואחר כך מחילים את העקומה.',
+      overlap: 'הצליל של הקליפ הזה חופף לקליפ הסמוך לו באותו ערוץ: מקצרים אחד מהם כך שרק ייגעו זה בזה, או מעבירים אחד מהם לערוץ אחר, ואחר כך מחילים את העקומה.',
+      reverse: 'קליפ שמתנגן לאחור לא יכול לקבל עקומת מהירות: קודם מבטלים את "ניגון לאחור".',
+      freeze: 'תמונה מוקפאת לא יכולה לקבל עקומת מהירות.',
+    },
     done: (n: number) => `העקומה הוחלה: ${n} חלקים נבחרו בציר הזמן. Ctrl+Z מבטל. כדי לנסות עקומה אחרת, מבטלים קודם.`,
     doneOne: 'העקומה הוחלה על הקליפ. Ctrl+Z מבטל; עקומה אחרת תחליף אותה.',
     repeat: 'העקומה כבר הוחלה והחלקים שלה נבחרו. כדי לנסות עקומה אחרת מבטלים קודם (Ctrl+Z); כדי לתת עקומה לחלק אחד, בוחרים אותו בציר הזמן.',
@@ -27,7 +34,14 @@ const STR = {
     ripple: 'Move the clips after it on the same track', length: (x: string) => `length ×${x}`, custom: 'Your own curve', customHint: 'Drag a point up to speed up and down to slow down. Double-click the graph to add a point; Delete removes the focused point.',
     smooth: 'Ease between speeds', apply: 'Apply curve', reset: 'Reset', newLength: (a: string, b: string) => `Length after applying: about ${a} s (now ${b} s)`,
     point: (i: number, at: string, v: string) => `Point ${i}: position ${at}%, speed ${v}×`, graph: 'Speed graph: position in the clip against speed',
-    blocked: { keyframes: 'The clip has keyframes or volume keys. Remove them first.', transition: 'There is a transition on this clip or after it. Remove it first.', reverse: 'A clip that plays backwards cannot take a speed curve.' },
+    blocked: {
+      keyframes: 'The clip has keyframes or volume keys. Remove them first.',
+      transition: 'The picture of this clip, or of the clip right after it, starts with a transition, which a speed curve cannot keep: set the transition type to None (in "Look and effects") first, then apply the curve.',
+      crossfade: 'The sound of this clip crossfades with the clip next to it on its track, which a speed curve cannot keep: set that crossfade to 0 in the Sound tab (on the later of the two clips) first, then apply the curve.',
+      overlap: 'The sound of this clip overlaps the clip next to it on its track: trim one of them so that they only touch, or move one to another track, then apply the curve.',
+      reverse: 'A clip that plays backwards cannot take a speed curve: turn off "Play backwards" first.',
+      freeze: 'A freeze frame cannot take a speed curve.',
+    },
     done: (n: number) => `Curve applied: ${n} parts selected on the timeline. Ctrl+Z undoes it. To try another curve, undo first.`,
     doneOne: 'Curve applied to the clip. Ctrl+Z undoes it; another curve replaces this one.',
     repeat: 'The curve is already applied and its parts are selected. To try another curve, undo first (Ctrl+Z); to give one part a curve of its own, choose that part on the timeline.',
@@ -84,11 +98,10 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
   const drag = useRef<number | null>(null);
   const doc = editor.doc;
   if (!doc) return null;
-  const track = doc.sequences[doc.mainSequenceId]!.tracks.find((tr) => tr.clips.some((c) => c.id === clip.id));
-  const next = track?.clips[track.clips.findIndex((c) => c.id === clip.id) + 1];
-  const blocked = clip.reverse ? S.blocked.reverse
-    : clip.keyframes || clip.volume || clip.effects?.some((e) => e.keyframes) ? S.blocked.keyframes
-    : clip.transition || (next?.type === 'media' && next.transition && T.eq(next.start, T.add(clip.start, clip.duration))) ? S.blocked.transition : null;
+  // What the op would refuse for every curve (its own checks, over the clip and what is linked to it), said before the
+  // click; a refusal it still gives is reported by the editor as before.
+  const block = curveBlocker(doc, clip.id);
+  const blocked = block ? S.blocked[block] : null;
   const nowSeconds = T.toSeconds(clip.duration), sourceSeconds = T.toSeconds(toSourceSpan(clip, clip.duration));
 
   // Not the `disabled` attribute: a tile that disables itself under the keyboard focus would drop the focus (and with it Ctrl+Z).
@@ -167,7 +180,7 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
     <fieldset className="speed-curves" data-testid="speed-curves" disabled={!!blocked}>
       <legend>{S.title}</legend>
       <p className="muted">{S.intro}</p>
-      {blocked && <p className="sc-blocked" role="note" data-testid="speed-curve-blocked">{blocked}</p>}
+      {blocked && <p className="sc-blocked" role="note" data-testid="speed-curve-blocked" data-reason={block ?? undefined}>{blocked}</p>}
       <div className="sc-grid" role="group" aria-label={S.title}>
         {SPEED_CURVES.map((c) => (
           <button key={c.id} type="button" className="sc-tile" data-testid="speed-curve" data-id={c.id} title={c.hint[state.lang]} aria-label={`${c.name[state.lang]}: ${c.hint[state.lang]}`}
