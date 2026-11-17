@@ -103,7 +103,7 @@ describe('cleanup.denoise: finite memory and look-ahead', () => {
   });
   it('the raw (in-place) output is the input delayed by exactly reach().ahead', () => {
     // a loud signal over the generic quiet profile: every gain is within 1e-5 of 1, so the gate passes the sound through
-    const p = P(), { ahead } = denoise.reach(p, SR), frames = SR;
+    const p = P(), ahead = denoise.reach(p, SR).ahead!, frames = SR;
     const x = white(frames, -12, 9), raw = renderFx('cleanup.denoise', p, x, { align: false });
     const err = (d: number) => { let e = 0; for (let n = 4096; n < frames; n++) e = Math.max(e, Math.abs(raw[n * 2]! - x[(n - d) * 2]!), Math.abs(raw[n * 2 + 1]! - x[(n - d) * 2 + 1]!)); return e; };
     expect(err(ahead)).toBeLessThan(1e-4);

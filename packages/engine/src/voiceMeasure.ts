@@ -13,7 +13,7 @@
  *    separate a hum line from the noise beside it.
  *
  * At finish():
- *  - Pauses (auto mode): the frame energy (50 Hz–20 kHz) smoothed over 3 frames; frames within 6 dB of its 5th percentile are
+ *  - Pauses (auto mode): the frame energy from 585 Hz up (above any hum line and rumble) smoothed over 3 frames; frames within 6 dB of its 5th percentile are
  *    quiet; runs of quiet frames covering at least 0.2 s are the pauses. A pause is "found" only when the rest of the recording is
  *    at least 6 dB louder; otherwise (a steady recording: noise only, a held tone, music without breaks) the levels are those of
  *    the quietest stretches, the warning is 'no_pause_found' and the confidence below 0.03.
@@ -50,6 +50,8 @@ const NS = 1024, HS = 256;
 const DEC = 8, LR = SR / DEC, NL = 2048, HL = 512, DTAPS = 97, DCUT = 3000, DBETA = 9;
 const LBINS = 513; // long-frame bins kept: 0 .. 1500 Hz
 const LOW_BANDS = 10; // bands 0–9 (upper edge 1433 Hz) from the long frames
+/** The frame energy that finds the pauses counts the bands from 585 Hz up: above every hum line (8 × 60 Hz) and rumble, where speech is. */
+const ENERGY_FROM_BAND = 6;
 const QUIET_MARGIN = Math.pow(10, 6 / 10), QUIET_PERCENTILE = 0.05, MIN_RUN = Math.round(0.2 * SR), MIN_RANGES = 0.3, PAUSE_CONTRAST_DB = 6;
 const HUM_LINES = 8, HUM_PEAK = 10, HUM_FUNDAMENTAL = 100, HUM_EXCLUDE_BINS = 5;
 const MIN_DB = -140;
@@ -135,7 +137,7 @@ export function voiceMeter(opts: VoiceMeasureOptions = {}): VoiceMeter {
       row[j] = row[j]! + p;
     }
     let e = 0;
-    for (let j = 0; j < NOISE_BANDS; j++) { e += row[j]!; row[j] = row[j]! / (SHORT.count[j]! * w2); }
+    for (let j = 0; j < NOISE_BANDS; j++) { if (j >= ENERGY_FROM_BAND) e += row[j]!; row[j] = row[j]! / (SHORT.count[j]! * w2); }
     row[NOISE_BANDS] = e / w2;
     shortRows.push(row);
   };
