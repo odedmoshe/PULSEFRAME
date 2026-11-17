@@ -3,7 +3,8 @@
  * Spread into `he` and `en` (index.ts); Hebrew first, and the English dictionary must cover the same keys.
  * Here: the operation names (`op.*`, op-wording.test.ts), the headlines of the export preflight codes (`preflight.*`; the
  * server's own English sentence is the detail), and the namespace `life.*`, reserved for this track: why a field has no words
- * (`life.missing.<reason>`, core fields.ts MISSING_REASONS) and where a capture date came from (`life.capture.source.*`).
+ * (`life.missing.<reason>`, core fields.ts MISSING_REASONS) and where a capture date came from (`life.capture.source.*`);
+ * and the labels of three palette commands (`cmd.*`).
  * The panels' own strings live next to them (apps/web/src/editor/lifeline/lifeline.strings.ts).
  * Also here: the Hebrew wording of every refusal of the life-line operations (HE_LIFE), which refusals.ts adds to
  * translateRefusal; packages/evals/src/lifeline-wording.test.ts keeps it in step with core lifeOps.ts LIFE_REFUSALS.
@@ -15,6 +16,8 @@ export const LIFELINE_HE = {
   'preflight.field_no_data': 'שדה ללא נתון', 'preflight.field_sunset_undecided': 'התאריך העברי תלוי בשקיעה', 'preflight.capture_estimated': 'תאריך משוער משם הקובץ', 'preflight.stamp_no_date': 'חותמת תאריך בלי תאריך צילום',
   'life.missing.no_date': 'אין תאריך לקליפ שמתחת לכותרת', 'life.missing.sunset_undecided': 'התאריך העברי תלוי בשאלה אם צולם אחרי השקיעה', 'life.missing.no_event_name': 'הקליפ שמתחת לכותרת אינו באירוע שיש לו שם', 'life.missing.unknown_person': 'השדה מפנה לאדם שאינו בפרויקט',
   'life.capture.source.container': 'נקרא מהקובץ', 'life.capture.source.exif': 'נקרא מנתוני התמונה', 'life.capture.source.filename': 'משוער משם הקובץ', 'life.capture.source.manual': 'נקבע ידנית',
+  // command palette (apps/web/src/editor/commands.ts; W3 adds the commands, their labels are these keys)
+  'cmd.arrangeEvents': 'סידור הספרייה לפי אירועים', 'cmd.readCaptureDates': 'קריאת תאריכי צילום מהקבצים', 'cmd.freezeFields': 'קביעת הכותרת כטקסט רגיל',
 } as const;
 export const LIFELINE_EN: Record<keyof typeof LIFELINE_HE, string> = {
   'op.set_asset_capture': 'Set capture date', 'op.shift_asset_captures': 'Shifted the clock of files', 'op.attach_asset_capture': 'Read capture date from the file',
@@ -22,6 +25,7 @@ export const LIFELINE_EN: Record<keyof typeof LIFELINE_HE, string> = {
   'preflight.field_no_data': 'A field has no data', 'preflight.field_sunset_undecided': 'The Hebrew date depends on sunset', 'preflight.capture_estimated': 'Date estimated from the file name', 'preflight.stamp_no_date': 'Date stamp without a capture date',
   'life.missing.no_date': 'The clip under the title has no date', 'life.missing.sunset_undecided': 'The Hebrew date depends on whether it was filmed after sunset', 'life.missing.no_event_name': 'The clip under the title is in no event with a name', 'life.missing.unknown_person': 'The field names a person who is not in the project',
   'life.capture.source.container': 'Read from the file', 'life.capture.source.exif': 'Read from the picture\'s own data', 'life.capture.source.filename': 'Estimated from the file name', 'life.capture.source.manual': 'Set by hand',
+  'cmd.arrangeEvents': 'Arrange the library by events', 'cmd.readCaptureDates': 'Read capture dates from the files', 'cmd.freezeFields': 'Make the title plain text',
 };
 
 /** A left-to-right run (brace groups, ids) isolated inside the Hebrew sentence, so its braces and order survive. */

@@ -41,12 +41,13 @@ describe('Hebrew wording of the life-line refusals (ADR-0021)', () => {
     expect(translateRefusal('he', SAMPLES.personFields)).toContain('{age:per_1}, {name:per_1}');
     expect(translateRefusal('he', LIFE_REFUSALS.fieldsAlready.message(false))).not.toBe(translateRefusal('he', SAMPLES.fieldsAlready));
   });
-  it('the shared strings of the track exist in both languages: a headline for each preflight code, a line for each reason a field has no words, a label for each capture source', () => {
+  it('the shared strings of the track exist in both languages: a headline for each preflight code, a line for each reason a field has no words, a label for each capture source, and the three palette commands', () => {
     const missing: string[] = [];
     const keys = [
       ...['field_no_data', 'field_sunset_undecided', 'capture_estimated', 'stamp_no_date'].map((c) => `preflight.${c}`),
       ...MISSING_REASONS.map((r) => `life.missing.${r}`),
       ...CaptureSchema.shape.source.options.map((s) => `life.capture.source.${s}`),
+      'cmd.arrangeEvents', 'cmd.readCaptureDates', 'cmd.freezeFields',
     ];
     for (const lang of ['he', 'en'] as const) for (const k of keys) if (!(dictionaries[lang] as Record<string, string>)[k]?.trim()) missing.push(`${lang} ${k}`);
     expect(missing).toEqual([]);

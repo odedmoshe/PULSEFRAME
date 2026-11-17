@@ -13,6 +13,14 @@
  * - Yom HaZikaron / Yom HaAtzmaut: 5 Iyar on a Monday moves to Tuesday only from the Hebrew year 5764 (5 Iyar 5757 was
  *   Monday 12 May 1997 and was kept).
  * - The holiday names and the schedule are reviewed by the owner before the calendar is called right (wave-5 decisions).
+ * - Test oracles (tests only, never at run time): Intl 'en-u-ca-hebrew' parts for year, month and day over every day of
+ *   1900–2100 (ICU's month names: Tishri, Heshvan, Kislev, Tevet, Shevat, Adar, Adar I, Adar II, Nisan, Iyar, Sivan, Tamuz,
+ *   Av, Elul); Intl 'he-u-ca-hebrew' with dateStyle 'long' and formatToParts gives the Hebrew-letter day and year (U+05F3 /
+ *   U+05F4) to compare hebrewNumeral with, beside a hand table (ICU versions differ). Month names stay our own table.
+ * - The published dates (hebrewCalendar.published.ts): when no published calendar can be reached from the build machine, its
+ *   header says "not confirmed against a published source; arithmetic and ICU only". Never an invented URL.
+ * - A test greps this file (and capture.ts, events.ts, fields.ts, lifeOps.ts) for `new Date`, `Date.now|UTC|parse` and
+ *   `Intl.`: none may appear (words such as hebrewDate are not matches).
  */
 const notBuilt = (what: string): never => { throw new Error(`life line: ${what} is not built yet (hebrewCalendar.ts, W1)`); };
 
