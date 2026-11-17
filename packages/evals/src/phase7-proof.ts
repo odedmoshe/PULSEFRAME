@@ -14,7 +14,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import * as T from '@pulseframe/time';
-import { BLEND_MODES, EFFECTS, TRANSITIONS } from '@pulseframe/core';
+import { BLEND_MODES, EFFECTS, TRANSITIONS, type TransitionDef } from '@pulseframe/core';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 
@@ -295,13 +295,15 @@ async function main() {
       return { kind: fig.dataset.kind!, id: fig.dataset.id!, variant: fig.dataset.variant!, aspect: fig.dataset.aspect!, unavailable: fig.dataset.unavailable === '1', hash: hashes.reduce((a, b) => (a * 33 + b) >>> 0, 7), flat };
     }));
     const byKind = (k: string) => tiles.filter((t) => t.kind === k);
+    /** The colour blocks (ADR-0012) cover the whole frame on the switch frame, which is the Lab's middle step (frame +7 of 15): a flat colour by design. */
+    const isBlockCover = (t: { kind: string; id: string; variant: string }) => t.kind === 'transition' && t.id.startsWith('block-') && t.variant.startsWith('step 3/5');
     const fxIds = new Set(byKind('effect').map((t) => t.id)), trIds = new Set(byKind('transition').map((t) => t.id)), blIds = new Set(byKind('blend').map((t) => t.id));
     const fullByDefault = new Set(['color.grayscale', 'color.sepia', 'color.invert', 'distort.mirror', 'stylize.duotone', 'color.lut']); // default amount is already the maximum; the mirror has no amount at all, only which half is kept; color.lut needs a colour table to change anything and the Lab project has none (no table chosen = the picture unchanged, in both variants; the pass itself is checked in gpu-proof.ts)
     const variantsDiffer = EFFECTS.every((e) => { if (fullByDefault.has(e.id)) return true; if (byKind('effect').some((t) => t.id === e.id && t.unavailable)) return true; /* no adapter in this browser: the tile says so */ const mine = byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9'); return new Set(mine.map((t) => t.hash)).size >= 2; });
     const aspects = new Set(byKind('effect').map((t) => t.aspect));
     await lab.screenshot({ path: path.join(art, 'lab.png'), fullPage: true });
     measurements.lab = { gpuEffectTilesUnavailable: tiles.filter((t) => t.unavailable).length, tiles: tiles.length, effects: fxIds.size, blends: blIds.size, transitions: trIds.size, masks: byKind('mask').length };
-    check('Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip or of the flash, which is meant to be a flat colour, the chroma key at full tolerance, which removes the whole picture, and the strobe at full amount at the instant of its flash, which is the flash colour), default and extreme variants differ (where the default is not already the maximum), no page errors', fxIds.size === EFFECTS.length && blIds.size === BLEND_MODES.length && trIds.size === TRANSITIONS.length && byKind('mask').length >= 4 && aspects.size === 2 && tiles.every((t) => !t.flat || t.id.startsWith('dip-') || t.id === 'flash' || (t.id === 'key.chroma' && t.variant === 'extreme') || (t.id === 'light.strobe' && t.variant === 'extreme')) && variantsDiffer && !lab.url().includes('error') && (await lab.evaluate(() => document.body.dataset.errors)) === undefined && labErrors.length === 0, { ...(measurements.lab as object), sameVariants: EFFECTS.filter((e) => new Set(byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9').map((t) => t.hash)).size < 2).map((e) => e.id), aspects: [...aspects], bodyErrors: await lab.evaluate(() => document.body.dataset.errors ?? null), flat: tiles.filter((t) => t.flat && !t.id.startsWith('dip-')).map((t) => `${t.kind}:${t.id}:${t.variant}`).slice(0, 6), labErrors: labErrors.slice(0, 2) });
+    check('Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip or of the flash, which is meant to be a flat colour, the middle step of the colour blocks, which cover the whole frame on the switch frame, the chroma key at full tolerance, which removes the whole picture, and the strobe at full amount at the instant of its flash, which is the flash colour), default and extreme variants differ (where the default is not already the maximum), no page errors', fxIds.size === EFFECTS.length && blIds.size === BLEND_MODES.length && trIds.size === TRANSITIONS.length && byKind('mask').length >= 4 && aspects.size === 2 && tiles.every((t) => !t.flat || t.id.startsWith('dip-') || t.id === 'flash' || (t.id === 'key.chroma' && t.variant === 'extreme') || (t.id === 'light.strobe' && t.variant === 'extreme') || isBlockCover(t)) && variantsDiffer && !lab.url().includes('error') && (await lab.evaluate(() => document.body.dataset.errors)) === undefined && labErrors.length === 0, { ...(measurements.lab as object), sameVariants: EFFECTS.filter((e) => new Set(byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9').map((t) => t.hash)).size < 2).map((e) => e.id), aspects: [...aspects], bodyErrors: await lab.evaluate(() => document.body.dataset.errors ?? null), flat: tiles.filter((t) => t.flat && !t.id.startsWith('dip-')).map((t) => `${t.kind}:${t.id}:${t.variant}`).slice(0, 6), labErrors: labErrors.slice(0, 2) });
     // the entries of the visual wave (ADR-0011), named so the evidence says so: each effect in both frame shapes with default and
     // extreme tiles that differ and are not flat; each transition in both frame shapes, five steps that are not flat and not all alike
     const WAVE_EFFECTS = ['time.echo', 'time.split', 'time.shutter', 'time.stutter', 'overlay.snow', 'overlay.confetti', 'overlay.hearts', 'overlay.bokeh', 'overlay.speed-lines', 'stylize.date-stamp', 'stylize.digicam', 'stylize.crt'];
@@ -318,6 +320,19 @@ async function main() {
     })];
     measurements.labWave = waveReport;
     check(`Lab, visual wave: the ${WAVE_EFFECTS.length} new effects and ${WAVE_TRANSITIONS.length} new transitions are tiled in 16:9 and 9:16, none flat; each effect's default and extreme differ and each transition's steps differ (a tile without a graphics adapter says so)`, waveReport.every((r) => r.ok), waveReport.filter((r) => !r.ok));
+    // the transitions of the trend pack (ADR-0012): each tiled in five steps, in both frame shapes where its registry row says its
+    // picture depends on the shape (heart, star, page turn), none flat but the colour blocks' switch frame, steps not all alike
+    const TREND_TRANSITIONS = ['punch-in', 'punch-out', 'blur-dissolve', 'split-open-h', 'split-open-v', 'shape-heart', 'shape-star', 'block-left', 'block-right', 'slices-h', 'slices-v', 'film-burn', 'light-leak', 'ink-bleed', 'brush-left', 'brush-right', 'page-turn-left', 'page-turn-right'];
+    const trendReport = TREND_TRANSITIONS.map((id) => {
+      const row = (TRANSITIONS as readonly TransitionDef[]).find((x) => x.id === id);
+      const mine = byKind('transition').filter((t) => t.id === id), unavailable = mine.some((t) => t.unavailable);
+      const sixteen = mine.filter((t) => t.aspect === '16:9'), nine = mine.filter((t) => t.aspect === '9:16');
+      const shapes = !!row?.shapeDependent;
+      const ok = !!row && sixteen.length === 5 && nine.length === (shapes ? 5 : 0) && mine.every((t) => !t.flat || isBlockCover(t)) && (unavailable || new Set(sixteen.map((t) => t.hash)).size >= 3) && (!shapes || unavailable || new Set(nine.map((t) => t.hash)).size >= 3);
+      return { id, ok, tiles: mine.length, bothShapes: shapes, unavailable, flat: mine.filter((t) => t.flat).map((t) => `${t.aspect} ${t.variant}`) };
+    });
+    measurements.labTrend = trendReport;
+    check(`Lab, trend pack: the ${TREND_TRANSITIONS.length} new transitions are tiled in five steps (in 16:9 and 9:16 where the registry marks them shape-dependent), none flat except the colour blocks' switch frame, at least three different steps in each shape (a tile without a graphics adapter says so)`, trendReport.every((r) => r.ok), trendReport.filter((r) => !r.ok));
     await lab.close();
   } catch (e) {
     console.error(e);

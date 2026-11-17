@@ -2,7 +2,9 @@
  * Editor interactions that were built but not yet exercised in a real browser (listed as unverified in docs/PROGRESS.md):
  * canvas drag that creates a format-only override, hide-in-format, clip moves snapping to beats, manual beat edits at the
  * playhead, the batch-export job list, and the level meter during playback. The visual wave's look panel (ADR-0011): the ♪
- * beat toggle with its fieldset and undo, the date-stamp field with its inline refusal, and the time-first separator.
+ * beat toggle with its fieldset and undo, the date-stamp field with its inline refusal, and the time-first separator. The trend
+ * pack's transition options (ADR-0012): beat lock and a ×2 velocity ramp set from the keyboard, each one undo step, with the
+ * Hebrew status line in a live region and the velocity choices the clips cannot take shown disabled with what they need.
  * Still not covered here: audible fades/ducking during live playback (only the offline WebAudio chain is measured).
  *   pnpm build && pnpm proof:editor-interactions
  */
@@ -15,7 +17,8 @@ import * as T from '@pulseframe/time';
 import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
-import { effectParamLabel, translateRefusal } from '../../i18n/src/index.ts';
+import { effectParamLabel, fillIn, translateRefusal, TREND_PACK_HE } from '../../i18n/src/index.ts';
+import { beatSwitchFrame, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
@@ -659,6 +662,65 @@ async function main() {
       check('time effect first: echo added after two effects is placed first; a separator (role separator, named by the rule) closes its row; moving the next effect up and the echo down are aria-disabled and change nothing; the cost line counts its pictures; a second time effect is refused and the refusal is shown in the panel in Hebrew', echoFirst && sepInfo.count === 1 && sepInfo.role === 'separator' && sepInfo.inFirstRow === 1 && !!sepInfo.name && blocked.up === 'true' && blocked.down === 'true' && blocked.otherDown === null && JSON.stringify(order1) === JSON.stringify(order0) && rev1 === rev0 && /4/.test(cost) && panelRefusal.includes(wantTime) && stillOne, { order0, order1, revisions: [rev0, rev1], separator: sepInfo, blocked, cost, panelRefusal, wantTime });
       check('no uncaught errors in the page with the visual-wave controls', vErrors.length === 0, vErrors.slice(0, 4));
       await vctx.close();
+    }
+
+    console.log('\n# trend pack (ADR-0012): transition options from the keyboard, in Hebrew');
+    {
+      // A under analysed music (beats about every 15 frames), B after it with a dissolve of 15 frames. The source left on each
+      // side allows ×2 but not ×3: 70 frames after A, 10 before B (×3 at 15 frames needs 29 and 14).
+      const tp = (await call('/projects', { name: 'transition options', width: 640, height: 360 })).body.project.id as string;
+      const tm = await upload(tp, musicFile), tpic = await upload(tp, picFile);
+      await txs(tp, [{ op: 'add_clip', args: { assetId: tm.assetId, start: f(0) } }]);
+      const analysedT = await call(`/projects/${tp}/assets/${tm.assetId}/analyze`, { kind: 'beats' });
+      const tr = await txs(tp, [
+        { op: 'add_clip', args: { assetId: tpic.assetId, start: f(0), sourceIn: f(0), duration: f(50), withLinkedAudio: false } },
+        { op: 'add_clip', args: { assetId: tpic.assetId, start: f(50), sourceIn: f(10), duration: f(60), withLinkedAudio: false } },
+      ]);
+      const tb = tr.results[1].output.clipId as string;
+      await txs(tp, [{ op: 'set_transition', args: { clipId: tb, type: 'dissolve', frames: 15 } }]);
+      const tdoc = async () => (await call(`/projects/${tp}`)).body as { project: ProjectDocument; revision: number };
+      const trOf = async () => (clipOf((await tdoc()).project, tb) as MediaClip).transition;
+      const tuntil = async (pred: (t: any) => boolean, ms = 8000) => { const t0 = Date.now(); for (;;) { if (pred(await trOf())) return true; if (Date.now() - t0 > ms) return false; await sleep(100); } };
+      const tctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+      const tpage = await tctx.newPage();
+      const tErrors: string[] = [];
+      tpage.on('pageerror', (e) => tErrors.push(String(e)));
+      await tpage.goto(`${s.ownerUrl}&project=${tp}`);
+      await tpage.locator(`.clip[data-clip-id="${tb}"]`).click(); // selecting the clip is the setup; the options below are set with the keyboard only
+      await tpage.getByTestId('transition-options').waitFor({ timeout: 10000 });
+      const plain = await trOf(), r0 = (await tdoc()).revision;
+      // beat lock: Space on the checkbox
+      await tpage.getByTestId('transition-sync').focus();
+      await tpage.keyboard.press('Space');
+      const locked = await tuntil((t) => t?.sync === 'beat');
+      const r1 = (await tdoc()).revision;
+      // the status line: a live region (role=status) the checkbox points to, saying in Hebrew what the lock found (the model's frame)
+      const d1 = (await tdoc()).project, k = beatSwitchFrame(d1, clipOf(d1, tb) as MediaClip);
+      const want = k === null ? TREND_PACK_HE['look.transition.sync.none'] : fillIn(TREND_PACK_HE['look.transition.sync.locked'], { frame: 50 + k, time: `\u2066${T.toTimecode(f(50 + k), R)}\u2069` });
+      const statusEl = tpage.getByTestId('transition-sync-status');
+      await tpage.waitForFunction((w) => document.querySelector('[data-testid=transition-sync-status]')?.textContent === w, want, { timeout: 8000 }).catch(() => {});
+      const statusText = (await statusEl.textContent()) ?? '';
+      const statusRole = await statusEl.getAttribute('role');
+      const statusId = await statusEl.getAttribute('id');
+      const describedBy = (await tpage.getByTestId('transition-sync').getAttribute('aria-describedby')) ?? '';
+      const announced = await tpage.getByRole('status').filter({ hasText: statusText.replace(/[\u2066\u2069]/g, '').slice(0, 12) }).count();
+      // velocity: Tab reaches the select; ×3 and ×4 are disabled and say what they need; one ArrowDown chooses ×2
+      await tpage.keyboard.press('Tab');
+      const onVelocity = await tpage.evaluate(() => document.activeElement?.getAttribute('data-testid'));
+      const opt3 = await tpage.locator('[data-testid=transition-velocity] option[value="3"]').evaluate((o) => ({ disabled: (o as HTMLOptionElement).disabled, text: o.textContent ?? '' }));
+      const need3 = velocityNeeds(15, 3), wantNeed = fillIn(TREND_PACK_HE['look.transition.velocity.need'], { out: need3.outFrames, head: need3.headFrames });
+      await tpage.keyboard.press('ArrowDown');
+      const ramped = await tuntil((t) => t?.velocity === 2 && t?.sync === 'beat');
+      const r2 = (await tdoc()).revision;
+      // each is one undo step: the Undo button pressed with Enter
+      await tpage.getByTestId('undo').press('Enter');
+      const undoVelocity = await tuntil((t) => t?.sync === 'beat' && t?.velocity === undefined);
+      await tpage.getByTestId('undo').press('Enter');
+      const undoSync = await tuntil((t) => JSON.stringify(t) === JSON.stringify(plain));
+      check('trend pack: from the keyboard, Space on "נעילה לפעימה" and ArrowDown on the velocity choice set the beat lock and ×2, each in one transaction and one undo step (Undo with Enter takes back ×2, then the lock); the Hebrew status line is a live region the checkbox points to, saying where the beat is (the model\'s frame); ×3 is disabled and says what it needs', analysedT.status === 200 && locked && r1 === r0 + 1 && statusText === want && /[א-ת]/.test(statusText) && statusRole === 'status' && !!statusId && describedBy.split(' ').includes(statusId) && announced >= 1 && onVelocity === 'transition-velocity' && opt3.disabled && opt3.text.includes(wantNeed) && ramped && r2 === r1 + 1 && undoVelocity && undoSync, { beatFrame: k === null ? null : 50 + k, statusText, want, statusRole, describedBy, announced, onVelocity, opt3, wantNeed, revisions: [r0, r1, r2], locked, ramped, undoVelocity, undoSync });
+      check('no uncaught errors in the page with the transition options', tErrors.length === 0, tErrors.slice(0, 4));
+      await tctx.close();
     }
 
     await page.close();
