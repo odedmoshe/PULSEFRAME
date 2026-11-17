@@ -30,6 +30,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { chooseFormat, openCardMenu, openInspectorPage, setWorkspace, startExport } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const EVALS = path.join(root, 'packages/evals/src');
@@ -340,8 +341,9 @@ async function domStates(): Promise<{ states: Record<string, string[]>; browser:
       console.log(`  state ${name}: ${states[name]!.length} ids in the DOM`);
     };
     const sel = async (page: import('playwright').Page, id: string) => { await page.locator(`[data-testid="clip-${id}"]`).first().click(); await page.waitForTimeout(700); };
-    const tab = async (page: import('playwright').Page, id: string) => { await page.getByTestId(`inspector-tab-${id}`).click(); await page.waitForTimeout(600); };
-    const pro = async (page: import('playwright').Page) => { await page.getByTestId('workspace-switch').selectOption('pro'); await tab(page, 'clip'); };
+    // the inspector's pages now live in the mode that hosts them (UX_REDESIGN §8): editor-ui.ts openInspectorPage
+    const tab = async (page: import('playwright').Page, id: 'clip' | 'speech' | 'captions' | 'sound' | 'review' | 'deliver' | 'recipes' | 'all') => { await openInspectorPage(page, id); await page.waitForTimeout(600); };
+    const pro = async (page: import('playwright').Page) => { await setWorkspace(page, 'pro'); await tab(page, 'clip'); };
 
     // STATES: the twelve states of the audit …
     let page = await open(empty);
@@ -350,11 +352,12 @@ async function domStates(): Promise<{ states: Record<string, string[]>; browser:
     page = await open(main); await pro(page);
     await snap(page, '02-main');
     await sel(page, beach); await snap(page, '03-clip-selected');
-    await page.getByTestId('format-switch').selectOption(variant); await page.getByTestId('format-badge').waitFor(); await snap(page, '04-format-9x16');
+    await chooseFormat(page, variant); await page.getByTestId('format-badge').waitFor(); await snap(page, '04-format-9x16');
     await page.context().close();
     page = await open(busy); await snap(page, '05-busy-timeline'); await page.context().close();
     page = await open(main); await pro(page);
     await sel(page, cake);
+    await page.getByTestId('insp-tab-effects').click(); // the gallery button is on the clip's effects tab now
     await page.getByTestId('gallery-open').first().scrollIntoViewIfNeeded(); await page.getByTestId('gallery-open').first().click();
     await page.getByTestId('gallery-tab-transitions').click(); await page.waitForTimeout(1500);
     await snap(page, '06-gallery-transitions');
@@ -371,13 +374,20 @@ async function domStates(): Promise<{ states: Record<string, string[]>; browser:
     // … and the panels the twelve do not open
     for (const t of ['speech', 'review', 'recipes'] as const) { await tab(page, t); await snap(page, `x-tab-${t}`); }
     await sel(page, beach); await tab(page, 'all'); await snap(page, 'x-tab-all-clip-selected');
-    await page.locator('[data-testid^="view-"]').first().click(); await page.getByTestId('source-viewer').waitFor(); await snap(page, 'x-source-viewer');
+    await openCardMenu(page, A.beach!); await page.locator(`[data-testid="view-${A.beach}"]`).click(); await page.getByTestId('source-viewer').waitFor(); await snap(page, 'x-source-viewer');
     await page.keyboard.press('Escape'); await page.waitForTimeout(300);
     await page.locator(`[data-testid="clip-${cake}"]`).first().click({ button: 'right' }); await page.waitForTimeout(500); await snap(page, 'x-clip-menu');
     await page.keyboard.press('Escape');
+    // the homes the redesign gave ids that used to stand in the header and the library (UX_REDESIGN §8; .artifacts/ux/testid-migrations.txt W1)
+    await openCardMenu(page, A.beach!); await snap(page, 'x-card-menu');
+    await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+    await page.getByTestId('agent-menu').click(); await page.getByTestId('pause-agent').waitFor(); await snap(page, 'x-agent-menu');
+    await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+    for (const c of ['text', 'elements', 'templates', 'ai'] as const) { await page.getByTestId(`rail-${c}`).click(); await page.waitForTimeout(800); await snap(page, `x-rail-${c}`); }
+    await page.getByTestId('rail-media').click();
     await page.context().close();
     page = await open(tiny);
-    await page.getByTestId('export').click();
+    await startExport(page);
     await page.getByTestId('export-finished').waitFor({ timeout: 240000 });
     await snap(page, '13-export-finished');
     await page.context().close();
