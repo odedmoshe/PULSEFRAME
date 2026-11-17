@@ -25,7 +25,7 @@ Nothing here is quality-reviewed on real footage: the tracker has only been meas
    is refused as a stale-edit conflict through `referencedIds`. Ops, all in the one registry: `create_motion_track` (one manual sample, so a pick is an undoable edit),
    `attach_motion_track` (internal; jobs only; refuses manual samples and keeps the track's own hand samples), `edit_motion_track` (set, mark lost, interpolate, rename; sets `origin.edited`),
    `remove_motion_track` (refused while a clip is bound unless `unbind` is given), `set_clip_follow`, `set_redact_region`. `remove_asset` takes the file's tracks along and refuses while a clip is bound to them.
-5. **The tracker is model-free and runs on the CPU** (`apps/server/src/vision`, `TRACKER_METHOD` "pf-track 1"): pyramidal Lucas–Kanade with median flow and a forward-backward check, verified by
+5. **The tracker is model-free and runs on the CPU** (`apps/server/src/vision`, `TRACKER_METHOD` "pf-track 2"): pyramidal Lucas–Kanade with median flow and a forward-backward check, verified by
    normalised cross-correlation against the seed template and up to 8 adaptive templates. A lost target is re-detected only on a unique match (best NCC ≥ 0.8, at least 0.1 above the runner-up)
    confirmed on 3 frames, so it never jumps silently. The reader decodes with ffmpeg `trim` and the frame counter, at 360 px work height, **from the start of the file**
    (backward passes read 240-frame chunks forward and walk them in reverse); no timestamps are parsed. The kernel is deterministic.
@@ -60,3 +60,17 @@ Nothing here is quality-reviewed on real footage: the tracker has only been meas
 Timestamp-seek reader proven equal to the frame-counter reader; track cache keyed by content; rotation; `onLoss 'hide'` for followers; confidence strip on the timeline and a path overlay;
 bake to keyframes; mask follow; effect-centre follow (GPU only); reframe (a camera follow with a picked track first, a labelled saliency heuristic later); follow for clips with time effects (per-tap resolution);
 `cancel {keep: true}`; picking in the source viewer; re-track from here; worker threads if the lag budget fails; planar and corner-pin tracking and stabilisation; optional ComfyUI model upgrades with the owner's permission.
+
+## Amendment (2026-11-17, after the first end-to-end proof): a lost target is looked for only where it can be
+- The first run of the proof found the worst failure a privacy tracker can have: after an occlusion the tracker re-acquired a look-alike
+  about 888 px from the truth and reported it as tracked. Cause: while lost, the search disc was centred on the place the target was last
+  seen and grew slowly, so the moving target left it while the static look-alike entered it, alone and therefore "unique".
+- "pf-track 2": the search region is a disc around the place the target would have reached at its last trusted velocity, growing with that
+  speed; a match is accepted only inside it, rivals are counted to half a box beyond it (a look-alike inside or on the edge keeps the track
+  lost), and a re-acquired match must also agree with the seed or a hand-placed sample (NCC ≥ 0.7), not only with an adaptive template.
+  Tests reproduce the fault without a browser (they fail on "pf-track 1").
+- Deliberate consequences: a target that reverses or stops behind an occluder for long stays lost until it is re-anchored by hand; a
+  look-alike that appears inside the gate while the target is hidden can still be taken for it (nothing model-free separates the two).
+- The proof then measured, on the synthetic fixture: 218 usable frames, median error 0.18 px, p95 0.33 px, worst 0.45 px; all 20 occluded
+  frames lost; re-acquired on frame 172. Two checks of the proof (P4, P11) still fail on their own assumptions and wait for the owner's
+  decision on correcting them (docs/PROGRESS.md).
