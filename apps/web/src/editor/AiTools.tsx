@@ -158,6 +158,8 @@ export function AiTools() {
   return (
     <section className="pf-ai" data-testid="ai-tools" aria-label={S.tools}>
       {status}
+      {/* the run buttons wait for any running tool job; when it is not one this panel started, say so (otherwise they are disabled with no reason) */}
+      {busy && !Object.values(mine).includes(job!.id) && <p className="muted" role="status" data-testid="ai-other-job">{S.otherJob}</p>}
       {caps.map((c) => {
         const takesImage = !!c.inputs?.some((i) => i.type === 'image');
         const codes = new Set((c.blockers ?? []).map((b) => b.code));
