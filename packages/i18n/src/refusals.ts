@@ -33,11 +33,34 @@ const HE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the clip is too short for this change of speed at the end of its source$/, () => 'הקליפ קצר מדי לשינוי המהירות הזה בסוף קובץ המקור'],
   [/^the file could not be read as video, sound or a picture$/, () => 'לא ניתן לקרוא את הקובץ כווידאו, כקול או כתמונה'],
 ];
+/**
+ * Refusals of the sound-effect operations («אפקטי קול», ADR-0010). Kept as their own list with their own test
+ * (packages/evals/src/audiofx-refusal-wording.test.ts provokes each of them), so the inventory of the list above stays as it is.
+ */
+const HE_AUDIO_FX: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^this clip has no sound clip$/, () => 'לקליפ הזה אין קליפ קול. אפשר לבחור את קליפ הקול, או קליפ תמונה שמקושר לקול'],
+  [/^sound effect ".+" does not exist$/, () => 'אפקט הקול הזה לא קיים בגרסה הזו'],
+  [/^invalid parameters for sound effect \S+$/, () => 'ההגדרות של אפקט הקול מחוץ לטווח המותר'],
+  [/^this clip already has the sound effect \S+$/, () => 'לקליפ כבר יש את אפקט הקול הזה; אפשר לשנות את ההגדרות שלו'],
+  [/^this clip already has a character voice \(\S+\)$/, () => 'לקליפ כבר יש דמות קול, ולכל קליפ יש דמות קול אחת בלבד'],
+  [/^a clip can carry at most (\d+) sound effects$/, (m) => `אפשר להוסיף לקליפ עד ${m[1]} אפקטי קול`],
+  [/^this sound keeps its pitch at another speed or changes speed gradually, so it cannot carry sound effects yet$/, () => 'אפקטי קול עדיין לא פועלים על קול ששומר על גובה הצליל במהירות אחרת, או שהמהירות שלו משתנה בהדרגה'],
+  [/^this sound has sound effects, which cannot follow a gradual change of speed or a stretch that keeps the pitch yet$/, () => 'לקול יש אפקטי קול, והם עדיין לא יכולים לעקוב אחרי שינוי מהירות הדרגתי או אחרי שמירה על גובה הצליל. אפשר להסיר אותם או לכבות אותם, לבצע את השינוי ולהוסיף אותם שוב'],
+  [/^sound effect \S+ not found on clip \S+$/, () => 'אפקט הקול לא נמצא בקליפ הזה'],
+  [/^sound preset ".+" does not exist$/, () => 'המתכון הזה לא קיים'],
+  [/^this clip has no sound effects to remove$/, () => 'לקליפ אין אפקטי קול להסרה'],
+  [/^the clip to copy from has no sound effects$/, () => 'לקליפ שממנו מעתיקים אין אפקטי קול'],
+  [/^a clip cannot take its own sound effects$/, () => 'אי אפשר להעתיק את אפקטי הקול של קליפ אל אותו קליפ'],
+  [/^this picture clip is linked to more than one sound clip$/, () => 'קליפ התמונה מקושר ליותר מקליפ קול אחד; יש לבחור את קליפ הקול'],
+  [/^give params and\/or enabled$/, () => 'לא צוין מה לשנות באפקט הקול'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of HE) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX]) { const m = re.exec(message); if (m) return say(m); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
 export const REFUSAL_PATTERNS: readonly RegExp[] = HE.map(([re]) => re);
+/** The sound-effect patterns, for their own test. */
+export const AUDIO_FX_REFUSAL_PATTERNS: readonly RegExp[] = HE_AUDIO_FX.map(([re]) => re);

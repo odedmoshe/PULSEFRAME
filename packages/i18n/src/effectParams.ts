@@ -28,6 +28,34 @@ export const EFFECT_OPTION_LABELS: Record<string, L> = {
 export const effectParamLabel = (name: string, lang: 'he' | 'en') => EFFECT_PARAM_LABELS[name]?.[lang] ?? name;
 export const effectOptionLabel = (value: string, lang: 'he' | 'en') => EFFECT_OPTION_LABELS[value]?.[lang] ?? value;
 
+/**
+ * Sound effects («אפקטי קול», packages/core/src/audioEffects.ts) have parameters of their own. They are kept apart from the picture
+ * labels above, so a key both registries use (`amount`, `seed`) can be worded for sound without changing the picture panel.
+ * Units are words, shown after the number (the number itself sits in a left-to-right isolate); parameters from 0 to 1 have no
+ * unit and are shown as a percentage. effect-param-labels.test.ts fails when a sound-effect parameter or option has no name here.
+ */
+export const AUDIO_FX_PARAM_LABELS: Record<string, L> = {
+  amount: { he: 'עוצמה', en: 'Amount' }, gainDb: { he: 'הגברת הבאס', en: 'Bass gain' }, freqHz: { he: 'תדר הפינה', en: 'Corner frequency' },
+  grit: { he: 'חספוס', en: 'Grit' }, hiss: { he: 'רחש הקו', en: 'Line hiss' }, seed: { he: 'דפוס הרעש', en: 'Noise pattern' }, drive: { he: 'עיוות', en: 'Drive' },
+  noise: { he: 'רחש וחריקות', en: 'Static and crackle' }, pitchHz: { he: 'גובה הצלצול', en: 'Ring pitch' }, metal: { he: 'צליל מתכתי', en: 'Metal' },
+  bits: { he: 'דיוק', en: 'Resolution' }, rateKhz: { he: 'קצב דגימה', en: 'Sample rate' },
+  delayMs: { he: 'זמן בין חזרות', en: 'Time between repeats' }, repeats: { he: 'מספר חזרות', en: 'Repeats' }, feedback: { he: 'עוצמת כל חזרה', en: 'Level of each repeat' },
+  pingPong: { he: 'החזרות קופצות בין ימין לשמאל', en: 'Repeats bounce between left and right' }, tone: { he: 'כהות החזרות', en: 'Darkness of the repeats' },
+  room: { he: 'סוג החלל', en: 'Space' }, decaySeconds: { he: 'זמן דעיכה', en: 'Decay time' }, predelayMs: { he: 'השהיה לפני ההדהוד', en: 'Pre-delay' },
+  damping: { he: 'ריכוך הגבוהים', en: 'High damping' }, spread: { he: 'פיזור סטריאו', en: 'Stereo spread' }, stereoWidth: { he: 'רוחב', en: 'Width' },
+};
+export const AUDIO_FX_OPTION_LABELS: Record<string, L> = {
+  room: { he: 'חדר', en: 'Room' }, hall: { he: 'אולם', en: 'Hall' }, cave: { he: 'מערה', en: 'Cave' }, bathroom: { he: 'מקלחת', en: 'Shower' },
+};
+/** Unit words of the sound-effect parameters that have one. */
+export const AUDIO_FX_PARAM_UNITS: Record<string, L> = {
+  gainDb: { he: 'דציבל', en: 'dB' }, freqHz: { he: 'הרץ', en: 'Hz' }, pitchHz: { he: 'הרץ', en: 'Hz' }, bits: { he: 'ביט', en: 'bits' }, rateKhz: { he: 'קילוהרץ', en: 'kHz' },
+  delayMs: { he: 'אלפיות שנייה', en: 'milliseconds' }, predelayMs: { he: 'אלפיות שנייה', en: 'milliseconds' }, decaySeconds: { he: 'שניות', en: 'seconds' },
+};
+export const audioFxParamLabel = (name: string, lang: 'he' | 'en') => AUDIO_FX_PARAM_LABELS[name]?.[lang] ?? name;
+export const audioFxOptionLabel = (value: string, lang: 'he' | 'en') => AUDIO_FX_OPTION_LABELS[value]?.[lang] ?? value;
+export const audioFxParamUnit = (name: string, lang: 'he' | 'en') => AUDIO_FX_PARAM_UNITS[name]?.[lang] ?? '';
+
 /** Stage words a job reports, as shown to a person. The counts after the word ("18/380") are kept as they are. */
 const STAGE_WORDS: Record<string, { he: string; en: string }> = {
   preparing: { he: 'מכין', en: 'preparing' }, 'rendering audio': { he: 'מעבד את הקול', en: 'rendering the sound' }, 'rendering still': { he: 'מעבד תמונה', en: 'rendering a still' },
