@@ -16,14 +16,39 @@
  *   file is long enough. A video shorter than its slot blocks the plan (slot_too_short); nothing is padded or slowed down.
  * - Ops, in this order: picture clips, camera moves, transitions, graphic elements, adjustment looks, titles, sound effects,
  *   music. Every op that makes an item is bound to the item's key, so later steps and the run's slot records refer to it.
+ *
+ * Content packs (ADR-0022):
+ * - Built-in music (input.builtinMusic): the grid is the steady grid of the style's tempo from the anchor, which is exactly
+ *   the track's own grid once the track is placed at the anchor from its start, and it has no end. The track is made to
+ *   measure: N = max(minBars, ceil((E − at)·bpm/240)) bars, where E is the EXACT grid time the last used slot ends at (before
+ *   it is snapped to a frame). The server makes the track (assetsNeeded kind 'music') and it arrives with its known grid.
+ *   The clip is placed with an explicit length: min(the track floored to whole frames, the pictures). So the music never
+ *   ends after the pictures and at most one frame before them. When the slots end on the bar line the track ends on, the
+ *   composed ending lands with the last picture and nothing is faded. When the track is longer (slots that do not end on a
+ *   bar line, or the style's shortest track), the clip is cut at the last picture and faded out (set_clip_fades, one
+ *   second, at most half the clip; notice builtin_music_faded). fit_music is not used: it would end the music on an earlier
+ *   bar and leave the last pictures silent.
+ * - Fields: a template's own title text may hold pack fields ({name} {name2} {age} {night} {place} {when}), written in from
+ *   input.fields, and live fields of the life line ({hebrewDate} and the others), which stay in the text: the title is made
+ *   with its live fields on (set_text_fields). When a pack field has no value, or a picture under the title has no capture
+ *   date for its live fields to read, the title's fallback words are used instead and a notice says so. Text the caller
+ *   typed (input.texts) is literal: nothing in it is read as a field. {n} stays the per-slot counter and is written in
+ *   after the fields. {night} is worked out from input.fields.date and atLighting when it is not given (the date is an
+ *   input; nothing reads a clock).
+ * - Two graphic elements of one plan that would lie on the same track range: the earlier one is left out (notice
+ *   element_dropped), so apply never fails with an overlap the plan did not show.
  */
 import * as T from '@pulseframe/time';
 import { z } from 'zod';
 import type { Asset, Clip, ProjectDocument, Track } from './schema.ts';
 import {
-  TemplateDefSchema, TemplateError, TemplateInputSchema, TEMPLATE_METHOD,
-  type PlannedSlot, type PredictedSlot, type TemplateDef, type TemplateInput, type TemplatePlan, type TemplatePlanContext, type TemplateStep, type TemplateSummary, type TemplateWarning,
+  PACK_FIELD_KEYS, TemplateDefSchema, TemplateError, TemplateInputSchema, TEMPLATE_METHOD,
+  type PackFieldKey, type PackFieldsInput, type PackFieldValues, type PlannedSlot, type PredictedSlot, type TemplateDef, type TemplateInput, type TemplateNotice, type TemplatePlan, type TemplatePlanContext, type TemplateStep, type TemplateSummary, type TemplateWarning,
 } from './templateContract.ts';
+import { barsForDuration, findMusicStyle, listMusicStyles, MUSIC_MAX_SECONDS, type MusicStyle } from './musicStyles.ts';
+import { resolveTitleText, titleFieldUse, titleTextProblems } from './titleFields.ts';
+import { candleNight } from './packs/suggest.ts';
+import { captureOf } from './capture.ts';
 import { defaultMotionFrames, MOTION_PRESETS, shortestSafeLoopFrames } from './motionPresets.ts';
 import { findEffect, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, TRANSITION_IDS } from './effects.ts';
 import { findTextPreset } from './textPresets.ts';
@@ -38,6 +63,8 @@ type Timing = TemplateDef['texts'][number]['at'];
 
 /** Bind names the planner gives to what is not an item of the template (an item key equal to one of these is refused). */
 export const TEMPLATE_RESERVED_BINDS = { pictures: 'pictures-track', elements: 'elements-track', music: 'music' } as const;
+/** The asset key of the built-in music track a plan asks the server to make (assetsNeeded kind 'music'). */
+export const BUILTIN_MUSIC_ASSET_KEY = 'music-1';
 /** The most operations one plan may hold (ApplyTemplateArgsSchema.ops). */
 export const MAX_TEMPLATE_OPS = 2000;
 const MAX_STEPS = 50;
@@ -135,6 +162,9 @@ function checkDef(raw: TemplateDef): TemplateDef {
     if (s.transitionIn && !TRANSITIONS.has(s.transitionIn.type)) throw bad(`slot ${s.key}: transition "${s.transitionIn.type}" does not exist`);
   }
   for (const x of def.texts) {
+    // fields in a title's own words (ADR-0022): pack fields and live fields only, with fallback words for when one has no value
+    const counter = !!x.perSlot && x.perSlot !== 'none';
+    for (const lang of ['he', 'en'] as const) for (const problem of titleTextProblems(x.default[lang], x.fallback?.[lang], { counter })) throw bad(`text ${x.key} (${lang}): ${problem}`);
     if (!findTextPreset(x.presetId)) throw bad(`text ${x.key}: text style "${x.presetId}" does not exist`);
     if (!slotKeys.has(x.at.slot)) throw bad(`text ${x.key} starts at slot "${x.at.slot}", which the template does not have`);
   }
@@ -171,6 +201,7 @@ export function summarizeTemplate(def: TemplateDef, env: { elementsAvailable: bo
   const elements = def.elements.length > 0;
   const gpu = def.adjust.some((a) => a.effects.some((e) => GPU_EFFECT_IDS.includes(e.type))) || def.slots.some((s) => !!s.transitionIn && GPU_TRANSITION_IDS.includes(s.transitionIn.type));
   const available = !(elements && !env.elementsAvailable);
+  const uses = def.texts.flatMap((t) => [t.default.he, t.default.en].map((text) => titleFieldUse(text, { counter: !!t.perSlot && t.perSlot !== 'none' })));
   return {
     id: def.id, version: def.version, name: def.name, hint: def.hint, genre: def.genre, designedFor: def.designedFor,
     slots: def.slots.map((s) => ({ key: s.key, role: s.role, accept: s.accept })),
@@ -180,6 +211,8 @@ export function summarizeTemplate(def: TemplateDef, env: { elementsAvailable: bo
     available,
     unavailableReason: available ? null : 'this template places graphic elements, which this machine cannot draw: its ffmpeg has no SVG decoder (librsvg)',
     method: TEMPLATE_METHOD,
+    pack: def.pack ?? null, fields: PACK_FIELD_KEYS.filter((k) => uses.some((u) => u.pack.includes(k))), liveFields: uses.some((u) => u.live),
+    builtinMusic: def.music.builtin !== undefined && findMusicStyle(def.music.builtin) ? def.music.builtin : null,
   };
 }
 
@@ -210,9 +243,11 @@ function anchorOf(doc: ProjectDocument, at: RT | undefined): RT {
   return end;
 }
 
-function musicOf(doc: ProjectDocument, def: TemplateDef, p: TemplateInput, at: RT, usesBars: boolean): Music | null {
+function musicOf(doc: ProjectDocument, def: TemplateDef, p: TemplateInput, at: RT, usesBars: boolean, builtin: boolean): Music | null {
   if (def.music.need === 'none' || p.musicAssetId === null) {
-    if (def.music.need === 'beats') throw new TemplateError('invalid_args', `template ${def.id} cuts on the beats of music: choose a music file`, 'Pass musicAssetId: a sound file whose beats were measured.');
+    // built-in music has its beats by construction, so it satisfies a template that cuts on beats. (The hint is unchanged: the
+    // editor recognises it by its exact words, apps/web/src/editor/templateRefusals.ts.)
+    if (def.music.need === 'beats' && !builtin) throw new TemplateError('invalid_args', `template ${def.id} cuts on the beats of music: choose a music file`, 'Pass musicAssetId: a sound file whose beats were measured.');
     return null;
   }
   const asset = Object.hasOwn(doc.assets, p.musicAssetId) ? doc.assets[p.musicAssetId] : undefined;
@@ -252,6 +287,22 @@ function handleBefore(doc: ProjectDocument, t: Track | undefined, start: RT): nu
 }
 
 /**
+ * The words of the pack fields from the plan's input: the six literal fields as given, and {night} (the Hanukkah candle)
+ * worked out from `date` and `atLighting` (default true: filmed at that evening's lighting) when it is not given itself.
+ */
+function packFieldValues(input: PackFieldsInput | undefined): PackFieldValues {
+  const out: Partial<Record<PackFieldKey, string>> = {};
+  if (!input) return out;
+  for (const k of PACK_FIELD_KEYS) { const v = Object.hasOwn(input, k) ? input[k] : undefined; if (v !== undefined) out[k] = v; }
+  if (out.night === undefined && input.date !== undefined) {
+    const [y, m, day] = input.date.split('-').map(Number) as [number, number, number];
+    const candle = candleNight({ y, m, d: day }, input.atLighting ?? true);
+    if (candle !== null) out.night = String(candle);
+  }
+  return out;
+}
+
+/**
  * Build the plan for a template from the current document. Pure; throws TemplateError when the template cannot apply. A plan
  * whose `blocking` list is not empty must not be applied (the server answers 409 template_blocked).
  */
@@ -270,6 +321,8 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   const keep = new Set(ctx.keepKeys ?? []);
   const warnings: TemplateWarning[] = [], blocking: TemplateWarning[] = [], steps: string[] = [], basis: string[] = [];
   const warn = (code: TemplateWarning['code'], message: string, details: Record<string, unknown> = {}) => warnings.push({ code, message, details });
+  const notices: TemplateNotice[] = [];
+  const notice = (code: TemplateNotice['code'], message: string, details: Record<string, unknown> = {}) => notices.push({ code, message, details });
   const nf = (t: RT) => T.nearestFrameIndex(t, rate);
   const ft = (f: number) => T.frameTime(f, rate);
 
@@ -283,11 +336,19 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
     return a;
   });
   const useCount = d.slotUse.mode === 'all' ? d.slots.length : Math.min(d.slots.length, Math.max(d.slotUse.min, media.length));
+  // built-in music (ADR-0022): one source of music at a time; an unknown or rejected style is refused
+  const wanted = p.builtinMusic ?? null;
+  if (wanted && p.musicAssetId !== null) throw new TemplateError('invalid_args', 'choose a music file or built-in music, not both', 'Send musicAssetId: null together with builtinMusic, and builtinMusic: null together with musicAssetId (a regeneration merges new parameters into the run\'s own).');
+  const style: MusicStyle | null = wanted ? findMusicStyle(wanted.styleId) ?? null : null;
+  if (wanted && !style) throw new TemplateError('invalid_args', `there is no built-in music style "${wanted.styleId}"`, `The styles are: ${listMusicStyles().map((x) => x.id).join(', ') || 'none in this build'} (GET /api/v1/music).`);
+  const builtin = style && d.music.need !== 'none' ? { style, seed: wanted!.seed } : null;
   const meterHint = d.music.need === 'none' || p.musicAssetId === null ? 4 : doc.analyses?.[p.musicAssetId]?.beats?.meter ?? 4;
   const spans = d.slots.slice(0, useCount).map((s) => scaleSpan(s.span, p.tempo, meterHint));
-  const music = musicOf(doc, d, p, at, spans.some((s) => 'bars' in s));
+  const music = musicOf(doc, d, p, at, spans.some((s) => 'bars' in s), !!builtin);
   if (p.musicAssetId !== null && d.music.need === 'none') basis.push('this template does not use music; the chosen music was not placed');
-  const grid = music?.grid ?? steadyGrid(at, d.tempo.fallbackBpm);
+  if (style && !builtin) basis.push('this template does not use music; no built-in music was made');
+  // with built-in music the grid is the style's own tempo from the anchor: the track's grid once it is placed there, without end
+  const grid = music?.grid ?? steadyGrid(at, builtin ? builtin.style.bpm : d.tempo.fallbackBpm);
 
   // ----- slots on the grid -----
   const raw: { def: SlotDef; index: number; start: RT; end: RT; beats?: Kept['beats'] }[] = [];
@@ -329,6 +390,15 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   for (const [k, v] of alias) slotIndex.set(k, slotIndex.get(v)!);
   const startFrame = pre[0]!.startFrame, endFrame = pre[pre.length - 1]!.endFrame;
   if (endFrame <= startFrame) throw new TemplateError('nothing_to_do', 'the slots of this template would be shorter than one frame here', 'Choose another tempo or other music.');
+  // built-in music made to measure: whole bars that cover the pictures, counted from the EXACT end of the last slot (not its frame)
+  let made: { style: MusicStyle; seed: number; bars: number; trackFrames: number; clipFrames: number } | null = null;
+  if (builtin) {
+    const bars = barsForDuration(builtin.style.id, T.sub(pre[pre.length - 1]!.end, at));
+    const length = T.rt(240 * bars, builtin.style.bpm);
+    if (T.lt(T.rt(MUSIC_MAX_SECONDS, 1), length)) throw new TemplateError('invalid_args', `built-in music for this template would be ${Math.ceil(T.toSeconds(length))} s long (${bars} bars); a built-in track is at most ${MUSIC_MAX_SECONDS} s`, 'Use fewer or shorter slots (tempo: double), or choose a music file instead (musicAssetId).');
+    const trackFrames = T.frameIndexAt(length, rate); // the track floored to whole frames
+    made = { ...builtin, bars, trackFrames, clipFrames: Math.min(trackFrames, endFrame - startFrame) };
+  }
 
   // ----- media -----
   let order = media.map((a) => a.id);
@@ -388,8 +458,8 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
     ops.push({ op: 'add_clip', args: { assetId: s.assetId, trackId: pictureTrackArg, start: ft(s.startFrame), duration: ft(s.endFrame - s.startFrame), ...(s.sourceInFrame !== null && a.kind !== 'image' ? { sourceIn: ft(s.sourceInFrame) } : {}), withLinkedAudio: !!s.def.keepAudio }, bind: s.key });
     slots.push({ key: s.key, kind: 'picture', clipId: ref(s.key), accept: s.def.accept, ...(s.beats && s.beats.count <= 64 ? { beats: s.beats } : {}) });
   }
-  const bpmText = music ? (music.bpm ? `${music.bpm.toFixed(1)} BPM` : 'unknown tempo') : `${d.tempo.fallbackBpm} BPM`;
-  if (emitted.length) steps.push(`Place ${emitted.length} picture slot(s) from ${secs(ft(startFrame))} to ${secs(ft(endFrame))} on ${pictureTrack ? `track ${pictureTrack.name}` : 'a new picture track'}, ${music ? `cut on the beats of "${music.asset.name}" (${bpmText})` : `cut on a steady ${bpmText} grid (no music)`}${p.tempo !== 'normal' ? `, ${p.tempo} tempo` : ''}, media ${p.order === 'shuffle' ? `shuffled (seed ${p.seed})` : 'in order'}${keepAudio ? `; ${keepAudio} keep their own sound` : '; their own sound is left out (the music carries the sound)'}`);
+  const bpmText = music ? (music.bpm ? `${music.bpm.toFixed(1)} BPM` : 'unknown tempo') : `${made ? made.style.bpm : d.tempo.fallbackBpm} BPM`;
+  if (emitted.length) steps.push(`Place ${emitted.length} picture slot(s) from ${secs(ft(startFrame))} to ${secs(ft(endFrame))} on ${pictureTrack ? `track ${pictureTrack.name}` : 'a new picture track'}, ${music ? `cut on the beats of "${music.asset.name}" (${bpmText})` : made ? `cut on the beats of the built-in music "${made.style.name.en}" (${bpmText}, known from its recipe)` : `cut on a steady ${bpmText} grid (no music)`}${p.tempo !== 'normal' ? `, ${p.tempo} tempo` : ''}, media ${p.order === 'shuffle' ? `shuffled (seed ${p.seed})` : 'in order'}${keepAudio ? `; ${keepAudio} keep their own sound` : '; their own sound is left out (the music carries the sound)'}`);
 
   // camera moves
   const motionFrames = (presetId: string, frames: number): { frames?: number } | null => {
@@ -448,21 +518,29 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
 
   // elements, on a picture track above the pictures
   const assetsNeeded: TemplatePlan['assetsNeeded'] = [];
-  const assetKey = (kind: 'sfx' | 'element', id: string, color?: string) => {
-    const found = assetsNeeded.find((x) => x.kind === kind && x.id === id && x.color === color);
+  const assetKey = (kind: 'sfx' | 'element', id: string, color?: string, color2?: string) => {
+    const found = assetsNeeded.find((x) => x.kind === kind && x.id === id && x.color === color && x.color2 === color2);
     if (found) return found.key;
     const key = `${kind === 'sfx' ? 'sfx' : 'el'}-${assetsNeeded.filter((x) => x.kind === kind).length + 1}`;
-    assetsNeeded.push({ key, kind, id, ...(color ? { color } : {}) });
+    assetsNeeded.push({ key, kind, id, ...(color ? { color } : {}), ...(color2 ? { color2 } : {}) });
     return key;
   };
-  const elementCopies = d.elements.flatMap((e) => copiesOf(e.at, e.perSlot).map((c) => ({ e, ...c, bind: `${e.key}${c.suffix}` }))).filter((c) => !keep.has(c.bind));
+  const allElementCopies = d.elements.flatMap((e) => copiesOf(e.at, e.perSlot).map((c) => ({ e, ...c, bind: `${e.key}${c.suffix}` }))).filter((c) => !keep.has(c.bind));
+  // all copies go on one track: where two would share a range (an element of an unused slot is moved to the last used one, a
+  // merged slot's element to the slot it was merged into), the earlier one is left out, so apply never meets an overlap
+  const overlapped = allElementCopies.filter((c, i) => allElementCopies.slice(i + 1).some((o) => o.start < c.end && c.start < o.end));
+  const elementCopies = allElementCopies.filter((c) => !overlapped.includes(c));
+  if (overlapped.length) {
+    notice('element_dropped', `${overlapped.length} graphic element(s) would lie on the same track range as a later one of this template and were left out`, { keys: overlapped.map((c) => c.bind) });
+    basis.push(`graphic element(s) ${overlapped.map((c) => c.bind).join(', ')} would share a track range with a later element (fewer slots are used than the template has, or cuts were merged) and were left out`);
+  }
   if (elementCopies.length) {
     const below = pictureTrack ? seq.tracks.indexOf(pictureTrack) : seq.tracks.length;
     const elTrack = pictureTrack ? seq.tracks.find((t, i) => i > below && t.kind === 'video' && freeOver(t, ranges(elementCopies.map((c) => ({ startFrame: c.start, endFrame: c.end }))))) : undefined;
     if (!elTrack) ops.push({ op: 'add_track', args: { kind: 'video' }, bind: TEMPLATE_RESERVED_BINDS.elements });
     const trackArg = elTrack ? elTrack.id : ref(TEMPLATE_RESERVED_BINDS.elements, 'trackId');
     for (const c of elementCopies) {
-      ops.push({ op: 'add_clip', args: { assetId: { $asset: assetKey('element', c.e.elementId, c.e.color) }, trackId: trackArg, start: ft(c.start), duration: ft(c.end - c.start), withLinkedAudio: false }, bind: c.bind });
+      ops.push({ op: 'add_clip', args: { assetId: { $asset: assetKey('element', c.e.elementId, c.e.color, c.e.color2) }, trackId: trackArg, start: ft(c.start), duration: ft(c.end - c.start), withLinkedAudio: false }, bind: c.bind });
       ops.push({ op: 'set_clip_transform', args: { clipId: ref(c.bind), transform: { x: c.e.place.x, y: c.e.place.y, ...(c.e.place.scale !== undefined ? { scale: c.e.place.scale } : {}) } } });
       if (c.e.motion && p.motion === 'full') {
         const presetId = mirrorForReading(c.e.motion.presetId, lang);
@@ -508,15 +586,24 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
 
   // titles
   const textStart = new Map<string, number>();
-  let titles = 0;
+  let titles = 0, liveTitles = 0;
+  const fieldValues = packFieldValues(p.fields);
   for (const t of d.texts) {
     const given = Object.hasOwn(p.texts, t.key) ? p.texts[t.key] : undefined;
     if (given !== undefined && given.length > t.maxChars) warn('text_too_long', `the text for ${t.key} has ${given.length} characters; this template is designed for at most ${t.maxChars}`, { key: t.key, length: given.length, maxChars: t.maxChars });
-    const value = given ?? t.default[lang];
+    const counter = !!t.perSlot && t.perSlot !== 'none';
+    const told = new Set<TemplateNotice['code']>();
     for (const c of copiesOf(t.at, t.perSlot)) {
       const bind = `${t.key}${c.suffix}`;
       if (!textStart.has(t.key)) textStart.set(t.key, c.start);
       if (keep.has(bind)) continue;
+      // Words the caller typed are literal. The template's own words may hold fields (ADR-0022): pack fields are written in,
+      // live fields stay and the title is made with them on; without a value or a capture date the fallback words are used.
+      const dated = kept.filter((k) => k.startFrame < c.end && c.start < k.endFrame).every((k) => captureOf(doc, k.assetId) !== null);
+      const own = given === undefined ? resolveTitleText(t.default[lang], t.fallback?.[lang], fieldValues, dated, { counter }) : null;
+      if (own?.usedFallback && own.missing.length && !told.has('field_missing')) { told.add('field_missing'); notice('field_missing', `title ${t.key} has no value for ${own.missing.map((k) => `{${k}}`).join(', ')}; its fallback words were used`, { key: t.key, fields: own.missing }); }
+      else if (own?.usedFallback && own.noDate && !told.has('field_no_date')) { told.add('field_no_date'); notice('field_no_date', `title ${t.key} shows the capture date of the picture under it, and a picture under it has no capture date; its fallback words were used`, { key: t.key }); }
+      const value = given ?? own!.text;
       const text = c.suffix ? value.replaceAll('{n}', String(c.n)) : value;
       ops.push({ op: 'add_text', args: { text, start: ft(c.start), duration: ft(c.end - c.start), transform: { x: t.place.x, y: t.place.y } }, bind });
       ops.push({ op: 'apply_text_preset', args: { clipId: ref(bind), presetId: t.presetId } });
@@ -530,11 +617,12 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
         if (!outOn) outF = 0;
         if (inOn || outOn || t.anim.loop) ops.push({ op: 'set_text_animation', args: { clipId: ref(bind), animation: { by: t.anim.by, in: inOn ? t.anim.in : null, out: outOn ? t.anim.out : null, loop: t.anim.loop, inFrames: Math.max(1, inF), outFrames: Math.max(1, outF) } } });
       }
+      if (own?.fields) { ops.push({ op: 'set_text_fields', args: { clipId: ref(bind), enabled: true } }); liveTitles++; }
       slots.push({ key: bind, kind: 'text', clipId: ref(bind) });
       titles++;
     }
   }
-  if (titles) steps.push(`Add ${titles} title(s) in ${lang === 'he' ? 'Hebrew' : 'English'}${p.motion === 'full' ? ', animated' : ' without animation (reduced motion)'}`);
+  if (titles) steps.push(`Add ${titles} title(s) in ${lang === 'he' ? 'Hebrew' : 'English'}${p.motion === 'full' ? ', animated' : ' without animation (reduced motion)'}${liveTitles ? `; ${liveTitles} show the capture date of the picture under them (live fields)` : ''}`);
 
   // sound effects
   let sounds = 0;
@@ -565,13 +653,27 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
     steps.push(`Place the music "${music.asset.name}" from ${secs(at)} (its first ${music.bars && d.music.startAt === 'first-downbeat' ? 'bar start' : d.music.startAt === 'zero' ? 'moment' : 'beat'} at ${secs(music.sourceIn)} in the file) and end it on a beat at the end of the pictures`);
   }
 
+  // built-in music, made to measure (ADR-0022): the server makes the track; it is placed from its start for exactly as long as the pictures
+  if (made && !keep.has(TEMPLATE_RESERVED_BINDS.music)) {
+    assetsNeeded.push({ key: BUILTIN_MUSIC_ASSET_KEY, kind: 'music', id: made.style.id, bars: made.bars, seed: made.seed });
+    ops.push({ op: 'add_clip', args: { assetId: { $asset: BUILTIN_MUSIC_ASSET_KEY }, start: at, duration: ft(made.clipFrames), withLinkedAudio: false }, bind: TEMPLATE_RESERVED_BINDS.music });
+    const cut = made.trackFrames - made.clipFrames;
+    const fade = cut > 0 ? Math.min(Math.round(fps), Math.floor(made.clipFrames / 2)) : 0;
+    if (fade >= 1) ops.push({ op: 'set_clip_fades', args: { clipId: ref(TEMPLATE_RESERVED_BINDS.music), fadeOut: ft(fade) } });
+    if (cut > 0) notice('builtin_music_faded', `the built-in music is ${made.bars} bars long, ${cut} frame(s) more than the pictures; it is cut at the last picture and fades out there instead of ending on its own last bar`, { bars: made.bars, trackFrames: made.trackFrames, clipFrames: made.clipFrames, fadeFrames: fade });
+    slots.push({ key: TEMPLATE_RESERVED_BINDS.music, kind: 'music', clipId: ref(TEMPLATE_RESERVED_BINDS.music) });
+    steps.push(`Make built-in music "${made.style.name.en}" (${made.style.id}, seed ${made.seed}): ${made.bars} bars at ${made.style.bpm} BPM, placed from ${secs(at)} for the length of the pictures${cut > 0 ? ', cut at the last picture with a fade-out' : '; its ending lands with the last picture'}`);
+  }
+
   // ----- what the plan rests on -----
   if (clamped.length) basis.push(`item(s) placed at slot(s) ${clamped.join(', ')}, which are not used with this much media, were placed on the last used slot`);
   if (keep.size) warn('kept_by_hand', `${keep.size} item(s) edited by hand since the last run were kept as they are and not made again`, { keys: [...keep].sort() });
   const shape = H > W * 1.1 ? 'tall' : W > H * 1.1 ? 'wide' : 'square';
   if (shape !== d.designedFor) warn('designed_for_other_shape', `this template is designed for a ${d.designedFor} frame; this project is ${shape} (${W}×${H})`, { designedFor: d.designedFor, project: shape, width: W, height: H });
   basis.unshift(
-    music ? `${music.beatCount} measured beats of "${music.asset.name}" (${bpmText}, confidence ${music.confidence ?? 'n/a'}${music.edited ? ', corrected by hand' : ''}${music.bars ? ', with bar starts' : ''}); method: ${music.method}` : `no music: a steady grid of ${d.tempo.fallbackBpm} beats a minute from the template, four beats to a bar`,
+    music ? `${music.beatCount} measured beats of "${music.asset.name}" (${bpmText}, confidence ${music.confidence ?? 'n/a'}${music.edited ? ', corrected by hand' : ''}${music.bars ? ', with bar starts' : ''}); method: ${music.method}`
+      : made ? `built-in music "${made.style.name.en}" (${made.style.id}): ${made.style.bpm} beats a minute, four beats to a bar; its beats and bars are known from its recipe, nothing was measured`
+      : `no music: a steady grid of ${d.tempo.fallbackBpm} beats a minute from the template, four beats to a bar`,
     `${media.length} chosen picture(s) or video(s), ${kept.length} slot(s) used of ${d.slots.length}; ${rate.num}/${rate.den} frames a second; cuts at least ${gap} frames apart`,
   );
   if (ops.length === 0) throw new TemplateError('nothing_to_do', 'every item of this template was edited by hand since the last run; there is nothing to make again');
@@ -587,7 +689,7 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   const clip = (s: string) => (s.length > 400 ? `${s.slice(0, 399)}…` : s);
   return {
     templateId: d.id, version: d.version, params: p,
-    steps: steps.slice(0, MAX_STEPS).map(clip), basis: basis.slice(0, MAX_STEPS).map(clip), warnings, blocking, alternatives, assetsNeeded, ops, slots,
+    steps: steps.slice(0, MAX_STEPS).map(clip), basis: basis.slice(0, MAX_STEPS).map(clip), warnings, notices, blocking, alternatives, assetsNeeded, ops, slots,
     predicted: { startFrame, endFrame, boundaries: [startFrame, ...kept.map((s) => s.endFrame)], gapFrames: gap, slots: predicted },
   };
 }

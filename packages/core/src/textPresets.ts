@@ -6,6 +6,7 @@
  * The last ten (trend pack, ADR-0012) use the title look fields: glow, gradient, a second outline, extrusion, long shadow, tracking.
  */
 import type { TextLookField, TextStyle } from './schema.ts';
+import { PACKS } from './packs/index.ts';
 
 /**
  * A preset owns the look fields (ADR-0012, schema.ts TEXT_LOOK_FIELDS): apply_text_preset clears every look field of the
@@ -16,7 +17,8 @@ export interface TextPreset {
   style: { fontFamily: string; fontWeight: number; sizeFrac: number; color: string; background: string | null; stroke: string | null; strokeFrac: number } & Partial<Pick<TextStyle, TextLookField>>;
   shadow: { color: string; opacity: number; blur: number; x: number; y: number } | null;
 }
-export const TEXT_PRESETS: readonly TextPreset[] = [
+/** The fifty text styles of this file. */
+export const BUILTIN_TEXT_PRESETS: readonly TextPreset[] = [
   { id: 'clean-white', name: { he: "לבן נקי", en: "Clean white" }, style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.06, color: '#FFFFFF', background: null, stroke: null, strokeFrac: 0 }, shadow: null },
   { id: 'classic-outline', name: { he: "קלאסי עם קו מתאר", en: "Classic outline" }, style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.06, color: '#FFFFFF', background: null, stroke: '#000000', strokeFrac: 0.08 }, shadow: null },
   { id: 'bold-shadow', name: { he: "מודגש עם צל", en: "Bold with shadow" }, style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.07, color: '#FFFFFF', background: null, stroke: null, strokeFrac: 0 }, shadow: { color: '#000000', opacity: 0.7, blur: 0.012, x: 0.004, y: 0.004 } },
@@ -71,4 +73,6 @@ export const TEXT_PRESETS: readonly TextPreset[] = [
 ];
 /** The ten styles of the trend pack (ADR-0012); each sets at least one title look field. */
 export const TREND_TEXT_PRESET_IDS = ['neon-tube-pink', 'neon-tube-cyan', 'gradient-sunset', 'gradient-ocean', 'gradient-gold', 'double-outline-pop', 'extrude-retro', 'extrude-block', 'long-shadow-flat', 'wide-minimal'] as const;
+/** Every text style of the build: the built-ins, then the styles the content packs bring (ADR-0022; packs/index.ts), in pack order. */
+export const TEXT_PRESETS: readonly TextPreset[] = [...BUILTIN_TEXT_PRESETS, ...PACKS.flatMap((p) => p.textPresets)];
 export const findTextPreset = (id: string) => TEXT_PRESETS.find((p) => p.id === id);

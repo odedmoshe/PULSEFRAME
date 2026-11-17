@@ -13,6 +13,7 @@
  * Templates that need a model are not here: they are MODEL_GATED_TEMPLATES (templateContract.ts), listed as unavailable.
  */
 import type { TemplateDef } from './templateContract.ts';
+import { PACKS } from './packs/index.ts';
 
 type SlotDef = TemplateDef['slots'][number];
 const MOVES = ['motion.move.ken-burns-in', 'motion.move.pan-left', 'motion.move.ken-burns-out', 'motion.move.pan-right'] as const;
@@ -164,5 +165,8 @@ const homeVideo: TemplateDef = {
   adjust: [{ key: 'camcorder', span: 'all', effects: [{ type: 'color.sepia', params: { amount: 0.3 } }, { type: 'stylize.grain', params: { amount: 0.2 } }, { type: 'light.vignette', params: { amount: 0.45 } }, { type: 'stylize.date-stamp' }] }],
 };
 
-export const TEMPLATES: readonly TemplateDef[] = [travelMontage, photoDump, birthday, quoteCard, countdownList, homeVideo];
+/** The six templates of this file. */
+export const BUILTIN_TEMPLATES: readonly TemplateDef[] = [travelMontage, photoDump, birthday, quoteCard, countdownList, homeVideo];
+/** Every template of the build: the built-ins, then the templates the content packs bring (ADR-0022; packs/index.ts), in pack order. */
+export const TEMPLATES: readonly TemplateDef[] = [...BUILTIN_TEMPLATES, ...PACKS.flatMap((p) => p.templates)];
 export const findTemplate = (id: string): TemplateDef | undefined => TEMPLATES.find((t) => t.id === id);

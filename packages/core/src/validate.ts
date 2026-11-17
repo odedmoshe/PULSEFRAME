@@ -279,6 +279,9 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     if (key !== an.assetId || !doc.assets[an.assetId]) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });
     for (const [name, list] of [['scene cuts', an.scenes?.cuts], ['beats', an.beats?.beats], ['bar starts', an.beats?.downbeats]] as const)
       if (list?.some((t, i) => T.isNegative(t) || (i > 0 && !T.lt(list[i - 1]!, t)))) issues.push({ code: 'analysis_order', message: `${name} of asset ${key} must be non-negative and strictly ascending`, ids: [key] });
+    // music sections (ADR-0022): each ends where the next starts, so they are ascending and the first starts with the file
+    const sections = an.beats?.sections;
+    if (sections?.length && (!T.isZero(sections[0]!.start) || sections.some((x, i) => i > 0 && !T.lt(sections[i - 1]!.start, x.start)))) issues.push({ code: 'analysis_sections', message: `music sections of asset ${key} must start at 0 and be strictly ascending`, ids: [key] });
   }
   for (const [key, tr] of Object.entries(doc.transcripts ?? {})) {
     if (key !== tr.assetId) issues.push({ code: 'key_mismatch', message: `transcript key ${key} != assetId ${tr.assetId}`, ids: [key] });
