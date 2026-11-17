@@ -5,8 +5,8 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createTracker } from './tracker.ts';
-import { discScene, outlierSequence, shiftedPair, zoomSequence, type DiscScene } from './synthetic.ts';
-import type { TrackerStep } from './types.ts';
+import { discScene, frameOf, outlierSequence, shiftedPair, texture, zoomSequence, type DiscScene } from './synthetic.ts';
+import type { GreyFrame, TrackerStep } from './types.ts';
 
 const usable = (st: number) => st === 1 || st === 6;
 const dist = (a: { cx: number; cy: number }, b: { cx: number; cy: number }) => Math.sqrt((a.cx - b.cx) ** 2 + (a.cy - b.cy) ** 2);
@@ -167,6 +167,41 @@ describe('a look-alike beside the path of a target that is being tracked', () =>
     for (let k = 1; k < 60; k++) if (usable(s[k - 1]!.st)) expect(dist(s[k - 1]!, sc.truth[k]!), `frame ${k}`).toBeLessThanOrEqual(2);
     expect(s.filter((x) => usable(x.st)).length).toBeGreaterThanOrEqual(40);
   });
+});
+
+describe('re-acquisition needs a match with what a person marked, not only with an adaptive template', () => {
+  /**
+   * A disc that stays put while its texture fades from one pattern to another (share `cap` of the second from frame
+   * cap/0.0062 on), hidden on frames 110–119. Adaptive templates follow the fade for as long as the picture is still close
+   * to the seed, so after the gap the disc matches a recent template well whatever it has become.
+   */
+  function fading(cap: number): GreyFrame[] {
+    const W = 200, H = 160, cx = 100, cy = 80, R = 20;
+    const bg = texture(41), a = texture(42, [12, 6, 3]), b = texture(43, [12, 6, 3]), block = texture(44);
+    return Array.from({ length: 140 }, (_, k) => {
+      const share = Math.min(cap, k * 0.0062), hidden = k >= 110 && k < 120;
+      return frameOf(W, H, (x, y) => {
+        if (hidden && Math.abs(x - cx) <= R + 6 && Math.abs(y - cy) <= R + 6) return block(x, y);
+        const d = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)), c = R + 0.5 - d, cover = c <= 0 ? 0 : c >= 1 ? 1 : c;
+        return cover > 0 ? cover * ((1 - share) * a(x, y) + share * b(x, y)) + (1 - cover) * bg(x, y) : bg(x, y);
+      });
+    });
+  }
+  const states = (frames: GreyFrame[]) => { const t = createTracker(frames[0]!, { kind: 'region', cx: 100, cy: 80, w: 40, h: 40 }); return frames.slice(1).map((f) => t.step(f).st); };
+
+  it('faded 30% (NCC 0.91 with the seed): tracked up to the gap, re-acquired within 5 frames after it', () => {
+    const st = states(fading(0.3));
+    for (let k = 1; k < 110; k++) expect(st[k - 1], `frame ${k}`).toBe(1);
+    const first = st.findIndex((s, i) => i + 1 >= 120 && usable(s)) + 1;
+    expect(first).toBeGreaterThanOrEqual(120);
+    expect(first - 120).toBeLessThan(5);
+    expect(st[first - 1]).toBe(6);
+  }, 60_000);
+  it('faded 55% (NCC 0.90 with a recent template, 0.50 with the seed): tracked up to the gap, then lost for good', () => {
+    const st = states(fading(0.55));
+    for (let k = 1; k < 110; k++) expect(st[k - 1], `frame ${k}`).toBe(1);
+    for (let k = 110; k < 140; k++) expect(st[k - 1], `frame ${k}`).toBe(3);
+  }, 60_000);
 });
 
 const GOLDEN = '2ff85a64ecccd62c64725cec976dfde68746cb282c63ab010ee5c759da423d13';
