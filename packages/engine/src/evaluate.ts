@@ -13,6 +13,7 @@ import { captionAt, type CaptionLayer } from './captions.ts';
 import { FLASH_SINCE } from './gpu.ts';
 import { flashSchedule, flashSince } from './strobeSchedule.ts';
 import { applyModulators } from './modulate.ts';
+import { OVERLAY_TYPES, heldOverlayParams } from './overlays.ts';
 import { beatPositionAt, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 
 /**
@@ -159,7 +160,31 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
     }
   }
   graph.layers.push(...captions); // captions always draw above picture and titles
+  holdOverlays(doc, seq.tracks, graph);
   return graph;
+}
+
+const LATTICE: readonly string[] = OVERLAY_TYPES;
+/**
+ * Lattice overlays (snow, confetti, hearts, bokeh) get the render parameters that hold their motion for the whole clip
+ * (overlays.ts heldOverlayParams): worked out from the instance with all its keys and the project's frame shape, so a
+ * keyframed density, opacity or size never moves the particles, and preview, stills and exports of any size agree.
+ * A layer's effects are its clip's enabled effects in order (a time effect taken out at the front), so the n-th overlay
+ * of the layer is the n-th enabled overlay of the clip.
+ */
+function holdOverlays(doc: ProjectDocument, tracks: readonly Track[], graph: RenderGraph): void {
+  const aspect = doc.settings.width / doc.settings.height;
+  for (const layer of graph.layers) {
+    if (layer.kind === 'caption' || !layer.effects?.some((e) => LATTICE.includes(e.type))) continue;
+    const clip = tracks.find((t) => t.id === layer.trackId)?.clips.find((c) => c.id === layer.clipId);
+    const own = (clip && clip.type !== 'caption' ? clip.effects ?? [] : []).filter((e) => e.enabled && LATTICE.includes(e.type));
+    let n = 0;
+    layer.effects = layer.effects.map((e) => {
+      if (!LATTICE.includes(e.type)) return e;
+      const fx = own[n++];
+      return fx?.type === e.type ? { ...e, params: { ...e.params, ...heldOverlayParams(fx, aspect) } } : e;
+    });
+  }
 }
 
 /** Everything active at a time, in readable form (agent sense `describe_moment`). */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, findEffect, paramRange, type BeatPosition, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { BURST, CENTRE_GAIN, DEPTHS, JITTER, DISC_LIGHT, OVERLAY_TYPES, SNOW_FLASH, SWAY, boundRadius, burstParticles, cellSize, latticeSite, latticeSites, overlayParticles, shapeAlpha, snowSpeedLimit, speedLines, wedgeCorners, type Particle } from './overlays.ts';
+import { applyTransaction, createProject, effectParamsAt, findEffect, paramRange, type BeatPosition, type EffectInstance, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { BURST, CENTRE_GAIN, DEPTHS, JITTER, DISC_LIGHT, FLASH_LIMIT, LATTICE_SIZE, OVERLAY_TYPES, RED_STEP_AS, SHAPE_LIGHT, SPEED_LIMIT, SWAY, boundRadius, burstParticles, cellSize, heldOverlayParams, latticeSite, latticeSites, overlayParticles, shapeAlpha, speedLimit, speedLines, strength, wedgeCorners, type Particle } from './overlays.ts';
 import { FlashAnalyser, flashCells } from './flashAnalysis.ts';
 import { evaluate } from './evaluate.ts';
 
@@ -243,40 +243,109 @@ describe('overlay model (ADR-0011)', () => {
     const report = flashVerdict((t) => (Math.round(t * FPS) % 4 < 2 ? rasterise(overlayParticles('overlay.snow', p, W, H, t, t, null), fw, fh, scale, false) : new Uint8ClampedArray(fw * fh * 4).fill(255).map((v, i) => (i % 4 === 3 ? 255 : 0))), 3, fw, fh);
     expect(report.verdict).toBe('fail');
   }, 120_000);
-  it('snow speed limit: far above the default speed for every frame shape from 2:1 to 1:2, so the defaults look as they did', () => {
-    const p = defaults('overlay.snow');
-    for (const [w, h] of [[2560, 1280], [2560, 1080], [1920, 1080], [1440, 1080], [1080, 1080], [1080, 1350], [1080, 1920], [1080, 2160], [320, 180], [180, 320]] as const) {
-      expect(snowSpeedLimit(p, w, h), `${w}×${h}`).toBeGreaterThan(2 * Number(p.speed));
-      // the drawn speed is the asked one: a cell centre moves on by speed·k·H per second along the direction of fall
-      const s0 = latticeSites('overlay.snow', p, w, h, 2, null)[0]!, s1 = latticeSite('overlay.snow', p, w, h, s0.l, s0.i, s0.j, 3, null)!;
-      expect(Math.hypot(s1.cx - s0.cx, s1.cy - s0.cy)).toBeCloseTo(Number(p.speed) * DEPTHS[s0.l] * h, 6);
+  it('speed limit: far above the default speed of snow, confetti and hearts for every frame shape from 2:1 to 1:2, so the defaults look as they did', () => {
+    for (const [type, over] of [['overlay.snow', {}], ['overlay.confetti', {}], ['overlay.confetti', { palette: 'gold' }], ['overlay.hearts', {}], ['overlay.hearts', { follow: 'music' }]] as const) {
+      const p = defaults(type, over);
+      for (const [w, h] of [[2560, 1280], [2560, 1080], [1920, 1080], [1440, 1080], [1080, 1080], [1080, 1350], [1080, 1920], [1080, 2160], [320, 180], [180, 320]] as const) {
+        expect(speedLimit(type, p, w / h), `${type} ${JSON.stringify(over)} ${w}×${h}`).toBeGreaterThan(2 * Number(p.speed));
+        // the drawn speed is the asked one: a cell centre moves on by speed·k·H per second along the direction of motion
+        const s0 = latticeSites(type, p, w, h, 2, null)[0]!, s1 = latticeSite(type, p, w, h, s0.l, s0.i, s0.j, 3, null)!;
+        expect(Math.hypot(s1.cx - s0.cx, s1.cy - s0.cy)).toBeCloseTo(Number(p.speed) * DEPTHS[s0.l] * h, 6);
+      }
     }
-    // the light of a flake the limit assumes is that of the drawn disc
-    let light = 0;
-    for (let i = 0; i < 20000; i++) { const r = (i + 0.5) / 20000; light += (shapeAlpha('disc', r, 0) * 2 * Math.PI * r) / 20000; }
-    expect(DISC_LIGHT).toBeCloseTo(light, 6);
-    expect(snowSpeedLimit(defaults('overlay.snow', { density: 0 }), W, H)).toBe(Infinity);
-    expect(snowSpeedLimit(defaults('overlay.snow', { amount: 0 }), W, H)).toBe(Infinity);
+    // the light of a particle the limit assumes is that of the drawn shape
+    for (const shape of ['disc', 'rect', 'heart'] as const) {
+      let light = 0;
+      const n = 800, span = 1.2;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) light += shapeAlpha(shape, ((x + 0.5) / n - 0.5) * 2 * span, ((y + 0.5) / n - 0.5) * 2 * span) * (2 * span / n) ** 2;
+      expect(SHAPE_LIGHT[shape] / light, shape).toBeCloseTo(1, 2);
+    }
+    expect(SHAPE_LIGHT.disc).toBe(DISC_LIGHT);
+    let disc = 0;
+    for (let i = 0; i < 20000; i++) { const r = (i + 0.5) / 20000; disc += (shapeAlpha('disc', r, 0) * 2 * Math.PI * r) / 20000; }
+    expect(DISC_LIGHT).toBeCloseTo(disc, 6);
+    for (const type of ['overlay.snow', 'overlay.confetti', 'overlay.hearts']) {
+      expect(speedLimit(type, defaults(type, { density: 0 }), W / H)).toBe(Infinity);
+      expect(speedLimit(type, defaults(type, { amount: 0 }), W / H)).toBe(Infinity);
+    }
+    expect(speedLimit('overlay.bokeh', defaults('overlay.bokeh', { size: 0.15, speed: 0.2, density: 1, amount: 1 }), W / H)).toBe(Infinity);
+    expect(speedLimit('overlay.confetti', defaults('overlay.confetti', { mode: 'burst' }), W / H)).toBe(Infinity);
   });
 
-  it('snow speed limit: below it the snow falls as asked, above it at the limit; the limit falls as flakes grow brighter, larger or denser', () => {
+  it('speed limit: below it the particles move as asked, above it at the limit; it falls as they grow brighter, larger or denser, and a red or dark colour counts more', () => {
     const big = defaults('overlay.snow', { size: 0.04, density: 1, amount: 1, speed: 1 });
-    const lim = snowSpeedLimit(big, W, H);
+    const lim = speedLimit('overlay.snow', big, W / H);
     expect(lim).toBeGreaterThan(0);
     expect(lim).toBeLessThan(0.5); // active at the extremes
     // at or above the limit the particles are those at the limit; below it the speed is untouched
     expect(overlayParticles('overlay.snow', big, W, H, 4.2, 0, null)).toEqual(overlayParticles('overlay.snow', { ...big, speed: lim }, W, H, 4.2, 0, null));
     const slow = { ...big, speed: lim / 2 }, s0 = latticeSites('overlay.snow', slow, W, H, 1, null)[0]!, s1 = latticeSite('overlay.snow', slow, W, H, s0.l, s0.i, s0.j, 2, null)!;
     expect(Math.hypot(s1.cx - s0.cx, s1.cy - s0.cy)).toBeCloseTo((lim / 2) * DEPTHS[s0.l] * H, 6);
-    // monotone in what makes a flake able to flash
-    const at = (over: Record<string, unknown>) => snowSpeedLimit(defaults('overlay.snow', over), W, H);
-    expect(at({ density: 1 })).toBeLessThan(at({ density: 0.5 }));
-    expect(at({ amount: 1 })).toBeLessThan(at({ amount: 0.5 }));
-    expect(at({ size: 0.02 })).toBeLessThan(at({ size: 0.008 }));
+    // a limit given by the evaluator wins over the one these parameters would give
+    const held = latticeSites('overlay.snow', { ...big, [SPEED_LIMIT]: lim / 4 }, W, H, 1, null)[0]!, held1 = latticeSite('overlay.snow', { ...big, [SPEED_LIMIT]: lim / 4 }, W, H, held.l, held.i, held.j, 2, null)!;
+    expect(Math.hypot(held1.cx - held.cx, held1.cy - held.cy)).toBeCloseTo((lim / 4) * DEPTHS[held.l] * H, 6);
+    // monotone in what makes a particle able to flash
+    for (const type of ['overlay.snow', 'overlay.confetti', 'overlay.hearts']) {
+      const at = (over: Record<string, unknown>) => speedLimit(type, defaults(type, { speed: paramRange(type, 'speed')!.max, ...over }), W / H);
+      expect(at({ density: 1 }), type).toBeLessThan(at({ density: 0.5 }));
+      expect(at({ amount: 1, size: 0.02 }), type).toBeLessThan(at({ amount: 0.5, size: 0.02 }));
+      expect(at({ size: 0.02 }), type).toBeLessThan(at({ size: 0.01 }));
+    }
+    expect(speedLimit('overlay.hearts', defaults('overlay.hearts', { size: 0.02, color: '#FF0000' }), W / H)).toBeLessThan(speedLimit('overlay.hearts', defaults('overlay.hearts', { size: 0.02, color: '#FFFFFF' }), W / H));
+    expect(speedLimit('overlay.hearts', defaults('overlay.hearts', { size: 0.02, follow: 'music' }), W / H)).toBeLessThan(speedLimit('overlay.hearts', defaults('overlay.hearts', { size: 0.02 }), W / H));
+    // strength: white lightens by at most its opacity; saturated red counts by the red rule; black over white darkens more than its opacity
+    expect(strength(0.7, '#FFFFFF')).toBe(0.7);
+    expect(strength(0.7, '#FF0000')).toBeCloseTo((0.7 * 320 * RED_STEP_AS) / 20, 9); // a red step (20 of 320) weighs RED_STEP_AS
+    expect(RED_STEP_AS).toBeGreaterThan(0.1); // more than a general step: a margin for red
+    expect(strength(0.7, '#000000')).toBeGreaterThan(0.7);
+    expect(strength(0.7, '#4CC9F0')).toBe(0.7);
     // it depends on the frame's shape, not on its size in pixels (the analyser's cells are fractions of the frame)
-    expect(snowSpeedLimit(defaults('overlay.snow', { size: 0.012, density: 1 }), 1920, 1080) / at({ size: 0.012, density: 1 })).toBeCloseTo(1, 9);
-    // one flake able to flash per cell per second at most: a third of the analyser's limit of three flashes a second
-    expect(SNOW_FLASH.perSecond).toBe(1);
+    expect(overlayParticles('overlay.snow', big, 1920, 1080, 3, 3, null).map((q) => q.y / 1080)).toEqual(overlayParticles('overlay.snow', big, 1280, 720, 3, 3, null).map((q) => expect.closeTo(q.y / 720, 9)));
+    // one particle able to flash per cell per second at most: a third of the analyser's limit of three flashes a second
+    expect(FLASH_LIMIT.perSecond).toBe(1);
+  });
+
+  it('held parameters: an instance without keys gets the limit of its parameters; with keys, the lowest limit any moment of it reaches and the largest size', () => {
+    const fx = (type: string, params: Record<string, unknown>, keys: Record<string, [number, number][]> = {}): EffectInstance => ({
+      id: 'fx', type, enabled: true, params: defaults(type, params),
+      ...(Object.keys(keys).length ? { keyframes: Object.fromEntries(Object.entries(keys).map(([k, ks]) => [k, ks.map(([at, value]) => ({ time: T.frameTime(at * FPS, { num: FPS, den: 1 }), value, easing: 'ease-in-out' as const }))])) } : {}),
+    });
+    for (const aspect of [16 / 9, 9 / 16, 1]) {
+      const still = fx('overlay.snow', { size: 0.03, density: 0.8, speed: 0.5 });
+      expect(heldOverlayParams(still, aspect)).toEqual({ [SPEED_LIMIT]: speedLimit('overlay.snow', still.params, aspect), [LATTICE_SIZE]: 0.03 });
+      for (const moving of [
+        fx('overlay.snow', { speed: 1 }, { size: [[0, 0.004], [2, 0.04], [3, 0.01]], density: [[0, 0.2], [3, 0.9]], wind: [[0, -1], [3, 1]], amount: [[1, 0.2], [2, 1]] }),
+        fx('overlay.confetti', { speed: 1, palette: 'single', color: '#FFFFFF' }, { size: [[0, 0.005], [3, 0.05]], density: [[0, 1], [3, 0.1]] }),
+        fx('overlay.hearts', { speed: 0.5 }, { size: [[0, 0.1], [3, 0.01]], amount: [[0, 1], [3, 0.5]] }),
+      ]) {
+        const held = heldOverlayParams(moving, aspect), limit = held[SPEED_LIMIT] as number;
+        expect(held[LATTICE_SIZE]).toBe(Math.max(...moving.keyframes!.size!.map((k) => k.value)));
+        expect(limit).toBeGreaterThan(0);
+        let lowest = Infinity;
+        for (let f = 0; f <= 3 * FPS; f++) {
+          const p = { ...effectParamsAt(moving, T.frameTime(f, { num: FPS, den: 1 })), [LATTICE_SIZE]: held[LATTICE_SIZE]! };
+          lowest = Math.min(lowest, speedLimit(moving.type, p, aspect));
+        }
+        expect(limit, `${moving.type} ${aspect}`).toBeLessThanOrEqual(lowest * (1 + 1e-9));
+      }
+    }
+    expect(heldOverlayParams(fx('overlay.bokeh', {}), 1)).toEqual({ [SPEED_LIMIT]: Infinity, [LATTICE_SIZE]: 0.06 });
+    expect(heldOverlayParams(fx('overlay.speed-lines', {}), 1)).toEqual({});
+    expect(heldOverlayParams(fx('color.adjust', {}), 1)).toEqual({});
+  });
+
+  it('a lattice made for a larger size keeps every particle in its cell and only changes how large it is drawn', () => {
+    for (const type of OVERLAY_TYPES) {
+      const p = defaults(type), grown = { ...p, [LATTICE_SIZE]: paramRange(type, 'size')!.max };
+      for (const s of latticeSites(type, grown, W, H, 5.5, null)) {
+        expect(s.c).toBe(cellSize(type, grown, H, s.l));
+        expect(s.c).toBeGreaterThanOrEqual(cellSize(type, p, H, s.l));
+        expect(Math.abs(s.particle.x - s.cx) + boundRadius(s.particle)).toBeLessThan(s.c / 2);
+        expect(Math.abs(s.particle.y - s.cy) + boundRadius(s.particle)).toBeLessThan(s.c / 2);
+      }
+      // a smaller value than the size itself is never used: the cells always hold their particles
+      expect(cellSize(type, { ...p, [LATTICE_SIZE]: 0 }, H, 2)).toBe(cellSize(type, p, H, 2));
+    }
   });
 
   // ADR-0009: snow is safe at every setting its schema allows. The extremes (largest flakes, top speed, full density and
@@ -291,6 +360,24 @@ describe('overlay model (ADR-0011)', () => {
   for (const [w, h, over, bg] of snowExtremes) it(`flash safety: snow ${JSON.stringify(over)} in ${w}×${h} on ${bg ? 'grey' : 'black'} passes the flash analyser`, () => {
     const p = defaults('overlay.snow', over), sc = 162 / Math.min(w, h), sw = Math.round(w * sc), sh = Math.round(h * sc);
     const report = flashVerdict((t) => rasterise(overlayParticles('overlay.snow', p, w, h, t, t, null), sw, sh, sc, false, bg), 3, sw, sh);
+    expect(report.verdict, JSON.stringify(report.ranges)).toBe('pass');
+  }, 120_000);
+  // ADR-0009, plan §0 (extremes where an item has a rate): confetti and hearts are held the same way. Their mid sizes at top
+  // speed flashed: hearts in their own red (the red-flash rule), confetti in one colour, white or red, and the party palette in 9:16;
+  // a dark colour over a light picture darkens it more than its opacity says. The bokeh is safe at its top speed at every size.
+  const fallExtremes: [string, number, number, Record<string, unknown>, number][] = [];
+  for (const [w, h] of [[W, H], [H, W]] as const) {
+    for (const size of [0.015, 0.02]) fallExtremes.push(['overlay.hearts', w, h, { size, speed: 0.5, density: 1, amount: 1 }, 0]);
+    fallExtremes.push(['overlay.hearts', w, h, { size: 0.015, speed: 0.5, density: 1, amount: 1, color: '#FF0000' }, 0]);
+    fallExtremes.push(['overlay.hearts', w, h, { size: 0.1, speed: 0.5, density: 1, amount: 1 }, 0]); // every number at its maximum
+    for (const color of ['#FFFFFF', '#FF0000']) fallExtremes.push(['overlay.confetti', w, h, { size: 0.02, speed: 1, density: 1, amount: 1, palette: 'single', color }, 0]);
+    fallExtremes.push(['overlay.confetti', w, h, { size: 0.025, speed: 1, density: 1, amount: 1 }, 0]);
+    fallExtremes.push(['overlay.confetti', w, h, { size: 0.02, speed: 1, density: 1, amount: 1, palette: 'single', color: '#000000' }, 255]);
+    fallExtremes.push(['overlay.bokeh', w, h, { size: 0.06, speed: 0.2, density: 1, amount: 1, color: '#FF0000' }, 0]);
+  }
+  for (const [type, w, h, over, bg] of fallExtremes) it(`flash safety: ${type} ${JSON.stringify(over)} in ${w}×${h} on ${['black', 'grey', 'white'][bg ? (bg === 255 ? 2 : 1) : 0]} passes the flash analyser`, () => {
+    const p = defaults(type, over), sc = 162 / Math.min(w, h), sw = Math.round(w * sc), sh = Math.round(h * sc);
+    const report = flashVerdict((t) => rasterise(overlayParticles(type, p, w, h, t, t, null), sw, sh, sc, type === 'overlay.bokeh', bg), 3, sw, sh);
     expect(report.verdict, JSON.stringify(report.ranges)).toBe('pass');
   }, 120_000);
   const ext = { amount: 1, lines: 240, thickness: 2, rate: 2, reach: 1 };
@@ -317,6 +404,93 @@ describe('overlay model (ADR-0011)', () => {
     const report = flashVerdict(frame, 3, sw, sh);
     expect(report.verdict, JSON.stringify(report.ranges)).toBe('pass');
   }, 120_000);
+});
+
+/**
+ * A project of `w` × `h` with one picture clip from `start` for `length` seconds carrying one overlay, plus keys on its
+ * parameters: real ops (add_effect, set_effect_keyframe) and the real evaluator, as preview, stills and exports use them.
+ */
+function overlayDoc(type: string, params: Record<string, unknown>, keys: Record<string, [number, number][]>, start: number, length: number, w = W, h = H) {
+  let n = 0;
+  const rate = { num: FPS, den: 1 };
+  const tx = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => applyTransaction(doc, ops, { idSeed: `ok${n++}_`, actor: 'test', allowInternal });
+  const asset = { kind: 'image' as const, name: 'a.png', contentHash: `sha256:${'b'.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.rt(7200, 1), image: { width: w, height: h, codec: 'png', hasAlpha: false }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'test' } };
+  let r = tx(createProject({ id: 'p', name: 'p', width: w, height: h, frameRate: rate }), [{ op: 'import_asset', args: { asset } }], true);
+  const assetId = r.results[0]!.output!.assetId as string;
+  r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: T.frameTime(start * FPS, rate), duration: T.frameTime(length * FPS, rate), withLinkedAudio: false } }]);
+  const clipId = r.results[0]!.output!.clipId as string;
+  r = tx(r.doc, [{ op: 'add_effect', args: { clipId, type, params } }]);
+  const effectId = r.results[0]!.output!.effectId as string;
+  const ops: OpCall[] = Object.entries(keys).flatMap(([param, ks]) => ks.map(([at, value]) => ({ op: 'set_effect_keyframe', args: { clipId, effectId, param, time: T.frameTime(at * FPS, rate), value } })));
+  if (ops.length) r = tx(r.doc, ops);
+  return r.doc;
+}
+/** The evaluated parameters of the clip's first effect at timeline frame `frame`, with its time in seconds. */
+function evaluatedAt(doc: ProjectDocument, frame: number) {
+  const g = evaluate(doc, T.frameTime(frame, { num: FPS, den: 1 }));
+  const l = g.layers[0] as { effects: { type: string; params: Record<string, number | string | boolean> }[] };
+  return { params: l.effects[0]!.params, seconds: T.toSeconds(g.time) };
+}
+
+describe('overlay motion is one motion for the whole clip (ADR-0011, ADR-0005)', () => {
+  // the reviewer's ramps: a heavier snow, larger flakes, a fade in; a heavier and larger confetti; hearts growing
+  const ramps: [string, string, Record<string, unknown>, Record<string, [number, number][]>, number][] = [
+    ['snow gets heavier', 'overlay.snow', { size: 0.02, speed: 0.2, density: 0.3 }, { density: [[0, 0.3], [10, 1]] }, 60],
+    ['snowflakes grow', 'overlay.snow', { size: 0.008, speed: 0.4, density: 0.8 }, { size: [[0, 0.008], [5, 0.03]] }, 30],
+    ['snow fades in', 'overlay.snow', { size: 0.03, speed: 0.6, density: 0.7, amount: 0 }, { amount: [[0, 0], [1, 0.9]] }, 60],
+    ['confetti gets heavier and larger', 'overlay.confetti', { size: 0.01, speed: 1, density: 0.3, palette: 'single', color: '#FFFFFF' }, { density: [[0, 0.3], [4, 1]], size: [[0, 0.01], [4, 0.03]] }, 45],
+    ['hearts grow', 'overlay.hearts', { size: 0.015, speed: 0.5, density: 1, amount: 1 }, { size: [[0, 0.015], [3, 0.05]] }, 20],
+  ];
+  for (const [what, type, params, keys, start] of ramps) it(`${what}: every cell moves on by the same step each frame, never faster than asked; a particle by at most v·dt + its sway`, () => {
+    const length = Math.max(...Object.values(keys).flat().map(([at]) => at)) + 1;
+    const doc = overlayDoc(type, params, keys, start, length);
+    const speed = Number(findEffect(type)!.params.parse(params).speed), dt = 1 / FPS;
+    const steps: number[] = [];
+    for (let f = start * FPS; f + 1 < (start + length) * FPS; f++) {
+      const a = evaluatedAt(doc, f), b = evaluatedAt(doc, f + 1);
+      let step = -1;
+      for (const s of latticeSites(type, a.params, W, H, a.seconds, null).slice(0, 200)) {
+        const next = latticeSite(type, b.params, W, H, s.l, s.i, s.j, b.seconds, null);
+        if (!next) continue; // fewer particles now: this cell is empty
+        const v = speed * DEPTHS[s.l] * H, sway = SWAY * Math.max(s.c, next.c) * 2 * Math.PI * 0.8;
+        expect(Math.hypot(next.particle.x - s.particle.x, next.particle.y - s.particle.y), `${what}, frame ${f}`).toBeLessThanOrEqual(v * dt + sway * dt + 1e-6);
+        step = Math.max(step, Math.hypot(next.cx - s.cx, next.cy - s.cy) / (DEPTHS[s.l] * H * dt)); // frame heights a second
+      }
+      if (step >= 0) steps.push(step);
+    }
+    expect(steps.length).toBeGreaterThan(length * FPS / 2);
+    for (const s of steps) expect(s).toBeCloseTo(steps[0]!, 6);
+    expect(steps[0]!).toBeLessThanOrEqual(speed + 1e-9);
+  }, 120_000);
+
+  it('a heavier snow does not flash: the density ramp through the evaluator passes the flash analyser', () => {
+    const doc = overlayDoc('overlay.snow', { size: 0.02, speed: 0.2, density: 0.3 }, { density: [[0, 0.3], [10, 1]] }, 60, 11);
+    const sc = 162 / H, sw = Math.round(W * sc), sh = Math.round(H * sc), an = new FlashAnalyser(FPS);
+    for (let f = 60 * FPS; f < 71 * FPS; f++) { const e = evaluatedAt(doc, f); an.push(flashCells(rasterise(overlayParticles('overlay.snow', e.params, W, H, e.seconds, 0, null), sw, sh, sc, false), sw, sh)); }
+    const report = an.report();
+    expect(report.verdict, JSON.stringify(report.ranges)).toBe('pass');
+  }, 180_000);
+
+  it('preview, stills and an export of another size or a slightly different shape draw the particles in the same places', () => {
+    // exports round their size to even numbers (apps/server export.ts), so a scaled export can differ a little in shape
+    for (const [[w, h], [ew, eh], over] of [[[1366, 768], [342, 192], { size: 0.03, density: 0.8, speed: 0.5 }], [[1080, 1351], [1080, 1352], { size: 0.03, density: 0.8, speed: 0.5 }], [[1080, 1351], [540, 676], { size: 0.02, speed: 0.5, density: 1, amount: 1, palette: 'single', color: '#FFFFFF' }]] as const) {
+      const type = 'color' in over ? 'overlay.confetti' : 'overlay.snow';
+      const doc = overlayDoc(type, over, {}, 0, 610, w, h);
+      for (const frame of [3 * FPS, 600 * FPS]) {
+        const e = evaluatedAt(doc, frame);
+        const own = new Map(latticeSites(type, e.params, w, h, e.seconds, null).map((s) => [`${s.l}:${s.i}:${s.j}`, s]));
+        let matched = 0;
+        for (const s of latticeSites(type, e.params, ew, eh, e.seconds, null)) {
+          const o = own.get(`${s.l}:${s.i}:${s.j}`);
+          if (!o) continue;
+          matched++;
+          expect(Math.abs(s.particle.x / eh - o.particle.x / h), `${w}×${h} against ${ew}×${eh} at frame ${frame}`).toBeLessThan(1e-9);
+          expect(Math.abs(s.particle.y / eh - o.particle.y / h), `${w}×${h} against ${ew}×${eh} at frame ${frame}`).toBeLessThan(1e-9);
+        }
+        expect(matched).toBeGreaterThan(own.size * 0.9);
+      }
+    }
+  }, 60_000);
 });
 
 function inTri(x: number, y: number, [a, b, c]: readonly [number, number][]): boolean {
