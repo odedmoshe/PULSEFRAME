@@ -12,7 +12,7 @@
  * for it (the cut inspector and the ride bar read it).
  */
 import { memo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { Blend, Plus, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { Plus, ShieldAlert, TriangleAlert } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { transitionDef, type Clip } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
@@ -40,6 +40,15 @@ export function defaultTransitionFrames(rate: T.Rate, spare: number | null): num
   return spare === null ? half : Math.max(1, Math.min(half, spare));
 }
 export const DEFAULT_TRANSITION = 'dissolve';
+
+/** The sign of a transition on the timeline: two shots meeting at the cut. Drawn on the icon set's 24 grid and stroke. */
+export function TransitionGlyph({ size = 14 }: { size?: number }) {
+  return (
+    <svg className="pf-ico pf-ico-fixed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M4 6.5v11l8-5.5zM20 6.5v11l-8-5.5z" />
+    </svg>
+  );
+}
 
 const secondsText = (frames: number, rate: T.Rate) => (Math.round(((frames * rate.den) / rate.num) * 10) / 10).toFixed(1);
 
@@ -131,7 +140,7 @@ export const CutChip = memo(function CutChip({ editor, lang, clip, before, befor
           <button type="button" className={`cut-chip${tr.sync === 'beat' ? ' beat' : ''}${held ? ' held' : ''}${short ? ' short' : ''}`} data-testid="cut-chip" data-transition={tr.type} data-frames={tr.frames} data-sync={tr.sync ?? undefined} data-held={held ? 'true' : undefined} data-short={short ? 'true' : undefined}
             aria-pressed={selected} aria-label={`${s.cutAt(tcAt)} · ${facts}`}
             onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); select(); }}>
-            <Blend size={13} strokeWidth={1.75} aria-hidden="true" />
+            <TransitionGlyph size={14} />
             {tr.sync === 'beat' && <IconBeatLock size={12} />}
             {held && <ShieldAlert size={12} strokeWidth={1.75} aria-hidden="true" />}
             {short && <TriangleAlert size={12} strokeWidth={1.75} aria-hidden="true" />}

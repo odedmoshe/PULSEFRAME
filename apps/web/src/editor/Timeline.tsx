@@ -349,6 +349,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
           const fxCount = c.type === 'caption' ? 0 : (c.effects ?? []).filter((x) => x.enabled).length;
           const speed = c.type === 'media' && !c.freeze && !c.speedEnd ? speedValue(c) : 1;
           const ai = c.type === 'media' && !!asset?.provenance?.derived;
+          const onBeatFx = c.type !== 'caption' && (c.effects ?? []).some((x) => x.enabled && x.modulate && Object.keys(x.modulate).length > 0);
           const before = beforeOf.get(c.id) ?? null;
           const hasCut = isVideo && c.type === 'media' && (!!c.transition || !!before);
           const kfs = c.keyframes ? [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.frameIndexAt(k.time, rate))))].filter((f) => f >= 0 && f <= T.frameIndexAt(c.duration, rate)) : [];
@@ -380,13 +381,14 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                   {fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿</span> : null}
                   <span dir="auto" className="clip-label">{label || (missing ? s.clipMissing : '')}</span>
                 </span>
-                {(fxCount > 0 || speed !== 1 || ai || (c.type === 'media' && (c.freeze || c.reverse || c.speedEnd))) && (
+                {(fxCount > 0 || speed !== 1 || ai || onBeatFx || (c.type === 'media' && (c.freeze || c.reverse || c.speedEnd))) && (
                   <span className="clip-badges" aria-hidden="true">
                     {c.type === 'media' && c.freeze && <span className="clip-badge" title={s.clipFreeze}><Snowflake size={11} strokeWidth={1.75} /></span>}
                     {c.type === 'media' && c.reverse && <span className="clip-badge" title={s.clipReverse}><Rewind size={11} strokeWidth={1.75} /></span>}
                     {c.type === 'media' && c.speedEnd && <span className="clip-badge" title={s.clipRamp}><TrendingUp size={11} strokeWidth={1.75} /></span>}
                     {speed !== 1 && <span className="clip-badge num" title={s.clipSpeed}>{Number(speed.toFixed(2))}×</span>}
                     {fxCount > 0 && <span className="clip-badge num" title={s.clipEffects(fxCount)}><Sparkles size={11} strokeWidth={1.75} />{fxCount}</span>}
+                    {onBeatFx && <span className="clip-badge is-beat" title={s.clipOnBeat}><IconBeatLock size={11} /></span>}
                     {ai && <span className="clip-badge is-ai num" title={s.clipAi}>AI</span>}
                   </span>
                 )}
@@ -678,7 +680,7 @@ export function Timeline() {
   return (
     <section ref={root} className="timeline pf-ds" dir="ltr" aria-label={t('timeline')} data-mode={mode} data-tool={tool} style={pulse.bpm ? ({ '--pf-bpm': Math.round(pulse.bpm) } as React.CSSProperties) : undefined}>
       {/* The toolbar is one row of fixed height, so the lanes below it get exactly the height that is left (timeline.css). It mirrors with the interface; the lanes never do. */}
-      <div className="tl-bar" dir={uiDir} role="toolbar" aria-label={s.toolbar}>
+      <div className="tl-bar" dir={uiDir} role="group" aria-label={s.toolbar}>
         <div className="tl-tools">
           <Seg label={s.tools} size="sm" iconOnly value={tool} onChange={setTool} className="tl-tool"
             options={[{ value: 'select', label: s.toolSelect, ariaLabel: `${s.toolSelect} (V)`, icon: <MousePointer2 size={15} strokeWidth={1.75} aria-hidden="true" />, testId: 'tl-tool-select' }, { value: 'blade', label: s.toolBlade, ariaLabel: `${s.toolBlade} (C)`, icon: <Scissors size={15} strokeWidth={1.75} aria-hidden="true" />, testId: 'tl-tool-blade' }]} />

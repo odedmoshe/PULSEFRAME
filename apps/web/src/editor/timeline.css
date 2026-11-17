@@ -211,6 +211,7 @@
 .timeline.pf-ds .track .clip.k-text .clip-badges, .timeline.pf-ds .track .clip.k-caption .clip-badges { inset-block-start: 50%; transform: translateY(-50%); }
 .timeline.pf-ds .clip-badge { display: inline-flex; align-items: center; gap: 2px; block-size: 18px; padding: 0 5px; border-radius: var(--pf-r-xs); background: var(--pf-plate); color: var(--pf-text); font-size: var(--pf-fs-digits); line-height: 1; }
 .timeline.pf-ds .clip-badge.is-ai { color: var(--pf-agent); }
+.timeline.pf-ds .clip-badge.is-beat { color: var(--pf-pulse); }
 /* in the low lanes the plate is the whole height */
 .timeline.pf-ds .track.lane-a3 .clip-plate, .timeline.pf-ds .track.lane-v2 .clip-plate, .timeline.pf-ds .track.lane-fx .clip-plate { margin-block: 1px; }
 .timeline.pf-ds .track.lane-a3 .clip, .timeline.pf-ds .track.lane-v2 .clip, .timeline.pf-ds .track.lane-fx .clip { align-items: center; }
@@ -319,7 +320,7 @@
 .timeline.pf-ds .trim-chip.at-start { left: 0; } .timeline.pf-ds .trim-chip.at-end { right: 0; }
 .timeline.pf-ds .track:nth-child(2) .trim-chip { inset-block-end: auto; inset-block-start: calc(100% + 4px); } /* the first lane: the chip goes below, clear of the ruler */
 .timeline.pf-ds .tether { position: absolute; inset-block: 0; inline-size: 0; border-left: 1px solid var(--pf-frame); pointer-events: none; z-index: 5; }
-.timeline.pf-ds .tether.is-beat, .timeline.pf-ds .tether.is-bar { border-left-color: var(--pf-pulse); box-shadow: 0 0 8px var(--pf-pulse-glow); }
+.timeline.pf-ds .tether.is-beat, .timeline.pf-ds .tether.is-bar { border-left: 1px dashed var(--pf-pulse); }
 .timeline.pf-ds .tether span { position: sticky; inset-block-start: calc(var(--pf-lane-pulse) + var(--pf-lane-ruler) + var(--pf-lane-flash) + 4px); display: inline-block; margin-left: 5px; padding: 1px 7px; border-radius: var(--pf-r-xs); background: var(--pf-frame); color: var(--pf-frame-ink); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); white-space: nowrap; }
 .timeline.pf-ds .tether.is-beat span, .timeline.pf-ds .tether.is-bar span { background: var(--pf-pulse); color: var(--pf-pulse-ink); }
 .timeline.pf-ds .marquee { position: absolute; z-index: 5; border: 1px solid var(--pf-frame); background: var(--pf-frame-soft); pointer-events: none; }
@@ -364,7 +365,7 @@
 /* Light theme: a plate stays dark (it sits over pictures), so what is written on it stays light. --pf-on-plate is the token
    asked for; until it exists, the one token that is white in both themes stands in. */
 :root[data-theme='light'] .timeline.pf-ds .track .clip:not(.k-text, .k-caption, .k-adjust) :is(.clip-plate, .clip-kind, .clip-fx-badge),
-:root[data-theme='light'] .timeline.pf-ds :is(.clip-badge, .clip-badge.is-ai, .word-chip, .duck-label) { color: var(--pf-on-plate, var(--pf-on-danger)); }
+:root[data-theme='light'] .timeline.pf-ds :is(.clip-badge, .clip-badge.is-ai, .clip-badge.is-beat, .word-chip, .duck-label) { color: var(--pf-on-plate, var(--pf-on-danger)); }
 
 @media (prefers-reduced-motion: reduce) {
   .timeline.pf-ds .pulse-now.playing { animation: none; }

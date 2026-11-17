@@ -43,7 +43,7 @@ const he = {
   flashRisk: (from: string, to: string, perSecond: string) => `סיכון להבהוב ${from}–${to}: ${perSecond} הבזקים בשנייה, לפי הבדיקה של הייצוא האחרון`,
   // clips
   clipEffects: (n: number) => `${n} אפקטים`, clipSpeed: 'מהירות', clipAi: 'נוצר בכלי AI', clipFreeze: 'פריים קפוא', clipReverse: 'מתנגן לאחור', clipRamp: 'מהירות משתנה',
-  clipMissing: 'הקובץ לא נמצא', clipLinked: 'מקושר',
+  clipMissing: 'הקובץ לא נמצא', clipLinked: 'מקושר', clipOnBeat: 'אפקט שמגיב לפעימה',
   duckUnder: 'הנמכה מתחת לקול',
   trimStart: 'קיצור מההתחלה', trimEnd: 'קיצור מהסוף',
   frames: (n: number) => (n === 1 ? 'פריים אחד' : `${n} פריימים`),
@@ -120,7 +120,7 @@ const en: typeof he = {
   flashLane: 'Flash check',
   flashRisk: (from: string, to: string, perSecond: string) => `Flash risk ${from}–${to}: ${perSecond} flashes per second, from the check of the last export`,
   clipEffects: (n: number) => (n === 1 ? '1 effect' : `${n} effects`), clipSpeed: 'Speed', clipAi: 'Made with an AI tool', clipFreeze: 'Freeze frame', clipReverse: 'Plays backwards', clipRamp: 'Changing speed',
-  clipMissing: 'The file is missing', clipLinked: 'Linked',
+  clipMissing: 'The file is missing', clipLinked: 'Linked', clipOnBeat: 'An effect that follows the beat',
   duckUnder: 'lowered under the voice',
   trimStart: 'Trim the start', trimEnd: 'Trim the end',
   frames: (n: number) => (n === 1 ? '1 frame' : `${n} frames`),

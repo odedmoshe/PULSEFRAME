@@ -11,13 +11,13 @@
  * The bar is one toolbar for assistive technology: Tab enters it, the arrow keys move inside it.
  */
 import { forwardRef, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeftRight, AudioLines, Blend, Check, ChevronLeft, ChevronRight, ClipboardPaste, Copy, CopyPlus, Ellipsis, Gauge, Link2, Scissors, Sparkles, Spline, Trash2, Unlink2, Volume2 } from 'lucide-react';
+import { ArrowLeftRight, AudioLines, Check, ChevronLeft, ChevronRight, ClipboardPaste, Copy, CopyPlus, Ellipsis, Gauge, Link2, Scissors, Sparkles, Spline, Trash2, Unlink2, Volume2 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { findClip, previousAdjacent, transitionDef, velocityLimit, type Clip } from '@pulseframe/core';
 import { Menu, Tooltip, cx, type MenuItem } from '../ds/index.ts';
 import { rovingNext } from '../ds/logic.ts';
 import { COMMANDS, chordLabel } from './commands.ts';
-import { cutSelection, DEFAULT_TRANSITION, defaultTransitionFrames, useSelectedCut } from './CutChip.tsx';
+import { cutSelection, DEFAULT_TRANSITION, defaultTransitionFrames, TransitionGlyph, useSelectedCut } from './CutChip.tsx';
 import { IconBeatLock } from './icons.tsx';
 import { signedTimecode, type BarGrid } from './interactions.math.ts';
 import { useEditorState, type Editor } from './store.ts';
@@ -111,6 +111,14 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     return () => ro.disconnect();
   }, [anchor, mode, state.lang, sel.length, one?.clip.id]);
 
+  // one tab stop: Tab enters the bar at the action that last had the focus (the first one otherwise); the arrows move inside
+  const stop = useRef(0);
+  const rove = () => {
+    const items = [...(root.current?.querySelectorAll<HTMLElement>('button') ?? [])];
+    const at = Math.min(stop.current, items.length - 1);
+    items.forEach((b, i) => { const want = i === at ? 0 : -1; if (b.tabIndex !== want || !b.hasAttribute('tabindex')) b.tabIndex = want; });
+  };
+  useLayoutEffect(rove);
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     const items = [...(root.current?.querySelectorAll<HTMLElement>('button') ?? [])];
     const i = items.indexOf(document.activeElement as HTMLElement);
@@ -141,7 +149,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     body = (
       <>
         <Menu className="tl-menu" label={s.rTransition} items={items} onSelect={(id) => (id === '#gallery' ? openPanel('transitions-gallery', clip.id) : setType(id))}
-          trigger={(p) => <Act {...p} testId="ride-transition" label={tr ? transitionDef(tr.type)?.name[state.lang] ?? s.rTransition : s.rTransition} icon={ico(Blend)} reason={locked ? s.locked : undefined} className="keeps-label" />} />
+          trigger={(p) => <Act {...p} testId="ride-transition" label={tr ? transitionDef(tr.type)?.name[state.lang] ?? s.rTransition : s.rTransition} icon={<TransitionGlyph size={15} />} reason={locked ? s.locked : undefined} className="keeps-label" />} />
         <Act testId="ride-beat-lock" className="ride-beat" label={s.cutBeatLock} icon={<IconBeatLock size={15} />} pressed={tr?.sync === 'beat'} reason={!tr ? s.cutAdd : !grid ? s.rulerBarsNeed : locked ? s.locked : undefined}
           onClick={() => void editor.commit([{ op: 'set_transition_options', args: { clipId: clip.id, sync: tr?.sync === 'beat' ? null : 'beat' } }], 'Beat lock')} />
         <span className="ride-sep" aria-hidden="true" />
@@ -184,7 +192,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
             {visual && jump('animation', s.rAnim, ico(Spline), 'ride-animation')}
             {visual && jump('effects', s.rEffect, ico(Sparkles), 'ride-effect')}
             {isPicture && (
-              <Act testId="ride-transition" label={s.rTransition} icon={ico(Blend)} reason={locked ? s.locked : !canTransition && !(clip as Extract<Clip, { type: 'media' }>).transition ? s.needVideoCut : undefined}
+              <Act testId="ride-transition" label={s.rTransition} icon={<TransitionGlyph size={15} />} reason={locked ? s.locked : !canTransition && !(clip as Extract<Clip, { type: 'media' }>).transition ? s.needVideoCut : undefined}
                 onClick={() => {
                   const c = clip as Extract<Clip, { type: 'media' }>;
                   cutSelection.set(c.id); // the bar turns into the cut's tools
@@ -204,7 +212,8 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
   }
   return (
     <div ref={root} className={`ride${none ? ' is-idle' : ''}`} role="toolbar" aria-label={s.ride} aria-orientation="horizontal" data-testid="timeline-actions" data-mode={mode} dir={state.lang === 'he' ? 'rtl' : 'ltr'}
-      style={left === null ? { visibility: 'hidden' } : { left }} onKeyDown={onKey}>
+      style={left === null ? { visibility: 'hidden' } : { left }} onKeyDown={onKey}
+      onFocusCapture={(e) => { const i = [...(root.current?.querySelectorAll<HTMLElement>('button') ?? [])].indexOf(e.target as HTMLElement); if (i >= 0) { stop.current = i; rove(); } }}>
       {chip}
       {body}
     </div>
