@@ -9,12 +9,15 @@
  *  - Output goes to an in-memory BufferTarget (follow-up: StreamTarget -> OPFS/File System Access so memory is bounded by
  *    the muxer, not the file). Backpressure: every `add()` is awaited, so frames are never queued unboundedly.
  *  - Audio is mixed with an OfflineAudioContext from whole decoded assets (limitation: long media is decoded whole; a
- *    streaming AudioBufferSink path is the follow-up).
+ *    streaming AudioBufferSink path is the follow-up). The plan is made at the output rate, so every position is in samples of
+ *    the rate the context renders at.
+ *  - Clips with sound effects (ADR-0010) are not mixed by WebAudio: the shared engine voice (the same code as the server export
+ *    and the preview) renders them from the decoded pieces, and its output is added sample by sample to the rendered buffer.
  */
 import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Input, Mp4OutputFormat, Output, Quality, UrlSource, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, initGpu, RampResampler, rampSpanOf, stretchKeepingPitch } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, fillPlayingOrder, initGpu, openClipVoice, RampResampler, rampSpanOf, soundEnd, stretchKeepingPitch, type PlannedAudioClip } from '@pulseframe/engine';
 import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
@@ -128,6 +131,34 @@ export async function probeSound(url: string): Promise<{ codec: string | null; f
     return { codec: track.codec ?? null, firstTimestamp: await track.getFirstTimestamp(), pieces: n, onsets, samples, lastEnd, sampleRate: sr };
   } finally { input.dispose(); }
 }
+/**
+ * The sound of one clip with effects over timeline samples [s0, s1), from the decoded pieces of its file: the playing-order source
+ * the voice asks for is filled from the pieces (positions from their own timestamps, as everywhere else in the browser), at the
+ * decoder's rate. Mono is heard in both channels; of more channels the first two are used (wave 1).
+ */
+function voiceSound(c: PlannedAudioClip, pieces: SoundPiece[], rate: number, s0: number, s1: number): Float32Array {
+  const sourceRate = pieces[0]?.buffer.sampleRate ?? c.voice!.sourceRate;
+  const voice = openClipVoice(c, rate, sourceRate, s0 - c.at, s1 - c.at);
+  const { origin, first, last, reverse } = voice.input;
+  const P = new Float32Array(Math.max(0, last - first) * 2);
+  // native indices the voice reads
+  const lo = reverse ? origin - last : origin + first, hi = reverse ? origin - first : origin + last;
+  for (const p of pieces) {
+    if (p.buffer.sampleRate !== sourceRate) throw new Error(`the decoder changed its sample rate within one file (${sourceRate} Hz, then ${p.buffer.sampleRate} Hz)`);
+    const start = Math.round(p.at * p.buffer.sampleRate), n = p.buffer.length;
+    if (start + n <= lo || start >= hi) continue;
+    const l = p.buffer.getChannelData(0), r = p.buffer.numberOfChannels > 1 ? p.buffer.getChannelData(1) : l;
+    const data = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) { data[i * 2] = l[i]!; data[i * 2 + 1] = r[i]!; }
+    fillPlayingOrder(P, first, voice.input, { start, data });
+  }
+  const a = voice.push(P), b = voice.finish();
+  const y = new Float32Array(a.length + b.length);
+  y.set(a);
+  y.set(b, a.length);
+  return y;
+}
+
 async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, out: Leased['manifest']['output'], rate: number, stopped: () => void): Promise<AudioBuffer> {
   const firstSample = T.nearestSampleIndex(T.frameTime(out.firstFrame, out.frameRate), rate);
   const totalSamples = T.nearestSampleIndex(T.frameTime(out.firstFrame + out.frames, out.frameRate), rate) - firstSample;
@@ -141,7 +172,24 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
   // Same audio plan as the server export and the preview: gain, pan, fades and ducking mean the same thing on every route.
   // Sound pieces are placed by their own timestamps on the file's clock, exactly as the preview does, so a sound stream that
   // starts late (or a container the browser's built-in audio decoder cannot read) behaves the same on every route.
-  for (const c of audioPlan(doc).clips) {
+  // The plan is made at the rate this context renders at (Opus is always 48 kHz), so its sample positions are this context's samples.
+  const plan = audioPlan(doc, undefined, { sampleRate: rate });
+  const end = firstSample + totalSamples;
+  const starts = new Map(plan.clips.map((c) => [c.clipId, c.at]));
+  const missing = plan.missingFx.filter((m) => (starts.get(m.clipId) ?? -1) < end);
+  if (missing.length) throw new BrowserExportError('export_failed', `sound effect ${missing.map((m) => `"${m.type}" on clip ${m.clipId}`).join(', ')} is not available in this build; the export would drop it`);
+  let fxMix: Float32Array | null = null; // the sound of the clips with effects, added after rendering
+  for (const c of plan.clips) {
+    if (c.voice) {
+      const s0 = Math.max(c.at, firstSample), s1 = Math.min(soundEnd(c), end);
+      if (s1 <= s0) continue;
+      stopped();
+      const y = voiceSound(c, await decode(c.assetId), rate, s0, s1);
+      fxMix ??= new Float32Array(totalSamples * 2);
+      const o = (s0 - firstSample) * 2;
+      for (let i = 0; i < y.length; i++) fxMix[o + i] = fxMix[o + i]! + y[i]!;
+      continue;
+    }
     const s0 = Math.max(c.at, firstSample);
     const s1 = Math.min(c.at + c.length, firstSample + totalSamples);
     if (s1 <= s0) continue;
@@ -208,7 +256,16 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
     }
   }
   stopped();
-  return ctx.startRendering();
+  const rendered = await ctx.startRendering();
+  if (fxMix) {
+    // exact alignment: sample i of the effects mix is sample i of the rendered buffer
+    for (let ch = 0; ch < 2; ch++) {
+      const x = rendered.getChannelData(ch);
+      for (let i = 0; i < x.length && i < totalSamples; i++) x[i] = x[i]! + fxMix[i * 2 + ch]!;
+      rendered.copyToChannel(x, ch);
+    }
+  }
+  return rendered;
 }
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
