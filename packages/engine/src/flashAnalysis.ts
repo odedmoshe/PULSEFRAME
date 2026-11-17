@@ -109,6 +109,8 @@ export class FlashAnalyser {
   private readonly block: number;
   /** Frames that failed: kind, the most transitions of a flashing cell in a failing window, the share of the frame flashing. */
   private failing: { frame: number; kind: 'general' | 'red'; count: number; flashing: Uint8Array }[] = [];
+  /** The most transitions of each kind any one cell had in any one-second window so far (peak()). */
+  private highest = { general: 0, red: 0 };
   constructor(readonly fps: number, private readonly grid = FLASH_GRID) {
     if (!(fps > 0)) throw new RangeError('frame rate must be positive');
     this.block = Math.max(1, Math.round(grid / 3));
@@ -130,6 +132,7 @@ export class FlashAnalyser {
       if (cell.red.next(redValue(r, g, b), [r, g, b])) cell.rTimes.push(this.frame);
       for (const [times, kind] of [[cell.gTimes, 'general'], [cell.rTimes, 'red']] as const) {
         while (times.length && times[0]! <= this.frame - window) times.shift();
+        if (times.length > this.highest[kind]) this.highest[kind] = times.length;
         if (times.length > 6) { flags[kind][c] = 1; most[kind] = Math.max(most[kind], times.length); }
       }
     });
@@ -146,6 +149,14 @@ export class FlashAnalyser {
       if (fails) this.failing.push({ frame: this.frame, kind, count: most[kind], flashing: f });
     }
     this.frame++;
+  }
+  /**
+   * The most transitions (of luminance, and of saturated red) that any one cell had in any one-second window of the frames
+   * pushed so far, whatever the area. A cell flashes above 6 (more than three flashes a second), so this says how close
+   * a picture comes to the limit even where it passes (the trend-pack proofs read it per transition, ADR-0012).
+   */
+  peak(): { general: number; red: number } {
+    return { ...this.highest };
   }
   report(): FlashReport {
     const window = Math.max(1, Math.round(this.fps));

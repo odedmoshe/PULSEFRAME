@@ -2,10 +2,12 @@
  * The JavaScript models of the wave-1 GPU passes (ADR-0011) and their registration. The passes themselves are WGSL only
  * (ADR-0008 decision 2) and are checked against these models on a real adapter by `pnpm proof:gpu`; here the models' own
  * properties, the numbers each pass receives (at most eight, CRT without time) and the transition table are checked in Node.
+ * The trend pack (ADR-0012) adds the transition uniform v2 (twelve numbers), the light colours' red share and the geometry
+ * models of film-burn, brush and page-turn (checked on an adapter by `pnpm proof:trend-light`).
  */
 import { describe, expect, it } from 'vitest';
-import { EFFECTS, effectParams, GPU_TRANSITION_IDS } from '@pulseframe/core';
-import { crtMap, digicamTick, digicamTone, GPU_EFFECTS, GPU_TRANSITIONS } from './gpu.ts';
+import { EFFECTS, effectParams, GPU_TRANSITION_IDS, TRANSITIONS, transitionDef } from '@pulseframe/core';
+import { brushFront, burnThreshold, crtMap, digicamTick, digicamTone, GPU_EFFECTS, GPU_TRANSITIONS, hash32, PAGE_RADIUS, pageFold, pageTurnSource, transitionUniforms, unit32 } from './gpu.ts';
 
 const defaults = (type: string) => effectParams(type, {}) as Record<string, unknown>;
 const env = (seconds: number) => ({ width: 360, height: 640, seconds, beat: null });
@@ -105,5 +107,74 @@ describe('registration', () => {
       'whip-left': { kernel: 'whip', v: [-1, 0, 0] }, 'whip-right': { kernel: 'whip', v: [1, 0, 0] }, 'whip-up': { kernel: 'whip', v: [0, -1, 0] }, 'whip-down': { kernel: 'whip', v: [0, 1, 0] },
       'spin-cw': { kernel: 'spin', v: [1, 0, 0] }, 'spin-ccw': { kernel: 'spin', v: [-1, 0, 0] },
     });
+  });
+});
+
+describe('trend-pack transitions (ADR-0012)', () => {
+  const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  it('transitionUniforms packs twelve numbers in order: p, v0..v2, W/H, W, H, light, tint r, g, b, seed', () => {
+    expect(transitionUniforms({ type: 'brush-left', progress: 0.25, light: 0.75, color: '#FF8000', seed: 42 }, 1080, 1920)).toEqual([0.25, -1, 0, 0, 1080 / 1920, 1080, 1920, 0.75, 1, 128 / 255, 0, 42]);
+    // a legacy kernel: light 0, white, seed 0, so the 39 legacy passes read what they always read in a and b
+    expect(transitionUniforms({ type: 'soft-wipe-down-left', progress: 0.5 }, 640, 360)).toEqual([0.5, -1, 1, 0, 640 / 360, 640, 360, 0, 1, 1, 1, 0]);
+    expect(transitionUniforms({ type: 'film-burn', progress: 1, color: 'orange' }, 2, 1).slice(8, 11)).toEqual([1, 1, 1]); // malformed colour: white
+    for (const id of Object.keys(GPU_TRANSITIONS)) expect(transitionUniforms({ type: id, progress: 0 }, 360, 640)).toHaveLength(12);
+    expect(() => transitionUniforms({ type: 'dissolve', progress: 0 }, 360, 640)).toThrow(/no GPU transition/);
+  });
+  it('the seven GPU ids and their variants; every light transition is a GPU id with a colour', () => {
+    expect(Object.fromEntries(['film-burn', 'light-leak', 'ink-bleed', 'brush-left', 'brush-right', 'page-turn-left', 'page-turn-right'].map((id) => [id, GPU_TRANSITIONS[id]]))).toEqual({
+      'film-burn': { kernel: 'burn', v: [0, 0, 0] }, 'light-leak': { kernel: 'leak', v: [0, 0, 0] }, 'ink-bleed': { kernel: 'ink', v: [0, 0, 0] },
+      'brush-left': { kernel: 'brush', v: [-1, 0, 0] }, 'brush-right': { kernel: 'brush', v: [1, 0, 0] },
+      'page-turn-left': { kernel: 'page', v: [-1, 0, 0] }, 'page-turn-right': { kernel: 'page', v: [1, 0, 0] },
+    });
+    const lights = TRANSITIONS.filter((t) => transitionDef(t.id)?.light).map((t) => t.id);
+    expect(lights.sort()).toEqual(['film-burn', 'light-leak']);
+    for (const id of lights) { expect(GPU_TRANSITIONS[id], id).toBeDefined(); expect(transitionDef(id)!.options).toContain('color'); }
+  });
+  it('the default light colours keep a linear red share of at most 0.75 (the analyser calls 0.8 saturated red)', () => {
+    for (const t of TRANSITIONS.map((x) => transitionDef(x.id)!).filter((x) => x.light)) {
+      const c = t.defaults!.color!, rgb = [1, 3, 5].map((i) => lin(parseInt(c.slice(i, i + 2), 16)));
+      const share = rgb[0]! / (rgb[0]! + rgb[1]! + rgb[2]!);
+      expect(share, `${t.id} ${c}`).toBeLessThanOrEqual(0.75);
+      expect(share, `${t.id} ${c}: still a warm light`).toBeGreaterThan(0.5);
+    }
+  });
+  it('burnThreshold sweeps from below every noise level (nothing burnt) to above every one (all burnt), evenly', () => {
+    expect(burnThreshold(0)).toBeLessThan(0);
+    expect(burnThreshold(1)).toBeGreaterThan(1);
+    expect(burnThreshold(0.5)).toBeCloseTo(0.525, 12);
+    for (let i = 1; i <= 100; i++) expect(burnThreshold(i / 100)).toBeGreaterThan(burnThreshold((i - 1) / 100));
+  });
+  it('brushFront: each band starts at most a quarter late, every band is done by the end, and the bands follow the shader\'s seeded delays', () => {
+    for (const seed of [0, 1, 77, 9999]) for (let band = 0; band < 4; band++) {
+      expect(brushFront(0, band, seed)).toBeLessThanOrEqual(0);
+      expect(brushFront(0, band, seed)).toBeGreaterThan(-0.25);
+      expect(brushFront(1, band, seed) - 0.08 - 0.01, 'past the far edge with the bristle and the soft edge').toBeGreaterThan(1);
+      expect(brushFront(0.5, band, seed)).toBeCloseTo(0.75 - unit32(hash32(band + seed)) * 0.25, 12);
+    }
+    // the seed changes the delays
+    expect([0, 1, 2, 3].map((b) => brushFront(0.5, b, 1))).not.toEqual([0, 1, 2, 3].map((b) => brushFront(0.5, b, 2)));
+  });
+  it('pageFold and pageTurnSource: all page at the start, all incoming at the end, nothing ever goes back, and the flat back mirrors about pageFold().mirror', () => {
+    expect(pageFold(0).fold).toBeCloseTo(1 + PAGE_RADIUS, 12);
+    expect(pageFold(1).fold).toBeCloseTo(-PAGE_RADIUS, 12);
+    const S = Array.from({ length: 400 }, (_, i) => (i + 0.5) / 400); // pixel centres
+    expect(S.every((s) => pageTurnSource(s, 0).face === 'front' && pageTurnSource(s, 0).at === s)).toBe(true);
+    expect(S.every((s) => pageTurnSource(s, 1).face === 'incoming')).toBe(true);
+    let was = S.map(() => false);
+    for (let k = 0; k <= 200; k++) {
+      const p = k / 200, now = S.map((s) => pageTurnSource(s, p).face === 'incoming');
+      now.forEach((inc, i) => { if (was[i]) expect(inc, `s=${S[i]} p=${p}`).toBe(true); });
+      was = now;
+      const { fold, edge, mirror } = pageFold(p);
+      expect(edge).toBeGreaterThanOrEqual(fold);
+      expect(edge).toBeLessThanOrEqual(fold + PAGE_RADIUS + 1e-12);
+      // the flat back of the page (left of the fold): the outgoing picture's s' = 2·mirror − s, and only paper that exists (s' <= 1)
+      for (const s of S) { const r = pageTurnSource(s, p); if (s <= fold && r.face === 'back') { expect(r.at).toBeCloseTo(2 * mirror - s, 12); expect(r.at).toBeLessThanOrEqual(1); } }
+    }
+    // half-way: the far side has gone, the near side is still the page, and the band just before the fold shows its back
+    const mid = pageFold(0.5);
+    expect(pageTurnSource(0.95, 0.5).face).toBe('incoming');
+    expect(pageTurnSource(0.05, 0.5)).toEqual({ face: 'front', at: 0.05 });
+    expect(pageTurnSource(mid.fold - 0.05, 0.5).face).toBe('back');
   });
 });
