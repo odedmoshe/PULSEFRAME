@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasHandles } from './editor/CanvasHandles.tsx';
+import { TrackPicker } from './editor/TrackPicker.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
 import { chordOf, Keymap } from './editor/commands.ts';
 import { ErrorBar, Header, Inspector, Library, Transport } from './editor/panels.tsx';
@@ -97,6 +98,7 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
         <div className="canvas-wrap">
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
           <CanvasHandles canvas={canvasEl} />
+          <TrackPicker canvas={canvasEl} />
           <PreviewNotice />
           <Welcome />
         </div>

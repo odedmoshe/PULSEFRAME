@@ -596,7 +596,7 @@ export class Editor {
 
   // ---------- motion tracking (ADR-0015) ----------
   /** The playhead moved into the clip: its first frame before it, its last frame after it. */
-  private timeIn(clip: Clip): T.RationalTime {
+  timeIn(clip: Clip): T.RationalTime {
     const last = T.max(clip.start, T.sub(clipEnd(clip), T.frameTime(1, this.rate)));
     return T.max(clip.start, T.min(this.playhead, last));
   }

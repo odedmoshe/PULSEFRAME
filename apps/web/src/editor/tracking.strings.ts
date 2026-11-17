@@ -38,7 +38,6 @@ const he = {
   'mtrack.pick.noPicture': 'הקליפ אינו מוצג בסמן. העבירו את הסמן לפריים שבו הוא נראה.',
   'mtrack.pick.noSize': 'לנקודה אין גודל. גרירה בוחרת אזור.',
   'mtrack.pick.created': 'נוצר מסלול מעקב. אפשר להתחיל במעקב.',
-  'mtrack.pick.cancelled': 'הבחירה בוטלה.',
 } satisfies Record<string, S>;
 const en: Record<keyof typeof he, S> = {
   'mtrack.title': 'Motion tracking',
@@ -70,7 +69,6 @@ const en: Record<keyof typeof he, S> = {
   'mtrack.pick.noPicture': 'The clip is not shown at the playhead. Move the playhead to a frame where it is visible.',
   'mtrack.pick.noSize': 'A point has no size. Drag to pick an area.',
   'mtrack.pick.created': 'Motion track created. You can start tracking.',
-  'mtrack.pick.cancelled': 'Picking cancelled.',
 };
 
 const heFollow = {
@@ -155,3 +153,22 @@ export const pickAnnouncement = (lang: Lang, p: { x: number; y: number; w?: numb
 };
 /** A stretch of source frames, to be read as a range ("120–149"); `to` is one past the last frame. */
 export const stretch = (from: number, to: number): S => (to - 1 > from ? `${from}–${to - 1}` : String(from));
+
+/**
+ * Fixed data-testids of the motion tracking UI, shared by the components and the proofs (editor-interactions-proof.ts,
+ * a11y-audit.ts, tracking-proof.ts). A list item repeats its id and carries data-* attributes (data-motion-track-id, …).
+ */
+export const TRACKING_TESTIDS = {
+  // the picker on the monitor (TrackPicker.tsx)
+  picker: 'track-picker', pickerMark: 'track-picker-mark', pickerConfirm: 'track-picker-confirm', pickerCancel: 'track-picker-cancel', pickerLive: 'track-picker-live', pickerError: 'track-picker-error', pickerBar: 'track-picker-bar',
+  // the tracking panel (TrackingPanel.tsx), in the clip tab of a video clip
+  panel: 'tracking-panel', newPoint: 'mtrack-new-point', newRegion: 'mtrack-new-region', status: 'mtrack-status',
+  item: 'mtrack-item', counts: 'mtrack-counts', problem: 'mtrack-problem', jump: 'mtrack-jump', run: 'mtrack-run', overwrite: 'mtrack-overwrite',
+  progress: 'mtrack-progress', stop: 'mtrack-stop', jobStatus: 'mtrack-job-status', rename: 'mtrack-rename', remove: 'mtrack-delete', removeUnbind: 'mtrack-delete-unbind', followTitle: 'mtrack-follow-title', error: 'mtrack-error',
+  // follow (FollowControls.tsx), for a title or a picture on a video track
+  follow: 'follow-controls', followTrack: 'follow-track', followAttach: 'follow-attach', followDetach: 'follow-detach', followScale: 'follow-scale', followSmooth: 'follow-smooth', followState: 'follow-state', followError: 'follow-error',
+  // privacy regions (RedactControls.tsx), on a video clip
+  redact: 'redact-controls', redactSource: 'redact-source', redactRegionSource: 'redact-region-source', redactAdd: 'redact-add', redactRegion: 'redact-region', redactShape: 'redact-shape', redactStyle: 'redact-style', redactStrength: 'redact-strength',
+  redactPad: 'redact-pad', redactFeather: 'redact-feather', redactColor: 'redact-color', redactOnLoss: 'redact-on-loss', redactWeak: 'redact-weak', redactRemove: 'redact-remove',
+  redactX: 'redact-x', redactY: 'redact-y', redactWidth: 'redact-width', redactHeight: 'redact-height', redactWarning: 'redact-warning', redactError: 'redact-error',
+} as const;

@@ -11,6 +11,10 @@ import { ASSET_DRAG_TYPE, useEditorState, WORKSPACES, type Editor, type Workspac
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { MediaGrid } from './MediaLibrary.tsx';
 import { AnalysisPanel } from './AnalysisPanel.tsx';
+import { TrackingPanel } from './TrackingPanel.tsx';
+import { FollowControls } from './FollowControls.tsx';
+import { RedactControls } from './RedactControls.tsx';
+import { trackingT } from './tracking.strings.ts';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
@@ -423,6 +427,10 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         {clipFocus !== 'motion' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <Section id="look" title={SECTION_STRINGS[state.lang].look}><LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} /></Section>}
         {clipFocus === 'color' && sel && !(state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video')) && <p className="muted" data-testid="color-none">{t('workspace.color.none')}</p>}
         {clipFocus === 'all' && sel && state.selection.length === 1 && sel.clip.type === 'media' && <Section id="analysis" title={SECTION_STRINGS[state.lang].analysis}><AnalysisPanel key={`analysis:${sel.clip.id}`} /></Section>}
+        {/* motion tracking (ADR-0015): the tracks of a video clip's file; follow for a title or a picture; privacy regions on a video clip */}
+        {clipFocus !== 'color' && sel && state.selection.length === 1 && sel.clip.type === 'media' && sel.track.kind === 'video' && !!state.doc?.assets[sel.clip.assetId]?.video && <Section id="tracking" title={trackingT(state.lang)('mtrack.title')}><TrackingPanel key={`tracking:${sel.clip.id}`} /></Section>}
+        {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || (sel.clip.type === 'media' && sel.track.kind === 'video')) && <Section id="follow" title={trackingT(state.lang)('follow.title')}><FollowControls key={`follow:${sel.clip.id}`} /></Section>}
+        {clipFocus !== 'motion' && sel && state.selection.length === 1 && sel.clip.type === 'media' && sel.track.kind === 'video' && !!state.doc?.assets[sel.clip.assetId]?.video && <Section id="redact" title={trackingT(state.lang)('redact.title')}><RedactControls key={`redact:${sel.clip.id}`} /></Section>}
       </div>
       <div {...panelProps('speech')}>
         <h2>{t('transcript')}</h2>
