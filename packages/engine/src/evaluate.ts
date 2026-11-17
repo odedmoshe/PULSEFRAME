@@ -12,7 +12,8 @@ import * as T from '@pulseframe/time';
 import { captionAt, type CaptionLayer } from './captions.ts';
 import { FLASH_SINCE } from './gpu.ts';
 import { flashSchedule, flashSince } from './strobeSchedule.ts';
-import { beatPositionAt, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { beatPositionAt, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
 
 /** Look applied by the compositor after the layer is placed: effects in order, then mask, then blend/opacity. */
 export interface LayerLook {
@@ -133,15 +134,55 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
   return graph;
 }
 
-/** Everything active at a time, in readable form (agent sense `describe_moment`). */
+/**
+ * Planned ring-out of every sound clip that has sound effects (ADR-0010), by clip id: the voice's tail (already cut at the end of
+ * the video) in seconds, and whether that cut happened. From the audio plan, so it is what every route plays and exports.
+ */
+export function soundTailsOf(doc: ProjectDocument, sequenceId = doc.mainSequenceId): Map<string, SoundTail> {
+  const plan = audioPlan(doc, sequenceId);
+  const out = new Map<string, SoundTail>();
+  for (const c of plan.clips) if (c.voice) out.set(c.clipId, { seconds: c.voice.tail / plan.sampleRate, cut: c.voice.cutFrom !== undefined });
+  return out;
+}
+// Core's timeline() and the sound-effect operations report tails through this (core has no kernels; see core queries.ts soundTails).
+provideSoundTails(soundTailsOf);
+
+/** A sound heard at a moment only through its tail: the clip has ended, its echo or reverb has not. */
+export interface TailAudio { clipId: string; trackId: string; assetId: string; tail: true; secondsAfterEnd: number; fx: string[] }
+/**
+ * What the audio plan says about the sound at timeline sample `sample` (ADR-0010 D9): the effects each planned clip runs through
+ * (the enabled, audible ones, in processing order), and the clips heard only through their tail there. `sounding` are the clips
+ * whose body covers the moment (the evaluator's audio entries); they are not listed again as tails.
+ */
+export function soundAt(plan: AudioPlan, sample: number, sounding: ReadonlySet<string>): { fx: Map<string, string[]>; tails: TailAudio[] } {
+  const fx = new Map<string, string[]>(), tails: TailAudio[] = [];
+  for (const c of plan.clips) {
+    if (!c.voice) continue;
+    const types = c.voice.chain.map((x) => x.type);
+    fx.set(c.clipId, types);
+    const end = c.at + c.length;
+    if (!sounding.has(c.clipId) && sample >= end && sample < soundEnd(c)) tails.push({ clipId: c.clipId, trackId: c.trackId, assetId: c.assetId, tail: true, secondsAfterEnd: Number(((sample - end) / plan.sampleRate).toFixed(4)), fx: types });
+  }
+  return { fx, tails };
+}
+/** The audio plan of a committed document, worked out once (documents are not changed after commit; edits make new ones). */
+const plans = new WeakMap<ProjectDocument, AudioPlan>();
+const planOf = (doc: ProjectDocument) => { let p = plans.get(doc); if (!p) { p = audioPlan(doc); plans.set(doc, p); } return p; };
+
+/**
+ * Everything active at a time, in readable form (agent sense `describe_moment`). Sound entries say which sound effects they run
+ * through (`fx`), and a clip whose echo or reverb is still ringing after its end is listed with `tail: true`.
+ */
 export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
   const g = evaluate(doc, time);
+  const plan = planOf(doc);
+  const sound = soundAt(plan, T.nearestSampleIndex(time, plan.sampleRate), new Set(g.audio.map((a) => a.clipId)));
   return {
     time: g.time,
     seconds: T.toSeconds(g.time),
     frameIndex: g.frameIndex,
     layers: g.layers.map((l) => (l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...(l.colourFix ? { colourFix: l.colourFix } : {}), ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
-    audio: g.audio,
+    audio: [...g.audio.map((a) => ({ ...a, fx: sound.fx.get(a.clipId) ?? [] })), ...sound.tails],
   };
 }
 

@@ -137,6 +137,20 @@ export const he = {
   'access.epd': 'מגבלת ייצואים ל-24 שעות (לא חובה)', 'access.epd.unit': 'ייצואים ביום',
   'access.create': 'הרשאה חדשה', 'access.name': 'שם', 'access.mode': 'רמת גישה', 'access.thisProject': 'הגבלה לפרויקט זה', 'access.budget': 'תקציב (יחידות מטבע שלמות)', 'access.budget.hint': 'בגרסה זו שום דבר עדיין לא עולה כסף.', 'access.createBtn': 'יצירת הרשאה',
   'access.token.title': 'אסימון הגישה', 'access.token.once': 'האסימון מוצג פעם אחת בלבד ולא יוצג שוב. העתיקו אותו עכשיו.', 'access.token.copy': 'העתקה', 'access.token.copied': 'הועתק', 'access.token.endpoint': 'כתובת MCP', 'access.token.usage': 'שולחים את האסימון בכותרת Authorization: Bearer …', 'access.token.dismiss': 'סיימתי, הסתרת האסימון',
+  // sound effects («אפקטי קול», ADR-0010); distinct from the sound library («צלילים»)
+  'sound.fx': 'אפקטי קול', 'sound.fx.open': 'אפקטי קול…', 'sound.fx.voice': 'דמות קול', 'sound.fx.space': 'חלל', 'sound.fx.tone': 'צליל', 'sound.fx.none': 'ללא',
+  'sound.fx.listen': 'השמעה לדוגמה', 'sound.fx.notSaved': '(לא נשמר)', 'sound.fx.active': 'האפקטים בקליפ', 'sound.fx.empty': 'אין אפקטי קול בקליפ הזה.',
+  'sound.fx.order': 'הסדר קבוע: האפקטים פועלים תמיד בסדר הזה, בלי קשר לסדר שבו נבחרו.', 'sound.fx.on': 'פעיל', 'sound.fx.settings': 'הגדרות', 'sound.fx.remove': 'הסרת',
+  'sound.fx.presets': 'מתכונים מוכנים', 'sound.fx.presets.pick': 'בחירת מתכון…', 'sound.fx.presets.clear': 'הסרת כל אפקטי הקול', 'sound.fx.presets.hint': 'מתכון מחליף בפעולה אחת את כל אפקטי הקול של הקליפ.',
+  'sound.fx.tail.before': 'הצליל ממשיך להדהד עוד', 'sound.fx.tail.after': 'שניות אחרי סוף הקליפ.', 'sound.fx.tailCut.before': 'הזנב נקטע בסוף הסרטון אחרי', 'sound.fx.tailCut.after': 'שניות.',
+  'sound.fx.tailCut.none': 'הסרטון נגמר עם סוף הקליפ, ולכן ההד שאחריו לא יישמע.',
+  'sound.fx.bypass': 'השוואה בלי אפקטים', 'sound.fx.bypass.hint': 'בתצוגה המקדימה בלבד: כל הקליפים נשמעים בלי אפקטי קול. לא נשמר בפרויקט.',
+  'sound.fx.applyTrack': 'החלה על כל הקליפים ברצועה', 'sound.fx.applyTrack.hint': 'אפקטי הקול של שאר קליפי הקול ברצועה מוחלפים באלה של הקליפ הזה.',
+  'sound.fx.blocked': 'אפקטי קול עדיין לא פועלים על קול ששומר על גובה הצליל במהירות אחרת, או שהמהירות שלו משתנה בהדרגה.', 'sound.fx.locked': 'הרצועה נעולה; יש לבטל את הנעילה כדי לשנות את אפקטי הקול.',
+  'sound.fx.mono': 'למקור מונו אין צד סטריאו, ולכן לרוחב הסטריאו אין השפעה עליו.', 'sound.fx.unavailable': 'בדפדפן הזה הקליפ מתנגן בתצוגה המקדימה בלי אפקטי הקול שלו:',
+  'sound.fx.unavailable.title': 'קליפים שמתנגנים כרגע בתצוגה המקדימה בלי אפקטי הקול שלהם:', 'sound.fx.dsp': 'אפקטים של עיבוד צליל, לא המרת קול. אותו עיבוד בתצוגה המקדימה ובייצוא.',
+  'sound.fx.seconds': 'שניות', 'timeline.fx': 'אפקטים', 'timeline.fx.tail': 'זנב',
+  'op.add_audio_effect': 'הוספת אפקט קול', 'op.update_audio_effect': 'עדכון אפקט קול', 'op.remove_audio_effect': 'הסרת אפקט קול', 'op.apply_audio_preset': 'מתכון אפקטי קול', 'op.copy_audio_effects': 'העתקת אפקטי קול',
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -275,6 +289,20 @@ export const en: Record<keyof typeof he, string> = {
   'access.epd': 'Exports per 24 hours (optional)', 'access.epd.unit': 'exports/day',
   'access.create': 'New grant', 'access.name': 'Name', 'access.mode': 'Access level', 'access.thisProject': 'Limit to this project', 'access.budget': 'Budget (whole currency units)', 'access.budget.hint': 'Nothing in this build costs money yet.', 'access.createBtn': 'Create grant',
   'access.token.title': 'Access token', 'access.token.once': 'This token is shown once and will not be shown again. Copy it now.', 'access.token.copy': 'Copy', 'access.token.copied': 'Copied', 'access.token.endpoint': 'MCP endpoint', 'access.token.usage': 'Send the token as the header Authorization: Bearer …', 'access.token.dismiss': 'Done, hide the token',
+  // sound effects (ADR-0010); distinct from the sound library
+  'sound.fx': 'Sound effects', 'sound.fx.open': 'Sound effects…', 'sound.fx.voice': 'Character voice', 'sound.fx.space': 'Space', 'sound.fx.tone': 'Tone', 'sound.fx.none': 'None',
+  'sound.fx.listen': 'Listen', 'sound.fx.notSaved': '(not saved)', 'sound.fx.active': 'Effects on this clip', 'sound.fx.empty': 'This clip has no sound effects.',
+  'sound.fx.order': 'The order is fixed: effects always run in this order, whatever order they were chosen in.', 'sound.fx.on': 'On', 'sound.fx.settings': 'Settings', 'sound.fx.remove': 'Remove',
+  'sound.fx.presets': 'Ready-made presets', 'sound.fx.presets.pick': 'Choose a preset…', 'sound.fx.presets.clear': 'Remove all sound effects', 'sound.fx.presets.hint': 'A preset replaces all of the clip\'s sound effects in one step.',
+  'sound.fx.tail.before': 'The sound rings on for', 'sound.fx.tail.after': 'seconds after the clip ends.', 'sound.fx.tailCut.before': 'The tail is cut at the end of the video after', 'sound.fx.tailCut.after': 'seconds.',
+  'sound.fx.tailCut.none': 'The video ends with this clip, so its echo will not be heard.',
+  'sound.fx.bypass': 'Compare without effects', 'sound.fx.bypass.hint': 'Preview only: every clip plays without sound effects. Not saved in the project.',
+  'sound.fx.applyTrack': 'Apply to every clip on the track', 'sound.fx.applyTrack.hint': 'The sound effects of the other sound clips on the track are replaced by this clip\'s.',
+  'sound.fx.blocked': 'Sound effects do not work yet on a sound that keeps its pitch at another speed, or whose speed changes gradually.', 'sound.fx.locked': 'The track is locked; unlock it to change the sound effects.',
+  'sound.fx.mono': 'A mono source has no stereo side, so stereo width does nothing to it.', 'sound.fx.unavailable': 'In this browser the preview plays this clip without its sound effects:',
+  'sound.fx.unavailable.title': 'Clips the preview plays without their sound effects for now:', 'sound.fx.dsp': 'Sound processing effects, not voice conversion. The same processing in preview and export.',
+  'sound.fx.seconds': 'seconds', 'timeline.fx': 'Effects', 'timeline.fx.tail': 'tail',
+  'op.add_audio_effect': 'Added sound effect', 'op.update_audio_effect': 'Updated sound effect', 'op.remove_audio_effect': 'Removed sound effect', 'op.apply_audio_preset': 'Sound effect preset', 'op.copy_audio_effects': 'Copied sound effects',
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };

@@ -7,7 +7,8 @@ import { shortcutAllowed } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
-import { findEffect } from '@pulseframe/core';
+import { findClip, findEffect } from '@pulseframe/core';
+import { clipLabel } from './editor/Timeline.tsx';
 
 export function App() {
   const editor = useMemo(() => new Editor(), []);
@@ -53,14 +54,24 @@ const NOTICE_STRINGS = {
  * A missing graphics adapter is a different state with its own notice (Look panel).
  */
 function PreviewNotice() {
-  const { editor, state } = useEditorState(); // the player ticks the state after every painted frame
+  const { editor, state, t } = useEditorState(); // the player ticks the state after every painted frame
   const reasons = editor.player?.unavailableReasons ?? {};
   const ids = Object.keys(reasons);
-  if (ids.length === 0) return null;
+  // Sound clips whose effects cannot run in this browser play without them (ADR-0010 D7): said here too, never silently.
+  const sound = editor.player?.unavailableAudioFx ?? {};
+  const soundIds = Object.keys(sound);
+  if (ids.length === 0 && soundIds.length === 0) return null;
+  const nameOf = (clipId: string) => { const f = state.doc ? findClip(state.doc, clipId) : undefined; return f && state.doc ? clipLabel(state.doc, f.clip) : clipId; };
   return (
     <div className="preview-notice" role="status" data-testid="effect-unavailable">
-      <p>{NOTICE_STRINGS[state.lang].without}</p>
-      <ul>{ids.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong> — <bdi dir="ltr">{reasons[id]}</bdi></li>)}</ul>
+      {ids.length > 0 && <>
+        <p>{NOTICE_STRINGS[state.lang].without}</p>
+        <ul>{ids.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong> — <bdi dir="ltr">{reasons[id]}</bdi></li>)}</ul>
+      </>}
+      {soundIds.length > 0 && <div data-testid="audio-fx-unavailable">
+        <p>{t('sound.fx.unavailable.title')}</p>
+        <ul>{soundIds.map((id) => <li key={id}><strong><bdi>{nameOf(id)}</bdi></strong> — <bdi dir="ltr">{sound[id]}</bdi></li>)}</ul>
+      </div>}
     </div>
   );
 }

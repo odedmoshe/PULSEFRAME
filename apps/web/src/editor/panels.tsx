@@ -14,6 +14,7 @@ import { AnalysisPanel } from './AnalysisPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
+import { LinkedSoundFx } from './AudioFxBlock.tsx';
 import { AiTools } from './AiTools.tsx';
 import { SpeedCurveField } from './SpeedCurves.tsx';
 import { PacingPanel } from './PacingPanel.tsx';
@@ -180,6 +181,7 @@ function SpeedField({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
           {t('speed.keepPitch')}
         </label>
       )}
+      {editor.selected?.track.kind === 'video' && <LinkedSoundFx sounds={sound.filter((c) => c.id !== clip.id)} />}
     </div>
   );
 }

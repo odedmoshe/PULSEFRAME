@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { toSourceSpan, clipEnd, timelineMarkers, MARKER_COLORS, type Clip, type Marker, type ProjectDocument } from '@pulseframe/core';
+import { toSourceSpan, clipEnd, findAudioEffect, sortAudioFx, timelineMarkers, MARKER_COLORS, type Clip, type Marker, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
@@ -12,6 +12,7 @@ import { useMarquee } from './TimelineMarquee.tsx';
 import { InlineRename } from './InlineRename.tsx';
 import { TimelineZoom, useWheelZoom } from './TimelineZoom.tsx';
 import { BAR_ICON_COMPONENTS, IconHide, IconLock, IconMute, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
+import { soundTailsFor } from './AudioFxBlock.tsx';
 
 const MAX_MARKERS = 3000;
 
@@ -61,6 +62,8 @@ export function Timeline() {
     const beats = m.beats.slice(0, MAX_MARKERS - scenes.length);
     return { scenes, beats, bars: new Set(m.downbeats.map((b) => T.nearestFrameIndex(b, rate))), truncated: m.sceneCuts.length + m.beats.length > MAX_MARKERS };
   }, [doc]);
+  // Echo and reverb ring on past a clip's end (ADR-0010): the planned tail of each sound clip, from the same audio plan as playback and export.
+  const tails = useMemo(() => (doc ? soundTailsFor(doc) : new Map<string, { seconds: number; cut: boolean }>()), [doc]);
   const userMarkers = useMemo(() => (doc ? Object.values(doc.markers ?? {}).filter((m) => m.sequenceId === doc.mainSequenceId).sort((a, b) => T.cmp(a.time, b.time)) : []), [doc]);
   const lastMarkerS = userMarkers.length ? T.toSeconds(userMarkers[userMarkers.length - 1]!.time) : 0;
   const here = userMarkers.find((m) => T.frameIndexAt(m.time, rate) === editor.frame);
@@ -146,21 +149,27 @@ export function Timeline() {
                 const width = Math.max(4, T.toSeconds(c.duration) * pps - 1);
                 const asset = c.type === 'media' ? doc.assets[c.assetId] : undefined;
                 const volLine = c.type === 'media' && tr.kind === 'audio' && asset?.kind !== 'image' && ((c.volume?.length ?? 0) > 0 || (selection.length === 1 && selection[0] === c.id));
+                // sound effects of a sound clip: «∿» on the clip, its names and tail in the clip's accessible name, the tail drawn after the clip
+                const fxNames = c.type === 'media' && tr.kind === 'audio' ? sortAudioFx(c.audioFx ?? []).filter((x) => x.enabled).map((x) => findAudioEffect(x.type)?.name[state.lang] ?? x.type) : [];
+                const tail = tails.get(c.id);
+                const tailS = tail && tail.seconds >= 0.05 ? tail.seconds : 0;
+                const fxLabel = `${fxNames.length ? `; ${t('timeline.fx')}: ${fxNames.join(', ')}` : ''}${tailS ? `; ${t('timeline.fx.tail')} ${tailS.toFixed(1)} ${t('sound.fx.seconds')}` : ''}`;
                 return (
                   <Fragment key={c.id}>
                   <button role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-ramp={c.type === 'media' && c.speedEnd ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
                     style={{ left: T.toSeconds(c.start) * pps, width }} onClick={(e) => editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace')} aria-pressed={selection.includes(c.id)}
                     onContextMenu={(e) => { e.preventDefault(); if (!selection.includes(c.id)) editor.select(c.id); setMenu({ x: e.clientX, y: e.clientY }); }}
-                    aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
+                    aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}${fxLabel}`} data-fx={fxNames.length ? 'true' : undefined}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                       <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={34} reverse={c.type === 'media' && !!c.reverse} />
                     )}
-                    <span dir="auto" className="clip-label">{c.type === 'media' && c.freeze ? '❄ ' : ''}{c.type === 'media' && c.reverse ? '◀ ' : ''}{c.type === 'media' && c.speedEnd ? '⤴ ' : ''}{clipLabel(doc, c)}</span>
+                    <span dir="auto" className="clip-label">{c.type === 'media' && c.freeze ? '❄ ' : ''}{c.type === 'media' && c.reverse ? '◀ ' : ''}{c.type === 'media' && c.speedEnd ? '⤴ ' : ''}{fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿ </span> : ''}{clipLabel(doc, c)}</span>
                     {c.keyframes && [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.toSeconds(k.time))))].filter((s) => s >= 0 && s <= T.toSeconds(c.duration)).map((s) => (
                       <i key={s} className="kf" style={{ left: s * pps }} aria-hidden="true" />
                     ))}
                   </button>
                   {volLine && <VolumeLine clip={c as Extract<Clip, { type: 'media' }>} selected={selection.length === 1 && selection[0] === c.id} editable={!tr.locked} pps={pps} left={T.toSeconds(c.start) * pps} width={width} />}
+                  {tailS > 0 && <div className="clip-tail" aria-hidden="true" data-testid="clip-tail" data-tail-of={c.id} data-cut={tail!.cut ? 'true' : undefined} style={{ left: T.toSeconds(clipEnd(c)) * pps, width: Math.max(2, tailS * pps) }} />}
                   </Fragment>
                 );
               })}
