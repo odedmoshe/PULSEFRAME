@@ -4,7 +4,10 @@
  *
  *   M2 recovery     a reference graded with known values, matched from an ungraded copy of the same picture: values within ±0.05,
  *                   verified difference ≤ 1.5
- *   M3 cast         an ffmpeg colorbalance cast matched to the neutral picture: the verified difference falls by ≥ 60 %
+ *   M2b hidden      the same on the test pattern as it is (flat saturated colours, which hide tint from the statistics): the
+ *                   match is as close, the other four values come back, and tint stays between the known value and no change
+ *   M3 cast         an ffmpeg colorbalance cast (noticeable: above 2 before) matched to the neutral picture: the verified
+ *                   difference falls by ≥ 60 %
  *   M4 extreme      a cast beyond the grade's reach (R/B about 2.3): limitedBy includes temperature, every value in range, the
  *                   remaining difference reported
  *   M5 match all    5 clips through MCP (match_colour, targets 'all'): one transaction, one undo restores all 5, each grade is
@@ -17,8 +20,9 @@
  *                   revision; with no adapter in the browser the panel is disabled and says why
  *   timing          seconds per target clip, reported
  *
- * Synthetic pictures only (ffmpeg's test pattern, blurred, with casts made by ffmpeg filters): this proves the measurement, the
- * fit, the op and the refusals, not that a match looks right on real footage. Nobody has compared the results by eye yet.
+ * Synthetic pictures only (ffmpeg's test pattern, blurred and brought into the mid-tones, with casts made by ffmpeg filters): this
+ * proves the measurement, the fit, the op and the refusals, not that a match looks right on real footage. Nobody has compared the
+ * results by eye yet.
  *   pnpm build && pnpm proof:colourmatch       Exits 2 (blocked) when this machine's browser gives no WebGPU adapter.
  */
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
@@ -41,18 +45,38 @@ const ff = (args: string[]) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'er
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail).slice(0, 900)}` : ''}`); };
 const KEYS = ['exposure', 'temperature', 'tint', 'contrast', 'saturation', 'shadows', 'highlights', 'fade'] as const;
+/** The grade of M2 and M2b's reference. */
+const KNOWN: GradeParams = { exposure: 0.3, temperature: 0.35, tint: -0.2, contrast: 1.15, saturation: 0.85, shadows: 0.2, highlights: 0.1, fade: 0.05 };
 const inRange = (p: GradeParams) => KEYS.every((k) => { const r = paramRange('color.grade', k)!; return p[k] >= r.min && p[k] <= r.max; });
 const r2 = (v: number | null | undefined) => (v === null || v === undefined ? v : Number(v.toFixed(2)));
 interface Target { clipId: string; params: GradeParams; residual: { model: number; verified: number | null }; verdict: string; limitedBy: string[]; warnings: string[]; statsBefore: PictureStats; statsAfter: PictureStats | null }
 interface Match { revision: number; method: string; reference: { clipId: string; stats: PictureStats } | null; targets: Target[]; ops: { op: string; args: any }[]; unavailable: string | null; note: string }
 
+/**
+ * Each channel of the test pattern brought from 0..255 into 25..165. The pattern itself is six flat saturated colours: every
+ * channel is 0 or 255 nearly everywhere, so a grade's gains are clipped away (0 stays 0, 255 stays 255), ffmpeg's colorbalance
+ * (which moves the middle of each channel) hardly touches it, and green is absent from the bars that make up the mid-tones. The
+ * first run of this proof (2026-11-17, on the merged tree) used it as it is. Measured on the stills its matches took (the same
+ * matches run again, with the same results):
+ * - M2: with tint held anywhere from −1 to 1 and the other values refitted, the statistics stay within 0.37 CIELAB units of the
+ *   reference, and within 0.1 for tint from −1 to 0.2 (the 8-bit rounding of a still alone leaves 0.04; people notice about 2).
+ *   No fit can return tint to ±0.05 from statistics of that picture.
+ * - M3: the colorbalance cast moved the statistics by 1.13 (already "close" before any match), and a search over all five
+ *   values of color.grade finds nothing under 0.53: a fall of 54 % at most, so "at least 60 %" was out of the grade's reach.
+ * In 25..165 every bar has some of every channel, the casts are ones a picture with mid-tones gets (6 units for M3), and the
+ * reference grade of M2 (gains up to 1.32, contrast 1.15) keeps every value inside 0..255. `bars` keeps the pattern as it is for
+ * M2b, which checks what a match should do with a picture that hides a value.
+ */
+const MID_TONES = 'lutrgb=r=val*0.55+25:g=val*0.55+25:b=val*0.55+25';
 /** The fixtures: ffmpeg's colour test pattern, blurred so its colours change smoothly, as 2 s H.264 clips; casts made by ffmpeg filters. */
 function fixtures() {
-  const scene = (out: string, filters: string, src = `testsrc2=size=${W}x${H}:rate=25`) => { const f = path.join(art, out); ff(['-f', 'lavfi', '-i', src, '-t', String(SECONDS), '-vf', `gblur=sigma=6${filters ? `,${filters}` : ''},format=yuv420p`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '12', '-an', f]); return f; };
+  const clip = (out: string, filters: string[]) => { const f = path.join(art, out); ff(['-f', 'lavfi', '-i', `testsrc2=size=${W}x${H}:rate=25`, '-t', String(SECONDS), '-vf', ['gblur=sigma=6', ...filters, 'format=yuv420p'].join(','), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '12', '-an', f]); return f; };
+  const scene = (out: string, filters: string) => clip(out, [MID_TONES, ...(filters ? [filters] : [])]);
   const cut = path.join(art, 'cut.mp4');
   ff(['-f', 'lavfi', '-i', `testsrc2=size=${W}x${H}:rate=25:duration=1`, '-f', 'lavfi', '-i', `color=c=0x1d3a8a:size=${W}x${H}:rate=25:duration=1`, '-filter_complex', '[0:v]gblur=sigma=6[a];[a][1:v]concat=n=2:v=1:a=0,format=yuv420p[v]', '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '12', '-an', cut]);
   return {
     neutral: scene('neutral.mp4', ''),
+    bars: clip('bars.mp4', []),
     warm: scene('warm.mp4', 'colorbalance=rm=0.22:gm=-0.04:bm=-0.22'),
     cool: scene('cool.mp4', 'colorbalance=rm=-0.18:bm=0.22'),
     dark: scene('dark.mp4', 'eq=brightness=-0.1:contrast=0.9'),
@@ -120,7 +144,7 @@ async function main() {
     {
       const pid = (m2Project = await A.project('m2'));
       const [ref, target] = await A.clips(pid, [fx.neutral, fx.neutral]) as [string, string];
-      const known: GradeParams = { exposure: 0.3, temperature: 0.35, tint: -0.2, contrast: 1.15, saturation: 0.85, shadows: 0.2, highlights: 0.1, fade: 0.05 };
+      const known = KNOWN;
       await A.tx(pid, [{ op: 'set_colour_grade', args: { clipId: ref, params: known } }]);
       const before = (await A.doc(pid)).revision;
       const m = await A.match(pid, { method: 'match', referenceClipId: ref, targetClipIds: [target] });
@@ -131,6 +155,23 @@ async function main() {
       check('M2 recovery: a reference graded with known values, matched from an ungraded copy: every value within ±0.05, verified difference ≤ 1.5, the revision unchanged', !!t && KEYS.every((k) => Math.abs(t.params[k] - known[k]) <= 0.05) && t.residual.verified !== null && t.residual.verified <= 1.5 && (await A.doc(pid)).revision === before, measurements.m2);
     }
 
+    // ---------- M2b a picture that hides a value ----------
+    // The test pattern as it is hides tint from the statistics (see MID_TONES), so the known tint cannot be asked back. What can
+    // be asked: the match is as close, the values the picture does show come back, and the one it hides is not sent anywhere the
+    // picture gives no reason for: it stays between the known value and no change. (The first run returned tint −0.996.)
+    {
+      const pid = await A.project('m2b');
+      const [ref, target] = await A.clips(pid, [fx.bars, fx.bars]) as [string, string];
+      await A.tx(pid, [{ op: 'set_colour_grade', args: { clipId: ref, params: KNOWN } }]);
+      const m = await A.match(pid, { method: 'match', referenceClipId: ref, targetClipIds: [target] });
+      const t = m.ok ? m.result.targets[0]! : null;
+      const shown = ['exposure', 'temperature', 'contrast', 'saturation', 'shadows', 'highlights', 'fade'] as const;
+      measurements.m2b = { known: KNOWN, found: t?.params, errors: t ? Object.fromEntries(KEYS.map((k) => [k, r2(Math.abs(t.params[k] - KNOWN[k]))])) : null, verified: r2(t?.residual.verified), model: r2(t?.residual.model), limitedBy: t?.limitedBy, verdict: t?.verdict };
+      if (m.ok) timing.push({ check: 'M2b', targets: 1, seconds: m.seconds, secondsPerTarget: m.seconds });
+      check('M2b a picture that hides tint (the flat saturated test pattern, graded with the same known values): verified difference ≤ 1.5, exposure, temperature, contrast and saturation within ±0.05, tint between the known value and no change (0.05 either side), no value reported as limited',
+        !!t && t.residual.verified !== null && t.residual.verified <= 1.5 && shown.every((k) => Math.abs(t.params[k] - KNOWN[k]) <= 0.05) && t.params.tint >= Math.min(KNOWN.tint, 0) - 0.05 && t.params.tint <= Math.max(KNOWN.tint, 0) + 0.05 && t.limitedBy.length === 0, measurements.m2b);
+    }
+
     // ---------- M3 cast ----------
     {
       const pid = (m3Project = await A.project('m3'));
@@ -139,9 +180,10 @@ async function main() {
       const t = m.ok ? m.result.targets[0]! : null;
       const before = m.ok && t ? statsDistance(t.statsBefore, m.result.reference!.stats) : null;
       const after = t?.residual.verified ?? null;
-      measurements.m3 = { before: r2(before), after: r2(after), reduction: before && after !== null ? r2(1 - after / before) : null, params: t?.params, verdict: t?.verdict };
+      measurements.m3 = { before: r2(before), after: r2(after), reduction: before && after !== null ? r2(1 - after / before) : null, params: t?.params, verdict: t?.verdict, verdictBefore: before !== null ? verdictOf(before) : null };
       if (m.ok) timing.push({ check: 'M3', targets: 1, seconds: m.seconds, secondsPerTarget: m.seconds });
-      check('M3 cast: an ffmpeg colorbalance cast matched to the neutral picture: the verified difference falls by at least 60 %', before !== null && after !== null && after <= 0.4 * before, measurements.m3);
+      // a cast that is there to be removed: above 2 before (one the verdict words would not already call close)
+      check('M3 cast: an ffmpeg colorbalance cast (noticeable: the difference before is above 2) matched to the neutral picture: the verified difference falls by at least 60 %', before !== null && after !== null && before > 2 && after <= 0.4 * before && t?.verdict === verdictOf(after), measurements.m3);
     }
 
     // ---------- M4 extreme cast ----------
@@ -250,21 +292,35 @@ async function main() {
       const dir = await page.evaluate(() => ({ html: document.documentElement.dir, lang: document.documentElement.lang, panel: getComputedStyle(document.querySelector('[data-testid=colour-match]')!).direction }));
       // wait for this browser's adapter check: «מדוד» stays disabled until it has passed
       for (let i = 0; i < 100 && (await page.getByTestId('colour-match-unavailable').count()); i++) await sleep(200);
+      const refTextBefore = await page.getByTestId('colour-match-reference').textContent();
       const reachedRef = await tabTo(page, 'colour-match-set-reference');
       await page.keyboard.press('Space');
+      // Space pressed the button (and did not start playback instead): the line now names this clip as the reference, and the
+      // button, which sets what is already set, is disabled
       const refText = await page.getByTestId('colour-match-reference').textContent();
+      const refSet = refText !== refTextBefore && (await page.getByTestId('colour-match-set-reference').isDisabled());
+      const playing = (await page.getByTestId('play').getAttribute('data-playing')) === 'true';
       await openClip(page, target);
       const reachedRadio = await tabTo(page, 'colour-match-method-match');
       const reachedMeasure = await tabTo(page, 'colour-match-measure');
       const revBefore = (await A.doc(pid)).revision;
-      await page.keyboard.press('Enter');
+      if (reachedMeasure) await page.keyboard.press('Enter');
+      // The measurement starts (the panel says so) and ends in results or in a failure the panel states. A panel that never
+      // started is a failed check, not a wait: the first run sat here for ten minutes and took the checks after it down too.
+      const panelState = async () => (await page.getByTestId('colour-match').getAttribute('data-state')) ?? '';
+      let started = false;
+      for (let i = 0; i < 100 && !(started = ['measuring', 'done'].includes(await panelState())); i++) await sleep(200);
       const progressText = await page.getByTestId('colour-match-progress').textContent().catch(() => '');
-      await page.getByTestId('colour-match-results').waitFor({ timeout: 10 * 60_000 });
+      for (const t0 = Date.now(); started && (await panelState()) === 'measuring' && Date.now() - t0 < 10 * 60_000;) await sleep(500);
+      const ended = await panelState();
+      const hasResults = (await page.getByTestId('colour-match-results').count()) > 0;
       for (let i = 0; i < 150 && (await page.locator('[data-testid=colour-match-tile][data-state=drawing]').count()); i++) await sleep(200);
       const tiles = await page.locator('[data-testid=colour-match-tile]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.state));
-      const shotA = await page.getByTestId('colour-match-results').screenshot();
+      const shot = async () => (hasResults ? page.getByTestId('colour-match-results').screenshot() : Buffer.alloc(0));
+      const shotA = await shot();
       await sleep(800);
-      const shotB = await page.getByTestId('colour-match-results').screenshot();
+      const shotB = await shot();
+      const still = hasResults && shotA.length > 0 && shotA.equals(shotB);
       // (the theme gives buttons a short colour transition on hover and focus; that is not motion, and it has settled by now)
       const motion = await page.evaluate(() => {
         const panel = document.querySelector('[data-testid=colour-match]')!;
@@ -272,21 +328,32 @@ async function main() {
         const moving = [...panel.querySelectorAll('*')].filter((el) => { const st = getComputedStyle(el); return !!st.animationName && st.animationName !== 'none'; }).length;
         return { running, moving };
       });
-      const names = await page.evaluate(() => {
-        const panel = document.querySelector('[data-testid=colour-match]')!;
-        const nameOf = (el: HTMLElement) => el.getAttribute('aria-label') || el.closest('label')?.textContent?.trim() || el.textContent?.trim() || '';
-        return [...panel.querySelectorAll<HTMLElement>('button, input, select')].map((el) => ({ testid: el.dataset.testid ?? el.tagName, name: nameOf(el) }));
-      });
+      // (no named function inside the callback: tsx wraps one in a helper, __name, that the page does not have)
+      const names = await page.evaluate(() => [...document.querySelector('[data-testid=colour-match]')!.querySelectorAll<HTMLElement>('button, input, select')]
+        .map((el) => ({ testid: el.dataset.testid ?? el.tagName, name: el.getAttribute('aria-label') || el.closest('label')?.textContent?.trim() || el.textContent?.trim() || '' })));
       const statusRole = await page.getByTestId('colour-match-progress').evaluate((el) => ({ role: el.getAttribute('role'), live: el.getAttribute('aria-live') }));
-      const reachedApply = await tabTo(page, 'colour-match-apply');
-      await page.keyboard.press('Enter');
-      for (let i = 0; i < 100 && (await A.doc(pid)).revision === revBefore; i++) await sleep(200);
+      // What the result row says: the verdict word and the number are the ones measured in a render (the same match asked over
+      // REST at this revision gives the same render), the word follows the number, and nothing reads as no difference at all.
+      const rows = await page.locator('[data-testid=colour-match-row]').evaluateAll((els) => els.map((e) => ({ verdict: (e as HTMLElement).dataset.verdict ?? '', text: e.querySelector('.cm-result')?.textContent ?? '' })));
+      const same = hasResults ? await A.match(pid, { method: 'match', referenceClipId: ref, targetClipIds: [target] }) : null;
+      const measured = same?.ok ? same.result.targets[0]! : null;
+      const VERDICT_WORD: Record<string, string> = { close: 'קרוב מאוד', noticeable: 'עדיין נשאר הבדל קטן', partial: 'מתקרב רק בחלקו' };
+      const shownNumber = (text: string) => { const m = /(<\s*)?(\d+\.\d)/.exec(text); return m ? { under: !!m[1], n: Number(m[2]) } : null; };
+      const rowOk = (r: { verdict: string; text: string }) => {
+        const shown = shownNumber(r.text), v = measured?.residual.verified;
+        return !!shown && typeof v === 'number' && r.verdict === measured!.verdict && r.verdict === verdictOf(v) && r.text.includes(VERDICT_WORD[r.verdict] ?? '\0')
+          && (shown.under ? v < shown.n : Math.abs(v - shown.n) <= 0.0501) && !(shown.n === 0) && !/perfect|exact|מושלמ|זהה/i.test(r.text);
+      };
+      const reachedApply = hasResults && (await tabTo(page, 'colour-match-apply'));
+      if (reachedApply) await page.keyboard.press('Enter');
+      for (let i = 0; i < 100 && reachedApply && (await A.doc(pid)).revision === revBefore; i++) await sleep(200);
       await sleep(500);
       const afterApply = await A.doc(pid);
       const grade = gradeOf(A.clipOf(afterApply.project, target));
-      measurements.m10 = { dir, reached: { setReference: reachedRef, radio: reachedRadio, measure: reachedMeasure, apply: reachedApply }, referenceText: refText, progressText, statusRole, tiles, sameTilePixels: shotA.equals(shotB), motion, revisions: { before: revBefore, after: afterApply.revision }, unnamed: names.filter((x) => !x.name), errors };
-      check('M10 the panel in Hebrew, right to left; set reference, choose and measure by keyboard; the measuring status is a polite live region', dir.html === 'rtl' && dir.lang === 'he' && dir.panel === 'rtl' && reachedRef && reachedRadio && reachedMeasure && /[֐-׿]/.test(refText ?? '') && statusRole.role === 'status' && statusRole.live === 'polite' && names.every((x) => x.name) && errors.length === 0, measurements.m10);
-      check('M10 the results show still tiles (drawn once, identical a moment later, nothing animated in the panel)', tiles.length >= 3 && tiles.every((x) => x === 'drawn') && shotA.equals(shotB) && motion.running === 0 && motion.moving === 0, { tiles, same: shotA.equals(shotB), motion });
+      measurements.m10 = { dir, reached: { setReference: reachedRef, radio: reachedRadio, measure: reachedMeasure, apply: reachedApply }, referenceTextBefore: refTextBefore, referenceText: refText, referenceSet: refSet, playingAfterSpace: playing, started, ended, progressText, statusRole, rows, measured: measured && { verdict: measured.verdict, verified: r2(measured.residual.verified) }, tiles, sameTilePixels: still, motion, revisions: { before: revBefore, after: afterApply.revision }, unnamed: names.filter((x) => !x.name), errors };
+      check('M10 the panel in Hebrew, right to left; Space on «קבע כייחוס» sets the reference (and does not start playback), the method and «מדוד» are reached and pressed by keyboard and the measurement starts; the measuring status is a polite live region', dir.html === 'rtl' && dir.lang === 'he' && dir.panel === 'rtl' && reachedRef && refSet && !playing && reachedRadio && reachedMeasure && started && /[֐-׿]/.test(refText ?? '') && statusRole.role === 'status' && statusRole.live === 'polite' && names.every((x) => x.name) && errors.length === 0, measurements.m10);
+      check('M10 the results show still tiles (drawn once, identical a moment later, nothing animated in the panel)', hasResults && tiles.length >= 3 && tiles.every((x) => x === 'drawn') && still && motion.running === 0 && motion.moving === 0, { ended, tiles, same: still, motion });
+      check('M10 the result row says what was measured: the verdict word follows the difference verified in a render, the number shown is that difference, and it never reads as no difference', rows.length === 1 && rows.every(rowOk), { rows, measured: measured && { verdict: measured.verdict, verified: measured.residual.verified } });
       check('M10 «החל» by keyboard adds exactly one revision and gives the clip the proposed grade', reachedApply && afterApply.revision === revBefore + 1 && !!grade, { revisions: measurements.m10 && (measurements.m10 as any).revisions, grade: grade?.params });
       await page.close();
       // no adapter in the browser: the panel is disabled and says why
@@ -327,12 +394,12 @@ async function main() {
 
   measurements.timing = timing.map((x) => ({ ...x, seconds: r2(x.seconds), secondsPerTarget: r2(x.secondsPerTarget) }));
   console.log('timing (seconds per target clip):', JSON.stringify(measurements.timing));
-  check('timing: seconds per target clip are reported for every match that ran', timing.length >= 5 && timing.every((x) => x.secondsPerTarget > 0), measurements.timing);
+  check('timing: seconds per target clip are reported for every match that ran', timing.length >= 6 && timing.every((x) => x.secondsPerTarget > 0), measurements.timing);
   const failed = checks.filter((x) => !x.ok);
   const report = {
     ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', passed: checks.length - failed.length, total: checks.length,
     machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none: the WebGPU adapter here is a software one' },
-    scope: 'Colour match and automatic colour balance (ADR-0014) on synthetic pictures (ffmpeg\'s test pattern, blurred, with casts made by ffmpeg filters) at 640x360, through the real server, render worker (software WebGPU) and editor. It proves the measurement, the fit, the verification, the op, the refusals and the panel; it does not show that a match looks right on real footage: nobody has compared the results by eye yet.',
+    scope: 'Colour match and automatic colour balance (ADR-0014) on synthetic pictures (ffmpeg\'s test pattern, blurred and brought into the mid-tones, with casts made by ffmpeg filters; M2b on the pattern as it is) at 640x360, through the real server, render worker (software WebGPU) and editor. It proves the measurement, the fit, the verification, the op, the refusals and the panel; it does not show that a match looks right on real footage: nobody has compared the results by eye yet.',
     measurements, checks,
   };
   fs.writeFileSync(path.join(root, 'docs/evidence/colourmatch-proof.json'), JSON.stringify(report, null, 2) + '\n');
