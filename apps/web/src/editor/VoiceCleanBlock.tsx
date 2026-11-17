@@ -75,6 +75,14 @@ export function reportTokens(r: VoiceMeasurement, lang: VoiceCleanLang): ReportT
   if (r.noise.warning === 'ranges_too_short') out.push({ t: `. ${s.rangesShort}` });
   return out;
 }
+/**
+ * ▶ «לפני» / ▶ «אחרי»: the visible text and the accessible name. The name BEGINS with the visible word (WCAG 2.5.3 Label in Name),
+ * so a speech-input user who says «לפני» reaches the button; the rest says it is a sample that is not saved.
+ */
+export function listenLabels(which: 'before' | 'after', lang: VoiceCleanLang): { text: string; name: string } {
+  const s = VOICE_CLEAN_STRINGS[lang], word = s[which];
+  return { text: `▶ ${word}`, name: `${word}: ${which === 'before' ? s.listenBefore : s.listenAfter}` };
+}
 export const tokensText = (tokens: readonly ReportToken[]): string => tokens.map((x) => ('t' in x ? x.t : x.n)).join('');
 
 /** Space and Enter on a button of this block press it; they do not reach the editor's play and step shortcuts. */
@@ -164,9 +172,9 @@ export function VoiceCleanBlock({ clip, locked, blocked }: { clip: SoundClip; lo
       )}
       <div className="row vclean-actions">
         <button type="button" className="afx-listen" aria-pressed={playing === 'before'} data-testid={ID.before} disabled={!player || !c.any || measuring} aria-describedby={describedBy}
-          aria-label={s('listenBefore')} title={s('listenBefore')} onClick={() => void listen('before')}>▶ {s('before')}</button>
+          aria-label={listenLabels('before', lang).name} title={listenLabels('before', lang).name} onClick={() => void listen('before')}>{listenLabels('before', lang).text}</button>
         <button type="button" className="afx-listen" aria-pressed={playing === 'after'} data-testid={ID.after} disabled={!player || !c.any || measuring} aria-describedby={describedBy}
-          aria-label={s('listenAfter')} title={s('listenAfter')} onClick={() => void listen('after')}>▶ {s('after')}</button>
+          aria-label={listenLabels('after', lang).name} title={listenLabels('after', lang).name} onClick={() => void listen('after')}>{listenLabels('after', lang).text}</button>
         <button type="button" className="danger" data-testid={ID.remove} disabled={off || !c.any || measuring} aria-describedby={describedBy} onClick={() => recommit(removeCleanupOps(clip), s('removed'))}>{s('remove')}</button>
       </div>
       {!player && <p className="muted afx-note">{s('noPlayer')}</p>}

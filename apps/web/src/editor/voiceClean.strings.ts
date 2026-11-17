@@ -45,7 +45,7 @@ export const VOICE_CLEAN_STRINGS = {
     disabledTimeMap: 'Voice cleanup does not work yet on a sound that keeps its pitch at another speed, or whose speed changes gradually. Give the clip one speed and let its pitch follow it, then clean up.',
     noCleanup: 'This clip has no cleanup yet: strength, comparing and removing work after «Clean up the voice».',
     noPlayer: 'Playback is not available here, so there is no before and after.',
-    listenBefore: 'Listen without the cleanup (not saved)', listenAfter: 'Listen with the cleanup (not saved)',
+    listenBefore: 'listen without the cleanup (not saved)', listenAfter: 'listen with the cleanup (not saved)',
     ai: 'A stronger cleanup with an AI model is a separate AI tool («Voice cleanup with AI»): it makes a new sound file, when it is set up.',
   },
 } as const;

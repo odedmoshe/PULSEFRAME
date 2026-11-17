@@ -9,7 +9,8 @@ import * as T from '@pulseframe/time';
 import { applyTransaction, AUDIO_PRESETS, audioEffectParams, createProject, decodeNoiseProfile, describeAudioCatalog, encodeNoiseProfile, findClip, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioFxParamUnit } from '@pulseframe/i18n';
 import { chipKeyTarget, roomOps, settingsParams, showValue, toggleOps, voiceOps, type ParamSchema } from './AudioFxBlock.tsx';
-import { beforeOps, cleanupStrengthOf, measuredOps, noiseLevelDb, removeCleanupOps, reportTokens, strengthOps, tokensText } from './VoiceCleanBlock.tsx';
+import { beforeOps, cleanupStrengthOf, listenLabels, measuredOps, noiseLevelDb, removeCleanupOps, reportTokens, strengthOps, tokensText } from './VoiceCleanBlock.tsx';
+import { VOICE_CLEAN_STRINGS, type VoiceCleanLang } from './voiceClean.strings.ts';
 import type { VoiceCheck } from '../api.ts';
 
 const R = { num: 30, den: 1 };
@@ -168,5 +169,17 @@ describe('voice cleanup «ניקוי קול» (VoiceCleanBlock, ADR-0013): the o
     const quiet = { ...c.report, hum: null, speech: { levelDb: null, peakDb: -60, snrDb: null }, noise: { ...c.report.noise, warning: 'no_pause_found' as const, confidence: 0.02 } };
     expect(tokensText(reportTokens(quiet, 'he'))).toMatch(/לא נמצא זמזום חשמל · דיבור לא ידוע · יחס אות לרעש לא ידוע · ביטחון במדידת הרעש 2%\. לא נמצאה הפסקה שקטה/);
     expect(tokensText(reportTokens(c.report, 'en'))).toMatch(/^Measured: background noise -50\.8 dBFS · mains hum 50 Hz/);
+  });
+});
+
+describe('▶ «לפני» / ▶ «אחרי»: the accessible name contains the visible label (WCAG 2.5.3 Label in Name)', () => {
+  it('in every language the name begins with the visible word, so saying «לפני» or «אחרי» reaches the button; the name still says nothing is saved', () => {
+    for (const lang of Object.keys(VOICE_CLEAN_STRINGS) as VoiceCleanLang[]) for (const which of ['before', 'after'] as const) {
+      const { text, name } = listenLabels(which, lang);
+      const word = text.replace(/^▶\s*/, '');
+      expect(word, `${lang} ${which}: a visible word`).toBe(VOICE_CLEAN_STRINGS[lang][which]);
+      expect(name.startsWith(word), `${lang} ${which}: «${name}» begins with «${word}»`).toBe(true);
+      expect(name.length, `${lang} ${which}: the name says more than the word`).toBeGreaterThan(word.length + 5);
+    }
   });
 });
