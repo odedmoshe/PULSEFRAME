@@ -130,8 +130,13 @@ export async function matchColour(store: Store, exporter: Exporter, projectId: s
   if (!targets.length) throw new ApiError(422, 'invalid_args', skipped.length ? `no clip can take a colour grade: ${skipped.map((s) => `${s.clipId} (${s.reason})`).join('; ')}` : 'there is no picture clip to match', { skipped }, 'Add video or image clips on a video track, or unlock their tracks.');
 
   // ---- measuring ----
-  const sampleOf = async (d: ProjectDocument, frames: number[]): Promise<PictureSample[]> =>
-    Promise.all(frames.map(async (frame) => { const png = await exporter.renderStill(d, revision, frame, MATCH_STILL_SCALE); const { rgba, width, height } = await decodePng(png); return samplePicture(rgba, width, height); }));
+  // Every still of a sample is awaited, also when one of them fails (the first failure, in frame order, is the one thrown). With
+  // Promise.all the others went on rendering after the request had answered: a still refused for want of a graphics adapter left
+  // two behind, and when the server was closed next they started a browser nobody closed.
+  const sampleOf = async (d: ProjectDocument, frames: number[]): Promise<PictureSample[]> => {
+    const stills = await Promise.allSettled(frames.map(async (frame) => { const png = await exporter.renderStill(d, revision, frame, MATCH_STILL_SCALE); const { rgba, width, height } = await decodePng(png); return samplePicture(rgba, width, height); }));
+    return stills.map((x) => { if (x.status === 'rejected') throw x.reason; return x.value; });
+  };
   let refStats: PictureStats | null = null, hold = { shadows: 0, highlights: 0, fade: 0 };
   if (reference) {
     try { refStats = pictureStats(mergeSamples(await sampleOf(isolateClip(doc, reference.clip.id, 'shown'), sampleFrames(doc, reference.clip, samples)))); } catch (e) {

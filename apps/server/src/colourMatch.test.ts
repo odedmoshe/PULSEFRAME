@@ -220,6 +220,25 @@ describe('match_colour (stub renderer, test only)', { timeout: 120_000 }, () => 
     expect(await refusal(matchColour(store, stubExporter({ adapter: false }).exporter, s2.pid, { method: 'match', referenceClipId: s2.ref, targetClipIds: [s2.warm], amount: 1, samples: 1 }))).toMatchObject({ status: 503, code: 'renderer_unavailable' });
   });
 
+  // proof:colourmatch M8: the stills of one sample are rendered side by side, and when the first was refused the request answered
+  // while the other two were still on their way to the render worker. The server was closed next, and they started a browser
+  // that nobody closed, which kept the process alive.
+  it('a still that fails does not leave the other stills of its sample rendering after the answer', async () => {
+    const s = scene();
+    let inFlight = 0, started = 0;
+    const exporter = { renderStill: async () => {
+      const first = started++ === 0;
+      inFlight++;
+      try {
+        if (first) throw new ApiError(502, 'render_failed', 'the render worker could not produce the frame (stub)');
+        await new Promise((r) => setTimeout(r, 60));
+        return PNG[s.assets['ref.png']!] as Buffer;
+      } finally { inFlight--; }
+    } } as unknown as Exporter;
+    await expect(matchColour(store, exporter, s.pid, { method: 'match', referenceClipId: s.ref, targetClipIds: [s.warm], amount: 1, samples: 3 })).rejects.toMatchObject({ code: 'render_failed' });
+    expect(started).toBe(3);
+    expect(inFlight).toBe(0);
+  });
   it('the verdict follows the verified residual when a render was made: an effect after the grade the model does not see', async () => {
     const s = scene();
     // the warm picture gets a look, then an effect after it: the target is measured without both, the verify render has both on
