@@ -98,6 +98,55 @@ describe('the specificity helper', () => {
   });
 });
 
+describe('design tokens (ds/tokens.css)', () => {
+  const tokens = read('./ds/tokens.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const brand = readFileSync(new URL('../../../packages/brand/src/tokens.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const declared = (css: string) => new Set([...css.matchAll(/(--pf-[\w-]+)\s*:/g)].map((m) => m[1]!));
+  const aliases: Record<string, string> = {
+    '--pf-bg': '--pf-canvas', '--pf-surface': '--pf-surface-1', '--pf-surface-raised': '--pf-surface-3', '--pf-border': '--pf-line-strong-solid',
+    '--pf-text-muted': '--pf-text-2', '--pf-accent': '--pf-frame', '--pf-accent-2': '--pf-info', '--pf-accent-3': '--pf-agent', '--pf-warn': '--pf-attention',
+  };
+
+  it('load first: the tokens, then the fonts, then the legacy aliases, then the base sheet', () => {
+    const at = (s: string) => main.indexOf(`'${s}'`);
+    expect(at('./ds/tokens.css')).toBeGreaterThan(-1);
+    expect(at('./ds/tokens.css')).toBeLessThan(at('./ds/uiFonts.ts'));
+    expect(at('./ds/uiFonts.ts')).toBeLessThan(at('@pulseframe/brand/tokens.css'));
+    expect(at('@pulseframe/brand/tokens.css')).toBeLessThan(at('./styles.css'));
+  });
+
+  it('defines dark as the default (regardless of the OS) and light as an explicit setting', () => {
+    expect(tokens).toMatch(/:root,\s*:root\[data-theme="dark"\]\s*\{/);
+    expect(tokens).toMatch(/:root\[data-theme="light"\]\s*\{/);
+    expect(tokens).not.toMatch(/prefers-color-scheme/);
+    // density: the layout tokens step with the viewport, and motion shortens under reduced motion
+    for (const q of ['(min-width:1800px)', '(min-width:2300px)', '(max-width:1366px)', '(max-height:780px)', '(prefers-reduced-motion:reduce)']) expect(tokens, q).toContain(q);
+  });
+
+  it('every legacy name still resolves: an alias onto a token that exists', () => {
+    const real = declared(tokens);
+    for (const [legacy, target] of Object.entries(aliases)) {
+      expect(brand, legacy).toContain(`${legacy}: var(${target})`);
+      expect(real.has(target), `${target} exists in ds/tokens.css`).toBe(true);
+    }
+  });
+
+  it('every var(--pf-...) the legacy sheets use is defined somewhere that loads', () => {
+    const defined = new Set([...declared(tokens), ...declared(brand), ...declared(read('./theme.css')), ...declared(read('./styles.css'))]);
+    for (const f of componentFiles) for (const d of declared(read(f))) defined.add(d);
+    const used = new Map<string, string>();
+    for (const f of ['./styles.css', './theme.css', ...componentFiles]) for (const m of read(f).matchAll(/var\((--pf-[\w-]+)\s*(,|\))/g)) if (!used.has(m[1]!)) used.set(m[1]!, f);
+    const missing = [...used].filter(([n]) => !defined.has(n)).map(([n, f]) => `${n} (${f})`);
+    // names with an inline fallback or set from script are listed by hand when they appear; the list must stay empty otherwise
+    expect(missing.filter((x) => !/--pf-(vol|tl|clip-|ch-|gal-|pal-|dlg-)/.test(x))).toEqual([]);
+  });
+
+  it('names both sheets define keep their legacy value in the brand sheet and the spec value in the tokens', () => {
+    expect(tokens).toMatch(/--pf-fs-sm:14px/);
+    expect(brand).toMatch(/--pf-fs-sm: 12px/);
+  });
+});
+
 describe('editor stylesheets', () => {
   it('the visual layer is loaded after the base sheet', () => {
     expect(main.indexOf("'./styles.css'")).toBeGreaterThan(-1);

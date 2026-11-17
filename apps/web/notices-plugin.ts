@@ -7,6 +7,13 @@ import { FONT_CATALOG } from '../../packages/core/src/fonts.ts';
 
 interface Pkg { name: string; version: string; license: string; url: string; text: string; dir: string }
 
+/** Interface fonts (src/ds/uiFonts.css). Not in FONT_CATALOG on purpose: that list is the canvas and export fonts. */
+const UI_FONTS = [
+  { package: '@fontsource/ibm-plex-sans-hebrew', slug: 'ibm-plex-sans-hebrew', family: 'IBM Plex Sans Hebrew' },
+  { package: '@fontsource/ibm-plex-mono', slug: 'ibm-plex-mono', family: 'IBM Plex Mono' },
+  { package: '@fontsource/karantina', slug: 'karantina', family: 'Karantina' },
+] as const;
+
 const LICENCE_FILE = /^(licen[sc]e|copying)(\.(md|txt))?$/i;
 
 function findPackageDir(file: string): string | undefined {
@@ -53,7 +60,7 @@ export function noticesPlugin(): Plugin {
       const dirs = new Set<string>();
       const fontPkgs = new Set<string>();
       for (const [fileName, out] of Object.entries(bundle)) {
-        if (out.type === 'asset') for (const f of FONT_CATALOG) if (new RegExp(`(^|/)${f.slug}-[^/]*\\.woff2?$`).test(fileName)) fontPkgs.add(f.package);
+        if (out.type === 'asset') for (const f of [...FONT_CATALOG, ...UI_FONTS]) if (new RegExp(`(^|/)${f.slug}-[^/]*\\.woff2?$`).test(fileName)) fontPkgs.add(f.package);
         if (out.type !== 'chunk') continue;
         for (const id of Object.keys(out.modules)) {
           const clean = id.split('?')[0]!.replace(/^\0/, '');
@@ -87,7 +94,7 @@ export function noticesPlugin(): Plugin {
             `  npm tarball: https://registry.npmjs.org/mediabunny/-/mediabunny-${p.version}.tgz`,
           );
         }
-        const font = FONT_CATALOG.find((f) => f.package === p.name);
+        const font = [...FONT_CATALOG, ...UI_FONTS].find((f) => f.package === p.name);
         if (font) parts.push('', `${font.family} font files (${font.slug}-*.woff2/.woff) are distributed under the SIL Open Font License 1.1; the licence text below accompanies them.`);
         parts.push('', '-'.repeat(78), p.text);
       }
