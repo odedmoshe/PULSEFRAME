@@ -92,7 +92,7 @@ const candles: TemplateDef = {
       anim: A('word', 'rise', 'fade', 0.7), at: { slot: 'lighting', offsetBeats: 1, spanSlots: 1 }, place: { x: 0, y: -0.3, sizeFrac: 0.07 } },
     { key: 'date', role: { he: 'התאריך', en: 'The date' }, default: { he: '{hebrewDate}', en: '{hebrewDate}' }, fallback: { he: 'ימי חנוכה', en: 'Days of Hanukkah' }, maxChars: 30, presetId: 'hanukkah-glow',
       anim: A('line', 'fade', 'fade', 0.6), at: { slot: 'family', offsetBeats: 1 }, place: { x: 0, y: 0.3, sizeFrac: 0.05 } },
-    { key: 'family', role: { he: 'שם המשפחה', en: 'Family' }, default: { he: 'משפחת {name}', en: 'The {name} family' }, fallback: { he: 'המשפחה שלנו', en: 'Our family' }, maxChars: 30, presetId: 'hanukkah-soft',
+    { key: 'house', role: { he: 'שם המשפחה', en: 'Family' }, default: { he: 'משפחת {name}', en: 'The {name} family' }, fallback: { he: 'המשפחה שלנו', en: 'Our family' }, maxChars: 30, presetId: 'hanukkah-soft',
       anim: A('word', 'fade', 'fade', 0.5), at: { slot: 'table', offsetBeats: 1 }, place: { x: 0, y: 0.3, sizeFrac: 0.05 } },
   ],
   elements: [

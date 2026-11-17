@@ -127,9 +127,9 @@ const cake: TemplateDef = {
     { key: 'confetti', elementId: el('confetti-burst'), at: { slot: 'burst' }, place: { x: 0, y: 0, scale: 1 }, motion: { presetId: 'motion.in.pop' } },
     { key: 'popper', elementId: el('party-popper'), at: { slot: 'after' }, place: { x: -0.3, y: -0.3, scale: 0.3 }, motion: { presetId: 'motion.in.pop' } },
   ],
-  sfx: [{ key: 'burst', sfxId: 'sfx.success', at: { slot: 'burst' }, gain: 0.7 }, { key: 'pop', sfxId: 'sfx.pop', at: { text: 'name' }, gain: 0.7 }],
+  sfx: [{ key: 'hooray', sfxId: 'sfx.success', at: { slot: 'burst' }, gain: 0.7 }, { key: 'pop', sfxId: 'sfx.pop', at: { text: 'name' }, gain: 0.7 }],
   adjust: [
-    { key: 'confetti', span: { tag: 'party' }, effects: [{ type: 'overlay.confetti', params: { mode: 'fall', palette: 'party', density: 0.3 } }], fadeSeconds: 0.4 },
+    { key: 'rain', span: { tag: 'party' }, effects: [{ type: 'overlay.confetti', params: { mode: 'fall', palette: 'party', density: 0.3 } }], fadeSeconds: 0.4 },
     { key: 'warm', span: 'all', effects: [{ type: 'color.adjust', params: { saturation: 1.1, brightness: 1.03 } }] },
   ],
 };
