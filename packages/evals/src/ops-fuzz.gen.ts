@@ -43,7 +43,7 @@ export function createFuzz(seed: number) {
       { op: 'set_transcript', args: { assetId: vid, language: 'he', segments: [0, 1, 2, 3].map((k) => ({ start: T.rt(k * 2, 1), duration: T.rt(2, 1), text: `מילה ${k} word`, words: [{ start: T.rt(k * 2, 1), duration: T.rt(1, 1), text: 'מילה' }, { start: T.rt(k * 2 + 1, 1), duration: T.rt(1, 1), text: `word${k}` }] })) } },
     ];
   };
-  const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.brightness', 'stylize.vignette'];
+  const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.adjust', 'light.vignette', 'time.echo', 'overlay.snow'];
 
   const gen = (doc: ProjectDocument): OpCall => {
     const seq = Object.values(doc.sequences)[0]!;
