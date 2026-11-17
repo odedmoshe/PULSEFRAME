@@ -4,7 +4,7 @@
  */
 import * as T from '@pulseframe/time';
 import { ANIMATABLE, type Clip, type Keyframe, type Transform } from './schema.ts';
-import type { EffectInstance } from './effects.ts';
+import { NOT_ANIMATABLE, type EffectInstance } from './effects.ts';
 
 const EASE: Record<Keyframe['easing'], (u: number) => number> = {
   linear: (u) => u,
@@ -46,10 +46,14 @@ export function shiftKeyframes(clip: Clip, delta: T.RationalTime): void {
   // Effect parameter animation is attached to the content in the same way.
   for (const fx of clip.effects ?? []) if (fx.keyframes) for (const p of Object.keys(fx.keyframes)) fx.keyframes[p] = fx.keyframes[p]!.map((k) => ({ ...k, time: T.sub(k.time, delta) }));
 }
-/** An effect's parameters at clip-local time `local`: static values with animated numeric parameters sampled from their keys. */
+/**
+ * An effect's parameters at clip-local time `local`: static values with animated numeric parameters sampled from their keys.
+ * A parameter that may not be animated (effects.ts NOT_ANIMATABLE) keeps its static value even when the document holds keys for it.
+ */
 export function effectParamsAt(fx: EffectInstance, local: T.RationalTime): EffectInstance['params'] {
   if (!fx.keyframes) return fx.params;
   const out = { ...fx.params };
-  for (const [p, keys] of Object.entries(fx.keyframes)) if (keys.length) out[p] = sampleKeyframes(keys, local);
+  const fixed = NOT_ANIMATABLE[fx.type];
+  for (const [p, keys] of Object.entries(fx.keyframes)) if (keys.length && !fixed?.includes(p)) out[p] = sampleKeyframes(keys, local);
   return out;
 }
