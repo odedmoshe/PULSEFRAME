@@ -247,6 +247,38 @@ function refuseFxTimeMap(clip: MediaClip, editing: 'effects' | 'speed') {
 const refuseRamped = (clip: Clip, action: string) => {
   if (isRamped(clip)) throw new OpError('incompatible', `this clip changes speed gradually over its length, so it cannot be ${action}`, { clipId: clip.id }, 'Give it one speed first (set_clip_speed), make the edit, then apply the gradual change again.');
 };
+// ---------- adjustment clips (ADR-0016): what they cannot take, said plainly ----------
+const ADJUSTMENT_HINT = 'Make this edit on the clips below the adjustment. An adjustment takes effects, a mask, a blend mode and opacity.';
+/**
+ * An adjustment clip has no source and no picture of its own: it acts on what is drawn below it. Edits that need a source
+ * or a picture of the clip's own (speed, reverse, slip, freeze, link, scenes, transitions, layouts) refuse it in these words
+ * instead of a generic refusal.
+ */
+function refuseAdjustment(clip: Clip, action: string, hint = ADJUSTMENT_HINT) {
+  if (clip.type === 'adjustment') throw new OpError('incompatible', `an adjustment clip has no source or picture of its own, so it cannot be ${action}`, { clipId: clip.id }, hint);
+}
+/** The effect types an adjustment clip refuses (validate.ts adjustmentRefusal), in the words add_adjustment uses. */
+function refuseAdjustmentEffect(clip: Clip, type: string) {
+  if (clip.type !== 'adjustment') return;
+  const why = adjustmentRefusal(type);
+  if (why) throw new OpError('incompatible', `${type} cannot go on an adjustment: ${why}`, { clipId: clip.id, type }, 'Put it on the clip itself.');
+}
+const ADJUSTMENT_FIXED = ['x', 'y', 'scale', 'rotation'] as const;
+/**
+ * An adjustment clip's transform is the identity apart from its opacity (its box is the whole frame). A position, size or
+ * turn other than the identity is refused here, with a way to limit the look to part of the frame.
+ */
+function refuseAdjustmentTransform(clip: Clip, transform: Partial<Record<(typeof ADJUSTMENT_FIXED)[number], number>> | null | undefined, verb: 'set' | 'animated') {
+  if (clip.type !== 'adjustment' || !transform) return;
+  const moved = ADJUSTMENT_FIXED.filter((p) => transform[p] !== undefined && transform[p] !== DEFAULT_TRANSFORM[p]);
+  if (moved.length) throw new OpError('incompatible', `only the opacity of an adjustment clip can be ${verb}: it has no picture of its own to move, scale or turn`, { clipId: clip.id, properties: moved }, 'Set opacity only. To limit the look to part of the frame, give the adjustment a mask (set_clip_mask).');
+}
+/** A motion on an adjustment clip may change its opacity and nothing else. */
+function refuseAdjustmentMotion(clip: Clip, name: string, properties: readonly string[]) {
+  if (clip.type !== 'adjustment') return;
+  const others = properties.filter((p) => p !== 'opacity');
+  if (others.length) throw new OpError('incompatible', `an adjustment clip can only change its opacity; ${name} also changes ${others.join(', ')}`, { clipId: clip.id, properties: others }, 'Use a fade (motion.in.fade, motion.out.fade, animate_clip fade) or an opacity loop (motion.loop.fade-pulse).');
+}
 /**
  * Make `part` the piece of `whole` that starts `fromOffset` into it and is `length` long: its source start and, for a
  * ramped clip, its place in the ramp (so the piece shows exactly what the whole showed there). `part` may be `whole`
@@ -561,10 +593,11 @@ defineOp({
 defineOp({
   name: 'set_clip_transform',
   version: 1,
-  description: 'Set position/scale/rotation/opacity of a picture or text clip. Unspecified fields are kept.',
+  description: 'Set position/scale/rotation/opacity of a picture or text clip. Unspecified fields are kept. An adjustment clip has only its opacity (position, size and rotation stay at the identity).',
   args: z.object({ clipId: z.string(), transform: TransformSchema.partial() }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseAdjustmentTransform(clip, a.transform, 'set');
     clip.transform = { ...clip.transform, ...a.transform };
     return { affectedIds: [clip.id], summary: `Transformed clip ${clip.id}` };
   },
@@ -574,10 +607,11 @@ const KfTarget = { clipId: z.string(), property: z.enum(ANIMATABLE), time: RT.de
 defineOp({
   name: 'set_keyframe',
   version: 1,
-  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key.',
+  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key. An adjustment clip animates its opacity only.',
   args: z.object({ ...KfTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear') }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    if (a.property !== 'opacity') refuseAdjustmentTransform(clip, { [a.property]: NaN }, 'animated'); // any key on these properties, whatever its value
     assertAligned(d, a.time, 'time');
     if (!TransformSchema.shape[a.property].safeParse(a.value).success) throw new OpError('invalid_args', `value ${a.value} is out of range for ${a.property}`, { property: a.property });
     const keys = [...(clip.keyframes?.[a.property] ?? [])];
@@ -637,6 +671,7 @@ defineOp({
   args: z.object({ clipId: z.string(), speed: z.number().min(0.1).max(8), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have a speed', { clipId: a.clipId });
     if (f.clip.freeze) throw new OpError('incompatible', 'a freeze frame has no speed', { clipId: a.clipId }, 'Trim it to change how long the picture is held.');
     const rate = d.settings.frameRate;
@@ -666,6 +701,7 @@ defineOp({
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), curve: z.enum(['even', 'smooth']).optional().describe('even (default) = the speed changes at a steady pace; smooth = it eases out of the first speed and into the last'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const v0 = speedFromNumber(a.from), v1 = speedFromNumber(a.to);
@@ -709,6 +745,7 @@ defineOp({
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), steps: z.number().int().min(2).max(24).optional().describe('Default 8'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const steps = a.steps ?? 8;
@@ -780,6 +817,7 @@ defineOp({
     if (!segments) throw new OpError('invalid_args', 'points must start at 0, end at 1 and be in increasing order (positions are taken to a thousandth)', { points: a.points });
     const smooth = preset ? preset.smooth : a.smooth !== false;
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const lead = f.clip as MediaClip;
@@ -971,6 +1009,7 @@ defineOp({
   args: z.object({ clipId: z.string(), gain: z.number().min(0).max(8) }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseAdjustment(clip, 'given a sound level');
     if (clip.type !== 'media') throw new OpError('incompatible', 'gain applies to media clips', { clipId: a.clipId });
     clip.gain = a.gain;
     return { affectedIds: [clip.id], summary: `Set gain of ${clip.id} to ${a.gain}` };
@@ -991,6 +1030,9 @@ defineOp({
     let target = f.track;
     if (a.trackId && a.trackId !== f.track.id) {
       target = mustTrack(f.seq, a.trackId);
+      // Adjustment clips live only on adjustment tracks, and those hold nothing else (ADR-0016): said here rather than by validation afterwards.
+      if (f.clip.type === 'adjustment' && target.kind !== 'adjustment') throw new OpError('incompatible', `an adjustment goes on an adjustment track, not on ${target.kind} track ${target.id}`, { trackId: target.id }, 'Choose another adjustment track, or leave trackId out.');
+      if (f.clip.type !== 'adjustment' && target.kind === 'adjustment') throw new OpError('incompatible', `only adjustment clips go on adjustment track ${target.id}`, { trackId: target.id }, `Choose a ${f.track.kind} track.`);
       if (target.kind !== f.track.kind) throw new OpError('incompatible', `cannot move a ${f.track.kind} clip to a ${target.kind} track`, { trackId: target.id });
     }
     for (const m of [{ track: target, clip: f.clip }, ...others]) {
@@ -1075,6 +1117,7 @@ defineOp({
     if (T.eq(a.by, T.ZERO)) throw new OpError('invalid_args', 'by must not be zero');
     const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
     for (const { clip } of targets) {
+      refuseAdjustment(clip, 'slipped');
       if (clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be slipped', { clipId: clip.id });
       refuseRamped(clip, 'slipped');
       const asset = d.assets[clip.assetId]!;
@@ -1115,6 +1158,7 @@ defineOp({
     const found = a.clipIds.map((id) => mustClip(d, id));
     const first = found[0]!.clip;
     for (const f of found) {
+      refuseAdjustment(f.clip, 'linked');
       if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be linked', { clipId: f.clip.id });
       // a link id that no other clip carries (left in a project saved before edits cleared such ids) links to nothing
       if (partnersOf(d, f.clip).length) throw new OpError('incompatible', 'this clip is already linked', { clipId: f.clip.id }, 'Use unlink_clip first.');
@@ -1137,6 +1181,7 @@ defineOp({
   args: z.object({ clipId: z.string(), keepPitch: z.boolean() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a pitch setting');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have sound to stretch', { clipId: a.clipId });
     const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...linked(d, f.clip)].filter((t) => t.track.kind === 'audio' && !!d.assets[t.clip.assetId]?.audio);
     if (!targets.length) throw new OpError('incompatible', 'this clip has no sound clip', { clipId: a.clipId }, 'Give the sound clip, or a picture clip that is linked to one.');
@@ -1153,6 +1198,7 @@ defineOp({
   args: z.object({ clipId: z.string(), reverse: z.boolean(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'played backwards');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can play backwards', { clipId: a.clipId });
     const others = linked(d, f.clip);
     const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : others)];
@@ -1235,6 +1281,7 @@ defineOp({
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
     const src = f.clip;
+    refuseAdjustment(src, 'held on a freeze frame');
     const asset = src.type === 'media' ? d.assets[src.assetId] : undefined;
     if (src.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'a freeze frame needs a video clip on a video track', { clipId: a.clipId });
     if (src.freeze) throw new OpError('incompatible', 'this clip is already a freeze frame', { clipId: a.clipId }, 'Trim it to make the hold longer or shorter.');
@@ -1415,6 +1462,7 @@ defineOp({
     for (const [kind, name, frames] of [['in', enter, nIn], ['out', exit, nOut]] as const) {
       if (name === 'none') continue;
       const made = animateClipKeys(kind, name, { totalFrames: total, rest: clip.transform, frames });
+      refuseAdjustmentMotion(clip, name, Object.keys(made));
       placeMotion(clip, rate, kind, made);
       for (const p of Object.keys(made)) props.add(p);
     }
@@ -1431,6 +1479,7 @@ defineOp({
     const { clip, track } = mustClip(d, a.clipId);
     if (clip.type === 'caption' || track.kind === 'audio') throw new OpError('incompatible', 'only text and picture clips can be animated', { clipId: clip.id });
     const preset = MOTION_PRESETS.find((m) => m.id === a.presetId)!;
+    refuseAdjustmentMotion(clip, preset.id, preset.properties);
     const rate = d.settings.frameRate;
     const total = T.frameIndexAt(clip.duration, rate);
     if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
@@ -1488,6 +1537,49 @@ defineOp({
 });
 
 // ---------- recipes (SPEC §23): a planned list of ordinary ops applied and recorded as one step ----------
+// The run machinery below is shared by apply_recipe and apply_template (templateOps.ts, ADR-0016).
+/**
+ * Regeneration of a run: remove the previous run's untouched clips (ids that no longer exist are skipped; a clip on a locked
+ * track stops the edit). A clip of that run that was edited by hand stays; if what it was linked to goes, it is no longer
+ * linked. Returns the ids this changed.
+ */
+export function removeRunClips(d: ProjectDocument, clipIds: readonly string[]): string[] {
+  const affected: string[] = [];
+  const left = new Set<string>(); // link groups that lose a clip here
+  for (const id of clipIds) {
+    const f = findClip(d, id);
+    if (!f) continue;
+    if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: id });
+    f.track.clips.splice(f.index, 1);
+    for (const g of linkIdsOf([f.clip])) left.add(g);
+    affected.push(id);
+  }
+  // the previous run's clip that was edited by hand stays; if what it was linked to goes, it is no longer linked
+  affected.push(...dissolveLoneLinks(d, left));
+  return affected;
+}
+/** The ids an operation's output names as made by it: clipId, audioClipId, trackId, variantId and createdClipIds. */
+export function createdIdsOf(out: Readonly<Record<string, unknown>>): string[] {
+  const ids: string[] = [];
+  for (const key of ['clipId', 'audioClipId', 'trackId', 'variantId'] as const) if (typeof out[key] === 'string') ids.push(out[key] as string);
+  if (Array.isArray(out.createdClipIds)) ids.push(...(out.createdClipIds as string[]));
+  return ids;
+}
+/**
+ * What a run record keeps of the ids a run made: those that still exist (clips, variants, tracks), and the content
+ * fingerprint of each clip among them. Clips kept from an earlier run keep their ORIGINAL fingerprint (`previous`), so they
+ * stay recognisable as hand-edited next time too.
+ */
+export function runFingerprints(d: ProjectDocument, created: readonly string[], keepIds: readonly string[], previous: Readonly<Record<string, string>>): { createdIds: string[]; fingerprints: Record<string, string> } {
+  const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!d.variants[x] || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
+  const fingerprints: Record<string, string> = {};
+  for (const cid of createdIds) {
+    const f = findClip(d, cid);
+    if (!f) continue;
+    fingerprints[cid] = keepIds.includes(cid) && previous[cid] ? previous[cid]! : fingerprint(f.clip);
+  }
+  return { createdIds, fingerprints };
+}
 defineOp({
   name: 'apply_recipe',
   version: 1,
@@ -1495,18 +1587,7 @@ defineOp({
   description: 'Apply a recipe plan (ordinary public ops) as one step and record which objects it created. Issued by the server from a plan it built; on regeneration it first removes the previous run\'s untouched clips.',
   args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000) }).strict(),
   apply(d, a, ctx) {
-    const affected = new Set<string>();
-    const left = new Set<string>(); // link groups that lose a clip here
-    for (const id of a.removeClipIds ?? []) {
-      const f = findClip(d, id);
-      if (!f) continue;
-      if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: id });
-      f.track.clips.splice(f.index, 1);
-      for (const g of linkIdsOf([f.clip])) left.add(g);
-      affected.add(id);
-    }
-    // the previous run's clip that was edited by hand stays; if what it was linked to goes, it is no longer linked
-    for (const id of dissolveLoneLinks(d, left)) affected.add(id);
+    const affected = new Set<string>(removeRunClips(d, a.removeClipIds ?? []));
     const created: string[] = [...(a.keepIds ?? [])];
     for (const [i, call] of a.ops.entries()) {
       const def = getOp(call.op);
@@ -1516,20 +1597,11 @@ defineOp({
       refuseInheritedIds(parsed.data, `recipe step ${i} (${call.op})`, '', def.checksOwnIds);
       const r = def.apply(d, parsed.data, ctx);
       for (const id of r.affectedIds) affected.add(id);
-      const out = r.output ?? {};
-      for (const key of ['clipId', 'audioClipId', 'trackId', 'variantId'] as const) if (typeof out[key] === 'string') created.push(out[key] as string);
-      if (Array.isArray(out.createdClipIds)) created.push(...(out.createdClipIds as string[]));
+      created.push(...createdIdsOf(r.output ?? {}));
     }
     const id = a.runId ?? ctx.newId('run');
     const previous = a.runId ? d.recipeRuns[a.runId]?.fingerprints ?? {} : {};
-    const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!d.variants[x] || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
-    const fingerprints: Record<string, string> = {};
-    for (const cid of createdIds) {
-      const f = findClip(d, cid);
-      if (!f) continue;
-      // Clips kept from an earlier run keep their ORIGINAL fingerprint, so they stay recognisable as hand-edited next time too.
-      fingerprints[cid] = (a.keepIds ?? []).includes(cid) && previous[cid] ? previous[cid]! : fingerprint(f.clip);
-    }
+    const { createdIds, fingerprints } = runFingerprints(d, created, a.keepIds ?? [], previous);
     d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps };
     affected.add(id);
     return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} recipe ${a.recipeId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: { runId: id, createdIds: d.recipeRuns[id]!.createdIds } };
@@ -1656,6 +1728,7 @@ defineOp({
     if (f.track.kind === 'audio') throw new OpError('incompatible', 'format overrides apply to picture, title and caption clips', { clipId: a.clipId });
     // a caption cue can be reworded or hidden per format; where and how captions are drawn is the caption style (update_variant.captionStyle)
     if (f.clip.type === 'caption' && (a.transform != null || a.textStyle != null)) throw new OpError('incompatible', 'a caption cue can only be reworded or hidden per format; position and style come from the caption style of the format', { clipId: a.clipId }, 'Use update_variant with captionStyle.');
+    refuseAdjustmentTransform(f.clip, a.transform, 'set'); // per format too: an adjustment has only its opacity
     const cur = v.overrides[a.clipId] ?? {};
     const next = { ...cur };
     if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
@@ -1856,6 +1929,7 @@ defineOp({
   args: z.object({ clipId: z.string(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'split at scene cuts');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have scenes', { clipId: a.clipId });
     const cuts = d.analyses[f.clip.assetId]?.scenes?.cuts;
     if (!cuts) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
@@ -2214,7 +2288,7 @@ defineOp({
 // ---------- effects, blend, mask, transitions (SPEC §8, §13) ----------
 const pictureClip = (d: ProjectDocument, clipId: string) => {
   const f = mustClip(d, clipId);
-  if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture and title clips', { clipId });
+  if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture, title and adjustment clips', { clipId });
   return f;
 };
 /**
@@ -2257,6 +2331,7 @@ defineOp({
   args: z.object({ clipId: z.string(), lookId: z.string() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, 'color.grade');
     const params = lookParams(a.lookId);
     if (!params) throw new OpError('not_found', `colour look "${a.lookId}" does not exist`, { lookId: a.lookId }, 'Call list_catalog for the looks.');
     const list = [...(clip.effects ?? [])];
@@ -2316,6 +2391,7 @@ defineOp({
   args: z.object({ clipId: z.string(), assetId: z.string().min(1).max(64), intensity: z.number().min(0).max(1).optional() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, 'color.lut');
     const list = [...(clip.effects ?? [])];
     const at = list.findIndex((e) => e.type === 'color.lut');
     const params = parseEffect('color.lut', { lut: a.assetId, intensity: a.intensity ?? (at >= 0 ? list[at]!.params.intensity : undefined) });
@@ -2344,6 +2420,7 @@ defineOp({
   args: z.object({ clipId: z.string(), type: z.string(), params: z.record(z.string(), z.unknown()).optional(), index: z.number().int().min(0).optional() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, a.type);
     const list = [...(clip.effects ?? [])];
     if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
     const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
@@ -2375,6 +2452,7 @@ defineOp({
     const i = mustEffect(clip, a.effectId);
     const list = [...clip.effects!];
     const fx = { ...list[i]! };
+    refuseAdjustmentEffect(clip, fx.type); // changed or moved, it is still an effect the adjustment may carry
     if (a.params) { fx.params = parseEffect(fx.type, { ...fx.params, ...a.params }); assertLutRef(d, fx.type, fx.params); }
     if (a.enabled !== undefined) fx.enabled = a.enabled;
     list.splice(i, 1);
@@ -2480,11 +2558,11 @@ defineOp({
 defineOp({
   name: 'set_clip_mask',
   version: 1,
-  description: 'Set, change or clear (mask=null) a rectangle/ellipse mask on a picture clip. Position and size are fractions of the clip\'s own picture, so the mask moves and scales with it. Unspecified fields keep their current value (or the default for a new mask).',
+  description: 'Set, change or clear (mask=null) a rectangle/ellipse mask on a picture clip or an adjustment clip. On a picture, position and size are fractions of the clip\'s own picture, so the mask moves and scales with it; on an adjustment they are fractions of the frame, and the look applies inside the mask only (outside it when inverted). Unspecified fields keep their current value (or the default for a new mask).',
   args: z.object({ clipId: z.string(), mask: MaskSchema.partial().nullable() }).strict(),
   apply(d, a) {
     const { clip, track } = pictureClip(d, a.clipId);
-    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'masks apply to picture clips on video tracks', { clipId: clip.id });
+    if (!(clip.type === 'media' && track.kind === 'video') && !(clip.type === 'adjustment' && track.kind === 'adjustment')) throw new OpError('incompatible', 'masks apply to picture clips on video tracks and to adjustment clips', { clipId: clip.id });
     if (a.mask === null) { delete clip.mask; return { affectedIds: [clip.id], summary: 'Removed mask' }; }
     clip.mask = { ...(clip.mask ?? DEFAULT_MASK), ...a.mask };
     return { affectedIds: [clip.id], summary: `Mask ${clip.mask.shape}${clip.mask.invert ? ' (inverted)' : ''}`, output: { mask: clip.mask } };
@@ -2503,6 +2581,7 @@ defineOp({
     const order = new Map<Track, number>();
     for (const seq of Object.values(d.sequences)) seq.tracks.forEach((t, i) => order.set(t, i));
     const sorted = found.map((f) => {
+      refuseAdjustment(f.clip, 'arranged in a layout', 'A layout arranges picture clips. To limit a look to part of the frame, give the adjustment a mask (set_clip_mask).');
       if (f.clip.type !== 'media' || f.track.kind !== 'video') throw new OpError('incompatible', 'a layout arranges picture clips on video tracks', { clipId: f.clip.id });
       const asset = d.assets[f.clip.assetId]!;
       const size = asset.video ?? asset.image;
@@ -2591,6 +2670,7 @@ function checkTransition(d: ProjectDocument, track: Track, clip: MediaClip, tr: 
 }
 const transitionTarget = (d: ProjectDocument, clipId: string): { clip: MediaClip; track: Track } => {
   const { clip, track } = pictureClip(d, clipId);
+  refuseAdjustment(clip, 'given a transition', 'Fade the adjustment in or out with its opacity instead (apply_motion_preset motion.in.fade or motion.out.fade).');
   if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
   return { clip, track };
 };
@@ -3008,8 +3088,8 @@ defineOp({
 
 // ---------- replace media (ADR-0016) ----------
 /**
- * Arguments of the public op replace_clip_media (v1). Contract only: the op itself is implemented in this file by the
- * templates track (W1). It keeps the clip id and everything on the clip; it changes assetId and sourceIn.
+ * Arguments of the public op replace_clip_media (v1). It keeps the clip id and everything on the clip; it changes assetId and
+ * sourceIn.
  */
 export const ReplaceClipMediaArgsSchema = z.object({
   clipId: z.string(),
@@ -3017,6 +3097,69 @@ export const ReplaceClipMediaArgsSchema = z.object({
   sourceIn: RT.optional(),
   linked: z.enum(['follow', 'detach']).optional().describe('default follow: a linked sound partner takes the new asset too (refused if it has no sound); detach: unlink it and leave it'),
 }).strict();
+defineOp({
+  name: 'replace_clip_media',
+  version: 1,
+  description: 'Give a clip another file from the library and keep everything else about it: its id (so per-format overrides and template slots stay), place and length on the timeline, transform and keyframes, effects, blend mode, mask, transition, speed and direction, fades and volume. Only the file and the point of it the clip starts from (sourceIn) change. sourceIn defaults to the current one when the new file is long enough from there, else 0 (always 0 for a still picture). A picture clip needs a file with a picture, a sound clip one with sound, and the file must be long enough for the clip from sourceIn; a transition into the next clip needs that many spare frames after it. A still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed. linked=follow (default): the clips linked to this one take the same file and sourceIn (refused when the file lacks what one of them plays); linked=detach: they are unlinked and left as they are.',
+  args: ReplaceClipMediaArgsSchema,
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given another file');
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a file can take another file', { clipId: a.clipId }, 'A title changes with update_text, a caption cue with update_cue.');
+    const clip = f.clip;
+    const asset = d.assets[a.assetId];
+    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId }, 'Call get_summary to list assets.');
+    if (asset.kind === 'lut') throw new OpError('incompatible', 'a colour table (LUT) is not placed on the timeline; it is applied to a clip as an effect', { assetId: asset.id }, 'Use apply_lut with a clipId, or add the effect color.lut with this id as its lut parameter.');
+    const isStill = asset.kind === 'image';
+    const hasPicture = !!asset.video || (isStill && !!asset.image);
+    const group = clip.linkGroupId;
+    const partners = partnersOf(d, clip);
+    const follow = a.linked !== 'detach';
+    if (follow) for (const p of partners) if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, 'Unlock the track, or pass linked:detach to leave that clip as it is.');
+    const targets = [{ track: f.track, clip }, ...(follow ? partners : [])];
+    // What each clip plays on its track: a picture on a video track, sound on a sound track.
+    const plays = (t: Track) => (t.kind === 'video' ? 'shows a picture' : 'plays sound');
+    for (const [i, { track, clip: c }] of targets.entries()) {
+      const ok = track.kind === 'video' ? hasPicture : track.kind === 'audio' ? !!asset.audio : false;
+      if (ok) continue;
+      const lacks = track.kind === 'video' ? 'picture' : 'sound';
+      if (i === 0) throw new OpError('incompatible', `this clip ${plays(track)}, and the file has no ${lacks}`, { clipId: c.id, assetId: asset.id }, `Choose a file with ${lacks === 'picture' ? 'a picture' : 'sound'}.`);
+      throw new OpError('incompatible', `the clip linked to this one (${c.id}) ${plays(track)}, and the file has no ${lacks}`, { clipId: c.id, assetId: asset.id }, 'Pass linked:detach to unlink that clip and leave it as it is.');
+    }
+    if (isStill) for (const { clip: c } of targets)
+      if (c.reverse || c.freeze || c.speedEnd || speedValue(c) !== 1) throw new OpError('incompatible', 'a still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed', { clipId: c.id }, 'Choose a video, or give the clip speed 1, forwards, first (set_clip_speed, set_clip_reverse).');
+    // Privacy regions (ADR-0015) are drawn on video pictures, and a region that follows a motion track follows one of this clip's file.
+    for (const { clip: c } of targets) {
+      if (!c.redact) continue;
+      if (!asset.video) throw new OpError('incompatible', 'this clip has privacy regions, which are drawn on video pictures only', { clipId: c.id }, 'Remove its privacy regions first (set_redact_region), or choose a video.');
+      if (c.redact.some((r) => r.motionTrackId && d.motionTracks?.[r.motionTrackId]?.assetId !== asset.id)) throw new OpError('incompatible', 'a privacy region of this clip follows a motion track of its current file', { clipId: c.id }, 'Make that region fixed or remove it first (set_redact_region).');
+    }
+    // The source a clip needs from sourceIn: its stretch of source (a freeze frame needs one picture inside the file).
+    const needed = (c: MediaClip) => toSourceSpan(c, c.duration);
+    const fits = (c: MediaClip, sourceIn: T.RationalTime) => isStill || (!T.isNegative(sourceIn) && (c.freeze ? T.lt(sourceIn, asset.duration) : T.lte(T.add(sourceIn, needed(c)), asset.duration)));
+    const sourceIn = a.sourceIn ?? (isStill ? T.ZERO : targets.every((t) => fits(t.clip, clip.sourceIn)) ? clip.sourceIn : T.ZERO);
+    if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'sourceIn is outside the asset', { sourceIn, assetDuration: asset.duration });
+    for (const { clip: c } of targets)
+      if (!fits(c, sourceIn)) throw new OpError('out_of_bounds', 'the file is too short for this clip from that point', { clipId: c.id, sourceIn, available: T.max(T.ZERO, T.sub(asset.duration, sourceIn)), needed: needed(c) }, 'Choose an earlier sourceIn or a longer file, or shorten the clip first (trim_clip).');
+    // A transition into the next picture plays on over spare source after this clip's end (as set_transition checks it).
+    const rate = d.settings.frameRate;
+    if (!isStill) for (const { track, clip: c } of targets) {
+      if (track.kind !== 'video') continue;
+      const next = track.clips.find((o) => o.type === 'media' && o.id !== c.id && o.transition && T.eq(o.start, clipEnd(c)));
+      if (!next || next.type !== 'media' || !next.transition) continue;
+      const after = T.frameIndexAt(handleAfterEnd({ ...c, sourceIn }, asset.duration), rate);
+      if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames after this clip, and the file has only ${after}`, { clipId: c.id, nextClipId: next.id, maxFrames: Math.max(0, after) }, 'Choose an earlier sourceIn or a longer file, or shorten that transition first (set_transition).');
+    }
+    const unchanged = targets.every((t) => t.clip.assetId === asset.id && T.eq(t.clip.sourceIn, sourceIn)) && (follow || !partners.length);
+    if (unchanged) throw new OpError('invalid_args', 'the clip already plays this file from this point', { clipId: clip.id, assetId: asset.id, sourceIn });
+    for (const { clip: c } of targets) { c.assetId = asset.id; c.sourceIn = sourceIn; }
+    // detach: this clip leaves its link group; a partner left alone in it is unlinked too (refused while it is on a locked track)
+    let unlinked: string[] = [];
+    if (!follow && group && partners.length) { clip.linkGroupId = null; unlinked = [clip.id, ...dissolveLoneLinks(d, [group])]; }
+    const ids = targets.map((t) => t.clip.id);
+    return { affectedIds: [...new Set([...ids, ...unlinked])], summary: `Clip now plays "${asset.name.slice(0, 60)}"${targets.length > 1 ? ` (with ${targets.length - 1} linked clip(s))` : ''}`, output: { clipIds: ids, assetId: asset.id, sourceIn, unlinkedClipIds: unlinked } };
+  },
+});
 
 // ---------- captions, transcripts and range cuts (SPEC §16) ----------
 function newCaptionTrack(seq: Sequence, ctx: OpContext, mode: 'manual' | 'transcript', linkedTrackId: string | null, style?: Partial<CaptionStyle>, name?: string): Track {

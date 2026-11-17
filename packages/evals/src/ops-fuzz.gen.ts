@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, sha256Hex, transitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, sha256Hex, transitionDef, type OpCall, type ProjectDocument, fingerprint } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -25,6 +25,8 @@ const ASSETS = [
  * `setup(doc)` returns the operations that add analysis data, a transcript and a motion track; `gen(doc)` returns the next random
  * call. `setupInternal(doc)` returns the internal operation (needs allowInternal) that attaches measured samples to that motion
  * track, as the tracking job does (ADR-0015); a driver that commits it after `setup` exercises attach_motion_track as well.
+ * `genInternal(doc)` returns a random apply_template call (internal: a driver commits it with allowInternal, as the server
+ * does; ADR-0016): a small plan with bindings, sometimes malformed, sometimes the regeneration of an earlier template run.
  */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
@@ -74,6 +76,8 @@ export function createFuzz(seed: number) {
     return [{ op: 'attach_motion_track', args: { motionTrackId: t.id, from: 1, x: Array.from({ length: k }, (_, i) => 3000 + i * 20), y: Array.from({ length: k }, (_, i) => 5000 + Math.round(1500 * Math.sin(i / 15))), s: Array.from({ length: k }, (_, i) => 900 + (i % 40) * 5), q: st.map((v) => (v === 1 ? 90 : 30)), st, method: 'fuzz', params: {}, createdAt: '2026-11-17T00:00:00Z' } }];
   };
   const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.adjust', 'light.vignette', 'time.echo', 'overlay.snow'];
+  /** Looks for adjustment layers; the last three are refused on an adjustment (time effect, chroma key, drop shadow). */
+  const ADJUST_EFFECTS = ['color.grayscale', 'color.adjust', 'blur.gaussian', 'light.vignette', 'stylize.grain', 'overlay.confetti', 'color.sepia', 'time.echo', 'key.chroma', 'stylize.shadow'];
   const SOUND_FX = AUDIO_EFFECTS.map((e) => e.id);
   /** A small change of a sound effect's main control (its wet amount, or the width), in range most of the time and out of it sometimes. */
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
@@ -124,6 +128,8 @@ export function createFuzz(seed: number) {
     const mtId = () => (motionTracks.length && rnd() < 0.9 ? pick(motionTracks).id : 'mtk_none');
     const videoTracks = tracks.filter((t) => t.kind === 'video');
     const followers = clips.filter((x) => x.c.type === 'text' || (x.c.type === 'media' && x.t.kind === 'video'));
+    const adjusts = clips.filter((x) => x.c.type === 'adjustment');
+    const adjustId = () => (adjusts.length && rnd() < 0.9 ? pick(adjusts).c.id : any());
     const menu: (() => OpCall)[] = [
       // ADR-0017: a derived copy in place of a clip's file; mostly a copy made from the clip's own file, sometimes any copy or file (refused)
       () => {
@@ -136,7 +142,7 @@ export function createFuzz(seed: number) {
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), trackId: trackId() } }),
       () => { const x = media.length ? pick(media) : null; return { op: 'add_clip', args: { assetId: x && x.c.type === 'media' ? x.c.assetId : pick(assetIds), start: x ? T.add(x.c.start, x.c.duration) : fr(), ...(x ? { trackId: x.t.id } : {}), duration: f(10 + int(60)), sourceIn: T.frameTime(int(60), SRC) } }; },
       () => ({ op: 'add_text', args: { text: pick(['שלום', 'Hello עולם 123', 'בְּרֵאשִׁית']), start: fr(), duration: dur() } }),
-      () => ({ op: 'add_track', args: { kind: pick(['video', 'audio', 'text'] as const) } }),
+      () => ({ op: 'add_track', args: { kind: pick(['video', 'audio', 'text', 'adjustment'] as const) } }),
       () => ({ op: 'move_clip', args: { clipId: any(), start: fr(), ...(rnd() < 0.2 ? { trackId: trackId() } : {}) } }),
       () => ({ op: 'move_clips', args: { clipIds: [any(), any()], delta: f(int(121) - 60) } }),
       () => ({ op: 'trim_clip', args: { clipId: any(), edge: pick(['start', 'end'] as const), to: at() } }),
@@ -287,8 +293,66 @@ export function createFuzz(seed: number) {
         if (own.length && mode < 0.45) return { op: 'set_redact_region', args: { clipId: x!.id, regionId: pick(own).id, region: look() } };
         return { op: 'set_redact_region', args: { clipId: x?.id ?? any(), region: { motionTrackId: ofAsset.length && rnd() < 0.7 ? pick(ofAsset).id : rnd() < 0.1 ? mtId() : null, ...look() } } };
       },
+      // adjustment layers (ADR-0016): over the whole edit or a stretch, with looks (some refused on an adjustment), on a named track
+      // or a free one; then effects, masks and opacity on them, and the refused position keys; the timing rows above reach them too
+      () => ({ op: 'add_adjustment', args: { span: rnd() < 0.5 ? 'edit' : { start: fr(), duration: rnd() < 0.05 ? f(0) : dur() }, ...(rnd() < 0.7 ? { effects: Array.from({ length: 1 + int(2) }, () => ({ type: pick(ADJUST_EFFECTS) })) } : {}), ...(rnd() < 0.3 ? { opacity: Number(rnd().toFixed(2)) } : {}), ...(rnd() < 0.15 ? { trackId: trackId() } : {}) } }),
+      () => ({ op: 'add_effect', args: { clipId: adjustId(), type: pick(ADJUST_EFFECTS) } }),
+      () => ({ op: 'set_clip_mask', args: { clipId: adjustId(), mask: rnd() < 0.2 ? null : { shape: pick(['rect', 'ellipse'] as const), x: Number((rnd() - 0.5).toFixed(2)), width: Number((0.2 + rnd() * 0.6).toFixed(2)), invert: rnd() < 0.3 } } }),
+      () => (rnd() < 0.5
+        ? { op: 'set_keyframe', args: { clipId: adjustId(), property: rnd() < 0.85 ? 'opacity' : pick(['x', 'scale'] as const), time: local(), value: Number(rnd().toFixed(2)) } }
+        : { op: 'set_clip_transform', args: { clipId: adjustId(), transform: rnd() < 0.85 ? { opacity: Number(rnd().toFixed(2)) } : { x: 0.1 } } }),
+      // replace media (ADR-0016): another of the files for a clip, its linked sound following or detached; refused for a file
+      // without what the clip plays, too short, or a still in place of a clip at another speed
+      () => ({ op: 'replace_clip_media', args: { clipId: media.length && rnd() < 0.9 ? pick(media).c.id : any(), assetId: pick(assetIds), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(150), SRC) } : {}), ...(rnd() < 0.4 ? { linked: pick(['follow', 'detach'] as const) } : {}) } }),
     ];
     return pick(menu)();
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen };
+  /** A procedural picture as the server would make it for a template (two contents, so the same one is often deduplicated). */
+  const templatePicture = (k: number) => ({ kind: 'image' as const, name: `el${k}.png`, contentHash: `sha256:${(k ? 'b' : 'a').repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 200, height: 200, codec: 'png', hasAlpha: true }, provenance: { origin: 'generated' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'system', procedural: { id: 'element.shape.star-5', version: 2, generator: 'fuzz' } } });
+  const genInternal = (doc: ProjectDocument): OpCall => {
+    const at = int(300), len = 15 + int(60);
+    const steps: { op: string; args: unknown; bind?: string }[] = [
+      { op: 'add_clip', args: { assetId: { $asset: 'pic' }, start: f(at), duration: f(len) }, bind: 'shot' },
+      { op: 'add_clip', args: { assetId: { $asset: rnd() < 0.5 ? 'pic' : 'el' }, start: f(at + len), duration: f(len), trackId: { $ref: 'shot', out: 'trackId' } }, bind: 'next' },
+      { op: 'add_text', args: { text: pick(['שלום', 'Hello עולם']), start: f(at), duration: f(len) }, bind: 'title' },
+      { op: 'add_adjustment', args: { span: { start: f(at), duration: f(2 * len) }, effects: [{ type: pick(['color.sepia', 'stylize.grain', 'light.vignette']) }] }, bind: 'look' },
+    ];
+    if (rnd() < 0.5) steps.push({ op: 'update_effect', args: { clipId: { $ref: 'look' }, effectId: { $ref: 'look', out: 'effectIds', at: 0 }, params: { amount: 0.4 } } });
+    if (rnd() < 0.5) steps.push({ op: 'set_transition', args: { clipId: { $ref: 'next' }, type: 'dissolve', frames: 1 + int(10) } });
+    if (rnd() < 0.5) steps.push({ op: 'apply_motion_preset', args: { clipId: { $ref: 'shot' }, presetId: 'motion.move.ken-burns-in' } });
+    if (rnd() < 0.4) steps.push({ op: 'set_keyframe', args: { clipId: { $ref: 'look' }, property: 'opacity', time: f(0), value: 0 } });
+    // a malformed plan now and then: a forward or unknown reference, a key beside $ref, an inherited name, an internal step
+    const fault = rnd();
+    if (fault < 0.04) steps.unshift({ op: 'set_clip_transform', args: { clipId: { $ref: 'shot' }, transform: { x: 0.1 } } });
+    else if (fault < 0.08) steps.push({ op: 'set_clip_transform', args: { clipId: { $ref: 'nobody' }, transform: { x: 0.1 } } });
+    else if (fault < 0.11) steps.push({ op: 'set_clip_transform', args: { clipId: { $ref: 'shot', extra: 1 }, transform: { x: 0.1 } } });
+    else if (fault < 0.14) steps.push({ op: 'add_text', args: { text: { $ref: 'title', out: pick(['toString', 'constructor']) }, start: f(0), duration: f(10) } });
+    else if (fault < 0.16) steps.push({ op: 'import_asset', args: { asset: templatePicture(0) } });
+    const slots = [{ key: 'shot', kind: 'picture', clipId: { $ref: 'shot' } }, { key: 'next', kind: 'picture', clipId: { $ref: 'next' } }, { key: 'title', kind: 'text', clipId: { $ref: 'title' } }, { key: 'look', kind: 'look', clipId: { $ref: fault > 0.97 ? 'nobody' : 'look' } }];
+    // regeneration of an earlier template run: its untouched clips go, the ones edited by hand stay with their slots
+    const runs = Object.values(doc.recipeRuns ?? {}).filter((r) => r.recipeId.startsWith('template:'));
+    const regen = runs.length && rnd() < 0.4 ? pick(runs) : null;
+    const clipNow = (id: string) => Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).find((c) => c.id === id);
+    const touched = regen ? regen.createdIds.filter((id) => { const c = clipNow(id); return c && regen.fingerprints[id] && fingerprint(c) !== regen.fingerprints[id]; }) : [];
+    const untouched = regen ? regen.createdIds.filter((id) => { const c = clipNow(id); return c && !touched.includes(id); }) : [];
+    return {
+      op: 'apply_template',
+      args: {
+        templateId: regen ? regen.recipeId.slice('template:'.length) : pick(['tpl.fuzz', 'tpl.fuzz-two']), templateVersion: 1, params: { seed }, steps: ['fuzz plan'],
+        assets: [{ key: 'pic', asset: templatePicture(int(2)) }, { key: 'el', asset: templatePicture(int(2)) }],
+        ...(regen ? { runId: regen.id, removeClipIds: untouched, keepIds: touched, keepSlots: (regen.slots ?? []).filter((s) => touched.includes(s.clipId)) } : {}),
+        ops: steps, slots: regen ? slots.filter((s) => !(regen.slots ?? []).some((k) => k.key === s.key && touched.includes(k.clipId))) : slots,
+      },
+    };
+  };
+  /**
+   * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
+   * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
+   */
+  const genFocused = (doc: ProjectDocument, ops: readonly string[]): OpCall => {
+    let call = gen(doc);
+    for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
+    return call;
+  };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal };
 }

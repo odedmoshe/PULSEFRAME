@@ -174,7 +174,7 @@ describe('motion tracking operations: refusals', () => {
     const rr = (args: Record<string, unknown>) => [{ op: 'set_redact_region', args }];
     refused(s.doc, rr({ clipId: s.pic, region: {} }), 'incompatible', 'privacy regions are drawn on video pictures only; this clip shows a still image');
     refused(s.doc, rr({ clipId: s.title, region: {} }), 'incompatible', 'privacy regions apply to video clips on video tracks');
-    refused(s.doc, rr({ clipId: s.sound, region: {} }), 'incompatible', 'effects, blends, masks and transitions apply to picture and title clips');
+    refused(s.doc, rr({ clipId: s.sound, region: {} }), 'incompatible', 'effects, blends, masks and transitions apply to picture, title and adjustment clips');
     refused(s.doc, rr({ clipId: s.clip, region: null }), 'invalid_args', 'name the region to delete (regionId)');
     refused(s.doc, rr({ clipId: s.clip, regionId: 'rgn_none', region: null }), 'not_found', `region rgn_none not found on clip ${s.clip}`);
     refused(s.doc, rr({ clipId: s.clip, regionId: 'rgn_none', region: { style: 'fill' } }), 'not_found', `region rgn_none not found on clip ${s.clip}`);
