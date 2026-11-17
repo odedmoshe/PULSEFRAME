@@ -15,7 +15,7 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
-import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd } from '@pulseframe/engine';
+import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
 import { limiter } from './analysis.ts';
 
@@ -99,6 +99,15 @@ export interface Blocker { code: string; message: string; ids: string[] }
 /** True when any clip of the project carries an effect that runs as a WebGPU pass: such a render needs a worker browser with a graphics adapter (ADR-0008). */
 export const usesGpuEffects = (doc: ProjectDocument) => Object.values(doc.sequences).some((q) => q.tracks.some((t) => t.clips.some((c) => ('effects' in c && c.effects?.some((e) => GPU_EFFECT_IDS.includes(e.type))) || ('transition' in c && !!c.transition && GPU_TRANSITION_IDS.includes(c.transition.type)))));
 
+/** The audio plan of the document at the project rate (the server mix's plan) and the exported frames as its samples [a, b). */
+interface SoundRange { plan: AudioPlan; a: number; b: number }
+const soundRange = (doc: ProjectDocument, firstFrame: number, frames: number): SoundRange => {
+  const { frameRate, sampleRate } = doc.settings;
+  return { plan: audioPlan(doc), a: T.nearestSampleIndex(T.frameTime(firstFrame, frameRate), sampleRate), b: T.nearestSampleIndex(T.frameTime(firstFrame + frames, frameRate), sampleRate) };
+};
+/** The clip is heard in samples [a, b): from its start to the end of its tail (soundEnd), as the mix keeps it. */
+const sounds = (c: PlannedAudioClip, a: number, b: number) => c.at < b && soundEnd(c) > a;
+
 export class Exporter {
   readonly sessions = new Map<string, RenderSession>();
   private queue: Promise<void> = Promise.resolve();
@@ -140,6 +149,9 @@ export class Exporter {
     const from = T.frameTime(first, frameRate);
     const to = T.frameTime(first + Math.max(0, frames), frameRate);
     const fxUsed = new Map<string, number>(), trUsed = new Map<string, number>();
+    // The sound of the range (none in a GIF or a still): the audio plan every mix follows, and the range in its samples.
+    const sound = options.format === 'gif' || options.format === 'png' ? null : soundRange(doc, first, Math.max(0, frames));
+    const drawn = new Set<string>(); // media clips counted below
     for (const tr of seq.tracks)
       for (const c of tr.clips) {
         // A clip is drawn until its end, and beyond it while the clip that follows on its track comes in over it with a transition:
@@ -148,7 +160,7 @@ export class Exporter {
         const next = c.type === 'media' ? tr.clips.find((n) => n.type === 'media' && n.id !== c.id && !!n.transition && T.eq(n.start, end)) : undefined;
         if (next?.type === 'media' && next.transition) end = T.add(end, T.frameTime(next.transition.frames, frameRate));
         if (!T.lt(c.start, to) || !T.lt(from, end)) continue; // outside the exported range
-        if (c.type === 'media') used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
+        if (c.type === 'media') { used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1); drawn.add(c.id); }
         for (const fx of c.effects ?? []) if (fx.enabled) {
           fxUsed.set(fx.type, (fxUsed.get(fx.type) ?? 0) + 1);
           // A colour table named by a colour-table effect is source material of the render like any clip's file.
@@ -159,6 +171,9 @@ export class Exporter {
         else if (c.type === 'text') families.add(c.style.fontFamily);
         if (tr.caption) families.add(tr.caption.style.fontFamily);
       }
+    // A clip with sound effects sounds until the end of its tail (ADR-0010), and in a range that starts in its echo the mix still
+    // runs its voice, which reads the clip's source from before the range. That source is pinned and checked like any clip's file.
+    if (sound) for (const c of sound.plan.clips) if (c.voice && !drawn.has(c.clipId) && sounds(c, sound.a, sound.b)) used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
     const assets = [...used].flatMap(([id, clips]) => {
       const a = Object.hasOwn(doc.assets, id) ? doc.assets[id] : undefined;
       if (!a) { blockers.push({ code: 'missing_media', message: `colour table ${id} named by an effect is not in the project library`, ids: [id] }); return []; }
@@ -180,7 +195,7 @@ export class Exporter {
     const effects = [...fxUsed].map(([type, clips]) => ({ type, version: findEffect(type)?.version ?? 0, clips }));
     for (const fx of effects) if (fx.version === 0) blockers.push({ code: 'unknown_effect', message: `effect "${fx.type}" is not available in this renderer; exporting would silently drop it`, ids: [] });
     const transitions = [...trUsed].map(([type, clips]) => ({ type, clips }));
-    const audioEffects = options.format === 'gif' || options.format === 'png' ? [] : this.planSound(doc, first, Math.max(0, frames), first + Math.max(0, frames) >= total, blockers, warnings);
+    const audioEffects = sound ? this.planSound(sound, first + Math.max(0, frames) >= total, blockers, warnings) : [];
     const seconds = (frames * frameRate.den) / frameRate.num;
     const video = options.format === 'mp4-h264-aac' || options.format === 'webm-vp9-opus';
     const estimate = video
@@ -195,13 +210,10 @@ export class Exporter {
    * Sound effects of the exported range (ADR-0010): which effect implementations the mix depends on, a blocker for any effect this
    * build cannot run (it would otherwise be dropped silently) and a warning for each echo or reverb cut at the end of the video.
    */
-  private planSound(doc: ProjectDocument, firstFrame: number, frames: number, reachesEnd: boolean, blockers: Blocker[], warnings: Blocker[]): Manifest['audioEffects'] {
-    const { frameRate, sampleRate } = doc.settings;
-    const ap = audioPlan(doc);
-    const a = T.nearestSampleIndex(T.frameTime(firstFrame, frameRate), sampleRate), b = T.nearestSampleIndex(T.frameTime(firstFrame + frames, frameRate), sampleRate);
+  private planSound({ plan: ap, a, b }: SoundRange, reachesEnd: boolean, blockers: Blocker[], warnings: Blocker[]): Manifest['audioEffects'] {
     const used = new Map<string, { type: string; version: number; clips: number }>();
     for (const c of ap.clips) {
-      if (!c.voice || c.at >= b || soundEnd(c) <= a) continue;
+      if (!c.voice || !sounds(c, a, b)) continue;
       for (const fx of c.voice.chain) {
         const key = `${fx.type}@${fx.version}`;
         const u = used.get(key) ?? { type: fx.type, version: fx.version, clips: 0 };

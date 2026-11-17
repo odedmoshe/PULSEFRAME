@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, findAudioEffect, findClip, validateProject, type AudioFxInstance, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { kernelFor, registerKernel, type FxKernel } from '@pulseframe/engine';
+import { audioPlan, kernelFor, registerKernel, soundEnd, type FxKernel } from '@pulseframe/engine';
 import { ENGINE, Exporter } from './export.ts';
 import { preflight } from './preflight.ts';
 
@@ -66,6 +66,40 @@ describe('export planning with sound effects', () => {
     const note = pf.issues.find((i) => i.code === 'audio_tail_cut');
     expect(note?.severity).toBe('note');
     expect(note?.ids).toEqual([cb]);
+  });
+
+  it('a range that starts in an echo pins and checks the source the echo is made from (missing source blocks, as for the whole video)', () => {
+    // clip A (0..3 s, echo) gets a file of its own, so its asset is used by nothing else in a range after 3 s
+    const { doc, ca } = project();
+    const d = structuredClone(doc);
+    const r = tx(d, [{ op: 'import_asset', args: { asset: asset('2') } }], true);
+    const assetA = r.results[0]!.output!.assetId as string;
+    const d2 = structuredClone(r.doc);
+    (findClip(d2, ca)!.clip as any).assetId = assetA;
+    expect(validateProject(d2)).toEqual([]);
+    const e = exporter(); // every blob is missing
+    const ids = (p: ReturnType<Exporter['plan']>) => p.manifest.assets.map((x) => x.id);
+    const missing = (p: ReturnType<Exporter['plan']>) => p.blockers.filter((x) => x.code === 'missing_media').flatMap((x) => x.ids);
+    expect(missing(e.plan(d2, 1, { format: 'wav' }))).toContain(assetA);
+    // where clip A's echo ends, at the project rate (frames of 1/30 s)
+    const sr = d2.settings.sampleRate;
+    const pa = audioPlan(d2).clips.find((c) => c.clipId === ca)!;
+    expect(pa.voice!.tail).toBeGreaterThan(0);
+    const lastHeard = Math.ceil((soundEnd(pa) * 30) / sr) - 1; // the last frame in which the echo still sounds
+    expect(lastHeard).toBeGreaterThanOrEqual(90);
+    // 3 s .. the last frame of the echo: only the echo of clip A sounds, read from its source
+    for (const p of [e.plan(d2, 1, { format: 'wav', range: { startFrame: 90, endFrame: 120 } }), e.plan(d2, 1, { format: 'mp4-h264-aac', range: { startFrame: lastHeard, endFrame: lastHeard + 1 } })]) {
+      expect(p.manifest.audioEffects).toEqual([{ type: 'space.echo', version: 1, clips: 1 }]);
+      expect(p.manifest.assets.find((x) => x.id === assetA)).toMatchObject({ id: assetA, clips: 1 });
+      expect(missing(p)).toContain(assetA);
+    }
+    // after the echo, and in formats without sound, clip A's source is not needed
+    for (const p of [e.plan(d2, 1, { format: 'wav', range: { startFrame: lastHeard + 1, endFrame: 200 } }), e.plan(d2, 1, { format: 'gif', range: { startFrame: 90, endFrame: 120 } }), e.plan(d2, 1, { format: 'png', frame: 95 })]) {
+      expect(ids(p)).not.toContain(assetA);
+      expect(missing(p)).not.toContain(assetA);
+    }
+    // a clip with sound effects inside the range is counted once
+    expect(e.plan(d2, 1, { format: 'wav', range: { startFrame: 0, endFrame: 120 } }).manifest.assets.find((x) => x.id === assetA)?.clips).toBe(1);
   });
 
   it('a sound effect this build cannot run blocks the export (never dropped silently); not for a GIF', () => {
