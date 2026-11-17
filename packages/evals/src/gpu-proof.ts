@@ -991,6 +991,47 @@ async function main() {
     }
     check('No uncaught errors in the editor page with the digicam preview', errors.length === 0, errors);
 
+    // ---------- M1 (colour match, ADR-0014): color.grade against its model gradePixel on a 9×9×9 colour grid ----------
+    // Colour match fits grade values with gradePixel (engine colourMatch.ts), so the model must be the pass. Fixture: 729 flat
+    // patches, every combination of 9 levels per channel (0, 32, 64 … 255), 27 × 27 patches of 13 × 23 pixels. Six seeded sets of
+    // all eight values (wider than a match ever proposes); each patch's centre in the still, against gradePixel of the same pixel
+    // in the plain still (so decoding is the same on both sides). The pass runs in f32 and stores 8 bits: within 2 of 255.
+    {
+      const { gradePixel } = await import('@pulseframe/engine');
+      const LV = 9, PW = Math.floor(W / 27), PH = Math.floor(H / 27), level = (i: number) => Math.round((255 * i) / (LV - 1));
+      const gridRaw = Buffer.alloc(W * H * 3);
+      const patches: [number, number][] = [];
+      for (let k = 0; k < LV; k++) for (let j = 0; j < LV; j++) for (let i = 0; i < LV; i++) {
+        const col = i + LV * (k % 3), row = j + LV * Math.floor(k / 3);
+        patches.push([col * PW + Math.floor(PW / 2), row * PH + Math.floor(PH / 2)]);
+        for (let y = row * PH; y < (row + 1) * PH; y++) for (let x = col * PW; x < (col + 1) * PW; x++) { const o = (y * W + x) * 3; gridRaw[o] = level(i); gridRaw[o + 1] = level(j); gridRaw[o + 2] = level(k); }
+      }
+      const gridFile = path.join(art, 'grade-grid.png');
+      ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', gridFile], gridRaw);
+      const gp = await newProject('grade-grid', gridFile);
+      const plainGrid = await still(gp.pid);
+      // seeded sets (mulberry32, seed 20261117), rounded to 0.001 like every fitted value
+      let seed = 20261117 >>> 0;
+      const rnd = () => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      const r3 = (v: number) => Math.round(v * 1000) / 1000;
+      const sets = Array.from({ length: 6 }, () => ({ exposure: r3((rnd() * 2 - 1) * 1.5), temperature: r3(rnd() * 2 - 1), tint: r3(rnd() * 2 - 1), contrast: r3(0.3 + rnd() * 1.4), saturation: r3(rnd() * 2), shadows: r3(rnd() * 2 - 1), highlights: r3(rnd() * 2 - 1), fade: r3(rnd()) }));
+      const gradeFx = (await tx(gp.pid, [{ op: 'add_effect', args: { clipId: gp.clipId, type: 'color.grade' } }])).results[0].output.effectId as string;
+      const perSet: { params: Record<string, number>; worst: number; changed: number }[] = [];
+      for (const p of sets) {
+        await tx(gp.pid, [{ op: 'update_effect', args: { clipId: gp.clipId, effectId: gradeFx, params: p } }]);
+        const img = await still(gp.pid);
+        let worst = 0;
+        for (const [x, y] of patches) {
+          const src = px(plainGrid, x, y), got = px(img, x, y), want = gradePixel([src[0]! / 255, src[1]! / 255, src[2]! / 255], p);
+          for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(got[c]! - want[c]! * 255));
+        }
+        perSet.push({ params: p, worst: Number(worst.toFixed(2)), changed: meanDiff(img, plainGrid) });
+      }
+      const worstAll = Math.max(...perSet.map((x) => x.worst));
+      measurements.gradeGrid = { patches: patches.length, sets: perSet };
+      check('M1 color.grade against gradePixel: a 9×9×9 colour grid at 6 seeded sets of all eight values, every patch within 2 of 255, and every set changed the picture', patches.length === 729 && perSet.length === 6 && worstAll <= 2 && perSet.every((x) => x.changed > 1), { worst: worstAll, perSet: perSet.map((x) => x.worst) });
+    }
+
     // ---------- no adapter in the browser ----------
     const p2 = await plain.newPage({ viewport: { width: 1500, height: 950 } });
     await p2.goto(`${s.ownerUrl}&project=${key.pid}`);

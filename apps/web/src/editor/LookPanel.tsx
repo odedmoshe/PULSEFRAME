@@ -8,6 +8,7 @@ import { ADJUST_STRINGS } from './adjust.strings.ts';
 import { wholeEditAdjustment, type WholeEditPick } from './commands.ts';
 import { flashSchedule } from '@pulseframe/engine';
 import { TRANSITION_OPTION_TESTIDS } from './trendTestIds.ts';
+import { ColourMatchPanel } from './ColourMatchPanel.tsx';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
@@ -561,6 +562,7 @@ export function LookPanel({ clip, trackKind }: { clip: Clip; trackKind: string }
           </select>
         </label>
       </div>
+      {media && clip.type === 'media' && <ColourMatchPanel key={`cm:${clip.id}`} clip={clip} />}
       {media && clip.type === 'media' && <MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} />}
       {adjustment && clip.type === 'adjustment' && <><MaskControls key={`mask:${clip.id}`} clipId={clip.id} mask={clip.mask} /><p className="muted" role="note" data-testid="adjust-mask-note">{A.maskNote}</p></>}
       {media && clip.type === 'media' && <TransitionControls key={`tr:${clip.id}:${clip.transition?.type ?? ''}:${clip.transition?.frames ?? ''}`} clip={clip} />}
