@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T07:51:24.928Z",
+  "ranAt": "2026-11-17T07:55:55.277Z",
   "result": "FAILED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -37,7 +37,7 @@
       "name": "A voice.telephone hiss 0.3 on silence: RMS within ± 1.5 dB of its calibrated level (-60 + 24·hiss dBFS added before the band filters, so band-limited by the measured response; or that level at the output); the same seed gives the same bytes, another seed differs",
       "ok": true,
       "detail": {
-        "measuredDbfs": -52.82,
+        "measuredDbfs": -52.8,
         "generatedDbfs": -52.8,
         "bandLimitedDbfs": -61.61,
         "sameSeedSameBytes": true,
@@ -69,9 +69,9 @@
           "hi": 4713.688
         },
         "amDepthDb": 0.5,
-        "cracklesFull": 7,
-        "cracklesRange": 7,
-        "perSecond": 2.346
+        "cracklesFull": 8,
+        "cracklesRange": 8,
+        "perSecond": 2.682
       }
     },
     {
@@ -478,15 +478,17 @@
       }
     },
     {
-      "name": "C seeded and nonlinear effects: radio crackle positions in the browser mix agree with the server export within ± 1 sample; with a telephone voice, third-octave levels within ± 1.5 dB",
+      "name": "C seeded and nonlinear effects: radio crackle positions in the browser mix agree with the server export within ± 1 sample; with a telephone voice, third-octave levels of the browser mix (before encoding) within ± 1.5 dB of the server export in every band within 50 dB of the loudest, and of the encoded file within ± 1.5 dB in every band within 30 dB",
       "ok": false,
       "detail": {
         "codec": "mp4/opus",
-        "crackleServer": 11,
-        "crackleBrowser": 11,
+        "crackleServer": 9,
+        "crackleBrowser": 9,
         "worstCrackleOffset": 0,
-        "telephoneBands": 28,
-        "worstBandDifferenceDb": 11.089
+        "telephoneBands": 27,
+        "worstBandDifferenceDb": 0.153,
+        "encodedBands": 18,
+        "worstEncodedBandDifferenceDb": 2.437
       }
     },
     {
@@ -639,7 +641,7 @@
         "at8kHzDb": -32.534
       },
       "telephoneHiss": {
-        "measuredDbfs": -52.82,
+        "measuredDbfs": -52.8,
         "generatedDbfs": -52.8,
         "bandLimitedDbfs": -61.61,
         "sameSeedSameBytes": true,
@@ -663,9 +665,9 @@
           "hi": 4713.688
         },
         "amDepthDb": 0.5,
-        "cracklesFull": 7,
-        "cracklesRange": 7,
-        "perSecond": 2.346
+        "cracklesFull": 8,
+        "cracklesRange": 8,
+        "perSecond": 2.682
       },
       "robot": {
         "strongestLinesHz": [
@@ -1016,11 +1018,13 @@
       },
       "radio": {
         "codec": "mp4/opus",
-        "crackleServer": 11,
-        "crackleBrowser": 11,
+        "crackleServer": 9,
+        "crackleBrowser": 9,
         "worstCrackleOffset": 0,
-        "telephoneBands": 28,
-        "worstBandDifferenceDb": 11.089
+        "telephoneBands": 27,
+        "worstBandDifferenceDb": 0.153,
+        "encodedBands": 18,
+        "worstEncodedBandDifferenceDb": 2.437
       }
     },
     "E": {

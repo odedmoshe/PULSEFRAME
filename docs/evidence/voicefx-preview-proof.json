@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T07:53:09.675Z",
+  "ranAt": "2026-11-17T07:57:44.339Z",
   "result": "FAILED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -8,7 +8,7 @@
     "gpu": "none"
   },
   "scope": "Synthetic fixtures only (ffmpeg lavfi beeps, sweep, speech-like pulse trains, impulse), 48 kHz projects, headless Chromium with its own audio clock. Preview levels come from the measurement tap (50 ms window peaks), not from a listener: nobody has listened to these effects yet. Not covered: 44.1 kHz devices, real speech, real-time audio devices, other browsers, the wave-2 worker host.",
-  "passed": 7,
+  "passed": 8,
   "total": 9,
   "checks": [
     {
@@ -56,64 +56,74 @@
           10
         ],
         "clock": "audio",
-        "fxPrimeMs": 50,
+        "fxPrimeMs": 47,
         "fxPrimeTimedOut": false,
         "unavailable": {}
       }
     },
     {
       "name": "D2 bass boost + hall reverb on a sweep: at 10 points (0.5 s to 9.5 s, through the reverb tail) the preview's 50 ms peak is within 0.04 of full scale of the export's",
-      "ok": false,
+      "ok": true,
       "detail": {
         "points": [
           {
             "t": 0.53,
-            "preview": 1.1848,
+            "preview": 1,
+            "previewBeforeTheSpeaker": 1.1848,
             "export": 1
           },
           {
             "t": 1.53,
             "preview": 0.6003,
+            "previewBeforeTheSpeaker": 0.6003,
             "export": 0.609
           },
           {
             "t": 2.53,
             "preview": 0.4799,
+            "previewBeforeTheSpeaker": 0.4799,
             "export": 0.48
           },
           {
             "t": 3.53,
             "preview": 0.468,
+            "previewBeforeTheSpeaker": 0.468,
             "export": 0.468
           },
           {
             "t": 4.53,
             "preview": 0.5065,
+            "previewBeforeTheSpeaker": 0.5065,
             "export": 0.507
           },
           {
             "t": 5.53,
             "preview": 0.4913,
+            "previewBeforeTheSpeaker": 0.4913,
             "export": 0.491
           },
           {
             "t": 6.53,
             "preview": 0,
+            "previewBeforeTheSpeaker": 0,
             "export": 0
           },
           {
             "t": 7.53,
             "preview": 0,
+            "previewBeforeTheSpeaker": 0,
             "export": 0
           },
           {
             "t": 8.53,
             "preview": 0,
+            "previewBeforeTheSpeaker": 0,
             "export": 0
           },
           {
             "t": 9.53,
             "preview": 0,
+            "previewBeforeTheSpeaker": 0,
             "export": 0
           }
         ],
@@ -122,7 +132,7 @@
     },
     {
       "name": "D3 after a seek to 0.5 s past the end of a clip with a cave reverb, playing gives the reverb tail at the export's level within 2 dB in every 50 ms window above -60 dBFS",
-      "ok": false,
+      "ok": true,
       "detail": {
         "windows": 17,
         "worstDb": 0.2700000000000031,
@@ -144,7 +154,7 @@
       "name": "D4 starting the preview 20 s into a clip with a 3 s hall reverb: the effects are rendered ahead (their whole warm-up) in at most 500 ms, and the first sound is on time",
       "ok": true,
       "detail": {
-        "fxPrimeMs": 342,
+        "fxPrimeMs": 373,
         "fxPrimeTimedOut": false,
         "fxLateStarts": 0,
         "warmUpSeconds": 11.281
@@ -156,48 +166,48 @@
       "detail": [
         {
           "type": "tone.bassboost",
-          "realtime": 214,
-          "kernelRealtime": 984
+          "realtime": 152,
+          "kernelRealtime": 930
         },
         {
           "type": "voice.telephone",
-          "realtime": 87,
-          "kernelRealtime": 150
+          "realtime": 64,
+          "kernelRealtime": 120
         },
         {
           "type": "voice.megaphone",
-          "realtime": 139,
-          "kernelRealtime": 190
+          "realtime": 168,
+          "kernelRealtime": 143
         },
         {
           "type": "voice.radio",
-          "realtime": 123,
-          "kernelRealtime": 164
+          "realtime": 128,
+          "kernelRealtime": 94
         },
         {
           "type": "voice.robot",
-          "realtime": 361,
-          "kernelRealtime": 440
+          "realtime": 320,
+          "kernelRealtime": 621
         },
         {
           "type": "texture.8bit",
-          "realtime": 439,
-          "kernelRealtime": 529
+          "realtime": 213,
+          "kernelRealtime": 347
         },
         {
           "type": "space.echo",
-          "realtime": 298,
-          "kernelRealtime": 690
+          "realtime": 163,
+          "kernelRealtime": 484
         },
         {
           "type": "space.reverb",
-          "realtime": 84,
-          "kernelRealtime": 111
+          "realtime": 54,
+          "kernelRealtime": 83
         },
         {
           "type": "utility.width",
-          "realtime": 386,
-          "kernelRealtime": 3505
+          "realtime": 226,
+          "kernelRealtime": 2843
         }
       ]
     },
@@ -207,51 +217,51 @@
       "detail": {
         "withEffects": {
           "fxVoices": 4,
-          "fxPrimeMs": 163,
+          "fxPrimeMs": 233,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
           "audioScheduledAheadMaxMs": 1485.9,
-          "longTasks": 1,
-          "longTaskMs": 52,
-          "longestTaskMs": 52,
+          "longTasks": 10,
+          "longTaskMs": 604,
+          "longestTaskMs": 82,
           "paintLatenessMs": {
-            "median": 8,
-            "p95": 28,
-            "max": 42.67
+            "median": 13.33,
+            "p95": 25.33,
+            "max": 88
           }
         },
         "baseline": {
           "fxVoices": 0,
-          "longTasks": 0,
-          "longTaskMs": 0,
-          "audioScheduledAheadMaxMs": 1560
+          "longTasks": 2,
+          "longTaskMs": 105,
+          "audioScheduledAheadMaxMs": 1552
         }
       }
     },
     {
       "name": "K3 main-thread long tasks while those four effect clips play: at most twice the time of the same playback with the effects bypassed (with 100 ms allowed over a near-zero baseline)",
-      "ok": true,
+      "ok": false,
       "detail": {
         "withEffects": {
           "fxVoices": 4,
-          "fxPrimeMs": 163,
+          "fxPrimeMs": 233,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
           "audioScheduledAheadMaxMs": 1485.9,
-          "longTasks": 1,
-          "longTaskMs": 52,
-          "longestTaskMs": 52,
+          "longTasks": 10,
+          "longTaskMs": 604,
+          "longestTaskMs": 82,
           "paintLatenessMs": {
-            "median": 8,
-            "p95": 28,
-            "max": 42.67
+            "median": 13.33,
+            "p95": 25.33,
+            "max": 88
           }
         },
         "baseline": {
           "fxVoices": 0,
-          "longTasks": 0,
-          "longTaskMs": 0,
-          "audioScheduledAheadMaxMs": 1560
+          "longTasks": 2,
+          "longTaskMs": 105,
+          "audioScheduledAheadMaxMs": 1552
         }
       }
     },
@@ -313,7 +323,7 @@
         10
       ],
       "clock": "audio",
-      "fxPrimeMs": 50,
+      "fxPrimeMs": 47,
       "fxPrimeTimedOut": false,
       "unavailable": {}
     },
@@ -321,52 +331,62 @@
       "points": [
         {
           "t": 0.53,
-          "preview": 1.1848,
+          "preview": 1,
+          "previewBeforeTheSpeaker": 1.1848,
           "export": 1
         },
         {
           "t": 1.53,
           "preview": 0.6003,
+          "previewBeforeTheSpeaker": 0.6003,
           "export": 0.609
         },
         {
           "t": 2.53,
           "preview": 0.4799,
+          "previewBeforeTheSpeaker": 0.4799,
           "export": 0.48
         },
         {
           "t": 3.53,
           "preview": 0.468,
+          "previewBeforeTheSpeaker": 0.468,
           "export": 0.468
         },
         {
           "t": 4.53,
           "preview": 0.5065,
+          "previewBeforeTheSpeaker": 0.5065,
           "export": 0.507
         },
         {
           "t": 5.53,
           "preview": 0.4913,
+          "previewBeforeTheSpeaker": 0.4913,
           "export": 0.491
         },
         {
           "t": 6.53,
           "preview": 0,
+          "previewBeforeTheSpeaker": 0,
           "export": 0
         },
         {
           "t": 7.53,
           "preview": 0,
+          "previewBeforeTheSpeaker": 0,
           "export": 0
         },
         {
           "t": 8.53,
           "preview": 0,
+          "previewBeforeTheSpeaker": 0,
           "export": 0
         },
         {
           "t": 9.53,
           "preview": 0,
+          "previewBeforeTheSpeaker": 0,
           "export": 0
         }
       ],
@@ -389,7 +409,7 @@
       ]
     },
     "priming": {
-      "fxPrimeMs": 342,
+      "fxPrimeMs": 373,
       "fxPrimeTimedOut": false,
       "fxLateStarts": 0,
       "warmUpSeconds": 11.281
@@ -397,71 +417,71 @@
     "nodeCost": [
       {
         "type": "tone.bassboost",
-        "realtime": 214,
-        "kernelRealtime": 984
+        "realtime": 152,
+        "kernelRealtime": 930
       },
       {
         "type": "voice.telephone",
-        "realtime": 87,
-        "kernelRealtime": 150
+        "realtime": 64,
+        "kernelRealtime": 120
       },
       {
         "type": "voice.megaphone",
-        "realtime": 139,
-        "kernelRealtime": 190
+        "realtime": 168,
+        "kernelRealtime": 143
       },
       {
         "type": "voice.radio",
-        "realtime": 123,
-        "kernelRealtime": 164
+        "realtime": 128,
+        "kernelRealtime": 94
       },
       {
         "type": "voice.robot",
-        "realtime": 361,
-        "kernelRealtime": 440
+        "realtime": 320,
+        "kernelRealtime": 621
       },
       {
         "type": "texture.8bit",
-        "realtime": 439,
-        "kernelRealtime": 529
+        "realtime": 213,
+        "kernelRealtime": 347
       },
       {
         "type": "space.echo",
-        "realtime": 298,
-        "kernelRealtime": 690
+        "realtime": 163,
+        "kernelRealtime": 484
       },
       {
         "type": "space.reverb",
-        "realtime": 84,
-        "kernelRealtime": 111
+        "realtime": 54,
+        "kernelRealtime": 83
       },
       {
         "type": "utility.width",
-        "realtime": 386,
-        "kernelRealtime": 3505
+        "realtime": 226,
+        "kernelRealtime": 2843
       }
     ],
     "previewCost": {
       "withEffects": {
         "fxVoices": 4,
-        "fxPrimeMs": 163,
+        "fxPrimeMs": 233,
         "fxLateStarts": 0,
         "fxLateSkips": 0,
         "audioScheduledAheadMaxMs": 1485.9,
-        "longTasks": 1,
-        "longTaskMs": 52,
-        "longestTaskMs": 52,
+        "longTasks": 10,
+        "longTaskMs": 604,
+        "longestTaskMs": 82,
         "paintLatenessMs": {
-          "median": 8,
-          "p95": 28,
-          "max": 42.67
+          "median": 13.33,
+          "p95": 25.33,
+          "max": 88
         }
       },
       "baseline": {
         "fxVoices": 0,
-        "longTasks": 0,
-        "longTaskMs": 0,
-        "audioScheduledAheadMaxMs": 1560
+        "longTasks": 2,
+        "longTaskMs": 105,
+        "audioScheduledAheadMaxMs": 1552
       }
     },
     "runtimes": [
@@ -470,84 +490,84 @@
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 9.4
+        "chromiumMs": 8.5
       },
       {
         "type": "tone.bassboost",
         "params": "{\"gainDb\":15,\"freqHz\":150}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 6.8
+        "chromiumMs": 14
       },
       {
         "type": "voice.telephone",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 26.7
+        "chromiumMs": 18.8
       },
       {
         "type": "voice.telephone",
         "params": "{\"grit\":1,\"hiss\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 18.6
+        "chromiumMs": 14.9
       },
       {
         "type": "voice.megaphone",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 14.1
+        "chromiumMs": 18.5
       },
       {
         "type": "voice.megaphone",
         "params": "{\"drive\":1,\"amount\":0.7}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 19.2
+        "chromiumMs": 12.3
       },
       {
         "type": "voice.radio",
         "params": "{}",
         "maxAbsDiff": 3.3306690738754696e-16,
         "bitEqual": false,
-        "chromiumMs": 31.5
+        "chromiumMs": 28.3
       },
       {
         "type": "voice.radio",
         "params": "{\"noise\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 23.7
+        "chromiumMs": 21.1
       },
       {
         "type": "voice.robot",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 6.5
+        "chromiumMs": 6.7
       },
       {
         "type": "voice.robot",
         "params": "{\"pitchHz\":200,\"metal\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 5.5
+        "chromiumMs": 5.4
       },
       {
         "type": "texture.8bit",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 3.5
+        "chromiumMs": 3.6
       },
       {
         "type": "texture.8bit",
         "params": "{\"bits\":3,\"rateKhz\":3}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 8
+        "chromiumMs": 11.1
       },
       {
         "type": "space.echo",
@@ -561,35 +581,35 @@
         "params": "{\"pingPong\":true,\"tone\":0.6,\"repeats\":8,\"delayMs\":120}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 11.4
+        "chromiumMs": 11
       },
       {
         "type": "space.reverb",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 50.3
+        "chromiumMs": 42.4
       },
       {
         "type": "space.reverb",
         "params": "{\"room\":\"cave\",\"decaySeconds\":3,\"damping\":1,\"spread\":0.3,\"predelayMs\":100,\"amount\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 36.1
+        "chromiumMs": 40.5
       },
       {
         "type": "utility.width",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 3
+        "chromiumMs": 2.5
       },
       {
         "type": "utility.width",
         "params": "{\"stereoWidth\":0}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 2
+        "chromiumMs": 9.6
       }
     ]
   }
