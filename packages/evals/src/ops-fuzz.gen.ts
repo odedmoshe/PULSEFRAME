@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, LIFE_OPS_BUILT, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, LIFE_OPS_BUILT, PEOPLE_OPS_BUILT, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -34,6 +34,8 @@ const LIFE_CAPTURES: (Capture | undefined)[] = [
   undefined,
 ];
 /** The operations of the life line that the fuzz draws (the public ones; attach_asset_capture is internal). */
+/** The operations on people that the fuzz draws (ADR-0021, people section), once they are built (PEOPLE_OPS_BUILT). */
+export const PEOPLE_FUZZ_OPS = ['add_person', 'update_person', 'remove_person'] as const;
 export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_text_fields', 'cluster_events', 'add_event', 'update_event', 'remove_event'] as const;
 
 /**
@@ -44,6 +46,8 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * does; ADR-0016): a small plan with bindings, sometimes malformed, sometimes the regeneration of an earlier template run.
  * `genLife(doc)` returns a random call of the life line (ADR-0021): its seven public operations and the text edits that give titles
  * brace groups. `gen` draws from these rows too once the operations are built (LIFE_OPS_BUILT).
+ * `genPeople(doc)` returns a random call on the people of the project (ADR-0021, people section): its three operations and the
+ * title edits that name a person. `gen` draws from these rows too once those operations are built (PEOPLE_OPS_BUILT).
  */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
@@ -130,6 +134,31 @@ export function createFuzz(seed: number) {
     ];
   };
   const genLife = (doc: ProjectDocument): OpCall => pick(lifeMenu(doc))();
+  /**
+   * The rows of the people of a project (ADR-0021, people section). Every call has arguments its operation's schema accepts
+   * (people-fuzz.test.ts checks that); what is refused is refused by the operation: a name with a brace or a colon, a name of
+   * spaces, a name another person has (also in another case or with other spaces), a day that does not exist, a year out of
+   * range, a person who is not there, a person a title still names. The title rows name people who exist and people who do
+   * not, in titles with live fields on and off.
+   */
+  const peopleMenu = (doc: ProjectDocument): (() => OpCall)[] => {
+    const people = Object.values(doc.people ?? {});
+    const personId = () => (people.length && rnd() < 0.9 ? pick(people).id : 'per_none');
+    const titles = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'text');
+    const titleId = () => (titles.length && rnd() < 0.9 ? pick(titles).id : 'clp_none');
+    const name = () => pick(['נועה', 'איתי', 'Noa', 'noa', '  נועה ', 'סבתא רבקה', 'סבתא  רבקה', 'a{b', 'x:y', 'p|q', '   ', 'José', 'Jose\u0301']);
+    const birth = () => pick(['2020-03-10', '2018-11-02', '2024-12-25', '2020-02-29', '2021-02-30', '1850-06-01', '2100-12-31', null]);
+    const form = () => pick(['m', 'f', null] as const);
+    return [
+      () => ({ op: 'add_person', args: { name: name(), ...(rnd() < 0.7 ? { birthDate: birth() } : {}), ...(rnd() < 0.6 ? { form: form() } : {}) } }),
+      () => { const r = rnd(); return { op: 'update_person', args: { personId: personId(), ...(r < 0.4 ? { name: name() } : {}), ...(r > 0.3 && r < 0.75 ? { birthDate: birth() } : {}), ...(r > 0.6 && r < 0.97 ? { form: form() } : {}) } }; },
+      () => ({ op: 'remove_person', args: { personId: personId() } }),
+      // titles that name a person: by the id of one who exists, and of one who does not
+      () => { const id = personId(); return { op: 'update_text', args: { clipId: titleId(), text: pick([`{name:${id}}`, `{name:${id}} {age:${id}}`, `{age:${id}:words} · {date}`, `{age:${id}:en}`, `{{${id}}}`, 'שלום']) } }; },
+      () => ({ op: 'set_text_fields', args: { clipId: titleId(), enabled: rnd() < 0.7 } }),
+    ];
+  };
+  const genPeople = (doc: ProjectDocument): OpCall => pick(peopleMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
 
   const gen = (doc: ProjectDocument): OpCall => {
@@ -356,6 +385,8 @@ export function createFuzz(seed: number) {
       () => ({ op: 'replace_clip_media', args: { clipId: media.length && rnd() < 0.9 ? pick(media).c.id : any(), assetId: pick(assetIds), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(150), SRC) } : {}), ...(rnd() < 0.4 ? { linked: pick(['follow', 'detach'] as const) } : {}) } }),
       // life line (ADR-0021): capture dates, events and title fields, once their operations are built
       ...(LIFE_OPS_BUILT ? lifeMenu(doc) : []),
+      // people (ADR-0021, people section): once their operations are built
+      ...(PEOPLE_OPS_BUILT ? peopleMenu(doc) : []),
     ];
     return pick(menu)();
   };
@@ -406,5 +437,5 @@ export function createFuzz(seed: number) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genPeople };
 }

@@ -4,6 +4,7 @@ import { TEMPLATES_EN, TEMPLATES_HE } from './templates.ts';
 import { TREND_PACK_EN, TREND_PACK_HE } from './trendPack.ts';
 import { CLEANUP_WAVE_EN, CLEANUP_WAVE_HE } from './cleanupWave.ts';
 import { LIFELINE_EN, LIFELINE_HE } from './lifeline.ts';
+import { PEOPLE_EN, PEOPLE_HE } from './people.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -196,6 +197,7 @@ export const he = {
   ...TREND_PACK_HE,
   ...CLEANUP_WAVE_HE,
   ...LIFELINE_HE,
+  ...PEOPLE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -388,6 +390,7 @@ export const en: Record<keyof typeof he, string> = {
   ...TREND_PACK_EN,
   ...CLEANUP_WAVE_EN,
   ...LIFELINE_EN,
+  ...PEOPLE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -401,3 +404,4 @@ export * from './trendPack.ts';
 export * from './cleanupWave.ts';
 export * from './ui.ts';
 export * from './lifeline.ts';
+export * from './people.ts';
