@@ -22,6 +22,7 @@ import { StatusBar } from './editor/StatusBar.tsx';
 import { Transport } from './editor/Transport.tsx';
 import { shortcutAllowed } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
+import { toastOf } from './editor/undoToast.ts';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
 import { findClip, findEffect } from '@pulseframe/core';
@@ -72,7 +73,7 @@ function Toasts({ children }: { children: React.ReactNode }) {
   const { state } = useEditorState();
   return <ToastProvider closeLabel={APP_STRINGS[state.lang].close}>{children}<ToastBridge /></ToastProvider>;
 }
-/** The editor's notices (editor.notify) go to the toast queue; an undo toast offers to undo the edit it names. */
+/** The editor's notices (editor.notify) go to the toast queue; an undo toast undoes exactly the transaction it names (undoToast.ts). */
 function ToastBridge() {
   const { editor, state } = useEditorState();
   const toasts = useToasts();
@@ -81,7 +82,7 @@ function ToastBridge() {
   useEffect(() => {
     if (!n || n.n === seen.current) return;
     seen.current = n.n;
-    toasts.push({ kind: n.kind, title: n.title, body: n.body, ...(n.kind === 'undo' ? { action: APP_STRINGS[state.lang].undo, onAction: () => void editor.history('undo') } : {}) });
+    toasts.push(toastOf(n, APP_STRINGS[state.lang].undo, editor));
   }, [n?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }

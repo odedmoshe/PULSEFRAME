@@ -32,7 +32,7 @@ export interface Proposal { id: string; actor: string; label: string | null; sum
 export interface JobEvent { id: string; type: string; status: string; stage: string | null; output: any; error: any }
 export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; fix?: { label: string; ops: OpCall[] } }
 export interface PreflightReport { revision: number; ok: boolean; blockers: number; warnings: number; notes: number; issues: PreflightIssue[]; output: unknown; scope: string }
-export interface CommitResult { revision: number; committed: boolean; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
+export interface CommitResult { revision: number; committed: boolean; /** the transaction this commit made (null when nothing changed): undo names it to reverse exactly this edit */ transactionId?: string | null; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
 export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string }
 /** measure_voice (ADR-0013; apps/server/src/voiceClean.ts): the same shapes as the server's VoiceMeasureBody and VoiceCheck. */
 export interface VoiceMeasureRequest { clipId: string; strength?: number; /** SOURCE-time stretches that hold only noise */ noiseRanges?: { start: RationalTime; end: RationalTime }[]; scope?: 'clip' | 'asset' }

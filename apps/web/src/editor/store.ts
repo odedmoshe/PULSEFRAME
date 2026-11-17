@@ -113,8 +113,11 @@ export interface EditorState {
 export type PanelTarget = 'speed' | 'animation' | 'effects' | 'transition' | 'transitions-gallery' | 'sound' | 'replace';
 /** The tabs of the effects gallery that can be asked for from outside it. */
 export type GalleryTab = 'effects' | 'looks' | 'transitions' | 'text' | 'motion';
-/** A toast the editor asks for: an undo toast offers to undo the edit that was just made. */
-export interface Notice { kind: 'undo' | 'info'; title: string; body?: string }
+/**
+ * A toast the editor asks for. An undo toast names the transaction it reports (`undoes`) and its button reverses exactly that
+ * one (editor.undoTransaction), never whatever edit happens to be newest when it is pressed; without `undoes` it has no button.
+ */
+export interface Notice { kind: 'undo' | 'info'; title: string; body?: string; undoes?: string }
 /** What an export is started with (POST /exports): the defaults are left out, as exportSheet.logic.ts exportOptions builds it. */
 export interface ExportRequest { variantId?: string; quality?: string; captions?: string; format?: string; scale?: number }
 /** What the track picker is picking, and on which clip's picture. */
@@ -369,6 +372,12 @@ export class Editor {
   /** `ops` may be a function: it is called when this write's turn comes, so it can decide from the document as it is then (after the user's earlier queued edits). Returning null or nothing commits nothing. */
   commit(ops: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> { return this.enqueue(() => this.commitNow(ops, label)); }
   history(mode: 'undo' | 'redo'): Promise<void> { return this.enqueue(() => this.historyNow(mode)); }
+  /**
+   * Undo exactly the transaction `id` (an undo toast's button): the server reverses that one or refuses with undo_conflict when
+   * its items were changed afterwards, so a later edit (the owner's or an agent's) is never undone in its place. One that was
+   * already undone (Ctrl+Z got there first) is left as it is.
+   */
+  undoTransaction(id: string): Promise<void> { return this.enqueue(() => this.historyNow('undo', id)); }
   private async commitNow(given: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> {
     const { doc, revision } = this.state;
     if (!doc) return null;
@@ -391,15 +400,15 @@ export class Editor {
       return null;
     }
   }
-  private async historyNow(mode: 'undo' | 'redo'): Promise<void> {
+  private async historyNow(mode: 'undo' | 'redo', transactionId?: string): Promise<void> {
     const { doc } = this.state;
     if (!doc) return;
     this.set({ error: null });
     try {
-      await api.undo(doc.id, mode);
+      await api.undo(doc.id, mode, transactionId);
       await this.load(doc.id);
     } catch (e) {
-      if (e instanceof ApiFailure && (e.code === 'nothing_to_undo' || e.code === 'nothing_to_redo')) return;
+      if (e instanceof ApiFailure && (e.code === 'nothing_to_undo' || e.code === 'nothing_to_redo' || e.code === 'already_undone')) return;
       this.fail(e instanceof ApiFailure && e.code === 'undo_conflict' ? new Error(this.t('undo.conflict')) : e);
     }
   }
