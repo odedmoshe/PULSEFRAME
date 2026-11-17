@@ -13,7 +13,7 @@ type C2D = OffscreenCanvasRenderingContext2D;
 export interface Buf { canvas: OffscreenCanvas; ctx: C2D }
 /** Geometry of the placed layer, so layer-relative effects and masks follow its transform. */
 export interface LayerBox { cx: number; cy: number; w: number; h: number; rotation: number; scale: number }
-export interface LookEnv { width: number; height: number; frameIndex: number; /** Timeline time of the frame in seconds. */ seconds: number; box: LayerBox; /** Where the frame falls in the beats of the music playing there, if any (core beatgrid.ts). */ beat?: BeatPosition | null; /** Colour tables of this frame by asset id (null = could not be supplied; the reason is in `lutReasons`). Filled by drawGraph for color.lut. */ luts?: ReadonlyMap<string, LutStrip | null>; lutReasons?: ReadonlyMap<string, string> }
+export interface LookEnv { width: number; height: number; frameIndex: number; /** Timeline time of the frame in seconds. */ seconds: number; /** Clip-local seconds of the frame (bursts at the clip start). */ local?: number; box: LayerBox; /** Where the frame falls in the beats of the music playing there, if any (core beatgrid.ts). */ beat?: BeatPosition | null; /** Colour tables of this frame by asset id (null = could not be supplied; the reason is in `lutReasons`). Filled by drawGraph for color.lut. */ luts?: ReadonlyMap<string, LutStrip | null>; lutReasons?: ReadonlyMap<string, string> }
 
 const pools = new Map<string, Buf[]>();
 /** Scratch buffer `slot` of the given size, cleared and reset. Buffers are reused across frames (bounded: a few per size). */
