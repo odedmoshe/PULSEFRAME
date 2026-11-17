@@ -228,8 +228,21 @@ const RANGE: Readonly<Record<keyof GradeParams, { min: number; max: number }>> =
   if (!r) throw new Error(`color.grade has no range for ${k}`);
   return [k, r];
 })) as Record<keyof GradeParams, { min: number; max: number }>;
-/** Weight of the pull toward the defaults, per ((value − default)/range)²: small, it only settles values the picture cannot decide. */
-const PULL = 0.01;
+/**
+ * Weight of the pull toward no change, per ((value − default)/range)², in squared CIELAB units like the rest of the loss: a value
+ * moved across its whole range must buy half a unit (√0.25) of the statistics, a quarter of the smallest difference people
+ * notice. It settles the values a picture cannot decide, so it has to outweigh what the statistics cannot measure: a still stored
+ * in 8 bits moves them by about 0.05, and on a picture that hides a value (tint, where green is absent or clipped in the
+ * mid-tones) the whole range of that value moves them by less than that. With a weaker pull (it was 0.01) the rounding chose such
+ * a value, anywhere up to the edge of its range. A pull this strong would also hold back the values a picture does show (tint by
+ * up to 0.03), so the last refinement pulls toward the estimate it starts from instead of toward no change (see `search`).
+ */
+const PULL = 0.25;
+/**
+ * After the first refinement the pull is made stronger by these factors in turn, each stage starting from the one before, and
+ * then relaxed to its own weight (see `search`): a value the statistics do not hold is brought back toward no change.
+ */
+const PULL_PATH = [16, 4];
 /** Halvings of the search step after the first (¼ of each range). */
 const HALVINGS = 8;
 /** Halvings of the first, saturation-free stage of the coordinate search: it only has to point temperature and tint the right way. */
@@ -243,7 +256,7 @@ const MAX_SWEEPS = 6;
 const DIFF_STEP = 2e-3;
 /** Iterations of the refinement, at most. */
 const MAX_REFINE = 40;
-/** The search and refinement measure at most this many points (an even stride of the sample); a larger sample then gets FINAL_REFINE iterations on every point. */
+/** The search and refinement measure at most this many points (`thinned`); a larger sample then gets FINAL_REFINE iterations on every point. */
 const FIT_POINTS = 4096;
 const FINAL_REFINE = 3;
 
@@ -253,10 +266,23 @@ interface Goal { lPct: readonly number[]; a: number; b: number; spread: number; 
 const COARSE_POINTS = 512;
 const GRID_EXPOSURE = [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2];
 const GRID_CONTRAST = [0.4, 0.7, 1, 1.3, 1.6, 2];
-const strided = (s: PictureSample, max: number): PictureSample => {
+/** The points of a sample from dark to bright: by BT.709 luma of the stored values, equal ones in the order given. */
+function byLuma(s: PictureSample): Int32Array {
+  const luma = new Float64Array(s.count), order = new Int32Array(s.count);
+  for (let i = 0; i < s.count; i++) { luma[i] = 0.2126 * s.rgb[i * 3]! + 0.7152 * s.rgb[i * 3 + 1]! + 0.0722 * s.rgb[i * 3 + 2]!; order[i] = i; }
+  return order.sort((x, y) => luma[x]! - luma[y]! || x - y);
+}
+/**
+ * At most `max` points of a sample for the stages that measure fewer: evenly along its points from dark to bright (`order`,
+ * byLuma), so the few carry the lightness distribution of them all and every flat area in proportion to its size. An even stride
+ * through the points in picture order (as it was) meets the picture's own pattern: of six colour bars it took uneven shares, the
+ * statistics of the few then sat several units from those of the whole, and the coarse stage settled in a valley the whole
+ * picture does not have (temperature and tint at −1 with a difference of 5.7 where 0.05 was in reach).
+ */
+const thinned = (s: PictureSample, max: number, order: Int32Array): PictureSample => {
   if (s.count <= max) return s;
   const rgb = new Float64Array(max * 3);
-  for (let i = 0; i < max; i++) { const j = Math.floor((i * s.count) / max); rgb[i * 3] = s.rgb[j * 3]!; rgb[i * 3 + 1] = s.rgb[j * 3 + 1]!; rgb[i * 3 + 2] = s.rgb[j * 3 + 2]!; }
+  for (let i = 0; i < max; i++) { const j = order[Math.floor(((i + 0.5) * s.count) / max)]!; rgb[i * 3] = s.rgb[j * 3]!; rgb[i * 3 + 1] = s.rgb[j * 3 + 1]!; rgb[i * 3 + 2] = s.rgb[j * 3 + 2]!; }
   return { rgb, count: max };
 };
 const round3 = (v: number) => { const r = Math.round(v * 1000) / 1000; return r === 0 ? 0 : r; };
@@ -285,21 +311,23 @@ function dampedStep(A: number[][], g: number[], mu: number): number[] | null {
 function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], start: GradeParams, amount: number): GradeFit {
   if (!(amount >= 0 && amount <= 1)) throw new RangeError(`amount must be within 0..1, got ${amount}`);
   if (target.count === 0) throw new RangeError('the picture has no points to measure');
-  const lp = [0, 0, 0, 0, 0], pull = Math.sqrt(PULL), ab = goal.weightAB ?? 1;
-  /** The residual vector over a set of points; the loss is its squared length: Σ(ΔL* percentiles)² + Δā² + Δb̄² + Δspread², plus the pull toward the defaults. */
-  const residualsOver = (pts: PictureSample) => {
+  const lp = [0, 0, 0, 0, 0], ab = goal.weightAB ?? 1;
+  /** The residual vector over a set of points; the loss is its squared length: Σ(ΔL* percentiles)² + Δā² + Δb̄² + Δspread², plus the pull (`weight`) toward the defaults, or toward the values given. */
+  const residualsOver = (pts: PictureSample, weight = PULL, toward: Readonly<GradeParams> = GRADE_DEFAULTS) => {
+    const pull = Math.sqrt(weight);
     const meter = new Meter(pts.count);
     return (p: GradeParams): number[] => {
       const m = meter.measure(pts.rgb, constantsOf(p), lp), r = lp.map((l, j) => l - goal.lPct[j]!);
       r.push(ab * (m.a - goal.a), ab * (m.b - goal.b));
       if (goal.useSpread) r.push(colourSpread({ meanA: m.a, meanB: m.b, meanC: m.c }) - goal.spread);
-      for (const k of keys) r.push((pull * (p[k] - GRADE_DEFAULTS[k])) / span(k));
+      for (const k of keys) r.push((pull * (p[k] - toward[k])) / span(k));
       return r;
     };
   };
   const sq = (r: readonly number[]) => r.reduce((s, v) => s + v * v, 0);
-  const residuals = residualsOver(strided(target, FIT_POINTS));
-  const coarse = residualsOver(strided(target, COARSE_POINTS)), coarseLoss = (p: GradeParams) => sq(coarse(p));
+  const order = target.count > COARSE_POINTS ? byLuma(target) : new Int32Array(0);
+  const fitPoints = thinned(target, FIT_POINTS, order), coarsePoints = thinned(target, COARSE_POINTS, order);
+  const residuals = residualsOver(fitPoints), coarse = residualsOver(coarsePoints), coarseLoss = (p: GradeParams) => sq(coarse(p));
 
   /** Coordinate search in a fixed order over `over`: each value in turn tries one step up, then one down, keeping a move that lowers the loss; steps start at ¼ of each range and halve. */
   const coordinate = (from: GradeParams, over: readonly FitKey[], measure: (p: GradeParams) => number, halvings = HALVINGS): GradeParams => {
@@ -364,10 +392,25 @@ function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], star
     if (!best || found.f < best.f) best = found;
   }
   let { p, f } = refine(best!.p, residuals);
+  // The coarse search moves each value in steps of up to a quarter of its range to make up for the ones that are not settled yet.
+  // Where the statistics hardly see a value, nothing brings it back afterwards: the valley is flat along it, and the refinement
+  // stops where it stands (a match of flat saturated colours ended with tint at −0.996 where −0.2 or 0 fitted as well). So the
+  // pull is made stronger and relaxed in steps (on the coarse points), each stage from the result before, and the refinement
+  // repeated from there: values the picture holds come back as the pull relaxes, the others stay near no change. The lower loss
+  // of the two results wins, so this never ends worse by the fit's own measure.
+  let mild = p;
+  for (const w of PULL_PATH) mild = refine(mild, residualsOver(coarsePoints, PULL * w)).p;
+  const relaxed = refine(mild, residuals);
+  if (relaxed.f < f) ({ p, f } = relaxed);
+  // The pull has also held back the values the picture does show. One more refinement with the pull toward this estimate, not
+  // toward no change (a proximal step), takes that back: a value the statistics hold moves on to where they put it, and one they
+  // do not hold stays where it is, because the same pull now keeps it there.
+  const estimate = p;
+  let full = residualsOver(fitPoints, PULL, estimate);
+  ({ p, f } = refine(p, full));
   // A larger sample: a few more iterations on every point, so the result fits the same points the reference statistics describe
-  // (a stride of a picture with large flat areas can sit a little off them).
-  let full = residuals;
-  if (target.count > FIT_POINTS) { full = residualsOver(target); ({ p, f } = refine(p, full, FINAL_REFINE)); }
+  // (a part of a picture with large flat areas can sit a little off them).
+  if (target.count > FIT_POINTS) { full = residualsOver(target, PULL, estimate); ({ p, f } = refine(p, full, FINAL_REFINE)); }
   const loss = (q: GradeParams) => sq(full(q));
   // A value at the edge of its range while the loss still falls beyond it: the grade cannot reach the goal (reported as limitedBy).
   const limitedBy: (keyof GradeParams)[] = [];
