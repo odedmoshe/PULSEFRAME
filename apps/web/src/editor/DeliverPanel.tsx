@@ -3,6 +3,7 @@ import { findClip, FORMAT_PROFILES } from '@pulseframe/core';
 import { jobStageLabel, type Key } from '@pulseframe/i18n';
 import { api, type PreflightReport } from '../api.ts';
 import { useEditorState } from './store.ts';
+import { ExportSheetHost, openExportSheet } from './ExportSheet.tsx';
 
 interface BatchJob { jobId: string; variantId: string; status: string; stage: string | null }
 const ACTIVE = ['queued', 'running', 'cancel-requested'];
@@ -105,6 +106,7 @@ export function DeliverPanel() {
 
   return (
     <div className="deliver" data-testid="deliver-panel">
+      <ExportSheetHost />
       <ProjectFrame />
       <section aria-labelledby="deliver-formats-h">
         <h3 id="deliver-formats-h">{t('deliver.formats')}</h3>
@@ -177,7 +179,7 @@ export function DeliverPanel() {
       <section aria-labelledby="deliver-exp-h">
         <h3 id="deliver-exp-h">{t('deliver.export')}</h3>
         <div className="row">
-          <button type="button" className="primary" disabled={!doc || exporting || editor.player?.frameCount === 0} data-testid="deliver-export" onClick={() => editor.startExport(viewed?.id)}>
+          <button type="button" className="primary" disabled={!doc || exporting || editor.player?.frameCount === 0} data-testid="deliver-export" onClick={() => openExportSheet()}>
             {exporting ? t('export.running') : t('deliver.export.this')}: <bdi>{viewed ? viewed.name : t('deliver.master')}</bdi>
           </button>
           <button type="button" className="ghost" disabled={!doc || variants.length === 0 || batchActive} data-testid="deliver-export-all" onClick={() => void exportAll()}>{t('deliver.export.all')}</button>
