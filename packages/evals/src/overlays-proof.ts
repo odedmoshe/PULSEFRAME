@@ -142,7 +142,7 @@ async function main() {
   fs.rmSync(art, { recursive: true, force: true });
   fs.mkdirSync(art, { recursive: true });
   if (!fs.existsSync(path.join(root, 'apps/web/dist/render.html'))) throw new Error('web bundle missing: run `pnpm build` first');
-  const pic = (name: string, src: string, w: number, h: number) => { const file = path.join(art, `${name}.png`); ff(['-y', '-f', 'lavfi', '-i', `${src}=s=${w}x${h}`, '-frames:v', '1', file]); return file; };
+  const pic = (name: string, src: string, w: number, h: number) => { const file = path.join(art, `${name}.png`); ff(['-y', '-f', 'lavfi', '-i', `${src}${src.includes('=') ? ':' : '='}s=${w}x${h}`, '-frames:v', '1', file]); return file; };
   const black169 = pic('black-1280x720', 'color=c=black', 1280, 720), black916 = pic('black-720x1280', 'color=c=black', 720, 1280);
   const black360 = pic('black-640x360', 'color=c=black', 640, 360), colour360 = pic('testsrc-640x360', 'testsrc2', 640, 360);
 
