@@ -130,6 +130,19 @@ function seedTrack(projectId: string, id: string, assetId: string, frame: number
   store.commit({ projectId, actor: 'user:local', allowInternal: true, ops: [{ op: 'restore_entities', args: { targets: [{ id, state: { kind: 'motionTrack', track } }] } }] });
 }
 const trackOf = (projectId: string, id: string) => store.getProject(projectId).doc.motionTracks[id]!;
+/**
+ * A hand correction of the first sample, leaving the track as edit_motion_track{set} leaves it (moved, origin.edited = true):
+ * through that op once it is registered (W1), until then the same state through the internal restore op.
+ */
+function correctByHand(projectId: string, id: string) {
+  const t = trackOf(projectId, id);
+  const ops = getOp('edit_motion_track')
+    ? [{ op: 'edit_motion_track', args: { motionTrackId: id, set: [{ frame: t.from, x: t.x[0]! + 50, y: t.y[0]! }] } }]
+    : [{ op: 'restore_entities', args: { targets: [{ id, state: { kind: 'motionTrack', track: { ...t, x: [t.x[0]! + 50, ...t.x.slice(1)], origin: { ...t.origin, edited: true } } } }] } }];
+  const r = store.commit({ projectId, actor: 'user:local', allowInternal: true, ops });
+  expect(trackOf(projectId, id)).toMatchObject({ x: [t.x[0]! + 50], origin: { edited: true } });
+  return r;
+}
 const arraysDigest = (t: MotionTrack) => createHash('sha256').update(JSON.stringify([t.from, t.x, t.y, t.s ?? null, t.q, t.st])).digest('hex');
 /** ffmpeg processes whose command line names this file (Linux /proc). */
 const ffmpegOn = (file: string) => fs.readdirSync('/proc').filter((d) => /^\d+$/.test(d)).filter((pid) => { try { const c = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8'); return c.startsWith('ffmpeg') && c.includes(file); } catch { return false; } });
@@ -343,6 +356,31 @@ describe('tracking job', () => {
     expect(done.error.code).toBe('track_changed');
     expect(store.getProject(pid).revision).toBe(edit.revision);
     expect(trackOf(pid, 'mtk_changed')).toMatchObject({ name: 'renamed', x: t.x, st: t.st });
+  }, 60_000);
+
+  it('a hand correction while the job runs (origin.edited set): track_changed, not would_discard_edits, and nothing attached', async () => {
+    seedTrack(pid, 'mtk_fixed', discAsset, 0, disc.truth[0]!.cx, disc.truth[0]!.cy, 320, 240, { w: 2 * disc.radius, h: 2 * disc.radius });
+    const job = startTrackingJob(store, gov, agent, pid, 'mtk_fixed', TrackRunBody.parse({ direction: 'forward', to: 40 }), { readFrames: slowReader(20) });
+    for (let i = 0; !String(store.getJob(job.id).stage).startsWith('tracking forward'); i++) { if (i > 4000) throw new Error('never started'); await sleep(5); }
+    const edit = correctByHand(pid, 'mtk_fixed');
+    const corrected = arraysDigest(trackOf(pid, 'mtk_fixed'));
+    const done = await settle(job.id);
+    expect([done.status, done.error.code], JSON.stringify(done.error)).toEqual(['failed', 'track_changed']);
+    expect(done.error.hint ?? '').not.toMatch(/overwrite/);
+    expect(store.getProject(pid).revision).toBe(edit.revision);
+    expect(arraysDigest(trackOf(pid, 'mtk_fixed'))).toBe(corrected);
+  }, 60_000);
+
+  it('a hand correction while the job waits (queued, or left running by a restart): track_changed when it starts', async () => {
+    seedTrack(pid, 'mtk_fixed2', discAsset, 0, disc.truth[0]!.cx, disc.truth[0]!.cy, 320, 240, { w: 2 * disc.radius, h: 2 * disc.radius });
+    // as startTrackingJob writes it; the correction lands before the runner gets to it
+    const waiting = store.createJob(pid, 'tracking', agent.actor, { motionTrackId: 'mtk_fixed2', assetId: discAsset, from: 0, to: 40, direction: 'forward', input: 'proxy', trackVersion: store.entityVersion(pid, 'mtk_fixed2')?.revision ?? null, projectRevision: store.getProject(pid).revision });
+    store.updateJob(waiting.id, { status: 'running', stage: 'tracking forward 3/39' });
+    const edit = correctByHand(pid, 'mtk_fixed2');
+    expect(recoverTrackingJobs(store)).toBe(1);
+    const done = await settle(waiting.id);
+    expect([done.status, done.error.code], JSON.stringify(done.error)).toEqual(['failed', 'track_changed']);
+    expect(store.getProject(pid).revision).toBe(edit.revision);
   }, 60_000);
 
   it('a job left running by a restart is tracked again by recoverTrackingJobs, with the same result as an uninterrupted run', async () => {

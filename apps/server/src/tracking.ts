@@ -302,10 +302,21 @@ async function work(store: Store, jobId: string, deps: TrackingDeps, signal: Abo
     store.updateJob(jobId, { status: 'running', stage: trackingStage(phase, done, total) });
   };
   stage('reading');
-  const versionNow = () => store.entityVersion(job.projectId, input.motionTrackId)?.revision ?? null;
   const changed = (why: string) => new ApiError(409, 'track_changed', `the motion track ${why} while it was being tracked; nothing was attached`, { motionTrackId: input.motionTrackId }, 'Track it again.');
-  const { track, asset } = (() => { try { return checkTrack(store, job.projectId, input.motionTrackId, input.overwrite); } catch (e) { if (e instanceof ApiError && e.status === 404) throw changed('or its media was removed'); throw e; } })();
-  if (versionNow() !== input.trackVersion) throw changed('changed');
+  /**
+   * The track and its media as the job was created against. The track's version is compared first, so any change since then
+   * is track_changed: a hand correction (which sets origin.edited) must not surface as would_discard_edits.
+   */
+  const recheck = () => {
+    const v = store.entityVersion(job.projectId, input.motionTrackId);
+    if ((v?.revision ?? null) !== input.trackVersion) throw changed(v?.deleted ? 'was removed' : 'changed');
+    try { return checkTrack(store, job.projectId, input.motionTrackId, input.overwrite); } catch (e) {
+      if (e instanceof ApiError && e.status === 404) throw changed('or its media was removed');
+      if (e instanceof ApiError && e.code === 'would_discard_edits') throw changed('was corrected by hand');
+      throw e;
+    }
+  };
+  const { track, asset } = recheck();
   const src = frameSource(store, deps.derivatives, asset, input.input);
   const read = deps.readFrames ?? readFrames;
   const { width: W, height: H } = workSize(src.width, src.height);
@@ -418,8 +429,7 @@ async function work(store: Store, jobId: string, deps: TrackingDeps, signal: Abo
   // attach only if nothing it depends on changed meanwhile (the pattern of measureAndAttach)
   if (signal.aborted || store.getJob(jobId).status === 'cancel-requested') throw new TrackingCanceled();
   stage('saving');
-  try { checkTrack(store, job.projectId, input.motionTrackId, input.overwrite); } catch (e) { if (e instanceof ApiError && e.status === 404) throw changed('or its media was removed'); throw e; }
-  if (versionNow() !== input.trackVersion) throw changed('changed');
+  recheck();
   const inputDigest = digests.length === 1 ? digests[0]! : createHash('sha256').update(digests.join(',')).digest('hex');
   const params: Record<string, number | string> = { algo: TRACKER_ALGO, input: src.kind, workWidth: W, workHeight: H, inputDigest, ffmpeg: await ffmpegVersionLine(), direction: input.direction };
   const commit = store.commit({ projectId: job.projectId, actor: job.actor, label: `Track ${track.name}`, allowInternal: true, ops: [{ op: 'attach_motion_track', args: { motionTrackId: input.motionTrackId, from: lo, x, y, ...(track.kind === 'region' ? { s } : {}), q, st, method: TRACKER_METHOD, params, createdAt: new Date().toISOString() } }] });
