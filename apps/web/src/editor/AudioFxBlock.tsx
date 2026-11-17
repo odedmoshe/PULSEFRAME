@@ -83,6 +83,12 @@ export function toggleOps(clip: SoundClip, type: string): OpCall[] {
   const on = (clip.audioFx ?? []).find((f) => f.type === type);
   return [on ? removeOp(clip, on) : addOp(clip, type)];
 }
+/**
+ * The editor's shortcuts listen on the window: Space plays and pauses, the arrows step the playhead. On a button of this block
+ * Space and Enter press that button instead, so they stop here (the chip rows also keep their arrow keys); Ctrl+Z and the
+ * other shortcuts still reach the editor.
+ */
+const keepButtonKeys = (e: React.KeyboardEvent) => { if ((e.key === ' ' || e.key === 'Enter') && (e.target as HTMLElement).tagName === 'BUTTON') e.stopPropagation(); };
 const addOp = (clip: SoundClip, type: string, params?: Record<string, unknown>): OpCall => ({ op: 'add_audio_effect', args: { clipId: clip.id, type, includeLinked: false, ...(params ? { params } : {}) } });
 const removeOp = (clip: SoundClip, fx: AudioFxInstance): OpCall => ({ op: 'remove_audio_effect', args: { clipId: clip.id, effectId: fx.id } });
 
@@ -104,7 +110,7 @@ function ChipGroup({ label, value, options, onCommit, listen, playing, disabled,
     const group = e.currentTarget.closest('[role=radiogroup]')!;
     const next = chipKeyTarget(e.key, i, options.length, getComputedStyle(group).direction === 'rtl');
     if (next === null) return;
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation(); // these keys move between chips, not the playhead
     setFocus(next);
     group.querySelectorAll<HTMLButtonElement>('[role=radio]')[next]?.focus();
   };
@@ -231,7 +237,7 @@ export function AudioFxBlock({ clip, heading = 'h3' }: { clip: SoundClip; headin
   const others = track.clips.filter((c) => c.type === 'media' && c.id !== clip.id && !!doc.assets[c.assetId]?.audio).map((c) => c.id).slice(0, 200);
   const H = heading;
   return (
-    <section className="afx" aria-labelledby={`afx-h-${clip.id}`} data-testid="afx-block" data-clip-id={clip.id}>
+    <section className="afx" aria-labelledby={`afx-h-${clip.id}`} data-testid="afx-block" data-clip-id={clip.id} onKeyDown={keepButtonKeys}>
       <H id={`afx-h-${clip.id}`}>{t('sound.fx')}</H>
       <p className="muted afx-note">{t('sound.fx.dsp')}</p>
       {blocked && <p className="muted afx-note" role="note" data-testid="afx-blocked">{t('sound.fx.blocked')}</p>}
@@ -294,7 +300,7 @@ export function LinkedSoundFx({ sounds }: { sounds: SoundClip[] }) {
   const id = useId();
   if (!sounds.length) return null;
   return (
-    <div className="afx-linked">
+    <div className="afx-linked" onKeyDown={keepButtonKeys}>
       <button type="button" className="ghost" aria-expanded={open} aria-controls={id} data-testid="afx-linked-open" onClick={() => setOpen(!open)}>{t('sound.fx.open')}</button>
       <div id={id} hidden={!open}>{open && sounds.map((c) => <AudioFxBlock key={c.id} clip={c} heading="h4" />)}</div>
     </div>
