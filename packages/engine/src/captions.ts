@@ -93,7 +93,6 @@ const spokenBy = (doc: ProjectDocument, cache: Map<string, Spoken>, assetId: str
   if (s === undefined) { s = transcriptFor(doc, assetId); cache.set(assetId, s); }
   return s;
 };
-type MediaOf<C> = Extract<C, { type: 'media' }>;
 /** The clips of `src` that speak the same transcript, with the stretch of it each one plays (on the transcript's clock). */
 const spokenSpans = (doc: ProjectDocument, cache: Map<string, Spoken>, src: Track, transcript: Transcript) => {
   const out: { from: T.RationalTime; to: T.RationalTime }[] = [];
@@ -101,7 +100,7 @@ const spokenSpans = (doc: ProjectDocument, cache: Map<string, Spoken>, src: Trac
     if (c.type !== 'media' || c.reverse) continue;
     const s = spokenBy(doc, cache, c.assetId);
     if (s?.transcript !== transcript) continue;
-    out.push({ from: T.add(c.sourceIn, s.offset), to: T.add(sourceEnd(c as MediaOf<typeof c>), s.offset) });
+    out.push({ from: T.add(c.sourceIn, s.offset), to: T.add(sourceEnd(c), s.offset) });
   }
   return out;
 };
