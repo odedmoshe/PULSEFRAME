@@ -565,6 +565,22 @@ export const MARKER_COLORS = ['blue', 'green', 'yellow', 'red', 'purple'] as con
 export const MarkerSchema = z.object({ id: Id, sequenceId: Id, time: RationalTimeSchema.describe('Timeline time, frame-aligned'), label: z.string().max(200), color: z.enum(MARKER_COLORS) }).strict();
 export type Marker = z.infer<typeof MarkerSchema>;
 
+/** The per-project editing behaviour of the timeline (ProjectDocument.settings.timeline). */
+export const TimelineBehaviourSchema = z.object({ mainMagnet: z.boolean(), rippleDelete: z.boolean() }).strict();
+export type TimelineBehaviour = z.infer<typeof TimelineBehaviourSchema>;
+/** What a project without settings.timeline does: today's behaviour, both off. */
+export const LEGACY_TIMELINE: Readonly<TimelineBehaviour> = Object.freeze({ mainMagnet: false, rippleDelete: false });
+/** What a new project starts with (owner decision, UX redesign wave A): the main-track magnet and ripple delete both on. */
+export const NEW_PROJECT_TIMELINE: Readonly<TimelineBehaviour> = Object.freeze({ mainMagnet: true, rippleDelete: true });
+/** The timeline behaviour of a project, with an absent field read as both off. */
+export const timelineBehaviour = (doc: { settings: { timeline?: TimelineBehaviour } }): TimelineBehaviour => ({ ...LEGACY_TIMELINE, ...doc.settings.timeline });
+/**
+ * The main track of a sequence (the editor's V1, where the magnet and ripple delete act): its bottom-most picture track.
+ * Undefined when the sequence has no picture track.
+ */
+export const mainTrackOf = (doc: { sequences: Record<string, { tracks: { id: string; kind: string }[] }>; mainSequenceId: string }, sequenceId?: string) =>
+  doc.sequences[sequenceId ?? doc.mainSequenceId]?.tracks.find((t) => t.kind === 'video');
+
 export const SequenceSchema = z.object({ id: Id, name: z.string().max(128), tracks: z.array(TrackSchema).describe('Bottom-most layer first') }).strict();
 
 export const ProjectSchema = z
@@ -577,7 +593,16 @@ export const ProjectSchema = z
         /** How pictures are placed before their own transform: contain (default) or cover. Set by format variants. */
         fit: z.enum(['contain', 'cover']).optional(),
         /** Export loudness: one static gain so the whole programme measures `target` LUFS (integrated), lowered if needed to keep true peak under `truePeak` dBTP. Absent = no normalisation. */
-        loudness: z.object({ target: z.number().min(-40).max(-5), truePeak: z.number().min(-9).max(0) }).strict().optional() })
+        loudness: z.object({ target: z.number().min(-40).max(-5), truePeak: z.number().min(-9).max(0) }).strict().optional(),
+        /**
+         * How the timeline edits for this project (set_timeline_behaviour; docs/design/UX_REDESIGN.md §2 decision 6, §5 Delete).
+         * OPTIONAL: absent = both off, which is how every project behaved before the field existed, so stored documents and op
+         * logs replay as they always did. createProject writes both on for new projects (NEW_PROJECT_TIMELINE).
+         * No operation reads it: it is the editor's choice of which operation a key sends (rippleDelete: Delete sends
+         * ripple_delete_clips for clips on the main track, Shift+Delete keeps the gap with delete_clip; mainMagnet: the main
+         * track keeps its clips together while dragging). Agents choose their operations explicitly.
+         */
+        timeline: TimelineBehaviourSchema.optional() })
       .strict(),
     assets: z.record(Id, AssetSchema),
     sequences: z.record(Id, SequenceSchema),
@@ -629,13 +654,22 @@ export type Sequence = z.infer<typeof SequenceSchema>;
 export type ProjectDocument = z.infer<typeof ProjectSchema>;
 export type { MotionTrack, Follow, RedactRegion } from './tracking.ts';
 
-export interface NewProjectOptions { id: string; name: string; width?: number; height?: number; frameRate?: { num: number; den: number }; sampleRate?: number }
+export interface NewProjectOptions {
+  id: string; name: string; width?: number; height?: number; frameRate?: { num: number; den: number }; sampleRate?: number;
+  /**
+   * The timeline behaviour the new project starts with. Default NEW_PROJECT_TIMELINE (magnet and ripple delete on); null leaves
+   * the field out, as projects made before it existed (read as both off). It is part of the project's initial document, not an
+   * operation, so it is not undone and an existing project's op log replays exactly as before.
+   */
+  timeline?: TimelineBehaviour | null;
+}
 export function createProject(o: NewProjectOptions): ProjectDocument {
+  const timeline = o.timeline === undefined ? { ...NEW_PROJECT_TIMELINE } : o.timeline === null ? undefined : TimelineBehaviourSchema.parse(o.timeline);
   return {
     schemaVersion: SCHEMA_VERSION,
     id: o.id,
     name: o.name,
-    settings: { width: o.width ?? 1080, height: o.height ?? 1920, frameRate: o.frameRate ?? { num: 30, den: 1 }, sampleRate: o.sampleRate ?? 48000, background: '#000000' },
+    settings: { width: o.width ?? 1080, height: o.height ?? 1920, frameRate: o.frameRate ?? { num: 30, den: 1 }, sampleRate: o.sampleRate ?? 48000, background: '#000000', ...(timeline ? { timeline } : {}) },
     assets: {},
     sequences: {
       seq_main: {
