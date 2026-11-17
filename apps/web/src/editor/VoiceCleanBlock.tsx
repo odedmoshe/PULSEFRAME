@@ -151,7 +151,7 @@ export function VoiceCleanBlock({ clip, locked, blocked }: { clip: SoundClip; lo
         <h4 id={headingId}>{s('title')}</h4>
         <span className="vclean-badge" data-testid={ID.unlistened}>{s('unlistened')}</span>
       </div>
-      <p className="muted afx-note">{s('what')}</p>
+      <p className="muted afx-note pf-help">{s('what')}</p>
       {why && <p className="afx-note" role="note" id={whyId} data-testid={ID.disabled}>{why}</p>}
       <div className="row vclean-actions">
         <button type="button" className="primary" data-testid={ID.run} disabled={off || measuring} aria-describedby={why ? whyId : undefined} onClick={() => void run()}>{measuring ? s('measuring') : s('run')}</button>
@@ -178,7 +178,7 @@ export function VoiceCleanBlock({ clip, locked, blocked }: { clip: SoundClip; lo
         <button type="button" className="danger" data-testid={ID.remove} disabled={off || !c.any || measuring} aria-describedby={describedBy} onClick={() => recommit(removeCleanupOps(clip), s('removed'))}>{s('remove')}</button>
       </div>
       {!player && <p className="muted afx-note">{s('noPlayer')}</p>}
-      <p className="muted afx-note">{s('ai')}</p>
+      <p className="muted afx-note pf-help">{s('ai')}</p>
     </div>
   );
 }

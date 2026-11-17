@@ -202,7 +202,7 @@ export function ColourMatchPanel({ clip }: { clip: PictureClip }) {
   return (
     <section className="cm" data-testid={ID.panel} aria-labelledby={headingId} data-state={!gpuOk ? 'unavailable' : s.run.kind}>
       <h4 id={headingId}>{S.title} <span className="cm-badge" data-testid={ID.unlooked}>{S.unlooked}</span></h4>
-      <p className="muted" id={noteId}>{S.intro} {S.statsNote}</p>
+      <p className="muted pf-help" id={noteId}>{S.intro} {S.statsNote}</p>
       {!gpuOk && (
         <p className="muted danger" role="status" data-testid={ID.unavailable}>
           {gpu ? <>{S.unavailable} <bdi>{gpu.reason}</bdi></> : S.gpuChecking}

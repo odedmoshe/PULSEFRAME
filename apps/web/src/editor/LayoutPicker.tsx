@@ -26,7 +26,7 @@ export function LayoutPicker() {
   return (
     <fieldset className="layout-picker" data-testid="layout-picker">
       <legend>{S.title}</legend>
-      <p className="muted">{S.intro(picked.length)}</p>
+      <p className="muted pf-help">{S.intro(picked.length)}</p>
       {fits.length === 0 ? <p className="muted" data-testid="layout-none">{S.none(picked.length)}</p> : (
         <div className="lp-grid" role="group" aria-label={S.title}>
           {fits.map((l) => (
@@ -41,7 +41,7 @@ export function LayoutPicker() {
           ))}
         </div>
       )}
-      <p className="muted">{S.hint}</p>
+      <p className="muted pf-help">{S.hint}</p>
     </fieldset>
   );
 }

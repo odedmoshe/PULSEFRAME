@@ -2,18 +2,19 @@
  * Speed curves for the selected clip: twelve named shapes and a hand-made curve drawn on a small graph.
  * Applying one is the registered `apply_speed_curve` op through editor.commit; nothing here keeps project state.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import * as T from '@pulseframe/time';
 import { curvePolyline, findClip, segmentsFromPoints, SPEED_CURVES, toSourceSpan, type Clip, type CurvePoint, type CurveSegment } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
 import { repeatClick } from './oneAtATime.ts';
 import { clipsLook, curveApplier, curveBlocker } from './speedCurves.apply.ts';
+import { SectionsContext } from './Section.tsx';
 import './speedCurves.css';
 
 type Media = Extract<Clip, { type: 'media' }>;
 const STR = {
   he: {
-    title: 'עקומות מהירות', intro: 'צורה מוכנה של מהירות לאורך הקליפ. הקליפ מתחלק לחלקים, כל אחד במהירות שלו, והתמונה והצליל המקושר משתנים יחד.',
+    title: 'עקומות מהירות', more: (n: number) => `עוד ${n} עקומות`, fewer: 'פחות עקומות', intro: 'צורה מוכנה של מהירות לאורך הקליפ. הקליפ מתחלק לחלקים, כל אחד במהירות שלו, והתמונה והצליל המקושר משתנים יחד.',
     ripple: 'להזיז את הקליפים שאחריו באותו ערוץ', length: (x: string) => `אורך ×${x}`, custom: 'עקומה משלך', customHint: 'גוררים נקודה למעלה כדי להאיץ ולמטה כדי להאט. לחיצה כפולה על הגרף מוסיפה נקודה; Delete מוחק את הנקודה שבמיקוד.',
     smooth: 'מעברים רכים בין המהירויות', apply: 'החלת העקומה', reset: 'איפוס', newLength: (a: string, b: string) => `אורך אחרי ההחלה: כ-${a} שנ׳ (עכשיו ${b} שנ׳)`,
     point: (i: number, at: string, v: string) => `נקודה ${i}: מיקום ${at}%, מהירות ${v}×`, graph: 'גרף מהירות: מיקום בקליפ מול מהירות',
@@ -30,7 +31,7 @@ const STR = {
     repeat: 'העקומה כבר הוחלה והחלקים שלה נבחרו. כדי לנסות עקומה אחרת מבטלים קודם (Ctrl+Z); כדי לתת עקומה לחלק אחד, בוחרים אותו בציר הזמן.',
   },
   en: {
-    title: 'Speed curves', intro: 'A ready-made shape of speed along the clip. The clip is divided into parts, each at its own speed; picture and linked sound change together.',
+    title: 'Speed curves', more: (n: number) => `${n} more curves`, fewer: 'Fewer curves', intro: 'A ready-made shape of speed along the clip. The clip is divided into parts, each at its own speed; picture and linked sound change together.',
     ripple: 'Move the clips after it on the same track', length: (x: string) => `length ×${x}`, custom: 'Your own curve', customHint: 'Drag a point up to speed up and down to slow down. Double-click the graph to add a point; Delete removes the focused point.',
     smooth: 'Ease between speeds', apply: 'Apply curve', reset: 'Reset', newLength: (a: string, b: string) => `Length after applying: about ${a} s (now ${b} s)`,
     point: (i: number, at: string, v: string) => `Point ${i}: position ${at}%, speed ${v}×`, graph: 'Speed graph: position in the clip against speed',
@@ -97,6 +98,9 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
   const svg = useRef<SVGSVGElement>(null);
   const drag = useRef<number | null>(null);
   const doc = editor.doc;
+  // Six curves show at first (one screen); the rest open on request. The all-tools view shows every curve.
+  const { flat: allTools } = useContext(SectionsContext);
+  const [more, setMore] = useState(allTools);
   if (!doc) return null;
   // What the op would refuse for every curve (its own checks, over the clip and what is linked to it), said before the
   // click; a refusal it still gives is reported by the editor as before.
@@ -179,10 +183,10 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
   return (
     <fieldset className="speed-curves" data-testid="speed-curves" disabled={!!blocked}>
       <legend>{S.title}</legend>
-      <p className="muted">{S.intro}</p>
+      <p className="muted pf-help">{S.intro}</p>
       {blocked && <p className="sc-blocked" role="note" data-testid="speed-curve-blocked" data-reason={block ?? undefined}>{blocked}</p>}
       <div className="sc-grid" role="group" aria-label={S.title}>
-        {SPEED_CURVES.map((c) => (
+        {(more ? SPEED_CURVES : SPEED_CURVES.slice(0, 6)).map((c) => (
           <button key={c.id} type="button" className="sc-tile" data-testid="speed-curve" data-id={c.id} title={c.hint[state.lang]} aria-label={`${c.name[state.lang]}: ${c.hint[state.lang]}`}
             aria-disabled={held || undefined} aria-busy={busy || undefined} onClick={(e) => void apply({ preset: c.id }, `Speed curve ${c.id}`, e.detail)}>
             <Thumb segments={c.segments} smooth={c.smooth} />
@@ -191,10 +195,11 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
           </button>
         ))}
       </div>
+      {!allTools && SPEED_CURVES.length > 6 && <button type="button" className="ghost sc-more" aria-expanded={more} data-testid="speed-curve-more" onClick={() => setMore(!more)}>{more ? S.fewer : S.more(SPEED_CURVES.length - 6)}</button>}
       <label className="check"><input type="checkbox" checked={ripple} data-testid="speed-curve-ripple" onChange={(e) => setRipple(e.target.checked)} /> {S.ripple}</label>
       <details className="sc-custom" data-testid="speed-curve-custom">
         <summary>{S.custom}</summary>
-        <p className="muted">{S.customHint}</p>
+        <p className="muted pf-help">{S.customHint}</p>
         <svg ref={svg} className="sc-graph" viewBox={`0 0 ${GW} ${GH}`} role="group" aria-label={S.graph} direction="ltr" data-testid="speed-curve-graph" onDoubleClick={addPoint}>
           {[0.25, 0.5, 1, 2, 4].map((v) => {
             const y = GH - GP - level(v) * (GH - 2 * GP);

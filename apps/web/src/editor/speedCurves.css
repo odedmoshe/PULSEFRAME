@@ -1,22 +1,38 @@
 /* Speed curves: preset tiles with a drawn curve, and the hand-made curve graph. Colours are the brand tokens. */
-.speed-curves { border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); padding: var(--pf-s-3); margin: var(--pf-s-3) 0; min-width: 0; }
-.speed-curves legend { padding: 0 var(--pf-s-2); font-weight: 600; }
+.speed-curves { border: 0; padding: 0; margin: 0; min-width: 0; }
+.speed-curves legend { padding: 0 var(--pf-sp-3); font-weight: 600; }
 .speed-curves:disabled .sc-grid, .speed-curves:disabled .sc-custom { opacity: 0.5; }
-.sc-blocked { color: var(--pf-warn); font-size: var(--pf-fs-sm); margin: var(--pf-s-2) 0; }
-.sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--pf-s-2); margin: var(--pf-s-2) 0; }
-.sc-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: var(--pf-s-2) 4px; background: var(--pf-surface); border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); color: var(--pf-text); cursor: pointer; min-width: 0; }
-.sc-tile:hover:not(:disabled) { border-color: var(--pf-accent); background: var(--pf-surface-raised); }
-.sc-tile:focus-visible, .sc-point:focus-visible { outline: 2px solid var(--pf-accent-2); outline-offset: 2px; }
+.sc-blocked { color: var(--pf-attention); font-size: var(--pf-fs-xs); margin: var(--pf-sp-3) 0; }
+.sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--pf-sp-3); margin: var(--pf-sp-3) 0; }
+.sc-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: var(--pf-sp-3) 4px; background: var(--pf-surface-2); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-sm); color: var(--pf-text); cursor: pointer; min-width: 0; }
+.sc-tile:hover:not(:disabled) { border-color: var(--pf-frame); background: var(--pf-surface-3); }
+.sc-tile:focus-visible, .sc-point:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 .sc-thumb { display: block; max-width: 100%; }
-.sc-line { fill: none; stroke: var(--pf-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.sc-one { stroke: var(--pf-text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
-.sc-rule { stroke: var(--pf-border); stroke-width: 1; }
-.sc-name { font-size: var(--pf-fs-sm); font-weight: 600; }
-.sc-len { font-size: 11px; color: var(--pf-text-muted); }
-.sc-custom { margin-top: var(--pf-s-3); }
-.sc-custom summary { cursor: pointer; font-weight: 600; padding: var(--pf-s-1, 4px) 0; }
-.sc-graph { display: block; width: 100%; max-width: 320px; height: auto; background: var(--pf-surface); border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); touch-action: none; user-select: none; margin: var(--pf-s-2) 0; overflow: visible; }
-.sc-tick { fill: var(--pf-text-muted); font-size: 8px; }
-.sc-point { fill: var(--pf-bg, #0e1013); stroke: var(--pf-accent); stroke-width: 2; cursor: grab; }
-.sc-point:active { cursor: grabbing; fill: var(--pf-accent); }
+.sc-line { fill: none; stroke: var(--pf-frame); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.sc-one { stroke: var(--pf-text-2); stroke-width: 1; stroke-dasharray: 3 3; }
+.sc-rule { stroke: var(--pf-line-strong); stroke-width: 1; }
+.sc-name { font-size: var(--pf-fs-xs); font-weight: 600; }
+.sc-len { font-size: var(--pf-fs-digits); color: var(--pf-text-2); }
+.sc-custom { margin-top: var(--pf-sp-4); }
+.sc-custom summary { cursor: pointer; font-weight: 600; padding: var(--pf-sp-2) 0; }
+.sc-graph { display: block; width: 100%; max-width: 320px; height: auto; background: var(--pf-surface-2); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-sm); touch-action: none; user-select: none; margin: var(--pf-sp-3) 0; overflow: visible; }
+.sc-tick { fill: var(--pf-text-2); font-size: 8px; }
+.sc-point { fill: var(--pf-surface-1); stroke: var(--pf-frame); stroke-width: 2; cursor: grab; }
+.sc-point:active { cursor: grabbing; fill: var(--pf-frame); }
 .sc-status { min-height: 1.4em; }
+/* inside the inspector: three tiles a row, the drawn curve in the frame colour, the name under it */
+.pf-insp .speed-curves { box-shadow: none; padding: 0; }
+.pf-insp .speed-curves > legend { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); float: none; }
+.pf-insp .sc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+.pf-insp .sc-tile { border: 0; border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-strong); padding: var(--pf-sp-3) var(--pf-sp-2); }
+.pf-insp .sc-tile:hover:not(:disabled) { background: var(--pf-surface-3); box-shadow: inset 0 0 0 1.5px var(--pf-frame); border: 0; }
+.pf-insp .sc-name { font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); }
+.pf-insp .sc-len { direction: ltr; unicode-bidi: isolate; font-family: var(--pf-font-mono); }
+.pf-insp .sc-graph { border: 0; box-shadow: inset 0 0 0 1px var(--pf-line-strong); border-radius: var(--pf-r-md); max-width: none; }
+.pf-insp .sc-custom summary { font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); color: var(--pf-text-2); }
+.pf-insp .sc-status:empty { display: none; }
+.pf-insp .sc-thumb { block-size: 28px; inline-size: 100%; }
+.pf-insp .sc-tile[aria-disabled='true'] { opacity: .5; cursor: not-allowed; }
+.pf-insp .sc-more { justify-self: start; }
+.pf-insp .sc-blocked { margin: 0; padding: var(--pf-sp-3) var(--pf-sp-4); border-radius: var(--pf-r-sm); background: color-mix(in srgb, var(--pf-attention) 12%, transparent); color: var(--pf-attention); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-insp .speed-curves { display: grid; gap: var(--pf-sp-3); }

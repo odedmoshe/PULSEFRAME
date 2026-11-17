@@ -1,35 +1,35 @@
 /* Sound effects block «אפקטי קול» (AudioFxBlock.tsx, ADR-0010). Nothing here moves, blinks or pulses: a playing ▶ and a chosen chip
-   are shown by a steady fill, never by an animation (and the global reduced-motion rule removes every transition). */
-.afx { display: grid; gap: var(--pf-s-2); margin-block: var(--pf-s-2); padding-block-start: var(--pf-s-2); border-block-start: 1px solid var(--pf-border); }
+   are shown by a steady fill, never by an animation (and the global reduced-motion rule removes every transition).
+   Inside the inspector (.pf-insp) the block is drawn with the ds tokens. */
+.afx { display: grid; gap: var(--pf-sp-4); margin: 0; padding-block-start: var(--pf-sp-3); min-inline-size: 0; }
 .afx h3, .afx h4 { margin: 0; }
-.afx-group { display: grid; gap: 4px; }
-.afx-group-label { font-size: var(--pf-fs-sm); color: var(--pf-text-muted); }
-.afx-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.afx-chip { display: inline-flex; align-items: stretch; }
-.afx-chip > button { padding: 2px 10px; font-size: var(--pf-fs-sm); border-radius: 0; box-shadow: none; }
-.afx-chip > button:first-child { border-start-start-radius: 99px; border-end-start-radius: 99px; }
-.afx-chip > button:last-child { border-start-end-radius: 99px; border-end-end-radius: 99px; }
-.afx-chip > button + button { border-inline-start-width: 0; }
-.afx-chip > button:focus-visible, .afx-toggles > button:focus-visible { outline-offset: 1px; position: relative; z-index: 1; }
-.afx-chip > button[role='radio'][aria-checked='true'] { background: var(--pf-accent); color: #062521; border-color: var(--pf-accent); font-weight: 700; }
-.afx-listen { min-width: 2.2em; }
-.afx-listen[aria-pressed='true'] { background: var(--pf-surface-2); border-color: var(--pf-accent); }
-.afx-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
-.afx-toggles > button { padding: 2px 10px; font-size: var(--pf-fs-sm); border-radius: 99px; }
-.afx-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.afx-row { display: grid; gap: 4px; padding: 6px var(--pf-s-2); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); background: var(--pf-bg); }
-.afx-row-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-s-2); }
-.afx-name { font-weight: 600; color: var(--pf-text); margin-inline-end: auto; }
-.afx-row[data-enabled='false'] .afx-name { color: var(--pf-text-muted); }
-.afx-row button { padding: 2px 8px; font-size: var(--pf-fs-sm); }
-.afx-switch { display: inline-flex; align-items: center; gap: 6px; }
-.afx-switch-track { display: inline-block; width: 26px; height: 14px; border-radius: 99px; border: 1px solid var(--pf-text-muted); position: relative; background: var(--pf-surface); }
-.afx-switch-track::after { content: ''; position: absolute; top: 2px; inset-inline-start: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--pf-text-muted); }
-.afx-switch[aria-checked='true'] .afx-switch-track { background: var(--pf-accent); border-color: var(--pf-accent); }
-.afx-switch[aria-checked='true'] .afx-switch-track::after { inset-inline-start: auto; inset-inline-end: 2px; background: #062521; }
-.afx-params { display: grid; gap: 4px; padding-inline-start: var(--pf-s-2); border-inline-start: 2px solid var(--pf-border); }
-.afx-note { margin: 0; font-size: var(--pf-fs-sm); }
-.afx-linked { display: grid; gap: 4px; }
+.afx-group { display: grid; gap: var(--pf-sp-2); }
+.afx-group-label { font-size: var(--pf-fs-xs); color: var(--pf-text-2); font-weight: var(--pf-fw-medium); }
+.afx-chips { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); align-items: center; }
+.afx-chip { display: inline-flex; align-items: stretch; border-radius: var(--pf-r-pill); box-shadow: inset 0 0 0 1px var(--pf-line-strong); overflow: hidden; }
+.pf-insp .afx-chip > button { min-block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-4); border: 0; border-radius: 0; background: var(--pf-surface-2); box-shadow: none; color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
+.pf-insp .afx-chip > button:hover:not(:disabled) { background: var(--pf-surface-3); color: var(--pf-text); }
+.pf-insp .afx-chip > button + button { border-inline-start: 1px solid var(--pf-line-strong); padding-inline: var(--pf-sp-3); }
+.afx-chip > button:focus-visible, .afx-toggles > button:focus-visible { outline-offset: -2px; position: relative; z-index: 1; }
+.pf-insp .afx-chip > button[role='radio'][aria-checked='true'] { background: var(--pf-frame); color: var(--pf-frame-ink); font-weight: var(--pf-fw-semibold); }
+.afx-listen { min-inline-size: 2.2em; }
+.pf-insp .afx-listen[aria-pressed='true'] { background: var(--pf-frame-soft); color: var(--pf-frame); box-shadow: inset 0 0 0 1px var(--pf-frame); }
+.afx-toggles { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); }
+.pf-insp .afx-toggles > button { min-block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-5); border-radius: var(--pf-r-pill); font-size: var(--pf-fs-xs); }
+.afx-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-sp-3); }
+.afx-row { display: grid; gap: var(--pf-sp-2); padding: var(--pf-sp-3) var(--pf-sp-4); border: 0; border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-strong); }
+.afx-row-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.afx-name { font-weight: var(--pf-fw-semibold); color: var(--pf-text); margin-inline-end: auto; font-size: var(--pf-fs-xs); }
+.afx-row[data-enabled='false'] .afx-name { color: var(--pf-text-3); }
+.pf-insp .afx-row button { min-block-size: 24px; padding: 0 var(--pf-sp-4); font-size: var(--pf-fs-xs); }
+.afx-switch { display: inline-flex; align-items: center; gap: var(--pf-sp-3); }
+.afx-switch-track { display: inline-block; inline-size: 30px; block-size: 16px; border-radius: var(--pf-r-pill); border: 0; position: relative; background: var(--pf-surface-4); box-shadow: inset 0 0 0 1px var(--pf-line-control); }
+.afx-switch-track::after { content: ''; position: absolute; inset-block-start: 3px; inset-inline-start: 3px; inline-size: 10px; block-size: 10px; border-radius: 50%; background: var(--pf-text-2); }
+.afx-switch[aria-checked='true'] .afx-switch-track { background: var(--pf-frame); box-shadow: none; }
+.afx-switch[aria-checked='true'] .afx-switch-track::after { inset-inline-start: auto; inset-inline-end: 3px; background: var(--pf-frame-ink); }
+.afx-params { display: grid; gap: var(--pf-sp-2); padding-inline-start: var(--pf-sp-4); border-inline-start: 2px solid var(--pf-line-strong); }
+.afx-note { margin: 0; font-size: var(--pf-fs-xs); }
+.afx-linked { display: grid; gap: var(--pf-sp-3); }
 
 /* Timeline: the ring-out of an echo or reverb after a clip's end. Static hatching, drawn under the next clip, not a target for the
    pointer, the marquee or snapping (it is not a clip, carries no clip id, and is hidden from assistive technology). */
@@ -40,10 +40,9 @@
 
 /* Voice cleanup «ניקוי קול» (VoiceCleanBlock.tsx, ADR-0013), at the top of the block. Steady: the «טרם נבדק בהאזנה» badge is a plain
    outlined label, a playing ▶ a steady fill (.afx-listen above); nothing animates or transitions. */
-.vclean { display: grid; gap: 6px; padding: 6px var(--pf-s-2); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); background: var(--pf-bg); }
-.vclean-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-s-2); }
+.vclean { display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-5); border: 0; border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-strong); }
+.vclean-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
 .vclean-head h4 { margin: 0; margin-inline-end: auto; }
-.vclean-badge { font-size: var(--pf-fs-sm); color: var(--pf-text); border: 1px solid var(--pf-text-muted); border-radius: 99px; padding: 0 8px; }
+.vclean-badge { font-size: var(--pf-fs-xs); color: var(--pf-text-2); border: 0; box-shadow: inset 0 0 0 1px var(--pf-line-control); border-radius: var(--pf-r-pill); padding: 0 var(--pf-sp-4); line-height: 20px; }
 .vclean-actions { align-items: center; }
-.vclean-actions > button { padding: 2px 10px; font-size: var(--pf-fs-sm); }
-.vclean-actions .check { margin-bottom: 0; }
+.vclean-actions .check { margin-block-end: 0; }

@@ -51,7 +51,7 @@ export function TrackingPanel() {
   const toggle = (kind: 'point' | 'region') => (picking === kind ? editor.closePicker() : editor.openPicker(kind, clip.id));
   return (
     <div className="fields tracking" data-testid={ID.panel} data-asset-id={asset.id}>
-      <p className="muted">{tt('mtrack.note')}</p>
+      <p className="muted pf-help">{tt('mtrack.note')}</p>
       <div className="row">
         <button type="button" className="ghost" aria-pressed={picking === 'point'} data-testid={ID.newPoint} onClick={() => toggle('point')}>{tt('mtrack.newPoint')}</button>
         <button type="button" className="ghost" aria-pressed={picking === 'region'} data-testid={ID.newRegion} onClick={() => toggle('region')}>{tt('mtrack.newRegion')}</button>
