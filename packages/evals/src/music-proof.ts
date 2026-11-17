@@ -30,6 +30,7 @@ import { MUSIC_METHOD, MUSIC_STYLES, MUSIC_UNHEARD_LABEL, musicLayout } from '@p
 import { startServer } from '@pulseframe/server';
 import { renderMusic } from '../../../apps/server/src/music/render.ts';
 import { detectBeatsOfFile } from '../../../apps/server/src/analysis.ts';
+import { alignment, control } from './music-proof-lag.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/music-proof');
@@ -52,20 +53,6 @@ const lufs = (file: string): number | null => {
   const all = [...String(r.stderr ?? '').matchAll(/I:\s+(-?[\d.]+) LUFS/g)];
   return all.length ? Number(all[all.length - 1]![1]) : null;
 };
-/** Normalised cross-correlation of `x` against `ref` at lags around `expect` (samples), over a window of `n` samples. */
-function bestLag(x: Float32Array, ref: Float32Array, expect: number, span: number, n: number): { lag: number; peak: number } {
-  let best = { lag: 0, peak: -Infinity };
-  const from = 2400, len = Math.min(n, ref.length - from - span - 1);
-  let rr = 0;
-  for (let i = 0; i < len; i++) rr += ref[from + i]! ** 2;
-  for (let lag = expect - span; lag <= expect + span; lag++) {
-    let xy = 0, xx = 0;
-    for (let i = 0; i < len; i++) { const a = x[from + i + lag] ?? 0; xy += a * ref[from + i]!; xx += a * a; }
-    const p = xy / Math.sqrt(xx * rr || 1);
-    if (p > best.peak) best = { lag, peak: p };
-  }
-  return best;
-}
 /** F1 of detected beats against the exact ones, a hit within ±70 ms (each exact beat used once). */
 function f1(detected: number[], exact: number[], tol = 0.07): { f1: number; precision: number; recall: number } {
   const used = new Set<number>();
@@ -140,17 +127,16 @@ async function main() {
     const wav6 = await exportWav(p6, 'p6.wav');
     const x6 = monoOf(wav6);
     const startSamples = T.sampleIndexAt(mclip.start, SR);
-    const corr = bestLag(x6, ref, startSamples, 800, 10 * SR);
-    check('P6 the exported sound is the synthesised track at the clip\'s start: best lag = start ±1 sample, normalised peak >= 0.99', Math.abs(corr.lag - startSamples) <= 1 && corr.peak >= 0.99, { ...corr, expected: startSamples });
+    const corr = alignment(x6, ref, startSamples, 10 * SR);
+    check('P6 the exported sound is the synthesised track at the clip\'s start: best lag = start ±1 sample, normalised peak >= 0.99', corr.ok, corr);
     let tail = 0;
     for (let i = Math.max(0, x6.length - 480); i < x6.length; i++) tail = Math.max(tail, Math.abs(x6[i]!));
     check('P6 the last 10 ms of the export are below −60 dBFS', db(tail) < -60, { dbfs: Number(db(tail).toFixed(1)) });
     // control: one frame later must fail the same check
     await txs(p6, [{ op: 'move_clip', args: { clipId: mclip.id, start: oneFrame } }]);
     const xc = monoOf(await exportWav(p6, 'p6-control.wav'));
-    const corrC = bestLag(xc, ref, startSamples, 800, 10 * SR);
-    const controlPasses = Math.abs(corrC.lag - startSamples) <= 1 && corrC.peak >= 0.99;
-    check('P6 CONTROL: with the clip one frame late the alignment check fails (lag moves by one frame)', !controlPasses && Math.abs(corrC.lag - startSamples - T.sampleIndexAt(oneFrame, SR)) <= 1, corrC);
+    const corrC = control(xc, ref, startSamples, T.sampleIndexAt(oneFrame, SR), 10 * SR);
+    check('P6 CONTROL: with the clip one frame late the alignment check fails, and the best lag moved by one frame', corrC.ok, corrC);
 
     // ------------------------------------------------------------ P7: POST /music
     const p7 = await newProject('music-p7');
