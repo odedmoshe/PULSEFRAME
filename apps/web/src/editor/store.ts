@@ -8,7 +8,7 @@ import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectVariant, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
-import { evaluate, initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
+import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
@@ -16,7 +16,7 @@ import { Player } from '../player.ts';
 import { timelineDerivatives } from '../clipVisuals.cache.ts';
 import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
 import { addAssetArgs, dropAssetArgs } from './placement.ts';
-import { followFactor, followPointFromZero, keepOffset, ownFromResolved } from './tracking.math.ts';
+import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -605,13 +605,7 @@ export class Editor {
    * viewed format, and the frame it belongs to; null when the clip is not drawn then (another time, a hidden track).
    */
   layerAt(clipId: string, time: T.RationalTime = this.playhead, doc: ProjectDocument | null = this.viewDoc): { layer: VideoLayer | ImageLayer | TextLayer; graph: RenderGraph } | null {
-    if (!doc) return null;
-    let graph: RenderGraph;
-    try { graph = evaluate(doc, time); } catch { return null; }
-    // the incoming side of a transition is the clip's own picture; the outgoing one plays on from its handle
-    const ls = graph.layers.filter((l): l is VideoLayer | ImageLayer | TextLayer => l.kind !== 'caption' && l.clipId === clipId);
-    const layer = ls.find((l) => l.transition?.role !== 'out') ?? ls[0];
-    return layer ? { layer, graph } : null;
+    return doc ? layerOf(doc, clipId, time) : null;
   }
   /**
    * The clip's transform as drawn at the playhead in the viewed format. For a clip that follows a motion track this is the
@@ -643,28 +637,12 @@ export class Editor {
   }
   /**
    * The offset (transform x, y) that attaches `clipId` to `follow` without moving it on the master frame at the playhead
-   * (keepOffset over the evaluator's own resolver): the clip is evaluated as it is now, and once more following with offset
-   * zero, which gives the tracked point P and the scale factor m. With no target there (target-missing) P is the frame
-   * centre and m is 1, so the offset is where the clip is. Null when the clip is not drawn at that time.
+   * (tracking.math.ts followOffsetAt: keepOffset over the evaluator's own resolver). Null when the clip is not drawn then.
    */
   followOffset(clipId: string, follow: Follow): { x: number; y: number } | null {
     const doc = this.state.doc;
     const found = doc ? findClip(doc, clipId) : undefined;
-    if (!doc || !found || found.clip.type === 'caption') return null;
-    const time = this.timeIn(found.clip);
-    const now = this.layerAt(clipId, time, doc);
-    if (!now) return null;
-    const trial = structuredClone(doc);
-    const tc = findClip(trial, clipId)!.clip;
-    if (tc.type === 'caption') return null;
-    tc.follow = follow;
-    tc.transform = { ...tc.transform, x: 0, y: 0 };
-    const zero = this.layerAt(clipId, time, trial);
-    if (!zero) return null;
-    const { width: W, height: H } = now.graph;
-    const m = followFactor(zero.layer.transform.scale, transformAt(tc, time).scale);
-    const off = keepOffset({ cur: now.layer.transform, P: followPointFromZero(zero.layer.transform, W, H), m, W, H });
-    return { x: Math.max(-4, Math.min(4, off.x)), y: Math.max(-4, Math.min(4, off.y)) };
+    return doc && found ? followOffsetAt(doc, clipId, follow, this.timeIn(found.clip)) : null;
   }
   /** Open the track picker on a clip's picture (TrackPicker.tsx). */
   openPicker(kind: 'point' | 'region', clipId: string) {

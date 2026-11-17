@@ -4,9 +4,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, type Fit, type MediaClip, type MotionTrack, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, findClip, listOps, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, transformAt, type Fit, type Follow, type MediaClip, type MotionTrack, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import {
-  boxToTrackUnits, followCandidates, followCentre, redactUnsureFrames, stateCounts, followFactor, followPointFromZero, frameToLayerSource, keepOffset, ownFromResolved, pickToSource, screenToFrame, sourceToScreen, timelineFrameOfSource,
+  boxToTrackUnits, followCandidates, followCentre, followOffsetAt, layerOf, redactUnsureFrames, stateCounts, followFactor, followPointFromZero, frameToLayerSource, keepOffset, ownFromResolved, pickToSource, screenToFrame, sourceToScreen, timelineFrameOfSource,
   toTrackUnits, trackingProgress, trackUnitsToFrame, type FrameBox, type LayerPlacement,
 } from './tracking.math.ts';
 
@@ -244,5 +244,54 @@ describe('what the panels list', () => {
     clip.redact[1]!.motionTrackId = 'mtk_gone';
     expect(redactUnsureFrames(d, clip)).toBe(90);
     expect(stateCounts([1, 1, 2, 3, 6, 9])).toEqual([0, 2, 1, 1, 0, 0, 1]);
+  });
+});
+
+/** The core worker of this wave registers the tracking ops; before that is merged these checks have nothing to run on. */
+const followOps = listOps().some((o) => o.name === 'set_clip_follow');
+describe.skipIf(!followOps)('attaching through the evaluator (runs once the tracking ops are in the registry)', () => {
+  const R = { num: 30, den: 1 };
+  const f = (n: number) => T.frameTime(n, R);
+  const asset = {
+    kind: 'video' as const, name: 'v.mp4', contentHash: `sha256:${'c'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(8, 1),
+    video: { width: 1280, height: 720, frameRate: R, codec: 'h264', rotation: 0, frameCount: 240 },
+    provenance: { origin: 'fixture' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'test' },
+  };
+  let n = 0;
+  const tx = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => applyTransaction(doc, ops, { idSeed: `f${n++}_`, actor: 'test', allowInternal });
+  const setup = () => {
+    let r = tx(createProject({ id: 'prj_f', name: 'F' }), [{ op: 'import_asset', args: { asset } }], true);
+    const assetId = r.results[0]!.output!.assetId as string;
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(0), withLinkedAudio: false } }]);
+    const videoTrackId = r.results[0]!.output!.trackId as string;
+    r = tx(r.doc, [{ op: 'create_motion_track', args: { assetId, kind: 'region', frame: 0, x: 3000, y: 4000, w: 1500, h: 1500 } }]);
+    const motionTrackId = r.results[0]!.output!.motionTrackId as string;
+    const k = Array.from({ length: 240 }, (_, i) => i);
+    r = tx(r.doc, [{ op: 'attach_motion_track', args: { motionTrackId, from: 0, x: k.map((i) => 3000 + 10 * i), y: k.map((i) => 4000 + 5 * i), s: k.map((i) => 1000 + 2 * i), q: k.map(() => 90), st: k.map(() => 1), method: 'test (hand-written samples)', params: {}, createdAt: '2026-11-17T00:00:00Z' } }], true);
+    r = tx(r.doc, [{ op: 'add_text', args: { text: 'T', start: f(0), duration: f(120), transform: { x: 0.1, y: -0.15, scale: 1.3 } } }]);
+    return { doc: r.doc, title: r.results[0]!.output!.clipId as string, follow: (scale: boolean): Follow => ({ motionTrackId, targetTrackId: videoTrackId, scale, smooth: 0 }) };
+  };
+
+  it('followOffsetAt attaches a title without moving it (with and without scale); a move written back through ownFromResolved lands where the pointer took it', () => {
+    const { doc, title, follow } = setup();
+    const t = f(30);
+    for (const scale of [false, true]) {
+      const before = layerOf(doc, title, t)!.layer.transform;
+      const off = followOffsetAt(doc, title, follow(scale), t)!;
+      const d2 = tx(doc, [{ op: 'set_clip_follow', args: { clipId: title, follow: follow(scale), offset: off } }]).doc;
+      const after = layerOf(d2, title, t)!.layer;
+      expect(after.follow?.state).toBe('tracked');
+      expect(Math.abs(after.transform.x - before.x)).toBeLessThan(1e-9);
+      expect(Math.abs(after.transform.y - before.y)).toBeLessThan(1e-9);
+      // a move on the monitor of (+0.05, −0.02) in what is drawn, written as the clip's own offset
+      const own = transformAt(findClip(d2, title)!.clip, t);
+      const m = followFactor(after.transform.scale, own.scale);
+      if (scale) expect(m).not.toBeCloseTo(1, 3); else expect(m).toBe(1);
+      const patch = ownFromResolved(own, after.transform, { x: after.transform.x + 0.05, y: after.transform.y - 0.02 }, m);
+      const d3 = tx(d2, [{ op: 'set_clip_transform', args: { clipId: title, transform: patch } }]).doc;
+      const moved = layerOf(d3, title, t)!.layer.transform;
+      expect(moved.x).toBeCloseTo(after.transform.x + 0.05, 9);
+      expect(moved.y).toBeCloseTo(after.transform.y - 0.02, 9);
+    }
   });
 });

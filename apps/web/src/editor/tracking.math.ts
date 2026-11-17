@@ -10,7 +10,8 @@
  *  - track units: integers in 1/TRACK_UNIT of the source width (x) and height (y), as stored in a motion track.
  */
 import * as T from '@pulseframe/time';
-import { frameToSource, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, type Fit, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { findClip, frameToSource, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, transformAt, type Fit, type Follow, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { evaluate, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 
 export interface FrameBox { W: number; H: number; fit: Fit }
 export interface LayerPlacement { srcW: number; srcH: number; transform: { x: number; y: number; scale: number; rotation: number } }
@@ -87,6 +88,41 @@ export function ownFromResolved(own: { x: number; y: number; scale: number }, be
   if (after.y !== undefined) out.y = own.y + (after.y - before.y) / k;
   if (after.scale !== undefined) out.scale = after.scale / k;
   return out;
+}
+
+/**
+ * A clip's layer as the one evaluator draws it at `time` (preview, stills and export alike), and the frame it belongs to; null
+ * when the clip is not drawn then. During a transition the incoming side is the clip's own picture.
+ */
+export function layerOf(doc: ProjectDocument, clipId: string, time: T.RationalTime): { layer: VideoLayer | ImageLayer | TextLayer; graph: RenderGraph } | null {
+  let graph: RenderGraph;
+  try { graph = evaluate(doc, time); } catch { return null; }
+  const ls = graph.layers.filter((l): l is VideoLayer | ImageLayer | TextLayer => l.kind !== 'caption' && l.clipId === clipId);
+  const layer = ls.find((l) => l.transition?.role !== 'out') ?? ls[0];
+  return layer ? { layer, graph } : null;
+}
+/**
+ * The offset (transform x, y) that attaches `clipId` to `follow` without moving it at `time` (keepOffset over the evaluator's
+ * own follow resolver): the clip is evaluated as it is, and once more following with offset zero, which gives the tracked
+ * point P and the scale factor m. With no target there ('target-missing') P is the frame centre and m is 1, so the offset is
+ * where the clip is. Null when the clip is not drawn at that time. Clamped to the op's range (±4).
+ */
+export function followOffsetAt(doc: ProjectDocument, clipId: string, follow: Follow, time: T.RationalTime): { x: number; y: number } | null {
+  const found = findClip(doc, clipId);
+  if (!found || found.clip.type === 'caption') return null;
+  const now = layerOf(doc, clipId, time);
+  if (!now) return null;
+  const trial = structuredClone(doc);
+  const tc = findClip(trial, clipId)!.clip;
+  if (tc.type === 'caption') return null;
+  tc.follow = follow;
+  tc.transform = { ...tc.transform, x: 0, y: 0 };
+  const zero = layerOf(trial, clipId, time);
+  if (!zero) return null;
+  const { width: W, height: H } = now.graph;
+  const m = followFactor(zero.layer.transform.scale, transformAt(tc, time).scale);
+  const off = keepOffset({ cur: now.layer.transform, P: followPointFromZero(zero.layer.transform, W, H), m, W, H });
+  return { x: Math.max(-4, Math.min(4, off.x)), y: Math.max(-4, Math.min(4, off.y)) };
 }
 
 // ---- tracking job progress (core trackingStage) ----
