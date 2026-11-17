@@ -91,16 +91,23 @@ async function main() {
     const A = raw(a);
     const bFiles = await run(a, 'invert1');
     const B = Buffer.concat(bFiles.map(raw));
-    let inv = B.length === A.length;
-    for (let i = 0; inv && i < A.length; i++) if (B[i] !== 255 - A[i]!) inv = false;
-    check('ImageInvert of the staged frames is exactly 255 − x for every byte of all 10 frames', inv && bFiles.length === 10, { frames: bFiles.length, bytes: B.length });
+    // ComfyUI reads 8-bit frames as float32 x/255 and its PreviewImage writes trunc(255·v) (nodes.py SaveImage: astype(np.uint8)
+    // truncates), so a float operation can land one below the exact integer. The transport is checked bit-exactly against that
+    // arithmetic, reproduced here in float32; how often ComfyUI's truncation differs from the exact 255 − x is recorded.
+    const f32 = Math.fround;
+    const comfyInvert = (x: number) => Math.trunc(f32(255 * f32(1 - f32(x / 255))));
+    let inv = B.length === A.length, offByTruncation = 0;
+    for (let i = 0; inv && i < A.length; i++) { if (B[i] !== comfyInvert(A[i]!)) inv = false; if (B[i] !== 255 - A[i]!) offByTruncation++; }
+    check('ImageInvert of the staged frames equals ComfyUI\'s float32 arithmetic for every byte of all 10 frames (transport bit-exact)', inv && bFiles.length === 10, { frames: bFiles.length, bytes: B.length, bytesOneBelowExactInvert: offByTruncation });
     const seq = path.join(art, 'png_b_seq');
     fs.mkdirSync(seq);
     bFiles.forEach((f, i) => fs.copyFileSync(f, path.join(seq, `${String(i).padStart(6, '0')}.png`)));
     const b = path.join(art, 'png_b.mkv');
     ff(['-framerate', `${R.num}/${R.den}`, '-i', path.join(seq, '%06d.png'), '-c:v', 'png', '-pix_fmt', 'rgb24', '-f', 'matroska', b]);
     const C = Buffer.concat((await run(b, 'invert2')).map(raw));
-    check('invert of invert on the decoded PNG path is bit-exact (equals the staged source frames)', C.equals(A), { bytes: C.length });
+    let twice = C.length === A.length, offTwice = 0;
+    for (let i = 0; twice && i < A.length; i++) { if (C[i] !== comfyInvert(comfyInvert(A[i]!))) twice = false; if (C[i] !== A[i]) offTwice++; }
+    check('invert of invert on the decoded PNG path equals ComfyUI\'s float32 arithmetic applied twice (transport bit-exact)', twice, { bytes: C.length, bytesOffFromSource: offTwice });
     // the two chunks this check staged by hand (the frame jobs below delete their own)
     const input = path.join(path.dirname(MODELS), 'input');
     if (fs.existsSync(input)) for (const f of ['pf_proof_invert1.mkv', 'pf_proof_invert2.mkv']) fs.rmSync(path.join(input, f), { force: true });
