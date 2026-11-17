@@ -15,6 +15,7 @@ import { BAR_ICON_COMPONENTS, IconHide, IconLock, IconMute, IconShow, IconSound,
 import { soundTailsFor } from './AudioFxBlock.tsx';
 import { findEffect } from '@pulseframe/core';
 import './templates.css';
+import './timeline.css';
 
 const MAX_MARKERS = 3000;
 
@@ -74,6 +75,8 @@ export function Timeline() {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   return (
     <section className="timeline" dir="ltr" aria-label={t('timeline')}>
+      {/* The bar above the tracks is one box, so the tracks below it get exactly the height that is left (timeline.css). */}
+      <div className="tl-bar">
       <label className="tl-snap">
         <input type="checkbox" checked={snapBeats} data-testid="snap-beats" onChange={(e) => { setSnapBeats(e.target.checked); writeSnapBeats(e.target.checked); }} />
         {t('snap.beats')}
@@ -88,6 +91,7 @@ export function Timeline() {
       <EditBar />
       {menu && <ClipMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
       {here && <MarkerBar marker={here} />}
+      </div>
       <div className="tl-scroll" ref={wheelZoomRef} {...containerProps}>
         <div className="tl-inner" style={{ width: totalSeconds * pps + 80 }} {...marqueeProps}
           onDragOver={(e) => { if (!e.dataTransfer.types.includes(ASSET_DRAG_TYPE) && !e.dataTransfer.types.includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; const at = dropPoint(e); if (!dropAt || dropAt.frame !== at.frame || dropAt.trackId !== at.trackId) setDropAt(at); }}

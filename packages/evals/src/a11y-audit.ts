@@ -149,6 +149,9 @@ async function main() {
         host.id = 'pf-a11y-planted';
         host.innerHTML = '<button id="planted-unnamed"></button><p id="planted-contrast">low contrast text</p><button id="planted-nofocus">no focus ring</button>';
         document.body.prepend(host);
+        // The shell is a fixed grid that covers the window (ds/shell.css): the planted controls are lifted above it, so the
+        // click at the corner that starts the focus walk lands on them, as it did while the shell was in the page flow.
+        host.style.position = 'relative'; host.style.zIndex = '1000';
         // Styles are set through the DOM API: the page's content security policy blocks inline style attributes in markup.
         const low = host.querySelector<HTMLElement>('#planted-contrast')!, nf = host.querySelector<HTMLElement>('#planted-nofocus')!;
         low.style.color = '#3a3f47'; low.style.background = '#30343b';

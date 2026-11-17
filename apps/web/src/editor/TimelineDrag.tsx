@@ -5,7 +5,7 @@ import { clipEnd, timelineMarkers, type Clip } from '@pulseframe/core';
 import { readSnapBeats } from '../api.ts';
 import { useEditor } from './store.ts';
 import { markerSnapCandidates, overlapsOnTrack, snapTime } from './interactions.math.ts';
-import './interactions.css';
+import './timeline.css';
 
 type Mode = 'move' | 'trim-start' | 'trim-end';
 type SnapKind = 'playhead' | 'clip-edge' | 'zero' | 'marker';

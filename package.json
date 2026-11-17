@@ -55,6 +55,7 @@
     "proof:phase12": "tsx packages/evals/src/phase12-proof.ts",
     "proof:phase11": "tsx packages/evals/src/phase11-proof.ts",
     "audit:a11y": "tsx packages/evals/src/a11y-audit.ts",
+    "audit:testids": "tsx packages/evals/src/testid-inventory.ts",
     "soak": "tsx packages/evals/src/soak.ts",
     "proof:editor-interactions": "tsx packages/evals/src/editor-interactions-proof.ts",
     "proof:owner-ui": "tsx packages/evals/src/owner-ui-proof.ts",
