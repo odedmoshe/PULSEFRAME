@@ -147,18 +147,19 @@ const mono = (ch: Float32Array[]): Float32Array => {
   for (const c of ch) for (let i = 0; i < out.length; i++) out[i]! += c[i]! / ch.length;
   return out;
 };
-export interface SoundStats { frames: number; /** Over every channel (a mono mix would hide a side-only signal). */ peak: number; rms: number; nonFinite: number; /** Energy per 0.1 s block of the mono mix, for choosing the lag window. */ blocks: Float64Array; /** Pearson correlation of the first two channels, or null. */ lrCorrelation: number | null }
+export interface SoundStats { frames: number; /** Over every channel (a mono mix would hide a side-only signal). */ peak: number; rms: number; nonFinite: number; /** Samples at full scale (clipped). */ clipped: number; /** Energy per 0.1 s block of the mono mix, for choosing the lag window. */ blocks: Float64Array; /** Pearson correlation of the first two channels, or null. */ lrCorrelation: number | null }
 /** One pass over the first `frames` frames, a second at a time (memory stays bounded for long sound). */
 export function soundStats(file: string, info: WavInfo, frames: number): SoundStats {
   const BLOCK = SAMPLE_RATE / 10;
   const blocks = new Float64Array(Math.ceil(frames / BLOCK));
-  let peak = 0, sumSq = 0, count = 0, nonFinite = 0, sl = 0, sr = 0, sll = 0, srr = 0, slr = 0;
+  let peak = 0, sumSq = 0, count = 0, nonFinite = 0, clipped = 0, sl = 0, sr = 0, sll = 0, srr = 0, slr = 0;
   for (let at = 0; at < frames; at += SAMPLE_RATE) {
     const ch = readWavFrames(file, info, at, Math.min(SAMPLE_RATE, frames - at));
     for (const c of ch) for (const v of c) {
       if (!Number.isFinite(v)) { nonFinite++; continue; }
       const a = Math.abs(v);
       if (a > peak) peak = a;
+      if (a >= 32767 / 32768) clipped++;
       sumSq += v * v;
       count++;
     }
@@ -174,7 +175,7 @@ export function soundStats(file: string, info: WavInfo, frames: number): SoundSt
     const vl = sll - (sl * sl) / frames, vr = srr - (sr * sr) / frames, cov = slr - (sl * sr) / frames;
     lrCorrelation = vl > 0 && vr > 0 ? cov / Math.sqrt(vl * vr) : vl === 0 && vr === 0 ? 1 : 0;
   }
-  return { frames, peak, rms: count ? Math.sqrt(sumSq / count) : 0, nonFinite, blocks, lrCorrelation };
+  return { frames, peak, rms: count ? Math.sqrt(sumSq / count) : 0, nonFinite, clipped, blocks, lrCorrelation };
 }
 function fft(re: Float64Array, im: Float64Array, inverse: boolean) {
   const n = re.length;
@@ -710,6 +711,7 @@ export class LocalTools implements LocalToolRunner {
     if (resStats.peak < SILENT_PEAK) throw new ApiError(502, 'output_invalid', 'the result is silent', { peakDb: db(resStats.peak) });
     validation.resultPeakDb = db(resStats.peak);
     validation.resultRmsDb = db(resStats.rms);
+    validation.resultClippedSamples = resStats.clipped; // reported, not refused: a centre cancel of anti-phase material can exceed full scale
     const h = createHash('sha256');
     await pipeline(fs.createReadStream(final), h);
     const contentHash = `sha256:${h.digest('hex')}`;

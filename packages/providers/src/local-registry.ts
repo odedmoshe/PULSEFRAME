@@ -88,8 +88,8 @@ function translator(from: 'he' | 'en', to: 'he' | 'en', models: CapabilityModel[
 
 /** Digests of the listed code files (sha256 over their bytes in order). Checked by local-registry.test.ts. */
 const DIGEST = {
-  translate: 'sha256:28e7847dd641423eed0a2dd99953ec0a0aca4b14047c16e97cb7db56c5a08d90',
-  runner: 'sha256:e49d0be86aeb4ec8b2fd773f43afd931ff1a3aee9eaeb4545120f9291f819416',
+  translate: 'sha256:e8cbca4331a1f86d7230ace5c6fcb6b9852e3a4e7f2961205d9b1f68c337480c',
+  runner: 'sha256:268eb95508a7684b757dd69332d5e8a4811bc348040a83eff962137404e98c78',
 };
 
 export const TRANSLATE_HE_EN = translator('he', 'en', opusModels('translate/opus-mt-tc-big-he-en', 'Helsinki-NLP/opus-mt-tc-big-he-en', AI_WAVE_PINS.opusMtHeEnWeights, OPUS_MT_SMALL_FILES['he-en'], 'CC-BY-4.0'), DIGEST.translate);
