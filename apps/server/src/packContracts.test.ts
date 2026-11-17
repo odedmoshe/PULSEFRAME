@@ -91,6 +91,36 @@ describe('built-in music on the server (ADR-0022)', () => {
     expect(r.status).toBe(400);
     expect(r.body.error.message).toBe('choose a music file or built-in music, not both');
   });
-  it.todo('W3: applying a template with built-in music adds the track with its known grid in the same transaction; one undo removes asset, analysis and clips');
-  it.todo('W3: overwrite=true measures the built-in track anyway (P9 calls the detector on the blob directly and commits nothing)');
+  it('W3: applying a template with built-in music adds the track with its known grid in the same transaction; one undo removes asset, analysis and clips', async () => {
+    const id = store.createProject({ name: 'packs-apply', width: 1080, height: 1920, frameRate: R }).doc.id;
+    store.commit({ projectId: id, actor: 'test', allowInternal: true, label: 'pictures', ops: ['d', 'e', 'f'].map((k) => ({ op: 'import_asset', args: { asset: { kind: 'image', name: `${k}.png`, contentHash: `sha256:${k.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 1080, height: 1920, codec: 'png', hasAlpha: false }, provenance: prov } } })) });
+    const before = store.getProject(id);
+    const media = Object.values(before.doc.assets).map((a) => a.id);
+    const applied = await rest('POST', `/projects/${id}/templates/tpl.photo-dump/apply`, { params: { media, builtinMusic: { styleId: 'music.festive', seed: 4 } } });
+    expect(applied.status).toBe(200);
+    const after = store.getProject(id);
+    expect(after.revision).toBe(before.revision + 1); // one transaction
+    const track = Object.values(after.doc.assets).find((a) => a.provenance.procedural?.id === 'music.festive')!;
+    expect(track.provenance.procedural!.params).toMatchObject({ seed: 4, synth: 1 });
+    const beats = after.doc.analyses[track.id]!.beats!;
+    expect([beats.origin.method, beats.confidence]).toEqual([MUSIC_METHOD, null]);
+    expect(beats.sections!.at(-1)!.kind).toBe('ending');
+    const clips = Object.values(after.doc.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips)).filter((c) => (c as { assetId?: string }).assetId === track.id);
+    expect(clips).toHaveLength(1);
+    const undone = await rest('POST', `/projects/${id}/undo`, {});
+    expect(undone.status).toBe(200);
+    expect(store.getProject(id).doc).toEqual(before.doc);
+  }, 120_000);
+  it('W3: overwrite=true measures the built-in track anyway (P9 calls the detector on the blob directly and commits nothing)', async () => {
+    const { makeMusic, createMusicQueue } = await import('./music.ts');
+    const made = await makeMusic(store, { styleId: 'music.pop', bars: 8, seed: 1 }, 'test', createMusicQueue());
+    const added = store.commit({ projectId: pid, actor: 'test', allowInternal: true, label: 'music', ops: [{ op: 'add_builtin_music', args: { asset: made.asset, grid: made.grid } }] });
+    const realId = (added.results[0]!.output as { assetId: string }).assetId;
+    expect((await rest('POST', `/projects/${pid}/assets/${realId}/analyze`, { kind: 'beats' })).body.error.code).toBe('known_by_construction');
+    const r = await rest('POST', `/projects/${pid}/assets/${realId}/analyze`, { kind: 'beats', overwrite: true });
+    expect(r.status).toBe(200);
+    const measured = store.getProject(pid).doc.analyses[realId]!.beats!;
+    expect(measured.origin.method).not.toBe(MUSIC_METHOD);
+    expect(measured.sections).toBeUndefined();
+  }, 120_000);
 });

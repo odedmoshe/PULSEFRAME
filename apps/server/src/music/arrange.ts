@@ -57,6 +57,9 @@ class Voicer {
 export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition, seed: number): Note[] {
   const rnd = mulberry32((Math.imul(seed + 7, 0x85ebca6b) ^ hashId(spec.id + ':arrange')) >>> 0);
   const human = () => 1 + (rnd() - 0.5) * 0.12;
+  /** The arrangement's own dynamics: harmony and drums play softer in a build than in a peak, so the form is heard. */
+  const PITCHED_AT = [0.9, 0.62, 0.88, 1], DRUMS_AT = [0.8, 0.6, 0.9, 1];
+  let dyn = 1;
   const N = layout.bars, S = layout.samplesPerBeat;
   const out: Note[] = [];
   const at = (bar: number, tick: number) => tickSample(layout, bar * TICKS_PER_BAR + tick, spec.swing);
@@ -64,6 +67,7 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
   const voicer = new Voicer(spec);
   const voicings: number[][][] = comp.chords.map((bar) => bar.map((c) => voicer.voice(c)));
   const push = (p: { voice: Voice; pan: number; send: number }, atS: number, gate: number, midi: number, vel: number) => out.push({ at: atS, gate, voice: p.voice, midi, vel: Math.min(1, vel), pan: p.pan, send: p.send });
+  const play = (p: PartSpec, atS: number, gate: number, midi: number, vel: number) => push(p, atS, gate, midi, vel * dyn);
   const levelOf: Level[] = new Array(N);
   const sectionOf: number[] = new Array(N);
   layout.sections.forEach((s, si) => { for (let i = 0; i < s.bars; i++) { levelOf[s.startBar + i] = s.level; sectionOf[s.startBar + i] = si; } });
@@ -72,6 +76,7 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
     const level = levelOf[bar]!;
     const s = layout.sections[sectionOf[bar]!]!;
     const chords = comp.chords[bar]!;
+    dyn = PITCHED_AT[level]!;
     for (const part of spec.parts) {
       const cell = part.cells[level];
       if (!cell) continue;
@@ -80,13 +85,13 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
     for (const d of spec.drums) {
       const ticks = d.patterns[level];
       if (!ticks) continue;
-      for (const t of ticks) push(d, at(bar, t), S, 60, d.vel * (t === 0 ? 1 : t % 12 === 0 ? 0.92 : 0.78) * human());
+      for (const t of ticks) push(d, at(bar, t), S, 60, DRUMS_AT[level]! * d.vel * (t === 0 ? 1 : t % 12 === 0 ? 0.92 : 0.78) * human());
     }
     if (spec.crash && s.kind === 'peak' && bar === s.startBar) push({ voice: spec.crash, pan: 0, send: 0.2 }, at(bar, 0), S, 60, 1);
     // the last bar of a build: a riser over the bar and a roll in sixteenths over its second half
     if (s.kind === 'build' && bar === s.startBar + s.bars - 1) {
-      push({ voice: spec.riser, pan: 0, send: 0.3 }, at(bar, 0), at(bar + 1, 0) - at(bar, 0), 60, 1);
-      for (let t = 24; t < TICKS_PER_BAR; t += 3) push({ voice: spec.roll, pan: 0, send: 0.2 }, at(bar, t), span(bar, t, 3), 60, spec.rollVel * (0.3 + (0.7 * (t - 24)) / 21));
+      push({ voice: spec.riser, pan: 0, send: 0.3 }, at(bar, 0), at(bar + 1, 0) - at(bar, 0), 60, 0.8);
+      for (let t = 24; t < TICKS_PER_BAR; t += 3) push({ voice: spec.roll, pan: 0, send: 0.2 }, at(bar, t), span(bar, t, 3), 60, spec.rollVel * (0.2 + (0.6 * (t - 24)) / 21));
     }
   }
 
@@ -100,13 +105,23 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
     const p = { voice, pan: part.pan, send: part.send };
     if (part.role === 'bass') push(p, endAt, endGate, spec.root + part.octave, part.vel * 0.95);
     else if (part.role === 'lead' || part.role === 'double') push(p, endAt, endGate, pitchOf(spec, leadHome) + part.octave, part.vel * 0.9);
-    else for (const m of tonic) push(p, endAt, endGate, m + part.octave, part.vel * 0.9);
+    else {
+      for (const m of tonic) push(p, endAt, endGate, m + part.octave, part.vel * 0.9);
+      if (part.role === 'pad') push(p, endAt, endGate, lowRoot(0) + part.octave, part.vel * 0.55);
+    }
   }
   const kickDrum = spec.drums.find((d) => d.voice.kind === 'kick');
   if (kickDrum) push(kickDrum, endAt, S, 60, kickDrum.vel);
   if (spec.crash) push({ voice: spec.crash, pan: 0, send: 0.2 }, endAt, S, 60, 1);
   return out;
 
+  /** The root of a chord in the octave under the chord register. */
+  function lowRoot(deg: number): number {
+    let m = pitchOf(spec, deg) - 12;
+    while (m > spec.root - 5) m -= 12;
+    while (m <= spec.root - 17) m += 12;
+    return m;
+  }
   function nearestTonic(deg: number): number {
     let best = -7 * Math.floor(-spec.leadLow / 7); // the lowest tonic in range
     for (let t = best; t <= spec.leadLow + 11; t += 7) if (Math.abs(t - deg) < Math.abs(best - deg)) best = t;
@@ -117,10 +132,15 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
     const vAt = (tick: number) => voiced[chords.indexOf(chordAt(chords, tick))]!;
     switch (part.role) {
       case 'pad':
-        chords.forEach((c, i) => { for (const m of voiced[i]!) push(part, at(bar, c.from), span(bar, c.from, c.to - c.from), m + part.octave, part.vel * human()); });
+        chords.forEach((c, i) => {
+          const g = span(bar, c.from, c.to - c.from);
+          for (const m of voiced[i]!) play(part, at(bar, c.from), g, m + part.octave, part.vel * human());
+          // the chord's root an octave under the voicing: the warmth between the bass and the chords
+          play(part, at(bar, c.from), g, lowRoot(c.deg) + part.octave, part.vel * 0.6 * human());
+        });
         return;
       case 'stab':
-        for (const [t, d] of cell) for (const m of vAt(t)) push(part, at(bar, t), span(bar, t, d), m + part.octave, part.vel * (t % 24 === 0 ? 1 : 0.85) * human());
+        for (const [t, d] of cell) for (const m of vAt(t)) play(part, at(bar, t), span(bar, t, d), m + part.octave, part.vel * (t % 24 === 0 ? 1 : 0.85) * human());
         return;
       case 'arp': {
         const order = [0, 1, 2, 3, 2, 1];
@@ -128,7 +148,7 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
           const v = vAt(t);
           const k = order[i % order.length]!;
           const m = k < v.length ? v[k]! : v[0]! + 12;
-          push(part, at(bar, t), span(bar, t, d), m + part.octave, part.vel * (t % 12 === 0 ? 1 : 0.8) * human());
+          play(part, at(bar, t), span(bar, t, d), m + part.octave, part.vel * (t % 12 === 0 ? 1 : 0.8) * human());
         });
         return;
       }
@@ -137,23 +157,26 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
           const c = chordAt(chords, t);
           const root = pitchOf(spec, c.deg);
           const tone = which === 1 ? pitchOf(spec, c.deg + 2) : which === 2 ? pitchOf(spec, c.deg + 4) : which === 3 ? root + 12 : root;
-          // the bass register: within an octave from the style's root down
+          // the bass register: the octave from a minor third under the style's root (62–123 Hz for D after its octave shift)
           let m = tone;
-          while (m > spec.root + 4) m -= 12;
-          while (m <= spec.root - 8) m += 12;
-          push(part, at(bar, t), span(bar, t, d), m + part.octave, part.vel * (t === 0 ? 1 : 0.88) * human());
+          while (m > spec.root + 9) m -= 12;
+          while (m <= spec.root - 3) m += 12;
+          play(part, at(bar, t), span(bar, t, d), m + part.octave, part.vel * (t === 0 ? 1 : 0.88) * human());
         }
         return;
       case 'lead': case 'double':
-        for (const n of comp.leadByBar[bar]!) push(part, at(bar, n.tick), span(bar, n.tick, n.dur), pitchOf(spec, n.deg) + part.octave, part.vel * (n.tick % 24 === 0 ? 1 : 0.88) * human());
+        for (const n of comp.leadByBar[bar]!) play(part, at(bar, n.tick), span(bar, n.tick, n.dur), pitchOf(spec, n.deg) + part.octave, part.vel * (n.tick % 24 === 0 ? 1 : 0.88) * human());
         return;
     }
   }
 }
 
-/** Every voice of the ending starts at once (a slow string attack would make the ending grow after its first beat). */
+/**
+ * Every voice of the ending starts at once (a slow string attack would make the ending grow after its first beat), and the
+ * held voices die away instead of holding, with almost no detune (detuned saws beat, which would make the dying chord swell).
+ */
 function endingVoice(v: Voice): Voice {
-  if (v.kind === 'pad') return { ...v, attack: Math.min(v.attack, 0.012), t60: 3.5 };
+  if (v.kind === 'pad') return { ...v, attack: Math.min(v.attack, 0.012), t60: 2.5, detune: Math.min(v.detune, 2) };
   if (v.kind === 'fm') return { ...v, attack: Math.min(v.attack, 0.004) };
   return v;
 }

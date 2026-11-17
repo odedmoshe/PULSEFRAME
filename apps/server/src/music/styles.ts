@@ -54,7 +54,7 @@ const SIXTEENTHS = Array.from({ length: 16 }, (_, i) => 3 * i);
 const WHOLE: Cell = [[0, 48]];
 
 // ---- instruments (arithmetic recipes, see voices.ts) ----
-const kick = (level = 0.7): Voice => ({ kind: 'kick', level, f0: 150, f1: 52, pitchT60: 0.09, t60: 0.5 });
+const kick = (level = 0.6): Voice => ({ kind: 'kick', level, f0: 150, f1: 52, pitchT60: 0.09, t60: 0.5 });
 const snare = (level = 0.3): Voice => ({ kind: 'snare', level, tone: 190, noiseHz: 2000, t60: 0.2 });
 const hat = (level = 0.09, t60 = 0.07): Voice => ({ kind: 'hat', level, hz: 7000, t60 });
 const clap = (level = 0.3): Voice => ({ kind: 'clap', level, hz: 1300, t60: 0.2 });
@@ -63,12 +63,12 @@ const crash = (level = 0.08): Voice => ({ kind: 'crash', level, hz: 5500, t60: 1
 const riser = (level = 0.08): Voice => ({ kind: 'riser', level, from: 300, to: 5000 });
 const pluck = (level: number, bright = 0.5, t60 = 1.0): Voice => ({ kind: 'pluck', level, bright, t60, release: 0.08 });
 const bell = (level: number): Voice => ({ kind: 'fm', level, ratio: 3.5, index: 0.3, indexT60: 0.45, t60: 1.5, attack: 0.002, release: 0.12 });
-const epiano = (level: number, t60 = 2.4): Voice => ({ kind: 'fm', level, ratio: 1, index: 0.2, indexT60: 0.8, t60, attack: 0.003, release: 0.18 });
+const epiano = (level: number, t60 = 2.4, index = 0.2): Voice => ({ kind: 'fm', level, ratio: 1, index, indexT60: 0.8, t60, attack: 0.003, release: 0.18 });
 const piano = (level: number): Voice => ({ kind: 'fm', level, ratio: 2, index: 0.12, indexT60: 0.6, t60: 2.2, attack: 0.002, release: 0.25 });
 const bass = (level: number, index = 0.16): Voice => ({ kind: 'fm', level, ratio: 1, index, indexT60: 0.25, t60: 2.4, attack: 0.004, release: 0.06 });
 const pad = (level: number, cutoff = 1500, attack = 0.25, release = 0.6): Voice => ({ kind: 'pad', level, cutoff, attack, release, detune: 10, saws: 2, t60: 0 });
 const strings = (level: number, attack = 0.45): Voice => ({ kind: 'pad', level, cutoff: 2200, attack, release: 1.2, detune: 12, saws: 3, t60: 0 });
-const tom = (level = 0.75): Voice => ({ kind: 'kick', level, f0: 110, f1: 66, pitchT60: 0.3, t60: 1.1 });
+const tom = (level = 0.6): Voice => ({ kind: 'kick', level, f0: 110, f1: 66, pitchT60: 0.3, t60: 1.1 });
 
 const all = (c: Cell | null) => [c, c, c, c] as const;
 const from = (level: Level, c: Cell, before: Cell | null = null) => [0, 1, 2, 3].map((l) => (l >= level ? c : before)) as unknown as PartSpec['cells'];
@@ -85,7 +85,7 @@ export const STYLE_SPECS: Readonly<Record<string, StyleSpec>> = {
     parts: [
       { role: 'pad', voice: pad(0.1, 1300, 0.3), cells: all(WHOLE), octave: 0, vel: 1, pan: 0, send: 0.3 },
       { role: 'stab', voice: pluck(0.22, 0.45, 0.5), cells: [hitsAt([12, 36], 8), hitsAt([12, 36], 8), hitsAt([12, 36], 8), hitsAt([12, 30, 36, 42], 5)], octave: 0, vel: 1, pan: 0.25, send: 0.2 },
-      { role: 'bass', voice: bass(0.36), cells: from(1, [[0, 10, 0], [24, 10, 2]]), octave: -24, vel: 1, pan: 0, send: 0.05 },
+      { role: 'bass', voice: bass(0.27), cells: from(1, [[0, 10, 0], [24, 10, 2]]), octave: -24, vel: 1, pan: 0, send: 0.05 },
       { role: 'lead', voice: pluck(0.44, 0.6, 1.2), cells: from(2, WHOLE), octave: 0, vel: 1, pan: -0.15, send: 0.25 },
       { role: 'double', voice: pluck(0.16, 0.5, 0.9), cells: from(3, WHOLE), octave: 12, vel: 1, pan: 0.2, send: 0.25 },
     ],
@@ -109,7 +109,7 @@ export const STYLE_SPECS: Readonly<Record<string, StyleSpec>> = {
     parts: [
       { role: 'pad', voice: pad(0.09, 1400), cells: all(WHOLE), octave: 0, vel: 1, pan: 0, send: 0.3 },
       { role: 'arp', voice: pluck(0.17, 0.4, 0.6), cells: [hitsAt(FOUR, 10), hitsAt(EIGHTHS, 5), hitsAt(EIGHTHS, 5), hitsAt(EIGHTHS, 5)], octave: 0, vel: 1, pan: 0.3, send: 0.2 },
-      { role: 'bass', voice: bass(0.36), cells: from(1, [[0, 10, 0], [24, 6, 0], [30, 6, 2], [36, 10, 0]]), octave: -24, vel: 1, pan: 0, send: 0.05 },
+      { role: 'bass', voice: bass(0.27), cells: from(1, [[0, 10, 0], [24, 6, 0], [30, 6, 2], [36, 10, 0]]), octave: -24, vel: 1, pan: 0, send: 0.05 },
       { role: 'lead', voice: bell(0.3), cells: from(2, WHOLE), octave: 0, vel: 1, pan: -0.1, send: 0.3 },
       { role: 'double', voice: pluck(0.2, 0.5, 0.9), cells: from(3, WHOLE), octave: -12, vel: 1, pan: 0.15, send: 0.2 },
     ],
@@ -132,7 +132,7 @@ export const STYLE_SPECS: Readonly<Record<string, StyleSpec>> = {
     parts: [
       { role: 'pad', voice: pad(0.08, 1200, 0.5, 1.0), cells: all(WHOLE), octave: 0, vel: 1, pan: 0, send: 0.35 },
       { role: 'arp', voice: epiano(0.16, 1.8), cells: [hitsAt([0, 12, 24, 36], 12), hitsAt(EIGHTHS, 6), hitsAt(EIGHTHS, 6), hitsAt(EIGHTHS, 6)], octave: 0, vel: 1, pan: 0.25, send: 0.3 },
-      { role: 'bass', voice: bass(0.38, 0.1), cells: from(1, [[0, 22, 0], [24, 22, 2]]), octave: -24, vel: 1, pan: 0, send: 0.05 },
+      { role: 'bass', voice: bass(0.28, 0.1), cells: from(1, [[0, 22, 0], [24, 22, 2]]), octave: -24, vel: 1, pan: 0, send: 0.05 },
       { role: 'lead', voice: epiano(0.24, 2.8), cells: from(2, WHOLE), octave: 0, vel: 1, pan: -0.15, send: 0.35 },
       { role: 'double', voice: pad(0.06, 1800, 0.08, 0.5), cells: from(3, WHOLE), octave: 0, vel: 1, pan: 0.15, send: 0.35 },
     ],
@@ -143,7 +143,7 @@ export const STYLE_SPECS: Readonly<Record<string, StyleSpec>> = {
       { voice: clap(0.16), patterns: [null, null, null, BACKBEAT], vel: 1, pan: -0.05, send: 0.25 },
     ],
     crash: crash(0.05), riser: riser(0.05), roll: snare(0.1), rollVel: 0.7, swing: 0,
-    mix: { gain: 1.0, wet: 0.55, room: 1.0, feedback: 0.82, damp: 0.45 },
+    mix: { gain: 1.1, wet: 0.55, room: 1.0, feedback: 0.82, damp: 0.45 },
   },
   // Upbeat pop: E major at 128, four on the floor, pumping eighth-note bass, off-beat plucked chords.
   'music.pop': {
@@ -155,12 +155,12 @@ export const STYLE_SPECS: Readonly<Record<string, StyleSpec>> = {
     parts: [
       { role: 'pad', voice: pad(0.1, 2200, 0.15), cells: all(WHOLE), octave: 0, vel: 1, pan: 0, send: 0.25 },
       { role: 'stab', voice: pluck(0.16, 0.55, 0.4), cells: [hitsAt([6, 30], 5), hitsAt(OFFBEATS, 5), hitsAt(OFFBEATS, 5), hitsAt(OFFBEATS, 5)], octave: 0, vel: 1, pan: 0.3, send: 0.2 },
-      { role: 'bass', voice: bass(0.3, 0.22), cells: from(1, hitsAt(EIGHTHS, 5, 0)), octave: -24, vel: 1, pan: 0, send: 0 },
+      { role: 'bass', voice: bass(0.24, 0.22), cells: from(1, hitsAt(EIGHTHS, 5, 0)), octave: -24, vel: 1, pan: 0, send: 0 },
       { role: 'lead', voice: pluck(0.42, 0.7, 1.0), cells: from(2, WHOLE), octave: 0, vel: 1, pan: -0.15, send: 0.25 },
       { role: 'double', voice: bell(0.12), cells: from(3, WHOLE), octave: 12, vel: 1, pan: 0.2, send: 0.3 },
     ],
     drums: [
-      { voice: kick(0.75), patterns: [null, [0, 24], FOUR, FOUR], vel: 1, pan: 0, send: 0 },
+      { voice: kick(0.65), patterns: [null, [0, 24], FOUR, FOUR], vel: 1, pan: 0, send: 0 },
       { voice: clap(0.3), patterns: [null, null, BACKBEAT, BACKBEAT], vel: 1, pan: 0, send: 0.15 },
       { voice: snare(0.2), patterns: [null, null, null, BACKBEAT], vel: 1, pan: 0, send: 0.1 },
       { voice: hat(0.1), patterns: [[6, 30], OFFBEATS, OFFBEATS, OFFBEATS], vel: 1, pan: -0.2, send: 0.05 },
@@ -178,19 +178,19 @@ export const STYLE_SPECS: Readonly<Record<string, StyleSpec>> = {
     leadLow: 4,
     parts: [
       { role: 'pad', voice: pad(0.05, 900, 0.4, 0.8), cells: all(WHOLE), octave: -12, vel: 1, pan: 0, send: 0.3 },
-      { role: 'stab', voice: epiano(0.12, 2.0), cells: all([[0, 28], [30, 18]]), octave: 0, vel: 1, pan: 0.2, send: 0.3 },
-      { role: 'bass', voice: bass(0.4, 0.08), cells: from(1, [[0, 16, 0], [18, 6, 0], [30, 16, 2]]), octave: -24, vel: 1, pan: 0, send: 0 },
-      { role: 'lead', voice: epiano(0.2, 2.6), cells: from(2, WHOLE), octave: 0, vel: 1, pan: -0.15, send: 0.35 },
+      { role: 'stab', voice: epiano(0.12, 2.0, 0.3), cells: all([[0, 28], [30, 18]]), octave: 0, vel: 1, pan: 0.2, send: 0.3 },
+      { role: 'bass', voice: bass(0.28, 0.08), cells: from(1, [[0, 16, 0], [18, 6, 0], [30, 16, 2]]), octave: -24, vel: 1, pan: 0, send: 0 },
+      { role: 'lead', voice: epiano(0.2, 2.6, 0.28), cells: from(2, WHOLE), octave: 0, vel: 1, pan: -0.15, send: 0.35 },
       { role: 'double', voice: pluck(0.12, 0.3, 0.8), cells: from(3, WHOLE), octave: 0, vel: 1, pan: 0.2, send: 0.3 },
     ],
     drums: [
-      { voice: kick(0.8), patterns: [null, [0, 30], [0, 22, 30], [0, 22, 30]], vel: 1, pan: 0, send: 0 },
+      { voice: kick(0.65), patterns: [null, [0, 30], [0, 22, 30], [0, 22, 30]], vel: 1, pan: 0, send: 0 },
       { voice: snare(0.2), patterns: [null, null, BACKBEAT, BACKBEAT], vel: 1, pan: 0, send: 0.15 },
-      { voice: hat(0.07, 0.05), patterns: [OFFBEATS, EIGHTHS, EIGHTHS, EIGHTHS], vel: 1, pan: -0.2, send: 0.05 },
+      { voice: hat(0.09, 0.05), patterns: [OFFBEATS, EIGHTHS, EIGHTHS, EIGHTHS], vel: 1, pan: -0.2, send: 0.05 },
       { voice: clap(0.14), patterns: [null, null, null, BACKBEAT], vel: 1, pan: 0.05, send: 0.25 },
     ],
     crash: null, riser: riser(0.05), roll: snare(0.12), rollVel: 0.6, swing: 2,
-    mix: { gain: 1.0, wet: 0.45, room: 0.9, feedback: 0.8, damp: 0.5 },
+    mix: { gain: 1.1, wet: 0.45, room: 0.9, feedback: 0.8, damp: 0.5 },
   },
   // Cinematic: D major at 72, strings that hold the chords, a piano arpeggio, low drums that grow into the last peak.
   'music.cinematic': {
@@ -202,18 +202,18 @@ export const STYLE_SPECS: Readonly<Record<string, StyleSpec>> = {
     parts: [
       { role: 'pad', voice: strings(0.08), cells: all(WHOLE), octave: 0, vel: 1, pan: 0, send: 0.4 },
       { role: 'arp', voice: piano(0.15), cells: [hitsAt(FOUR, 12), hitsAt(EIGHTHS, 6), hitsAt(EIGHTHS, 6), hitsAt(EIGHTHS, 6)], octave: 0, vel: 1, pan: 0.25, send: 0.35 },
-      { role: 'bass', voice: strings(0.1, 0.3), cells: from(1, [[0, 48, 0]]), octave: -24, vel: 1, pan: 0, send: 0.25 },
+      { role: 'bass', voice: strings(0.05, 0.3), cells: from(1, [[0, 48, 0]]), octave: -24, vel: 1, pan: 0, send: 0.25 },
       { role: 'lead', voice: strings(0.13, 0.12), cells: from(2, WHOLE), octave: 0, vel: 1, pan: -0.1, send: 0.4 },
       { role: 'double', voice: piano(0.12), cells: from(3, WHOLE), octave: 12, vel: 1, pan: 0.15, send: 0.35 },
     ],
     drums: [
       { voice: tom(), patterns: [null, [0], [0, 24], [0, 24, 30, 36]], vel: 1, pan: 0, send: 0.2 },
-      { voice: kick(0.6), patterns: [null, null, [0, 24], [0, 24]], vel: 1, pan: 0, send: 0 },
+      { voice: kick(0.45), patterns: [null, null, [0, 24], [0, 24]], vel: 1, pan: 0, send: 0 },
       { voice: snare(0.14), patterns: [null, null, null, BACKBEAT], vel: 1, pan: 0, send: 0.35 },
       { voice: shaker(0.06), patterns: [null, null, EIGHTHS, EIGHTHS], vel: 1, pan: 0.25, send: 0.15 },
     ],
     crash: crash(0.07), riser: riser(0.06), roll: tom(0.4), rollVel: 0.8, swing: 0,
-    mix: { gain: 0.85, wet: 0.6, room: 1.1, feedback: 0.84, damp: 0.4 },
+    mix: { gain: 0.95, wet: 0.6, room: 1.1, feedback: 0.84, damp: 0.4 },
   },
 };
 export const styleSpec = (id: string): StyleSpec => {
