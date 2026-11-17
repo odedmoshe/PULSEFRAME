@@ -58,7 +58,8 @@ describe('beat position on the timeline', () => {
   it('lists the beats around the moment where they are on the timeline, numbered from the first bar start', () => {
     const { doc } = project(); // beats at source 1.0, 1.5 … 10.5; the clip shows source 0.5 … 10.5 from timeline second 2
     const p = beatPositionAt(doc, f(150))!; // timeline 5.0 s = beat 5
-    expect(p.at).toBe(5); expect(p.sinceFirstBar).toBeCloseTo(5, 9); expect(p.musicBefore).toBeNull();
+    expect(p.at).toBe(5); expect(p.sinceFirstBar).toBeCloseTo(5, 9); expect(p.followedFrom).toBe(-Infinity); // followed since second 2, which is longer ago than the window
+    expect(beatPositionAt(doc, f(75))!.followedFrom).toBe(2);
     expect(p.hits).toEqual([3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7].map((t, k) => ({ t, index: k + 1 }))); // two seconds each way
     // the same beat is the same entry from wherever it is listed
     expect(beatPositionAt(doc, f(100))!.hits.find((h) => h.index === 3)).toEqual(p.hits.find((h) => h.index === 3));
@@ -105,24 +106,43 @@ describe('beat position on the timeline', () => {
     }
   });
 
-  it('says when other music was followed before this clip took over', () => {
-    const { doc, assetId, clipId } = project(); // the music plays from second 2 to second 12
-    // cut in two at second 6: the second piece takes over from the first right there
-    const cut = tx(doc, [{ op: 'split_clip', args: { clipId, at: f(180) } }]).doc;
-    expect(beatPositionAt(cut, f(170))!.musicBefore).toBeNull();
-    expect(beatPositionAt(cut, f(200))!.musicBefore).toBe(6);
-    // another piece later on the same track, after a pause: what counts is when the earlier one stopped
+  it('(reported) lists the beats of every piece of music as it is heard around the moment, and says since when music has been followed without a break', () => {
+    const { doc, assetId, clipId } = project(); // the music plays from second 2 to second 12, with beats at 2.5, 3 … 11.5
+    const whole = beatPositionAt(doc, f(190))!;
+    // cut in two at second 6 (and again at 6.2 and 7): the pieces' beats are listed exactly as those of the uncut clip, from either side of a cut
+    let cut = tx(doc, [{ op: 'split_clip', args: { clipId, at: f(180) } }]).doc;
+    for (const at of [186, 210]) cut = tx(cut, [{ op: 'split_clip', args: { clipId: beatPositionAt(cut, f(at))!.clipId, at: f(at) } }]).doc;
+    for (const frame of [150, 179, 180, 185, 190, 215]) {
+      const uncut = beatPositionAt(doc, f(frame))!, pieces = beatPositionAt(cut, f(frame))!;
+      expect(pieces.hits, `frame ${frame}`).toEqual(uncut.hits);
+      expect(pieces.followedFrom, `frame ${frame}`).toBe(uncut.followedFrom);
+    }
+    expect(beatPositionAt(cut, f(190))!.clipId).not.toBe(clipId);
+    expect(beatPositionAt(cut, f(190))!.hits).toEqual(whole.hits);
+    // another piece later on the same track, after a pause of 1.33 s: the last beat before the pause is still listed, and the music has been followed only since the piece began
     const later = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(400), duration: f(60) } }]).doc;
-    expect(beatPositionAt(later, f(410))!.musicBefore).toBe(12);
+    const after = beatPositionAt(later, f(405))!; // 13.5 s; the piece shows the file from its start, so its first beat (file second 1) is at 14.333 s
+    expect(after.hits.map((h) => [Number(h.t.toFixed(3)), h.index])).toEqual([[11.5, 18], [14.333, 0], [14.833, 1]]);
+    expect(after.followedFrom).toBeCloseTo(400 / 30, 9);
+    expect(beatPositionAt(later, f(380))).toBeNull(); // in the pause nothing is followed
     // a piece on a second sound track under the first (tracks are followed in their order): it is heard from second 1, the
-    // first track's music takes over at second 2 and hands back at second 12
+    // first track's music takes over at second 2 and hands back at second 12. Each beat is listed for the clip that is the music at that beat.
     let r = tx(doc, [{ op: 'add_track', args: { kind: 'audio' } }]);
     r = tx(r.doc, [{ op: 'add_clip', args: { assetId, trackId: r.results[0]!.output!.trackId as string, start: f(30), duration: f(450) } }]);
     const under = r.results[0]!.output!.clipId as string;
-    expect(beatPositionAt(r.doc, f(45))).toMatchObject({ clipId: under, musicBefore: null });
-    expect(beatPositionAt(r.doc, f(90))).toMatchObject({ clipId, musicBefore: 2 });
-    expect(beatPositionAt(r.doc, f(400))).toMatchObject({ clipId: under, musicBefore: 12 });
-    // its beats from before the take-over are still listed; it is for the effect to leave them out
-    expect(beatPositionAt(r.doc, f(365))!.hits.some((h) => h.t < 12)).toBe(true);
+    const before = beatPositionAt(r.doc, f(45))!; // 1.5 s: the lower piece is the music, its own beats at 2.0, 2.5 … fall where the upper one is
+    expect(before.clipId).toBe(under);
+    expect(before.hits).toEqual([{ t: 2.5, index: 0 }, { t: 3, index: 1 }, { t: 3.5, index: 2 }]);
+    expect(before.followedFrom).toBe(1);
+    expect(beatPositionAt(r.doc, f(80))).toMatchObject({ clipId, followedFrom: 1 }); // the upper piece took over without a break
+    const handedBack = beatPositionAt(r.doc, f(400))!; // 13.333 s: the lower piece again; the file's last beat (file second 10.5) passed in it at 11.5 s, while the upper piece was the music
+    expect(handedBack.clipId).toBe(under);
+    expect(handedBack.hits).toEqual([{ t: 11.5, index: 18 }]); // the upper piece's beat there: the same moment, listed once
+    expect(handedBack.followedFrom).toBe(-Infinity);
+    // a muted track is not followed and its beats are not listed
+    const lower = Object.values(r.doc.sequences)[0]!.tracks.find((t) => t.clips.some((c) => c.id === under))!;
+    const muted = tx(r.doc, [{ op: 'update_track', args: { trackId: lower.id, muted: true } }]).doc;
+    expect(beatPositionAt(muted, f(45))).toBeNull();
+    expect(beatPositionAt(muted, f(350))!.hits.map((h) => h.t)).toEqual([10, 10.5, 11, 11.5]);
   });
 });

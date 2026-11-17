@@ -95,30 +95,19 @@ function drawText(ctx: Ctx2D, g: RenderGraph, layer: TextLayer) {
   });
 }
 
-import { mixesDirections, pieceRects, unitRanges, widenStretches, type Stretch } from './textAnimation.ts';
+import { needsLineLayout, pieceRects, unitRanges, widenStretches, type Stretch } from './textAnimation.ts';
 const GRAPHEMES = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
 /** User-perceived characters: a letter stays with its vowel points and other combining marks. */
 const graphemes = (w: string): string[] => (GRAPHEMES ? Array.from(GRAPHEMES.segment(w), (x) => x.segment) : Array.from(w));
-const RTL_CHAR = /[֐-ࣿיִ-﷿ﹰ-﻿]/, LTR_CHAR = /[A-Za-z0-9À-ɏͰ-ϿЀ-ӿ]/;
-/** A word as runs of one direction each (Hebrew letters; Latin letters and digits); marks and symbols stay with the run before them. */
-function directionRuns(word: string, base: 'rtl' | 'ltr'): { text: string; dir: 'rtl' | 'ltr' }[] {
-  const runs: { text: string; dir: 'rtl' | 'ltr' | null }[] = [];
-  for (const g of graphemes(word)) {
-    const d = RTL_CHAR.test(g) ? 'rtl' : LTR_CHAR.test(g) ? 'ltr' : null;
-    const last = runs[runs.length - 1];
-    if (last && (d === null || last.dir === null || last.dir === d)) { last.text += g; last.dir ??= d; } else runs.push({ text: g, dir: d });
-  }
-  return runs.map((r) => ({ text: r.text, dir: r.dir ?? base }));
-}
 /**
- * A title whose letters, words or lines are animating: each unit is placed where the whole line would put it (word-level
- * visual order as for captions; letters by the measured width of the text before them, per direction run) and drawn with
+ * A title whose letters, words or lines are animating: each unit is placed where the whole line puts it and drawn with
  * the pose textAnimation.ts computes for it. All outlines are drawn before all fills, so a thick outline never covers a neighbour.
  *
- * A line with both directions in it (textAnimation.ts mixesDirections) is not placed by that word-level order, which can
- * differ from the browser's own layout of the line at rest. Its units are the places the browser reports for them in the
- * whole line (pieceRects), and each is drawn as the whole line seen through a window on those places: nothing can be in
- * another place than at rest. Where the browser cannot report them, the line animates as one unit.
+ * Only a plain line (textAnimation.ts needsLineLayout: one direction, laid out in that direction, nothing in it that the
+ * browser would reorder) is placed here word by word: the words side by side in the line's direction, each drawn in that
+ * direction, letters by the measured width of the text before them. For every other line the units are the places the
+ * browser reports for them in the whole line (pieceRects), and each is drawn as the whole line seen through a window on
+ * those places: nothing can be in another place than at rest. Where the browser cannot report them, the line animates as one unit.
  */
 function drawTextUnits(ctx: Ctx2D, layer: TextLayer, lines: { line: string; dir: 'rtl' | 'ltr'; width: number }[], geo: { px: number; lineH: number; blockW: number; blockH: number }) {
   const s = layer.style, a = layer.animation!, { px, lineH, blockW, blockH } = geo;
@@ -130,7 +119,7 @@ function drawTextUnits(ctx: Ctx2D, layer: TextLayer, lines: { line: string; dir:
     const whole = () => { if (m.line.trim()) units.push({ text: m.line, left, width: m.width, baseline, dir: m.dir, rtl }); };
     if (a.by === 'line') { whole(); return; }
     ctx.direction = m.dir;
-    if (mixesDirections(m.line)) {
+    if (needsLineLayout(m.line, m.dir, a.by)) {
       const places = pieceRects(ctx.measureText(m.line), m.line, unitRanges(m.line, a.by, graphemes), m.width);
       if (!places) { whole(); return; }
       widenStretches(places, px * 0.25).forEach((stretches, k) => {
@@ -146,26 +135,17 @@ function drawTextUnits(ctx: Ctx2D, layer: TextLayer, lines: { line: string; dir:
     for (const wi of visualOrder(words, m.dir)) { lefts[wi] = x; x += widths[wi]! + space; }
     words.forEach((w, wi) => {
       if (!w) return;
-      const wdir = wordDir(w) ?? m.dir;
+      const wdir = wordDir(w) ?? m.dir; // the line's own direction: a plain line has no word of the other one
       if (a.by === 'word') { units.push({ text: w, left: lefts[wi]!, width: widths[wi]!, baseline, dir: wdir, rtl }); return; }
-      // letters: runs of one direction inside the word, placed in visual order; inside a run, by the width of the text before each letter
-      const runs = directionRuns(w, wdir);
+      // letters: by the width of the text before each letter, from the side the word starts on
       ctx.direction = wdir;
-      const runWidths = runs.map((r) => ctx.measureText(r.text).width);
-      const scale = widths[wi]! / Math.max(1e-6, runWidths.reduce((n, v) => n + v, 0)); // runs measured apart can differ from the word by kerning: spread the difference
-      const runLefts: number[] = [];
-      let rx = lefts[wi]!;
-      for (const ri of visualOrder(runs.map((r) => r.text), wdir)) { runLefts[ri] = rx; rx += runWidths[ri]! * scale; }
-      runs.forEach((r, ri) => {
-        ctx.direction = r.dir;
-        let before = 0, prefix = '';
-        for (const g of graphemes(r.text)) {
-          prefix += g;
-          const upTo = ctx.measureText(prefix).width, width = (upTo - before) * scale;
-          units.push({ text: g, left: r.dir === 'rtl' ? runLefts[ri]! + (runWidths[ri]! - upTo) * scale : runLefts[ri]! + before * scale, width, baseline, dir: r.dir, rtl });
-          before = upTo;
-        }
-      });
+      let before = 0, prefix = '';
+      for (const g of graphemes(w)) {
+        prefix += g;
+        const upTo = ctx.measureText(prefix).width;
+        units.push({ text: g, left: wdir === 'rtl' ? lefts[wi]! + widths[wi]! - upTo : lefts[wi]! + before, width: upTo - before, baseline, dir: wdir, rtl });
+        before = upTo;
+      }
     });
   });
   const poses = units.map((_, i) => unitPose(a, i, units.length, units[i]!.rtl));

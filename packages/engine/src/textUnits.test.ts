@@ -40,8 +40,8 @@ function canvas(order?: { line: string; fromLeft: number[] }) {
   return { ctx, fills, strokes };
 }
 /** Draw frame 30 of a title with this text and animation (null = no animation) and return what was drawn. */
-async function draw(text: string, animation: Partial<TextAnimation> | null, order?: { line: string; fromLeft: number[] }) {
-  let r = tx(createProject({ id: 'prj_u', name: 'U', width: 1280, height: 720 }), [{ op: 'add_text', args: { text, start: f(0), duration: f(90) } }]);
+async function draw(text: string, animation: Partial<TextAnimation> | null, order?: { line: string; fromLeft: number[] }, frame: { width?: number; direction?: 'rtl' | 'ltr' } = {}) {
+  let r = tx(createProject({ id: 'prj_u', name: 'U', width: frame.width ?? 1280, height: 720 }), [{ op: 'add_text', args: { text, start: f(0), duration: f(90), ...(frame.direction ? { style: { direction: frame.direction } } : {}) } }]);
   if (animation) r = tx(r.doc, [{ op: 'set_text_animation', args: { clipId: r.results[0]!.output!.clipId as string, animation } }]);
   const c = canvas(order);
   await drawGraph(c.ctx, evaluate(r.doc, f(30)), async () => null);
@@ -100,5 +100,44 @@ describe('an animating title is drawn where the title at rest is', () => {
     expect([...en.fills, ...he.fills].every((d) => d.windows === null)).toBe(true);
     // digits do not make a Hebrew line mixed
     expect((await draw('קנו 15 עכשיו', { by: 'word', loop: 'wave' })).fills.map((d) => d.text)).toEqual(['קנו', '15', 'עכשיו']);
+  });
+
+  it('(reported) a line of one direction laid out in the other moves as one piece, drawn like the line at rest: the last line of a wrapped title, a title set against its text', async () => {
+    // [text, how it is laid out, the line in question]: at rest the browser puts the "!" of each of these lines on the
+    // other side than a word drawn on its own would have it (full bidi: "!Friday" in a right-to-left paragraph)
+    const cases: [string, { width?: number; direction?: 'rtl' | 'ltr' }, string][] = [
+      ['מבצע ענק רק היום Black Friday!', { width: 300 }, 'Friday!'], // wraps: "Friday!" alone on the second line of a right-to-left paragraph
+      ['Black Friday מבצע ענק על כל החנות!', { width: 300 }, 'החנות!'], // wraps: "החנות!" alone on the second line of a left-to-right paragraph
+      ['שלום עולם!', { direction: 'ltr' }, 'שלום עולם!'],
+      ['Hello world!', { direction: 'rtl' }, 'Hello world!'],
+    ];
+    for (const [text, frame, line] of cases) {
+      const rest = (await draw(text, null, undefined, frame)).fills.find((d) => d.text === line)!;
+      expect(rest, text).toBeDefined();
+      for (const by of ['word', 'letter'] as const) {
+        const moving = (await draw(text, { by, loop: 'wave' }, undefined, frame)).fills; // the wave moves a piece up and down only
+        const piece = moving.filter((d) => line.includes(d.text) && d.y > rest.y - 20 && d.y < rest.y + 20);
+        expect(piece.map((d) => d.text), `${text} by ${by}`).toEqual([line]); // not its words or letters
+        expect(piece[0]!.direction, `${text} by ${by}`).toBe(rest.direction); // it used to be drawn in the direction of its own letters
+        expect(piece[0]!.x, `${text} by ${by}`).toBeCloseTo(rest.x, 6);
+        expect(piece[0]!.windows).toBeNull();
+      }
+      // where the browser can say where it put things, the pieces are windows on the whole line, in the line's direction
+      const order = { line, fromLeft: Array.from(line, (_, i) => i) };
+      const windows = (await draw(text, { by: 'word', loop: 'wave' }, order, frame)).fills.filter((d) => d.text === line);
+      expect(windows.length, text).toBe(line.split(' ').length);
+      expect(windows.every((d) => d.direction === rest.direction && Math.abs(d.x - rest.x) < 1e-6 && d.windows !== null), text).toBe(true);
+    }
+  });
+
+  it('a Hebrew line with numbers: word by word each word is drawn in the line\'s direction (the browser puts "!" left of 50%), letter by letter the line moves as one piece', async () => {
+    const words = await draw('עד 50%! היום', { by: 'word', loop: 'wave' });
+    expect(words.fills.map((d) => [d.text, d.direction])).toEqual([['עד', 'rtl'], ['50%!', 'rtl'], ['היום', 'rtl']]);
+    expect(words.fills.map((d) => Math.round(d.x - words.fills[2]!.x))).toEqual([100, 50, 0]); // right to left, the number in its place in the reading order
+    expect((await draw('עד 50%! היום', { by: 'letter', loop: 'wave' })).fills.map((d) => d.text)).toEqual(['עד 50%! היום']);
+    expect((await draw('שלום עולם!', { by: 'letter', loop: 'wave' })).fills.map((d) => d.text).join('')).toBe('שלוםעולם!'); // without numbers: letter by letter
+    const letters = (await draw('אב גד!', { by: 'letter', loop: 'wave' })).fills;
+    expect(letters.map((d) => Math.round(d.x - letters[4]!.x))).toEqual([50, 40, 20, 10, 0]); // from the right; the "!" ends up leftmost, as at rest
+    expect(letters.every((d) => d.direction === 'rtl')).toBe(true);
   });
 });

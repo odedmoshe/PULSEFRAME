@@ -86,15 +86,49 @@ export function unitPose(a: TextAnimation & { local: number; total: number; fps:
   return p;
 }
 
-const RTL_LETTER = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/, LTR_LETTER = /[A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF]/;
+// Characters by how the browser's bidi layout treats them (UAX #9), as far as the plain cases below need to know.
+/** Right-to-left scripts, with their own digits and presentation forms: Hebrew, Arabic, Syriac, Thaana, N'Ko and the rest of those blocks. */
+const RTL_SCRIPT = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u;
+/** Characters that change the direction without being seen (marks, embeddings, overrides, isolates). */
+const DIRECTION_CONTROL = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
+const HEBREW = '\\u0590-\\u05FF\\uFB1D-\\uFB4F';
+/** Arabic and the other scripts of those blocks. Their letters join, and European digits after them follow rules of their own. */
+const ARABIC = '\\u0600-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFE';
+const DIGIT = /[0-9\u0660-\u0669\u06F0-\u06F9]/;
 /**
- * True for a line that holds both right-to-left letters and left-to-right letters (Hebrew with a Latin name in it, or the
- * other way round). Where each word, number and punctuation mark of such a line ends up is decided by the full bidi
- * algorithm of the browser; the word-by-word placement used for lines of one direction can differ from it. Such a line is
- * therefore animated only from positions the browser itself reports (pieceRects), or as one piece.
- * Digits are not letters here: a Hebrew line with numbers in it is not mixed.
+ * Characters that take the direction of the line whatever stands next to them, or belong to a number: the space, ASCII
+ * punctuation and symbols, Latin-1 and general punctuation, currency signs, arrows, and emoji (with the joiner and the
+ * selector that build them). Left out on purpose: anything that is a letter somewhere (ª, µ, ℹ, Ⓜ, flags, U+26AC), and
+ * × and ÷, which the word order used for plain lines (captions.ts wordDir) takes for Latin letters.
  */
-export const mixesDirections = (line: string): boolean => RTL_LETTER.test(line) && LTR_LETTER.test(line);
+const NEUTRAL = ' !-/:-@\\[-`{-~\\u00A1-\\u00A9\\u00AB-\\u00B1\\u00B4\\u00B6-\\u00B8\\u00BB\\u00BF\\u2010-\\u2027\\u2030-\\u205E\\u20A0-\\u20C0\\u2190-\\u21FF\\u2600-\\u26AB\\u26AD-\\u27BF\\u2B00-\\u2BFF\\u{1F300}-\\u{1F64F}\\u{1F680}-\\u{1F6FF}\\u{1F900}-\\u{1FAFF}\\uFE0F\\u200D';
+const only = (classes: string) => new RegExp(`^[${classes}]*$`, 'u');
+const RTL_PLAIN_LETTERS = only(HEBREW + NEUTRAL), RTL_PLAIN_WORDS = only(HEBREW + NEUTRAL + '0-9'), RTL_PLAIN_WORDS_NO_DIGITS = only(HEBREW + ARABIC + NEUTRAL);
+/**
+ * True when the places of a line's words (or letters) can only be taken from the browser's own layout of the whole line.
+ * The placement used otherwise (words side by side in the line's direction, each drawn in that direction; letters by the
+ * width of the text before them) is the browser's layout only in the plain cases listed here; every other line says true,
+ * and is then animated from places the browser itself reports (pieceRects) or as one piece.
+ *
+ * `base` is the direction the line is laid out in: its paragraph's (the first letter of the paragraph) or the one set on
+ * the title. It need not be the direction of the line's own letters: the last line of a wrapped Hebrew title can be
+ * "Friday!" alone, and a title can be set to a direction against its text. A mark at the end of such a line sits on the
+ * other side of it than word-by-word placement would put it.
+ *
+ * Plain, laid out left to right: no character of a right-to-left script and no direction control. Everything is then
+ * placed left to right in the order it is written.
+ * Plain, laid out right to left, by word: Hebrew, spaces, punctuation, symbols and emoji, and European digits (a number is
+ * a left-to-right piece inside its word; the browser places it when the word is drawn in the line's direction). Arabic
+ * script too when the line has no digits.
+ * Plain, laid out right to left, by letter: Hebrew, spaces, punctuation, symbols and emoji. Not digits: "50%!" is shown
+ * as 50% with the "!" on its left. Not Arabic script: a letter drawn on its own has another shape than inside its word.
+ */
+export function needsLineLayout(line: string, base: 'rtl' | 'ltr', by: 'letter' | 'word'): boolean {
+  if (DIRECTION_CONTROL.test(line)) return true;
+  if (base === 'ltr') return RTL_SCRIPT.test(line);
+  if (by === 'letter') return !RTL_PLAIN_LETTERS.test(line);
+  return !(RTL_PLAIN_WORDS.test(line) || (!DIGIT.test(line) && RTL_PLAIN_WORDS_NO_DIGITS.test(line)));
+}
 
 /**
  * The pieces of a line that animate on their own, in reading order, as [start, end) offsets into the line: its words, or

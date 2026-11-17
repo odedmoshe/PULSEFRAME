@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_TEXT_ANIMATION, TEXT_ANIM_IN, TEXT_ANIM_LOOP, TEXT_ANIM_OUT, type TextAnimation } from '@pulseframe/core';
-import { mixesDirections, pieceRects, textAtRest, unitPose, unitProgress, unitRanges, widenStretches } from './textAnimation.ts';
+import { needsLineLayout, pieceRects, textAtRest, unitPose, unitProgress, unitRanges, widenStretches } from './textAnimation.ts';
 
 const at = (a: Partial<TextAnimation>, local: number, total = 4) => ({ ...DEFAULT_TEXT_ANIMATION, ...a, local, total, fps: 30 });
 const REST = { alpha: 1, dx: 0, dy: 0, scale: 1 };
@@ -99,9 +99,39 @@ describe('text animation as numbers', () => {
 
 describe('titles with both writing directions in one line', () => {
   const letters = (w: string) => Array.from(w);
-  it('a line is mixed when it has Hebrew (or Arabic) letters and Latin, Greek or Cyrillic letters; digits and marks alone do not mix it', () => {
-    for (const line of ['קנו iPhone 15 עכשיו', 'מבצע Black Friday!', 'ראיתי Netflix: אתמול', 'I said שלום! today', 'iPhoneשל', 'مرحبا world', 'Привет שלום']) expect(mixesDirections(line), line).toBe(true);
-    for (const line of ['שלום עולם', 'ONE TWO THREE', 'קנו 15 עכשיו!', 'עד 50% הנחה', '12:30 – 14:00', 'Hello, world! (2)', '']) expect(mixesDirections(line), line).toBe(false);
+  it('a line with letters of both directions needs the browser\'s layout, whichever way it is laid out and whatever animates', () => {
+    for (const line of ['קנו iPhone 15 עכשיו', 'מבצע Black Friday!', 'ראיתי Netflix: אתמול', 'I said שלום! today', 'iPhoneשל', 'مرحبا world', 'Привет שלום'])
+      for (const base of ['rtl', 'ltr'] as const) for (const by of ['word', 'letter'] as const) expect(needsLineLayout(line, base, by), `${line} ${base} ${by}`).toBe(true);
+  });
+  it('(reported) so does a line of one direction that is laid out in the other: the last line of a wrapped title, or a title set against its text', () => {
+    // "מבצע ענק רק היום Black Friday!" wrapped so that "Friday!" is alone on the second line: the paragraph is right-to-left, and the "!" is shown on the left of Friday
+    for (const by of ['word', 'letter'] as const) {
+      expect(needsLineLayout('Friday!', 'rtl', by)).toBe(true);
+      expect(needsLineLayout('החנות!', 'ltr', by)).toBe(true); // "Black Friday מבצע ענק על כל החנות!" wrapped: a left-to-right paragraph
+      expect(needsLineLayout('שלום עולם!', 'ltr', by)).toBe(true); // direction set to ltr on a Hebrew title
+      expect(needsLineLayout('Hello world!', 'rtl', by)).toBe(true); // direction set to rtl on an English title
+      expect(needsLineLayout('Friday!', 'ltr', by)).toBe(false);
+      expect(needsLineLayout('החנות!', 'rtl', by)).toBe(false);
+    }
+  });
+  it('plain lines are placed word by word: one direction, laid out in it, nothing the browser would reorder', () => {
+    for (const by of ['word', 'letter'] as const) {
+      for (const line of ['ONE TWO THREE', '12:30 – 14:00', 'Hello, world! (2)', 'Über 50% (heute)!', 'Привет, мир', '中文 title', 'Sale 🔥 -50%', '']) expect(needsLineLayout(line, 'ltr', by), line).toBe(false);
+      for (const line of ['שלום עולם', 'שלום, עולם! (באמת)', 'שָׁלוֹם', 'מבצע ענק 🔥', 'חדש — עכשיו…', '"שלום" ו־\'עולם\'', '']) expect(needsLineLayout(line, 'rtl', by), line).toBe(false);
+    }
+    // numbers in a Hebrew line: fine word by word (the browser places the number inside its word), not letter by letter: "50%!" is shown as 50% with the "!" on its left
+    for (const line of ['קנו 15 עכשיו!', 'עד 50% הנחה', 'עד 50%!', 'רק ₪99.90', '12:30 – 14:00', '2026!', '(50%)']) {
+      expect(needsLineLayout(line, 'rtl', 'word'), line).toBe(false);
+      expect(needsLineLayout(line, 'rtl', 'letter'), line).toBe(true);
+    }
+    // Arabic script: word by word without digits; never letter by letter (its letters join), and not with digits (they are ordered by rules of their own)
+    expect(needsLineLayout('مرحبا بالعالم!', 'rtl', 'word')).toBe(false);
+    expect(needsLineLayout('مرحبا بالعالم!', 'rtl', 'letter')).toBe(true);
+    expect(needsLineLayout('مرحبا 50%', 'rtl', 'word')).toBe(true);
+    expect(needsLineLayout('مرحبا ٥٠', 'rtl', 'word')).toBe(true);
+    // anything else in a right-to-left line: letters of other scripts than Latin, symbols that are letters to the browser, flags, hidden direction marks
+    for (const line of ['שלום 中文', 'שלום ℹ', 'שלום 🇮🇱', 'שלום Ⓜ', 'א × ב', 'שלום\u200E!', 'מחיר: 5\u00A0₪']) expect(needsLineLayout(line, 'rtl', 'word'), line).toBe(true);
+    for (const line of ['abc\u200Fdef', 'abc \u202Edef', 'price ٥٠', 'ab \u{10900}']) expect(needsLineLayout(line, 'ltr', 'word'), line).toBe(true);
   });
   it('the pieces of a line are its words or its letters, in reading order, without the spaces', () => {
     const line = 'קנו iPhone 15';
