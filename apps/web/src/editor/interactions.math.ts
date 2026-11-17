@@ -170,3 +170,219 @@ export function overlapsOnTrack(clips: readonly { id: string; start: T.RationalT
 export function markerSnapCandidates(markers: readonly T.RationalTime[], rate: T.Rate): T.RationalTime[] {
   return markers.map((m) => T.snapToFrame(m, rate));
 }
+
+// ---- the timeline of the redesign (docs/design/UX_REDESIGN.md §4.7) ----
+
+/** The lane a track is drawn in: its height and tint come from the role (timeline.css, the --pf-lane-* tokens). */
+export type LaneRole = 't' | 'c' | 'fx' | 'v2' | 'v1' | 'a1' | 'a2' | 'a3';
+export interface Lane<TR> { track: TR; role: LaneRole; /** Short id by kind and place: V1, V2, A1, T1, C1, FX1. */ code: string }
+const KIND_PREFIX: Record<string, string> = { video: 'V', audio: 'A', text: 'T', caption: 'C', adjustment: 'FX' };
+
+/**
+ * The order the lanes are shown in, top to bottom: titles, captions, then the picture stack as it is drawn (adjustment and
+ * video tracks, the front-most first, so the main track V1 is the last picture lane), then sound in list order (A1, A2, A3).
+ * The project lists picture tracks bottom-most first, so the picture groups are reversed and the sound group is not.
+ * Adjustment and video tracks stay in their true order among themselves: an adjustment layer acts on the pictures below it,
+ * and a layer moved between two video tracks must be seen there.
+ */
+export function laneOrder<TR extends { id: string; kind: string }>(tracks: readonly TR[]): Lane<TR>[] {
+  const ordinal = new Map<string, number>();
+  const codeOf = new Map<string, string>();
+  for (const t of tracks) { const n = (ordinal.get(t.kind) ?? 0) + 1; ordinal.set(t.kind, n); codeOf.set(t.id, `${KIND_PREFIX[t.kind] ?? '?'}${n}`); }
+  const main = tracks.find((t) => t.kind === 'video')?.id;
+  const audio = tracks.filter((t) => t.kind === 'audio');
+  const roleOf = (t: TR): LaneRole => t.kind === 'text' ? 't' : t.kind === 'caption' ? 'c' : t.kind === 'adjustment' ? 'fx' : t.kind === 'video' ? (t.id === main ? 'v1' : 'v2')
+    : (['a1', 'a2'] as const)[audio.indexOf(t)] ?? 'a3';
+  const back = (kinds: string[]) => tracks.filter((t) => kinds.includes(t.kind)).reverse();
+  return [...back(['text']), ...back(['caption']), ...back(['adjustment', 'video']), ...audio].map((track) => ({ track, role: roleOf(track), code: codeOf.get(track.id)! }));
+}
+
+/** A cut: two clips of one track that touch (the second starts exactly where the first ends). */
+export interface Cut<C> { before: C; after: C; at: T.RationalTime }
+export function cutsOf<C extends { id: string; start: T.RationalTime; duration: T.RationalTime }>(clips: readonly C[]): Cut<C>[] {
+  const sorted = [...clips].sort((a, b) => T.cmp(a.start, b.start));
+  const out: Cut<C>[] = [];
+  for (let i = 1; i < sorted.length; i++) if (T.eq(T.add(sorted[i - 1]!.start, sorted[i - 1]!.duration), sorted[i]!.start)) out.push({ before: sorted[i - 1]!, after: sorted[i]!, at: sorted[i]!.start });
+  return out;
+}
+
+/** Index of the last value <= x in an ascending list, or -1. */
+export function lastAtOrBefore(sorted: ArrayLike<number>, x: number): number {
+  let lo = 0, hi = sorted.length - 1, at = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (sorted[mid]! <= x) { at = mid; lo = mid + 1; } else hi = mid - 1; }
+  return at;
+}
+
+/**
+ * Bars and beats as the Pulse Strip counts them, from the analysed grid on the timeline (frame numbers, ascending; a bar
+ * start is one of the beats). `at(frame)`: the bar (1-based) and the beat in it (1-based) the frame falls in, or null before
+ * the first bar start or when no bar starts are known. Nothing is extrapolated: outside the analysed grid there is no answer.
+ */
+export function barGrid(beatFrames: readonly number[], barFrames: readonly number[]) {
+  const beats = [...beatFrames].sort((a, b) => a - b), bars = [...barFrames].sort((a, b) => a - b);
+  return {
+    beats, bars,
+    at(frame: number): { bar: number; beat: number; onBeat: boolean; onBar: boolean } | null {
+      const b = lastAtOrBefore(bars, frame);
+      if (b < 0) return null;
+      const from = lastAtOrBefore(beats, bars[b]!), now = lastAtOrBefore(beats, frame);
+      if (from < 0 || now < from) return null;
+      // past the last analysed beat by more than a beat's length: no claim
+      if (now === beats.length - 1 && beats.length > 1 && frame - beats[now]! > beats[now]! - beats[now - 1]!) return null;
+      return { bar: b + 1, beat: now - from + 1, onBeat: beats[now] === frame, onBar: bars[b] === frame };
+    },
+    /** The beat nearest to a frame (ties: the earlier), or null without beats. */
+    nearestBeat(frame: number): number | null {
+      const i = lastAtOrBefore(beats, frame);
+      const a = i >= 0 ? beats[i]! : null, b = i + 1 < beats.length ? beats[i + 1]! : null;
+      return a === null ? b : b === null ? a : frame - a <= b - frame ? a : b;
+    },
+    /** A length in frames as whole beats or bars when it is one (within a frame), from the median beat length; otherwise null. */
+    lengthIn(frames: number): { unit: 'bar' | 'beat'; count: number } | null {
+      if (beats.length < 3 || frames <= 0) return null;
+      const gaps = beats.slice(1).map((v, i) => v - beats[i]!).sort((x, y) => x - y), beat = gaps[gaps.length >> 1]!;
+      if (!(beat > 0)) return null;
+      const perBar = bars.length >= 2 ? Math.round((bars[1]! - bars[0]!) / beat) : 0;
+      const n = frames / beat;
+      if (Math.abs(n - Math.round(n)) * beat > 1 || Math.round(n) < 1) return null;
+      const whole = Math.round(n);
+      return perBar >= 2 && whole % perBar === 0 ? { unit: 'bar', count: whole / perBar } : { unit: 'beat', count: whole };
+    },
+  };
+}
+export type BarGrid = ReturnType<typeof barGrid>;
+
+/** What a dragged edge or clip snapped to. Beats and bar starts are told apart so the tether can name them. */
+export type SnapKind = 'playhead' | 'clip-edge' | 'zero' | 'marker' | 'scene' | 'beat' | 'bar';
+export interface SnapTarget { time: T.RationalTime; kind: SnapKind }
+/** Snap precedence when two targets are equally near: the playhead and cuts first, then bar starts, beats, markers and scene cuts. */
+const SNAP_RANK: Record<SnapKind, number> = { playhead: 0, 'clip-edge': 1, zero: 2, bar: 3, beat: 4, marker: 5, scene: 6 };
+/**
+ * Snap to the nearest target within the threshold. Among targets at the same distance (a bar start is also a beat, and a
+ * cut may sit on one) the higher-ranked kind names the snap; the time is the same either way.
+ */
+export function snapToTargets(a: { time: T.RationalTime; targets: readonly SnapTarget[]; pxPerSecond: number; thresholdPx: number }): { time: T.RationalTime; kind: SnapKind } | null {
+  let best: SnapTarget | null = null, bestDist = Infinity;
+  for (const t of a.targets) {
+    const dist = Math.abs(T.toSeconds(T.sub(t.time, a.time))) * a.pxPerSecond;
+    if (dist > a.thresholdPx) continue;
+    if (dist < bestDist - 1e-9 || (Math.abs(dist - bestDist) <= 1e-9 && best && SNAP_RANK[t.kind] < SNAP_RANK[best.kind])) { best = t; bestDist = dist; }
+  }
+  return best ? { time: best.time, kind: best.kind } : null;
+}
+/** Beats (and the bar starts among them) as snap targets, each moved to its nearest frame so what snaps stays frame-aligned. */
+export function beatSnapTargets(beats: readonly T.RationalTime[], downbeats: readonly T.RationalTime[], rate: T.Rate): SnapTarget[] {
+  const bars = new Set(downbeats.map((d) => T.nearestFrameIndex(d, rate)));
+  return beats.map((b) => { const time = T.snapToFrame(b, rate); return { time, kind: bars.has(T.nearestFrameIndex(b, rate)) ? 'bar' as const : 'beat' as const }; });
+}
+
+/** The spacing of the ruler's labels: the smallest step from a fixed ladder that keeps two labels at least `minPx` apart. */
+const RULER_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+export function rulerStep(pxPerSecond: number, minPx = 72): number {
+  return RULER_STEPS.find((s) => s * pxPerSecond >= minPx) ?? RULER_STEPS[RULER_STEPS.length - 1]!;
+}
+/** A ruler label: m:ss, with tenths when the step is below a second. */
+export function rulerLabel(seconds: number, step: number): string {
+  const whole = Math.floor(seconds + 1e-9), m = Math.floor(whole / 60), s = whole % 60;
+  const base = `${m}:${String(s).padStart(2, '0')}`;
+  return step < 1 ? `${base}.${Math.round((seconds - whole) * 10)}` : base;
+}
+/** How many of the bars get a number at this zoom: every bar, or every 2nd, 4th, 8th… so two numbers are at least `minPx` apart. */
+export function barLabelEvery(pxPerBar: number, minPx = 34): number {
+  let every = 1;
+  while (pxPerBar * every < minPx && every < 4096) every *= 2;
+  return every;
+}
+
+/** A signed length for the trim chip: +0:00.12 (minutes:seconds.frames). */
+export function signedTimecode(frames: number, rate: T.Rate): string {
+  const fps = Math.round(rate.num / rate.den) || 1, n = Math.abs(frames);
+  const s = Math.floor(n / fps), f = n % fps;
+  return `${frames < 0 ? '−' : '+'}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}.${String(f).padStart(2, '0')}`;
+}
+
+// ---- a catalogue item dragged onto the timeline (a transition onto a cut, an effect or a look onto a clip) ----
+// While something is dragged over a drop target the browser shows the page only the TYPES of the dragged data, never the
+// data. The drop tip must name the item before it is dropped ("release to apply «light leak» to «kids dancing»"), so the
+// kind, id and name travel in the type string itself. Type strings are lower-cased by the browser: the values are hex.
+
+export type CatalogKind = 'transition' | 'effect' | 'look';
+export interface CatalogDragItem { kind: CatalogKind; id: string; name: string }
+export const CATALOG_DRAG_PREFIX = 'application/x-pulseframe-catalog;';
+const hex = (s: string) => [...new TextEncoder().encode(s)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const unhex = (h: string): string | null => {
+  if (h.length % 2 || /[^0-9a-f]/.test(h)) return null;
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16))); } catch { return null; }
+};
+/** The drag type a gallery tile sets (`e.dataTransfer.setData(catalogDragType(item), item.id)`). */
+export function catalogDragType(item: CatalogDragItem): string {
+  return `${CATALOG_DRAG_PREFIX}k=${item.kind};i=${hex(item.id)};n=${hex(item.name.slice(0, 80))}`;
+}
+/** The catalogue item among the types of a drag, or null when the drag carries none (or a malformed one). */
+export function catalogDragFrom(types: readonly string[]): CatalogDragItem | null {
+  for (const t of types) {
+    if (!t.startsWith(CATALOG_DRAG_PREFIX)) continue;
+    const f = Object.fromEntries(t.slice(CATALOG_DRAG_PREFIX.length).split(';').map((p) => { const i = p.indexOf('='); return [p.slice(0, i), p.slice(i + 1)]; }));
+    const id = unhex(f.i ?? ''), name = unhex(f.n ?? '');
+    if ((f.k === 'transition' || f.k === 'effect' || f.k === 'look') && id) return { kind: f.k, id, name: name ?? '' };
+  }
+  return null;
+}
+
+// ---- the splitter between the viewer and the timeline ----
+/** The timeline's height after a splitter move: at least `min`, and never so tall that the viewer above keeps less than `keepAbove`. */
+/** The timeline's usual height in the shell (CSS), as tall as its lanes (--pf-tl-natural, set by Timeline.tsx) within bounds. */
+export const TL_USUAL = 'clamp(248px, var(--pf-tl-natural, var(--pf-tl-h, 38dvh)), 48dvh)';
+/** In Sound mode: 52% of the window, or what the taller sound lanes need, whichever is more; the viewer keeps 260 px. */
+export const TL_USUAL_SOUND = 'clamp(248px, max(52dvh, var(--pf-tl-natural, 0px)), calc(100dvh - 260px))';
+export function splitterHeight(wanted: number, a: { min: number; available: number; keepAbove: number }): number {
+  const max = Math.max(a.min, a.available - a.keepAbove);
+  return Math.round(Math.min(max, Math.max(a.min, wanted)));
+}
+
+/**
+ * What the controls on a cut may cover. The cut's buttons are centred on the cut, so each takes half its width from the clip
+ * on either side. A clip must keep most of its width for its own click and drag, so the "+" (24 px, a hover affordance) needs
+ * 48 px on both sides, and the chip of an existing transition (24 px or more) and its length handle need 32 px; under that
+ * only the hatched band is drawn (pointer-transparent) and the transition is reached from the clip's ride bar.
+ */
+export const CUT_ADD_ROOM_PX = 48;
+export const CUT_CHIP_ROOM_PX = 32;
+export function cutRoom(beforePx: number | null, afterPx: number): { add: boolean; chip: boolean } {
+  const room = Math.min(beforePx ?? Infinity, afterPx);
+  return { add: beforePx !== null && room >= CUT_ADD_ROOM_PX, chip: room >= CUT_CHIP_ROOM_PX };
+}
+
+/** A stretch of speech on a sound clip, in pixels from the clip's left edge. */
+export interface SpokenChip { key: string; left: number; width: number; text: string }
+/** Horizontal room a word chip's text loses to its padding (5 px each side) and its 1 px gap to the neighbours. */
+export const SPOKEN_CHIP_PAD_PX = 12;
+/** A phrase chip narrower than this cannot show a letter and its ellipsis: it is left out. */
+export const SPOKEN_PHRASE_MIN_PX = 30;
+/**
+ * Which spoken chips a sound clip shows at this zoom. Word by word when most words fit whole in the time they are said; then
+ * only the words that fit (a word is never cut). Otherwise phrase by phrase, each shortened with an ellipsis at its end
+ * (`mode: 'phrase'`), leaving out the phrases too short to hold one letter.
+ */
+export function pickSpoken(words: readonly SpokenChip[], phrases: readonly SpokenChip[], textWidth: (text: string) => number, max = 400): { mode: 'word' | 'phrase'; chips: SpokenChip[] } {
+  const fit = words.filter((w) => w.width - SPOKEN_CHIP_PAD_PX >= textWidth(w.text));
+  if (words.length > 0 && fit.length >= 0.6 * words.length) return { mode: 'word', chips: fit.slice(0, max) };
+  return { mode: 'phrase', chips: phrases.filter((p) => p.width >= SPOKEN_PHRASE_MIN_PX).slice(0, max) };
+}
+
+/**
+ * Where the playhead's timecode sits on the ruler, from the playhead (px from the time origin), the timecode's width and the
+ * user markers there: centred on the line; started at the line near the origin (it would leave the lane); ended at the line
+ * when a marker is at the playhead, whose flag runs to the right of its line and must stay visible.
+ */
+export function capPlacement(atPx: number, capPx: number, onMarker: boolean): 'centre' | 'start' | 'end' {
+  if (onMarker && atPx >= capPx) return 'end';
+  if (atPx < capPx / 2 + 2) return 'start';
+  return onMarker ? 'end' : 'centre';
+}
+/** The ruler labels (left edge and width in px) the timecode box [from, to] covers, by index. */
+export function labelsUnder(labels: readonly { left: number; width: number }[], from: number, to: number): number[] {
+  const out: number[] = [];
+  labels.forEach((l, i) => { if (l.left < to && l.left + l.width > from) out.push(i); });
+  return out;
+}

@@ -13,12 +13,16 @@ import { volumeLevelAt, volumePoints, type Clip } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
-const H = 34, PAD = 4, TOP = 2; // the line uses the clip's height; a level of 2 (+6 dB) or more is drawn at the top
-export const levelToY = (v: number): number => H - PAD - (Math.min(TOP, Math.max(0, v)) / TOP) * (H - 2 * PAD);
-export const yToLevel = (y: number): number => Math.round(Math.min(TOP, Math.max(0, ((H - PAD - y) / (H - 2 * PAD)) * TOP)) * 100) / 100;
+/** The least height of the line's box. A lane lower than this (the compact layout) keeps the box at this height, centred on the clip. */
+export const VOLUME_LINE_MIN_H = 34;
+const PAD = 4, TOP = 2; // a level of 2 (+6 dB) or more is drawn at the top
+const levelToYIn = (v: number, H = VOLUME_LINE_MIN_H): number => H - PAD - (Math.min(TOP, Math.max(0, v)) / TOP) * (H - 2 * PAD);
+const yToLevelIn = (y: number, H = VOLUME_LINE_MIN_H): number => Math.round(Math.min(TOP, Math.max(0, ((H - PAD - y) / (H - 2 * PAD)) * TOP)) * 100) / 100;
 
-export function VolumeLine({ clip, selected, editable, pps, left, width }: { clip: MediaClip; selected: boolean; editable: boolean; pps: number; left: number; width: number }) {
+export function VolumeLine({ clip, selected, editable, pps, left, width, clipHeight = VOLUME_LINE_MIN_H, clipTop = 3 }: { clip: MediaClip; selected: boolean; editable: boolean; pps: number; left: number; width: number; /** the clip's drawn height and top inside its lane: the line uses that height (never less than VOLUME_LINE_MIN_H) */ clipHeight?: number; clipTop?: number }) {
   const { editor, t } = useEditorState();
+  const H = Math.max(VOLUME_LINE_MIN_H, Math.round(clipHeight));
+  const levelToY = (v: number) => levelToYIn(v, H), yToLevel = (y: number) => yToLevelIn(y, H);
   const rate = editor.rate;
   const [drag, setDrag] = useState<{ index: number; frame: number; value: number } | null>(null);
   const session = useRef<{ pointerId: number; index: number; startX: number; startY: number; frame0: number; y0: number; moved: boolean } | null>(null);
@@ -132,7 +136,7 @@ export function VolumeLine({ clip, selected, editable, pps, left, width }: { cli
   const strokePath = stroke ? [...stroke.entries()].sort((x, y) => x[0] - y[0]).map(([fr, v]) => `${xOf(fr).toFixed(1)},${levelToY(v).toFixed(1)}`).join(' ') : '';
   const active = selected && editable;
   return (
-    <div className={`vol-line${active ? ' active' : ''}`} data-testid={`volume-line-${clip.id}`} data-drag-clip={clip.id} data-keys={stored.length} style={{ left, width }}>
+    <div className={`vol-line${active ? ' active' : ''}`} data-testid={`volume-line-${clip.id}`} data-drag-clip={clip.id} data-keys={stored.length} style={{ left, width, height: H, top: clipTop + (clipHeight - H) / 2 }}>
       <svg width={width} height={H} aria-hidden="true" focusable="false">
         <polyline className="vol-path" points={path} />
         {active && <polyline className="vol-hit" data-testid="volume-line-hit" points={path} onDoubleClick={(e) => { e.stopPropagation(); addAt(e.clientX, e.currentTarget.ownerSVGElement!.getBoundingClientRect()); }}
