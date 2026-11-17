@@ -148,10 +148,14 @@ async function main() {
       const params = { count: 4, delay: 3, decay: 0.6 }; // the defaults
       const tapsOf = (F: number) => [0, 1, 2, 3].map((k) => Math.max(0, F - k * params.delay));
       const needed = [...new Set(sample.flatMap(tapsOf))].sort((a, b) => a - b);
+      // g(F): each frame as one tap draws it (shutter at 0°: the frame's own picture placed on its own and merged alone), so
+      // this check tests the merge alone; that path against no effect at all is checked on its own below (shutter at 0°)
+      const single = await addEffect(pid, clipId, 'time.shutter', { angle: 0 });
       const g = new Map<number, number>();
       let unflat = 0;
       for (const F of needed) { const x = flat(await still(pid, F)); g.set(F, x.v); unflat += x.off; }
-      measurements.greyDecoded = { frames: needed.length, differentFromEncodedLevel: needed.filter((F) => g.get(F) !== greyLevel(F)).length };
+      await tx(pid, [{ op: 'remove_effect', args: { clipId, effectId: single } }]);
+      measurements.greyDecoded = { frames: needed.length, differentFromEncodedLevel: needed.filter((F) => g.get(F) !== greyLevel(F)).length, plainStillsAgree: (await Promise.all(sample.slice(0, 3).map(async (F) => flat(await still(pid, F)).v === g.get(F)))).every(Boolean) };
       check('Grey fixture: every frame decodes to one flat grey (the reference levels g(F) for the echo checks)', unflat === 0, { frames: needed.length, offPixels: unflat });
       const fxId = await addEffect(pid, clipId, 'time.echo', {});
       const w = tapWeights('time.echo', params, 4);
