@@ -667,7 +667,9 @@ export class LocalTools implements LocalToolRunner {
       const outDir = path.join(tmp, 'cleaned');
       fs.mkdirSync(outDir);
       const model = path.join(this.cfg.toolsModelsDir, d.models[0]!.path);
-      await this.exec(this.cfg.denoiseBin!, ['-D', '-m', model, '--atten-lim', String(inp.params.attenLimitDb ?? 100), '-o', outDir, inWav], jobId, 'the voice engine', Math.max(600_000, Math.ceil(((N + pad) / SAMPLE_RATE) * 4000) + 120_000));
+      // deep-filter 0.5.6 options (clap, read from the pinned build's help strings): -D = --compensate-delay, -m = --model (passed
+      // explicitly: the help text still names DFN2), --atten-lim-db, --output-dir (the result keeps the input's file name there).
+      await this.exec(this.cfg.denoiseBin!, ['-D', '-m', model, '--atten-lim-db', String(inp.params.attenLimitDb ?? 100), '--output-dir', outDir, inWav], jobId, 'the voice engine', Math.max(600_000, Math.ceil(((N + pad) / SAMPLE_RATE) * 4000) + 120_000));
       if (this.canceled(jobId)) return this.finishCanceled(jobId);
       lap('engine');
       this.store.updateJob(jobId, { stage: 'checking the result' });

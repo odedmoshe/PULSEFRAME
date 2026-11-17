@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 TEST FAKE (labelled; used only by apps/server/src/localtools.test.ts). It is NOT deep-filter and removes no noise. It accepts the
-command line the runner gives the real engine (deep-filter 0.5.6: -D -m MODEL --atten-lim DB -o OUTDIR FILE) and writes OUTDIR/<name of
+command line the runner gives the real engine (deep-filter 0.5.6: -D -m MODEL --atten-lim-db DB --output-dir OUTDIR FILE) and writes OUTDIR/<name of
 FILE>, so the runner's padding, trimming and validation can be tested without the engine or its model.
 
 Like the real engine as measured by the lead (2026-11-17), its pass-through output is 1440 samples shorter than its input.
@@ -38,16 +38,19 @@ def main():
     out_dir, files, i = "out", [], 0
     while i < len(argv):
         a = argv[i]
-        if a in ("-m", "--model", "--atten-lim", "--pf-beta"):
+        if a in ("-m", "--model", "-a", "--atten-lim-db", "--pf-beta", "--min-db-thresh", "--max-db-erb-thresh", "--max-db-df-thresh", "--reduce-mask"):
             i += 2
             continue
-        if a in ("-o", "--out-dir", "--output-dir"):
+        if a in ("-o", "--output-dir"):
             out_dir = argv[i + 1]
             i += 2
             continue
-        if a.startswith("-"):
+        if a in ("-D", "--compensate-delay", "--pf", "-v", "--verbose"):
             i += 1
             continue
+        if a.startswith("-"):  # like the real engine's argument parser: an option it does not know is an error
+            sys.stderr.write(f"error: unexpected argument '{a}' found\n")
+            return 2
         files.append(a)
         i += 1
     if mode == "slow":

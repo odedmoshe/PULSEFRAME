@@ -315,7 +315,7 @@ describe('voice cleanup (fake deep-filter)', () => {
     expect(j.output.validation).toMatchObject({ samples: s1 - s0, lagSamples: 0, engineSamples: s1 - s0 + SAMPLE_RATE - 1440, trimmedSamples: SAMPLE_RATE - 1440, finite: true });
     expect(j.output.attachment.status).toBe('attached');
     const args = JSON.parse(fs.readFileSync(process.env.PF_FAKE_DF_ARGSFILE, 'utf8')) as string[];
-    expect(args.slice(0, 5)).toEqual(['-D', '-m', path.join(fx.cfg.toolsModelsDir, d.models[0]!.path), '--atten-lim', '100']);
+    expect(args.slice(0, 7)).toEqual(['-D', '-m', path.join(fx.cfg.toolsModelsDir, d.models[0]!.path), '--atten-lim-db', '100', '--output-dir', path.join(path.dirname(args[7]!), 'cleaned')]);
     const doc = fx.store.getProject(fx.pid).doc;
     const out = doc.assets[j.output.attachment.assetId]!;
     expect(out.kind).toBe('audio');
