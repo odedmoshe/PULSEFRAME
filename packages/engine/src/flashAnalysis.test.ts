@@ -102,3 +102,19 @@ describe('photosensitivity check of rendered frames', () => {
     expect(half.rgb[(FLASH_GRID - 1) * 3]).toBeCloseTo(0, 6);
   });
 });
+
+describe('built-ins kept below the flash threshold by construction', () => {
+  it('old film: on a white picture at full amount, no two frames differ by a tenth of the luminance range, for any seed', async () => {
+    const { GPU_EFFECTS } = await import('./gpu.ts');
+    const film = GPU_EFFECTS['stylize.film']!;
+    const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    let widest = 0;
+    for (let seed = 0; seed < 300; seed++) {
+      const levels: number[] = [];
+      for (let k = 0; k < 90; k++) levels.push(lin(film.params({ amount: 1, seed }, { width: 64, height: 64, seconds: k / 30, beat: null })[4]!));
+      widest = Math.max(widest, Math.max(...levels) - Math.min(...levels));
+    }
+    expect(widest).toBeLessThan(0.1);
+    expect(widest).toBeGreaterThan(0.05); // and it still flickers visibly
+  });
+});

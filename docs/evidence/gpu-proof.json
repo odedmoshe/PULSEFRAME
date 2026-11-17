@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T05:00:16.192Z",
+  "ranAt": "2026-11-17T05:17:58.155Z",
   "result": "PASSED",
   "passed": 78,
   "total": 78,
@@ -20,7 +20,7 @@
       "meanChange": 77.563
     },
     "lutPreviewRecovery": {
-      "seconds": 1.2,
+      "seconds": 1.4,
       "meanDifferenceFromStill": 0
     },
     "lutPreviewVsStill": {
@@ -641,17 +641,17 @@
       "ok": true,
       "detail": {
         "shuttle": "▶▶ ×8",
-        "samples": 172,
-        "flashesOnScreen": 7,
+        "samples": 167,
+        "flashesOnScreen": 6,
         "mostInOneSecond": 3,
-        "framesHeldBack": 11
+        "framesHeldBack": 10
       }
     },
     {
       "name": "stylize.film: changes the picture, is identical for the same frame, and differs on another frame",
       "ok": true,
       "detail": {
-        "changed": 20.549
+        "changed": 19.598
       }
     },
     {
@@ -808,7 +808,7 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_33bcbd73580 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_c3d873ee630 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
       }
@@ -817,7 +817,7 @@
       "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
       "ok": true,
       "detail": {
-        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_33bcbd73580 could not be loaded: Missing LUT_3D_SIZE",
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_c3d873ee630 could not be loaded: Missing LUT_3D_SIZE",
         "previewVsPlain": 0
       }
     },
@@ -825,7 +825,7 @@
       "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
       "ok": true,
       "detail": {
-        "seconds": 1.2,
+        "seconds": 1.4,
         "meanDifferenceFromStill": 0,
         "errors": []
       }
@@ -842,10 +842,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_33bcbd73580",
+        "value": "ast_c3d873ee630",
         "options": [
           "",
-          "ast_33bcbd73580"
+          "ast_c3d873ee630"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -858,7 +858,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_86fc693d4a0",
+        "selected": "ast_6fbccaae480",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47
