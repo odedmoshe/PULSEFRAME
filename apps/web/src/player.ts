@@ -138,7 +138,12 @@ export class Player {
     const finished = new Promise<void>((r) => { this.auditionDone = r; });
     this.onTick();
     const session = await this.startSound([c], sr, startSample / sr, startSample, gen, until);
-    if (!session || gen !== this.generation) { this.endAudition(); return finished; }
+    if (!session || gen !== this.generation) {
+      // Abandoned. Whatever moved the generation on (stopAudition, a transport action, the next audition) has already ended this
+      // audition and resolved `finished`; endAudition acts on the current audition, which may by now be the next one.
+      if (gen === this.generation) this.endAudition();
+      return finished;
+    }
     this.auditionTimer = setTimeout(() => { if (gen === this.generation) this.stopAudition(); }, Math.max(0, ((session.K + until) / sr - session.now()) * 1000) + 50);
     return finished;
   }
