@@ -87,6 +87,9 @@ async function makeAssets(store: Store, principal: Principal, plan: TemplatePlan
 }
 /** Checks before a template may change a project: edit rights (propose mode refused), not paused, no track/range limit. */
 function mayApply(gov: Governance, principal: Principal, projectId: string) {
+  gov.assertMayAct(principal, projectId, 'observe'); // the grant covers this project at all (403 out_of_scope otherwise)
+  // governance's own refusal suggests a proposal, which cannot carry a template: say what can be done instead
+  if (principal.kind === 'agent' && principal.mode === 'propose') throw new ApiError(403, 'insufficient_scope', 'this credential may only propose edits, and a template cannot be proposed: it is applied through an internal step that a proposal does not carry', { mode: 'propose' }, 'Ask the project owner to apply the template, or for a grant in edit mode. plan_template still shows what it would do.');
   gov.assertMayAct(principal, projectId, 'edit');
   gov.assertUnrestricted(principal, 'apply a template (it adds tracks, media and a run record)');
 }
