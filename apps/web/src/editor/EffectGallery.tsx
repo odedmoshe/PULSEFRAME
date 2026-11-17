@@ -12,7 +12,7 @@ import type { Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
 import { useEditorState } from './store.ts';
 import { GALLERY_STRINGS } from './gallery.strings.ts';
-import { isOn, pickCall, pickRefusal, thumbSize } from './gallery.pick.ts';
+import { DEFAULT_TRANSITION_FRAMES, isOn, pickCall, pickRefusal, thumbSize, transitionLength, transitionRoom } from './gallery.pick.ts';
 import { singleFlight } from './oneAtATime.ts';
 import './effectGallery.css';
 
@@ -246,17 +246,34 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     if (flight.busy) return; // a pick is on its way: this activation (the second half of a double-click) is not a second edit
     const name = lang === 'he' ? it.he : it.en;
     const live = (editor.doc && findClip(editor.doc, clip.id)?.clip) || clip; // the clip as it is now, not as it was when the tile was drawn
-    const call = pickCall(live, it);
+    // A transition is asked for at a length the op accepts: the clip's current length (or the default), cut to what the clips
+    // allow (gallery.pick.ts transitionRoom). When nothing fits, nothing is sent and the status says what to do.
+    let frames: number | undefined;
+    let short: { frames: number; limit: 'clip' | 'previous' | 'max' } | null = null;
+    if (it.kind === 'transition' && editor.doc) {
+      const room = transitionRoom(editor.doc, live.id);
+      if (room) {
+        const wanted = live.type === 'media' && live.transition ? live.transition.frames : DEFAULT_TRANSITION_FRAMES;
+        frames = transitionLength(room, wanted);
+        if (frames < 1) { setStatus({ kind: 'error', text: G.refused(name), reason: room.limit === 'previous' ? G.noHandle : G.noRoom }); return; }
+        if (frames < wanted) short = { frames, limit: room.limit };
+      }
+    }
+    const call = pickCall(live, it, frames);
     if (!call) { setStatus({ kind: 'info', text: G.alreadyOn(name) }); return; }
     setBusyKey(it.key);
     try {
       const done = await flight.run(() => editor.commit([call], `Gallery: ${it.id}`));
       if (done.dropped) return;
-      if (done.value) { setStatus({ kind: 'info', text: G.applied(name) }); return; }
+      if (done.value) { setStatus({ kind: 'info', text: short ? G.appliedShort(name, short.frames, short.limit === 'previous') : G.applied(name) }); return; }
       const why = pickRefusal(editor.getState());
       setStatus({ kind: 'error', text: G.refused(name), reason: why.reason ?? (why.conflict ? G.conflict : G.noReason) });
     } finally { setBusyKey(null); }
   };
+
+  // the clips as they are now: is there room for any transition at the start of this clip?
+  const room = media && editor.doc ? transitionRoom(editor.doc, clip.id) : null;
+  const noTransitionRoom = !!room && room.maxFrames < 1 && room.limit === 'previous';
 
   const focusables = () => [...(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].filter((n) => n.offsetParent !== null);
   // Escape and Tab must work wherever focus is: a click on a disabled tile or outside any control can leave focus on the page
@@ -319,6 +336,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     const shown = id === tab ? items.filter(matches).length : 0;
     return (
       <div key={id} id={`pf-gal-panel-${id}`} role="tabpanel" aria-labelledby={`pf-gal-tab-${id}`} hidden={id !== tab} data-testid={`gallery-panel-${id}`}>
+        {id === 'transitions' && noTransitionRoom && <p className="pf-gal-note pf-gal-room" role="note" data-testid="gallery-transition-room">{G.noHandle}</p>}
         {id === 'effects'
           ? CATEGORIES.map((c) => {
             const group = items.filter((i) => i.category === c);
