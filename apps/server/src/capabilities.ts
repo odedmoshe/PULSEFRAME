@@ -397,15 +397,20 @@ export class Capabilities implements CapabilityService {
     // new-track
     if (opts.m) throw new ApiError(422, 'invalid_request', 'slow motion is placed in its clip (replace-clip) or kept in the library; on a new track it would need its own speed', { apply });
     if (!clip) {
+      // Made from a library asset: placed where the caller said (attach.start), which no clip's later edit can make stale. The caller
+      // records attach.trackId and its own dependsOn as preconditions.
       const a = req.attach!;
       return { placement: { mode: 'new-track', clipId: null, start: a.start as T.RationalTime, ...(a.duration ? { duration: a.duration as T.RationalTime } : {}) }, dependsOn: [] };
     }
-    if (opts.still) return { placement: { mode: 'new-track', clipId: clip.id, start: clip.start, duration: clip.duration }, dependsOn: [] };
+    // The placement copies the clip's start, source in and length as they are now: moved, trimmed, re-timed or deleted while the job
+    // runs, the clip no longer says where the result belongs, so the result stays a proposal (attach). Same entities as replace-clip.
+    const deps = [clip.id, f!.track.id];
+    if (opts.still) return { placement: { mode: 'new-track', clipId: clip.id, start: clip.start, duration: clip.duration }, dependsOn: deps };
     // a picture result keeps the source's timing: it shows the same stretch of source from the same moment, at speed 1
     const span = T.sub(sourceEnd(clip), clip.sourceIn);
     const frames = T.frameIndexAt(span, doc.settings.frameRate);
     if (frames < 1) throw new ApiError(422, 'incompatible', 'the clip shows less than one frame of its file', { clipId: clip.id });
-    return { placement: { mode: 'new-track', clipId: clip.id, start: clip.start, sourceIn: T.sub(clip.sourceIn, opts.sourceRangeStart ?? T.ZERO), duration: T.frameTime(frames, doc.settings.frameRate) }, dependsOn: [] };
+    return { placement: { mode: 'new-track', clipId: clip.id, start: clip.start, sourceIn: T.sub(clip.sourceIn, opts.sourceRangeStart ?? T.ZERO), duration: T.frameTime(frames, doc.settings.frameRate) }, dependsOn: deps };
   }
   private reserveCost(job: JobRow, d: CapabilityDescriptor, req: RunRequest) {
     // Paid capabilities: reserve the declared cost against the caller's budget BEFORE anything is dispatched.

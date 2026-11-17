@@ -215,6 +215,35 @@ describe('frame driver: a per-frame job end to end (mock provider)', () => {
       expect(done.output.attachment).toMatchObject({ status: 'attached', mode: 'replace-clip', speed: 0.5 });
     } finally { await s.caps.stop(); s.store.close(); }
   }, 120_000);
+
+  it('new-track: placed at the clip\'s start on a track of its own; a clip trimmed while the job runs leaves the result a proposal', async () => {
+    const s = await setup();
+    try {
+      const run = () => s.caps.start({ projectId: s.pid, capabilityId: INVERT.id, params: {}, actor: 'user:owner', source: { clipId: s.clipId }, apply: 'new-track' });
+      const done = await settle(s.store, run().id);
+      expect(done.status, JSON.stringify(done.error)).toBe('succeeded');
+      expect(done.output.attachment).toMatchObject({ status: 'attached', mode: 'new-track' });
+      let doc = s.store.getProject(s.pid).doc;
+      const placed = findClip(doc, done.output.attachment.clipId)!, orig = findClip(doc, s.clipId)!;
+      expect(placed.track.id).not.toBe(orig.track.id);
+      expect([placed.clip.start, (placed.clip as MediaClip).sourceIn, placed.clip.duration].map((t) => T.normalize(t))).toEqual([orig.clip.start, (orig.clip as MediaClip).sourceIn, orig.clip.duration].map((t) => T.normalize(t)));
+      // trimmed while chunk 1 of 3 runs: the recorded start, source in and duration are out of date, so nothing is placed
+      s.mock.hold.add(0);
+      const job = run();
+      expect(job.input.preconditions.map((p: { entityId: string }) => p.entityId)).toContain(s.clipId);
+      await until(() => !!s.store.getJob(job.id).output?.frames?.current?.providerJobId);
+      s.store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'trim_clip', args: { clipId: s.clipId, edge: 'start', to: T.frameTime(4, R) } }] });
+      doc = s.store.getProject(s.pid).doc;
+      const clipsBefore = Object.values(doc.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips.map((c) => c.id))).sort();
+      s.mock.release(0);
+      const late = await settle(s.store, job.id);
+      expect(late.status, JSON.stringify(late.error)).toBe('succeeded');
+      expect(late.output.attachment).toMatchObject({ status: 'proposed', conflicts: expect.arrayContaining([expect.objectContaining({ entityId: s.clipId })]), proposal: { mode: 'new-track', clipId: s.clipId } });
+      doc = s.store.getProject(s.pid).doc;
+      expect(Object.values(doc.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips.map((c) => c.id))).sort()).toEqual(clipsBefore);
+      expect(doc.assets[late.output.attachment.assetId]).toBeDefined(); // the result is kept in the library
+    } finally { await s.caps.stop(); s.store.close(); }
+  }, 120_000);
 });
 
 describe('frame driver: restart, cancel and the interrupt rule', () => {

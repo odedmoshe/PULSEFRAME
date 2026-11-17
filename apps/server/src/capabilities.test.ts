@@ -247,6 +247,38 @@ describe('stills: source, placement modes, every declared output, mime by contai
       expect((findClip(s.store.getProject(s.pid).doc, clipId)!.clip as MediaClip).assetId).toBe(assetId);
     } finally { await s.caps.stop(); s.store.close(); }
   }, 60_000);
+  it('new-track: a source clip moved or deleted while the job runs leaves the result a proposal; nothing is placed', async () => {
+    const s = await setup({ registry: [UPSCALE_NO_MODEL] });
+    try {
+      const assetId = await s.ingest(png(16, 12, 2), 'photo.png');
+      const clipId = s.store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'add_clip', args: { assetId, start: T.rt(1, 1) } }] }).results[0]!.output!.clipId as string;
+      const trackId = findClip(s.store.getProject(s.pid).doc, clipId)!.track.id;
+      const clipCount = () => Object.values(s.store.getProject(s.pid).doc.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips)).length;
+      s.fake.produce = { image: { width: 64, height: 48 } };
+      const run = () => s.caps.start({ projectId: s.pid, capabilityId: UPSCALE_NO_MODEL.id, params: { scale: 1 }, actor: 'user:owner', source: { clipId }, apply: 'new-track' });
+      // moved: the clip the placement was taken from now starts at 3 s; a clip at 1 s would be placed from an out-of-date timeline
+      s.fake.hold = true;
+      const moved = run();
+      expect(moved.input.preconditions.map((p: { entityId: string }) => p.entityId).sort()).toEqual([clipId, trackId].sort());
+      s.store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'move_clip', args: { clipId, start: T.rt(3, 1) } }] });
+      const n = clipCount();
+      s.fake.hold = false;
+      const late = await settle(s.store, moved.id);
+      expect(late.status, JSON.stringify(late.error)).toBe('succeeded');
+      expect(late.output.attachment).toMatchObject({ status: 'proposed', conflicts: [expect.objectContaining({ entityId: clipId, deleted: false })], proposal: { mode: 'new-track', clipId } });
+      expect(clipCount()).toBe(n);
+      expect(s.store.getProject(s.pid).doc.assets[late.output.attachment.assetId]).toBeDefined(); // kept in the library
+      // deleted: the clip is gone, so there is nothing for the result to sit above
+      s.fake.hold = true;
+      const gone = run();
+      s.store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId } }] });
+      const m = clipCount();
+      s.fake.hold = false;
+      const orphan = await settle(s.store, gone.id);
+      expect(orphan.output.attachment).toMatchObject({ status: 'proposed', conflicts: [expect.objectContaining({ entityId: clipId, deleted: true })] });
+      expect(clipCount()).toBe(m);
+    } finally { await s.caps.stop(); s.store.close(); }
+  }, 60_000);
   it('every declared output is imported (cutout and matte), with its role', async () => {
     const s = await setup({ registry: [MATTE_NO_MODEL] });
     try {
