@@ -52,6 +52,8 @@ The bounded BiRefNet trial then ran: see docs/INTEGRATIONS.md and `docs/evidence
 - **Reference voice (cloning):** the rules are built (owner only, consent recorded) and one take was made from a synthetic reference. Whether the result resembles a real speaker was not assessed. The editor form requires a named speaker and a ticked statement. Using a real person's voice stays the owner's decision each time.
 - **Not built:** voice list with previews, pronunciation dictionary, dubbing. (Script narration sentence by sentence is built.)
 
+- **Licence note to reconcile, found 2026-11-17 by the wave-5 licence critic:** the pin for Phonikud (Hebrew vowel pointing, used by narration) says MIT by its model card (recorded 2026-11-16), while the publisher's repository README now says its code is CC BY 4.0 and its datasets are licensed separately. Both allow commercial use with attribution, but the record and the notices must say what the publisher says today; the model card and the weights' own terms are to be re-read at the source before the pointing is used in any new feature. Narration keeps working meanwhile.
+
 ## B-9 — REOPENED BY THE OWNER 2026-11-17: an in-editor command bar in Hebrew, with a language model
 The owner chose the external-agent route: any MCP client plans and edits through the tools; the editor does not embed a language model. Prompt-to-Draft and Long-to-Shorts by meaning are therefore done by that agent, not by a built-in feature. Reopen only on request (it would need a provider credential and a spending limit).
 
