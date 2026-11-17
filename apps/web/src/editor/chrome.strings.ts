@@ -8,7 +8,7 @@ const he = {
   presence: 'נוכחים בפרויקט', owner: 'את/ה', agent: 'העוזר', agentMenu: 'העוזר',
   agentReady: 'מוכן ומחכה', agentPaused: 'מושהה', pauseAgent: 'השהיית העוזר', resumeAgent: 'חידוש העוזר', undoAgent: 'ביטול כל השינויים שלו', undoAgentWhy: 'עדיין לא זמין',
   undoTip: 'ביטול', redoTip: 'ביצוע מחדש', language: 'שפת הממשק',
-  exportRing: 'ייצוא ברקע', exportDone: 'הייצוא הסתיים', exportCancel: 'ביטול הייצוא', exportRetry: 'ניסיון חוזר בייצוא', exportDownload: 'הורדת הסרטון',
+  exportRing: 'ייצוא ברקע', exportOpen: 'פתיחת חלון הייצוא', exportFailed: 'הייצוא נכשל', exportCanceled: 'הייצוא בוטל', exportDone: 'הייצוא הסתיים', exportCancel: 'ביטול הייצוא', exportRetry: 'ניסיון חוזר בייצוא', exportDownload: 'הורדת הסרטון',
   formatView: 'פורמט תצוגה', safeArea: 'אזור בטוח',
   // rail
   railLabel: 'קטגוריות', railTools: 'כלים', shortcuts: 'קיצורים', settings: 'הגדרות',
@@ -66,7 +66,7 @@ const en: ChromeStrings = {
   presence: 'People in this project', owner: 'You', agent: 'Assistant', agentMenu: 'Assistant',
   agentReady: 'Ready and waiting', agentPaused: 'Paused', pauseAgent: 'Pause the assistant', resumeAgent: 'Resume the assistant', undoAgent: 'Undo all its changes', undoAgentWhy: 'Not available yet',
   undoTip: 'Undo', redoTip: 'Redo', language: 'Interface language',
-  exportRing: 'Export in the background', exportDone: 'Export finished', exportCancel: 'Cancel the export', exportRetry: 'Retry the export', exportDownload: 'Download the video',
+  exportRing: 'Export in the background', exportOpen: 'Open the export window', exportFailed: 'Export failed', exportCanceled: 'Export canceled', exportDone: 'Export finished', exportCancel: 'Cancel the export', exportRetry: 'Retry the export', exportDownload: 'Download the video',
   formatView: 'Preview format', safeArea: 'Safe area',
   railLabel: 'Categories', railTools: 'Tools', shortcuts: 'Shortcuts', settings: 'Settings',
   rail: { media: 'Media', audio: 'Audio', text: 'Text', captions: 'Captions', effects: 'Effects', transitions: 'Transitions', looks: 'Looks', elements: 'Elements', templates: 'Templates', ai: 'AI tools' },

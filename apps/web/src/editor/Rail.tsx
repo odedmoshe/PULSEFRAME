@@ -2,8 +2,8 @@
  * The rail (docs/design/UX_REDESIGN.md §4.3): 72 px at the start edge, full height. Categories, each an icon over a label:
  * assets (media, audio, text, captions), the catalogue (effects, transitions, looks, elements, templates), tools (AI), and
  * shortcuts and settings pinned at the bottom. The active category decides what the browser drawer shows (Library.tsx).
- * A vertical tablist with a roving tabindex; Alt+1…0 choose a category. `gallery-open` stays on the library's own opener
- * (EffectGallery) and the Effects item opens the drawer that leads to it.
+ * A vertical tablist with a roving tabindex; Alt+1…0 choose a category. The Effects, Transitions and Looks items open the
+ * drawer whose button owns `gallery-open` (Library.tsx; the gallery opens through editor.openGallery).
  * Keep the root element and its data-shell-slot: the shell finds the mount by it.
  */
 import { useEffect, useRef, type ReactNode } from 'react';

@@ -2,19 +2,23 @@
  * The top bar (docs/design/UX_REDESIGN.md §4.2): one row with fixed slots that never wraps.
  * From the start edge: logo, the project name (opens the projects dialog) over the save line, the mode bar, the command bar
  * (opens the palette), presence (the owner and the agent, whose menu holds "pause"), undo and redo, language, the export
- * state and the primary Export button. Export progress is a ring chip, never a text run in the bar. The flash check
- * moved to the status bar (StatusBar.tsx). Styles: ds/chrome.css (everything under .pf-ds).
+ * state and the primary Export button. Export always opens the export sheet (ExportSheet.tsx, owner decision); its progress
+ * is a ring chip here, a button that reopens the sheet, never a text run in the bar. Cancel, retry, the finished file and the
+ * flash check live in the sheet; the flash check also stays in the status bar (StatusBar.tsx). The format switch and the
+ * safe-area guide live in the stage header (StageHeader.tsx, FormatPrism.tsx). Styles: ds/chrome.css (everything under .pf-ds).
  */
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Check, ChevronDown, CircleAlert, CloudOff, Download, Pencil, RotateCw, Search, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, CircleAlert, CloudOff, Pencil, Search, TriangleAlert, User } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { LOGO_SVG } from '@pulseframe/brand';
 import type { Key } from '@pulseframe/i18n';
-import { Badge, IconButton, ModeBar, Ring, Tooltip, type SegOption } from '../ds/index.ts';
+import { IconButton, ModeBar, Ring, Tooltip, type SegOption } from '../ds/index.ts';
 import { chordLabel, editEnd } from './commands.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { onMenuKeyDown } from './menuKeys.ts';
 import { InlineRename } from './InlineRename.tsx';
+import { openExportSheet, useExportSheet } from './ExportSheet.tsx';
+import { isActiveJob, jobFraction, overallFraction } from './exportSheet.logic.ts';
 import { ProjectsDialog } from './ProjectsDialog.tsx';
 import { IconExport, IconRedo, IconUndo } from './icons.tsx';
 import { WORKSPACES, useEditorState, type Workspace } from './store.ts';
@@ -39,7 +43,6 @@ export function Header() {
   const { editor, state, t } = useEditorState();
   const { doc, save, revision, exportJob: job, lang } = state;
   const S = CHROME_STRINGS[lang];
-  const viewVariant = state.viewVariantId ? doc?.variants?.[state.viewVariantId] ?? null : null;
   const exporting = !!job && ['queued', 'running', 'cancel-requested'].includes(job.status);
   const [projectsOpen, setProjectsOpen] = useState(false);
 
@@ -100,22 +103,6 @@ export function Header() {
         </span>
       </button>
 
-      {doc && Object.keys(doc.variants ?? {}).length > 0 && (
-        <div className="pf-top-format">
-          <label>
-            <span className="pf-sr">{t('format.switch')}</span>
-            <select value={state.viewVariantId ?? ''} onChange={(e) => editor.setViewVariant(e.target.value || null)} data-testid="format-switch" aria-label={t('format.switch')}>
-              <option value="">{t('deliver.master')} ({doc.settings.width}×{doc.settings.height})</option>
-              {Object.values(doc.variants ?? {}).map((v) => <option key={v.id} value={v.id}>{v.name} ({v.width}×{v.height})</option>)}
-            </select>
-          </label>
-          {viewVariant && <span className="pf-top-badge" role="status" data-testid="format-badge" data-variant-id={viewVariant.id} title={t('format.badge')}><Badge tone="pulse"><bdi>{viewVariant.name}</bdi></Badge></span>}
-          {viewVariant?.safeArea && (
-            <label className="pf-top-safe"><input type="checkbox" checked={state.safeAreaOn} onChange={(e) => editor.setSafeArea(e.target.checked)} data-testid="safe-area-toggle" /> <span>{t('format.safeArea')}</span></label>
-          )}
-        </div>
-      )}
-
       <div className="pf-top-end">
         <Presence />
         <div className="pf-top-hist">
@@ -127,7 +114,7 @@ export function Header() {
         </Tooltip>
 
         <ExportState />
-        <button type="button" className="pf-btn pf-btn-primary pf-btn-md pf-top-export" disabled={!doc || exporting || editor.player?.frameCount === 0} onClick={() => editor.startExport()} data-testid="export">
+        <button type="button" className="pf-btn pf-btn-primary pf-btn-md pf-top-export" aria-haspopup="dialog" disabled={!doc || editor.player?.frameCount === 0} onClick={() => openExportSheet()} data-testid="export">
           <IconExport />
           <span className="pf-btn-label">{exporting ? t('export.running') : t('export')}</span>
         </button>
@@ -137,34 +124,38 @@ export function Header() {
   );
 }
 
-/** The export's own state, in the bar's end slot: a ring chip while it runs, a done chip with the download, or the way to retry. */
+/**
+ * The export's own state, in the bar's end slot: one chip that is a button reopening the export sheet on the last run. While
+ * the export runs it is a ring with the share done (the sheet's own runs when it started them, else the editor's latest export
+ * job); then a done chip, or a quiet chip that says it failed or was canceled. Cancel, retry and the file are in the sheet.
+ */
 function ExportState() {
-  const { editor, state, t } = useEditorState();
+  const { state, t } = useEditorState();
   const S = CHROME_STRINGS[state.lang];
+  const sheet = useExportSheet();
   const job = state.exportJob;
-  if (!job) return null;
-  const running = ['queued', 'running', 'cancel-requested'].includes(job.status);
-  const pct = typeof job.output?.progress === 'number' ? Math.round(job.output.progress * 100) : null;
-  return (
-    <div className="pf-top-export-state">
-      {running && (
-        <>
-          <span className="pf-top-chip" role="status" aria-label={S.exportRing}>
+  const mine = sheet.jobs.length > 0 && (!job || sheet.jobs.some((j) => j.id === job.id));
+  const running = mine ? sheet.starting || sheet.jobs.some((j) => isActiveJob(j.status)) : !!job && isActiveJob(job.status);
+  if (!mine && !job) return null;
+  const frac = mine ? overallFraction([...sheet.jobs]) : job ? jobFraction(job) ?? (typeof job.output?.progress === 'number' ? job.output.progress : null) : null;
+  const pct = frac == null ? null : Math.round(frac * 100);
+  const status = running ? 'running' : mine ? (sheet.jobs.some((j) => j.status === 'succeeded') ? 'succeeded' : sheet.jobs.every((j) => j.status === 'canceled') ? 'canceled' : 'failed') : job!.status;
+  const open = () => openExportSheet({ last: true });
+  if (running) {
+    const label = `${S.exportRing}${pct != null ? ` · ${pct}%` : ''} · ${S.exportOpen}`;
+    return (
+      <div className="pf-top-export-state">
+        <Tooltip label={label}>
+          <button type="button" className="pf-top-chip" aria-haspopup="dialog" aria-label={label} data-testid="export-ring" data-status="running" onClick={open}>
             <Ring value={pct} label={S.exportRing} size={28}>{pct != null ? `${pct}%` : undefined}</Ring>
-          </span>
-          <IconButton label={S.exportCancel} icon={<X size={16} strokeWidth={1.75} aria-hidden="true" />} size="sm" onClick={() => editor.cancelExport()} data-testid="export-cancel" variant="danger-quiet" />
-        </>
-      )}
-      {job.status === 'succeeded' && (
-        <>
-          <span className="pf-top-chip is-done" role="status" data-testid="export-finished" title={t('export.finished')}><Check size={14} strokeWidth={2} aria-hidden="true" /><span>{S.exportDone}</span></span>
-          <a className="pf-btn pf-btn-ghost pf-btn-sm pf-iconbtn" href={`/api/v1/jobs/${job.id}/output`} download data-testid="export-download" aria-label={t('export.done')} title={t('export.done')}><Download size={16} strokeWidth={1.75} aria-hidden="true" /></a>
-        </>
-      )}
-      {job.status === 'canceled' && <span className="pf-top-chip is-quiet" role="status" data-testid="export-canceled"><span>{t('export.canceled')}</span></span>}
-      {(job.status === 'canceled' || job.status === 'failed') && <IconButton label={S.exportRetry} icon={<RotateCw size={16} strokeWidth={1.75} aria-hidden="true" />} size="sm" onClick={() => editor.retryExport()} data-testid="export-retry" />}
-    </div>
-  );
+          </button>
+        </Tooltip>
+      </div>
+    );
+  }
+  if (status === 'succeeded') return <div className="pf-top-export-state"><button type="button" className="pf-top-chip is-done" aria-haspopup="dialog" title={t('export.finished')} data-testid="export-ring" data-status="succeeded" onClick={open}><Check size={14} strokeWidth={2} aria-hidden="true" /><span>{S.exportDone}</span></button></div>;
+  if (status === 'failed' || status === 'canceled') return <div className="pf-top-export-state"><button type="button" className="pf-top-chip is-quiet" aria-haspopup="dialog" data-testid="export-ring" data-status={status} onClick={open}>{status === 'failed' && <TriangleAlert size={14} strokeWidth={2} aria-hidden="true" />}<span>{status === 'failed' ? S.exportFailed : S.exportCanceled}</span></button></div>;
+  return null;
 }
 
 /** The owner, and the agent: a violet ring and a status dot; its menu pauses it. The menu is a plain popover with a real focus order. */

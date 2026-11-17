@@ -38,7 +38,7 @@ import { Menu, ScrubField, Tabs, type MenuItem, type TabSpec } from '../ds/index
 import { isolate } from '../ds/util.tsx';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { cutBefore, keyframeSummary, matchingPreset, objectActions, secondsText, shortTimecode, tabsFor, type InspectorPage, type ObjectAction, type ObjectKind, type ObjectTab } from './inspector.model.ts';
-import { openInspectorTab, selectCut } from './inspector.bus.ts';
+import { TextStyles } from './TextStyles.tsx';
 import { CutPanel, TransitionPanel } from './InspectorCut.tsx';
 import { ProjectPanel } from './InspectorProject.tsx';
 
@@ -334,13 +334,13 @@ function FrameFill({ clip, shown }: { clip: Media; shown: ResolvedNow }) {
 
 /** The cut this clip starts with: what is on it now, and the way into the cut inspector (the timeline's cut chip does the same). */
 function CutLink({ clip }: { clip: Media }) {
-  const { state } = useEditorState();
+  const { editor, state } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   const cut = state.doc ? cutBefore(state.doc, clip.id) : null;
   if (!cut) return null;
   const tr = clip.transition;
   return (
-    <button type="button" className="insp-link" data-testid="insp-cut-open" onClick={() => selectCut(clip.id)}>
+    <button type="button" className="insp-link" data-testid="insp-cut-open" onClick={() => editor.selectCut(clip.id)}>
       <Scissors size={16} strokeWidth={1.75} aria-hidden="true" />
       <span className="insp-link-text"><span>{S.cutBefore}</span><span className="muted">{tr ? <bdi>{transitionDef(tr.type)?.name[state.lang] ?? tr.type} · <span className="num">{tr.frames}</span> {S.frames}</bdi> : S.cutNone}</span></span>
       <ChevronRight size={16} strokeWidth={1.75} aria-hidden="true" className="pf-ico pf-ico-flip" />
@@ -605,7 +605,7 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
         <TransformRows clip={clip} viewClip={viewClip} shown={shown} />
       </Section>
       {media && <Section id="fill" title={S.secFill}><FrameFill clip={media} shown={shown} /></Section>}
-      <BeatRow clip={clip} onOpen={() => openInspectorTab('effects')} />
+      <BeatRow clip={clip} onOpen={() => editor.openInspectorTab('effects')} />
       {media && !variantId && <CutLink clip={media} />}
       <Section id="keys" title={S.secKeys} defaultOpen={false} summary={ks.count ? S.keysCount(ks.count) : S.keysNone}><KeyframeButtons clip={clip} keymap={keymap} /></Section>
       <Section id="blend" title={S.secBlend} defaultOpen={false} summary={S.blend[blend] ?? blend}><BlendField clip={clip} /></Section>
@@ -839,45 +839,6 @@ function SizeRow({ size, commit }: { size: number; commit: (v: number) => Promis
   );
 }
 
-/**
- * The ready text styles as pictures (UX_REDESIGN §4.6, Text-Tool): each tile writes the title's own first words in that style
- * (its font, weight, colour, box, outline and shadow, from the preset itself), so the choice is seen, not read. The first six
- * show; the rest open under "all styles". One registered operation per pick (apply_text_preset), as the old list did.
- */
-const PRESET_FIRST = 6;
-function PresetTiles({ clip, current }: { clip: Extract<Clip, { type: 'text' }>; current: string | null }) {
-  const { editor, state, t } = useEditorState();
-  const S = INSPECTOR_STRINGS[state.lang];
-  const [all, setAll] = useState(false);
-  const words = (clip.text.split('\n')[0] || S.kindText).slice(0, 18);
-  const shown = all ? TEXT_PRESETS : TEXT_PRESETS.slice(0, PRESET_FIRST);
-  return (
-    <div className="preset-tiles-wrap">
-      <div className="preset-tiles" role="group" aria-label={t('text.preset')} data-testid="text-preset">
-        {shown.map((p) => {
-          const px = 15, st = p.style;
-          const stroke = st.stroke && st.strokeFrac > 0 ? Math.max(1, Math.round(st.strokeFrac * px * 1.4)) : 0;
-          const look: React.CSSProperties = {
-            fontFamily: `"${st.fontFamily}"`, fontWeight: st.fontWeight, color: st.color, background: st.background ?? undefined,
-            WebkitTextStroke: stroke ? `${stroke}px ${st.stroke}` : undefined, paintOrder: 'stroke fill',
-            textShadow: p.shadow ? `${Math.round(p.shadow.x * 400)}px ${Math.round(p.shadow.y * 400)}px ${Math.round(p.shadow.blur * 400)}px color-mix(in srgb, ${p.shadow.color} ${Math.round(p.shadow.opacity * 100)}%, transparent)` : undefined,
-          };
-          return (
-            <button key={p.id} type="button" className="preset-tile" aria-pressed={current === p.id} data-testid="text-preset-option" data-value={p.id} title={p.name[state.lang]}
-              onClick={() => void editor.commit([{ op: 'apply_text_preset', args: { clipId: clip.id, presetId: p.id } }], 'Apply text style')}>
-              <span className="preset-sample" aria-hidden="true"><span dir="auto" style={look}>{words}</span></span>
-              <span className="preset-name">{p.name[state.lang]}</span>
-            </button>
-          );
-        })}
-      </div>
-      {TEXT_PRESETS.length > PRESET_FIRST && (
-        <button type="button" className="ghost preset-more" aria-expanded={all} data-testid="text-preset-all" onClick={() => setAll((a) => !a)}>{all ? S.stylesFewer : S.stylesAll(TEXT_PRESETS.length)}</button>
-      )}
-    </div>
-  );
-}
-
 function StyleTab({ clip, viewClip }: PanelProps) {
   const { state } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
@@ -886,7 +847,8 @@ function StyleTab({ clip, viewClip }: PanelProps) {
   return (
     <>
       <Section id="preset" title={S.secStyle} summary={current ? current.name[state.lang] : S.stylesCount(TEXT_PRESETS.length)}>
-        <PresetTiles clip={clip} current={current?.id ?? null} />
+        {/* the styles as tiles drawn by the shared compositor with the title's own words (TextStyles.tsx, W4); the group keeps data-testid text-preset */}
+        <TextStyles titleClipId={clip.id} />
       </Section>
       <Section id="textfx" title={S.secTextFx} help><TextEffectsField clip={clip} style={viewClip.type === 'text' ? viewClip.style : clip.style} variantId={state.viewVariantId ?? null} /></Section>
     </>

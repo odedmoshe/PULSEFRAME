@@ -19,6 +19,7 @@ import { aiApi, type ApplyMode, type RunSource } from './api.ts';
 import { addAssetArgs, dropAssetArgs } from './placement.ts';
 import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
 import { wholeEditOps, type WholeEditPick } from './commands.ts';
+import { cutBefore, type ObjectTab } from './inspector.model.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -88,7 +89,34 @@ export interface EditorState {
   templatesFocus: number;
   /** The template run applied from this tab, for the post-apply bar (shuffle, another tempo, undo); session state only. */
   templateRun: TemplateRunInfo | null;
+  /**
+   * The chosen cut: the id of the clip whose start is the cut (the clip after it, which carries a transition), or null. The
+   * timeline's cut chips choose it (selectCut), the cut inspector, the ride bar and the loupe read it. Session view state only.
+   */
+  cutClipId: string | null;
+  /** The cut loupe (the frames either side of the chosen cut) is shown in the viewer. */
+  loupe: boolean;
+  /** A tab of the selected object asked for from outside the inspector; `n` makes each request new. */
+  inspectorTab: { tab: ObjectTab; n: number } | null;
+  /** A panel asked for by the timeline's ride bar (editor.openPanel): the inspector shows it and moves the focus there. */
+  panelRequest: { target: PanelTarget; clipId: string | null; n: number } | null;
+  /** The effects gallery is open (EffectGallery.tsx GalleryHost), on this tab of its own; null when closed. */
+  gallery: { tab: GalleryTab | null; n: number } | null;
+  /** A quiet line over the viewer ("the playhead moved into the title"), with the time it was said. */
+  stageNote: { text: string; at: number } | null;
+  /** Bumped by openExportSheet: the export sheet's host opens the sheet (ExportSheet.tsx). */
+  exportSheet: number;
+  /** The last notice for the toast queue (App.tsx ToastBridge); `n` makes each one new. Session state only. */
+  notice: (Notice & { n: number }) | null;
 }
+/** A place the ride bar can ask the editor to show: a tab of the inspector, or a gallery (RideBar.tsx, Inspector.tsx). */
+export type PanelTarget = 'speed' | 'animation' | 'effects' | 'transition' | 'transitions-gallery' | 'sound' | 'replace';
+/** The tabs of the effects gallery that can be asked for from outside it. */
+export type GalleryTab = 'effects' | 'looks' | 'transitions' | 'text' | 'motion';
+/** A toast the editor asks for: an undo toast offers to undo the edit that was just made. */
+export interface Notice { kind: 'undo' | 'info'; title: string; body?: string }
+/** What an export is started with (POST /exports): the defaults are left out, as exportSheet.logic.ts exportOptions builds it. */
+export interface ExportRequest { variantId?: string; quality?: string; captions?: string; format?: string; scale?: number }
 /** What the track picker is picking, and on which clip's picture. */
 export interface TrackPick { kind: 'point' | 'region'; clipId: string; assetId: string }
 /** A clip as drawn at the playhead: its transform after the follow post-pass (ADR-0015), its own transform, and the follow's scale factor m (resolved scale = own scale · m). */
@@ -136,7 +164,10 @@ export class Editor {
     provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [], actor: null,
     trackJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
     templatesOpen: false, templatesFocus: 0, templateRun: null,
+    cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
   };
+  /** Counter that makes each view request (tab, panel, gallery, notice) a new one. */
+  private requests = 0;
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
   private es?: EventSource;
@@ -208,7 +239,9 @@ export class Editor {
       const targets = this.state.doc?.id === p.project.id ? {} : { targets: readTargets(p.project.id) };
       // the track picker closes when the clip it picks on is gone
       const picker = this.state.picker && !findClip(p.project, this.state.picker.clipId) ? { picker: null } : {};
-      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker });
+      // the chosen cut goes when it is no longer a cut (its clips were moved apart, or one of them is gone)
+      const cutGone = this.state.cutClipId && (!selection.includes(this.state.cutClipId) || !cutBefore(p.project, this.state.cutClipId)) ? { cutClipId: null, loupe: false } : {};
+      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone });
       const vd = this.viewDoc;
       if (vd) this.player?.setDoc(vd);
     }
@@ -430,8 +463,43 @@ export class Editor {
   select(id: string | null, mode: 'replace' | 'toggle' = 'replace') {
     const cur = this.state.selection;
     const selection = !id ? [] : mode === 'toggle' ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : [id];
-    this.set({ selection, ...(this.following ? {} : { followAgent: false }) });
+    // a chosen cut belongs to the clip after it: any other selection lets it go
+    const cutGone = this.state.cutClipId && !(selection.length === 1 && selection[0] === this.state.cutClipId) ? { cutClipId: null, loupe: false } : {};
+    this.set({ selection, ...cutGone, ...(this.following ? {} : { followAgent: false }) });
   }
+  /**
+   * Choose the cut at the start of `clipId` (that clip is selected with it, so the inspector and the ride bar show the cut),
+   * or let the chosen cut go with null (the selection stays). Choosing a cut shows the loupe unless `loupe: false`.
+   */
+  selectCut(clipId: string | null, opts: { loupe?: boolean } = {}) {
+    if (!clipId) { if (this.state.cutClipId || this.state.loupe) this.set({ cutClipId: null, loupe: false }); return; }
+    const loupe = opts.loupe ?? true;
+    if (this.state.cutClipId === clipId && this.state.loupe === loupe && this.state.selection.length === 1 && this.state.selection[0] === clipId) return;
+    this.set({ selection: [clipId], cutClipId: clipId, loupe, ...(this.following ? {} : { followAgent: false }) });
+  }
+  /** Show or hide the cut loupe (only while a cut is chosen). */
+  setLoupe(on: boolean) { const loupe = on && !!this.state.cutClipId; if (loupe !== this.state.loupe) this.set({ loupe }); }
+  /** Ask the inspector to show a tab of the selected object (it ignores a tab the object does not have). */
+  openInspectorTab(tab: ObjectTab) { this.set({ inspectorTab: { tab, n: ++this.requests } }); }
+  /**
+   * Show a panel for the clip `clipId` (the ride bar's speed, animation, effect, sound, replace and "all transitions"): the
+   * inspector opens the tab that holds it and moves the focus there; effects and the transitions gallery open the gallery.
+   */
+  openPanel(target: PanelTarget, clipId: string | null) {
+    if (clipId && !(this.state.selection.length === 1 && this.state.selection[0] === clipId)) this.select(clipId);
+    this.set({ panelRequest: { target, clipId, n: ++this.requests } });
+    if (target === 'effects') this.openGallery('effects');
+    else if (target === 'transitions-gallery') this.openGallery('transitions');
+  }
+  /** Open the effects gallery for the selected clip, on one of its tabs (its first one when null or not offered). */
+  openGallery(tab: GalleryTab | null = null) { if (this.selected) this.set({ gallery: { tab, n: ++this.requests } }); }
+  closeGallery() { if (this.state.gallery) this.set({ gallery: null }); }
+  /** Say a quiet line over the viewer; null takes it away. */
+  sayOnStage(text: string | null) { this.set({ stageNote: text ? { text, at: Date.now() } : null }); }
+  /** Open the export sheet (for callers that do not import ExportSheet.tsx, such as the command registry). */
+  openExportSheet() { this.set({ exportSheet: this.state.exportSheet + 1 }); }
+  /** Show a toast (App.tsx mounts the queue). */
+  notify(notice: Notice) { this.set({ notice: { ...notice, n: ++this.requests } }); }
   selectAll() {
     const doc = this.state.doc;
     if (doc) this.set({ selection: [...doc.sequences[doc.mainSequenceId]!.tracks].reverse().filter((t) => !t.locked).flatMap((t) => t.clips.map((c) => c.id)) });
@@ -450,9 +518,25 @@ export class Editor {
   }
   /** Exports started from this tab that have not finished yet (their file is saved automatically when ready). */
   private myExports = new Set<string>();
-  startExport(variantId?: string) {
+  /**
+   * An export this tab started (the export sheet, a retry): its file is saved by itself once it is ready, and it becomes the
+   * export the top bar's ring follows until a newer one starts.
+   */
+  trackExport(jobId: string) {
+    this.myExports.add(jobId);
+    this.set({ exportJob: { id: jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } });
+  }
+  /**
+   * Start an export through the same REST route as every client (the export sheet calls this; the top bar's Export button and
+   * the palette open the sheet). Resolves to the job id; a refusal (preflight blockers, a format the server refuses) is
+   * thrown to the caller, who says it in place.
+   */
+  async startExport(options: ExportRequest = {}): Promise<string | null> {
     const { doc } = this.state;
-    if (doc) api.startExport(doc.id, variantId ? { variantId } : undefined).then((j) => { this.myExports.add(j.jobId); this.set({ exportJob: { id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } }); }).catch(this.fail);
+    if (!doc) return null;
+    const j = await api.startExport(doc.id, Object.keys(options).length ? options : undefined);
+    this.trackExport(j.jobId);
+    return j.jobId;
   }
   /** Pause Agent / Take Over: the server refuses agent mutations until the owner resumes. */
   setAgentsPaused(paused: boolean) { const d = this.state.doc; if (d) api.setPaused(d.id, paused).then((r) => this.set({ agentsPaused: r.agentsPaused })).catch(this.fail); }
@@ -478,7 +562,7 @@ export class Editor {
   cancelExport() { const j = this.state.exportJob; if (j) api.cancelJob(j.id).catch(this.fail); }
   retryExport() {
     const j = this.state.exportJob;
-    if (j) api.retryJob(j.id).then((n) => { this.myExports.add(n.jobId); this.set({ exportJob: { id: n.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null } }); }).catch(this.fail);
+    if (j) api.retryJob(j.id).then((n) => this.trackExport(n.jobId)).catch(this.fail);
   }
   /**
    * Starts a capability run and returns its job id. The job is recorded as queued unless its first event has already come in

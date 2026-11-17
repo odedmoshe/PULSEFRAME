@@ -4,16 +4,20 @@ import './ds/shell.css';
 import './editor/stage.css';
 import './editor/timeline.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ToastProvider, useToasts } from './ds/index.ts';
 import { CanvasHandles } from './editor/CanvasHandles.tsx';
 import { TrackPicker } from './editor/TrackPicker.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
 import { chordOf, Keymap } from './editor/commands.ts';
 import { ErrorBar } from './editor/ErrorBar.tsx';
+import { GalleryHost } from './editor/EffectGallery.tsx';
+import { ExportSheetHost } from './editor/ExportSheet.tsx';
 import { Header } from './editor/Header.tsx';
 import { Inspector } from './editor/Inspector.tsx';
 import { Library } from './editor/Library.tsx';
 import { Rail } from './editor/Rail.tsx';
 import { Splitter } from './editor/Splitter.tsx';
+import { StageHeader } from './editor/StageHeader.tsx';
 import { StatusBar } from './editor/StatusBar.tsx';
 import { Transport } from './editor/Transport.tsx';
 import { shortcutAllowed } from './editor/shortcutGate.ts';
@@ -40,7 +44,9 @@ export function App() {
       const el = e.target as HTMLElement;
       const typing = el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
       const chord = chordOf(e);
-      const cmd = keymap.lookup(chord);
+      // a chord may belong to more than one command (the cut's , and . before the keyframe steps): the first that can run now acts
+      const bound = keymap.lookupAll(chord);
+      const cmd = bound.find((c) => !c.enabled || c.enabled(editor)) ?? bound[0];
       if (!cmd) return;
       // any modal dialog (whatever its class) is open: editor shortcuts do not act on the timeline behind it
       if (!shortcutAllowed(chord, cmd, { typing, paletteOpen: editor.getState().paletteOpen, modalOpen: !!document.querySelector('[aria-modal="true"]') })) return;
@@ -53,9 +59,31 @@ export function App() {
 
   return (
     <EditorContext.Provider value={editor}>
-      <Shell canvasRef={canvasRef} keymap={keymap} />
+      <Toasts>
+        <Shell canvasRef={canvasRef} keymap={keymap} />
+      </Toasts>
     </EditorContext.Provider>
   );
+}
+
+const APP_STRINGS = { he: { close: 'סגירה', undo: 'ביטול' }, en: { close: 'Close', undo: 'Undo' } } as const;
+/** The toast queue of the editor (ds ToastProvider), in the interface language. */
+function Toasts({ children }: { children: React.ReactNode }) {
+  const { state } = useEditorState();
+  return <ToastProvider closeLabel={APP_STRINGS[state.lang].close}>{children}<ToastBridge /></ToastProvider>;
+}
+/** The editor's notices (editor.notify) go to the toast queue; an undo toast offers to undo the edit it names. */
+function ToastBridge() {
+  const { editor, state } = useEditorState();
+  const toasts = useToasts();
+  const seen = useRef(0);
+  const n = state.notice;
+  useEffect(() => {
+    if (!n || n.n === seen.current) return;
+    seen.current = n.n;
+    toasts.push({ kind: n.kind, title: n.title, body: n.body, ...(n.kind === 'undo' ? { action: APP_STRINGS[state.lang].undo, onAction: () => void editor.history('undo') } : {}) });
+  }, [n?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
 }
 
 const NOTICE_STRINGS = {
@@ -110,6 +138,7 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
       <Rail />
       <Library />
       <main className="stage">
+        <StageHeader />
         <div className="canvas-wrap">
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
           <CanvasHandles canvas={canvasEl} />
@@ -124,6 +153,9 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
       <Timeline />
       <StatusBar />
       <CommandPalette keymap={keymap} />
+      {/* one host each: the export sheet (the top bar's Export, the palette and the Deliver panel open it) and the effects gallery (the rail, the ride bar and the inspector open it) */}
+      <ExportSheetHost />
+      <GalleryHost />
     </div>
   );
 }

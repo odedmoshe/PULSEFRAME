@@ -5,6 +5,11 @@
  * Tiles that move by themselves (motions, time effects, overlays, the strobe) and transition tiles animate while hovered or
  * focused, never under prefers-reduced-motion; every animated frame passes one FlashGuard per dialog (ADR-0009 decision 2),
  * like the player. Transitions are grouped by their registry category (ADR-0012).
+ * Opening: `GalleryHost` (App.tsx, mounted once) shows the gallery for the selected clip whenever the editor asks for it
+ * (editor.openGallery: the rail's Effects / Transitions / Looks drawer, whose button carries `gallery-open`, and the ride bar).
+ * The inspector's own button (EffectGalleryButton) keeps the Look panel's "apply to" choice; it carries `gallery-open` only
+ * while the rail's button is not on screen, and `gallery-open-inspector` otherwise, so the id is never there twice.
+ * Effect, look and transition tiles can be dragged onto the timeline (catalogDragType; the timeline shows the drop and commits).
  */
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -13,7 +18,9 @@ import { adjustmentRefusal, applyTransaction, COLOR_LOOKS, createProject, EFFECT
 import { drawGraph, evaluate, FlashGuard, type FrameImage } from '@pulseframe/engine';
 import { fillIn, type Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
-import { useEditorState } from './store.ts';
+import { useEditorState, type GalleryTab } from './store.ts';
+import { useChrome } from './chromeState.ts';
+import { catalogDragType } from './interactions.math.ts';
 import { GALLERY_STRINGS, SPREAD_STRINGS } from './gallery.strings.ts';
 import { ArrowLeft, ArrowRight, Star, X } from 'lucide-react';
 import { Button, Tabs } from '../ds/index.ts';
@@ -165,20 +172,42 @@ function cachePut(key: string, bm: ImageBitmap) {
 const clockOf = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(0).padStart(2, '0')}`;
 const stripExt = (n: string) => n.replace(/\.[A-Za-z0-9]{2,4}$/, '');
 
+/** The rail categories whose drawer shows the gallery's own opener (Library.tsx CatalogueDrawer, data-testid gallery-open). */
+export const GALLERY_RAIL = ['effects', 'transitions', 'looks'] as const;
 export function EffectGalleryButton({ clip, trackKind, applyTo = 'clip', onApplyTo }: { clip: Clip; trackKind: string; applyTo?: ApplyTo; onApplyTo?: (v: ApplyTo) => void }) {
   const { state } = useEditorState();
+  const { rail } = useChrome();
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const G = GALLERY_STRINGS[state.lang];
+  // the rail's drawer owns gallery-open while it shows its button; this one is then its alias under another id
+  const testId = (GALLERY_RAIL as readonly string[]).includes(rail) ? 'gallery-open-inspector' : 'gallery-open';
   return (
     <>
-      <button ref={btn} type="button" data-testid="gallery-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>{G.open}</button>
+      <button ref={btn} type="button" data-testid={testId} aria-haspopup="dialog" onClick={() => setOpen(true)}>{G.open}</button>
       {open && <EffectGallery clip={clip} trackKind={trackKind} applyTo={applyTo} onApplyTo={onApplyTo} onClose={() => { setOpen(false); setTimeout(() => btn.current?.focus(), 0); }} />}
     </>
   );
 }
 
-function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onApplyTo }: { clip: Clip; trackKind: string; onClose: () => void; applyTo: ApplyTo; onApplyTo?: (v: ApplyTo) => void }) {
+/**
+ * The gallery the editor asked for (editor.openGallery), for the selected clip, on the tab asked for. Closing it returns the
+ * focus to what had it when it opened (the rail's button, the ride bar's action). Mounted once, in App.tsx.
+ */
+export function GalleryHost() {
+  const { editor, state } = useEditorState();
+  const g = state.gallery;
+  const sel = editor.selected;
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (g) opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }, [g?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // nothing selected any more (the clip was deleted elsewhere): the request lapses
+  useEffect(() => { if (g && !sel) editor.closeGallery(); }, [g, sel, editor]);
+  if (!g || !sel) return null;
+  const close = () => { editor.closeGallery(); const el = opener.current; setTimeout(() => { if (el?.isConnected) el.focus(); }, 0); };
+  return <EffectGallery key={`${g.n}:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} applyTo="clip" initialTab={g.tab} onClose={close} />;
+}
+
+function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onApplyTo, initialTab = null }: { clip: Clip; trackKind: string; onClose: () => void; applyTo: ApplyTo; onApplyTo?: (v: ApplyTo) => void; initialTab?: GalleryTab | null }) {
   const { editor, state, t } = useEditorState();
   const lang = state.lang;
   const G = GALLERY_STRINGS[lang];
@@ -192,7 +221,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
   const [applyTo, setApplyToState] = useState<ApplyTo>(adjustment ? 'clip' : initialApplyTo);
   const setApplyTo = (v: ApplyTo) => { setApplyToState(v); onApplyTo?.(v); };
   const tabs = useMemo<TabId[]>(() => [...(isText || media || adjustment ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media ? (['motion'] as TabId[]) : [])], [isText, media, adjustment]);
-  const [tab, setTab] = useState<TabId>(tabs[0] ?? 'effects');
+  const [tab, setTab] = useState<TabId>(() => (initialTab && tabs.includes(initialTab) ? initialTab : tabs[0] ?? 'effects'));
   const [query, setQuery] = useState('');
   const [snap, setSnap] = useState<{ bitmap: ImageBitmap; dim: ImageBitmap; w: number; h: number; key: string } | null | undefined>(undefined);
   const [rendered, setRendered] = useState<ReadonlySet<string>>(new Set());
@@ -531,6 +560,16 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
         <button type="button" className="pf-gal-tile" data-testid="gallery-tile" {...(main ? {} : { 'data-testid': 'gallery-pick' })} data-kind={it.kind} data-id={it.id} data-value={it.id}
           data-rendered={main && isRendered ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
           disabled={unavailable} aria-pressed={pressed} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
+          draggable={!unavailable && (it.kind === 'effect' || it.kind === 'look' || it.kind === 'transition')}
+          onDragStart={(e) => {
+            if (it.kind !== 'effect' && it.kind !== 'look' && it.kind !== 'transition') return;
+            e.dataTransfer.setData(catalogDragType({ kind: it.kind, id: it.id, name }), it.id);
+            e.dataTransfer.effectAllowed = 'copy';
+            // the timeline behind the spread takes the drop: the backdrop lets the drag through until it ends
+            const back = dialogRef.current?.parentElement;
+            if (back) back.style.pointerEvents = 'none';
+          }}
+          onDragEnd={() => { const back = dialogRef.current?.parentElement; if (back) back.style.pointerEvents = ''; }}
           onPointerEnter={animates(it) ? () => setHot(it.key) : undefined} onPointerLeave={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
           onFocus={animates(it) ? () => setHot(it.key) : undefined} onBlur={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
           <span className="pf-gal-img" aria-hidden="true">
