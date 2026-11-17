@@ -525,7 +525,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
     const isRendered = rendered.has(it.key);
     return (
       <div key={`${section ?? 'all'}:${it.key}`} className={`pf-gal-cell${pressed ? ' is-applied' : ''}${unavailable ? ' is-off' : ''}`} hidden={!matches(it)}>
-        <button type="button" className="pf-gal-tile" data-testid={main ? 'gallery-tile' : 'gallery-pick'} data-kind={it.kind} data-id={it.id} data-value={it.id}
+        <button type="button" className="pf-gal-tile" data-testid="gallery-tile" {...(main ? {} : { 'data-testid': 'gallery-pick' })} data-kind={it.kind} data-id={it.id} data-value={it.id}
           data-rendered={main && isRendered ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
           disabled={unavailable} aria-pressed={pressed} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
           onPointerEnter={animates(it) ? () => setHot(it.key) : undefined} onPointerLeave={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}

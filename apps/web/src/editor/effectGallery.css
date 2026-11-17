@@ -65,3 +65,5 @@
 .pf-gal-dialog fieldset.pf-apply-to .muted { flex-basis: 100%; margin: 0; color: var(--pf-text-3); }
 .pf-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 900px) { .pf-gal-dialog { inline-size: 100%; } .pf-gal-backdrop { padding: 8px; } }
+/* a pressed tile draws its state on its picture (above); the button itself stays flat */
+.pf-gal-tile[aria-pressed='true'] { border-color: transparent; background-color: transparent; }

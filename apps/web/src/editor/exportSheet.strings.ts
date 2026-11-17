@@ -33,7 +33,7 @@ export const EXPORT_STRINGS = {
       velocity_source: ['שינוי מהירות במעבר', 'אין מספיק חומר בקליפים למעבר הזה', ''],
       decode_budget: ['יותר מדי תמונות ברגע אחד', 'חלק מהפריימים יסורבו בייצוא', ''],
       no_sound: ['אין שמע בסרטון', 'הסרטון ייוצא שקט', ''],
-      no_loudness_target: ['לא נקבעה עוצמה לשמע', 'אפשר לקבוע יעד עוצמה בלשונית הסאונד', ''],
+      no_loudness_target: ['לא נקבעה עוצמה לשמע', 'אפשר לקבוע יעד עוצמה בלשונית הסאונד', 'קביעת יעד ל־14−'],
     } as Record<string, [string, string, string]>,
     blocker: 'חוסם', warning: 'שימו לב',
     // progress
@@ -85,7 +85,7 @@ export const EXPORT_STRINGS = {
       velocity_source: ['Speed change inside a transition', 'The clips have too little material for this transition', ''],
       decode_budget: ['Too many pictures at once', 'Some frames would be refused in the export', ''],
       no_sound: ['The video has no sound', 'It will export silent', ''],
-      no_loudness_target: ['No sound level target set', 'You can set one in the Sound tab', ''],
+      no_loudness_target: ['No sound level target set', 'You can set one in the Sound tab', 'Set the target to −14'],
     } as Record<string, [string, string, string]>,
     blocker: 'Blocks export', warning: 'Heads up',
     progressTitle: (label: string) => `Exporting · ${label}`, frameWord: 'frames', framesOf: (a: number, b: number) => `${a} / ${b}`,

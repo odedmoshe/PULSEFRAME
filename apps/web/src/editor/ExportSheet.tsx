@@ -27,10 +27,16 @@ import './exportSheet.css';
 
 // ---------------------------------------------------------------- the sheet's own small store (open state and the jobs it started)
 export interface SheetJob { id: string; label: string; variantId: string | null; status: string; stage: string | null; output: any; error: any; ext: string; w: number; h: number }
-interface SheetState { open: boolean; jobs: SheetJob[]; starting: boolean; error: string | null; blockers: { code: string; message: string }[] }
-let sheet: SheetState = { open: false, jobs: [], starting: false, error: null, blockers: [] };
+interface SheetState { open: boolean; jobs: SheetJob[]; starting: boolean; error: string | null; blockers: { code: string; message: string }[]; recent: SheetJob[] }
+let sheet: SheetState = { open: false, jobs: [], starting: false, error: null, blockers: [], recent: [] };
 const listeners = new Set<() => void>();
-const setSheet = (patch: Partial<SheetState>) => { sheet = { ...sheet, ...patch }; for (const l of listeners) l(); };
+const setSheet = (patch: Partial<SheetState>) => {
+  sheet = { ...sheet, ...patch };
+  // finished files of this session, newest first (the Deliver panel lists them as recent exports)
+  const fresh = sheet.jobs.filter((j) => j.status === 'succeeded' && !sheet.recent.some((r) => r.id === j.id));
+  if (fresh.length) sheet = { ...sheet, recent: [...fresh, ...sheet.recent].slice(0, 6) };
+  for (const l of listeners) l();
+};
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 const useSheet = () => useSyncExternalStore(subscribe, () => sheet);
 /** Opens the export sheet. A finished or failed earlier run is cleared, so the sheet opens on its settings; a running one is shown. */
@@ -38,6 +44,8 @@ export function openExportSheet() {
   const running = sheet.jobs.some((j) => isActiveJob(j.status));
   setSheet({ open: true, error: null, blockers: [], ...(running ? {} : { jobs: [] }) });
 }
+/** The files this session exported, newest first (for the Deliver panel). */
+export function useRecentExports(): SheetJob[] { return useSheet().recent; }
 export function closeExportSheet() { setSheet({ open: false }); }
 
 // only the first mounted host renders, so a second mount point cannot open a second dialog
