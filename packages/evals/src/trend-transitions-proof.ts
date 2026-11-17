@@ -27,7 +27,14 @@
  *      between six back-to-back 1-second clips, with dark/bright and with equal-luminance pictures: the FlashAnalyser verdict.
  *      Canvas2D: a gate. The colour blocks (and dip, for comparison) between 4-frame clips: recorded, not a gate.
  *  T7. punch-in, shape-heart, blur-dissolve and slices-h: the paused editor preview is byte-identical to the still, and the
- *      export reaches PSNR ≥ 40 dB against the stills.
+ *      export shows the same frames as the stills. An export is 4:2:0 (one colour sample per 2×2 pixels), which alone
+ *      leaves a frame with a hard edge between the blue 0 and the blue 255 picture at 32–37 dB against its still, whatever
+ *      the codec does (recorded per id: the stills through that conversion with no codec loss, against themselves). So
+ *      the export is compared with the stills put through the export's own conversion (export.ts EXPORT_PIXEL_FILTER) and
+ *      a lossless encode: PSNR ≥ 40 dB on frames
+ *      61, 66, 70, 73, 74, 75, 78, 82 and 87, and on 73, 74 and 75 the export is at least 6 dB nearer its own frame than
+ *      the frame before or after (a frame out of place fails). wipe-left (a transition from before the pack, hard-edged
+ *      too) is measured the same way.
  *  T8. Recorded: the median milliseconds per frame of each new Canvas2D id at 1080×1920 (lab.html?bench=transitions, the
  *      render page's CPU raster path), against the same frames without a transition; anything over 60 ms is named.
  *
@@ -47,6 +54,7 @@ import { blockColors, blockSpans, SHAPES, shapeScale } from '@pulseframe/engine/
 import { GPU_TRANSITIONS, pageFold } from '@pulseframe/engine/gpu.ts';
 import { BARCODE, generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { EXPORT_COLOR_TAGS, EXPORT_PIXEL_FILTER } from '@pulseframe/server/export.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/trend-transitions');
@@ -529,6 +537,36 @@ async function main() {
         const [size, data] = b64.split(':');
         return size === `${wide.w}x${wide.h}` ? Buffer.from(data ?? '', 'base64') : null;
       };
+      /**
+       * Stills as an export would carry them with no codec loss: the export's own conversion to 4:2:0 (EXPORT_PIXEL_FILTER
+       * and its colour tags), a lossless H.264 encode, and the decode exportFrames uses.
+       */
+      const asExported = (stills: Img[]): Buffer[] => {
+        const file = path.join(art, `reference-${++outputs}.mp4`);
+        ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${wide.w}x${wide.h}`, '-framerate', '30', '-i', 'pipe:0', '-vf', EXPORT_PIXEL_FILTER, '-c:v', 'libx264', '-preset', 'medium', '-qp', '0', ...EXPORT_COLOR_TAGS, '-y', file], Buffer.concat(stills.map((x) => x.rgb)));
+        const raw = ff(['-i', file, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']), fb = wide.w * wide.h * 3;
+        if (raw.length !== fb * stills.length) throw new Error(`reference encode: ${raw.length / fb} frames for ${stills.length} stills`);
+        return stills.map((_, i) => raw.subarray(i * fb, (i + 1) * fb));
+      };
+      /** The frames whose export is compared, and the three about the middle where a frame out of place must show. */
+      const COMPARED = [61, 66, 70, 73, 74, 75, 78, 82, 87], IN_PLACE = [73, 74, 75];
+      /** An export of the window against its stills: through the export's 4:2:0 conversion (the gate) and as they are (recorded). */
+      const exportAgreement = async () => {
+        const exp = await exportFrames(wide.pid, 60, 89, wide.w, wide.h);
+        if (exp.job.status !== 'succeeded' || exp.frames.length !== N) return { ok: false, detail: { export: exp.job.status, frames: exp.frames.length } };
+        const first = IN_PLACE[0]! - 1, around: Img[] = [];
+        for (let k = first; k <= IN_PLACE.at(-1)! + 1; k++) around.push(await still(wide.pid, k, wide.w, wide.h));
+        const rest = COMPARED.filter((k) => k < first || k > first + around.length - 1);
+        const restStills: Img[] = [];
+        for (const k of rest) restStills.push(await still(wide.pid, k, wide.w, wide.h));
+        const frames = [...rest, ...around.map((_, i) => first + i)], stills = [...restStills, ...around], refs = asExported(stills);
+        const ref = (k: number) => refs[frames.indexOf(k)]!, raw = (k: number) => stills[frames.indexOf(k)]!.rgb, out = (k: number) => exp.frames[k - 60]!;
+        let minRef = Infinity, minRaw = Infinity, minConversion = Infinity, minMargin = Infinity;
+        for (const k of COMPARED) { minRef = Math.min(minRef, psnr(out(k), ref(k))); minRaw = Math.min(minRaw, psnr(out(k), raw(k))); minConversion = Math.min(minConversion, psnr(ref(k), raw(k))); }
+        for (const k of IN_PLACE) minMargin = Math.min(minMargin, psnr(out(k), ref(k)) - Math.max(psnr(out(k), ref(k - 1)), psnr(out(k), ref(k + 1))));
+        const db = (v: number) => (Number.isFinite(v) ? Number(v.toFixed(2)) : String(v));
+        return { ok: minRef >= 40 && minMargin >= 6, detail: { exportMinPsnrDb: db(minRef), nearerItsOwnFrameByDb: db(minMargin), exportAgainstTheStillsAsRenderedMinPsnrDb: db(minRaw), conversionAloneMinPsnrDb: db(minConversion) } };
+      };
       const rows: Record<string, unknown> = {};
       let ok = true;
       for (const id of ['punch-in', 'shape-heart', 'blur-dissolve', 'slices-h']) {
@@ -546,15 +584,17 @@ async function main() {
           if (!d?.identical) ok = false;
           agree[k] = d ?? 'preview canvas of another size';
         }
-        const exp = await exportFrames(wide.pid, 60, 89, wide.w, wide.h);
-        let minPsnr = Infinity;
-        for (const k of [61, 66, 70, 74, 78, 82, 87]) minPsnr = Math.min(minPsnr, exp.frames[k - 60] ? psnr(exp.frames[k - 60]!, (await still(wide.pid, k, wide.w, wide.h)).rgb) : 0);
-        if (!(exp.job.status === 'succeeded' && minPsnr >= 40)) ok = false;
-        rows[id] = { previewVsStill: agree, exportMinPsnrDb: Number(minPsnr.toFixed(2)) };
+        const exp = await exportAgreement();
+        if (!exp.ok) ok = false;
+        rows[id] = { export: exp.detail, previewVsStill: agree };
       }
       await page.close();
-      measurements.agreement = rows;
-      check('T7 punch-in, shape-heart, blur-dissolve and slices-h: the paused editor preview is byte-identical to the still (frames 70, 74, 78) and the export reaches PSNR ≥ 40 dB against the stills; no page errors', ok && errors.length === 0, { ...rows, pageErrors: errors.slice(0, 3) });
+      // a hard-edged transition from before the pack, measured the same way (its stills are pinned by proof:trend-baseline)
+      await setTr(wide, 'wipe-left');
+      const legacy = await exportAgreement();
+      if (!legacy.ok) ok = false;
+      measurements.agreement = { ...rows, 'wipe-left (from before the pack)': { export: legacy.detail }, note: 'exportMinPsnrDb: the export against the stills through the export\'s own 4:2:0 conversion and a lossless encode (the gate, with nearerItsOwnFrameByDb); conversionAloneMinPsnrDb: those against the stills as rendered, which is what 4:2:0 costs the picture with no codec loss; exportAgainstTheStillsAsRenderedMinPsnrDb: both together (recorded)' };
+      check('T7 punch-in, shape-heart, blur-dissolve and slices-h: the paused editor preview is byte-identical to the still (frames 70, 74, 78); the export reaches PSNR ≥ 40 dB against the stills as its 4:2:0 conversion carries them without codec loss (frames 61, 66, 70, 73, 74, 75, 78, 82, 87) and on 73, 74 and 75 is at least 6 dB nearer its own frame than the one before or after; wipe-left, from before the pack, the same; no page errors', ok && errors.length === 0, { ...Object.fromEntries(Object.entries(rows).map(([id, r]) => [id, { ...(r as { export: object }).export, previewIdentical: Object.values((r as { previewVsStill: Record<string, { identical?: boolean }> }).previewVsStill).every((d) => d?.identical === true) }])), 'wipe-left': legacy.detail, pageErrors: errors.slice(0, 3) });
     }
 
     // ---------------------------------------------------------------- T8
