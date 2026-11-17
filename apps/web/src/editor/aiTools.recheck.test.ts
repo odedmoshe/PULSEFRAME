@@ -173,7 +173,8 @@ describe('jobs: progress, cancel, proposals', () => {
     const start = T.rt(2, 1);
     expect(placeAnywayOps({ status: 'proposed', assetId: 'ast_r', proposal: { mode: 'replace-clip', clipId: 'clp_1', speed: 0.25 } })).toEqual([{ op: 'replace_clip_asset', args: { clipId: 'clp_1', assetId: 'ast_r' } }, { op: 'set_clip_speed', args: { clipId: 'clp_1', speed: 0.25 } }]);
     expect(placeAnywayOps({ status: 'proposed', assetId: 'ast_r', proposal: { mode: 'new-track', clipId: 'clp_1', start, duration: T.rt(1, 1) } })).toEqual([{ op: 'add_clip', args: { assetId: 'ast_r', start, duration: T.rt(1, 1), withLinkedAudio: false } }]);
-    expect(placeAnywayOps({ status: 'proposed', proposal: { op: 'attach_translation', args: {} } })).toBeNull();
+    expect(placeAnywayOps({ status: 'proposed', assetId: 'ast_r', proposal: { op: 'attach_translation', args: {} } })).toBeNull();
+    expect(placeAnywayOps({ status: 'proposed', assetId: 'ast_r', proposal: { op: 'replace_clip_asset', args: { clipId: 'clp_1', assetId: 'ast_r' } } })).toEqual([{ op: 'replace_clip_asset', args: { clipId: 'clp_1', assetId: 'ast_r' } }]);
     expect(placeAnywayOps({ status: 'attached', assetId: 'ast_r', proposal: { mode: 'replace-clip', clipId: 'clp_1' } })).toBeNull();
   });
 });

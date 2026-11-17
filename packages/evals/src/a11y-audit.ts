@@ -3,14 +3,18 @@
  * It checks things a script can decide: every control has an accessible name, text contrast, visible keyboard focus,
  * document language/direction, tab semantics. It is not a WCAG conformance statement and does not replace testing with a
  * screen reader or with users. Findings are written to docs/evidence/a11y-audit.json. The transient states include the
- * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator).
+ * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator), and the
+ * AI-model wave's surfaces (ADR-0017): the AI tools panel with a run sheet open, the before/after compare slider after a run of the
+ * ffmpeg-only classic vocal remover, and the translation review (a typed translation fixture; no model runs).
  *   pnpm build && pnpm audit:a11y
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
+import { sha256Hex } from '@pulseframe/core';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 
@@ -104,6 +108,15 @@ async function main() {
     const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
     const tx = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }, { op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60) } }, { op: 'add_caption_track', args: { mode: 'manual' } }, { op: 'add_variant', args: { profileId: 'vertical-9x16' } }, { op: 'add_marker', args: { time: f(0), label: 'סמן פתיחה' } }] });
     const clipId = tx.results[0].output.clipId;
+    // ADR-0017: a stereo sound (two different channels, so the classic vocal remover accepts it) on its own clip, with a typed Hebrew
+    // transcript and an English translation fixture (stored by the op the translation tool commits; no model runs here).
+    const mix = path.join(art, 'mix.wav');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', "aevalsrc=exprs='0.3*sin(2*PI*440*t)+0.3*sin(2*PI*660*t)|0.3*sin(2*PI*440*t)':s=48000:d=2", '-c:a', 'pcm_s16le', mix]);
+    const upMix: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'mix.wav' }, body: fs.readFileSync(mix) })).json();
+    const mixClip = (await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: upMix.assetId, start: f(0) } }] })).results[0].output.clipId as string;
+    s.store.commit({ projectId: pid, actor: 'fixture', ops: [{ op: 'set_transcript', args: { assetId: upMix.assetId, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(1, 1), text: 'שלום לכולם' }] } }] });
+    const seg = s.store.getProject(pid).doc.transcripts[upMix.assetId]!.segments[0]!.id;
+    s.store.commit({ projectId: pid, actor: 'fixture', allowInternal: true, ops: [{ op: 'attach_translation', args: { baseVariantId: null, name: 'English', language: 'en', translation: { from: 'he', to: 'en', engine: 'typed fixture (no model ran)', model: 'none', createdAt: new Date().toISOString(), createdBy: 'fixture', sources: { [seg]: sha256Hex('שלום לכולם') } }, phraseText: { [seg]: 'Hello everyone' }, cueText: {} } }] });
     for (const lang of ['he', 'en'] as const) {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
@@ -233,6 +246,32 @@ async function main() {
       await auditState('look-visual-wave', { shown: lookShown.fieldset === 1 && lookShown.separator === 1 && lookShown.stampField === 1 && lookShown.beatToggles >= 1, ...lookShown }, true);
       await post(`/projects/${pid}/transactions`, { ops: waveFx.map((effectId) => ({ op: 'remove_effect', args: { clipId, effectId } })) });
       await page.getByTestId('beat-fieldset').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+      // ---- AI-model wave (ADR-0017) ----
+      // the AI tools panel, sound tab, with the classic vocal remover's run sheet open on the selected stereo clip
+      await page.locator(`.clip[data-clip-id="${mixClip}"]`).click();
+      const soundTab = page.locator('[data-testid=ai-tab][data-tab=sound]');
+      if (await soundTab.count()) await soundTab.click();
+      const vocals = page.locator('[data-testid=ai-tool][data-id="local.audio.vocals-classic"]');
+      const vocalsShown = (await vocals.count()) === 1;
+      if (vocalsShown) { await vocals.getByTestId('ai-open-run').click(); await vocals.getByTestId('ai-run-sheet').waitFor({ timeout: 8000 }).catch(() => {}); await vocals.getByTestId('ai-open-run').focus(); }
+      await auditState('ai-tools-run-sheet', { shown: vocalsShown && (await vocals.getByTestId('ai-run-sheet').count()) === 1, tabs: await page.locator('[data-testid=ai-tab]').count() }, true);
+      // a run in place of the clip's file, then the before/after compare slider (focused; the focus walk starts there)
+      let compareShown = false;
+      if (vocalsShown) {
+        await vocals.getByTestId('ai-apply-replace-clip').check().catch(() => {});
+        await vocals.getByTestId('ai-run').click().catch(() => {});
+        await vocals.getByTestId('ai-compare-slider').waitFor({ timeout: 60000 }).catch(() => {});
+        compareShown = (await vocals.getByTestId('ai-compare-slider').count()) === 1;
+        if (compareShown) await vocals.getByTestId('ai-compare-slider').focus();
+      }
+      await auditState('ai-result-compare', { shown: compareShown, progressbar: await vocals.locator('[role=progressbar]').count() }, true);
+      if (compareShown) { await vocals.getByTestId('ai-undo').click().catch(() => {}); await page.waitForTimeout(500); }
+      // the translation review in the transcript panel (all Inspector panels are shown)
+      const review = page.getByTestId('translation-review');
+      await review.waitFor({ timeout: 8000 }).catch(() => {});
+      const reviewShown = (await review.count()) === 1;
+      if (reviewShown) { await review.scrollIntoViewIfNeeded().catch(() => {}); await review.getByTestId('translation-limit').focus().catch(() => {}); }
+      await auditState('translation-review', { shown: reviewShown && (await review.getByTestId('translation-row').count()) === 1 }, true);
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);

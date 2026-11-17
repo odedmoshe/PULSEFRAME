@@ -103,9 +103,12 @@ export const samplesToSeconds = (n: number, rate = 48000) => Math.round((n / rat
  * (replace_clip_asset, plus the slow-motion speed), or a new clip on its own track. None for anything else (a translation is
  * stored by an internal op only the server commits).
  */
+const PLACE_OPS = new Set(['replace_clip_asset', 'add_clip']);
 export function placeAnywayOps(a: Attachment | null | undefined): OpCall[] | null {
   if (!a || a.status !== 'proposed' || !a.assetId || !a.proposal) return null;
   const p = a.proposal as { mode?: string; clipId?: string | null; start?: unknown; sourceIn?: unknown; duration?: unknown; speed?: number; op?: string };
+  // a proposal already written as one public op (the local tools keep { op: 'replace_clip_asset', args }); an internal op is not offered
+  if (typeof p.op === 'string') return PLACE_OPS.has(p.op) && (a.proposal as { args?: unknown }).args ? [{ op: p.op, args: (a.proposal as { args: unknown }).args }] : null;
   if (p.mode === 'replace-clip' && typeof p.clipId === 'string') {
     return [{ op: 'replace_clip_asset', args: { clipId: p.clipId, assetId: a.assetId } }, ...(typeof p.speed === 'number' ? [{ op: 'set_clip_speed', args: { clipId: p.clipId, speed: p.speed } }] : [])];
   }

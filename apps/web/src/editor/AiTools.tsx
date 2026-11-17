@@ -206,6 +206,16 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
   const blockedBy = (c.blockers ?? []).filter((b) => !EARNED.has(b.code)).map((b) => S.blockers[b.code] ?? `${S.unknownBlocker}: ${b.message}`);
   const stepArg = setup.code === 'host_not_allowed' ? (setup.hosts ?? []).join(', ') : setup.code === 'disk_insufficient' ? size(missingBytes) : engineVar(c);
   const steps = (S.setupSteps[setup.code] ?? S.setupSteps.ready)(stepArg);
+  // each model file that is not ready, as the model store reports it (size still to download, damaged, cannot be verified)
+  const modelLines = (c.models ?? []).flatMap((m) => {
+    const st = m.status;
+    if (!st || st.state === 'ready') return [];
+    if (st.state === 'missing') return [S.modelMissing(m.path, size(st.missingBytes))];
+    if (st.state === 'partial-download') return [S.modelPartial(m.path, size(st.missingBytes))];
+    if (st.state === 'corrupt') return [S.modelCorrupt(m.path)];
+    if (st.state === 'unverifiable') return [S.modelUnverifiable(m.path)];
+    return [S.modelUnresolved(m.path)];
+  });
 
   const recheck = async () => {
     setCheck({ text: S.checking, failed: false });
@@ -263,7 +273,7 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
                 <ol className="pf-ai-steps" data-testid="ai-setup-steps">{steps.map((s) => <li key={s}><bdi dir="auto">{s}</bdi></li>)}</ol>
               </>
             )}
-            {blockedBy.length > 0 && <ul className="pf-ai-why">{[...new Set(blockedBy)].map((w) => <li key={w}>{w}</li>)}</ul>}
+            {(blockedBy.length > 0 || modelLines.length > 0) && <ul className="pf-ai-why" data-testid="ai-why">{[...new Set([...modelLines, ...blockedBy])].map((w) => <li key={w}>{w}</li>)}</ul>}
             {canAsk && (
               <div className="pf-ai-row">
                 {pending || ask.state === 'sent'
@@ -287,7 +297,7 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
       ) : (
         <>
           <div className="pf-ai-row">
-            <button type="button" className="ghost" aria-expanded={open} aria-controls={`${uid}-sheet`} disabled={!c.runnable && setup.code !== 'ready'} onClick={() => setOpen((o) => !o)} data-testid="ai-open-run">{open ? S.closeRun : S.openRun}</button>
+            <button type="button" className="ghost" aria-expanded={open} aria-controls={`${uid}-sheet`} disabled={!c.runnable || setup.code !== 'ready'} onClick={() => setOpen((o) => !o)} data-testid="ai-open-run">{open ? S.closeRun : S.openRun}</button>
           </div>
           <div id={`${uid}-sheet`} hidden={!open}>
             {open && <AiRunSheet cap={c} tab={tab} S={S} onRefused={(m) => setRefused(m)} onStarted={(jobId, info) => { setRefused(null); setCancel({ sending: false, text: null }); setPlaced(null); onStarted(jobId, info); }} />}
@@ -318,7 +328,7 @@ function JobView({ cap: c, job, run, S, editor, smoke, onCancel, cancel, placed,
   const beforeId = att?.previousAssetId ?? run?.sourceAssetId ?? null;
   const before = beforeId ? aiApi.assetUrl(pid, beforeId) : null;
   const clipId = att?.clipId ?? run?.clipId ?? null;
-  const times = doc && clipId && att?.status === 'attached' && att.mode === 'replace-clip' ? compareTimes(doc, clipId, editor.playhead) : null;
+  const times = doc && clipId && att?.status === 'attached' && att.mode !== 'new-track' ? compareTimes(doc, clipId, editor.playhead) : null;
   const placeAnyway = async () => {
     if (!ops) return;
     const r = await editor.commit(ops, 'Place result');
@@ -351,7 +361,7 @@ function JobView({ cap: c, job, run, S, editor, smoke, onCancel, cancel, placed,
           {c.task === 'translate' ? (
             <>
               <p>{S.translationMade}</p>
-              {att?.variantId && <button type="button" className="ghost" onClick={() => { editor.set({ viewVariantId: att.variantId! }); document.getElementById('inspector-tab-captions')?.click(); }} data-testid="ai-show-translation">{S.showTranslation}</button>}
+              {att?.variantId && <button type="button" className="ghost" onClick={() => { editor.set({ viewVariantId: att.variantId! }); document.getElementById('inspector-tab-speech')?.click(); }} data-testid="ai-show-translation">{S.showTranslation}</button>}
             </>
           ) : att?.status === 'proposed' ? (
             <>
