@@ -2,9 +2,10 @@
 
 Status: **accepted** (2026-11-17); built, reviewed, repaired and merged. Proof so far: trend-baseline: the 348 existing frame hashes are identical
 after the merge;
-trend-transitions proof 15/15; trend-light proof 15/15; trend-text proof currently FAILING 20/23 (gradient bottom stop, long-shadow 1 px,
-extrude-retro export PSNR),
-a repair is in progress. The lead updates this line when the repair lands. Nobody has looked at any of this on real footage, and the seven new GPU
+trend-transitions proof 15/15; trend-light proof 15/15; trend-text proof 25/25 after a repair (2026-11-17): the gradient of a title over 256 px ended
+about 5 px below the ink (a product fault: Chromium measures ink boxes in 1/64-em steps above 256 px; fixed, baseline unchanged); the long
+shadow and the extrude export were faults of the check (unequal coverage thresholds; a 4:2:0 encode of the still itself scores 35.97 dB),
+both now measured as corrected with a control each; an independent verifier found no loosened check. Nobody has looked at any of this on real footage, and the seven new GPU
 transitions have been
 run only on a software renderer in the cloud, never on a real graphics card (ADR-0011:85: they count as verified only after the owner's run on the
 laptop).

@@ -1,8 +1,9 @@
 # ADR-0013: Voice cleanup «ניקוי קול» — model-free hum removal, noise reduction and speech enhancer
 
-Status: **accepted** (2026-11-17); built, reviewed, repaired and merged. Proof so far: voiceclean proof currently FAILING 9/11 (a constant −3-sample
-lag; 0.61 dB against
-a 0.5 dB bound), a repair is in progress. The lead updates this line when the repair lands. Nobody has listened to the cleaned sound on a real
+Status: **accepted** (2026-11-17); built, reviewed, repaired and merged. Proof: `pnpm proof:voiceclean` 11/11 after a repair (2026-11-17): the first run failed 9/11 on two faults of the check, not of
+the effects — C4 read the designed phase of the filters at 1 kHz (−2.51 samples) as a delay (now broadband bursts measure the delay, 0
+samples), and C5's 0.61 dB came from the preview tap stamping its windows to 0.1 ms (now microseconds, plus a sample-by-sample comparison);
+an independent verifier found no loosened check. Nobody has listened to the cleaned sound on a real
 recording; every statement
 below about what the effects do rests on synthetic signals.
 

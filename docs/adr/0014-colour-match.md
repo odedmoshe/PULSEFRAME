@@ -1,8 +1,9 @@
 # ADR-0014: Colour match «התאמת צבע» and automatic colour balance «איזון צבע אוטומטי»
 
-Status: **accepted** (2026-11-17); built, reviewed, repaired and merged. Proof so far: colourmatch proof currently FAILING 6/8 (tint solved to −0.996
-where −0.2 was expected;
-48% against a 60% bound), a repair is in progress. The lead updates this line when the repair lands. Nobody has compared a match with its reference by
+Status: **accepted** (2026-11-17); built, reviewed, repaired and merged. Proof: `pnpm proof:colourmatch` 17/17 after a repair (2026-11-17): the first run failed 6/8; the tint runaway and the fit's
+starting points were product faults (fixed), the flat test pattern hid tint from any statistics fit (M2 now on a picture with mid-tones, the
+flat pattern kept as M2b against the runaway), the M3 cast was already "close" before any match (fixture changed), and an independent
+verifier then showed the fit minimised another measure than the distance it reports (fixed: see Consequences). Nobody has compared a match with its reference by
 eye on real footage;
 the fit has been measured only on synthetic and fixture pictures.
 
@@ -54,6 +55,11 @@ the fit has been measured only on synthetic and fixture pictures.
   are wave 2.
 
 ## Consequences / what is not promised
+- The match fit searches on a sum of squares of the statistics and finishes with iteratively reweighted least squares on the distance it
+  reports (statsDistance: |mid-tone colour difference| + mean |L* percentile error|), anchored at the search's estimate and never accepting a
+  worse result by that measure. On pictures of flat colours this distance has minima narrower than the 0.001 step of a grade value and than an
+  8-bit render (on the proof's first M3 stills the fit reaches 0.41, 0.42 rounded to 8 bits, where a search finds 0.28 in the model but only
+  0.40 rounded), so the verified figure, not the model residual, is the one to trust there.
 - A match is a static grade per clip: a clip that changes light inside itself is matched on three frames and warned about.
 - Each match replaces an existing grade; undo restores it.
 - The numbers (residual, verdict) describe statistics of three frames, not how the clip looks. Nothing here is called "looks right".
