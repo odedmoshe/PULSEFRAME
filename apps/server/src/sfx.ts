@@ -7,12 +7,10 @@ import { execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import type { Asset } from '@pulseframe/core';
 import { describeMedia } from './ingest.ts';
 import { ApiError, type Store } from './store.ts';
 
-const exec = promisify(execFile);
 export type SfxCategory = 'ui' | 'whoosh' | 'impact' | 'riser' | 'glitch' | 'notify' | 'cartoon' | 'ambience' | 'drum' | 'tone';
 export interface SfxDef { id: string; version: number; name: { he: string; en: string }; seconds: number; /** ffmpeg lavfi source graph (mono), deterministic */ graph: string; category: SfxCategory }
 const tone = (expr: string, d: number) => `aevalsrc=${expr.replaceAll(',', '\\,')}:s=48000:d=${d}`;
@@ -40,7 +38,13 @@ const chirp = (f0: number, f1: number, d: number) => `sin(2*PI*(${f0}*t+${+((f1 
 /** A decaying note starting at s seconds. */
 const note = (s: number, f: number, k: number, a = 0.5) => `${a}*gt(t,${s})*${SIN(f, `(t-${s})`)}*exp(-${k}*(t-${s}))`;
 const sq = (f: number | string) => `(gt(${SIN(f)},0)-0.5)`;
-const mk = (id: string, category: SfxCategory, he: string, en: string, seconds: number, graph: string): SfxDef => ({ id: `sfx.${id}`, version: 1, name: { he, en }, seconds, graph, category });
+/** `version` is 1 unless the recipe of a sound was changed after it shipped: a changed recipe gives other bytes, and the version says so in the asset's provenance. */
+const mk = (id: string, category: SfxCategory, he: string, en: string, seconds: number, graph: string, version = 1): SfxDef => ({ id: `sfx.${id}`, version, name: { he, en }, seconds, graph, category });
+/**
+ * Noise kept to a band `width` hertz wide around `centre`. The unit is stated (t=h) because ffmpeg reads a bare `w=` as a Q factor:
+ * version 1 of the four sounds below wrote `w=1200` and the like, a pass band a hertz or two wide, and came out as a faint pure tone.
+ */
+const band = (centre: number, width: number) => `bandpass=f=${centre}:t=h:w=${width}`;
 
 const NEW_SFX: readonly SfxDef[] = [
   // ui
@@ -52,14 +56,14 @@ const NEW_SFX: readonly SfxDef[] = [
   mk('shutter', 'ui', 'צמצם מצלמה', 'Camera shutter', 0.16, T(`0.7*${SIN(1800)}*exp(-250*t)+0.3*${SIN(90)}*exp(-60*t)+${note(0.06, 1100, 200, 0.6)}`, 0.16)),
   mk('tap', 'ui', 'נקישה', 'Tap', 0.1, T(`0.8*${SIN(400)}*exp(-90*t)`, 0.1)),
   mk('select', 'ui', 'בחירה', 'Select', 0.12, T(`0.4*${SIN(1500)}*exp(-40*t)+0.2*${SIN(3000)}*exp(-60*t)`, 0.12)),
-  mk('swipe-tick', 'ui', 'החלקה קצרה', 'Swipe tick', 0.12, N('white', 0.9, 21, 0.12, 'sin(PI*t/0.12)', 'bandpass=f=3000:w=1500,volume=24dB')),
+  mk('swipe-tick', 'ui', 'החלקה קצרה', 'Swipe tick', 0.12, N('white', 0.9, 21, 0.12, 'sin(PI*t/0.12)', band(3000, 1500)), 2),
   // whoosh
   mk('whoosh-short', 'whoosh', 'ווש קצר', 'Short whoosh', 0.3, N('pink', 0.8, 31, 0.3, 'pow(sin(PI*t/0.3),2)', 'highpass=f=500')),
   mk('whoosh-long', 'whoosh', 'ווש ארוך', 'Long whoosh', 1.5, N('pink', 0.8, 32, 1.5, 'pow(sin(PI*t/1.5),2)', 'highpass=f=250')),
   mk('whoosh-low', 'whoosh', 'ווש נמוך', 'Low whoosh', 0.8, N('brown', 1, 33, 0.8, 'pow(sin(PI*t/0.8),2)', 'lowpass=f=600')),
   mk('whoosh-high', 'whoosh', 'ווש גבוה', 'High whoosh', 0.5, N('white', 0.5, 34, 0.5, 'pow(sin(PI*t/0.5),2)', 'highpass=f=2500')),
   mk('whoosh-reverse', 'whoosh', 'ווש הפוך', 'Reverse swell', 0.8, N('pink', 0.8, 35, 0.8, 'pow(t/0.8,3)', 'highpass=f=400')),
-  mk('whoosh-swirl', 'whoosh', 'מערבולת', 'Swirl', 1.2, N('pink', 0.8, 36, 1.2, 'sin(PI*t/1.2)*(0.6+0.4*sin(2*PI*7*t))', 'bandpass=f=1500:w=1800,volume=28dB')),
+  mk('whoosh-swirl', 'whoosh', 'מערבולת', 'Swirl', 1.2, N('pink', 0.8, 36, 1.2, 'sin(PI*t/1.2)*(0.6+0.4*sin(2*PI*7*t))', `${band(1500, 1800)},volume=5dB`), 2),
   mk('whoosh-air', 'whoosh', 'משב אוויר', 'Air burst', 0.4, N('white', 0.7, 37, 0.4, 'exp(-8*t)', 'highpass=f=1000,lowpass=f=4500')),
   // impact
   mk('boom', 'impact', 'בום', 'Boom', 3, T(`0.9*${SIN('(70-20*t)')}*exp(-1.6*t)`, 3)),
@@ -104,7 +108,7 @@ const NEW_SFX: readonly SfxDef[] = [
   mk('wind', 'ambience', 'רוח', 'Wind', 4, N('pink', 0.8, 71, 4, '0.6+0.4*sin(2*PI*0.4*t)', 'lowpass=f=900,afade=t=in:d=0.5')),
   mk('rain', 'ambience', 'גשם', 'Rain', 4, N('white', 0.5, 72, 4, '1', 'highpass=f=2000,lowpass=f=9000,afade=t=in:d=0.3')),
   mk('room-tone', 'ambience', 'שקט חדר', 'Room tone', 4, N('brown', 0.9, 73, 4, '1', 'lowpass=f=400,afade=t=in:d=0.3')),
-  mk('vinyl-crackle', 'ambience', 'שריקת תקליט', 'Vinyl crackle', 4, N('white', 1, 74, 4, '1', 'agate=threshold=0.6:ratio=9000:attack=0.01:release=2:detection=peak,bandpass=f=3500:w=3000,volume=30dB,afade=t=in:d=0.2')),
+  mk('vinyl-crackle', 'ambience', 'שריקת תקליט', 'Vinyl crackle', 4, N('white', 1, 74, 4, '1', `agate=threshold=0.6:ratio=9000:attack=0.01:release=2:detection=peak,${band(3500, 3000)},afade=t=in:d=0.2`), 2),
   mk('electric-hum', 'ambience', 'זמזום חשמלי', 'Electric hum', 3, T(`0.4*${SIN(50)}+0.2*${SIN(100)}+0.1*${SIN(150)}`, 3)),
   // drum
   mk('kick', 'drum', 'קיק', 'Kick', 0.4, T(`0.95*sin(2*PI*(45*t+55*(1-exp(-30*t))/30))*exp(-9*t)`, 0.4)),
@@ -112,7 +116,7 @@ const NEW_SFX: readonly SfxDef[] = [
   mk('snare', 'drum', 'סנר', 'Snare', 0.25, mix(N('white', 0.7, 81, 0.25, 'exp(-22*t)', 'highpass=f=1500'), T(`0.5*${SIN(190)}*exp(-30*t)`, 0.25))),
   mk('hihat-closed', 'drum', 'היי-האט סגור', 'Hi-hat closed', 0.08, N('white', 0.6, 82, 0.08, 'exp(-60*t)', 'highpass=f=7000')),
   mk('hihat-open', 'drum', 'היי-האט פתוח', 'Hi-hat open', 0.5, N('white', 0.6, 83, 0.5, 'exp(-8*t)', 'highpass=f=6500')),
-  mk('clap', 'drum', 'מחיאת כף', 'Clap', 0.3, N('white', 0.9, 84, 0.3, 'if(lt(t,0.03),pow(mod(t,0.01)/0.01,0.5),exp(-18*(t-0.03)))', 'bandpass=f=1400:w=1200,volume=30dB')),
+  mk('clap', 'drum', 'מחיאת כף', 'Clap', 0.3, N('white', 0.9, 84, 0.3, 'if(lt(t,0.03),pow(mod(t,0.01)/0.01,0.5),exp(-18*(t-0.03)))', band(1400, 1200)), 2),
   mk('tom-low', 'drum', 'תוף נמוך', 'Low tom', 0.6, T(`0.9*sin(2*PI*(90*t+40*(1-exp(-15*t))/15))*exp(-6*t)`, 0.6)),
   mk('tom-high', 'drum', 'תוף גבוה', 'High tom', 0.4, T(`0.9*sin(2*PI*(200*t+80*(1-exp(-20*t))/20))*exp(-9*t)`, 0.4)),
   mk('rimshot', 'drum', 'רימשוט', 'Rimshot', 0.15, T(`0.5*${SIN(1700)}*exp(-90*t)+0.4*${SIN(480)}*exp(-60*t)+0.3*${SIN(3100)}*exp(-120*t)`, 0.15)),
@@ -133,34 +137,119 @@ export const SFX: readonly SfxDef[] = [...ORIGINAL_SFX, ...NEW_SFX];
 /** ffmpeg arguments used by makeSfx (exported so tests render exactly what production renders). */
 export const sfxFfmpegArgs = (graph: string, out: string): string[] => ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-f', 'lavfi', '-i', graph, '-ac', '2', '-ar', '48000', '-c:a', 'pcm_s16le', '-bitexact', '-fflags', '+bitexact', out];
 
-/** Rendered bytes of one effect for listening before adding it. Held in memory for the few most recent ones; nothing is stored. */
-const previews = new Map<string, Buffer>();
-export async function sfxPreview(tmpDir: string, id: string): Promise<Buffer> {
+// ---- On-demand synthesis: every ffmpeg run that a single request can ask for (a sound here, a graphic element in elements.ts) ----
+
+/** Why an ffmpeg run did not produce its file. */
+export class SynthFailure extends Error {
+  constructor(public reason: 'unavailable' | 'timeout' | 'failed', public tail = '') { super(`ffmpeg ${reason}`); }
+}
+/** Starts ffmpeg with these arguments and settles when it has ended. Replaceable, so the limits below can be tested without ffmpeg. */
+export type SynthRunner = (args: string[], timeoutMs: number) => Promise<void>;
+/** The real runner. A run that is still going after `timeoutMs` is killed outright, not asked to stop. */
+export const runFfmpeg: SynthRunner = (args, timeoutMs) => new Promise((resolve, reject) => {
+  execFile('ffmpeg', args, { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 1 << 20 }, (err, _stdout, stderr) => {
+    if (!err) return resolve();
+    const e = err as NodeJS.ErrnoException & { killed?: boolean };
+    reject(new SynthFailure(e.code === 'ENOENT' ? 'unavailable' : e.killed && e.code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? 'timeout' : 'failed', String(stderr).trim().slice(-400)));
+  });
+});
+
+export interface SynthLimits { /** ffmpeg runs at once */ max: number; /** requests that may wait for a turn */ maxQueue: number; /** a run is killed after this long */ timeoutMs: number; /** results held in memory, per kind */ keep: number; /** what a refused caller is told to wait */ retryAfterSeconds: number }
+export interface Synth {
+  /**
+   * The bytes for `key`, made by `make` (which starts ffmpeg through the function it is given and returns the file it wrote).
+   * A recent result comes from memory. A request for something that is already being made shares that run. Otherwise it takes a
+   * turn: at most `max` runs are active, at most `maxQueue` requests wait, and one more is refused with 429 `synthesis_busy`.
+   */
+  bytes(kind: string, key: string, make: (ffmpeg: (args: string[]) => Promise<void>) => Promise<Buffer>): Promise<Buffer>;
+}
+/**
+ * Sound previews are reachable with a read-only credential, and each one used to start its own ffmpeg: a few hundred requests in
+ * parallel meant a few hundred processes. This is the bound, shared by sounds and graphic elements so that the two together stay
+ * inside it. Results are deterministic (fixed recipes, bit-exact output), which is what makes sharing a run and a cache safe.
+ */
+export function createSynth(runner: SynthRunner = runFfmpeg, limits: Partial<SynthLimits> = {}): Synth {
+  const { max, maxQueue, timeoutMs, keep, retryAfterSeconds }: SynthLimits = { max: 2, maxQueue: 16, timeoutMs: 30_000, keep: 24, retryAfterSeconds: 2, ...limits };
+  const caches = new Map<string, Map<string, Buffer>>();
+  const inFlight = new Map<string, Promise<Buffer>>();
+  let running = 0;
+  const waiting: (() => void)[] = [];
+  /** Resolves when it is this request's turn. A finished run hands its place straight to the first waiter, so `running` never passes `max`. */
+  const turn = (): Promise<void> => {
+    if (running < max) { running++; return Promise.resolve(); }
+    if (waiting.length >= maxQueue) throw new ApiError(429, 'synthesis_busy', 'too many sounds or graphic elements are being made at the moment; this one was not started', { running, waiting: waiting.length, retryAfterSeconds }, `Wait ${retryAfterSeconds} s and ask again.`);
+    return new Promise<void>((resolve) => waiting.push(resolve));
+  };
+  const done = () => { const next = waiting.shift(); if (next) next(); else running--; };
+  return {
+    bytes(kind, key, make) {
+      const cache = caches.get(kind) ?? new Map<string, Buffer>();
+      caches.set(kind, cache);
+      const hit = cache.get(key);
+      if (hit) return Promise.resolve(hit);
+      const id = `${kind}\n${key}`;
+      const shared = inFlight.get(id);
+      if (shared) return shared;
+      const run = (async () => {
+        await turn();
+        try {
+          const bytes = await make((args) => runner(args, timeoutMs));
+          cache.set(key, bytes);
+          if (cache.size > keep) cache.delete(cache.keys().next().value!);
+          return bytes;
+        } finally {
+          done();
+        }
+      })().finally(() => inFlight.delete(id));
+      inFlight.set(id, run);
+      return run;
+    },
+  };
+}
+/** The one queue of this server process. */
+export const synth = createSynth();
+
+const findSfx = (id: string): SfxDef => {
   const def = SFX.find((s) => s.id === id);
   if (!def) throw new ApiError(404, 'not_found', `sound effect "${id}" does not exist`, { available: SFX.map((s) => s.id) }, 'Call list_catalog.');
-  const hit = previews.get(id);
-  if (hit) return hit;
-  const tmp = path.join(tmpDir, `sfxp_${randomBytes(6).toString('hex')}.wav`);
-  try {
-    await exec('ffmpeg', sfxFfmpegArgs(def.graph, tmp), { timeout: 30_000 });
-    const bytes = fs.readFileSync(tmp);
-    previews.set(id, bytes);
-    if (previews.size > 24) previews.delete(previews.keys().next().value!);
-    return bytes;
-  } finally {
-    fs.rmSync(tmp, { force: true });
-  }
+  return def;
+};
+/** A failed run as an answer the caller can act on: which sound, and whether the machine, the load or the recipe is the reason. */
+function sfxFailure(def: SfxDef, e: unknown): unknown {
+  if (!(e instanceof SynthFailure)) return e;
+  const which = `the sound "${def.name.en}" (${def.id})`;
+  if (e.reason === 'unavailable') return new ApiError(503, 'sfx_unavailable', `ffmpeg could not be started, so ${which} cannot be synthesised`, { id: def.id }, 'Install ffmpeg, make sure it is on the PATH, and restart the server.');
+  if (e.reason === 'timeout') return new ApiError(503, 'sfx_timeout', `synthesising ${which} took too long and was stopped`, { id: def.id }, 'The machine is very busy; try again shortly.');
+  return new ApiError(501, 'sfx_unsupported', `the installed ffmpeg cannot synthesise ${which}`, { id: def.id, name: def.name.en, ffmpeg: e.tail }, 'The recipe of this sound uses a filter or an option that this ffmpeg build does not have. Install a current, full ffmpeg build and restart the server. The other sounds are not affected.');
+}
+/** The WAV bytes of one sound: what a preview plays and what adding it stores. Exported for tests (a recipe this ffmpeg rejects, a replaced runner). */
+export function renderSfx(tmpDir: string, def: SfxDef, queue: Synth = synth): Promise<Buffer> {
+  return queue.bytes('sfx', `${def.id}@${def.version}`, async (ffmpeg) => {
+    const tmp = path.join(tmpDir, `sfxp_${randomBytes(6).toString('hex')}.wav`);
+    try {
+      await ffmpeg(sfxFfmpegArgs(def.graph, tmp));
+      return fs.readFileSync(tmp);
+    } catch (e) {
+      throw sfxFailure(def, e);
+    } finally {
+      fs.rmSync(tmp, { force: true });
+    }
+  });
+}
+
+/** Rendered bytes of one effect for listening before adding it. Held in memory for the few most recent ones; nothing is stored. */
+export async function sfxPreview(tmpDir: string, id: string, queue: Synth = synth): Promise<Buffer> {
+  return renderSfx(tmpDir, findSfx(id), queue);
 }
 
 /** Synthesise one effect and return it as an asset (blob stored, not yet attached to a project). */
-export async function makeSfx(store: Store, id: string, actor: string): Promise<Omit<Asset, 'id'>> {
-  const def = SFX.find((s) => s.id === id);
-  if (!def) throw new ApiError(404, 'not_found', `sound effect "${id}" does not exist`, { available: SFX.map((s) => s.id) }, 'Call list_catalog.');
+export async function makeSfx(store: Store, id: string, actor: string, queue: Synth = synth): Promise<Omit<Asset, 'id'>> {
+  const def = findSfx(id);
+  // -bitexact and a fixed graph: the same build produces the same bytes, so the asset is content-addressed and de-duplicated.
+  const bytes = await renderSfx(store.tmpDir, def, queue);
   const tmp = path.join(store.tmpDir, `sfx_${randomBytes(6).toString('hex')}.wav`);
   try {
-    // -bitexact and a fixed graph: the same build produces the same bytes, so the asset is content-addressed and de-duplicated.
-    await exec('ffmpeg', sfxFfmpegArgs(def.graph, tmp), { timeout: 30_000 });
-    const bytes = fs.readFileSync(tmp);
+    fs.writeFileSync(tmp, bytes);
     const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
     const meta = await describeMedia(tmp);
     store.putBlob(contentHash, tmp, bytes.length, meta.mimeType);
