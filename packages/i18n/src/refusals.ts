@@ -92,10 +92,20 @@ const HE_AI: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^caption cue \S+ not found$/, () => 'הכתובית שתורגמה כבר לא נמצאת (ייתכן שנמחקה בזמן התרגום)'],
   [/^only cues of a manual caption track are translated as cues$/, () => 'רק כתוביות של רצועת כתוביות ידנית מתורגמות ככתוביות'],
 ];
+/**
+ * Refusals of portrait blur («טשטוש רקע לתמונה», ADR-0017; packages/core/src/recipes.ts). Their own list, provoked one by one in
+ * packages/core/src/recipes.test.ts, so the AI list above keeps its own inventory test.
+ */
+const HE_PORTRAIT: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^portrait blur works on a still picture clip$/, () => 'טשטוש רקע פועל על קליפ של תמונה סטטית; לווידאו צריך חיתוך של כל פריים, ואת זה הגרסה הזו לא עושה'],
+  [/^the cut-out \S+ is not in the project$/, () => 'החיתוך (התמונה בלי הרקע) כבר לא נמצא בפרויקט. אפשר להריץ שוב את הסרת הרקע על התמונה'],
+  [/^the cut-out was not made from the picture this clip shows$/, () => 'החיתוך לא נוצר מהתמונה שהקליפ מציג. יש להריץ את הסרת הרקע על התמונה של הקליפ הזה'],
+  [/^remove the transition into the next clip first$/, () => 'יש להסיר קודם את המעבר אל הקליפ הבא'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_PORTRAIT]) { const m = re.exec(message); if (m) return say(m); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
@@ -104,3 +114,5 @@ export const REFUSAL_PATTERNS: readonly RegExp[] = HE.map(([re]) => re);
 export const AUDIO_FX_REFUSAL_PATTERNS: readonly RegExp[] = HE_AUDIO_FX.map(([re]) => re);
 /** The AI-model wave patterns (ADR-0017), for their own test. */
 export const AI_REFUSAL_PATTERNS: readonly RegExp[] = HE_AI.map(([re]) => re);
+/** The portrait-blur patterns (ADR-0017), for their own test (packages/core/src/recipes.test.ts). */
+export const PORTRAIT_REFUSAL_PATTERNS: readonly RegExp[] = HE_PORTRAIT.map(([re]) => re);
