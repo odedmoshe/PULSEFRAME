@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_TEXT_ANIMATION, TEXT_ANIM_IN, TEXT_ANIM_LOOP, TEXT_ANIM_OUT, type TextAnimation } from '@pulseframe/core';
-import { needsLineLayout, pieceRects, textAtRest, unitPose, unitProgress, unitRanges, widenStretches } from './textAnimation.ts';
+import { hasArabicScript, needsLineLayout, pieceRects, textAtRest, unitPose, unitProgress, unitRanges, widenStretches, writeProgress } from './textAnimation.ts';
 
 const at = (a: Partial<TextAnimation>, local: number, total = 4) => ({ ...DEFAULT_TEXT_ANIMATION, ...a, local, total, fps: 30 });
 const REST = { alpha: 1, dx: 0, dy: 0, scale: 1 };
@@ -94,6 +94,77 @@ describe('text animation as numbers', () => {
     expect(Math.max(...scales)).toBeGreaterThan(1.02);
     expect(scales[30]).toBe(1);
     expect(scales[0]).toBeLessThan(0.5);
+  });
+});
+
+describe('blur and write-on (ADR-0012)', () => {
+  const frame = (a: Partial<TextAnimation>, k: number, total = 4) => at(a, k / 30, total); // frame k of a 120-frame title
+  it('the blur entrance sharpens monotonically to no blur at all, and is absent at rest; the blur exit is the same backwards', () => {
+    for (const count of [1, 5]) for (const i of [0, count - 1]) {
+      const blurs = Array.from({ length: 24 }, (_, k) => unitPose(frame({ in: 'blur', inFrames: 20 }, k), i, count, true).blur ?? 0);
+      for (let k = 1; k < blurs.length; k++) expect(blurs[k]!, `unit ${i} of ${count}, frame ${k}`).toBeLessThanOrEqual(blurs[k - 1]!);
+      expect(blurs[0]).toBeGreaterThan(0);
+      expect(blurs[0]).toBeLessThanOrEqual(0.25);
+      expect(blurs[19]).toBe(0); // the last frame of the entrance
+      expect(unitPose(frame({ in: 'blur', inFrames: 20 }, 19), i, count, true)).toEqual(REST); // no blur field at all at rest
+      const alphas = Array.from({ length: 21 }, (_, k) => unitPose(frame({ in: 'blur', inFrames: 20 }, k), i, count, true).alpha);
+      for (let k = 1; k < alphas.length; k++) expect(alphas[k]!).toBeGreaterThanOrEqual(alphas[k - 1]!);
+    }
+    const out = Array.from({ length: 21 }, (_, k) => unitPose(frame({ out: 'blur', outFrames: 20 }, 99 + k), 0, 1, true));
+    expect(out[0]).toEqual(REST); // frame 99: the frame before the exit
+    for (let k = 1; k < out.length; k++) { expect(out[k]!.blur ?? 0).toBeGreaterThanOrEqual(out[k - 1]!.blur ?? 0); expect(out[k]!.alpha).toBeLessThanOrEqual(out[k - 1]!.alpha); }
+    expect(out[20]!.alpha).toBe(0);
+    expect(out[20]!.blur).toBeCloseTo(0.25, 12);
+    expect(textAtRest(frame({ in: 'blur', inFrames: 20 }, 19))).toBe(true);
+    expect(textAtRest(frame({ in: 'blur', inFrames: 20 }, 18))).toBe(false);
+  });
+  it('write-on: each unit takes its share of the entrance by its measured width, one after another; the shares add up to the whole', () => {
+    const widths = [30, 10, 20, 40];
+    // the shares: unit i is written from Σ_{j<i} w / Σw to Σ_{j≤i} w / Σw
+    expect([0, 1, 2, 3].map((i) => writeProgress(widths, i, 0.3))).toEqual([1, 0, 0, 0]);
+    expect(writeProgress(widths, 1, 0.35)).toBeCloseTo(0.5, 12);
+    expect(writeProgress(widths, 2, 0.5)).toBeCloseTo(0.5, 12);
+    expect([0, 1, 2, 3].map((i) => writeProgress(widths, i, 1))).toEqual([1, 1, 1, 1]);
+    expect([0, 1, 2, 3].map((i) => writeProgress(widths, i, 0))).toEqual([0, 0, 0, 0]);
+    for (const ws of [widths, [5], [1, 1, 1], [12.5, 0, 7, 33.1, 2], [0, 0]]) {
+      const total = ws.reduce((a, b) => a + b, 0), share = (i: number) => (total > 0 ? ws[i]! / total : 1 / ws.length);
+      expect(ws.reduce((n, _, i) => n + share(i), 0)).toBeCloseTo(1, 12); // the shares sum to 1
+      for (let k = 0; k <= 200; k++) {
+        const t = k / 200, r = ws.map((_, i) => writeProgress(ws, i, t));
+        // written so far = t: the units are written at a steady pace, by width
+        expect(r.reduce((n, x, i) => n + x * share(i), 0), `${ws} t=${t}`).toBeCloseTo(t, 9);
+        // sequential: a unit starts only when every unit before it is complete
+        for (let i = 1; i < r.length; i++) if (r[i]! > 0) expect(r[i - 1], `${ws} t=${t} unit ${i}`).toBe(1);
+      }
+    }
+  });
+  it('write-on poses: a unit not yet begun is invisible; a unit being written shows part of itself; at rest nothing is left of it', () => {
+    const a = { in: 'write' as const, inFrames: 10, by: 'letter' as const };
+    const widths = [20, 20, 20, 20];
+    const pose = (k: number, i: number) => unitPose(frame(a, k), i, 4, true, widths);
+    expect(pose(0, 0).alpha).toBe(1); expect(pose(0, 0).reveal).toBeCloseTo(0.4, 12); // frame 0 is step 1 of 10: 0.1 of the title = 0.4 of the first letter
+    expect(pose(0, 1).alpha).toBe(0);
+    expect(pose(3, 1).reveal).toBeCloseTo(0.6, 12); // 0.4 of the title
+    for (let i = 0; i < 4; i++) expect(pose(9, i)).toEqual(REST);
+    // without the widths every unit gets an equal share
+    expect(unitPose(frame(a, 3), 1, 4, true).reveal).toBeCloseTo(0.6, 12);
+  });
+  it('textAtRest is unchanged for every entrance, exit and loop', () => {
+    // the rule as it was before the blur and write-on entrances existed (the typewriter counts from the first frame)
+    const before = (x: TextAnimation & { local: number; total: number; fps: number }) => {
+      if (x.loop) return false;
+      if (x.in && (x.in === 'typewriter' ? x.local : x.local + 1 / x.fps) < x.inFrames / x.fps - 1e-9) return false;
+      if (x.out && x.local - (x.total - x.outFrames / x.fps) + 1 / x.fps > 1e-9) return false;
+      return true;
+    };
+    for (const kind of [null, ...TEXT_ANIM_IN]) for (const out of [null, ...TEXT_ANIM_OUT]) for (const loop of [null, ...TEXT_ANIM_LOOP]) for (const n of [1, 7, 20]) for (let k = 0; k < 120; k += 3) {
+      const x = frame({ in: kind, out, loop, inFrames: n, outFrames: n }, k);
+      expect(textAtRest(x), `${kind}/${out}/${loop} ${n} frame ${k}`).toBe(before(x));
+    }
+  });
+  it('Arabic script is found in any of its blocks; Hebrew and Latin are not it', () => {
+    for (const t of ['مرحبا', 'abc ﻼ', 'ﭐ', 'ہ']) expect(hasArabicScript(t), t).toBe(true);
+    for (const t of ['שלום', 'Hello', 'שָׁלוֹם 2026', '']) expect(hasArabicScript(t), t).toBe(false);
   });
 });
 

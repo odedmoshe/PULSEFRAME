@@ -9,6 +9,8 @@
  * motion tracking UI (ADR-0015): the tracking panel, follow and privacy-region controls with their warning, and the track picker.
  * Templates and adjustment layers (ADR-0016): an adjustment clip's inspector, the Templates drawer (its first card at the inline
  * start), the template dialog (first step and plan step) and the post-apply bar.
+ * The trend pack's panels (ADR-0012): the title effects panel with all six look fields on, and the transition options of a light
+ * transition (beat lock, velocity, colour, seed, light status).
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -322,6 +324,34 @@ async function main() {
       Object.assign(states.at(-1), { closed: (await page.getByTestId('track-picker').count()) === 0, focusReturned: await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'mtrack-new-point'), startsInside: pickerFocused });
       await post(`/projects/${pid}/transactions`, { ops: [{ op: 'remove_motion_track', args: { motionTrackId: mtk, unbind: true } }] });
       await page.getByTestId('mtrack-item').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+
+      // the title effects panel (ADR-0012): the title selected and all six look fields on, so every control shows; the focus walk starts in the panel
+      const textClipId = tx.results[1].output.clipId as string;
+      const looks = { gradient: { colors: ['#FFD166', '#3A5BFF', '#8A2BE2'], angle: 90 }, tracking: 0.1, stroke2: { color: '#111111', widthFrac: 0.06 }, glow: { color: '#FF2BD6', radiusFrac: 0.5, intensity: 0.8 }, extrude: { color: '#1D3557', depthFrac: 0.15, angle: 45, shade: 0.5 }, longShadow: { color: '#0000004D', lengthFrac: 1.5, angle: 45 } };
+      const fxOn = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: textClipId, style: looks } }] });
+      if (!fxOn.results) throw new Error(`turning the title looks on failed: ${JSON.stringify(fxOn).slice(0, 300)}`);
+      await page.locator(`.clip[data-clip-id="${textClipId}"]`).click();
+      await page.getByTestId('text-effects').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid=text-effects] input[type=checkbox]:checked').length >= 7, undefined, { timeout: 8000 }).catch(() => {});
+      await page.getByTestId('text-effects').scrollIntoViewIfNeeded().catch(() => {});
+      await page.getByTestId('text-fx-gradient').focus().catch(() => {});
+      const fxShown = { panel: await page.getByTestId('text-effects').count(), checked: await page.locator('[data-testid=text-effects] input[type=checkbox]:checked').count(), status: await page.getByTestId('text-fx-status').count(), removeAll: await page.getByTestId('text-fx-remove-all').count(), colourFields: await page.locator('[data-testid=text-effects] input[type=color]').count() };
+      await auditState('text-effects', { shown: fxShown.panel === 1 && fxShown.checked >= 6 && fxShown.status === 1 && fxShown.removeAll === 1 && fxShown.colourFields >= 7, ...fxShown }, true);
+      await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: textClipId, style: Object.fromEntries(Object.keys(looks).map((k) => [k, null])) } }] });
+      // the transition options (ADR-0012) of a light transition between two short clips of the fixture (film-burn declares colour,
+      // seed and light, so every control of the panel shows); the clips are removed again afterwards
+      const pair = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(200), duration: f(40), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: up.assetId, start: f(240), duration: f(40), withLinkedAudio: false } }] });
+      const [pairA, pairB] = (pair.results ?? []).map((r: any) => r.output.clipId as string);
+      const trSet = pairB ? await post(`/projects/${pid}/transactions`, { ops: [{ op: 'set_transition', args: { clipId: pairB, type: 'film-burn', frames: 10 } }] }) : null;
+      if (pairB && trSet?.results) {
+        await page.locator(`.clip[data-clip-id="${pairB}"]`).click();
+        await page.getByTestId('transition-options').waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('transition-options').scrollIntoViewIfNeeded().catch(() => {});
+        await page.getByTestId('transition-sync').focus().catch(() => {});
+      }
+      const trShown = { options: await page.getByTestId('transition-options').count(), sync: await page.getByTestId('transition-sync').count(), velocity: await page.getByTestId('transition-velocity').count(), colour: await page.getByTestId('transition-color').count(), seed: await page.getByTestId('transition-seed').count(), lightStatus: await page.getByTestId('transition-light-status').count(), transitionSet: !!trSet?.results };
+      await auditState('transition-options', { shown: trShown.transitionSet && trShown.options === 1 && trShown.sync === 1 && trShown.velocity === 1 && trShown.colour >= 1 && trShown.seed >= 1 && trShown.lightStatus === 1, ...trShown }, true);
+      if (pairA || pairB) await post(`/projects/${pid}/transactions`, { ops: [pairA, pairB].filter(Boolean).map((id) => ({ op: 'delete_clip', args: { clipId: id } })) });
 
       // ---- templates and adjustment layers (ADR-0016), in their own project ----
       await page.goto(`${s.ownerUrl}&project=${tplPid}`);
