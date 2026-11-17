@@ -3,6 +3,7 @@ import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIM
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -64,6 +65,7 @@ export function loneLinkClips(doc: ProjectDocument): string[] {
 export function validateProject(doc: ProjectDocument): Issue[] {
   const issues: Issue[] = [];
   const rate = doc.settings.frameRate;
+  const motionTracks = doc.motionTracks ?? {};
   const seen = new Set<string>();
   const uniq = (id: string) => {
     if (seen.has(id)) issues.push({ code: 'duplicate_id', message: `duplicate id ${id}`, ids: [id] });
@@ -139,6 +141,30 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           seenFx.add(fx.id);
         }
         if ((c.effects?.length || c.blend) && (tr.kind === 'audio' || tr.kind === 'caption')) issues.push({ code: 'incompatible_track', message: `clip ${c.id} on a ${tr.kind} track cannot carry picture effects`, ids: [c.id, tr.id] });
+        // Motion tracking (ADR-0015): new optional fields, so these rules can only fire on documents that use them.
+        if (c.follow) {
+          if (!(c.type === 'text' || (c.type === 'media' && tr.kind === 'video'))) issues.push({ code: 'follow_clip', message: `clip ${c.id}: only a title, or a picture on a video track, can follow a motion track`, ids: [c.id, tr.id] });
+          if (!Object.hasOwn(motionTracks, c.follow.motionTrackId)) issues.push({ code: 'follow_track', message: `clip ${c.id} follows motion track ${c.follow.motionTrackId}, which does not exist`, ids: [c.id, c.follow.motionTrackId] });
+          const first = c.effects?.find((e) => e.enabled);
+          if (first && isTimeEffect(first.type)) issues.push({ code: 'follow_time_effect', message: `clip ${c.id}: a clip with a time effect cannot follow a motion track yet`, ids: [c.id] });
+          // a targetTrackId that names no track is not an issue: the evaluator reports the follow as target-missing
+        }
+        if (c.type === 'media' && c.redact) {
+          if (tr.kind !== 'video') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: privacy regions belong to video clips on video tracks`, ids: [c.id, tr.id] });
+          const asset = doc.assets[c.assetId];
+          // a region on a still would be stored and never drawn: a silent privacy gap, so it is invalid
+          if (asset && !asset.video) issues.push({ code: 'redact_still', message: `clip ${c.id}: privacy regions are drawn on video pictures only, and asset ${asset.id} has no video`, ids: [c.id, asset.id] });
+          const regionIds = new Set<string>();
+          for (const r of c.redact) {
+            // ids are unique within the clip only: split_clip copies the clip whole, regions included
+            if (regionIds.has(r.id)) issues.push({ code: 'duplicate_id', message: `clip ${c.id} has two privacy regions with id ${r.id}`, ids: [c.id] });
+            regionIds.add(r.id);
+            if (r.motionTrackId === null) continue;
+            const mt = Object.hasOwn(motionTracks, r.motionTrackId) ? motionTracks[r.motionTrackId] : undefined;
+            if (!mt) issues.push({ code: 'redact_track', message: `clip ${c.id}: privacy region ${r.id} follows motion track ${r.motionTrackId}, which does not exist`, ids: [c.id, r.motionTrackId] });
+            else if (mt.assetId !== c.assetId) issues.push({ code: 'redact_track', message: `clip ${c.id}: privacy region ${r.id} follows motion track ${mt.id} of another file`, ids: [c.id, mt.id] });
+          }
+        }
         if (c.type === 'media' && (c.mask || c.transition) && tr.kind !== 'video') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: masks and transitions belong to picture clips`, ids: [c.id, tr.id] });
         // Adjustment clips live only on adjustment tracks and use opacity alone (ADR-0016). This rule can only fire on
         // documents that use them (schema v2), so an older project stays editable.
@@ -203,6 +229,22 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     if (!doc.sequences[mk.sequenceId]) issues.push({ code: 'missing_sequence', message: `marker ${mk.id} refers to a missing sequence`, ids: [mk.id] });
     if (T.isNegative(mk.time) || !T.isFrameAligned(mk.time, doc.settings.frameRate)) issues.push({ code: 'marker_time', message: `marker ${mk.id} must sit on a non-negative whole frame`, ids: [mk.id] });
   }
+  // Motion tracks (ADR-0015): one sample per source frame of a video asset, in equal-length integer columns.
+  let samples = 0;
+  for (const [key, mt] of Object.entries(motionTracks)) {
+    if (key !== mt.id) issues.push({ code: 'key_mismatch', message: `motion track key ${key} != id ${mt.id}`, ids: [key] });
+    uniq(mt.id); // an entity of its own (entities.ts): its id must not be another entity's
+    const asset = doc.assets[mt.assetId];
+    if (!asset?.video) issues.push({ code: 'missing_asset', message: `motion track ${mt.id} refers to asset ${mt.assetId}, which is missing or has no video`, ids: [mt.id, mt.assetId] });
+    const n = mt.x.length;
+    samples += n;
+    if (mt.y.length !== n || mt.q.length !== n || mt.st.length !== n || (mt.s && mt.s.length !== n)) issues.push({ code: 'track_shape', message: `motion track ${mt.id}: its sample columns differ in length`, ids: [mt.id] });
+    if ((mt.kind === 'region') !== !!mt.s || (mt.kind === 'region') !== !!mt.box) issues.push({ code: 'track_shape', message: `motion track ${mt.id}: sizes and a box belong exactly to region tracks`, ids: [mt.id] });
+    if (asset?.video && asset.video.frameCount !== null && mt.from + n > asset.video.frameCount) issues.push({ code: 'track_range', message: `motion track ${mt.id} reaches past the last frame of asset ${asset.id}`, ids: [mt.id, asset.id] });
+    if (mt.st.some((v) => !Number.isInteger(v) || v < 0 || v >= TRACK_STATES.length)) issues.push({ code: 'track_state', message: `motion track ${mt.id} has a state code outside 0..${TRACK_STATES.length - 1}`, ids: [mt.id] });
+  }
+  if (Object.keys(motionTracks).length > MAX_MOTION_TRACKS) issues.push({ code: 'track_limit', message: `the project has more than ${MAX_MOTION_TRACKS} motion tracks`, ids: [] });
+  if (samples > MAX_PROJECT_TRACK_SAMPLES) issues.push({ code: 'track_limit', message: `the motion tracks hold ${samples} samples, more than ${MAX_PROJECT_TRACK_SAMPLES}`, ids: [] });
   for (const [key, va] of Object.entries(doc.variants ?? {})) {
     if (key !== va.id) issues.push({ code: 'key_mismatch', message: `variant key ${key} != id ${va.id}`, ids: [key] });
     uniq(va.id);
