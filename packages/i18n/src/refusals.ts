@@ -1,5 +1,6 @@
 import { effectParamLabel } from './effectParams.ts';
 import { HE_LIFE } from './lifeline.ts';
+import { HE_PACKS } from './packs.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -216,7 +217,7 @@ const HE_TEMPLATES: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS]) { const m = re.exec(message); if (m) return say(m); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
@@ -235,3 +236,5 @@ export const TRACKING_REFUSAL_PATTERNS: readonly RegExp[] = HE_TRACKING.map(([re
 export const TEMPLATE_REFUSAL_PATTERNS: readonly RegExp[] = HE_TEMPLATES.map(([re]) => re);
 /** The life-line patterns (ADR-0021; the table is in lifeline.ts), for their own test (packages/evals/src/lifeline-wording.test.ts). */
 export const LIFE_REFUSAL_PATTERNS: readonly RegExp[] = HE_LIFE.map(([re]) => re);
+/** The patterns of the content packs and built-in music (ADR-0022; the table is in packs.ts), for their own test (packages/evals/src/packs-wording.test.ts). */
+export const PACK_REFUSAL_PATTERNS: readonly RegExp[] = HE_PACKS.map(([re]) => re);

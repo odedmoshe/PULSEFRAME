@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, findClip, isRealWallDate, OpError, WALL_DATE, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
+import { applyTransaction, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, OpError, WALL_DATE, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
@@ -897,12 +897,17 @@ function checkAnalysis(store: Store, gov: Governance, principal: Principal, proj
   gov.assertUnrestricted(principal, 'change analysis data');
   assertAnalysable(store, projectId, a);
 }
+/** The refusal to measure the beats of built-in music (ADR-0022), whose beats, bars and sections are known from its recipe. */
+export const knownByConstruction = () => new ApiError(409, 'known_by_construction', 'the beats of this built-in music are known from its recipe; measuring them would replace exact beats, bars and sections with an estimate', { kind: 'beats' }, 'Nothing needs measuring. Pass overwrite=true to measure it anyway.');
 function assertAnalysable(store: Store, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
   const p = store.getProject(projectId);
   const asset = p.doc.assets[a.assetId];
   if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
   const existing = a.kind === 'scenes' ? p.doc.analyses?.[a.assetId]?.scenes : p.doc.analyses?.[a.assetId]?.beats;
   if (existing?.origin.edited && !a.overwrite) throw new ApiError(409, 'would_discard_edits', 'this result was corrected by hand; analysing again would discard those corrections', { kind: a.kind }, 'Pass overwrite=true to replace it.');
+  // Built-in music (ADR-0022): its beats, bars and sections are known from the recipe. A measurement would replace them with
+  // an estimate (the tracker can lock half a beat off or at double tempo) and drop the sections.
+  if (a.kind === 'beats' && !a.overwrite && isBuiltinMusic(asset) && isKnownGrid(p.doc.analyses?.[a.assetId]?.beats)) throw knownByConstruction();
   if (a.kind === 'scenes' && !asset.video) throw new ApiError(422, 'no_video', 'this asset has no moving picture to analyse');
   if (a.kind === 'beats' && !asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to analyse');
   return asset;
