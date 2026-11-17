@@ -6,7 +6,7 @@
  * .stage, .transport and .timecode after it. The bare `canvas` rule stays in styles.css: it is the base of every canvas.
  * theme.cascade.test.ts pins .stage { overflow-y: clip } (theme.css) and .canvas-wrap { position: relative } (here).
  */
-.stage { grid-area: stage; display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
+.stage { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
 .canvas-wrap { min-height: 0; display: flex; align-items: center; justify-content: center; padding: var(--pf-s-4); }
 .transport { display: flex; align-items: center; justify-content: center; gap: var(--pf-s-2); padding: var(--pf-s-2); border-top: 1px solid var(--pf-border); }
 .timecode { font: 700 var(--pf-fs-lg) var(--pf-mono); min-width: 9ch; text-align: center; }

@@ -1,5 +1,6 @@
-// These two sheets come before every component sheet (the first imports of this file): their rules stood in styles.css,
-// ahead of all the components' own sheets, and keep that place in the cascade.
+// These sheets come before every component sheet (the first imports of this file). The shell grid first; then the stage and
+// timeline rules, which stood in styles.css, ahead of all the components' own sheets, and keep that place in the cascade.
+import './ds/shell.css';
 import './editor/stage.css';
 import './editor/timeline.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -7,7 +8,14 @@ import { CanvasHandles } from './editor/CanvasHandles.tsx';
 import { TrackPicker } from './editor/TrackPicker.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
 import { chordOf, Keymap } from './editor/commands.ts';
-import { ErrorBar, Header, Inspector, Library, Transport } from './editor/panels.tsx';
+import { ErrorBar } from './editor/ErrorBar.tsx';
+import { Header } from './editor/Header.tsx';
+import { Inspector } from './editor/Inspector.tsx';
+import { Library } from './editor/Library.tsx';
+import { Rail } from './editor/Rail.tsx';
+import { Splitter } from './editor/Splitter.tsx';
+import { StatusBar } from './editor/StatusBar.tsx';
+import { Transport } from './editor/Transport.tsx';
 import { shortcutAllowed } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { Timeline } from './editor/Timeline.tsx';
@@ -94,9 +102,12 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
   const { t } = useEditorState();
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
   return (
+    // The shell grid (ds/shell.css): top bar, error bar, rail, browser, stage, inspector, splitter, timeline, status bar.
+    // The rail, the splitter and the status bar are mounts: empty, and without room in the grid, until they are built.
     <div className="app">
       <Header />
       <ErrorBar />
+      <Rail />
       <Library />
       <main className="stage">
         <div className="canvas-wrap">
@@ -109,7 +120,9 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
         <Transport />
       </main>
       <Inspector keymap={keymap} />
+      <Splitter />
       <Timeline />
+      <StatusBar />
       <CommandPalette keymap={keymap} />
     </div>
   );

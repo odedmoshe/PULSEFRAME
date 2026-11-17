@@ -14,8 +14,7 @@ kbd { font: 11px var(--pf-mono); padding: 1px 4px; border-radius: 3px; backgroun
 .file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .file { position: relative; }
 
-.app { height: 100%; display: grid; grid-template: auto auto minmax(0, 1fr) 230px / 260px minmax(0, 1fr) 300px; grid-template-areas: 'header header header' 'error error error' 'library stage inspector' 'timeline timeline timeline'; }
-.header { grid-area: header; display: flex; align-items: center; gap: var(--pf-s-3); padding: var(--pf-s-2) var(--pf-s-4); background: var(--pf-surface); border-bottom: 1px solid var(--pf-border); }
+.header { display: flex; align-items: center; gap: var(--pf-s-3); padding: var(--pf-s-2) var(--pf-s-4); background: var(--pf-surface); border-bottom: 1px solid var(--pf-border); }
 .logo { width: 26px; height: 26px; display: inline-flex; color: var(--pf-text); }
 .brand { letter-spacing: 0.06em; }
 .title { color: var(--pf-text-muted); }
@@ -23,10 +22,10 @@ kbd { font: 11px var(--pf-mono); padding: 1px 4px; border-radius: 3px; backgroun
 .spacer { flex: 1; }
 .save, .rev { font-size: var(--pf-fs-sm); color: var(--pf-text-muted); }
 .save.warn { color: var(--pf-warn); }
-.error { grid-area: error; background: #3a1d1f; color: #ffd9d9; padding: var(--pf-s-2) var(--pf-s-4); display: flex; justify-content: space-between; align-items: center; gap: var(--pf-s-3); }
+.error { background: #3a1d1f; color: #ffd9d9; padding: var(--pf-s-2) var(--pf-s-4); display: flex; justify-content: space-between; align-items: center; gap: var(--pf-s-3); }
 .library, .inspector { padding: var(--pf-s-4); background: var(--pf-surface); overflow: auto; }
-.library { grid-area: library; border-inline-end: 1px solid var(--pf-border); }
-.inspector { grid-area: inspector; border-inline-start: 1px solid var(--pf-border); }
+.library { border-inline-end: 1px solid var(--pf-border); }
+.inspector { border-inline-start: 1px solid var(--pf-border); }
 .assets { list-style: none; margin: var(--pf-s-3) 0 0; padding: 0; display: grid; gap: var(--pf-s-2); }
 .assets li { display: grid; gap: 4px; padding: var(--pf-s-2); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); background: var(--pf-bg); }
 .asset-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }

@@ -1,4 +1,8 @@
-/** The top bar: project name, format and workspace switches, save state, history, projects, palette, language, export. Split out of panels.tsx unchanged. */
+/**
+ * The top bar: project name, format and workspace switches, save state, history, projects, palette, language, export.
+ * Split out of panels.tsx. One row that never wraps (ds/shell.css): the labels of its buttons are .hd-label spans, so a
+ * crowded bar can narrow a button to its icon and end the label in an ellipsis; the two long notes carry their text as a tooltip.
+ */
 import { useState } from 'react';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import { jobStageLabel, type Key } from '@pulseframe/i18n';
@@ -36,7 +40,7 @@ export function Header() {
         </select>
       </label>
       {viewVariant && (
-        <span className="format-badge" role="status" data-testid="format-badge" data-variant-id={viewVariant.id}>{t('format.badge')}</span>
+        <span className="format-badge" role="status" data-testid="format-badge" data-variant-id={viewVariant.id} title={t('format.badge')}>{t('format.badge')}</span>
       )}
       {viewVariant?.safeArea && (
         <label className="check format-safe"><input type="checkbox" checked={state.safeAreaOn} onChange={(e) => editor.setSafeArea(e.target.checked)} data-testid="safe-area-toggle" /> {t('format.safeArea')}</label>
@@ -44,20 +48,20 @@ export function Header() {
       <span className="spacer" />
       <span className={`save ${save === 'save.conflict' || save === 'save.offline' ? 'warn' : ''}`} role="status" data-testid="save-state">{t(save)}</span>
       <span className="rev" data-testid="revision">{t('revision')} <bdi>{revision}</bdi></span>
-      <button className={`ghost ${state.agentsPaused ? 'paused' : ''}`} disabled={!doc} aria-pressed={state.agentsPaused} onClick={() => editor.setAgentsPaused(!state.agentsPaused)} data-testid="pause-agent">{state.agentsPaused ? t('agents.resume') : t('agents.pause')}</button>
+      <button className={`ghost ${state.agentsPaused ? 'paused' : ''}`} disabled={!doc} aria-pressed={state.agentsPaused} onClick={() => editor.setAgentsPaused(!state.agentsPaused)} data-testid="pause-agent"><span className="hd-label">{state.agentsPaused ? t('agents.resume') : t('agents.pause')}</span></button>
       {state.agentsPaused && <span className="save warn" role="status" data-testid="agents-paused">{t('agents.paused')}</span>}
-      <button className="ghost" disabled={!doc} onClick={() => void editor.history('undo')} data-testid="undo" title="Ctrl+Z"><IconUndo className="pf-ico-flip" />{t('undo')}</button>
-      <button className="ghost" disabled={!doc} onClick={() => void editor.history('redo')} data-testid="redo" title="Ctrl+Shift+Z"><IconRedo className="pf-ico-flip" />{t('redo')}</button>
-      <button className="ghost" onClick={() => setProjectsOpen(true)} data-testid="projects-open" aria-haspopup="dialog"><IconProjects />{t('projects.open')}</button>
+      <button className="ghost" disabled={!doc} onClick={() => void editor.history('undo')} data-testid="undo" title="Ctrl+Z"><IconUndo className="pf-ico-flip" /><span className="hd-label">{t('undo')}</span></button>
+      <button className="ghost" disabled={!doc} onClick={() => void editor.history('redo')} data-testid="redo" title="Ctrl+Shift+Z"><IconRedo className="pf-ico-flip" /><span className="hd-label">{t('redo')}</span></button>
+      <button className="ghost" onClick={() => setProjectsOpen(true)} data-testid="projects-open" aria-haspopup="dialog"><IconProjects /><span className="hd-label">{t('projects.open')}</span></button>
       {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); /* return focus to the button that opened the dialog */ setTimeout(() => document.querySelector<HTMLElement>('[data-testid=projects-open]')?.focus(), 0); }} />}
-      <button className="ghost" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog"><IconSearch />{t('cmd.palette')} <kbd>{chordLabel('Mod+KeyK')}</kbd></button>
-      <button className="ghost" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle"><IconLanguage />{t('lang.toggle')}</button>
-      {job?.status === 'succeeded' && <span className="save" role="status" data-testid="export-finished">{t('export.finished')}</span>}
-      {job?.status === 'succeeded' && <a className="ghost" href={`/api/v1/jobs/${job.id}/output`} download data-testid="export-download">{t('export.done')}</a>}
+      <button className="ghost" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog"><IconSearch /><span className="hd-label">{t('cmd.palette')}</span> <kbd>{chordLabel('Mod+KeyK')}</kbd></button>
+      <button className="ghost" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle"><IconLanguage /><span className="hd-label">{t('lang.toggle')}</span></button>
+      {job?.status === 'succeeded' && <span className="save export-finished" role="status" data-testid="export-finished" title={t('export.finished')}>{t('export.finished')}</span>}
+      {job?.status === 'succeeded' && <a className="ghost" href={`/api/v1/jobs/${job.id}/output`} download data-testid="export-download"><span className="hd-label">{t('export.done')}</span></a>}
       {job?.status === 'succeeded' && job.output?.photosensitivity && <FlashResult report={job.output.photosensitivity} />}
-      {exporting && <button className="ghost danger" onClick={() => editor.cancelExport()} data-testid="export-cancel">{t('export.cancel')}</button>}
+      {exporting && <button className="ghost danger" onClick={() => editor.cancelExport()} data-testid="export-cancel"><span className="hd-label">{t('export.cancel')}</span></button>}
       {job?.status === 'canceled' && <span className="save warn" role="status" data-testid="export-canceled">{t('export.canceled')}</span>}
-      {(job?.status === 'canceled' || job?.status === 'failed') && <button className="ghost" onClick={() => editor.retryExport()} data-testid="export-retry">{t('export.retry')}</button>}
+      {(job?.status === 'canceled' || job?.status === 'failed') && <button className="ghost" onClick={() => editor.retryExport()} data-testid="export-retry"><span className="hd-label">{t('export.retry')}</span></button>}
       <button className="primary" disabled={!doc || !!exporting || editor.player?.frameCount === 0} onClick={() => editor.startExport()} data-testid="export">
         <IconExport />{exporting ? <>{t('export.running')} <bdi>{jobStageLabel(job?.stage, lang)}</bdi></> : t('export')}
       </button>
