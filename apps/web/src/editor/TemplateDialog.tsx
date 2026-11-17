@@ -7,17 +7,16 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import * as T from '@pulseframe/time';
 import type { TemplateApplyResult, TemplateInput, TemplatePlanView, TemplateSummary } from '@pulseframe/core';
-import { dictionaries } from '@pulseframe/i18n';
 import { api, ApiFailure } from '../api.ts';
 import { useEditorState } from './store.ts';
 import { TEMPLATE_STRINGS } from './templates.strings.ts';
 import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
-import { beatState, buildParams, counter, defaultMusic, initialMedia, moveItem, musicAssets, pictureAssets, planRows, syncMedia, templateApi, toggleItem, type MediaItem } from './templateDialog.logic.ts';
+import { beatState, buildParams, counter, defaultMusic, initialMedia, moveItem, musicAssets, pictureAssets, planChoices, planRows, syncMedia, takeAlternative, templateApi, toggleItem, type AlternativeState, type MediaItem } from './templateDialog.logic.ts';
+import { templateRefusal, type Failure } from './templateRefusals.ts';
 
 const STEPS = ['media', 'music', 'texts', 'plan'] as const;
 type Step = (typeof STEPS)[number];
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
-interface Failure { code: string | null; message: string; hint?: string }
 
 export interface AppliedTemplate { result: TemplateApplyResult; params: Partial<TemplateInput>; alternatives: TemplatePlanView['alternatives'] }
 
@@ -34,9 +33,11 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
   const [music, setMusic] = useState<string>(() => (doc ? defaultMusic(doc, summary.needs.music) : ''));
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [motionNone, setMotionNone] = useState(() => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  /** The alternative taken (its parameters are kept: a new plan may list other alternatives). */
-  const [chosen, setChosen] = useState<{ index: number; params: Partial<TemplateInput> } | null>(null);
+  /** The parameters of the alternatives taken (tempo, order, seed …); kept by value, since a new plan lists other alternatives. */
+  const [overrides, setOverrides] = useState<Partial<TemplateInput>>({});
   const [plan, setPlan] = useState<TemplatePlanView | null>(null);
+  /** The last plan that succeeded: its choices stay on screen when a re-plan is refused, so another value can be chosen. */
+  const [lastPlan, setLastPlan] = useState<TemplatePlanView | null>(null);
   const [planning, setPlanning] = useState(false);
   const [applying, setApplying] = useState(false);
   const [measuring, setMeasuring] = useState<string | null>(null);
@@ -46,15 +47,17 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
 
   // files imported while the dialog is open join the list (included); files removed elsewhere leave it
   useEffect(() => { if (doc) setMedia((m) => syncMedia(m, doc)); }, [doc]);
-  const alternatives = plan?.alternatives ?? [];
-  const extra = chosen?.params;
-  const params = useMemo(() => buildParams({ media, music, texts, motionNone, lang, ...(extra ? { extra } : {}) }), [media, music, texts, motionNone, lang, extra]);
-
-  const failure = (e: unknown): Failure => {
-    if (!(e instanceof ApiFailure)) return { code: null, message: e instanceof Error ? e.message : String(e) };
-    const headline = (dictionaries[lang] as Record<string, string>)[`error.code.${e.code}`];
-    return { code: e.code, message: headline ? `${headline}: ${e.message}` : e.message, ...(e.hint ? { hint: e.hint } : {}) };
+  const params = useMemo(() => buildParams({ media, music, texts, motionNone, lang, extra: overrides }), [media, music, texts, motionNone, lang, overrides]);
+  /** Take an alternative (or a radio's value): its motion ticks or unticks the checkbox; the rest joins the overrides; plan again. */
+  const take = (alt: Partial<TemplateInput>) => {
+    const next: AlternativeState = takeAlternative({ overrides, motionNone }, alt);
+    setOverrides(next.overrides);
+    setMotionNone(next.motionNone);
+    void runPlan(buildParams({ media, music, texts, motionNone: next.motionNone, lang, extra: next.overrides }));
   };
+
+  /** A refusal worded in the interface language where it is known (templateRefusals.ts), else as the server wrote it. */
+  const failure = (e: unknown): Failure => templateRefusal(lang, e);
   const runPlan = async (p = params) => {
     if (!doc) return;
     const seq = ++planSeq.current;
@@ -62,7 +65,7 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
     setError(null);
     try {
       const v = await templateApi.plan(doc.id, summary.id, p);
-      if (seq === planSeq.current) setPlan(v);
+      if (seq === planSeq.current) { setPlan(v); setLastPlan(v); }
     } catch (e) {
       if (seq === planSeq.current) { setPlan(null); setError(failure(e)); }
     } finally { if (seq === planSeq.current) setPlanning(false); }
@@ -121,6 +124,8 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
     if (id) setTimeout(() => dialogRef.current?.querySelector<HTMLElement>(`li[data-asset-id="${CSS.escape(id)}"] [data-testid="${which === 'earlier' ? TID.mediaEarlier : TID.mediaLater}"]`)?.focus(), 0);
   };
   const rows = plan ? planRows(plan, doc.settings.frameRate) : null;
+  const shownPlan = plan ?? lastPlan;
+  const choices = shownPlan ? planChoices(shownPlan, params) : null;
   const sound = musicAssets(doc);
   const pictures = pictureAssets(doc);
 
@@ -250,20 +255,34 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
                 {error.code === 'needs_analysis' && <> <button type="button" className="ghost" onClick={() => go('music')}>{S.goMusic}</button></>}
               </div>
             )}
-            {alternatives.length > 0 && (
-              <fieldset className="pf-tpl-alts">
-                <legend>{S.alternatives}</legend>
-                <label className="check"><input type="radio" name={`${titleId}-alt`} checked={chosen === null} data-testid={TID.alternative} data-index="-1" onChange={() => { setChosen(null); void runPlan(buildParams({ media, music, texts, motionNone, lang })); }} /> {S.asPlanned}</label>
-                {alternatives.map((a, i) => (
-                  <label key={i} className="check"><input type="radio" name={`${titleId}-alt`} checked={chosen?.index === i} data-testid={TID.alternative} data-index={i}
-                    onChange={() => { setChosen({ index: i, params: a.params }); void runPlan(buildParams({ media, music, texts, motionNone, lang, extra: a.params })); }} /> <bdi dir="auto">{a.label}</bdi></label>
-                ))}
-              </fieldset>
+            {choices && (
+              <div className="pf-tpl-alts">
+                <fieldset>
+                  <legend>{S.tempo}</legend>
+                  {choices.tempo.map((o) => (
+                    <label key={o.value} className="check"><input type="radio" name={`${titleId}-tempo`} checked={o.checked} data-testid={TID.alternative} data-index={o.index} data-param="tempo" data-value={o.value}
+                      onChange={() => { if (!o.checked) take(o.params); }} /> {S.tempoChoice[o.value]}</label>
+                  ))}
+                </fieldset>
+                <fieldset>
+                  <legend>{S.order}</legend>
+                  {choices.order.map((o) => (
+                    <label key={o.value} className="check"><input type="radio" name={`${titleId}-order`} checked={o.checked} data-testid={TID.alternative} data-index={o.index} data-param="order" data-value={o.value}
+                      onChange={() => { if (!o.checked) take(o.params); }} /> {S.orderNames[o.value]}</label>
+                  ))}
+                </fieldset>
+                {choices.others.length > 0 && (
+                  <fieldset>
+                    <legend>{S.alternatives}</legend>
+                    {choices.others.map((a) => <button key={a.index} type="button" className="ghost" data-testid={TID.alternative} data-index={a.index} onClick={() => take(a.params)}><bdi dir="auto">{a.label}</bdi></button>)}
+                  </fieldset>
+                )}
+              </div>
             )}
-            <label className="check"><input type="checkbox" checked={motionNone} data-testid={TID.motionNone} onChange={(e) => { const v = e.target.checked; setMotionNone(v); void runPlan(buildParams({ media, music, texts, motionNone: v, lang, ...(extra ? { extra } : {}) })); }} /> {S.motionNone}</label>
+            <label className="check"><input type="checkbox" checked={motionNone} data-testid={TID.motionNone} onChange={(e) => { const v = e.target.checked; setMotionNone(v); void runPlan(buildParams({ media, music, texts, motionNone: v, lang, extra: overrides })); }} /> {S.motionNone}</label>
           </section>
         )}
-        {step !== 'plan' && error && <p role="alert" className="danger" data-testid="template-error" data-code={error.code ?? undefined}><bdi dir="auto">{error.message}</bdi></p>}
+        {step !== 'plan' && error && <p role="alert" className="danger" data-testid="template-error" data-code={error.code ?? undefined}><bdi dir="auto">{error.message}</bdi>{error.hint && <> — <bdi dir="auto">{error.hint}</bdi></>}</p>}
 
         <div className="row pf-tpl-nav">
           <button type="button" className="ghost" disabled={at === 0} onClick={() => go(STEPS[at - 1]!)} data-testid="template-back">{S.back}</button>

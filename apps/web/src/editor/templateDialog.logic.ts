@@ -66,15 +66,71 @@ export interface DialogChoices {
   texts: Readonly<Record<string, string>>;
   motionNone: boolean;
   lang: 'he' | 'en';
-  /** Parameters taken from a chosen alternative (tempo, order, seed …), over the ones above. */
+  /** Parameters taken from chosen alternatives (tempo, order, seed …), over the ones above. Never the motion: the checkbox decides it. */
   extra?: Partial<TemplateInput>;
 }
 /** The template input the dialog sends (TemplateInputSchema): media in order, music or null, the typed texts, motion and language. */
 export function buildParams(c: DialogChoices): Partial<TemplateInput> & Pick<TemplateInput, 'media' | 'musicAssetId' | 'texts' | 'lang' | 'motion'> {
   const texts: Record<string, string> = {};
   for (const [k, v] of Object.entries(c.texts)) if (v.trim()) texts[k] = v;
-  return mergeAlternative({ media: c.media.filter((m) => m.included).map((m) => m.assetId), musicAssetId: c.music || null, texts, lang: c.lang, motion: c.motionNone ? 'none' : 'full' }, { params: c.extra ?? {} }) as ReturnType<typeof buildParams>;
+  const { motion: _ignored, ...extra } = c.extra ?? {};
+  return mergeAlternative({ media: c.media.filter((m) => m.included).map((m) => m.assetId), musicAssetId: c.music || null, texts, lang: c.lang, motion: c.motionNone ? 'none' : 'full' }, { params: extra }) as ReturnType<typeof buildParams>;
 }
+/** What the alternatives chosen so far amount to: parameters over the dialog's choices, and the "no motion" checkbox. */
+export interface AlternativeState { overrides: Partial<TemplateInput>; motionNone: boolean }
+/**
+ * An alternative taken: its motion sets the "no motion" checkbox (so what is ticked is what is applied); its other parameters
+ * join the ones taken before (a later choice of the same parameter replaces the earlier; texts are merged).
+ */
+export function takeAlternative(s: AlternativeState, params: Partial<TemplateInput>): AlternativeState {
+  const { motion, ...rest } = params;
+  return { overrides: mergeAlternative(s.overrides, { params: rest }), motionNone: motion ? motion === 'none' : s.motionNone };
+}
+const TEMPO_ORDER = ['normal', 'half', 'double'] as const;
+const ORDER_ORDER = ['sequence', 'shuffle'] as const;
+export interface ChoiceOption<V> { value: V; checked: boolean; /** The planner's alternative it takes; -1 = none (the value asked now, or one the plan does not list). */ index: number; /** What choosing it sends. */ params: Partial<TemplateInput> }
+export interface PlanChoices {
+  tempo: ChoiceOption<TemplateInput['tempo']>[];
+  order: ChoiceOption<TemplateInput['order']>[];
+  /** Whether the plan is asked (or was made) without camera moves and animated titles. */
+  motionNone: boolean;
+  /** Alternatives that are not a tempo, an order or the motion: offered with the server's own label. */
+  others: { index: number; label: string; params: Partial<TemplateInput> }[];
+}
+const only = (params: Partial<TemplateInput>, keys: readonly string[]) => Object.keys(params).every((k) => keys.includes(k));
+/**
+ * The plan step's choices. The planner lists its alternatives relative to the parameters it planned with (at half tempo,
+ * "normal tempo" is an alternative), so an index names a different option after every plan. The radios are therefore per
+ * parameter, every value in a fixed order, checked by what is asked now (`requested`, the dialog's parameters; else what the
+ * plan was made with), each sending the parameters of the planner's alternative for that value when it lists one (shuffle
+ * carries the planner's next seed). `view` may be the last plan that succeeded: after a refused re-plan the person can still
+ * choose another value.
+ */
+export function planChoices(view: Pick<TemplatePlanView, 'params' | 'alternatives'>, requested: Partial<TemplateInput> = {}): PlanChoices {
+  const tempo = requested.tempo ?? view.params.tempo ?? 'normal', order = requested.order ?? view.params.order ?? 'sequence';
+  const seed = requested.seed ?? view.params.seed ?? 1;
+  const others: PlanChoices['others'] = [];
+  const tempoAlt = new Map<string, number>(), orderAlt = new Map<string, number>();
+  view.alternatives.forEach((a, index) => {
+    const p = a.params;
+    if (p.tempo && only(p, ['tempo'])) { if (!tempoAlt.has(p.tempo)) tempoAlt.set(p.tempo, index); }
+    else if (p.order && only(p, ['order', 'seed'])) { if (!orderAlt.has(p.order)) orderAlt.set(p.order, index); }
+    else if (p.motion && only(p, ['motion'])) { /* the "no motion" checkbox */ }
+    else others.push({ index, label: a.label, params: p });
+  });
+  const opts = <V extends string>(values: readonly V[], now: V, alts: Map<string, number>, own: (v: V) => Partial<TemplateInput>): ChoiceOption<V>[] =>
+    values.map((v) => {
+      const i = alts.get(v);
+      return { value: v, checked: v === now, index: v === now || i === undefined ? -1 : i, params: v !== now && i !== undefined ? view.alternatives[i]!.params : own(v) };
+    });
+  return {
+    tempo: opts(TEMPO_ORDER, tempo, tempoAlt, (v) => ({ tempo: v })),
+    order: opts(ORDER_ORDER, order, orderAlt, (v) => (v === 'shuffle' ? { order: v, seed: seed + 1 } : { order: v })),
+    motionNone: (requested.motion ?? view.params.motion) === 'none',
+    others,
+  };
+}
+
 /**
  * The parameters with an alternative's taken over: its fields replace the current ones, except `texts`, whose keys are
  * merged (an alternative never drops a text the person typed). The input objects are not changed.
