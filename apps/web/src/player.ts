@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, FlashGuard, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
@@ -52,6 +52,19 @@ export class Player {
   private analyser: AnalyserNode | null = null;
   private meterBuf: Float32Array | null = null;
   private origin = { clock: 0, frame: 0 };
+  /**
+   * SAFETY: whatever the transport does (shuttle, stepping, loop, jumps, edits during playback), the screen never shows
+   * a strobe flash start less than a third of a second after the last one (engine strobeSchedule.ts FlashGuard).
+   */
+  readonly flashGuard = new FlashGuard();
+  /**
+   * Frames are drawn here first and copied to the visible canvas in one step when complete. drawGraph paints the
+   * background and then waits (for decoded pictures, colour tables and GPU passes) in the middle of a frame; drawn
+   * straight onto the visible canvas, the screen could show those half-drawn states between frames: a dark flicker.
+   */
+  private back: HTMLCanvasElement | null = null;
+  /** Whether a frame has been copied to the visible canvas yet (before that, sizing it early clears nothing anyone sees). */
+  private shown = false;
   /** Index of the frame most recently painted, for tests and the UI. */
   painted = -1;
   /** Playback instrumentation: how late (seconds) each painted frame appeared relative to the clock that drives audio. */
@@ -99,9 +112,15 @@ export class Player {
         const scale = this.playing ? Math.min(1, 960 / height) : 1;
         const w = Math.round(width * scale);
         const h = Math.round(height * scale);
+        if (!this.shown && (this.canvas.width !== w || this.canvas.height !== h)) { this.canvas.width = w; this.canvas.height = h; } // the layout gets the right shape at once
+        const back = (this.back ??= document.createElement('canvas'));
+        if (back.width !== w || back.height !== h) { back.width = w; back.height = h; }
+        const g = this.flashGuard.apply(evaluate(doc, T.frameTime(frame, frameRate)), performance.now() / 1000); // real time, never the audio clock (it can stand still)
+        const drawn = await drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames);
+        // the finished frame replaces the one on screen at once (resizing the visible canvas clears it, so only now)
         if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
-        const g = evaluate(doc, T.frameTime(frame, frameRate));
-        const drawn = await drawGraph(this.canvas.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames);
+        this.canvas.getContext('2d', { alpha: false })!.drawImage(back, 0, 0);
+        this.shown = true;
         /** GPU effects of the frame on screen that could not run in this browser (shown without them; the editor says so). */
         this.unavailableEffects = drawn.unavailableEffects;
         this.unavailableReasons = drawn.unavailableReasons ?? {};
@@ -113,6 +132,7 @@ export class Player {
           if (this.late.length > 3000) this.late.shift();
         }
         this.canvas.dataset.frame = String(frame);
+        this.canvas.dataset.flashesHeld = String(this.flashGuard.leftOut); // frames on which the safety guard held a strobe flash back
         this.canvas.dataset.quality = scale === 1 ? 'full' : 'draft';
         this.canvas.dataset.source = scale === 1 ? 'original' : 'proxy-or-original';
         this.onTick();

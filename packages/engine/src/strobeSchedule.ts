@@ -18,7 +18,8 @@
  */
 import * as T from '@pulseframe/time';
 import { followedBeats, type ProjectDocument } from '@pulseframe/core';
-import { thinnedHits } from './gpu.ts';
+import { FLASH_SINCE, STROBE_FADE, thinnedHits } from './gpu.ts';
+import type { RenderGraph } from './evaluate.ts';
 
 export interface FlashSchedule {
   /** Frames per second of the timeline. */
@@ -109,3 +110,64 @@ export function flashSince(schedule: FlashSchedule, clipId: string, effectId: st
   while (lo <= hi) { const mid = (lo + hi) >> 1; if (frames[mid]! <= frame) { at = mid; lo = mid + 1; } else hi = mid - 1; }
   return at < 0 ? Infinity : (frame - frames[at]!) / schedule.fps;
 }
+
+/** The least real time between two flash starts shown on a screen: a hair over a third of a second. */
+export const SCREEN_FLASH_GAP = 1 / 3 + 1e-3;
+/** A change of the strobe light by this much (of full brightness) counts as a rise or a fall; smaller changes are not. */
+export const SCREEN_FLASH_STEP = 0.02;
+
+/**
+ * SAFETY RULE, on the screen in real time. The schedule keeps flash starts apart on the TIMELINE. A preview that moves
+ * through the timeline faster than real time (shuttle, held arrow keys, dragging the playhead), backwards, back and forth
+ * across one flash, wraps around (loop), jumps (a seek during playback) or switches to a re-planned schedule mid-play
+ * (an edit, another format) could show them closer together on screen. The editor's player passes every frame it is
+ * about to draw through this guard with the real time of drawing.
+ *
+ * The guard follows the strobe light it lets through (the strongest strobe on the frame, as the GPU pass computes it).
+ * A flash on screen is a rise followed by a fall. A rise begins when the light goes more than SCREEN_FLASH_STEP above the
+ * lowest it has been since the last fall, and a fall when it goes more than that below the highest since the rise began.
+ * A rise that would begin less than SCREEN_FLASH_GAP after the last one began is not let through: every strobe on that
+ * frame draws nothing (which is no rise), until enough real time has passed. So no second of real time shows more than
+ * three rises, whatever the transport does; ordinary playback at normal speed is not changed (the schedule's starts are
+ * further apart than the gap).
+ * Exported files, stills and frames rendered for agents do not pass through this guard: they are drawn at their own
+ * frame rate, where the schedule alone keeps the rule.
+ */
+export class FlashGuard {
+  private last = -Infinity;
+  private rising = false;
+  private low = 0;
+  private high = 0;
+  /** Frames on which a rise was held back (for tests and diagnostics). */
+  leftOut = 0;
+  constructor(private readonly gap = SCREEN_FLASH_GAP) {}
+  /** Forget what was shown (a new player, another project). */
+  reset() { this.last = -Infinity; this.rising = false; this.low = 0; this.high = 0; }
+  /**
+   * The graph to draw at real time `now` (seconds, any monotonic clock). The graph is not changed; when its strobes must
+   * not flash on this frame, a copy without their light is returned.
+   */
+  apply(graph: RenderGraph, now: number): RenderGraph {
+    let light = 0;
+    for (const layer of graph.layers) for (const fx of effectsOf(layer)) if (fx.type === 'light.strobe') light = Math.max(light, strength(fx.params));
+    let out = graph, shown = light;
+    if (!this.rising && light > this.low + SCREEN_FLASH_STEP) {
+      if (now - this.last >= this.gap) { this.last = now; this.rising = true; this.high = light; }
+      else { this.leftOut++; shown = 0; out = withoutFlash(graph); }
+    }
+    if (this.rising) { this.high = Math.max(this.high, shown); if (shown < this.high - SCREEN_FLASH_STEP) { this.rising = false; this.low = shown; } }
+    else this.low = Math.min(this.low, shown);
+    return out;
+  }
+}
+const effectsOf = (l: RenderGraph['layers'][number]) => ('effects' in l ? l.effects ?? [] : []);
+const withoutFlash = (graph: RenderGraph): RenderGraph => ({
+  ...graph,
+  layers: graph.layers.map((l) => (effectsOf(l).some((fx) => fx.type === 'light.strobe') ? { ...l, effects: effectsOf(l).map((fx) => (fx.type === 'light.strobe' ? { ...fx, params: { ...fx.params, [FLASH_SINCE]: Infinity } } : fx)) } : l)) as RenderGraph['layers'],
+});
+/** The light a strobe adds on a frame, as its GPU pass computes it (gpu.ts 'light.strobe'): 0 without a flash time. */
+const strength = (p: Record<string, number | string | boolean>) => {
+  const since = p[FLASH_SINCE], amount = typeof p.amount === 'number' ? p.amount : 0.6;
+  if (typeof since !== 'number' || !(since * STROBE_FADE <= 12)) return 0;
+  return amount * Math.exp(-Math.max(0, since) * STROBE_FADE);
+};
