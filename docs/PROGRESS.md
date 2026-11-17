@@ -1178,6 +1178,7 @@ Next, in order of value (none started): guard asset lookups by id in the ops aga
 | 19a | workflow agents | waves 4 and 5: maps, idea generation, critics, two designs and a judge per track, plan verifiers; wave-5 contracts | inherited (no override) | `claude-fable-5-2` | not collected |
 | 19a | `pf-implementer` | ADR-0015 and ADR-0016 drafts; ADR-0012…0014 drafts and the Hebrew quickstart section (running) | `sonnet` | not observable | not collected |
 | 19a (running) | workflow agents ×12 | UI redesign wave A: builders W2 (timeline) and W3 (stage and inspector) inherited; W1 (chrome and start) and W4 (catalogue, AI, delivery) `sonnet`; all four reviewers inherited | as listed | — | — |
+| 19b | — | usage limit: the session model's quota ran out mid-wave (2026-11-17, resets 2026-11-24); seven running agents stopped (UI reviews W1, W4 and repairs W2, W3; contracts of content packs and of people; two proof-repair follow-ups). The owner switched the session to `claude-opus-5-5`; every stopped task was restarted from its worktree's state (builds and finished reviews reused from the workflow journal, not redone) | inherited | `claude-opus-5-5` | — |
 
 The `pf-implementer` definition was exercised on three real tasks: each stayed inside its file scope and reported defects instead of patching shared code
 (it found the undo-body 500 and the raw-JSON idempotency comparison; both fixed by the lead). `pf-scout` was exercised once, read-only, and found two citation mismatches (fixed).
