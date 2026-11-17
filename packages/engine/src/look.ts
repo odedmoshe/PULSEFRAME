@@ -5,7 +5,7 @@
  * Order for a layer with a look:  place (transform, opacity) -> effects in list order -> mask -> transition -> blend onto the frame.
  * Conventions: 8-bit sRGB, non-linear blending as defined by Canvas2D composite operations (no linear-light intermediates).
  */
-import type { BeatPosition, BlendMode, Mask } from '@pulseframe/core';
+import type { BeatPosition, BlendMode, Mask, ResolvedRegion } from '@pulseframe/core';
 import type { LayerLook } from './evaluate.ts';
 import { gpuEffect, isGpuEffect, type LutStrip } from './gpu.ts';
 import { boundRadius, overlayParticles, shapeAlpha, speedLines, wedgeCorners, type Particle } from './overlays.ts';
@@ -338,19 +338,28 @@ export async function applyEffects(a: Buf, effects: NonNullable<LayerLook['effec
   return cur;
 }
 
+/**
+ * Fill a mask-shaped area white, in the layer's own space: centre (x, y) and size (width, height) as fractions of the placed
+ * layer box (MaskSchema units); `radius` rounds a rectangle's corners. `clipToBox` keeps it inside the layer's picture.
+ */
+export function drawMaskShape(ctx: C2D, box: LayerBox, shape: 'rect' | 'ellipse', x: number, y: number, width: number, height: number, radius = 0, clipToBox = false) {
+  ctx.save();
+  inLayerSpace(ctx, box);
+  if (clipToBox) { ctx.beginPath(); ctx.rect(-box.w / 2, -box.h / 2, box.w, box.h); ctx.clip(); }
+  ctx.fillStyle = '#fff';
+  const w = width * box.w, h = height * box.h, cx = x * box.w, cy = y * box.h;
+  ctx.beginPath();
+  if (shape === 'ellipse') ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
+  else ctx.roundRect(cx - w / 2, cy - h / 2, w, h, (radius * Math.min(w, h)) / 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 /** Keep (or with invert, remove) the masked region of `buf`. The mask is defined in the layer's own space. */
 export function applyMask(buf: Buf, mask: Mask, env: LookEnv) {
   const { width: W, height: H, box } = env;
   let m = scratch(4, W, H);
-  m.ctx.save();
-  inLayerSpace(m.ctx, box);
-  m.ctx.fillStyle = '#fff';
-  const w = mask.width * box.w, h = mask.height * box.h, cx = mask.x * box.w, cy = mask.y * box.h;
-  m.ctx.beginPath();
-  if (mask.shape === 'ellipse') m.ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
-  else m.ctx.roundRect(cx - w / 2, cy - h / 2, w, h, (mask.radius * Math.min(w, h)) / 2);
-  m.ctx.fill();
-  m.ctx.restore();
+  drawMaskShape(m.ctx, box, mask.shape, mask.x, mask.y, mask.width, mask.height, mask.radius);
   if (mask.feather > 0) {
     const soft = scratch(5, W, H);
     soft.ctx.filter = `blur(${(mask.feather * H).toFixed(3)}px)`;
@@ -362,6 +371,63 @@ export function applyMask(buf: Buf, mask: Mask, env: LookEnv) {
   buf.ctx.globalAlpha = 1;
   buf.ctx.drawImage(m.canvas, 0, 0);
   buf.ctx.globalCompositeOperation = 'source-over';
+}
+
+/** Scratch slots of the privacy regions (wave-3 allocation: 15–16 = tracking, ADR-0015): the hiding copy, and the region's shape. */
+export const REGION_COPY_SLOT = 15;
+export const REGION_MASK_SLOT = 16;
+/** Blur radius of a privacy region in px: (0.04 + 0.21·strength) of the region's height on screen (the layer's height when whole). */
+export const regionBlurPx = (strength: number, heightPx: number) => (0.04 + 0.21 * strength) * heightPx;
+/** Pixel blocks across a pixelated region's height: 24 at strength 0, down to 4 (the coarsest) at strength 1. */
+export const regionBlocks = (strength: number) => Math.max(4, Math.round(24 - 20 * strength));
+/**
+ * Privacy regions (ADR-0015) on a placed picture, before its effects: for each region, a hiding copy of the picture (blurred,
+ * pixelated, or a flat colour), kept to the region's feathered shape m (in the layer's own space, inside its picture), is put in
+ * place of the picture there: buf·(1−m) + copy·m, made by erasing first (destination-out) and then adding (lighter). Erasing
+ * first means a picture that is only partly opaque never shows the original through the copy. A whole region (the loss
+ * fallback) is the layer's whole picture, always blurred. Everything outside m is left byte for byte as it was.
+ */
+export function applyRegions(buf: Buf, regions: readonly ResolvedRegion[], env: Pick<LookEnv, 'width' | 'height' | 'box'>) {
+  const { width: W, height: H, box } = env;
+  for (const r of regions) {
+    const heightPx = (r.whole ? 1 : r.height) * box.h * Math.abs(box.scale);
+    const copy = scratch(REGION_COPY_SLOT, W, H);
+    if (r.style === 'blur') {
+      const px = regionBlurPx(r.strength, heightPx);
+      drawFiltered(copy.ctx, buf.canvas, `blur(${px.toFixed(3)}px)`, px, W, H);
+    } else if (r.style === 'pixelate') {
+      // as stylize.pixelate, with the block size from the region: the mask slot holds the small picture until the shape is drawn
+      const block = Math.max(1, heightPx / regionBlocks(r.strength));
+      const cols = Math.max(1, Math.ceil(W / block)), rows = Math.max(1, Math.ceil(H / block));
+      const small = scratch(REGION_MASK_SLOT, W, H);
+      small.ctx.drawImage(buf.canvas, 0, 0, W, H, 0, 0, W / block, H / block);
+      copy.ctx.imageSmoothingEnabled = false;
+      copy.ctx.drawImage(small.canvas, 0, 0, cols, rows, 0, 0, cols * block, rows * block);
+      copy.ctx.imageSmoothingEnabled = true;
+    } else {
+      copy.ctx.fillStyle = /^#[0-9a-fA-F]{6}$/.test(r.color) ? r.color : '#000000';
+      copy.ctx.fillRect(0, 0, W, H);
+    }
+    const m = scratch(REGION_MASK_SLOT, W, H);
+    if (r.whole) drawMaskShape(m.ctx, box, 'rect', 0, 0, 1, 1);
+    else {
+      if (r.feather > 0) m.ctx.filter = `blur(${(r.feather * H).toFixed(3)}px)`;
+      drawMaskShape(m.ctx, box, r.shape, r.x, r.y, r.width, r.height, 0, true);
+      m.ctx.filter = 'none';
+    }
+    copy.ctx.globalCompositeOperation = 'destination-in';
+    copy.ctx.drawImage(m.canvas, 0, 0);
+    const b = buf.ctx;
+    b.save();
+    b.setTransform(1, 0, 0, 1, 0, 0);
+    b.globalAlpha = 1;
+    b.filter = 'none';
+    b.globalCompositeOperation = 'destination-out';
+    b.drawImage(m.canvas, 0, 0);
+    b.globalCompositeOperation = 'lighter';
+    b.drawImage(copy.canvas, 0, 0);
+    b.restore();
+  }
 }
 
 const DIR: Record<string, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };

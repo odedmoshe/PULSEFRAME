@@ -10,7 +10,8 @@ import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip
 import type { ImageLayer, Layer, PictureLayer, RenderGraph, TextLayer, VideoLayer } from './evaluate.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
 import { textAtRest, unitPose } from './textAnimation.ts';
-import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
+import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
+import { fitScale } from '@pulseframe/core';
 import { TAP_PLACE_SLOT, tapMerger } from './taps.ts';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -283,9 +284,15 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
 /** Size of a placed layer before its own transform: a picture fitted to the frame (contain or cover); a title spans the frame. */
 function placedSize(g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer): { w: number; h: number } {
   if (layer.kind === 'text') return { w: g.width, h: g.height };
-  // Default placement of pictures, centred: contain (whole picture visible) or cover (frame filled, edges cropped).
-  const fit = (g.fit === 'cover' ? Math.max : Math.min)(g.width / layer.sourceWidth, g.height / layer.sourceHeight);
+  // Default placement of pictures, centred: contain (whole picture visible) or cover (frame filled, edges cropped). The same
+  // rule as core geometry.ts, which motion tracking (ADR-0015) uses to find a tracked point in the frame.
+  const fit = fitScale(g.width, g.height, layer.sourceWidth, layer.sourceHeight, g.fit);
   return { w: layer.sourceWidth * fit, h: layer.sourceHeight * fit };
+}
+/** The placed box of a layer (its picture's size and its transform), in frame px: what layer-relative effects, masks and privacy regions use. */
+function boxOf(g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer): LayerBox {
+  const { w, h } = placedSize(g, layer), t = layer.transform;
+  return { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
 }
 /** Draw a layer's picture (or title) with its transform and opacity, nothing else: the first step of every layer and of every time tap. */
 function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer, img: FrameImage | null) {
@@ -394,7 +401,8 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
     if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); const why = frames.refusal?.(layer); if (why) missingReasons[layer.clipId] = why; continue; }
     const { w, h } = placedSize(g, layer);
     const colourFix = layer.kind === 'video' ? layer.colourFix : undefined;
-    const hasLook = !!(colourFix || layer.time || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
+    const regions = layer.kind === 'video' ? layer.regions : undefined;
+    const hasLook = !!(colourFix || regions?.length || layer.time || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
     if (!hasLook) { placeLayer(ctx, g, layer, img ?? null); continue; } // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
@@ -410,6 +418,8 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
         const slot = scratch(TAP_PLACE_SLOT, g.width, g.height);
         placeLayer(slot.ctx, g, tap.layer, tapImgs[k] ?? null);
         if (tap.layer.kind === 'video' && tap.layer.colourFix === 'bt709-as-bt601') applyColourMatrix(slot, BT709_AS_BT601);
+        // each earlier picture hides its own privacy regions, resolved at its own source frame (ADR-0015), before the merge
+        if (tap.layer.kind === 'video' && tap.layer.regions?.length) applyRegions(slot, tap.layer.regions, { width: g.width, height: g.height, box: boxOf(g, tap.layer) });
         merger.add(k, slot.ctx.getImageData(0, 0, g.width, g.height).data);
       });
       const merged = buf.ctx.createImageData(g.width, g.height);
@@ -421,6 +431,7 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
       if (taps && layer.time) timeLeftOut.set(layer.time.type, tapWhy.get(`${i}:${lost}`) ?? 'source frame unavailable');
       placeLayer(buf.ctx, g, layer, img ?? null);
       if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
+      if (regions?.length) applyRegions(buf, regions, env); // privacy regions (ADR-0015): on the placed picture, before any effect
     }
     if (layer.effects?.length) buf = await applyEffects(buf, layer.effects, env);
     if (layer.mask) applyMask(buf, layer.mask, env);
