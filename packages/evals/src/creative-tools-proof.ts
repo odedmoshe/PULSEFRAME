@@ -5,7 +5,9 @@
  *    the source runs on without repeats or gaps across part boundaries, picture and sound end together;
  *  - the curve picker in the editor: preset tiles, the hand-made curve graph by keyboard, undo;
  *  - a motion preset changes the rendered picture as its keyframes say;
- *  - the gallery, the sound browser (listen and add) and the pacing strip work in the editor with no console errors.
+ *  - the gallery, the sound browser (listen and add) and the pacing strip work in the editor with no console errors;
+ *  - flash safety in the gallery (ADR-0009): the strobe tile shows its flash; a hovered strobe tile shows at most three rises of
+ *    light in any second of real time and the dialog reports what its guard held back; under reduced motion no tile moves.
  * Not covered: how any of it looks or sounds to a person; real footage; the owner's GPU (this run uses the software adapter).
  *   pnpm build && pnpm proof:creative
  */
@@ -192,6 +194,70 @@ async function main() {
     const rendered = await page.locator('[data-testid=gallery-panel-effects] [data-testid=gallery-tile][data-rendered="1"]').count();
     const unavailable = await page.locator('[data-testid=gallery-panel-effects] [data-testid=gallery-tile][data-unavailable="1"]').count();
     check('the gallery opens on the effects tab with a thumbnail drawn for every effect this browser can run', nEffects === EFFECTS.length && rendered + unavailable === EFFECTS.length && rendered >= 12, { nEffects, rendered, unavailable, webgpu: gpu });
+    // the strobe tile is drawn one frame after its first flash, so it shows the light (at frame 12 it had faded): compared with the
+    // same snapshot drawn plainly at the tile's size (the gallery's own resize of the preview, which shows the frame it was opened on)
+    const strobeTile = await page.evaluate(async () => {
+      const tile = document.querySelector<HTMLElement>('[data-testid=gallery-panel-effects] [data-testid=gallery-tile][data-id="light.strobe"]');
+      const canvas = tile?.querySelector('canvas');
+      const preview = document.querySelector<HTMLCanvasElement>('canvas[data-testid=preview]');
+      if (!tile || !canvas || !preview) return null;
+      const w = canvas.width, h = canvas.height;
+      const bm = await createImageBitmap(preview, { resizeWidth: w, resizeHeight: h, resizeQuality: 'medium' });
+      const plain = new OffscreenCanvas(w, h);
+      plain.getContext('2d')!.drawImage(bm, 0, 0);
+      const a = canvas.getContext('2d')!.getImageData(0, 0, w, h).data, b = plain.getContext('2d')!.getImageData(0, 0, w, h).data;
+      let sum = 0;
+      for (let i = 0; i < a.length; i += 4) sum += (Math.abs(a[i]! - b[i]!) + Math.abs(a[i + 1]! - b[i + 1]!) + Math.abs(a[i + 2]! - b[i + 2]!)) / 3;
+      return { rendered: tile.dataset.rendered === '1', unavailable: tile.dataset.unavailable === '1', meanDifference: Number((sum / (w * h)).toFixed(2)) };
+    });
+    check('the strobe tile shows its flash: its mean difference from the plain picture at the tile\'s size is more than 20 levels', !!strobeTile && strobeTile.rendered && strobeTile.meanDifference > 20, strobeTile);
+    // reduced motion (this page asks for it): hovering tiles that move by themselves animates nothing
+    const tileHashes = () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-testid=gallery-panel-effects] [data-testid=gallery-tile]')].map((t) => {
+      const c = t.querySelector('canvas')!, d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+      let hsh = 0;
+      for (let i = 0; i < d.length; i += 4) hsh = (hsh * 31 + d[i]! + d[i + 1]! * 3 + d[i + 2]! * 7) >>> 0;
+      return `${t.dataset.id}:${hsh}`;
+    }));
+    const still0 = await tileHashes();
+    for (const id of ['overlay.snow', 'time.echo', 'light.strobe']) await page.locator(`[data-testid=gallery-panel-effects] [data-testid=gallery-tile][data-id="${id}"]`).hover();
+    await sleep(1000);
+    const still1 = await tileHashes();
+    const moved = still1.filter((x, i) => x !== still0[i]);
+    check('under reduced motion, hovering the snow, echo and strobe tiles animates nothing: no tile\'s picture changes over a second', still0.length === EFFECTS.length && moved.length === 0, { tiles: still0.length, changed: moved.slice(0, 5) });
+    // without reduced motion: a hovered strobe tile animates through the dialog's flash guard (ADR-0009 decision 2)
+    {
+      const mp = await (await browser.newContext({ viewport: { width: 1500, height: 4200 } })).newPage();
+      const mErrors: string[] = [];
+      mp.on('pageerror', (e) => mErrors.push(String(e)));
+      await mp.goto(`${s.ownerUrl}&project=${pid}`);
+      await mp.locator(`.clip[data-clip-id="${clipId}"]`).click();
+      await mp.getByTestId('gallery-open').click();
+      await mp.getByTestId('effect-gallery').waitFor();
+      await mp.waitForFunction(() => { const t = [...document.querySelectorAll('[data-testid=gallery-panel-effects] [data-testid=gallery-tile]')]; return t.length > 0 && t.every((x) => x.getAttribute('data-rendered') === '1' || x.getAttribute('data-unavailable') === '1'); }, undefined, { timeout: 60_000 }).catch(() => {});
+      const tile = mp.locator('[data-testid=gallery-panel-effects] [data-testid=gallery-tile][data-id="light.strobe"]');
+      await tile.scrollIntoViewIfNeeded();
+      // (a string, not a function: the TypeScript runner would wrap named functions in a helper the page does not have)
+      await mp.evaluate(`(() => {
+        const c = document.querySelector('[data-testid=gallery-panel-effects] [data-testid=gallery-tile][data-id="light.strobe"] canvas');
+        const small = document.createElement('canvas'); small.width = 16; small.height = 16;
+        const sx = small.getContext('2d', { willReadFrequently: true });
+        const out = []; window.__pfTileSamples = out;
+        const loop = () => { sx.drawImage(c, 0, 0, 16, 16); const d = sx.getImageData(0, 0, 16, 16).data; let m = 0; for (let i = 0; i < d.length; i += 4) m += (d[i] + d[i + 1] + d[i + 2]) / 3; out.push([performance.now() / 1000, m / 256]); if (out.length < 20000) requestAnimationFrame(loop); };
+        requestAnimationFrame(loop);
+      })()`);
+      await tile.hover();
+      await sleep(2200);
+      const samples = await mp.evaluate(() => (window as unknown as { __pfTileSamples: [number, number][] }).__pfTileSamples.splice(0));
+      const held = await mp.getByTestId('effect-gallery').getAttribute('data-flashes-held');
+      const rises: number[] = [];
+      { let rising = false, low = Infinity, high = 0; for (const [t, v] of samples) { if (!rising && v > low + 8) { rises.push(t); rising = true; high = v; } else if (rising && v < high - 8) { rising = false; low = v; } if (rising) high = Math.max(high, v); else low = Math.min(low, v); } }
+      let most = 0;
+      for (let i = 0, j = 0; i < rises.length; i++) { while (rises[i]! - rises[j]! > 1) j++; most = Math.max(most, i - j + 1); }
+      const span = samples.length ? samples[samples.length - 1]![0] - samples[0]![0] : 0;
+      measurements.galleryStrobeHover = { samples: samples.length, seconds: Number(span.toFixed(2)), rises: rises.length, mostInOneSecond: most, flashesHeld: held };
+      check('a hovered strobe tile animates (its light rises again) but shows at most three rises in any second of real time over 2 s, and the dialog carries data-flashes-held from its flash guard', samples.length > 30 && span >= 2 && rises.length >= 2 && most <= 3 && held !== null && Number.isFinite(Number(held)) && mErrors.length === 0, { ...(measurements.galleryStrobeHover as object), errors: mErrors.slice(0, 3) });
+      await mp.close();
+    }
     await page.getByTestId('gallery-search').fill('vhs');
     const found = await page.locator('[data-testid=gallery-panel-effects] [data-testid=gallery-tile]:not([hidden])').count();
     await page.getByTestId('gallery-search').fill('');
