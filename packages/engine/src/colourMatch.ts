@@ -94,8 +94,13 @@ export function mergeSamples(parts: readonly PictureSample[]): PictureSample {
 export interface PictureStats { count: number; lPct: [number, number, number, number, number]; meanA: number; meanB: number; meanC: number; rgbMedian: [number, number, number] }
 /** The percentiles of L* in lPct. */
 export const L_PERCENTILES = [0.02, 0.1, 0.5, 0.9, 0.98] as const;
-/** Mid-tones, where a*, b* and C* are averaged: 20 ≤ L* ≤ 85 (the colour of very dark and very bright areas is unreliable). */
-export const MID_TONES = { lo: 20, hi: 85 } as const;
+/**
+ * Mid-tones, where a*, b* and C* are averaged: 20 ≤ L* ≤ 85 (the colour of very dark and very bright areas is unreliable), with soft
+ * edges. A point's weight is 1 from L* 25 to 80 and falls linearly to 0 at 15 and at 90 (½ at 20 and 85), so a flat area whose
+ * lightness sits at an edge does not make the means jump when a grade moves it slightly.
+ */
+export const MID_TONES = { lo: 20, hi: 85, soft: 5 } as const;
+const midWeight = (l: number) => Math.min(1, Math.max(0, (l - MID_TONES.lo + MID_TONES.soft) / (2 * MID_TONES.soft))) * Math.min(1, Math.max(0, (MID_TONES.hi + MID_TONES.soft - l) / (2 * MID_TONES.soft)));
 
 // sRGB decoding through a table with linear interpolation (4096 steps: error below 1e-7, far under one 8-bit step), so a fit can
 // evaluate many thousands of points per trial. The same function serves pictureStats and the fit, so they agree exactly.
@@ -136,7 +141,8 @@ class Meter {
       const l = 116 * fy - 16, a = 500 * (fx - fy), bb = 200 * (fy - fz), c = Math.sqrt(a * a + bb * bb);
       L[i] = l;
       ta += a; tb += bb; tc += c;
-      if (l >= MID_TONES.lo && l <= MID_TONES.hi) { sa += a; sb += bb; sc += c; m++; }
+      const w = midWeight(l);
+      if (w > 0) { sa += w * a; sb += w * bb; sc += w * c; m += w; }
     }
     const at = this.orderStats();
     for (let j = 0; j < L_PERCENTILES.length; j++) {
@@ -181,7 +187,7 @@ function percentileSorted(v: Float64Array, q: number): number {
 }
 const medianOf = (s: PictureSample, ch: number) => { const v = new Float64Array(s.count); for (let i = 0; i < s.count; i++) v[i] = s.rgb[i * 3 + ch]!; v.sort(); return percentileSorted(v, 0.5); };
 
-/** CIELAB D65 from linearised sRGB. lPct = L* at 2/10/50/90/98 %; a*, b*, C* means over mid-tones (20 ≤ L* ≤ 85; every point when there are none). rgbMedian: the median of each stored (non-linear) channel. */
+/** CIELAB D65 from linearised sRGB. lPct = L* at 2/10/50/90/98 %; a*, b*, C* means over mid-tones (20 ≤ L* ≤ 85 with soft edges, MID_TONES; every point when there are none). rgbMedian: the median of each stored (non-linear) channel. */
 export function pictureStats(s: PictureSample): PictureStats {
   const lPct = [0, 0, 0, 0, 0];
   const m = new Meter(s.count).measure(s.rgb, null, lPct);
@@ -226,6 +232,8 @@ const RANGE: Readonly<Record<keyof GradeParams, { min: number; max: number }>> =
 const PULL = 0.01;
 /** Halvings of the search step after the first (¼ of each range). */
 const HALVINGS = 8;
+/** Halvings of the first, saturation-free stage of the coordinate search: it only has to point temperature and tint the right way. */
+const ORIENT_HALVINGS = 4;
 /** Sweeps over the values at one step size, at most. */
 const MAX_SWEEPS = 6;
 /**
@@ -235,13 +243,14 @@ const MAX_SWEEPS = 6;
 const DIFF_STEP = 2e-3;
 /** Iterations of the refinement, at most. */
 const MAX_REFINE = 40;
-/** The fit itself measures at most this many points (an even stride of the sample); its result is measured on all of them. */
+/** The search and refinement measure at most this many points (an even stride of the sample); a larger sample then gets FINAL_REFINE iterations on every point. */
 const FIT_POINTS = 4096;
+const FINAL_REFINE = 3;
 
 /** What a fit aims for: L* percentiles, mid-tone ā, b̄ (weighted by `weightAB`, default 1), and (when `useSpread`) the colourSpread. */
 interface Goal { lPct: readonly number[]; a: number; b: number; spread: number; useSpread: boolean; weightAB?: number }
 /** Points of the coarse stage (the start grid and the coordinate search), and the exposure and contrast values the start grid tries (every combination). */
-const COARSE_POINTS = 768;
+const COARSE_POINTS = 512;
 const GRID_EXPOSURE = [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2];
 const GRID_CONTRAST = [0.4, 0.7, 1, 1.3, 1.6, 2];
 const strided = (s: PictureSample, max: number): PictureSample => {
@@ -289,14 +298,14 @@ function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], star
     };
   };
   const sq = (r: readonly number[]) => r.reduce((s, v) => s + v * v, 0);
-  const residuals = residualsOver(strided(target, FIT_POINTS)), loss = (p: GradeParams) => sq(residuals(p));
+  const residuals = residualsOver(strided(target, FIT_POINTS));
   const coarse = residualsOver(strided(target, COARSE_POINTS)), coarseLoss = (p: GradeParams) => sq(coarse(p));
 
   /** Coordinate search in a fixed order over `over`: each value in turn tries one step up, then one down, keeping a move that lowers the loss; steps start at ¼ of each range and halve. */
-  const coordinate = (from: GradeParams, over: readonly FitKey[], measure: (p: GradeParams) => number): GradeParams => {
+  const coordinate = (from: GradeParams, over: readonly FitKey[], measure: (p: GradeParams) => number, halvings = HALVINGS): GradeParams => {
     let p = from, f = measure(p);
     const step = Object.fromEntries(over.map((k) => [k, span(k) / 4])) as Record<FitKey, number>;
-    for (let level = 0; level <= HALVINGS; level++) {
+    for (let level = 0; level <= halvings; level++) {
       for (let sweep = 0; sweep < MAX_SWEEPS; sweep++) {
         let moved = false;
         for (const k of over) {
@@ -318,9 +327,9 @@ function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], star
    * value at an edge whose gradient points outward is held there). The values are coupled (temperature, tint and saturation all
    * move the mean colour), which a search along one value at a time crosses only slowly.
    */
-  const refine = (from: GradeParams, residuals: (p: GradeParams) => number[]): { p: GradeParams; f: number } => {
+  const refine = (from: GradeParams, residuals: (p: GradeParams) => number[], iterations = MAX_REFINE): { p: GradeParams; f: number } => {
     let p = from, r = residuals(p), f = sq(r), mu = 1e-3;
-    for (let it = 0; it < MAX_REFINE && mu < 1e8; it++) {
+    for (let it = 0; it < iterations && mu < 1e8; it++) {
       const J = keys.map((k) => { const h = span(k) * DIFF_STEP, up = p[k] + h <= RANGE[k].max, q = { ...p, [k]: up ? p[k] + h : p[k] - h }; const rq = residuals(q); return rq.map((v, i) => (up ? v - r[i]! : r[i]! - v) / h); });
       const g = J.map((col) => col.reduce((s, v, i) => s + v * r[i]!, 0));
       const free = keys.map((k, i) => !((p[k] <= RANGE[k].min && g[i]! > 0) || (p[k] >= RANGE[k].max && g[i]! < 0))).flatMap((ok, i) => (ok ? [i] : []));
@@ -333,7 +342,7 @@ function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], star
         const q = { ...p };
         free.forEach((i, n) => { const k = keys[i]!; q[k] = inRange(k, p[k] + x[n]!); });
         const rq = residuals(q), fq = sq(rq);
-        if (fq < f) { const gain = f - fq; p = q; r = rq; f = fq; mu = Math.max(1e-9, mu / 3); accepted = true; if (gain <= 1e-12 * (1 + f)) it = MAX_REFINE; }
+        if (fq < f) { const gain = f - fq; p = q; r = rq; f = fq; mu = Math.max(1e-9, mu / 3); accepted = true; if (gain <= 1e-12 * (1 + f)) it = iterations; }
         else mu *= 4;
       }
     }
@@ -351,10 +360,15 @@ function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], star
   const colourFirst = keys.filter((k) => k !== 'saturation');
   let best: { p: GradeParams; f: number } | null = null;
   for (const s0 of [start, plain, grid]) {
-    const found = refine(coordinate(coordinate(s0, colourFirst, coarseLoss), keys, coarseLoss), coarse);
+    const found = refine(coordinate(coordinate(s0, colourFirst, coarseLoss, ORIENT_HALVINGS), keys, coarseLoss), coarse);
     if (!best || found.f < best.f) best = found;
   }
-  const { p, f } = refine(best!.p, residuals);
+  let { p, f } = refine(best!.p, residuals);
+  // A larger sample: a few more iterations on every point, so the result fits the same points the reference statistics describe
+  // (a stride of a picture with large flat areas can sit a little off them).
+  let full = residuals;
+  if (target.count > FIT_POINTS) { full = residualsOver(target); ({ p, f } = refine(p, full, FINAL_REFINE)); }
+  const loss = (q: GradeParams) => sq(full(q));
   // A value at the edge of its range while the loss still falls beyond it: the grade cannot reach the goal (reported as limitedBy).
   const limitedBy: (keyof GradeParams)[] = [];
   for (const k of keys) {
