@@ -1146,7 +1146,10 @@ Next, in order of value (none started): guard asset lookups by id in the ops aga
 | 18m | workflow agents ×5 | colour tables: implement, three-lens review, repair (own worktree) | inherited | `claude-fable-5-2` | 1.64 M tok |
 | 18m | workflow agents ×12 (+ one run cut off by a container restart and resumed from its journal) | fixes of the confirmed findings in four worktrees, skeptic, repair | inherited | `claude-fable-5-2` | 1.62 M tok |
 | 18m | workflow agents ×3 | media handling fixes | inherited | `claude-fable-5-2` | 0.64 M tok |
-| 18m | workflow agents (running) | strobe skeptics ×4 with verifiers; follow-up fixers ×3 with reviewers; design of the next wave (2 maps, 4 designs, 2 judges) | inherited | `claude-opus-5-5` (the first launch failed on a usage limit of the earlier model before any work; relaunched after the owner switched models) | to be recorded |
+| 18n | workflow agents ×37 | strobe skeptics ×4 and 26 verifiers (one per finding); follow-up fixers ×3 (core, web, server) and their reviewers ×3 | inherited | `claude-opus-5-5` (the first launch failed on a usage limit of the earlier model before any work; relaunched after the owner switched models) | 7.37 M tok |
+| 18n | workflow agents ×8 | read-only design of the next wave: 2 maps, 4 designs, 2 judges | inherited | `claude-opus-5-5` | 2.64 M tok |
+| 18n | workflow agents ×3 | visual-wave shared contracts: implement, review, repair (worktree `wt/vispre`) | inherited | `claude-opus-5-5` | 0.80 M tok |
+| 18n | workflow agents (running) | sound effects wave 1 (3 builders, 3 reviewers, repairs) and visual wave 1 (the same), in six worktrees. A container restart stopped both mid-run; they were resumed, and the builders continued from their own commits | inherited | `claude-opus-5-5` | to be recorded |
 
 The `pf-implementer` definition was exercised on three real tasks: each stayed inside its file scope and reported defects instead of patching shared code
 (it found the undo-body 500 and the raw-JSON idempotency comparison; both fixed by the lead). `pf-scout` was exercised once, read-only, and found two citation mismatches (fixed).
