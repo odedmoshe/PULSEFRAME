@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { findClip, MODEL_GATED_TEMPLATES, TEMPLATES, validateProject, type Asset, type TemplateDef } from '@pulseframe/core';
+import { clipEnd, findClip, MODEL_GATED_TEMPLATES, TEMPLATES, validateProject, type Asset, type Clip, type ProjectDocument, type TemplateDef } from '@pulseframe/core';
 import { useApplyTemplateDoubleIfStub } from '@pulseframe/core/templatePlan.testDouble.ts';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
@@ -40,7 +40,14 @@ const TEST_DEF: TemplateDef = {
   elements: [], sfx: [{ key: 'tick', sfxId: 'sfx.click', at: 'first' }],
   adjust: [{ key: 'look', span: 'all', effects: [{ type: 'color.adjust', params: { saturation: 1.1 } }] }],
 };
-(TEMPLATES as TemplateDef[]).push(TEST_DEF);
+// TEST TEMPLATE with slots that keep their own sound (like tpl.home-video): each slot is a picture linked to its own sound.
+const SOUND_DEF: TemplateDef = {
+  id: 'tpl.server-test-sound', version: 1, name: words('Server test with sound'), hint: words('Slots that keep their own sound'), genre: 'memories', designedFor: 'wide',
+  tempo: { fallbackBpm: 120 }, music: { need: 'optional', startAt: 'zero' },
+  slots: Array.from({ length: 3 }, (_, i) => ({ key: `clip${i + 1}`, role: words(`Clip ${i + 1}`), accept: 'any' as const, span: { seconds: '1' }, keepAudio: true })),
+  slotUse: { mode: 'all', min: 1 }, texts: [], elements: [], sfx: [], adjust: [],
+};
+(TEMPLATES as TemplateDef[]).push(TEST_DEF, SOUND_DEF);
 
 const USER: Principal = { actor: 'user:owner', kind: 'user', scopes: ['observe', 'edit'] };
 const R = { num: 30, den: 1 };
@@ -68,6 +75,30 @@ const tool = async (name: string, args: Record<string, unknown>, t?: string) => 
 const txRows = (pid: string) => (store.db.prepare('SELECT COUNT(*) AS n FROM transactions WHERE project_id = ?').get(pid) as { n: number }).n;
 const revision = (pid: string) => store.getProject(pid).revision;
 const grantToken = (input: Record<string, unknown>) => gov.createGrant({ name: `g${n++}`, ...input }, USER).token;
+const mainTracks = (doc: ProjectDocument) => doc.sequences[doc.mainSequenceId]!.tracks;
+const isPictureClip = (doc: ProjectDocument, c: Clip) => c.type === 'media' && ['video', 'image'].includes(doc.assets[c.assetId]?.kind ?? '');
+/** The run's picture slots: their clips, the frames from the first slot's start to the last one's end that no picture covers, and kept clips a picture on a higher track covers. */
+function pictureCoverage(doc: ProjectDocument, runId: string, keptIds: readonly string[] = []) {
+  const tracks = mainTracks(doc).filter((t) => t.kind === 'video');
+  const slotClips = doc.recipeRuns[runId]!.slots!.filter((s) => s.kind === 'picture').map((s) => findClip(doc, s.clipId)!.clip);
+  const fi = (t: T.RationalTime) => T.nearestFrameIndex(t, R);
+  const from = Math.min(...slotClips.map((c) => fi(c.start))), to = Math.max(...slotClips.map((c) => fi(clipEnd(c))));
+  const holes: number[] = [];
+  for (let f = from; f < to; f++) if (!tracks.some((t) => t.clips.some((c) => isPictureClip(doc, c) && fi(c.start) <= f && f < fi(clipEnd(c))))) holes.push(f);
+  const covered = keptIds.filter((id) => {
+    const k = findClip(doc, id);
+    if (!k || k.track.kind !== 'video') return false;
+    const below = tracks.indexOf(k.track);
+    return tracks.slice(below + 1).some((t) => t.clips.some((c) => isPictureClip(doc, c) && T.lt(c.start, clipEnd(k.clip)) && T.lt(k.clip.start, clipEnd(c))));
+  });
+  return { from, to, holes, covered };
+}
+/** The clips linked to `clipId` (its link group, itself excluded). */
+const partners = (doc: ProjectDocument, clipId: string) => {
+  const c = findClip(doc, clipId)!.clip;
+  return c.type === 'media' && c.linkGroupId ? mainTracks(doc).flatMap((t) => t.clips).filter((x) => x.id !== clipId && x.type === 'media' && x.linkGroupId === c.linkGroupId) : [];
+};
+const soundsAt = (doc: ProjectDocument, start: T.RationalTime) => mainTracks(doc).filter((t) => t.kind === 'audio').flatMap((t) => t.clips).filter((c) => T.eq(c.start, start));
 
 /** A project with three long videos, a short one and analysed music (a beat every half second, a bar every four). */
 function seed(name: string) {
@@ -214,7 +245,7 @@ describe('plan and apply', () => {
 
 describe('the built-in templates over REST', () => {
   it('each plans, applies and regenerates as one revision each, leaving a valid project (real sound and element synthesis)', async () => {
-    const builtins = TEMPLATES.filter((t) => t.id !== TEST_DEF.id);
+    const builtins = TEMPLATES.filter((t) => t.id !== TEST_DEF.id && t.id !== SOUND_DEF.id);
     const listed = (await rest('GET', '/templates')).body.templates as { id: string; available: boolean }[];
     for (const def of builtins) {
       if (!listed.find((t) => t.id === def.id)!.available) continue; // graphic elements need an ffmpeg with librsvg
@@ -262,6 +293,8 @@ describe('regenerate', () => {
     for (const sl of run.slots!) if (sl.key !== 's2') expect(run0.slots!.find((x) => x.key === sl.key)!.clipId).not.toBe(sl.clipId);
     // the old untouched clips are gone; one picture per slot remains
     for (const id of live) if (id !== s2) expect(findClip(doc, id)).toBeUndefined();
+    // no frame of the run lacks a picture, and nothing new covers the kept one
+    expect(pictureCoverage(doc, runId, [s2])).toMatchObject({ holes: [], covered: [] });
     // and a second regeneration still recognises the hand edit
     const again = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, {});
     expect(again.body.protected).toEqual([s2]);
@@ -269,7 +302,78 @@ describe('regenerate', () => {
     expect((await rest('POST', `/projects/${s.pid}/template-runs/run_nope/regenerate`, {})).status).toBe(404);
     // MCP regenerate: one revision
     const t0 = revision(s.pid);
-    const mt = await tool('regenerate_template', { projectId: s.pid, runId, params: { tempo: 'half' } });
+    const mt = await tool('regenerate_template', { projectId: s.pid, runId, params: { seed: 9 } });
     expect([mt.isError, revision(s.pid)]).toEqual([false, t0 + 1]);
+    expect(pictureCoverage(store.getProject(s.pid).doc, runId, [s2])).toMatchObject({ holes: [], covered: [] });
+  }, 60_000);
+
+  it('another tempo would move a slot kept by hand: refused with 409 template_blocked naming the slot (REST and MCP), nothing changes; without hand edits it re-times every slot with no gap', async () => {
+    const s = seed('regen-tempo');
+    const params = { media: [s.a, s.b, s.c], musicAssetId: s.mus };
+    const applied = await rest('POST', `/projects/${s.pid}/templates/${TEST_DEF.id}/apply`, { params });
+    const runId = applied.body.runId as string;
+    // untouched: half tempo re-times every slot, one revision, no frame without a picture
+    const h = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, { params: { tempo: 'half' } });
+    expect([h.status, h.body.protected]).toEqual([200, []]);
+    const half = pictureCoverage(store.getProject(s.pid).doc, runId);
+    expect([half.from, half.to, half.holes]).toEqual([0, 240, []]);
+    // a hand edit, then another tempo: the kept clip would no longer lie on its slot
+    const s2 = store.getProject(s.pid).doc.recipeRuns[runId]!.slots!.find((x) => x.key === 's2')!.clipId;
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'set_clip_transform', args: { clipId: s2, transform: { rotation: 5 } } }] });
+    const before = revision(s.pid), rows = txRows(s.pid), doc0 = store.getProject(s.pid).doc;
+    const r = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, { params: { tempo: 'normal' } });
+    expect([r.status, r.body.error.code]).toEqual([409, 'template_blocked']);
+    expect(r.body.error.details.kept).toEqual([{ key: 's2', clipId: s2, startFrame: 60, frames: 60, plannedStartFrame: 30, plannedFrames: 30 }]);
+    expect(r.body.error.message).toContain('s2');
+    expect(r.body.error.hint).toContain('half');
+    const m = await tool('regenerate_template', { projectId: s.pid, runId, params: { tempo: 'double' } });
+    expect([m.isError, m.body.error.code]).toEqual([true, 'template_blocked']);
+    expect([revision(s.pid), txRows(s.pid)]).toEqual([before, rows]);
+    expect(store.getProject(s.pid).doc).toEqual(doc0);
+    // the run's own tempo still regenerates, keeping the edit
+    const ok = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, { params: { order: 'shuffle', seed: 2 } });
+    expect([ok.status, ok.body.protected]).toEqual([200, [s2]]);
+    expect(pictureCoverage(store.getProject(s.pid).doc, runId, [s2])).toMatchObject({ holes: [], covered: [] });
+    // a kept clip trimmed by hand no longer fills its slot either: refused the same way
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'trim_clip', args: { clipId: s2, edge: 'end', to: T.frameTime(110, R) } }] });
+    const t = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, {});
+    expect([t.status, t.body.error.code, t.body.error.details.kept[0].frames]).toEqual([409, 'template_blocked', 50]);
+  }, 60_000);
+
+  it('a slot that keeps its own sound is kept as a whole: a picture edited by hand keeps its linked sound, a sound edited by hand keeps its picture (no doubled sound)', async () => {
+    for (const edit of ['picture', 'sound'] as const) {
+      const s = seed(`regen-sound-${edit}`);
+      const applied = await rest('POST', `/projects/${s.pid}/templates/${SOUND_DEF.id}/apply`, { params: { media: [s.a, s.b, s.c], musicAssetId: null } });
+      expect(applied.status).toBe(200);
+      const runId = applied.body.runId as string;
+      const doc0 = store.getProject(s.pid).doc;
+      const pic = doc0.recipeRuns[runId]!.slots!.find((x) => x.key === 'clip2')!.clipId;
+      const [aud, ...more] = partners(doc0, pic);
+      expect([aud?.type, more.length], 'the slot is a picture linked to its own sound').toEqual(['media', 0]);
+      if (edit === 'picture') store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'set_clip_transform', args: { clipId: pic, transform: { rotation: 5 } } }] });
+      else store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'set_clip_gain', args: { clipId: aud!.id, gain: 0.5 } }] });
+      const d1 = store.getProject(s.pid).doc;
+      const keptPic = structuredClone(findClip(d1, pic)!.clip), keptAud = structuredClone(findClip(d1, aud!.id)!.clip);
+      const r = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, { params: { order: 'shuffle', seed: 7 } });
+      expect(r.status, edit).toBe(200);
+      expect([...r.body.protected].sort(), edit).toEqual([pic, aud!.id].sort());
+      expect(r.body.warnings, edit).toContainEqual(expect.objectContaining({ code: 'kept_by_hand', details: { keys: ['clip2'] } }));
+      const doc = store.getProject(s.pid).doc;
+      expect(validateProject(doc), edit).toEqual([]);
+      // the whole slot, byte for byte: still linked, the sound still its own
+      expect(findClip(doc, pic)?.clip, edit).toEqual(keptPic);
+      expect(findClip(doc, aud!.id)?.clip, edit).toEqual(keptAud);
+      expect(doc.recipeRuns[runId]!.slots!.find((x) => x.key === 'clip2')!.clipId, edit).toBe(pic);
+      // one sound under the kept picture, and every other slot is a new picture with its own one sound
+      expect(soundsAt(doc, keptPic.start).map((c) => c.id), edit).toEqual([aud!.id]);
+      for (const sl of doc.recipeRuns[runId]!.slots!.filter((x) => x.kind === 'picture' && x.key !== 'clip2')) {
+        const c = findClip(doc, sl.clipId)!.clip;
+        expect([partners(doc, c.id).length, soundsAt(doc, c.start).length], `${edit} ${sl.key}`).toEqual([1, 1]);
+      }
+      expect(pictureCoverage(doc, runId, [pic]), edit).toMatchObject({ holes: [], covered: [] });
+      // the next regeneration still keeps the whole slot
+      const again = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, {});
+      expect([...again.body.protected].sort(), edit).toEqual([pic, aud!.id].sort());
+    }
   }, 60_000);
 });

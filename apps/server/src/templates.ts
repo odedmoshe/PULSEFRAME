@@ -10,9 +10,10 @@
  *   cannot carry (governance.ts propose/decide commit without internal ops). A grant limited to tracks or a time range is
  *   refused too (403 out_of_scope): a template adds tracks, assets and run records.
  */
+import * as T from '@pulseframe/time';
 import {
-  findClip, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
-  type Asset, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
+  clipEnd, findClip, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
+  type Asset, type ProjectDocument, type SlotRecord, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
@@ -121,9 +122,43 @@ export async function applyTemplateFor(store: Store, gov: Governance, principal:
 }
 
 /**
+ * The clips of a run kept on regeneration: those whose content fingerprint differs from the one the run recorded (edited by
+ * hand), together with every clip of the run linked to one of them. A slot that keeps its own sound is a picture linked to its
+ * sound; an edit to either keeps both, so the kept slot stays whole (still linked, its own sound under its own picture) and its
+ * key is not made again.
+ */
+function keptByHand(doc: ProjectDocument, live: readonly string[], fingerprints: Readonly<Record<string, string>>): string[] {
+  const clip = (id: string) => findClip(doc, id)!.clip;
+  const edited = live.filter((id) => fingerprint(clip(id)) !== fingerprints[id]);
+  const groups = new Set(edited.map((id) => clip(id)).flatMap((c) => (c.type === 'media' && c.linkGroupId ? [c.linkGroupId] : [])));
+  return live.filter((id) => { const c = clip(id); return edited.includes(id) || (c.type === 'media' && !!c.linkGroupId && groups.has(c.linkGroupId)); });
+}
+/**
+ * A picture slot kept by hand stays where it is, so it must lie exactly on the range the new plan gives that slot: otherwise
+ * (another tempo re-times the slots, or the clip was moved or trimmed) the new pictures would leave frames without a picture and
+ * could cover the kept one from a higher track. Refused with 409 template_blocked, naming each such slot.
+ */
+function refuseMovedKeptPictures(doc: ProjectDocument, plan: TemplatePlan, keepSlots: readonly SlotRecord[], runParams: Readonly<Record<string, unknown>>) {
+  const rate = doc.settings.frameRate;
+  const moved = keepSlots.filter((s) => s.kind === 'picture').flatMap((s) => {
+    const c = findClip(doc, s.clipId)!.clip;
+    const startFrame = T.nearestFrameIndex(c.start, rate), frames = T.nearestFrameIndex(clipEnd(c), rate) - startFrame;
+    const planned = plan.predicted.slots.find((x) => x.key === s.key);
+    const fits = planned && T.eq(c.start, T.frameTime(planned.startFrame, rate)) && T.eq(clipEnd(c), T.frameTime(planned.startFrame + planned.frames, rate));
+    return fits ? [] : [{ key: s.key, clipId: s.clipId, startFrame, frames, plannedStartFrame: planned?.startFrame ?? null, plannedFrames: planned?.frames ?? null }];
+  });
+  if (!moved.length) return;
+  const keys = moved.map((m) => m.key).join(', ');
+  const tempo = typeof runParams.tempo === 'string' ? runParams.tempo : 'normal';
+  throw new ApiError(409, 'template_blocked', `the template cannot regenerate like this: slot(s) ${keys} were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture`, { kept: moved },
+    `Regenerate with the run's tempo (${tempo}), undo the hand edit that moved or trimmed slot(s) ${keys}, or delete that clip so the template fills the slot again.`);
+}
+
+/**
  * Regenerate a template run, optionally with changed parameters (shuffle, another tempo): clips the run made that nobody
- * changed are replaced; clips edited by hand since (their content fingerprint differs) are kept exactly as they are, with
- * their slot records, and the planner does not make those items again.
+ * changed are replaced; clips edited by hand since (their content fingerprint differs), and the clips linked to them, are kept
+ * exactly as they are, with their slot records, and the planner does not make those items again. A kept picture that would no
+ * longer lie on its slot (another tempo, or the clip was moved or trimmed) is refused with 409 template_blocked.
  */
 export async function regenerateTemplateFor(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, expectedRevision?: number): Promise<TemplateRegenerateResult> {
   mayApply(gov, principal, projectId);
@@ -133,7 +168,7 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
   if (newParams !== undefined && (typeof newParams !== 'object' || newParams === null || Array.isArray(newParams))) throw new ApiError(400, 'invalid_request', 'params must be an object of template parameters to change');
   const def = templateOf(run.recipeId.slice('template:'.length));
   const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
-  const protectedIds = live.filter((id) => fingerprint(findClip(p.doc, id)!.clip) !== run.fingerprints?.[id]);
+  const protectedIds = keptByHand(p.doc, live, run.fingerprints ?? {});
   const removable = live.filter((id) => !protectedIds.includes(id));
   const keepSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
   // Plan against the document as it will be once the untouched clips are gone; `at` and the other parameters come from the run.
@@ -143,6 +178,7 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
   const params = { ...previous, ...(newParams as Record<string, unknown> | undefined) };
   const elementsAvailable = await elementsFor(def);
   const plan = wrap(() => planTemplate(without, def, params, { keepKeys: keepSlots.map((s) => s.key), elementsAvailable }));
+  refuseMovedKeptPictures(p.doc, plan, keepSlots, run.params);
   refuseBlocked(plan);
   const assets = await makeAssets(store, principal, plan);
   mayApply(gov, principal, projectId);
