@@ -8,6 +8,8 @@
 import type { BeatPosition, BlendMode, Mask } from '@pulseframe/core';
 import type { LayerLook } from './evaluate.ts';
 import { gpuEffect, isGpuEffect, type LutStrip } from './gpu.ts';
+import { boundRadius, overlayParticles, shapeAlpha, speedLines, wedgeCorners, type Particle } from './overlays.ts';
+import { STAMP_TEXT, stampPolygons } from './stamp.ts';
 
 type C2D = OffscreenCanvasRenderingContext2D;
 export interface Buf { canvas: OffscreenCanvas; ctx: C2D }
@@ -111,6 +113,78 @@ export function grainOffset(seed: number, frameIndex: number): { x: number; y: n
 const clipTo = (dst: C2D, shape: OffscreenCanvas) => { dst.globalCompositeOperation = 'destination-in'; dst.globalAlpha = 1; dst.drawImage(shape, 0, 0); dst.globalCompositeOperation = 'source-over'; };
 const inLayerSpace = (x: C2D, box: LayerBox) => { x.translate(box.cx, box.cy); x.rotate((box.rotation * Math.PI) / 180); x.scale(box.scale, box.scale); };
 
+// ---- overlay sprites (ADR-0011): one small picture per shape, colour and radius bucket, drawn with drawImage ----
+/**
+ * Sprite pixels are computed here in JavaScript from overlays.ts shapeAlpha (4×4 samples a pixel), never rasterised by the
+ * canvas, so every canvas (the editor's, the render worker's) holds the same sprite to the bit; only the bilinear placement
+ * at a fractional position is the canvas's own. If preview and stills ever disagree beyond SPEC §8's tolerance on a machine,
+ * SNAP_TO_PIXELS places unrotated sprites on whole pixels instead (plan risk 4); the overlays proof measures it.
+ */
+const SNAP_TO_PIXELS = false;
+const SPRITE_BUCKET = 0.25;
+const SPRITE_LIMIT = 192;
+const sprites = new Map<string, { canvas: OffscreenCanvas; half: number }>();
+const rgbOf = (hex: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)] : [255, 255, 255]);
+function spriteOf(shape: Particle['shape'], colour: string, r: number) {
+  const rb = Math.max(SPRITE_BUCKET, Math.round(r / SPRITE_BUCKET) * SPRITE_BUCKET);
+  const key = `${shape}|${colour}|${rb}`;
+  let s = sprites.get(key);
+  if (s) return s;
+  if (sprites.size >= SPRITE_LIMIT) sprites.clear(); // bounded, like the noise tiles: rebuilt on demand
+  const half = Math.ceil(boundRadius({ r: rb, shape }) + 1.5), side = 2 * half;
+  const canvas = new OffscreenCanvas(side, side);
+  const x = canvas.getContext('2d')!;
+  const img = x.createImageData(side, side);
+  const [cr, cg, cb] = rgbOf(colour);
+  for (let py = 0; py < side; py++) for (let px = 0; px < side; px++) {
+    let a = 0;
+    for (let sy = 0; sy < 4; sy++) for (let sx = 0; sx < 4; sx++) a += shapeAlpha(shape, (px + (sx + 0.5) / 4 - half) / rb, (py + (sy + 0.5) / 4 - half) / rb);
+    const o = (py * side + px) * 4;
+    img.data[o] = cr!; img.data[o + 1] = cg!; img.data[o + 2] = cb!; img.data[o + 3] = Math.round((a / 16) * 255);
+  }
+  x.putImageData(img, 0, 0);
+  s = { canvas, half };
+  sprites.set(key, s);
+  return s;
+}
+function drawParticles(x: C2D, parts: readonly Particle[]) {
+  x.save();
+  x.imageSmoothingEnabled = true;
+  x.imageSmoothingQuality = 'low'; // plain bilinear placement: the same arithmetic on every canvas
+  for (const q of parts) {
+    if (!(q.alpha > 0) || !(q.r > 0)) continue;
+    const s = spriteOf(q.shape, q.colour, q.r);
+    x.globalAlpha = Math.min(1, q.alpha);
+    if (q.rot) { const c = Math.cos(q.rot), sn = Math.sin(q.rot); x.setTransform(c, sn, -sn, c, q.x, q.y); x.drawImage(s.canvas, -s.half, -s.half); }
+    else {
+      x.setTransform(1, 0, 0, 1, 0, 0);
+      x.drawImage(s.canvas, SNAP_TO_PIXELS ? Math.round(q.x - s.half) : q.x - s.half, SNAP_TO_PIXELS ? Math.round(q.y - s.half) : q.y - s.half);
+    }
+  }
+  x.restore();
+}
+/** Overlay particles over the layer: over the whole frame buffer (area=frame), or kept to the layer's shape (area=layer). */
+function overlay(type: string, p: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: LookEnv) {
+  const { width: W, height: H } = env;
+  dst.drawImage(src, 0, 0);
+  const parts = overlayParticles(type, p as Record<string, number | string | boolean>, W, H, env.seconds, env.local ?? 0, env.beat ?? null);
+  if (!parts.length) return;
+  const op: GlobalCompositeOperation = type === 'overlay.bokeh' ? 'lighter' : 'source-over'; // light adds to what is behind it
+  if (p.area === 'layer') {
+    const own = scratch(9, W, H);
+    own.ctx.globalCompositeOperation = op;
+    drawParticles(own.ctx, parts);
+    clipTo(own.ctx, src);
+    dst.globalCompositeOperation = op;
+    dst.drawImage(own.canvas, 0, 0);
+    dst.globalCompositeOperation = 'source-over';
+    return;
+  }
+  dst.globalCompositeOperation = op;
+  drawParticles(dst, parts);
+  dst.globalCompositeOperation = 'source-over';
+}
+
 function layerEffect(type: string, p: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: LookEnv) {
   const { width: W, height: H } = env;
   switch (type) {
@@ -187,6 +261,46 @@ function layerEffect(type: string, p: Record<string, unknown>, src: OffscreenCan
         dst.drawImage(ch.canvas, ox, oy);
       }
       dst.globalCompositeOperation = 'source-over';
+      return;
+    }
+    case 'overlay.snow':
+    case 'overlay.confetti':
+    case 'overlay.hearts':
+    case 'overlay.bokeh':
+      overlay(type, p, src, dst, env);
+      return;
+    case 'overlay.speed-lines': {
+      dst.drawImage(src, 0, 0);
+      const { cx, cy, lines } = speedLines(p as Record<string, number | string | boolean>, W, H, env.seconds);
+      if (!lines.length) return;
+      dst.save();
+      dst.globalAlpha = Math.min(1, Math.max(0, n(p.amount, 0.7)));
+      dst.fillStyle = typeof p.color === 'string' ? p.color : '#FFFFFF';
+      dst.beginPath(); // one path: wedges that touch are one shape, never painted twice
+      for (const s of lines) { const [t, a, b] = wedgeCorners(cx, cy, s); dst.moveTo(t[0], t[1]); dst.lineTo(a[0], a[1]); dst.lineTo(b[0], b[1]); dst.closePath(); }
+      dst.fill();
+      dst.restore();
+      return;
+    }
+    case 'stylize.date-stamp': {
+      dst.drawImage(src, 0, 0);
+      const text = typeof p.text === 'string' ? p.text : '';
+      if (!STAMP_TEXT.test(text)) return; // refused by the effect's schema before it can be stored; never drawn as something else
+      const sizePx = n(p.size, 0.045) * H;
+      const corner = (['bottom-right', 'bottom-left', 'top-right', 'top-left'] as const).find((c) => c === p.corner) ?? 'bottom-right';
+      const polys = stampPolygons(text, sizePx, corner, env.box.w, env.box.h);
+      if (!polys.length) return;
+      dst.save();
+      inLayerSpace(dst, env.box); // in the corner of the picture, moving and scaling with it
+      dst.translate(-env.box.w / 2, -env.box.h / 2);
+      const glow = Math.min(1, Math.max(0, n(p.glow, 0.5)));
+      dst.shadowBlur = glow * 0.25 * sizePx; // device pixels: glow·0.25·size·H
+      dst.shadowColor = glow > 0 ? hexRgba(p.color, 0.9) : 'rgba(0,0,0,0)';
+      dst.fillStyle = typeof p.color === 'string' ? p.color : '#FF9A2E';
+      dst.beginPath();
+      for (const poly of polys) { poly.forEach((q, i) => (i ? dst.lineTo(q.x, q.y) : dst.moveTo(q.x, q.y))); dst.closePath(); }
+      dst.fill();
+      dst.restore();
       return;
     }
     default:
