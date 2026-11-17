@@ -60,6 +60,22 @@ function defineOp<S extends z.ZodType>(def: OpDefinition<S>) {
   registry.set(def.name, def as unknown as OpDefinition);
 }
 export const listOps = () => [...registry.values()];
+
+/**
+ * Names that every plain object answers to through its prototype (`__proto__`, `constructor`, `toString`, …). Library
+ * files, sequences, analyses and variants are kept in plain objects keyed by id, so an id equal to one of these names
+ * would find something that is not an entry (`d.assets.__proto__` is Object.prototype), and writing to it would change
+ * every object in the process. No id this product makes can be such a name (ids are `prefix_…`), so an argument that
+ * names one is refused before any op sees it.
+ */
+const INHERITED_NAMES: ReadonlySet<string> = new Set(Object.getOwnPropertyNames(Object.prototype));
+const isIdKey = (key: string) => key === 'id' || key === 'lut' || /Ids?$/.test(key);
+/** Throws `not_found` when an id-like argument (a key named `id`, `…Id` or `…Ids`, at any depth) is one of those names. */
+export function refuseInheritedIds(args: unknown, where: string, key = ''): void {
+  if (typeof args === 'string') { if (isIdKey(key) && INHERITED_NAMES.has(args)) throw new OpError('not_found', `${where}: no ${key} "${args}"`, { [key]: args }); return; }
+  if (Array.isArray(args)) { for (const v of args) refuseInheritedIds(v, where, key); return; }
+  if (args && typeof args === 'object') for (const [k, v] of Object.entries(args)) refuseInheritedIds(v, where, isIdKey(k) ? k : k === 'params' || k === 'args' ? '' : isIdKey(key) ? key : k);
+}
 export const getOp = (name: string) => registry.get(name);
 export function describeOps(opts: { includeInternal?: boolean } = {}) {
   return listOps()
@@ -1405,6 +1421,7 @@ defineOp({
       if (!def || def.internal) throw new OpError('forbidden_op', `recipe step ${i} uses "${call.op}", which is not a public operation`, { index: i });
       const parsed = def.args.safeParse(call.args);
       if (!parsed.success) throw new OpError('invalid_args', `recipe step ${i} (${call.op}): ${z.prettifyError(parsed.error)}`, { index: i });
+      refuseInheritedIds(parsed.data, `recipe step ${i} (${call.op})`);
       const r = def.apply(d, parsed.data, ctx);
       for (const id of r.affectedIds) affected.add(id);
       const out = r.output ?? {};
@@ -2525,6 +2542,7 @@ export function applyTransaction(doc: ProjectDocument, ops: OpCall[], opts: { id
     const parsed = def.args.safeParse(call.args);
     if (!parsed.success) throw new OpError('invalid_args', `invalid arguments for ${call.op}: ${z.prettifyError(parsed.error)}`, { index, issues: parsed.error.issues });
     try {
+      refuseInheritedIds(parsed.data, call.op);
       results.push({ op: call.op, ...def.apply(draft, parsed.data, ctx) });
     } catch (e) {
       if (e instanceof OpError) e.details = { index, op: call.op, ...e.details };
