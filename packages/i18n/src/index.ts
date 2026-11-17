@@ -109,6 +109,9 @@ export const he = {
   'marker.color.blue': 'כחול', 'marker.color.green': 'ירוק', 'marker.color.yellow': 'צהוב', 'marker.color.red': 'אדום', 'marker.color.purple': 'סגול',
   'op.add_marker': 'הוספת סמן', 'op.update_marker': 'עדכון סמן', 'op.remove_marker': 'הסרת סמן', 'marker.add': 'הוספת סמן', 'marker.next': 'הסמן הבא', 'marker.prev': 'הסמן הקודם', 'marker.label': 'שם הסמן', 'marker.color': 'צבע', 'marker.remove': 'הסרת הסמן', 'marker.unnamed': 'סמן', 'marker.edit': 'עריכת סמן', 'marker.close': 'סגירה',
   'op.add_variant': 'הוספת פורמט', 'op.update_variant': 'עדכון פורמט', 'op.remove_variant': 'הסרת פורמט', 'op.set_variant_override': 'התאמה לפורמט', 'op.set_variant_phrase_text': 'ניסוח משפט בפורמט',
+  // AI-model wave (ADR-0017): operations and their error codes
+  'op.replace_clip_asset': 'הקליפ מציג גרסה מעובדת של הקובץ שלו', 'op.attach_translation': 'תרגום מכונה של הכתוביות', 'op.review_translation': 'סימון בדיקה של תרגום',
+  'error.code.not_time_preserving': 'הקובץ החדש אינו שומר על התזמון של המקור', 'error.code.range_not_covered': 'הקובץ החדש אינו מכסה את כל הקטע שהקליפ משתמש בו',
   'inspector.tab.recipes': 'מתכונים', 'op.apply_recipe': 'הפעלת מתכון',
   'recipes.intro': 'מתכונים הם עריכות רב-שלביות לפי כללים, שנבנות ממידע שכבר נמצא בפרויקט. אין בהם מודל בינה מלאכותית. כל מתכון מופעל כצעד אחד שאפשר לבטל, וכל מה שנוצר נשאר ניתן לעריכה.',
   'recipes.needs': 'דרישות', 'recipes.plan': 'תצוגה מקדימה', 'recipes.planning': 'מתכנן…', 'recipes.apply': 'הפעלה', 'recipes.applying': 'מפעיל…',
@@ -264,6 +267,9 @@ export const en: Record<keyof typeof he, string> = {
   'marker.color.blue': 'Blue', 'marker.color.green': 'Green', 'marker.color.yellow': 'Yellow', 'marker.color.red': 'Red', 'marker.color.purple': 'Purple',
   'op.add_marker': 'Added marker', 'op.update_marker': 'Updated marker', 'op.remove_marker': 'Removed marker', 'marker.add': 'Add marker', 'marker.next': 'Next marker', 'marker.prev': 'Previous marker', 'marker.label': 'Marker name', 'marker.color': 'Colour', 'marker.remove': 'Remove marker', 'marker.unnamed': 'Marker', 'marker.edit': 'Edit marker', 'marker.close': 'Close',
   'op.add_variant': 'Added format', 'op.update_variant': 'Updated format', 'op.remove_variant': 'Removed format', 'op.set_variant_override': 'Format override', 'op.set_variant_phrase_text': 'Phrase wording in a format',
+  // AI-model wave (ADR-0017): operations and their error codes
+  'op.replace_clip_asset': 'Clip shows a processed copy of its file', 'op.attach_translation': 'Machine translation of the captions', 'op.review_translation': 'Translation review mark',
+  'error.code.not_time_preserving': 'The new file does not keep the timing of the original', 'error.code.range_not_covered': 'The new file does not cover the whole stretch the clip uses',
   'inspector.tab.recipes': 'Recipes', 'op.apply_recipe': 'Applied recipe',
   'recipes.intro': 'Recipes are rule-based, multi-step edits made from data already in the project. No AI model is involved. Each one applies as a single step you can undo, and everything it creates stays editable.',
   'recipes.needs': 'Needs', 'recipes.plan': 'Preview', 'recipes.planning': 'Planning…', 'recipes.apply': 'Apply', 'recipes.applying': 'Applying…',

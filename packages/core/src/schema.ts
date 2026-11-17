@@ -21,6 +21,38 @@ export const RateSchema = z.object({ num: z.number().int().positive(), den: z.nu
 const Id = z.string().min(1).max(64);
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/).describe('#RRGGBB or #RRGGBBAA');
 
+/**
+ * How the frames of a derived video map to its source (ADR-0017 frame jobs). Present on provider outputs made frame by frame.
+ * identity: output frame i = source frame sourceStartFrame+i. interpolated: output frame i·m = source frame sourceStartFrame+i (time-identical at rate r·m).
+ */
+export const DerivedFramesSchema = z
+  .object({
+    sourceStartFrame: z.number().int().nonnegative(),
+    sourceFrameCount: z.number().int().positive(),
+    sourceRate: RateSchema,
+    outputRate: RateSchema,
+    /** identity: output frame i = source frame f0+i. interpolated: output frame i·m = source frame f0+i (time-identical at rate r·m). */
+    mapping: z.enum(['identity', 'interpolated']),
+    multiplier: z.number().int().min(2).max(8).optional(),
+    /** Output frame indices that repeat the previous frame (trailing holds, holds across scene cuts). */
+    heldFrames: z.array(z.number().int().nonnegative()).max(100000),
+  })
+  .strict();
+/**
+ * A machine translation stored on a language variant (ADR-0017). Phrase-timed only: the master's timing is kept and never mapped
+ * word by word (SPEC §16). Only the owner can mark it reviewed.
+ */
+export const VariantTranslationSchema = z
+  .object({
+    from: z.string().min(2).max(35), to: z.string().min(2).max(35),
+    engine: z.string().max(80), model: z.string().max(200),
+    createdAt: z.string(), createdBy: z.string(),
+    review: z.enum(['needed', 'reviewed']), reviewedBy: z.string().optional(), reviewedAt: z.string().optional(),
+    /** sha256 hex of each master phrase/cue text when translated (key = segment id or caption clip id). */
+    sources: z.record(Id, z.string().regex(/^[0-9a-f]{64}$/)),
+  })
+  .strict();
+
 export const AssetSchema = z
   .object({
     id: Id,
@@ -89,7 +121,23 @@ export const AssetSchema = z
           .optional(),
         /** Present for provider outputs (SPEC §25, Amendment A1 FF-08): enough to recreate the recipe and trace lineage. */
         derived: z
-          .object({ jobId: z.string(), capabilityId: z.string(), capabilityVersion: z.string(), graphDigest: z.string(), params: z.record(z.string(), z.unknown()), sourceAssetIds: z.array(z.string()), outputName: z.string(), outputRole: z.string(), encoding: z.string(), provider: z.record(z.string(), z.unknown()) })
+          .object({
+            jobId: z.string(), capabilityId: z.string(), capabilityVersion: z.string(),
+            /** The reviewed graph's digest for a ComfyUI result. A local tool has no graph and writes its code digest here too (same as logicDigest). */
+            graphDigest: z.string(),
+            params: z.record(z.string(), z.unknown()), sourceAssetIds: z.array(z.string()), outputName: z.string(), outputRole: z.string(), encoding: z.string(), provider: z.record(z.string(), z.unknown()),
+            // ADR-0017 (all optional; older documents stay valid):
+            /** Frame mapping of a frame-job video output. */
+            frames: DerivedFramesSchema.optional(),
+            /** What happened to the source's sound: copied unchanged, processed by the tool, or absent. */
+            audio: z.enum(['source-copied', 'processed', 'none']).optional(),
+            /** Source-asset time (its own clock) of this asset's time zero. Present iff the derivative is time-preserving (replace_clip_asset and caption lineage need it). */
+            sourceRangeStart: RationalTimeSchema.optional(),
+            /** The verified model files the job ran with. */
+            models: z.array(z.object({ path: z.string(), sha256: z.string().regex(/^[0-9a-f]{64}$/) }).strict()).max(16).optional(),
+            /** sha256:<hex> logic digest (graphDigest or codeDigest) the job ran. graphDigest keeps its meaning for ComfyUI. */
+            logicDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
+          })
           .strict()
           .optional(),
       })
@@ -288,6 +336,10 @@ export const VariantSchema = z
     overrides: z.record(z.string(), VariantOverrideSchema),
     /** Transcript phrases (by segment id) worded differently in this format. Such a phrase is shown as phrase-timed text there: the word timing describes the master wording. */
     phraseText: z.record(Id, z.string().min(1).max(4000)).optional(),
+    /** BCP 47 tag of the captions in this format when they differ from the master's (a language variant, ADR-0017). */
+    language: z.string().min(2).max(35).optional(),
+    /** Present on a language variant made by machine translation: where its wording came from and whether the owner reviewed it. */
+    translation: VariantTranslationSchema.optional(),
   })
   .strict();
 
@@ -374,6 +426,8 @@ export type CaptionStyle = z.infer<typeof CaptionStyleSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;
 export type Variant = z.infer<typeof VariantSchema>;
+export type VariantTranslation = z.infer<typeof VariantTranslationSchema>;
+export type DerivedFrames = z.infer<typeof DerivedFramesSchema>;
 export type SafeArea = z.infer<typeof SafeAreaSchema>;
 export type Segment = z.infer<typeof SegmentSchema>;
 export type Word = z.infer<typeof WordSchema>;

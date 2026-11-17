@@ -1,0 +1,116 @@
+/**
+ * ADR-0017 descriptor contract: one registry with two providers, reviewed discrete values, new size and frame contracts, local-tool
+ * blockers. The local descriptor below is a test fixture (labelled), not a registry entry.
+ */
+import { describe, expect, it } from 'vitest';
+import {
+  ALL_CAPABILITIES, BUILTIN_CAPABILITIES, DescriptorSchema, graphDigest, IMAGE_SOFT_BLUR, LOCAL_TOOLS, logicDigest, publicationBlockers, resolveGraph, resolveParams,
+  type CapabilityDescriptor, type ComfyDescriptor, type LocalToolDescriptor,
+} from './index.ts';
+
+const thrown = (fn: () => unknown) => { try { fn(); } catch (e: any) { return e.code as string; } return 'ok'; };
+const pass = Object.fromEntries(['schemaValid', 'dependencyReady', 'licenseReviewed', 'executed', 'qualityReviewed', 'hebrewQualified', 'hardwareQualified'].map((k) => [k, { status: 'pass' }]));
+const codes = (d: CapabilityDescriptor, ctx = {}) => publicationBlockers(d, 'commercial', ctx).map((b) => b.code);
+
+/** Test fixture only: a local tool shaped like the voice-cleanup descriptor W2 will add. */
+const LOCAL_FIXTURE = DescriptorSchema.parse({
+  id: 'test.local.fixture', version: '0.1.0', provider: 'local', state: 'published',
+  title: { he: 'בדיקה', en: 'Fixture' }, description: { he: 'בדיקה', en: 'Fixture' },
+  source: { repository: null, commit: null, notices: null },
+  inputs: [
+    { name: 'audio', label: { he: 'קול', en: 'Sound' }, type: 'audio', binding: null, required: true, reviewed: true },
+    { name: 'attenLimitDb', label: { he: 'הנחתה', en: 'Attenuation' }, type: 'int', binding: null, required: false, default: 24, allowed: [6, 12, 24, 100], reviewed: true },
+  ],
+  outputs: [{ name: 'audio', role: 'audio', mediaType: 'audio', nodeId: null, reviewed: true }],
+  models: [], limits: { maxFrames: null, maxPixels: null },
+  resources: { downloadBytes: 0, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
+  egress: 'none', languages: [], limitations: [], qualification: pass,
+  engine: { kind: 'binary', configVar: 'PF_DENOISE_BIN' }, task: 'voice-clean', codeFiles: ['apps/server/tools/pf_tools.py'], codeDigest: `sha256:${'c'.repeat(64)}`,
+}) as LocalToolDescriptor;
+
+describe('one registry, two providers', () => {
+  it('the union parses both kinds; defaults fill the new fields; the registry lists built-ins then local tools', () => {
+    expect(LOCAL_FIXTURE.provider).toBe('local');
+    expect(LOCAL_FIXTURE.engine.verifiedBinaries).toEqual([]);
+    expect(LOCAL_FIXTURE.outputs[0]).toMatchObject({ expectSize: null, expectFrames: null, dataSchema: null, encoding: 'display' });
+    for (const d of BUILTIN_CAPABILITIES) { expect(d.frames).toBeNull(); for (const m of d.models) expect(m.attribution).toBeNull(); }
+    expect(ALL_CAPABILITIES).toEqual([...BUILTIN_CAPABILITIES, ...LOCAL_TOOLS]);
+    expect(logicDigest(IMAGE_SOFT_BLUR)).toBe(IMAGE_SOFT_BLUR.graphDigest);
+    expect(logicDigest(LOCAL_FIXTURE)).toBe(LOCAL_FIXTURE.codeDigest);
+    expect(DescriptorSchema.safeParse({ ...LOCAL_FIXTURE, graph: {} }).success).toBe(false); // a local tool has no graph
+  });
+  it('local-tool blockers: graph bindings, egress and a code digest that differs from the installed code', () => {
+    expect(codes(LOCAL_FIXTURE)).toEqual([]);
+    expect(codes(LOCAL_FIXTURE, { codeDigest: `sha256:${'c'.repeat(64)}` })).toEqual([]);
+    expect(codes(LOCAL_FIXTURE, { codeDigest: `sha256:${'d'.repeat(64)}` })).toEqual(['code_digest_mismatch']);
+    const bound = { ...LOCAL_FIXTURE, inputs: [{ ...LOCAL_FIXTURE.inputs[0]!, binding: { nodeId: '1', input: 'x' } }], outputs: [{ ...LOCAL_FIXTURE.outputs[0]!, nodeId: '9' }] };
+    expect(codes(bound)).toEqual(['binding_on_local_tool', 'binding_on_local_tool']);
+    expect(codes({ ...LOCAL_FIXTURE, egress: 'graph-defined' })).toEqual(['local_tool_egress']);
+  });
+  it('allowed values: shape checks, and resolveParams accepts only them', () => {
+    const at = (allowed: number[], type: 'int' | 'float' | 'string' = 'int', extra = {}) => codes({ ...LOCAL_FIXTURE, inputs: [LOCAL_FIXTURE.inputs[0]!, { ...LOCAL_FIXTURE.inputs[1]!, type, allowed, default: allowed[0], ...extra }] });
+    expect(at([6, 12])).toEqual([]);
+    expect(at([0.5])).toEqual(['invalid_allowed']);
+    expect(at([6, 6])).toEqual(['invalid_allowed']);
+    expect(at([6], 'string')).toEqual(['invalid_allowed']);
+    expect(at([6, 200], 'int', { min: 0, max: 100 })).toEqual(['invalid_allowed']);
+    expect(resolveParams(LOCAL_FIXTURE, { audio: 'ast_abc', attenLimitDb: 12 })).toEqual({ resolved: { audio: 'ast_abc', attenLimitDb: 12 }, media: [{ name: 'audio', type: 'audio', assetId: 'ast_abc', nodeId: null, input: null }] });
+    expect(thrown(() => resolveParams(LOCAL_FIXTURE, { audio: 'ast_abc', attenLimitDb: 13 }))).toBe('invalid_parameter');
+    expect(thrown(() => resolveParams(LOCAL_FIXTURE, { audio: '/etc/passwd' }))).toBe('invalid_parameter');
+    expect(thrown(() => resolveParams(LOCAL_FIXTURE, {}))).toBe('missing_parameter');
+  });
+});
+
+describe('ComfyUI contracts: size by a reviewed scale, frame plans, data outputs', () => {
+  const graph = {
+    '1': { class_type: 'LoadImage', inputs: { image: 'in.png' } },
+    '2': { class_type: 'ImageScaleBy', inputs: { image: ['1', 0], upscale_method: 'lanczos', scale_by: 1 } },
+    '3': { class_type: 'SaveImage', inputs: { images: ['2', 0], filename_prefix: 'x' } },
+  };
+  const scaled = (allowed: number[]): ComfyDescriptor => ({
+    ...IMAGE_SOFT_BLUR, id: 'test.scale', graph, graphDigest: graphDigest(graph), qualification: pass as any,
+    requiredNodes: ['LoadImage', 'ImageScaleBy', 'SaveImage'].map((classType) => ({ classType, pack: 'core', packVersion: null })),
+    inputs: [IMAGE_SOFT_BLUR.inputs[0]!, { name: 'scaleBy', label: { he: 'קנה מידה', en: 'Scale' }, type: 'float', binding: { nodeId: '2', input: 'scale_by' }, required: false, default: allowed[allowed.length - 1], allowed, reviewed: true }],
+    outputs: [{ ...IMAGE_SOFT_BLUR.outputs[0]!, nodeId: '3', expectSize: { scaleOfInputByParam: { input: 'image', param: 'scaleBy', base: 4 } } }],
+  });
+  it('scaleOfInputByParam needs allowed values that give a whole-number scale; 0.6 is refused at run time', () => {
+    expect(codes(scaled([0.5, 0.75, 1]))).toEqual([]);
+    expect(codes(scaled([0.5, 0.6]))).toEqual(['invalid_allowed']);
+    const noAllowed = scaled([1]);
+    delete noAllowed.inputs[1]!.allowed;
+    expect(codes(noAllowed)).toContain('invalid_allowed');
+    const r = resolveGraph(scaled([0.5, 0.75, 1]), { image: 'ast_x', scaleBy: 0.75 });
+    expect(r.graph['2']!.inputs.scale_by).toBe(0.75);
+    expect(thrown(() => resolveGraph(scaled([0.5, 0.75, 1]), { image: 'ast_x', scaleBy: 0.6 }))).toBe('invalid_parameter');
+  });
+  it('a null binding on a ComfyUI input is dangling; a data output needs a schema', () => {
+    const d = scaled([1]);
+    expect(codes({ ...d, inputs: [{ ...d.inputs[0]!, binding: null }, d.inputs[1]!] })).toEqual(['dangling_binding']);
+    expect(codes({ ...LOCAL_FIXTURE, outputs: [{ ...LOCAL_FIXTURE.outputs[0]!, mediaType: 'data' }] })).toEqual(['data_output_without_schema']);
+    expect(codes({ ...LOCAL_FIXTURE, outputs: [{ ...LOCAL_FIXTURE.outputs[0]!, mediaType: 'data', dataSchema: 'translation.v1' }] })).toEqual([]);
+  });
+  it('video inputs resolve only through a frame plan that reads them; frame plans are checked', () => {
+    const vg = {
+      '1': { class_type: 'LoadVideo', inputs: { file: 'in.mkv' } },
+      '2': { class_type: 'GetVideoComponents', inputs: { video: ['1', 0] } },
+      '3': { class_type: 'FrameInterpolate', inputs: { images: ['2', 0], multiplier: 2 } },
+      '4': { class_type: 'PreviewImage', inputs: { images: ['3', 0] } },
+    };
+    const base: ComfyDescriptor = {
+      ...IMAGE_SOFT_BLUR, id: 'test.frames', graph: vg, graphDigest: graphDigest(vg), qualification: pass as any,
+      requiredNodes: ['LoadVideo', 'GetVideoComponents', 'FrameInterpolate', 'PreviewImage'].map((classType) => ({ classType, pack: 'core', packVersion: null })),
+      inputs: [
+        { name: 'video', label: { he: 'וידאו', en: 'Video' }, type: 'video', binding: { nodeId: '1', input: 'file' }, required: true, reviewed: true },
+        { name: 'multiplier', label: { he: 'פי', en: 'Times' }, type: 'int', binding: { nodeId: '3', input: 'multiplier' }, required: false, default: 2, allowed: [2, 4], reviewed: true },
+      ],
+      outputs: [{ name: 'frames', role: 'primary', mediaType: 'video', nodeId: '4', encoding: 'display', expectSize: { sameAsInput: 'video' }, expectFrames: 'pairwise', dataSchema: null, reviewed: true }],
+      frames: { input: 'video', mode: 'pairwise', chunkFrames: 48, multiplierParam: 'multiplier', maxOutputRate: 120 },
+    };
+    expect(codes(base)).toEqual([]);
+    expect(resolveGraph(base, { video: 'ast_v', multiplier: 4 }).media).toEqual([{ name: 'video', type: 'video', assetId: 'ast_v', nodeId: '1', input: 'file' }]);
+    expect(thrown(() => resolveGraph({ ...base, frames: null }, { video: 'ast_v' }))).toBe('unsupported_input_type');
+    expect(codes({ ...base, frames: null })).toEqual(['frames_input_missing']); // the output's frame-count contract has no plan
+    expect(codes({ ...base, frames: { ...base.frames!, input: 'nope' } })).toEqual(['frames_input_missing']);
+    expect(codes({ ...base, frames: { ...base.frames!, multiplierParam: undefined } })).toEqual(['frames_input_missing']);
+  });
+});

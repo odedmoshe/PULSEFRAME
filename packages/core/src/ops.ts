@@ -6,7 +6,7 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
-  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS,
+  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
   type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
@@ -28,7 +28,9 @@ import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
-  | 'incompatible' | 'forbidden_op' | 'invalid_result';
+  | 'incompatible' | 'forbidden_op' | 'invalid_result'
+  // replace_clip_asset (ADR-0017): the new file does not keep the original's timing / does not cover what the clip shows
+  | 'not_time_preserving' | 'range_not_covered';
 export class OpError extends Error {
   constructor(public code: OpErrorCode, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
     super(message);
@@ -1613,6 +1615,12 @@ defineOp({
     return { affectedIds: [m.id], summary: `Removed marker${m.label ? ` "${m.label}"` : ''}` };
   },
 });
+/** A reviewed machine translation whose wording is edited is no longer what the owner reviewed (ADR-0017): it needs review again. */
+function needsReviewAgain(v: Variant) {
+  if (v.translation?.review !== 'reviewed') return;
+  const { reviewedBy: _by, reviewedAt: _at, ...rest } = v.translation;
+  v.translation = { ...rest, review: 'needed' };
+}
 defineOp({
   name: 'set_variant_override',
   version: 1,
@@ -1631,6 +1639,7 @@ defineOp({
     if (a.hidden !== undefined) { if (a.hidden) next.hidden = true; else delete next.hidden; }
     if ((a.text != null && f.clip.type !== 'text' && f.clip.type !== 'caption') || (a.textStyle != null && f.clip.type !== 'text')) throw new OpError('incompatible', 'wording can be set per format on title and caption clips, text style on title clips', { clipId: a.clipId });
     if (a.text === null) delete next.text; else if (a.text !== undefined) next.text = a.text;
+    if (next.text !== cur.text) needsReviewAgain(v); // a reworded cue of a reviewed translation is no longer what was reviewed
     if (a.textStyle === null) delete next.textStyle; else if (a.textStyle) next.textStyle = { ...cur.textStyle, ...a.textStyle };
     if (next.textStyle && Object.keys(next.textStyle).length === 0) delete next.textStyle;
     if (next.transform && Object.keys(next.transform).length === 0) delete next.transform;
@@ -1649,9 +1658,121 @@ defineOp({
     const seg = d.transcripts[a.assetId]?.segments.find((s) => s.id === a.segmentId);
     if (!seg) throw new OpError('not_found', `phrase ${a.segmentId} not found in the transcript of ${a.assetId}`, { segmentId: a.segmentId });
     const next = { ...(v.phraseText ?? {}) };
+    const before = next[a.segmentId];
     if (a.text === null || a.text === seg.text) delete next[a.segmentId]; else next[a.segmentId] = a.text;
     if (Object.keys(next).length) v.phraseText = next; else delete v.phraseText;
+    if (before !== next[a.segmentId]) needsReviewAgain(v);
     return { affectedIds: [v.id], summary: `Format ${v.name}: phrase ${next[a.segmentId] !== undefined ? 'reworded' : 'back to the master wording'}`, output: { text: next[a.segmentId] ?? null } };
+  },
+});
+
+// ---------- AI-model wave (ADR-0017): derived copies in place of a clip's file, machine-translated language variants ----------
+/** The clip that starts exactly where `clip` ends on the same track, if any. */
+const nextAdjacent = (track: Track, clip: Clip): Clip | undefined => track.clips.find((c) => c.id !== clip.id && T.eq(c.start, clipEnd(clip)));
+defineOp({
+  name: 'replace_clip_asset',
+  version: 1,
+  description: 'Show a derived copy of a clip\'s file in the clip, for example an enhanced picture or a cleaned-up voice a tool made from it. The clip keeps its place, length, speed, effects and everything else; linked clips keep their own file. The new file must have been made from the file the clip shows now and keep its timing, and it must cover the whole stretch of source the clip uses (plus the frames a transition into the next clip needs), so the clip shows exactly the same moments. A still picture may take a still made from it. Refused for freeze frames, reversed clips and clips that change speed gradually.',
+  args: z.object({ clipId: z.string(), assetId: z.string() }).strict(),
+  apply(d, a) {
+    const { clip, track } = mustClip(d, a.clipId);
+    if (clip.type !== 'media') throw new OpError('incompatible', 'only a picture or sound clip shows a file', { clipId: a.clipId });
+    if (clip.freeze) throw new OpError('incompatible', 'a freeze frame cannot be given another file', { clipId: clip.id }, 'Give the clip the new file first, then make the freeze frame.');
+    refuseRamped(clip, 'given another file');
+    if (clip.reverse) throw new OpError('incompatible', 'a clip that plays backwards cannot be given another file', { clipId: clip.id }, 'Play it forwards (set_clip_reverse), give it the new file, then reverse it again.');
+    if (!Object.hasOwn(d.assets, a.assetId)) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    const next = d.assets[a.assetId]!, cur = d.assets[clip.assetId];
+    if (next.id === clip.assetId) throw new OpError('incompatible', 'the clip already shows this file', { clipId: clip.id, assetId: next.id });
+    const der = next.provenance.derived;
+    if (!der?.sourceAssetIds.includes(clip.assetId)) throw new OpError('incompatible', 'the new file was not made from the file this clip shows', { clipId: clip.id, assetId: next.id, sourceAssetIds: der?.sourceAssetIds ?? [] }, 'Run the tool on this clip, or pick the file it made from this clip\'s file.');
+    if (track.kind === 'video' && !next.video && !(next.kind === 'image' && next.image)) throw new OpError('incompatible', 'the new file has no picture', { clipId: clip.id, assetId: next.id });
+    if (track.kind === 'audio' && !next.audio) throw new OpError('incompatible', 'the new file has no sound', { clipId: clip.id, assetId: next.id });
+    const previousAssetId = clip.assetId;
+    if (cur?.kind === 'image' || next.kind === 'image') {
+      // a still has no timing to keep; a still and a moving picture cannot stand in for each other
+      if (cur?.kind !== 'image' || next.kind !== 'image') throw new OpError('not_time_preserving', 'a still picture and a moving picture cannot stand in for each other', { clipId: clip.id, assetId: next.id });
+      clip.assetId = next.id;
+      return { affectedIds: [clip.id], summary: `Clip now shows "${next.name.slice(0, 60)}"`, output: { previousAssetId, sourceIn: clip.sourceIn } };
+    }
+    if (!der.sourceRangeStart || der.sourceAssetIds[0] !== clip.assetId || (der.frames && der.frames.mapping !== 'identity' && der.frames.mapping !== 'interpolated'))
+      throw new OpError('not_time_preserving', 'the new file does not keep the timing of the file this clip shows', { clipId: clip.id, assetId: next.id }, 'Place it on a track of its own instead (add_clip).');
+    let needEnd = sourceEnd(clip);
+    const after = track.kind === 'video' ? nextAdjacent(track, clip) : undefined;
+    if (after?.type === 'media' && after.transition) needEnd = T.add(needEnd, toSourceSpan(clip, T.frameTime(after.transition.frames, d.settings.frameRate)));
+    const from = der.sourceRangeStart, to = T.add(from, next.duration);
+    if (T.lt(clip.sourceIn, from) || T.lt(to, needEnd))
+      throw new OpError('range_not_covered', `the new file covers ${fmt(from)}–${fmt(to)} of the original; the clip needs ${fmt(clip.sourceIn)}–${fmt(needEnd)}`, { clipId: clip.id, assetId: next.id, covers: { start: from, end: to }, needs: { start: clip.sourceIn, end: needEnd } }, 'Run the tool on the whole stretch the clip uses, including the frames a transition after it plays.');
+    clip.assetId = next.id;
+    clip.sourceIn = T.sub(clip.sourceIn, from);
+    return { affectedIds: [clip.id], summary: `Clip now shows "${next.name.slice(0, 60)}"`, output: { previousAssetId, sourceIn: clip.sourceIn } };
+  },
+});
+const segmentExists = (d: ProjectDocument, id: string) => Object.values(d.transcripts ?? {}).some((t) => t.segments.some((s) => s.id === id));
+defineOp({
+  name: 'attach_translation',
+  version: 1,
+  internal: true,
+  description: 'Store a machine translation of the captions, produced by the trusted translation job, as a language variant: transcript phrases keep their master timing and get the translated wording (phrase-timed, never mapped word by word), manual cues get the translated text. With variantId an existing translation variant is updated (its frame settings are kept); otherwise a new variant takes the frame, fill, safe area and caption style of baseVariantId, or the master settings when it is null. The translation always needs review afterwards.',
+  args: z.object({
+    variantId: z.string().min(1).max(64).optional(),
+    baseVariantId: z.string().min(1).max(64).nullable(),
+    name: z.string().min(1).max(80),
+    language: z.string().min(2).max(35),
+    translation: VariantTranslationSchema.omit({ review: true, reviewedBy: true, reviewedAt: true }),
+    phraseText: z.record(z.string(), z.string().min(1).max(4000)),
+    cueText: z.record(z.string(), z.string().min(1).max(2000)),
+  }).strict(),
+  apply(d, a, ctx) {
+    const ids = [...Object.keys(a.phraseText), ...Object.keys(a.cueText)];
+    if (ids.length === 0) throw new OpError('invalid_args', 'a translation needs at least one phrase or cue');
+    if (a.language !== a.translation.to) throw new OpError('invalid_args', 'the language of the format must be the language translated to', { language: a.language, to: a.translation.to });
+    const recorded = Object.keys(a.translation.sources).sort(), translated = [...ids].sort();
+    if (recorded.length !== translated.length || recorded.some((k, i) => k !== translated[i])) throw new OpError('invalid_args', 'the translation must record the master text of every translated phrase and cue, and of nothing else', { translated, recorded });
+    for (const id of Object.keys(a.phraseText)) if (!segmentExists(d, id)) throw new OpError('not_found', `phrase ${id} not found in any transcript`, { segmentId: id });
+    for (const id of Object.keys(a.cueText)) {
+      const f = findClip(d, id);
+      if (!f || f.clip.type !== 'caption') throw new OpError('not_found', `caption cue ${id} not found`, { clipId: id });
+      if (f.track.caption?.mode !== 'manual') throw new OpError('incompatible', 'only cues of a manual caption track are translated as cues', { clipId: id });
+    }
+    let v: Variant;
+    if (a.variantId) {
+      v = mustVariant(d, a.variantId);
+      if (!v.translation) throw new OpError('incompatible', 'this format is not a translation', { variantId: v.id }, 'Omit variantId to make a new language format.');
+      v.name = a.name;
+    } else {
+      const base = a.baseVariantId === null ? null : mustVariant(d, a.baseVariantId);
+      v = {
+        id: ctx.newId('var'), name: a.name, width: base?.width ?? d.settings.width, height: base?.height ?? d.settings.height, fit: base?.fit ?? d.settings.fit ?? 'contain',
+        profileId: base?.profileId ?? null, safeArea: base?.safeArea ? { ...base.safeArea } : null, ...(base?.captionStyle ? { captionStyle: structuredClone(base.captionStyle) } : {}), overrides: {},
+      };
+      d.variants[v.id] = v;
+    }
+    v.language = a.language;
+    v.translation = { ...a.translation, sources: { ...a.translation.sources }, review: 'needed' };
+    if (Object.keys(a.phraseText).length) v.phraseText = { ...a.phraseText }; else delete v.phraseText;
+    // cue wording: exactly the translated cues carry a text override (other override fields stay)
+    for (const [id, ov] of Object.entries(v.overrides)) {
+      if (ov.text === undefined || Object.hasOwn(a.cueText, id)) continue;
+      const { text: _t, ...rest } = ov;
+      if (Object.keys(rest).length) v.overrides[id] = rest; else delete v.overrides[id];
+    }
+    for (const [id, text] of Object.entries(a.cueText)) v.overrides[id] = { ...v.overrides[id], text };
+    return { affectedIds: [v.id], summary: `Translation ${a.translation.from}→${a.translation.to}: ${Object.keys(a.phraseText).length} phrases, ${Object.keys(a.cueText).length} cues (needs review)`, output: { variantId: v.id } };
+  },
+});
+defineOp({
+  name: 'review_translation',
+  version: 1,
+  internal: true,
+  description: 'Mark a machine translation as reviewed by the person whose session made the request (the owner), or as needing review again. Reachable only through the owner\'s session; `at` is the time of the review as the server read it.',
+  args: z.object({ variantId: z.string(), review: z.enum(['needed', 'reviewed']), at: z.string().max(40).optional() }).strict(),
+  apply(d, a, ctx) {
+    const v = mustVariant(d, a.variantId);
+    if (!v.translation) throw new OpError('incompatible', 'this format is not a translation', { variantId: v.id });
+    if (v.translation.review === a.review) throw new OpError('incompatible', a.review === 'reviewed' ? 'the translation is already marked as reviewed' : 'the translation is already marked as needing review', { variantId: v.id });
+    const { reviewedBy: _by, reviewedAt: _at, ...rest } = v.translation;
+    v.translation = { ...rest, review: a.review, ...(a.review === 'reviewed' ? { reviewedBy: ctx.actor, ...(a.at ? { reviewedAt: a.at } : {}) } : {}) };
+    return { affectedIds: [v.id], summary: `Format ${v.name}: translation ${a.review === 'reviewed' ? 'marked as reviewed' : 'needs review again'}` };
   },
 });
 
