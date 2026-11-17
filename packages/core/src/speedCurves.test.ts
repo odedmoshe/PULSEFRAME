@@ -189,3 +189,99 @@ describe('speed curves', () => {
     ), { numRuns: 150 });
   });
 });
+
+describe('speed curves: links and crossfades', () => {
+  const tracksOf = (d: ProjectDocument) => Object.values(d.sequences)[0]!.tracks;
+  const all = (d: ProjectDocument) => tracksOf(d).flatMap((t) => t.clips).filter((c): c is MediaClip => c.type === 'media');
+  const partsOf = (r: ReturnType<typeof tx>) => (r.results[r.results.length - 1]!.output as { partClipIds: string[] }).partClipIds;
+  const song = { kind: 'audio' as const, name: 'song.wav', contentHash: `sha256:${'f'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(60, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: asset.provenance };
+
+  it('a clip curved on its own leaves no part linked to another part: each part can be deleted, split and trimmed alone', () => {
+    // (a) the sound was deleted on its own before, so the picture still carries its old link id
+    const a = project();
+    const soundId = all(a.doc).find((c) => c.id !== a.clipId)!.id;
+    const lone = tx(a.doc, [{ op: 'delete_clip', args: { clipId: soundId, includeLinked: false } }]).doc;
+    expect(media(lone, a.clipId).linkGroupId).toBeTruthy(); // the precondition: a link id that points at nothing
+    // (b) the picture is curved without its sound
+    const b = project();
+    for (const [name, doc, clipId, extra] of [['lone', lone, a.clipId, {}], ['includeLinked=false', b.doc, b.clipId, { includeLinked: false }]] as const) {
+      const r = tx(doc, [{ op: 'apply_speed_curve', args: { clipId, preset: 'hero', ...extra } }]);
+      expect(validateProject(r.doc), name).toEqual([]);
+      const ids = partsOf(r);
+      expect(ids.length, name).toBe(5);
+      for (const id of ids) expect(media(r.doc, id).linkGroupId, name).toBeNull();
+      // no clip is left with a link id that only it carries
+      const count = new Map<string, number>();
+      for (const c of all(r.doc)) if (c.linkGroupId) count.set(c.linkGroupId, (count.get(c.linkGroupId) ?? 0) + 1);
+      for (const [id, n] of count) expect(n, `${name}: ${id}`).toBeGreaterThan(1);
+      const before = all(r.doc).length;
+      const third = media(r.doc, ids[2]!);
+      expect(all(tx(r.doc, [{ op: 'delete_clip', args: { clipId: third.id } }]).doc).length, name).toBe(before - 1);
+      expect(code(() => tx(r.doc, [{ op: 'split_clip', args: { clipId: third.id, at: T.add(third.start, f(10)) } }])), name).toBe('ok');
+      expect(code(() => tx(r.doc, [{ op: 'trim_clip', args: { clipId: third.id, edge: 'end', to: T.sub(clipEnd(third), f(1)) } }])), name).toBe('ok');
+    }
+    // the sound that was left out is still there, whole, and no longer linked
+    const r = tx(b.doc, [{ op: 'apply_speed_curve', args: { clipId: b.clipId, preset: 'hero', includeLinked: false } }]);
+    const sound = tracksOf(r.doc).filter((t) => t.kind === 'audio').flatMap((t) => t.clips) as MediaClip[];
+    expect(sound.length).toBe(1);
+    expect(T.eq(sound[0]!.duration, f(240))).toBe(true);
+    expect(sound[0]!.linkGroupId).toBeNull();
+    expect(r.results[0]!.affectedIds).toContain(sound[0]!.id);
+  });
+
+  it('left out of a group of three, the other two stay linked to each other', () => {
+    const { doc, clipId } = project();
+    const soundId = all(doc).find((c) => c.id !== clipId)!.id;
+    const extra = tx(doc, [{ op: 'import_asset', args: { asset: song } }, { op: 'add_track', args: { kind: 'audio' } }, { op: 'unlink_clip', args: { clipId } }], true);
+    const third = tx(extra.doc, [{ op: 'add_clip', args: { assetId: extra.results[0]!.output!.assetId as string, start: f(0), duration: f(240), trackId: extra.results[1]!.output!.trackId as string } }]);
+    const thirdId = third.results[0]!.output!.clipId as string;
+    const d = tx(third.doc, [{ op: 'link_clips', args: { clipIds: [clipId, soundId, thirdId] } }]).doc;
+    const r = tx(d, [{ op: 'apply_speed_curve', args: { clipId, preset: 'hero', includeLinked: false } }]);
+    for (const id of partsOf(r)) expect(media(r.doc, id).linkGroupId).toBeNull();
+    expect(media(r.doc, soundId).linkGroupId).toBeTruthy();
+    expect(media(r.doc, soundId).linkGroupId).toBe(media(r.doc, thirdId).linkGroupId);
+  });
+
+  it('a sound that crossfades into the next clip, or is crossfaded into, is refused with a reason; without the crossfade it works', () => {
+    let r = tx(createProject({ id: 'prj_x', name: 'X' }), [{ op: 'import_asset', args: { asset: song } }, { op: 'add_track', args: { kind: 'audio' } }], true);
+    const assetId = r.results[0]!.output!.assetId as string, trackId = r.results[1]!.output!.trackId as string;
+    r = tx(r.doc, [0, 300, 600].map((at) => ({ op: 'add_clip', args: { assetId, start: f(at), duration: f(300), trackId } })));
+    const [m1, m2, m3] = r.results.map((x) => x.output!.clipId as string) as [string, string, string];
+    const plain = r.doc;
+    const faded = tx(plain, [{ op: 'set_audio_crossfade', args: { clipId: m2, duration: f(30) } }]).doc;
+    expect(T.eq(clipEnd(media(faded, m1)), f(330))).toBe(true); // M1 now lies over the start of M2
+    const refusal = (clipId: string) => { try { tx(faded, [{ op: 'apply_speed_curve', args: { clipId, preset: 'hero' } }]); } catch (e) { return e as OpError; } return null; };
+    const out = refusal(m1), into = refusal(m2);
+    expect(out?.code).toBe('incompatible');
+    expect(out?.message).toMatch(/crossfade/);
+    expect(out?.hint).toMatch(/set_audio_crossfade/);
+    expect(into?.code).toBe('incompatible');
+    expect(into?.message).toMatch(/crossfade/);
+    expect(code(() => tx(faded, [{ op: 'apply_speed_curve', args: { clipId: m1, preset: 'hero', ripple: false } }]))).toBe('incompatible');
+    expect(code(() => tx(faded, [{ op: 'apply_speed_curve', args: { clipId: m3, preset: 'hero' } }]))).toBe('ok'); // M3 has no crossfade
+    // once the crossfade is removed the curve applies and what follows stays back to back
+    const cleared = tx(faded, [{ op: 'set_audio_crossfade', args: { clipId: m2, duration: f(0) } }]).doc;
+    const ok = tx(cleared, [{ op: 'apply_speed_curve', args: { clipId: m1, preset: 'hero' } }]);
+    const total = (ok.results[0]!.output as { durationFrames: number }).durationFrames;
+    expect(T.eq(media(ok.doc, m2).start, f(total))).toBe(true);
+    expect(T.eq(media(ok.doc, m3).start, f(total + 300))).toBe(true);
+  });
+
+  it('a crossfade on the linked sound refuses the curve on the picture too', () => {
+    // two picture + sound pairs back to back; the first sound crossfades into the second
+    const { doc, clipId, assetId } = project();
+    const v1 = findClip(doc, clipId)!.track.id;
+    const two = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(240), sourceIn: T.rt(12, 1), trackId: v1, duration: f(60) } }]);
+    const secondId = two.results[0]!.output!.clipId as string;
+    const secondSound = all(two.doc).find((c) => c.id !== secondId && c.linkGroupId === media(two.doc, secondId).linkGroupId)!;
+    const faded = tx(two.doc, [{ op: 'set_audio_crossfade', args: { clipId: secondSound.id, duration: f(10) } }]).doc;
+    // the second pair still matches in place and length; only its sound is crossfaded into
+    let err: OpError | null = null;
+    try { tx(faded, [{ op: 'apply_speed_curve', args: { clipId: secondId, preset: 'jump-cut' } }]); } catch (e) { err = e as OpError; }
+    expect(err?.code).toBe('incompatible');
+    expect(err?.message).toMatch(/crossfade/);
+    expect(code(() => tx(faded, [{ op: 'apply_speed_curve', args: { clipId, preset: 'jump-cut' } }]))).toBe('incompatible');
+    // left out, the sound's crossfade is not in the way of the picture
+    expect(code(() => tx(faded, [{ op: 'apply_speed_curve', args: { clipId: secondId, preset: 'jump-cut', includeLinked: false } }]))).toBe('ok');
+  });
+});

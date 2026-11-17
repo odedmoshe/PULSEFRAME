@@ -42,7 +42,7 @@ interface Def {
   en: string;
   frames: number;
   spec: Spec;
-  /** loop only: properties that keep progressing every period (e.g. a full turn per period) */
+  /** loop only: properties that keep progressing every period (e.g. a full turn per period); a rotation that does so keeps turning for any clip length (see wrapTurns) */
   cumulative?: readonly MotionProperty[];
 }
 
@@ -191,6 +191,48 @@ function dedupe(raw: MotionKey[]): MotionKey[] {
   return out;
 }
 
+/**
+ * A rotation that keeps adding turns (loop.spin) would pass the largest rotation a key may hold (±3600°) after ten turns.
+ * An angle a whole number of turns away is the same angle, so the keys restart from the equivalent angle between 0° and 360°
+ * just before they would leave the range. Two keys cannot share a frame, and a segment from an angle to its equivalent would
+ * spin backwards, so the last frame before the restart is a 'hold' key: it shows its own angle for that one frame and the next
+ * frame starts from the equivalent angle. At whole frames, which is where a clip is drawn, the turning is unbroken; between
+ * those two frames the angle waits instead of moving on. A segment that is not linear is written frame by frame where it
+ * has to restart, so its shape is kept at whole frames too.
+ */
+function wrapTurns(keys: MotionKey[]): MotionKey[] {
+  const [lo, hi] = RANGE.rotation;
+  const inside = (v: number) => v >= lo && v <= hi;
+  if (keys.every((k) => inside(k.value))) return keys;
+  const out: MotionKey[] = [];
+  let off = 0; // whole turns taken off so far, in degrees
+  // `raw` is the true angle. When it would leave the range, the key before it (always one frame earlier) holds and this one restarts.
+  const put = (frame: number, raw: number, easing: MotionEasing) => {
+    let v = raw - off;
+    if (!inside(v)) {
+      const turns = 360 * Math.floor(v / 360);
+      off += turns;
+      v -= turns;
+      const prev = out[out.length - 1];
+      if (prev) prev.easing = 'hold';
+    }
+    out.push({ frame, value: v, easing });
+  };
+  put(keys[0]!.frame, keys[0]!.value, keys[0]!.easing);
+  for (let i = 1; i < keys.length; i++) {
+    const a = keys[i - 1]!, b = keys[i]!;
+    if (inside(b.value - off)) { put(b.frame, b.value, b.easing); continue; } // easings never overshoot, so the whole segment stays inside
+    const at = (g: number) => (g === b.frame ? b.value : a.value + (b.value - a.value) * EASE[a.easing]((g - a.frame) / (b.frame - a.frame)));
+    const straight = a.easing === 'linear';
+    for (let g = a.frame + 1; g <= b.frame; g++) {
+      const leaves = !inside(at(g) - off);
+      if (leaves && out[out.length - 1]!.frame < g - 1) put(g - 1, at(g - 1), 'linear');
+      if (leaves || g === b.frame || !straight) put(g, at(g), g === b.frame ? b.easing : 'linear');
+    }
+  }
+  return out;
+}
+
 export function motionKeys(presetId: string, ctx: MotionContext): Partial<Record<MotionProperty, MotionKey[]>> {
   const def = BY_ID.get(presetId);
   if (!def) throw new Error(`unknown motion preset: ${presetId}`);
@@ -203,7 +245,8 @@ export function motionKeys(presetId: string, ctx: MotionContext): Partial<Record
     const spec = def.spec[prop];
     if (!spec) continue;
     const rest = ctx.rest[prop];
-    const value = (v: number, extra = 0): number => clamp(prop, ADDITIVE[prop] ? rest + (v + extra) * amt : rest * (1 + (v + extra - 1) * amt));
+    const free = (v: number, extra = 0): number => (ADDITIVE[prop] ? rest + (v + extra) * amt : rest * (1 + (v + extra - 1) * amt));
+    const value = (v: number, extra = 0): number => clamp(prop, free(v, extra));
     const mk = (frame: number, v: number, e: MotionEasing | undefined, extra = 0): MotionKey => ({ frame, value: value(v, extra), easing: e ?? 'linear' });
 
     if (def.kind === 'loop') {
@@ -211,11 +254,15 @@ export function motionKeys(presetId: string, ctx: MotionContext): Partial<Record
       const cycles = Math.ceil(total / p);
       const cumulative = def.cumulative?.includes(prop) === true;
       const span = cumulative ? spec[spec.length - 1]![1] - spec[0]![1] : 0;
+      // A rotation that keeps adding turns is built from its true angles and brought back into range by whole turns at the end
+      // (clamping it instead would stop the turning at the edge of the range).
+      const turning = cumulative && prop === 'rotation' && Number.isFinite(rest);
       const raw: MotionKey[] = [];
       for (let c = 0; c < cycles; c++) {
         spec.forEach(([t, v, e], j) => {
           if (c > 0 && j === 0) return;
-          raw.push(mk(c * p + Math.round(t * p), v, e, cumulative ? c * span : 0));
+          const k = mk(c * p + Math.round(t * p), v, e, cumulative ? c * span : 0);
+          raw.push(turning ? { ...k, value: free(v, c * span) } : k);
         });
       }
       const all = dedupe(raw);
@@ -225,9 +272,9 @@ export function motionKeys(presetId: string, ctx: MotionContext): Partial<Record
         const next = all[keys.length];
         let v = last.value;
         if (next) v = last.value + (next.value - last.value) * EASE[last.easing]((total - last.frame) / (next.frame - last.frame));
-        keys.push({ frame: total, value: clamp(prop, v), easing: 'linear' });
+        keys.push({ frame: total, value: turning ? v : clamp(prop, v), easing: 'linear' });
       }
-      result[prop] = keys;
+      result[prop] = turning ? wrapTurns(keys) : keys;
       continue;
     }
 
@@ -236,4 +283,78 @@ export function motionKeys(presetId: string, ctx: MotionContext): Partial<Record
     result[prop] = dedupe(spec.map(([t, v, e]) => mk(base + Math.round(t * n), v, e)));
   }
   return result;
+}
+
+/** A key as it sits on a clip: `frame` is its clip-local time in frames (after a trim or a cut it can be negative or past the end). */
+export interface PlacedMotionKey { frame: number; value: number; easing: MotionEasing }
+const NEUTRAL: MotionContext['rest'] = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 };
+const OFF_FRAME = 1e-6;
+
+/**
+ * How many of the first ('in') or last ('out') keys of `have` are the keys `def` writes on `prop` for a length of `n` frames;
+ * 0 when they are not. The keys must sit at the same distances from each other, carry the same easings, and move the same
+ * way from the value they rest at (an entrance arrives at it with its last key, an exit leaves it from its first): the
+ * amount and the resting value themselves are free, since the motion may have been made at any strength and from any transform.
+ */
+function runOf(def: Def, prop: MotionProperty, n: number, have: readonly PlacedMotionKey[]): number {
+  const pattern = motionKeys(def.id, { totalFrames: Math.max(2, n), frames: n, rest: NEUTRAL })[prop]!;
+  const m = pattern.length;
+  if (have.length < m) return 0;
+  const run = def.kind === 'in' ? have.slice(0, m) : have.slice(have.length - m);
+  const anchor = def.kind === 'in' ? m - 1 : 0;
+  const rest = run[anchor]!.value;
+  for (let i = 0; i < m; i++) {
+    const k = run[i]!, want = pattern[i]!;
+    if (Math.abs(k.frame - run[0]!.frame - (want.frame - pattern[0]!.frame)) > OFF_FRAME || k.easing !== want.easing) return 0;
+    const dev = want.value - pattern[anchor]!.value, got = k.value - rest;
+    if (Math.abs(dev) < 1e-12 ? Math.abs(got) > 1e-9 * Math.max(1, Math.abs(rest)) : got * dev <= 0) return 0;
+  }
+  return m;
+}
+/** The lengths (in whole frames) an entrance or exit with up to `max` keys could have, read off where the keys of a property sit. */
+function lengthsIn(kind: 'in' | 'out', have: readonly PlacedMotionKey[], max: number): number[] {
+  const out: number[] = [];
+  for (let m = 2; m <= Math.min(max, have.length); m++) {
+    const n = kind === 'in' ? have[m - 1]!.frame - have[0]!.frame : have[have.length - 1]!.frame - have[have.length - m]!.frame;
+    if (n >= 1 - OFF_FRAME && Math.abs(n - Math.round(n)) <= OFF_FRAME) out.push(Math.round(n));
+  }
+  return out;
+}
+
+/**
+ * The keys an entrance ('in') or exit ('out') of this library left on a clip, so that a new one can replace them as a whole.
+ * A clip does not record which preset made its keys, so this reads the keys themselves. Per property it returns how many of
+ * its first keys (entrance) or last keys (exit) belong to the earlier motion; a property that is not listed has none.
+ *
+ * Rule: an earlier entrance (exit) is some entrance (exit) of the library, at some length, whose keys are the first (last)
+ * keys of EVERY property it uses, all starting (ending) on the same frame (see runOf for what "its keys" means). Of several
+ * that fit, the one with the most keys wins: a drop is read as a drop, not as the fade it contains. Asking for all of its
+ * properties is what keeps an entrance fade followed by the first key of an exit from being read as a longer entrance.
+ * The keys are recognised wherever they are, not only at the clip's ends: an exit made before the clip changed length is
+ * still its exit, and the entrance of a clip whose start was trimmed is still its entrance.
+ *
+ * What this cannot tell apart, or does not see:
+ *  - keys made by hand (or by another tool) at the same distances, with the same easings and the same direction as a library
+ *    entrance or exit on all of its properties are taken for one and replaced with it; in practice that is a plain fade
+ *    (two linear opacity keys), which every new entrance or exit rewrites anyway;
+ *  - the last, unfinished cycle of an opacity loop (fade pulse, flicker) ends in two linear keys going down and is read as a
+ *    fade out when an exit is applied (the exit takes over the opacity of those frames in any case);
+ *  - an entrance or exit that a loop, a move or a hand edit has changed on one of its properties is no longer recognised:
+ *    its other keys stay, as do those of a motion made with amount 0 or clamped flat (they move nothing).
+ */
+export function previousMotion(kind: 'in' | 'out', keys: Partial<Record<MotionProperty, readonly PlacedMotionKey[]>>): Partial<Record<MotionProperty, number>> {
+  const edge = (have: readonly PlacedMotionKey[]) => (kind === 'in' ? have[0]! : have[have.length - 1]!).frame;
+  let best: Partial<Record<MotionProperty, number>> = {}, bestKeys = 0;
+  for (const def of DEFS) {
+    if (def.kind !== kind) continue;
+    const props = PROP_ORDER.filter((p) => def.spec[p] !== undefined);
+    const first = keys[props[0]!];
+    if (!first || props.some((p) => !keys[p] || keys[p]!.length < 2 || Math.abs(edge(keys[p]!) - edge(first)) > OFF_FRAME)) continue;
+    for (const n of lengthsIn(kind, first, def.spec[props[0]!]!.length)) {
+      const counts = props.map((p) => runOf(def, p, n, keys[p]!));
+      const total = counts.reduce((a, b) => a + b, 0);
+      if (counts.every((c) => c > 0) && total > bestKeys) { bestKeys = total; best = Object.fromEntries(props.map((p, i) => [p, counts[i]!])); }
+    }
+  }
+  return best;
 }

@@ -13,7 +13,7 @@ import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
-import { MOTION_PRESETS, motionKeys } from './motionPresets.ts';
+import { MOTION_PRESETS, motionKeys, previousMotion } from './motionPresets.ts';
 import { findLayout, layoutPlacements, LAYOUT_IDS, LAYOUTS } from './layouts.ts';
 const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[]];
 import { lookParams } from './looks.ts';
@@ -138,6 +138,23 @@ function clampFades(clip: Clip) {
   const fout = T.min(clip.fadeOut ?? T.ZERO, T.sub(clip.duration, fin));
   if (T.isZero(fin)) delete clip.fadeIn; else clip.fadeIn = fin;
   if (T.isZero(fout)) delete clip.fadeOut; else clip.fadeOut = fout;
+}
+/**
+ * After a title is divided or cut shorter, keep its text animation on the outer edges, like the fades of a sound: the entrance
+ * belongs to the first part and the exit to the last (`keep` says which of the two this part still owns); a loop plays on in
+ * every part. What is kept must fit the part, as set_text_animation requires: the entrance first, then whatever room is left
+ * for the exit. A part with nothing left animating loses the field.
+ */
+function fitTextAnimation(clip: Clip, rate: T.Rate, keep: { in: boolean; out: boolean }) {
+  if (clip.type !== 'text' || !clip.animation) return;
+  const total = T.frameIndexAt(clip.duration, rate);
+  const next = { ...clip.animation };
+  if (!keep.in) next.in = null;
+  if (!keep.out) next.out = null;
+  if (next.in) { if (total < 1) next.in = null; else next.inFrames = Math.min(next.inFrames, total); }
+  const room = total - (next.in ? next.inFrames : 0);
+  if (next.out) { if (room < 1) next.out = null; else next.outFrames = Math.min(next.outFrames, room); }
+  if (!next.in && !next.out && !next.loop) delete clip.animation; else clip.animation = next;
 }
 const fmt = (t: T.RationalTime) => `${T.toSeconds(t).toFixed(3)}s`;
 
@@ -646,7 +663,7 @@ defineOp({
 defineOp({
   name: 'apply_speed_curve',
   version: 1,
-  description: 'Give a clip a speed curve: a named shape such as hero (fast, a deep slow-down in the middle, fast again), bullet, montage, jump-cut, flash-in, flash-out, smooth-ramp, stutter, slow-down, build-up, wave, emphasis, surge or fast-forward, or a hand-made one from `points` (position in the clip 0–1 and the speed there; between two points the speed changes gradually). The clip is replaced by one clip per segment of the curve (and the same for its linked sound), each playing the source on without gaps or repeats at one speed or with a gradual change, so every time stays exact and each part can still be edited. The curve shows the same stretch of source as before, to within the rounding of each part to whole frames. The total length changes: by default the clips after it on the same tracks (and what is linked to them) move by the difference, and other tracks such as music stay where they are; with ripple=false nothing else moves and the new length must fit. Markers and hand-timed captions do not move. Sound is resampled with the picture, so its pitch follows the speed.',
+  description: 'Give a clip a speed curve: a named shape such as hero (fast, a deep slow-down in the middle, fast again), bullet, montage, jump-cut, flash-in, flash-out, smooth-ramp, stutter, slow-down, build-up, wave, emphasis, surge or fast-forward, or a hand-made one from `points` (position in the clip 0–1 and the speed there; between two points the speed changes gradually). The clip is replaced by one clip per segment of the curve (and the same for its linked sound), each playing the source on without gaps or repeats at one speed or with a gradual change, so every time stays exact and each part can still be edited. The curve shows the same stretch of source as before, to within the rounding of each part to whole frames. The total length changes: by default the clips after it on the same tracks (and what is linked to them) move by the difference, and other tracks such as music stay where they are; with ripple=false nothing else moves and the new length must fit. Markers and hand-timed captions do not move. Sound is resampled with the picture, so its pitch follows the speed. A sound that crossfades into the next clip, or is crossfaded into, is refused: remove the crossfade first (set_audio_crossfade with duration 0). With includeLinked=false the clip is curved alone and is no longer linked to its other half.',
   args: z.object({
     clipId: z.string(),
     preset: z.enum(SPEED_CURVE_IDS).optional(),
@@ -666,6 +683,17 @@ defineOp({
     const rate = d.settings.frameRate;
     const lead = f.clip as MediaClip;
     const targets = [{ track: f.track, clip: lead }, ...(a.includeLinked === false ? [] : linked(d, lead))];
+    // Curved on its own, the clip leaves its link group (its parts are linked to nothing). A partner that would be left alone
+    // in that group is unlinked too, as unlink_clip does, so no clip keeps a link id that points at nothing.
+    let leftAlone: MediaClip | null = null;
+    if (a.includeLinked === false && lead.linkGroupId) {
+      const rest: { track: Track; clip: MediaClip }[] = [];
+      for (const seq of Object.values(d.sequences)) for (const track of seq.tracks) for (const c of track.clips) if (c.type === 'media' && c.id !== lead.id && c.linkGroupId === lead.linkGroupId) rest.push({ track, clip: c });
+      if (rest.length === 1) {
+        if (rest[0]!.track.locked) throw new OpError('track_locked', `linked clip ${rest[0]!.clip.id} is on locked track ${rest[0]!.track.id}, so it cannot be detached from this clip`, { trackId: rest[0]!.track.id, clipId: rest[0]!.clip.id }, 'Unlock the track first.');
+        leftAlone = rest[0]!.clip;
+      }
+    }
     const span = toSourceSpan(lead, lead.duration); // source shown now; the curve shows this stretch
     const gradual = segments.some((sg) => sg.from !== sg.to);
     for (const { track, clip } of targets) {
@@ -675,6 +703,13 @@ defineOp({
       if (clip.keyframes || clip.volume || clip.effects?.some((e) => e.keyframes)) throw new OpError('incompatible', 'remove keyframes and volume keys first: they would not survive the division into parts', { clipId: clip.id });
       const i = track.clips.indexOf(clip), next = track.clips[i + 1];
       if (clip.transition || (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip)))) throw new OpError('incompatible', 'remove the transition at this clip first', { clipId: clip.id });
+      // A sound crossfade is an overlap: the earlier clip plays on over the start of the later one. Dividing either of them, or
+      // moving what follows the curve, would leave that overlap in the wrong place, so it is refused (as set_clip_reverse does).
+      const end = clipEnd(clip);
+      const into = clip.fadeOut ? track.clips.find((o) => o.id !== clip.id && o.type === 'media' && o.fadeIn && T.lt(clip.start, o.start) && T.lt(o.start, end)) : undefined;
+      if (into) throw new OpError('incompatible', 'remove the crossfade into the next clip first', { clipId: clip.id, nextClipId: into.id }, 'Use set_audio_crossfade on the next clip with duration 0.');
+      const from = clip.fadeIn ? track.clips.find((o) => o.id !== clip.id && o.type === 'media' && o.fadeOut && T.lt(o.start, clip.start) && T.lt(clip.start, clipEnd(o))) : undefined;
+      if (from) throw new OpError('incompatible', 'remove the crossfade from the previous clip into this one first', { clipId: clip.id, previousClipId: from.id }, 'Use set_audio_crossfade on this clip with duration 0.');
       if (!T.eq(clip.start, lead.start) || !T.eq(clip.duration, lead.duration) || !T.eq(toSourceSpan(clip, clip.duration), span))
         throw new OpError('incompatible', 'the linked clips differ in place, length or speed, so one curve cannot fit them all', { clipId: clip.id }, 'Pass includeLinked=false, or unlink them first.');
     }
@@ -720,7 +755,7 @@ defineOp({
         delete p.rampWindow;
         if (pl.speed.num === pl.speed.den) delete p.speed; else p.speed = pl.speed;
         if (pl.speedEnd) { p.speedEnd = pl.speedEnd; if (smooth) p.speedCurve = 'smooth'; else delete p.speedCurve; } else { delete p.speedEnd; delete p.speedCurve; }
-        if (links) p.linkGroupId = links[k]!;
+        p.linkGroupId = links ? links[k]! : null;
         if (k > 0) delete p.fadeIn;
         if (k < plan.length - 1) delete p.fadeOut;
         clampFades(p);
@@ -733,6 +768,7 @@ defineOp({
       });
       track.clips.splice(track.clips.indexOf(clip), 1, ...parts);
     }
+    if (leftAlone) leftAlone.linkGroupId = null;
     // What comes after: by default it follows the new end on the tracks of the curve (with whatever is linked to it).
     const moved: string[] = [];
     const delta = T.sub(newEnd, oldEnd);
@@ -754,9 +790,9 @@ defineOp({
     }
     const oldFrames = T.frameIndexAt(T.sub(oldEnd, lead.start), rate);
     return {
-      affectedIds: [...new Set([...targets.map((t) => t.clip.id), ...created, ...moved])],
+      affectedIds: [...new Set([...targets.map((t) => t.clip.id), ...created, ...moved, ...(leftAlone ? [leftAlone.id] : [])])],
       summary: `Speed curve ${preset ? preset.id : `(${segments.length} parts)`}: ${plan.length} parts, ${fmt(T.frameTime(oldFrames, rate))} → ${fmt(T.frameTime(total, rate))}`,
-      output: { partClipIds: [lead.id, ...created.slice(0, plan.length - 1)], createdClipIds: created, durationFrames: total, deltaFrames: total - oldFrames, movedClipIds: moved, parts: plan.map((p) => ({ frames: p.frames, from: p.speed.num / p.speed.den, to: p.speedEnd ? p.speedEnd.num / p.speedEnd.den : p.speed.num / p.speed.den })) },
+      output: { partClipIds: [lead.id, ...created.slice(0, plan.length - 1)], createdClipIds: created, durationFrames: total, deltaFrames: total - oldFrames, movedClipIds: moved, unlinkedClipIds: leftAlone ? [leftAlone.id] : [], parts: plan.map((p) => ({ frames: p.frames, from: p.speed.num / p.speed.den, to: p.speedEnd ? p.speedEnd.num / p.speedEnd.den : p.speed.num / p.speed.den })) },
     };
   },
 });
@@ -1061,6 +1097,8 @@ defineOp({
       clip.duration = left;
       clampFades(clip);
       clampFades(right);
+      fitTextAnimation(clip, d.settings.frameRate, { in: true, out: false }); // a title's entrance and exit stay on the outer edges too
+      fitTextAnimation(right, d.settings.frameRate, { in: false, out: true });
       track.clips.push(right);
       sortClips(track);
       created.push(right.id);
@@ -1242,7 +1280,7 @@ defineOp({
 defineOp({
   name: 'apply_motion_preset',
   version: 1,
-  description: 'Give a text or picture clip one motion from the motion library (see list_catalog → motionPresets): an entrance (motion.in.*), an exit (motion.out.*), a loop that repeats over the whole clip (motion.loop.*) or one move across the whole clip such as a slow zoom or pan (motion.move.*). It writes ordinary keyframes on the properties the motion uses (x, y, scale, rotation, opacity), measured from the values the clip has now, so the result stays editable with set_keyframe. An entrance replaces the keys of those properties in its first frames and an exit in its last frames, so the two can be combined; a loop or a move replaces all keys of its properties. `frames` is the length of an entrance or exit, or the period of a loop. The exit is placed against the current clip end; run again after changing the length.',
+  description: 'Give a text or picture clip one motion from the motion library (see list_catalog → motionPresets): an entrance (motion.in.*), an exit (motion.out.*), a loop that repeats over the whole clip (motion.loop.*) or one move across the whole clip such as a slow zoom or pan (motion.move.*). It writes ordinary keyframes on the properties the motion uses (x, y, scale, rotation, opacity), measured from the values the clip has now, so the result stays editable with set_keyframe. An entrance replaces the entrance from this library that the clip already has, on every property that one used, and otherwise the keys of its own properties in its first frames; an exit does the same with an earlier exit and its last frames, so an entrance and an exit can be combined and each can be changed for another; a loop or a move replaces all keys of its properties. `frames` is the length of an entrance or exit, or the period of a loop. The exit is placed against the current clip end; run again after changing the length.',
   args: z.object({ clipId: z.string(), presetId: z.enum(MOTION_PRESET_IDS), frames: z.number().int().min(1).max(600).optional(), amount: z.number().min(0).max(2).optional().describe('Strength, default 1') }).strict(),
   apply(d, a) {
     const { clip, track } = mustClip(d, a.clipId);
@@ -1254,6 +1292,16 @@ defineOp({
     const made = motionKeys(preset.id, { totalFrames: total, rest: clip.transform, ...(a.frames !== undefined ? { frames: a.frames } : {}), ...(a.amount !== undefined ? { amount: a.amount } : {}) });
     const keyframes = { ...clip.keyframes };
     const frameOf = (t: T.RationalTime) => T.toSeconds(t) * (rate.num / rate.den);
+    // A new entrance replaces the entrance the clip already has, and a new exit its exit, as a whole: on every property the
+    // earlier one used, not only on those of the new one, and wherever its keys are now (previousMotion says how it is recognised).
+    if (preset.kind === 'in' || preset.kind === 'out') {
+      const now: Parameters<typeof previousMotion>[1] = {};
+      for (const p of ANIMATABLE) if (keyframes[p]?.length) now[p] = keyframes[p]!.map((k) => ({ frame: frameOf(k.time), value: k.value, easing: k.easing }));
+      for (const [p, count] of Object.entries(previousMotion(preset.kind, now)) as [(typeof ANIMATABLE)[number], number][]) {
+        const rest = preset.kind === 'in' ? keyframes[p]!.slice(count) : keyframes[p]!.slice(0, keyframes[p]!.length - count);
+        if (rest.length) keyframes[p] = rest; else delete keyframes[p];
+      }
+    }
     for (const [p, keys] of Object.entries(made) as [(typeof ANIMATABLE)[number], { frame: number; value: number; easing: (typeof EASINGS)[number] }[]][]) {
       const lo = keys[0]!.frame, hi = keys[keys.length - 1]!.frame;
       // keys the motion does not cover stay: after an entrance, before an exit; a loop or a move covers the whole clip
@@ -2219,12 +2267,14 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
         right.start = ripple ? start : end;
         right.duration = T.sub(cEnd, end);
         clampFades(right);
+        fitTextAnimation(right, d.settings.frameRate, { in: !hasLeft, out: true }); // a title cut in two: the entrance stays with the first part; with only its head cut off it keeps both
       }
       if (hasLeft) {
         if (clip.type === 'media') delete clip.fadeOut;
         if (clip.type === 'media') setPart(clip, clip, T.ZERO, T.sub(start, clip.start));
         clip.duration = T.sub(start, clip.start);
         clampFades(clip);
+        fitTextAnimation(clip, d.settings.frameRate, { in: true, out: !hasRight }); // and the exit with the last part
         if (clip.type === 'caption') delete clip.words;
         next.push(clip);
       }
@@ -2293,9 +2343,11 @@ function openGap(d: ProjectDocument, at: T.RationalTime, len: T.RationalTime, tr
       right.start = T.add(at, len);
       right.duration = T.sub(cEnd, at);
       clampFades(right);
+      fitTextAnimation(right, d.settings.frameRate, { in: false, out: true }); // a title's entrance stays with the first part, its exit with the last
       if (clip.type === 'media') { delete clip.fadeOut; setPart(clip, clip, T.ZERO, delta); }
       clip.duration = delta;
       clampFades(clip);
+      fitTextAnimation(clip, d.settings.frameRate, { in: true, out: false });
       if (clip.type === 'caption') delete clip.words;
       changed.push(clip.id);
       next.push(clip, right);

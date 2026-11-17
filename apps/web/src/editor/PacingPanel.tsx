@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { pacingReport } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
@@ -14,11 +14,25 @@ export function PacingPanel() {
   const { editor, state } = useEditorState();
   const { doc, lang } = state;
   const S = pacingStrings[lang];
-  const report = useMemo(() => (doc ? pacingReport(doc) : null), [doc]);
-  if (!doc || !report || report.windows.length === 0) return <section className="pacing" aria-label={S.title}><h2>{S.title}</h2><p className="muted" data-testid="pacing-empty">{S.empty}</p></section>;
+  // The report is worked out only while this panel can be seen. The inspector keeps the panel of every tab mounted and hides
+  // the others (display: none), and the document is a new object after every edit, so a report that is always on would be
+  // recomputed after each commit with nobody looking. A hidden element has no box; the observer says when it gets one or loses it.
+  const root = useRef<HTMLElement>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    if (typeof ResizeObserver === 'undefined') { setShown(true); return; }
+    const ro = new ResizeObserver(() => setShown(el.getClientRects().length > 0));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const report = useMemo(() => (doc && shown ? pacingReport(doc) : null), [doc, shown]);
+  if (!shown) return <section ref={root} className="pacing" aria-label={S.title}><h2>{S.title}</h2></section>;
+  if (!doc || !report || report.windows.length === 0) return <section ref={root} className="pacing" aria-label={S.title}><h2>{S.title}</h2><p className="muted" data-testid="pacing-empty">{S.empty}</p></section>;
   const go = (t: T.RationalTime) => editor.seek(T.frameIndexAt(t, doc.settings.frameRate));
   return (
-    <section className="pacing" aria-label={S.title}>
+    <section ref={root} className="pacing" aria-label={S.title}>
       <h2>{S.title}</h2>
       <div className="pacing-labels" aria-hidden="true"><span>{S.cutsRow}</span><span>{S.wordsRow}</span></div>
       <div className="pacing-strip" data-testid="pacing-strip" role="group" aria-label={S.strip} dir="ltr">
