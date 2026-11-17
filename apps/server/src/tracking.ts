@@ -294,10 +294,14 @@ async function work(store: Store, jobId: string, deps: TrackingDeps, signal: Abo
   const job = store.getJob(jobId);
   if (job.status !== 'queued') return; // canceled while it waited
   const input = job.input as TrackingJobInput;
+  const ffmpegLine = ffmpegVersionLine(); // started now, awaited before the last checks (it never rejects)
   let lastStage = 0, lastPhase = '';
   const stage = (phase: 'reading' | 'forward' | 'backward' | 'saving', done = 0, total = 0) => {
     const now = performance.now();
     if (phase === lastPhase && now - lastStage < STAGE_EVERY_MS && done < total) return;
+    // a cancel is never overwritten with 'running': the job stops here instead (the runner records it as canceled)
+    const status = store.getJob(jobId).status;
+    if (signal.aborted || (status !== 'queued' && status !== 'running')) throw new TrackingCanceled();
     lastStage = now; lastPhase = phase;
     store.updateJob(jobId, { status: 'running', stage: trackingStage(phase, done, total) });
   };
@@ -426,12 +430,15 @@ async function work(store: Store, jobId: string, deps: TrackingDeps, signal: Abo
   }
   const seconds = (performance.now() - t0) / 1000;
 
-  // attach only if nothing it depends on changed meanwhile (the pattern of measureAndAttach)
-  if (signal.aborted || store.getJob(jobId).status === 'cancel-requested') throw new TrackingCanceled();
+  // attach only if nothing it depends on changed meanwhile (the pattern of measureAndAttach). Nothing is awaited from these
+  // checks to the commit and the job's success, so a cancel lands either before them (canceled, nothing attached) or after
+  // the job finished (already-finished): never between an accepted cancel and an attach.
   stage('saving');
+  const ffmpeg = await ffmpegLine;
+  if (signal.aborted || store.getJob(jobId).status !== 'running') throw new TrackingCanceled();
   recheck();
   const inputDigest = digests.length === 1 ? digests[0]! : createHash('sha256').update(digests.join(',')).digest('hex');
-  const params: Record<string, number | string> = { algo: TRACKER_ALGO, input: src.kind, workWidth: W, workHeight: H, inputDigest, ffmpeg: await ffmpegVersionLine(), direction: input.direction };
+  const params: Record<string, number | string> = { algo: TRACKER_ALGO, input: src.kind, workWidth: W, workHeight: H, inputDigest, ffmpeg, direction: input.direction };
   const commit = store.commit({ projectId: job.projectId, actor: job.actor, label: `Track ${track.name}`, allowInternal: true, ops: [{ op: 'attach_motion_track', args: { motionTrackId: input.motionTrackId, from: lo, x, y, ...(track.kind === 'region' ? { s } : {}), q, st, method: TRACKER_METHOD, params, createdAt: new Date().toISOString() } }] });
   const after = ownTrack(store.getProject(job.projectId).doc, input.motionTrackId)!;
   const sum = trackSummary(after);

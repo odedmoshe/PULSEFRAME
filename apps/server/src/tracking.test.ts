@@ -50,8 +50,8 @@ import { createApp } from './http.ts';
 import { describeMedia } from './ingest.ts';
 import { createMcp } from './mcp.ts';
 import { Presence } from './presence.ts';
-import { Store } from './store.ts';
-import { frameSource, readFrames, recoverTrackingJobs, startTrackingJob, stopTrackingJobs } from './tracking.ts';
+import { Store, type JobRow } from './store.ts';
+import { cancelTrackingJob, frameSource, readFrames, recoverTrackingJobs, startTrackingJob, stopTrackingJobs } from './tracking.ts';
 import { discScene, texture } from './vision/synthetic.ts';
 import type { FrameSource, GreyFrame, ReadFrames } from './vision/types.ts';
 
@@ -382,6 +382,37 @@ describe('tracking job', () => {
     expect([done.status, done.error.code], JSON.stringify(done.error)).toEqual(['failed', 'track_changed']);
     expect(store.getProject(pid).revision).toBe(edit.revision);
   }, 60_000);
+
+  it('a cancel answered "cancel-requested" ends canceled with nothing attached wherever it lands; the status never goes back to running', async () => {
+    const moments = ['as the last frame reaches the tracker', 'while the stage turns to saving', 'just after the stage turned to saving'] as const;
+    for (const [n, moment] of moments.entries()) {
+      const id = `mtk_late${n}`;
+      seedTrack(pid, id, discAsset, 0, disc.truth[0]!.cx, disc.truth[0]!.cy, 320, 240, { w: 2 * disc.radius, h: 2 * disc.radius });
+      const before = arraysDigest(trackOf(pid, id)), rev = store.getProject(pid).revision;
+      const events: { status: string; stage: string | null }[] = [];
+      let jobId = '', cut = -1, answer: ReturnType<typeof cancelTrackingJob> | null = null;
+      const cancel = () => { if (answer) return; cut = events.length; answer = cancelTrackingJob(store, jobId, 'user:local'); };
+      const onJob = (j: JobRow) => {
+        if (j.id !== jobId) return;
+        events.push({ status: j.status, stage: j.stage });
+        if (j.status !== 'running' || j.stage !== 'saving track') return;
+        if (moment === 'while the stage turns to saving') cancel();
+        else if (moment === 'just after the stage turned to saving') queueMicrotask(cancel);
+      };
+      // instrumentation of the real reader: the cancel arrives while ffmpeg delivers the last frame, before the tracker sees it
+      const reader: ReadFrames = (src, from, to, h, onFrame, signal) => readFrames(src, from, to, h, async (i, f) => { if (moment === 'as the last frame reaches the tracker' && i === to - 1) cancel(); await onFrame(i, f); }, signal);
+      store.events.on('job', onJob);
+      try {
+        jobId = startTrackingJob(store, gov, agent, pid, id, TrackRunBody.parse({ direction: 'forward', to: 20 }), { readFrames: reader }).id;
+        const done = await settle(jobId);
+        expect(answer, moment).toMatchObject({ status: 'cancel-requested', outcome: 'stopping' });
+        expect(done.status, `${moment}: ${JSON.stringify(events.slice(cut))}`).toBe('canceled');
+        expect(events.slice(cut).map((e) => e.status).filter((s) => s !== 'cancel-requested' && s !== 'canceled'), moment).toEqual([]);
+        expect(store.getProject(pid).revision, moment).toBe(rev);
+        expect(arraysDigest(trackOf(pid, id)), moment).toBe(before);
+      } finally { store.events.off('job', onJob); }
+    }
+  }, 120_000);
 
   it('a job left running by a restart is tracked again by recoverTrackingJobs, with the same result as an uninterrupted run', async () => {
     const at = disc.truth[45]!;
