@@ -28,3 +28,7 @@ export * from './notices.ts';
 export * from './pacing.ts';
 export * from './flashSafety.ts';
 export * from './audioEffects.ts';
+export * from './templateContract.ts';
+export * from './templateCatalog.ts';
+export * from './templatePlan.ts';
+export * from './templateOps.ts';
