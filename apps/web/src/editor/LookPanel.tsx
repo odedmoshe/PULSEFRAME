@@ -158,7 +158,7 @@ function LutControl({ value, onCommit }: { value: string; onCommit: (assetId: st
   };
   return (
     <div className="effect-lut" data-testid="effect-lut-control">
-      <label><span><bdi>{effectParamLabel('lut', state.lang)}</bdi></span>
+      <label><span><bdi>{effectParamLabel('lut', state.lang, 'color.lut')}</bdi></span>
         <select data-testid="effect-lut" data-param="lut" value={tables.some((a) => a.id === value) ? value : ''} onChange={(e) => onCommit(e.target.value)}>
           <option value="">{S.none}</option>
           {tables.map((a) => <option key={a.id} value={a.id}>{a.name}{a.lut ? ` (${a.lut.size}³)` : ''}</option>)}
