@@ -1,6 +1,6 @@
 # ADR-0011: Time effects, overlays and beat modulation through the one rendering path
 
-Status: **accepted** (2026-11-17) for wave 1. Shared contracts are on branch `wt/vispre`; three workers are building it. Nothing is shipped until all three land (the new catalogue rows have no renderer before then).
+Status: **accepted** (2026-11-17) for wave 1. Wave 1 is merged (PROGRESS checkpoint 18o): the shared contracts and all three workers landed together, and the time, overlay and GPU proofs pass on the merged head.
 
 ## Context
 - The market survey (docs/MARKET_RESEARCH.md §1–2) lists effects this editor lacked: echo trails and motion blur (they need the clip at other times than the frame drawn), particle overlays, a dated digicam look, CRT, velocity-style whip transitions, effects that pulse with the music.
