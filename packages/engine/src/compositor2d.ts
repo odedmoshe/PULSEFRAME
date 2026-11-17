@@ -339,8 +339,16 @@ function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | T
  * The adjustment pass (ADR-0016): the frame drawn so far (every layer before this one) is copied into scratch slot
  * ADJUST_PASS_SLOT, run through the adjustment's effects with a whole-frame box (effects ping-pong slots 1 and 2), masked in
  * frame space (slots 4 and 5) and composited back with the clip's opacity and blend mode. For the normal blend that is
- * exactly frame·(1 − α·m) + adjusted·α·m (α opacity, m mask coverage): masked-out pixels are transparent in the adjusted copy,
+ * frame·(1 − α·m) + adjusted·α·m (α opacity, m mask coverage): masked-out pixels are transparent in the adjusted copy,
  * so they stay byte-identical. Nothing else is drawn: no picture is asked for, no transform, no transition.
+ *
+ * Opacity below 1 is put into the copy's own alpha (one destination-in fill) and the copy is then drawn at full alpha. Drawing
+ * the opaque copy with globalAlpha instead is the same picture in exact arithmetic, but not in 8 bits: Chromium's software
+ * canvas then computes (s·(a+1) + d·(255−a)) >> 8 with a = 255·α (s adjusted, d frame): weights of (a+1)/256 and (255−a)/256
+ * and a truncation, which at α = 0.5 is 2 below round((s + d) / 2) for 4096 of the 65536 byte pairs, and more than 1 off
+ * somewhere at 114 of 271 opacities tried. With the alpha in the copy every byte pair is within 1 of round(d + (s − d)·α) at
+ * α = 0.5 and at every α = k/255; of 17 opacities between two such levels, 5 had pairs 2 off (measured in headless Chromium
+ * 153 over all 256×256 pairs; proof:adjust check 2 holds the 0.5 case on real stills).
  */
 async function adjustPass(ctx: Ctx2D, g: RenderGraph, layer: AdjustLayer, tables: Pick<LookEnv, 'luts' | 'lutReasons'>) {
   const snap = scratch(ADJUST_PASS_SLOT, g.width, g.height);
@@ -350,9 +358,20 @@ async function adjustPass(ctx: Ctx2D, g: RenderGraph, layer: AdjustLayer, tables
   let buf: Buf = snap;
   if (layer.effects?.length) buf = await applyEffects(buf, layer.effects, env);
   if (layer.mask) applyMask(buf, layer.mask, env);
+  if (layer.opacity < 1) {
+    const b = buf.ctx;
+    b.save();
+    b.setTransform(1, 0, 0, 1, 0, 0);
+    b.filter = 'none';
+    b.globalCompositeOperation = 'destination-in';
+    b.globalAlpha = layer.opacity;
+    b.fillStyle = '#000';
+    b.fillRect(0, 0, g.width, g.height);
+    b.restore();
+  }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = layer.opacity;
+  ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = COMPOSITE[layer.blend ?? 'normal'];
   ctx.drawImage(buf.canvas, 0, 0);
   ctx.restore();
