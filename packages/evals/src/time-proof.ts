@@ -218,6 +218,33 @@ async function main() {
       check('time.shutter at 0°: byte-identical to no effect on a video clip (frames 10 and 77)', after.every((a, i) => maxDiff(a, before[i]!) === 0), after.map((a, i) => maxDiff(a, before[i]!)));
     }
 
+    // ---------- titles: no decode at all ----------
+    {
+      // a title moving right 12.8 px a frame (x from −0.3 to 0.3 over 30 frames)
+      const pid = await newProject('titles');
+      const textId = (await tx(pid, [{ op: 'add_text', args: { text: 'PULSE', start: f(0), duration: f(60) } }])).results[0].output.clipId as string;
+      await tx(pid, [{ op: 'set_keyframe', args: { clipId: textId, property: 'x', time: f(0), value: -0.3 } }, { op: 'set_keyframe', args: { clipId: textId, property: 'x', time: f(30), value: 0.3 } }]);
+      const F = 20, taps = [20, 17, 14, 11];
+      const plain18 = await still(pid, 18), plain20 = await still(pid, F);
+      // the title as one tap draws it (shutter at 0°: placed on its own, then merged as one picture), at each tap time:
+      // the text is rasterised the same way as in the echo, whatever the browser does for text on an opaque canvas
+      const single = await addEffect(pid, textId, 'time.shutter', { angle: 0 });
+      const ref = new Map<number, Buffer>();
+      for (const at of taps) ref.set(at, await still(pid, at));
+      await tx(pid, [{ op: 'remove_effect', args: { clipId: textId, effectId: single } }]);
+      const fxId = await addEffect(pid, textId, 'time.echo', {});
+      const echo = await still(pid, F);
+      // over the black background each reference holds the title premultiplied; the echo is their weighted sum
+      const w = tapWeights('time.echo', { decay: 0.6 }, 4);
+      let worst = 0;
+      for (let i = 0; i < echo.length; i++) worst = Math.max(worst, Math.abs(echo[i]! - ((taps.reduce((sum, at, k) => sum + w[k]! * ref.get(at)![i]!, 0) + 2048) >> 12)));
+      check('Titles (no decode), time.echo: the still is the weighted sum of the title at frames 20, 17, 14 and 11 (within 2 of 255 on every pixel: straight-alpha rounding at the letter edges)', worst <= 2 && meanDiff(echo, plain20) > 1, { worstDifference: worst, differsFromPlain: Number(meanDiff(echo, plain20).toFixed(2)), shutter0VsPlainMax: maxDiff(ref.get(F)!, plain20) });
+      await tx(pid, [{ op: 'remove_effect', args: { clipId: textId, effectId: fxId } }]);
+      await addEffect(pid, textId, 'time.stutter', { hold: 3 });
+      const held = await still(pid, F);
+      check('Titles (no decode), time.stutter: frame 20 shows the title exactly as on frame 18 (held with its movement)', maxDiff(held, plain18) === 0, { maxDifference: maxDiff(held, plain18) });
+    }
+
     // ---------- 5. stutter ----------
     {
       const pid = await newProject('stutter');
