@@ -521,6 +521,106 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       }
       return vec4f(min(s.rgb + sum / 10.0 * P.a.z * s.a, vec3f(s.a)), s.a);`,
   },
+  // A mid-2000s pocket camera (ADR-0011): oversharpened, highlights that bloom, a cool cast, blocky colour and fine coloured
+  // noise. digicamTone below is the same arithmetic on a flat patch (its proof model). SAFETY (ADR-0009): the noise is the only
+  // part that changes with time, 15 times a second (digicamTick, worked out here, not in the shader). In every 2 x 2 pixel cell
+  // its four offsets are a, b, -b, -a, so they cancel over the cell, and no channel moves by more than 0.03 * noise: the area
+  // brightness the flash guidelines look at does not change at all from one tick to the next.
+  'stylize.digicam': {
+    params: (p, env) => [n(p.amount, 0.8), n(p.sharpen, 0.7), n(p.noise, 0.3), n(p.bloom, 0.35), n(p.cool, 0.4), Math.round(n(p.seed, 1)), digicamTick(env.seconds ?? 0), 0],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let dim = vec2f(textureDimensions(src));
+      let t = 1.0 / dim;
+      let px = uv * dim;
+      let c0 = s.rgb / s.a;
+      // 1. unsharp mask: the [1 2 1] x [1 2 1] blur from four bilinear taps half a pixel off the diagonals
+      let bl = (textureSampleLevel(src, smp, uv + vec2f(-0.5, -0.5) * t, 0.0) + textureSampleLevel(src, smp, uv + vec2f(0.5, -0.5) * t, 0.0)
+        + textureSampleLevel(src, smp, uv + vec2f(-0.5, 0.5) * t, 0.0) + textureSampleLevel(src, smp, uv + vec2f(0.5, 0.5) * t, 0.0)) * 0.25;
+      let sharp = s.rgb + P.a.y * (s.rgb - bl.rgb);
+      // 2. bloom: light of the neighbourhood above luma 0.8, from 12 points on a spiral 1.2% of the frame height across, inside the layer's shape
+      var glow = vec3f(0.0);
+      for (var i = 0; i < 12; i++) {
+        let ang = f32(i) * 2.3999632; let rad = sqrt((f32(i) + 0.5) / 12.0) * 0.012 * dim.y;
+        let g = textureSampleLevel(src, smp, uv + vec2f(cos(ang), sin(ang)) * rad * t, 0.0);
+        glow += g.rgb * smoothstep(0.8, 1.0, luma(g.rgb));
+      }
+      var k = (sharp + glow / 12.0 * P.a.w * s.a) / s.a;
+      // 3. white balance: cool (positive) takes red down and blue up
+      let wb = vec3f(1.0 - 0.05 * P.b.x, 1.0 + 0.01 * P.b.x, 1.0 + 0.08 * P.b.x);
+      k = k * wb;
+      // 4. blocky colour: the colour (not the brightness) of the pixel's 8 x 8 block, mixed in 0.4
+      let blk = floor(px / 8.0) * 8.0;
+      let b = (textureSampleLevel(src, smp, (blk + vec2f(2.0, 2.0)) * t, 0.0) + textureSampleLevel(src, smp, (blk + vec2f(6.0, 2.0)) * t, 0.0)
+        + textureSampleLevel(src, smp, (blk + vec2f(2.0, 6.0)) * t, 0.0) + textureSampleLevel(src, smp, (blk + vec2f(6.0, 6.0)) * t, 0.0)) * 0.25;
+      if (b.a > 0.0) { let bc = b.rgb / b.a * wb; k = k + 0.4 * ((bc - vec3f(luma(bc))) - (k - vec3f(luma(k)))); }
+      // 5. noise: one pair of random colours (na, nb) per 2 x 2 cell and tick, placed as na, nb / -nb, -na
+      let ip = vec2u(px);
+      let cp = ip / 2u;
+      let inCell = ip - cp * 2u;
+      let h = hash(hash(cp.x * 7919u + cp.y * 104723u + u32(P.b.y) * 2654435u) ^ hash(u32(P.b.z) * 2246822519u + 3u));
+      let na = vec3f(unit(hash(h ^ 1u)), unit(hash(h ^ 2u)), unit(hash(h ^ 3u))) * 2.0 - vec3f(1.0);
+      let nb = vec3f(unit(hash(h ^ 4u)), unit(hash(h ^ 5u)), unit(hash(h ^ 6u))) * 2.0 - vec3f(1.0);
+      var nz = na;
+      if (inCell.x == 1u && inCell.y == 0u) { nz = nb; } else if (inCell.x == 0u && inCell.y == 1u) { nz = -nb; } else if (inCell.x == 1u && inCell.y == 1u) { nz = -na; }
+      k = k + nz * (0.03 * P.a.z);
+      // 6. strength
+      let o = mix(c0, clamp(k, vec3f(0.0), vec3f(1.0)), P.a.x);
+      return vec4f(o * s.a, s.a);`,
+  },
+  // An old picture-tube screen (ADR-0011): curved glass with rounded corners, beam lines that widen where the picture is bright,
+  // an RGB phosphor mask and a slight glow. crtMap below is the same curve (its proof model). Nothing here reads the time, so
+  // it cannot flicker (ADR-0009). The mask lies on the glass, in output pixels; the beam lines follow the curved picture.
+  'stylize.crt': {
+    params: (p, env) => [n(p.curvature, 0.12), ({ grille: 0, dots: 1, slot: 2 } as Record<string, number>)[String(p.phosphor)] ?? 0, Math.max(1, n(p.pitch, 0.0028) * env.height), Math.max(1, Math.round(n(p.lines, 480))), n(p.amount, 0.8), n(p.glow, 0.3), env.width / env.height, 0],
+    wgsl: `
+      let dim = vec2f(textureDimensions(src));
+      let asp = P.b.z;
+      // 1. curved glass: the output point d (in frame heights from the centre) shows the picture at d (1 + curvature |d|^2)
+      let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0);
+      let qd = d * (1.0 + P.a.x * dot(d, d));
+      let at = vec2f(0.5) + qd / vec2f(asp, 1.0);
+      // outside the glass, a box with rounded corners (radius growing with the curvature), is black
+      let rr = 0.4 * P.a.x;
+      let e = abs(qd) - vec2f(asp * 0.5, 0.5) + vec2f(rr);
+      let sd = length(max(e, vec2f(0.0))) + min(max(e.x, e.y), 0.0) - rr;
+      let inside = 1.0 - smoothstep(-0.5 / dim.y, 0.0, sd);
+      let s0 = textureSampleLevel(src, smp, uv, 0.0);
+      let s = textureSampleLevel(src, smp, at, 0.0);
+      var c = vec3f(0.0);
+      if (s.a > 0.0) { c = s.rgb / s.a; }
+      // 2. beam lines: across each of the lines a gaussian, wider where the picture is bright, scaled to mean 1 over the line
+      let sigma = mix(0.22, 0.4, luma(c));
+      let f = fract(at.y * P.a.w) - 0.5;
+      let sg = sigma - 0.22;
+      let scan = exp(-0.5 * f * f / (sigma * sigma)) / (0.5386 + 2.0342 * sg - 3.5167 * sg * sg);
+      // 3. phosphor mask: each pixel column lies in the red, green or blue stripe of a triad P.a.z pixels wide; gains of mean 1
+      let xp = uv.x * dim.x; let yp = uv.y * dim.y; let pitch = P.a.z;
+      var shift = 0.0; var rowGain = 1.0;
+      if (P.a.y > 1.5) {
+        // slot mask: rows of slots two triads high, every other row shifted by half a triad, a dark gap at the end of each slot
+        let slotRow = floor(yp / (2.0 * pitch));
+        shift = 1.5 * (slotRow - 2.0 * floor(slotRow * 0.5));
+        rowGain = select(1.0705882, 0.6, fract(yp / (2.0 * pitch)) > 0.85);
+      } else if (P.a.y > 0.5) {
+        // dots: rows of triads one triad high, every other row shifted by half a triad, darker between the rows
+        let dotRow = floor(yp / pitch);
+        shift = 1.5 * (dotRow - 2.0 * floor(dotRow * 0.5));
+        rowGain = 1.0 + 0.3 * cos(6.2831853 * fract(yp / pitch));
+      }
+      let stripe = floor(3.0 * xp / pitch + shift);
+      let which = stripe - 3.0 * floor(stripe / 3.0);
+      var mask = vec3f(0.7);
+      if (which < 0.5) { mask.x = 1.6; } else if (which < 1.5) { mask.y = 1.6; } else { mask.z = 1.6; }
+      mask = mask * rowGain;
+      // 4. glow: light from 8 points around, 0.6% of the frame height away
+      var gl = vec3f(0.0);
+      for (var i = 0; i < 8; i++) { let ang = f32(i) * 0.7853982; gl += textureSampleLevel(src, smp, at + vec2f(cos(ang), sin(ang)) * 0.006 / vec2f(asp, 1.0), 0.0).rgb; }
+      let crt = c * scan * mask + gl / 8.0 * (0.6 * P.b.y);
+      let o = mix(c, clamp(crt, vec3f(0.0), vec3f(1.0)), P.b.x);
+      return vec4f(o * s.a * inside, mix(s0.a, s.a, inside));`,
+  },
 };
 export const isGpuEffect = (type: string) => type in GPU_EFFECTS;
 /** The id of the colour table an effect instance names, or '' when it names none (or is not a table effect). */
@@ -608,6 +708,36 @@ const T2: Record<string, string> = {
     let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0); let r = length(d);
     let q = uv + normalize(d + vec2f(0.00001)) * sin(r * 40.0 - p * 18.0) * 0.03 * sin(p * 3.14159265) / vec2f(asp, 1.0);
     return mix(O(q), I(q), p);`,
+  // Whip pan (ADR-0011): both pictures lie side by side on one strip that moves past by one frame in the direction va
+  // (strip coordinate w: the outgoing picture on [0, 1), the incoming one on [1, 2)), blurred along the move by 16 samples
+  // over a length that is largest half-way. The incoming share of the frame is p, so it never goes back.
+  whip: `
+    let dir = vec2f(va.x, va.y);
+    let w = dot(uv - vec2f(0.5), dir) + 0.5 + p;
+    let sp = sin(p * 3.14159265); let len = 0.45 * sp * sp;
+    var acc = vec4f(0.0);
+    for (var i = 0; i < 16; i++) {
+      let o = len * (f32(i) / 15.0 - 0.5);
+      if (w + o < 1.0) { acc += O(uv + dir * (p + o)); } else { acc += I(uv + dir * (p + o - 1.0)); }
+    }
+    return acc / 16.0;`,
+  // Spin (ADR-0011): one whole turn (va.x = 1 clockwise, -1 counter-clockwise) with a zoom that is largest half-way, blurred
+  // along the turn by 12 samples behind it (as a shutter open while it turns records it, so the two directions differ even
+  // half-way); the outgoing picture before p = 0.45, the incoming one after 0.55, crossfaded between; what turns in from
+  // outside the picture is the picture mirrored.
+  spin: `
+    let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0);
+    let sp = sin(p * 3.14159265);
+    let zoom = 1.0 + 0.8 * sp; let sweep = 0.6 * sp * sp;
+    var a = vec4f(0.0); var b = vec4f(0.0);
+    for (var i = 0; i < 12; i++) {
+      let t = va.x * (6.2831853 * p - sweep * f32(i) / 11.0);
+      let r = vec2f(d.x * cos(t) + d.y * sin(t), -d.x * sin(t) + d.y * cos(t)) / zoom;
+      let at = vec2f(0.5) + r / vec2f(asp, 1.0);
+      let q = vec2f(1.0) - abs(fract(at * 0.5) * 2.0 - vec2f(1.0));
+      a += O(q); b += I(q);
+    }
+    return mix(a / 12.0, b / 12.0, smoothstep(0.45, 0.55, p));`,
 };
 /** Transition id -> kernel and the numbers that set its variant. */
 export const GPU_TRANSITIONS: Record<string, { kernel: string; v: [number, number, number] }> = {
@@ -627,6 +757,9 @@ export const GPU_TRANSITIONS: Record<string, { kernel: string; v: [number, numbe
   checker: { kernel: 'checker', v: [0, 0, 0] },
   'bars-h': { kernel: 'bars', v: [0, 0, 0] }, 'bars-v': { kernel: 'bars', v: [1, 0, 0] },
   ripple: { kernel: 'ripple', v: [0, 0, 0] },
+  // whip: the direction the camera turns (the picture moves the other way); spin: 1 clockwise, -1 counter-clockwise
+  'whip-left': { kernel: 'whip', v: [-1, 0, 0] }, 'whip-right': { kernel: 'whip', v: [1, 0, 0] }, 'whip-up': { kernel: 'whip', v: [0, -1, 0] }, 'whip-down': { kernel: 'whip', v: [0, 1, 0] },
+  'spin-cw': { kernel: 'spin', v: [1, 0, 0] }, 'spin-ccw': { kernel: 'spin', v: [-1, 0, 0] },
 };
 export const isGpuTransition = (type: string) => type in GPU_TRANSITIONS;
 const transitionShader = (body: string) => `${VERTEX}
@@ -828,10 +961,41 @@ async function runPass(type: string, key: string, shader: () => string, numbers:
   }
 }
 
-// ---- stylize.digicam and stylize.crt: CPU models of the passes, for their proofs (STUB, lead pre-pass; W3 builds them) ----
+// ---- stylize.digicam and stylize.crt: exact JavaScript models of the shader arithmetic, for their proofs (ADR-0011) ----
+// There is no CPU twin of either pass (ADR-0008 decision 2): these model only what a proof can measure, step for step in the
+// shader's order, so a still can be checked against them.
 /** Noise tick of stylize.digicam at timeline seconds (15 per second). */
 export const digicamTick = (seconds: number) => Math.floor(seconds * 15 + 1e-6);
-/** stylize.digicam on a flat patch (no noise, no neighbours): straight RGB 0..1 in and out. */
-export function digicamTone(rgb: [number, number, number], p: Record<string, unknown>): [number, number, number] { return rgb; }
-/** Source uv the stylize.crt pass samples for output uv, or null outside the curved glass. */
-export function crtMap(u: number, v: number, p: Record<string, unknown>, aspect: number): [number, number] | null { return [u, v]; }
+const LUMA = [0.2126, 0.7152, 0.0722] as const;
+const lumaOf = (c: readonly number[]) => LUMA[0] * c[0]! + LUMA[1] * c[1]! + LUMA[2] * c[2]!;
+/** WGSL smoothstep. */
+const smoothstep = (lo: number, hi: number, x: number) => { const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo))); return t * t * (3 - 2 * t); };
+/**
+ * stylize.digicam on a flat patch (no noise, no neighbours): straight RGB 0..1 in and out. On a flat opaque patch the unsharp
+ * mask changes nothing, the bloom adds the patch's own colour times bloom * smoothstep(0.8, 1, luma), the block colour is the
+ * patch's colour with the white balance (without the bloom), and the noise is left out (its mean over every 2 x 2 cell is 0).
+ */
+export function digicamTone(rgb: [number, number, number], p: Record<string, unknown>): [number, number, number] {
+  const amount = n(p.amount, 0.8), bloom = n(p.bloom, 0.35), cool = n(p.cool, 0.4);
+  const wb = [1 - 0.05 * cool, 1 + 0.01 * cool, 1 + 0.08 * cool];
+  const lift = smoothstep(0.8, 1, lumaOf(rgb)) * bloom;
+  let k = rgb.map((v, i) => (v + v * lift) * wb[i]!);
+  const b = rgb.map((v, i) => v * wb[i]!);
+  const lb = lumaOf(b), lk = lumaOf(k);
+  k = k.map((v, i) => v + 0.4 * ((b[i]! - lb) - (v - lk)));
+  const out = k.map((v, i) => rgb[i]! * (1 - amount) + Math.min(1, Math.max(0, v)) * amount); // WGSL mix(c0, clamp(k), amount)
+  return [out[0]!, out[1]!, out[2]!];
+}
+/**
+ * Source uv the stylize.crt pass samples for output uv, or null outside the curved glass: the point d (frame heights from the
+ * centre) shows the picture at d (1 + curvature |d|^2); the glass is the frame with corners rounded by 0.4 * curvature.
+ */
+export function crtMap(u: number, v: number, p: Record<string, unknown>, aspect: number): [number, number] | null {
+  const k = n(p.curvature, 0.12);
+  const dx = (u - 0.5) * aspect, dy = v - 0.5, f = 1 + k * (dx * dx + dy * dy);
+  const qx = dx * f, qy = dy * f, rr = 0.4 * k;
+  const ex = Math.abs(qx) - aspect / 2 + rr, ey = Math.abs(qy) - 0.5 + rr;
+  const sd = Math.hypot(Math.max(ex, 0), Math.max(ey, 0)) + Math.min(Math.max(ex, ey), 0) - rr;
+  if (sd > 0) return null;
+  return [0.5 + qx / aspect, 0.5 + qy];
+}
