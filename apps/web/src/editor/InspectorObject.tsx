@@ -37,7 +37,7 @@ import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } fr
 import { Menu, ScrubField, Tabs, type MenuItem, type TabSpec } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
-import { cutBefore, keyframeSummary, objectActions, secondsText, shortTimecode, tabsFor, type InspectorPage, type ObjectAction, type ObjectKind, type ObjectTab } from './inspector.model.ts';
+import { cutBefore, keyframeSummary, matchingPreset, objectActions, secondsText, shortTimecode, tabsFor, type InspectorPage, type ObjectAction, type ObjectKind, type ObjectTab } from './inspector.model.ts';
 import { openInspectorTab, selectCut } from './inspector.bus.ts';
 import { CutPanel, TransitionPanel } from './InspectorCut.tsx';
 import { ProjectPanel } from './InspectorProject.tsx';
@@ -839,19 +839,54 @@ function SizeRow({ size, commit }: { size: number; commit: (v: number) => Promis
   );
 }
 
-function StyleTab({ clip, viewClip }: PanelProps) {
+/**
+ * The ready text styles as pictures (UX_REDESIGN §4.6, Text-Tool): each tile writes the title's own first words in that style
+ * (its font, weight, colour, box, outline and shadow, from the preset itself), so the choice is seen, not read. The first six
+ * show; the rest open under "all styles". One registered operation per pick (apply_text_preset), as the old list did.
+ */
+const PRESET_FIRST = 6;
+function PresetTiles({ clip, current }: { clip: Extract<Clip, { type: 'text' }>; current: string | null }) {
   const { editor, state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
+  const [all, setAll] = useState(false);
+  const words = (clip.text.split('\n')[0] || S.kindText).slice(0, 18);
+  const shown = all ? TEXT_PRESETS : TEXT_PRESETS.slice(0, PRESET_FIRST);
+  return (
+    <div className="preset-tiles-wrap">
+      <div className="preset-tiles" role="group" aria-label={t('text.preset')} data-testid="text-preset">
+        {shown.map((p) => {
+          const px = 15, st = p.style;
+          const stroke = st.stroke && st.strokeFrac > 0 ? Math.max(1, Math.round(st.strokeFrac * px * 1.4)) : 0;
+          const look: React.CSSProperties = {
+            fontFamily: `"${st.fontFamily}"`, fontWeight: st.fontWeight, color: st.color, background: st.background ?? undefined,
+            WebkitTextStroke: stroke ? `${stroke}px ${st.stroke}` : undefined, paintOrder: 'stroke fill',
+            textShadow: p.shadow ? `${Math.round(p.shadow.x * 400)}px ${Math.round(p.shadow.y * 400)}px ${Math.round(p.shadow.blur * 400)}px color-mix(in srgb, ${p.shadow.color} ${Math.round(p.shadow.opacity * 100)}%, transparent)` : undefined,
+          };
+          return (
+            <button key={p.id} type="button" className="preset-tile" aria-pressed={current === p.id} data-testid="text-preset-option" data-value={p.id} title={p.name[state.lang]}
+              onClick={() => void editor.commit([{ op: 'apply_text_preset', args: { clipId: clip.id, presetId: p.id } }], 'Apply text style')}>
+              <span className="preset-sample" aria-hidden="true"><span dir="auto" style={look}>{words}</span></span>
+              <span className="preset-name">{p.name[state.lang]}</span>
+            </button>
+          );
+        })}
+      </div>
+      {TEXT_PRESETS.length > PRESET_FIRST && (
+        <button type="button" className="ghost preset-more" aria-expanded={all} data-testid="text-preset-all" onClick={() => setAll((a) => !a)}>{all ? S.stylesFewer : S.stylesAll(TEXT_PRESETS.length)}</button>
+      )}
+    </div>
+  );
+}
+
+function StyleTab({ clip, viewClip }: PanelProps) {
+  const { state } = useEditorState();
+  const S = INSPECTOR_STRINGS[state.lang];
   if (clip.type !== 'text') return null;
+  const current = matchingPreset(clip.style, TEXT_PRESETS);
   return (
     <>
-      <Section id="preset" title={S.secStyle}>
-        <label><span className="sr-only">{t('text.preset')}</span>
-          <select value="" data-testid="text-preset" aria-label={t('text.preset')} onChange={(e) => { const presetId = e.target.value; if (presetId) void editor.commit([{ op: 'apply_text_preset', args: { clipId: clip.id, presetId } }], 'Apply text style'); }}>
-            <option value="">{t('text.preset.pick')}</option>
-            {TEXT_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name[state.lang]}</option>)}
-          </select>
-        </label>
+      <Section id="preset" title={S.secStyle} summary={current ? current.name[state.lang] : S.stylesCount(TEXT_PRESETS.length)}>
+        <PresetTiles clip={clip} current={current?.id ?? null} />
       </Section>
       <Section id="textfx" title={S.secTextFx} help><TextEffectsField clip={clip} style={viewClip.type === 'text' ? viewClip.style : clip.style} variantId={state.viewVariantId ?? null} /></Section>
     </>

@@ -392,3 +392,15 @@
 .pf-insp .look-target-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3) var(--pf-sp-4); margin-block-end: var(--pf-sp-4); }
 .pf-insp .look-target-line .look-target-label { color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
 .pf-insp .look-target-line > p { flex-basis: 100%; margin: 0; }
+
+/* the ready text styles as pictures: the title's own words in each style, on the stage colour */
+.pf-insp .preset-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--pf-sp-3); }
+.pf-insp .preset-tile { display: grid; grid-template-rows: 56px auto; gap: var(--pf-sp-2); min-inline-size: 0; padding: 0; border: 0; background: none; box-shadow: none; color: var(--pf-text-2); font-size: var(--pf-fs-xs); text-align: start; cursor: pointer; }
+.pf-insp .preset-sample { display: grid; place-items: center; overflow: hidden; padding-inline: var(--pf-sp-3); border-radius: var(--pf-r-sm); background: var(--pf-stage); box-shadow: inset 0 0 0 1px var(--pf-line-strong); }
+.pf-insp .preset-sample > span { max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: clip; padding: 1px 5px; border-radius: 3px; font-size: 15px; line-height: 1.25; }
+.pf-insp .preset-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-insp .preset-tile:hover .preset-sample { box-shadow: inset 0 0 0 1px var(--pf-line-control); }
+.pf-insp .preset-tile[aria-pressed='true'] .preset-sample { box-shadow: 0 0 0 2px var(--pf-frame); }
+.pf-insp .preset-tile[aria-pressed='true'] .preset-name { color: var(--pf-frame); }
+.pf-insp .preset-tile:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; border-radius: var(--pf-r-sm); }
+.pf-insp .preset-more { margin-block-start: var(--pf-sp-3); }

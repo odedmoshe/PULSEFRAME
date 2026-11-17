@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, clipEnd, createProject, findClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { activeTab, cutBefore, firstTab, framesToNearestBeat, keyframeSummary, objectActions, objectKind, trackRole, pagesFor, pinnedTab, rollCutOps, shortTimecode, tabsFor } from './inspector.model.ts';
+import { activeTab, cutBefore, firstTab, framesToNearestBeat, keyframeSummary, matchingPreset, objectActions, objectKind, trackRole, pagesFor, pinnedTab, rollCutOps, shortTimecode, tabsFor } from './inspector.model.ts';
 import { ratioLabel } from './FormatPrism.tsx';
 
 const R = { num: 30, den: 1 };
@@ -165,5 +165,19 @@ describe('trackRole: what a mixer strip says its track carries', () => {
   it('nothing is claimed for an empty track or plain files (the strip shows the first file)', () => {
     expect(trackRole(doc, { clips: [] })).toBeNull();
     expect(trackRole(doc, { clips: [m('fx1'), m('v1', 'g1')] })).toBeNull();
+  });
+});
+
+describe('matchingPreset: which ready text style a title wears', () => {
+  const P = [
+    { id: 'white', style: { fontFamily: 'Heebo', fontWeight: 700, color: '#FFFFFF', background: null, stroke: null, strokeFrac: 0 } },
+    { id: 'outline', style: { fontFamily: 'Heebo', fontWeight: 700, color: '#FFFFFF', background: null, stroke: '#000000', strokeFrac: 0.08 } },
+  ];
+  it('finds the style whose font, colour, box and outline the title has, in any letter case', () => {
+    expect(matchingPreset({ fontFamily: 'Heebo', fontWeight: 700, color: '#ffffff', stroke: '#000000', strokeFrac: 0.08, background: null }, P)?.id).toBe('outline');
+    expect(matchingPreset({ fontFamily: 'Heebo', fontWeight: 700, color: '#FFFFFF' }, P)?.id).toBe('white');
+  });
+  it('a title changed by hand wears none', () => {
+    expect(matchingPreset({ fontFamily: 'Rubik', fontWeight: 700, color: '#FFFFFF' }, P)).toBeNull();
   });
 });

@@ -168,3 +168,11 @@ export function trackRole(doc: ProjectDocument, track: { clips: readonly Clip[] 
   if (media.every((c) => !!c.linkGroupId)) return 'linked';
   return null;
 }
+
+/** The ready text style a title's own style matches (font, weight, colour, box and outline as the style set them), or null. */
+export function matchingPreset<P extends { id: string; style: { fontFamily: string; fontWeight: number; color: string; background: string | null; stroke: string | null; strokeFrac: number } }>(
+  style: { fontFamily: string; fontWeight?: number; color: string; background?: string | null; stroke?: string | null; strokeFrac?: number }, presets: readonly P[]): P | null {
+  const same = (a: string | null | undefined, b: string | null | undefined) => (a ?? null)?.toLowerCase() === (b ?? null)?.toLowerCase();
+  return presets.find((p) => p.style.fontFamily === style.fontFamily && p.style.fontWeight === (style.fontWeight ?? 400) && same(p.style.color, style.color)
+    && same(p.style.background, style.background) && same(p.style.stroke, style.stroke) && Math.abs(p.style.strokeFrac - (style.strokeFrac ?? 0)) < 1e-6) ?? null;
+}

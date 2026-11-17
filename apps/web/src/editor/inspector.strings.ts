@@ -59,7 +59,7 @@ const he = {
   secClean: 'ניקוי קול', secSoundFx: 'אפקטי קול', secBeat: 'קצב ופעימות',
   tempo: 'קצב', beatsN: (n: number) => `${n} פעימות`, bpmNone: 'הקצב עוד לא נותח',
   // text
-  secWords: 'הטקסט', secFont: 'גופן', secStyle: 'סגנון מוכן', secTextFx: 'קו מתאר, צל וזוהר', secTextAnim: 'אנימציית טקסט',
+  secWords: 'הטקסט', secFont: 'גופן', secStyle: 'סגנון מוכן', stylesCount: (n: number) => `${n} סגנונות`, stylesAll: (n: number) => `כל ${n} הסגנונות`, stylesFewer: 'פחות סגנונות', secTextFx: 'קו מתאר, צל וזוהר', secTextAnim: 'אנימציית טקסט',
   chars: 'תווים', fontFamily: 'משפחה', fontSize: 'גודל',
   captionLooksLink: 'מראה הכתוביות נקבע לכל הרצועה, במצב כתוביות.',
   // adjustment
@@ -129,7 +129,7 @@ const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => st
   narrationNotInstalled: 'Narration from text is not installed on this computer yet. It can be installed from the status centre.',
   secClean: 'Voice cleanup', secSoundFx: 'Sound effects', secBeat: 'Tempo and beats',
   tempo: 'Tempo', beatsN: (n) => `${n} beats`, bpmNone: 'The tempo is not analysed yet',
-  secWords: 'The text', secFont: 'Font', secStyle: 'Ready style', secTextFx: 'Outline, shadow and glow', secTextAnim: 'Text animation',
+  secWords: 'The text', secFont: 'Font', secStyle: 'Ready style', stylesCount: (n) => `${n} styles`, stylesAll: (n) => `All ${n} styles`, stylesFewer: 'Fewer styles', secTextFx: 'Outline, shadow and glow', secTextAnim: 'Text animation',
   chars: 'characters', fontFamily: 'Family', fontSize: 'Size',
   captionLooksLink: 'The look of captions is set for the whole track, in Captions mode.',
   secRange: 'Range and strength',
