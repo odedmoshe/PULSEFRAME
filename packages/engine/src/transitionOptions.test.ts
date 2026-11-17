@@ -98,3 +98,31 @@ describe('transition state on the layers (ADR-0012)', () => {
     }
   });
 });
+
+describe('a velocity ramp and privacy regions together (ADR-0012 with ADR-0015)', () => {
+  it('each side of a ramped transition hides what is in the source frame it actually shows, not the frame the clock would show', () => {
+    // one moving track over the whole file: x = 100 + 40·frame (in 1/10,000 of the width), so the region's place tells the frame
+    const p = pair('wipe-left', 15, { velocity: 4 });
+    const assetId = Object.keys(p.doc.assets)[0]!;
+    let r = tx(p.doc, [{ op: 'create_motion_track', args: { assetId, kind: 'region', frame: 0, x: 100, y: 5000, w: 800, h: 800 } }]);
+    const motionTrackId = r.results[0]!.output!.motionTrackId as string;
+    const n = 239;
+    r = tx(r.doc, [{ op: 'attach_motion_track', args: { motionTrackId, from: 1, x: Array.from({ length: n }, (_, i) => 100 + 40 * (i + 1)), y: Array(n).fill(5000), s: Array(n).fill(1000), q: Array(n).fill(100), st: Array(n).fill(1), method: 'test', params: {}, createdAt: '2026-11-17T00:00:00Z' } }], true);
+    r = tx(r.doc, [p.a, p.b].map((clipId) => ({ op: 'set_redact_region', args: { clipId, region: { motionTrackId, style: 'fill' as const, strength: 1 } } })));
+    let checked = 0;
+    for (let l = 0; l < 15; l++) {
+      const s = sides(r.doc, 60 + l);
+      for (const side of [s.out, s.in]) {
+        expect(side.regions, `l=${l} ${side.transition!.role}`).toHaveLength(1);
+        const region = side.regions![0]!;
+        expect(region.whole, `l=${l}`).toBe(false);
+        // the region was resolved at the frame this side SHOWS (its place on the picture follows from that frame alone)
+        expect(region.sourceFrame, `l=${l} ${side.transition!.role}`).toBe(side.sourceFrameIndex);
+        checked++;
+      }
+    }
+    expect(checked).toBe(30);
+    const mid = sides(r.doc, 60 + 7);
+    expect(mid.out.sourceFrameIndex).not.toBe(90 + 7); // the ramp shows another frame than the clock's: the case the rule exists for
+  });
+});

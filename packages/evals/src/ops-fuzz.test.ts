@@ -24,6 +24,7 @@ function run(seed: number) {
   let doc = applyTransaction(createProject({ id: 'prj_fuzz', name: 'fuzz', width: 640, height: 360, frameRate: rate }), fz.importOps, ctx(true)).doc;
   doc = applyTransaction(doc, fz.setup(doc), ctx()).doc;
   doc = applyTransaction(doc, fz.aiSetup(doc), ctx(true)).doc; // ADR-0017 fixtures: derived copies and a translation (internal operations)
+  { const ops = fz.setupInternal(doc); if (ops.length) doc = applyTransaction(doc, ops, ctx(true)).doc; } // ADR-0015: measured samples for the motion track (an internal operation)
   const gen = () => fz.gen(doc);
 
   const stats = { accepted: 0, refused: 0, byOp: {} as Record<string, [number, number]> };
