@@ -20,7 +20,7 @@
  *        nothing either.
  *     c. A 'names' credential may not GIVE a birth date or a word choice either (assertMayWritePeople): otherwise
  *        "the person already has these details" would answer guesses. It may add a person by name, rename and remove.
- *     What stays visible, and the interface says so (apps/web/src/editor/lifeline/people.strings.ts `people.privacy`):
+ *     What stays visible, and the interface says so (apps/web/src/editor/lifeline/people.strings.ts PEOPLE_STRINGS.privacy):
  *     an age the owner made plain text ("Make it plain text"), or typed into a title or an event name, is ordinary text.
  *  3. Rows that hold operation arguments or entity states (proposals; anything later) never reach a 'names' credential
  *     with a birth date in them (scrubPeople, applied to proposals where they are read, to every JSON answer of REST as a
