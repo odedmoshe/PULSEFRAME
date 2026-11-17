@@ -6,7 +6,7 @@
  * if nobody changed them since" — a compensating transaction, never a history rewrite.
  */
 import * as T from '@pulseframe/time';
-import type { Analysis, Asset, Clip, Marker, ProjectDocument, RecipeRun, Track, Transcript, Variant } from './schema.ts';
+import type { Analysis, Asset, Clip, LifeEvent, Marker, ProjectDocument, RecipeRun, Track, Transcript, Variant } from './schema.ts';
 import type { MotionTrack } from './tracking.ts';
 
 export type EntityState =
@@ -21,6 +21,8 @@ export type EntityState =
   | { kind: 'marker'; marker: Marker }
   /** A motion track (ADR-0015), keyed by its own id like a marker, so an edit sent from an out-of-date view of it conflicts. */
   | { kind: 'motionTrack'; track: MotionTrack }
+  /** An event of the life line (ADR-0021), keyed by its own id. A file's capture date rides on its `asset` entity. */
+  | { kind: 'lifeEvent'; event: LifeEvent }
   /** The stacking order of a sequence's tracks. Compared only over the tracks both sides have, so adding or removing a track is not an order change. */
   | { kind: 'trackOrder'; sequenceId: string; ids: string[] };
 /** Entity id of an asset's analysis results. */
@@ -51,6 +53,7 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
   for (const r of Object.values(doc.recipeRuns ?? {})) m.set(r.id, { kind: 'recipeRun', run: r });
   for (const k of Object.values(doc.markers ?? {})) m.set(k.id, { kind: 'marker', marker: k });
   for (const k of Object.values(doc.motionTracks ?? {})) m.set(k.id, { kind: 'motionTrack', track: k });
+  for (const e of Object.values(doc.events ?? {})) m.set(e.id, { kind: 'lifeEvent', event: e });
   for (const seq of Object.values(doc.sequences)) {
     m.set(trackOrderEntityId(seq.id), { kind: 'trackOrder', sequenceId: seq.id, ids: seq.tracks.map((t) => t.id) });
     seq.tracks.forEach((t, index) => {
@@ -123,6 +126,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
       if (cur?.kind === 'recipeRun') delete draft.recipeRuns[cur.run.id];
       if (cur?.kind === 'marker') delete draft.markers[cur.marker.id];
       if (cur?.kind === 'motionTrack') delete draft.motionTracks[cur.track.id];
+      if (cur?.kind === 'lifeEvent') delete draft.events[cur.event.id];
       if (cur?.kind === 'track') { const seq = draft.sequences[cur.sequenceId]!; seq.tracks.splice(seq.tracks.findIndex((t) => t.id === id), 1); }
     } else if (state.kind === 'project') { draft.name = state.name; draft.settings = structuredClone(state.settings); }
     else if (state.kind === 'asset') draft.assets[id] = structuredClone(state.asset);
@@ -132,6 +136,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
     else if (state.kind === 'recipeRun') draft.recipeRuns[state.run.id] = structuredClone(state.run);
     else if (state.kind === 'marker') (draft.markers ??= {})[state.marker.id] = structuredClone(state.marker);
     else if (state.kind === 'motionTrack') (draft.motionTracks ??= {})[state.track.id] = structuredClone(state.track);
+    else if (state.kind === 'lifeEvent') (draft.events ??= {})[state.event.id] = structuredClone(state.event);
   }
   // 2. tracks (so restored clips have a home), lowest original index first
   for (const { id, state } of targets.filter((t) => t.state?.kind === 'track').sort((x, y) => (x.state as any).index - (y.state as any).index)) {

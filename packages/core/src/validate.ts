@@ -2,7 +2,8 @@ import * as T from '@pulseframe/time';
 import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange, transitionDef } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
-import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { ANIMATABLE, MAX_LIFE_EVENTS, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { lifeIssues } from './fields.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -296,5 +297,20 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       }
     }
   }
+  // life line (ADR-0021): the structure of the events; the grammar of live title fields is checked by lifeIssues (fields.ts)
+  const inEvent = new Map<string, string>();
+  for (const [key, ev] of Object.entries(doc.events ?? {})) {
+    if (key !== ev.id) issues.push({ code: 'key_mismatch', message: `event key ${key} != id ${ev.id}`, ids: [key] });
+    uniq(ev.id); // an entity of its own (entities.ts): its id must not be another entity's
+    for (const assetId of ev.assetIds) {
+      const asset = Object.hasOwn(doc.assets, assetId) ? doc.assets[assetId] : undefined;
+      if (!asset || (asset.kind !== 'video' && asset.kind !== 'image')) issues.push({ code: 'life_event_asset', message: `event ${ev.id} lists file ${assetId}, which is missing or is not a picture or a video`, ids: [ev.id, assetId] });
+      const other = inEvent.get(assetId);
+      if (other !== undefined) issues.push({ code: 'life_event_overlap', message: other === ev.id ? `event ${ev.id} lists file ${assetId} twice` : `file ${assetId} is in two events (${other} and ${ev.id})`, ids: [ev.id, assetId] });
+      inEvent.set(assetId, ev.id);
+    }
+  }
+  if (Object.keys(doc.events ?? {}).length > MAX_LIFE_EVENTS) issues.push({ code: 'life_event_limit', message: `the project has more than ${MAX_LIFE_EVENTS} events`, ids: [] });
+  issues.push(...lifeIssues(doc));
   return issues;
 }

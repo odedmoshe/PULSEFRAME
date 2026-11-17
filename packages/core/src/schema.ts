@@ -54,6 +54,69 @@ export const VariantTranslationSchema = z
   })
   .strict();
 
+// ---------- life line (ADR-0021): capture dates, events and live title fields. Optional fields only; no schema version bump. ----------
+/** A calendar day on the wall where the picture was taken. */
+export const WALL_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+/** A day, or a day and the wall-clock time. Never a UTC instant, never a zone suffix. */
+export const WALL_DATE_TIME = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d)?$/;
+/** Capture dates are kept inside these years (both included); a camera clock outside them is not a date anyone filmed on. */
+export const CAPTURE_MIN_YEAR = 1900;
+export const CAPTURE_MAX_YEAR = 2100;
+/**
+ * True for a WALL_DATE or WALL_DATE_TIME string whose day exists (no 30 February) in a year from CAPTURE_MIN_YEAR to
+ * CAPTURE_MAX_YEAR. Integers only: calendar data is never a float and never goes through Date or Intl (ADR-0021).
+ */
+export function isRealWallDate(at: string): boolean {
+  if (!WALL_DATE_TIME.test(at)) return false;
+  const y = Number(at.slice(0, 4)), m = Number(at.slice(5, 7)), d = Number(at.slice(8, 10));
+  if (y < CAPTURE_MIN_YEAR || y > CAPTURE_MAX_YEAR) return false;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  return d <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]!;
+}
+/**
+ * When a picture or video was taken (ADR-0021). Calendar data on the wall clock of the place it was filmed, not timeline time
+ * (ADR-0003 is untouched): the conversion from a file's UTC instant happens once, at import, on the server; everything that
+ * renders does integer arithmetic on the stored wall clock.
+ */
+export const CaptureSchema = z
+  .object({
+    /** YYYY-MM-DD (only the day is known) or YYYY-MM-DDTHH:MM:SS, as the wall clock read at the file's first picture. A real day, 1900–2100. */
+    at: z.string().regex(WALL_DATE_TIME).refine(isRealWallDate, { message: 'not a real calendar day between 1900 and 2100' }),
+    /** Minutes east of UTC at `at` when the FILE states it (Apple creationdate, EXIF OffsetTimeOriginal); null = not stated. */
+    utcOffsetMinutes: z.number().int().min(-840).max(840).nullable(),
+    /** Where the date came from: the container's tags, the picture's EXIF, a pattern in the file name, or a person. */
+    source: z.enum(['container', 'exif', 'filename', 'manual']),
+    /** An estimate: a file name gives the day a file was saved or sent, not necessarily the day it was filmed. */
+    circa: z.literal(true).optional(),
+    /** The file gave a UTC instant only; the wall clock was worked out for this IANA zone at import (server config homeZone). */
+    assumedZone: z.string().min(1).max(64).optional(),
+    /** Minutes a person moved the file's own clock by (shift_asset_captures); `at` already includes them. */
+    shiftedMinutes: z.number().int().min(-5256000).max(5256000).optional(),
+  })
+  .strict();
+export type Capture = z.infer<typeof CaptureSchema>;
+/** A project holds at most this many events. */
+export const MAX_LIFE_EVENTS = 2000;
+/**
+ * An event (ADR-0021): library files grouped by when they were taken. Only what a person typed or chose is stored: a holiday
+ * name is derived when it is read (events.ts eventDisplayName), never written here, so a corrected holiday table never
+ * changes what an old operation log replays to.
+ */
+export const LifeEventSchema = z
+  .object({
+    id: Id,
+    /** The name a person typed, one line; '' = none (the event is then shown by its derived name, or by its date). */
+    name: z.string().max(120).regex(/^[^\n\r]*$/),
+    /** Was it filmed after sunset? null = not decided; true = the Hebrew date of the next day; false = of the same day. Never guessed. */
+    afterSunset: z.boolean().nullable(),
+    /** Pictures and videos of the library; a file sits in at most one event (validate.ts). */
+    assetIds: z.array(Id).min(1).max(5000),
+    /** How the grouping was made. No timestamps: operations are pure and replayable. `edited` = a person changed it, so cluster_events leaves it alone. */
+    origin: z.object({ method: z.enum(['gap', 'manual']), gapMinutes: z.number().int().min(30).max(1440).nullable(), createdBy: z.string(), edited: z.boolean() }).strict(),
+  })
+  .strict();
+export type LifeEvent = z.infer<typeof LifeEventSchema>;
+
 export const AssetSchema = z
   .object({
     id: Id,
@@ -87,6 +150,8 @@ export const AssetSchema = z
     image: z.object({ width: z.number().int().positive(), height: z.number().int().positive(), codec: z.string(), hasAlpha: z.boolean() }).strict().optional(),
     /** Present for kind 'lut': a 3D colour lookup table (.cube). The stored bytes are the original file text; `size` is its entries per axis. It is applied to clips as the effect color.lut and never placed on the timeline. */
     lut: z.object({ size: z.number().int().min(2).max(65), title: z.string().max(256).nullable() }).strict().optional(),
+    /** When the picture was taken, read from the ORIGINAL file at import or set by hand (life line, ADR-0021). Absent = unknown. */
+    capture: CaptureSchema.optional(),
     /**
      * Present when the stored media is a conformed copy (SPEC §7): the original could not be edited directly
      * (variable frame rate, rotation metadata, or a codec the editor cannot decode). The original bytes are kept.
@@ -284,7 +349,9 @@ export const TextAnimationSchema = z
   .strict();
 export type TextAnimation = z.infer<typeof TextAnimationSchema>;
 export const DEFAULT_TEXT_ANIMATION = { by: 'word', in: null, out: null, loop: null, inFrames: 20, outFrames: 15 } as const satisfies TextAnimation;
-export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema, animation: TextAnimationSchema.optional() }).strict();
+export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema, animation: TextAnimationSchema.optional(),
+  /** Live fields (life line, ADR-0021): `{date}`, `{hebrewDate}`, `{event}` … in `text` are resolved by the evaluator (core fields.ts); `{{` and `}}` are braces. Absent = the text is drawn verbatim, as before. */
+  fields: z.literal(true).optional() }).strict();
 
 // ---------- captions and transcripts (SPEC §16) ----------
 export const CAPTION_PRESETS = ['classic', 'karaoke', 'word-pop', 'box-highlight', 'reveal', 'underline', 'dim-ahead'] as const;
@@ -471,6 +538,8 @@ export const ProjectSchema = z
     markers: z.record(Id, MarkerSchema).default({}),
     /** Motion tracks by track id (ADR-0015): positions of a point or box per source frame of a video asset. */
     motionTracks: z.record(Id, MotionTrackSchema).default({}),
+    /** Events (life line, ADR-0021): groups of library files by capture time, by event id. */
+    events: z.record(Id, LifeEventSchema).default({}),
   })
   .strict();
 
@@ -525,6 +594,7 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
     recipeRuns: {},
     markers: {},
     motionTracks: {},
+    events: {},
   };
 }
 
