@@ -67,7 +67,10 @@ describe('delete on the main track', () => {
     expect(plan.moved).toBe(0);
   });
   it('ripples only when the project turned it on and the op that stores it exists', () => {
-    expect(rippleDeleteOn(p.doc)).toBe(false);
+    // a project made before the behaviour existed (no settings.timeline) never ripples; a new project has it on (core createProject)
+    const legacy = { ...p.doc, settings: { ...p.doc.settings, timeline: undefined } } as ProjectDocument;
+    expect(rippleDeleteOn(legacy)).toBe(false);
+    expect(rippleDeleteOn(p.doc)).toBe(!!getOp('set_timeline_behaviour'));
     const on = { ...p.doc, settings: { ...p.doc.settings, timeline: { rippleDelete: true } } } as ProjectDocument;
     // without the core's set_timeline_behaviour op this build keeps today's delete
     expect(rippleDeleteOn(on)).toBe(!!getOp('set_timeline_behaviour'));

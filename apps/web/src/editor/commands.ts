@@ -190,21 +190,17 @@ export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: 
   }
   const removed = track.clips.filter((c) => gone.has(c.id));
   if (!removed.length) return { ops, moved: 0, deleted: clips.length };
-  const groups = new Map<string, { delta: T.RationalTime; ids: string[] }>();
   let moved = 0;
   for (const c of [...track.clips].sort((a, b) => T.cmp(a.start, b.start))) {
     if (gone.has(c.id)) continue;
-    const before = removed.filter((r) => !T.lt(c.start, clipEnd(r)));
-    if (!before.length) continue;
-    const delta = before.reduce((n, r) => T.add(n, r.duration), T.ZERO);
-    const key = `${delta.value}/${delta.timescale}`;
-    const grp = groups.get(key) ?? { delta, ids: [] };
-    grp.ids.push(c.id);
-    groups.set(key, grp);
-    moved++;
+    if (removed.some((r) => !T.lt(c.start, clipEnd(r)))) moved++;
   }
-  for (const g of [...groups.values()].sort((a, b) => T.cmp(a.delta, b.delta))) ops.push({ op: 'move_clips', args: { clipIds: g.ids, delta: T.sub(T.ZERO, g.delta) } });
-  return { ops, moved, deleted: clips.length };
+  // One core op closes the gap (ADR: ripple_delete_clips — exact undo, linked sound moves with its picture, a J-cut that would
+  // land before 0 is refused with its own wording). It names the V1 clips; selected clips elsewhere keep their gap (delete_clip).
+  const mainIds = removed.map((c) => c.id);
+  const elsewhere = clips.filter(({ clip }) => !gone.has(clip.id) && !(clip.type === 'media' && clip.linkGroupId && removed.some((r) => r.type === 'media' && r.linkGroupId === clip.linkGroupId)));
+  const rippled: OpCall[] = [...elsewhere.map(({ clip }) => ({ op: 'delete_clip', args: { clipId: clip.id } })), { op: 'ripple_delete_clips', args: { clipIds: mainIds } }];
+  return { ops: rippled, moved, deleted: clips.length };
 }
 /**
  * Delete the selection in one transaction (one undo), with an undo toast. `keepGap` (Shift+Delete) never ripples; Delete
