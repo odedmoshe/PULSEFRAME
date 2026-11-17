@@ -13,6 +13,7 @@ import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type 
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
 import { Player } from '../player.ts';
+import { addAssetArgs, dropAssetArgs } from './placement.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -438,22 +439,28 @@ export class Editor {
    * The linked sound of a picture file goes to the sound target track, if one is chosen.
    */
   dropAsset(assetId: string, frame: number, trackId: string | null) {
-    const d = this.state.doc, a = d?.assets[assetId];
-    if (!d || !a || a.kind === 'lut') return Promise.resolve(null); // a colour table is applied as an effect, never placed
-    const picture = !!a.video || a.kind === 'image';
-    const tr = trackId ? d.sequences[d.mainSequenceId]!.tracks.find((t) => t.id === trackId) : undefined;
-    const fits = !!tr && !tr.locked && tr.kind === (picture ? 'video' : 'audio');
-    const au = this.target('audio');
-    return this.commit([{ op: 'add_clip', args: { assetId, start: T.frameTime(Math.max(0, frame), this.rate), ...(fits ? { trackId: tr!.id } : {}), ...(picture && a.audio && au ? { audioTrackId: au } : {}) } }], 'Add clip');
+    const a = this.state.doc?.assets[assetId];
+    if (!a || a.kind === 'lut') return Promise.resolve(null); // a colour table is applied as an effect, never placed
+    const start = T.frameTime(Math.max(0, frame), this.rate);
+    // decided when this write's turn comes: the sound target is named only while it is free there (see placement.ts)
+    return this.commit(() => {
+      const d = this.state.doc;
+      const args = d ? dropAssetArgs(d, assetId, { start, trackId, audioTarget: this.target('audio') }) : null;
+      return args ? [{ op: 'add_clip', args }] : null;
+    }, 'Add clip');
   }
   addAsset(assetId: string) {
-    const a = this.state.doc?.assets[assetId];
-    if (a?.kind === 'lut') return Promise.resolve(null); // a colour table is applied as an effect, never placed
-    const picture = !!a && (!!a.video || a.kind === 'image'), v = this.target('video'), au = this.target('audio');
-    // target tracks: the picture (or a sound-only file) goes to its target, the linked sound of a picture file to the sound target
-    const where = picture ? { ...(v ? { trackId: v } : {}), ...(au && a?.audio ? { audioTrackId: au } : {}) } : au ? { trackId: au } : {};
-    // a picture goes after what is already there; a sound-only file (music, a recording) starts at the playhead, on a sound track that is free there
-    return this.commit([{ op: 'add_clip', args: { assetId, start: picture ? this.appendPoint() : this.playhead, ...where } }], 'Add clip');
+    if (this.state.doc?.assets[assetId]?.kind === 'lut') return Promise.resolve(null); // a colour table is applied as an effect, never placed
+    const playhead = this.playhead; // where the user is now
+    // Target tracks: the picture goes to the picture target; the sound (a sound-only file, or the linked sound of a picture file)
+    // to the sound target while that track is free there. A picture goes after what is already there; a sound-only file (music,
+    // a recording) starts at the playhead. Where exactly is decided when this write's turn comes, from the document as it is
+    // then: pressing + twice must not put the second sound on top of the first (an occupied sound target is not named, so the
+    // server places the sound on a free sound track).
+    return this.commit(() => {
+      const d = this.state.doc;
+      return d ? [{ op: 'add_clip', args: addAssetArgs(d, assetId, { appendPoint: this.appendPoint(), playhead, videoTarget: this.target('video'), audioTarget: this.target('audio') }) }] : null;
+    }, 'Add clip');
   }
   async addText() {
     const rate = this.rate;

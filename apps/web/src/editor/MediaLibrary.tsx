@@ -4,72 +4,64 @@ import * as T from '@pulseframe/time';
 import { assetNotices, lutUsers, type Asset, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { peaksForColumns, pickWaveformLevel } from '../clipVisuals.math.ts';
+import { DerivativeLoader, thumbTileAt, type LoadedDerivative } from './mediaThumb.ts';
 import { ASSET_DRAG_TYPE, useEditorState } from './store.ts';
 import { InlineRename } from './InlineRename.tsx';
 import { MEDIA_STRINGS } from './media.strings.ts';
 import './mediaLibrary.css';
 
-interface ThumbMeta { tileWidth: number; tileHeight: number; columns: number; rows: number; frameIndices: number[] }
-interface WaveLevel { samplesPerBucket: number; buckets: number; byteOffset: number }
-interface WaveMeta { sampleRate: number; totalSamples: number; levels: WaveLevel[] }
-type Row = { kind: string; status: string; meta: any };
-type Loaded = { kind: 'thumbnails'; bitmap: ImageBitmap; meta: ThumbMeta } | { kind: 'waveform'; buffer: ArrayBuffer; meta: WaveMeta } | null;
+type Loaded = LoadedDerivative<ImageBitmap> | null;
 
-const RETRY_MS = [1000, 3000, 8000];
 const fmtDur = (s: number) => { const t = Math.max(0, Math.round(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Loads the ingest derivative that suits the asset (filmstrip or waveform), retrying a bounded number of times while it is being made. */
-function useDerivative(projectId: string, a: Asset, refreshKey: number): Loaded {
+/**
+ * Loads the ingest derivative that suits the asset (filmstrip or waveform). The card loads it once: `refreshKey` (bumped by a
+ * derivative event of ANY asset) only makes a card that is still waiting look at the state of its own asset, with a bounded
+ * number of retries while it is being made. The decoded filmstrip is closed when it is replaced and when the card goes away
+ * (rules and tests: mediaThumb.ts). `loaded` says what to render; `live` is what may be drawn right now: it never holds a
+ * closed picture, also between a replacement and the next render.
+ */
+function useDerivative(projectId: string, a: Asset, refreshKey: number): { loaded: Loaded; live: { readonly current: Loaded } } {
   const want = a.kind === 'video' && a.video ? 'thumbnails' : a.kind !== 'image' && a.audio ? 'waveform' : null;
   const [loaded, setLoaded] = useState<Loaded>(null);
+  const live = useRef<Loaded>(null);
+  const loader = useRef<DerivativeLoader<ImageBitmap> | null>(null);
+  const seen = useRef(refreshKey);
   useEffect(() => {
-    if (!want) return;
-    let dead = false; let timer: ReturnType<typeof setTimeout> | undefined; let bmp: ImageBitmap | null = null;
-    const base = `/api/v1/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(a.id)}/derivatives`;
-    const attempt = async (n: number) => {
-      let ok = false;
-      try {
-        const r = await fetch(base, { credentials: 'same-origin' });
-        if (r.ok) {
-          const row = ((await r.json()) as { derivatives: Row[] }).derivatives.find((d) => d.kind === want);
-          if (row?.status === 'not-applicable') return;
-          if (row?.status === 'ready') {
-            const b = await fetch(`${base}/${want}`, { credentials: 'same-origin' });
-            if (b.ok && !dead) {
-              if (want === 'thumbnails') { bmp = await createImageBitmap(await b.blob()); if (dead) { bmp.close(); return; } setLoaded({ kind: 'thumbnails', bitmap: bmp, meta: row.meta as ThumbMeta }); }
-              else setLoaded({ kind: 'waveform', buffer: await b.arrayBuffer(), meta: row.meta as WaveMeta });
-              ok = true;
-            }
-          }
-        }
-      } catch { /* try again below */ }
-      if (!ok && !dead && n < RETRY_MS.length) timer = setTimeout(() => void attempt(n + 1), RETRY_MS[n]);
-    };
-    void attempt(0);
-    return () => { dead = true; if (timer) clearTimeout(timer); };
-  }, [projectId, a.id, a.contentHash, want, refreshKey]);
-  return loaded;
+    const l = new DerivativeLoader<ImageBitmap>({
+      fetch: (url, signal) => fetch(url, { credentials: 'same-origin', signal }),
+      decode: (blob) => createImageBitmap(blob),
+      onChange: (v) => { live.current = v; setLoaded(v); },
+    });
+    loader.current = l;
+    return () => { loader.current = null; live.current = null; setLoaded(null); l.dispose(); };
+  }, []);
+  useEffect(() => { loader.current?.show(want ? { projectId, assetId: a.id, contentHash: a.contentHash, kind: want } : null); }, [projectId, a.id, a.contentHash, want]);
+  useEffect(() => { if (seen.current !== refreshKey) { seen.current = refreshKey; loader.current?.poke(); } }, [refreshKey]);
+  return { loaded, live };
 }
 
 function Thumb({ projectId, a, refreshKey }: { projectId: string; a: Asset; refreshKey: number }) {
-  const loaded = useDerivative(projectId, a, refreshKey);
+  const { loaded, live } = useDerivative(projectId, a, refreshKey);
   const canvas = useRef<HTMLCanvasElement>(null);
   const draw = (frac: number) => {
-    const c = canvas.current;
-    if (!c || !loaded) return;
+    const c = canvas.current, cur = live.current;
+    if (!c || !cur) return;
     const ctx = c.getContext('2d');
     if (!ctx) return;
-    if (loaded.kind === 'thumbnails') {
-      const m = loaded.meta; const n = m.frameIndices.length;
-      const i = Math.min(n - 1, Math.max(0, Math.floor(frac * n)));
-      c.width = m.tileWidth; c.height = m.tileHeight;
-      ctx.drawImage(loaded.bitmap, (i % m.columns) * m.tileWidth, Math.floor(i / m.columns) * m.tileHeight, m.tileWidth, m.tileHeight, 0, 0, m.tileWidth, m.tileHeight);
+    if (cur.kind === 'thumbnails') {
+      // The canvas takes the size of one tile, which has the aspect of the video; the stylesheet fits it into the 16:9 box (contain, on black).
+      const tile = thumbTileAt(cur.meta, frac);
+      if (c.width !== tile.width) c.width = tile.width;
+      if (c.height !== tile.height) c.height = tile.height;
+      ctx.drawImage(cur.bitmap, tile.sx, tile.sy, tile.width, tile.height, 0, 0, tile.width, tile.height);
+      c.setAttribute('data-frame', String(tile.index));
     } else {
       const W = 208, H = 117; c.width = W; c.height = H;
-      const m = loaded.meta;
+      const m = cur.meta;
       const level = pickWaveformLevel(m.levels, m.totalSamples, W);
-      const peaks = peaksForColumns({ view: new DataView(loaded.buffer), level, firstSample: 0, sampleCount: m.totalSamples, columns: W });
+      const peaks = peaksForColumns({ view: new DataView(cur.buffer), level, firstSample: 0, sampleCount: m.totalSamples, columns: W });
       ctx.fillStyle = '#d2e1ff'; const k = H / 2 / 32768;
       for (let x = 0; x < W; x++) { const top = Math.max(0, H / 2 - peaks[x * 2 + 1]! * k), bot = Math.min(H, H / 2 - peaks[x * 2]! * k); ctx.fillRect(x, top, 1, Math.max(1, bot - top)); }
     }
