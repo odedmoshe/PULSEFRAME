@@ -7,8 +7,8 @@
  *    2/255 for 99.9 % of samples), the same three hours into the timeline;
  *  - the confetti burst: centroid within 2 px of the closed form at 0.5 s, nothing left after 1.6 s;
  *  - the date stamp: segment mask IoU ≥ 0.95 against the model polygons at 16:9 and 9:16; text outside its alphabet is refused;
- *  - flash safety (ADR-0009): the flash analyser passes on a 3-second export of every overlay at its defaults and of speed lines
- *    at their extremes.
+ *  - flash safety (ADR-0009): the flash analyser passes on a 3-second export of every overlay at its defaults, of speed lines
+ *    at their extremes, and of snow at its extremes (largest flakes, top speed, full density: held by its speed limit).
  * CPU only: no graphics adapter is used or needed (these are Canvas2D effects).
  *   pnpm build && pnpm proof:overlays
  */
@@ -324,6 +324,9 @@ async function main() {
         ['snow at defaults', 'overlay.snow', {}], ['confetti at defaults', 'overlay.confetti', {}], ['confetti burst', 'overlay.confetti', { mode: 'burst' }], ['hearts at defaults', 'overlay.hearts', {}],
         ['bokeh at defaults', 'overlay.bokeh', {}], ['speed lines at defaults', 'overlay.speed-lines', {}], ['date stamp at defaults', 'stylize.date-stamp', {}],
         ['speed lines at their extremes (every number at its maximum)', 'overlay.speed-lines', { ...ext, focus: 1, x: 1, y: 1 }], ['speed lines at their extremes, sweeping the whole frame (focus 0)', 'overlay.speed-lines', { ...ext, focus: 0 }],
+        // snow at the settings that flashed before its speed limit (overlays.ts snowSpeedLimit): the largest flakes, and the mid size that flashed worst
+        ['snow at its extremes (largest flakes, top speed, full density and opacity)', 'overlay.snow', { size: 0.04, speed: 1, density: 1, amount: 1 }],
+        ['snow with mid-size flakes at top speed, full density and opacity, wind to the left', 'overlay.snow', { size: 0.018, speed: 1, density: 1, amount: 1, wind: -1 }],
       ];
       const pid = (await call('/projects', { name: 'overlays-flash', width: 640, height: 360 })).body.project.id as string;
       const assetId = await upload(pid, black360);

@@ -17,9 +17,13 @@
  *
  * Nothing here flashes (ADR-0009 decision 3: safe at the defaults): the bokeh twinkles at most ±15 % on smooth noise that
  * changes direction at most 0.4 times a second, and speed lines wander smoothly (rate ≤ 2/s) and are never re-drawn at random.
+ * Snow is safe at every setting its schema allows, by a speed limit (snowSpeedLimit): large bright flakes passing a point
+ * several times a second would make the cells they cross flash, so the snow falls no faster than the speed at which, on
+ * average, one flake able to change a flash-analyser cell by a whole step passes any cell per second.
  * Units: frame pixels, y down; angles in radians, clockwise on screen.
  */
 import type { BeatPosition } from '@pulseframe/core';
+import { FLASH_GRID } from './flashAnalysis.ts';
 import { hash32, musicHit, smoothNoise, unit32 } from './gpu.ts';
 
 /**
@@ -75,11 +79,16 @@ const confettiColour = (p: Params, x: number) => {
 };
 
 interface Kind { m: number; dir: [number, number]; size: number; speed: number; density: number; seed: number }
-function kindOf(type: string, p: Params): Kind | null {
+const norm = (x: number, y: number): [number, number] => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
+const snowDir = (p: Params) => norm(Math.max(-1, Math.min(1, num(p.wind, 0.1))), 1);
+/**
+ * The kind's lattice. With the frame size (W, H) the speed is the one drawn: for snow, never above snowSpeedLimit. Without it
+ * (cellSize, which needs only the size) the speed is left as given.
+ */
+function kindOf(type: string, p: Params, W?: number, H?: number): Kind | null {
   const seed = Math.round(num(p.seed, 1)), density = clamp01(num(p.density, 0.4)), speed = Math.max(0, num(p.speed, 0.1));
-  const norm = (x: number, y: number): [number, number] => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
   switch (type) {
-    case 'overlay.snow': return { m: 6, dir: norm(Math.max(-1, Math.min(1, num(p.wind, 0.1))), 1), size: num(p.size, 0.008), speed, density, seed };
+    case 'overlay.snow': return { m: 6, dir: snowDir(p), size: num(p.size, 0.008), speed: W !== undefined && H !== undefined ? Math.min(speed, snowSpeedLimit(p, W, H)) : speed, density, seed };
     case 'overlay.confetti': return { m: 6, dir: [0, 1], size: num(p.size, 0.014), speed, density, seed };
     case 'overlay.hearts': return { m: 6, dir: [0, -1], size: num(p.size, 0.035), speed, density, seed };
     case 'overlay.bokeh': return { m: 10, dir: norm(0.25, -1), size: num(p.size, 0.06), speed, density, seed };
@@ -92,14 +101,54 @@ export function cellSize(type: string, p: Params, H: number, l: 0 | 1 | 2): numb
   return k ? Math.max(H / 40, k.m * Math.max(0, k.size) * DEPTHS[l] * H) : H / 40;
 }
 
+/**
+ * Flash safety of snow at every setting (ADR-0009 decision 3, ADR-0011). The flash analyser (flashAnalysis.ts) divides the
+ * frame into FLASH_GRID × FLASH_GRID cells and counts, per cell, changes of its mean linear luminance by 0.1 or more; more
+ * than six in one second over a quarter of the cells of a window fails. A small flake changes a cell by a fraction of that
+ * step and many of them average out; a large bright one changes it by a whole step on its own, so large flakes passing a
+ * point more than about three times a second flash (the analyser flagged size 0.04 at speed 1 on black, and mid sizes
+ * 0.012–0.025 at speeds 0.6–1 in 9:16 and 16:9, worse on a grey background). Snow therefore keeps, per depth layer l:
+ *  - P_l, the most one flake can change the mean linear luminance of one cell (a × b = W/24 × H/24 pixels) over any
+ *    background: a pixel covered at opacity a changes its linear luminance by at most a (sRGB → linear is convex), so
+ *    P_l = α_l·min(1, DISC_LIGHT·r_l² / (a·b)) with α_l the flake's opacity and r_l its radius;
+ *  - F_l, how many of its flakes pass over a given cell per second on average: density / c_l² × v_l × (the cell's width
+ *    across the direction of fall + the flake's diameter), with v_l its speed and c_l its lattice cell;
+ *  - a weight min(1, P_l / SNOW_FLASH.step)³: a flake that can change a cell by a whole step (with the bound's margin)
+ *    counts as one possible flash, a fainter one steeply less (it takes several at once, which is rarer).
+ * The snow then falls no faster than the speed at which Σ_l F_l·weight_l = SNOW_FLASH.perSecond (one such flake per cell
+ * per second on average: about two transitions a second where six are allowed). The constants were set against
+ * FlashAnalyser on a grid of sizes, speeds, densities, opacities and winds, in 16:9, 9:16, 1:1, 2:1 and 1:2, on black and
+ * on two greys: with the limit, the busiest quarter of any analyser window saw at most four transitions a second (more
+ * than six fail). overlays.test.ts checks the extremes. At the defaults the limit is at least twice the default speed for
+ * every frame shape from 2:1 to 1:2 (three times in 9:16), so the look there is unchanged; only a frame taller than 1:2
+ * slows the default snow (1:3: 0.12 frame heights a second instead of 0.15). Otherwise it slows large or dense flakes
+ * asked to fall fast (the largest at full density and opacity: about 0.11 in 16:9, 0.16 in 9:16); a large flake falls slowly anyway.
+ */
+export const SNOW_FLASH = { step: 0.15, perSecond: 1 } as const;
+/** ∫ shapeAlpha('disc') dA in units of r²: the light of a flake at full opacity relative to its radius squared. */
+export const DISC_LIGHT = Math.PI * (0.35 * 0.35 + 2 * 0.65 * (0.35 * 0.5 + 0.65 * 0.15));
+/** The fastest snow with these parameters may fall in a frame of W × H pixels, in frame heights per second (Infinity: no limit). Pure. */
+export function snowSpeedLimit(p: Params, W: number, H: number): number {
+  const density = clamp01(num(p.density, 0.4)), size = Math.max(0, num(p.size, 0.008)), amount = clamp01(num(p.amount, 0.9));
+  if (!(density > 0) || !(size > 0) || !(amount > 0) || !(W > 0) || !(H > 0)) return Infinity;
+  const [dx, dy] = snowDir(p), a = W / FLASH_GRID, b = H / FLASH_GRID;
+  let perUnitSpeed = 0; // Σ F_l·weight_l at a speed of one frame height per second (F is proportional to the speed)
+  for (const l of [0, 1, 2] as const) {
+    const k = DEPTHS[l], r = size * k * H, c = cellSize('overlay.snow', p, H, l), alpha = amount * (0.45 + 0.55 * k);
+    const reach = Math.min(1, (DISC_LIGHT * r * r) / (a * b)) * alpha;
+    const passes = (density / (c * c)) * k * H * (a * Math.abs(dy) + b * Math.abs(dx) + 2 * r);
+    perUnitSpeed += passes * Math.min(1, reach / SNOW_FLASH.step) ** 3;
+  }
+  return perUnitSpeed > 0 ? SNOW_FLASH.perSecond / perUnitSpeed : Infinity;
+}
+
 /** One lattice site: the cell it belongs to and, if the cell holds one, its particle. */
 export interface LatticeSite { l: 0 | 1 | 2; i: number; j: number; /** cell side */ c: number; /** cell centre at this moment */ cx: number; cy: number; particle: Particle }
 
 /** The particle of cell (i, j) of layer l at timeline `seconds`, or null when the cell is empty. Pure. */
 export function latticeSite(type: string, p: Params, W: number, H: number, l: 0 | 1 | 2, i: number, j: number, seconds: number, beat: BeatPosition | null): LatticeSite | null {
-  const kind = kindOf(type, p);
+  const kind = kindOf(type, p, W, H);
   if (!kind) return null;
-  void W;
   const { seed, dir } = kind;
   if (!(u(seed, l, i, j, 0) < kind.density)) return null;
   const k = DEPTHS[l], c = cellSize(type, p, H, l), travel = seconds * kind.speed * k * H;
@@ -140,7 +189,7 @@ const wrapAngle = (a: number) => a - TAU * Math.floor(a / TAU);
 
 /** Every occupied site of the cells that meet the frame, far layer first. Pure. */
 export function latticeSites(type: string, p: Params, W: number, H: number, seconds: number, beat: BeatPosition | null): LatticeSite[] {
-  const kind = kindOf(type, p);
+  const kind = kindOf(type, p, W, H);
   if (!kind || !(kind.density > 0) || !(W > 0) || !(H > 0) || !Number.isFinite(seconds)) return [];
   const out: LatticeSite[] = [];
   for (const l of [0, 1, 2] as const) {

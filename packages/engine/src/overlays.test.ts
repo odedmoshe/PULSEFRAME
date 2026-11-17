@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, findEffect, paramRange, type BeatPosition, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { BURST, CENTRE_GAIN, DEPTHS, JITTER, OVERLAY_TYPES, SWAY, boundRadius, burstParticles, cellSize, latticeSite, latticeSites, overlayParticles, shapeAlpha, speedLines, wedgeCorners, type Particle } from './overlays.ts';
+import { BURST, CENTRE_GAIN, DEPTHS, JITTER, DISC_LIGHT, OVERLAY_TYPES, SNOW_FLASH, SWAY, boundRadius, burstParticles, cellSize, latticeSite, latticeSites, overlayParticles, shapeAlpha, snowSpeedLimit, speedLines, wedgeCorners, type Particle } from './overlays.ts';
 import { FlashAnalyser, flashCells } from './flashAnalysis.ts';
 import { evaluate } from './evaluate.ts';
 
@@ -9,9 +9,9 @@ const defaults = (type: string, over: Record<string, unknown> = {}) => findEffec
 const W = 1280, H = 720, FPS = 30;
 const ALL = [...OVERLAY_TYPES.map((t) => [t, {}] as const), ['overlay.confetti', { mode: 'burst' }] as const, ['overlay.bokeh', { shape: 'hexagon' }] as const];
 
-/** A coarse rasteriser of the model (source-over, or added light for the bokeh) on black, for the flash check. */
-function rasterise(parts: readonly Particle[], w: number, h: number, scale: number, add: boolean): Uint8ClampedArray {
-  const rgb = new Float64Array(w * h * 3), out = new Uint8ClampedArray(w * h * 4);
+/** A coarse rasteriser of the model (source-over, or added light for the bokeh) on black or on a flat grey `bg` (0…255), for the flash check. */
+function rasterise(parts: readonly Particle[], w: number, h: number, scale: number, add: boolean, bg = 0): Uint8ClampedArray {
+  const rgb = new Float64Array(w * h * 3).fill(bg), out = new Uint8ClampedArray(w * h * 4);
   for (const q of parts) {
     const R = boundRadius(q) * scale, x0 = Math.max(0, Math.floor(q.x * scale - R)), x1 = Math.min(w - 1, Math.ceil(q.x * scale + R)), y0 = Math.max(0, Math.floor(q.y * scale - R)), y1 = Math.min(h - 1, Math.ceil(q.y * scale + R));
     const col = [parseInt(q.colour.slice(1, 3), 16), parseInt(q.colour.slice(3, 5), 16), parseInt(q.colour.slice(5, 7), 16)];
@@ -242,6 +242,56 @@ describe('overlay model (ADR-0011)', () => {
     const p = defaults('overlay.snow', { density: 1, size: 0.04, amount: 1 });
     const report = flashVerdict((t) => (Math.round(t * FPS) % 4 < 2 ? rasterise(overlayParticles('overlay.snow', p, W, H, t, t, null), fw, fh, scale, false) : new Uint8ClampedArray(fw * fh * 4).fill(255).map((v, i) => (i % 4 === 3 ? 255 : 0))), 3, fw, fh);
     expect(report.verdict).toBe('fail');
+  }, 120_000);
+  it('snow speed limit: far above the default speed for every frame shape from 2:1 to 1:2, so the defaults look as they did', () => {
+    const p = defaults('overlay.snow');
+    for (const [w, h] of [[2560, 1280], [2560, 1080], [1920, 1080], [1440, 1080], [1080, 1080], [1080, 1350], [1080, 1920], [1080, 2160], [320, 180], [180, 320]] as const) {
+      expect(snowSpeedLimit(p, w, h), `${w}×${h}`).toBeGreaterThan(2 * Number(p.speed));
+      // the drawn speed is the asked one: a cell centre moves on by speed·k·H per second along the direction of fall
+      const s0 = latticeSites('overlay.snow', p, w, h, 2, null)[0]!, s1 = latticeSite('overlay.snow', p, w, h, s0.l, s0.i, s0.j, 3, null)!;
+      expect(Math.hypot(s1.cx - s0.cx, s1.cy - s0.cy)).toBeCloseTo(Number(p.speed) * DEPTHS[s0.l] * h, 6);
+    }
+    // the light of a flake the limit assumes is that of the drawn disc
+    let light = 0;
+    for (let i = 0; i < 20000; i++) { const r = (i + 0.5) / 20000; light += (shapeAlpha('disc', r, 0) * 2 * Math.PI * r) / 20000; }
+    expect(DISC_LIGHT).toBeCloseTo(light, 6);
+    expect(snowSpeedLimit(defaults('overlay.snow', { density: 0 }), W, H)).toBe(Infinity);
+    expect(snowSpeedLimit(defaults('overlay.snow', { amount: 0 }), W, H)).toBe(Infinity);
+  });
+
+  it('snow speed limit: below it the snow falls as asked, above it at the limit; the limit falls as flakes grow brighter, larger or denser', () => {
+    const big = defaults('overlay.snow', { size: 0.04, density: 1, amount: 1, speed: 1 });
+    const lim = snowSpeedLimit(big, W, H);
+    expect(lim).toBeGreaterThan(0);
+    expect(lim).toBeLessThan(0.5); // active at the extremes
+    // at or above the limit the particles are those at the limit; below it the speed is untouched
+    expect(overlayParticles('overlay.snow', big, W, H, 4.2, 0, null)).toEqual(overlayParticles('overlay.snow', { ...big, speed: lim }, W, H, 4.2, 0, null));
+    const slow = { ...big, speed: lim / 2 }, s0 = latticeSites('overlay.snow', slow, W, H, 1, null)[0]!, s1 = latticeSite('overlay.snow', slow, W, H, s0.l, s0.i, s0.j, 2, null)!;
+    expect(Math.hypot(s1.cx - s0.cx, s1.cy - s0.cy)).toBeCloseTo((lim / 2) * DEPTHS[s0.l] * H, 6);
+    // monotone in what makes a flake able to flash
+    const at = (over: Record<string, unknown>) => snowSpeedLimit(defaults('overlay.snow', over), W, H);
+    expect(at({ density: 1 })).toBeLessThan(at({ density: 0.5 }));
+    expect(at({ amount: 1 })).toBeLessThan(at({ amount: 0.5 }));
+    expect(at({ size: 0.02 })).toBeLessThan(at({ size: 0.008 }));
+    // it depends on the frame's shape, not on its size in pixels (the analyser's cells are fractions of the frame)
+    expect(snowSpeedLimit(defaults('overlay.snow', { size: 0.012, density: 1 }), 1920, 1080) / at({ size: 0.012, density: 1 })).toBeCloseTo(1, 9);
+    // one flake able to flash per cell per second at most: a third of the analyser's limit of three flashes a second
+    expect(SNOW_FLASH.perSecond).toBe(1);
+  });
+
+  // ADR-0009: snow is safe at every setting its schema allows. The extremes (largest flakes, top speed, full density and
+  // opacity, either wind) and the mid sizes that flashed worst without the limit, in 16:9 and 9:16, on black and on grey
+  // (a translucent flake changes a grey pixel's linear luminance more than a black one's).
+  const snowExtremes: [number, number, Record<string, unknown>, number][] = [];
+  for (const [w, h] of [[W, H], [H, W]] as const) {
+    for (const wind of [-1, 0, 1]) for (const bg of [0, 90]) snowExtremes.push([w, h, { size: 0.04, speed: 1, density: 1, amount: 1, wind }, bg]);
+    for (const size of [0.008, 0.012, 0.018, 0.025]) snowExtremes.push([w, h, { size, speed: 1, density: 1, amount: 1 }, 90]);
+    snowExtremes.push([w, h, { size: 0.04, speed: 1, density: 0.5, amount: 1 }, 0]);
+  }
+  for (const [w, h, over, bg] of snowExtremes) it(`flash safety: snow ${JSON.stringify(over)} in ${w}×${h} on ${bg ? 'grey' : 'black'} passes the flash analyser`, () => {
+    const p = defaults('overlay.snow', over), sc = 162 / Math.min(w, h), sw = Math.round(w * sc), sh = Math.round(h * sc);
+    const report = flashVerdict((t) => rasterise(overlayParticles('overlay.snow', p, w, h, t, t, null), sw, sh, sc, false, bg), 3, sw, sh);
+    expect(report.verdict, JSON.stringify(report.ranges)).toBe('pass');
   }, 120_000);
   const ext = { amount: 1, lines: 240, thickness: 2, rate: 2, reach: 1 };
   for (const over of [{}, { ...ext, focus: 1, x: 1, y: 1 }, { ...ext, focus: 0 }]) it(`flash safety: speed lines ${JSON.stringify(over)} pass the flash analyser`, () => {
