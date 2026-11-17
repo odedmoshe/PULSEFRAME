@@ -198,8 +198,10 @@ export function GalleryHost() {
   const { editor, state } = useEditorState();
   const g = state.gallery;
   const sel = editor.selected;
+  // what had the focus when the request came, read while rendering it (the gallery's own effects move the focus into it)
   const opener = useRef<HTMLElement | null>(null);
-  useEffect(() => { if (g) opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }, [g?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  const seen = useRef<number | null>(null);
+  if (g && seen.current !== g.n) { seen.current = g.n; opener.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null; }
   // nothing selected any more (the clip was deleted elsewhere): the request lapses
   useEffect(() => { if (g && !sel) editor.closeGallery(); }, [g, sel, editor]);
   if (!g || !sel) return null;
