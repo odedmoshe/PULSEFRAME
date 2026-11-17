@@ -5,8 +5,9 @@
  * original, every project size and every format. Machine samples enter only through the internal op attach_motion_track.
  * This file must not import ./schema.ts at runtime (schema.ts imports it), like effects.ts.
  *
- * Contract file of the tracking wave: the types, constants and schemas are final; the four function bodies below are
- * still to be written (W1) and throw until then. Nothing calls them yet.
+ * Contract file of the tracking wave: the types, constants and schemas are shared by the core, engine, server and editor
+ * work. The sample functions below are pure and use only integer arithmetic on the stored samples (or plain float maths on
+ * render quantities), so a frame drawn on its own equals the same frame drawn in sequence (SPEC §8).
  */
 import { z } from 'zod';
 
@@ -104,17 +105,122 @@ export interface FollowInfo { motionTrackId: string; state: FollowStateName; sou
 export interface TrackSample { x: number; y: number; s: number; q: number; st: number; outside: boolean }
 export interface TrackProblem { from: number; to: number; state: 'unknown' | 'weak' | 'lost' | 'reacquired' }
 
-/** Thrown by the bodies below until they are written (W1 of the tracking wave). */
-const notYet = (name: string): never => { throw new Error(`${name} is not implemented yet (ADR-0015, tracking wave W1)`); };
+/** Samples of a track (all arrays have this length; validate.ts holds them equal). */
+export const trackLength = (t: MotionTrack): number => t.x.length;
+/** One past the last source frame the track holds a sample for: samples cover [from, trackEnd). */
+export const trackEnd = (t: MotionTrack): number => t.from + t.x.length;
+/** Round half up of num/den for integers, den > 0 (exact: the operands are small integers). */
+export const roundHalfUp = (num: number, den: number): number => Math.floor((2 * num + den) / (2 * den));
 
-/** W1. Sample at source frame `frame`. Outside [from, from+n): the nearest end sample, outside=true. smooth>0: integer mean (round half up) of usable samples in [frame−smooth, frame+smooth]; a manual sample is returned exactly; no usable sample → the raw one. s = SIZE_UNIT for point tracks. */
-export function trackSampleAt(t: MotionTrack, frame: number, smooth = 0): TrackSample { void t; void frame; void smooth; return notYet('trackSampleAt'); }
-/** W1. Closing filter, pure, cached per track object (WeakMap): bad = unknown|lost (|weak when weakIsLost); dilate bad by H = ceil(fps/3) source frames each way, then clear good runs shorter than H+1 between bad runs. Index i ↔ frame from+i. */
-export function lossFlags(t: MotionTrack, fps: number, weakIsLost: boolean): Uint8Array { void t; void fps; void weakIsLost; return notYet('lossFlags'); }
-/** W1. Region geometry in layer units (see RedactRegionSchema); sample null = fixed region. */
-export function regionGeometry(r: RedactRegion, t: MotionTrack | null, sample: TrackSample | null): { x: number; y: number; width: number; height: number } { void r; void t; void sample; return notYet('regionGeometry'); }
-/** W1. Counts per state and maximal runs of unknown/weak/lost plus single reacquired frames, in source frames, ascending. */
-export function trackSummary(t: MotionTrack): { samples: number; counts: Record<TrackStateName, number>; problems: TrackProblem[] } { void t; return notYet('trackSummary'); }
+/**
+ * Sample at source frame `frame` (ADR-0015).
+ * - Outside [from, from+n): the nearest end sample, raw, with outside=true (nothing is extrapolated).
+ * - smooth > 0: x, y and s are the integer mean (round half up) of the USABLE samples (isUsable) in
+ *   [frame−smooth, frame+smooth] that lie inside the track; a manual sample is returned exactly; when no sample in the window is
+ *   usable, the raw one. q and st are always the sample's own.
+ * - s = SIZE_UNIT for point tracks.
+ */
+export function trackSampleAt(t: MotionTrack, frame: number, smooth = 0): TrackSample {
+  const n = trackLength(t);
+  const raw = frame - t.from;
+  const outside = raw < 0 || raw >= n;
+  const i = Math.min(n - 1, Math.max(0, raw));
+  const st = t.st[i]!, q = t.q[i]!;
+  const own: TrackSample = { x: t.x[i]!, y: t.y[i]!, s: t.s ? t.s[i]! : SIZE_UNIT, q, st, outside };
+  if (outside || smooth <= 0 || st === ST.manual) return own;
+  let sx = 0, sy = 0, ss = 0, count = 0;
+  for (let k = Math.max(0, i - smooth), last = Math.min(n - 1, i + smooth); k <= last; k++) {
+    if (!isUsable(t.st[k]!)) continue;
+    sx += t.x[k]!; sy += t.y[k]!; ss += t.s ? t.s[k]! : SIZE_UNIT; count++;
+  }
+  if (count === 0) return own;
+  return { x: roundHalfUp(sx, count), y: roundHalfUp(sy, count), s: roundHalfUp(ss, count), q, st, outside };
+}
+
+/** Half-width of the loss filter in SOURCE frames of the asset (fps = the asset's frame rate): ceil(fps/3), at least 1. */
+export const lossHalfWidth = (fps: number): number => Math.max(1, Math.ceil(fps / 3 - 1e-9));
+const lossCache = new WeakMap<MotionTrack, Map<string, Uint8Array>>();
+/**
+ * Which samples a privacy region treats as lost (1) or usable (0): a closing filter, so the loss fallback never blinks
+ * (ADR-0015; ADR-0009 photosensitivity). Index i is source frame from+i. All lengths are in SOURCE frames of the asset,
+ * H = ceil(fps/3) with fps the asset's frame rate (10 at 30 fps):
+ *  1. bad = unknown or lost (and weak when weakIsLost);
+ *  2. every bad sample is widened by H samples on each side (dilation);
+ *  3. every run of good samples shorter than H+1 is made bad. The frames before and after the track count as bad here (a
+ *     clip that shows them treats them as lost), so a short good run at either end of the track is cleared too.
+ * Result: every bad sample is flagged, every bad run between good runs is at least 2H+1 samples, and every good run is at
+ * least H+1 samples. On the timeline these are source frames: a clip at speed v shows them about v times faster, so at
+ * speed 4 and 30 fps the shortest good or bad stretch lasts about 2.5 to 2.75 timeline frames (the whole-picture fallback is
+ * always a blur, never a fill). Cached per track object: documents are not changed after commit; edits make new ones.
+ */
+export function lossFlags(t: MotionTrack, fps: number, weakIsLost: boolean): Uint8Array {
+  const key = `${fps}|${weakIsLost ? 1 : 0}`;
+  let byKey = lossCache.get(t);
+  const hit = byKey?.get(key);
+  if (hit) return hit;
+  const n = trackLength(t), H = lossHalfWidth(fps);
+  const out = new Uint8Array(n);
+  // 1-2: dilate. Walk once, remembering the last bad index; then once backwards for the other side.
+  let lastBad = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const st = t.st[i]!;
+    if (st === ST.unknown || st === ST.lost || (weakIsLost && st === ST.weak)) lastBad = i;
+    if (i - lastBad <= H) out[i] = 1;
+  }
+  let nextBad = Infinity;
+  for (let i = n - 1; i >= 0; i--) {
+    const st = t.st[i]!;
+    if (st === ST.unknown || st === ST.lost || (weakIsLost && st === ST.weak)) nextBad = i;
+    if (nextBad - i <= H) out[i] = 1;
+  }
+  // 3: clear short good runs (the ends of the track count as bad)
+  for (let i = 0; i < n; ) {
+    if (out[i]) { i++; continue; }
+    let j = i;
+    while (j < n && !out[j]) j++;
+    if (j - i < H + 1) out.fill(1, i, j);
+    i = j;
+  }
+  if (!byKey) { byKey = new Map(); lossCache.set(t, byKey); }
+  byKey.set(key, out);
+  return out;
+}
+
+/**
+ * Region geometry in layer units (MaskSchema units: a fraction of the placed picture's width and height, centred on it).
+ * sample null (or a fixed region) = the region's own centre and size. See RedactRegionSchema for the three cases.
+ */
+export function regionGeometry(r: RedactRegion, t: MotionTrack | null, sample: TrackSample | null): { x: number; y: number; width: number; height: number } {
+  const k = 1 + r.pad;
+  if (!t || !sample || r.motionTrackId === null) return { x: r.x, y: r.y, width: r.width * k, height: r.height * k };
+  const x = sample.x / TRACK_UNIT - 0.5 + r.x, y = sample.y / TRACK_UNIT - 0.5 + r.y;
+  if (t.kind === 'region' && t.box) {
+    const s = sample.s / SIZE_UNIT;
+    return { x, y, width: (t.box.w / TRACK_UNIT) * s * k, height: (t.box.h / TRACK_UNIT) * s * k };
+  }
+  return { x, y, width: r.width * k, height: r.height * k };
+}
+
+/**
+ * Counts of samples per state, and the stretches to review: maximal runs of unknown, of weak and of lost samples, and each
+ * reacquired sample on its own, in source frames, ascending. A problem covers [from, to): `to` is one past its last frame.
+ */
+export function trackSummary(t: MotionTrack): { samples: number; counts: Record<TrackStateName, number>; problems: TrackProblem[] } {
+  const counts = Object.fromEntries(TRACK_STATES.map((s) => [s, 0])) as Record<TrackStateName, number>;
+  const problems: TrackProblem[] = [];
+  const n = trackLength(t);
+  for (let i = 0; i < n; ) {
+    const st = t.st[i]!;
+    const name = TRACK_STATES[st] ?? 'unknown';
+    if (name === 'reacquired') { counts.reacquired++; problems.push({ from: t.from + i, to: t.from + i + 1, state: 'reacquired' }); i++; continue; }
+    let j = i;
+    while (j < n && t.st[j] === st) j++;
+    counts[name] += j - i;
+    if (name === 'unknown' || name === 'weak' || name === 'lost') problems.push({ from: t.from + i, to: t.from + j, state: name });
+    i = j;
+  }
+  return { samples: n, counts, problems };
+}
 
 const SetSample = z.object({ frame: Int.min(0), x: Pos, y: Pos, s: Size.optional() }).strict();
 const Span = z.object({ from: Int.min(0), to: Int.min(0) }).strict();
