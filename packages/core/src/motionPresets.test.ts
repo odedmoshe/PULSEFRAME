@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { MOTION_PRESETS, motionKeys, previousMotion, type MotionContext, type MotionKey, type MotionPreset, type MotionProperty } from './motionPresets.ts';
-import { applyTransaction, createProject, findClip, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, createProject, findClip, transformAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 import * as T from '@pulseframe/time';
 import { sampleKeyframes } from './animation.ts';
 
@@ -196,7 +196,7 @@ describe('apply_motion_preset: a new entrance replaces the previous entrance, a 
     expect(validateProject(e)).toEqual([]);
   });
 
-  it('every pair of entrances and every pair of exits: the second alone is what is left, whatever else is on the clip', () => {
+  it('every pair of entrances and every pair of exits: the second alone is what is left, also with a motion at the other end of the clip', () => {
     for (const transform of [{}, { x: 0.25, y: -0.1, scale: 1.3, rotation: 12.5, opacity: 0.5 }] as Record<string, number>[]) {
       const { doc, clipId } = title(120, transform);
       const exit = motion(doc, clipId, 'motion.out.spin'), entrance = motion(doc, clipId, 'motion.in.spin');
@@ -272,10 +272,204 @@ describe('apply_motion_preset: a new entrance replaces the previous entrance, a 
           for (const [rest, amount] of [[RESTS[0]!, 1], [RESTS[3]!, 0.5], [RESTS[3]!, 2]] as const) {
             const keys = placed(motionKeys(p.id, { totalFrames, rest, amount, ...(frames ? { frames } : {}) }));
             const label = `${p.id}, ${totalFrames} frames, length ${frames ?? 'default'}, amount ${amount}`;
-            if (p.kind !== 'in') expect(previousMotion('in', keys), label).toEqual({});
+            if (p.kind !== 'in') expect(previousMotion('in', keys, totalFrames, rest), label).toEqual({});
             // the one known look-alike: the unfinished last cycle of an opacity loop ends in two linear keys going down, like a fade out
-            if (p.kind !== 'out' && !(p.kind === 'loop' && p.properties.includes('opacity'))) expect(previousMotion('out', keys), label).toEqual({});
-            if (p.kind === 'in' || p.kind === 'out') expect(previousMotion(p.kind, keys), label).toEqual(Object.fromEntries(Object.entries(keys).map(([prop, k]) => [prop, k.length])));
+            if (p.kind !== 'out' && !(p.kind === 'loop' && p.properties.includes('opacity'))) expect(previousMotion('out', keys, totalFrames, rest), label).toEqual({});
+            if (p.kind === 'in' || p.kind === 'out') expect(previousMotion(p.kind, keys, totalFrames, rest), label).toEqual(Object.fromEntries(Object.entries(keys).map(([prop, k]) => [prop, k.length])));
           }
   });
+
+  // ---- what a replaced entrance or exit must leave alone ----
+  /** The clip's transform at a whole clip-local frame, as the evaluator samples it. */
+  const at = (doc: ProjectDocument, clipId: string, frame: number) => transformAt(findClip(doc, clipId)!.clip, f(frame));
+  const key = (doc: ProjectDocument, clipId: string, property: string, frame: number, value: number, easing?: string) => tx(doc, [{ op: 'set_keyframe', args: { clipId, property, time: f(frame), value, ...(easing ? { easing } : {}) } }]).doc;
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+
+  it('replacing an entrance keeps the key that later animation on the same property starts from (slow zoom, hand-made move)', () => {
+    // a slow zoom over the whole clip, an entrance over its first frames, then a different entrance: the zoom goes on after the entrance
+    const a = title(240);
+    const zoomed = motion(motion(a.doc, a.clipId, 'motion.move.ken-burns-in'), a.clipId, 'motion.in.zoom-in');
+    const faded = motion(zoomed, a.clipId, 'motion.in.fade');
+    expect(keysOf(faded, a.clipId).scale).toEqual([[18, 1, 'linear'], [240, 1.18, 'linear']]);
+    for (let g = 18; g <= 240; g++) expect(at(faded, a.clipId, g).scale, `frame ${g}`).toBe(at(zoomed, a.clipId, g).scale);
+    for (let g = 0; g < 18; g++) expect(at(faded, a.clipId, g).scale, `frame ${g}`).toBe(1); // the old entrance is gone: the title rests until the zoom goes on
+    expect(keysOf(faded, a.clipId).opacity).toEqual([[0, 0, 'linear'], [15, 1, 'linear']]);
+    // a hand-made grow after the entrance
+    const b = title(150);
+    const grown = key(motion(b.doc, b.clipId, 'motion.in.zoom-in'), b.clipId, 'scale', 100, 1.5);
+    const after = motion(grown, b.clipId, 'motion.in.fade');
+    expect(keysOf(after, b.clipId).scale).toEqual([[18, 1, 'linear'], [100, 1.5, 'linear']]);
+    for (const g of [18, 20, 60, 100, 149]) expect(at(after, b.clipId, g).scale, `frame ${g}`).toBe(at(grown, b.clipId, g).scale);
+    // the same for an exit: a hand-made shrink that ends where the exit starts
+    const c = title(150);
+    const shrunk = key(key(motion(c.doc, c.clipId, 'motion.out.zoom-out'), c.clipId, 'scale', 40, 1.4), c.clipId, 'scale', 0, 1.4);
+    const out = motion(shrunk, c.clipId, 'motion.out.fade');
+    expect(keysOf(out, c.clipId).scale).toEqual([[0, 1.4, 'linear'], [40, 1.4, 'linear'], [132, 1, 'linear']]); // the key the shrink ends on stays; the exit's easing on it went with the exit
+    for (const g of [0, 40, 90, 132]) expect(at(out, c.clipId, g).scale, `frame ${g}`).toBe(at(shrunk, c.clipId, g).scale);
+    for (const g of [133, 140, 150]) expect(at(out, c.clipId, g).scale, `frame ${g}`).toBe(1);
+  });
+
+  it('an entrance and an exit that meet: replacing either leaves the other playing, not the title frozen where the replaced one ended', () => {
+    const { doc, clipId } = title(48);
+    // exit first, then the entrance (they meet at frame 24), then another entrance
+    const a = motion(motion(doc, clipId, 'motion.out.spin'), clipId, 'motion.in.spin');
+    const a2 = motion(a, clipId, 'motion.in.fade');
+    expect(at(a2, clipId, 24)).toMatchObject({ rotation: 0, scale: 1 });
+    for (let g = 24; g <= 48; g++) for (const p of PROPS) expect(at(a2, clipId, g)[p], `${p} at ${g}`).toBe(at(a, clipId, g)[p]);
+    for (let g = 0; g < 24; g++) expect(at(a2, clipId, g), `frame ${g}`).toMatchObject({ rotation: 0, scale: 1 });
+    // entrance first, then the exit, then another exit
+    const b = motion(motion(doc, clipId, 'motion.in.spin'), clipId, 'motion.out.spin');
+    const b2 = motion(b, clipId, 'motion.out.fade');
+    expect(keysOf(b2, clipId).rotation).toEqual(keysOf(motion(doc, clipId, 'motion.in.spin'), clipId).rotation); // the entrance is as it was made, easing of its last key included
+    for (let g = 0; g <= 24; g++) for (const p of PROPS) expect(at(b2, clipId, g)[p], `${p} at ${g}`).toBe(at(b, clipId, g)[p]);
+    for (let g = 25; g <= 48; g++) expect(at(b2, clipId, g), `frame ${g}`).toMatchObject({ rotation: 0, scale: 1 });
+    // and the other two orders
+    const a3 = motion(a, clipId, 'motion.out.fade');
+    for (let g = 0; g <= 24; g++) for (const p of PROPS) expect(at(a3, clipId, g)[p], `${p} at ${g}`).toBe(at(a, clipId, g)[p]);
+    for (let g = 25; g <= 48; g++) expect(at(a3, clipId, g), `frame ${g}`).toMatchObject({ rotation: 0, scale: 1 });
+    const b3 = motion(b, clipId, 'motion.in.fade');
+    for (let g = 24; g <= 48; g++) for (const p of PROPS) expect(at(b3, clipId, g)[p], `${p} at ${g}`).toBe(at(b, clipId, g)[p]);
+    for (let g = 0; g < 24; g++) expect(at(b3, clipId, g), `frame ${g}`).toMatchObject({ rotation: 0, scale: 1 });
+  });
+
+  it('on a short title, where the exit touches or overlaps the entrance, a different entrance still leaves nothing of the first one', () => {
+    // 36 frames: zoom in (18) and zoom out (18) meet in the middle
+    const a = title(36);
+    const both = motion(motion(a.doc, a.clipId, 'motion.in.zoom-in'), a.clipId, 'motion.out.zoom-out');
+    expect(keysOf(motion(both, a.clipId, 'motion.in.fade'), a.clipId)).toEqual({
+      scale: [[18, 1, 'ease-in'], [36, 0.6, 'linear']],
+      opacity: [[0, 0, 'linear'], [15, 1, 'linear'], [18, 1, 'linear'], [29, 1, 'linear'], [36, 0, 'linear']],
+    });
+    // 24 frames: a spin as long as the title, and a fade out that overwrote the end of its opacity
+    const b = title(24);
+    const spun = motion(motion(b.doc, b.clipId, 'motion.in.spin'), b.clipId, 'motion.out.fade');
+    expect(keysOf(motion(spun, b.clipId, 'motion.in.fade'), b.clipId)).toEqual({ opacity: [[0, 0, 'linear'], [15, 1, 'linear'], [24, 0, 'linear']] });
+    // 30 frames: zoom in and zoom out overlap on both of their properties
+    const c = title(30);
+    const over = motion(motion(c.doc, c.clipId, 'motion.in.zoom-in'), c.clipId, 'motion.out.zoom-out');
+    expect(keysOf(over, c.clipId).scale).toEqual([[0, 0.6, 'ease-out'], [12, 1, 'ease-in'], [30, 0.6, 'linear']]); // the precondition: the exit took over from frame 12
+    const swapped = keysOf(motion(over, c.clipId, 'motion.in.fade', { frames: 10 }), c.clipId);
+    expect(swapped.scale).toEqual([[12, 1, 'ease-in'], [30, 0.6, 'linear']]);
+    expect(swapped.opacity).toEqual([[0, 0, 'linear'], [10, 1, 'linear'], [12, 1, 'linear'], [23, 1, 'linear'], [30, 0, 'linear']]);
+    // 15 frames: the fade out is as long as the title and replaced the spin's opacity altogether
+    const e = title(15);
+    const whole = motion(motion(e.doc, e.clipId, 'motion.in.spin'), e.clipId, 'motion.out.fade');
+    expect(Object.keys(keysOf(motion(whole, e.clipId, 'motion.in.slide-left', { frames: 5 }), e.clipId)).sort()).toEqual(['opacity', 'x']);
+    // ... also when the first entrance used one property besides opacity
+    const zoom = motion(motion(e.doc, e.clipId, 'motion.in.zoom-in'), e.clipId, 'motion.out.fade');
+    expect(keysOf(zoom, e.clipId)).toEqual({ scale: [[0, 0.6, 'ease-out'], [15, 1, 'linear']], opacity: [[0, 1, 'linear'], [15, 0, 'linear']] }); // the precondition
+    expect(Object.keys(keysOf(motion(zoom, e.clipId, 'motion.in.slide-left', { frames: 5 }), e.clipId)).sort()).toEqual(['opacity', 'x']);
+    // ... but a loop under such an entrance is not taken for part of it, not even when the end of the clip cuts it down to
+    // two keys that look like a slide or a zoom: a loop starts from the resting value, an entrance arrives at it
+    for (const loop of ['motion.loop.heartbeat', 'motion.loop.pendulum', 'motion.loop.bounce']) {
+      for (const frames of [8, 15]) {
+        const t = title(frames);
+        const under = motion(motion(motion(t.doc, t.clipId, loop), t.clipId, 'motion.in.fade'), t.clipId, 'motion.out.fade');
+        const after = keysOf(motion(under, t.clipId, 'motion.in.fade', { frames: 5 }), t.clipId);
+        for (const p of ['x', 'y', 'scale', 'rotation']) expect(after[p], `${loop} on ${frames} frames: ${p}`).toEqual(keysOf(under, t.clipId)[p]);
+      }
+    }
+    // and the mirror: an entrance applied after the exit, overlapping it, then a different exit
+    const m = title(30);
+    const late = motion(motion(m.doc, m.clipId, 'motion.out.spin'), m.clipId, 'motion.in.zoom-in');
+    const mirrored = keysOf(motion(late, m.clipId, 'motion.out.fade', { frames: 10 }), m.clipId);
+    expect(mirrored.rotation).toBeUndefined();
+    expect(mirrored.scale).toEqual([[0, 0.6, 'ease-out'], [18, 1, 'linear']]);
+  });
+
+  it('hand-made opacity keys in the middle of the clip are not an entrance or an exit', () => {
+    const { doc, clipId } = title(300);
+    // a dim from frame 100 to 130, then an exit 150 frames later
+    const dim = key(key(doc, clipId, 'opacity', 100, 1), clipId, 'opacity', 130, 0.3);
+    const withExit = motion(dim, clipId, 'motion.out.slide-left');
+    expect(keysOf(withExit, clipId).opacity).toEqual([[100, 1, 'linear'], [130, 0.3, 'linear'], [282, 1, 'linear'], [293, 1, 'linear'], [300, 0, 'linear']]);
+    for (const g of [0, 100, 115, 130]) expect(at(withExit, clipId, g).opacity, `frame ${g}`).toBe(at(dim, clipId, g).opacity);
+    // a brighten from frame 100 to 130, then an entrance
+    const brighten = key(key(doc, clipId, 'opacity', 100, 0.3), clipId, 'opacity', 130, 1);
+    const withEntrance = motion(brighten, clipId, 'motion.in.slide-left');
+    expect(keysOf(withEntrance, clipId).opacity).toEqual([[0, 0, 'linear'], [7, 1, 'linear'], [18, 1, 'linear'], [100, 0.3, 'linear'], [130, 1, 'linear']]);
+    // the same keys with other motions around them, and replaced twice
+    const twice = motion(motion(motion(dim, clipId, 'motion.in.fade'), clipId, 'motion.out.fade'), clipId, 'motion.out.zoom-out');
+    expect(keysOf(twice, clipId).opacity!.filter((k) => k[0] === 100 || k[0] === 130)).toEqual([[100, 1, 'linear'], [130, 0.3, 'linear']]);
+    // a hand-made fade from the very first frame IS an entrance (it cannot be told from one), and is replaced
+    const handIn = key(key(doc, clipId, 'opacity', 0, 0.2), clipId, 'opacity', 20, 1);
+    expect(keysOf(motion(handIn, clipId, 'motion.in.slide-left'), clipId).opacity).toEqual([[0, 0, 'linear'], [7, 1, 'linear'], [18, 1, 'linear']]);
+  });
+
+  it('an entrance or exit made by animate_clip is replaced as well', () => {
+    const { doc, clipId } = title(120);
+    for (const name of ['fade', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right']) {
+      for (const frames of [undefined, 30]) {
+        const entered = tx(doc, [{ op: 'animate_clip', args: { clipId, in: name, ...(frames ? { inFrames: frames } : {}) } }]).doc;
+        expect(keysOf(motion(entered, clipId, 'motion.in.fade'), clipId), `in: ${name}`).toEqual({ opacity: [[0, 0, 'linear'], [15, 1, 'linear']] });
+        // (an exit of animate_clip also leaves a resting key on the first frame; it moves nothing, so compare what is played)
+        const left = motion(tx(doc, [{ op: 'animate_clip', args: { clipId, out: name, ...(frames ? { outFrames: frames } : {}) } }]).doc, clipId, 'motion.out.fade');
+        const fadeOnly = motion(doc, clipId, 'motion.out.fade');
+        for (let g = 0; g <= 120; g++) expect(at(left, clipId, g), `out: ${name}, frame ${g}`).toEqual(at(fadeOnly, clipId, g));
+        // both at once: each is replaced on its own and the other stays
+        const both = tx(doc, [{ op: 'animate_clip', args: { clipId, in: name, out: name } }]).doc;
+        const newIn = motion(both, clipId, 'motion.in.fade'), newOut = motion(both, clipId, 'motion.out.fade');
+        for (let g = 15; g <= 120; g++) for (const p of PROPS) expect(at(newIn, clipId, g)[p], `${name}: ${p} at ${g}`).toBe(at(both, clipId, g)[p]);
+        for (let g = 0; g <= 105; g++) for (const p of PROPS) expect(at(newOut, clipId, g)[p], `${name}: ${p} at ${g}`).toBe(at(both, clipId, g)[p]);
+        for (const p of ['x', 'y', 'scale'] as const) {
+          for (let g = 0; g <= 15; g++) expect(at(newIn, clipId, g)[p], `${name}: ${p} at ${g}`).toBe(at(doc, clipId, g)[p]);
+          for (let g = 105; g <= 120; g++) expect(at(newOut, clipId, g)[p], `${name}: ${p} at ${g}`).toBe(at(doc, clipId, g)[p]);
+        }
+      }
+    }
+    // entrance and exit of animate_clip that meet in the middle of a short title
+    const short = title(24);
+    const met = tx(short.doc, [{ op: 'animate_clip', args: { clipId: short.clipId, in: 'slide-left', out: 'pop' } }]).doc;
+    const changed = keysOf(motion(met, short.clipId, 'motion.in.fade', { frames: 6 }), short.clipId);
+    expect(changed.x).toBeUndefined();
+    expect(changed.scale).toEqual([[12, 1, 'ease-in'], [24, 0.6, 'linear']]);
+  });
+
+  it('whatever else is on the clip (a move or loop made before, an exit before or after, hand keys later on): a replaced entrance or exit changes nothing outside its own frames', () => {
+    const ins = MOTION_PRESETS.filter((p) => p.kind === 'in'), outs = MOTION_PRESETS.filter((p) => p.kind === 'out'), under = MOTION_PRESETS.filter((p) => p.kind === 'move' || p.kind === 'loop');
+    const id = (list: readonly MotionPreset[]) => fc.constantFrom(...list.map((p) => p.id));
+    const len = fc.constantFrom(undefined, 5, 10, 40);
+    fc.assert(fc.property(
+      fc.constantFrom('in' as const, 'out' as const), fc.constantFrom(15, 20, 24, 30, 36, 48, 60, 120, 240),
+      fc.option(id(under), { nil: undefined }), fc.constantFrom('none' as const, 'before' as const, 'after' as const),
+      fc.integer({ min: 0, max: 40 }), len, fc.integer({ min: 0, max: 40 }), len, fc.integer({ min: 0, max: 40 }), len,
+      fc.option(fc.tuple(fc.constantFrom(...PROPS), fc.double({ min: 0.1, max: 0.9, noNaN: true })), { nil: undefined }), fc.constantFrom(1, 0.5),
+      (kind, total, base, otherWhen, ai, aLen, bi, bLen, xi, xLen, hand, amount) => {
+        const mine = kind === 'in' ? ins : outs, others = kind === 'in' ? outs : ins;
+        const A = mine[ai % mine.length]!, B = mine[bi % mine.length]!, X = others[xi % others.length]!;
+        const span = (p: MotionPreset, n: number | undefined) => Math.min(total, n ?? p.defaultFrames);
+        const nA = span(A, aLen), nB = span(B, bLen), nX = span(X, xLen);
+        /** `u` frames in from this motion's own edge of the clip, as a clip-local frame */
+        const frame = (u: number) => (kind === 'in' ? u : total - u);
+        const { doc, clipId } = title(total, { x: 0.1, y: -0.05, scale: 1.2, rotation: 5, opacity: 0.8 });
+        const args = (n: number | undefined) => ({ ...(n ? { frames: n } : {}), amount });
+        let d = base ? motion(doc, clipId, base) : doc;
+        if (otherWhen === 'before') d = motion(d, clipId, X.id, args(xLen));
+        d = motion(d, clipId, A.id, args(aLen));
+        if (otherWhen === 'after') d = motion(d, clipId, X.id, args(xLen));
+        // a hand-made key further in than the motion (and not inside the motion at the other end: a hand edit there makes
+        // that motion unrecognisable, which is a stated limit), on any property
+        const reach = otherWhen === 'none' ? total : total - nX; // how far in from this edge the other motion begins
+        const handAt = hand ? nA + 1 + Math.floor(hand[1] * (total - nA - 1)) : -1;
+        if (hand && handAt > nA && handAt < reach) d = key(d, clipId, hand[0], frame(handAt), hand[0] === 'opacity' ? 0.5 : hand[0] === 'scale' ? 1.7 : hand[0] === 'rotation' ? 40 : 0.3);
+        const before = d;
+        const after = motion(before, clipId, B.id, args(bLen));
+        expect(validateProject(after)).toEqual([]);
+        const label = `${total} frames: ${base ?? '-'}, ${X.id} ${otherWhen} (${nX}), ${A.id} (${nA}) -> ${B.id} (${nB})${hand && handAt > nA && handAt < reach ? `, hand ${hand[0]} at ${handAt}` : ''}`;
+        for (const p of PROPS) {
+          const bUses = B.properties.includes(p), aUsed = A.properties.includes(p), xUses = otherWhen !== 'none' && X.properties.includes(p);
+          // (1) further in than the old motion nothing changes, and nowhere at all on a property neither motion uses.
+          //     (On its own properties a new motion that is longer than the old one, or that runs into the other end's motion,
+          //     overwrites what it covers, as it always did; that case is left out here.)
+          const from = !bUses ? (aUsed ? nA : 0) : aUsed && nB <= nA && !(xUses && nB > reach) ? nA : total + 1;
+          for (let u = from; u <= total; u++) if (!near(at(after, clipId, frame(u))[p], at(before, clipId, frame(u))[p])) throw new Error(`${label}: ${p} changed at frame ${frame(u)}: ${at(before, clipId, frame(u))[p]} -> ${at(after, clipId, frame(u))[p]}`);
+          // (2) where the old motion was and the new one is not, the property rests: nothing of the old motion is left.
+          if (!aUsed) continue;
+          const cutShort = otherWhen === 'after' && xUses && reach < nA; // the other motion took over from `reach`
+          const end = cutShort ? reach : nA, rest = at(before, clipId, frame(end))[p];
+          for (let u = bUses ? nB : 0; u <= end; u++) if (!near(at(after, clipId, frame(u))[p], rest)) throw new Error(`${label}: ${p} at frame ${frame(u)} is ${at(after, clipId, frame(u))[p]}, not at rest (${rest}): the old ${kind === 'in' ? 'entrance' : 'exit'} is still there`);
+        }
+      },
+    ), { numRuns: 2000 });
+  }, 120_000);
 });

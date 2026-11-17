@@ -663,7 +663,7 @@ defineOp({
 defineOp({
   name: 'apply_speed_curve',
   version: 1,
-  description: 'Give a clip a speed curve: a named shape such as hero (fast, a deep slow-down in the middle, fast again), bullet, montage, jump-cut, flash-in, flash-out, smooth-ramp, stutter, slow-down, build-up, wave, emphasis, surge or fast-forward, or a hand-made one from `points` (position in the clip 0–1 and the speed there; between two points the speed changes gradually). The clip is replaced by one clip per segment of the curve (and the same for its linked sound), each playing the source on without gaps or repeats at one speed or with a gradual change, so every time stays exact and each part can still be edited. The curve shows the same stretch of source as before, to within the rounding of each part to whole frames. The total length changes: by default the clips after it on the same tracks (and what is linked to them) move by the difference, and other tracks such as music stay where they are; with ripple=false nothing else moves and the new length must fit. Markers and hand-timed captions do not move. Sound is resampled with the picture, so its pitch follows the speed. A sound that crossfades into the next clip, or is crossfaded into, is refused: remove the crossfade first (set_audio_crossfade with duration 0). With includeLinked=false the clip is curved alone and is no longer linked to its other half.',
+  description: 'Give a clip a speed curve: a named shape such as hero (fast, a deep slow-down in the middle, fast again), bullet, montage, jump-cut, flash-in, flash-out, smooth-ramp, stutter, slow-down, build-up, wave, emphasis, surge or fast-forward, or a hand-made one from `points` (position in the clip 0–1 and the speed there; between two points the speed changes gradually). The clip is replaced by one clip per segment of the curve (and the same for its linked sound), each playing the source on without gaps or repeats at one speed or with a gradual change, so every time stays exact and each part can still be edited. The curve shows the same stretch of source as before, to within the rounding of each part to whole frames. The total length changes: by default the clips after it on the same tracks (and what is linked to them) move by the difference, and other tracks such as music stay where they are; with ripple=false nothing else moves and the new length must fit. Markers and hand-timed captions do not move. Sound is resampled with the picture, so its pitch follows the speed. A sound that plays on over the start of the next clip on its track, or whose start the previous clip plays over, is refused: remove the crossfade first (set_audio_crossfade with duration 0), or trim the earlier clip back if the overlap is not a crossfade. A sound layered wholly inside a longer one is not in the way. With includeLinked=false the clip is curved alone and is no longer linked to its other half (refused while that other half is on a locked track, since its link would have to be cleared).',
   args: z.object({
     clipId: z.string(),
     preset: z.enum(SPEED_CURVE_IDS).optional(),
@@ -682,17 +682,20 @@ defineOp({
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const lead = f.clip as MediaClip;
-    const targets = [{ track: f.track, clip: lead }, ...(a.includeLinked === false ? [] : linked(d, lead))];
+    // The other clips of its link group. A locked one stops the curve either way; the hint names includeLinked=false only where
+    // that is a way out (three or more in the group: the others stay linked to each other and nothing on the locked track changes).
+    const group: { track: Track; clip: MediaClip }[] = [];
+    if (lead.linkGroupId) for (const seq of Object.values(d.sequences)) for (const track of seq.tracks) for (const c of track.clips) if (c.type === 'media' && c.id !== lead.id && c.linkGroupId === lead.linkGroupId) group.push({ track, clip: c });
+    const lockedOne = group.find((g) => g.track.locked);
+    if (lockedOne && a.includeLinked !== false) throw new OpError('track_locked', `linked clip ${lockedOne.clip.id} is on locked track ${lockedOne.track.id}`, { trackId: lockedOne.track.id, clipId: lockedOne.clip.id }, group.length > 1 ? 'Unlock the track or pass includeLinked=false.' : 'Unlock the track first.');
+    const targets = [{ track: f.track, clip: lead }, ...(a.includeLinked === false ? [] : group)];
     // Curved on its own, the clip leaves its link group (its parts are linked to nothing). A partner that would be left alone
-    // in that group is unlinked too, as unlink_clip does, so no clip keeps a link id that points at nothing.
+    // in that group is unlinked too, as unlink_clip does, so no clip keeps a link id that points at nothing; like unlink_clip,
+    // that is refused while the partner's track is locked.
     let leftAlone: MediaClip | null = null;
-    if (a.includeLinked === false && lead.linkGroupId) {
-      const rest: { track: Track; clip: MediaClip }[] = [];
-      for (const seq of Object.values(d.sequences)) for (const track of seq.tracks) for (const c of track.clips) if (c.type === 'media' && c.id !== lead.id && c.linkGroupId === lead.linkGroupId) rest.push({ track, clip: c });
-      if (rest.length === 1) {
-        if (rest[0]!.track.locked) throw new OpError('track_locked', `linked clip ${rest[0]!.clip.id} is on locked track ${rest[0]!.track.id}, so it cannot be detached from this clip`, { trackId: rest[0]!.track.id, clipId: rest[0]!.clip.id }, 'Unlock the track first.');
-        leftAlone = rest[0]!.clip;
-      }
+    if (a.includeLinked === false && group.length === 1) {
+      if (lockedOne) throw new OpError('track_locked', `linked clip ${lockedOne.clip.id} is on locked track ${lockedOne.track.id}, so it cannot be detached from this clip`, { trackId: lockedOne.track.id, clipId: lockedOne.clip.id }, 'Unlock the track first.');
+      leftAlone = group[0]!.clip;
     }
     const span = toSourceSpan(lead, lead.duration); // source shown now; the curve shows this stretch
     const gradual = segments.some((sg) => sg.from !== sg.to);
@@ -703,13 +706,23 @@ defineOp({
       if (clip.keyframes || clip.volume || clip.effects?.some((e) => e.keyframes)) throw new OpError('incompatible', 'remove keyframes and volume keys first: they would not survive the division into parts', { clipId: clip.id });
       const i = track.clips.indexOf(clip), next = track.clips[i + 1];
       if (clip.transition || (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip)))) throw new OpError('incompatible', 'remove the transition at this clip first', { clipId: clip.id });
-      // A sound crossfade is an overlap: the earlier clip plays on over the start of the later one. Dividing either of them, or
-      // moving what follows the curve, would leave that overlap in the wrong place, so it is refused (as set_clip_reverse does).
+      // Sound may overlap sound on one track. Where one clip plays on over the start of the next (a crossfade made by
+      // set_audio_crossfade, what is left of one after a fade was cleared, or an overlap made by hand), dividing either of them or
+      // moving what follows the curve would leave that overlap in the wrong place: the later clip starts before the old end, so
+      // it would stay behind while the clips after it move. It is refused, as set_clip_reverse refuses a crossfade. A clip that
+      // lies wholly inside another (a sound layered over music) is not such an overlap and stays where it is.
       const end = clipEnd(clip);
-      const into = clip.fadeOut ? track.clips.find((o) => o.id !== clip.id && o.type === 'media' && o.fadeIn && T.lt(clip.start, o.start) && T.lt(o.start, end)) : undefined;
-      if (into) throw new OpError('incompatible', 'remove the crossfade into the next clip first', { clipId: clip.id, nextClipId: into.id }, 'Use set_audio_crossfade on the next clip with duration 0.');
-      const from = clip.fadeIn ? track.clips.find((o) => o.id !== clip.id && o.type === 'media' && o.fadeOut && T.lt(o.start, clip.start) && T.lt(clip.start, clipEnd(o))) : undefined;
-      if (from) throw new OpError('incompatible', 'remove the crossfade from the previous clip into this one first', { clipId: clip.id, previousClipId: from.id }, 'Use set_audio_crossfade on this clip with duration 0.');
+      const isCrossfade = (earlier: MediaClip, later: Clip) => !!earlier.fadeOut && T.eq(T.sub(clipEnd(earlier), earlier.fadeOut), later.start); // what set_audio_crossfade can remove
+      const into = track.clips.find((o) => o.id !== clip.id && o.type === 'media' && T.lt(clip.start, o.start) && T.lt(o.start, end) && T.lt(end, clipEnd(o)));
+      if (into) {
+        if (isCrossfade(clip, into)) throw new OpError('incompatible', 'remove the crossfade into the next clip first', { clipId: clip.id, nextClipId: into.id }, 'Use set_audio_crossfade on the next clip with duration 0.');
+        throw new OpError('incompatible', 'this clip plays on over the start of the next clip on its track; end the overlap first', { clipId: clip.id, nextClipId: into.id, overlapStart: into.start }, 'Trim the end of this clip back to overlapStart (trim_clip edge=end), or move one of the two clips to another track.');
+      }
+      const from = track.clips.find((o): o is MediaClip => o.id !== clip.id && o.type === 'media' && T.lt(o.start, clip.start) && T.lt(clip.start, clipEnd(o)) && T.lt(clipEnd(o), end));
+      if (from) {
+        if (isCrossfade(from, clip)) throw new OpError('incompatible', 'remove the crossfade from the previous clip into this one first', { clipId: clip.id, previousClipId: from.id }, 'Use set_audio_crossfade on this clip with duration 0.');
+        throw new OpError('incompatible', 'the previous clip on this track plays on over the start of this one; end the overlap first', { clipId: clip.id, previousClipId: from.id, overlapStart: clip.start }, 'Trim the end of the previous clip back to overlapStart (trim_clip edge=end), or move one of the two clips to another track.');
+      }
       if (!T.eq(clip.start, lead.start) || !T.eq(clip.duration, lead.duration) || !T.eq(toSourceSpan(clip, clip.duration), span))
         throw new OpError('incompatible', 'the linked clips differ in place, length or speed, so one curve cannot fit them all', { clipId: clip.id }, 'Pass includeLinked=false, or unlink them first.');
     }
@@ -921,6 +934,7 @@ defineOp({
         if (ramp && clip.type === 'media') clip.rampWindow = ramp;
         clip.duration = duration;
         clampFades(clip);
+        fitTextAnimation(clip, d.settings.frameRate, { in: true, out: true }); // a title cut shorter than its text animation keeps what fits
       } else {
         if (!T.lt(a.to, end) || T.isNegative(a.to)) throw new OpError('out_of_bounds', 'trim would leave an empty clip or start before 0', { clipId: clip.id });
         const delta = T.sub(a.to, clip.start);
@@ -940,6 +954,7 @@ defineOp({
         clip.start = a.to;
         clip.duration = T.sub(end, a.to);
         clampFades(clip);
+        fitTextAnimation(clip, d.settings.frameRate, { in: true, out: true });
         sortClips(track);
       }
     }
@@ -1280,7 +1295,7 @@ defineOp({
 defineOp({
   name: 'apply_motion_preset',
   version: 1,
-  description: 'Give a text or picture clip one motion from the motion library (see list_catalog → motionPresets): an entrance (motion.in.*), an exit (motion.out.*), a loop that repeats over the whole clip (motion.loop.*) or one move across the whole clip such as a slow zoom or pan (motion.move.*). It writes ordinary keyframes on the properties the motion uses (x, y, scale, rotation, opacity), measured from the values the clip has now, so the result stays editable with set_keyframe. An entrance replaces the entrance from this library that the clip already has, on every property that one used, and otherwise the keys of its own properties in its first frames; an exit does the same with an earlier exit and its last frames, so an entrance and an exit can be combined and each can be changed for another; a loop or a move replaces all keys of its properties. `frames` is the length of an entrance or exit, or the period of a loop. The exit is placed against the current clip end; run again after changing the length.',
+  description: 'Give a text or picture clip one motion from the motion library (see list_catalog → motionPresets): an entrance (motion.in.*), an exit (motion.out.*), a loop that repeats over the whole clip (motion.loop.*) or one move across the whole clip such as a slow zoom or pan (motion.move.*). It writes ordinary keyframes on the properties the motion uses (x, y, scale, rotation, opacity), measured from the values the clip has now, so the result stays editable with set_keyframe. An entrance replaces the entrance the clip already has at its start (one from this library or from animate_clip), on every property that one used, and otherwise the keys of its own properties in its first frames; an exit does the same with an earlier exit and its last frames, so an entrance and an exit can be combined and each can be changed for another. Animation that goes on after the entrance or before the exit (a slow zoom, keys made by hand) is kept. A loop or a move replaces all keys of its properties. `frames` is the length of an entrance or exit, or the period of a loop. The exit is placed against the current clip end; run again after changing the length.',
   args: z.object({ clipId: z.string(), presetId: z.enum(MOTION_PRESET_IDS), frames: z.number().int().min(1).max(600).optional(), amount: z.number().min(0).max(2).optional().describe('Strength, default 1') }).strict(),
   apply(d, a) {
     const { clip, track } = mustClip(d, a.clipId);
@@ -1293,12 +1308,15 @@ defineOp({
     const keyframes = { ...clip.keyframes };
     const frameOf = (t: T.RationalTime) => T.toSeconds(t) * (rate.num / rate.den);
     // A new entrance replaces the entrance the clip already has, and a new exit its exit, as a whole: on every property the
-    // earlier one used, not only on those of the new one, and wherever its keys are now (previousMotion says how it is recognised).
+    // earlier one used, not only on those of the new one. previousMotion says how it is recognised and how many keys go: the
+    // key that later animation on a property starts from, or that the motion shares with the one at the other end, stays.
     if (preset.kind === 'in' || preset.kind === 'out') {
       const now: Parameters<typeof previousMotion>[1] = {};
       for (const p of ANIMATABLE) if (keyframes[p]?.length) now[p] = keyframes[p]!.map((k) => ({ frame: frameOf(k.time), value: k.value, easing: k.easing }));
-      for (const [p, count] of Object.entries(previousMotion(preset.kind, now)) as [(typeof ANIMATABLE)[number], number][]) {
+      for (const [p, count] of Object.entries(previousMotion(preset.kind, now, total, clip.transform)) as [(typeof ANIMATABLE)[number], number][]) {
         const rest = preset.kind === 'in' ? keyframes[p]!.slice(count) : keyframes[p]!.slice(0, keyframes[p]!.length - count);
+        // the easing on the key an exit started from shaped the exit; with the exit gone that key is the last one and shapes nothing
+        if (preset.kind === 'out' && rest.length) rest[rest.length - 1] = { ...rest[rest.length - 1]!, easing: 'linear' };
         if (rest.length) keyframes[p] = rest; else delete keyframes[p];
       }
     }
@@ -1307,7 +1325,12 @@ defineOp({
       // keys the motion does not cover stay: after an entrance, before an exit; a loop or a move covers the whole clip
       const kept = preset.kind === 'in' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) > hi + 1e-9)
         : preset.kind === 'out' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) < lo - 1e-9) : [];
-      const next = [...kept, ...keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }))].sort((x, y) => T.cmp(x.time, y.time));
+      const fresh = keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }));
+      // The key an entrance ends on is also the key that what follows starts from (an exit that begins right there, a slow zoom):
+      // where one was there already, it keeps its easing, so the entrance does not change the shape of what comes after it.
+      const meets = preset.kind === 'in' && kept.length ? (keyframes[p] ?? []).find((k) => Math.abs(frameOf(k.time) - hi) <= 1e-9) : undefined;
+      if (meets) fresh[fresh.length - 1]!.easing = meets.easing;
+      const next = [...kept, ...fresh].sort((x, y) => T.cmp(x.time, y.time));
       if (next.length > 2000) throw new OpError('out_of_bounds', 'this motion would need more keyframes than a property can hold on a clip this long', { keyframes: next.length }, 'Use a longer period (frames), or a shorter clip.');
       keyframes[p] = next;
     }

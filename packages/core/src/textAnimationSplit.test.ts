@@ -115,3 +115,54 @@ describe('a title with a text animation that is divided', () => {
     ), { numRuns: 120 });
   });
 });
+
+describe('a title with a text animation that is trimmed shorter than its animation', () => {
+  it('trim_clip at either edge keeps what fits: the entrance first, then whatever room is left for the exit', () => {
+    const { doc, clipId } = project(); // 120 frames, entrance 20, exit 15
+    // before the fix the 10-frame title kept inFrames 20 and outFrames 15: a state set_text_animation refuses, in which no word is ever fully drawn
+    for (const [args, want] of [
+      [{ edge: 'end', to: f(10) }, [0, 10, { in: 'fade', inFrames: 10, out: null }]],
+      [{ edge: 'start', to: f(110) }, [110, 10, { in: 'fade', inFrames: 10, out: null }]],
+      [{ edge: 'end', to: f(30) }, [0, 30, { in: 'fade', inFrames: 20, out: 'fade', outFrames: 10 }]],
+      [{ edge: 'start', to: f(90) }, [90, 30, { in: 'fade', inFrames: 20, out: 'fade', outFrames: 10 }]],
+      [{ edge: 'end', to: f(35) }, [0, 35, { in: 'fade', inFrames: 20, out: 'fade', outFrames: 15 }]], // exactly fits: untouched
+      [{ edge: 'end', to: f(200) }, [0, 200, { in: 'fade', inFrames: 20, out: 'fade', outFrames: 15 }]], // longer: untouched
+    ] as [Record<string, unknown>, [number, number, Record<string, unknown>]][]) {
+      const d = tx(doc, [{ op: 'trim_clip', args: { clipId, ...args } }]).doc;
+      expect(validateProject(d)).toEqual([]);
+      const [c] = titles(d);
+      expect([fi(c!.start), fi(c!.duration)], JSON.stringify(args)).toEqual([want[0], want[1]]);
+      expect(c!.animation, JSON.stringify(args)).toMatchObject(want[2]);
+      fits(d);
+    }
+    // a loop plays on however short the title gets; an exit alone is shortened to the title
+    const loop = project({ in: 'fade', inFrames: 20, out: 'fade', outFrames: 15, loop: 'wave' });
+    const one = tx(loop.doc, [{ op: 'trim_clip', args: { clipId: loop.clipId, edge: 'end', to: f(1) } }]).doc;
+    expect(titles(one)[0]!.animation).toMatchObject({ in: 'fade', inFrames: 1, out: null, loop: 'wave' });
+    fits(one);
+    const exit = project({ out: 'sink', outFrames: 40 });
+    const short = tx(exit.doc, [{ op: 'trim_clip', args: { clipId: exit.clipId, edge: 'start', to: f(100) } }]).doc;
+    expect(titles(short)[0]!.animation).toMatchObject({ in: null, out: 'sink', outFrames: 20 });
+    fits(short);
+  });
+
+  it('any run of trims, splits and cuts leaves every title with an animation that fits it', () => {
+    fc.assert(fc.property(
+      fc.array(fc.tuple(fc.constantFrom('trim-end', 'trim-start', 'split', 'cut'), fc.integer({ min: 0, max: 140 }), fc.integer({ min: 1, max: 30 })), { minLength: 1, maxLength: 6 }),
+      (steps) => {
+        let d = project({ in: 'pop', inFrames: 20, out: 'lift', outFrames: 15 }).doc;
+        for (const [kind, at, len] of steps) {
+          try {
+            const c = titles(d).find((x) => fi(x.start) < at && at < fi(x.start) + fi(x.duration));
+            if (kind === 'cut') d = tx(d, [{ op: 'cut_range', args: { start: f(at), end: f(at + len) } }]).doc;
+            else if (!c) continue;
+            else if (kind === 'split') d = tx(d, [{ op: 'split_clip', args: { clipId: c.id, at: f(at) } }]).doc;
+            else d = tx(d, [{ op: 'trim_clip', args: { clipId: c.id, edge: kind === 'trim-end' ? 'end' : 'start', to: f(at) } }]).doc;
+          } catch (e) { expect(e).toBeInstanceOf(OpError); }
+        }
+        expect(validateProject(d)).toEqual([]);
+        fits(d);
+      },
+    ), { numRuns: 150 });
+  });
+});

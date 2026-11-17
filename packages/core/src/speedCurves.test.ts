@@ -284,4 +284,106 @@ describe('speed curves: links and crossfades', () => {
     // left out, the sound's crossfade is not in the way of the picture
     expect(code(() => tx(faded, [{ op: 'apply_speed_curve', args: { clipId: secondId, preset: 'jump-cut', includeLinked: false } }]))).toBe('ok');
   });
+
+  /** Three sounds back to back on one track; M1 crossfades 30 frames into M2 (so M1 is [0,330) over M2 [300,600)). */
+  function threeSounds() {
+    let r = tx(createProject({ id: 'prj_x', name: 'X' }), [{ op: 'import_asset', args: { asset: song } }, { op: 'add_track', args: { kind: 'audio' } }], true);
+    const assetId = r.results[0]!.output!.assetId as string, trackId = r.results[1]!.output!.trackId as string;
+    r = tx(r.doc, [0, 300, 600].map((at) => ({ op: 'add_clip', args: { assetId, start: f(at), duration: f(300), trackId } })));
+    const [m1, m2, m3] = r.results.map((x) => x.output!.clipId as string) as [string, string, string];
+    return { plain: r.doc, faded: tx(r.doc, [{ op: 'set_audio_crossfade', args: { clipId: m2, duration: f(30) } }]).doc, m1, m2, m3, assetId, trackId };
+  }
+  const refusal = (doc: ProjectDocument, args: Record<string, unknown>) => { try { tx(doc, [{ op: 'apply_speed_curve', args }]); } catch (e) { return e as OpError; } return null; };
+  /** Every sound on the track of `id` starts where the one before it ends: no silence and nothing doubled. */
+  const backToBack = (d: ProjectDocument, id: string) => {
+    const clips = [...findClip(d, id)!.track.clips].sort((a, b) => T.cmp(a.start, b.start));
+    for (let i = 1; i < clips.length; i++) expect(T.eq(clips[i]!.start, clipEnd(clips[i - 1]!)), `${clips[i - 1]!.id} -> ${clips[i]!.id}`).toBe(true);
+  };
+
+  it('an overlap left by half a crossfade (one of its two fades cleared) is refused as well, with a hint that can be followed', () => {
+    const { faded, m1, m2 } = threeSounds();
+    // (a) the later clip's fade-in was cleared: the earlier clip still plays on over its start, and still records the crossfade length
+    const noFadeIn = tx(faded, [{ op: 'set_clip_fades', args: { clipId: m2, fadeIn: f(0) } }]).doc;
+    // (b) the earlier clip's fade-out was cleared: the overlap is still there, but nothing says how long the crossfade was
+    const noFadeOut = tx(faded, [{ op: 'set_clip_fades', args: { clipId: m1, fadeOut: f(0) } }]).doc;
+    for (const [name, doc] of [['later fade-in cleared', noFadeIn], ['earlier fade-out cleared', noFadeOut]] as const) {
+      expect(T.lt(media(doc, m2).start, clipEnd(media(doc, m1))), name).toBe(true); // the precondition: M1 still lies over the start of M2
+      for (const clipId of [m1, m2]) {
+        for (const extra of [{}, { ripple: false }]) {
+          const err = refusal(doc, { clipId, preset: 'hero', ...extra });
+          expect(err?.code, `${name}: ${clipId}`).toBe('incompatible');
+          expect(err?.details, name).toMatchObject(clipId === m1 ? { nextClipId: m2 } : { previousClipId: m1 });
+        }
+      }
+    }
+    // (a) is still a crossfade as set_audio_crossfade sees it: the hint names it, and following it works
+    const a = refusal(noFadeIn, { clipId: m1, preset: 'hero' })!;
+    expect(a.hint).toMatch(/set_audio_crossfade/);
+    const clearedA = tx(noFadeIn, [{ op: 'set_audio_crossfade', args: { clipId: m2, duration: f(0) } }]).doc;
+    backToBack(tx(clearedA, [{ op: 'apply_speed_curve', args: { clipId: m1, preset: 'hero' } }]).doc, m1);
+    // (b) is not (set_audio_crossfade finds no crossfade there), so the hint must not send the caller to it: it says to trim the earlier clip back
+    expect(code(() => tx(noFadeOut, [{ op: 'set_audio_crossfade', args: { clipId: m2, duration: f(0) } }]))).toBe('not_found');
+    for (const clipId of [m1, m2]) {
+      const b = refusal(noFadeOut, { clipId, preset: 'hero' })!;
+      expect(b.hint, clipId).not.toMatch(/set_audio_crossfade/);
+      expect(b.hint, clipId).toMatch(/trim_clip/);
+      expect(b.message, clipId).toMatch(/overlap|plays on/);
+    }
+    const clearedB = tx(noFadeOut, [{ op: 'trim_clip', args: { clipId: m1, edge: 'end', to: media(noFadeOut, m2).start } }]).doc;
+    for (const clipId of [m1, m2]) backToBack(tx(clearedB, [{ op: 'apply_speed_curve', args: { clipId, preset: 'hero' } }]).doc, m1);
+  });
+
+  it('an overlap with no fades at all is refused in the same way: what follows could not stay back to back', () => {
+    const { plain, m1, m2 } = threeSounds();
+    const over = tx(plain, [{ op: 'trim_clip', args: { clipId: m1, edge: 'end', to: f(330) } }]).doc; // sound may overlap sound on one track
+    expect(refusal(over, { clipId: m1, preset: 'hero' })?.details).toMatchObject({ nextClipId: m2 });
+    expect(refusal(over, { clipId: m2, preset: 'hero' })?.details).toMatchObject({ previousClipId: m1 });
+    expect(refusal(over, { clipId: m1, preset: 'hero' })?.hint).toMatch(/trim_clip/);
+  });
+
+  it('a sound layered inside a longer one on the same track is not a crossfade: the curve applies to either of them', () => {
+    let r = tx(createProject({ id: 'prj_y', name: 'Y' }), [{ op: 'import_asset', args: { asset: song } }, { op: 'add_track', args: { kind: 'audio' } }], true);
+    const assetId = r.results[0]!.output!.assetId as string, trackId = r.results[1]!.output!.trackId as string;
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(0), duration: f(300), trackId } }, { op: 'add_clip', args: { assetId, start: f(100), duration: f(60), trackId } }]);
+    const [music, sfx] = r.results.map((x) => x.output!.clipId as string) as [string, string];
+    const lay = tx(r.doc, [{ op: 'set_clip_fades', args: { clipId: music, fadeOut: f(30) } }, { op: 'set_clip_fades', args: { clipId: sfx, fadeIn: f(10) } }]).doc;
+    // there is no crossfade here to remove (the old refusal sent the caller to set_audio_crossfade, which then failed)
+    expect(code(() => tx(lay, [{ op: 'set_audio_crossfade', args: { clipId: sfx, duration: f(0) } }]))).toBe('not_found');
+    const onMusic = tx(lay, [{ op: 'apply_speed_curve', args: { clipId: music, preset: 'hero' } }]);
+    expect(validateProject(onMusic.doc)).toEqual([]);
+    expect(partsOf(onMusic).length).toBe(5);
+    expect([media(onMusic.doc, sfx).start, media(onMusic.doc, sfx).duration].map((t) => T.frameIndexAt(t, R))).toEqual([100, 60]); // the layered sound stays where it was
+    const onSfx = tx(lay, [{ op: 'apply_speed_curve', args: { clipId: sfx, preset: 'jump-cut' } }]);
+    expect(validateProject(onSfx.doc)).toEqual([]);
+    expect(T.eq(media(onSfx.doc, music).duration, f(300))).toBe(true);
+  });
+
+  it('with the linked sound on a locked track, no refusal recommends a step that is refused in turn', () => {
+    const { doc, clipId } = project();
+    const audioTrack = tracksOf(doc).find((t) => t.kind === 'audio')!;
+    const locked = tx(doc, [{ op: 'update_track', args: { trackId: audioTrack.id, locked: true } }]).doc;
+    // picture + one sound: leaving the sound out would have to clear its link, which its locked track does not allow either
+    const withSound = refusal(locked, { clipId, preset: 'hero' })!;
+    const alone = refusal(locked, { clipId, preset: 'hero', includeLinked: false })!;
+    expect(withSound.code).toBe('track_locked');
+    expect(alone.code).toBe('track_locked');
+    expect(withSound.hint).not.toMatch(/includeLinked/);
+    for (const err of [withSound, alone]) {
+      expect(err.hint).toMatch(/[Uu]nlock/);
+      expect(err.details).toMatchObject({ trackId: audioTrack.id });
+    }
+    // following the hint works, both ways
+    const unlocked = tx(locked, [{ op: 'update_track', args: { trackId: audioTrack.id, locked: false } }]).doc;
+    expect(code(() => tx(unlocked, [{ op: 'apply_speed_curve', args: { clipId, preset: 'hero' } }]))).toBe('ok');
+    expect(code(() => tx(unlocked, [{ op: 'apply_speed_curve', args: { clipId, preset: 'hero', includeLinked: false } }]))).toBe('ok');
+    // a group of three with one locked member: there includeLinked=false is a real way out (the other two stay linked), and the hint may say so
+    const soundId = all(doc).find((c) => c.id !== clipId)!.id;
+    const extra = tx(doc, [{ op: 'import_asset', args: { asset: song } }, { op: 'add_track', args: { kind: 'audio' } }, { op: 'unlink_clip', args: { clipId } }], true);
+    const third = tx(extra.doc, [{ op: 'add_clip', args: { assetId: extra.results[0]!.output!.assetId as string, start: f(0), duration: f(240), trackId: extra.results[1]!.output!.trackId as string } }]);
+    const three = tx(third.doc, [{ op: 'link_clips', args: { clipIds: [clipId, soundId, third.results[0]!.output!.clipId as string] } }, { op: 'update_track', args: { trackId: audioTrack.id, locked: true } }]).doc;
+    const hint = refusal(three, { clipId, preset: 'hero' })!;
+    expect(hint.code).toBe('track_locked');
+    expect(hint.hint).toMatch(/includeLinked=false/);
+    expect(code(() => tx(three, [{ op: 'apply_speed_curve', args: { clipId, preset: 'hero', includeLinked: false } }]))).toBe('ok');
+  });
 });
