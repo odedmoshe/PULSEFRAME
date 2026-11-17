@@ -160,6 +160,7 @@ function project(rate = R, capture = false): ProjectDocument {
 }
 const MEDIA = ['vid_a', 'vid_b', 'vid_c', 'vid_d'];
 const musicStep = (plan: TemplatePlan) => plan.ops.find((o) => o.bind === 'music');
+const argsOf = (step: { args: unknown } | undefined) => step!.args as Record<string, unknown>;
 const frames = (t: unknown, rate = R) => T.frameIndexAt(t as T.RationalTime, rate);
 /** The procedural assets a server would make for a plan (fixed records, no files); music arrives with its known grid. */
 const madeAssets = (plan: TemplatePlan) => plan.assetsNeeded.map((x, i) => (x.kind === 'music'
@@ -178,7 +179,7 @@ describe('planner: built-in music made to measure (ADR-0022, plan §4.7 with the
       const step = musicStep(made)!;
       expect(step.op).toBe('add_clip');
       const pictures = made.predicted.endFrame - made.predicted.startFrame;
-      const clip = frames(step.args.duration, rate);
+      const clip = frames(argsOf(step).duration, rate);
       expect(clip).toBeLessThanOrEqual(pictures);
       expect(clip).toBeGreaterThanOrEqual(pictures - 1);
       expect(made.ops.some((o) => o.op === 'fit_music' || o.op === 'set_clip_fades')).toBe(false);
@@ -197,9 +198,9 @@ describe('planner: built-in music made to measure (ADR-0022, plan §4.7 with the
     const plan = planTemplate(doc, TPL({ slots: [slot(1, { beats: 2 }), slot(2, { beats: 2 })] }), { media: MEDIA, builtinMusic: { styleId: 'music.festive', seed: 1 } });
     expect(plan.assetsNeeded.find((x) => x.kind === 'music')).toMatchObject({ bars: 4 });
     const pictures = plan.predicted.endFrame - plan.predicted.startFrame;
-    expect(frames(musicStep(plan)!.args.duration)).toBe(pictures);
+    expect(frames(argsOf(musicStep(plan)).duration)).toBe(pictures);
     const fade = plan.ops.find((o) => o.op === 'set_clip_fades')!;
-    expect(frames(fade.args.fadeOut)).toBe(Math.min(30, Math.floor(pictures / 2)));
+    expect(frames(argsOf(fade).fadeOut)).toBe(Math.min(30, Math.floor(pictures / 2)));
     expect(plan.ops.some((o) => o.op === 'fit_music')).toBe(false);
     expect(plan.notices.map((x) => x.code)).toEqual(['builtin_music_faded']);
     apply(doc, plan);
@@ -229,7 +230,7 @@ describe('planner: built-in music made to measure (ADR-0022, plan §4.7 with the
 describe('planner: pack fields in a template\'s own titles', () => {
   const text = (key: string, def: { he: string; en: string }, fallback?: { he: string; en: string }, extra: Partial<TemplateDef['texts'][number]> = {}): TemplateDef['texts'][number] =>
     ({ key, role: words('Title'), default: def, ...(fallback ? { fallback } : {}), maxChars: 60, presetId: 'clean-white', at: { slot: 's1' }, place: { x: 0, y: 0 }, ...extra });
-  const titles = (plan: TemplatePlan) => plan.ops.filter((o) => o.op === 'add_text').map((o) => o.args.text);
+  const titles = (plan: TemplatePlan) => plan.ops.filter((o) => o.op === 'add_text').map((o) => argsOf(o).text);
   it('writes the given words in; without a value the fallback words are used and a notice says so', () => {
     const def = TPL({ texts: [text('t', { he: 'חנוכה שמח, {name}!', en: 'Happy Hanukkah, {name}!' }, { he: 'חנוכה שמח!', en: 'Happy Hanukkah!' })] });
     expect(titles(planTemplate(project(), def, { media: MEDIA, fields: { name: 'נועה' } }))).toEqual(['חנוכה שמח, נועה!']);
