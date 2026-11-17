@@ -18,7 +18,8 @@
  * Then the faces: the second outline (outside the first: its line is 2·px·(strokeFrac + widthFrac) wide), the outline, and
  * the fill, all outlines before all fills. A gradient fill runs through the centre of the block's ink box, with half-length
  * (inkW/2)|cos| + (inkH/2)|sin| and evenly spaced stops; each unit's gradient is the block's shifted by minus the unit's
- * place at rest, so a letter keeps its colours while it moves and equals the still picture at rest.
+ * place at rest, so a letter keeps its colours while it moves and equals the still picture at rest. The ink box is the
+ * browser's, measured at a font size of at most INK_METRICS_MAX_PX (above it the browser's box is too coarse for the ends).
  */
 import type { TextStyle } from '@pulseframe/core';
 import { scratch, type Buf } from './look.ts';
@@ -29,6 +30,13 @@ type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 export const TEXT_FX_SLOTS = { silhouette: 10, work: 11, work2: 12 } as const;
 /** Copies of the silhouette at most in an extrusion, and shade buckets at most. */
 export const EXTRUDE_MAX_LAYERS = 48, EXTRUDE_MAX_BUCKETS = 6;
+/**
+ * The largest font size, in px, at which a line's ink box is measured (compositor2d drawText). Up to it Chromium reports
+ * the box (TextMetrics actualBoundingBox…) in whole pixels; above it only in steps of 1/64 of the font size, since it
+ * measures large text at a size of 64 and scales. Measured in Chromium 153, Heebo 700, 'שלום': at 384 px a descent of 12
+ * where the ink descends 6.74 px, at 256 px a descent of 5 where it descends 4.56 px.
+ */
+export const INK_METRICS_MAX_PX = 256;
 
 /** One unit of a title: a line (still title) or a letter, word or line of an animated one. Geometry in the block's coordinates, as compositor2d lays it out. */
 export interface TitleUnit {
