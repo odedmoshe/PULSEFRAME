@@ -1,0 +1,312 @@
+{
+  "generatedAt": "2026-11-17T15:36:09.513Z",
+  "label": "Measured on this 4-vCPU container, CPU only, with short synthetic inputs. Every figure applies to this machine only; this is not hardware qualification and not a quality review.",
+  "machine": {
+    "cpus": 4,
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "totalRamBytes": 16869134336,
+    "platform": "linux 6.18.44-fc-v553"
+  },
+  "comfyui": {
+    "version": "0.45.0",
+    "device": "cpu",
+    "deviceReported": {
+      "name": "cpu",
+      "type": "cpu",
+      "vramTotalBytes": null
+    },
+    "pidSampled": 26015,
+    "rssBasis": "VmRSS of the ComfyUI process from /proc, sampled every 200 ms during each run"
+  },
+  "runs": [
+    {
+      "capability": "comfy.video.smooth-slowmo",
+      "workload": "60 frames 640x360 at 30000/1001, multiplier 4 (240 output frames)",
+      "device": "cpu",
+      "status": "succeeded",
+      "wallSeconds": 58.29,
+      "secondsPerOutputFrame": {
+        "median": 0.179,
+        "p95": 0.253,
+        "chunks": 2,
+        "basis": "per chunk: chunk wall seconds (extract, stage, inference, collect) / output frames kept from it"
+      },
+      "peakRssBytes": 2095845376,
+      "output": {
+        "sha256": "sha256:b129d8da9e7cfe71824213f224b41484baa7e260d2f4e8a0cf42d2afe81268e2",
+        "bytes": 57343,
+        "width": 640,
+        "height": 360,
+        "frames": 240,
+        "rFrameRate": "120000/1001"
+      },
+      "error": null
+    },
+    {
+      "capability": "comfy.image.upscale",
+      "workload": "one 320x240 photo, scale 1",
+      "device": "cpu",
+      "status": "succeeded",
+      "wallSeconds": 12.29,
+      "secondsPerOutputFrame": null,
+      "peakRssBytes": 1948413952,
+      "output": {
+        "sha256": "sha256:d2679ac9f833860c27a536d7572390e1a62a434c57a5322ddc430f1bc5ae2798",
+        "bytes": 797414,
+        "width": 1280,
+        "height": 960,
+        "frames": 1,
+        "rFrameRate": null
+      },
+      "error": null
+    },
+    {
+      "capability": "comfy.image.upscale",
+      "workload": "one 320x240 photo, scale 0.75",
+      "device": "cpu",
+      "status": "succeeded",
+      "wallSeconds": 0.77,
+      "secondsPerOutputFrame": null,
+      "peakRssBytes": 1347690496,
+      "output": {
+        "sha256": "sha256:c05deb409e312090285632e4d59c20e9f309426117da0e3f8fff1ff193730155",
+        "bytes": 490232,
+        "width": 960,
+        "height": 720,
+        "frames": 1,
+        "rFrameRate": null
+      },
+      "error": null
+    },
+    {
+      "capability": "comfy.video.enhance",
+      "workload": "60 frames (2 s) 320x180 at 30000/1001 with sound, scale 1 (1280x720)",
+      "device": "cpu",
+      "status": "succeeded",
+      "wallSeconds": 80.86,
+      "secondsPerOutputFrame": {
+        "median": 0.978,
+        "p95": 1.843,
+        "chunks": 3,
+        "basis": "per chunk: chunk wall seconds (extract, stage, inference, collect) / output frames kept from it"
+      },
+      "peakRssBytes": 1989660672,
+      "output": {
+        "sha256": "sha256:3e1973beb0168813d5d19d7f9c6873e02bf9a9285f198ea845f9bbc930c43794",
+        "bytes": 907356,
+        "width": 1280,
+        "height": 720,
+        "frames": 60,
+        "rFrameRate": "30000/1001"
+      },
+      "error": null
+    },
+    {
+      "capability": "comfy.video.enhance",
+      "workload": "12 identical frames 320x180, scale 0.5 (640x360)",
+      "device": "cpu",
+      "status": "succeeded",
+      "wallSeconds": 8.54,
+      "secondsPerOutputFrame": {
+        "median": 0.661,
+        "p95": 0.661,
+        "chunks": 1,
+        "basis": "per chunk: chunk wall seconds (extract, stage, inference, collect) / output frames kept from it"
+      },
+      "peakRssBytes": 1613643776,
+      "output": {
+        "sha256": "sha256:0b3073f29adc2e643082d38e87954735c6a745e2ee9941056f7e117ed943e226",
+        "bytes": 16853,
+        "width": 480,
+        "height": 360,
+        "frames": 12,
+        "rFrameRate": "30000/1001"
+      },
+      "error": null
+    }
+  ],
+  "rifeDownload": {
+    "status": "succeeded",
+    "bytes": 22674688,
+    "sha256": "1505884b9bdae956795430d2a70f7e2317b2abd8f130f8cfdb35a5759f909481",
+    "wallSeconds": 2.051,
+    "error": null
+  },
+  "slowmoPngPath": {
+    "sourceFrames": 8,
+    "outputFrames": 29,
+    "everyFourthIdentical": true,
+    "midpointCentroidMaxErrorPx": 0
+  },
+  "checks": [
+    {
+      "name": "ComfyUI runs on the CPU here",
+      "ok": true,
+      "detail": {
+        "name": "cpu",
+        "type": "cpu",
+        "vramTotalBytes": null
+      }
+    },
+    {
+      "name": "before the download: slow motion is not runnable; its setup names the exact missing bytes",
+      "ok": true,
+      "detail": {
+        "code": "model_missing",
+        "detail": "1 model file(s) to download: frame_interpolation/rife_v4.25.safetensors",
+        "missingBytes": 22674688
+      }
+    },
+    {
+      "name": "an agent cannot start the download itself (403)",
+      "ok": true
+    },
+    {
+      "name": "an agent asks: an approval for exactly the RIFE bytes is created, and no download starts",
+      "ok": true,
+      "detail": {
+        "capabilityId": "comfy.video.smooth-slowmo",
+        "bytes": 22674688,
+        "models": [
+          {
+            "path": "frame_interpolation/rife_v4.25.safetensors",
+            "sha256": "1505884b9bdae956795430d2a70f7e2317b2abd8f130f8cfdb35a5759f909481"
+          }
+        ]
+      }
+    },
+    {
+      "name": "the agent cannot approve its own request",
+      "ok": true
+    },
+    {
+      "name": "the owner approves: RIFE is downloaded and verified by size and SHA-256",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "bytes": 22674688,
+        "sha256": "1505884b9bdae956795430d2a70f7e2317b2abd8f130f8cfdb35a5759f909481",
+        "wallSeconds": 2.051,
+        "error": null
+      }
+    },
+    {
+      "name": "RIFE reads ready: slow motion is runnable",
+      "ok": true,
+      "detail": {
+        "code": "ready",
+        "detail": "ready",
+        "device": "cpu",
+        "versions": {
+          "comfyui": "0.45.0"
+        }
+      }
+    },
+    {
+      "name": "PNG path: 29 frames for 8 source frames at 4x, and every 4th frame is bit-identical to its source frame",
+      "ok": true,
+      "detail": {
+        "frames": 29,
+        "identical": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    },
+    {
+      "name": "smoke check (not a quality review): the midpoint disc centroid is within 1 px of linear motion",
+      "ok": true,
+      "detail": {
+        "maxErrorPx": 0
+      }
+    },
+    {
+      "name": "slow motion succeeds",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "60 frames at 4x give 240 frames at 4r (120000/1001)",
+      "ok": true,
+      "detail": {
+        "frames": 240,
+        "rate": "120000/1001"
+      }
+    },
+    {
+      "name": "replace_clip_asset + set_clip_speed(0.25): the clip shows the result and is exactly 4x longer",
+      "ok": true,
+      "detail": {
+        "before": {
+          "value": "1001",
+          "timescale": 500
+        },
+        "after": {
+          "value": "1001",
+          "timescale": 125
+        },
+        "speed": {
+          "num": 1,
+          "den": 4
+        }
+      }
+    },
+    {
+      "name": "x4plus at scale 1: 320x240 gives 1280x960",
+      "ok": true,
+      "detail": {
+        "width": 1280,
+        "height": 960
+      }
+    },
+    {
+      "name": "x4plus at scale 0.75: 320x240 gives 960x720",
+      "ok": true,
+      "detail": {
+        "width": 960,
+        "height": 720
+      }
+    },
+    {
+      "name": "x4v3: 2 s at 320x180 gives 1280x720 with exactly 60 frames at 30000/1001",
+      "ok": true,
+      "detail": {
+        "name": "video",
+        "role": "primary",
+        "mediaType": "video",
+        "encoding": "display",
+        "contentHash": "sha256:3e1973beb0168813d5d19d7f9c6873e02bf9a9285f198ea845f9bbc930c43794",
+        "bytes": 907356,
+        "mimeType": "video/mp4",
+        "codec": "h264",
+        "width": 1280,
+        "height": 720,
+        "pixFmt": "yuv420p",
+        "hasAlpha": false,
+        "durationSeconds": 2.002,
+        "frames": 60,
+        "rFrameRate": "30000/1001"
+      }
+    },
+    {
+      "name": "the enhanced result keeps the source sound",
+      "ok": true
+    },
+    {
+      "name": "a static input gives identical consecutive output frames (one digest for all 12 collected frames)",
+      "ok": false,
+      "detail": {
+        "sourceDistinct": 1,
+        "outputDistinct": 6,
+        "error": null
+      }
+    }
+  ],
+  "verdict": "FAILED (1 of 17 checks)"
+}
