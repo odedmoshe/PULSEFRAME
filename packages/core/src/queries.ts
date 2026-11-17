@@ -54,6 +54,9 @@ export function summarize(doc: ProjectDocument) {
     analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null, bars: a.beats?.downbeats?.length ?? null, meter: a.beats?.meter ?? null })),
     transcripts: Object.values(doc.transcripts ?? {}).map((t) => ({ assetId: t.assetId, language: t.language, origin: t.origin.kind, phrases: t.segments.length, words: t.segments.reduce((n, s) => n + s.words.length, 0), wordTimed: t.segments.every((s) => s.timing === 'word') })),
     // life line (ADR-0021): `name` is what a person typed ('' = none); `shownAs` is the name the library shows (typed, or derived from a holiday), '' = shown by its date
+    // people (ADR-0021, people section): the id and the name, for every reader. A summary never holds a birth date or the word choice;
+    // the editor reads those from the document, which the server hands to the owner and to credentials granted them.
+    people: Object.values(doc.people ?? {}).map((p) => ({ id: p.id, name: p.name })),
     events: Object.values(doc.events ?? {}).map((e) => { const shown = eventDisplayName(doc, e, 'en'); return { id: e.id, name: e.name, shownAs: shown.name, nameKind: shown.kind, files: e.assetIds.length, afterSunset: e.afterSunset, edited: e.origin.edited }; }),
   };
 }

@@ -45,3 +45,7 @@ export * from './capture.ts';
 export * from './events.ts';
 export * from './fields.ts';
 export * from './lifeOps.ts';
+// people (ADR-0021, people section)
+export * from './people.ts';
+export * from './ageWords.ts';
+export * from './peopleOps.ts';
