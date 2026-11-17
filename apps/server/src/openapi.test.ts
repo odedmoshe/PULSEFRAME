@@ -38,6 +38,16 @@ describe('openapi structure', () => {
       expect(Object.keys(op.responses).length).toBeGreaterThan(0);
     }
   });
+  it('every response object has a description (required by OpenAPI 3.1; a status missing from the error table used to come out without one)', () => {
+    const served = JSON.parse(JSON.stringify(doc)); // as GET /api/v1/openapi.json sends it: an undefined description is dropped
+    const missing: string[] = [];
+    let count = 0;
+    for (const [p, item] of Object.entries<any>(served.paths))
+      for (const [method, op] of Object.entries<any>(item).filter(([m]) => METHODS.includes(m)))
+        for (const [status, r] of Object.entries<any>(op.responses)) { count++; if (typeof r.description !== 'string' || !r.description.trim()) missing.push(`${method} ${p} -> ${status}`); }
+    expect(count).toBeGreaterThan(400);
+    expect(missing).toEqual([]);
+  });
   it('is deterministic', () => expect(JSON.stringify(buildOpenApi())).toBe(JSON.stringify(buildOpenApi())));
   it('contains known routes', () => {
     for (const p of ['/api/v1/projects', '/api/v1/ops', '/api/v1/capabilities', '/api/v1/projects/{id}/undo']) expect(doc.paths[p], p).toBeTruthy();
