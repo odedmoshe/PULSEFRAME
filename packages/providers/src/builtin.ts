@@ -1,8 +1,11 @@
 /**
- * Built-in reviewed capabilities. Phase G0 ships exactly one: a model-free smoke graph that proves
- * the provider path (submit → progress → collect → validate) without any model download or GPU.
+ * Built-in reviewed capabilities. Phase G0 shipped a model-free smoke graph that proves the provider path
+ * (submit → progress → collect → validate) without any model download or GPU; later phases add reviewed media workflows.
+ * The AI-model wave (ADR-0017) adds photo upscale 2x/3x/4x and two frame jobs (smooth slow motion, video enhance), all
+ * from ComfyUI core nodes at the pinned commit, with model records taken from the pin table (aiPins.ts).
  */
-import { ComfyDescriptorSchema, graphDigest, type ComfyDescriptor, type ComfyGraph } from './descriptor.ts';
+import { AI_WAVE_PINS, type FilePin } from './aiPins.ts';
+import { ComfyDescriptorSchema, graphDigest, type CapabilityModel, type ComfyDescriptor, type ComfyGraph } from './descriptor.ts';
 
 const smokeGraph: ComfyGraph = {
   '1': { class_type: 'EmptyImage', inputs: { width: 256, height: 256, batch_size: 1, color: 0x3de0c8 } },
@@ -152,67 +155,246 @@ export const IMAGE_REMOVE_BACKGROUND: ComfyDescriptor = ComfyDescriptorSchema.pa
     hardwareQualified: { status: 'not_assessed', evidence: 'set from a recorded run; a CPU run is not GPU qualification' },
   },
 });
+// ---------------------------------------------------------------------------------------------------------------------------
+// AI-model wave (ADR-0017): reviewed ComfyUI-core graphs for photo upscale, smooth slow motion and video enhance.
+// ---------------------------------------------------------------------------------------------------------------------------
+const COMFY_COMMIT = 'eee59185ff4f43ae2d9ad122b245619d27d9daad';
+const COMFY_REPO = 'https://github.com/comfyanonymous/ComfyUI';
+const core = (classes: string[]) => classes.map((classType) => ({ classType, pack: 'core', packVersion: null }));
+/**
+ * How far the licence of the Real-ESRGAN weights has been settled. 'owner-accepted': the owner approved Real-ESRGAN by name and
+ * accepted the DIV2K training-data residual risk (2026-11-17, lead decision in .artifacts/wave3-decisions.md; BLOCKERS B-4), so the
+ * weights are commercialUse 'allowed' and licenseReviewed 'pass'. 'pending': the state before that decision (commercialUse
+ * 'unknown', licenseReviewed 'not_assessed'), kept so both states stay tested and the descriptor can be rebuilt either way.
+ */
+export type RealEsrganLicence = 'owner-accepted' | 'pending';
+const DIV2K_RISK = 'Residual risk: the DIV2K training data is labelled academic-research-only; recorded on the same footing as BiRefNet.';
+/** A Real-ESRGAN weights record from the pin table (publisher URL, exact bytes and SHA-256). */
+function realEsrganModel(pin: FilePin, release: string, licence: RealEsrganLicence): CapabilityModel {
+  const accepted = licence === 'owner-accepted';
+  return {
+    role: 'upscale',
+    path: `upscale_models/${pin.file}`,
+    publisher: `xinntao (Real-ESRGAN), GitHub release ${release}`,
+    revision: `xinntao/Real-ESRGAN@${release} (release asset ${pin.file})`,
+    sha256: pin.sha256,
+    bytes: pin.bytes,
+    license: 'BSD-3-Clause',
+    licenseEvidence: [
+      'Publisher LICENSE https://github.com/xinntao/Real-ESRGAN/blob/master/LICENSE (BSD-3-Clause; no separate weight terms).',
+      `Pinned file: ${pin.url}, ${pin.bytes} bytes, sha256 ${pin.sha256} (${pin.evidence}).`,
+      DIV2K_RISK,
+      accepted
+        ? 'The owner approved Real-ESRGAN by name and accepted this residual risk on 2026-11-17 (lead decision; docs/BLOCKERS.md B-4).'
+        : 'Pending: the owner has not accepted this residual risk, so commercial use is not settled.',
+    ].join(' '),
+    commercialUse: accepted ? 'allowed' : 'unknown',
+    gated: false,
+    source: pin.url,
+    attribution: null,
+  };
+}
+const realEsrganQualification = (licence: RealEsrganLicence) => ({
+  licenseReviewed: licence === 'owner-accepted'
+    ? { status: 'pass' as const, evidence: `publisher licence BSD-3-Clause; publisher file digest-identical to the pin; ${DIV2K_RISK} Accepted by the owner on 2026-11-17.` }
+    : { status: 'not_assessed' as const, evidence: `publisher licence BSD-3-Clause and digest match recorded; ${DIV2K_RISK} Owner acceptance pending.` },
+});
+const NOT_RUN = { status: 'not_assessed' as const, evidence: 'set from a recorded run on a named profile' };
+
 const upscaleGraph: ComfyGraph = {
   '1': { class_type: 'LoadImage', inputs: { image: 'pulseframe_input.png' } },
-  '2': { class_type: 'UpscaleModelLoader', inputs: { model_name: 'RealESRGAN_x4plus.pth' } },
+  '2': { class_type: 'UpscaleModelLoader', inputs: { model_name: AI_WAVE_PINS.realesrganX4plus.file } },
   '3': { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['2', 0], image: ['1', 0] } },
-  '4': { class_type: 'SaveImage', inputs: { images: ['3', 0], filename_prefix: 'pulseframe_upscale' } },
+  '4': { class_type: 'ImageScaleBy', inputs: { image: ['3', 0], upscale_method: 'lanczos', scale_by: 1 } },
+  '5': { class_type: 'SaveImage', inputs: { images: ['4', 0], filename_prefix: 'pulseframe_upscale' } },
 };
 /**
- * Still-image 4x upscale with Real-ESRGAN x4plus through ComfyUI core nodes (comfy_extras.nodes_upscale_model).
- * EXPERIMENTAL: implemented only. Never executed, not quality-reviewed, not hardware-qualified.
- * The output is 4x the input size; the descriptor schema cannot express a size multiple, so `expectSize` is left unset.
+ * Photo upscale 2x, 3x or 4x (replaces comfy.image.upscale-4x 0.1.0): Real-ESRGAN x4plus makes 4x, then ImageScaleBy (lanczos)
+ * takes it to the reviewed size: scale 0.5 → 2x, 0.75 → 3x, 1 → 4x. The output size is contract-checked exactly as ComfyUI
+ * computes it (Python round of side × 4 × scale, nodes.py:1939-1940). EXPERIMENTAL: not quality-reviewed, not hardware-qualified.
  */
-export const IMAGE_UPSCALE_4X: ComfyDescriptor = ComfyDescriptorSchema.parse({
-  id: 'comfy.image.upscale-4x',
+export function imageUpscaleDescriptor(licence: RealEsrganLicence = 'owner-accepted'): ComfyDescriptor {
+  return ComfyDescriptorSchema.parse({
+    id: 'comfy.image.upscale',
+    version: '0.2.0',
+    provider: 'comfyui',
+    state: 'published',
+    title: { he: 'הגדלת תמונה פי 2, 3 או 4 (ניסיוני)', en: 'Upscale photo 2x, 3x or 4x (experimental)' },
+    description: {
+      he: 'הגדלת תמונה סטילית באמצעות Real-ESRGAN: פי 4 מהמודל, ואז הקטנה מדויקת לפי 2, פי 3 או פי 4. רץ על המעבד; האיכות לא נבדקה.',
+      en: 'Still-photo upscale with Real-ESRGAN: 4x from the model, then an exact resize to 2x, 3x or 4x. Runs on the CPU; quality not reviewed.',
+    },
+    source: { repository: COMFY_REPO, commit: COMFY_COMMIT, notices: 'Graph authored for PULSEFRAME from ComfyUI core nodes (comfy_extras.nodes_upscale_model, nodes.ImageScaleBy). Not copied from Freefield.' },
+    graph: upscaleGraph,
+    graphDigest: graphDigest(upscaleGraph),
+    inputs: [
+      { name: 'image', label: { he: 'תמונת מקור', en: 'Source image' }, type: 'image', binding: { nodeId: '1', input: 'image' }, required: true, reviewed: true },
+      { name: 'scale', label: { he: 'הגדלה (0.5 = פי 2, 0.75 = פי 3, 1 = פי 4)', en: 'Enlargement (0.5 = 2x, 0.75 = 3x, 1 = 4x)' }, type: 'float', binding: { nodeId: '4', input: 'scale_by' }, required: false, default: 1, min: 0.5, max: 1, allowed: [0.5, 0.75, 1], reviewed: true },
+    ],
+    outputs: [{ name: 'image', role: 'primary', mediaType: 'image', nodeId: '5', encoding: 'display', reviewed: true, expectSize: { scaleOfInputByParam: { input: 'image', param: 'scale', base: 4 } } }],
+    requiredNodes: core(['LoadImage', 'UpscaleModelLoader', 'ImageUpscaleWithModel', 'ImageScaleBy', 'SaveImage']),
+    models: [realEsrganModel(AI_WAVE_PINS.realesrganX4plus, 'v0.1.0', licence)],
+    runtime: { comfyuiCommit: COMFY_COMMIT, imageDigest: null },
+    // Limits apply to the INPUT (up to 16x the pixels come out). 1 MP is the CPU bound of the plan.
+    limits: { maxFrames: 1, maxPixels: 1024 * 1024 },
+    resources: { downloadBytes: AI_WAVE_PINS.realesrganX4plus.bytes, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
+    egress: 'none',
+    languages: [],
+    limitations: [
+      'Still images only; video uses comfy.video.enhance.',
+      'Not quality-reviewed: no reviewed fixtures. Upscaling invents detail and can alter faces, text and fine patterns.',
+      'Inputs up to 1 megapixel on the CPU; memory and speed are measured per profile, not promised. Model file size is not runtime memory.',
+      'Alpha is not kept: the model works on the colour channels only.',
+      'The model file is a PyTorch .pth, read by ComfyUI through its weights-only loader (nodes_upscale_model.py, safe_load=True).',
+    ],
+    qualification: {
+      schemaValid: { status: 'pass', evidence: 'DescriptorSchema + graph digest' },
+      dependencyReady: { status: 'pass', evidence: 'core nodes at eee59185; model file verified by size and SHA-256 at run time' },
+      ...realEsrganQualification(licence),
+      executed: NOT_RUN,
+      qualityReviewed: { status: 'not_assessed', evidence: 'no reviewed fixture set' },
+      hebrewQualified: NA,
+      hardwareQualified: NOT_RUN,
+    },
+  });
+}
+export const IMAGE_UPSCALE: ComfyDescriptor = imageUpscaleDescriptor('owner-accepted');
+/**
+ * @deprecated comfy.image.upscale-4x 0.1.0 is replaced by comfy.image.upscale 0.2.0 (ADR-0017). This name is kept only so older
+ * imports compile; it is the new descriptor, and the registry lists it once.
+ */
+export const IMAGE_UPSCALE_4X: ComfyDescriptor = IMAGE_UPSCALE;
+
+const rifePin = AI_WAVE_PINS.rifeV425;
+const slowmoGraph: ComfyGraph = {
+  '1': { class_type: 'LoadVideo', inputs: { file: 'pulseframe_input.mkv' } },
+  '2': { class_type: 'GetVideoComponents', inputs: { video: ['1', 0] } },
+  '3': { class_type: 'FrameInterpolationModelLoader', inputs: { model_name: rifePin.file } },
+  '4': { class_type: 'FrameInterpolate', inputs: { interp_model: ['3', 0], images: ['2', 0], multiplier: 2 } },
+  '5': { class_type: 'PreviewImage', inputs: { images: ['4', 0] } },
+};
+/**
+ * Smooth slow motion: RIFE v4.25 makes m−1 new frames between every pair of source frames (FrameInterpolate copies the source
+ * frames through unchanged, nodes_frame_interpolation.py). A frame job (ADR-0017): chunks of 48 source frames overlapping by one,
+ * the result has exactly N·m frames at m times the source rate (the last frame is held m−1 times), and in place of a clip it is
+ * placed together with set_clip_speed(1/m) so the clip becomes exactly m times longer. EXPERIMENTAL.
+ */
+export const VIDEO_SMOOTH_SLOWMO: ComfyDescriptor = ComfyDescriptorSchema.parse({
+  id: 'comfy.video.smooth-slowmo',
   version: '0.1.0',
   provider: 'comfyui',
   state: 'published',
-  title: { he: 'הגדלת תמונה פי 4 (ניסיוני, טרם הורץ)', en: 'Upscale image 4x (experimental, not yet run)' },
-  description: { he: 'הגדלת תמונה סטילית פי 4 באמצעות Real-ESRGAN. ניסיוני: הגרף עדיין לא הורץ.', en: 'Still-image 4x upscale using Real-ESRGAN. Experimental: this graph has not been run yet.' },
-  source: { repository: 'https://github.com/comfyanonymous/ComfyUI', commit: 'eee59185ff4f43ae2d9ad122b245619d27d9daad', notices: 'Graph authored for PULSEFRAME from ComfyUI core nodes (comfy_extras.nodes_upscale_model). Not copied from Freefield.' },
-  graph: upscaleGraph,
-  graphDigest: graphDigest(upscaleGraph),
-  inputs: [{ name: 'image', label: { he: 'תמונת מקור', en: 'Source image' }, type: 'image', binding: { nodeId: '1', input: 'image' }, required: true, reviewed: true }],
-  outputs: [{ name: 'image', role: 'primary', mediaType: 'image', nodeId: '4', encoding: 'display', reviewed: true, expectSize: null }],
-  requiredNodes: ['LoadImage', 'UpscaleModelLoader', 'ImageUpscaleWithModel', 'SaveImage'].map((classType) => ({ classType, pack: 'core', packVersion: null })),
+  title: { he: 'הילוך איטי חלק (ניסיוני)', en: 'Smooth slow motion (experimental)' },
+  description: {
+    he: 'יוצר פריימי ביניים עם RIFE כדי להאט קטע פי 2 או פי 4 בלי קפיצות. פריימי המקור נשמרים כמו שהם. רץ על המעבד; האיכות לא נבדקה.',
+    en: 'Makes in-between frames with RIFE so a clip can play 2x or 4x slower without stutter. Source frames are kept unchanged. Runs on the CPU; quality not reviewed.',
+  },
+  source: { repository: COMFY_REPO, commit: COMFY_COMMIT, notices: 'Graph authored for PULSEFRAME from ComfyUI core nodes (comfy_extras.nodes_video, comfy_extras.nodes_frame_interpolation). Not copied from Freefield.' },
+  graph: slowmoGraph,
+  graphDigest: graphDigest(slowmoGraph),
+  inputs: [
+    { name: 'video', label: { he: 'וידאו מקור', en: 'Source video' }, type: 'video', binding: { nodeId: '1', input: 'file' }, required: true, reviewed: true },
+    { name: 'multiplier', label: { he: 'האטה (פי)', en: 'Slow down (times)' }, type: 'int', binding: { nodeId: '4', input: 'multiplier' }, required: false, default: 2, min: 2, max: 4, allowed: [2, 4], reviewed: true },
+  ],
+  outputs: [{ name: 'video', role: 'primary', mediaType: 'video', nodeId: '5', encoding: 'display', reviewed: true, expectSize: { sameAsInput: 'video' }, expectFrames: 'pairwise' }],
+  requiredNodes: core(['LoadVideo', 'GetVideoComponents', 'FrameInterpolationModelLoader', 'FrameInterpolate', 'PreviewImage']),
   models: [{
-    role: 'upscale',
-    path: 'upscale_models/RealESRGAN_x4plus.pth',
-    publisher: 'Real-ESRGAN (xinntao); file as mirrored by nateraw on Hugging Face',
-    revision: 'nateraw/real-esrgan@42efb9c3eeed1f5c0c8a626cf5f7f4481dfbb094',
-    sha256: '4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1',
-    bytes: 67040989,
-    license: 'BSD-3-Clause (as tagged on the mirror)',
-    licenseEvidence: 'Metadata-level check on 2026-11-16 of https://huggingface.co/nateraw/real-esrgan at revision 42efb9c3eeed1f5c0c8a626cf5f7f4481dfbb094: cardData.license is bsd-3-clause; RealESRGAN_x4plus.pth is 67040989 bytes with LFS sha256 4fa0d389...82f1. The same digest is served by other third-party mirrors. The original publisher repository could not be fetched in this session, so the licence is NOT confirmed against the original publisher and the mirror owner is not the publisher. Training-data terms were not reviewed. Not a .safetensors file (PyTorch .pth, loaded by ComfyUI with safe_load).',
-    commercialUse: 'unknown',
+    role: 'frame_interpolation',
+    path: `frame_interpolation/${rifePin.file}`,
+    publisher: rifePin.publisher,
+    revision: 'Comfy-Org/Frame-Interpolation@aa7009be4d1471ea0bac91d6fe4d7e4b637cbbfc',
+    sha256: rifePin.sha256,
+    bytes: rifePin.bytes,
+    license: 'MIT',
+    licenseEvidence: `${rifePin.licence} Pinned file: ${rifePin.url}, ${rifePin.bytes} bytes, sha256 ${rifePin.sha256} (${rifePin.evidence}).`,
+    commercialUse: 'allowed',
     gated: false,
-    source: 'https://huggingface.co/nateraw/real-esrgan/resolve/42efb9c3eeed1f5c0c8a626cf5f7f4481dfbb094/RealESRGAN_x4plus.pth',
+    source: rifePin.url,
+    attribution: null,
   }],
-  runtime: { comfyuiCommit: 'eee59185ff4f43ae2d9ad122b245619d27d9daad', imageDigest: null },
-  // Limits apply to the INPUT; the output has 16x the pixels.
-  limits: { maxFrames: 1, maxPixels: 1024 * 1024 },
-  // Three different quantities (FF-06). Residency and host RAM are unknown until measured.
-  resources: { downloadBytes: 67040989, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
+  runtime: { comfyuiCommit: COMFY_COMMIT, imageDigest: null },
+  limits: { maxFrames: 150, maxPixels: 1280 * 720 },
+  resources: { downloadBytes: rifePin.bytes, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
+  frames: { input: 'video', mode: 'pairwise', chunkFrames: 48, multiplierParam: 'multiplier', maxOutputRate: 120 },
   egress: 'none',
   languages: [],
   limitations: [
-    'Still images only; not suitable for video without separate temporal-consistency tests.',
-    'Experimental: this graph has never been executed.',
-    'Not quality-reviewed: no reviewed fixtures.',
-    'Upscaling invents detail and can alter faces, text and fine patterns.',
-    'The output has 16x the pixels of the input (4x per side); memory use has not been measured, and no GPU memory or speed figures exist. Model file size is not runtime memory.',
-    'The output size is not contract-checked (the descriptor schema cannot express a 4x multiple).',
-    'The model file is a PyTorch .pth, not safetensors. The pinned ComfyUI reads it through its weights-only loader (comfy_extras/nodes_upscale_model.py calls load_torch_file with safe_load=True); that was read in the source, not exercised.',
+    'Not quality-reviewed: fast motion, occlusion, thin structures and text can smear or warp in the new frames.',
+    'On the CPU: up to 1280x720 and 150 source frames per run; the output rate may not exceed 120 frames per second.',
+    'Pairs across a scene cut found by the scenes analysis are held, not interpolated; without that analysis a cut is blended.',
+    'The last frame is held m−1 times so the result has exactly m times the frames and the same length as the source range.',
+    'Clips that change speed gradually, play backwards or freeze are refused.',
+    'The model file is a key-renamed repack by Comfy-Org of the publisher\'s RIFE v4.25; Vimeo-90K training terms not reviewed.',
   ],
   qualification: {
     schemaValid: { status: 'pass', evidence: 'DescriptorSchema + graph digest' },
-    dependencyReady: { status: 'pass', evidence: 'core nodes; model file verified by size and SHA-256 at run time' },
-    licenseReviewed: { status: 'not_assessed', evidence: 'mirror tagged bsd-3-clause; original publisher licence not fetched; owner confirmation pending' },
-    executed: { status: 'not_assessed', evidence: 'never run' },
+    dependencyReady: { status: 'pass', evidence: 'core nodes at eee59185; model file verified by size and SHA-256 at run time' },
+    licenseReviewed: { status: 'pass', evidence: 'MIT per the original publisher (hzwer/Practical-RIFE); the file is a key-renamed repack recorded as such; training-data terms not reviewed. Metadata-level check.' },
+    executed: NOT_RUN,
     qualityReviewed: { status: 'not_assessed', evidence: 'no reviewed fixture set' },
     hebrewQualified: NA,
-    hardwareQualified: { status: 'not_assessed', evidence: 'never run on any profile' },
+    hardwareQualified: NOT_RUN,
   },
 });
-export const BUILTIN_CAPABILITIES: ComfyDescriptor[] = [SMOKE_SOLID_IMAGE, IMAGE_SOFT_BLUR, IMAGE_REMOVE_BACKGROUND, IMAGE_UPSCALE_4X];
+
+const x4v3Pin = AI_WAVE_PINS.realesrGeneralX4v3;
+const enhanceGraph: ComfyGraph = {
+  '1': { class_type: 'LoadVideo', inputs: { file: 'pulseframe_input.mkv' } },
+  '2': { class_type: 'GetVideoComponents', inputs: { video: ['1', 0] } },
+  '3': { class_type: 'UpscaleModelLoader', inputs: { model_name: x4v3Pin.file } },
+  '4': { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['3', 0], image: ['2', 0] } },
+  '5': { class_type: 'ImageScaleBy', inputs: { image: ['4', 0], upscale_method: 'lanczos', scale_by: 1 } },
+  '6': { class_type: 'PreviewImage', inputs: { images: ['5', 0] } },
+};
+/**
+ * Video enhance: realesr-general-x4v3 per frame (the core node tiles at 512 px, nodes_upscale_model.py), then ImageScaleBy to 2x or
+ * 4x. A frame job (ADR-0017) in chunks of 24 frames; frame count and rate equal the source, the source sound is copied back. EXPERIMENTAL.
+ */
+export function videoEnhanceDescriptor(licence: RealEsrganLicence = 'owner-accepted'): ComfyDescriptor {
+  return ComfyDescriptorSchema.parse({
+    id: 'comfy.video.enhance',
+    version: '0.1.0',
+    provider: 'comfyui',
+    state: 'published',
+    title: { he: 'שיפור והגדלת וידאו (ניסיוני)', en: 'Enhance and upscale video (experimental)' },
+    description: {
+      he: 'מנקה רעש ומגדיל וידאו פי 2 או פי 4, פריים אחר פריים, עם Real-ESRGAN (general x4v3). מספר הפריימים והקצב נשארים. רץ על המעבד; האיכות לא נבדקה.',
+      en: 'Cleans up and upscales video 2x or 4x, frame by frame, with Real-ESRGAN (general x4v3). Frame count and rate stay the same. Runs on the CPU; quality not reviewed.',
+    },
+    source: { repository: COMFY_REPO, commit: COMFY_COMMIT, notices: 'Graph authored for PULSEFRAME from ComfyUI core nodes (comfy_extras.nodes_video, comfy_extras.nodes_upscale_model, nodes.ImageScaleBy). Not copied from Freefield.' },
+    graph: enhanceGraph,
+    graphDigest: graphDigest(enhanceGraph),
+    inputs: [
+      { name: 'video', label: { he: 'וידאו מקור', en: 'Source video' }, type: 'video', binding: { nodeId: '1', input: 'file' }, required: true, reviewed: true },
+      { name: 'scale', label: { he: 'הגדלה (0.5 = פי 2, 1 = פי 4)', en: 'Enlargement (0.5 = 2x, 1 = 4x)' }, type: 'float', binding: { nodeId: '5', input: 'scale_by' }, required: false, default: 1, min: 0.5, max: 1, allowed: [0.5, 1], reviewed: true },
+    ],
+    outputs: [{ name: 'video', role: 'primary', mediaType: 'video', nodeId: '6', encoding: 'display', reviewed: true, expectSize: { scaleOfInputByParam: { input: 'video', param: 'scale', base: 4 } }, expectFrames: 'same' }],
+    requiredNodes: core(['LoadVideo', 'GetVideoComponents', 'UpscaleModelLoader', 'ImageUpscaleWithModel', 'ImageScaleBy', 'PreviewImage']),
+    models: [realEsrganModel(x4v3Pin, 'v0.2.5.0', licence)],
+    runtime: { comfyuiCommit: COMFY_COMMIT, imageDigest: null },
+    limits: { maxFrames: 300, maxPixels: 640 * 360 },
+    resources: { downloadBytes: x4v3Pin.bytes, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
+    frames: { input: 'video', mode: 'per-frame', chunkFrames: 24, maxOutputRate: 120 },
+    egress: 'none',
+    languages: [],
+    limitations: [
+      'This model file is the strongest denoising setting of Real-ESRGAN general x4v3 (no blend with the weak-denoise model): fine texture can be smoothed away.',
+      'Frame-to-frame flicker has not been reviewed; each frame is processed on its own.',
+      'On the CPU: inputs up to 640x360 and 300 frames per run.',
+      'Not quality-reviewed: upscaling invents detail and can alter faces, text and fine patterns.',
+      'Clips that change speed gradually, play backwards or freeze are refused.',
+    ],
+    qualification: {
+      schemaValid: { status: 'pass', evidence: 'DescriptorSchema + graph digest' },
+      dependencyReady: { status: 'pass', evidence: 'core nodes at eee59185; model file verified by size and SHA-256 at run time' },
+      ...realEsrganQualification(licence),
+      executed: NOT_RUN,
+      qualityReviewed: { status: 'not_assessed', evidence: 'no reviewed fixture set; flicker not reviewed' },
+      hebrewQualified: NA,
+      hardwareQualified: NOT_RUN,
+    },
+  });
+}
+export const VIDEO_ENHANCE: ComfyDescriptor = videoEnhanceDescriptor('owner-accepted');
+
+export const BUILTIN_CAPABILITIES: ComfyDescriptor[] = [SMOKE_SOLID_IMAGE, IMAGE_SOFT_BLUR, IMAGE_REMOVE_BACKGROUND, IMAGE_UPSCALE, VIDEO_SMOOTH_SLOWMO, VIDEO_ENHANCE];

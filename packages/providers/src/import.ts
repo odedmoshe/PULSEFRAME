@@ -4,8 +4,24 @@
  */
 import { ComfyGraphSchema, graphDigest, publicationBlockers, type Blocker, type ComfyDescriptor } from './descriptor.ts';
 
-/** Node classes shipped in ComfyUI core that the importer can attribute without a runtime. Extend only after review. */
-export const KNOWN_CORE_NODES = new Set(['EmptyImage', 'SaveImage', 'PreviewImage', 'LoadImage', 'ImageScale', 'ImageInvert', 'ImageBlur', 'ImageBatch', 'SolidMask', 'MaskToImage', 'ImageCompositeMasked', 'ImagePadForOutpaint', 'LoadBackgroundRemovalModel', 'RemoveBackground', 'JoinImageWithAlpha', 'InvertMask']);
+/**
+ * Node classes shipped in ComfyUI core that the importer can attribute without a runtime. Extend only after review.
+ * ADR-0017 additions, each read in the core source at the pinned commit eee59185 (comfy_extras/nodes_upscale_model.py, nodes.py
+ * ImageScaleBy, nodes_video.py, nodes_frame_interpolation.py, the MediaPipe face and DA3 depth nodes, nodes_primitive.py and the
+ * logic nodes that ComfyUI's own "Frame Interpolation" blueprint uses), so a graph built from them imports without unknown_node_pack.
+ * Being known says only who ships the class; every imported graph is still a draft that a reviewer must publish.
+ */
+export const KNOWN_CORE_NODES = new Set([
+  'EmptyImage', 'SaveImage', 'PreviewImage', 'LoadImage', 'ImageScale', 'ImageInvert', 'ImageBlur', 'ImageBatch', 'SolidMask', 'MaskToImage', 'ImageCompositeMasked', 'ImagePadForOutpaint', 'LoadBackgroundRemovalModel', 'RemoveBackground', 'JoinImageWithAlpha', 'InvertMask',
+  // upscaling (Real-ESRGAN through spandrel) and exact scale factors
+  'UpscaleModelLoader', 'ImageUpscaleWithModel', 'ImageScaleBy',
+  // video in and out, frame interpolation (RIFE / FILM)
+  'LoadVideo', 'GetVideoComponents', 'CreateVideo', 'SaveVideo', 'FrameInterpolationModelLoader', 'FrameInterpolate',
+  // faces (wave 1b) and depth (wave 1b)
+  'LoadMediaPipeFaceLandmarker', 'MediaPipeFaceLandmarker', 'MediaPipeFaceMask', 'LoadDA3Model', 'DA3Inference', 'DA3Render',
+  // primitives and logic used by core blueprints
+  'PrimitiveInt', 'PrimitiveBoolean', 'ComfySwitchNode', 'ComfyMathExpression',
+]);
 const OUTPUT_NODES: Record<string, 'image' | 'video' | 'audio'> = { SaveImage: 'image', PreviewImage: 'image', SaveAnimatedWEBP: 'video', SaveAnimatedPNG: 'video', SaveVideo: 'video', SaveWEBM: 'video', VHS_VideoCombine: 'video', SaveAudio: 'audio' };
 const MEDIA_LOADERS: Record<string, 'image' | 'video' | 'audio'> = { LoadImage: 'image', LoadVideo: 'video', VHS_LoadVideo: 'video', LoadAudio: 'audio' };
 const MODEL_FIELD = /^(bg_removal_name|ckpt_name|lora_name|vae_name|unet_name|clip_name\d*|control_net_name|model_name|upscale_model|style_model_name|clip_vision_name|gligen_name)$/;
