@@ -12,10 +12,14 @@
  *       design-time constants), so only sqrt runs here;
  *     - Gs_k = the anchored moving average of U over 300 ms, blocks [k − 27, k + 2] (mostly trailing: the centred window already
  *       looks 200 ms ahead, and the whole effect may read at most 250 ms ahead, the registry's aheadMs);
- *     - a pause cap: a block with no active block within ±100 ms (HOLD) is a pause, capped at gain 1; the cap is averaged over
- *       ±2 blocks so it eases in. F_k = min(Gs_k, cap_k). Short gaps between words (under about 200 ms) hold the speech gain,
- *       so the noise between words is not pumped up and down; a longer pause is never raised beyond 130 ms from speech;
- *     - the gain of a sample is F interpolated linearly between block centres.
+ *     - a pause cap at the gate's edge: with d_k the distance in blocks from k to the nearest block that is not active (0 for an
+ *       inactive block), cap_k = 1 while d_k ≤ 2 (EDGE) and eases linearly to Gmax over the next 2 blocks (EASE).
+ *       F_k = min(Gs_k, cap_k). Every inactive block and the two outermost blocks of every active run are capped at gain 1, so
+ *       with the interpolation below no sample of a pause (any gap holding a whole block below the gate, 10 ms; tested down to
+ *       25 ms) is ever raised; the ramp up to the speech gain lies inside the speech. The price: the noise heard between words is
+ *       not raised while the words around it are, and words shorter than about 40 ms are raised less;
+ *     - the gain of a sample is F interpolated linearly between block centres (a sample interpolates between its own block and
+ *       the nearer neighbour, so a sample of an inactive block or of an edge block sees two gains ≤ 1).
  *  4. Limiter, always last: r[n] = min(1, c / max(|L|, |R|)), c = ceilingDb as a gain; m = the anchored minimum of r over the
  *     next 5 ms; the gain is the anchored average of m over the last 5 ms (every averaged window of minima contains n, so the gain
  *     never exceeds r[n] and the peak never exceeds c); a final clamp to c (to the largest 32-bit float not above it) covers rounding.
@@ -43,8 +47,8 @@ export const SPEECH = {
   /** a block below this mean square (dBFS) is not speech */ gateDb: -50,
   /** half-width of the centred level window, blocks (±200 ms: 400 ms) */ windowBlocks: 20,
   /** gain smoothing over blocks [k − smoothPast, k + smoothFuture] (300 ms) */ smoothPast: 27, smoothFuture: 2,
-  /** a block with no active block within ±holdBlocks is a pause (gain capped at 1) */ holdBlocks: 10,
-  /** half-width of the cap's easing, blocks */ capEase: 2,
+  /** the outermost blocks of every active run held at gain ≤ 1, like the inactive blocks (the pause cap) */ edgeBlocks: 2,
+  /** blocks over which the cap then eases from 1 to Gmax */ capEase: 2,
   /** limiter window, ms */ limiterMs: 5,
   /** what a restarted filter may differ from a never-reset one by, relative to the input peak */ restartEps: 2 ** -20,
   presence: { lowHz: 300, lowDb: -2, lowQ: 0.9, midHz: 3500, midDb: 4, midQ: 1.2, shelfHz: 10000, shelfDb: 2 },
@@ -91,9 +95,9 @@ export function speechDesign(p: Readonly<AudioFxParams>, sampleRate: number): Sp
   const Wf = Math.max(1, cascadeWarm([...lowCut, ...presence], 1, SPEECH.restartEps), presence.length ? cascadeWarm(presence, 1, SPEECH.restartEps) : 0);
   const S = Wf;
   const B = Math.max(1, msToSamples(SPEECH.blockMs, sampleRate)), M = Math.max(1, Math.round((SPEECH.limiterMs * sampleRate) / 1000));
-  const { windowBlocks: Wb, smoothPast: P, smoothFuture: Qf, holdBlocks: H, capEase: E } = SPEECH;
-  // F_{k+1} needs the blocks up to k + 1 + Qf + Wb (level) and k + 1 + E + H (cap); they are complete when the input is that many blocks on
-  const aheadBlocks = Math.max(Qf + Wb + 2, H + E + 2);
+  const { windowBlocks: Wb, smoothPast: P, smoothFuture: Qf } = SPEECH;
+  // F_{k+1} needs the blocks up to k + 1 + Qf + Wb (level) and k + 1 + CAP_REACH (cap); they are complete when the input is that many blocks on
+  const aheadBlocks = Math.max(Qf + Wb, CAP_REACH) + 2;
   const aheadLevel = aheadBlocks * B;
   const ahead = aheadLevel + M - 1;
   // history: limiter (M − 1), leveller (the level window and smoothing behind the block before: (P + Wb + 2)·B − 1), filters (S + Wf − 1)
@@ -105,6 +109,10 @@ export function speechDesign(p: Readonly<AudioFxParams>, sampleRate: number): Sp
   return d;
 }
 
+/** The pause cap of a block depends on the activity of the blocks within ±CAP_REACH of it (its distance to the nearest inactive
+ * block matters up to CAP_REACH + 1, where the cap reaches Gmax). The block pipeline computes the cap no later than F needs it. */
+const CAP_REACH = SPEECH.edgeBlocks + SPEECH.capEase - 1;
+if (CAP_REACH > SPEECH.windowBlocks + SPEECH.smoothFuture) throw new Error('cleanup.speech: the pause cap reaches beyond the level window');
 /** Leveller block ring (whole blocks kept: the level window and the smoothing reach back 49 blocks). */
 const NB = 128, NM = NB - 1;
 /** Frames filtered at once (scratch size). */
@@ -120,9 +128,11 @@ class SpeechProcessor implements FxProcessor {
   // leveller
   private readonly B: number; private readonly gateSum: number; private readonly T2B: number;
   private readonly gmax: number; private readonly gmin: number; private readonly gmax2: number; private readonly gmin2: number;
-  private readonly invSmooth: number; private readonly invCap: number; private readonly aheadBlocks: number;
+  private readonly invSmooth: number; private readonly aheadBlocks: number;
+  /** the pause cap by distance to the nearest inactive block, 0..CAP_REACH + 1 */
+  private readonly capTab: Float64Array;
   private readonly Esum = new Float64Array(NB); private readonly act = new Uint8Array(NB);
-  private readonly G = new Float64Array(NB).fill(1); private readonly capRaw = new Float64Array(NB).fill(1);
+  private readonly G = new Float64Array(NB).fill(1);
   private readonly capS = new Float64Array(NB).fill(1); private readonly F = new Float64Array(NB).fill(1);
   private readonly wts: Float64Array; private readonly side: Int8Array;
   // delay lines and limiter
@@ -146,7 +156,9 @@ class SpeechProcessor implements FxProcessor {
     this.gateSum = dbToGain(SPEECH.gateDb) * dbToGain(SPEECH.gateDb) * 2 * B; // mean square −50 dBFS over the block's 2·B values
     this.T2B = T2B;
     this.gmax = d.gmax; this.gmin = 1 / d.gmax; this.gmax2 = d.gmax * d.gmax; this.gmin2 = 1 / this.gmax2;
-    this.invSmooth = 1 / (SPEECH.smoothPast + SPEECH.smoothFuture + 1); this.invCap = 1 / (2 * SPEECH.capEase + 1);
+    this.invSmooth = 1 / (SPEECH.smoothPast + SPEECH.smoothFuture + 1);
+    this.capTab = new Float64Array(CAP_REACH + 2);
+    for (let dist = 0; dist <= CAP_REACH + 1; dist++) this.capTab[dist] = 1 + (d.gmax - 1) * Math.min(1, Math.max(0, dist - SPEECH.edgeBlocks) / SPEECH.capEase);
     this.aheadBlocks = d.aheadLevel / B;
     // interpolation between block centres: a sample at offset o of block k lies (o + 0.5)/B − 0.5 blocks from the centre of k
     this.wts = new Float64Array(B); this.side = new Int8Array(B);
@@ -172,8 +184,8 @@ class SpeechProcessor implements FxProcessor {
   }
   /** Block j is complete with energy e: the block pipeline moves on (level gain, pause cap, smoothed gain F). */
   private finish(j: number, e: number): void {
-    const { windowBlocks: Wb, smoothPast: P, smoothFuture: Qf, holdBlocks: H, capEase: E } = SPEECH;
-    const Esum = this.Esum, act = this.act, G = this.G, capRaw = this.capRaw, capS = this.capS;
+    const { windowBlocks: Wb, smoothPast: P, smoothFuture: Qf } = SPEECH;
+    const Esum = this.Esum, act = this.act, G = this.G, capS = this.capS;
     const ji = j & NM;
     Esum[ji] = e;
     act[ji] = e >= this.gateSum ? 1 : 0;
@@ -184,16 +196,12 @@ class SpeechProcessor implements FxProcessor {
     let U = 1;
     if (n > 0) { const ratio = (this.T2B * n) / s; U = ratio >= this.gmax2 ? this.gmax : ratio <= this.gmin2 ? this.gmin : Math.sqrt(ratio); }
     G[u & NM] = U;
-    // pause cap of block v = j − H (no active block within ±H), eased over ±E blocks for block w = v − E
-    const v = j - H;
-    let near = 0;
-    for (let i = v - H; i <= j; i++) if (act[i & NM]) { near = 1; break; }
-    capRaw[v & NM] = near ? this.gmax : 1;
-    const w = v - E;
-    let c = 0;
-    for (let i = w - E; i <= v; i++) c += capRaw[i & NM]!;
-    capS[w & NM] = c * this.invCap;
-    // smoothed gain of block z = u − Qf over [z − P, z + Qf], capped
+    // pause cap of block v = j − CAP_REACH: its distance to the nearest inactive block in [v − CAP_REACH, v + CAP_REACH]
+    const v = j - CAP_REACH;
+    let dist = CAP_REACH + 1;
+    for (let i = 0; i <= CAP_REACH; i++) if (!act[(v - i) & NM] || !act[(v + i) & NM]) { dist = i; break; }
+    capS[v & NM] = this.capTab[dist]!;
+    // smoothed gain of block z = u − Qf over [z − P, z + Qf], capped (z ≤ v: its cap is known)
     const z = u - Qf;
     let g = 0;
     for (let i = z - P; i <= u; i++) g += G[i & NM]!;

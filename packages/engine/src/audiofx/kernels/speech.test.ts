@@ -109,32 +109,48 @@ describe('cleanup.speech: leveller', () => {
       else expect(levels[k]!, `quiet phrase ${k} raised by about levelDb`).toBeGreaterThan(-35 + 9);
     }
   }, 120000);
-  it('noise-only pauses at −60 dBFS are never raised by more than 0.1 dB: a recording of nothing but such noise, and pauses between quiet phrases farther than the hold (130 ms) from speech', () => {
-    // the reference is the same effect with levelDb 0 (the leveller at gain 1): the low cut and presence EQ alone
+  it('noise-only pauses at −60 dBFS are never raised by more than 0.1 dB, sample by sample: a recording of nothing but such noise, and every pause between quiet phrases and words, long or as short as 25 ms, next to speech included', () => {
+    // the reference is the same effect with levelDb 0 (the leveller at gain 1): the low cut and presence EQ alone. Both are linear and
+    // the limiter does not act at these levels, so y/r at a sample is the leveller's gain there.
     const loud = P({ levelDb: 15, presence: 0.5 }), flat = P({ levelDb: 0, presence: 0.5 });
-    const B = speechDesign(loud, SR).B, warm = reach(loud).warm;
+    const warm = reach(loud).warm;
+    /** The largest gain, in dB, over the samples of [from, to) outside every span of `speechAt` (samples where r is tiny are skipped). */
+    const worstGainDb = (y: Float32Array, r: Float32Array, speechAt: readonly [number, number][], from: number, to: number) => {
+      let worst = 0, n = 0;
+      for (let i = from; i < to; i++) {
+        if (speechAt.some(([s, e]) => i >= s && i < e)) continue;
+        for (const ch of [0, 1]) { const rv = Math.abs(r[i * 2 + ch]!); if (rv < 1e-6) continue; const g = Math.abs(y[i * 2 + ch]!) / rv; if (g > worst) worst = g; n++; }
+      }
+      return { db: db(worst), n };
+    };
     // (a) nothing but noise
     const quiet = noise(6 * SR, 5, ampFor(-60));
-    const ya = renderFx('cleanup.speech', loud, quiet), ra = renderFx('cleanup.speech', flat, quiet);
-    let worstA = -Infinity;
-    for (let b = Math.ceil(warm / B); (b + 1) * B <= 6 * SR; b++) worstA = Math.max(worstA, rmsDb(ya, b * B, (b + 1) * B) - rmsDb(ra, b * B, (b + 1) * B));
-    // (b) phrases at −35 dBFS (they want +15 dB) with 1 s pauses of −60 dBFS noise
-    const ph = Math.round(1.5 * SR), pa = SR, cycles = 4, x = noise((ph + pa) * cycles, 6, ampFor(-60));
+    const a = worstGainDb(renderFx('cleanup.speech', loud, quiet), renderFx('cleanup.speech', flat, quiet), [], warm, 6 * SR);
+    // (b) phrases at −35 dBFS (they want +15 dB) separated by 1 s pauses, then words of 300 ms separated by gaps of 300, 150, 80, 40
+    // and 25 ms; every start is off the 10 ms block grid (+137 samples), so pauses begin and end inside blocks
+    const ph = Math.round(1.5 * SR), pa = SR, word = Math.round(0.3 * SR), gaps = [0.3, 0.15, 0.08, 0.04, 0.025].map((g) => Math.round(g * SR));
     const speechAt: [number, number][] = [];
-    for (let k = 0; k < cycles; k++) { const s = k * (ph + pa) + pa; x.set(noise(ph, 200 + k, ampFor(-35)), s * 2); speechAt.push([s, s + ph]); }
-    const yb = renderFx('cleanup.speech', loud, x), rb = renderFx('cleanup.speech', flat, x);
-    const margin = Math.round(0.15 * SR);
-    let worstB = -Infinity, nearEdge = -Infinity, checked = 0, phraseGain = Infinity;
-    for (let b = Math.ceil(warm / B); (b + 1) * B <= x.length / 2; b++) {
-      const lo = b * B, hi = (b + 1) * B, rise = rmsDb(yb, lo, hi) - rmsDb(rb, lo, hi);
-      const inSpeech = speechAt.some(([s, e]) => hi > s && lo < e), far = !speechAt.some(([s, e]) => hi > s - margin && lo < e + margin);
-      if (far) { worstB = Math.max(worstB, rise); checked++; } else if (!inSpeech) nearEdge = Math.max(nearEdge, rise);
-      if (inSpeech && lo > speechAt.find(([s, e]) => lo >= s && lo < e)![0] + 0.5 * SR) phraseGain = Math.min(phraseGain, rise);
+    let t = 137;
+    for (let k = 0; k < 3; k++) {
+      t += pa; speechAt.push([t, t + ph]); t += ph;
+      t += pa;
+      for (const g of gaps) { speechAt.push([t, t + word]); t += word + g; }
     }
-    console.log(`pauses: noise only ${worstA.toFixed(3)} dB; pause blocks ≥ 150 ms from speech ${worstB.toFixed(3)} dB (${checked} blocks); within 150 ms of speech up to ${nearEdge.toFixed(2)} dB (the hold); the phrases themselves raised by at least ${phraseGain.toFixed(1)} dB`);
-    expect(worstA).toBeLessThanOrEqual(0.1);
-    expect(worstB).toBeLessThanOrEqual(0.1);
-    expect(checked).toBeGreaterThan(200);
+    t += pa;
+    const x = noise(t, 6, ampFor(-60));
+    speechAt.forEach(([s, e], k) => x.set(noise(e - s, 200 + k, ampFor(-35)), s * 2));
+    const yb = renderFx('cleanup.speech', loud, x), rb = renderFx('cleanup.speech', flat, x);
+    const b = worstGainDb(yb, rb, speechAt, warm, t);
+    // the short gaps alone (the pauses after the words), so a regression there is named
+    const wordGaps = speechAt.filter(([s, e]) => e - s === word).map(([, e], k): [number, number] => [e, e + gaps[k % gaps.length]!]);
+    const g = wordGaps.map(([s, e]) => worstGainDb(yb, rb, [], s, e).db);
+    let phraseGain = Infinity;
+    for (const [s, e] of speechAt) if (e - s === ph) phraseGain = Math.min(phraseGain, rmsDb(yb, s + SR / 2, e) - rmsDb(rb, s + SR / 2, e));
+    console.log(`pauses: noise only ${a.db.toFixed(3)} dB (${a.n} samples); every pause sample ${b.db.toFixed(3)} dB (${b.n} samples); gaps between words ${gaps.map((v, k) => `${Math.round((v * 1000) / SR)} ms ${g[k]!.toFixed(3)}`).join(', ')} dB; the phrases themselves raised by at least ${phraseGain.toFixed(1)} dB`);
+    expect(a.db).toBeLessThanOrEqual(0.1);
+    expect(b.db).toBeLessThanOrEqual(0.1);
+    for (const v of g) expect(v).toBeLessThanOrEqual(0.1);
+    expect(b.n).toBeGreaterThan(SR);
     expect(phraseGain, 'the quiet phrases are raised (the test is not vacuous)').toBeGreaterThan(10);
   }, 120000);
 });
