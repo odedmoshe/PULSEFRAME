@@ -2,12 +2,11 @@
  * The CSS imports of the title fonts the content packs bring (ADR-0022; core fonts.ts TITLE_FONT_ROWS): exactly the hebrew and
  * latin file of every weight of every row, the same per-subset files as fonts.ts imports for the catalogue.
  *
- * NOT IMPORTED YET, on purpose. A family may be offered only when every page that draws text loads it: the editor, the render
- * worker's page and the browser export all call ensureFonts (fonts.ts), which fails loudly for a catalogue face without a
- * loaded file, and the export manifest pins the files by SHA-256. The lead activates the title fonts in ONE commit: the rows
- * move from TITLE_FONT_ROWS into FONT_CATALOG, fonts.ts imports this file, and check:notices and proof:fonts run in a browser.
- * Karantina: the interface already loads the same woff2 files (ds/uiFonts.css points at the same files), so the bundle emits each
- * file once; check:notices confirms it on activation.
+ * Imported by fonts.ts, so every page that draws text loads them: the editor, the render worker's page and the browser export all
+ * call ensureFonts (fonts.ts), which fails loudly for a catalogue face without a loaded file, and the export manifest pins the
+ * files by SHA-256. The rows are in FONT_CATALOG (core fonts.ts) because apps/web/src/fonts.glyphs.test.ts proved them.
+ * Karantina: the interface already loads the same woff2 files (ds/uiFonts.css points at the same files), so the bundle emits
+ * each file once; check:notices confirms it.
  * apps/web/src/fonts.imports.test.ts (W2) holds this list equal to the rows.
  */
 import '@fontsource/suez-one/hebrew-400.css';

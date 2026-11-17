@@ -2,7 +2,9 @@
  * Bundled, pinned text fonts. Canvas text only uses a web font once it is loaded, so every
  * renderer (preview and export) must await this before drawing: otherwise output would silently
  * fall back to a system font and differ between machines.
- * The CSS imports below must list exactly the files of FONT_CATALOG (checked at start-up).
+ * The CSS imports below and in titleFonts.ts (the title fonts of the content packs) must list exactly the files of
+ * FONT_CATALOG (fonts.imports.test.ts; ensureFonts fails at start-up for a face that did not load). The render page
+ * (render.ts) and the browser export page call ensureFonts, so preview, stills and export load the same files.
  */
 import '@fontsource/heebo/hebrew-400.css';
 import '@fontsource/heebo/hebrew-700.css';
@@ -22,6 +24,7 @@ import '@fontsource/frank-ruhl-libre/latin-400.css';
 import '@fontsource/frank-ruhl-libre/latin-700.css';
 import '@fontsource/secular-one/hebrew-400.css';
 import '@fontsource/secular-one/latin-400.css';
+import './titleFonts.ts';
 import { FONT_CATALOG } from '@pulseframe/core';
 
 const HEBREW = 'אבגדהוזחטיכלמנסעפצקרשת בְּרֵאשִׁית';
