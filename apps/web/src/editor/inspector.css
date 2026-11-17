@@ -150,8 +150,11 @@
 .pf-insp input[type='range']::-moz-range-track { block-size: 4px; border-radius: 4px; background: var(--pf-surface-4); }
 .pf-insp input[type='range']::-moz-range-progress { block-size: 4px; border-radius: 4px; background: var(--pf-frame); }
 .pf-insp input[type='range']::-moz-range-thumb { inline-size: 14px; block-size: 14px; border: 0; border-radius: 50%; background: var(--pf-text); box-shadow: 0 0 0 2.5px var(--pf-surface-1), 0 0 0 4px color-mix(in srgb, var(--pf-frame) 70%, transparent); }
-.pf-insp input[type='range']:focus-visible { outline: none; }
+/* focus: the ring of every control (2px of --pf-focus, 2px off), on the range itself, so it shows in every engine and on the
+   standing faders too; the thumb also takes the focus colour */
+.pf-insp input[type='range']:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; border-radius: var(--pf-r-sm); }
 .pf-insp input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2.5px var(--pf-surface-1), 0 0 0 4.5px var(--pf-focus); }
+.pf-insp input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2.5px var(--pf-surface-1), 0 0 0 4.5px var(--pf-focus); }
 .pf-insp input[type='range']:disabled { opacity: .45; cursor: not-allowed; }
 
 /* buttons of the older vocabulary */
@@ -305,6 +308,8 @@
 .pf-insp input[type='range'].pf-vrange::-webkit-slider-runnable-track { width: 4px; height: 100%; block-size: auto; background: linear-gradient(to top, var(--pf-k-voice) var(--v), var(--pf-surface-4) var(--v)); }
 .pf-insp input[type='range'].pf-vrange::-webkit-slider-thumb { width: 22px; height: 12px; margin: 0; margin-left: -9px; border-radius: 3px; box-shadow: 0 0 0 1px var(--pf-surface-1), 0 2px 5px color-mix(in srgb, black 50%, transparent); }
 .pf-insp input[type='range'].pf-vrange::-moz-range-track { width: 4px; height: 100%; }
+.pf-insp input[type='range'].pf-vrange:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--pf-surface-1), 0 0 0 4px var(--pf-focus); }
+.pf-insp input[type='range'].pf-vrange:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--pf-surface-1), 0 0 0 4px var(--pf-focus); }
 .pf-insp .mix-strip .val { grid-column: 1; grid-row: auto; min-inline-size: 0; padding: 0; block-size: auto; background: none; box-shadow: none; color: var(--pf-text); font-size: var(--pf-fs-digits); line-height: 16px; white-space: nowrap; }
 .pf-insp .mix-pan { display: block; inline-size: 100%; padding-inline: var(--pf-sp-2); }
 .pf-insp .mix-pan input { inline-size: 100%; }
