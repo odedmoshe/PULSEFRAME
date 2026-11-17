@@ -157,8 +157,34 @@ export function buildOpenApi(): Record<string, unknown> {
         params: { type: 'object', additionalProperties: true, default: {} }, idempotencyKey: idem,
         attach: { type: 'object', additionalProperties: false, required: ['start'], description: 'Place the primary output on the timeline when the job finishes, if nothing it depends on changed meanwhile', properties: { start: ref('RationalTime'), duration: ref('RationalTime'), trackId: { type: 'string' } } },
         dependsOn: { type: 'array', maxItems: 100, items: { type: 'string' }, description: 'Entity ids the placement depends on; a change to any of them turns the placement into a proposal' },
+        source: ref('RunSource'),
+        apply: { enum: ['library', 'replace-clip', 'new-track'], description: 'Where the result goes (ADR-0017): library (default), replace-clip (the source clip shows the result, if nothing it depends on changed; otherwise it stays a proposal), new-track (a new clip on a new track)' },
+        confirmLongRun: { type: 'boolean', description: 'Required (true) when the estimate says needsConfirm (a run measured to take longer than PF_AI_CONFIRM_MINUTES); agents too' },
       },
     },
+    RunSource: {
+      description: 'What a run reads (ADR-0017): a timeline clip (its exact source span) or a library asset, optionally a frame range of it',
+      oneOf: [
+        { type: 'object', additionalProperties: false, required: ['clipId'], properties: { clipId: { type: 'string', minLength: 1, maxLength: 64 } } },
+        { type: 'object', additionalProperties: false, required: ['assetId'], properties: { assetId: { type: 'string', pattern: '^ast_[A-Za-z0-9]+$' }, range: { type: 'object', additionalProperties: false, required: ['firstFrame', 'frameCount'], properties: { firstFrame: { type: 'integer', minimum: 0 }, frameCount: { type: 'integer', exclusiveMinimum: 0 } } } } },
+      ],
+    },
+    SetupState: {
+      type: 'object', required: ['code', 'detail'], description: 'Why a capability can or cannot run here, in the order a person fixes it',
+      properties: {
+        code: { enum: ['ready', 'provider_not_configured', 'provider_unreachable', 'engine_not_configured', 'engine_not_working', 'engine_unverified', 'model_missing', 'licence_blocked', 'host_not_allowed', 'disk_insufficient'] },
+        detail: { type: 'string' }, hosts: { type: 'array', items: { type: 'string' } }, missingBytes: { type: 'integer' }, freeBytes: { type: 'integer' }, device: { type: ['string', 'null'] }, versions: { type: 'object', additionalProperties: { type: 'string' } },
+      },
+    },
+    CapabilityEstimate: {
+      type: 'object', required: ['capabilityId', 'setup', 'frames', 'chunks', 'missingDownloadBytes', 'scratchBytes', 'seconds', 'basis', 'needsConfirm', 'blockers'],
+      properties: {
+        capabilityId: { type: 'string' }, setup: ref('SetupState'), frames: { type: ['integer', 'null'] }, chunks: { type: ['integer', 'null'] },
+        missingDownloadBytes: { type: 'integer' }, scratchBytes: { type: 'integer' }, seconds: { type: ['integer', 'null'], description: 'Measured on this machine, or null: never a guess' }, basis: { enum: ['measured-profile', 'none'] },
+        needsConfirm: { type: 'boolean' }, blockers: { type: 'array', items: { type: 'object', required: ['code', 'message'], properties: { code: { type: 'string' }, message: { type: 'string' } } } },
+      },
+    },
+    TranslationReviewRequest: { type: 'object', additionalProperties: false, required: ['review'], properties: { review: { enum: ['reviewed', 'needed'] } } },
     DownloadRequest: { type: 'object', additionalProperties: false, required: ['confirmBytes'], properties: { confirmBytes: { type: 'integer', exclusiveMinimum: 0, description: 'Exact byte count shown to the owner; must match the server-computed size' } } },
     Derivative: {
       type: 'object', required: ['kind', 'status'],
@@ -245,6 +271,8 @@ export function buildOpenApi(): Record<string, unknown> {
     { method: 'get', path: `${P}/capabilities`, id: 'listCapabilities', scope: 'observe', summary: 'Provider capabilities and setup state', responses: { '200': okJson('Capabilities list', { type: 'object', additionalProperties: true }), ...errs('401', '403') } },
     { method: 'post', path: `${P}/capabilities/import`, id: 'importCapabilityDraft', scope: 'edit', summary: 'Import a workflow graph as a capability draft (not executed)', requestBody: bodyOf(ref('ImportRequest')), responses: { '200': okJson('Draft descriptor', { type: 'object', additionalProperties: true }), ...errs('400', '401', '403', '422') } },
     { method: 'post', path: `${P}/projects/{id}/capabilities/{capabilityId}/runs`, id: 'runCapability', scope: 'edit', summary: 'Start a capability run as a durable job', parameters: [pid, pathParam('capabilityId', 'Capability id')], requestBody: bodyOf(ref('RunRequest')), responses: { '202': okJson('Accepted', ref('JobAccepted')), ...errs('400', '401', '403', '404', '409', '422', '423', '503') } },
+    { method: 'get', path: `${P}/projects/{id}/capabilities/{capabilityId}/estimate`, id: 'estimateCapability', scope: 'observe', summary: 'What a run would read and cost here, and the setup state (read-only)', description: 'ADR-0017. Frames, chunks, scratch bytes, missing download bytes and a time measured on this machine (null with basis "none" when nothing was measured: never a guess); needsConfirm when the run needs confirmLongRun. Refusals the run would meet are listed in blockers instead of thrown.', parameters: [pid, pathParam('capabilityId', 'Capability id'), { name: 'source', in: 'query', required: false, schema: { type: 'string' }, description: 'JSON of a RunSource, URL-encoded' }, { name: 'params', in: 'query', required: false, schema: { type: 'string' }, description: 'JSON object of the run parameters, URL-encoded' }], responses: { '200': okJson('Estimate', ref('CapabilityEstimate')), ...errs('400', '401', '403', '404') } },
+    { method: 'post', path: `${P}/projects/{id}/variants/{variantId}/translation/review`, id: 'reviewTranslation', scope: 'edit', summary: 'Mark a machine translation reviewed, or back to needs review (owner session only)', description: 'ADR-0017. Only the owner\'s own session marks a translation; agent credentials get 403 `human_approval_required` (there is no MCP tool for it). Commits review_translation as one undoable revision; 409/422 when the variant is not a translation or already has that mark.', extra: { 'x-owner-session-only': true }, parameters: [pid, pathParam('variantId', 'Language format (variant) id')], requestBody: bodyOf(ref('TranslationReviewRequest')), responses: { '200': okJson('Committed', ref('CommitResult')), ...errs('400', '401', '403', '404', '409', '422') } },
     { method: 'post', path: `${P}/projects/{id}/capabilities/{capabilityId}/models/download`, id: 'downloadCapabilityModels', scope: 'edit', summary: 'Download a capability\'s models as a durable job (owner session only)', description: 'A deliberate human action: not exposed over MCP, and bound to the exact byte count shown. Agent credentials get 403 `human_approval_required`. 409 codes: `download_size_mismatch`, `models_already_ready`, `capability_blocked`.', extra: { 'x-owner-session-only': true }, parameters: [pid, pathParam('capabilityId', 'Capability id')], requestBody: bodyOf(ref('DownloadRequest')), responses: { '202': okJson('Accepted', ref('JobAccepted')), ...errs('400', '401', '403', '404', '409', '503') } },
     { method: 'get', path: `${P}/grants`, id: 'listGrants', scope: 'owner', summary: 'List agent grants with spend (owner session only)', extra: { 'x-owner-session-only': true }, responses: { '200': okJson('Grants', { type: 'object', required: ['grants'], properties: { grants: { type: 'array', items: ref('Grant') } } }), ...errs('401', '403') } },
     { method: 'post', path: `${P}/grants`, id: 'createGrant', scope: 'owner', summary: 'Create an agent grant (owner session only)', description: 'The token is returned once; only its hash is stored. Agent credentials get 403 `owner_required`. 400 if range.start is not before range.end.', extra: { 'x-owner-session-only': true }, requestBody: bodyOf(ref('GrantInput')), responses: { '201': okJson('Created; token shown once', { type: 'object', required: ['grant', 'token'], properties: { grant: ref('Grant'), token: { type: 'string', description: 'Bearer token, prefix pfg_' } } }), ...errs('400', '401', '403') } },

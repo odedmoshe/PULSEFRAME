@@ -8,14 +8,15 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { NarrationBody, NarrationScriptBody, TranscribeBody, type Speech } from './speech.ts';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { listOps, RationalTimeSchema, summarize, timeline, transcriptView } from '@pulseframe/core';
+import { listOps, RationalTimeSchema, summarize, timeline, transcriptFor, transcriptView } from '@pulseframe/core';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import { ExportOptionsSchema, type Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import type { Presence } from './presence.ts';
 import { describeMoment } from '@pulseframe/engine';
-import { addElement, ElementBody, addSfx, assertMayCancel, analysisView, analyzeAsset, cancelAnalysisJob, startAnalysisJob, AnalyzeBody, catalog, exportCaptions, findSilences, findFillerWords, FillerBody, jobView, programmeLoudness, SfxBody, SilenceBody } from './http.ts';
+import { addElement, ElementBody, addSfx, assertMayCancel, analysisView, analyzeAsset, cancelAnalysisJob, startAnalysisJob, AnalyzeBody, catalog, exportCaptions, findSilences, findFillerWords, FillerBody, jobView, programmeLoudness, requestModelDownload, RunBody, runRequestOf, SfxBody, SilenceBody } from './http.ts';
+import { RunSourceSchema } from './aiContracts.ts';
 import { ApiError, type Store } from './store.ts';
 import { preflight } from './preflight.ts';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
@@ -134,8 +135,39 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('observe', () => { const j = store.getJob(jobId); gov.assertMayAct(principal, j.projectId, 'observe'); return jobView(j); }));
     server.registerTool('list_capabilities', { description: 'Optional provider capabilities (reviewed workflows) with their qualification status, blockers, resource data and provider readiness. Listing never starts a worker.', inputSchema: z.object({}), annotations: ro }, () =>
       run('observe', () => capabilities.list()));
-    server.registerTool('run_capability', { description: 'Run a reviewed, published capability by id with validated parameters as a durable job. Raw workflow graphs cannot be submitted. Returns a jobId; poll get_job.', inputSchema: z.object({ projectId: pid, capabilityId: z.string(), params: z.record(z.string(), z.unknown()).optional(), idempotencyKey: z.string().max(128).optional(), attach: z.object({ start: RationalTimeSchema, duration: RationalTimeSchema.optional(), trackId: z.string().optional() }).optional().describe('Place the primary output on the timeline when done, unless its dependencies changed (then it stays a proposal in the library)'), dependsOn: z.array(z.string()).optional() }) }, ({ projectId, capabilityId, params, idempotencyKey, attach, dependsOn }) =>
-      run('edit', () => { gov.assertMayAct(principal, projectId, 'job'); gov.assertUnrestricted(principal, 'run provider jobs (their results are added to the library and may be placed on any track)'); const job = capabilities.start({ projectId, capabilityId, params: params ?? {}, idempotencyKey, attach, dependsOn, actor: principal.actor, principal }); return { jobId: job.id, status: job.status, type: job.type }; }));
+    /** The same admission as POST …/runs: scope, Pause Agent, the job right, no track/range-limited grants, then one RunRequest (runRequestOf). */
+    const startRun = (projectId: string, capabilityId: string, body: Record<string, unknown>) => {
+      gov.assertMayAct(principal, projectId, 'job');
+      gov.assertUnrestricted(principal, 'run provider jobs (their results are added to the library and may be placed on any track)');
+      const parsed = RunBody.safeParse(body);
+      if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
+      const job = capabilities.start(runRequestOf(projectId, capabilityId, parsed.data, principal));
+      return { jobId: job.id, status: job.status, type: job.type };
+    };
+    const runShape = RunBody.shape;
+    server.registerTool('run_capability', { description: 'Run a reviewed, published capability by id with validated parameters as a durable job (ComfyUI workflows and PULSEFRAME local tools alike). Raw workflow graphs cannot be submitted. `source` says what it reads (a clip, or a library asset with an optional frame range); `apply` says where the result goes (library, replace-clip, new-track). A run that estimate_capability says needs confirmation (needsConfirm) is refused unless confirmLongRun is true; agents have their own frame and queue caps. Returns a jobId; poll get_job (output.progress and output.eta are measured on this run).', inputSchema: z.object({ projectId: pid, capabilityId: z.string(), params: runShape.params.optional(), idempotencyKey: runShape.idempotencyKey, attach: runShape.attach.describe('Place the primary output on the timeline when done, unless its dependencies changed (then it stays a proposal in the library)'), dependsOn: runShape.dependsOn, source: runShape.source, apply: runShape.apply, confirmLongRun: runShape.confirmLongRun }) }, ({ projectId, capabilityId, ...rest }) =>
+      run('edit', () => startRun(projectId, capabilityId, Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)))));
+    server.registerTool('estimate_capability', { description: 'What a capability run would read and cost on this machine before starting it: its setup state (ready, or what is missing and how to fix it), frames and chunks, scratch bytes, missing download bytes, a time measured on this machine (or null with basis "none": never a guess), whether it needs confirmLongRun, and the refusals the run would meet. Read-only; starts nothing.', inputSchema: z.object({ projectId: pid, capabilityId: z.string(), params: z.record(z.string(), z.unknown()).optional(), source: RunSourceSchema.optional() }), annotations: ro }, ({ projectId, capabilityId, params, source }) =>
+      run('observe', () => { read(projectId); return capabilities.estimate(runRequestOf(projectId, capabilityId, { params: params ?? {}, ...(source ? { source } : {}) }, principal)); }));
+    server.registerTool('translate_captions', { description: 'Machine-translate captions between Hebrew and English with the local translation tool, as a durable job: the transcript of a media asset (assetId), or the cues of a manual caption track (captionTrackId). The result becomes a linked language format (variant) with each phrase keeping the master\'s timing, marked "not reviewed": only the owner can mark it reviewed, in the editor. Returns {jobId}; poll get_job. Refused with engine_not_configured or a model setup state when the tool is not installed (estimate_capability shows which).', inputSchema: z.object({ projectId: pid, assetId: z.string().optional().describe('Asset whose transcript to translate'), captionTrackId: z.string().optional().describe('Manual caption track whose cues to translate'), to: z.enum(['he', 'en']).describe('Language to translate into'), baseVariantId: z.string().optional().describe('Linked format whose frame size and caption style the language format copies'), name: z.string().min(1).max(80).optional(), idempotencyKey: z.string().max(128).optional() }) }, ({ projectId, assetId, captionTrackId, to, baseVariantId, name, idempotencyKey }) =>
+      run('edit', () => {
+        const p = read(projectId);
+        if ((assetId === undefined) === (captionTrackId === undefined)) throw new ApiError(400, 'invalid_request', 'give exactly one of assetId (translate its transcript) or captionTrackId (translate the cues of a manual caption track)');
+        let from: 'he' | 'en' = to === 'he' ? 'en' : 'he';
+        if (assetId !== undefined) {
+          const tr = transcriptFor(p.doc, assetId);
+          if (!tr) throw new ApiError(404, 'no_transcript', 'this asset has no transcript to translate', { assetId }, 'Type, import or recognise a transcript first (set_transcript, import_transcript, transcribe_asset).');
+          const lang = tr.transcript.language.toLowerCase().split('-')[0];
+          if (lang === to) throw new ApiError(422, 'language_mismatch', `the transcript is already in "${tr.transcript.language}"`, { language: tr.transcript.language, to });
+          if (lang === 'he' || lang === 'en') from = lang;
+        }
+        return startRun(projectId, `local.text.translate-${from}-${to}`, {
+          params: { ...(captionTrackId !== undefined ? { captionTrackId } : {}), ...(baseVariantId !== undefined ? { baseVariantId } : {}), ...(name !== undefined ? { name } : {}) },
+          ...(assetId !== undefined ? { source: { assetId } } : {}), apply: 'library', ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
+        });
+      }));
+    server.registerTool('request_model_download', { description: 'Ask the project owner to approve downloading a capability\'s missing model files. It only creates a pending approval bound to the exact byte count and file hashes shown by list_capabilities; nothing is downloaded until the owner approves it in the editor. Agents cannot start a download themselves.', inputSchema: z.object({ projectId: pid, capabilityId: z.string() }) }, ({ projectId, capabilityId }) =>
+      run('observe', async () => ({ approval: await requestModelDownload(capabilities, gov, principal, projectId, capabilityId) })));
     server.registerTool('cancel_job', { description: 'Request cancellation of an export or capability job. The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
       run('edit', () => (gov.assertMayAct(principal, store.getJob(jobId).projectId, 'observe'), assertMayCancel(gov, principal, store.getJob(jobId)), store.getJob(jobId).type === 'analysis' ? cancelAnalysisJob(store, jobId, principal.actor) : store.getJob(jobId).type === 'export' ? exporter.cancel(jobId, principal.actor) : capabilities.cancel(jobId, principal.actor))));
     return server;
