@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-17T15:36:09.513Z",
+  "generatedAt": "2026-11-17T15:41:06.177Z",
   "label": "Measured on this 4-vCPU container, CPU only, with short synthetic inputs. Every figure applies to this machine only; this is not hardware qualification and not a quality review.",
   "machine": {
     "cpus": 4,
@@ -24,14 +24,14 @@
       "workload": "60 frames 640x360 at 30000/1001, multiplier 4 (240 output frames)",
       "device": "cpu",
       "status": "succeeded",
-      "wallSeconds": 58.29,
+      "wallSeconds": 91.69,
       "secondsPerOutputFrame": {
-        "median": 0.179,
-        "p95": 0.253,
+        "median": 0.362,
+        "p95": 0.456,
         "chunks": 2,
         "basis": "per chunk: chunk wall seconds (extract, stage, inference, collect) / output frames kept from it"
       },
-      "peakRssBytes": 2095845376,
+      "peakRssBytes": 2257211392,
       "output": {
         "sha256": "sha256:b129d8da9e7cfe71824213f224b41484baa7e260d2f4e8a0cf42d2afe81268e2",
         "bytes": 57343,
@@ -47,9 +47,9 @@
       "workload": "one 320x240 photo, scale 1",
       "device": "cpu",
       "status": "succeeded",
-      "wallSeconds": 12.29,
+      "wallSeconds": 24.1,
       "secondsPerOutputFrame": null,
-      "peakRssBytes": 1948413952,
+      "peakRssBytes": 1942495232,
       "output": {
         "sha256": "sha256:d2679ac9f833860c27a536d7572390e1a62a434c57a5322ddc430f1bc5ae2798",
         "bytes": 797414,
@@ -67,7 +67,7 @@
       "status": "succeeded",
       "wallSeconds": 0.77,
       "secondsPerOutputFrame": null,
-      "peakRssBytes": 1347690496,
+      "peakRssBytes": 1349550080,
       "output": {
         "sha256": "sha256:c05deb409e312090285632e4d59c20e9f309426117da0e3f8fff1ff193730155",
         "bytes": 490232,
@@ -83,14 +83,14 @@
       "workload": "60 frames (2 s) 320x180 at 30000/1001 with sound, scale 1 (1280x720)",
       "device": "cpu",
       "status": "succeeded",
-      "wallSeconds": 80.86,
+      "wallSeconds": 68.3,
       "secondsPerOutputFrame": {
-        "median": 0.978,
-        "p95": 1.843,
+        "median": 1.024,
+        "p95": 1.651,
         "chunks": 3,
         "basis": "per chunk: chunk wall seconds (extract, stage, inference, collect) / output frames kept from it"
       },
-      "peakRssBytes": 1989660672,
+      "peakRssBytes": 1880408064,
       "output": {
         "sha256": "sha256:3e1973beb0168813d5d19d7f9c6873e02bf9a9285f198ea845f9bbc930c43794",
         "bytes": 907356,
@@ -106,14 +106,14 @@
       "workload": "12 identical frames 320x180, scale 0.5 (640x360)",
       "device": "cpu",
       "status": "succeeded",
-      "wallSeconds": 8.54,
+      "wallSeconds": 5.29,
       "secondsPerOutputFrame": {
-        "median": 0.661,
-        "p95": 0.661,
+        "median": 0.397,
+        "p95": 0.397,
         "chunks": 1,
         "basis": "per chunk: chunk wall seconds (extract, stage, inference, collect) / output frames kept from it"
       },
-      "peakRssBytes": 1613643776,
+      "peakRssBytes": 1614987264,
       "output": {
         "sha256": "sha256:0b3073f29adc2e643082d38e87954735c6a745e2ee9941056f7e117ed943e226",
         "bytes": 16853,
@@ -126,17 +126,22 @@
     }
   ],
   "rifeDownload": {
-    "status": "succeeded",
-    "bytes": 22674688,
-    "sha256": "1505884b9bdae956795430d2a70f7e2317b2abd8f130f8cfdb35a5759f909481",
-    "wallSeconds": 2.051,
-    "error": null
+    "status": "already-present-and-verified",
+    "bytes": 0
   },
   "slowmoPngPath": {
     "sourceFrames": 8,
     "outputFrames": 29,
     "everyFourthIdentical": true,
     "midpointCentroidMaxErrorPx": 0
+  },
+  "enhanceStaticFlicker": {
+    "frames": 12,
+    "distinctFrames": 1,
+    "maxByteDiffFromFirst": 0,
+    "bytesDiffering": 0,
+    "bytesCompared": 7603200,
+    "basis": "PNG frames collected from ComfyUI for 12 identical 320x180 source frames, scale 0.5 (640x360)"
   },
   "checks": [
     {
@@ -146,48 +151,6 @@
         "name": "cpu",
         "type": "cpu",
         "vramTotalBytes": null
-      }
-    },
-    {
-      "name": "before the download: slow motion is not runnable; its setup names the exact missing bytes",
-      "ok": true,
-      "detail": {
-        "code": "model_missing",
-        "detail": "1 model file(s) to download: frame_interpolation/rife_v4.25.safetensors",
-        "missingBytes": 22674688
-      }
-    },
-    {
-      "name": "an agent cannot start the download itself (403)",
-      "ok": true
-    },
-    {
-      "name": "an agent asks: an approval for exactly the RIFE bytes is created, and no download starts",
-      "ok": true,
-      "detail": {
-        "capabilityId": "comfy.video.smooth-slowmo",
-        "bytes": 22674688,
-        "models": [
-          {
-            "path": "frame_interpolation/rife_v4.25.safetensors",
-            "sha256": "1505884b9bdae956795430d2a70f7e2317b2abd8f130f8cfdb35a5759f909481"
-          }
-        ]
-      }
-    },
-    {
-      "name": "the agent cannot approve its own request",
-      "ok": true
-    },
-    {
-      "name": "the owner approves: RIFE is downloaded and verified by size and SHA-256",
-      "ok": true,
-      "detail": {
-        "status": "succeeded",
-        "bytes": 22674688,
-        "sha256": "1505884b9bdae956795430d2a70f7e2317b2abd8f130f8cfdb35a5759f909481",
-        "wallSeconds": 2.051,
-        "error": null
       }
     },
     {
@@ -299,14 +262,25 @@
       "ok": true
     },
     {
-      "name": "a static input gives identical consecutive output frames (one digest for all 12 collected frames)",
-      "ok": false,
+      "name": "the static input job succeeds",
+      "ok": true,
       "detail": {
         "sourceDistinct": 1,
-        "outputDistinct": 6,
         "error": null
+      }
+    },
+    {
+      "name": "a static input stays steady: 12 frames, every byte within 2 of frame 0, at most 1% of bytes differing (measured, not assumed bit-identical)",
+      "ok": true,
+      "detail": {
+        "frames": 12,
+        "distinctFrames": 1,
+        "maxByteDiffFromFirst": 0,
+        "bytesDiffering": 0,
+        "bytesCompared": 7603200,
+        "basis": "PNG frames collected from ComfyUI for 12 identical 320x180 source frames, scale 0.5 (640x360)"
       }
     }
   ],
-  "verdict": "FAILED (1 of 17 checks)"
+  "verdict": "passed (13 checks)"
 }
