@@ -4,6 +4,7 @@
  * Deterministic: + − × / and Math.floor|sqrt|abs|round only, fixed order, ties to the lowest (y, x).
  */
 import { bilinear, fromLevel, pow2, toLevel, type Plane, type Pyramid } from './image.ts';
+import { sampleWindow } from './lk.ts';
 
 /** A zero-mean, unit-length vector of samples (NCC of two such vectors is their dot product). null = flat (no contrast). */
 export type Normed = Float64Array | null;
@@ -31,6 +32,7 @@ export function dot(a: Normed, b: Normed): number {
 /** n×n bilinear samples of a plane on a grid of spacing `step`, centred at (cx, cy) (plane pixels). */
 export function grid(p: Plane, cx: number, cy: number, n: number, stepX: number, stepY = stepX): Float64Array {
   const out = new Float64Array(n * n);
+  if (stepX === 1 && stepY === 1 && n % 2 === 1) { sampleWindow(p.data, p.width, p.height, cx, cy, (n - 1) / 2, out); return out; }
   const o = (n - 1) / 2;
   let k = 0;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) out[k++] = bilinear(p.data, p.width, p.height, cx + (i - o) * stepX, cy + (j - o) * stepY);

@@ -1,26 +1,50 @@
 /**
  * Pyramidal Lucas–Kanade (Bouguet's formulation) for one point, plus the structure tensor used to pick trackable points
  * (ADR-0015). Pure and deterministic: + − × / and Math.floor|sqrt|abs only, in a fixed order.
+ *
+ * Every sample of a window at (x + i, y + j) shares the fractional part of (x, y), so the bilinear weights are worked out once
+ * per window and rows are read directly; a window that touches the border is sampled with clamping instead.
  */
 import { bilinear, gradients, toLevel, type Level, type Pyramid } from './image.ts';
 
 export interface LkOptions { window: number; levels: number; maxIter: number; epsilon: number }
 export interface LkResult { x: number; y: number; ok: boolean }
 
+/** Bilinear samples of `data` (w×h) on the (2·half+1)² grid of unit spacing centred at (x, y), row by row, into `out`. */
+export function sampleWindow(data: Float32Array, w: number, h: number, x: number, y: number, half: number, out: Float64Array): void {
+  const x0 = Math.floor(x), y0 = Math.floor(y);
+  if (x0 - half >= 0 && y0 - half >= 0 && x0 + half + 1 <= w - 1 && y0 + half + 1 <= h - 1) {
+    const fx = x - x0, fy = y - y0;
+    let k = 0;
+    for (let j = -half; j <= half; j++) {
+      let r0 = (y0 + j) * w + x0 - half, r1 = r0 + w;
+      for (let i = -half; i <= half; i++, r0++, r1++) {
+        const a = data[r0]!, b = data[r0 + 1]!, c = data[r1]!, d = data[r1 + 1]!;
+        const top = a + (b - a) * fx, bot = c + (d - c) * fx;
+        out[k++] = top + (bot - top) * fy;
+      }
+    }
+    return;
+  }
+  let k = 0;
+  for (let j = -half; j <= half; j++) for (let i = -half; i <= half; i++) out[k++] = bilinear(data, w, h, x + i, y + j);
+}
+
+const scratch = new Map<number, { v: Float64Array; gx: Float64Array; gy: Float64Array; j: Float64Array }>();
+const buffers = (n: number) => { let b = scratch.get(n); if (!b) scratch.set(n, (b = { v: new Float64Array(n), gx: new Float64Array(n), gy: new Float64Array(n), j: new Float64Array(n) })); return b; };
+
 /** Smallest eigenvalue of the 2×2 structure tensor over a window×window patch centred at (x, y) on a level (gradients per pixel). */
 export function minEigen(l: Level, x: number, y: number, window: number): number {
   const { gx, gy } = gradients(l);
-  const half = (window - 1) / 2;
-  let a = 0, b = 0, c = 0;
-  for (let j = -half; j <= half; j++)
-    for (let i = -half; i <= half; i++) {
-      const ix = bilinear(gx, l.width, l.height, x + i, y + j), iy = bilinear(gy, l.width, l.height, x + i, y + j);
-      a += ix * ix; b += ix * iy; c += iy * iy;
-    }
-  const n = window * window;
-  a /= n; b /= n; c /= n;
-  const h = (a - c) / 2;
-  return (a + c) / 2 - Math.sqrt(h * h + b * b);
+  const half = (window - 1) / 2, n = window * window;
+  const b = buffers(n);
+  sampleWindow(gx, l.width, l.height, x, y, half, b.gx);
+  sampleWindow(gy, l.width, l.height, x, y, half, b.gy);
+  let a = 0, c2 = 0, c = 0;
+  for (let k = 0; k < n; k++) { const ix = b.gx[k]!, iy = b.gy[k]!; a += ix * ix; c2 += ix * iy; c += iy * iy; }
+  a /= n; c2 /= n; c /= n;
+  const hh = (a - c) / 2;
+  return (a + c) / 2 - Math.sqrt(hh * hh + c2 * c2);
 }
 
 /**
@@ -31,7 +55,7 @@ export function trackPoint(prev: Pyramid, next: Pyramid, x: number, y: number, o
   const top = Math.min(o.levels, prev.levels.length, next.levels.length) - 1;
   const half = (o.window - 1) / 2;
   const n = o.window * o.window;
-  const iv = new Float64Array(n), ixv = new Float64Array(n), iyv = new Float64Array(n);
+  const { v: iv, gx: ixv, gy: iyv, j: jv } = buffers(n);
   let scale = 1;
   for (let l = 0; l < top; l++) scale *= 2;
   let gxs = guess ? guess.dx / scale : 0, gys = guess ? guess.dy / scale : 0;
@@ -41,28 +65,19 @@ export function trackPoint(prev: Pyramid, next: Pyramid, x: number, y: number, o
     const { gx, gy } = gradients(I);
     const w = I.width, h = I.height;
     const px = toLevel(x, l), py = toLevel(y, l);
-    let gxx = 0, gxy = 0, gyy = 0, k = 0;
-    for (let j = -half; j <= half; j++)
-      for (let i = -half; i <= half; i++) {
-        const sx = px + i, sy = py + j;
-        const v = bilinear(I.data, w, h, sx, sy), ix = bilinear(gx, w, h, sx, sy), iy = bilinear(gy, w, h, sx, sy);
-        iv[k] = v; ixv[k] = ix; iyv[k] = iy; k++;
-        gxx += ix * ix; gxy += ix * iy; gyy += iy * iy;
-      }
+    sampleWindow(I.data, w, h, px, py, half, iv);
+    sampleWindow(gx, w, h, px, py, half, ixv);
+    sampleWindow(gy, w, h, px, py, half, iyv);
+    let gxx = 0, gxy = 0, gyy = 0;
+    for (let k = 0; k < n; k++) { const ix = ixv[k]!, iy = iyv[k]!; gxx += ix * ix; gxy += ix * iy; gyy += iy * iy; }
     const det = gxx * gyy - gxy * gxy;
     let vx = 0, vy = 0;
     // A flat patch at a coarse level carries no information there: keep the guess and refine below.
     if (det > 1e-6 * n * n) {
-      const jw = J.width, jh = J.height, jd = J.data;
       for (let it = 0; it < o.maxIter; it++) {
+        sampleWindow(J.data, J.width, J.height, px + gxs + vx, py + gys + vy, half, jv);
         let bx = 0, by = 0;
-        k = 0;
-        const ox = px + gxs + vx, oy = py + gys + vy;
-        for (let j = -half; j <= half; j++)
-          for (let i = -half; i <= half; i++) {
-            const diff = iv[k]! - bilinear(jd, jw, jh, ox + i, oy + j);
-            bx += diff * ixv[k]!; by += diff * iyv[k]!; k++;
-          }
+        for (let k = 0; k < n; k++) { const diff = iv[k]! - jv[k]!; bx += diff * ixv[k]!; by += diff * iyv[k]!; }
         const ex = (gyy * bx - gxy * by) / det, ey = (gxx * by - gxy * bx) / det;
         vx += ex; vy += ey;
         if (!(Math.abs(vx) < 1e6 && Math.abs(vy) < 1e6)) return { x, y, ok: false };

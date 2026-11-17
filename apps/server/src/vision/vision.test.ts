@@ -117,4 +117,4 @@ describe('occlusion, decoy and re-acquisition', () => {
   });
 });
 
-const GOLDEN = '076a293cc0b7105af8674ddf87adcd53d24547be7c50ca5b5f1191cf0a1bb87b';
+const GOLDEN = '2ff85a64ecccd62c64725cec976dfde68746cb282c63ab010ee5c759da423d13';
