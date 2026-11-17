@@ -7,7 +7,7 @@
  * The reference clip, the choices and the last result are session state of this browser tab, never stored in the project.
  * Disabled, with the reason, where this browser's own graphics adapter check failed (the grade is a WebGPU pass, ADR-0008).
  */
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import * as T from '@pulseframe/time';
 import { applyTransaction, findClip, type Clip, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate } from '@pulseframe/engine';
@@ -112,6 +112,18 @@ export function tileDocs(doc: ProjectDocument, target: Pick<ColourMatchTarget, '
   } catch { /* refused (a locked track): no after tile */ }
   return { before, after, reference: referenceId && findClip(doc, referenceId) ? isolateClip(doc, referenceId, 'shown') : null };
 }
+/**
+ * The measured difference as the result row shows it, to one decimal. A difference that would round to 0.0 is shown as "< 0.1":
+ * the statistics of two pictures being that close does not make them the same picture, and the row never reads as no difference.
+ */
+export const shownDifference = (v: number): string => (v < 0.05 ? '< 0.1' : v.toFixed(1));
+/** A key that presses the focused button: Space or Enter on a button. */
+export const pressesButton = (key: string, tagName: string): boolean => (key === ' ' || key === 'Enter') && tagName === 'BUTTON';
+/**
+ * Space and Enter on a button of this panel press it; they do not reach the editor's one keyboard dispatcher (App.tsx), where
+ * Space is play and pause and is taken away from the button (the same guard as AudioFxBlock and VoiceCleanBlock).
+ */
+const keepButtonKeys = (e: ReactKeyboardEvent) => { if (pressesButton(e.key, (e.target as HTMLElement).tagName)) e.stopPropagation(); };
 const verdictWord = (S: ColourMatchStrings, v: ColourMatchTarget['verdict']) => (v === 'close' ? S.verdictClose : v === 'noticeable' ? S.verdictNoticeable : S.verdictPartial);
 const WARNING_WORD = { changes_within_clip: 'warnChanges', not_verified: 'warnNotVerified', replaces_grade: 'warnReplaces', animated_grade: 'warnAnimated' } as const;
 const nameOf = (doc: ProjectDocument, clipId: string) => { const c = findClip(doc, clipId)?.clip; return c?.type === 'media' ? doc.assets[c.assetId]?.name ?? clipId : clipId; };
@@ -150,7 +162,7 @@ function Tile({ doc, clipId, label, editor }: { doc: ProjectDocument | null; cli
 function ResultRow({ doc, target, referenceId, S, lang, editor }: { doc: ProjectDocument; target: ColourMatchTarget; referenceId: string | null; S: ColourMatchStrings; lang: 'he' | 'en'; editor: Editor }) {
   const [docs] = useState(() => { try { return tileDocs(doc, target, referenceId); } catch { return null; } });
   const name = nameOf(doc, target.clipId), refName = referenceId ? nameOf(doc, referenceId) : '';
-  const n = (v: number) => <bdi dir="ltr">{v.toFixed(1)}</bdi>;
+  const n = (v: number) => <bdi dir="ltr">{shownDifference(v)}</bdi>;
   const [lead, tail] = (target.residual.verified !== null ? S.residual : S.residualModel).split('{n}');
   return (
     <tr data-testid={ID.row} data-clip-id={target.clipId} data-verdict={target.verdict}>
@@ -200,7 +212,7 @@ export function ColourMatchPanel({ clip }: { clip: PictureClip }) {
     </label>
   );
   return (
-    <section className="cm" data-testid={ID.panel} aria-labelledby={headingId} data-state={!gpuOk ? 'unavailable' : s.run.kind}>
+    <section className="cm" data-testid={ID.panel} aria-labelledby={headingId} data-state={!gpuOk ? 'unavailable' : s.run.kind} onKeyDown={keepButtonKeys}>
       <h4 id={headingId}>{S.title} <span className="cm-badge" data-testid={ID.unlooked}>{S.unlooked}</span></h4>
       <p className="muted" id={noteId}>{S.intro} {S.statsNote}</p>
       {!gpuOk && (

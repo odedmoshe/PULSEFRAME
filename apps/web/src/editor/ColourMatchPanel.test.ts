@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, findClip, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { GRADE_DEFAULTS } from '@pulseframe/engine';
-import { pictureClipIds, requestFor, tileDocs } from './ColourMatchPanel.tsx';
+import { pictureClipIds, pressesButton, requestFor, shownDifference, tileDocs } from './ColourMatchPanel.tsx';
 import { COLOUR_MATCH_STRINGS, fill } from './colourMatch.strings.ts';
 
 const R = { num: 30, den: 1 };
@@ -81,6 +81,27 @@ describe('colour match panel: still tiles', () => {
     const t = tileDocs(doc, { clipId: p.b, params: { ...GRADE_DEFAULTS } }, null);
     expect((findClip(t.after!, p.b)!.clip as MediaClip).effects![0]!.keyframes).toBeUndefined();
     expect((findClip(doc, p.b)!.clip as MediaClip).effects![0]!.keyframes?.exposure).toHaveLength(1);
+  });
+});
+
+describe('what a result row and the keyboard do', () => {
+  // proof:colourmatch M10: Space on «קבע כייחוס» started playback and never pressed the button, because the panel let the key
+  // through to the editor's dispatcher, which takes Space for play and pause.
+  it('Space and Enter on a button are kept for the button; other keys and other elements go on to the editor shortcuts', () => {
+    expect(pressesButton(' ', 'BUTTON')).toBe(true);
+    expect(pressesButton('Enter', 'BUTTON')).toBe(true);
+    expect(pressesButton(' ', 'SECTION')).toBe(false);
+    expect(pressesButton(' ', 'INPUT')).toBe(false); // radios and the amount slider handle their own keys; the dispatcher leaves inputs alone
+    expect(pressesButton('k', 'BUTTON')).toBe(false);
+    expect(pressesButton('ArrowLeft', 'BUTTON')).toBe(false);
+  });
+  it('a measured difference is never shown as 0.0: under 0.05 it reads "< 0.1"', () => {
+    expect(shownDifference(0)).toBe('< 0.1');
+    expect(shownDifference(0.04)).toBe('< 0.1');
+    expect(shownDifference(0.05)).toBe('0.1');
+    expect(shownDifference(0.59)).toBe('0.6');
+    expect(shownDifference(8.22)).toBe('8.2');
+    for (const v of [0, 0.01, 0.049, 0.05, 0.3, 2, 5.5, 40]) expect(shownDifference(v)).not.toMatch(/^0\.0$/);
   });
 });
 
