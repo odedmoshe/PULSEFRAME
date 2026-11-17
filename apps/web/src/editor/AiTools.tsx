@@ -17,7 +17,11 @@ import { AI_TABS, cancelMeaning, cardJob, clipFor, compareTimes, failureOf, plac
 import { aiApi, type Attachment, type CapInfo, type SetupState } from './api.ts';
 import { AiRunSheet } from './AiRunSheet.tsx';
 import { AiCompare } from './AiCompare.tsx';
+import { Badge, Button, JobRow, Ring } from '../ds/index.ts';
+import { HUB_STRINGS, pillKind, type HubStrings } from './aiHub.strings.ts';
+import { capIcon } from './aiHubIcons.tsx';
 import './aiTools.css';
+import './aiHub.css';
 
 type S = (typeof AI_STRINGS)['he' | 'en'];
 /** Blockers a run does not wait for (they are earned by running); they become badges, not reasons. */
@@ -119,28 +123,36 @@ export function AiTools() {
   };
   const otherRunning = Object.values(state.capJobs).some((j) => OPEN.includes(j.status) && !Object.values(mine).includes(j.id));
 
+  const H = HUB_STRINGS[lang];
+  const isSmoke = (c: CapInfo) => !c.inputs?.length && (c.provider ?? 'comfyui') === 'comfyui';
+  const kinds = caps.filter((c) => !isSmoke(c)).map((c) => { const st = setupOf(c, pr); const j = cardJob(c.id, mine, state.capJobs); return pillKind(st.code, c.runnable, !!j && OPEN.includes(j.status), st.missingBytes ?? c.missingDownloadBytes ?? 0); });
+  const nReady = kinds.filter((k) => k === 'ready' || k === 'running').length, nOff = kinds.filter((k) => k === 'off').length, nSetup = kinds.length - nReady - nOff;
+  const running = Object.values(state.capJobs).filter((j) => OPEN.includes(j.status));
+  const capTitle = (id: string | undefined) => caps.find((c) => c.id === id)?.title[lang] ?? id ?? '';
   return (
-    <section className="pf-ai" data-testid="ai-tools" aria-label={S.tools}>
-      {status}
+    <section className="pf-ai pf-ds pf-hub" data-testid="ai-tools" aria-label={S.tools}>
+      <header className="pf-hub-head">
+        <h2 className="pf-hub-title">{H.title}</h2>
+        <p className="pf-hub-counts" data-testid="ai-counts"><span>{H.counts(nReady, nSetup, nOff)}</span><span className="pf-hub-privacy">{H.privacy}</span></p>
+      </header>
+      {running.length > 0 && (
+        <div className="pf-hub-jobs" role="group" aria-label={H.jobs} data-testid="ai-jobs-strip">
+          {running.map((j) => { const pr_ = progressOf(j.output); const pct = pr_ ? Math.round((100 * pr_.done) / pr_.total) : null; return (
+            <JobRow key={j.id} title={capTitle((j as { capabilityId?: string }).capabilityId ?? (j.output as { capabilityId?: string } | null)?.capabilityId)} detail={pr_ ? undefined : S.waiting} state="running" progress={pct} stateLabel={pct == null ? H.pill.runningNoPct : H.pill.running(`${pct}%`)} cancelLabel={S.cancel} onCancel={() => void api.cancelJob(j.id).catch(() => undefined)} />
+          ); })}
+        </div>
+      )}
       {!connected && (
-        <details className="pf-ai-how" data-testid="ai-setup" open={caps.every((c) => (c.provider ?? 'comfyui') === 'comfyui') || undefined}>
-          <summary>{S.comfyTitle}: {S.howTitle}</summary>
-          {pr.configured && <p className="muted">{S.unreachableWhy}</p>}
-          <ol>
-            <li>{S.steps[0]}</li>
-            <li>{S.steps[1]}</li>
-            <li>{S.steps[2]} <code dir="ltr">{S.example}</code>
-              <div className="muted">{S.modelsDirNote.split('PF_COMFYUI_MODELS_DIR')[0]}<code dir="ltr">PF_COMFYUI_MODELS_DIR</code>{S.modelsDirNote.split('PF_COMFYUI_MODELS_DIR')[1]}</div>
-            </li>
-            <li>{S.steps[3]}</li>
-          </ol>
+        <details className="pf-hub-how" data-testid="ai-setup" open={caps.every((c) => (c.provider ?? 'comfyui') === 'comfyui') || undefined}>
+          <summary>{H.comfyHow}: {H.howTo}</summary>
+          <ol>{H.steps[pr.configured ? 'provider_unreachable' : 'provider_not_configured']!.map((x) => <li key={x}>{x}</li>)}</ol>
           <div className="pf-ai-row">
-            <button type="button" className="ghost" disabled={checking} onClick={() => void recheck()} data-testid="ai-recheck">{S.recheck}</button>
+            <Button size="sm" variant="secondary" busy={checking} onClick={() => void recheck()} data-testid="ai-recheck">{S.recheck}</Button>
           </div>
           <div role="status" className={`muted${msg.failed ? ' danger' : ''}`} data-testid="ai-recheck-status" data-failed={msg.failed ? 'true' : undefined}>{msg.text}</div>
-          <p className="muted">{S.works}</p>
         </details>
       )}
+      <div className="pf-hub-status">{status}</div>
       {otherRunning && <p className="muted" role="status" data-testid="ai-other-job">{S.otherJob}</p>}
       <div role="tablist" aria-label={S.tabsLabel} className="pf-ai-tabs" onKeyDown={onTabKey}>
         {AI_TABS.map((x) => (
@@ -247,10 +259,22 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
     catch (e) { setRefused(e instanceof ApiFailure ? sayFailure(lang, e) : e instanceof Error ? e.message : String(e)); }
   };
 
+  const H = HUB_STRINGS[lang];
+  const kind = pillKind(setup.code, c.runnable, runBusy, missingBytes);
+  const prog = job && runBusy ? progressOf(job.output) : null;
+  const pct = prog ? Math.round((100 * prog.done) / prog.total) : null;
+  const Icon = capIcon(c.id, c.task);
+  const gb = missingBytes ? size(missingBytes) : '';
+  const kindLabel = kind === 'ready' ? H.pill.ready : kind === 'running' ? (pct == null ? H.pill.runningNoPct : H.pill.running(`${pct}%`)) : kind === 'prep' ? H.pill.prep(gb) : kind === 'off' ? H.pill.off : H.pill.setup;
+  const gpuNote = (c.blockers ?? []).some((b) => /gpu|cuda|graphics/i.test(b.code + b.message)) || /gpu|cuda/i.test(setup.detail ?? '');
   return (
-    <article className="pf-ai-card" data-testid="ai-tool" data-id={c.id} data-runnable={c.runnable ? 'true' : 'false'} data-setup={setup.code} data-tab={tab} aria-labelledby={`${uid}-h`}>
-      <h3 id={`${uid}-h`}>{title}</h3>
-      {c.description && <p className="muted">{c.description[lang]}</p>}
+    <article className={`pf-ai-card pf-hub-card is-${kind}`} data-testid="ai-tool" data-id={c.id} data-runnable={c.runnable ? 'true' : 'false'} data-setup={setup.code} data-tab={tab} aria-labelledby={`${uid}-h`}>
+      <div className="pf-hub-card-top">
+        <span className="pf-hub-ico" aria-hidden="true"><Icon size={20} strokeWidth={1.75} /></span>
+        <h3 id={`${uid}-h`}>{title}</h3>
+        {kind === 'running' && <Ring value={pct} label={title} size={28} />}
+      </div>
+      {c.description && <p className="pf-hub-purpose">{c.description[lang]}</p>}
       <div className="pf-ai-badges">
         {c.experimental && <span className="pf-ai-badge" title={S.experimentalHint} data-testid="ai-badge-experimental">{S.experimental}</span>}
         {open_.includes('qualityReviewed') && <span className="pf-ai-badge" title={S.badgeQualityHint} data-testid="ai-badge-quality">{S.badgeQuality}</span>}
@@ -259,45 +283,43 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
         {codes.has('not_executed') && <span className="pf-ai-badge" data-testid="ai-badge-notrun">{S.notRun}</span>}
         {(codes.has('model_license_unknown') || codes.has('not_licenseReviewed')) && <span className="pf-ai-badge" data-testid="ai-badge-licence">{S.licence}</span>}
       </div>
-      {(c.provider ?? 'comfyui') === 'comfyui' && <p className="muted">{S.device}: <bdi>{pr.readiness?.device ? `${pr.readiness.device.name} (${pr.readiness.device.type})` : S.unknownDevice}</bdi></p>}
-      {setup.code === 'ready' && c.runnable
-        ? <p className="pf-ai-state pf-ai-ok" data-testid="ai-state" data-code="ready">{S.runnable}</p>
-        : (
-          <div className="pf-ai-state" data-testid="ai-state" data-code={setup.code}>
-            {setup.code === 'ready' ? <p>{S.notRunnable}</p> : <p data-testid="ai-state-headline"><strong>{(dictionaries[lang] as Record<string, string>)[`ai.setup.${setup.code}`] ?? setup.code}</strong></p>}
-            {setup.code !== 'ready' && setup.detail && <p className="muted">{S.stateDetail} <bdi dir="auto" data-testid="ai-state-detail">{setup.detail}</bdi></p>}
-            {setup.code === 'disk_insufficient' && setup.freeBytes !== undefined && <p className="muted">{S.freeNow(size(setup.freeBytes))}</p>}
-            {steps.length > 0 && (
-              <>
-                <p className="muted">{S.stepsTitle}</p>
-                <ol className="pf-ai-steps" data-testid="ai-setup-steps">{steps.map((s) => <li key={s}><bdi dir="auto">{s}</bdi></li>)}</ol>
-              </>
-            )}
-            {(blockedBy.length > 0 || modelLines.length > 0) && <ul className="pf-ai-why" data-testid="ai-why">{[...new Set([...modelLines, ...blockedBy])].map((w) => <li key={w}>{w}</li>)}</ul>}
-            {canAsk && (
-              <div className="pf-ai-row">
-                {pending || ask.state === 'sent'
-                  ? <p className="muted" role="status" data-testid="ai-download-requested">{pending ? S.approvalPending : S.requested}</p>
-                  : <button type="button" className="ghost" disabled={ask.state === 'sending'} onClick={() => void requestDownload()} data-testid="ai-request-download">{ask.state === 'sending' ? S.requesting : S.requestDownload(size(missingBytes))}</button>}
-                {(pending || ask.state === 'sent') && <button type="button" className="ghost" onClick={goApprovals} data-testid="ai-go-approvals">{S.goApprovals}</button>}
-              </div>
-            )}
-            {ask.state === 'failed' && <p className="danger" role="alert">{S.requestFailed}: <bdi>{ask.text}</bdi></p>}
+      <div className="pf-ai-state pf-hub-state" data-testid="ai-state" data-code={setup.code}>
+        <span className={`pf-hub-pill is-${kind}`} data-testid={setup.code === 'ready' && c.runnable ? undefined : 'ai-state-headline'}>{kindLabel}{gpuNote && kind !== 'ready' ? ` · ${H.needGpu}` : ''}</span>
+        {setup.code === 'disk_insufficient' && setup.freeBytes !== undefined && <span className="muted">{S.freeNow(size(setup.freeBytes))}</span>}
+      </div>
+      {setup.code !== 'ready' && (
+        <details className="pf-hub-how" data-testid="ai-setup-how">
+          <summary>{kind === 'off' ? H.whyOff : H.howTo}</summary>
+          {(H.steps[setup.code]?.length ?? 0) > 0 && <ol className="pf-ai-steps" data-testid="ai-setup-steps">{H.steps[setup.code]!.map((x) => <li key={x}>{x}</li>)}</ol>}
+          {(blockedBy.length > 0 || modelLines.length > 0) && <ul className="pf-ai-why" data-testid="ai-why">{[...new Set([...modelLines, ...blockedBy])].map((w) => <li key={w}>{w}</li>)}</ul>}
+          {canAsk && (
             <div className="pf-ai-row">
-              <button type="button" className="ghost" onClick={() => void recheck()} data-testid="ai-tool-recheck">{S.checkAgain}</button>
-              <span role="status" className={`muted${check?.failed ? ' danger' : ''}`} data-testid="ai-tool-recheck-status">{check?.text ?? ''}</span>
+              {pending || ask.state === 'sent'
+                ? <p className="muted" role="status" data-testid="ai-download-requested">{pending ? S.approvalPending : S.requested}</p>
+                : <Button size="sm" variant="primary" busy={ask.state === 'sending'} onClick={() => void requestDownload()} data-testid="ai-request-download">{ask.state === 'sending' ? S.requesting : S.requestDownload(size(missingBytes))}</Button>}
+              {(pending || ask.state === 'sent') && <Button size="sm" variant="secondary" onClick={goApprovals} data-testid="ai-go-approvals">{S.goApprovals}</Button>}
             </div>
+          )}
+          {ask.state === 'failed' && <p className="danger" role="alert">{S.requestFailed}: <bdi>{ask.text}</bdi></p>}
+          <div className="pf-ai-row">
+            <Button size="sm" variant="secondary" onClick={() => void recheck()} data-testid="ai-tool-recheck">{S.checkAgain}</Button>
+            <span role="status" className={`muted${check?.failed ? ' danger' : ''}`} data-testid="ai-tool-recheck-status">{check?.text ?? ''}</span>
           </div>
-        )}
+          {setup.detail && (
+            <details className="pf-hub-tech"><summary>{H.technical}</summary><p className="muted">{S.stateDetail} <bdi dir="auto" data-testid="ai-state-detail">{setup.detail}</bdi> <span className="muted">· {engineVar(c)}</span></p></details>
+          )}
+        </details>
+      )}
+      {setup.code === 'ready' && !c.runnable && <p className="muted" data-testid="ai-state-headline">{S.notRunnable}</p>}
       <ModelCard cap={c} S={S} />
       {smoke ? (
         <div className="pf-ai-row">
-          <button type="button" className="ghost" disabled={!c.runnable || runBusy} onClick={() => void runSmoke()} data-testid={c.id === 'comfy.smoke.solid-image' ? 'provider-smoke' : 'ai-run'} title={S.smokeHint}>{runBusy ? `${t('providers.running')} ${job?.stage ?? ''}` : c.id === 'comfy.smoke.solid-image' ? t('providers.smoke') : S.run}</button>
+          <Button size="sm" variant="secondary" disabled={!c.runnable || runBusy} onClick={() => void runSmoke()} data-testid={c.id === 'comfy.smoke.solid-image' ? 'provider-smoke' : 'ai-run'} title={S.smokeHint}>{runBusy ? `${t('providers.running')} ${job?.stage ?? ''}` : c.id === 'comfy.smoke.solid-image' ? t('providers.smoke') : S.run}</Button>
         </div>
       ) : (
         <>
           <div className="pf-ai-row">
-            <button type="button" className="ghost" aria-expanded={open} aria-controls={`${uid}-sheet`} disabled={!c.runnable || setup.code !== 'ready'} onClick={() => setOpen((o) => !o)} data-testid="ai-open-run">{open ? S.closeRun : S.openRun}</button>
+            <Button size="md" variant={c.runnable && setup.code === 'ready' ? 'primary' : 'secondary'} aria-expanded={open} aria-controls={`${uid}-sheet`} disabled={!c.runnable || setup.code !== 'ready'} onClick={() => setOpen((o) => !o)} data-testid="ai-open-run">{open ? S.closeRun : S.openRun}</Button>
           </div>
           <div id={`${uid}-sheet`} hidden={!open}>
             {open && <AiRunSheet cap={c} tab={tab} S={S} onRefused={(m) => setRefused(m)} onStarted={(jobId, info) => { setRefused(null); setCancel({ sending: false, text: null }); setPlaced(null); onStarted(jobId, info); }} />}
@@ -394,7 +416,7 @@ function ModelCard({ cap: c, S }: { cap: CapInfo; S: S }) {
           {(c.models ?? []).map((m) => (
             <li key={m.path} data-testid="ai-model">
               <dl>
-                <dt>{S.modelFile}</dt><dd><bdi dir="ltr">{m.path}</bdi></dd>
+                
                 {m.bytes ? <><dt>{S.modelSize}</dt><dd><bdi dir="ltr">{size(m.bytes)}</bdi></dd></> : null}
                 <dt>{S.modelLicence}</dt><dd><bdi dir="ltr" data-testid="ai-model-licence">{m.license ?? '—'}</bdi>{m.commercialUse ? <> · {S.modelCommercial}: <bdi dir="ltr">{m.commercialUse}</bdi></> : null}</dd>
                 {m.publisher ? <><dt>{S.modelPublisher}</dt><dd><bdi dir="ltr">{m.publisher}</bdi></dd></> : null}
