@@ -1854,9 +1854,18 @@ const pictureClip = (d: ProjectDocument, clipId: string) => {
   if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture and title clips', { clipId });
   return f;
 };
+/**
+ * The parameters a failed effect parse names, so that the refusal says which one is wrong (the editor words it per parameter,
+ * packages/i18n/src/refusals.ts): the top-level name of each issue and the names the schema does not know; at most 8, each cut to 48 characters.
+ */
+const badParamNames = (issues: readonly { code?: string; path?: readonly PropertyKey[]; keys?: readonly string[] }[] | undefined): string[] =>
+  [...new Set((issues ?? []).flatMap((i) => (i.code === 'unrecognized_keys' ? (i.keys ?? []) : i.path?.length ? [String(i.path[0])] : [])))].slice(0, 8).map((k) => k.slice(0, 48));
 const parseEffect = (type: string, params: unknown) => {
   if (!findEffect(type)) throw new OpError('not_found', `effect "${type}" does not exist`, { type, available: EFFECTS.map((e) => e.id) }, 'Call list_catalog for the available effects and their parameters.');
-  try { return effectParams(type, params); } catch (e: any) { throw new OpError('invalid_args', `invalid parameters for ${type}`, { issues: e.issues?.slice(0, 8) }, 'Call list_catalog for the parameter schema.'); }
+  try { return effectParams(type, params); } catch (e: any) {
+    const names = badParamNames(e.issues);
+    throw new OpError('invalid_args', `invalid parameters for ${type}${names.length ? `: ${names.join(', ')}` : ''}`, { issues: e.issues?.slice(0, 8) }, 'Call list_catalog for the parameter schema.');
+  }
 };
 /** A color.lut effect that names a table must name a colour table (asset of kind 'lut') of this project. */
 const assertLutRef = (d: ProjectDocument, type: string, params: Record<string, unknown>) => {
