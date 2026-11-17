@@ -1,0 +1,16 @@
+/* Text-style and caption-look tile groups (UX_REDESIGN §4.4). ds tokens only. */
+.pf-st-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--pf-sp-5) var(--pf-sp-4); }
+.pf-st-tile { display: flex; flex-direction: column; gap: var(--pf-sp-2); padding: 0; background: transparent; border: 0; color: var(--pf-text); font: inherit; text-align: start; cursor: pointer; border-radius: var(--pf-r-md); min-inline-size: 0; }
+.pf-st-img { position: relative; display: block; overflow: hidden; border-radius: var(--pf-r-md); background: var(--pf-surface-3); box-shadow: 0 0 0 1px var(--pf-line-strong); }
+.pf-st-img canvas { display: block; inline-size: 100%; block-size: auto; aspect-ratio: 16 / 9; }
+.pf-st-tile:hover .pf-st-img { box-shadow: 0 0 0 1px var(--pf-text-3); }
+.pf-st-tile.is-on .pf-st-img { box-shadow: var(--pf-glow-frame); }
+.pf-st-tile.is-locked { cursor: not-allowed; opacity: 0.7; }
+.pf-st-tile:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.pf-st-name { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); color: var(--pf-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-st-tile.is-on .pf-st-name { color: var(--pf-frame); font-weight: var(--pf-fw-semibold); }
+.pf-st-check { position: absolute; inset-block-start: 5px; inset-inline-start: 5px; display: grid; place-items: center; inline-size: 20px; block-size: 20px; border-radius: 50%; background: var(--pf-frame); color: var(--pf-frame-ink); }
+.pf-st-shimmer { position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, var(--pf-line-strong) 50%, transparent 80%); background-size: 200% 100%; animation: pf-st-shim 1.4s linear infinite; }
+@keyframes pf-st-shim { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .pf-st-shimmer { animation: none; } }
+.pf-st-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }

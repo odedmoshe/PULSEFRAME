@@ -51,7 +51,7 @@ const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'dist
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const LONG_SIDE = 180;
 const RATE = { num: 30, den: 1 };
-const f = (n: number) => T.frameTime(n, RATE);
+export const f = (n: number) => T.frameTime(n, RATE);
 const FRAME_AT = 12; // 0.4 s at 30 fps, so time-driven effects show something
 const TRANSITION_FRAMES = 15;
 /** A transition tile's scene: the outgoing clip at frames 0–60, the incoming one from 60 with the transition over 60–74. */
@@ -90,12 +90,12 @@ const ITEMS: Item[] = [
 
 // ---- thumbnail documents (same approach as the Look Lab: a small in-memory project through the real ops) ----
 let seq = 0;
-const step = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => {
+export const step = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => {
   const r = applyTransaction(doc, ops, { idSeed: `gal${seq++}_`, actor: 'gallery', allowInternal });
   return { doc: r.doc, out: r.results.map((x) => x.output ?? {}) as Record<string, any>[] };
 };
-interface Scene { w: number; h: number; base: ProjectDocument; a: string; b: string; v1: string }
-function makeScene(w: number, h: number): Scene {
+export interface Scene { w: number; h: number; base: ProjectDocument; a: string; b: string; v1: string }
+export function makeScene(w: number, h: number): Scene {
   const asset = (name: string, c: string) => ({
     kind: 'image' as const, name, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.rt(5, 1),
     image: { width: w, height: h, codec: 'png', hasAlpha: false },
@@ -108,7 +108,7 @@ function makeScene(w: number, h: number): Scene {
   const v1 = s.doc.sequences[s.doc.mainSequenceId]!.tracks.find((t) => t.kind === 'video')!.id;
   return { w, h, base: s.doc, a: s.out[0]!.assetId as string, b: s.out[1]!.assetId as string, v1 };
 }
-const addPicture = (s: Scene, assetId: string, start: number, dur: number): OpCall => ({ op: 'add_clip', args: { assetId, trackId: s.v1, start: f(start), duration: f(dur), withLinkedAudio: false } });
+export const addPicture = (s: Scene, assetId: string, start: number, dur: number): OpCall => ({ op: 'add_clip', args: { assetId, trackId: s.v1, start: f(start), duration: f(dur), withLinkedAudio: false } });
 /** A frame where the motion is visible: a third into an entrance, two thirds into an exit, a quarter period of a loop, the end of a move. */
 function motionStaticFrame(it: Item): number {
   const n = it.mframes || 0;
