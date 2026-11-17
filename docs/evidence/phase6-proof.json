@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-17T08:10:19.504Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-17T09:13:42.055Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -8,7 +8,7 @@
     "gpu": "none"
   },
   "scope": "Synthetic transcript on a beep fixture. Speech recognition, forced alignment and real speech are not exercised.",
-  "passed": 36,
+  "passed": 37,
   "total": 37,
   "checks": [
     {
@@ -31,10 +31,8 @@
     },
     {
       "name": "editor: no uncaught errors",
-      "ok": false,
-      "detail": [
-        "Error: VideoSample is closed.\n    at e.draw (http://127.0.0.1:8796/assets/media-CfPTaJo1.js:2:81717)\n    at Object.draw (http://127.0.0.1:8796/assets/media-CfPTaJo1.js:4:1067)\n    at http://127.0.0.1:8796/assets/src-D510uvTP.js:365:6342\n    at gy (http://127.0.0.1:8796/assets/src-D510uvTP.js:364:42435)\n    at p (http://127.0.0.1:8796/assets/src-D510uvTP.js:365:6327)\n    at Cy (http://127.0.0.1:8796/assets/src-D510uvTP.js:365:6482)\n    at async e.pump (http://127.0.0.1:8796/assets/index-D4dL6Dbx.js:9:140251)"
-      ]
+      "ok": true,
+      "detail": []
     },
     {
       "name": "transcript, caption track and clip are created through the normal transaction path",

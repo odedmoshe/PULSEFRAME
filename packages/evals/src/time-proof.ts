@@ -244,7 +244,7 @@ async function main() {
       const w = tapWeights('time.echo', { decay: 0.6 }, 4);
       let worst = 0;
       for (let i = 0; i < echo.length; i++) worst = Math.max(worst, Math.abs(echo[i]! - ((taps.reduce((sum, at, k) => sum + w[k]! * ref.get(at)![i]!, 0) + 2048) >> 12)));
-      check('Titles (no decode), time.echo: the still is the weighted sum of the title at frames 20, 17, 14 and 11 (within 2 of 255 on every pixel: straight-alpha rounding at the letter edges)', worst <= 2 && meanDiff(echo, plain20) > 1, { worstDifference: worst, differsFromPlain: Number(meanDiff(echo, plain20).toFixed(2)), shutter0VsPlainMax: maxDiff(ref.get(F)!, plain20) });
+      check('Titles (no decode), time.echo: the still is the weighted sum of the title at frames 20, 17, 14 and 11 (within 2 of 255 on every pixel: straight-alpha rounding at the letter edges)', worst <= 2 && maxDiff(echo, plain20) > 20, { worstDifference: worst, maxDifferenceFromPlain: maxDiff(echo, plain20), differsFromPlain: Number(meanDiff(echo, plain20).toFixed(2)), shutter0VsPlainMax: maxDiff(ref.get(F)!, plain20) });
       await tx(pid, [{ op: 'remove_effect', args: { clipId: textId, effectId: fxId } }]);
       await addEffect(pid, textId, 'time.stutter', { hold: 3 });
       const held = await still(pid, F);

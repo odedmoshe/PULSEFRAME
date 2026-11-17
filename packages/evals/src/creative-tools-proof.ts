@@ -246,7 +246,12 @@ async function main() {
         requestAnimationFrame(loop);
       })()`);
       await tile.hover();
-      await sleep(2200);
+      // sample until there are enough frames to see flashes (a software graphics adapter draws the tile slowly), at most 20 s
+      for (let waited = 0; waited < 20_000; waited += 500) {
+        await sleep(500);
+        const n = await mp.evaluate(() => (window as unknown as { __pfTileSamples: unknown[] }).__pfTileSamples.length);
+        if (waited >= 2000 && n >= 60) break;
+      }
       const samples = await mp.evaluate(() => (window as unknown as { __pfTileSamples: [number, number][] }).__pfTileSamples.splice(0));
       const held = await mp.getByTestId('effect-gallery').getAttribute('data-flashes-held');
       const rises: number[] = [];
@@ -255,7 +260,7 @@ async function main() {
       for (let i = 0, j = 0; i < rises.length; i++) { while (rises[i]! - rises[j]! > 1) j++; most = Math.max(most, i - j + 1); }
       const span = samples.length ? samples[samples.length - 1]![0] - samples[0]![0] : 0;
       measurements.galleryStrobeHover = { samples: samples.length, seconds: Number(span.toFixed(2)), rises: rises.length, mostInOneSecond: most, flashesHeld: held };
-      check('a hovered strobe tile animates (its light rises again) but shows at most three rises in any second of real time over 2 s, and the dialog carries data-flashes-held from its flash guard', samples.length > 30 && span >= 2 && rises.length >= 2 && most <= 3 && held !== null && Number.isFinite(Number(held)) && mErrors.length === 0, { ...(measurements.galleryStrobeHover as object), errors: mErrors.slice(0, 3) });
+      check('a hovered strobe tile animates (its light rises again) but shows at most three rises in any second of real time (sampled on every animation frame for at least 2 s and until 60 samples, at most 20 s), and the dialog carries data-flashes-held from its flash guard', samples.length > 30 && span >= 2 && rises.length >= 2 && most <= 3 && held !== null && Number.isFinite(Number(held)) && mErrors.length === 0, { ...(measurements.galleryStrobeHover as object), errors: mErrors.slice(0, 3) });
       await mp.close();
     }
     await page.getByTestId('gallery-search').fill('vhs');

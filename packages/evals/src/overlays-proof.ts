@@ -30,7 +30,7 @@ const art = path.join(root, '.artifacts/overlays-proof');
 const R = { num: 30, den: 1 }, FPS = 30;
 const f = (n: number) => T.frameTime(n, R);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const ff = (args: string[], input?: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', ...args], { maxBuffer: 1 << 31, ...(input ? { input } : {}) });
+const ff = (args: string[], input?: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', ...args], { maxBuffer: 2 ** 31, ...(input ? { input } : {}) });
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
 const measurements: Record<string, unknown> = {};
