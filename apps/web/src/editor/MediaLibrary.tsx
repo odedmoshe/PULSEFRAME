@@ -8,6 +8,7 @@ import { peaksForColumns, pickWaveformLevel } from '../clipVisuals.math.ts';
 import { DerivativeLoader, thumbTileAt, type LoadedDerivative } from './mediaThumb.ts';
 import { ASSET_DRAG_TYPE, useEditorState } from './store.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
+import { onMenuKeyDown } from './menuKeys.ts';
 import { InlineRename } from './InlineRename.tsx';
 import { MEDIA_STRINGS } from './media.strings.ts';
 import './mediaLibrary.css';
@@ -106,7 +107,7 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
     const away = (e: MouseEvent) => { if (!pop.current?.contains(e.target as Node) && !btn.current?.contains(e.target as Node)) setAt(null); };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setAt(null); btn.current?.focus(); } };
     document.addEventListener('mousedown', away); document.addEventListener('keydown', esc, true);
-    pop.current?.querySelector<HTMLElement>('button,select')?.focus();
+    pop.current?.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled),select')?.focus();
     return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc, true); };
   }, [at]);
   const open = () => {
@@ -119,8 +120,7 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
     <>
       <button ref={btn} type="button" className="pf-mc-btn" aria-haspopup="menu" aria-expanded={!!at} aria-label={`${S.cardMore}: ${a.name}`} title={S.cardMore} data-testid={`more-${a.id}`} onClick={() => (at ? setAt(null) : open())}><Ellipsis size={16} strokeWidth={1.75} aria-hidden="true" /></button>
       {at && createPortal(
-        <div ref={pop} className="pf-ds pf-mc-pop" role="menu" aria-label={`${S.cardMore}: ${a.name}`} style={{ top: at.top, left: at.left }}>
-          {a.kind !== 'image' && !isLut && <button type="button" role="menuitem" className="pf-mc-item" data-testid={`view-${a.id}`} onClick={() => { setAt(null); onView(a.id); }}><Eye size={16} strokeWidth={1.75} aria-hidden="true" />{t('source.open')}</button>}
+        <div ref={pop} className="pf-ds pf-mc-pop" style={{ top: at.top, left: at.left }}>
           {notices.length > 0 && (
             <details className="pf-mc-notes" data-testid={`notes-${a.id}`} open>
               <summary><Info size={16} strokeWidth={1.75} aria-hidden="true" />{S.fixNotes} <bdi className="num">({notices.length})</bdi></summary>
@@ -142,10 +142,13 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
               ))}
             </details>
           )}
+          <div className="pf-mc-menu" role="menu" aria-label={`${S.cardMore}: ${a.name}`} onKeyDown={(e) => { if (e.key === 'Tab') close(); else onMenuKeyDown(e); }}>
+          {a.kind !== 'image' && !isLut && <button type="button" role="menuitem" className="pf-mc-item" data-testid={`view-${a.id}`} onClick={() => { setAt(null); onView(a.id); }}><Eye size={16} strokeWidth={1.75} aria-hidden="true" />{t('source.open')}</button>}
           <div role="separator" className="pf-mc-sep" />
-          <button type="button" role="menuitem" className="pf-mc-item is-danger" disabled={isUsed} aria-disabled={isUsed || undefined} title={isUsed ? (isLut ? M.lutRemoveUsed : t('media.remove.used')) : undefined} data-testid={`remove-${a.id}`}
+          <button type="button" role="menuitem" className="pf-mc-item is-danger" disabled={isUsed} aria-disabled={isUsed || undefined} aria-describedby={isUsed ? `why-${a.id}` : undefined} title={isUsed ? (isLut ? M.lutRemoveUsed : t('media.remove.used')) : undefined} data-testid={`remove-${a.id}`}
             onClick={() => { close(); void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file'); }}><Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />{S.cardRemove}</button>
-          {isUsed && <p className="pf-mc-why">{isLut ? M.lutRemoveUsed : t('media.remove.used')}</p>}
+          </div>
+          {isUsed && <p className="pf-mc-why" id={`why-${a.id}`}>{isLut ? M.lutRemoveUsed : t('media.remove.used')}</p>}
         </div>, document.body)}
     </>
   );
@@ -194,8 +197,8 @@ export function MediaGrid({ onView, query = '', filter = 'all' }: { onView: (id:
               <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} className="pf-mc-rename" onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
             {(bpm || shots || lang) && (
               <span className="pf-mc-glyphs">
-                {bpm && <span title={C.badgeBeat}><bdi className="num">{bpm}</bdi> BPM</span>}
-                {shots && shots > 1 && <span title="shots"><bdi className="num">{shots}</bdi> cuts</span>}
+                {bpm && <span title={C.badgeBeat}><bdi className="num">{bpm}</bdi> {C.bpmWord}</span>}
+                {shots && shots > 1 && <span title={C.badgeShots}><bdi className="num">{shots}</bdi> {C.shotsWord}</span>}
                 {lang && <span title={C.badgeVoice}><bdi className="num">{lang}</bdi></span>}
               </span>
             )}

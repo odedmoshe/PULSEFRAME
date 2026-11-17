@@ -13,17 +13,22 @@ export function applyTheme(theme: 'dark' | 'light') {
   try { localStorage.setItem(THEME_KEY, theme); } catch { /* not remembered in a private window */ }
 }
 
+type Rows = { id: string; name: string; word: string; tone: 'ok' | 'need' | 'off'; why?: string }[];
+/** What still needs setting up, in the owner's words: the server's own reason text (variable names, paths) is never shown. */
+export function capRows(gpu: { available: boolean } | null | undefined, provider: { provider: { configured: boolean } } | null | undefined, S: Pick<typeof CHROME_STRINGS.he, 'gpu' | 'ai' | 'assistant' | 'assistantOff' | 'capReady' | 'capSetup' | 'gpuWhy' | 'aiWhy'>): Rows {
+  return [
+    { id: 'gpu', name: S.gpu, word: gpu ? (gpu.available ? S.capReady : S.capSetup) : '…', tone: gpu ? (gpu.available ? 'ok' : 'need') : 'off', why: gpu && !gpu.available ? S.gpuWhy : undefined },
+    { id: 'ai', name: S.ai, word: provider ? (provider.provider.configured ? S.capReady : S.capSetup) : '…', tone: provider ? (provider.provider.configured ? 'ok' : 'need') : 'off', why: provider && !provider.provider.configured ? S.aiWhy : undefined },
+    { id: 'assistant', name: S.assistant, word: S.assistantOff, tone: 'off' },
+  ];
+}
+
 export function SettingsDialog() {
   const { editor, state } = useEditorState();
   const { settingsOpen } = useChrome();
   const S = CHROME_STRINGS[state.lang];
   const [theme, setTheme] = useState<'dark' | 'light'>(readTheme);
-  const { gpu, provider } = state;
-  const rows: { id: string; name: string; word: string; tone: 'ok' | 'need' | 'off'; why?: string }[] = [
-    { id: 'gpu', name: S.gpu, word: gpu ? (gpu.available ? S.capReady : S.capSetup) : '…', tone: gpu ? (gpu.available ? 'ok' : 'need') : 'off', why: gpu && !gpu.available ? gpu.reason : undefined },
-    { id: 'ai', name: S.ai, word: provider ? (provider.provider.configured ? S.capReady : S.capSetup) : '…', tone: provider ? (provider.provider.configured ? 'ok' : 'need') : 'off', why: provider && !provider.provider.configured ? provider.provider.reason ?? undefined : undefined },
-    { id: 'assistant', name: S.assistant, word: S.assistantOff, tone: 'off' },
-  ];
+  const rows = capRows(state.gpu, state.provider, S);
   return (
     <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} title={S.settingsTitle} closeLabel={S.settingsClose} size="md" testId="settings-dialog">
       <div className="pf-set">

@@ -6,6 +6,7 @@
  */
 import { Check, ShieldCheck, TriangleAlert } from 'lucide-react';
 import * as T from '@pulseframe/time';
+import { capStageLabel } from './statusStage.ts';
 import { Ring } from '../ds/index.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { setSettingsOpen } from './chromeState.ts';
@@ -33,7 +34,7 @@ export function StatusBar() {
         {job && (
           <span className="pf-status-job" role="status" aria-label={S.statusJobs}>
             <Ring value={pct} label={S.statusJobs} size={28} />
-            <span className="pf-status-jobText">{capJob?.stage ? <bdi>{capJob.stage}</bdi> : S.statusJobs}{pct != null && <> · <span className="num">{pct}%</span></>}</span>
+            <span className="pf-status-jobText">{capJob?.stage ? <bdi>{capStageLabel(capJob.stage, state.lang)}</bdi> : S.statusJobs}{pct != null && <> · <span className="num">{pct}%</span></>}</span>
           </span>
         )}
       </div>

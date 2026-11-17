@@ -9,10 +9,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, CircleAlert, CloudOff, Download, Pencil, RotateCw, Search, User, X } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { LOGO_SVG } from '@pulseframe/brand';
-import { jobStageLabel, type Key } from '@pulseframe/i18n';
+import type { Key } from '@pulseframe/i18n';
 import { Badge, IconButton, ModeBar, Ring, Tooltip, type SegOption } from '../ds/index.ts';
 import { chordLabel, editEnd } from './commands.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
+import { onMenuKeyDown } from './menuKeys.ts';
 import { InlineRename } from './InlineRename.tsx';
 import { ProjectsDialog } from './ProjectsDialog.tsx';
 import { IconExport, IconRedo, IconUndo } from './icons.tsx';
@@ -128,7 +129,7 @@ export function Header() {
         <ExportState />
         <button type="button" className="pf-btn pf-btn-primary pf-btn-md pf-top-export" disabled={!doc || exporting || editor.player?.frameCount === 0} onClick={() => editor.startExport()} data-testid="export">
           <IconExport />
-          <span className="pf-btn-label">{exporting ? <>{t('export.running')} <bdi>{jobStageLabel(job?.stage, lang)}</bdi></> : t('export')}</span>
+          <span className="pf-btn-label">{exporting ? t('export.running') : t('export')}</span>
         </button>
       </div>
       {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); /* return focus to the button that opened the dialog */ setTimeout(() => document.querySelector<HTMLElement>('[data-testid=projects-open]')?.focus(), 0); }} />}
@@ -190,9 +191,9 @@ function Presence() {
       </button>
       {paused && <span className="pf-top-paused" role="status" data-testid="agents-paused">{S.agentPaused}</span>}
       {open && (
-        <div className="pf-top-menu" role="menu" aria-label={S.agentMenu}>
+        <div className="pf-top-menu" role="menu" aria-label={S.agentMenu} onKeyDown={(e) => { if (e.key === 'Tab') setOpen(false); else onMenuKeyDown(e); }}>
           <div className="pf-top-menuHead" aria-hidden="true">{S.agentMenu} · {paused ? S.agentPaused : S.agentReady}</div>
-          <button type="button" role="menuitem" autoFocus className="pf-top-menuItem" data-testid="pause-agent" aria-pressed={paused} onClick={() => { editor.setAgentsPaused(!paused); setOpen(false); btn.current?.focus(); }}>{paused ? S.resumeAgent : S.pauseAgent}</button>
+          <button type="button" role="menuitemcheckbox" aria-checked={paused} autoFocus className="pf-top-menuItem" data-testid="pause-agent" onClick={() => { editor.setAgentsPaused(!paused); setOpen(false); btn.current?.focus(); }}>{paused ? S.resumeAgent : S.pauseAgent}</button>
           <button type="button" role="menuitem" className="pf-top-menuItem is-danger" aria-disabled="true" title={S.undoAgentWhy} onClick={(e) => e.preventDefault()}>{S.undoAgent}<span className="pf-top-menuWhy"> · {S.undoAgentWhy}</span></button>
         </div>
       )}
