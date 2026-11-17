@@ -224,8 +224,9 @@ describe.runIf(LIFE_OPS_BUILT)('time effects show a title\'s fields as they were
 describe.runIf(LIFE_OPS_BUILT)('the date stamp that takes its date from the capture (core)', () => {
   // 25 December 2024, 18:15:30 where it was filmed
   const EVENING: Capture = { at: '2024-12-25T18:15:30', utcOffsetMinutes: 120, source: 'container' };
-  function stamped(params: Record<string, unknown>, capture: Capture | undefined = EVENING) {
-    const lib = tx(createProject({ id: 'prj_st', name: 'ST', width: 640, height: 360, frameRate: R }), [{ op: 'import_asset', args: { asset: file(1, capture) } }], true);
+  /** `capture` null = a file without a date. */
+  function stamped(params: Record<string, unknown>, capture: Capture | null = EVENING) {
+    const lib = tx(createProject({ id: 'prj_st', name: 'ST', width: 640, height: 360, frameRate: R }), [{ op: 'import_asset', args: { asset: file(1, capture ?? undefined) } }], true);
     const r = tx(lib.doc, [{ op: 'add_clip', args: { assetId: out(lib, 0, 'assetId'), start: f(0), duration: f(3600), withLinkedAudio: false } }]);
     const clipId = out(r, 0, 'clipId');
     const e = tx(r.doc, [{ op: 'add_effect', args: { clipId, type: 'stylize.date-stamp', params: { source: 'capture', ...params } } }]);
@@ -276,7 +277,7 @@ describe.runIf(LIFE_OPS_BUILT)('the date stamp that takes its date from the capt
     const day = stamped({ clock: true }, { at: '2024-12-25', utcOffsetMinutes: null, source: 'filename', circa: true });
     expect(textAt(day.doc, day.clipId, 0)).toBe("'24 12 25");
     expect(textAt(day.doc, day.clipId, 3000)).toBe("'24 12 25");
-    const none = stamped({ clock: true, text: "'99 1 1" }, undefined);
+    const none = stamped({ clock: true, text: "'99 1 1" }, null);
     expect(textAt(none.doc, none.clipId, 0)).toBe('');
   });
   it('whatever the date, the text fits the stamp\'s own pattern, and the rest of the stamp is exactly the typed stamp', () => {
