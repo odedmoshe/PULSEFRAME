@@ -57,8 +57,16 @@ export interface ComputeLane {
 export interface LocalToolRunner {
   setup(d: LocalToolDescriptor): Promise<SetupState>;
   models(): ModelStore; // on PF_TOOLS_MODELS_DIR
-  /** Validates source/params for the task and returns the job.input additions to persist; throws ApiError. */
-  prepare(d: LocalToolDescriptor, req: RunRequest): Promise<Record<string, unknown>>;
+  /**
+   * Validates source/params for the task against the document and the configuration and returns the job.input additions to persist;
+   * throws ApiError. Synchronous on purpose: job input is fixed when Store.createJob runs (updateJob cannot patch it; recovery restarts
+   * from it), and CapabilityService.start calls prepare in the same tick as the idempotency lookup and createJob, so a refusal comes
+   * before any job row exists and the additions, the recorded preconditions and the job all describe one project revision.
+   * It may refuse a setup state that needs no probe (engine_not_configured). Checks that need a probe or decoding (the engine probe,
+   * model digests, the L/R correlation of vocals-classic) belong to setup() (reported by estimate) and to drive(), which fails the job
+   * with the setup or validation code.
+   */
+  prepare(d: LocalToolDescriptor, req: RunRequest): Record<string, unknown>;
   /** Drives an already-persisted job row to succeeded/failed/canceled. Never throws. */
   drive(jobId: string, d: LocalToolDescriptor): Promise<void>;
   cancel(jobId: string, actor: string): { jobId: string; status: string; outcome: string };
@@ -67,6 +75,13 @@ export interface LocalToolRunner {
 }
 /** Capabilities' public surface used by W3 (http.ts/mcp.ts). */
 export interface CapabilityService {
+  /**
+   * Refuses (ApiError) or creates the durable job, synchronously: descriptor lookup, blockers, source/frame-plan checks, the agent caps,
+   * the storage ceiling and free scratch space (fs.statfsSync), LocalToolRunner.prepare, the idempotency lookup and Store.createJob run
+   * in one tick with no await, so two requests cannot interleave between a check and the job it admits. Readiness that needs an await
+   * (provider or engine probe, model digests) is reported by estimate() before a run and re-checked by the driver, which fails the job
+   * with that code.
+   */
   start(req: RunRequest): JobRow;
   estimate(req: RunRequest): Promise<CapabilityEstimate>;
   cancel(jobId: string, actor: string): Promise<{ jobId: string; status: string; outcome: string }>;

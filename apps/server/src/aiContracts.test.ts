@@ -5,11 +5,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
-import { ApplyModeSchema, RunSourceSchema, SETUP_CODES, type SetupCode } from './aiContracts.ts';
+import type { LocalToolDescriptor } from '@pulseframe/providers';
+import { afterAll, describe, expect, expectTypeOf, it } from 'vitest';
+import { ApplyModeSchema, RunSourceSchema, SETUP_CODES, type CapabilityService, type LocalToolRunner, type SetupCode } from './aiContracts.ts';
 import { Capabilities } from './capabilities.ts';
 import { DEFAULT_MODEL_HOSTS, loadConfig } from './config.ts';
-import { ApiError, Store } from './store.ts';
+import { ApiError, Store, type JobRow } from './store.ts';
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); });
@@ -55,6 +56,36 @@ describe('Capabilities: the L0 bridge refuses what it cannot do yet, never guess
       expect(await code(() => caps.start({ ...req, source: { clipId: 'clp_1' } }))).toBe('501:not_implemented');
       expect(await code(() => caps.start({ ...req, apply: 'replace-clip' }))).toBe('501:not_implemented');
       expect(await code(() => caps.estimate({ ...req, capabilityId: 'nope.nope' }))).toBe('404:capability_not_found');
+    } finally { store.close(); }
+  });
+});
+
+describe('contract shape: a run is refused or created in one synchronous step', () => {
+  it('LocalToolRunner.prepare returns its job.input additions synchronously, so CapabilityService.start can call it and stay synchronous', () => {
+    // Job input is immutable once Store.createJob has run (updateJob has no input patch; recover restarts from it). start must therefore
+    // get prepare's additions BEFORE createJob, and W3's REST and MCP callers use start's JobRow directly.
+    expectTypeOf<LocalToolRunner['prepare']>().returns.toEqualTypeOf<Record<string, unknown>>();
+    expectTypeOf<CapabilityService['start']>().returns.toEqualTypeOf<JobRow>();
+  });
+  it('the composition W1 writes: a prepare refusal leaves no job row; its additions land in job.input in the same tick', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-aicontracts-'));
+    dirs.push(dir);
+    const store = new Store(dir);
+    try {
+      const pid = store.createProject({ name: 'shape' }).doc.id;
+      // Labelled fake: a LocalToolRunner.prepare that reads only the request (a real one reads the document and the configuration).
+      const prepare: LocalToolRunner['prepare'] = (_d, req) => {
+        if (!req.source) throw new ApiError(422, 'source_required', 'this tool reads a clip or a library asset');
+        return { range: { from: 0, samples: 48_000 } };
+      };
+      const d = { id: 'test.local.shape', provider: 'local' } as LocalToolDescriptor; // the fake reads nothing from it
+      const start: CapabilityService['start'] = (req) => store.createJob(req.projectId, 'capability', req.actor, { capabilityId: req.capabilityId, ...prepare(d, req) });
+      const jobs = () => (store.db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number }).n;
+      const req = { projectId: pid, capabilityId: d.id, params: {}, actor: 'user:owner' };
+      expect(() => start(req)).toThrow(expect.objectContaining({ code: 'source_required' }));
+      expect(jobs()).toBe(0);
+      const job = start({ ...req, source: { assetId: 'ast_a' } });
+      expect(store.getJob(job.id).input).toEqual({ capabilityId: d.id, range: { from: 0, samples: 48_000 } });
     } finally { store.close(); }
   });
 });
