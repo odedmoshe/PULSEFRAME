@@ -28,7 +28,8 @@ export async function setWorkspace(page: Page, ws: Mode): Promise<void> {
   };
   const b = bar[ws];
   if (b) { await b().click(); await page.waitForFunction((w) => document.querySelector(`[data-testid="workspace-${w}"]`)?.getAttribute('aria-checked') === 'true', ws, { timeout: 10000 }); return; }
-  await page.evaluate((w) => localStorage.setItem('pf.workspace.v1', w), ws);
+  // as the bar does, the mode change leaves the all-tools view: the inspector then opens the mode's first panel
+  await page.evaluate((w) => { localStorage.setItem('pf.workspace.v1', w); if (localStorage.getItem('pf.inspector.tab.v1') === 'all') localStorage.setItem('pf.inspector.tab.v1', 'clip'); }, ws);
   await page.reload();
   await page.getByTestId('project-name').waitFor();
   await page.waitForFunction((w) => document.querySelector('.inspector')?.getAttribute('data-mode') === w, ws, { timeout: 15000 });

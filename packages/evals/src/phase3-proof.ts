@@ -13,6 +13,7 @@ import * as T from '@pulseframe/time';
 import { transformAt, type ProjectDocument } from '@pulseframe/core';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { openCardMenu, setWorkspace, workspaceValue } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/phase3');
@@ -32,7 +33,8 @@ async function main() {
   const browser = await chromium.launch();
   // Reduced motion: deterministic screenshots (no mid-animation frames) and it exercises that preference.
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
-  await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+  // the all-tools view on the first load; a reload keeps what the editor stored since (the workspaces section reloads)
+  await page.addInitScript(() => { try { if (!sessionStorage.getItem('pf.proof.boot')) { sessionStorage.setItem('pf.proof.boot', '1'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } } catch { /* storage unavailable */ } });
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   /** Library files this proof removed (see the last check). */
@@ -265,6 +267,9 @@ async function main() {
       return { code: readBarcode(Uint8Array.from(shot.data), shot.w, 3, { x: 0, y: 0, w: shot.w, h: 0 }), frame: Number(shot.frame) };
     };
     const srcAt = async (f: number) => { await page.waitForFunction((t) => { const cv = document.querySelector('[data-testid=source-canvas]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, f, { timeout: 15000 }); return (await srcCode()).code; };
+    // "view" is an item of the media card's ⋯ menu (UX_REDESIGN §8): the menu is opened from the keyboard, then its item
+    await page.getByTestId(`more-${assetId}`).focus();
+    await page.keyboard.press('Enter');
     await page.getByTestId(`view-${assetId}`).focus();
     await page.keyboard.press('Enter');
     await page.getByTestId('source-viewer').waitFor();
@@ -287,7 +292,8 @@ async function main() {
     const svPlayed = (await srcCode()).frame > 80;
     await page.getByTestId('source-add').click();
     await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
-    const focusBack = await page.evaluate((id) => (document.activeElement as HTMLElement | null)?.dataset?.testid === `view-${id}`, assetId);
+    // the menu item that opened the viewer is gone with its menu: the focus goes back to the card's ⋯ button that opened the menu
+    const focusBack = await page.evaluate((id) => (document.activeElement as HTMLElement | null)?.dataset?.testid === `more-${id}`, assetId);
     let svAfter = await getDoc();
     for (let i = 0; i < 50 && svAfter.revision === svBefore.revision; i++) { await new Promise((r) => setTimeout(r, 100)); svAfter = await getDoc(); }
     const svAdded = svAfter.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).filter((c) => !svBefore.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).some((o) => o.id === c.id));
@@ -316,7 +322,7 @@ async function main() {
     for (let i = 0; i < (startOf + 10) % 10; i++) await page.keyboard.press('ArrowRight');
     await page.waitForFunction((t) => document.querySelector('[data-testid=preview]')?.getAttribute('data-frame') === String(t), startOf + 10, { timeout: 10000 }).catch(() => {});
     const atFrame = Number(await page.getByTestId('preview').getAttribute('data-frame'));
-    await page.getByTestId(`view-${assetId}`).click();
+    await openCardMenu(page, assetId); await page.getByTestId(`view-${assetId}`).click();
     await page.getByTestId('source-viewer').waitFor();
     await page.getByTestId('source-scrub').fill('100');
     await srcAt(100);
@@ -338,7 +344,7 @@ async function main() {
     console.log('\n# overwrite at the playhead');
     // the playhead is still at atFrame (start of the inserted 100–119 range): overwrite its first 10 frames with source 60–69
     const ob = await getDoc();
-    await page.getByTestId(`view-${assetId}`).click();
+    await openCardMenu(page, assetId); await page.getByTestId(`view-${assetId}`).click();
     await page.getByTestId('source-viewer').waitFor();
     await page.getByTestId('source-scrub').fill('60');
     await srcAt(60);
@@ -362,7 +368,7 @@ async function main() {
     const vT = added.results[0].output.trackId as string, aT = added.results[1].output.trackId as string;
     await page.waitForFunction((n) => document.querySelectorAll('.track').length >= n, tt0.project.sequences.seq_main!.tracks.length + 2, { timeout: 8000 }).catch(() => {});
     const ttB = await getDoc();
-    await page.getByTestId(`view-${assetId}`).click();
+    await openCardMenu(page, assetId); await page.getByTestId(`view-${assetId}`).click();
     await page.getByTestId('source-viewer').waitFor();
     await page.getByTestId('source-scrub').fill('20');
     await srcAt(20);
@@ -695,7 +701,12 @@ async function main() {
     console.log('\n# move a track');
     const mvB = await getDoc();
     const orderOf = (d: ProjectDocument) => d.sequences.seq_main!.tracks.map((tr) => tr.id);
+    // the timeline rows, top to bottom (UX_REDESIGN §4.7): titles, captions, the picture stack as drawn (adjustment and video
+    // tracks, front-most first), then sound in list order. The project lists picture tracks bottom-most first.
+    const laneRows = (d: ProjectDocument) => { const tr = d.sequences.seq_main!.tracks; const back = (k: string[]) => tr.filter((t) => k.includes(t.kind)).reverse().map((t) => t.id); return [...back(['text']), ...back(['caption']), ...back(['adjustment', 'video']), ...tr.filter((t) => t.kind === 'audio').map((t) => t.id)]; };
     const shownOrder = async () => page.locator('.track').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.trackId));
+    await page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('.track')].map((e) => (e as HTMLElement).dataset.trackId)) === want, JSON.stringify(laneRows(mvB.project)), { timeout: 8000 }).catch(() => {});
+    const shownBefore = await shownOrder();
     const anyClip = mvB.project.sequences.seq_main!.tracks[0]!.clips[0]!; // a clip on the first track in the list (shown at the bottom)
     await page.locator(`.clip[data-clip-id="${anyClip.id}"]`).click();
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
@@ -705,14 +716,14 @@ async function main() {
     await key('Enter');
     let mvA = await getDoc();
     for (let i = 0; i < 50 && mvA.revision === mvB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvA = await getDoc(); }
-    await page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('.track')].map((e) => (e as HTMLElement).dataset.trackId)) === want, JSON.stringify([...orderOf(mvA.project)].reverse()), { timeout: 8000 }).catch(() => {});
+    await page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('.track')].map((e) => (e as HTMLElement).dataset.trackId)) === want, JSON.stringify(laneRows(mvA.project)), { timeout: 8000 }).catch(() => {});
     const shownAfter = await shownOrder();
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await key('Control+KeyZ');
     let mvU = await getDoc();
     for (let i = 0; i < 50 && mvU.revision === mvA.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvU = await getDoc(); }
     const b0 = orderOf(mvB.project);
-    check('"move track up" from the palette swaps the selected clip\'s track with the one above it (list order and the timeline rows both change), and Ctrl+Z restores the order', upCmd === 'track.moveUp' && JSON.stringify(orderOf(mvA.project)) === JSON.stringify([b0[1], b0[0], ...b0.slice(2)]) && JSON.stringify(shownAfter) === JSON.stringify([...orderOf(mvA.project)].reverse()) && JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), { upCmd, before: b0.length, moved: orderOf(mvA.project)[1] === b0[0], shownMatches: JSON.stringify(shownAfter) === JSON.stringify([...orderOf(mvA.project)].reverse()), restored: JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0) });
+    check('"move track up" from the palette swaps the selected clip\'s track with the one above it in the list, the timeline rows before and after are exactly the lane order of that list (titles, captions, picture stack front-most first, sound in list order), and Ctrl+Z restores the order', upCmd === 'track.moveUp' && JSON.stringify(orderOf(mvA.project)) === JSON.stringify([b0[1], b0[0], ...b0.slice(2)]) && JSON.stringify(shownBefore) === JSON.stringify(laneRows(mvB.project)) && JSON.stringify(shownAfter) === JSON.stringify(laneRows(mvA.project)) && JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), { upCmd, before: b0.length, moved: orderOf(mvA.project)[1] === b0[0], shownMatches: JSON.stringify(shownAfter) === JSON.stringify(laneRows(mvA.project)), restored: JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), kinds: mvB.project.sequences.seq_main!.tracks.map((t) => t.kind), shownBefore, shownAfter, rowsBefore: laneRows(mvB.project) });
 
     console.log('\n# full history dialog');
     await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'add_marker', args: { time: T.frameTime(7, R), label: 'from an agent' } }] }) }); // one edit by an agent, so the filter has something to show
@@ -775,14 +786,21 @@ async function main() {
     check('during playback the preview draws, for every frame it reports, the same source frame as the server still of that timeline frame (read by barcode from the moving canvas)', distinct.length >= 15 && mismatches.length === 0 && new Set(distinct.map((x) => x.code)).size >= 10, { sampled: samples.length, movingFramesCompared: distinct.length, differentSourceFrames: new Set(distinct.map((x) => x.code)).size, firstFrames: distinct.slice(0, 6), mismatches: mismatches.slice(0, 5) });
 
     console.log('\n# workspaces');
+    // Since the redesign (UX_REDESIGN §4.9) the mode bar offers Edit (pro), Look (color), Sound, Captions and Deliver; Quick,
+    // Motion and Custom are still modes of the inspector but no longer on the bar, so this proof chooses them the way the
+    // editor keeps a mode (editor-ui.ts setWorkspace). The inspector's own panel tabs are read from its tab row: the rail and
+    // the object's tab set are role=tab too now. A mode change leaves the all-tools view, as the bar does.
     const wb = await getDoc();
-    const tabsShown = async () => page.locator('[role=tab]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid!.replace('inspector-tab-', '')));
+    const tabsShown = async () => page.locator('aside.inspector .inspector-tabs [role=tab]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid!.replace('inspector-tab-', '')));
     const panelsShown = async () => page.locator('.inspector-panel:not([hidden])').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid!.replace('inspector-panel-', '')));
-    const proTabs = await tabsShown();
-    await page.getByTestId('workspace-switch').selectOption('quick');
+    const proTabs = await tabsShown(); // the all-tools view stored at the start: every panel
+    await setWorkspace(page, 'quick');
     const quick = { tabs: await tabsShown(), panels: await panelsShown() };
-    await page.getByTestId('workspace-switch').selectOption('sound');
+    await setWorkspace(page, 'sound');
     const sound = { tabs: await tabsShown(), panels: await panelsShown() };
+    const captions = await (async () => { await setWorkspace(page, 'captions'); return { tabs: await tabsShown(), panels: await panelsShown() }; })();
+    const deliver = await (async () => { await setWorkspace(page, 'deliver'); return { tabs: await tabsShown(), panels: await panelsShown() }; })();
+    await setWorkspace(page, 'sound');
     // a target track chosen before the reload is still chosen after it
     await page.getByTestId('track-target').first().click();
     await page.reload();
@@ -790,15 +808,16 @@ async function main() {
     await page.getByTestId('track-target').first().waitFor();
     const targetKept = await page.locator('[data-testid=track-target][aria-pressed=true]').count();
     await page.locator('[data-testid=track-target][aria-pressed=true]').first().click().catch(() => {});
-    const afterReload = { ws: await page.getByTestId('workspace-switch').inputValue(), tabs: await tabsShown() };
-    // Motion and Color: the clip panel, each with its own part of it (a picture clip is selected first)
-    await page.getByTestId('workspace-switch').selectOption('pro');
+    const afterReload = { ws: await workspaceValue(page), tabs: await tabsShown() };
+    // Motion and Look (color): the selection only, each opening the picture clip on its own tab (a picture clip is selected first).
+    // What a tab holds is counted when it is on screen: every tab of the object is mounted, the others hidden.
     const wsClip = (await getDoc()).project.sequences.seq_main!.tracks.find((tr) => tr.kind === 'video')!.clips[0]!;
+    const vis = (id: string) => page.locator(`[data-testid=${id}]:visible`).count();
+    const parts = async () => ({ tabs: await tabsShown(), objectTab: await page.locator('aside.inspector .insp-object').first().getAttribute('data-tab'), transform: await vis('transform-x'), speed: await vis('speed-field'), animate: await vis('animate-controls'), look: await vis('look-apply'), analysis: await vis('analysis-panel') });
+    await setWorkspace(page, 'motion');
     await page.locator(`.clip[data-clip-id="${wsClip.id}"]`).click();
-    const parts = async () => ({ tabs: await tabsShown(), transform: await page.getByTestId('transform-x').count(), speed: await page.getByTestId('speed-field').count(), animate: await page.getByTestId('animate-controls').count(), look: await page.getByTestId('look-panel').count(), analysis: await page.getByTestId('analysis-panel').count() });
-    await page.getByTestId('workspace-switch').selectOption('motion');
     const motion = await parts();
-    await page.getByTestId('workspace-switch').selectOption('color');
+    await setWorkspace(page, 'color');
     const color = await parts();
     // scopes in the Color workspace: their numbers against the server still of the same frame
     await page.getByTestId('scopes').waitFor({ timeout: 5000 }).catch(() => {});
@@ -814,29 +833,38 @@ async function main() {
     const waveInk = await page.getByTestId('scope-waveform').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 192, 96).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; }).catch(() => 0);
     const scopeCheck = { frame: scope.frame, mean: Number(scope.mean), stillMean: Number(stillMean.toFixed(1)), min: Number(scope.min), max: Number(scope.max), stillMin: Math.round(lumaMin), stillMax: Math.round(lumaMax), histInk, waveInk, vecInk, saturation: Number(scope.saturation) };
     check('Color workspace scopes: drawn (histogram, waveform and vectorscope all have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)', histInk > 20 && waveInk > 20 && vecInk > 3 && Number.isFinite(scopeCheck.saturation) && Math.abs(scopeCheck.mean - scopeCheck.stillMean) <= 3 && Math.abs(scopeCheck.min - scopeCheck.stillMin) <= 12 && Math.abs(scopeCheck.max - scopeCheck.stillMax) <= 12, scopeCheck);
-    await page.getByTestId('workspace-switch').selectOption('pro');
-    await page.getByTestId('inspector-tab-clip').click();
+    await setWorkspace(page, 'pro');
     const proParts = await parts();
-    check('workspaces Motion and Color: both offer the clip panel only; Motion shows position/size, speed and entrances without the look controls; Color shows the look controls without them; Pro shows all of it',
-      JSON.stringify(motion) === JSON.stringify({ tabs: ['clip'], transform: 1, speed: 1, animate: 1, look: 0, analysis: 0 }) && JSON.stringify(color) === JSON.stringify({ tabs: ['clip'], transform: 0, speed: 0, animate: 0, look: 1, analysis: 0 }) && proParts.transform === 1 && proParts.look === 1 && proParts.analysis === 1 && proParts.tabs.length === 8, { motion, color, proParts });
+    await page.getByTestId('inspector-tab-all').click();
+    const allParts = await parts();
+    check('workspaces Motion and Look: both offer the selection only (no panel tabs); Motion opens the picture clip on its motion tab (entrances shown, no look controls, no position or speed on screen); Look opens it on its colour tab (the look controls without position, speed or entrances); Edit opens it on its basic tab (position/size, no look controls); the all-tools view shows all of it with every panel',
+      JSON.stringify(motion) === JSON.stringify({ tabs: [], objectTab: 'motion', transform: 0, speed: 0, animate: 1, look: 0, analysis: 0 }) && JSON.stringify(color) === JSON.stringify({ tabs: [], objectTab: 'colour', transform: 0, speed: 0, animate: 0, look: 1, analysis: 0 })
+      && proParts.tabs.length === 0 && proParts.objectTab === 'basic' && proParts.transform === 1 && proParts.look === 0
+      && allParts.transform === 1 && allParts.speed === 1 && allParts.animate === 1 && allParts.look === 1 && allParts.analysis === 1 && allParts.tabs.length === 8, { motion, color, proParts, allParts });
     // the custom workspace: the user's own choice of panels, kept across a reload
-    await page.getByTestId('workspace-switch').selectOption('custom');
+    await setWorkspace(page, 'custom');
     const customDefault = await tabsShown();
     await page.getByTestId('custom-panel-captions').check();
     await page.getByTestId('custom-panel-sound').uncheck();
     const customChosen = await tabsShown();
     await page.reload();
     await page.getByTestId('timecode').waitFor();
-    const customKept = { ws: await page.getByTestId('workspace-switch').inputValue(), tabs: await tabsShown() };
+    const customKept = { ws: await workspaceValue(page), tabs: await tabsShown() };
     await page.getByTestId('custom-panel-clip').uncheck();
     await page.getByTestId('custom-panel-deliver').uncheck();
     const lastLocked = await page.getByTestId('custom-panel-captions').isDisabled();
     await page.getByTestId('custom-panel-clip').check(); await page.getByTestId('custom-panel-deliver').check(); await page.getByTestId('custom-panel-sound').check(); await page.getByTestId('custom-panel-captions').uncheck();
     check('custom workspace: starts with clip, sound and deliver; ticking and unticking panels changes the tabs on offer; the choice survives a reload; the last remaining panel cannot be unticked', JSON.stringify(customDefault) === JSON.stringify(['clip', 'sound', 'deliver']) && JSON.stringify(customChosen) === JSON.stringify(['clip', 'captions', 'deliver']) && customKept.ws === 'custom' && JSON.stringify(customKept.tabs) === JSON.stringify(['clip', 'captions', 'deliver']) && lastLocked, { customDefault, customChosen, customKept, lastLocked });
-    await page.getByTestId('workspace-switch').selectOption('pro');
+    await setWorkspace(page, 'pro');
     const back = await tabsShown();
+    const allButton = await page.getByTestId('inspector-tab-all').count();
+    await page.getByTestId('inspector-tab-all').click();
+    const allAgain = await tabsShown();
     const wa = await getDoc();
-    check('workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload, and so does a chosen target track; Pro offers every panel again; the project is not changed by any of it', targetKept === 1 && proTabs.length === 8 && JSON.stringify(quick.tabs) === JSON.stringify(['recipes', 'speech', 'captions', 'deliver']) && JSON.stringify(quick.panels) === JSON.stringify(['recipes']) && JSON.stringify(sound.tabs) === JSON.stringify(['sound', 'clip']) && JSON.stringify(sound.panels) === JSON.stringify(['sound']) && afterReload.ws === 'sound' && JSON.stringify(afterReload.tabs) === JSON.stringify(['sound', 'clip']) && back.length === 8 && wa.revision === wb.revision && JSON.stringify(wa.project) === JSON.stringify(wb.project), { proTabs: proTabs.length, quick, sound, afterReload, back: back.length });
+    check('workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; Captions offers captions, speech and clip; Deliver offers deliver, review and recipes; each shows its first panel; the choice survives a reload, and so does a chosen target track; Edit shows the selection only, with the all-tools button that offers every panel again; the project is not changed by any of it',
+      targetKept === 1 && proTabs.length === 8 && JSON.stringify(quick.tabs) === JSON.stringify(['recipes', 'speech', 'captions', 'deliver']) && JSON.stringify(quick.panels) === JSON.stringify(['recipes']) && JSON.stringify(sound.tabs) === JSON.stringify(['sound', 'clip']) && JSON.stringify(sound.panels) === JSON.stringify(['sound'])
+      && JSON.stringify(captions.tabs) === JSON.stringify(['captions', 'speech', 'clip']) && JSON.stringify(captions.panels) === JSON.stringify(['captions']) && JSON.stringify(deliver.tabs) === JSON.stringify(['deliver', 'review', 'recipes']) && JSON.stringify(deliver.panels) === JSON.stringify(['deliver'])
+      && afterReload.ws === 'sound' && JSON.stringify(afterReload.tabs) === JSON.stringify(['sound', 'clip']) && back.length === 0 && allButton === 1 && allAgain.length === 8 && wa.revision === wb.revision && JSON.stringify(wa.project) === JSON.stringify(wb.project), { proTabs: proTabs.length, quick, sound, captions, deliver, afterReload, back, allButton, allAgain: allAgain.length });
     // A library file the proof removed may still be being looked up by the editor at that moment (its thumbnails, its list of
     // derived files): the server then rightly answers 404, which the browser logs. Those, and only those, are not errors of the editor.
     const removedLookup = (e: string) => /status of 404/.test(e) && [...removedAssets].some((id) => e.includes(`/assets/${id}/derivatives`));
