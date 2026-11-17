@@ -7,14 +7,22 @@
  *            the pages beside it): as a data-testid attribute, as a data-testid template, or as a string constant;
  *   dynamic  the id is in the DOM of the built editor in the states listed in STATES below (the audit's twelve states,
  *            the two header states and a few more that open panels the twelve do not), driven on a synthetic project.
- * The static check fails on any id no source emits. The dynamic check is a pin: an id that was in the DOM of a state in
- * the committed report (docs/evidence/testid-inventory.json) must still be there in that state. A proof reaches many ids
- * only in its own scenario (a running job, a refusal, a second page); those are listed with no state and are covered by
- * the static check and by the proof itself.
+ * Both checks are held against the committed report (docs/evidence/testid-inventory.json):
+ *   static   fails on any id no source emits, and on any id whose evidence is weaker than the report records
+ *            (sourceLosses below). "Found" alone cannot fail for an id that is also an ordinary word in the source: with
+ *            the attribute deleted from every element, `'undo'` in `editor.history('undo')` still counts as a constant and
+ *            `clip-${id}` still accepts clip-speed. So an id the report has as an attribute must still be an attribute,
+ *            a constant must not turn into a template or the reverse, and the template that emitted an id must still exist.
+ *   dynamic  a pin: an id that was in the DOM of a state in the report must still be there in that state.
+ * A proof reaches many ids only in its own scenario (a running job, a refusal, a second page); those are listed with no
+ * state and are held by the static check and by the proof itself. What the static check cannot see: an id kept in a table
+ * of constants (templates.testids.ts and the like) stays "found" while the table has it, whether or not an element still
+ * carries it; those ids are held by the driven states and by their proofs.
  *
  *   pnpm build && pnpm audit:testids             check against the committed report, then refresh it
  *   pnpm audit:testids -- --accept               record the DOM as it is now (only with a listed migration of the ids lost)
- *   pnpm audit:testids -- --static               the source check only: no server, no browser, the report is not written
+ *   pnpm audit:testids -- --static               the source check only, against the committed report: no server, no browser,
+ *                                                the report is not written (the unit test runs the same check)
  *   PF_TESTIDS_PORT=8942 pnpm audit:testids      another port (default 8889)
  */
 import { execFileSync } from 'node:child_process';
@@ -52,6 +60,9 @@ function templateParts(body: string): { lit: string[]; expr: string[] } {
   }
   return { lit, expr };
 }
+
+/** The pattern a template can emit: its fixed text with `*` for each `${…}`. */
+export const templatePattern = (body: string) => templateParts(body).lit.join('*').replace(/\*+/g, '*');
 
 /** The string literals passed for parameter `name` of the function that encloses `pos` (a helper such as `q = (id) => …`). */
 function callSiteLiterals(src: string, pos: number, name: string): string[] | null {
@@ -160,27 +171,29 @@ export function scanSource(files: { file: string; src: string }[]): Emitted {
     for (const m of src.matchAll(/(?:data-testid|testid|testId|['"]data-testid['"])\s*[=:]\s*\{?\s*(['"])([A-Za-z0-9_.:-]+)\1/g)) put(exact, m[2]!, file);
     for (const m of src.matchAll(/setAttribute\(\s*['"]data-testid['"]\s*,\s*(['"])([A-Za-z0-9_.:-]+)\1/g)) put(exact, m[2]!, file);
     for (const m of src.matchAll(/(?:data-testid|testid|testId|['"]data-testid['"])\s*[=:]\s*\{?\s*`([^`]+)`/g)) {
-      const { lit, expr } = templateParts(m[1]!);
-      if (!expr.length) put(exact, m[1]!, file); else templates.push({ pattern: lit.join('*').replace(/\*+/g, '*'), file });
+      if (!templateParts(m[1]!).expr.length) put(exact, m[1]!, file); else templates.push({ pattern: templatePattern(m[1]!), file });
     }
     // ids that reach the attribute through an expression: a ternary, a constants table, a helper
     for (const m of src.matchAll(/(['"])([a-z][a-z0-9]*(?:[-.:][a-zA-Z0-9]+)*)\1/g)) put(literals, m[2]!, file);
-    for (const m of src.matchAll(/`([a-z][a-z0-9-]*-)\$\{[^`]*`/g)) { const { lit } = templateParts(m[0].slice(1, -1)); templates.push({ pattern: lit.join('*').replace(/\*+/g, '*'), file: `${file} (template literal)` }); }
+    for (const m of src.matchAll(/`([a-z][a-z0-9-]*-)\$\{[^`]*`/g)) templates.push({ pattern: templatePattern(m[0].slice(1, -1)), file: `${file} (template literal)` });
   }
   return { exact, templates, literals };
 }
 
-export interface StaticEvidence { found: boolean; how: 'attribute' | 'constant' | 'template' | null; where: string[] }
+/** `via`: for template evidence, the patterns of the templates that can emit the id, the one with the most fixed text first. */
+export interface StaticEvidence { found: boolean; how: 'attribute' | 'constant' | 'template' | null; where: string[]; via?: string[] }
 /** A template counts only when its fixed text says something: `x-${id}` does, `${group}-${value}` does not. */
 const telling = (pattern: string) => pattern.replace(/[^a-z0-9]/gi, '').length >= 3;
 export function staticEvidence(ref: { id: string; kind: Ref['kind'] }, e: Emitted): StaticEvidence {
   const files = (s: Iterable<string>) => [...new Set(s)].sort().slice(0, 4);
+  const fixed = (pattern: string) => pattern.replace(/\*/g, '').length;
+  const byTemplate = (t: Emitted['templates']): StaticEvidence => ({ found: true, how: 'template', where: files(t.map((x) => x.file)), via: [...new Set(t.map((x) => x.pattern))].sort((a, b) => fixed(b) - fixed(a) || a.localeCompare(b)) });
   const templates = e.templates.filter((x) => telling(x.pattern));
   if (ref.kind === 'exact') {
     if (e.exact.has(ref.id)) return { found: true, how: 'attribute', where: files(e.exact.get(ref.id)!) };
     if (e.literals.has(ref.id)) return { found: true, how: 'constant', where: files(e.literals.get(ref.id)!) };
     const t = templates.filter((x) => patternRegex(x.pattern).test(ref.id));
-    if (t.length) return { found: true, how: 'template', where: files(t.map((x) => x.file)) };
+    if (t.length) return byTemplate(t);
     return { found: false, how: null, where: [] };
   }
   const re = patternRegex(ref.id), head = ref.id.split('*')[0]!, tail = ref.id.split('*').at(-1)!;
@@ -189,8 +202,28 @@ export function staticEvidence(ref: { id: string; kind: Ref['kind'] }, e: Emitte
   // a template in the source that can produce an id the proof's pattern accepts: the fixed start (or end) is the same text
   const agree = (a: string, b: string, from: 'start' | 'end') => !!a && !!b && (from === 'start' ? a.startsWith(b) || b.startsWith(a) : a.endsWith(b) || b.endsWith(a));
   const t = templates.filter((x) => { const h = x.pattern.split('*')[0]!, tl = x.pattern.split('*').at(-1)!; return head ? agree(h, head, 'start') && (!tail || !tl || agree(tl, tail, 'end')) : agree(tl, tail, 'end'); });
-  if (t.length) return { found: true, how: 'template', where: files(t.map((x) => x.file)) };
+  if (t.length) return byTemplate(t);
   return { found: false, how: null, where: [] };
+}
+
+/** An id as the committed report has it. */
+export interface PinnedId { id: string; kind: string; dynamic?: string[]; static?: { how: string | null; via?: string[] } }
+const EVIDENCE: Record<string, string> = { attribute: 'a data-testid attribute', template: 'a data-testid template', constant: 'a string constant' };
+/**
+ * Ids that are still "found" in the source, but on weaker evidence than the committed report records: the id has most
+ * likely left its element. An id that became an attribute is never a loss; an id nothing emits is reported as missing,
+ * not here; an id no proof refers to any more is not in the inventory and is not judged.
+ */
+export function sourceLosses(pinned: PinnedId[], now: { id: string; kind: string; static: StaticEvidence }[]): { id: string; why: string }[] {
+  const current = new Map(now.map((x) => [`${x.kind}:${x.id}`, x.static]));
+  const out: { id: string; why: string }[] = [];
+  for (const p of pinned) {
+    const was = p.static?.how, s = current.get(`${p.kind}:${p.id}`);
+    if (!was || !s?.found || s.how === 'attribute') continue;
+    if (s.how !== was) out.push({ id: p.id, why: `was ${EVIDENCE[was] ?? was} in the source, is now only ${EVIDENCE[s.how!]}${s.via ? ` (${s.via[0]})` : ''}` });
+    else if (was === 'template' && p.static?.via?.[0] && !s.via?.includes(p.static.via[0])) out.push({ id: p.id, why: `the template ${p.static.via[0]} that emitted it is gone; only ${s.via?.join(', ')} still matches` });
+  }
+  return out;
 }
 
 const walk = (dir: string, keep: (f: string) => boolean): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => d.name === 'node_modules' || d.name === 'dist' ? [] : d.isDirectory() ? walk(path.join(dir, d.name), keep) : keep(d.name) ? [path.join(dir, d.name)] : []);
@@ -209,6 +242,14 @@ async function constsOf(file: string, src: string): Promise<Consts> {
   return out;
 }
 
+/** The web source the ids are looked for in: apps/web/src (tests excluded) and the pages beside it. */
+export function webSources(): { file: string; src: string }[] {
+  const files = [...walk(path.join(WEB, 'src'), (f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('.test.ts')), ...fs.readdirSync(WEB).filter((f) => f.endsWith('.html')).map((f) => path.join(WEB, f))];
+  return files.map((file) => ({ file: rel(file), src: fs.readFileSync(file, 'utf8') }));
+}
+/** The committed report, or null before the first run. */
+export const pinnedReport = (): { ids: PinnedId[] } | null => (fs.existsSync(REPORT) ? JSON.parse(fs.readFileSync(REPORT, 'utf8')) as { ids: PinnedId[] } : null);
+
 export async function inventory() {
   const proofFiles = walk(EVALS, (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'testid-inventory.ts');
   const refs: Ref[] = [], unresolved: Unresolved[] = [];
@@ -218,8 +259,8 @@ export async function inventory() {
     const r = extractRefs(rel(file), src, await constsOf(file, src));
     refs.push(...r.refs); unresolved.push(...r.unresolved);
   }
-  const webFiles = [...walk(path.join(WEB, 'src'), (f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('.test.ts')), ...fs.readdirSync(WEB).filter((f) => f.endsWith('.html')).map((f) => path.join(WEB, f))];
-  const emitted = scanSource(webFiles.map((file) => ({ file: rel(file), src: fs.readFileSync(file, 'utf8') })));
+  const webFiles = webSources();
+  const emitted = scanSource(webFiles);
   const byId = new Map<string, { id: string; kind: Ref['kind']; usedBy: Set<string> }>();
   for (const r of refs) { const k = `${r.kind}:${r.id}`; if (!byId.has(k)) byId.set(k, { id: r.id, kind: r.kind, usedBy: new Set() }); byId.get(k)!.usedBy.add(path.basename(r.file)); }
   const ids = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)).map((x) => ({ id: x.id, kind: x.kind, usedBy: [...x.usedBy].sort(), static: staticEvidence(x, emitted) }));
@@ -353,26 +394,31 @@ async function main() {
   const missing = inv.ids.filter((x) => !x.static.found);
   console.log(`test ids used by ${inv.proofFiles} proof files: ${inv.ids.length} (${inv.ids.filter((x) => x.kind === 'pattern').length} patterns); not found in the web source: ${missing.length}; references this script could not read: ${inv.unresolved.length}`);
   for (const m of missing) console.log(` MISSING in source: ${m.id}  (used by ${m.usedBy.join(', ')})`);
-  if (staticOnly) { if (missing.length) process.exitCode = 1; return; }
+  // the pin: what the committed report saw must still be there, in the source and (below) state by state
+  const pinned = pinnedReport();
+  const weaker = pinned ? sourceLosses(pinned.ids, inv.ids) : [];
+  if (staticOnly) {
+    for (const l of weaker) console.log(` LOST in source: ${l.id}  (${l.why})`);
+    console.log(pinned ? `weaker in the source than the committed report records: ${weaker.length}` : 'no committed report to compare the source with');
+    if (weaker.length) console.log('An id that moved on purpose is recorded by the full run with --accept, with the migration listed.');
+    if (missing.length || weaker.length) process.exitCode = 1;
+    return;
+  }
 
   const dom = await domStates();
   const seenIn = (x: { id: string; kind: Ref['kind'] }) => Object.entries(dom.states).filter(([, ids]) => (x.kind === 'exact' ? ids.includes(x.id) : ids.some((d) => patternRegex(x.id).test(d)))).map(([name]) => name);
   const ids = inv.ids.map((x) => ({ ...x, dynamic: seenIn(x) }));
-  // the pin: what the committed report saw must still be there, state by state
-  const pinned = fs.existsSync(REPORT) ? JSON.parse(fs.readFileSync(REPORT, 'utf8')) as { ids: { id: string; kind: string; dynamic: string[]; static?: { how: string | null } }[] } : null;
-  const lost: { id: string; state: string }[] = [];
+  const lost: { id: string; state: string }[] = weaker.map((l) => ({ id: l.id, state: `source: ${l.why}` }));
   if (pinned) for (const p of pinned.ids) {
     const now = ids.find((x) => x.id === p.id && x.kind === p.kind);
-    for (const st of p.dynamic) if (!now?.dynamic.includes(st)) lost.push({ id: p.id, state: st });
-    // an id that was an attribute in the source and is now only some string constant has most likely left its element
-    if (p.static?.how && p.static.how !== 'constant' && now?.static.how === 'constant') lost.push({ id: p.id, state: '(source: no longer a data-testid attribute)' });
+    for (const st of p.dynamic ?? []) if (!now?.dynamic.includes(st)) lost.push({ id: p.id, state: st });
   }
   for (const l of lost) console.log(` LOST: ${l.id}  (${l.state})`);
   const ok = missing.length === 0 && (lost.length === 0 || accept);
   const report = {
     ranAt: new Date().toISOString(),
     machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, browser: dom.browser },
-    scope: 'Every data-testid a proof or the a11y audit (packages/evals/src) refers to. static: found in the web source (attribute, attribute template, or string constant). dynamic: the states of the built editor, on a synthetic project at 1440x900, in whose DOM the id was present; an empty list means the id is reached only in its own proof scenario. Not a proof that a control works: the proofs do that.',
+    scope: 'Every data-testid a proof or the a11y audit (packages/evals/src) refers to. static: found in the web source (attribute, attribute template, or string constant; via: the templates that can emit it), and never on weaker evidence than the report before it. dynamic: the states of the built editor, on a synthetic project at 1440x900, in whose DOM the id was present; an empty list means the id is reached only in its own proof scenario. Not a proof that a control works: the proofs do that.',
     states: Object.keys(dom.states),
     summary: { ids: ids.length, patterns: ids.filter((x) => x.kind === 'pattern').length, staticMissing: missing.map((x) => x.id), inTheDomOfAState: ids.filter((x) => x.dynamic.length).length, onlyInItsOwnProofScenario: ids.filter((x) => !x.dynamic.length).length, lostSinceTheLastReport: lost, acceptedWithLosses: accept && lost.length > 0, unreadableReferences: inv.unresolved.length },
     ids,
