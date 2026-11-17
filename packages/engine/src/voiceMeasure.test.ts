@@ -183,25 +183,24 @@ describe('voiceMeter', () => {
     const at = (snrDb: number | null) => recommendedStrength({ speech: { snrDb, levelDb: -20, peakDb: -3 } } as VoiceMeasurement);
     expect([at(40), at(30), at(20), at(10), at(0), at(null)]).toEqual([0.35, 0.35, 0.6, 0.85, 0.85, 0.6]);
   });
-  it('600 s of input: memory growth at most 64 MB; wall time reported (at most 10 s here)', () => {
+  it('600 s of input: memory growth at most 64 MB; time reported (at most 10 s of CPU time here, so other work on a shared machine does not count)', () => {
     const chunk = new Float32Array(SR * 2), before = process.memoryUsage(), t0 = performance.now();
     const m = voiceMeter();
-    let metering = 0;
+    let metering = 0, cpu = 0;
+    const timed = (fn: () => void) => { const a = performance.now(), c = process.cpuUsage(); fn(); const d = process.cpuUsage(c); metering += performance.now() - a; cpu += (d.user + d.system) / 1000; };
     for (let s = 0; s < 600; s++) {
       for (let i = 0; i < SR; i++) { const v = (uniform(hash32(s, i, 0)) - 0.5) * 0.01 + (s % 4 === 0 ? 0 : 0.2 * Math.sin(i * 0.131)); chunk[i * 2] = v; chunk[i * 2 + 1] = v; }
-      const a = performance.now();
-      m.push(chunk);
-      metering += performance.now() - a;
+      timed(() => m.push(chunk));
     }
-    const a = performance.now(), r = m.finish();
-    metering += performance.now() - a;
+    let r!: VoiceMeasurement;
+    timed(() => { r = m.finish(); });
     const wall = metering / 1000, after = process.memoryUsage();
     // typed-array storage is counted in arrayBuffers (the meter's rows); the heap may shrink meanwhile, so both are bounded
     const buffers = (after.arrayBuffers - before.arrayBuffers) / 2 ** 20, growth = (after.heapUsed + after.arrayBuffers - before.heapUsed - before.arrayBuffers) / 2 ** 20;
-    console.log(`600 s measured in ${wall.toFixed(2)} s of metering (${((performance.now() - t0) / 1000).toFixed(2)} s with the signal generation); typed arrays +${buffers.toFixed(1)} MB, heap and typed arrays +${growth.toFixed(1)} MB; quiet ${r.noise.quietSeconds} s`);
+    console.log(`600 s measured in ${(cpu / 1000).toFixed(2)} s of CPU time, ${wall.toFixed(2)} s wall (${((performance.now() - t0) / 1000).toFixed(2)} s wall with the signal generation); typed arrays +${buffers.toFixed(1)} MB, heap and typed arrays +${growth.toFixed(1)} MB; quiet ${r.noise.quietSeconds} s`);
     expect(buffers).toBeLessThanOrEqual(64);
     expect(r.analysedSeconds).toBe(600);
     expect(growth).toBeLessThanOrEqual(64);
-    expect(wall).toBeLessThanOrEqual(10);
+    expect(cpu / 1000).toBeLessThanOrEqual(10);
   }, 120000);
 });

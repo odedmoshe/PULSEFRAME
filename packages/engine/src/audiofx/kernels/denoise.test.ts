@@ -227,20 +227,25 @@ describe('cleanup.denoise and cleanup.dehum through the voice runtime (openClipV
     console.log(`moved by 100 samples (not a multiple of H = ${H}): largest change ${worst.toExponential(2)}`);
     expect(worst).toBeGreaterThan(0);
   });
-  it('the whole voice with denoise runs at least 40× real time in Node on 30 s of 48 kHz stereo (reported)', () => {
+  it('the whole voice with denoise runs at least 40× real time in Node on 30 s of 48 kHz stereo (reported; CPU time of this process, so other work on a shared machine does not count)', () => {
     const seconds = 30, clip = clipOf(0, seconds * SR, [1, 10], [CHAIN[1]!]), both = clipOf(0, seconds * SR, [1, 10], CHAIN);
     const timeOf = (cl: PlannedAudioClip) => {
       const v = openClipVoice(cl, SR, SR, 0, Infinity), n = v.input.last - v.input.first, P = new Float32Array(n * 2);
       for (let i = 0; i < n; i++) { P[i * 2] = native(v.input.origin + v.input.first + i, 0); P[i * 2 + 1] = native(v.input.origin + v.input.first + i, 1); }
-      const t0 = performance.now();
+      const t0 = performance.now(), c0 = process.cpuUsage();
       for (let o = 0; o < n; o += 4096) v.push(P.subarray(o * 2, Math.min(n, o + 4096) * 2));
       v.finish();
-      return seconds / ((performance.now() - t0) / 1000);
+      const c = process.cpuUsage(c0);
+      return { cpu: seconds / ((c.user + c.system) / 1e6), wall: seconds / ((performance.now() - t0) / 1000) };
     };
-    let best = 0, bestBoth = 0;
-    for (let k = 0; k < 3; k++) { best = Math.max(best, timeOf(clip)); bestBoth = Math.max(bestBoth, timeOf(both)); }
-    console.log(`voice speed: denoise ${best.toFixed(1)}× real time; dehum + denoise ${bestBoth.toFixed(1)}× (best of 3, 30 s at 48 kHz stereo)`);
-    expect(best).toBeGreaterThanOrEqual(40);
+    let best = { cpu: 0, wall: 0 }, bestBoth = { cpu: 0, wall: 0 };
+    for (let k = 0; k < 3; k++) {
+      const a = timeOf(clip), b = timeOf(both);
+      if (a.cpu > best.cpu) best = a;
+      if (b.cpu > bestBoth.cpu) bestBoth = b;
+    }
+    console.log(`voice speed: denoise ${best.cpu.toFixed(1)}× real time in CPU time (${best.wall.toFixed(1)}× wall); dehum + denoise ${bestBoth.cpu.toFixed(1)}× (${bestBoth.wall.toFixed(1)}× wall) (best of 3, 30 s at 48 kHz stereo, hop N/4)`);
+    expect(best.cpu).toBeGreaterThanOrEqual(40);
   }, 120000);
   it('the plan and the kernels agree on the look-ahead (the voice refuses a mismatch)', () => {
     const r = chainReach(CHAIN, SR);

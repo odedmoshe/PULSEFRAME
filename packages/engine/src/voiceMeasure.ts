@@ -190,9 +190,14 @@ export function voiceMeter(opts: VoiceMeasureOptions = {}): VoiceMeter {
 
 /** Short frame k covers samples [k·HS, k·HS + NS); long frame f covers decimated [f·HL, f·HL + NL), i.e. input [8·f·HL − 96, 8·(f·HL + NL − 1) + 1). */
 const longSpan = (f: number): Interval => ({ a: DEC * f * HL - (DTAPS - 1), b: DEC * (f * HL + NL - 1) + 1 });
+/**
+ * Whether `iv` lies wholly inside one interval of `set`. The sets used here are sorted by start with their ends increasing too
+ * (runs of frames, merged ranges), so the only candidate is the last interval starting at or before iv.a: a binary search.
+ */
 function within(iv: Interval, set: readonly Interval[]): boolean {
-  for (const s of set) if (iv.a >= s.a && iv.b <= s.b) return true;
-  return false;
+  let lo = 0, hi = set.length - 1, at = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (set[mid]!.a <= iv.a) { at = mid; lo = mid + 1; } else hi = mid - 1; }
+  return at >= 0 && iv.b <= set[at]!.b;
 }
 function merge(list: Interval[]): Interval[] {
   const s = list.filter((x) => x.b > x.a).sort((x, y) => x.a - y.a), out: Interval[] = [];
