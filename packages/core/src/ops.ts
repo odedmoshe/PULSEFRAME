@@ -7,7 +7,7 @@ import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
   CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS,
-  type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
+  type AdjustmentClip, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
@@ -22,7 +22,7 @@ import { lookParams } from './looks.ts';
 import { findTextPreset } from './textPresets.ts';
 import { CAPTION_LOOK_IDS, findCaptionLook } from './captionPresets.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, isTimeEffect, MaskSchema, modulatableParams, ModulatorSchema, paramRange, TRANSITION_IDS, type EffectInstance, type Modulator } from './effects.ts';
-import { clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
+import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 
@@ -62,7 +62,11 @@ export interface OpDefinition<S extends z.ZodType = z.ZodType> {
 }
 
 const registry = new Map<string, OpDefinition>();
-function defineOp<S extends z.ZodType>(def: OpDefinition<S>) {
+/**
+ * Register an operation (once, at module load). Used by this file and by modules that keep an op family in a file of its own
+ * (templateOps.ts); every registered op still runs only through applyTransaction.
+ */
+export function defineOp<S extends z.ZodType>(def: OpDefinition<S>) {
   if (registry.has(def.name)) throw new Error(`duplicate op ${def.name}`);
   registry.set(def.name, def as unknown as OpDefinition);
 }
@@ -130,9 +134,13 @@ function assertAligned(d: ProjectDocument, t: T.RationalTime, what: string) {
 }
 function newTrack(seq: Sequence, kind: Track['kind'], ctx: OpContext, name?: string): Track {
   const count = seq.tracks.filter((t) => t.kind === kind).length + 1;
-  const track: Track = { id: ctx.newId('trk'), kind, name: name ?? `${kind === 'video' ? 'V' : kind === 'audio' ? 'A' : kind === 'caption' ? 'C' : 'T'}${count}`, locked: false, muted: false, hidden: false, clips: [] };
-  // Bottom-most first: picture tracks, then text tracks, then audio.
-  const at = kind === 'audio' ? -1 : kind === 'video' ? seq.tracks.findIndex((t) => t.kind !== 'video') : seq.tracks.findIndex((t) => t.kind === 'audio');
+  const prefix = kind === 'video' ? 'V' : kind === 'audio' ? 'A' : kind === 'caption' ? 'C' : kind === 'adjustment' ? 'FX' : 'T';
+  const track: Track = { id: ctx.newId('trk'), kind, name: name ?? `${prefix}${count}`, locked: false, muted: false, hidden: false, clips: [] };
+  // Bottom-most first: picture tracks, adjustment tracks (a look covers every picture, also ones added later; ADR-0016), titles, audio.
+  const at = kind === 'audio' ? -1
+    : kind === 'video' ? seq.tracks.findIndex((t) => t.kind !== 'video')
+    : kind === 'adjustment' ? seq.tracks.findIndex((t) => t.kind === 'text' || t.kind === 'caption' || t.kind === 'audio')
+    : seq.tracks.findIndex((t) => t.kind === 'audio');
   seq.tracks.splice(at < 0 ? seq.tracks.length : at, 0, track);
   return track;
 }
@@ -332,8 +340,8 @@ defineOp({
 defineOp({
   name: 'add_track',
   version: 1,
-  description: 'Add an empty track. Picture tracks stack bottom-to-top in list order; audio tracks mix.',
-  args: z.object({ sequenceId: z.string().optional(), kind: z.enum(['video', 'audio', 'text']), name: z.string().max(128).optional() }).strict(),
+  description: 'Add an empty track. Picture tracks stack bottom-to-top in list order; audio tracks mix. An adjustment track (default names FX1, FX2…) holds adjustment clips (add_adjustment); a new one goes above the picture tracks and below the title tracks.',
+  args: z.object({ sequenceId: z.string().optional(), kind: z.enum(['video', 'audio', 'text', 'adjustment']), name: z.string().max(128).optional() }).strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
     const t = newTrack(seq, a.kind, ctx, a.name);
@@ -2334,6 +2342,64 @@ defineOp({
     return { affectedIds: [clip.id], summary: `Transition ${a.type} (${frames} frames)`, output: { previousClipId: prev?.id ?? null } };
   },
 });
+
+// ---------- adjustment clips (ADR-0016) ----------
+export const AddAdjustmentArgsSchema = z.object({
+  sequenceId: z.string().optional(),
+  span: z.union([z.literal('edit'), z.object({ start: RT, duration: RT }).strict()]).describe('"edit" = from 0 to the end of the last picture or title clip'),
+  trackId: z.string().optional(),
+  effects: z.array(z.object({ type: z.string(), params: z.record(z.string(), z.unknown()).optional() }).strict()).max(16).optional(),
+  opacity: z.number().min(0).max(1).optional(),
+  label: z.string().max(80).optional(),
+}).strict();
+defineOp({
+  name: 'add_adjustment',
+  version: 1,
+  checksOwnIds: ['lut'], // assertLutRef: Object.hasOwn, and the error lists the tables there are
+  description: 'Add an adjustment clip: it has no picture of its own; its effects, mask, opacity and blend apply to everything drawn below it (pictures and titles on lower tracks) for its time span. span "edit" covers 0 to the end of the last picture or title clip. It goes on an adjustment track (a new one above the picture tracks and below the title tracks when none is free). Time effects, chroma key and drop shadow are refused on adjustments. Captions are never affected.',
+  args: AddAdjustmentArgsSchema,
+  apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
+    let start: T.RationalTime = T.ZERO, duration: T.RationalTime;
+    if (a.span === 'edit') {
+      let end = T.ZERO;
+      for (const t of seq.tracks) if (t.kind === 'video' || t.kind === 'text') for (const c of t.clips) end = T.max(end, clipEnd(c));
+      if (!T.lt(T.ZERO, end)) throw new OpError('invalid_args', 'the edit has no picture or title to cover yet', {}, 'Add clips first, or give span {start, duration}.');
+      duration = end;
+    } else { start = a.span.start; duration = a.span.duration; }
+    assertAligned(d, start, 'start');
+    assertAligned(d, duration, 'duration');
+    if (T.isNegative(start) || !T.lt(T.ZERO, duration)) throw new OpError('invalid_args', 'start must be >= 0 and duration > 0', { start, duration });
+    const effects: EffectInstance[] = (a.effects ?? []).map((e) => {
+      const why = adjustmentRefusal(e.type);
+      if (why) throw new OpError('incompatible', `${e.type} cannot go on an adjustment: ${why}`, { type: e.type }, 'Put it on the clip itself.');
+      const fx = { id: ctx.newId('fx'), type: e.type, enabled: true, params: parseEffect(e.type, e.params) };
+      assertLutRef(d, fx.type, fx.params);
+      return fx;
+    });
+    const end = T.add(start, duration);
+    const explicit = a.trackId ? mustTrack(seq, a.trackId) : undefined;
+    if (explicit && explicit.kind !== 'adjustment') throw new OpError('incompatible', `an adjustment goes on an adjustment track, not on ${explicit.kind} track ${explicit.id}`, { trackId: explicit.id }, 'Omit trackId to use a free adjustment track (one is added when none is free).');
+    const track = explicit ?? placeTrack(seq, 'adjustment', start, end, ctx);
+    assertFree(track, start, end);
+    const clip: AdjustmentClip = { id: ctx.newId('clp'), type: 'adjustment', start, duration, transform: { ...DEFAULT_TRANSFORM, opacity: a.opacity ?? 1 }, ...(effects.length ? { effects } : {}), ...(a.label ? { label: a.label } : {}) };
+    track.clips.push(clip);
+    sortClips(track);
+    return { affectedIds: [clip.id], summary: `Added adjustment at ${fmt(start)} for ${fmt(duration)}`, output: { clipId: clip.id, trackId: track.id, effectIds: effects.map((e) => e.id) } };
+  },
+});
+
+// ---------- replace media (ADR-0016) ----------
+/**
+ * Arguments of the public op replace_clip_media (v1). Contract only: the op itself is implemented in this file by the
+ * templates track (W1). It keeps the clip id and everything on the clip; it changes assetId and sourceIn.
+ */
+export const ReplaceClipMediaArgsSchema = z.object({
+  clipId: z.string(),
+  assetId: z.string(),
+  sourceIn: RT.optional(),
+  linked: z.enum(['follow', 'detach']).optional().describe('default follow: a linked sound partner takes the new asset too (refused if it has no sound); detach: unlink it and leave it'),
+}).strict();
 
 // ---------- captions, transcripts and range cuts (SPEC §16) ----------
 function newCaptionTrack(seq: Sequence, ctx: OpContext, mode: 'manual' | 'transcript', linkedTrackId: string | null, style?: Partial<CaptionStyle>, name?: string): Track {
