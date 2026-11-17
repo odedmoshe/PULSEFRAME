@@ -30,7 +30,8 @@ export function Copilot() {
   const [mode, setMode] = useState<Mode>('guide');
   const receipts = useMemo(() => state.activity.filter(isAgentEvent), [state.activity]);
   return (
-    <aside className="pf-ds pf-cop" aria-label={H.title} data-testid="copilot">
+    // a region, not a second complementary landmark: it stands inside the inspector column (Inspector.tsx) while the rail's AI item is active
+    <section className="pf-ds pf-cop" aria-label={H.title} data-testid="copilot">
       <header className="pf-cop-head">
         <span className="pf-cop-ico" aria-hidden="true"><Bot size={20} strokeWidth={1.75} /></span>
         <div className="pf-cop-titles"><h2>{H.title}</h2><span>{H.subtitle}</span></div>
@@ -39,7 +40,7 @@ export function Copilot() {
       </header>
       <Tabs label={H.title} value={tab} onChange={(id) => setTab(id as CopTab)} panelPrefix="pf-cop-panel" tabs={[{ id: 'chat', label: H.chat, testId: 'copilot-tab-chat' }, { id: 'receipts', label: H.receipts, count: receipts.length, testId: 'copilot-tab-receipts' }]} />
       {tab === 'chat' ? <Chat /> : <Receipts editor={editor} receipts={receipts} />}
-    </aside>
+    </section>
   );
 }
 

@@ -30,6 +30,8 @@ import { activeTab, INSPECTOR_PAGES, objectKind, pagesFor, pinnedTab, REAL_PAGES
 import { ObjectFooter, ObjectHeader, ObjectPanels } from './InspectorObject.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import { useWideStage } from './Transport.tsx';
+import { useChrome } from './chromeState.ts';
+import { Copilot } from './Copilot.tsx';
 import './inspector.css';
 
 const TAB_KEY = 'pf.inspector.tab.v1';
@@ -209,10 +211,14 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   const wide = useWideStage(); // at wide windows the scopes dock beside the viewer (Transport.tsx)
   const motionOnly = state.workspace === 'motion';
   const noColour = colour && pinnedTab('color', kind) === null;
+  // the AI page (UX_REDESIGN §4.1, §4.11): while the rail's AI item is active the inspector column holds the Copilot
+  const { rail } = useChrome();
+  const copilot = rail === 'ai';
   return (
     <SectionsContext.Provider value={{ flat, labels: { help: S.help, reset: S.reset } }}>
-    <aside ref={root} className="inspector pf-ds pf-insp" aria-label={t('inspector')} data-view={flat ? 'all' : 'tabs'} data-mode={state.workspace} data-page={page} data-kind={kind}>
+    <aside ref={root} className="inspector pf-ds pf-insp" aria-label={t('inspector')} data-view={flat ? 'all' : 'tabs'} data-mode={state.workspace} data-page={page} data-kind={kind} data-rail={copilot ? 'ai' : undefined}>
       <h2 className="sr-only">{t('inspector')}</h2>
+      {copilot ? <Copilot /> : <>
       {state.workspace === 'custom' && (
         <fieldset className="custom-panels" data-testid="custom-panels">
           <legend>{t('workspace.custom.choose')}</legend>
@@ -347,6 +353,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       </ol>
       <AccessPanel />
       </div>
+      </>}
     </aside>
     </SectionsContext.Provider>
   );
