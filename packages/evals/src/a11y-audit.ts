@@ -6,6 +6,7 @@
  * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator), and the
  * AI-model wave's surfaces (ADR-0017): the AI tools panel with a run sheet open, the before/after compare slider after a run of the
  * ffmpeg-only classic vocal remover, and the translation review (a typed translation fixture; no model runs).
+ * motion tracking UI (ADR-0015): the tracking panel, follow and privacy-region controls with their warning, and the track picker.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -272,6 +273,41 @@ async function main() {
       const reviewShown = (await review.count()) === 1;
       if (reviewShown) { await review.scrollIntoViewIfNeeded().catch(() => {}); await review.getByTestId('translation-limit').focus().catch(() => {}); }
       await auditState('translation-review', { shown: reviewShown && (await review.getByTestId('translation-row').count()) === 1 }, true);
+
+      // motion tracking (ADR-0015): a track of the clip's file, a privacy region that follows it and the title following it.
+      // States: the video clip (tracking panel, follow controls, privacy regions with the standing warning), the title (its
+      // follow controls), and the track picker on the monitor (focus on the picture; Escape closes it and gives the focus back).
+      const mt = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'create_motion_track', args: { assetId: up.assetId, name: 'נקודה', kind: 'point', frame: 0, x: 5000, y: 6000 } }] });
+      const mtk = mt.results?.[0]?.output?.motionTrackId as string | undefined;
+      if (!mtk) throw new Error(`creating a motion track failed: ${JSON.stringify(mt).slice(0, 300)}`);
+      const projectNow: any = (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json()).project;
+      const videoTrackId = projectNow.sequences.seq_main.tracks.find((t: any) => t.clips.some((c: any) => c.id === clipId)).id as string;
+      const titleId = tx.results[1].output.clipId as string;
+      const bound = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'set_redact_region', args: { clipId, region: { motionTrackId: mtk } } }, { op: 'set_clip_follow', args: { clipId: titleId, follow: { motionTrackId: mtk, targetTrackId: videoTrackId, scale: false, smooth: 0 }, offset: { x: 0, y: 0 } } }] });
+      if (!bound.results) throw new Error(`binding the motion track failed: ${JSON.stringify(bound).slice(0, 300)}`);
+      await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
+      await page.getByTestId('redact-warning').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('tracking-panel').scrollIntoViewIfNeeded().catch(() => {});
+      const trackingShown = { panel: await page.getByTestId('tracking-panel').count(), items: await page.getByTestId('mtrack-item').count(), follow: await page.getByTestId('follow-controls').count(), redact: await page.getByTestId('redact-controls').count(), warning: await page.getByTestId('redact-warning').count(), warningRole: await page.getByTestId('redact-warning').getAttribute('role').catch(() => null) };
+      await auditState('tracking-video-clip', { shown: trackingShown.panel === 1 && trackingShown.items === 1 && trackingShown.follow === 1 && trackingShown.redact === 1 && trackingShown.warning === 1 && trackingShown.warningRole === 'status', ...trackingShown });
+      await page.locator(`.clip[data-clip-id="${titleId}"]`).click();
+      await page.getByTestId('follow-detach').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('follow-controls').scrollIntoViewIfNeeded().catch(() => {});
+      const followShown = { detach: await page.getByTestId('follow-detach').count(), scale: await page.getByTestId('follow-scale').count(), smooth: await page.getByTestId('follow-smooth').count(), state: await page.getByTestId('follow-state').count() };
+      await auditState('tracking-follower', { shown: followShown.detach === 1 && followShown.scale === 1 && followShown.smooth === 1 && followShown.state === 1, ...followShown });
+      await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
+      await page.getByTestId('mtrack-new-point').click();
+      await page.getByTestId('track-picker').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(150);
+      const pickerFocused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'track-picker');
+      await auditState('track-picker', { shown: (await page.getByTestId('track-picker').count()) === 1 && (await page.getByTestId('track-picker-confirm').count()) === 1, pickerFocused }, true);
+      await page.getByTestId('track-picker').focus().catch(() => {});
+      await page.keyboard.press('Escape');
+      await page.getByTestId('track-picker').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(150);
+      Object.assign(states.at(-1), { closed: (await page.getByTestId('track-picker').count()) === 0, focusReturned: await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'mtrack-new-point'), startsInside: pickerFocused });
+      await post(`/projects/${pid}/transactions`, { ops: [{ op: 'remove_motion_track', args: { motionTrackId: mtk, unbind: true } }] });
+      await page.getByTestId('mtrack-item').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);

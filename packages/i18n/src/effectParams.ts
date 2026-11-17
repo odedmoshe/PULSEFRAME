@@ -106,6 +106,9 @@ const STAGE_WORDS: Record<string, { he: string; en: string }> = {
   preparing: { he: 'מכין', en: 'preparing' }, 'rendering audio': { he: 'מעבד את הקול', en: 'rendering the sound' }, 'rendering still': { he: 'מעבד תמונה', en: 'rendering a still' },
   rendering: { he: 'מעבד פריימים', en: 'rendering frames' }, encoding: { he: 'מקודד', en: 'encoding' }, validating: { he: 'בודק את הקובץ', en: 'checking the file' }, leased: { he: 'מתחיל', en: 'starting' },
   'recovered-after-restart': { he: 'ממשיך אחרי הפעלה מחדש', en: 'resuming after a restart' },
+  // motion tracking jobs (core trackingStage, ADR-0015); 'tracking forward 12/240' keeps its count
+  'reading frames': { he: 'קורא פריימים', en: 'reading frames' }, 'tracking forward': { he: 'עוקב קדימה', en: 'tracking forward' },
+  'tracking backward': { he: 'עוקב אחורה', en: 'tracking backward' }, 'saving track': { he: 'שומר את המסלול', en: 'saving the track' },
 };
 export function jobStageLabel(stage: string | null | undefined, lang: 'he' | 'en'): string {
   if (!stage) return '';

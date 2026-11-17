@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { findClip, type Clip } from '@pulseframe/core';
 import { boxToScreen, clampRotation, clampScale, clampX, edgeProxies, layerBox, rotationFromDrag, scaleFromDrag, SCALE_ANCHORS, screenDeltaToFrameFraction, type LayerHandle, type LayerTransform, type ScaleHandle } from './interactions.math.ts';
-import { useEditorState } from './store.ts';
+import { useEditorState, type ResolvedNow } from './store.ts';
 import './interactions.css';
 
 type Handle = LayerHandle;
@@ -19,6 +19,8 @@ interface Drag {
   startX: number;
   startY: number;
   start: LayerTransform;
+  /** The clip as drawn when the drag began (for a follower: resolved, with its own offset and the follow's factor m). */
+  shown: ResolvedNow;
   centre: { x: number; y: number };
   moved: boolean;
 }
@@ -94,7 +96,10 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
   }
   if (!natural) return shell;
 
-  const base = editor.transformNow(clip);
+  // A clip that follows a motion track (ADR-0015) is drawn where the evaluator's follow post-pass puts it; its handles sit
+  // there too, and a change made with them is written back as its own offset (setShownTransform: Δ/m).
+  const shown = editor.resolvedTransformNow(clip);
+  const base = shown.transform;
   const eff: LayerTransform = { x: base.x, y: base.y, scale: base.scale, rotation: base.rotation, ...preview };
   const k = rect.width / frameW;
   const box = boxToScreen(layerBox({ frameW, frameH, naturalW: natural.w, naturalH: natural.h, transform: eff, fit: natural.fit }), rect.width, frameW);
@@ -105,7 +110,7 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
     const changed: Partial<Record<'x' | 'y' | 'scale' | 'rotation', number>> = {};
     for (const key of ['x', 'y', 'scale', 'rotation'] as const) if (p[key] !== undefined && p[key] !== d.start[key]) changed[key] = p[key]!;
     if (!Object.keys(changed).length) return;
-    void editor.setTransformForView(c, changed, kind === 'move' ? 'Move layer' : kind === 'rotate' ? 'Rotate layer' : 'Scale layer');
+    void editor.setShownTransform(c, d.shown, changed, kind === 'move' ? 'Move layer' : kind === 'rotate' ? 'Rotate layer' : 'Scale layer');
   };
   const compute = (e: ReactPointerEvent<HTMLElement>, d: Drag): Preview => {
     if (d.handle === 'move') {
@@ -131,7 +136,7 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
     e.stopPropagation();
     const r = root.current!.getBoundingClientRect();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-    drag.current = { handle: h, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, start: { ...eff }, centre: { x: r.left + box.cx, y: r.top + box.cy }, moved: false };
+    drag.current = { handle: h, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, start: { ...eff }, shown, centre: { x: r.left + box.cx, y: r.top + box.cy }, moved: false };
   };
   const onMove = (e: ReactPointerEvent<HTMLElement>) => {
     const d = drag.current;
@@ -152,17 +157,18 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
     const a = arrows[e.key];
     if (!a) return;
     e.preventDefault();
-    const now = editor.transformNow(clip);
+    const at = editor.resolvedTransformNow(clip); // as drawn now (a follower: resolved; its offset is what changes)
+    const now = at.transform;
     if (h === 'move') {
       const step = e.shiftKey ? 0.05 : 0.01;
-      void editor.setTransformForView(clip, { x: clampX(now.x + a[0] * step), y: clampX(now.y + a[1] * step) }, 'Move layer');
+      void editor.setShownTransform(clip, at, { x: clampX(now.x + a[0] * step), y: clampX(now.y + a[1] * step) }, 'Move layer');
     } else if (h === 'rotate') {
       const step = e.shiftKey ? 15 : 1;
       const dir = a[0] !== 0 ? a[0] : -a[1];
-      void editor.setTransformForView(clip, { rotation: clampRotation(now.rotation + dir * step) }, 'Rotate layer');
+      void editor.setShownTransform(clip, at, { rotation: clampRotation(now.rotation + dir * step) }, 'Rotate layer');
     } else {
       const dir = a[0] !== 0 ? a[0] : -a[1];
-      void editor.setTransformForView(clip, { scale: clampScale(now.scale + dir * 0.05) }, 'Scale layer');
+      void editor.setShownTransform(clip, at, { scale: clampScale(now.scale + dir * 0.05) }, 'Scale layer');
     }
   };
   const focusRing = (h: Handle) => (e: { currentTarget: HTMLElement }) => {

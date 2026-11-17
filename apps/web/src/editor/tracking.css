@@ -1,0 +1,31 @@
+/* Motion tracking UI (ADR-0015). The picker's geometry uses physical left/top on purpose (the canvas is never mirrored), like
+   the canvas handles (interactions.css); its bar and the panels follow the page direction. Colours are the theme tokens. */
+.tp-clip { position: absolute; inset: 0; overflow: clip; pointer-events: none; z-index: 4; }
+.tp-root { position: absolute; direction: ltr; pointer-events: none; }
+.tp-surface { position: absolute; inset: 0; pointer-events: auto; cursor: crosshair; touch-action: none; outline-offset: -3px; }
+.tp-surface:focus-visible { outline: 2px solid var(--pf-accent-2); }
+.tp-point { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 2px solid #ffb020; border-radius: 50%; box-shadow: 0 0 0 1px #000; pointer-events: none; }
+.tp-point::before, .tp-point::after { content: ''; position: absolute; background: #ffb020; left: 50%; top: 50%; }
+.tp-point::before { width: 26px; height: 2px; margin: -1px 0 0 -13px; }
+.tp-point::after { width: 2px; height: 26px; margin: -13px 0 0 -1px; }
+.tp-box { position: absolute; box-sizing: border-box; border: 2px dashed #ffb020; box-shadow: 0 0 0 1px #000; pointer-events: none; }
+.tp-bar { position: absolute; inset-inline-start: var(--pf-s-4, 16px); top: var(--pf-s-4, 16px); max-width: min(420px, 60%); z-index: 5; display: grid; gap: var(--pf-s-2, 8px);
+  padding: var(--pf-s-3, 12px); background: var(--pf-surface); color: var(--pf-text); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md, 8px); box-shadow: var(--pf-shadow-2); }
+.tp-help { margin: 0; font-size: var(--pf-fs-sm); color: var(--pf-text-muted); }
+.tp-error { margin: 0; font-size: var(--pf-fs-sm); color: #ffb4b4; }
+
+/* panels */
+.mtrack-list, .mtrack-problems, .redact-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-s-2, 8px); }
+.mtrack-item, .redact-region { display: grid; gap: var(--pf-s-2, 8px); padding: var(--pf-s-2, 8px); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md, 8px); background: var(--pf-bg); }
+.mtrack-item[data-active='true'] { border-color: var(--pf-accent-2); }
+.mtrack-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-s-2, 8px); }
+.mtrack-name { font-weight: 700; overflow-wrap: anywhere; }
+.mtrack-counts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; font-size: var(--pf-fs-sm); color: var(--pf-text-muted); }
+.mtrack-problems li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-s-2, 8px); font-size: var(--pf-fs-sm); }
+.mtrack-bar { inline-size: 100%; block-size: 8px; border-radius: 4px; background: var(--pf-surface-2, #222733); overflow: hidden; }
+.mtrack-bar > span { display: block; block-size: 100%; background: var(--pf-accent-2); }
+.mtrack-bar[data-indeterminate='true'] > span { inline-size: 30% !important; opacity: 0.6; }
+.redact-warning { margin: 0; padding: var(--pf-s-2, 8px); border: 1px solid var(--pf-warn); border-radius: var(--pf-r-md, 8px); color: var(--pf-text); background: color-mix(in srgb, var(--pf-warn) 14%, var(--pf-bg)); font-size: var(--pf-fs-sm); }
+.follow-state { font-size: var(--pf-fs-sm); color: var(--pf-text-muted); margin: 0; }
+.tracking-msg { margin: 0; font-size: var(--pf-fs-sm); }
+.tracking-msg.danger { color: #ffb4b4; }

@@ -187,6 +187,9 @@ export const he = {
   'sound.fx.unavailable.title': 'קליפים שמתנגנים כרגע בתצוגה המקדימה בלי אפקטי הקול שלהם:', 'sound.fx.dsp': 'אפקטים של עיבוד צליל, לא המרת קול. אותו עיבוד בתצוגה המקדימה ובייצוא.',
   'sound.fx.seconds': 'שניות', 'timeline.fx': 'אפקטים', 'timeline.fx.tail': 'זנב',
   'op.add_audio_effect': 'הוספת אפקט קול', 'op.update_audio_effect': 'עדכון אפקט קול', 'op.remove_audio_effect': 'הסרת אפקט קול', 'op.apply_audio_preset': 'מתכון אפקטי קול', 'op.copy_audio_effects': 'העתקת אפקטי קול',
+  // motion tracking (ADR-0015): operation names and the refusal headlines of the tracking job; the panels' own strings are in apps/web/src/editor/tracking.strings.ts (mtrack.*, follow.*, redact.*)
+  'op.create_motion_track': 'יצירת מסלול מעקב', 'op.attach_motion_track': 'שמירת תוצאת מעקב תנועה', 'op.edit_motion_track': 'תיקון מסלול מעקב', 'op.remove_motion_track': 'מחיקת מסלול מעקב', 'op.set_clip_follow': 'מעקב קליפ אחרי תנועה', 'op.set_redact_region': 'אזור פרטיות',
+  'error.code.no_video': 'אין בקובץ תמונה נעה', 'error.code.would_discard_edits': 'המסלול תוקן ביד', 'error.code.tracking_in_progress': 'המעקב כבר רץ', 'error.code.range_too_long': 'הקטע ארוך מדי למעקב אחד', 'error.code.track_changed': 'המסלול השתנה בזמן המעקב', 'error.code.frame_count_mismatch': 'מספר הפריימים שנקראו שונה מהצפוי', 'error.code.no_anchor': 'אין נקודת התחלה בקטע', 'error.code.tracking_unavailable': 'המעקב אינו זמין',
   ...VISUAL_WAVE_HE,
   ...TEMPLATES_HE,
   ...TREND_PACK_HE,
@@ -375,6 +378,9 @@ export const en: Record<keyof typeof he, string> = {
   'sound.fx.unavailable.title': 'Clips the preview plays without their sound effects for now:', 'sound.fx.dsp': 'Sound processing effects, not voice conversion. The same processing in preview and export.',
   'sound.fx.seconds': 'seconds', 'timeline.fx': 'Effects', 'timeline.fx.tail': 'tail',
   'op.add_audio_effect': 'Added sound effect', 'op.update_audio_effect': 'Updated sound effect', 'op.remove_audio_effect': 'Removed sound effect', 'op.apply_audio_preset': 'Sound effect preset', 'op.copy_audio_effects': 'Copied sound effects',
+  // motion tracking (ADR-0015)
+  'op.create_motion_track': 'Created a motion track', 'op.attach_motion_track': 'Saved a motion tracking result', 'op.edit_motion_track': 'Corrected a motion track', 'op.remove_motion_track': 'Removed a motion track', 'op.set_clip_follow': 'Clip follows motion', 'op.set_redact_region': 'Privacy region',
+  'error.code.no_video': 'The file has no moving picture', 'error.code.would_discard_edits': 'The track was corrected by hand', 'error.code.tracking_in_progress': 'Tracking is already running', 'error.code.range_too_long': 'The stretch is too long for one tracking run', 'error.code.track_changed': 'The track changed while it was being tracked', 'error.code.frame_count_mismatch': 'A different number of frames was read than expected', 'error.code.no_anchor': 'No starting point in the stretch', 'error.code.tracking_unavailable': 'Tracking is unavailable',
   ...VISUAL_WAVE_EN,
   ...TEMPLATES_EN,
   ...TREND_PACK_EN,
