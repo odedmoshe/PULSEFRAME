@@ -460,3 +460,51 @@ describe('Hebrew wording of common refusals', () => {
     expect(TIMELINE_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
   });
 });
+
+describe('Hebrew wording of the refusals of the people operations (ADR-0021, people section)', () => {
+  it('every refusal of PEOPLE_REFUSALS is provoked through its operation, carries its code, and is recognised by exactly one people pattern; no birth date in the Hebrew', async () => {
+    const { PEOPLE_REFUSALS, MAX_PEOPLE } = await import('@pulseframe/core');
+    const { PEOPLE_REFUSAL_PATTERNS } = await import('../../i18n/src/index.ts');
+    let r = tx(createProject({ id: 'prj_people', name: 'People' }), [{ op: 'add_text', args: { text: 'T', start: f(0), duration: f(30) } }, { op: 'add_person', args: { name: 'נועה', birthDate: '2016-11-04', form: 'f' } }, { op: 'add_person', args: { name: 'איתי' } }]);
+    const titleId = r.results[0]!.output!.clipId as string, noa = r.results[1]!.output!.personId as string, itai = r.results[2]!.output!.personId as string;
+    const d = r.doc;
+    const named = tx(d, [{ op: 'update_text', args: { clipId: titleId, text: `{name:${noa}}` } }]).doc;
+    r = tx(createProject({ id: 'prj_full', name: 'Full' }), Array.from({ length: MAX_PEOPLE }, (_, i) => ({ op: 'add_person', args: { name: `p${i}` } })));
+    const full = r.doc;
+    const cases: Record<keyof typeof PEOPLE_REFUSALS, [ProjectDocument, OpCall[]][]> = {
+      personNotFound: [[d, [{ op: 'update_person', args: { personId: 'per_gone', name: 'x' } }]], [d, [{ op: 'remove_person', args: { personId: 'per_gone' } }]]],
+      personNameCharacters: [[d, [{ op: 'add_person', args: { name: 'a{b' } }]], [d, [{ op: 'update_person', args: { personId: noa, name: 'x:y' } }]]],
+      personNameEmpty: [[d, [{ op: 'add_person', args: { name: '   ' } }]]],
+      noSuchBirthDay: [[d, [{ op: 'add_person', args: { name: 'z', birthDate: '2021-02-30' } }]], [d, [{ op: 'update_person', args: { personId: itai, birthDate: '2023-02-29' } }]]],
+      birthDateOutOfRange: [[d, [{ op: 'add_person', args: { name: 'z', birthDate: '1850-06-01' } }]]],
+      personNameTaken: [[d, [{ op: 'add_person', args: { name: ' נועה ' } }]], [d, [{ op: 'update_person', args: { personId: itai, name: 'נועה' } }]]],
+      tooManyPeople: [[full, [{ op: 'add_person', args: { name: 'one more' } }]]],
+      personNothingToChange: [[d, [{ op: 'update_person', args: { personId: noa } }]]],
+      personUnchanged: [[d, [{ op: 'update_person', args: { personId: noa, form: 'f' } }]]],
+      personInUse: [[named, [{ op: 'remove_person', args: { personId: noa } }]]],
+      unknownPerson: [[d, [{ op: 'update_text', args: { clipId: titleId, text: '{name:per_x} {age:per_x:words}' } }, { op: 'set_text_fields', args: { clipId: titleId, enabled: true } }]]],
+    };
+    expect(Object.keys(cases).sort()).toEqual(Object.keys(PEOPLE_REFUSALS).sort());
+    const matched = new Set<number>();
+    const messages: Record<string, string> = {};
+    for (const [key, list] of Object.entries(cases) as [keyof typeof PEOPLE_REFUSALS, [ProjectDocument, OpCall[]][]][]) for (const [doc, ops] of list) {
+      let message = '(not refused)', code = '';
+      try { tx(doc, ops); } catch (e) { if (!(e instanceof OpError)) throw e; message = e.message; code = e.code; }
+      messages[key] = message;
+      expect(code, `${key}: ${message}`).toBe(PEOPLE_REFUSALS[key].code);
+      const he = translateRefusal('he', message);
+      expect(he, `${key}: ${message}`).toMatch(/[֐-׿]/);
+      expect(he, key).not.toMatch(/2016|11-04|\d{1,2}[./]\d{1,2}[./]\d{2,4}/);
+      const hits = PEOPLE_REFUSAL_PATTERNS.map((re, i) => (re.test(message) ? i : -1)).filter((i) => i >= 0);
+      expect(hits.length, `${key}: ${message} is recognised by exactly one people pattern`).toBe(1);
+      expect(LIFE_REFUSAL_PATTERNS.some((re) => re.test(message)), key).toBe(false);
+      matched.add(hits[0]!);
+      expect(translateRefusal('en', message), key).toBeUndefined();
+    }
+    expect(PEOPLE_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
+    expect(translateRefusal('he', messages.personNameTaken!)).toContain('נועה');
+    expect(translateRefusal('he', messages.tooManyPeople!)).toContain(String(MAX_PEOPLE));
+    expect(translateRefusal('he', messages.personInUse!)).toContain('1');
+    expect(translateRefusal('he', messages.birthDateOutOfRange!)).toMatch(/1900.*2100/);
+  });
+});
