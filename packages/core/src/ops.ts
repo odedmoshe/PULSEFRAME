@@ -13,7 +13,7 @@ import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
 import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
-import { MOTION_PRESETS, motionKeys, previousMotion } from './motionPresets.ts';
+import { ANIMATE_CLIP_MOTIONS, animateClipKeys, defaultMotionFrames, MOTION_PRESETS, motionKeys, previousMotion, shortestSafeLoopFrames } from './motionPresets.ts';
 import { findLayout, layoutPlacements, LAYOUT_IDS, LAYOUTS } from './layouts.ts';
 const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[]];
 import { lookParams } from './looks.ts';
@@ -149,15 +149,51 @@ function placeTrack(seq: Sequence, kind: Track['kind'], start: T.RationalTime, e
   for (const t of seq.tracks) if (t.kind === kind && !t.locked && !overlaps(t, start, end, new Set())) return t;
   return newTrack(seq, kind, ctx);
 }
-const linked = (d: ProjectDocument, clip: Clip) => {
-  if (clip.type !== 'media' || !clip.linkGroupId) return [];
+/** The other clips of a clip's link group, wherever they are (none for a clip that is not linked, or whose link id no other clip carries). */
+const partnersOf = (d: ProjectDocument, clip: Clip) => {
   const out: { track: Track; clip: MediaClip }[] = [];
+  if (clip.type !== 'media' || !clip.linkGroupId) return out;
   for (const seq of Object.values(d.sequences))
     for (const track of seq.tracks)
       for (const c of track.clips) if (c.type === 'media' && c.id !== clip.id && c.linkGroupId === clip.linkGroupId) out.push({ track, clip: c });
+  return out;
+};
+/** The other clips of a clip's link group, which an edit of the clip changes too: refused while one of them is on a locked track. */
+const linked = (d: ProjectDocument, clip: Clip) => {
+  const out = partnersOf(d, clip);
   for (const l of out) if (l.track.locked) throw new OpError('track_locked', `linked clip ${l.clip.id} is on locked track ${l.track.id}`, { trackId: l.track.id, clipId: l.clip.id }, 'Unlock the track or pass includeLinked=false.');
   return out;
 };
+/** The link ids the given clips carry. */
+const linkIdsOf = (clips: Iterable<Clip>) => {
+  const out = new Set<string>();
+  for (const c of clips) if (c.type === 'media' && c.linkGroupId) out.add(c.linkGroupId);
+  return out;
+};
+/**
+ * A link group of one clip is not a link. After an edit has removed, divided or detached clips of the given link groups,
+ * a clip left as the only member of one of them loses its link id in the same edit, so that no clip carries a link id
+ * that no other clip has (undo brings the link back with the rest of the edit). Clearing it changes that clip, so like
+ * unlink_clip it is refused while the clip is on a locked track. Groups that keep two or more members are left as they
+ * are. Returns the ids of the clips that were unlinked, in document order.
+ */
+function dissolveLoneLinks(d: ProjectDocument, groups: Iterable<string>): string[] {
+  const want = new Set(groups);
+  if (!want.size) return [];
+  const members = new Map<string, { track: Track; clip: MediaClip }[]>();
+  for (const seq of Object.values(d.sequences))
+    for (const track of seq.tracks)
+      for (const clip of track.clips) {
+        if (clip.type !== 'media' || !clip.linkGroupId || !want.has(clip.linkGroupId)) continue;
+        const list = members.get(clip.linkGroupId);
+        if (list) list.push({ track, clip }); else members.set(clip.linkGroupId, [{ track, clip }]);
+      }
+  const alone = [...members.values()].filter((list) => list.length === 1).map((list) => list[0]!);
+  const locked = alone.find((m) => m.track.locked);
+  if (locked) throw new OpError('track_locked', `clip ${locked.clip.id} on locked track ${locked.track.id} is linked to a clip this edit removes or divides, and would be left linked to nothing`, { trackId: locked.track.id, clipId: locked.clip.id }, 'Unlock that track first, so its clip can be unlinked.');
+  for (const m of alone) m.clip.linkGroupId = null;
+  return alone.map((m) => m.clip.id);
+}
 /** After a clip gets shorter, keep its audio fades inside it (fade-in first, then whatever room is left for the fade-out). */
 function clampFades(clip: Clip) {
   if (clip.type !== 'media' || (!clip.fadeIn && !clip.fadeOut)) return;
@@ -633,7 +669,7 @@ const volumeTarget = (d: ProjectDocument, clipId: string) => {
 defineOp({
   name: 'speed_ramp',
   version: 1,
-  description: 'Change a clip\'s speed gradually from one value to another over its length. The clip is replaced by `steps` consecutive clips (and the same for its linked sound), each at a constant speed between `from` and `to`, playing the source on without gaps or repeats; a stepped ramp keeps every time exact. The ramp plays the same stretch of source as before (to within the rounding of each step to whole frames), so its length on the timeline changes; nothing else moves, and it is refused if the new length would run into the next clip. Not for clips with keyframes, volume keys or a transition, freeze frames, reversed clips or stills. One undo restores the single clip.',
+  description: 'Change a clip\'s speed gradually from one value to another over its length. The clip is replaced by `steps` consecutive clips (and the same for its linked sound), each at a constant speed between `from` and `to`, playing the source on without gaps or repeats; a stepped ramp keeps every time exact. The ramp plays the same stretch of source as before (to within the rounding of each step to whole frames), so its length on the timeline changes; nothing else moves, and it is refused if the new length would run into the next clip. Not for clips with keyframes, volume keys or a transition, freeze frames, reversed clips or stills. With includeLinked=false the steps are linked to nothing, and a clip left alone in the link is unlinked too (refused while it is on a locked track). One undo restores the single clip.',
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), steps: z.number().int().min(2).max(24).optional().describe('Default 8'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
@@ -657,6 +693,7 @@ defineOp({
     const newEnd = T.add(lead.start, T.frameTime(total, rate));
     const created: string[] = [];
     const links = targets.length > 1 ? speeds.map(() => ctx.newId('lnk')) : null;
+    const oldLinks = linkIdsOf(targets.map((t) => t.clip)); // ramped alone (includeLinked=false), the clip leaves its link group
     for (const { track, clip } of targets) {
       assertFree(track, clip.start, newEnd, new Set([clip.id]));
       const asset = d.assets[clip.assetId]!;
@@ -682,7 +719,8 @@ defineOp({
       track.clips.splice(track.clips.indexOf(clip), 1, ...parts);
       sortClips(track);
     }
-    return { affectedIds: [...targets.map((t) => t.clip.id), ...created], summary: `Speed ramp ${a.from}× → ${a.to}× in ${steps} steps`, output: { createdClipIds: created, steps, durationFrames: total, speeds: speeds.map((sp) => Number((sp.num / sp.den).toFixed(3))) } };
+    const unlinked = dissolveLoneLinks(d, oldLinks);
+    return { affectedIds: [...targets.map((t) => t.clip.id), ...created, ...unlinked], summary: `Speed ramp ${a.from}× → ${a.to}× in ${steps} steps`, output: { createdClipIds: created, steps, durationFrames: total, speeds: speeds.map((sp) => Number((sp.num / sp.den).toFixed(3))), unlinkedClipIds: unlinked } };
   },
 });
 
@@ -1040,7 +1078,8 @@ defineOp({
     const first = found[0]!.clip;
     for (const f of found) {
       if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be linked', { clipId: f.clip.id });
-      if (f.clip.linkGroupId) throw new OpError('incompatible', 'this clip is already linked', { clipId: f.clip.id }, 'Use unlink_clip first.');
+      // a link id that no other clip carries (left in a project saved before edits cleared such ids) links to nothing
+      if (partnersOf(d, f.clip).length) throw new OpError('incompatible', 'this clip is already linked', { clipId: f.clip.id }, 'Use unlink_clip first.');
       if (f.clip.freeze) throw new OpError('incompatible', 'a freeze frame cannot be linked', { clipId: f.clip.id });
       if (!T.eq(f.clip.start, first.start) || !T.eq(f.clip.duration, first.duration)) throw new OpError('incompatible', 'linked clips must start and end together', { clipId: f.clip.id, start: f.clip.start, duration: f.clip.duration });
       const sp = (c: Clip) => (c.type === 'media' && c.speed ? c.speed.num / c.speed.den : 1);
@@ -1144,7 +1183,9 @@ defineOp({
       sortClips(track);
       created.push(right.id);
     }
-    return { affectedIds: [...targets.map((t) => t.clip.id), ...created], summary: `Split clip at ${fmt(a.at)}`, output: { rightClipId: created[0], createdClipIds: created } };
+    // the left halves keep the link they had; one that was the only clip with its link id (an older project) loses it
+    const unlinked = dissolveLoneLinks(d, linkIdsOf(targets.map((t) => t.clip)));
+    return { affectedIds: [...new Set([...targets.map((t) => t.clip.id), ...created, ...unlinked])], summary: `Split clip at ${fmt(a.at)}`, output: { rightClipId: created[0], createdClipIds: created } };
   },
 });
 
@@ -1208,7 +1249,10 @@ defineOp({
     copyOverrides(d, src.id, held.id);
     f.track.clips.push(held);
     for (const track of f.seq.tracks) sortClips(track);
-    return { affectedIds: [...affected], summary: `Freeze frame at ${fmt(a.at)} for ${fmt(a.duration)}`, output: { freezeClipId: held.id, createdClipIds: created } };
+    // Linked clips that do not both cross the point (one was trimmed on its own): the later part of the one that does is linked to nothing.
+    const unlinked = dissolveLoneLinks(d, [...relink.keys(), ...relink.values()]);
+    for (const id of unlinked) affected.add(id);
+    return { affectedIds: [...affected], summary: `Freeze frame at ${fmt(a.at)} for ${fmt(a.duration)}`, output: { freezeClipId: held.id, createdClipIds: created, unlinkedClipIds: unlinked } };
   },
 });
 defineOp({
@@ -1238,13 +1282,14 @@ defineOp({
 defineOp({
   name: 'delete_clip',
   version: 1,
-  description: 'Remove a clip (and its linked clips unless includeLinked=false). Leaves a gap; the source asset is kept.',
+  description: 'Remove a clip (and its linked clips unless includeLinked=false). Leaves a gap; the source asset is kept. With includeLinked=false the clip it was linked to is unlinked, since a link needs two clips (refused while that clip is on a locked track); of three or more linked clips, the others stay linked to each other.',
   args: z.object({ clipId: z.string(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
     const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
     for (const { track, clip } of targets) track.clips.splice(track.clips.indexOf(clip), 1);
-    return { affectedIds: targets.map((t) => t.clip.id), summary: `Deleted ${targets.length} clip(s)` };
+    const unlinked = dissolveLoneLinks(d, linkIdsOf(targets.map((t) => t.clip)));
+    return { affectedIds: [...targets.map((t) => t.clip.id), ...unlinked], summary: `Deleted ${targets.length} clip(s)${unlinked.length ? '; the clip it was linked to is no longer linked' : ''}`, output: { deletedClipIds: targets.map((t) => t.clip.id), unlinkedClipIds: unlinked } };
   },
 });
 
@@ -1266,22 +1311,54 @@ defineOp({
 
 // ---------- transactions ----------
 
-const MOTION = ['none', 'fade', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right'] as const;
+const MOTION = ['none', ...ANIMATE_CLIP_MOTIONS] as const;
 export const CLIP_MOTIONS = MOTION;
-/** Offset from the resting transform at the far end of an entrance/exit. */
-const MOTION_FROM: Record<(typeof MOTION)[number], Partial<Record<'opacity' | 'scale' | 'x' | 'y', (rest: number) => number>>> = {
-  none: {},
-  fade: { opacity: () => 0 },
-  pop: { opacity: () => 0, scale: (r) => Math.max(0.01, r * 0.6) },
-  'slide-up': { opacity: () => 0, y: (r) => r + 0.08 },
-  'slide-down': { opacity: () => 0, y: (r) => r - 0.08 },
-  'slide-left': { opacity: () => 0, x: (r) => r + 0.1 },
-  'slide-right': { opacity: () => 0, x: (r) => r - 0.1 },
-};
+type MotionKeyList = { frame: number; value: number; easing: (typeof EASINGS)[number] }[];
+/**
+ * Write one motion's keys (motionKeys / animateClipKeys, in whole clip-local frames) on a clip: the single way entrances,
+ * exits, loops and moves are placed, by apply_motion_preset and animate_clip alike, so whichever of the two runs last owns
+ * the part of the clip it writes and replaces what either of them wrote there.
+ *  - An entrance ('in') replaces the entrance the clip already has, and an exit ('out') its exit, as a whole: on every
+ *    property the earlier one used, not only on those of the new one (previousMotion says how it is recognised and how
+ *    many keys go: the key that later animation on a property starts from, or that the motion shares with the one at the
+ *    other end, stays). On its own properties it then replaces the keys in its own frames and keeps those after an
+ *    entrance or before an exit.
+ *  - A loop or a move replaces all keys of its properties.
+ */
+function placeMotion(clip: Clip, rate: T.Rate, kind: 'in' | 'out' | 'loop' | 'move', made: Partial<Record<(typeof ANIMATABLE)[number], MotionKeyList>>) {
+  const total = T.frameIndexAt(clip.duration, rate);
+  const keyframes = { ...clip.keyframes };
+  const frameOf = (t: T.RationalTime) => T.toSeconds(t) * (rate.num / rate.den);
+  if (kind === 'in' || kind === 'out') {
+    const now: Parameters<typeof previousMotion>[1] = {};
+    for (const p of ANIMATABLE) if (keyframes[p]?.length) now[p] = keyframes[p]!.map((k) => ({ frame: frameOf(k.time), value: k.value, easing: k.easing }));
+    for (const [p, count] of Object.entries(previousMotion(kind, now, total, clip.transform)) as [(typeof ANIMATABLE)[number], number][]) {
+      const rest = kind === 'in' ? keyframes[p]!.slice(count) : keyframes[p]!.slice(0, keyframes[p]!.length - count);
+      // the easing on the key an exit started from shaped the exit; with the exit gone that key is the last one and shapes nothing
+      if (kind === 'out' && rest.length) rest[rest.length - 1] = { ...rest[rest.length - 1]!, easing: 'linear' };
+      if (rest.length) keyframes[p] = rest; else delete keyframes[p];
+    }
+  }
+  for (const [p, keys] of Object.entries(made) as [(typeof ANIMATABLE)[number], MotionKeyList][]) {
+    const lo = keys[0]!.frame, hi = keys[keys.length - 1]!.frame;
+    // keys the motion does not cover stay: after an entrance, before an exit; a loop or a move covers the whole clip
+    const kept = kind === 'in' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) > hi + 1e-9)
+      : kind === 'out' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) < lo - 1e-9) : [];
+    const fresh = keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }));
+    // The key an entrance ends on is also the key that what follows starts from (an exit that begins right there, a slow zoom):
+    // where one was there already, it keeps its easing, so the entrance does not change the shape of what comes after it.
+    const meets = kind === 'in' && kept.length ? (keyframes[p] ?? []).find((k) => Math.abs(frameOf(k.time) - hi) <= 1e-9) : undefined;
+    if (meets) fresh[fresh.length - 1]!.easing = meets.easing;
+    const next = [...kept, ...fresh].sort((x, y) => T.cmp(x.time, y.time));
+    if (next.length > 2000) throw new OpError('out_of_bounds', 'this motion would need more keyframes than a property can hold on a clip this long', { keyframes: next.length }, 'Use a longer period (frames), or a shorter clip.');
+    keyframes[p] = next;
+  }
+  clip.keyframes = keyframes;
+}
 defineOp({
   name: 'animate_clip',
   version: 1,
-  description: 'Give a text or picture clip an entrance and/or exit (fade, pop, slide). Writes ordinary keyframes on opacity/scale/x/y, replacing existing keys on the properties it uses, so the result stays editable with set_keyframe. The exit is placed against the current clip end; run again after changing the duration.',
+  description: 'Give a text or picture clip an entrance and/or exit (fade, pop, slide), written as ordinary keyframes on opacity, scale, x or y, so the result stays editable with set_keyframe. Each is placed exactly as an entrance or exit from the motion library is (apply_motion_preset): it replaces the entrance (or exit) the clip already has, whether that came from this operation or from the library, on every property it used, and keeps the other end, a slow move and keys made by hand further in. A side that is left out (or none) stays as it is. Entrance plus exit may not be longer than the clip. The exit is placed against the current clip end; run again after changing the duration.',
   args: z.object({ clipId: z.string(), in: z.enum(MOTION).optional(), out: z.enum(MOTION).optional(), inFrames: z.number().int().min(1).max(600).optional(), outFrames: z.number().int().min(1).max(600).optional() }).strict(),
   apply(d, a) {
     const { clip, track } = mustClip(d, a.clipId);
@@ -1289,34 +1366,21 @@ defineOp({
     const rate = d.settings.frameRate;
     const total = T.frameIndexAt(clip.duration, rate);
     const enter = a.in ?? 'none', exit = a.out ?? 'none';
+    if (enter === 'none' && exit === 'none') throw new OpError('invalid_args', 'choose an entrance and/or an exit');
     const nIn = enter === 'none' ? 0 : a.inFrames ?? 12, nOut = exit === 'none' ? 0 : a.outFrames ?? 12;
+    if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
     if (nIn + nOut > total) throw new OpError('out_of_bounds', `entrance (${nIn}) plus exit (${nOut}) frames exceed the clip length (${total} frames)`, { clipFrames: total }, 'Use fewer frames.');
-    const props = new Set([...Object.keys(MOTION_FROM[enter]), ...Object.keys(MOTION_FROM[exit])]) as Set<'opacity' | 'scale' | 'x' | 'y'>;
-    if (props.size === 0) throw new OpError('invalid_args', 'choose an entrance and/or an exit');
-    const keyframes = { ...clip.keyframes };
-    for (const p of props) {
-      const rest = clip.transform[p];
-      const keys: { time: T.RationalTime; value: number; easing: (typeof EASINGS)[number] }[] = [];
-      const from = MOTION_FROM[enter][p], to = MOTION_FROM[exit][p];
-      if (from) keys.push({ time: T.ZERO, value: from(rest), easing: 'ease-out' });
-      keys.push({ time: T.frameTime(nIn, rate), value: rest, easing: 'linear' });
-      if (to) {
-        if (total - nOut > nIn) keys.push({ time: T.frameTime(total - nOut, rate), value: rest, easing: 'ease-in' });
-        else keys[keys.length - 1]!.easing = 'ease-in';
-        keys.push({ time: T.frameTime(total, rate), value: to(rest), easing: 'linear' });
-      }
-      keyframes[p] = keys;
+    const props = new Set<string>();
+    // the entrance first, then the exit: where the two meet, the exit's first key is the one that stays, as with two library motions
+    for (const [kind, name, frames] of [['in', enter, nIn], ['out', exit, nOut]] as const) {
+      if (name === 'none') continue;
+      const made = animateClipKeys(kind, name, { totalFrames: total, rest: clip.transform, frames });
+      placeMotion(clip, rate, kind, made);
+      for (const p of Object.keys(made)) props.add(p);
     }
-    clip.keyframes = keyframes;
     return { affectedIds: [clip.id], summary: `Animated clip (${enter === 'none' ? '' : `in: ${enter}`}${enter !== 'none' && exit !== 'none' ? ', ' : ''}${exit === 'none' ? '' : `out: ${exit}`})`, output: { properties: [...props] } };
   },
 });
-
-
-
-
-
-
 
 defineOp({
   name: 'apply_motion_preset',
@@ -1330,37 +1394,14 @@ defineOp({
     const rate = d.settings.frameRate;
     const total = T.frameIndexAt(clip.duration, rate);
     if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
-    const made = motionKeys(preset.id, { totalFrames: total, rest: clip.transform, ...(a.frames !== undefined ? { frames: a.frames } : {}), ...(a.amount !== undefined ? { amount: a.amount } : {}) });
-    const keyframes = { ...clip.keyframes };
-    const frameOf = (t: T.RationalTime) => T.toSeconds(t) * (rate.num / rate.den);
-    // A new entrance replaces the entrance the clip already has, and a new exit its exit, as a whole: on every property the
-    // earlier one used, not only on those of the new one. previousMotion says how it is recognised and how many keys go: the
-    // key that later animation on a property starts from, or that the motion shares with the one at the other end, stays.
-    if (preset.kind === 'in' || preset.kind === 'out') {
-      const now: Parameters<typeof previousMotion>[1] = {};
-      for (const p of ANIMATABLE) if (keyframes[p]?.length) now[p] = keyframes[p]!.map((k) => ({ frame: frameOf(k.time), value: k.value, easing: k.easing }));
-      for (const [p, count] of Object.entries(previousMotion(preset.kind, now, total, clip.transform)) as [(typeof ANIMATABLE)[number], number][]) {
-        const rest = preset.kind === 'in' ? keyframes[p]!.slice(count) : keyframes[p]!.slice(0, keyframes[p]!.length - count);
-        // the easing on the key an exit started from shaped the exit; with the exit gone that key is the last one and shapes nothing
-        if (preset.kind === 'out' && rest.length) rest[rest.length - 1] = { ...rest[rest.length - 1]!, easing: 'linear' };
-        if (rest.length) keyframes[p] = rest; else delete keyframes[p];
-      }
-    }
-    for (const [p, keys] of Object.entries(made) as [(typeof ANIMATABLE)[number], { frame: number; value: number; easing: (typeof EASINGS)[number] }[]][]) {
-      const lo = keys[0]!.frame, hi = keys[keys.length - 1]!.frame;
-      // keys the motion does not cover stay: after an entrance, before an exit; a loop or a move covers the whole clip
-      const kept = preset.kind === 'in' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) > hi + 1e-9)
-        : preset.kind === 'out' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) < lo - 1e-9) : [];
-      const fresh = keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }));
-      // The key an entrance ends on is also the key that what follows starts from (an exit that begins right there, a slow zoom):
-      // where one was there already, it keeps its easing, so the entrance does not change the shape of what comes after it.
-      const meets = preset.kind === 'in' && kept.length ? (keyframes[p] ?? []).find((k) => Math.abs(frameOf(k.time) - hi) <= 1e-9) : undefined;
-      if (meets) fresh[fresh.length - 1]!.easing = meets.easing;
-      const next = [...kept, ...fresh].sort((x, y) => T.cmp(x.time, y.time));
-      if (next.length > 2000) throw new OpError('out_of_bounds', 'this motion would need more keyframes than a property can hold on a clip this long', { keyframes: next.length }, 'Use a longer period (frames), or a shorter clip.');
-      keyframes[p] = next;
-    }
-    clip.keyframes = keyframes;
+    const fps = rate.num / rate.den;
+    // Default lengths keep their duration in seconds at any frame rate (they were designed at 30 frames a second).
+    const frames = a.frames ?? (preset.kind === 'move' ? undefined : defaultMotionFrames(preset.id, fps));
+    const safe = shortestSafeLoopFrames(preset.id, fps);
+    if (safe !== null && frames !== undefined && frames < safe)
+      throw new OpError('invalid_args', `${preset.name.en} with a period of ${frames} frames would dim and return more than three times a second, a seizure risk for some viewers; at ${Number(fps.toFixed(3))} frames a second the shortest period offered is ${safe} frames`, { frames, shortest: safe }, `Use frames >= ${safe}.`);
+    const made = motionKeys(preset.id, { totalFrames: total, rest: clip.transform, ...(frames !== undefined ? { frames } : {}), ...(a.amount !== undefined ? { amount: a.amount } : {}) });
+    placeMotion(clip, rate, preset.kind, made);
     return { affectedIds: [clip.id], summary: `Motion ${preset.id}`, output: { properties: Object.keys(made), kind: preset.kind } };
   },
 });
@@ -1418,13 +1459,17 @@ defineOp({
     const prior = a.runId === undefined ? undefined : own(d.recipeRuns, a.runId);
     if (a.runId !== undefined && !prior) throw new OpError('not_found', `recipe run ${a.runId} not found`, { runId: a.runId });
     const affected = new Set<string>();
+    const left = new Set<string>(); // link groups that lose a clip here
     for (const id of a.removeClipIds ?? []) {
       const f = findClip(d, id);
       if (!f) continue;
       if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: id });
       f.track.clips.splice(f.index, 1);
+      for (const g of linkIdsOf([f.clip])) left.add(g);
       affected.add(id);
     }
+    // the previous run's clip that was edited by hand stays; if what it was linked to goes, it is no longer linked
+    for (const id of dissolveLoneLinks(d, left)) affected.add(id);
     const created: string[] = [...(a.keepIds ?? [])];
     for (const [i, call] of a.ops.entries()) {
       const def = getOp(call.op);
@@ -1728,7 +1773,7 @@ defineOp({
   apply(d, a) {
     const { clip, track, seq } = mustClip(d, a.clipId);
     if (clip.type !== 'media' || track.kind !== 'audio') throw new OpError('incompatible', 'fit_music applies to a sound clip on a sound track', { clipId: a.clipId });
-    if (clip.linkGroupId) throw new OpError('incompatible', 'this sound is linked to a picture; detach it first if it should be fitted on its own', { clipId: clip.id }, 'Use unlink_clip.');
+    if (partnersOf(d, clip).length) throw new OpError('incompatible', 'this sound is linked to a picture; detach it first if it should be fitted on its own', { clipId: clip.id }, 'Use unlink_clip.');
     if (clip.reverse) throw new OpError('incompatible', 'a clip that plays backwards cannot be fitted to beats', { clipId: clip.id });
     refuseRamped(clip, 'fitted to the picture');
     const rate = d.settings.frameRate;
@@ -2322,6 +2367,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
   const len = T.sub(end, start);
   const removed: string[] = [], changed: string[] = [], created: string[] = [];
   const relink = new Map<string, string>();
+  const touched = new Set<string>(); // link groups that lose a clip here, or that a divided clip leaves
   for (const track of tracks) {
     if (track.locked) throw new OpError('track_locked', `track ${track.id} is locked, so the cut cannot keep tracks in sync`, { trackId: track.id }, 'Unlock the track, or pass trackIds without it (other tracks will then shift relative to it).');
     const next: Clip[] = [];
@@ -2334,6 +2380,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
         continue;
       }
       const hasLeft = T.lt(clip.start, start), hasRight = T.lt(end, cEnd);
+      if (clip.type === 'media' && clip.linkGroupId) touched.add(clip.linkGroupId);
       if (!hasLeft && !hasRight) { removed.push(clip.id); continue; }
       let right: Clip | null = null;
       if (hasRight) {
@@ -2346,6 +2393,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
           if (right.type === 'media' && right.linkGroupId) {
             if (!relink.has(right.linkGroupId)) relink.set(right.linkGroupId, ctx.newId('lnk'));
             right.linkGroupId = relink.get(right.linkGroupId)!;
+            touched.add(right.linkGroupId);
           }
         }
         if (right.type === 'media' && hasLeft) delete right.transition;
@@ -2386,13 +2434,16 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
       m.time = start; atCut = m; markersMoved.push(m.id);
     }
   }
-  return { removed, changed, created, markersMoved, markersRemoved };
+  // A clip whose linked clip was removed or divided while it was not (it lies on a track that was not cut, or reaches less
+  // far): a link group of one is not a link.
+  const unlinked = dissolveLoneLinks(d, touched);
+  return { removed, changed, created, markersMoved, markersRemoved, unlinked };
 }
 
 defineOp({
   name: 'cut_range',
   version: 1,
-  description: 'Remove a frame-aligned time range from the timeline. By default every track is cut and later material moves earlier (ripple) so picture, sound and captions stay in sync; markers after the range move with it, and markers on removed frames collapse onto the cut point (one marker per frame: extra ones are dropped and listed in the output). A locked track makes the cut fail rather than drift.',
+  description: 'Remove a frame-aligned time range from the timeline. By default every track is cut and later material moves earlier (ripple) so picture, sound and captions stay in sync; markers after the range move with it, and markers on removed frames collapse onto the cut point (one marker per frame: extra ones are dropped and listed in the output). A locked track makes the cut fail rather than drift. A clip whose linked clip is removed or divided while it is not (on a track left out of trackIds, say) is unlinked, as a link needs two clips; that is refused while it is on a locked track.',
   args: z.object({ sequenceId: z.string().optional(), start: RT, end: RT, trackIds: z.array(z.string()).min(1).optional(), ripple: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
@@ -2401,7 +2452,7 @@ defineOp({
     if (T.isNegative(a.start) || !T.lt(a.start, a.end)) throw new OpError('invalid_args', 'need 0 <= start < end');
     const tracks = a.trackIds ? a.trackIds.map((id) => mustTrack(seq, id)) : seq.tracks;
     const r = cutRange(d, seq, a.start, a.end, tracks, a.ripple !== false, ctx);
-    return { affectedIds: [...new Set([...r.removed, ...r.changed, ...r.created, ...r.markersMoved, ...r.markersRemoved])], summary: `Cut ${fmt(T.sub(a.end, a.start))} at ${fmt(a.start)}${a.ripple === false ? ' (gap left)' : ''}${r.markersRemoved.length ? `; ${r.markersRemoved.length} marker(s) on removed frames dropped` : ''}`, output: { removedClipIds: r.removed, createdClipIds: r.created, movedMarkerIds: r.markersMoved, removedMarkerIds: r.markersRemoved } };
+    return { affectedIds: [...new Set([...r.removed, ...r.changed, ...r.created, ...r.markersMoved, ...r.markersRemoved, ...r.unlinked])], summary: `Cut ${fmt(T.sub(a.end, a.start))} at ${fmt(a.start)}${a.ripple === false ? ' (gap left)' : ''}${r.markersRemoved.length ? `; ${r.markersRemoved.length} marker(s) on removed frames dropped` : ''}${r.unlinked.length ? `; ${r.unlinked.length} clip(s) no longer linked` : ''}`, output: { removedClipIds: r.removed, createdClipIds: r.created, movedMarkerIds: r.markersMoved, removedMarkerIds: r.markersRemoved, unlinkedClipIds: r.unlinked } };
   },
 });
 
@@ -2444,7 +2495,9 @@ function openGap(d: ProjectDocument, at: T.RationalTime, len: T.RationalTime, tr
     track.clips = next;
     sortClips(track);
   }
-  return { changed, created };
+  // A clip divided here whose linked clip was not (on a track left out of trackIds): the later part is linked to nothing.
+  const unlinked = dissolveLoneLinks(d, [...relink.keys(), ...relink.values()]);
+  return { changed, created, unlinked };
 }
 
 defineOp({
@@ -2461,7 +2514,7 @@ defineOp({
     const r = openGap(d, a.at, a.duration, tracks, ctx);
     const moved: string[] = [];
     if (!a.trackIds) for (const m of Object.values(d.markers ?? {})) if (m.sequenceId === seq.id && !T.lt(m.time, a.at)) { m.time = T.add(m.time, a.duration); moved.push(m.id); }
-    return { affectedIds: [...new Set([...r.changed, ...r.created, ...moved])], summary: `Opened ${fmt(a.duration)} at ${fmt(a.at)}`, output: { createdClipIds: r.created, movedMarkerIds: moved } };
+    return { affectedIds: [...new Set([...r.changed, ...r.created, ...moved, ...r.unlinked])], summary: `Opened ${fmt(a.duration)} at ${fmt(a.at)}`, output: { createdClipIds: r.created, movedMarkerIds: moved, unlinkedClipIds: r.unlinked } };
   },
 });
 
@@ -2488,7 +2541,7 @@ defineOp({
     if (a.to && T.lt(cursor, hi) && spans.some((sp) => !T.lt(sp.s, hi))) gaps.push({ start: cursor, end: hi }); // empty time up to `to` only counts if something comes after it
     if (gaps.length === 0) throw new OpError('not_found', 'there is no empty time to close', {}, 'A gap on one track under a clip on another track is not empty time; use move_clip for that.');
     const affected = new Set<string>();
-    for (const g of gaps.reverse()) { const c = cutRange(d, seq, g.start, g.end, seq.tracks, true, ctx); for (const id of [...c.changed, ...c.markersMoved, ...c.markersRemoved]) affected.add(id); }
+    for (const g of gaps.reverse()) { const c = cutRange(d, seq, g.start, g.end, seq.tracks, true, ctx); for (const id of [...c.changed, ...c.markersMoved, ...c.markersRemoved, ...c.unlinked]) affected.add(id); }
     const total = gaps.reduce((n, g) => T.add(n, T.sub(g.end, g.start)), T.ZERO);
     return { affectedIds: [...affected], summary: `Closed ${gaps.length} gap(s), ${fmt(total)} in all`, output: { gaps: gaps.reverse(), removed: total } };
   },
@@ -2523,7 +2576,7 @@ defineOp({
     if (ranges.length === 0) throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId });
     ranges.sort((x, y) => T.cmp(y.start, x.start)); // latest first, so earlier ranges keep their times
     const affected = new Set<string>();
-    for (const r of ranges) { const c = cutRange(d, seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created, ...c.markersMoved, ...c.markersRemoved]) affected.add(id); }
+    for (const r of ranges) { const c = cutRange(d, seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created, ...c.markersMoved, ...c.markersRemoved, ...c.unlinked]) affected.add(id); }
     const text = picked.map((x) => x.w.text).join(' ');
     return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline`, output: { ranges: ranges.reverse(), words: picked.length } };
   },

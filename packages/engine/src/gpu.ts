@@ -143,6 +143,8 @@ function thinning(hits: { t: number; index: number }[], every: number, gap: numb
 }
 /** How fast a flash fades, per second. */
 export const STROBE_FADE = 20;
+/** Largest brightness swing of the old-film flicker at full amount (see 'stylize.film'). */
+const FILM_FLICKER = 0.045;
 /** The computed parameter through which the evaluator tells a strobe how long ago its last flash started (seconds; absent = never). Not stored in documents. */
 export const FLASH_SINCE = '__flashSince';
 export function motionAt(type: string, p: Record<string, unknown>, seconds: number, beat?: BeatPosition | null): { scale: number; rotation: number; dx: number; dy: number } {
@@ -196,9 +198,10 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       var at = uv;
       if (P.a.w > 0.5) { at.y = at.y + amp * sin(6.2831853 * (uv.x / (len * aspect)) + phase); }
       else { at.x = at.x + amp * aspect * sin(6.2831853 * (uv.y / len) + phase); }
-      // outside the picture there is nothing to show
-      if (at.x < 0.0 || at.x > 1.0 || at.y < 0.0 || at.y > 1.0) { return vec4f(0.0); }
-      return textureSampleLevel(src, smp, at, 0.0);`,
+      // Beyond the picture's edge the edge itself continues (as a wave of water would show it). Showing nothing there
+      // uncovered and covered dark strips at the frame's sides with every passing wave: at high speeds, a large area
+      // flashing many times a second.
+      return textureSampleLevel(src, smp, clamp(at, vec2f(0.0), vec2f(1.0)), 0.0);`,
   },
   // Magnify (amount > 0) or pinch (amount < 0) inside a circle. Lengths are fractions of the frame height.
   'distort.bulge': {
@@ -470,8 +473,11 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       return vec4f(mix(s.rgb, vec3f(P.a.x, P.a.y, P.a.z) * s.a, P.a.w), s.a);`,
   },
   // Old film: the frame weaves a little, the light flickers, dust and scratches come and go, the colour fades toward brown.
+  // The light flickers 18 times a second. The swing is kept small enough that even on a white picture, at full amount,
+  // two frames never differ by a tenth of the luminance range (a multiplier of at least 0.955 on encoded values is at
+  // least 0.9 in linear light): a flicker, never a flash in the sense of the photosensitivity guidelines.
   'stylize.film': {
-    params: (p, env) => { const tick = Math.floor((env.seconds ?? 0) * 18 + 1e-6), seed = Math.round(n(p.seed, 1)), a = n(p.amount, 0.6); return [a, seed, tick, (unit32(hash32(seed * 31 + tick)) - 0.5) * 0.004 * a, 1 - 0.12 * a * unit32(hash32(seed * 57 + tick + 9)), env.width, env.height]; },
+    params: (p, env) => { const tick = Math.floor((env.seconds ?? 0) * 18 + 1e-6), seed = Math.round(n(p.seed, 1)), a = n(p.amount, 0.6); return [a, seed, tick, (unit32(hash32(seed * 31 + tick)) - 0.5) * 0.004 * a, 1 - FILM_FLICKER * a * unit32(hash32(seed * 57 + tick + 9)), env.width, env.height]; },
     wgsl: `
       let a = P.a.x; let seed = u32(P.a.y) * 104729u; let tick = u32(P.a.z);
       let s = textureSampleLevel(src, smp, vec2f(uv.x, uv.y + P.a.w), 0.0);

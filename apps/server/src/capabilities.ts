@@ -17,6 +17,7 @@ import type { Config } from './config.ts';
 import { describeMedia, ffprobe } from './ingest.ts';
 import { ModelStore, type ModelStatus } from './models.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import { assertStorageRoom } from './storage.ts';
 import type { Principal } from './auth.ts';
 
 const TYPE = 'capability';
@@ -143,6 +144,8 @@ export class Capabilities {
       const prior = this.store.findJobByKey(TYPE, req.actor, req.idempotencyKey);
       if (prior) return prior;
     }
+    // A run stores its results in the library: past the storage ceiling it is refused before a job exists, as exports, sounds and narration are.
+    assertStorageRoom(this.store, 1, 'run this tool');
     if (d.state !== 'published') throw new ApiError(409, 'capability_is_draft', 'drafts cannot be executed');
     const blockers = this.executionBlockers(publicationBlockers(d, this.cfg.distributionProfile));
     if (blockers.length) throw new ApiError(409, 'capability_blocked', `capability ${d.id} is not eligible to run in the ${this.cfg.distributionProfile} profile`, { blockers });
@@ -342,6 +345,8 @@ export class Capabilities {
         const want = exp && 'fromParams' in exp ? { w: p[exp.fromParams[0]], h: p[exp.fromParams[1]] } : src ? { w: src.width, h: src.height } : null;
         if (v && want && (v.width !== want.w || v.height !== want.h)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" is ${v.width}x${v.height}, expected ${want.w}x${want.h}`); }
         const mime = f.mediaType === 'image' ? `image/${v.codec_name === 'mjpeg' ? 'jpeg' : v.codec_name}` : f.mediaType === 'video' ? 'video/mp4' : 'audio/wav';
+        // the result is stored only if it fits under the ceiling; otherwise the job fails with that reason and nothing is kept
+        if (!fs.existsSync(this.store.blobPath(contentHash))) { try { assertStorageRoom(this.store, f.bytes.length, 'store this result'); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; } }
         this.store.putBlob(contentHash, tmp, f.bytes.length, mime);
         bundle.push({ name: f.name, role: f.role, mediaType: f.mediaType, encoding: f.encoding, contentHash, bytes: f.bytes.length, mimeType: mime, codec: (v ?? a).codec_name, width: v?.width ?? null, height: v?.height ?? null, pixFmt: v?.pix_fmt ?? null, hasAlpha: /a/.test(String(v?.pix_fmt ?? '').replace(/^(gray|pal|ya)/, '')) && /rgba|bgra|ya|yuva|gbrap/.test(String(v?.pix_fmt)), durationSeconds: probe.format?.duration ? Number(probe.format.duration) : null });
       }

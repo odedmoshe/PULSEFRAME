@@ -11,10 +11,15 @@ import { z } from 'zod';
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/).describe('#RRGGBB');
 const frac = (max: number, def: number, what: string) => z.number().min(0).max(max).default(def).describe(what);
-/** What drives an effect that hits repeatedly: its own steady setting, or the detected beats of the music playing under the clip (see beatgrid.ts). Without analysed music at that moment it falls back to the steady setting. */
+/**
+ * What drives an effect that hits repeatedly: its own steady setting, or the detected beats of the music playing under the
+ * clip (see beatgrid.ts). Where no analysed music plays, the shake, the zoom pulse and the RGB shake fall back to their steady
+ * setting; the strobe shows nothing there (packages/engine strobeSchedule.ts). Beats are counted from the first bar start of
+ * the music, not from the start of each bar (engine gpu.ts musicHit).
+ */
 const FOLLOW = {
-  follow: z.enum(['steady', 'music']).default('steady').describe('steady = the effect\'s own tempo or rate; music = it hits on the beats detected in the music under the clip (run a beat analysis on the music first)'),
-  every: z.number().int().min(1).max(16).default(1).describe('with follow=music: hit on every Nth beat, counted from the start of the bar'),
+  follow: z.enum(['steady', 'music']).default('steady').describe('steady = the effect\'s own tempo or rate; music = it hits on the beats detected in the music under the clip (run a beat analysis on the music first). Where no analysed music plays, a strobe shows nothing and the other effects keep their steady setting'),
+  every: z.number().int().min(1).max(16).default(1).describe('with follow=music: hit on every Nth beat, counting the beats from the first bar start of the music'),
 };
 
 export interface EffectDef<S extends z.ZodObject = z.ZodObject> {
@@ -103,8 +108,8 @@ export const EFFECTS = [
     params: z.object({ rate: z.number().min(-720).max(720).default(90).describe('degrees per second; negative turns the other way'), zoom: z.number().min(0.2).max(4).default(1).describe('size while turning') }).strict() }),
   def({ id: 'light.leak', version: 1, category: 'light', name: { he: 'דליפת אור', en: 'Light leak' }, description: 'Soft coloured light drifts over the picture, as from a leak in an old camera. Seeded. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true,
     params: z.object({ color: Color.default('#FF7A2F'), amount: frac(2, 0.6, 'strength'), speed: z.number().min(0).max(5).default(0.3).describe('how fast the light drifts'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
-  def({ id: 'light.strobe', version: 1, category: 'light', name: { he: 'הבזקים', en: 'Strobe' }, description: 'Brief flashes at a steady rate. The rate cannot exceed three per second: faster flashing is a seizure risk for some viewers. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
-    params: z.object({ rate: z.number().min(0).max(3).default(2).describe('flashes per second (at most 3)'), amount: frac(1, 0.6, 'brightness of the flash'), color: Color.default('#FFFFFF'), ...FOLLOW }).strict() }),
+  def({ id: 'light.strobe', version: 1, category: 'light', name: { he: 'הבזקים', en: 'Strobe' }, description: 'Brief flashes, at a steady rate or on the beats of the music. All strobes on a timeline share one limit of three flash starts a second (faster flashing is a seizure risk for some viewers), so with several strobes or fast music some flashes are left out. A strobe that follows the music shows nothing where no analysed music plays. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false,
+    params: z.object({ rate: z.number().min(0).max(3).default(2).describe('with follow=steady: flashes per second (at most 3, shared with every other strobe on the timeline)'), amount: frac(1, 0.6, 'brightness of the flash'), color: Color.default('#FFFFFF'), ...FOLLOW }).strict() }),
   def({ id: 'stylize.film', version: 1, category: 'stylize', name: { he: 'פילם ישן', en: 'Old film' }, description: 'The frame weaves, the light flickers, dust and scratches come and go, the colour fades toward brown. Seeded; the same frame always looks the same. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true,
     params: z.object({ amount: frac(1, 0.6, 'strength'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
   def({ id: 'digital.rgb-shake', version: 1, category: 'digital', name: { he: 'רעידת צבעים', en: 'RGB shake' }, description: 'The colour channels jump apart in a direction that changes several times a second. Seeded. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true,

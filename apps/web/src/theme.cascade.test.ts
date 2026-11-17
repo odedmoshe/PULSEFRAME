@@ -175,7 +175,30 @@ describe('editor stylesheets', () => {
     }
     expect(winner(pick(all, (s) => s === '.canvas-wrap'), 'position')?.rule.decls.position).toBe('relative');
     // nothing lets the handles out again: no rule puts them or the wrap in the top layer or gives them a z-index above the page
-    for (const sel of ['.ch-root', '.ch-box', '.canvas-wrap']) for (const r of pick(all, (s) => s === sel)) expect(r.rule.decls['z-index'], sel).toBeUndefined();
+    for (const sel of ['.ch-root', '.ch-box', '.canvas-wrap', '.ch-clip']) for (const r of pick(all, (s) => s === sel)) expect(r.rule.decls['z-index'], sel).toBeUndefined();
+  });
+
+  it('the handles are cut off at the edge of the viewer, so an enlarged clip takes no clicks from the transport bar or the side panels', () => {
+    // The transport bar is inside the stage (below the canvas wrap) and the side panels are beside it: the stage clip above
+    // does not keep the handle box off them. The handles therefore live in a layer that covers the canvas wrap exactly and
+    // clips what lies outside it; what is clipped is neither painted nor hit.
+    const handles = read('./editor/CanvasHandles.tsx');
+    const layer = handles.indexOf('className="ch-clip"');
+    expect(layer).toBeGreaterThan(-1);
+    // the handle root is inside that layer, in both the empty shell and the full overlay
+    expect(handles.split('className="ch-clip"').length - 1).toBe(2);
+    for (const part of handles.split('className="ch-clip"').slice(1)) expect(part.indexOf('className="ch-root"')).toBeGreaterThan(-1);
+    const clip = pick(all, (s) => s === '.ch-clip');
+    expect(winner(clip, 'position')?.rule.decls.position).toBe('absolute');
+    expect(winner(clip, 'inset')?.rule.decls.inset).toBe('0');
+    expect(winner(clip, 'overflow')?.rule.decls.overflow).toBe('clip'); // not hidden: no scroll container, so a focused handle outside cannot scroll it
+    expect(winner(clip, 'pointer-events')?.rule.decls['pointer-events']).toBe('none'); // the layer itself takes no clicks; only the handles do
+    for (const r of clip) for (const prop of ['overflow-x', 'overflow-y', 'overflow-inline', 'overflow-block']) expect(r.rule.decls[prop], `.ch-clip { ${prop} }`).toBeUndefined();
+    // its containing block is the canvas wrap (relative, above), so `inset: 0` is the viewer
+    expect(winner(pick(all, (s) => s === '.canvas-wrap'), 'position')?.rule.decls.position).toBe('relative');
+    // the stand-ins at the edge are positioned inside the handle root, like the handles
+    expect(winner(pick(all, (s) => s === '.ch-proxy'), 'position')?.rule.decls.position).toBe('absolute');
+    expect(winner(pick(all, (s) => s === '.ch-proxy'), 'pointer-events')?.rule.decls['pointer-events']).toBe('auto');
   });
 
   it('the zoom control is in the normal flow of the timeline bar, not laid over it', () => {

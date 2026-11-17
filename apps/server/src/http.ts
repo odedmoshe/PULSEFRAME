@@ -20,7 +20,7 @@ import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
-import { canRasteriseSvg, makeElement, setElementStorageCeiling } from './elements.ts';
+import { canRasteriseSvg, makeElement } from './elements.ts';
 import { applyTransaction, OpError, type Asset, type OpCall } from '@pulseframe/core';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
@@ -191,7 +191,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const st = backup.status();
     return c.json(st, st.lastOk ? 200 : 500);
   });
-  app.get('/api/v1/storage', (c) => { const p = need(c, 'observe'); const rep = storageReport(store, p, Date.now(), cfg.maxStorageBytes); const { hashes: _h, ...unref } = rep.unreferenced; return c.json({ ...rep, unreferenced: unref }); });
+  app.get('/api/v1/storage', (c) => { const p = need(c, 'observe'); const rep = storageReport(store, p); const { hashes: _h, ...unref } = rep.unreferenced; return c.json({ ...rep, unreferenced: unref }); });
   app.post('/api/v1/storage/gc', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ apply: z.boolean().optional() }).strict()); return c.json(collectGarbage(store, p, b.apply === true)); });
   app.get('/api/v1/projects/:id/archive', (c) => {
     need(c, 'observe');
@@ -204,11 +204,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (who.grant?.projectIds) throw new ApiError(403, 'out_of_scope', 'this grant is limited to specific projects and cannot create new ones');
     gov.assertUnrestricted(who, 'import a project');
     if (!c.req.raw.body) throw new ApiError(400, 'empty_upload', 'request has no body');
-    assertStorageRoom(store, cfg.maxStorageBytes, Number(c.req.header('content-length') ?? 0) || 1, 'import this project');
+    // As for uploads: refuse up front when the declared size cannot fit, and cut a body of unknown (or understated) size off at
+    // the room left, not only at the archive size limit. Without the cut a chunked body could fill the disk past the ceiling.
+    const room = assertStorageRoom(store, Number(c.req.header('content-length') ?? 0) || 1, 'import this project');
+    const maxBytes = Math.min(cfg.maxUploadBytes * 4, room);
     const tmp = path.join(store.tmpDir, `imp_${Date.now()}_${Math.random().toString(36).slice(2)}.tar`);
     let size = 0;
     try {
-      await pipeline(Readable.fromWeb(c.req.raw.body as any), async function* (src) { for await (const chunk of src) { size += chunk.length; if (size > cfg.maxUploadBytes * 4) throw new ApiError(413, 'upload_too_large', 'archive is too large'); yield chunk; } }, fs.createWriteStream(tmp, { mode: 0o600 }));
+      await pipeline(Readable.fromWeb(c.req.raw.body as any), async function* (src) { for await (const chunk of src) { size += chunk.length; if (size > maxBytes) throw new ApiError(413, 'upload_too_large', `archive exceeds ${maxBytes} bytes${maxBytes < cfg.maxUploadBytes * 4 ? ' (the room left under the storage ceiling)' : ''}`, { maxBytes }); yield chunk; } }, fs.createWriteStream(tmp, { mode: 0o600 }));
       const r = importArchive(store, tmp);
       for (const a of Object.values(r.doc.assets)) derivatives.ensure(a);
       return c.json({ project: { id: r.doc.id, name: r.doc.name }, revision: r.revision, blobsAdded: r.blobsAdded, blobsAlreadyPresent: r.blobsAlreadyPresent }, 201);
@@ -266,13 +269,13 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const pr = need(c, 'edit');
     const projectId = c.req.param('id');
     gov.assertMayAct(pr, projectId, 'job');
-    assertStorageRoom(store, cfg.maxStorageBytes, 1, 'start exports');
+    assertStorageRoom(store, 1, 'start exports'); // once for the whole batch, before any job exists (each start below is told so)
     const b = await body(c, z.object({ variantIds: z.array(z.string()).min(1).max(8), options: z.record(z.string(), z.unknown()).optional() }).strict());
     const doc = store.getProject(projectId).doc;
     // All-or-nothing: every variant must exist and plan without blockers before any job is created.
     for (const id of b.variantIds) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, variantId: id }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `format ${id} cannot be exported: ${plan.blockers[0]!.message}`, { variantId: id, blockers: plan.blockers }); }
     gov.takeExportQuota(pr, b.variantIds.length, true);
-    const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }));
+    const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }, undefined, { roomChecked: true }));
     gov.takeExportQuota(pr, jobs.length);
     return c.json({ jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, status: j.status })) }, 202);
   });
@@ -421,7 +424,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (!c.req.raw.body) throw new ApiError(400, 'empty_upload', 'request has no body');
     const name = decodeURIComponent(c.req.header('x-filename') ?? 'upload');
     // Storage ceiling: refuse up front when the declared size cannot fit, and cut a stream of unknown size off at the room left.
-    const room = assertStorageRoom(store, cfg.maxStorageBytes, Number(c.req.header('content-length') ?? 0) || 1, 'store this upload');
+    const room = assertStorageRoom(store, Number(c.req.header('content-length') ?? 0) || 1, 'store this upload');
     const asset = await ingestUpload(store, c.req.raw.body, name, p.actor, Math.min(cfg.maxUploadBytes, room));
     // The ingest job attaches its result through a normal (internal) operation.
     const r = store.commit({ projectId, actor: p.actor, label: `Import ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
@@ -443,8 +446,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const bytes = await sfxPreview(store.tmpDir, c.req.param('sfxId'));
     return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600' });
   });
-  // Graphic elements: the same route for the editor and for agents.
-  setElementStorageCeiling(store, cfg.maxStorageBytes); // element pictures count against the storage ceiling like uploads, also when the agent tool makes them
+  // Graphic elements: the same route for the editor and for agents. Element pictures count against the storage ceiling like
+  // uploads; makeElement checks it (store.maxStorageBytes), so the agent tool is held to it as well.
   app.get('/api/v1/elements', async (c) => { need(c, 'observe'); return c.json({ available: await canRasteriseSvg(), count: ELEMENTS.length, note: 'Elements are listed in the catalog. available=false means this machine\'s ffmpeg cannot read SVG, so elements cannot be made here.' }); });
   app.post('/api/v1/projects/:id/elements', async (c) => {
     const p = need(c, 'edit');
@@ -493,8 +496,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const pr = need(c, 'edit');
     gov.assertMayAct(pr, c.req.param('id'), 'job');
     const options = await c.req.json().catch(() => ({}));
-    assertStorageRoom(store, cfg.maxStorageBytes, 1, 'start an export'); // the output size is not known in advance; an export is refused once the ceiling is reached
     gov.takeExportQuota(pr, 1, true);
+    // exporter.start refuses once the storage ceiling is reached (the same check for this route, the batch route, retries and MCP)
     const job = exporter.start(c.req.param('id'), pr.actor, options);
     gov.takeExportQuota(pr);
     return c.json({ jobId: job.id, status: job.status, revision: job.input.revision, estimate: job.input.manifest.estimate, warnings: job.input.warnings }, 202);

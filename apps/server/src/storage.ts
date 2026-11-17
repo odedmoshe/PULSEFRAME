@@ -55,17 +55,20 @@ export function dataDirBytes(dir: string): number {
   return n;
 }
 /**
- * Refuse work that needs `neededBytes` more when the configured ceiling would be passed. No ceiling (0) never refuses.
- * Returns how much room is left (Infinity without a ceiling) so a streaming upload can be cut off at that point.
+ * Refuse work that needs `neededBytes` more when the store's ceiling (`store.maxStorageBytes`) would be passed. No ceiling (0)
+ * never refuses. Returns how much room is left (Infinity without a ceiling) so a streaming upload can be cut off at that point.
+ * Call it from the function a REST route and its MCP tool both call (Exporter.start, makeElement, makeSfx, Speech.startNarration),
+ * not from the route, so the agent tool is held to the same limit.
  */
-export function assertStorageRoom(store: Store, quotaBytes: number, neededBytes: number, what: string): number {
+export function assertStorageRoom(store: Store, neededBytes: number, what: string): number {
+  const quotaBytes = store.maxStorageBytes;
   if (!quotaBytes) return Infinity;
   const usedBytes = dataDirBytes(store.dataDir);
   if (usedBytes + neededBytes > quotaBytes)
     throw new ApiError(507, 'storage_quota_exceeded', `not enough room to ${what}: the storage ceiling is ${quotaBytes} bytes and ${usedBytes} are in use`, { quotaBytes, usedBytes, neededBytes }, 'Delete projects you no longer need and run the storage clean-up (owner: project manager → storage), or raise PF_MAX_STORAGE_BYTES.');
   return quotaBytes - usedBytes;
 }
-export function storageReport(store: Store, by: Principal, now = Date.now(), quotaBytes = 0) {
+export function storageReport(store: Store, by: Principal, now = Date.now(), quotaBytes = store.maxStorageBytes) {
   ownerOnly(by, 'inspect storage');
   const refs = referencedHashes(store);
   const blobDir = path.join(store.dataDir, 'blobs');

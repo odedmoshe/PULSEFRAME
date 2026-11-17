@@ -347,6 +347,19 @@ describe('strobe: the three-a-second limit as a property', () => {
     expect(mostInOneSecond(onsetsOf(frameStrengths(d, 10)), 30)).toBeLessThanOrEqual(3);
   });
 
+  it('reported: pieces of one strobe whose later piece is brighter (or another colour) do not flash as one run: the light never rises at a cut without a scheduled start', () => {
+    // a title cut a few frames after each flash; the pieces alternate between a faint and a full flash
+    const made = withStrobe(createProject({ id: 'prj_c', name: 'C' }), { rate: 2.5, amount: 0.3 }, 300);
+    let d = cutTitle(made.doc, Array.from({ length: 24 }, (_, i) => 3 + i * 12));
+    const pieces = Object.values(d.sequences).flatMap((q) => q.tracks).flatMap((t) => t.clips).filter((c) => c.type === 'text').sort((a, b) => T.cmp(a.start, b.start));
+    expect(pieces.length).toBeGreaterThan(10);
+    pieces.forEach((p, i) => { d = tx(d, [{ op: 'update_effect', args: { clipId: p.id, effectId: (p as { effects: { id: string }[] }).effects[0]!.id, params: { amount: i % 2 ? 1 : 0.1, ...(i % 4 === 3 ? { color: '#FF00FF' } : {}) } } }]).doc; });
+    const frames = frameStrengths(d, 10);
+    expect(mostInOneSecond(onsetsOf(frames), 30)).toBeLessThanOrEqual(3);
+    const scheduled = new Set([...flashSchedule(d).shown.values()].flatMap((x) => [...x]));
+    for (let i = 1; i < frames.length; i++) if (frames[i]! > frames[i - 1]! + 1e-9) expect(scheduled.has(i), `rise on frame ${i}`).toBe(true);
+  });
+
   it('several strobes with different settings, on one clip, on clips that overlap on several tracks, on clips that follow one another and on cut clips, start at most three flashes a second between them', () => {
     const strobe = fc.oneof(
       fc.record({ rate: fc.oneof(fc.integer({ min: 0, max: 3000 }).map((x) => x / 1000), fc.constantFrom(3, 2.999, 2.9, 2.5, 1.7)) }),

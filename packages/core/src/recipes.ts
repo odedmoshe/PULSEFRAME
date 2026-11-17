@@ -11,6 +11,7 @@ import { cutOps, sourceTimesToTimeline, sourceRangesToTimeline, type TimeRange }
 import { FORMAT_PROFILES } from './variants.ts';
 import { findClip, type OpCall } from './ops.ts';
 import { own } from './own.ts';
+import { flashGapFrames } from './flashSafety.ts';
 
 export class RecipeError extends Error {
   constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do', message: string, public hint?: string) { super(message); }
@@ -83,7 +84,13 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   // On bars, the cut points are the analysis's bar starts (the first beat of each bar), which sound like the natural places to cut.
   if (p.cutOn === 'bars' && !analysis.downbeats?.length) throw new RecipeError('needs_analysis', 'the beat analysis of this music has no bar starts', 'Cut on beats instead, or mark the bar starts with edit_analysis (downbeats).');
   const barFrames = p.cutOn === 'bars' ? [...new Set(sourceTimesToTimeline(doc, mclip.assetId, analysis.downbeats!).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b) : [];
-  const cuts = (p.cutOn === 'bars' ? barFrames : beatFrames).filter((_, i) => i % p.everyBeats === 0);
+  const wantedCuts = (p.cutOn === 'bars' ? barFrames : beatFrames).filter((_, i) => i % p.everyBeats === 0);
+  // SAFETY (ADR-0009): cuts between pictures of different brightness flash. A cut that would come less than a third of a
+  // second after the last one is left out, so the montage never cuts more than three times a second, however fast the music.
+  const gap = flashGapFrames(rate.num / rate.den);
+  const cuts: number[] = [];
+  for (const c of wantedCuts) if (!cuts.length || c - cuts[cuts.length - 1]! >= gap) cuts.push(c);
+  const thinnedOut = wantedCuts.length - cuts.length;
   if (cuts.length < 2) throw new RecipeError('nothing_to_do', 'fewer than two cut points fall inside the music clip');
   const bounds = [...cuts, fi(to)].filter((x, i, a) => i === 0 || x > a[i - 1]!);
   let order = p.assetIds.slice();
@@ -114,7 +121,7 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   const bpm = analysis.bpm ? `${analysis.bpm.toFixed(1)} BPM` : 'unknown tempo';
   return {
     recipeId: 'beat-montage', params: p,
-    steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} ${p.cutOn === 'bars' ? 'bar(s), starting on bar starts' : 'beat(s)'}, order: ${p.order}`, ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : [])],
+    steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} ${p.cutOn === 'bars' ? 'bar(s), starting on bar starts' : 'beat(s)'}, order: ${p.order}`, ...(thinnedOut ? [`Leave out ${thinnedOut} cut(s) that would come less than a third of a second after the one before, so the montage cuts at most three times a second (faster cutting between bright and dark pictures is a seizure risk for some viewers)`] : []), ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : [])],
     basis: [`${p.cutOn === 'bars' ? `${barFrames.length} bar starts among ` : ''}${beatFrames.length} beats of the music clip (${bpm}, confidence ${analysis.confidence ?? 'n/a'}${analysis.origin.edited ? ', corrected by hand' : ''})`, `method: ${analysis.origin.method}`],
     ops,
     alternatives: [

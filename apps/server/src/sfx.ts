@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Asset } from '@pulseframe/core';
 import { describeMedia } from './ingest.ts';
+import { assertStorageRoom } from './storage.ts';
 import { ApiError, type Store } from './store.ts';
 
 export type SfxCategory = 'ui' | 'whoosh' | 'impact' | 'riser' | 'glitch' | 'notify' | 'cartoon' | 'ambience' | 'drum' | 'tone';
@@ -285,15 +286,20 @@ export async function sfxPreview(tmpDir: string, id: string, queue: Synth = synt
   return renderSfx(tmpDir, findSfx(id), queue);
 }
 
-/** Synthesise one effect and return it as an asset (blob stored, not yet attached to a project). */
+/**
+ * Synthesise one effect and return it as an asset (blob stored, not yet attached to a project). The editor's route and the agent
+ * tool both come here, so both are held to the store's storage ceiling, as graphic elements are (elements.ts).
+ */
 export async function makeSfx(store: Store, id: string, actor: string, queue: Synth = synth): Promise<Omit<Asset, 'id'>> {
   const def = findSfx(id);
   // -bitexact and a fixed graph: the same build produces the same bytes, so the asset is content-addressed and de-duplicated.
   const bytes = await renderSfx(store.tmpDir, def, queue, 'add');
+  const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  // A sound that is not stored yet needs room under the ceiling; one that is already stored needs none.
+  if (!fs.existsSync(store.blobPath(contentHash))) assertStorageRoom(store, bytes.length, 'store this sound');
   const tmp = path.join(store.tmpDir, `sfx_${randomBytes(6).toString('hex')}.wav`);
   try {
     fs.writeFileSync(tmp, bytes);
-    const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
     const meta = await describeMedia(tmp);
     store.putBlob(contentHash, tmp, bytes.length, meta.mimeType);
     return { ...meta, name: `${def.name.en}.wav`, contentHash, byteSize: bytes.length, provenance: { origin: 'generated', importedAt: new Date().toISOString(), importedBy: actor, procedural: { id: def.id, version: def.version, generator: 'ffmpeg lavfi formula; no third-party content' } } };

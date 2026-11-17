@@ -42,3 +42,25 @@ describe('beat montage recipe: cutting on beats or on bar starts', () => {
     expect(planRecipe(d, 'beat-montage', { musicClipId: clipId, assetIds: [videoId] }).alternatives.some((x) => /bar/.test(x.label))).toBe(false);
   });
 });
+
+describe('beat montage on fast music: at most three cuts a second (ADR-0009)', () => {
+  it('beats 0.1 s apart (600 per minute): cuts are left out so that no clip is shorter than a third of a second, and the plan says so', () => {
+    let r = tx(createProject({ id: 'prj_fast', name: 'F' }), [{ op: 'import_asset', args: { asset: music } }, { op: 'import_asset', args: { asset: video } }], true);
+    const musicId = r.results[0]!.output!.assetId as string, videoId = r.results[1]!.output!.assetId as string;
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: musicId, start: f(0), duration: f(300) } }]);
+    const clipId = (r.results[0]!.output as any).clipId as string;
+    const d = tx(r.doc, [{ op: 'attach_analysis', args: { assetId: musicId, kind: 'beats', method: 'test', params: {}, createdAt: 'now', times: Array.from({ length: 99 }, (_, k) => f(3 * (k + 1))), bpm: 600 } }], true).doc;
+    for (const everyBeats of [1, 2] as const) {
+      const plan = planRecipe(d, 'beat-montage', { musicClipId: clipId, assetIds: [videoId], everyBeats });
+      const at = plan.ops.map((o) => T.frameIndexAt((o.args as any).start, R));
+      for (let i = 1; i < at.length; i++) expect(at[i]! - at[i - 1]!, `every ${everyBeats}`).toBeGreaterThanOrEqual(11); // ⌈30/3⌉ + 1 frames
+      let most = 0; for (let i = 0, j = 0; i < at.length; i++) { while (at[i]! - at[j]! >= 30) j++; most = Math.max(most, i - j + 1); }
+      expect(most).toBeLessThanOrEqual(3);
+      expect(plan.steps.some((x) => /Leave out \d+ cut/.test(x)), `every ${everyBeats}`).toBe(true);
+    }
+    // slower music is not changed: every 4 beats of this music is 0.4 s
+    const slow = planRecipe(d, 'beat-montage', { musicClipId: clipId, assetIds: [videoId], everyBeats: 4 });
+    expect(slow.steps.some((x) => /Leave out/.test(x))).toBe(false);
+  });
+});
+

@@ -8,8 +8,47 @@
  * selection as before, so there is no first part to protect and nothing to tell "applied" from "undone" by: it is not held.
  * Another curve on that clip replaces its speed over the same stretch of the source (the op reads the source shown now).
  */
-import type { OpCall } from '@pulseframe/core';
+import * as T from '@pulseframe/time';
+import { clipEnd, findClip, type Clip, type OpCall, type ProjectDocument, type Track } from '@pulseframe/core';
 import { sameIds, singleFlight } from './oneAtATime.ts';
+
+type MediaClip = Extract<Clip, { type: 'media' }>;
+/**
+ * Why `apply_speed_curve` (packages/core/src/ops.ts) would refuse every curve on this clip, read from the document before
+ * anything is sent, so the tiles can be held with a sentence that says what to do. The op stays the authority: this
+ * follows its checks, in its order, over the same clips (the clip and, as the inspector always sends, every clip linked
+ * to it), and a refusal it still gives is shown as before.
+ * - 'freeze' / 'reverse': a freeze frame, or a clip that plays backwards;
+ * - 'keyframes': keyframes, volume keys or animated effect parameters;
+ * - 'transition': a picture transition at the start of the clip, or at the start of the clip that follows it directly;
+ * - 'crossfade': its sound plays on over the next clip on its track, or the previous one over it, as a crossfade
+ *   (set_audio_crossfade can remove it);
+ * - 'overlap': the same kind of overlap made by hand (not a crossfade).
+ * Not covered, because they depend on the curve or on other tracks: keep-pitch sound with a gradual curve, linked clips that
+ * differ in place or length, a linked clip on a locked track, a clip too short for the curve.
+ */
+export type CurveBlock = 'freeze' | 'reverse' | 'keyframes' | 'transition' | 'crossfade' | 'overlap';
+export function curveBlocker(doc: ProjectDocument, clipId: string): CurveBlock | null {
+  const f = findClip(doc, clipId);
+  if (!f || f.clip.type !== 'media') return null;
+  const lead = f.clip;
+  const targets: { track: Track; clip: MediaClip }[] = [{ track: f.track, clip: lead }];
+  if (lead.linkGroupId) for (const seq of Object.values(doc.sequences)) for (const track of seq.tracks) for (const c of track.clips) if (c.type === 'media' && c.id !== lead.id && c.linkGroupId === lead.linkGroupId) targets.push({ track, clip: c });
+  for (const { track, clip } of targets) {
+    if (clip.freeze) return 'freeze';
+    if (clip.reverse) return 'reverse';
+    if (clip.keyframes || clip.volume || clip.effects?.some((e) => e.keyframes)) return 'keyframes';
+    const next = track.clips[track.clips.indexOf(clip) + 1];
+    if (clip.transition || (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip)))) return 'transition';
+    const end = clipEnd(clip);
+    const isCrossfade = (earlier: MediaClip, later: Clip) => !!earlier.fadeOut && T.eq(T.sub(clipEnd(earlier), earlier.fadeOut), later.start);
+    const into = track.clips.find((o) => o.id !== clip.id && o.type === 'media' && T.lt(clip.start, o.start) && T.lt(o.start, end) && T.lt(end, clipEnd(o)));
+    if (into) return isCrossfade(clip, into) ? 'crossfade' : 'overlap';
+    const from = track.clips.find((o): o is MediaClip => o.id !== clip.id && o.type === 'media' && T.lt(o.start, clip.start) && T.lt(clip.start, clipEnd(o)) && T.lt(clipEnd(o), end));
+    if (from) return isCrossfade(from, clip) ? 'crossfade' : 'overlap';
+  }
+  return null;
+}
 
 export interface CurveHost {
   commit(ops: OpCall[], label?: string): Promise<{ results: { output?: Record<string, any> }[] } | null>;

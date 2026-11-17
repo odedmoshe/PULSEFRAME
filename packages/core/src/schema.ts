@@ -4,6 +4,7 @@
  * Transient state (selection, playhead, presence, panel layout) is NOT part of this document.
  */
 import { z } from 'zod';
+import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 
 export const SCHEMA_VERSION = 1;
@@ -172,6 +173,8 @@ export const MediaClipSchema = z
     /** Volume automation: level multipliers (on top of `gain`) at clip-local, frame-aligned times; linear between keys, held before the first and after the last. Audio-track clips only. */
     /** Volume keys. `curve: 'smooth'` on a key makes the level ease out of it and into the next key (an S-shaped change) instead of moving in a straight line. */
     volume: z.array(z.object({ time: RationalTimeSchema, value: z.number().min(0).max(4), curve: z.literal('smooth').optional() }).strict()).min(1).max(2000).optional(),
+    /** Sound effects of a clip on an audio track (audioEffects.ts, ADR-0010). Processed in the fixed stage order whatever the list order; at most one per type and one character voice. */
+    audioFx: z.array(AudioFxInstanceSchema).max(MAX_AUDIO_FX).optional(),
     fadeOut: RationalTimeSchema.optional(),
     mask: MaskSchema.optional(),
     transition: TransitionSchema.optional(),

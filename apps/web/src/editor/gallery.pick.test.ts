@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, COLOR_LOOKS, createProject, findClip, OpError, projectVariant, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { isOn, pickCall, pickRefusal, thumbSize } from './gallery.pick.ts';
+import { DEFAULT_TRANSITION_FRAMES, isOn, pickCall, pickRefusal, thumbSize, transitionLength, transitionRoom } from './gallery.pick.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -87,5 +87,70 @@ describe('gallery thumbnails', () => {
     const view = projectVariant(r.doc, r.results[0]!.output!.variantId as string); // what Editor.viewDoc gives while that format is viewed
     expect(thumbSize(r.doc.settings.width, r.doc.settings.height)).toEqual([180, 101]); // the master: what the gallery used before
     expect(thumbSize(view.settings.width, view.settings.height)).toEqual([101, 180]);
+  });
+});
+
+describe('the length of a transition picked in the gallery', () => {
+  /** Two clips of the five-second files a and b back to back on one track: the first shows a from `inA` for `lenA` frames. */
+  function pair(inA: number, lenA: number, lenB = 150) {
+    let r = tx(createProject({ id: 'prj_t', name: 'T', width: 1920, height: 1080, frameRate: R }), [{ op: 'import_asset', args: { asset: video('a') } }, { op: 'import_asset', args: { asset: video('b') } }], true);
+    const [a, b] = r.results.map((x) => x.output!.assetId as string);
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: a, start: f(0), sourceIn: f(inA), duration: f(lenA), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: b, start: f(lenA), duration: f(lenB), withLinkedAudio: false } }]);
+    const [first, second] = r.results.map((x) => x.output!.clipId as string);
+    return { doc: r.doc, first: first!, second: second! };
+  }
+  const accepts = (doc: ProjectDocument, clipId: string, frames: number) => { try { tx(doc, [{ op: 'set_transition', args: { clipId, type: 'dissolve', frames } }]); return true; } catch (e) { if (e instanceof OpError) return false; throw e; } };
+
+  it('two whole clips: nothing fits, so nothing is sent (the op would refuse every length)', () => {
+    const p = pair(0, 150);
+    const room = transitionRoom(p.doc, p.second)!;
+    expect(room).toEqual({ maxFrames: 0, limit: 'previous' });
+    expect(transitionLength(room)).toBe(0);
+    expect(accepts(p.doc, p.second, 1)).toBe(false);
+  });
+
+  it('the previous clip stops 6 frames before the end of its file: the default 15 is cut to 6, which the op accepts, and 7 it refuses', () => {
+    const p = pair(0, 144);
+    const room = transitionRoom(p.doc, p.second)!;
+    expect(room).toEqual({ maxFrames: 6, limit: 'previous' });
+    expect(transitionLength(room)).toBe(6);
+    const call = pickCall(clipOf(p.doc, p.second), { kind: 'transition', id: 'dissolve' }, transitionLength(room))!;
+    expect(call).toEqual({ op: 'set_transition', args: { clipId: p.second, type: 'dissolve', frames: 6 } });
+    const done = tx(p.doc, [call]).doc;
+    expect((clipOf(done, p.second) as Extract<Clip, { type: 'media' }>).transition).toEqual({ type: 'dissolve', frames: 6 });
+    expect(accepts(p.doc, p.second, 7)).toBe(false);
+  });
+
+  it('with enough material the default is kept; a longer current transition keeps its length when it still fits', () => {
+    const p = pair(0, 90); // 60 unused frames after the first clip
+    const room = transitionRoom(p.doc, p.second)!;
+    expect(room).toEqual({ maxFrames: 60, limit: 'previous' });
+    expect(transitionLength(room)).toBe(DEFAULT_TRANSITION_FRAMES);
+    expect(transitionLength(room, 30)).toBe(30);
+    expect(transitionLength(room, 90)).toBe(60);
+    expect(accepts(p.doc, p.second, 60)).toBe(true);
+    expect(accepts(p.doc, p.second, 61)).toBe(false);
+  });
+
+  it('a clip shorter than the default is the limit itself; the first clip (nothing before it) is limited by its own length only', () => {
+    const p = pair(0, 90, 10);
+    expect(transitionRoom(p.doc, p.second)).toEqual({ maxFrames: 10, limit: 'clip' });
+    expect(transitionLength(transitionRoom(p.doc, p.second)!)).toBe(10);
+    expect(accepts(p.doc, p.second, 10)).toBe(true);
+    expect(accepts(p.doc, p.second, 11)).toBe(false);
+    expect(transitionRoom(p.doc, p.first)).toEqual({ maxFrames: 90, limit: 'clip' });
+    const whole = project();
+    expect(transitionRoom(whole.doc, whole.first)).toEqual({ maxFrames: 150, limit: 'max' }); // 150 frames long: as much as the op takes
+    expect(transitionRoom(p.doc, 'no-such-clip')).toBeNull();
+  });
+
+  it('agrees with the op at its edge for many trims', () => {
+    for (const lenA of [30, 75, 120, 140, 149, 150]) for (const inA of [0, 3]) {
+      if (inA + lenA > 150) continue;
+      const p = pair(inA, lenA);
+      const max = transitionRoom(p.doc, p.second)!.maxFrames;
+      if (max >= 1) expect(accepts(p.doc, p.second, max), `${inA}+${lenA}: ${max}`).toBe(true);
+      if (max < 150) expect(accepts(p.doc, p.second, max + 1), `${inA}+${lenA}: ${max + 1}`).toBe(false);
+    }
   });
 });

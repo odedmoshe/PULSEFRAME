@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-17T05:06:28.388Z",
+  "ranAt": "2026-11-17T05:55:49.567Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
-    "cpu": "Intel(R) Xeon(R) Processor",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
@@ -76,11 +76,11 @@
       "detail": {
         "proposed": true,
         "committed": false,
-        "proposalId": "prp_SUAQskxxiMQ",
+        "proposalId": "prp_t7MEw4MKjX8",
         "baseRevision": 10,
         "summary": "Updated text \"פתיחה חלופית\"",
         "changedIds": [
-          "clp_31c8f99e860"
+          "clp_362ee5d2930"
         ],
         "status": "open"
       }
@@ -113,7 +113,7 @@
       "name": "goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied",
       "ok": true,
       "detail": {
-        "entityId": "clp_e0a9e7168d4",
+        "entityId": "clp_673c27a6bf4",
         "reason": "track trk_video is outside the grant"
       }
     },

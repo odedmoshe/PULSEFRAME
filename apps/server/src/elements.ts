@@ -54,23 +54,26 @@ export function sizeSvg(svg: string, id: string, longSide: number): string {
 }
 
 interface Opts { color?: string; color2?: string; longSide?: number }
-function validate(id: string, o: Opts): { svg: string; longSide: number; color: string; color2: string } {
-  if (!ELEMENTS.some((e) => e.id === id)) throw new ApiError(404, 'not_found', `element "${id}" does not exist`, { available: ELEMENT_IDS }, 'Call list_catalog.');
+function validate(id: string, o: Opts): { svg: string; longSide: number; color: string; color2: string; version: number } {
+  const def = ELEMENTS.find((e) => e.id === id);
+  if (!def) throw new ApiError(404, 'not_found', `element "${id}" does not exist`, { available: ELEMENT_IDS }, 'Call list_catalog.');
   const longSide = o.longSide ?? 1024;
   if (!Number.isInteger(longSide) || longSide < 64 || longSide > 2048) throw new ApiError(400, 'invalid_option', 'longSide must be a whole number from 64 to 2048', { longSide });
   const color = o.color ?? '#FFFFFF', color2 = o.color2 ?? '#3DE0C8';
   for (const [k, v] of [['color', color], ['color2', color2]] as const) if (typeof v !== 'string' || !COLOUR.test(v)) throw new ApiError(400, 'invalid_option', `${k} must be a colour like #RRGGBB`, { [k]: v });
-  return { svg: sizeSvg(elementSvg(id, { color, color2 }), id, longSide), longSide, color, color2 };
+  return { svg: sizeSvg(elementSvg(id, { color, color2 }), id, longSide), longSide, color, color2, version: def.version };
 }
 
 /**
  * The PNG bytes of one element in these colours at this size. Drawing goes through the queue shared with the sound effects
  * (sfx.ts): the same picture asked for twice at once is drawn once, and the few most recent pictures are held in memory.
+ * The remembered pictures are keyed by the element's version too (as the sounds are), so a changed recipe is never answered
+ * with pictures drawn by the old one.
  */
 async function render(tmpDir: string, id: string, o: Opts, queue: Synth, lane: SynthLane): Promise<Buffer> {
   const v = validate(id, o);
   if (!(await canRasteriseSvg())) throw new ApiError(501, 'element_rasteriser_missing', 'this ffmpeg cannot read SVG, so graphic elements cannot be turned into pictures', { needs: 'ffmpeg built with librsvg (decoder "librsvg")' }, 'Install an ffmpeg build with --enable-librsvg (for example the full build from your distribution), then restart the server.');
-  return queue.bytes('element', JSON.stringify([id, v.color, v.color2, v.longSide]), async (ffmpeg) => {
+  return queue.bytes('element', JSON.stringify([`${id}@${v.version}`, v.color, v.color2, v.longSide]), async (ffmpeg) => {
     const base = path.join(tmpDir, `el_${randomBytes(6).toString('hex')}`);
     const svgFile = `${base}.svg`, png = `${base}.png`;
     try {
@@ -87,21 +90,17 @@ async function render(tmpDir: string, id: string, o: Opts, queue: Synth, lane: S
   }, lane);
 }
 
-const ceilings = new WeakMap<Store, number>();
 /**
- * The storage ceiling (bytes; 0 = none) that element pictures stored in `store` must respect. The HTTP app sets it once from its
- * configuration; makeElement reads it, so the editor's route and the agent tool are held to the same limit.
+ * Render one element and return it as an image asset (blob stored, not yet attached to a project). The editor's route and the
+ * agent tool both come here, so both are held to the store's storage ceiling.
  */
-export function setElementStorageCeiling(store: Store, maxStorageBytes: number): void { ceilings.set(store, maxStorageBytes); }
-
-/** Render one element and return it as an image asset (blob stored, not yet attached to a project). */
 export async function makeElement(store: Store, id: string, options: Opts, actor: string, queue: Synth = synth): Promise<Omit<Asset, 'id'>> {
   const def = ELEMENTS.find((e) => e.id === id);
   const bytes = await render(store.tmpDir, id, options, queue, 'add'); // what is being added to a project does not wait behind previews (see createSynth)
   const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
   // The colours are the caller's choice, so there is no end to the distinct pictures that can be asked for: a new one needs room
   // under the storage ceiling, like an upload. A picture that is already stored needs none.
-  if (!fs.existsSync(store.blobPath(contentHash))) assertStorageRoom(store, ceilings.get(store) ?? 0, bytes.length, 'store this element');
+  if (!fs.existsSync(store.blobPath(contentHash))) assertStorageRoom(store, bytes.length, 'store this element');
   const png = path.join(store.tmpDir, `el_${randomBytes(6).toString('hex')}.png`);
   try {
     fs.writeFileSync(png, bytes);

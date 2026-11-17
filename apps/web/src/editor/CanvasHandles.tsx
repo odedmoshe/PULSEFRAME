@@ -1,13 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { findClip, type Clip } from '@pulseframe/core';
-import { boxToScreen, clampRotation, clampScale, clampX, layerBox, rotationFromDrag, scaleFromDrag, screenDeltaToFrameFraction, type LayerTransform } from './interactions.math.ts';
+import { boxToScreen, clampRotation, clampScale, clampX, edgeProxies, layerBox, rotationFromDrag, scaleFromDrag, SCALE_ANCHORS, screenDeltaToFrameFraction, type LayerHandle, type LayerTransform, type ScaleHandle } from './interactions.math.ts';
 import { useEditorState } from './store.ts';
 import './interactions.css';
 
-type Handle = 'move' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw' | 'rotate';
-const SCALE_HANDLES: Record<Exclude<Handle, 'move' | 'rotate'>, [number, number]> = { n: [50, 0], ne: [100, 0], e: [100, 50], se: [100, 100], s: [50, 100], sw: [0, 100], w: [0, 50], nw: [0, 0] };
+type Handle = LayerHandle;
 const CENTRE_SNAP_PX = 6;
+/** Half the size of a handle (interactions.css), and the least distance between two grips at the viewer edge. */
+const HANDLE_HALF_PX = 6;
+const GRIP_GAP_PX = 16;
 /** Text has no measurable box outside the canvas: nominal 80% frame width, lines x size x lineHeight tall (approximate). */
 const TEXT_NOMINAL_W = 0.8;
 
@@ -27,31 +29,33 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
   const { canvas } = props;
   const root = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
-  const [rect, setRect] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const [rect, setRect] = useState({ left: 0, top: 0, width: 0, height: 0, viewW: 0, viewH: 0 });
   const [preview, setPreview] = useState<Preview | null>(null);
   const [guide, setGuide] = useState({ v: false, h: false });
+  /** The handle that has the keyboard focus (:focus-visible), so a stand-in can show its ring when the handle itself is clipped. */
+  const [ring, setRing] = useState<Handle | null>(null);
 
-  // Track the canvas' displayed rect relative to the positioned wrapper (root's parent).
+  // Track the canvas' displayed rect relative to the clipping layer (root's parent), which covers the viewer (the canvas wrap)
+  // exactly, and the size of that layer: the viewer, outside which the handles can be neither seen nor clicked.
+  const measure = (parent: HTMLElement) => {
+    const c = canvas!.getBoundingClientRect();
+    const p = parent.getBoundingClientRect();
+    return { left: c.left - p.left + parent.scrollLeft - parent.clientLeft, top: c.top - p.top + parent.scrollTop - parent.clientTop, width: c.width, height: c.height, viewW: parent.clientWidth, viewH: parent.clientHeight };
+  };
   useLayoutEffect(() => {
     const parent = root.current?.parentElement;
     if (!canvas || !parent) return;
-    const c = canvas.getBoundingClientRect();
-    const p = parent.getBoundingClientRect();
-    const next = { left: c.left - p.left + parent.scrollLeft - parent.clientLeft, top: c.top - p.top + parent.scrollTop - parent.clientTop, width: c.width, height: c.height };
-    setRect((r) => (r.left === next.left && r.top === next.top && r.width === next.width && r.height === next.height ? r : next));
+    const next = measure(parent);
+    setRect((r) => (r.left === next.left && r.top === next.top && r.width === next.width && r.height === next.height && r.viewW === next.viewW && r.viewH === next.viewH ? r : next));
   });
   useEffect(() => {
     const parent = root.current?.parentElement;
     if (!canvas || !parent || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      const c = canvas.getBoundingClientRect();
-      const p = parent.getBoundingClientRect();
-      setRect({ left: c.left - p.left + parent.scrollLeft - parent.clientLeft, top: c.top - p.top + parent.scrollTop - parent.clientTop, width: c.width, height: c.height });
-    });
+    const ro = new ResizeObserver(() => setRect(measure(parent)));
     ro.observe(canvas);
     ro.observe(parent);
     return () => ro.disconnect();
-  }, [canvas]);
+  }, [canvas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The viewed format's projected document: its own frame size and fit mode. In a format, the clip is read from it so overrides show.
   const doc = editor.viewDoc;
@@ -66,7 +70,9 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
     </div>
   ) : null;
   const visible = !!doc && !!sel && !!clip && editor.playheadOnSelection && (sel.track.kind === 'video' || sel.track.kind === 'text') && rect.width > 0;
-  const shell = <>{overlay}<div ref={root} className="ch-root" data-testid="canvas-handles" dir="ltr" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, display: visible ? undefined : 'none' }} /></>;
+  // The handles live in a layer that covers the viewer and clips what lies outside it (interactions.css: .ch-clip), so the box
+  // of an enlarged clip never lies over the transport bar, the side panels or the header, nor takes their clicks.
+  const shell = <>{overlay}<div className="ch-clip" data-testid="canvas-handles-clip"><div ref={root} className="ch-root" data-testid="canvas-handles" dir="ltr" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, display: visible ? undefined : 'none' }} /></div></>;
   if (!visible || !doc || !clip) return shell;
 
   const frameW = doc.settings.width;
@@ -159,24 +165,51 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
       void editor.setTransformForView(clip, { scale: clampScale(now.scale + dir * 0.05) }, 'Scale layer');
     }
   };
+  const focusRing = (h: Handle) => (e: { currentTarget: HTMLElement }) => {
+    let shown = true;
+    try { shown = e.currentTarget.matches(':focus-visible'); } catch { /* no :focus-visible: count every focus */ }
+    setRing(shown ? h : null);
+  };
   const common = (h: Handle) => ({
     type: 'button' as const, 'data-handle': h, 'aria-label': label(h), onPointerDown: onDown(h), onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: cancel, onKeyDown: onKey(h),
+    onFocus: focusRing(h), onBlur: () => setRing((r) => (r === h ? null : r)),
   });
+  // Stand-ins at the viewer edge for handles outside it (interactions.math.ts edgeProxies). Placed from the committed transform,
+  // not the drag preview, so the one being dragged stays where the pointer took it. They are pointer grips only (aria-hidden,
+  // not focusable): the handles themselves stay the keyboard controls, and a stand-in shows the ring of a focused one.
+  const still = boxToScreen(layerBox({ frameW, frameH, naturalW: natural.w, naturalH: natural.h, transform: base, fit: natural.fit }), rect.width, frameW);
+  const proxies = rect.viewW > 0 && rect.viewH > 0
+    ? edgeProxies({ box: still, view: { left: -rect.left, top: -rect.top, right: rect.viewW - rect.left, bottom: rect.viewH - rect.top }, margin: HANDLE_HALF_PX, gap: GRIP_GAP_PX, focused: ring })
+    : [];
+  // The stand-in takes no focus itself (no text selection either); the handle it stands for does, without scrolling anything,
+  // so Escape cancels the drag and the arrow keys go on from there, as after a drag on the handle itself.
+  const proxyDown = (h: Handle) => (e: ReactPointerEvent<HTMLElement>) => {
+    if (e.button !== 0 || drag.current) return;
+    e.preventDefault();
+    onDown(h)(e);
+    root.current?.querySelector<HTMLElement>(`[data-handle="${h}"]`)?.focus({ preventScroll: true });
+  };
 
   return (
     <>
     {overlay}
+    <div className="ch-clip" data-testid="canvas-handles-clip">
     <div ref={root} className="ch-root" data-testid="canvas-handles" dir="ltr" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}>
       {guide.v && <div className="ch-guide ch-guide-v" aria-hidden="true" />}
       {guide.h && <div className="ch-guide ch-guide-h" aria-hidden="true" />}
       <div className="ch-box" style={{ left: box.cx, top: box.cy, width: box.w, height: box.h, transform: `translate(-50%, -50%) rotate(${box.rotationDeg}deg)` }}>
         <button {...common('move')} className="ch-move" />
-        {(Object.entries(SCALE_HANDLES) as [Exclude<Handle, 'move' | 'rotate'>, [number, number]][]).map(([h, [px, py]]) => (
-          <button key={h} {...common(h)} className={`ch-handle ch-${h}`} style={{ left: `${px}%`, top: `${py}%` }} />
+        {(Object.entries(SCALE_ANCHORS) as [ScaleHandle, readonly [number, number]][]).map(([h, [u, v]]) => (
+          <button key={h} {...common(h)} className={`ch-handle ch-${h}`} style={{ left: `${u * 100}%`, top: `${v * 100}%` }} />
         ))}
         <span className="ch-stem" aria-hidden="true" />
         <button {...common('rotate')} className="ch-handle ch-rotate" />
       </div>
+      {proxies.map((p) => (
+        <span key={p.id} className={`ch-proxy${p.mirror ? ' ch-mirror' : ''}`} data-testid="canvas-handle-proxy" data-proxy={p.id} aria-hidden="true" title={label(p.id)}
+          style={{ left: p.x, top: p.y }} onPointerDown={proxyDown(p.id)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={cancel} />
+      ))}
+    </div>
     </div>
     </>
   );

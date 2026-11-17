@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { MOTION_PRESETS, motionKeys, previousMotion, type MotionContext, type MotionKey, type MotionPreset, type MotionProperty } from './motionPresets.ts';
-import { applyTransaction, createProject, findClip, transformAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { ANIMATE_CLIP_MOTIONS, animateClipKeys, MOTION_PRESETS, motionKeys, previousMotion, shortestSafeLoopFrames, type AnimateClipMotion, type MotionContext, type MotionKey, type MotionPreset, type MotionProperty } from './motionPresets.ts';
+import { applyTransaction, createProject, diffEntities, findClip, OpError, restoreEntities, transformAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 import * as T from '@pulseframe/time';
 import { sampleKeyframes } from './animation.ts';
 
@@ -472,4 +472,199 @@ describe('apply_motion_preset: a new entrance replaces the previous entrance, a 
       },
     ), { numRuns: 2000 });
   }, 120_000);
+
+  // ---- animate_clip and the library: whichever runs last owns the entrance (or exit) it writes ----
+  const animate = (doc: ProjectDocument, clipId: string, args: Record<string, unknown>) => tx(doc, [{ op: 'animate_clip', args: { clipId, ...args } }]).doc;
+  /** Undo as the store does it: the before-states of every entity the transaction changed. */
+  const undone = (before: ProjectDocument, after: ProjectDocument) => { const back = structuredClone(after); restoreEntities(back, diffEntities(before, after).map((c) => ({ id: c.id, state: c.before }))); return back; };
+
+  it('animate_clip after a library entrance or exit replaces it on every property it used, and keeps the other end; undo restores it', () => {
+    for (const transform of [{}, { x: 0.25, y: -0.1, scale: 1.3, rotation: 12.5, opacity: 0.5 }] as Record<string, number>[]) {
+      const { doc, clipId } = title(120, transform);
+      const exit = motion(doc, clipId, 'motion.out.spin'), entrance = motion(doc, clipId, 'motion.in.spin');
+      for (const [side, set, other] of [['in', ins, exit], ['out', outs, entrance]] as const) {
+        for (const name of ANIMATE_CLIP_MOTIONS) {
+          const args = side === 'in' ? { in: name } : { out: name };
+          const alone = keysOf(animate(doc, clipId, args), clipId), withOther = keysOf(animate(other, clipId, args), clipId);
+          for (const lib of set) {
+            for (const extra of [{}, { frames: 40 }, { amount: 0.5 }] as Record<string, number>[]) {
+              const before = motion(doc, clipId, lib.id, extra);
+              const after = animate(before, clipId, args);
+              expect(keysOf(after, clipId), `${lib.id} then animate_clip ${side}: ${name}`).toEqual(alone);
+              expect(undone(before, after)).toEqual(before);
+              expect(keysOf(animate(motion(other, clipId, lib.id, extra), clipId, args), clipId), `${lib.id} then animate_clip ${side}: ${name}, next to the other end`).toEqual(withOther);
+            }
+          }
+        }
+      }
+    }
+  }, 120_000);
+
+  it('a library entrance or exit after animate_clip replaces it on every property it used, and keeps the other end; undo restores it', () => {
+    const { doc, clipId } = title(120, { x: -0.2, y: 0.15, scale: 0.9, rotation: -8, opacity: 0.9 });
+    for (const [side, set, otherArgs] of [['in', ins, { out: 'pop' }], ['out', outs, { in: 'slide-left' }]] as const) {
+      const other = animate(doc, clipId, otherArgs);
+      for (const lib of set) {
+        const alone = keysOf(motion(doc, clipId, lib.id), clipId), withOther = keysOf(motion(other, clipId, lib.id), clipId);
+        for (const name of ANIMATE_CLIP_MOTIONS) {
+          for (const frames of [undefined, 30]) {
+            const args = side === 'in' ? { in: name, ...(frames ? { inFrames: frames } : {}) } : { out: name, ...(frames ? { outFrames: frames } : {}) };
+            const before = animate(doc, clipId, args);
+            const after = motion(before, clipId, lib.id);
+            expect(keysOf(after, clipId), `animate_clip ${side}: ${name} then ${lib.id}`).toEqual(alone);
+            expect(undone(before, after)).toEqual(before);
+            expect(keysOf(motion(animate(other, clipId, args), clipId, lib.id), clipId), `animate_clip ${side}: ${name} then ${lib.id}, next to the other end`).toEqual(withOther);
+          }
+        }
+      }
+    }
+  });
+
+  it('animate_clip after animate_clip: each side replaces its own side only; a side left out stays', () => {
+    const { doc, clipId } = title(90);
+    for (const a of ANIMATE_CLIP_MOTIONS) {
+      for (const b of ANIMATE_CLIP_MOTIONS) {
+        // both sides at once, twice: the second is all that is left
+        expect(keysOf(animate(animate(doc, clipId, { in: a, out: a }), clipId, { in: b, out: b, inFrames: 20 }), clipId), `${a} then ${b}`).toEqual(keysOf(animate(doc, clipId, { in: b, out: b, inFrames: 20 }), clipId));
+        // a new entrance alone keeps the exit made with the first entrance
+        expect(keysOf(animate(animate(doc, clipId, { in: a, out: a }), clipId, { in: b }), clipId), `in ${a} + out ${a}, then in ${b}`).toEqual(keysOf(animate(animate(doc, clipId, { out: a }), clipId, { in: b }), clipId));
+        expect(keysOf(animate(animate(doc, clipId, { in: a, out: a }), clipId, { out: b }), clipId), `in ${a} + out ${a}, then out ${b}`).toEqual(keysOf(animate(animate(doc, clipId, { in: a }), clipId, { out: b }), clipId));
+      }
+    }
+    // the case of the report: a zoom-in entrance from the library, then a fade entrance from animate_clip: no scale keys of the zoom are left
+    const zoomed = motion(doc, clipId, 'motion.in.zoom-in');
+    const faded = animate(zoomed, clipId, { in: 'fade' });
+    expect(keysOf(faded, clipId)).toEqual({ opacity: [[0, 0, 'ease-out'], [12, 1, 'linear']] });
+    for (let g = 0; g <= 90; g++) expect(at(faded, clipId, g).scale, `frame ${g}`).toBe(1);
+    // and both ends from the library, then both ends from animate_clip
+    const both = motion(motion(doc, clipId, 'motion.in.elastic'), clipId, 'motion.out.spin');
+    expect(keysOf(animate(both, clipId, { in: 'pop', out: 'slide-down' }), clipId)).toEqual(keysOf(animate(doc, clipId, { in: 'pop', out: 'slide-down' }), clipId));
+  });
+
+  it('animate_clip writes what it always wrote on a clip without animation: the entrance and exit shapes, at the frames asked for', () => {
+    const { doc, clipId } = title(60, { y: 0.2 });
+    expect(keysOf(animate(doc, clipId, { in: 'pop', out: 'slide-down', inFrames: 10, outFrames: 10 }), clipId)).toEqual({
+      y: [[50, 0.2, 'ease-in'], [60, 0.2 - 0.08, 'linear']],
+      scale: [[0, 0.6, 'ease-out'], [10, 1, 'linear']],
+      opacity: [[0, 0, 'ease-out'], [10, 1, 'linear'], [50, 1, 'ease-in'], [60, 0, 'linear']],
+    });
+    // entrance and exit that meet: the key between them eases into the exit
+    expect(keysOf(animate(doc, clipId, { in: 'fade', out: 'fade', inFrames: 30, outFrames: 30 }), clipId)).toEqual({ opacity: [[0, 0, 'ease-out'], [30, 1, 'ease-in'], [60, 0, 'linear']] });
+    // longer together than the clip, or nothing chosen: refused as before
+    expect(() => animate(doc, clipId, { in: 'fade', out: 'fade', inFrames: 40, outFrames: 40 })).toThrow();
+    expect(() => animate(doc, clipId, { in: 'none' })).toThrow();
+    // the shapes are the ones previousMotion recognises
+    for (const kind of ['in', 'out'] as const) for (const name of ANIMATE_CLIP_MOTIONS) {
+      const keys = animateClipKeys(kind, name, { totalFrames: 60, rest: RESTS[3]!, frames: 12 });
+      expect(previousMotion(kind, keys, 60, RESTS[3]!), `${kind} ${name}`).toEqual(Object.fromEntries(Object.entries(keys).map(([p, k]) => [p, k.length])));
+    }
+  });
+
+  it('property: entrances and exits from either operation, in any order, over moves, loops and hand keys: the last one owns its end of the clip, and undo restores the clip exactly', () => {
+    type Entry = { id: string; kind: 'in' | 'out'; properties: readonly MotionProperty[]; defaultFrames: number; anim?: AnimateClipMotion };
+    const anim = (kind: 'in' | 'out'): Entry[] => ANIMATE_CLIP_MOTIONS.map((name) => ({ id: `animate_clip.${kind}.${name}`, kind, anim: name, defaultFrames: 12, properties: PROPS.filter((p) => p in animateClipKeys(kind, name, { totalFrames: 100, rest: RESTS[0]! })) }));
+    const lib = (kind: 'in' | 'out'): Entry[] => MOTION_PRESETS.filter((p) => p.kind === kind).map((p) => ({ id: p.id, kind, properties: p.properties, defaultFrames: p.defaultFrames }));
+    const pools = { in: [...anim('in'), ...lib('in')], out: [...anim('out'), ...lib('out')] };
+    const under = MOTION_PRESETS.filter((p) => p.kind === 'move' || p.kind === 'loop');
+    const len = fc.constantFrom(undefined, 5, 10, 40);
+    fc.assert(fc.property(
+      fc.constantFrom('in' as const, 'out' as const), fc.constantFrom(24, 30, 36, 48, 60, 120, 240),
+      fc.option(fc.constantFrom(...under.map((p) => p.id)), { nil: undefined }), fc.constantFrom('none' as const, 'before' as const, 'after' as const),
+      fc.nat(), len, fc.nat(), len, fc.nat(), len,
+      fc.option(fc.tuple(fc.constantFrom(...PROPS), fc.double({ min: 0.1, max: 0.9, noNaN: true })), { nil: undefined }), fc.constantFrom(1, 0.5),
+      (kind, total, base, otherWhen, ai, aLen, bi, bLen, xi, xLen, hand, amount) => {
+        const mine = pools[kind], others = pools[kind === 'in' ? 'out' : 'in'];
+        const A = mine[ai % mine.length]!, B = mine[bi % mine.length]!, X = others[xi % others.length]!;
+        const span = (p: Entry, n: number | undefined) => Math.min(total, n ?? p.defaultFrames);
+        const nA = span(A, aLen), nB = span(B, bLen), nX = span(X, xLen);
+        const frame = (u: number) => (kind === 'in' ? u : total - u);
+        const { doc, clipId } = title(total, { x: 0.1, y: -0.05, scale: 1.2, rotation: 5, opacity: 0.8 });
+        const put = (d: ProjectDocument, e: Entry, n: number | undefined) => e.anim
+          ? animate(d, clipId, e.kind === 'in' ? { in: e.anim, inFrames: span(e, n) } : { out: e.anim, outFrames: span(e, n) })
+          : motion(d, clipId, e.id, { ...(n ? { frames: n } : {}), amount });
+        let d = base ? motion(doc, clipId, base) : doc;
+        if (otherWhen === 'before') d = put(d, X, xLen);
+        d = put(d, A, aLen);
+        if (otherWhen === 'after') d = put(d, X, xLen);
+        const reach = otherWhen === 'none' ? total : total - nX;
+        const handAt = hand ? nA + 1 + Math.floor(hand[1] * (total - nA - 1)) : -1;
+        if (hand && handAt > nA && handAt < reach) d = key(d, clipId, hand[0], frame(handAt), hand[0] === 'opacity' ? 0.5 : hand[0] === 'scale' ? 1.7 : hand[0] === 'rotation' ? 40 : 0.3);
+        const before = d;
+        const after = put(before, B, bLen);
+        expect(validateProject(after)).toEqual([]);
+        expect(undone(before, after)).toEqual(before);
+        const label = `${total} frames: ${base ?? '-'}, ${X.id} ${otherWhen} (${nX}), ${A.id} (${nA}) -> ${B.id} (${nB})${hand && handAt > nA && handAt < reach ? `, hand ${hand[0]} at ${handAt}` : ''}`;
+        for (const p of PROPS) {
+          const bUses = B.properties.includes(p), aUsed = A.properties.includes(p), xUses = otherWhen !== 'none' && X.properties.includes(p);
+          // (1) further in than the old motion nothing changes, and nowhere at all on a property neither motion uses
+          const from = !bUses ? (aUsed ? nA : 0) : aUsed && nB <= nA && !(xUses && nB > reach) ? nA : total + 1;
+          for (let u = from; u <= total; u++) if (!near(at(after, clipId, frame(u))[p], at(before, clipId, frame(u))[p])) throw new Error(`${label}: ${p} changed at frame ${frame(u)}: ${at(before, clipId, frame(u))[p]} -> ${at(after, clipId, frame(u))[p]}`);
+          // (2) where the old motion was and the new one is not, the property rests: nothing of the old motion is left
+          if (!aUsed) continue;
+          const cutShort = otherWhen === 'after' && xUses && reach < nA;
+          const end = cutShort ? reach : nA, rest = at(before, clipId, frame(end))[p];
+          for (let u = bUses ? nB : 0; u <= end; u++) if (!near(at(after, clipId, frame(u))[p], rest)) throw new Error(`${label}: ${p} at frame ${frame(u)} is ${at(after, clipId, frame(u))[p]}, not at rest (${rest}): the old ${kind === 'in' ? 'entrance' : 'exit'} is still there`);
+        }
+      },
+    ), { numRuns: 1500 });
+  }, 180_000);
+});
+
+describe('motion presets at any frame rate, and opacity loops within the flash limit', () => {
+  let n = 0;
+  const tx = (doc: ProjectDocument, ops: OpCall[]) => applyTransaction(doc, ops, { idSeed: `fr${n++}_`, actor: 'test' });
+  const titled = (num: number, den = 1, seconds = 12) => {
+    const rate = { num, den };
+    const r = tx(createProject({ id: 'prj_fr', name: 'FR', frameRate: rate }), [{ op: 'add_text', args: { text: 'X', start: T.frameTime(0, rate), duration: T.frameTime(Math.round((seconds * num) / den), rate) } }]);
+    return { doc: r.doc, clipId: r.results[0]!.output!.clipId as string, rate };
+  };
+  /** Opacity on every frame of the clip, through the keys the op wrote. */
+  const opacities = (doc: ProjectDocument, clipId: string) => {
+    const { clip } = findClip(doc, clipId)!;
+    const rate = doc.settings.frameRate, total = T.frameIndexAt(clip.duration, rate);
+    return Array.from({ length: total }, (_, k) => transformAt(clip, T.frameTime(k, rate)).opacity);
+  };
+  /** Dips (local minima at least 0.05 below the highest since the last dip, with hysteresis) and the most of them in one second. */
+  const mostDipsInASecond = (o: number[], fps: number) => {
+    const at: number[] = [];
+    let high = o[0]!, low = Infinity, falling = false;
+    o.forEach((v, k) => {
+      if (!falling && v < high - 0.05) { falling = true; low = v; }
+      if (falling) { if (v < low) low = v; if (v > low + 0.05) { at.push(k); falling = false; high = v; } }
+      else high = Math.max(high, v);
+    });
+    let most = 0; for (let i = 0, j = 0; i < at.length; i++) { while (at[i]! - at[j]! >= fps) j++; most = Math.max(most, i - j + 1); }
+    return most;
+  };
+
+  it('a default entrance lasts the same time at 24, 30 and 60 frames a second (it used to be twice as fast at 60)', () => {
+    for (const [num, den] of [[24, 1], [30, 1], [60, 1], [30000, 1001]] as const) {
+      const { doc, clipId, rate } = titled(num, den);
+      const d = tx(doc, [{ op: 'apply_motion_preset', args: { clipId, presetId: 'motion.in.fade' } }]).doc;
+      const keys = findClip(d, clipId)!.clip.keyframes!.opacity!;
+      const seconds = T.toSeconds(keys[keys.length - 1]!.time);
+      expect(seconds, `${num}/${den}`).toBeCloseTo(0.5, 1); // 15 frames at 30 frames a second
+    }
+  });
+
+  it('flicker and opacity pulse: no period the op accepts dims more than three times a second, at any frame rate; a faster one is refused with the shortest period offered', () => {
+    for (const presetId of ['motion.loop.flicker', 'motion.loop.fade-pulse'] as const) {
+      for (const fps of [12, 24, 25, 30, 50, 60, 120]) {
+        const { doc, clipId } = titled(fps);
+        const safe = shortestSafeLoopFrames(presetId, fps)!;
+        expect(safe).toBeGreaterThan(0);
+        let refused: unknown;
+        try { tx(doc, [{ op: 'apply_motion_preset', args: { clipId, presetId, frames: safe - 1 } }]); } catch (e) { refused = e; }
+        expect(refused, `${presetId} ${fps} fps ${safe - 1} frames`).toBeInstanceOf(OpError);
+        expect((refused as OpError).details).toMatchObject({ shortest: safe });
+        for (const frames of [safe, safe + 1, safe + 7, undefined]) {
+          for (const amount of [0.5, 1, 2]) {
+            const d = tx(doc, [{ op: 'apply_motion_preset', args: { clipId, presetId, amount, ...(frames ? { frames } : {}) } }]).doc;
+            expect(mostDipsInASecond(opacities(d, clipId), fps), `${presetId} ${fps} fps, ${frames ?? 'default'} frames, amount ${amount}`).toBeLessThanOrEqual(3);
+          }
+        }
+      }
+    }
+    expect(shortestSafeLoopFrames('motion.loop.pulse', 30)).toBeNull(); // scale only: no flash
+  });
 });
