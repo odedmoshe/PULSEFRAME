@@ -156,3 +156,18 @@ canvas[data-testid='preview'] { border-radius: 10px; box-shadow: 0 0 0 1px var(-
 }
 .flash-result-body ul { margin: 6px 0; padding-inline-start: 18px; }
 .flash-result-body li { margin: 4px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* ---- transition options (ADR-0012): beat lock, velocity ramp, colour and variation, light status ---- */
+.transition-options { border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); padding: 6px 8px; margin: 0; display: grid; gap: 6px; min-inline-size: 0; }
+.transition-options legend { font-size: var(--pf-fs-sm); color: var(--pf-text-muted); padding: 0 4px; }
+.transition-options .muted { margin: 0; font-size: var(--pf-fs-sm); }
+/* the live regions stay in the page when empty (so what they say later is announced), taking no height */
+.transition-options [role='status']:empty { margin-block: -3px; }
+.transition-options select { inline-size: 100%; }
+.transition-color, .transition-seed { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
+.transition-color > label, .transition-seed > label { flex: 1; min-inline-size: 0; }
+/* colours and numbers read left to right in a Hebrew panel too */
+.transition-options .transition-hex, .transition-seed input[type='number'] { direction: ltr; text-align: left; font-family: var(--pf-mono); }
+.transition-options .transition-hex { inline-size: 10ch; }
+.transition-options .transition-hex[aria-invalid='true'] { border-color: var(--pf-danger); }
+.look-panel [data-testid='transition-refusal'] { margin: 0; font-size: var(--pf-fs-sm); }

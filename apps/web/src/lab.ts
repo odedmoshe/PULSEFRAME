@@ -5,7 +5,7 @@
 import './lab.css';
 import './strictPage.ts';
 import * as T from '@pulseframe/time';
-import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type TransitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate, gpuStatus, initGpu, type FrameImage } from '@pulseframe/engine';
 import { ensureFonts } from './fonts.ts';
 
@@ -152,9 +152,12 @@ for (const [variant, m] of maskVariants) {
 }
 const TFRAMES = 15;
 const OFFSETS = [1, 4, 7, 10, 13];
-/** Transitions whose picture depends on the frame's shape (a whip pan moves a strip of the frame, a spin zooms about its centre) are drawn in both shapes. */
-const BOTH_SHAPES = new Set(['whip', 'spin']);
-for (const tr of TRANSITIONS) for (const aspect of BOTH_SHAPES.has(tr.kernel) ? (['16:9', '9:16'] as const) : (['16:9'] as const)) {
+/**
+ * Transitions whose picture depends on the frame's shape (a whip pan moves a strip of the frame, a spin zooms about its centre,
+ * a heart or star must cover all four corners, a page turns about its edge) are drawn in both shapes: the registry says which
+ * (TransitionDef.shapeDependent, ADR-0012).
+ */
+for (const tr of TRANSITIONS as readonly TransitionDef[]) for (const aspect of tr.shapeDependent ? (['16:9', '9:16'] as const) : (['16:9'] as const)) {
   OFFSETS.forEach((off, i) => tiles.push({
     kind: 'transition', id: tr.id, variant: `step ${i + 1}/5 (frame +${off} of ${TFRAMES})`, aspect, params: { frames: TFRAMES }, strip: true,
     build: (s) => {

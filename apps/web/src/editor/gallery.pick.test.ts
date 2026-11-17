@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, COLOR_LOOKS, createProject, findClip, OpError, projectVariant, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, COLOR_LOOKS, createProject, findClip, OpError, projectVariant, TRANSITIONS, velocityNeeds, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { DEFAULT_TRANSITION_FRAMES, isOn, pickCall, pickRefusal, thumbSize, transitionLength, transitionRoom } from './gallery.pick.ts';
 
 const R = { num: 30, den: 1 };
@@ -153,4 +153,69 @@ describe('the length of a transition picked in the gallery', () => {
       if (max < 150) expect(accepts(p.doc, p.second, max + 1), `${inA}+${lenA}: ${max + 1}`).toBe(false);
     }
   });
+
+  // ADR-0012: set_transition keeps the velocity ramp and the beat lock on a new type, so the room counts what they need
+  /** A (source inA…inA+lenA) then B (source inB…) with a dissolve of n frames at B and the given options. */
+  function withOptions(inA: number, lenA: number, inB: number, n: number, options: Record<string, unknown>) {
+    let r = tx(createProject({ id: 'prj_v', name: 'V', width: 1920, height: 1080, frameRate: R }), [{ op: 'import_asset', args: { asset: video('a') } }, { op: 'import_asset', args: { asset: video('b') } }], true);
+    const [a, b] = r.results.map((x) => x.output!.assetId as string);
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: a, start: f(0), sourceIn: f(inA), duration: f(lenA), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: b, start: f(lenA), sourceIn: f(inB), duration: f(60), withLinkedAudio: false } }]);
+    const [first, second] = r.results.map((x) => x.output!.clipId as string);
+    r = tx(r.doc, [{ op: 'set_transition', args: { clipId: second, type: 'dissolve', frames: n } }, { op: 'set_transition_options', args: { clipId: second, ...options } }]);
+    return { doc: r.doc, first: first!, second: second! };
+  }
+  const picks = (doc: ProjectDocument, clipId: string, type: string, frames: number) => { try { tx(doc, [pickCall(clipOf(doc, clipId), { kind: 'transition', id: type }, frames)!]); return true; } catch (e) { if (e instanceof OpError) return false; throw e; } };
+
+  it('a kept velocity ramp: a later slip of the previous clip leaves 18 frames after it, so ×2 fits 12 frames (12 + 5 ≤ 18), not the 15 the plain rule offered', () => {
+    const p = withOptions(0, 120, 10, 15, { velocity: 2 }); // 30 frames after A, 10 before B: ×2 at 15 needs 22 and 7
+    expect(transitionRoom(p.doc, p.second)).toEqual({ maxFrames: 20, limit: 'previous', velocity: 2 }); // 20 + 9 ≤ 30 < 21 + 10
+    const slipped = tx(p.doc, [{ op: 'slip_clip', args: { clipId: p.first, by: f(12) } }]).doc; // accepted: handles are a preflight warning, not a refusal
+    const room = transitionRoom(slipped, p.second)!;
+    expect(room).toEqual({ maxFrames: 12, limit: 'previous', velocity: 2 });
+    expect(velocityNeeds(12, 2).outFrames).toBe(17);
+    expect(velocityNeeds(13, 2).outFrames).toBe(19);
+    // what the gallery asked for before: the current 15 frames, which the op refuses with the ramp kept
+    expect(picks(slipped, p.second, 'slices-h', 15)).toBe(false);
+    // now: 12, accepted, and the velocity is still there on the new type
+    const n = transitionLength(room, 15);
+    expect(n).toBe(12);
+    const done = tx(slipped, [pickCall(clipOf(slipped, p.second), { kind: 'transition', id: 'slices-h' }, n)!]).doc;
+    expect((clipOf(done, p.second) as Extract<Clip, { type: 'media' }>).transition).toEqual({ type: 'slices-h', frames: 12, velocity: 2 });
+    expect(picks(slipped, p.second, 'slices-h', 13)).toBe(false);
+  });
+
+  it('a kept velocity ramp: a slip of this clip that leaves 4 frames before it limits ×2 to 10 frames (head ⌊9/2⌋ = 4), limit "start"', () => {
+    const p = withOptions(0, 120, 10, 15, { velocity: 2 });
+    const slipped = tx(p.doc, [{ op: 'slip_clip', args: { clipId: p.second, by: f(-6) } }]).doc;
+    const room = transitionRoom(slipped, p.second)!;
+    expect(room).toEqual({ maxFrames: 10, limit: 'start', velocity: 2 });
+    expect(picks(slipped, p.second, 'push-left', 15)).toBe(false);
+    expect(picks(slipped, p.second, 'push-left', transitionLength(room, 15))).toBe(true);
+    expect(picks(slipped, p.second, 'push-left', 11)).toBe(false);
+  });
+
+  it('a kept beat lock: nothing shorter than 3 frames is asked for (the op refuses it)', () => {
+    const p = withOptions(0, 120, 10, 15, { sync: 'beat' });
+    expect(transitionRoom(p.doc, p.second)).toEqual({ maxFrames: 30, limit: 'previous', minFrames: 3 });
+    const slipped = tx(p.doc, [{ op: 'slip_clip', args: { clipId: p.first, by: f(28) } }]).doc; // 2 frames left after A
+    const room = transitionRoom(slipped, p.second)!;
+    expect(room).toEqual({ maxFrames: 2, limit: 'previous', minFrames: 3 });
+    expect(transitionLength(room, 15)).toBe(0);
+    expect(picks(slipped, p.second, 'dissolve', 2)).toBe(false);
+  });
+
+  it('with options kept, agrees with the op at its edge for many slips', () => {
+    for (const options of [{ velocity: 2 }, { velocity: 3 }, { velocity: 4 }, { velocity: 4, sync: 'beat' }] as Record<string, unknown>[]) {
+      const p = withOptions(0, 100, 40, 15, options); // 50 frames after A and 40 before B: ×4 at 15 needs 36 and 21
+      for (const byA of [0, 10, 20, 30, 40, 46, 48]) for (const byB of [0, -10, -20, -30, -36, -38]) {
+        let d: ProjectDocument;
+        try { d = tx(tx(p.doc, [{ op: 'slip_clip', args: { clipId: p.first, by: f(byA) } }]).doc, [{ op: 'slip_clip', args: { clipId: p.second, by: f(byB) } }]).doc; } catch (e) { if (e instanceof OpError) continue; throw e; }
+        const room = transitionRoom(d, p.second)!, n = transitionLength(room, 150), at = `${JSON.stringify(options)} A+${byA} B${byB}: ${JSON.stringify(room)}`;
+        if (n >= 1) expect(picks(d, p.second, 'wipe-left', n), at).toBe(true);
+        if (room.maxFrames >= 1 && room.maxFrames < 60) expect(picks(d, p.second, 'wipe-left', room.maxFrames + 1), at).toBe(false);
+        if (n === 0 && room.maxFrames >= 1) expect(picks(d, p.second, 'wipe-left', room.maxFrames), at).toBe(false);
+      }
+    }
+  });
 });
+
