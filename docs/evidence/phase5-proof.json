@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T05:55:49.567Z",
+  "ranAt": "2026-11-17T09:31:05.617Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -23,7 +23,7 @@
       "name": "discovery: editing, senses, proposals, jobs and control tools are all listed from one registry",
       "ok": true,
       "detail": {
-        "tools": 120
+        "tools": 126
       }
     },
     {
@@ -76,11 +76,11 @@
       "detail": {
         "proposed": true,
         "committed": false,
-        "proposalId": "prp_t7MEw4MKjX8",
+        "proposalId": "prp_ekj5aP8LFUg",
         "baseRevision": 10,
         "summary": "Updated text \"פתיחה חלופית\"",
         "changedIds": [
-          "clp_362ee5d2930"
+          "clp_daf2a66e130"
         ],
         "status": "open"
       }
@@ -113,7 +113,7 @@
       "name": "goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied",
       "ok": true,
       "detail": {
-        "entityId": "clp_673c27a6bf4",
+        "entityId": "clp_32f3ae4b054",
         "reason": "track trk_video is outside the grant"
       }
     },

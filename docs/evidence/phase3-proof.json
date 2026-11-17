@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-17T09:15:35.779Z",
-  "result": "PASSED",
+  "ranAt": "2026-11-17T09:29:00.770Z",
+  "result": "FAILED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 0.992037,
-        "editor-en": 0.985811,
-        "palette-en": 0.989383
+        "editor-he": "baseline written",
+        "editor-en": "baseline written",
+        "palette-en": "baseline written"
       }
     },
     {
@@ -610,9 +610,9 @@
         "differentSourceFrames": 30,
         "firstFrames": [
           {
-            "frame": 3,
+            "frame": 1,
             "quality": "draft",
-            "code": 3
+            "code": 1
           },
           {
             "frame": 8,
@@ -625,14 +625,14 @@
             "code": 9
           },
           {
-            "frame": 10,
+            "frame": 15,
             "quality": "draft",
-            "code": 10
+            "code": 15
           },
           {
-            "frame": 18,
+            "frame": 19,
             "quality": "draft",
-            "code": 18
+            "code": 19
           },
           {
             "frame": 22,
@@ -765,9 +765,11 @@
     },
     {
       "name": "no uncaught errors in the editor page (404s for derived files of library files this proof had just removed are left out)",
-      "ok": true,
+      "ok": false,
       "detail": {
-        "unexpected": [],
+        "unexpected": [
+          "Error: VideoSample is closed.\n    at e.draw (http://127.0.0.1:8794/assets/media-D2b4EB2_.js:2:81719)\n    at Object.draw (http://127.0.0.1:8794/assets/media-D2b4EB2_.js:4:1068)\n    at http://127.0.0.1:8794/assets/src-CnTGdIZq.js:470:5301\n    at px (http://127.0.0.1:8794/assets/src-CnTGdIZq.js:469:63762)\n    at bx (http://127.0.0.1:8794/assets/src-CnTGdIZq.js:470:5286)\n    at Cx (http://127.0.0.1:8794/assets/src-CnTGdIZq.js:470:7217)\n    at async e.pump (http://127.0.0.1:8794/assets/index-zTNXlw7A.js:9:146275) [/assets/index-zTNXlw7A.js]"
+        ],
         "leftOut": 0
       }
     }

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T09:19:32.508Z",
+  "ranAt": "2026-11-17T09:48:40.943Z",
   "result": "PASSED",
   "passed": 26,
   "total": 26,
@@ -13,7 +13,7 @@
   },
   "scope": "Time effects (echo, time split, shutter, stutter) on synthetic fixtures: a 640x360 frame-barcode video, a 320x180 flat-grey lossless video, a white bar and a coloured still image, a generated click track; server stills and exports, one browser export, the paused editor preview. Correctness, agreement, decoder budget and flash safety at defaults; one cost sample. Not covered: real footage, playback frame rate in the editor, a hardware graphics adapter, the owner's laptop.",
   "measurements": {
-    "stillMs": 331,
+    "stillMs": 328,
     "greyDecoded": {
       "frames": 29,
       "differentFromEncodedLevel": 3,
@@ -26,7 +26,7 @@
           "sampleRate": 22050,
           "hop": 256
         },
-        "createdAt": "2026-11-17T09:18:40.233Z",
+        "createdAt": "2026-11-17T09:47:49.177Z",
         "createdBy": "agent:local",
         "edited": false,
         "bpm": 132.51,
@@ -81,7 +81,7 @@
       "opened": 10,
       "disposed": 0,
       "refused": 0,
-      "wallMs": 4390,
+      "wallMs": 3992,
       "frames": 120
     },
     "previewVsStill": {
@@ -124,12 +124,12 @@
       "size": "1080x1920",
       "frames": 30,
       "drawMsPerFrame": {
-        "noEffect": 6.7,
-        "echo5": 168.4
+        "noEffect": 7.2,
+        "echo5": 183.1
       },
       "wallSeconds": {
-        "noEffect": 2.988,
-        "echo5": 8.235
+        "noEffect": 3.225,
+        "echo5": 8.814
       },
       "note": "server export, software canvas, one run on this machine; not a target"
     }
@@ -435,9 +435,9 @@
         ],
         "frames": 120,
         "renderStageMs": {
-          "draw": 4358,
-          "readback": 131,
-          "upload": 945
+          "draw": 4122,
+          "readback": 127,
+          "upload": 826
         }
       }
     },
@@ -450,7 +450,7 @@
         "opened": 10,
         "disposed": 0,
         "refused": 0,
-        "wallMs": 4390,
+        "wallMs": 3992,
         "frames": 120
       }
     },
@@ -474,9 +474,9 @@
             "toFrame": 40,
             "peak": 15,
             "clipIds": [
-              "clp_9787db9a2e0",
-              "clp_fdcbb037121",
-              "clp_6e644a806b1"
+              "clp_fbc58c60110",
+              "clp_ba9339f6271",
+              "clp_86eaa449371"
             ]
           }
         ]
@@ -491,9 +491,9 @@
           "severity": "warning",
           "message": "on frames 24–39, more video pictures must be decoded at once than the 12 the renderer can open (up to 15); those frames would be refused. Time effects such as echo and time split decode each earlier picture separately (a picture shown more than once in a frame is decoded once). Lower the count of a time effect, remove one, or move the overlapping clips apart",
           "ids": [
-            "clp_9787db9a2e0",
-            "clp_fdcbb037121",
-            "clp_6e644a806b1"
+            "clp_fbc58c60110",
+            "clp_ba9339f6271",
+            "clp_86eaa449371"
           ],
           "range": {
             "startFrame": 24,
@@ -573,12 +573,12 @@
         "size": "1080x1920",
         "frames": 30,
         "drawMsPerFrame": {
-          "noEffect": 6.7,
-          "echo5": 168.4
+          "noEffect": 7.2,
+          "echo5": 183.1
         },
         "wallSeconds": {
-          "noEffect": 2.988,
-          "echo5": 8.235
+          "noEffect": 3.225,
+          "echo5": 8.814
         },
         "note": "server export, software canvas, one run on this machine; not a target"
       }

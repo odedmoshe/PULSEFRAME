@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T09:05:50.784Z",
+  "ranAt": "2026-11-17T09:38:52.940Z",
   "result": "PASSED",
   "passed": 90,
   "total": 90,
@@ -66,7 +66,7 @@
       "meanChange": 77.563
     },
     "lutPreviewRecovery": {
-      "seconds": 1.1,
+      "seconds": 1.3,
       "meanDifferenceFromStill": 0
     },
     "lutPreviewVsStill": {
@@ -823,8 +823,8 @@
         "shuttle": "▶▶ ×8",
         "samples": 173,
         "flashesOnScreen": 4,
-        "mostInOneSecond": 2,
-        "framesHeldBack": 10
+        "mostInOneSecond": 3,
+        "framesHeldBack": 12
       }
     },
     {
@@ -1054,7 +1054,7 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_da72ce03f70 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_c159dd319f0 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
       }
@@ -1063,7 +1063,7 @@
       "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
       "ok": true,
       "detail": {
-        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_da72ce03f70 could not be loaded: Missing LUT_3D_SIZE",
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_c159dd319f0 could not be loaded: Missing LUT_3D_SIZE",
         "previewVsPlain": 0
       }
     },
@@ -1071,7 +1071,7 @@
       "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
       "ok": true,
       "detail": {
-        "seconds": 1.1,
+        "seconds": 1.3,
         "meanDifferenceFromStill": 0,
         "errors": []
       }
@@ -1088,10 +1088,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_da72ce03f70",
+        "value": "ast_c159dd319f0",
         "options": [
           "",
-          "ast_da72ce03f70"
+          "ast_c159dd319f0"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -1104,7 +1104,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_afded91b530",
+        "selected": "ast_e9ddb0b5250",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47
