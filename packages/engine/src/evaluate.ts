@@ -65,6 +65,15 @@ export interface VideoLayer extends LayerLook {
 /** A still picture. Same placement rules as video; one decoded image for the whole clip. */
 export interface ImageLayer extends LayerLook { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform }
 export interface TextLayer extends LayerLook { kind: 'text'; clipId: string; trackId: string; text: string; style: TextStyle; transform: Transform; /** Letter/word/line animation with where this frame is in the clip (seconds from its start, and the clip's length). */ animation?: TextAnimation & { local: number; total: number; fps: number } }
+/**
+ * Adjustment clip active at this time (ADR-0016). It never asks the FrameProvider for a picture: drawGraph copies the frame
+ * so far into scratch slot ADJUST_PASS_SLOT, runs `effects` with a whole-frame box, applies `mask` (frame space) and
+ * composites back with `opacity` and `blend`. Not yet a member of `Layer`: the templates track (W2) adds it there together
+ * with the evaluator branch and the drawGraph pass.
+ */
+export interface AdjustLayer extends Pick<LayerLook, 'effects' | 'blend' | 'mask' | 'local'> { kind: 'adjust'; clipId: string; trackId: string; opacity: number }
+/** Scratch canvas slot (look.ts `scratch`) reserved for the adjustment pass (wave-3 allocation: 14 = templates track). */
+export const ADJUST_PASS_SLOT = 14;
 export type Layer = VideoLayer | ImageLayer | TextLayer | CaptionLayer;
 export type PictureLayer = VideoLayer | ImageLayer;
 export interface ActiveAudio { clipId: string; trackId: string; assetId: string; sourceTime: T.RationalTime; gain: number }
