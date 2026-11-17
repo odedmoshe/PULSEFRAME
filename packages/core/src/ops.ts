@@ -1548,7 +1548,7 @@ defineOp({
     if (f.track.kind === 'audio') throw new OpError('incompatible', 'format overrides apply to picture, title and caption clips', { clipId: a.clipId });
     // a caption cue can be reworded or hidden per format; where and how captions are drawn is the caption style (update_variant.captionStyle)
     if (f.clip.type === 'caption' && (a.transform != null || a.textStyle != null)) throw new OpError('incompatible', 'a caption cue can only be reworded or hidden per format; position and style come from the caption style of the format', { clipId: a.clipId }, 'Use update_variant with captionStyle.');
-    const cur = own(v.overrides, a.clipId) ?? {};
+    const cur = own(v.overrides, f.clip.id) ?? {};
     const next = { ...cur };
     if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
     if (a.hidden !== undefined) { if (a.hidden) next.hidden = true; else delete next.hidden; }
@@ -1557,8 +1557,8 @@ defineOp({
     if (a.textStyle === null) delete next.textStyle; else if (a.textStyle) next.textStyle = { ...cur.textStyle, ...a.textStyle };
     if (next.textStyle && Object.keys(next.textStyle).length === 0) delete next.textStyle;
     if (next.transform && Object.keys(next.transform).length === 0) delete next.transform;
-    if (Object.keys(next).length === 0) delete v.overrides[a.clipId]; else v.overrides[a.clipId] = next;
-    const kept = own(v.overrides, a.clipId);
+    if (Object.keys(next).length === 0) delete v.overrides[f.clip.id]; else v.overrides[f.clip.id] = next;
+    const kept = own(v.overrides, f.clip.id);
     return { affectedIds: [v.id], summary: `Format ${v.name}: ${kept ? 'override set on' : 'override cleared from'} clip`, output: { override: kept ?? null } };
   },
 });
@@ -2201,8 +2201,8 @@ defineOp({
   description: 'Set the transcript of a media asset from typed or imported text, timed in the SOURCE media\'s own time. This records human/imported text only; speech-recognition results arrive through provider jobs, never through this operation.',
   args: z.object({ assetId: z.string(), language: z.string().min(2).max(35), origin: z.enum(['import', 'manual']).optional(), segments: z.array(SegmentIn).min(1).max(20000) }).strict(),
   apply(d, a, ctx) {
-    d.transcripts[a.assetId] = buildTranscript(d, ctx, a.assetId, a.language, a.origin ?? 'manual', a.segments);
-    const t = d.transcripts[a.assetId]!;
+    const t = buildTranscript(d, ctx, a.assetId, a.language, a.origin ?? 'manual', a.segments); // refuses an asset the library does not hold
+    d.transcripts[a.assetId] = t;
     return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Set transcript (${t.segments.length} phrases, ${a.language})`, output: { segmentIds: t.segments.map((s) => s.id), wordIds: t.segments.map((s) => s.words.map((w) => w.id)) } };
   },
 });
@@ -2214,8 +2214,8 @@ defineOp({
   description: 'Attach a speech-recognition result produced by a local speech job from the source file. Words carry the times and confidence the recogniser reported.',
   args: z.object({ assetId: z.string(), language: z.string().min(2).max(35), provider: z.string().min(1).max(80), model: z.string().min(1).max(200), createdAt: z.string(), segments: z.array(SegmentIn).min(1).max(20000) }).strict(),
   apply(d, a, ctx) {
-    d.transcripts[a.assetId] = buildTranscript(d, ctx, a.assetId, a.language, 'asr', a.segments, { provider: a.provider, model: a.model, createdAt: a.createdAt });
-    const t = d.transcripts[a.assetId]!;
+    const t = buildTranscript(d, ctx, a.assetId, a.language, 'asr', a.segments, { provider: a.provider, model: a.model, createdAt: a.createdAt });
+    d.transcripts[a.assetId] = t;
     return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Recognised speech (${t.segments.length} phrases, ${t.segments.reduce((n, s) => n + s.words.length, 0)} words, ${a.language})`, output: { segmentIds: t.segments.map((s) => s.id) } };
   },
 });
@@ -2256,8 +2256,9 @@ defineOp({
     let parsed;
     try { parsed = parseSubtitles(a.content, a.format); } catch (e: any) { throw new OpError('invalid_args', `cannot read subtitles: ${e.message}`, { line: e.line, code: e.code }); }
     if (parsed.cues.length === 0) throw new OpError('invalid_args', 'the file contains no usable cues', { warnings: parsed.warnings.slice(0, 20) });
-    d.transcripts[a.assetId] = buildTranscript(d, ctx, a.assetId, a.language, 'import', parsed.cues.map((c) => ({ start: c.start, duration: T.sub(c.end, c.start), text: c.text })));
-    return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Imported transcript (${parsed.cues.length} phrases, ${parsed.format.toUpperCase()})`, output: { segmentIds: d.transcripts[a.assetId]!.segments.map((s) => s.id), warnings: parsed.warnings.slice(0, 50) } };
+    const t = buildTranscript(d, ctx, a.assetId, a.language, 'import', parsed.cues.map((c) => ({ start: c.start, duration: T.sub(c.end, c.start), text: c.text })));
+    d.transcripts[a.assetId] = t;
+    return { affectedIds: [transcriptEntityId(a.assetId)], summary: `Imported transcript (${parsed.cues.length} phrases, ${parsed.format.toUpperCase()})`, output: { segmentIds: t.segments.map((s) => s.id), warnings: parsed.warnings.slice(0, 50) } };
   },
 });
 

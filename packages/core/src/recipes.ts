@@ -97,7 +97,7 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
     const a = bounds[i]!, b = bounds[i + 1]!;
     if (prot.some(([s, e]) => a < e && s < b)) { skipped++; continue; }
     const assetId = order[i % order.length]!;
-    const asset = doc.assets[assetId]!;
+    const asset = own(doc.assets, assetId)!; // every id in the list was found above
     let len = b - a, sourceIn = 0;
     if (asset.kind !== 'image') {
       const total = T.frameIndexAt(asset.duration, rate);
