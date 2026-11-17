@@ -11,8 +11,10 @@
  *  5. stutter: export barcodes equal F − F mod hold, the same with a cut at frame 37; following analysed music the picture
  *     changes only on planned beat frames, at least flashGapFrames apart;
  *  6. decode lanes: two echo-5 clips under a 15-frame transition export every frame within 12 decoders (server and browser
- *     export); three overlapping echo-5 clips: the still refuses with effect_unavailable … decode_budget and preflight
- *     lists decode_budget;
+ *     export); three overlapping echo-5 clips (at 0, 10, 20): the still of frame 30 refuses with effect_unavailable …
+ *     decode_budget, the still of frame 22 (all three play, 11 decoders: shared pictures) is delivered, and preflight names
+ *     exactly frames 24–39; three stacked copies at frame 0 (7 decoders) get no decode_budget warning and their still is
+ *     delivered;
  *  7. agreement: paused editor preview vs still (mean difference < 0.5 of 255), export vs still (PSNR ≥ 36 dB);
  *  8. flash safety (ADR-0009): the FlashAnalyser verdict is `pass` on an export of each time effect at its defaults;
  *  9. recorded, not gated: milliseconds per frame of echo-5 at 1080×1920, and decoder counts.
@@ -26,7 +28,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Browser } from 'playwright';
 import * as T from '@pulseframe/time';
-import { beatStepFrames, FlashAnalyser, flashCells, flashGapFrames, maxDecodeLanes, tapWeights } from '@pulseframe/engine';
+import { beatStepFrames, decodeOverBudget, FlashAnalyser, flashCells, flashGapFrames, maxDecodeLanes, tapWeights } from '@pulseframe/engine';
 import type { ProjectDocument } from '@pulseframe/core';
 import { generateBarcodeFixture, generateGreyFixture, greyLevel, readBarcode, readBarcodeChannel } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
@@ -296,9 +298,11 @@ async function main() {
       await addEffect(pid, a, 'time.echo', { count: 5 });
       await addEffect(pid, b, 'time.echo', { count: 5 });
       await tx(pid, [{ op: 'set_transition', args: { clipId: b, type: 'dissolve', frames: 15 } }]);
-      const lanes = maxDecodeLanes(await docOf(pid));
+      const tDoc = await docOf(pid);
+      const lanes = maxDecodeLanes(tDoc);
+      const above9 = decodeOverBudget(tDoc, 9); // the frames that need 10 (the bound), counted exactly
       const exp = await exportFrames(pid, 0, 120);
-      check('Decode lanes: two echo-5 clips under a 15-frame transition need 10 decoders at once and export every frame within the worker\'s 12 (a frame that needed more would have been refused)', lanes.lanes === 10 && exp.frames.length === 120, { maxDecodeLanes: lanes, frames: exp.frames.length, renderStageMs: exp.job.output?.renderStageMs });
+      check('Decode lanes: two echo-5 clips under a 15-frame transition need 10 decoders at once (bound and exact count agree) and export every frame within the worker\'s 12 (a frame that needed more would have been refused)', lanes.lanes === 10 && above9.length > 0 && Math.max(...above9.map((x) => x.peak)) === 10 && decodeOverBudget(tDoc, 12).length === 0 && exp.frames.length === 120, { maxDecodeLanes: lanes, exactAbove9: above9.map(({ fromFrame, toFrame, peak }) => ({ fromFrame, toFrame, peak })), frames: exp.frames.length, renderStageMs: exp.job.output?.renderStageMs });
       const page = await browser.newPage();
       await page.goto(`${s.url}/browser-export.html?key=${s.auth.tokens.owner}`);
       await page.evaluate(() => (window as any).__pfBrowserExport.ready);
@@ -315,9 +319,22 @@ async function main() {
       const r = await call(`/projects/${over}/frame?index=30`);
       const message = JSON.stringify(r.body);
       check('Decode lanes: three overlapping echo-5 clips (15 pictures): the still is refused with effect_unavailable naming decode_budget, never delivered without the effect', r.status >= 400 && /effect_unavailable/.test(message) && /decode_budget/.test(message) && /time\.echo/.test(message), { status: r.status, error: (r.body?.error?.message ?? message).slice(0, 300) });
+      // frame 22: all three play, but the newest one's taps are still held at its start and share pictures: 11 decoders
+      const fits = await call(`/projects/${over}/frame?index=22`);
+      check('Decode lanes: in the same project the still of frame 22 (all three play; 11 decoders, as pictures shown twice are decoded once) is delivered', fits.status === 200, { status: fits.status, error: fits.status === 200 ? null : JSON.stringify(fits.body).slice(0, 300), exact: decodeOverBudget(await docOf(over), 12) });
       const pre = (await call(`/projects/${over}/preflight`)).body;
-      const issue = pre.issues?.find((i: any) => i.code === 'decode_budget');
-      check('Decode lanes: preflight lists decode_budget with the frames where the three overlap', !!issue && issue.range?.startFrame === 20 && issue.range?.endFrame === 40 && issue.ids?.length === 3, issue ?? pre);
+      const issues = (pre.issues ?? []).filter((i: any) => i.code === 'decode_budget');
+      const issue = issues[0];
+      check('Decode lanes: preflight lists decode_budget for exactly the frames that need more than 12 decoders (24–39, up to 15), naming the three clips', issues.length === 1 && issue.range?.startFrame === 24 && issue.range?.endFrame === 40 && issue.ids?.length === 3 && /up to 15/.test(issue.message), issues.length ? issues : pre);
+
+      // three stacked copies at frame 0: the per-clip bound says 15, but they show the same pictures (7 decoders)
+      const stacked = await newProject('lanes-stacked');
+      const sAsset = await upload(stacked, barcode.file);
+      for (let k = 0; k < 3; k++) { const c = await clipOn(stacked, sAsset, 0, 40, { withLinkedAudio: false }); await addEffect(stacked, c, 'time.echo', { count: 5 }); }
+      const sDoc = await docOf(stacked);
+      const sStill = await call(`/projects/${stacked}/frame?index=30`);
+      const sPre = (await call(`/projects/${stacked}/preflight`)).body;
+      check('Decode lanes: three echo-5 copies stacked at frame 0 (bound 15, 7 decoders needed): no decode_budget warning and the still of frame 30 is delivered', maxDecodeLanes(sDoc).lanes === 15 && decodeOverBudget(sDoc, 12).length === 0 && !(sPre.issues ?? []).some((i: any) => i.code === 'decode_budget') && sStill.status === 200, { bound: maxDecodeLanes(sDoc), still: sStill.status, issues: (sPre.issues ?? []).map((i: any) => i.code) });
     }
 
     // ---------- 7. agreement: editor preview, still and export ----------
