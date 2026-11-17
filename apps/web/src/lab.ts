@@ -5,7 +5,7 @@
 import './lab.css';
 import './strictPage.ts';
 import * as T from '@pulseframe/time';
-import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type TransitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate, gpuStatus, initGpu, type FrameImage } from '@pulseframe/engine';
 import { ensureFonts } from './fonts.ts';
 
@@ -152,9 +152,12 @@ for (const [variant, m] of maskVariants) {
 }
 const TFRAMES = 15;
 const OFFSETS = [1, 4, 7, 10, 13];
-/** Transitions whose picture depends on the frame's shape (a whip pan moves a strip of the frame, a spin zooms about its centre) are drawn in both shapes. */
-const BOTH_SHAPES = new Set(['whip', 'spin']);
-for (const tr of TRANSITIONS) for (const aspect of BOTH_SHAPES.has(tr.kernel) ? (['16:9', '9:16'] as const) : (['16:9'] as const)) {
+/**
+ * Transitions whose picture depends on the frame's shape (a whip pan moves a strip of the frame, a spin zooms about its centre,
+ * a heart or star must cover all four corners, a page turns about its edge) are drawn in both shapes: the registry says which
+ * (TransitionDef.shapeDependent, ADR-0012).
+ */
+for (const tr of TRANSITIONS as readonly TransitionDef[]) for (const aspect of tr.shapeDependent ? (['16:9', '9:16'] as const) : (['16:9'] as const)) {
   OFFSETS.forEach((off, i) => tiles.push({
     kind: 'transition', id: tr.id, variant: `step ${i + 1}/5 (frame +${off} of ${TFRAMES})`, aspect, params: { frames: TFRAMES }, strip: true,
     build: (s) => {
@@ -217,7 +220,60 @@ async function main() {
   if (errors) document.body.dataset.errors = String(errors);
   document.body.dataset.ready = '1';
 }
-main().catch((e) => {
+// ---- cost of the Canvas2D transitions (lab.html?bench=transitions; recorded by proof:trend-transitions T8, ADR-0012) ----
+/** What the bench measured: per id, the time drawGraph takes for each frame of a 29-frame transition at 1080×1920. */
+export interface LabBench { size: string; frames: number; raster: string; results: Record<string, { medianMs: number; meanMs: number; maxMs: number }> }
+/**
+ * Draws frames 60…88 (a 29-frame transition between two generated 1080×1920 pictures) with the same evaluate + drawGraph as
+ * the render worker, on a canvas kept on the CPU raster path as the render page keeps it, once per transition id and once
+ * with no transition (the cost of the plain layers), and times each frame including a one-pixel read-back (so the drawing
+ * is really done). Diagnostics only: nothing is stored; the numbers go to window.__pfLabBench.
+ */
+async function benchTransitions(ids: readonly string[]): Promise<LabBench> {
+  await ensureFonts();
+  const W = 1080, H = 1920, N = 29;
+  const asset = (name: string, hash: string) => ({
+    kind: 'image' as const, name, contentHash: `sha256:${hash.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.rt(5, 1),
+    image: { width: W, height: H, codec: 'png', hasAlpha: false },
+    provenance: { origin: 'fixture' as const, importedAt: '2026-01-01T00:00:00Z', importedBy: 'lab' },
+  });
+  const s0 = step(createProject({ id: 'prj_lab_bench', name: 'Lab bench', width: W, height: H, frameRate: RATE }), [{ op: 'import_asset', args: { asset: asset('bench-a', 'e') } }, { op: 'import_asset', args: { asset: asset('bench-b', 'f') } }], true);
+  const [a, b] = [s0.out[0]!.assetId as string, s0.out[1]!.assetId as string];
+  const v1 = s0.doc.sequences[s0.doc.mainSequenceId]!.tracks.find((t) => t.kind === 'video')!.id;
+  const pics = new Map([[a, paint(W, H, 'a')], [b, paint(W, H, 'b')]]);
+  const s1 = step(s0.doc, [{ op: 'add_clip', args: { assetId: a, trackId: v1, start: f(0), duration: f(60), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: b, trackId: v1, start: f(60), duration: f(60), withLinkedAudio: false } }]);
+  const clipId = s1.out[1]!.clipId as string;
+  const canvas = el('canvas', { width: W, height: H });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false, colorSpace: 'srgb' })!;
+  const provider = async (l: { assetId: string }): Promise<FrameImage | null> => { const pic = pics.get(l.assetId); return pic ? { draw: (c, dx, dy, dw, dh) => c.drawImage(pic, dx, dy, dw, dh) } : null; };
+  const results: LabBench['results'] = {};
+  for (const id of ['none', ...ids]) {
+    const doc = id === 'none' ? s1.doc : step(s1.doc, [{ op: 'set_transition', args: { clipId, type: id, frames: N } }]).doc;
+    await drawGraph(ctx, evaluate(doc, f(59)), provider); // warm-up: the pictures and the scratch buffers of this size exist from here on
+    const ms: number[] = [];
+    for (let k = 60; k < 60 + N; k++) {
+      const t0 = performance.now();
+      const r = await drawGraph(ctx, evaluate(doc, f(k)), provider);
+      ctx.getImageData(0, 0, 1, 1);
+      ms.push(performance.now() - t0);
+      if (r.missing.length || r.unavailableEffects.length) throw new Error(`${id}: frame ${k} could not be drawn`);
+    }
+    const sorted = [...ms].sort((x, y) => x - y);
+    results[id] = { medianMs: +sorted[Math.floor(N / 2)]!.toFixed(2), meanMs: +(ms.reduce((x, y) => x + y, 0) / N).toFixed(2), maxMs: +sorted[N - 1]!.toFixed(2) };
+  }
+  return { size: `${W}x${H}`, frames: N, raster: 'canvas 2d, willReadFrequently (the render page\'s CPU raster path)', results };
+}
+
+const bench = new URLSearchParams(location.search).get('bench');
+if (bench === 'transitions') {
+  // the trend-pack Canvas2D ids by default; ?ids=a,b picks others (non-GPU ids only)
+  const asked = new URLSearchParams(location.search).get('ids')?.split(',').filter(Boolean);
+  const ids = asked ?? (TRANSITIONS as readonly TransitionDef[]).filter((t) => !t.gpu && ['punch', 'blur', 'split', 'shape', 'block', 'slices'].includes(t.kernel)).map((t) => t.id);
+  benchTransitions(ids).then((r) => { (window as unknown as { __pfLabBench: LabBench }).__pfLabBench = r; document.body.dataset.bench = JSON.stringify(r); }, (e) => {
+    root.append(el('div', { className: 'tile-error', role: 'alert', textContent: `${S.errors}: ${e instanceof Error ? e.message : String(e)}` }));
+    document.body.dataset.errors = '1';
+  }).finally(() => { document.body.dataset.ready = '1'; });
+} else main().catch((e) => {
   root.append(el('div', { className: 'tile-error', role: 'alert', textContent: `${S.errors}: ${e instanceof Error ? e.message : String(e)}` }));
   document.body.dataset.errors = '1';
   document.body.dataset.ready = '1';
