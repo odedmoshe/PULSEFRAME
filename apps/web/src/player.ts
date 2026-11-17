@@ -467,7 +467,7 @@ export class Player {
           this.scheduledAheadMax = Math.max(this.scheduledAheadMax, when - s.now());
         };
         const take = async (out: Float32Array, last = false) => {
-          if (out.length) { pending.push(out); pendingFrames += out.length >> 1; produced += out.length >> 1; }
+          if (out.length) { pending.push(out.slice()); pendingFrames += out.length >> 1; produced += out.length >> 1; } // copied: the voice may reuse its output buffer
           if (!s.master && (produced - from >= PRIME || last)) {
             // enough is rendered ahead of the start: wait for the clock to be set
             markPrimed();
