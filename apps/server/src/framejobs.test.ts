@@ -189,6 +189,9 @@ describe('frame driver: a per-frame job end to end (mock provider)', () => {
       expect((findClip(back, s.clipId)!.clip as MediaClip).assetId).toBe(s.assetId);
       const { [asset.id]: _imported, ...assets } = back.assets;
       expect(canonical({ ...back, assets })).toBe(before);
+      // undoing the import as well returns the document to exactly what it was
+      s.store.undo(s.pid, 'user:owner', 'undo');
+      expect(canonical(s.store.getProject(s.pid).doc)).toBe(before);
     } finally { await s.caps.stop(); s.store.close(); }
   }, 120_000);
 

@@ -255,6 +255,7 @@ export class FrameJobDriver {
     const base: string = job.input.clientRequestId;
     const work = this.workDir(jobId);
     try {
+      if (TERMINAL.has(job.status)) return;
       if (job.status === 'cancel-requested') { await this.finishCancel(jobId); return; }
       const adapter = this.deps.adapter();
       if (!adapter) throw new ApiError(503, 'provider_not_configured', 'the ComfyUI provider is not configured');
@@ -278,16 +279,23 @@ export class FrameJobDriver {
         if (this.deps.stopped()) return;
         if (this.canceled(jobId)) { await this.finishCancel(jobId); return; }
         const lane = this.deps.lane();
-        if (lane?.exportActive()) {
-          this.save(jobId, { stage: `queued (an export is running; chunk ${k + 1} of ${plan.chunks.length} waits for it)` });
-          if (lane.waitForExportIdle) await lane.waitForExportIdle(ctl.signal).catch(() => {});
-          else while (lane.exportActive() && !ctl.signal.aborted) await sleep(250);
-        }
-        if (this.deps.stopped()) return;
-        if (this.canceled(jobId)) { await this.finishCancel(jobId); return; }
-        if (lane && lane.busy().holder !== null) this.save(jobId, { stage: `queued (waiting for compute: ${lane.busy().holder})` });
         let release: () => void = () => {};
-        if (lane) { try { release = await lane.acquire(`${d.id} chunk ${k + 1}/${plan.chunks.length} (${jobId})`, ctl.signal); } catch { /* aborted: canceled or stopping */ } }
+        // While a server export runs no chunk is dispatched; an export that starts while this chunk waits for the lane is waited for too.
+        for (;;) {
+          if (lane?.exportActive()) {
+            this.save(jobId, { stage: `queued (an export is running; chunk ${k + 1} of ${plan.chunks.length} waits for it)` });
+            if (lane.waitForExportIdle) await lane.waitForExportIdle(ctl.signal).catch(() => {});
+            else while (lane.exportActive() && !ctl.signal.aborted) await sleep(250);
+          }
+          if (this.deps.stopped()) return;
+          if (this.canceled(jobId)) { await this.finishCancel(jobId); return; }
+          if (!lane) break;
+          if (lane.busy().holder !== null) this.save(jobId, { stage: `queued (waiting for compute: ${lane.busy().holder})` });
+          try { release = await lane.acquire(`${d.id} chunk ${k + 1}/${plan.chunks.length} (${jobId})`, ctl.signal); } catch { release = () => {}; break; /* aborted: canceled or stopping */ }
+          if (!lane.exportActive()) break;
+          release(); // an export began meanwhile: give the lane back and wait for it
+          release = () => {};
+        }
         try {
           if (this.deps.stopped()) return;
           if (this.canceled(jobId)) { await this.finishCancel(jobId); return; }
@@ -443,6 +451,7 @@ export class FrameJobDriver {
     }
     // ---- poll ----
     let lost = 0;
+    let shown = '';
     for (;;) {
       if (this.deps.stopped()) return 'stopped';
       const s = await adapter.status(providerJobId);
@@ -454,7 +463,8 @@ export class FrameJobDriver {
       if (this.canceled(jobId) && s.state === 'unknown') return 'canceled';
       if (s.state === 'unknown') { if (++lost * (this.deps.pollMs ?? 200) > 30_000) throw new ApiError(502, 'provider_lost_job', `chunk ${k + 1}: the provider no longer lists this prompt`, { chunk: k, requestId }); }
       else lost = 0;
-      if (!this.canceled(jobId)) this.save(jobId, { stage: s.state === 'queued' ? `queued at the provider (chunk ${k + 1} of ${plan.chunks.length}, position ${s.position ?? '?'})` : `inference (chunk ${k + 1} of ${plan.chunks.length}; progress inside a chunk is not reported)` });
+      const stage = s.state === 'queued' ? `queued at the provider (chunk ${k + 1} of ${plan.chunks.length}, position ${s.position ?? '?'})` : `inference (chunk ${k + 1} of ${plan.chunks.length}; progress inside a chunk is not reported)`;
+      if (stage !== shown && !this.canceled(jobId)) { this.save(jobId, { stage }); shown = stage; }
       await sleep(this.deps.pollMs ?? 200);
     }
     if (this.canceled(jobId)) return 'canceled'; // finished anyway: its frames are discarded
