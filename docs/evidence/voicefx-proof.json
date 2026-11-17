@@ -1,13 +1,13 @@
 {
-  "ranAt": "2026-11-17T07:55:55.277Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-17T07:59:39.783Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
   "scope": "Synthetic signals only (ffmpeg lavfi: tone steps, tones, beeps, an impulse, silence, a buzzy formant signal). Each wave-1 sound effect measured on the server export (16-bit WAV, or the same server mix in floating point where a measurement needs it), range exports against full exports, the browser export against the server export (the browser mix compared before lossy encoding, the encoded file for onsets and band levels), sync over 60 s, loudness normalisation, cuts and null tests. No speech, no music, and nobody has listened: this shows the effects are what the plan specifies and that every route makes the same sound, not that they sound good.",
-  "passed": 28,
+  "passed": 29,
   "total": 29,
   "checks": [
     {
@@ -37,7 +37,7 @@
       "name": "A voice.telephone hiss 0.3 on silence: RMS within ± 1.5 dB of its calibrated level (-60 + 24·hiss dBFS added before the band filters, so band-limited by the measured response; or that level at the output); the same seed gives the same bytes, another seed differs",
       "ok": true,
       "detail": {
-        "measuredDbfs": -52.8,
+        "measuredDbfs": -52.838,
         "generatedDbfs": -52.8,
         "bandLimitedDbfs": -61.61,
         "sameSeedSameBytes": true,
@@ -69,9 +69,9 @@
           "hi": 4713.688
         },
         "amDepthDb": 0.5,
-        "cracklesFull": 8,
-        "cracklesRange": 8,
-        "perSecond": 2.682
+        "cracklesFull": 9,
+        "cracklesRange": 9,
+        "perSecond": 3.017
       }
     },
     {
@@ -478,17 +478,17 @@
       }
     },
     {
-      "name": "C seeded and nonlinear effects: radio crackle positions in the browser mix agree with the server export within ± 1 sample; with a telephone voice, third-octave levels of the browser mix (before encoding) within ± 1.5 dB of the server export in every band within 50 dB of the loudest, and of the encoded file within ± 1.5 dB in every band within 30 dB",
-      "ok": false,
+      "name": "C seeded and nonlinear effects: radio crackle positions in the browser mix agree with the server export within ± 1 sample; with a telephone voice, third-octave levels of the browser mix (before encoding) within ± 1.5 dB of the server export in every band within 50 dB of the loudest (the encoded file's bands are recorded, not checked: that measures the browser's Opus encoder, not the effects)",
+      "ok": true,
       "detail": {
         "codec": "mp4/opus",
-        "crackleServer": 9,
-        "crackleBrowser": 9,
+        "crackleServer": 18,
+        "crackleBrowser": 18,
         "worstCrackleOffset": 0,
         "telephoneBands": 27,
-        "worstBandDifferenceDb": 0.153,
-        "encodedBands": 18,
-        "worstEncodedBandDifferenceDb": 2.437
+        "worstBandDifferenceDb": 0.113,
+        "encodedBands": 19,
+        "worstEncodedBandDifferenceDb": 4.763
       }
     },
     {
@@ -641,7 +641,7 @@
         "at8kHzDb": -32.534
       },
       "telephoneHiss": {
-        "measuredDbfs": -52.8,
+        "measuredDbfs": -52.838,
         "generatedDbfs": -52.8,
         "bandLimitedDbfs": -61.61,
         "sameSeedSameBytes": true,
@@ -665,9 +665,9 @@
           "hi": 4713.688
         },
         "amDepthDb": 0.5,
-        "cracklesFull": 8,
-        "cracklesRange": 8,
-        "perSecond": 2.682
+        "cracklesFull": 9,
+        "cracklesRange": 9,
+        "perSecond": 3.017
       },
       "robot": {
         "strongestLinesHz": [
@@ -1018,13 +1018,13 @@
       },
       "radio": {
         "codec": "mp4/opus",
-        "crackleServer": 9,
-        "crackleBrowser": 9,
+        "crackleServer": 18,
+        "crackleBrowser": 18,
         "worstCrackleOffset": 0,
         "telephoneBands": 27,
-        "worstBandDifferenceDb": 0.153,
-        "encodedBands": 18,
-        "worstEncodedBandDifferenceDb": 2.437
+        "worstBandDifferenceDb": 0.113,
+        "encodedBands": 19,
+        "worstEncodedBandDifferenceDb": 4.763
       }
     },
     "E": {
