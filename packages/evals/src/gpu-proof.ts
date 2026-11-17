@@ -1,6 +1,8 @@
 /**
  * WebGPU effect passes (ADR-0008): the adapter check, two effects (chroma key, wave) checked by pixel in the editor preview,
  * in a still and in an export, agreement between those three, repeatability, and the refusals when no adapter is available.
+ * Wave 1 of the visual effects (ADR-0011) adds the old-digicam and CRT looks, checked against their JavaScript models
+ * (digicamTone, crtMap), the digicam noise ticks and a flash check of a digicam export, and the whip and spin transitions.
  *
  *   pnpm build && pnpm proof:gpu
  * Exits 2 (blocked) when this machine's browser gives no WebGPU adapter even with WebGPU enabled.
@@ -14,7 +16,7 @@ import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
 import { beatPositionAt, identityLut, lutStrip, sampleLut, sampleStrip, serializeCube, type Lut3D } from '@pulseframe/core';
-import { hash32, motionAt, unit32 } from '@pulseframe/engine';
+import { crtMap, digicamTick, digicamTone, FlashAnalyser, flashCells, hash32, motionAt, unit32 } from '@pulseframe/engine';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { startServer } from '@pulseframe/server';
@@ -500,7 +502,7 @@ async function main() {
       allOrdered &&= ordered; allRepeat &&= repeat;
       rowsT.push({ id, incomingShare: b.map((x) => Number((x / 255).toFixed(2))), ordered, repeat });
     }
-    check(`All ${gpuTransitions.length} GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash is checked at its ends only)`, gpuTransitions.length === 33 && allOrdered, rowsT.filter((r) => !r.ordered).length ? rowsT.filter((r) => !r.ordered) : { transitions: gpuTransitions.length });
+    check(`All ${gpuTransitions.length} GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash is checked at its ends only)`, gpuTransitions.length === 39 && allOrdered, rowsT.filter((r) => !r.ordered).length ? rowsT.filter((r) => !r.ordered) : { transitions: gpuTransitions.length });
     check('Every GPU transition gives the identical middle frame when rendered again, and no two of them give the same middle frame', allRepeat && new Set(Object.values(mids).map((m) => createHash('sha256').update(m).digest('hex'))).size === gpuTransitions.length, { repeatable: allRepeat, distinctMiddleFrames: new Set(Object.values(mids).map((m) => createHash('sha256').update(m).digest('hex'))).size });
     const isIn = (img: Img, x: number, y: number) => px(img, x, y)[2]! > 200, isOut = (img: Img, x: number, y: number) => px(img, x, y)[2]! < 55;
     check('Soft wipe right, half-way: the left side already shows the incoming picture and the right side still the outgoing one; wipe left is the opposite', isIn(mids['soft-wipe-right']!, 40, 320) && isOut(mids['soft-wipe-right']!, 320, 320) && isOut(mids['soft-wipe-left']!, 40, 320) && isIn(mids['soft-wipe-left']!, 320, 320));
@@ -512,6 +514,58 @@ async function main() {
     const bl = mids['blinds-h']!;
     const stripT = [...Array(9).keys()].map((k) => [isIn(bl, 180, Math.round(((k + 0.2) / 9) * H)), isOut(bl, 180, Math.round(((k + 0.8) / 9) * H))]);
     check('Blinds, half-way: in each of the nine slats the first half shows the incoming picture and the second half the outgoing one', stripT.every(([a2, b2]) => a2 && b2));
+
+    // ---------- whip and spin (ADR-0011) ----------
+    // Progress of transition frame k of 29 (evaluate.ts): smooth((k + 1) / 30); frame 73 is local 13, frame 75 local 15.
+    const progressAt = (frame: number) => { const u = (frame - 60 + 1) / 30; return u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2; };
+    {
+      // spin turns about the centre, so the centre pixel shows the outgoing picture up to p 0.45 and the incoming one from 0.55
+      const rowsS: unknown[] = [];
+      let spinOk = true;
+      for (const id of ['spin-cw', 'spin-ccw']) {
+        await tx(tp, [{ op: 'set_transition', args: { clipId: inClip, type: id, frames: 29 } }]);
+        const before = px(await still(tp, 73), 180, 320)[2]!, after = px(await still(tp, 75), 180, 320)[2]!;
+        spinOk &&= before < 55 && after > 200;
+        rowsS.push({ id, [`centreBlueAtP${progressAt(73).toFixed(3)}`]: before, [`centreBlueAtP${progressAt(75).toFixed(3)}`]: after });
+      }
+      check('Spin (both directions): the centre of the frame shows the outgoing picture before progress 0.45 and the incoming one after 0.55 (blue 0 = outgoing, 255 = incoming)', spinOk && progressAt(73) < 0.45 && progressAt(75) > 0.55, rowsS);
+
+      // whip: the spread of one bright dot of the outgoing picture on the middle frame (p = 0.5, the longest blur). Along the
+      // move it is smeared over 45% of the frame; across it, it keeps the dot's own size. The variance of the dot's light
+      // along the move must be at least 4 times the variance across it, and the streak must lie where the strip has moved
+      // it (a quarter of the frame from the edge the picture leaves by).
+      const dots = Buffer.alloc(W * H * 3);
+      const dotAt = [[90, 320], [270, 320], [180, 160], [180, 480]] as const; // uv (0.25, 0.5), (0.75, 0.5), (0.5, 0.25), (0.5, 0.75)
+      for (const [cx, cy] of dotAt) for (let y = cy - 3; y < cy + 3; y++) for (let x = cx - 3; x < cx + 3; x++) dots.fill(255, (y * W + x) * 3, (y * W + x) * 3 + 3);
+      const dotsFile = path.join(art, 'dots.png'), blackFile = path.join(art, 'black.png');
+      ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', dotsFile], dots);
+      ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', blackFile], Buffer.alloc(W * H * 3));
+      const wp = (await call('/projects', { name: 'whip', width: W, height: H })).body.project.id as string;
+      await tx(wp, [{ op: 'add_clip', args: { assetId: await upload(wp, dotsFile), start: T.rt(0, 1), duration: T.frameTime(60, R30) } }]);
+      const wIn = (await tx(wp, [{ op: 'add_clip', args: { assetId: await upload(wp, blackFile), start: T.frameTime(60, R30), duration: T.frameTime(60, R30) } }])).results[0].output.clipId as string;
+      /** Light-weighted centroid and variance of x and y over a band of the frame. */
+      const spread = (img: Img, x0: number, x1: number, y0: number, y1: number) => {
+        let s0 = 0, sx = 0, sy = 0, sxx = 0, syy = 0;
+        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const c = px(img, x, y), v = (c[0]! + c[1]! + c[2]!) / 3; s0 += v; sx += v * (x + 0.5); sy += v * (y + 0.5); sxx += v * (x + 0.5) ** 2; syy += v * (y + 0.5) ** 2; }
+        const mx = sx / s0, my = sy / s0;
+        return { light: Math.round(s0), x: Number(mx.toFixed(2)), y: Number(my.toFixed(2)), varX: Number((sxx / s0 - mx * mx).toFixed(1)), varY: Number((syy / s0 - my * my).toFixed(1)) };
+      };
+      // [id, horizontal?, where the streak's centre must be along the move]
+      const whips: [string, boolean, number][] = [['whip-right', true, 90], ['whip-left', true, 270], ['whip-down', false, 160], ['whip-up', false, 480]];
+      const rowsW: unknown[] = [];
+      let whipOk = true;
+      for (const [id, horizontal, centre] of whips) {
+        await tx(wp, [{ op: 'set_transition', args: { clipId: wIn, type: id, frames: 29 } }]);
+        const mid = await still(wp, 74);
+        const sp = horizontal ? spread(mid, 0, W, 256, 384) : spread(mid, 144, 216, 0, H);
+        const along = horizontal ? sp.varX : sp.varY, across = horizontal ? sp.varY : sp.varX, at = horizontal ? sp.x : sp.y;
+        const ok = sp.light > 1000 && along >= 4 * across && Math.abs(at - centre) <= 4;
+        whipOk &&= ok;
+        rowsW.push({ id, ...sp, alongOverAcross: Number((along / Math.max(across, 1e-9)).toFixed(1)), expectedCentre: centre, ok });
+      }
+      measurements.whip = rowsW;
+      check('Whip (four directions), middle frame: a dot of the outgoing picture is smeared along the move (variance along at least 4 times across) and lies where the moving strip puts it (within 4 pixels)', whipOk, rowsW);
+    }
     await tx(tp, [{ op: 'set_transition', args: { clipId: inClip, type: 'iris-open', frames: 29 } }]);
     const trJob = await waitJob((await call(`/projects/${tp}/exports`, {})).body.jobId);
     if (trJob.status === 'succeeded') {
@@ -768,6 +822,150 @@ async function main() {
     }
     check('No uncaught errors in the editor page with a colour table', errors.length === 0, errors);
 
+    // ---------- stylize.digicam (ADR-0011): against digicamTone, the noise ticks, and the flash check ----------
+    // Fixture: four flat quadrants, mid grey, a skin tone, a near-white that blooms (luma above 0.8) and a saturated blue.
+    // Their centres lie 90 pixels from any edge, beyond the reach of the sharpening, the bloom and the 8 x 8 colour blocks.
+    const quadColours = [[128, 128, 128], [205, 150, 120], [240, 236, 225], [40, 70, 200]] as const;
+    const quadRaw = Buffer.alloc(W * H * 3);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) quadRaw.set(quadColours[(y < H / 2 ? 0 : 2) + (x < W / 2 ? 0 : 1)]!, (y * W + x) * 3);
+    const quadFile = path.join(art, 'quad.png');
+    ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', quadFile], quadRaw);
+    const dc = await newProject('digicam', quadFile);
+    const plainQ = await still(dc.pid);
+    const centres = [[90, 160], [270, 160], [90, 480], [270, 480]] as const;
+    const DC = { amount: 0.8, sharpen: 0.7, noise: 0, bloom: 0.6, cool: 0.4, seed: 7 };
+    const dcFx = (await tx(dc.pid, [{ op: 'add_effect', args: { clipId: dc.clipId, type: 'stylize.digicam', params: DC } }])).results[0].output.effectId as string;
+    const tone0 = await still(dc.pid);
+    {
+      let worstTone = 0;
+      const rows: unknown[] = [];
+      for (const [cx, cy] of centres) {
+        const src = px(plainQ, cx, cy), model = digicamTone([src[0]! / 255, src[1]! / 255, src[2]! / 255], DC).map((v) => v * 255);
+        for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 2; x <= cx + 2; x++) { const got = px(tone0, x, y); for (let c = 0; c < 3; c++) worstTone = Math.max(worstTone, Math.abs(got[c]! - model[c]!)); }
+        rows.push({ at: [cx, cy], plain: src, still: px(tone0, cx, cy), model: model.map((v) => Number(v.toFixed(1))) });
+      }
+      measurements.digicamTone = { worstOf255: Number(worstTone.toFixed(2)), rows };
+      check('stylize.digicam, noise 0: on every flat patch (grey, skin, a near-white that blooms, blue) each pixel is what digicamTone gives for the plain pixel (within 2 of 255), and the picture did change', worstTone <= 2 && meanDiff(tone0, plainQ) > 2, measurements.digicamTone);
+    }
+    await tx(dc.pid, [{ op: 'update_effect', args: { clipId: dc.clipId, effectId: dcFx, params: { amount: 0, noise: 1 } } }]);
+    const dcZero = await still(dc.pid);
+    check('stylize.digicam, amount 0 (with the noise at 1): the plain picture (largest difference 1 of 255)', maxDiff(dcZero, plainQ) <= 1, { maxDifference: maxDiff(dcZero, plainQ) });
+    await tx(dc.pid, [{ op: 'update_effect', args: { clipId: dc.clipId, effectId: dcFx, params: { amount: 1, noise: 0 } } }]);
+    const quiet = await still(dc.pid);
+    await tx(dc.pid, [{ op: 'update_effect', args: { clipId: dc.clipId, effectId: dcFx, params: { noise: 1 } } }]);
+    const noisy: Img[] = [];
+    for (let f = 0; f < 9; f++) noisy.push(await still(dc.pid, f));
+    {
+      // the noise over a 2 x 2-aligned area of the grey and the skin patches (no channel near 0 or 255, so nothing is clipped)
+      const area = (x0: number, y0: number) => { let d: number[] = [0, 0, 0], abs = 0, most = 0, k = 0; for (let y = y0; y < y0 + 120; y++) for (let x = x0; x < x0 + 100; x++) { const a = px(noisy[0]!, x, y), b = px(quiet, x, y); for (let c = 0; c < 3; c++) { const v = a[c]! - b[c]!; d[c] = d[c]! + v; abs += Math.abs(v); most = Math.max(most, Math.abs(v)); } k++; } d = d.map((v) => Number((v / k).toFixed(3))); return { meanOffset: d, meanSize: Number((abs / (3 * k)).toFixed(2)), largest: most }; };
+      const grey = area(40, 100), skin = area(220, 100);
+      const ok = [grey, skin].every((a) => a.meanOffset.every((v) => Math.abs(v) <= 0.5) && a.meanSize > 1 && a.largest <= Math.ceil(0.03 * 255) + 1);
+      measurements.digicamNoise = { grey, skin };
+      check('stylize.digicam noise at 1: it is there (mean size over 1 of 255), no channel moves by more than 0.03 of the range (+1 for rounding), and over the area its mean is zero (within 0.5 of 255): it adds no brightness', ok, measurements.digicamNoise);
+      const same: unknown[] = [];
+      let ticksOk = maxDiff(noisy[0]!, await still(dc.pid, 0)) === 0;
+      for (let f = 0; f < 8; f++) {
+        const sameTick = digicamTick(f / 30) === digicamTick((f + 1) / 30), identical = maxDiff(noisy[f]!, noisy[f + 1]!) === 0;
+        ticksOk &&= sameTick === identical && (identical || meanDiff(noisy[f]!, noisy[f + 1]!) > 0.5);
+        same.push({ frames: [f, f + 1], ticks: [digicamTick(f / 30), digicamTick((f + 1) / 30)], identical });
+      }
+      check('stylize.digicam: the same tick gives the identical picture (also rendered again), and the noise changes exactly where digicamTick changes (15 times a second: every second frame at 30 fps)', ticksOk, same);
+    }
+    // preview vs still, in the editor (paused on frame 0)
+    await page.goto(`${s.ownerUrl}&project=${dc.pid}`);
+    await page.locator('.clip').first().waitFor();
+    let dprev: Img = await previewRgb(page);
+    for (let i = 0; i < 150 && meanDiff(dprev, noisy[0]!) >= 0.5; i++) { await sleep(100); dprev = await previewRgb(page); }
+    measurements.digicamPreviewVsStill = { meanDifference: meanDiff(dprev, noisy[0]!), maxDifference: maxDiff(dprev, noisy[0]!) };
+    check('stylize.digicam: the editor preview and the still agree (mean difference under 0.5 of 255)', meanDiff(dprev, noisy[0]!) < 0.5, measurements.digicamPreviewVsStill);
+    // flash check (ADR-0009) on an export at noise 1 and full amount: every frame of the file through the FlashAnalyser
+    {
+      const dj = await waitJob((await call(`/projects/${dc.pid}/exports`, {})).body.jobId);
+      if (dj.status !== 'succeeded') check('stylize.digicam (export)', false, { status: dj.status, error: dj.error });
+      else {
+        const out = path.join(art, 'digicam.mp4');
+        fs.writeFileSync(out, (await call(`/jobs/${dj.id}/output`)).body);
+        const frames = ff(['-i', out, '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+        const fa = new FlashAnalyser(30), size = W * H * 4;
+        for (let k = 0; k + size <= frames.length; k += size) fa.push(flashCells(frames.subarray(k, k + size), W, H));
+        const rep = fa.report();
+        measurements.digicamFlash = { frames: rep.frames, verdict: rep.verdict, ranges: rep.ranges };
+        check('stylize.digicam at noise 1 and amount 1, exported: the FlashAnalyser reads every frame of the file and its verdict is pass', rep.frames >= 120 && rep.verdict === 'pass', measurements.digicamFlash);
+      }
+    }
+
+    // ---------- stylize.crt (ADR-0011): the phosphor mask period, the curve against crtMap, no time ----------
+    const greyRaw = Buffer.alloc(W * H * 3, 128);
+    const greyFile = path.join(art, 'grey.png');
+    ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', greyFile], greyRaw);
+    const cr = await newProject('crt', greyFile);
+    const crFx = (await tx(cr.pid, [{ op: 'add_effect', args: { clipId: cr.clipId, type: 'stylize.crt', params: { curvature: 0, phosphor: 'grille', pitch: 0.01, lines: 120, amount: 1, glow: 0 } } }])).results[0].output.effectId as string;
+    {
+      /** The strongest period of the red channel along some rows (mean removed): a fine scan of the Fourier amplitude between 2 and 24 pixels. */
+      const periodOf = (img: Img, rows: number[]) => {
+        const amp = (P: number) => { let t = 0; for (const y of rows) { let m = 0; for (let x = 0; x < W; x++) m += px(img, x, y)[0]!; m /= W; let re = 0, im = 0; for (let x = 0; x < W; x++) { const v = px(img, x, y)[0]! - m, a = (2 * Math.PI * (x + 0.5)) / P; re += v * Math.cos(a); im += v * Math.sin(a); } t += Math.hypot(re, im); } return t; };
+        let best = 2, bestA = -1;
+        for (let P = 2; P <= 24; P += 0.01) { const a = amp(P); if (a > bestA) { bestA = a; best = P; } }
+        for (let P = best - 0.02; P <= best + 0.02; P += 0.0005) { const a = amp(P); if (a > bestA) { bestA = a; best = P; } }
+        return best;
+      };
+      const rows = [100, 220, 340, 460, 580];
+      const p10 = periodOf(await still(cr.pid), rows);
+      await tx(cr.pid, [{ op: 'update_effect', args: { clipId: cr.clipId, effectId: crFx, params: { pitch: 0.007 } } }]);
+      const p7 = periodOf(await still(cr.pid), rows);
+      measurements.crtMaskPeriod = { pitch0010: { expected: 0.01 * H, measured: Number(p10.toFixed(3)) }, pitch0007: { expected: 0.007 * H, measured: Number(p7.toFixed(3)) } };
+      check('stylize.crt: along a row the phosphor mask repeats every pitch x frame height pixels (within 0.1 pixel; pitch 0.01 and 0.007 on a 640-pixel-high frame)', Math.abs(p10 - 0.01 * H) <= 0.1 && Math.abs(p7 - 0.007 * H) <= 0.1, measurements.crtMaskPeriod);
+      // the defaults (curvature, beam lines, glow): no input is the time, so another moment is the same picture; outside the glass is black
+      await tx(cr.pid, [{ op: 'update_effect', args: { clipId: cr.clipId, effectId: crFx, params: { curvature: 0.2, pitch: 0.0028, lines: 480, amount: 0.8, glow: 0.3 } } }]);
+      const c0 = await still(cr.pid, 0), c15 = await still(cr.pid, 15), c90 = await still(cr.pid, 90);
+      check('stylize.crt reads no time: frames 0, 15 and 90 are identical; the corner outside the curved glass is black and the centre is not', maxDiff(c0, c15) === 0 && maxDiff(c0, c90) === 0 && near(px(c0, 1, 1), [0, 0, 0], 1) && px(c0, 180, 320)[0]! > 40, { frames15: maxDiff(c0, c15), frames90: maxDiff(c0, c90), corner: px(c0, 1, 1), centre: px(c0, 180, 320) });
+    }
+    {
+      // The curve: a grid of white lines 3 pixels wide on black (columns 60, 120, … 300, rows 80, 160, … 560), with the
+      // curvature at 0.2 and amount 0 (the curved picture alone). Each line's centre is measured across it (light-weighted, in
+      // a 15-pixel window that must be dark at its ends) on rows and columns half-way between the lines, and compared with
+      // where crtMap puts it (solved for the output position by bisection).
+      const gridRaw = Buffer.alloc(W * H * 3);
+      const vLines = [60, 120, 180, 240, 300], hLines = [80, 160, 240, 320, 400, 480, 560];
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (vLines.some((c) => Math.abs(x - c) <= 1) || hLines.some((r) => Math.abs(y - r) <= 1)) gridRaw.fill(255, (y * W + x) * 3, (y * W + x) * 3 + 3);
+      const gridFile = path.join(art, 'crt-grid.png');
+      ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', gridFile], gridRaw);
+      const cg = await newProject('crt-grid', gridFile);
+      const gridPlain = await still(cg.pid);
+      const cgFx = (await tx(cg.pid, [{ op: 'add_effect', args: { clipId: cg.clipId, type: 'stylize.crt', params: { curvature: 0, amount: 0 } } }])).results[0].output.effectId as string;
+      const flat = await still(cg.pid);
+      await tx(cg.pid, [{ op: 'update_effect', args: { clipId: cg.clipId, effectId: cgFx, params: { curvature: 0.2 } } }]);
+      const curved = await still(cg.pid);
+      const CP = { curvature: 0.2 }, aspect = W / H;
+      /** Output position (continuous pixels) along one axis whose source position is `target`, the other coordinate fixed. */
+      const solve = (target: number, fixed: number, horizontal: boolean) => {
+        const at = (z: number) => { const m = horizontal ? crtMap(z / W, fixed / H, CP, aspect) : crtMap(fixed / W, z / H, CP, aspect); return m ? (horizontal ? m[0] * W : m[1] * H) : null; };
+        const span = horizontal ? W : H;
+        let lo = 0, hi = span;
+        // outside the glass (null) lies beyond the ends of the row or column: past the middle it is too far on, before it too far back
+        for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2, v = at(mid); if (v === null ? mid > span / 2 : v >= target) hi = mid; else lo = mid; }
+        const z = (lo + hi) / 2;
+        // only well inside the glass: crtMap must hold 8 pixels around the point too
+        return at(z - 8) !== null && at(z + 8) !== null ? z : null;
+      };
+      let worstCurve = 0, points = 0, moved = 0;
+      const measure = (horizontal: boolean, fixedPx: number, line: number) => {
+        const z = solve(line + 0.5, fixedPx + 0.5, horizontal);
+        if (z === null) return;
+        const c = Math.round(z - 0.5), val = (k: number) => { const q = horizontal ? px(curved, k, fixedPx) : px(curved, fixedPx, k); return q[0]!; };
+        if (c - 7 < 0 || c + 7 >= (horizontal ? W : H) || val(c - 7) > 20 || val(c + 7) > 20) return;
+        let s0 = 0, s1 = 0;
+        for (let k = c - 7; k <= c + 7; k++) { s0 += val(k); s1 += val(k) * (k + 0.5); }
+        if (s0 < 200) return;
+        worstCurve = Math.max(worstCurve, Math.abs(s1 / s0 - z)); points++; moved = Math.max(moved, Math.abs(z - (line + 0.5)));
+      };
+      for (let k = 0; k <= hLines.length; k++) for (const x of vLines) measure(true, 40 + 80 * k, x);
+      for (let k = 0; k <= vLines.length; k++) for (const y of hLines) measure(false, 30 + 60 * k, y);
+      measurements.crtCurve = { worstPixels: Number(worstCurve.toFixed(2)), points, largestDisplacement: Number(moved.toFixed(1)), flatVsPlain: maxDiff(flat, gridPlain) };
+      check('stylize.crt: with no curvature and amount 0 the picture is unchanged (largest difference 1); at curvature 0.2 every measured line lies where crtMap puts it (within 1.5 pixels) on at least 30 points, and lines near the edge moved by more than 3 pixels', maxDiff(flat, gridPlain) <= 1 && worstCurve <= 1.5 && points >= 30 && moved > 3, measurements.crtCurve);
+    }
+    check('No uncaught errors in the editor page with the digicam preview', errors.length === 0, errors);
+
     // ---------- no adapter in the browser ----------
     const p2 = await plain.newPage({ viewport: { width: 1500, height: 950 } });
     await p2.goto(`${s.ownerUrl}&project=${key.pid}`);
@@ -805,7 +1003,7 @@ async function main() {
     const report = {
       ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', passed: checks.length - failed.length, total: checks.length,
       machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none: the WebGPU adapter here is a software one' },
-      scope: 'Twenty-nine effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and thirty-three transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
+      scope: 'Thirty-one effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and thirty-nine transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
       measurements, checks,
     };
     fs.writeFileSync(path.join(root, 'docs/evidence/gpu-proof.json'), JSON.stringify(report, null, 2) + '\n');
