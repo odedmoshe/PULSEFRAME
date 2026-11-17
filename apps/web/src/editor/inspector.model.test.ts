@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, clipEnd, createProject, findClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { activeTab, cutBefore, firstTab, framesToNearestBeat, keyframeSummary, objectKind, pagesFor, pinnedTab, rollCutOps, shortTimecode, tabsFor } from './inspector.model.ts';
+import { activeTab, cutBefore, firstTab, framesToNearestBeat, keyframeSummary, objectActions, objectKind, pagesFor, pinnedTab, rollCutOps, shortTimecode, tabsFor } from './inspector.model.ts';
 import { ratioLabel } from './FormatPrism.tsx';
 
 const R = { num: 30, den: 1 };
@@ -140,5 +140,16 @@ describe('small formats', () => {
     expect(ratioLabel(1080, 1080)).toBe('1:1');
     expect(ratioLabel(1080, 1350)).toBe('4:5');
     expect(ratioLabel(1998, 1080)).toBe('1.85:1');
+  });
+});
+
+describe('objectActions: what the ⋯ menu and the footer may do to what the panel names', () => {
+  it('a cut offers no clip action: the selection under it is the clip after the cut, which the panel does not name', () => {
+    expect(objectActions('cut')).toEqual([]);
+  });
+  it('the project offers none; a multi-selection duplicates and deletes; a clip also splits', () => {
+    expect(objectActions('none')).toEqual([]);
+    expect(objectActions('multi')).toEqual(['duplicate', 'delete']);
+    for (const k of ['video', 'image', 'text', 'caption', 'sound', 'adjustment'] as const) expect(objectActions(k)).toEqual(['duplicate', 'split', 'delete']);
   });
 });

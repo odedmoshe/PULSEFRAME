@@ -23,7 +23,7 @@ import { TrackingPanel } from './TrackingPanel.tsx';
 import { FollowControls } from './FollowControls.tsx';
 import { RedactControls } from './RedactControls.tsx';
 import { trackingT } from './tracking.strings.ts';
-import { BlendField, EffectsBlock, LOOK_CATALOG_COUNTS, LooksField, LookTarget, MaskControls, musicUnder, useLook, type LookState } from './LookPanel.tsx';
+import { BlendField, EffectsBlock, LOOK_CATALOG_COUNTS, LooksField, LookTarget, LookTargetLine, MaskControls, musicUnder, useLook, type LookState } from './LookPanel.tsx';
 import { ColourMatchPanel } from './ColourMatchPanel.tsx';
 import { ClipSound, DuckSwitch } from './SoundPanel.tsx';
 import { AudioFxBlock, LinkedSoundFx } from './AudioFxBlock.tsx';
@@ -36,7 +36,7 @@ import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } fr
 import { Menu, ScrubField, Tabs, type MenuItem, type TabSpec } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
-import { cutBefore, keyframeSummary, secondsText, shortTimecode, tabsFor, type InspectorPage, type ObjectKind, type ObjectTab } from './inspector.model.ts';
+import { cutBefore, keyframeSummary, objectActions, secondsText, shortTimecode, tabsFor, type InspectorPage, type ObjectAction, type ObjectKind, type ObjectTab } from './inspector.model.ts';
 import { openInspectorTab, selectCut } from './inspector.bus.ts';
 import { CutPanel, TransitionPanel } from './InspectorCut.tsx';
 import { ProjectPanel } from './InspectorProject.tsx';
@@ -93,11 +93,12 @@ export function ObjectHeader({ kind, keymap }: { kind: ObjectKind; keymap: Keyma
       if (!a) tone = 'missing';
     }
   }
-  const items: MenuItem[] = sel && kind !== 'multi' && kind !== 'none' ? [
-    { id: 'edit.duplicate', label: t('cmd.duplicate'), keys: ['Ctrl', 'D'] },
-    { id: 'edit.split', label: t('split'), keys: ['S'], disabled: !editor.playheadInsideSelection },
-    { id: 'edit.delete', label: t('delete'), keys: ['Del'], danger: true },
-  ] : kind === 'multi' ? [{ id: 'edit.duplicate', label: t('cmd.duplicate'), keys: ['Ctrl', 'D'] }, { id: 'edit.delete', label: t('delete'), keys: ['Del'], danger: true }] : [];
+  const ITEM: Record<ObjectAction, MenuItem> = {
+    duplicate: { id: 'edit.duplicate', label: t('cmd.duplicate'), keys: ['Ctrl', 'D'] },
+    split: { id: 'edit.split', label: t('split'), keys: ['S'], disabled: !editor.playheadInsideSelection },
+    delete: { id: 'edit.delete', label: t('delete'), keys: ['Del'], danger: true },
+  };
+  const items: MenuItem[] = sel || kind === 'multi' ? objectActions(kind).map((a) => ITEM[a]) : [];
   void keymap;
   return (
     <div className={`oh is-${tone}`} data-testid="insp-header" data-kind={kind}>
@@ -138,58 +139,80 @@ const TRANSFORM_FIELDS: TField[] = [
 ];
 
 /**
+ * The value a control shows while a gesture is under way (a drag, arrow keys, typing), and the committed value otherwise.
+ * The row keeps its elements across commits (it is never keyed by its value), so the control that has the keyboard focus
+ * keeps it after each committed step. The draft is dropped when the committed value changes, or when the edit is refused.
+ */
+function useDraft(committed: number): [number, (v: number | null) => void] {
+  const [draft, setDraft] = useState<number | null>(null);
+  useEffect(() => { setDraft(null); }, [committed]);
+  return [draft ?? committed, setDraft];
+}
+/** Commits a value and drops the draft when the edit did not go through (otherwise the new committed value replaces it). */
+const settle = (p: Promise<unknown> | false | undefined | void, drop: (v: null) => void) => { if (p) void p.then((r) => { if (!r) drop(null); }, () => drop(null)); else drop(null); };
+
+/**
  * Size, position, rotation and opacity as shown at the playhead. The slider (the element proofs drive) and the number beside
  * it edit the same value; an animated property gets a keyframe at the playhead, a still one is set directly
  * (editor.setShownTransform). The diamond adds or removes that property's keyframe here.
  */
 function TransformRows({ clip, viewClip, shown, only }: { clip: Clip; viewClip: Clip; shown: ResolvedNow; only?: readonly TField['prop'][] }) {
-  const { editor, state, t } = useEditorState();
+  const { editor, state } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
-  const A = ADJUST_STRINGS[state.lang];
-  const variantId = state.viewVariantId;
-  const now = shown.transform;
   const on = editor.playheadOnSelection;
   const beat = editor.doc ? onBeatFrame(editor) : false;
   const props = keyframeProps(clip) as readonly string[];
-  const local = () => T.sub(editor.playhead, clip.start);
   return (
     <>
-      {TRANSFORM_FIELDS.filter((f) => props.includes(f.prop) && (!only || only.includes(f.prop))).map((fld) => {
-        const keys = viewClip.type === 'caption' ? [] : viewClip.keyframes?.[fld.prop] ?? [];
-        const animated = keys.length > 0;
-        const here = on && keys.some((k) => T.eq(k.time, local()));
-        const commit = (v: number) => on && v !== now[fld.prop] && void editor.setShownTransform(clip, shown, { [fld.prop]: v });
-        const label = clip.type === 'adjustment' ? A.opacity : S[fld.label];
-        const toggleKey = () => {
-          if (!on || variantId) return;
-          const at = local();
-          void editor.commit(() => {
-            const cur = editor.doc ? findClip(editor.doc, clip.id)?.clip : undefined;
-            if (!cur || cur.type === 'caption') return null;
-            const has = cur.keyframes?.[fld.prop]?.some((k) => T.eq(k.time, at));
-            return has ? [{ op: 'delete_keyframe', args: { clipId: clip.id, property: fld.prop, time: at } }] : [{ op: 'set_keyframe', args: { clipId: clip.id, property: fld.prop, time: at, value: Math.round(now[fld.prop] * 1e4) / 1e4 } }];
-          }, 'Keyframe');
-        };
-        const Kf = here ? IconKeyframeFull : animated ? IconKeyframeHalf : IconKeyframeHollow;
-        return (
-          <Row key={`${fld.prop}:${now[fld.prop]}`} label={label} modified={Math.abs(now[fld.prop] - fld.neutral) > 1e-6}
-            value={<ScrubField label={label} value={+(now[fld.prop] * fld.show).toFixed(fld.decimals)} min={fld.min * fld.show} max={fld.max * fld.show} step={fld.show === 100 ? 1 : fld.step} unit={fld.unit} defaultValue={fld.neutral * fld.show} disabled={!on}
-              onChange={() => { /* committed once, when the gesture ends */ }} onCommit={(v) => commit(v / fld.show)} />}
-            kf={<button type="button" className={`pf-kf${here ? (beat ? ' is-on-beat' : ' is-at-playhead') : animated ? ' is-animated' : ''}`} disabled={!on || !!variantId} aria-pressed={here}
-              aria-label={`${S.kfToggle}: ${label}`} title={variantId ? t('transform.keyframesMasterOnly') : here ? S.kfHere : animated ? S.kfAnimated : S.kfToggle} data-testid={`kf-${fld.prop}`} onClick={toggleKey}>
-              {here && beat ? <IconOnBeat size={16} /> : <Kf size={16} />}</button>}>
-            <span className="sr-only val">{+now[fld.prop].toFixed(3)}{animated ? ` ${t('keyframes.animated')}` : ''}</span>
-            <input type="range" dir={fld.spatial ? 'ltr' : undefined} className={fld.spatial ? 'is-bipolar' : undefined} min={fld.min} max={fld.max} step={fld.step} defaultValue={now[fld.prop]} disabled={!on} aria-label={label}
-              data-testid={clip.type === 'adjustment' ? TID.adjustOpacity : `transform-${fld.prop}`} aria-valuetext={`${+(now[fld.prop] * fld.show).toFixed(fld.decimals)}${fld.unit}`}
-              onInput={(e) => e.currentTarget.setAttribute('aria-valuetext', `${+(Number(e.currentTarget.value) * fld.show).toFixed(fld.decimals)}${fld.unit}`)}
-              onPointerUp={(e) => commit(Number(e.currentTarget.value))} onKeyUp={(e) => commit(Number(e.currentTarget.value))} />
-          </Row>
-        );
-      })}
+      {TRANSFORM_FIELDS.filter((f) => props.includes(f.prop) && (!only || only.includes(f.prop))).map((fld) => (
+        <TransformRow key={fld.prop} fld={fld} clip={clip} viewClip={viewClip} shown={shown} on={on} beat={beat} />
+      ))}
       {!on && <p className="muted insp-note" role="note">{S.outsideClip}</p>}
     </>
   );
 }
+function TransformRow({ fld, clip, viewClip, shown, on, beat }: { fld: TField; clip: Clip; viewClip: Clip; shown: ResolvedNow; on: boolean; beat: boolean }) {
+  const { editor, state, t } = useEditorState();
+  const S = INSPECTOR_STRINGS[state.lang];
+  const A = ADJUST_STRINGS[state.lang];
+  const variantId = state.viewVariantId;
+  const now = shown.transform[fld.prop];
+  const [live, setDraft] = useDraft(now);
+  const local = () => T.sub(editor.playhead, clip.start);
+  const keys = viewClip.type === 'caption' ? [] : viewClip.keyframes?.[fld.prop] ?? [];
+  const animated = keys.length > 0;
+  const here = on && keys.some((k) => T.eq(k.time, local()));
+  const commit = (v: number) => { setDraft(v); settle(on && v !== now && editor.setShownTransform(clip, shown, { [fld.prop]: v }), setDraft); };
+  const label = clip.type === 'adjustment' ? A.opacity : S[fld.label];
+  const toggleKey = () => {
+    if (!on || variantId) return;
+    const at = local();
+    void editor.commit(() => {
+      const cur = editor.doc ? findClip(editor.doc, clip.id)?.clip : undefined;
+      if (!cur || cur.type === 'caption') return null;
+      const has = cur.keyframes?.[fld.prop]?.some((k) => T.eq(k.time, at));
+      return has ? [{ op: 'delete_keyframe', args: { clipId: clip.id, property: fld.prop, time: at } }] : [{ op: 'set_keyframe', args: { clipId: clip.id, property: fld.prop, time: at, value: Math.round(now * 1e4) / 1e4 } }];
+    }, 'Keyframe');
+  };
+  const Kf = here ? IconKeyframeFull : animated ? IconKeyframeHalf : IconKeyframeHollow;
+  const text = `${+(live * fld.show).toFixed(fld.decimals)}${fld.unit}`;
+  return (
+    <Row label={label} modified={Math.abs(now - fld.neutral) > 1e-6}
+      value={<ScrubField label={label} value={+(live * fld.show).toFixed(fld.decimals)} min={fld.min * fld.show} max={fld.max * fld.show} step={fld.show === 100 ? 1 : fld.step} unit={fld.unit} defaultValue={fld.neutral * fld.show} disabled={!on}
+        onChange={(v) => setDraft(v / fld.show)} onCommit={(v) => commit(v / fld.show)} />}
+      kf={<button type="button" className={`pf-kf${here ? (beat ? ' is-on-beat' : ' is-at-playhead') : animated ? ' is-animated' : ''}`} disabled={!on || !!variantId} aria-pressed={here}
+        aria-label={`${S.kfToggle}: ${label}`} title={variantId ? t('transform.keyframesMasterOnly') : here ? S.kfHere : animated ? S.kfAnimated : S.kfToggle} data-testid={`kf-${fld.prop}`} onClick={toggleKey}>
+        {here && beat ? <IconOnBeat size={16} /> : <Kf size={16} />}</button>}>
+      <span className="sr-only val">{+now.toFixed(3)}{animated ? ` ${t('keyframes.animated')}` : ''}</span>
+      <input type="range" dir={fld.spatial ? 'ltr' : undefined} className={fld.spatial ? 'is-bipolar' : undefined} min={fld.min} max={fld.max} step={fld.step} value={live} disabled={!on} aria-label={label}
+        data-testid={clip.type === 'adjustment' ? TID.adjustOpacity : `transform-${fld.prop}`} aria-valuetext={text}
+        onChange={(e) => setDraft(Number(e.currentTarget.value))}
+        onPointerUp={(e) => commit(Number(e.currentTarget.value))} onKeyUp={(e) => { if (RANGE_KEYS.has(e.key)) commit(Number(e.currentTarget.value)); }} />
+    </Row>
+  );
+}
+/** The keys that move a range input: a commit follows their release, not the release of Tab or a modifier. */
+const RANGE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
 /** Whether the playhead stands on an analysed beat of the music under it (the gold keyframe). */
 function onBeatFrame(editor: Editor): boolean {
   const doc = editor.doc; if (!doc) return false;
@@ -627,24 +650,30 @@ function ManualGrade({ clip }: { clip: Clip }) {
   const grade = clip.effects?.find((e) => e.type === 'color.grade');
   const gpu = !!state.gpu?.available;
   const value = (k: string, neutral: number) => { const v = grade?.params[k]; return typeof v === 'number' ? v : neutral; };
-  const set = (params: Record<string, number>, mode: 'merge' | 'replace' = 'merge') => void editor.commit([{ op: 'set_colour_grade', args: { clipId: clip.id, params, mode } }], 'Colour grade');
+  const set = (params: Record<string, number>, mode: 'merge' | 'replace' = 'merge') => editor.commit([{ op: 'set_colour_grade', args: { clipId: clip.id, params, mode } }], 'Colour grade');
   const changed = !!grade && GRADE_FIELDS.some((f) => Math.abs(value(f.key, f.neutral) - f.neutral) > 1e-6);
   const animated = (k: string) => !!grade?.keyframes?.[k]?.length;
   return (
-    <Section id="grade" title={S.secGrade} onReset={changed && gpu ? () => set(Object.fromEntries(GRADE_FIELDS.map((f) => [f.key, f.neutral]))) : undefined}>
+    <Section id="grade" title={S.secGrade} onReset={changed && gpu ? () => void set(Object.fromEntries(GRADE_FIELDS.map((f) => [f.key, f.neutral]))) : undefined}>
       {!gpu && <p className="muted" role="note" data-testid="grade-unavailable">{t('look.gpu.needed')}</p>}
-      {GRADE_FIELDS.map((f) => {
-        const v = value(f.key, f.neutral), label = S[f.label], full = effectParamLabel(f.key, state.lang, 'color.grade');
-        const commit = (n: number) => { if (n !== v) set({ [f.key]: Math.round(n * 1e3) / 1e3 }); };
-        const shown = `${v - f.neutral > 0 ? '+' : ''}${Math.round((v - f.neutral) * 100)}`;
-        return (
-          <Row key={`${f.key}:${v}`} label={label} modified={Math.abs(v - f.neutral) > 1e-6} value={<bdi className="val num pf-read">{shown.replace('-', '−')}</bdi>}>
-            <input type="range" dir={f.bipolar ? 'ltr' : undefined} className={f.bipolar ? 'is-bipolar' : undefined} min={f.min} max={f.max} step={f.step} defaultValue={v} disabled={!gpu || animated(f.key)} aria-label={full} data-testid={`grade-${f.key}`}
-              title={animated(f.key) ? t('keyframes.animated') : full} onPointerUp={(e) => commit(Number(e.currentTarget.value))} onKeyUp={(e) => commit(Number(e.currentTarget.value))} />
-          </Row>
-        );
-      })}
+      {GRADE_FIELDS.map((f) => <GradeRow key={f.key} f={f} value={value(f.key, f.neutral)} gpu={gpu} animated={animated(f.key)} set={set} />)}
     </Section>
+  );
+}
+
+function GradeRow({ f, value: v, gpu, animated, set }: { f: (typeof GRADE_FIELDS)[number]; value: number; gpu: boolean; animated: boolean; set: (params: Record<string, number>) => Promise<unknown> | void }) {
+  const { state, t } = useEditorState();
+  const S = INSPECTOR_STRINGS[state.lang];
+  const [live, setDraft] = useDraft(v);
+  const label = S[f.label], full = effectParamLabel(f.key, state.lang, 'color.grade');
+  const commit = (n: number) => { setDraft(n); settle(n !== v && set({ [f.key]: Math.round(n * 1e3) / 1e3 }), setDraft); };
+  const shown = `${live - f.neutral > 0 ? '+' : ''}${Math.round((live - f.neutral) * 100)}`.replace('-', '\u2212');
+  return (
+    <Row label={label} modified={Math.abs(v - f.neutral) > 1e-6} value={<bdi className="val num pf-read">{shown}</bdi>}>
+      <input type="range" dir={f.bipolar ? 'ltr' : undefined} className={f.bipolar ? 'is-bipolar' : undefined} min={f.min} max={f.max} step={f.step} value={live} disabled={!gpu || animated} aria-label={full} aria-valuetext={shown} data-testid={`grade-${f.key}`}
+        title={animated ? t('keyframes.animated') : full} onChange={(e) => setDraft(Number(e.currentTarget.value))}
+        onPointerUp={(e) => commit(Number(e.currentTarget.value))} onKeyUp={(e) => { if (RANGE_KEYS.has(e.key)) commit(Number(e.currentTarget.value)); }} />
+    </Row>
   );
 }
 
@@ -655,7 +684,7 @@ function ColourTab({ clip, look, trackKind }: PanelProps) {
   const media = clip.type === 'media' && trackKind === 'video';
   return (
     <>
-      <Section id="looks" title={S.secLooks} summary={S.looksCount(LOOK_CATALOG_COUNTS.looks)}><LooksField look={look} /></Section>
+      <Section id="looks" title={S.secLooks} summary={S.looksCount(LOOK_CATALOG_COUNTS.looks)}><LookTargetLine look={look} /><LooksField look={look} /></Section>
       <ManualGrade clip={clip} />
       {media && clip.type === 'media' && <Section id="match" title={S.secMatch} defaultOpen={false} help><ColourMatchPanel key={`cm:${clip.id}`} clip={clip} /></Section>}
     </>
@@ -732,7 +761,7 @@ function TextTab({ clip, viewClip }: PanelProps) {
   if (clip.type !== 'text') return null;
   const variantId = tx.variantId;
   const hasTextOverride = !!(tx.textOverride && (tx.textOverride.text !== undefined || tx.textOverride.textStyle));
-  const sizeCommit = (v: number) => void editor.commit(variantId
+  const sizeCommit = (v: number) => editor.commit(variantId
     ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, textStyle: { sizeFrac: v } } }]
     : [{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: v } } }], 'Text size');
   const size = viewClip.type === 'text' ? viewClip.style.sizeFrac : 0.05;
@@ -755,11 +784,23 @@ function TextTab({ clip, viewClip }: PanelProps) {
             {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}
           </select>
         </label>
-        <Row label={S.fontSize} value={<bdi className="val num pf-read">{Math.round(size * 100)}%</bdi>}>
-          <input type="range" min={0.02} max={0.2} step={0.005} key={`${variantId ?? 'master'}:${size}`} defaultValue={size} aria-label={t('text.size')} data-testid="text-size" onPointerUp={(e) => sizeCommit(Number(e.currentTarget.value))} onKeyUp={(e) => sizeCommit(Number(e.currentTarget.value))} />
-        </Row>
+        <SizeRow key={variantId ?? 'master'} size={size} commit={sizeCommit} />
       </Section>
     </>
+  );
+}
+
+/** The text size: the slider and its readout follow a drag; one commit when it ends. Keyed by the viewed format only, so focus stays. */
+function SizeRow({ size, commit }: { size: number; commit: (v: number) => Promise<unknown> }) {
+  const { state, t } = useEditorState();
+  const S = INSPECTOR_STRINGS[state.lang];
+  const [live, setDraft] = useDraft(size);
+  const done = (v: number) => { setDraft(v); settle(v !== size && commit(v), setDraft); };
+  return (
+    <Row label={S.fontSize} value={<bdi className="val num pf-read">{Math.round(live * 100)}%</bdi>}>
+      <input type="range" min={0.02} max={0.2} step={0.005} value={live} aria-label={t('text.size')} aria-valuetext={`${Math.round(live * 100)}%`} data-testid="text-size"
+        onChange={(e) => setDraft(Number(e.currentTarget.value))} onPointerUp={(e) => done(Number(e.currentTarget.value))} onKeyUp={(e) => { if (RANGE_KEYS.has(e.key)) done(Number(e.currentTarget.value)); }} />
+    </Row>
   );
 }
 
@@ -929,15 +970,7 @@ export function ObjectPanels({ kind, tab, onTab, keymap, firstIsClipTab }: { kin
   return (
     <div className="insp-object" data-kind={kind} data-tab={tab}>
       {!flat && tabs.length > 1 && <Tabs tabs={specs} value={tab} onChange={(id) => onTab(id as ObjectTab)} label={S.objectTabs} panelPrefix="insp-panel" collapsed={narrow && tabs.length > 5} className="insp-tabs" />}
-      {tabs.map((id) => (
-        <div key={id} role={flat || tabs.length < 2 ? 'group' : 'tabpanel'} id={`insp-panel-${id}`} aria-labelledby={flat || tabs.length < 2 ? undefined : `insp-panel-tab-${id}`} aria-label={flat || tabs.length < 2 ? (S[TAB_LABEL[id]] as string) : undefined}
-          hidden={!flat && id !== tab} className="insp-tabpanel" data-testid={`insp-panel-${id}`}>
-          {flat && tabs.length > 1 && <h3 className="insp-flat-title">{ico(TAB_ICON[id], 16)} {S[TAB_LABEL[id]] as string}</h3>}
-          {kind === 'none' ? <ProjectPanel /> : kind === 'multi' ? <SharedTab /> : kind === 'cut' && clip?.type === 'media'
-            ? (id === 'cut' ? <CutPanel clip={clip} /> : <TransitionPanel clip={clip} />)
-            : clip && viewClip && sel && shown ? <ObjectTabBody id={id} kind={kind} clip={clip} viewClip={viewClip} shown={shown} keymap={keymap} trackKind={sel.track.kind} /> : null}
-        </div>
-      ))}
+      {clip && sel ? <WithLook key={clip.id} clip={clip} trackKind={sel.track.kind}>{(look) => panels(look)}</WithLook> : panels(null)}
       {/* all tools on one screen: the transition at the start of a picture clip stands with the clip (in tabs it belongs to the cut) */}
       {flat && (kind === 'video' || kind === 'image') && clip?.type === 'media' && (
         <div role="group" aria-label={S.tabTransition} className="insp-tabpanel" data-testid="insp-panel-transition">
@@ -947,11 +980,21 @@ export function ObjectPanels({ kind, tab, onTab, keymap, firstIsClipTab }: { kin
       )}
     </div>
   );
+  function panels(look: LookState | null) {
+    return tabs.map((id) => (
+        <div key={id} role={flat || tabs.length < 2 ? 'group' : 'tabpanel'} id={`insp-panel-${id}`} aria-labelledby={flat || tabs.length < 2 ? undefined : `insp-panel-tab-${id}`} aria-label={flat || tabs.length < 2 ? (S[TAB_LABEL[id]] as string) : undefined}
+          hidden={!flat && id !== tab} className="insp-tabpanel" data-testid={`insp-panel-${id}`}>
+          {flat && tabs.length > 1 && <h3 className="insp-flat-title">{ico(TAB_ICON[id], 16)} {S[TAB_LABEL[id]] as string}</h3>}
+          {kind === 'none' ? <ProjectPanel /> : kind === 'multi' ? <SharedTab /> : kind === 'cut' && clip?.type === 'media'
+            ? (id === 'cut' ? <CutPanel clip={clip} /> : <TransitionPanel clip={clip} />)
+            : clip && viewClip && sel && shown ? <ObjectTabBody id={id} kind={kind} clip={clip} viewClip={viewClip} shown={shown} keymap={keymap} trackKind={sel.track.kind} look={look} /> : null}
+        </div>
+      ));
+  }
 }
 
-/** One tab's content. The look state is made here, per clip, so the colour and effects tabs of one object share it. */
-function ObjectTabBody({ id, kind, clip, viewClip, shown, keymap, trackKind }: { id: ObjectTab; kind: ObjectKind; clip: Clip; viewClip: Clip; shown: ResolvedNow; keymap: Keymap; trackKind: string }) {
-  const look = useSharedLook(clip, trackKind);
+/** One tab's content. */
+function ObjectTabBody({ id, kind, clip, viewClip, shown, keymap, trackKind, look }: { id: ObjectTab; kind: ObjectKind; clip: Clip; viewClip: Clip; shown: ResolvedNow; keymap: Keymap; trackKind: string; look: LookState | null }) {
   const p: PanelProps = { clip, viewClip, shown, keymap, look, trackKind };
   switch (id) {
     case 'basic': return <BasicTab {...p} />;
@@ -975,17 +1018,13 @@ function ObjectTabBody({ id, kind, clip, viewClip, shown, keymap, trackKind }: {
 }
 
 /**
- * The colour tab and the effects tab are two panels of one object: where a look goes ("this clip" or "the whole edit") is
- * chosen once for both. The choice is kept per clip while the clip stays selected.
+ * The look state of the selected object, made once for all its tabs: the colour tab and the effects tab show and change the
+ * same "this clip / the whole edit" choice, and each shows the status and refusal of a look applied from either. The caller
+ * keys it by the clip, so another selection starts again at "this clip".
  */
-const lookStore = new Map<string, 'clip' | 'edit'>();
-function useSharedLook(clip: Clip, trackKind: string): LookState | null {
+function WithLook({ clip, trackKind, children }: { clip: Clip; trackKind: string; children: (look: LookState | null) => ReactNode }) {
   const look = useLook(clip, trackKind);
-  const [, bump] = useState(0);
-  useEffect(() => { const on = () => bump((n) => n + 1); window.addEventListener('pf:look-target', on); return () => window.removeEventListener('pf:look-target', on); }, []);
-  if (clip.type === 'caption') return null;
-  const applyTo = lookStore.get(clip.id) ?? 'clip';
-  return { ...look, applyTo, toEdit: !look.adjustment && applyTo === 'edit', setApplyTo: (v) => { lookStore.clear(); lookStore.set(clip.id, v); look.setApplyTo(v); window.dispatchEvent(new Event('pf:look-target')); } };
+  return <>{children(clip.type === 'caption' ? null : look)}</>;
 }
 
 /** True at the widths where the inspector column is narrow (tokens: ≤1366px): seven tabs then show as icons, each with its name for assistive technology. */
@@ -1005,7 +1044,7 @@ function useNarrow(): boolean {
 export function ObjectFooter({ kind }: { kind: ObjectKind }) {
   const { editor, state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
-  if (kind === 'none') return null;
+  if (!objectActions(kind).includes('delete')) return null;
   return (
     <div className="insp-foot" data-testid="insp-footer">
       <button type="button" className="insp-foot-main" data-testid="insp-duplicate" onClick={() => run(editor, 'edit.duplicate')}>{S.duplicate}</button>

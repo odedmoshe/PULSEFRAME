@@ -31,6 +31,18 @@ export function pagesFor(workspace: Workspace, opts: { custom: readonly Inspecto
 }
 
 export type ObjectKind = 'none' | 'multi' | 'video' | 'image' | 'text' | 'caption' | 'sound' | 'adjustment' | 'cut';
+/** The clip actions the header's ⋯ menu and the inspector's footer offer. */
+export type ObjectAction = 'duplicate' | 'split' | 'delete';
+/**
+ * What the header's ⋯ menu and the footer may do to what the inspector says is selected. Nothing for the project, and
+ * nothing for a cut: a cut is the meeting of two clips, and the selection under it is the clip after it, so "duplicate" or
+ * the bin there would act on a clip the panel does not name. A multi-selection has no single playhead split.
+ */
+export function objectActions(kind: ObjectKind): ObjectAction[] {
+  if (kind === 'none' || kind === 'cut') return [];
+  if (kind === 'multi') return ['duplicate', 'delete'];
+  return ['duplicate', 'split', 'delete'];
+}
 export type ObjectTab =
   | 'project' | 'shared' | 'basic' | 'motion' | 'speed' | 'colour' | 'effects' | 'mask' | 'audio'
   | 'text' | 'style' | 'anim' | 'place' | 'cue' | 'timing' | 'soundfx' | 'beat' | 'range' | 'cut' | 'transition';

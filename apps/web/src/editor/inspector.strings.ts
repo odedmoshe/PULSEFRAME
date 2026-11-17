@@ -80,7 +80,7 @@ const he = {
   onBeat: (bar: number, beat: number) => `החיתוך על הפעימה · תיבה ${bar}, פעימה ${beat}`, offBeat: (f: number) => `${Math.abs(f)} פריימים ${f > 0 ? 'אחרי' : 'לפני'} הפעימה הקרובה`,
   secHandles: 'חומר עודף', handleBefore: 'לפני', handleAfter: 'אחרי', handleNote: 'כמה מהצילום נשאר מחוץ לקליפ בכל צד. מעבר משתמש בחומר הזה.',
   handleStill: 'תמונה: בלי הגבלה', secFav: 'מעברים לחיתוך הזה', allTransitions: 'כל המעברים', applied: 'בחיתוך',
-  loupe: 'לופה של חיתוך', loupeOn: 'הלופה מוצגת בתצוגה', noCut: 'לקליפ הזה אין קליפ צמוד לפניו, ולכן אין כאן חיתוך.',
+  backToClip: 'חזרה לקליפ', loupe: 'לופה של חיתוך', loupeOn: 'הלופה מוצגת בתצוגה', noCut: 'לקליפ הזה אין קליפ צמוד לפניו, ולכן אין כאן חיתוך.',
   secLength: 'משך', lengthFrames: 'אורך', secBeatLock: 'קצב', secVelocity: 'תאוצה', removeTransition: 'הסרת המעבר',
 } as const;
 
@@ -144,7 +144,7 @@ const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => st
   onBeat: (bar, beat) => `The cut is on the beat · bar ${bar}, beat ${beat}`, offBeat: (f) => `${Math.abs(f)} frames ${f > 0 ? 'after' : 'before'} the nearest beat`,
   secHandles: 'Spare material', handleBefore: 'Before', handleAfter: 'After', handleNote: 'How much of the footage is left outside the clip on each side. A transition uses this material.',
   handleStill: 'Image: no limit', secFav: 'Transitions for this cut', allTransitions: 'All transitions', applied: 'On the cut',
-  loupe: 'Cut loupe', loupeOn: 'The loupe is shown in the viewer', noCut: 'This clip has no clip right before it, so there is no cut here.',
+  backToClip: 'Back to the clip', loupe: 'Cut loupe', loupeOn: 'The loupe is shown in the viewer', noCut: 'This clip has no clip right before it, so there is no cut here.',
   secLength: 'Length', lengthFrames: 'Length', secBeatLock: 'Beat', secVelocity: 'Velocity', removeTransition: 'Remove the transition',
 };
 

@@ -10,6 +10,7 @@ import { wholeEditAdjustment, type WholeEditPick } from './commands.ts';
 import { flashSchedule } from '@pulseframe/engine';
 import { TRANSITION_OPTION_TESTIDS } from './trendTestIds.ts';
 import { SectionsContext } from './Section.tsx';
+import { Seg } from '../ds/index.ts';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } from './icons.tsx';
 
@@ -558,6 +559,29 @@ export function LookTarget({ look }: { look: LookState }) {
   );
 }
 
+/**
+ * The same "this clip / the whole edit" choice as the effects tab's, at the head of the colour tab, so a ready look never
+ * changes the whole edit without the tab saying so; and what the last look applied from here did (or why it was refused).
+ * The manual sliders below always act on the clip, which the note under "the whole edit" says.
+ */
+export function LookTargetLine({ look }: { look: LookState }) {
+  const { editor, state } = useEditorState();
+  const A = ADJUST_STRINGS[state.lang];
+  const whole = state.doc ? wholeEditAdjustment(state.doc) : null;
+  const refusalId = useId();
+  if (look.adjustment || look.clip.type === 'caption') return null;
+  return (
+    <div className="look-target-line" data-testid="colour-apply-to">
+      <span className="look-target-label">{A.applyTo}</span>
+      <Seg label={A.applyTo} size="sm" value={look.applyTo} onChange={(v) => look.setApplyTo(v as ApplyTo)}
+        options={[{ value: 'clip', label: A.applyToClip, testId: 'colour-apply-clip' }, { value: 'edit', label: A.applyToEdit, testId: 'colour-apply-edit' }]} />
+      {look.toEdit && <p className="muted pf-help">{A.looksOnEditNote}</p>}
+      {look.toEdit && look.editStatus && <p className="muted" role="status" data-testid="colour-apply-status">{look.editStatus} {whole && <button type="button" className="ghost" onClick={() => editor.select(whole.clip.id)}>{A.showAdjustment}</button>}</p>}
+      {look.refusal && <p id={refusalId} className="danger" role="alert" data-testid="colour-refusal">{look.refusal}</p>}
+    </div>
+  );
+}
+
 /** The effect stack of a clip: its rows in order, the notice of a missing graphics adapter, and "add an effect". */
 export function EffectsBlock({ look }: { look: LookState }) {
   const { state, t } = useEditorState();
@@ -602,7 +626,7 @@ export function LooksField({ look }: { look: LookState }) {
   const { clip, toEdit } = look;
   return (
     <label className="looks-field">{t('look.looks')}
-      <select data-testid="look-apply" value="" disabled={!state.gpu?.available} title={state.gpu?.available ? t('look.looks.hint') : t('look.gpu.needed')} onChange={(e) => { const lookId = e.target.value; if (!lookId) return; if (toEdit) void look.toWholeEdit({ kind: 'look', lookId }); else void editor.commit([{ op: 'apply_look', args: { clipId: clip.id, lookId } }], 'Apply colour look'); }}>
+      <select data-testid="look-apply" value="" disabled={!state.gpu?.available} title={state.gpu?.available ? t('look.looks.hint') : t('look.gpu.needed')} onChange={(e) => { const lookId = e.target.value; if (!lookId) return; if (toEdit) void look.toWholeEdit({ kind: 'look', lookId }); else void look.run([{ op: 'apply_look', args: { clipId: clip.id, lookId } }], 'Apply colour look'); }}>
         <option value="">{state.gpu?.available ? t('look.looks.pick') : `${t('look.looks.pick')} — ${t('look.gpu.needed')}`}</option>
         {COLOR_LOOKS.map((l) => <option key={l.id} value={l.id}>{l.name[state.lang]}</option>)}
       </select>

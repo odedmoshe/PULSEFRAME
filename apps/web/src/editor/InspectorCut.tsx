@@ -65,7 +65,7 @@ export function CutPanel({ clip }: { clip: Media }) {
     <>
       <div className="cut-loupe-row">
         <Switch checked={view.loupe} onChange={setLoupe} label={S.loupe} testId="cut-loupe-toggle" />
-        <button type="button" className="oh-more" aria-label={t('cmd.deselect')} title={t('cmd.deselect')} data-testid="cut-close" onClick={() => selectCut(null)}><X size={16} strokeWidth={1.75} aria-hidden="true" /></button>
+        <button type="button" className="oh-more" aria-label={S.backToClip} title={S.backToClip} data-testid="cut-close" onClick={() => selectCut(null)}><X size={16} strokeWidth={1.75} aria-hidden="true" /></button>
       </div>
       <Section id="roll" title={S.secRoll} help>
         <div className="cut-roll" dir="ltr" role="group" aria-label={S.secRoll}>
