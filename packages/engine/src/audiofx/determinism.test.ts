@@ -49,7 +49,7 @@ function findings(file: string): string[] {
 describe('sound-effect determinism scan (ADR-0010 D6)', () => {
   it('scans the kernels and the shared code', () => {
     const names = files(dir).map((f) => path.relative(dir, f));
-    for (const f of ['design.ts', 'tables.ts', 'noise.ts', 'kernels/index.ts', 'kernels/reverb.ts', 'kernels/denoise.ts', 'kernels/dehum.ts', 'kernels/speech.ts']) expect(names).toContain(f);
+    for (const f of ['design.ts', 'tables.ts', 'noise.ts', 'kernels/index.ts', 'kernels/reverb.ts', 'kernels/denoise.ts', 'kernels/dehum.ts', 'kernels/speech.ts', 'fft.ts', 'anchored.ts']) expect(names).toContain(f);
   });
   it('no clocks, no random sources, and transcendental Math only in design.ts and tables.ts', () => {
     expect(files(dir).flatMap(findings)).toEqual([]);
