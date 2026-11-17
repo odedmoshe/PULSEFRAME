@@ -19,6 +19,7 @@ import { SfxBrowser } from './SfxBrowser.tsx';
 import { SourceViewer } from './SourceViewer.tsx';
 import { useEditorState } from './store.ts';
 import { TemplatesDrawer } from './TemplatesDrawer.tsx';
+import { TextStyles } from './TextStyles.tsx';
 import '../ds/chrome.css';
 
 const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp,.cube';
@@ -46,6 +47,8 @@ export function Library() {
         <Pane title={S.textTitle}>
           <p className="pf-bw-lead">{S.textLead}</p>
           <Button variant="primary" size="md" icon={<Type size={16} aria-hidden="true" />} disabled={!doc} onClick={() => void editor.addText()} data-testid="add-text">{t('text.add')}</Button>
+          {/* the text styles as tiles: they apply to the selected title (apply_text_preset) and say so while none is selected */}
+          <div className="pf-bw-scroll"><TextStyles testId="text-preset-drawer" /></div>
         </Pane>
       )}
       {rail === 'captions' && (
@@ -143,7 +146,11 @@ const CATALOGUE: Record<'effects' | 'transitions' | 'looks', { kind: PickKind; i
   looks: { kind: 'look', items: () => COLOR_LOOKS.map((l) => ({ id: l.id, name: l.name })) },
 };
 
-/** Effects, transitions and looks: the catalogue by name, applied to the selected clip as one registered op. The full gallery (previews on the frame) opens from its own button. */
+/**
+ * Effects, transitions and looks: the catalogue by name, applied to the selected clip as one registered op. The full gallery
+ * (previews on the frame) opens from this drawer's button, which owns `gallery-open` while it is shown (editor.openGallery;
+ * the inspector's button is then its alias, EffectGallery.tsx).
+ */
 function CatalogueDrawer({ kind }: { kind: 'effects' | 'transitions' | 'looks' }) {
   const { editor, state } = useEditorState();
   const S = CHROME_STRINGS[state.lang];
@@ -163,14 +170,14 @@ function CatalogueDrawer({ kind }: { kind: 'effects' | 'transitions' | 'looks' }
     setSaid(name);
   };
   const title = kind === 'effects' ? S.catEffectsTitle : kind === 'transitions' ? S.catTransitionsTitle : S.catLooksTitle;
-  const gallery = () => document.querySelector<HTMLElement>('[data-testid=gallery-open]')?.click();
+  const gallery = () => editor.openGallery(kind);
   return (
     <Pane title={title} count={all.length} >
       <label className="pf-bw-search">
         <Search size={16} strokeWidth={1.75} aria-hidden="true" />
         <input type="search" dir="auto" value={q} onChange={(e) => setQ(e.target.value)} placeholder={S.searchPlaceholder} aria-label={S.searchPlaceholder} data-testid="catalogue-search" />
       </label>
-      {clip ? <Button size="sm" variant="secondary" icon={<Sparkles size={16} aria-hidden="true" />} onClick={gallery} data-testid="catalogue-open-gallery">{S.catOpen}</Button>
+      {clip ? <Button size="sm" variant="secondary" icon={<Sparkles size={16} aria-hidden="true" />} onClick={gallery} aria-haspopup="dialog" data-testid="gallery-open">{S.catOpen}</Button>
         : <p className="pf-bw-lead" role="status">{S.catNeedGallery}</p>}
       <ul className="pf-bw-list" aria-label={title}>
         {shown.map((i) => (

@@ -23,6 +23,31 @@ export function mergeJobViews<J extends JobView>(current: J[], views: JobView[])
   });
 }
 
+/**
+ * The jobs the sheet shows when it opens. The sheet's own run is kept while it is running, or when the top bar's chip asks for
+ * the last run (`last`). The chip follows the newest export of the project (`followed`), which the sheet may not have started: one
+ * the agent started over MCP or REST, another tab's, or one still running after a reload. Asked for by the chip, that one is
+ * shown too (next to the sheet's own running files, or in place of a finished run), so its progress, cancel, file and retry are
+ * there; otherwise a finished run is cleared and the sheet opens on its settings.
+ */
+export function jobsOnOpen<J extends JobView>(jobs: J[], opts: { last?: boolean }, followed: J | null): J[] {
+  const running = jobs.some((j) => isActiveJob(j.status));
+  if (opts.last && followed && !jobs.some((j) => j.id === followed.id)) return running ? [...jobs, followed] : [followed];
+  return running || (opts.last && jobs.length) ? jobs : [];
+}
+/**
+ * How the sheet names an export it did not start, from the options the server stored with it (GET /jobs/:id `options`): the
+ * format it was made for, its file type and its size. Without options (not fetched yet) it is the project's own shape.
+ */
+export function describeExport(doc: ProjectDocument, options: { variantId?: unknown; format?: unknown; scale?: unknown } | null | undefined, lang: 'he' | 'en'): { label: string; variantId: string | null; ext: string; w: number; h: number } {
+  const targets = exportTargets(doc);
+  const variantId = typeof options?.variantId === 'string' ? options.variantId : null;
+  const t = (variantId && targets.find((x) => x.variantId === variantId)) || targets[0]!;
+  const scale: ExportScale = options?.scale === 0.5 || options?.scale === 0.25 ? options.scale : 1;
+  const size = scaledSize(t, scale);
+  return { label: t.name[lang], variantId: t.variantId, ext: options?.format === 'webm-vp9-opus' ? 'webm' : 'mp4', w: size.width, h: size.height };
+}
+
 /** The words the server reports as a job's stage, in the order an export passes through them. */
 export const STAGE_ORDER = ['preparing', 'rendering audio', 'rendering', 'encoding', 'validating'] as const;
 export type StageId = (typeof STAGE_ORDER)[number];

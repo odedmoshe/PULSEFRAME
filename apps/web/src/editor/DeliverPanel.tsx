@@ -3,7 +3,7 @@ import { findClip, FORMAT_PROFILES } from '@pulseframe/core';
 import { jobStageLabel, type Key } from '@pulseframe/i18n';
 import { api, type PreflightReport } from '../api.ts';
 import { useEditorState } from './store.ts';
-import { ExportSheetHost, openExportSheet, useRecentExports } from './ExportSheet.tsx';
+import { openExportSheet, useRecentExports } from './ExportSheet.tsx';
 import { EXPORT_STRINGS } from './exportSheet.strings.ts';
 import { formatFileSize } from './exportSheet.logic.ts';
 import './deliverPanel.css';
@@ -111,7 +111,6 @@ export function DeliverPanel() {
 
   return (
     <div className="deliver pf-ds pf-dlv" data-testid="deliver-panel">
-      <ExportSheetHost />
       <ProjectFrame />
       <section aria-labelledby="deliver-formats-h">
         <h3 id="deliver-formats-h">{t('deliver.formats')}</h3>

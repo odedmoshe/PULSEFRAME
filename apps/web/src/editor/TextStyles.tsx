@@ -13,7 +13,12 @@ import { addPicture, step, f } from './EffectGallery.tsx';
 
 const NEED_TITLE = { he: 'בחרו כותרת קודם', en: 'Select a title first' } as const;
 
-export function TextStyles({ titleClipId }: { titleClipId?: string }) {
+/**
+ * `titleClipId` pins the group to one title (the inspector's style tab); without it the group follows the selection (the Text
+ * drawer). `testId` names the group: the inspector's keeps `text-preset`, the drawer's is `text-preset-drawer` so the two
+ * never share an id when both are on screen.
+ */
+export function TextStyles({ titleClipId, testId = 'text-preset' }: { titleClipId?: string; testId?: string }) {
   const { editor, state } = useEditorState();
   const lang = state.lang;
   const SP = SPREAD_STRINGS[lang];
@@ -31,7 +36,7 @@ export function TextStyles({ titleClipId }: { titleClipId?: string }) {
     },
   })), [lang, words]);
   return (
-    <StyleTiles items={items} value={clip && clip.type === 'text' ? currentTextPresetId(clip, TEXT_PRESETS) : null} label={lang === 'he' ? 'סגנונות טקסט' : 'Text styles'} testId="text-preset" cacheTag={`text:${words}`} appliedLabel={SP.checkMark}
+    <StyleTiles items={items} value={clip && clip.type === 'text' ? currentTextPresetId(clip, TEXT_PRESETS) : null} label={lang === 'he' ? 'סגנונות טקסט' : 'Text styles'} testId={testId} cacheTag={`text:${words}`} appliedLabel={SP.checkMark}
       disabledReason={clipId ? undefined : NEED_TITLE[lang]}
       onPick={(id) => { if (clipId) void editor.commit([{ op: 'apply_text_preset', args: { clipId, presetId: id } }], 'Text style'); }} />
   );

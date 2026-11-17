@@ -9,7 +9,7 @@
  *               that delete cannot be used with nothing selected still finds the control; they are out of the tab order and
  *               of the accessibility tree while hidden
  * Each action is the command the keyboard runs (commands.ts) or one registered op through the editor's commit. The actions
- * that open a tab of the inspector or a gallery ask for it with `openPanel` below: they do not reach into those panels.
+ * that open a tab of the inspector or a gallery ask the editor for it (editor.openPanel): they do not reach into those panels.
  * The bar is one toolbar for assistive technology: Tab enters it, the arrow keys move inside it.
  */
 import { forwardRef, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
@@ -19,36 +19,14 @@ import { findClip, previousAdjacent, transitionDef, velocityLimit, type Clip } f
 import { Menu, Tooltip, cx, type MenuItem } from '../ds/index.ts';
 import { rovingNext } from '../ds/logic.ts';
 import { COMMANDS, chordLabel } from './commands.ts';
-import { cutSelection, DEFAULT_TRANSITION, defaultTransitionFrames, TransitionGlyph, useSelectedCut } from './CutChip.tsx';
+import { DEFAULT_TRANSITION, defaultTransitionFrames, TransitionGlyph, useSelectedCut } from './CutChip.tsx';
 import { IconBeatLock } from './icons.tsx';
 import { signedTimecode, type BarGrid } from './interactions.math.ts';
-import { useEditorState, type Editor } from './store.ts';
+import { useEditorState, type Editor, type PanelTarget } from './store.ts';
 import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
 
-/** A place the ride bar can ask the editor to show: a tab of the inspector, or a gallery. */
-export type PanelTarget = 'speed' | 'animation' | 'effects' | 'transition' | 'transitions-gallery' | 'sound' | 'replace';
-/**
- * Ask for a panel. A cancellable `pf:open-panel` event goes to the window (detail: { target, clipId }); the panel that
- * shows the target handles it and calls preventDefault. While no panel listens, the controls that carry the kept test ids
- * of that content are used instead: the gallery button, the inspector's tab, the block of that property.
- */
-export function openPanel(target: PanelTarget, clipId: string | null): void {
-  const ev = new CustomEvent('pf:open-panel', { detail: { target, clipId }, cancelable: true });
-  if (!window.dispatchEvent(ev)) return;
-  const q = (sel: string) => document.querySelector<HTMLElement>(sel);
-  const show = (el: HTMLElement | null) => {
-    if (!el) return false;
-    for (let d = el.closest('details'); d; d = d.parentElement?.closest('details') ?? null) d.open = true;
-    el.scrollIntoView({ block: 'center' });
-    (el.matches('button, input, select, textarea, [tabindex]') ? el : el.querySelector<HTMLElement>('button, input, select, textarea, [tabindex]'))?.focus({ preventScroll: true });
-    return true;
-  };
-  if (target === 'effects' || target === 'transitions-gallery') { q('[data-testid=inspector-tab-clip][aria-selected=false]')?.click(); requestAnimationFrame(() => q('[data-testid=gallery-open]')?.click()); return; }
-  if (target === 'sound') { const tab = q('[data-testid=inspector-tab-sound]'); if (tab) { tab.click(); tab.focus(); } return; }
-  q('[data-testid=inspector-tab-clip][aria-selected=false]')?.click();
-  const first: Record<Exclude<PanelTarget, 'effects' | 'transitions-gallery' | 'sound'>, string> = { speed: '[data-testid=clip-speed]', animation: '[data-testid=animate-controls], [data-testid=text-animation]', transition: '[data-testid=transition-type], [data-testid=transition-controls]', replace: '[data-testid=replace-media-block]' };
-  requestAnimationFrame(() => show(q(first[target])));
-}
+/** A place the ride bar can ask the editor to show (editor.openPanel; the inspector and the gallery honour it). */
+export type { PanelTarget } from './store.ts';
 
 /** The test id of a clip action of the bar: bar-split, bar-duplicate, bar-delete. */
 const barId = (id: string) => `bar-${id.slice(5)}`;
@@ -154,7 +132,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     chip = <span className="ride-chip is-cut" data-testid="ride-length"><Scissors size={13} strokeWidth={1.75} aria-hidden="true" /><span>{s.cut}</span><bdi className="num">{signedTimecode(T.frameIndexAt(clip.start, rate), rate).slice(1)}</bdi></span>;
     body = (
       <>
-        <Menu className="tl-menu" label={s.rTransition} items={items} onSelect={(id) => (id === '#gallery' ? openPanel('transitions-gallery', clip.id) : setType(id))}
+        <Menu className="tl-menu" label={s.rTransition} items={items} onSelect={(id) => (id === '#gallery' ? editor.openPanel('transitions-gallery', clip.id) : setType(id))}
           trigger={(p) => <Act {...p} testId="ride-transition" label={tr ? transitionDef(tr.type)?.name[state.lang] ?? s.rTransition : s.rTransition} icon={<TransitionGlyph size={15} />} reason={locked ? s.locked : undefined} className="keeps-label" />} />
         <Act testId="ride-beat-lock" className="ride-beat" label={s.cutBeatLock} icon={<IconBeatLock size={15} />} pressed={tr?.sync === 'beat'} reason={!tr ? s.cutAdd : !grid ? s.rulerBarsNeed : locked ? s.locked : undefined}
           onClick={() => void editor.commit([{ op: 'set_transition_options', args: { clipId: clip.id, sync: tr?.sync === 'beat' ? null : 'beat' } }], 'Beat lock')} />
@@ -183,7 +161,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     } else if (mode === 'many') {
       chip = <span className="ride-chip" data-testid="ride-length"><bdi className="num">{s.nSelected(clips.length)}</bdi></span>;
     }
-    const jump = (target: PanelTarget, label: string, icon: ReactNode, testId: string) => <Act testId={testId} label={label} icon={icon} reason={locked ? s.locked : undefined} onClick={() => openPanel(target, clip?.id ?? null)} />;
+    const jump = (target: PanelTarget, label: string, icon: ReactNode, testId: string) => <Act testId={testId} label={label} icon={icon} reason={locked ? s.locked : undefined} onClick={() => editor.openPanel(target, clip?.id ?? null)} />;
     const more: MenuItem[] = [
       { id: 'edit.copy', label: s.rCopy, icon: <Copy size={14} strokeWidth={1.75} aria-hidden="true" />, keys: key('edit.copy'), disabled: !can('edit.copy', editor) },
       { id: 'edit.cut', label: s.rCut, icon: <Scissors size={14} strokeWidth={1.75} aria-hidden="true" />, keys: key('edit.cut'), disabled: !can('edit.cut', editor) },
@@ -204,7 +182,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
               <Act testId="ride-transition" label={s.rTransition} icon={<TransitionGlyph size={15} />} reason={locked ? s.locked : !canTransition && !(clip as Extract<Clip, { type: 'media' }>).transition ? s.needVideoCut : undefined}
                 onClick={() => {
                   const c = clip as Extract<Clip, { type: 'media' }>;
-                  cutSelection.set(c.id); // the bar turns into the cut's tools
+                  editor.selectCut(c.id); // the bar turns into the cut's tools
                   if (!c.transition && doc) { const spare = velocityLimit(doc, c.id).haveOutFrames; if (spare !== 0) void editor.commit([{ op: 'set_transition', args: { clipId: c.id, type: DEFAULT_TRANSITION, frames: defaultTransitionFrames(rate, spare) } }], 'Add transition'); }
                 }} />
             )}

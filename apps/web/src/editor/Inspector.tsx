@@ -14,7 +14,7 @@ import { clipEnd } from '@pulseframe/core';
 import { dictionaries, type Key } from '@pulseframe/i18n';
 import type { Keymap } from './commands.ts';
 import { Scopes } from './Scopes.tsx';
-import { useEditorState } from './store.ts';
+import { useEditorState, type PanelTarget } from './store.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
@@ -27,10 +27,11 @@ import { CaptionControls, FillerPanel, SilencePanel, TranscribeAll, TranscriptPa
 import { TAB_ICON_COMPONENTS } from './icons.tsx';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { activeTab, INSPECTOR_PAGES, objectKind, pagesFor, pinnedTab, REAL_PAGES, tabsFor, type InspectorPage, type ObjectTab } from './inspector.model.ts';
-import { sayOnStage, selectCut, useInspectorView } from './inspector.bus.ts';
 import { ObjectFooter, ObjectHeader, ObjectPanels } from './InspectorObject.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import { useWideStage } from './Transport.tsx';
+import { useChrome } from './chromeState.ts';
+import { Copilot } from './Copilot.tsx';
 import './inspector.css';
 
 const TAB_KEY = 'pf.inspector.tab.v1';
@@ -49,6 +50,34 @@ function loadTab(): InspectorPage {
     if ((INSPECTOR_PAGES as readonly string[]).includes(v ?? '')) return v as InspectorPage;
   } catch { /* storage unavailable */ }
   return 'clip';
+}
+
+/** The tab of an object that holds what the ride bar asks for (editor.openPanel); null when the object has none (the gallery targets open the gallery instead). */
+export function panelTab(target: PanelTarget, kind: string): ObjectTab | null {
+  switch (target) {
+    case 'speed': return 'speed';
+    case 'animation': return kind === 'text' ? 'anim' : 'motion';
+    case 'effects': return 'effects';
+    case 'transition': return 'transition';
+    case 'sound': return 'audio';
+    case 'replace': return kind === 'sound' ? 'beat' : 'basic';
+    default: return null;
+  }
+}
+/** The control the focus moves to once the tab of a panel request is shown: the kept test ids of that content. */
+const PANEL_FOCUS: Partial<Record<PanelTarget, string>> = {
+  speed: '[data-testid=clip-speed]', animation: '[data-testid=text-animation], [data-testid=animate-controls]', transition: '[data-testid=transition-type], [data-testid=transition-controls]',
+  replace: '[data-testid=replace-media-block]', sound: '[data-testid=insp-panel-audio]',
+};
+/** Opens the closed section around `el` (its toggle), scrolls it into view and moves the focus to its first control. */
+function revealControl(el: HTMLElement | null) {
+  if (!el) return;
+  const sec = el.closest<HTMLElement>('.pf-section[data-open=false]');
+  sec?.querySelector<HTMLButtonElement>('.pf-section-toggle')?.click();
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ block: 'center' });
+    (el.matches('button, input, select, textarea, [tabindex]') ? el : el.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]'))?.focus({ preventScroll: true });
+  });
 }
 
 function FillerSection() {
@@ -70,7 +99,6 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   const { editor, state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   const sel = editor.selected;
-  const view = useInspectorView();
   const root = useRef<HTMLElement>(null);
   const [page, setPageState] = useState<InspectorPage>(loadTab);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -98,7 +126,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   }, [state.workspace, pages.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- the object ----
-  const kind = objectKind(state.doc, state.selection, view.cutClipId);
+  const kind = objectKind(state.doc, state.selection, state.cutClipId);
   const [chosen, setChosen] = useState<ObjectTab | null>(null);
   const tab = activeTab(kind, chosen, state.workspace);
   const selKey = state.selection.join(',');
@@ -108,7 +136,6 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     lastSel.current = selKey;
     // A new selection always opens the object's first tab, and the object itself when the mode offers it beside another panel.
     setChosen(null);
-    if (view.cutClipId && view.cutClipId !== state.selection[0]) selectCut(null);
     if (selKey && !flat && page !== 'clip' && pages.includes('clip')) setPage('clip');
     // A title or a caption chosen while the playhead is elsewhere: the playhead moves into it, so it shows in the viewer.
     // A move of the view only, never an edit.
@@ -116,13 +143,27 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     if (one && (one.clip.type === 'text' || one.clip.type === 'caption') && !editor.player?.playing && !(T.lte(one.clip.start, editor.playhead) && T.lt(editor.playhead, clipEnd(one.clip)))) {
       const a = T.frameIndexAt(one.clip.start, editor.rate), b = T.frameIndexAt(clipEnd(one.clip), editor.rate);
       editor.seek(Math.min(b - 1, a + Math.floor((b - a) / 2)));
-      sayOnStage(STAGE_STRINGS[state.lang][one.clip.type === 'text' ? 'movedIntoTitle' : 'movedIntoCue']);
+      editor.sayOnStage(STAGE_STRINGS[state.lang][one.clip.type === 'text' ? 'movedIntoTitle' : 'movedIntoCue']);
     }
   }, [selKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // a cut that no longer exists (its clips were moved apart, or the clip is gone) is no longer chosen
-  useEffect(() => { if (view.cutClipId && kind !== 'cut') selectCut(null); }, [view.cutClipId, kind]);
+  useEffect(() => { if (state.cutClipId && kind !== 'cut') editor.selectCut(null); }, [state.cutClipId, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   // another part of the editor asks for a tab of the object (the gallery after it applied an effect)
-  useEffect(() => { if (view.tabRequest && tabsFor(kind).includes(view.tabRequest.tab)) { setChosen(view.tabRequest.tab); if (!flat && page !== 'clip' && pages.includes('clip')) setPage('clip'); } }, [view.tabRequest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const r = state.inspectorTab; if (r && tabsFor(kind).includes(r.tab)) { setChosen(r.tab); if (!flat && page !== 'clip' && pages.includes('clip')) setPage('clip'); } }, [state.inspectorTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the ride bar asks for a panel (editor.openPanel): the object's tab that holds it, then the focus on its first control. After
+  // the selection effect above, so a request that also selected the clip lands on the new object's tab.
+  useEffect(() => {
+    const r = state.panelRequest;
+    if (!r) return;
+    const want = panelTab(r.target, kind);
+    if (want && tabsFor(kind).includes(want)) setChosen(want);
+    if (!flat && page !== 'clip' && pages.includes('clip')) setPage('clip');
+    const target = PANEL_FOCUS[r.target];
+    if (!target) return;
+    // two frames: the tab chosen above has rendered by then
+    let h = requestAnimationFrame(() => { h = requestAnimationFrame(() => revealControl(root.current?.querySelector<HTMLElement>(target) ?? null)); });
+    return () => cancelAnimationFrame(h);
+  }, [state.panelRequest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   // an effect added to the selected clip: the effects tab opens on it
   const fxCount = sel && sel.clip.type !== 'caption' ? sel.clip.effects?.length ?? 0 : 0;
   const lastFx = useRef({ key: selKey, n: fxCount });
@@ -170,10 +211,14 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   const wide = useWideStage(); // at wide windows the scopes dock beside the viewer (Transport.tsx)
   const motionOnly = state.workspace === 'motion';
   const noColour = colour && pinnedTab('color', kind) === null;
+  // the AI page (UX_REDESIGN §4.1, §4.11): while the rail's AI item is active the inspector column holds the Copilot
+  const { rail } = useChrome();
+  const copilot = rail === 'ai';
   return (
     <SectionsContext.Provider value={{ flat, labels: { help: S.help, reset: S.reset } }}>
-    <aside ref={root} className="inspector pf-ds pf-insp" aria-label={t('inspector')} data-view={flat ? 'all' : 'tabs'} data-mode={state.workspace} data-page={page} data-kind={kind}>
+    <aside ref={root} className="inspector pf-ds pf-insp" aria-label={t('inspector')} data-view={flat ? 'all' : 'tabs'} data-mode={state.workspace} data-page={page} data-kind={kind} data-rail={copilot ? 'ai' : undefined}>
       <h2 className="sr-only">{t('inspector')}</h2>
+      {copilot ? <Copilot /> : <>
       {state.workspace === 'custom' && (
         <fieldset className="custom-panels" data-testid="custom-panels">
           <legend>{t('workspace.custom.choose')}</legend>
@@ -308,6 +353,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       </ol>
       <AccessPanel />
       </div>
+      </>}
     </aside>
     </SectionsContext.Provider>
   );

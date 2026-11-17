@@ -7,8 +7,12 @@
  * result from the saved file. No time estimate is shown because none is measured. Exports are started through the same REST
  * routes as every other client; a format that is not linked yet is linked first with the registered `add_variant` op.
  *
- * Opening: `openExportSheet()` (the top bar's Export button and the palette call it). `<ExportSheetHost/>` renders the dialog;
- * mount it once (several hosts are safe: only the first mounted one renders).
+ * Opening: `openExportSheet()` (the top bar's Export button and its ring chip, the Deliver panel), or `editor.openExportSheet()`
+ * (the palette's command). `<ExportSheetHost/>` renders the dialog; App.tsx mounts it once (a second host would stay empty).
+ * Exports start through `editor.startExport(options)`, which also registers the job for the editor's auto-save and for the
+ * top bar's ring.
+ * The photosensitivity card in the done step carries its own ids (export-flash-*): flash-pass / flash-fail are the status
+ * bar's (StatusBar.tsx), which stays after the sheet is closed.
  */
 import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { Check, Download, MessageCircle, MonitorPlay, Play, ShieldCheck, SlidersHorizontal, Smartphone, HardDriveDownload, TriangleAlert, Upload } from 'lucide-react';
@@ -17,16 +21,17 @@ import { isolate } from '../ds/util.tsx';
 import { translateRefusal } from '@pulseframe/i18n';
 import * as T from '@pulseframe/time';
 import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../api.ts';
-import { useEditorState, type Editor } from './store.ts';
+import { useEditorState, type Editor, type ExportRequest } from './store.ts';
 import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
 import {
-  alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
+  alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, describeExport, jobsOnOpen, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
 } from './exportSheet.logic.ts';
 import './exportSheet.css';
 
 // ---------------------------------------------------------------- the sheet's own small store (open state and the jobs it started)
-export interface SheetJob { id: string; label: string; variantId: string | null; status: string; stage: string | null; output: any; error: any; ext: string; w: number; h: number }
+/** `pending`: an export the sheet did not start (the chip's followed job), named from the project until its stored options are read. */
+export interface SheetJob { id: string; label: string; variantId: string | null; status: string; stage: string | null; output: any; error: any; ext: string; w: number; h: number; pending?: boolean }
 interface SheetState { open: boolean; jobs: SheetJob[]; starting: boolean; error: string | null; blockers: { code: string; message: string }[]; recent: SheetJob[] }
 let sheet: SheetState = { open: false, jobs: [], starting: false, error: null, blockers: [], recent: [] };
 const listeners = new Set<() => void>();
@@ -39,11 +44,17 @@ const setSheet = (patch: Partial<SheetState>) => {
 };
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 const useSheet = () => useSyncExternalStore(subscribe, () => sheet);
-/** Opens the export sheet. A finished or failed earlier run is cleared, so the sheet opens on its settings; a running one is shown. */
-export function openExportSheet() {
-  const running = sheet.jobs.some((j) => isActiveJob(j.status));
-  setSheet({ open: true, error: null, blockers: [], ...(running ? {} : { jobs: [] }) });
+/**
+ * Opens the export sheet. A finished or failed earlier run is cleared, so the sheet opens on its settings; a running one is
+ * shown. `{ last: true }` (the top bar's export chip) shows the last run as it is, finished or not, and `followed` is the
+ * export the chip follows: when the sheet did not start it (the agent, another tab, a reload), it is shown all the same, with
+ * its progress and cancel, or its file and retry (exportSheet.logic.ts jobsOnOpen).
+ */
+export function openExportSheet(opts: { last?: boolean; followed?: SheetJob | null } = {}) {
+  setSheet({ open: true, error: null, blockers: [], jobs: jobsOnOpen(sheet.jobs, opts, opts.followed ?? null) });
 }
+/** The runs of the sheet's last export and whether the sheet is open (the top bar's export chip reads them). */
+export function useExportSheet(): { open: boolean; jobs: readonly SheetJob[]; starting: boolean } { const s = useSheet(); return { open: s.open, jobs: s.jobs, starting: s.starting }; }
 /** The files this session exported, newest first (for the Deliver panel). */
 export function useRecentExports(): SheetJob[] { return useSheet().recent; }
 export function closeExportSheet() { setSheet({ open: false }); }
@@ -83,12 +94,26 @@ export function ExportSheetHost() {
     tick();
     return () => window.clearInterval(h);
   }, [primary, active]);
+  // an export the sheet did not start is named from the options the server stored with it (its format, file type and size)
+  const pending = s.jobs.filter((j) => j.pending).map((j) => j.id).join(' ');
+  useEffect(() => {
+    const doc = state.doc;
+    if (!primary || !pending || !doc) return;
+    for (const id of pending.split(' ')) {
+      void api.job(id).then((v) => setSheet({ jobs: sheet.jobs.map((j) => (j.id === id ? { ...j, ...describeExport(doc, v.options, state.lang), status: isActiveJob(j.status) ? v.status : j.status, stage: isActiveJob(j.status) ? v.stage : j.stage, output: isActiveJob(j.status) ? v.output : j.output, error: isActiveJob(j.status) ? v.error : j.error, pending: false } : j)) }))
+        .catch(() => setSheet({ jobs: sheet.jobs.map((j) => (j.id === id ? { ...j, pending: false } : j)) }));
+    }
+  }, [primary, pending]); // eslint-disable-line react-hooks/exhaustive-deps
   // the editor hears the newest export through the event stream; that is fresher than the next poll, so the sheet takes it too
   const heard = state.exportJob;
   useEffect(() => {
     if (!primary || !heard || !sheet.jobs.some((j) => j.id === heard.id)) return;
     setSheet({ jobs: mergeJobViews(sheet.jobs, [heard]) });
   }, [primary, heard]);
+  // the palette's command asks through the editor (editor.openExportSheet)
+  const asked = state.exportSheet;
+  const seenAsk = useRef(asked);
+  useEffect(() => { if (primary && asked !== seenAsk.current) { seenAsk.current = asked; openExportSheet(); } }, [primary, asked]);
   if (!primary || !state.doc) return null;
   return <Sheet editor={editor} />;
 }
@@ -386,9 +411,10 @@ function SettingsFooter({ editor, S }: { editor: Editor; S: ExportStrings }) {
       for (const c of chosen) {
         const variantId = c.kind === 'master' ? null : c.kind === 'variant' ? c.variantId : made.get(c.key) ?? null;
         const out = scaledSize(c, p.choices.scale);
-        const r = await api.startExport(doc.id, exportOptions(p.choices, variantId) as { variantId?: string });
-        // the editor saves a file it started when it is ready (store.ts); a job started here is registered the same way
-        (editor as unknown as { myExports?: Set<string> }).myExports?.add(r.jobId);
+        // the editor registers the job: its file is saved by itself when ready, and the top bar's ring follows it (store.ts)
+        const jobId = await editor.startExport(exportOptions(p.choices, variantId) as ExportRequest);
+        if (!jobId) throw new Error(S.startFailed);
+        const r = { jobId };
         // append to the list as it is now (a poll may have updated the earlier files meanwhile); `starting` stays on until the last is added
         setSheet({ jobs: [...sheet.jobs, { id: r.jobId, label: c.name[lang], variantId, status: 'queued', stage: null, output: null, error: null, ext: p.choices.format === 'webm-vp9-opus' ? 'webm' : 'mp4', w: out.width, h: out.height }] });
       }
@@ -461,7 +487,7 @@ function Done({ editor, S }: { editor: Editor; S: ExportStrings }) {
   const retry = async (j: SheetJob) => {
     try {
       const r = await api.retryJob(j.id);
-      (editor as unknown as { myExports?: Set<string> }).myExports?.add(r.jobId);
+      editor.trackExport(r.jobId);
       setSheet({ jobs: sheet.jobs.map((x) => (x.id === j.id ? { ...x, id: r.jobId, status: 'queued', stage: null, output: null, error: null } : x)) });
     } catch (e) { editor.fail(e); }
   };
@@ -470,16 +496,22 @@ function Done({ editor, S }: { editor: Editor; S: ExportStrings }) {
       <h3 className="pf-xs-run-title">{ok.length === 0 ? (bad.every((j) => j.status === 'canceled') ? S.canceledTitle : S.failedTitle) : ok.length === 1 ? S.doneTitle : S.doneMany(ok.length)}</h3>
       {ok.length > 0 && <span className="pf-xs-sr" role="status" data-testid="export-finished">{ok.length === 1 ? S.doneTitle : S.doneMany(ok.length)}</span>}
       {ok.map((j) => <FileCard key={j.id} j={j} S={S} editor={editor} />)}
-      {bad.map((j) => (
-        <div key={j.id} className="pf-xs-card is-bad" data-testid={j.status === 'canceled' ? 'export-canceled' : 'export-failed'} role="alert">
-          <TriangleAlert size={18} aria-hidden="true" />
-          <div className="pf-xs-card-text">
-            <b>{j.label} · {j.status === 'canceled' ? S.canceledTitle : S.failedTitle}</b>
-            <span dir="auto">{j.status === 'canceled' ? S.canceledNote : `${j.error?.message ? (translateRefusal(state.lang, j.error.message) ?? j.error.message) + '. ' : ''}${S.failedFix}`}</span>
-          </div>
-          <Button variant="secondary" size="sm" onClick={() => void retry(j)} data-testid="export-retry">{S.retry}</Button>
-        </div>
-      ))}
+      {bad.map((j) => {
+        const body = (
+          <>
+            <TriangleAlert size={18} aria-hidden="true" />
+            <div className="pf-xs-card-text">
+              <b>{j.label} · {j.status === 'canceled' ? S.canceledTitle : S.failedTitle}</b>
+              <span dir="auto">{j.status === 'canceled' ? S.canceledNote : `${j.error?.message ? (translateRefusal(state.lang, j.error.message) ?? j.error.message) + '. ' : ''}${S.failedFix}`}</span>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => void retry(j)} data-testid="export-retry">{S.retry}</Button>
+          </>
+        );
+        // the ids stay literal attributes (the test id inventory reads them from the source)
+        return j.status === 'canceled'
+          ? <div key={j.id} className="pf-xs-card is-bad" data-testid="export-canceled" role="alert">{body}</div>
+          : <div key={j.id} className="pf-xs-card is-bad" data-testid="export-failed" role="alert">{body}</div>;
+      })}
       <AlsoCard S={S} ok={ok} />
       <div className="pf-xs-run-actions">
         <Button variant="secondary" size="lg" onClick={closeExportSheet}>{S.backToEdit}</Button>
@@ -537,22 +569,22 @@ interface FlashReport { verdict: 'pass' | 'fail'; ranges: { from: { value: strin
 function FlashResult({ report, S, editor }: { report: FlashReport; S: ExportStrings; editor: Editor }) {
   const { state, t } = useEditorState();
   if (report.verdict === 'pass') {
-    return <div className="pf-xs-card is-ok" role="status" data-testid="flash-pass" title={t('flash.passTitle')}><ShieldCheck size={18} aria-hidden="true" /><div className="pf-xs-card-text"><b>{S.flashPass}</b><span>{S.flashPassNote}</span></div></div>;
+    return <div className="pf-xs-card is-ok" role="status" data-testid="export-flash-pass" title={t('flash.passTitle')}><ShieldCheck size={18} aria-hidden="true" /><div className="pf-xs-card-text"><b>{S.flashPass}</b><span>{S.flashPassNote}</span></div></div>;
   }
   const rate = state.doc?.settings.frameRate;
   const sec = (x: { value: string; timescale: number }) => Number(x.value) / x.timescale;
   const clock = (v: number) => `${Math.floor(v / 60)}:${(v % 60).toFixed(1).padStart(4, '0')}`;
   return (
-    <div className="pf-xs-card is-bad is-flash" data-testid="flash-fail" role="group" aria-label={S.flashFailTitle}>
+    <div className="pf-xs-card is-bad is-flash" data-testid="export-flash-fail" role="group" aria-label={S.flashFailTitle}>
       <TriangleAlert size={18} aria-hidden="true" />
       <div className="pf-xs-card-text">
         <b>{S.flashFailTitle} ({report.ranges.length})</b>
         <span>{t('flash.failIntro')}</span>
         <ul className="pf-xs-flash-list">
           {report.ranges.map((r, i) => (
-            <li key={i} data-testid="flash-range">
+            <li key={i} data-testid="export-flash-range">
               <bdi dir="ltr" className="num">{clock(sec(r.from))}–{clock(sec(r.to))}</bdi> · {t(r.kind === 'red' ? 'flash.red' : 'flash.general')} <span className="num">{r.flashesPerSecond}</span> {t('flash.perSecond')} · <span className="num">{Math.round(r.area * 100)}%</span> {t('flash.area')}
-              {rate && <Button size="sm" variant="secondary" data-testid="flash-jump" onClick={() => { editor.seek(Math.floor((sec(r.from) * rate.num) / rate.den)); closeExportSheet(); }}>{S.jump}</Button>}
+              {rate && <Button size="sm" variant="secondary" data-testid="export-flash-jump" onClick={() => { editor.seek(Math.floor((sec(r.from) * rate.num) / rate.den)); closeExportSheet(); }}>{S.jump}</Button>}
             </li>
           ))}
         </ul>

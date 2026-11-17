@@ -53,16 +53,23 @@ export function FormatPrism() {
         {chips.map((c, i) => {
           const on = i === active;
           const ratio = ratioLabel(c.width, c.height);
-          return (
-            <button key={c.id || 'master'} ref={(el) => { refs.current[i] = el; }} type="button" role="radio" aria-checked={on} tabIndex={on ? 0 : -1} className={`prism-chip${on ? ' is-on' : ''}`}
-              data-value={c.id} data-testid={on && c.id ? 'format-badge' : 'format-chip'} data-variant-id={c.id || undefined}
-              aria-label={`${c.name} ${ratio} (${c.width}×${c.height})${c.diverged ? ` · ${S.diverged}` : ''}`} title={on && c.id ? S.formatNote : `${c.name} · ${c.width}×${c.height}${c.diverged ? ` · ${S.diverged}` : ''}`}
-              onClick={() => choose(c.id)} onKeyDown={(e) => onKey(e, i)}>
+          const props = {
+            ref: (el: HTMLButtonElement | null) => { refs.current[i] = el; }, type: 'button' as const, role: 'radio', 'aria-checked': on, tabIndex: on ? 0 : -1, className: `prism-chip${on ? ' is-on' : ''}`,
+            'data-value': c.id, 'data-variant-id': c.id || undefined,
+            'aria-label': `${c.name} ${ratio} (${c.width}×${c.height})${c.diverged ? ` · ${S.diverged}` : ''}`, title: on && c.id ? S.formatNote : `${c.name} · ${c.width}×${c.height}${c.diverged ? ` · ${S.diverged}` : ''}`,
+            onClick: () => choose(c.id), onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => onKey(e, i),
+          };
+          const inner = (
+            <>
               <span className="prism-shape" aria-hidden="true"><i style={c.width >= c.height ? { inlineSize: 22, blockSize: Math.max(6, Math.round((22 * c.height) / c.width)) } : { blockSize: 18, inlineSize: Math.max(6, Math.round((18 * c.width) / c.height)) }} /></span>
               <span className="num">{ratio}</span>
               {c.diverged && <i className="prism-dot" aria-hidden="true" />}
-            </button>
+            </>
           );
+          // the viewed linked format is the format badge (the id the top bar's badge had); the ids stay literal attributes for the inventory
+          return on && c.id
+            ? <button key={c.id} {...props} data-testid="format-badge">{inner}</button>
+            : <button key={c.id || 'master'} {...props} data-testid="format-chip">{inner}</button>;
         })}
       </div>
       {addable.length > 0 && (

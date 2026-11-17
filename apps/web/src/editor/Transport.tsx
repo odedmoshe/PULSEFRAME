@@ -1,6 +1,6 @@
 /**
- * The stage around the viewer (UX_REDESIGN §4.5). App.tsx mounts this component after the viewer; it renders the stage header
- * (placed above the viewer by the stage grid, stage.css), what lies over the viewer (the cut loupe, the note of a moved
+ * The stage around the viewer (UX_REDESIGN §4.5). App.tsx mounts this component after the viewer (and the stage header,
+ * StageHeader.tsx, before it, so the DOM and tab order match the picture); it renders what lies over the viewer (the cut loupe, the note of a moved
  * playhead, the hint of an edit with no clips yet), the scopes docked beside the viewer in Look mode at wide windows, and the
  * transport bar: timecode, steps, play, loop, the beat under the playhead, full screen. The transport runs left to right in
  * every language.
@@ -13,10 +13,8 @@ import { COMMANDS } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
 import { IconLoop, IconNextFrame, IconPause, IconPlay, IconPrevFrame } from './icons.tsx';
 import { Scopes } from './Scopes.tsx';
-import { StageHeader } from './StageHeader.tsx';
 import { CutLoupe } from './CutLoupe.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
-import { sayOnStage, useInspectorView } from './inspector.bus.ts';
 import './stage.css';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -47,13 +45,12 @@ function beatNow(editor: Editor): { bar: number; beat: number; index: number } |
 
 /** What lies over the viewer: the cut loupe; a quiet note that fades by itself; the hint of an edit that has files but no clips yet. */
 function StageOverlay() {
-  const { state } = useEditorState();
-  const view = useInspectorView();
+  const { editor, state } = useEditorState();
   const S = STAGE_STRINGS[state.lang];
-  const note = view.stageNote;
+  const note = state.stageNote;
   useEffect(() => {
     if (!note) return;
-    const t = window.setTimeout(() => sayOnStage(null), 4200);
+    const t = window.setTimeout(() => editor.sayOnStage(null), 4200);
     return () => window.clearTimeout(t);
   }, [note?.at]); // eslint-disable-line react-hooks/exhaustive-deps
   const doc = state.doc;
@@ -84,7 +81,6 @@ export function Transport() {
   }, [vw, vh]);
   return (
     <>
-      <StageHeader />
       <StageOverlay />
       {state.workspace === 'color' && wide && <aside className="stage-side pf-ds pf-insp pf-force-dark" aria-label={S.scopes} data-testid="stage-scopes"><Scopes /></aside>}
       <div className="transport pf-ds pf-force-dark" dir="ltr" role="group" aria-label={t('cmd.playPause')}>

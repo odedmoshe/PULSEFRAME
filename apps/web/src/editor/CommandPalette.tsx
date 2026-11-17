@@ -16,7 +16,7 @@ import './command-palette.css';
 
 const MODIFIER_CODES = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight', 'OS', 'AltGraph']);
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-const SEARCH_ITEMS = COMMANDS.map((c) => ({ id: c.id, he: dictionaries.he[c.label], en: dictionaries.en[c.label] }));
+const SEARCH_ITEMS = COMMANDS.map((c) => ({ id: c.id, he: c.text?.he ?? dictionaries.he[c.label], en: c.text?.en ?? dictionaries.en[c.label] }));
 const GROUP_ORDER = [...new Set(COMMANDS.map((c) => c.group))];
 const byId = new Map(COMMANDS.map((c) => [c.id, c]));
 const otherLang = (l: Lang): Lang => (l === 'he' ? 'en' : 'he');
@@ -73,7 +73,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   }, [view]);
 
   const close = () => editor.set({ paletteOpen: false });
-  const label = (c: Command, l: Lang = lang) => dictionaries[l][c.label];
+  const label = (c: Command, l: Lang = lang) => c.text?.[l] ?? dictionaries[l][c.label];
   const enabled = (c: Command) => !c.enabled || c.enabled(editor);
   const chords = (c: Command) => keymap.keysFor(c.id);
 
