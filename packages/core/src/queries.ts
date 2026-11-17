@@ -3,6 +3,7 @@ import type { ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
 import { timelineMarkers } from './cleanup.ts';
 import { assetNotices } from './notices.ts';
+import { own } from './own.ts';
 
 const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
 
@@ -27,7 +28,7 @@ export function summarize(doc: ProjectDocument) {
 }
 
 export function timeline(doc: ProjectDocument, sequenceId = doc.mainSequenceId) {
-  const seq = doc.sequences[sequenceId];
+  const seq = own(doc.sequences, sequenceId);
   if (!seq) return null;
   return {
     sequenceId: seq.id,
@@ -48,7 +49,7 @@ export function timeline(doc: ProjectDocument, sequenceId = doc.mainSequenceId) 
 
 /** A transcript in agent-readable form: phrase and word ids (for correct_transcript / delete_transcript_range) with source times. */
 export function transcriptView(doc: ProjectDocument, assetId: string) {
-  const t = doc.transcripts?.[assetId];
+  const t = own(doc.transcripts, assetId);
   if (!t) return null;
   return {
     assetId, language: t.language, origin: t.origin,

@@ -2,6 +2,7 @@ import * as T from '@pulseframe/time';
 import { animatableParams, findEffect } from './effects.ts';
 import { sourceEnd } from './speed.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { isInheritedName, own } from './own.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -12,7 +13,7 @@ export const forbidsOverlap = (t: Track) => t.kind !== 'audio';
 
 export function sequenceDuration(doc: ProjectDocument, sequenceId = doc.mainSequenceId): T.RationalTime {
   let end = T.ZERO;
-  for (const tr of doc.sequences[sequenceId]?.tracks ?? []) for (const c of tr.clips) end = T.max(end, clipEnd(c));
+  for (const tr of own(doc.sequences, sequenceId)?.tracks ?? []) for (const c of tr.clips) end = T.max(end, clipEnd(c));
   return end;
 }
 
@@ -33,9 +34,12 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   const seen = new Set<string>();
   const uniq = (id: string) => {
     if (seen.has(id)) issues.push({ code: 'duplicate_id', message: `duplicate id ${id}`, ids: [id] });
+    // Ids key the document's records (and records beside them: transcripts by asset, overrides by clip). One that names
+    // something every object inherits would be found there without being there, so no entity may carry it (see own.ts).
+    if (isInheritedName(id)) issues.push({ code: 'reserved_id', message: `id "${id}" is reserved and cannot name an item`, ids: [id] });
     seen.add(id);
   };
-  if (!doc.sequences[doc.mainSequenceId]) issues.push({ code: 'missing_sequence', message: 'mainSequenceId does not exist', ids: [doc.mainSequenceId] });
+  if (!own(doc.sequences, doc.mainSequenceId)) issues.push({ code: 'missing_sequence', message: 'mainSequenceId does not exist', ids: [doc.mainSequenceId] });
   for (const [key, a] of Object.entries(doc.assets)) {
     if (key !== a.id) issues.push({ code: 'key_mismatch', message: `asset key ${key} != id ${a.id}`, ids: [key] });
     uniq(a.id);
@@ -82,7 +86,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           if (!d) issues.push({ code: 'unknown_effect', message: `clip ${c.id} uses effect "${fx.type}", which this build does not have`, ids: [c.id] });
           else if (!d.params.safeParse(fx.params).success) issues.push({ code: 'effect_params', message: `clip ${c.id} effect ${fx.type} has invalid parameters`, ids: [c.id] });
           const table = lutRef(fx);
-          if (table && doc.assets[table]?.kind !== 'lut') issues.push({ code: 'missing_lut', message: `clip ${c.id} effect color.lut names colour table ${table}, which is not a colour table in this project's library`, ids: [c.id, table] });
+          if (table && own(doc.assets, table)?.kind !== 'lut') issues.push({ code: 'missing_lut', message: `clip ${c.id} effect color.lut names colour table ${table}, which is not a colour table in this project's library`, ids: [c.id, table] });
           for (const [param, keys] of Object.entries(fx.keyframes ?? {})) {
             const ok = !!d && animatableParams(fx.type).includes(param) && keys.every((k, i) => (i === 0 || T.lt(keys[i - 1]!.time, k.time)) && T.isFrameAligned(k.time, rate) && d.params.safeParse({ ...fx.params, [param]: k.value }).success);
             if (!ok) issues.push({ code: 'effect_keyframes', message: `clip ${c.id} effect ${fx.type}: keyframes of "${param}" are not animatable, out of range, unsorted or off the frame grid`, ids: [c.id] });
@@ -97,7 +101,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           continue;
         }
         if (tr.kind === 'caption') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on caption track`, ids: [c.id, tr.id] });
-        const asset = doc.assets[c.assetId];
+        const asset = own(doc.assets, c.assetId);
         if (!asset) { issues.push({ code: 'missing_asset', message: `clip ${c.id} references missing asset ${c.assetId}`, ids: [c.id, c.assetId] }); continue; }
         if (tr.kind === 'text') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on text track`, ids: [c.id, tr.id] });
         if (tr.kind === 'video' && !asset.video && !(asset.kind === 'image' && asset.image)) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
@@ -122,7 +126,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   for (const [key, mk] of Object.entries(doc.markers ?? {})) {
     if (key !== mk.id) issues.push({ code: 'key_mismatch', message: `marker key ${key} != id ${mk.id}`, ids: [key] });
     uniq(mk.id);
-    if (!doc.sequences[mk.sequenceId]) issues.push({ code: 'missing_sequence', message: `marker ${mk.id} refers to a missing sequence`, ids: [mk.id] });
+    if (!own(doc.sequences, mk.sequenceId)) issues.push({ code: 'missing_sequence', message: `marker ${mk.id} refers to a missing sequence`, ids: [mk.id] });
     if (T.isNegative(mk.time) || !T.isFrameAligned(mk.time, doc.settings.frameRate)) issues.push({ code: 'marker_time', message: `marker ${mk.id} must sit on a non-negative whole frame`, ids: [mk.id] });
   }
   for (const [key, va] of Object.entries(doc.variants ?? {})) {
@@ -130,13 +134,13 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     uniq(va.id);
   }
   for (const [key, an] of Object.entries(doc.analyses ?? {})) {
-    if (key !== an.assetId || !doc.assets[an.assetId]) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });
+    if (key !== an.assetId || !own(doc.assets, an.assetId)) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });
     for (const [name, list] of [['scene cuts', an.scenes?.cuts], ['beats', an.beats?.beats], ['bar starts', an.beats?.downbeats]] as const)
       if (list?.some((t, i) => T.isNegative(t) || (i > 0 && !T.lt(list[i - 1]!, t)))) issues.push({ code: 'analysis_order', message: `${name} of asset ${key} must be non-negative and strictly ascending`, ids: [key] });
   }
   for (const [key, tr] of Object.entries(doc.transcripts ?? {})) {
     if (key !== tr.assetId) issues.push({ code: 'key_mismatch', message: `transcript key ${key} != assetId ${tr.assetId}`, ids: [key] });
-    if (!doc.assets[tr.assetId]?.audio) issues.push({ code: 'missing_asset', message: `transcript refers to asset ${tr.assetId}, which is missing or has no audio`, ids: [tr.assetId] });
+    if (!own(doc.assets, tr.assetId)?.audio) issues.push({ code: 'missing_asset', message: `transcript refers to asset ${tr.assetId}, which is missing or has no audio`, ids: [tr.assetId] });
     let prevEnd = T.ZERO;
     for (const seg of tr.segments) {
       uniq(seg.id);

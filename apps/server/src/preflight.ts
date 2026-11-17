@@ -4,7 +4,7 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { handleAfterEnd, sequenceDuration, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { handleAfterEnd, own, sequenceDuration, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { variantDoc } from './export.ts';
@@ -23,7 +23,7 @@ export interface PreflightOptions { variantId?: string; maxCharsPerSecond?: numb
 export function preflight(exporter: Exporter, master: ProjectDocument, revision: number, opts: PreflightOptions = {}) {
   const issues: PreflightIssue[] = [];
   const doc = variantDoc(master, opts.variantId);
-  const variant = opts.variantId ? master.variants[opts.variantId]! : null;
+  const variant = opts.variantId ? own(master.variants, opts.variantId)! : null; // variantDoc above refused an id that names no format
   const { width: W, height: H, frameRate: rate } = doc.settings;
   const seq = doc.sequences[doc.mainSequenceId]!;
   const total = T.frameCount(sequenceDuration(doc), rate);

@@ -11,6 +11,7 @@
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from './schema.ts';
 import { sourceAt, speedEndValue, speedValue } from './speed.ts';
+import { own } from './own.ts';
 
 export interface BeatPosition {
   /** The sound clip whose beats these are. */
@@ -33,7 +34,7 @@ function lastAtOrBefore(xs: Float64Array, x: number): number {
 }
 
 export function beatPositionAt(doc: ProjectDocument, time: T.RationalTime, sequenceId = doc.mainSequenceId): BeatPosition | null {
-  const seq = doc.sequences[sequenceId];
+  const seq = own(doc.sequences, sequenceId);
   if (!seq) return null;
   for (const track of seq.tracks) {
     if (track.kind !== 'audio' || track.muted) continue;

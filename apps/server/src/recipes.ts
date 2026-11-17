@@ -3,7 +3,7 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { timeOriginSeconds, findClip, fingerprint, planRecipe, RecipeError, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
+import { timeOriginSeconds, own, findClip, fingerprint, planRecipe, RecipeError, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { detectSilences, heavy } from './analysis.ts';
 import type { Governance } from './governance.ts';
@@ -20,7 +20,7 @@ const wrap = <R>(fn: () => R): R => {
 async function context(store: Store, projectId: string, recipeId: string, params: any, protectedRanges?: TimeRange[]): Promise<PlanContext> {
   const ctx: PlanContext = { protectedRanges };
   if (recipeId === 'tidy-speech' && typeof params?.assetId === 'string') {
-    const asset = store.getProject(projectId).doc.assets[params.assetId];
+    const asset = own(store.getProject(projectId).doc.assets, params.assetId);
     if (asset?.audio) ctx.silences = { [params.assetId]: await heavy(() => detectSilences(store.blobPath(asset.contentHash), { thresholdDb: -35, minSeconds: 0.5 }, timeOriginSeconds(asset))) };
   }
   return ctx;
@@ -44,7 +44,7 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
 
 export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown) {
   const p = store.getProject(projectId);
-  const run = p.doc.recipeRuns?.[runId];
+  const run = own(p.doc.recipeRuns, runId);
   if (!run) throw new ApiError(404, 'not_found', `recipe run ${runId} not found`, { runId });
   // "Protected" = a clip the run created whose content no longer matches what the run left (compared by content fingerprint,
   // so the answer does not depend on history: an undo that restores a hand edit restores its protection too).

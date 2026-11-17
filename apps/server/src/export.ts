@@ -13,7 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
@@ -57,7 +57,7 @@ function captionSidecar(doc: ProjectDocument, manifest: Manifest): { format: 'sr
 /** The document to render: the master, or the master projected into one of its linked formats. */
 export function variantDoc(doc: ProjectDocument, variantId?: string): ProjectDocument {
   if (!variantId) return doc;
-  if (!doc.variants?.[variantId]) throw new ApiError(404, 'not_found', `format variant ${variantId} not found`, { variantId, available: Object.keys(doc.variants ?? {}) }, 'get_summary lists the variants.');
+  if (!own(doc.variants, variantId)) throw new ApiError(404, 'not_found', `format variant ${variantId} not found`, { variantId, available: Object.keys(doc.variants ?? {}) }, 'get_summary lists the variants.');
   return projectVariant(doc, variantId);
 }
 const CRF = { 'mp4-h264-aac': { draft: 28, standard: 21, high: 16 }, 'webm-vp9-opus': { draft: 40, standard: 32, high: 24 } } as const;
@@ -156,7 +156,7 @@ export class Exporter {
         if (tr.caption) families.add(tr.caption.style.fontFamily);
       }
     const assets = [...used].flatMap(([id, clips]) => {
-      const a = Object.hasOwn(doc.assets, id) ? doc.assets[id] : undefined;
+      const a = own(doc.assets, id);
       if (!a) { blockers.push({ code: 'missing_media', message: `colour table ${id} named by an effect is not in the project library`, ids: [id] }); return []; }
       let present = false;
       try { present = fs.statSync(this.store.blobPath(a.contentHash)).size === a.byteSize; } catch { /* missing */ }

@@ -4,6 +4,7 @@
  * so every master edit reaches every variant and overrides (keyed by clip id) survive those edits.
  */
 import { ANIMATABLE, type ProjectDocument, type SafeArea } from './schema.ts';
+import { own } from './own.ts';
 
 /**
  * Starting points for common shapes. The safe-area insets are GENERIC guides for where app interfaces usually cover the picture;
@@ -19,7 +20,7 @@ export const findProfile = (id: string) => FORMAT_PROFILES.find((p) => p.id === 
 
 /** The document a variant renders: the master with the variant's frame, fill mode and overrides applied. Pure; the master is not changed. */
 export function projectVariant(doc: ProjectDocument, variantId: string): ProjectDocument {
-  const v = doc.variants?.[variantId];
+  const v = own(doc.variants, variantId);
   if (!v) throw new Error(`variant ${variantId} not found`);
   const out = structuredClone(doc);
   out.settings.width = v.width;

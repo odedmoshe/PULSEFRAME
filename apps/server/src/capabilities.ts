@@ -8,6 +8,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { own } from '@pulseframe/core';
 import {
   BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph,
   type Blocker, type CapabilityDescriptor, type ProviderAdapter,
@@ -158,7 +159,7 @@ export class Capabilities {
     const { doc, revision } = this.store.getProject(req.projectId);
     // Media inputs are project assets. Bind a content-addressed name now; the bytes are staged when the job runs.
     const sources = resolved.media.map((m) => {
-      const a = doc.assets[m.assetId];
+      const a = own(doc.assets, m.assetId);
       if (!a) throw new ApiError(404, 'asset_not_found', `asset ${m.assetId} is not in this project`, { parameter: m.name });
       if (a.kind !== m.type || !a.image) throw new ApiError(422, 'incompatible', `parameter "${m.name}" needs an ${m.type} asset; ${m.assetId} is ${a.kind}`, { parameter: m.name });
       if (d.limits.maxPixels && a.image.width * a.image.height > d.limits.maxPixels) throw new ApiError(422, 'input_too_large', `source is ${a.image.width}x${a.image.height}; this capability is qualified up to ${d.limits.maxPixels} pixels`, { parameter: m.name });

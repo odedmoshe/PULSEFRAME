@@ -23,6 +23,7 @@ import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, fin
 import { clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
+import { own } from './own.ts';
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
@@ -69,9 +70,15 @@ export function describeOps(opts: { includeInternal?: boolean } = {}) {
 
 // ---------- helpers ----------
 const seqOf = (d: ProjectDocument, id?: string): Sequence => {
-  const s = d.sequences[id ?? d.mainSequenceId];
+  const s = own(d.sequences, id ?? d.mainSequenceId);
   if (!s) throw new OpError('not_found', `sequence ${id} not found`, { sequenceId: id });
   return s;
+};
+/** The library entry a caller named. An id the library does not itself hold (including "__proto__", "constructor" and the like) is not found. */
+const mustAsset = (d: ProjectDocument, assetId: string, hint?: string) => {
+  const a = own(d.assets, assetId);
+  if (!a) throw new OpError('not_found', `asset ${assetId} not found`, { assetId }, hint);
+  return a;
 };
 export function findClip(d: ProjectDocument, clipId: string): { seq: Sequence; track: Track; clip: Clip; index: number } | undefined {
   for (const seq of Object.values(d.sequences))
@@ -203,8 +210,7 @@ defineOp({
   description: 'Change the name a library file is shown by. The stored file is not touched.',
   args: z.object({ assetId: z.string(), name: z.string().min(1).max(255) }).strict(),
   apply(d, a) {
-    const asset = d.assets[a.assetId];
-    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    const asset = mustAsset(d, a.assetId);
     asset.name = a.name;
     return { affectedIds: [asset.id], summary: `Renamed library file to "${a.name.slice(0, 60)}"` };
   },
@@ -215,8 +221,7 @@ defineOp({
   description: 'For a video file that does not say how its colours are encoded (the library shows a note): choose how to read them. bt601 = standard-definition material (the reading most other players use for it); auto = as the browser reads it (BT.709). The choice applies to every clip of the file, in preview, stills and export.',
   args: z.object({ assetId: z.string(), readAs: z.enum(['auto', 'bt601']) }).strict(),
   apply(d, a) {
-    const asset = d.assets[a.assetId];
-    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    const asset = mustAsset(d, a.assetId);
     if (!asset.video?.untaggedColour || asset.conform) throw new OpError('incompatible', 'this file states how its colours are encoded (or was converted at import), so there is nothing to choose', { assetId: asset.id });
     if (a.readAs === 'bt601') asset.video.readColourAs = 'bt601'; else delete asset.video.readColourAs;
     return { affectedIds: [asset.id], summary: `Colours of "${asset.name.slice(0, 40)}" read as ${a.readAs === 'bt601' ? 'BT.601' : 'the browser reads them (BT.709)'}` };
@@ -228,15 +233,14 @@ defineOp({
   description: 'Remove a file from the project library, together with its transcript and analysis results. Refused while any clip uses it, or while a colour table (LUT) effect on any clip refers to it. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
-    const asset = d.assets[a.assetId];
-    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    const asset = mustAsset(d, a.assetId);
     const users = Object.values(d.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'media' && c.assetId === asset.id).map((c) => c.id);
     if (users.length) throw new OpError('incompatible', `${users.length} clip(s) on the timeline still use this file`, { assetId: asset.id, clipIds: users.slice(0, 50) }, 'Delete those clips first.');
     const graded = lutUsers(d, asset.id);
     if (graded.length) throw new OpError('incompatible', `${graded.length} clip(s) still use this colour table in a colour table (LUT) effect`, { assetId: asset.id, clipIds: graded.slice(0, 50) }, 'Remove that effect from those clips, or choose another table for it, first.');
     const affected = [asset.id];
-    if (d.transcripts?.[asset.id]) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
-    if (d.analyses?.[asset.id]) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
+    if (own(d.transcripts, asset.id)) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
+    if (own(d.analyses, asset.id)) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
     delete d.assets[asset.id];
     return { affectedIds: affected, summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
   },
@@ -325,8 +329,7 @@ defineOp({
     .strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
-    const asset = d.assets[a.assetId];
-    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId }, 'Call get_summary to list assets.');
+    const asset = mustAsset(d, a.assetId, 'Call get_summary to list assets.');
     if (asset.kind === 'lut') throw new OpError('incompatible', 'a colour table (LUT) is not placed on the timeline; it is applied to a clip as an effect', { assetId: asset.id }, 'Use apply_lut with a clipId, or add the effect color.lut with this id as its lut parameter.');
     const rate = d.settings.frameRate;
     const sourceIn = a.sourceIn ?? T.ZERO;
@@ -1320,6 +1323,9 @@ defineOp({
   description: 'Apply a recipe plan (ordinary public ops) as one step and record which objects it created. Issued by the server from a plan it built; on regeneration it first removes the previous run\'s untouched clips.',
   args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000) }).strict(),
   apply(d, a, ctx) {
+    // Regeneration replaces an existing run. A run id the project does not hold is refused rather than written under whatever key the caller chose.
+    const prior = a.runId === undefined ? undefined : own(d.recipeRuns, a.runId);
+    if (a.runId !== undefined && !prior) throw new OpError('not_found', `recipe run ${a.runId} not found`, { runId: a.runId });
     const affected = new Set<string>();
     for (const id of a.removeClipIds ?? []) {
       const f = findClip(d, id);
@@ -1341,24 +1347,25 @@ defineOp({
       if (Array.isArray(out.createdClipIds)) created.push(...(out.createdClipIds as string[]));
     }
     const id = a.runId ?? ctx.newId('run');
-    const previous = a.runId ? d.recipeRuns[a.runId]?.fingerprints ?? {} : {};
-    const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!d.variants[x] || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
+    const previous = prior?.fingerprints ?? {};
+    const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!own(d.variants, x) || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
     const fingerprints: Record<string, string> = {};
     for (const cid of createdIds) {
       const f = findClip(d, cid);
       if (!f) continue;
       // Clips kept from an earlier run keep their ORIGINAL fingerprint, so they stay recognisable as hand-edited next time too.
-      fingerprints[cid] = (a.keepIds ?? []).includes(cid) && previous[cid] ? previous[cid]! : fingerprint(f.clip);
+      const original = (a.keepIds ?? []).includes(cid) ? own(previous, cid) : undefined;
+      fingerprints[cid] = original || fingerprint(f.clip);
     }
     d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps };
     affected.add(id);
-    return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} recipe ${a.recipeId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: { runId: id, createdIds: d.recipeRuns[id]!.createdIds } };
+    return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} recipe ${a.recipeId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: { runId: id, createdIds } };
   },
 });
 
 // ---------- linked format variants (SPEC §19.8) ----------
 const mustVariant = (d: ProjectDocument, id: string) => {
-  const v = d.variants[id];
+  const v = own(d.variants, id);
   if (!v) throw new OpError('not_found', `variant ${id} not found`, { variantId: id }, 'get_summary lists the variants.');
   return v;
 };
@@ -1408,7 +1415,7 @@ defineOp({
   },
 });
 const mustMarker = (d: ProjectDocument, id: string) => {
-  const m = d.markers?.[id];
+  const m = own(d.markers, id);
   if (!m) throw new OpError('not_found', `marker ${id} does not exist`, { markerId: id });
   return m;
 };
@@ -1470,7 +1477,7 @@ defineOp({
     if (f.track.kind === 'audio') throw new OpError('incompatible', 'format overrides apply to picture, title and caption clips', { clipId: a.clipId });
     // a caption cue can be reworded or hidden per format; where and how captions are drawn is the caption style (update_variant.captionStyle)
     if (f.clip.type === 'caption' && (a.transform != null || a.textStyle != null)) throw new OpError('incompatible', 'a caption cue can only be reworded or hidden per format; position and style come from the caption style of the format', { clipId: a.clipId }, 'Use update_variant with captionStyle.');
-    const cur = v.overrides[a.clipId] ?? {};
+    const cur = own(v.overrides, a.clipId) ?? {};
     const next = { ...cur };
     if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
     if (a.hidden !== undefined) { if (a.hidden) next.hidden = true; else delete next.hidden; }
@@ -1480,7 +1487,8 @@ defineOp({
     if (next.textStyle && Object.keys(next.textStyle).length === 0) delete next.textStyle;
     if (next.transform && Object.keys(next.transform).length === 0) delete next.transform;
     if (Object.keys(next).length === 0) delete v.overrides[a.clipId]; else v.overrides[a.clipId] = next;
-    return { affectedIds: [v.id], summary: `Format ${v.name}: ${v.overrides[a.clipId] ? 'override set on' : 'override cleared from'} clip`, output: { override: v.overrides[a.clipId] ?? null } };
+    const kept = own(v.overrides, a.clipId);
+    return { affectedIds: [v.id], summary: `Format ${v.name}: ${kept ? 'override set on' : 'override cleared from'} clip`, output: { override: kept ?? null } };
   },
 });
 
@@ -1491,23 +1499,19 @@ defineOp({
   args: z.object({ variantId: z.string(), assetId: z.string(), segmentId: z.string(), text: z.string().min(1).max(4000).nullable() }).strict(),
   apply(d, a) {
     const v = mustVariant(d, a.variantId);
-    const seg = d.transcripts[a.assetId]?.segments.find((s) => s.id === a.segmentId);
+    const seg = own(d.transcripts, a.assetId)?.segments.find((s) => s.id === a.segmentId);
     if (!seg) throw new OpError('not_found', `phrase ${a.segmentId} not found in the transcript of ${a.assetId}`, { segmentId: a.segmentId });
     const next = { ...(v.phraseText ?? {}) };
     if (a.text === null || a.text === seg.text) delete next[a.segmentId]; else next[a.segmentId] = a.text;
     if (Object.keys(next).length) v.phraseText = next; else delete v.phraseText;
-    return { affectedIds: [v.id], summary: `Format ${v.name}: phrase ${next[a.segmentId] !== undefined ? 'reworded' : 'back to the master wording'}`, output: { text: next[a.segmentId] ?? null } };
+    const worded = own(next, a.segmentId);
+    return { affectedIds: [v.id], summary: `Format ${v.name}: phrase ${worded !== undefined ? 'reworded' : 'back to the master wording'}`, output: { text: worded ?? null } };
   },
 });
 
 // ---------- analysis results and edits that use them (SPEC §19) ----------
 const TimeList = z.array(RT).max(50000);
 const sortedUnique = (list: T.RationalTime[]) => list.slice().sort(T.cmp).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
-const mustAsset = (d: ProjectDocument, assetId: string) => {
-  const a = d.assets[assetId];
-  if (!a) throw new OpError('not_found', `asset ${assetId} not found`, { assetId });
-  return a;
-};
 defineOp({
   name: 'attach_analysis',
   version: 1,
@@ -1515,14 +1519,14 @@ defineOp({
   description: 'Attach a measured analysis result (scene cuts or beat grid) produced by the server from the source file.',
   args: z.object({ assetId: z.string(), kind: z.enum(['scenes', 'beats']), method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), times: TimeList, bpm: z.number().nullable().optional(), confidence: z.number().min(0).max(1).nullable().optional(), downbeats: TimeList.optional(), meter: z.number().int().min(2).max(12).nullable().optional() }).strict(),
   apply(d, a, ctx) {
-    mustAsset(d, a.assetId);
+    const asset = mustAsset(d, a.assetId);
     const origin = { method: a.method, params: a.params, createdAt: a.createdAt, createdBy: ctx.actor, edited: false };
-    const cur = d.analyses[a.assetId] ?? { assetId: a.assetId };
+    const cur = own(d.analyses, asset.id) ?? { assetId: asset.id };
     const times = sortedUnique(a.times);
     // bar starts are beats: anything else in the list (rounding at the edges of the file) is dropped
     const bars = a.kind === 'beats' && a.downbeats ? sortedUnique(a.downbeats).filter((t) => times.some((b) => T.eq(b, t))) : [];
-    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: times } } : { ...cur, beats: { origin, bpm: a.bpm ?? null, confidence: a.confidence ?? null, beats: times, ...(bars.length ? { downbeats: bars, meter: a.meter ?? null } : {}) } };
-    return { affectedIds: [analysisEntityId(a.assetId)], summary: a.kind === 'scenes' ? `Found ${times.length} scene cuts` : `Found ${times.length} beats${a.bpm ? ` (${a.bpm.toFixed(1)} BPM)` : ''}${bars.length ? `, ${bars.length} bars` : ''}` };
+    d.analyses[asset.id] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: times } } : { ...cur, beats: { origin, bpm: a.bpm ?? null, confidence: a.confidence ?? null, beats: times, ...(bars.length ? { downbeats: bars, meter: a.meter ?? null } : {}) } };
+    return { affectedIds: [analysisEntityId(asset.id)], summary: a.kind === 'scenes' ? `Found ${times.length} scene cuts` : `Found ${times.length} beats${a.bpm ? ` (${a.bpm.toFixed(1)} BPM)` : ''}${bars.length ? `, ${bars.length} bars` : ''}` };
   },
 });
 defineOp({
@@ -1532,7 +1536,7 @@ defineOp({
   args: z.object({ assetId: z.string(), kind: z.enum(['scenes', 'beats']), add: TimeList.optional(), remove: TimeList.optional(), replace: TimeList.optional(), bpm: z.number().min(20).max(400).nullable().optional(), downbeats: TimeList.nullable().optional().describe('kind=beats: the beats that start a bar (each must be one of the beats after this edit); null clears them. Left out, the stored bar starts that are still beats are kept.'), meter: z.number().int().min(2).max(12).nullable().optional() }).strict(),
   apply(d, a, ctx) {
     const asset = mustAsset(d, a.assetId);
-    const cur = d.analyses[a.assetId] ?? { assetId: a.assetId };
+    const cur = own(d.analyses, asset.id) ?? { assetId: asset.id };
     const existing = a.kind === 'scenes' ? cur.scenes?.cuts : cur.beats?.beats;
     let list = a.replace ?? existing ?? [];
     if (a.remove) list = list.filter((t) => !a.remove!.some((r) => T.eq(r, t)));
@@ -1546,8 +1550,8 @@ defineOp({
     if (a.downbeats && !a.downbeats.every(isBeat)) throw new OpError('invalid_args', 'every bar start must be one of the beats', {}, 'Add the beat first, or pass it in the same edit.');
     const bars = a.downbeats === null ? [] : a.downbeats ? sortedUnique(a.downbeats) : (cur.beats?.downbeats ?? []).filter(isBeat);
     const meter = a.meter !== undefined ? a.meter : cur.beats?.meter ?? null;
-    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list, ...(bars.length ? { downbeats: bars, meter } : {}) } };
-    return { affectedIds: [analysisEntityId(a.assetId)], summary: `Edited ${a.kind === 'scenes' ? 'scene cuts' : 'beats'} (${list.length})` };
+    d.analyses[asset.id] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list, ...(bars.length ? { downbeats: bars, meter } : {}) } };
+    return { affectedIds: [analysisEntityId(asset.id)], summary: `Edited ${a.kind === 'scenes' ? 'scene cuts' : 'beats'} (${list.length})` };
   },
 });
 defineOp({
@@ -1722,10 +1726,9 @@ const parseEffect = (type: string, params: unknown) => {
 };
 /** A color.lut effect that names a table must name a colour table (asset of kind 'lut') of this project. */
 const assertLutRef = (d: ProjectDocument, type: string, params: Record<string, unknown>) => {
-  if (type !== 'color.lut' || typeof params.lut !== 'string' || params.lut === '') return;
-  // An own entry of the library only: an id such as "__proto__" or "constructor" names nothing, it must not find Object's own members.
-  const known = Object.hasOwn(d.assets, params.lut) ? d.assets[params.lut] : undefined;
-  if (known?.kind === 'lut') return;
+  if (type !== 'color.lut' || typeof params.lut !== 'string' || params.lut === '') return undefined;
+  const known = own(d.assets, params.lut);
+  if (known?.kind === 'lut') return known;
   throw new OpError('not_found', known ? `"${known.name.slice(0, 60)}" is a ${known.kind} file, not a colour table (LUT)` : `colour table ${params.lut} is not in this project's library`, { lut: params.lut, available: lutAssets(d).slice(0, 100).map((x) => ({ id: x.id, name: x.name })) }, 'Upload a .cube file to the project library first; get_summary lists the colour tables (assets of kind lut) with their ids.');
 };
 defineOp({
@@ -1761,7 +1764,7 @@ defineOp({
     const list = [...(clip.effects ?? [])];
     const at = list.findIndex((e) => e.type === 'color.lut');
     const params = parseEffect('color.lut', { lut: a.assetId, intensity: a.intensity ?? (at >= 0 ? list[at]!.params.intensity : undefined) });
-    assertLutRef(d, 'color.lut', params);
+    const table = assertLutRef(d, 'color.lut', params);
     let effectId: string;
     if (at >= 0) {
       const { keyframes, ...rest } = list[at]!;
@@ -1774,7 +1777,7 @@ defineOp({
       list.push({ id: effectId, type: 'color.lut', enabled: true, params });
     }
     clip.effects = list;
-    return { affectedIds: [clip.id], summary: `Applied colour table "${d.assets[a.assetId]!.name.slice(0, 60)}"`, output: { effectId, params } };
+    return { affectedIds: [clip.id], summary: `Applied colour table "${(table?.name ?? a.assetId).slice(0, 60)}"`, output: { effectId, params } };
   },
 });
 
@@ -1830,7 +1833,7 @@ defineOp({
     if (!animatableParams(fx.type).includes(a.param)) throw new OpError('invalid_args', `"${a.param}" is not a numeric parameter of ${fx.type}`, { animatable: animatableParams(fx.type) });
     assertAligned(d, a.time, 'time');
     parseEffect(fx.type, { ...fx.params, [a.param]: a.value }); // range check
-    const keys = [...(fx.keyframes?.[a.param] ?? [])];
+    const keys = [...(own(fx.keyframes, a.param) ?? [])];
     const k = keys.findIndex((x) => T.eq(x.time, a.time));
     const key = { time: a.time, value: a.value, easing: a.easing ?? (k >= 0 ? keys[k]!.easing : 'linear') };
     if (k >= 0) keys[k] = key; else keys.push(key);
@@ -1849,7 +1852,7 @@ defineOp({
     const { clip } = pictureClip(d, a.clipId);
     const i = mustEffect(clip, a.effectId);
     const fx = { ...clip.effects![i]! };
-    const keys = fx.keyframes?.[a.param] ?? [];
+    const keys = own(fx.keyframes, a.param) ?? [];
     const k = keys.findIndex((x) => T.eq(x.time, a.time));
     if (k < 0) throw new OpError('not_found', 'no keyframe at that time', { param: a.param, time: a.time });
     const rest = keys.filter((_, n) => n !== k);
@@ -2103,8 +2106,7 @@ defineOp({
 const WordIn = z.object({ text: z.string().min(1).max(200), start: RT, duration: RT, confidence: z.number().min(0).max(1).optional() }).strict();
 const SegmentIn = z.object({ start: RT, duration: RT, text: z.string().max(4000), speaker: z.string().max(80).optional(), words: z.array(WordIn).max(2000).optional(), approximate: z.boolean().optional().describe('true when word times are estimates') }).strict();
 function buildTranscript(d: ProjectDocument, ctx: OpContext, assetId: string, language: string, kind: 'import' | 'manual' | 'asr', segments: z.infer<typeof SegmentIn>[], asr?: { provider: string; model: string; createdAt: string }): Transcript {
-  const asset = d.assets[assetId];
-  if (!asset) throw new OpError('not_found', `asset ${assetId} not found`, { assetId });
+  const asset = mustAsset(d, assetId);
   if (!asset.audio) throw new OpError('incompatible', `asset ${assetId} has no audio to transcribe`, { assetId });
   const out: Transcript = { assetId, language, origin: { kind, provider: asr?.provider ?? null, model: asr?.model ?? null, createdAt: asr?.createdAt ?? 'op', createdBy: ctx.actor }, segments: [] };
   let prevEnd = T.ZERO;
@@ -2154,7 +2156,7 @@ defineOp({
   description: 'Give the words of existing transcript phrases the times a local recognition job heard (alignment). The phrases, their text and their ids are kept; only word times change.',
   args: z.object({ assetId: z.string(), segments: z.array(z.object({ segmentId: z.string(), approximate: z.boolean(), words: z.array(WordIn).min(1).max(2000) }).strict()).min(1).max(20000) }).strict(),
   apply(d, a, ctx) {
-    const tr = d.transcripts[a.assetId];
+    const tr = own(d.transcripts, a.assetId);
     if (!tr) throw new OpError('not_found', `asset ${a.assetId} has no transcript`, { assetId: a.assetId });
     let words = 0;
     for (const s of a.segments) {
@@ -2194,7 +2196,7 @@ defineOp({
   description: 'Correct the text of one transcript phrase. The audio is not changed and the recognised original is kept. If the number of words changes, word times become estimates (marked approximate).',
   args: z.object({ assetId: z.string(), segmentId: z.string(), text: z.string().min(1).max(4000) }).strict(),
   apply(d, a, ctx) {
-    const seg = d.transcripts[a.assetId]?.segments.find((s) => s.id === a.segmentId);
+    const seg = own(d.transcripts, a.assetId)?.segments.find((s) => s.id === a.segmentId);
     if (!seg) throw new OpError('not_found', `phrase ${a.segmentId} not found in the transcript of ${a.assetId}`, { segmentId: a.segmentId });
     if (seg.original === null) seg.original = seg.text;
     seg.text = a.text;
@@ -2399,7 +2401,7 @@ defineOp({
   args: z.object({ sequenceId: z.string().optional(), assetId: z.string(), fromWordId: z.string(), toWordId: z.string(), allowApproximate: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
-    const tr = d.transcripts[a.assetId];
+    const tr = own(d.transcripts, a.assetId);
     if (!tr) throw new OpError('not_found', `asset ${a.assetId} has no transcript`, { assetId: a.assetId });
     const flat = tr.segments.flatMap((s) => s.words.map((w) => ({ w, s })));
     const i = flat.findIndex((x) => x.w.id === a.fromWordId), j = flat.findIndex((x) => x.w.id === a.toWordId);
