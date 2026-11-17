@@ -464,11 +464,12 @@ export class Speech {
     const p = this.store.getProject(projectId);
     const reference = this.referenceInput(principal, p.doc, a);
     if (!a.text.trim()) throw new ApiError(400, 'invalid_request', 'there is no text to speak');
-    // Every narration is a new sound file (another text or seed is another file), so it is refused once the storage ceiling is
-    // reached, like an export. Here rather than in the route: the REST route and the MCP tool both start narration through this.
-    assertStorageRoom(this.store, 1, 'generate narration');
     const st = await this.status();
     if (!st.narration.ready) throw new ApiError(409, 'voice_not_ready', `narration is not set up: ${st.narration.detail}`, { reason: st.narration.reason }, 'A recorded or imported voice file works without it.');
+    // Every narration is a new sound file (another text or seed is another file), so it is refused once the storage ceiling is
+    // reached, like an export: after the setup state (a narration that could not run anyway is not told to free storage).
+    // Here rather than in the route: the REST route and the MCP tool both start narration through this.
+    assertStorageRoom(this.store, 1, 'generate narration');
     const model = st.models.find((m) => m.kind === 'tts' && m.ready)!;
     const job = this.store.createJob(projectId, NARRATE, principal.actor, {
       text: a.text.trim(), language: a.language ?? 'he', seed: a.seed ?? randomBytes(4).readUInt32BE() >>> 1, modelId: model.id, projectRevision: p.revision,
@@ -490,9 +491,9 @@ export class Speech {
     const sentences = splitSentences(a.text, 300);
     if (!sentences.length) throw new ApiError(400, 'invalid_request', 'there is no text to speak');
     if (sentences.length > MAX_SCRIPT_SENTENCES) throw new ApiError(422, 'script_too_long', `the script has ${sentences.length} sentences; at most ${MAX_SCRIPT_SENTENCES} are narrated in one request`, { sentences: sentences.length, max: MAX_SCRIPT_SENTENCES }, 'Send it in parts.');
-    assertStorageRoom(this.store, 1, 'generate narration'); // as in startNarration
     const st = await this.status();
     if (!st.narration.ready) throw new ApiError(409, 'voice_not_ready', `narration is not set up: ${st.narration.detail}`, { reason: st.narration.reason }, 'A recorded or imported voice file works without it.');
+    assertStorageRoom(this.store, 1, 'generate narration'); // as in startNarration: after the setup state
     const model = st.models.find((m) => m.kind === 'tts' && m.ready)!;
     const rate = p.doc.settings.frameRate;
     const gap = T.frameTime(a.gapFrames ?? 6, rate);
