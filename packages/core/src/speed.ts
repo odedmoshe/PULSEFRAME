@@ -5,7 +5,7 @@
  * transitions, audio) agrees. Sound follows the picture by resampling ("varispeed"): pitch rises and falls with speed.
  */
 import * as T from '@pulseframe/time';
-import type { Clip, MediaClip } from './schema.ts';
+import type { Asset, Clip, MediaClip } from './schema.ts';
 
 /**
  * Whole frames by which a video's picture starts after the file's time zero (nearest frame, so the error against the sound
@@ -121,6 +121,18 @@ export const sourceInOfPart = (c: MediaClip, fromOffset: T.RationalTime, length:
  */
 export const pictureSourceAt = (c: MediaClip, t: T.RationalTime, frame: T.RationalTime): T.RationalTime =>
   c.reverse ? sourceAt(c, T.sub(T.sub(T.add(T.add(c.start, c.start), c.duration), frame), t)) : sourceAt(c, t);
+/**
+ * Source frame index a media clip's picture shows at `time` (the barePicture rule, evaluate.ts): floor(pictureSourceAt·rate)
+ * − startOffsetFrames, clamped to [0, last]. Frames are counted from the first picture in the file; when that picture does not
+ * sit at time 0 it is shown that many frames later (and held until then), which keeps it in step with the sound.
+ * Motion tracks (ADR-0015) are stored per this index.
+ */
+export function sourceFrameIndexAt(asset: Pick<Asset, 'duration'> & { video: NonNullable<Asset['video']> }, clip: MediaClip, time: T.RationalTime, projectRate: { num: number; den: number }): number {
+  const rate = asset.video.frameRate;
+  const idx = Math.max(0, T.frameIndexAt(pictureSourceAt(clip, time, T.frameTime(1, projectRate)), rate) - startOffsetFrames(asset.video));
+  const last = asset.video.frameCount !== null ? asset.video.frameCount - 1 : Math.max(0, T.frameIndexAt(asset.duration, rate) - 1);
+  return Math.min(idx, last);
+}
 /**
  * Timeline time for which a clip could keep playing past its end before its source runs out (the "handle" a transition
  * into the next clip uses). A forward clip continues into later source; a reversed clip continues into earlier source.

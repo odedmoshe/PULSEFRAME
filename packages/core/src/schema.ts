@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
+import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 
 export const SCHEMA_VERSION = 1;
 
@@ -145,6 +146,8 @@ const ClipBase = {
   /** Applied in order after the layer is placed (with its transform and opacity), before its mask, transition and blend mode. A time effect (time.*) is always first (ops.ts effectSlot). */
   effects: z.array(EffectInstanceSchema).max(16).optional(),
   blend: z.enum(BLEND_MODES).optional(),
+  /** Follow a motion track (ADR-0015): a title, or a picture on a video track, moves with the tracked point; its own transform is then an offset from that point. */
+  follow: FollowSchema.optional(),
 };
 export const MediaClipSchema = z
   .object({
@@ -177,6 +180,8 @@ export const MediaClipSchema = z
     audioFx: z.array(AudioFxInstanceSchema).max(MAX_AUDIO_FX).optional(),
     fadeOut: RationalTimeSchema.optional(),
     mask: MaskSchema.optional(),
+    /** Privacy regions (ADR-0015): blurred, pixelated or covered parts of the picture, fixed or following a motion track of this clip's asset. Drawn on each picture of the clip before its effects. */
+    redact: z.array(RedactRegionSchema).min(1).max(MAX_REDACT_REGIONS).optional(),
     transition: TransitionSchema.optional(),
   })
   .strict();
@@ -358,6 +363,8 @@ export const ProjectSchema = z
     analyses: z.record(Id, AnalysisSchema).default({}),
     /** User markers by marker id. */
     markers: z.record(Id, MarkerSchema).default({}),
+    /** Motion tracks by track id (ADR-0015): positions of a point or box per source frame of a video asset. */
+    motionTracks: z.record(Id, MotionTrackSchema).default({}),
   })
   .strict();
 
@@ -381,6 +388,7 @@ export type Clip = z.infer<typeof ClipSchema>;
 export type Track = z.infer<typeof TrackSchema>;
 export type Sequence = z.infer<typeof SequenceSchema>;
 export type ProjectDocument = z.infer<typeof ProjectSchema>;
+export type { MotionTrack, Follow, RedactRegion } from './tracking.ts';
 
 export interface NewProjectOptions { id: string; name: string; width?: number; height?: number; frameRate?: { num: number; den: number }; sampleRate?: number }
 export function createProject(o: NewProjectOptions): ProjectDocument {
@@ -407,6 +415,7 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
     variants: {},
     recipeRuns: {},
     markers: {},
+    motionTracks: {},
   };
 }
 
