@@ -26,7 +26,7 @@ export const VOICE_CLEAN_STRINGS = {
     disabledTimeMap: 'ניקוי קול עדיין לא פועל על קול ששומר על גובה הצליל במהירות אחרת, או שהמהירות שלו משתנה בהדרגה. יש לתת לקטע מהירות אחת ולתת לגובה הצליל ללכת אחריה, ואז לנקות.',
     noCleanup: 'עוד אין ניקוי בקטע הזה: עוצמה, השוואה והסרה יפעלו אחרי «נקה את הקול».',
     noPlayer: 'ההשמעה אינה זמינה כאן, ולכן אין השוואה לפני ואחרי.',
-    listen: 'השמעה לדוגמה (לא נשמר)', listenBefore: 'השמעה לדוגמה בלי הניקוי (לא נשמר)', listenAfter: 'השמעה לדוגמה עם הניקוי (לא נשמר)',
+    listenBefore: 'השמעה לדוגמה בלי הניקוי (לא נשמר)', listenAfter: 'השמעה לדוגמה עם הניקוי (לא נשמר)',
     ai: 'ניקוי חזק יותר, במודל בינה מלאכותית, הוא כלי נפרד בכלי ה־AI («ניקוי קול בבינה מלאכותית»): הוא יוצר קובץ קול חדש, כשהוא מותקן.',
   },
   en: {
@@ -45,7 +45,7 @@ export const VOICE_CLEAN_STRINGS = {
     disabledTimeMap: 'Voice cleanup does not work yet on a sound that keeps its pitch at another speed, or whose speed changes gradually. Give the clip one speed and let its pitch follow it, then clean up.',
     noCleanup: 'This clip has no cleanup yet: strength, comparing and removing work after «Clean up the voice».',
     noPlayer: 'Playback is not available here, so there is no before and after.',
-    listen: 'Listen (not saved)', listenBefore: 'Listen without the cleanup (not saved)', listenAfter: 'Listen with the cleanup (not saved)',
+    listenBefore: 'Listen without the cleanup (not saved)', listenAfter: 'Listen with the cleanup (not saved)',
     ai: 'A stronger cleanup with an AI model is a separate AI tool («Voice cleanup with AI»): it makes a new sound file, when it is set up.',
   },
 } as const;
