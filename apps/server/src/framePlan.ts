@@ -12,7 +12,7 @@
  * input frame, where outFactor counts the output pixels each input pixel becomes.
  */
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, isFreeze, isRamped, isReverse, sourceEnd, startOffsetFrames, toSourceSpan, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { clipEnd, findClip, isFreeze, isRamped, isReverse, sourceEnd, startOffsetFrames, timeOriginSeconds, toSourceSpan, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { expectedOutputSize, type ComfyDescriptor, type PixelSize } from '@pulseframe/providers';
 import type { FramePlan, RunSource } from './aiContracts.ts';
 import { ApiError } from './store.ts';
@@ -42,6 +42,8 @@ export interface FrameSource {
   sourceRangeStart: T.RationalTime;
   /** The asset's sound, copied back over exactly the same time range; null when it has none. */
   audio: { sampleRate: number; channels: number } | null;
+  /** The file's own start time in seconds (Asset.timeOrigin; ffmpeg's raw timestamps minus this are asset times). */
+  timeOrigin: number;
   /** How the asset's YCbCr colours are read when frames are extracted (the editor's reading: BT.709 unless the owner chose BT.601). */
   colourMatrix: 'auto' | 'bt709' | 'bt601';
 }
@@ -97,6 +99,7 @@ export function resolveFrameSource(doc: ProjectDocument, source: RunSource): Fra
     assetId, clipId, trackId, firstFrame: range.first, frameCount: range.count, rate, width: v.width, height: v.height, startFrames,
     sourceRangeStart: T.frameTime(range.first + startFrames, rate),
     audio: asset.audio ? { sampleRate: asset.audio.sampleRate, channels: asset.audio.channels } : null,
+    timeOrigin: timeOriginSeconds(asset),
     colourMatrix: v.readColourAs === 'bt601' ? 'bt601' : v.untaggedColour ? 'bt709' : 'auto',
   };
 }
