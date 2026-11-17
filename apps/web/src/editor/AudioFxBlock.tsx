@@ -2,7 +2,7 @@
  * «אפקטי קול»: the sound effects of one sound clip (ADR-0010; plan section 7). Character voices and spaces are chosen from chip rows
  * (radio groups with the arrow keys in visual order: in Hebrew ArrowLeft is the next chip), tones are toggles, and every effect on the
  * clip is listed in the fixed order it runs in, with its on/off switch, amount and settings. Every change is one committed
- * operation (or one transaction), so one undo takes it back. ▶ plays the clip with a choice applied to a scratch copy of the
+ * operation (or one transaction), so one undo takes it back. Voice cleanup «ניקוי קול» (VoiceCleanBlock.tsx, ADR-0013) sits at the top. ▶ plays the clip with a choice applied to a scratch copy of the
  * document, made by the same operation a click would commit: it is only played, never stored, and the revision does not change.
  * Nothing here blinks, pulses or moves: playing and chosen states are a steady fill.
  */
@@ -11,6 +11,7 @@ import { applyTransaction, AUDIO_PRESETS, audioEffectParams, describeAudioCatalo
 import { soundTailsOf } from '@pulseframe/engine';
 import { audioFxOptionLabel, audioFxParamLabel, audioFxParamUnit } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
+import { VoiceCleanBlock } from './VoiceCleanBlock.tsx';
 import './audioFx.css';
 
 type SoundClip = Extract<Clip, { type: 'media' }>;
@@ -49,6 +50,14 @@ const isFraction = (name: string, s: ParamSchema) => !audioFxParamUnit(name, 'en
  * and a whole-number count such as the echo's repeats, as the number itself, to at most two decimals.
  */
 export const showValue = (name: string, s: ParamSchema, v: number) => (isFraction(name, s) ? `${Math.round(v * 100)}%` : `${+v.toFixed(2)}`);
+/**
+ * The parameters an effect's settings show, without its main amount: every number, choice and switch, but never a free text
+ * parameter (the noise profile of voice cleanup and the recording it was measured on, ADR-0013): those are data from a
+ * measurement, set by clean_voice, not settings to type in.
+ */
+export function settingsParams(type: string, main: string | null): [string, ParamSchema][] {
+  return Object.entries(SCHEMAS.get(type) ?? {}).filter(([p, s]) => p !== main && !(s.type === 'string' && !s.enum));
+}
 const stepOf = (s: ParamSchema) => (s.type === 'integer' ? 1 : (s.maximum ?? 1) - (s.minimum ?? 0) <= 1 ? 0.05 : (s.maximum ?? 1) - (s.minimum ?? 0) <= 3 ? 0.1 : 0.5);
 
 /** Planned ring-out of each sound clip, from the engine's audio plan (the one the player and both exports use), once per document. */
@@ -173,7 +182,7 @@ function FxRow({ clip, fx, lang, locked, blocked, mono }: { clip: SoundClip; fx:
       {main && schema[main] && slider(main, schema[main]!, 'afx-amount')}
       {fx.type === 'utility.width' && mono && <p className="muted afx-note" data-testid="afx-mono">{t('sound.fx.mono')}</p>}
       <div className="afx-params" id={panelId} hidden={!open}>
-        {open && Object.entries(schema).filter(([p]) => p !== main).map(([p, s]) => {
+        {open && settingsParams(fx.type, main).map(([p, s]) => {
           if (s.enum) return (
             <label key={p}>{audioFxParamLabel(p, lang)}
               <select value={String(fx.params[p])} disabled={disabled} data-testid={`afx-param-${p}`} onChange={(e) => setParam(p, e.target.value)}>
@@ -244,6 +253,7 @@ export function AudioFxBlock({ clip, heading = 'h3' }: { clip: SoundClip; headin
   return (
     <section className="afx" aria-labelledby={`afx-h-${clip.id}`} data-testid="afx-block" data-clip-id={clip.id} onKeyDown={keepButtonKeys}>
       <H id={`afx-h-${clip.id}`}>{t('sound.fx')}</H>
+      <VoiceCleanBlock clip={clip} locked={locked} blocked={blocked} />
       <p className="muted afx-note">{t('sound.fx.dsp')}</p>
       {blocked && <p className="muted afx-note" role="note" data-testid="afx-blocked">{t('sound.fx.blocked')}</p>}
       {!blocked && locked && <p className="muted afx-note" data-testid="afx-locked">{t('sound.fx.locked')}</p>}
