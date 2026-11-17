@@ -283,7 +283,7 @@ async function main() {
     const labErrors: string[] = [];
     lab.on('pageerror', (e) => labErrors.push(String(e)));
     await lab.goto(`${s.url}/lab.html`);
-    await lab.waitForFunction(() => document.body.dataset.ready === '1', undefined, { timeout: 120000 });
+    await lab.waitForFunction(() => document.body.dataset.ready === '1', undefined, { timeout: 300_000 }); // the visual wave added about 140 tiles
     const tiles: { kind: string; id: string; variant: string; aspect: string; hash: number; flat: boolean; unavailable: boolean }[] = await lab.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-testid=lab-tile]')].map((fig) => {
       const hashes: number[] = []; let flat = true;
       for (const c of fig.querySelectorAll('canvas')) {
