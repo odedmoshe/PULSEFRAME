@@ -103,7 +103,7 @@ describe('ramp resampler (continuous speed change)', () => {
     let worst = 0;
     for (let i = 8; i < tail.length; i++) worst = Math.max(worst, Math.abs(tail[i]! - whole[start * 2 + i]!));
     expect(worst).toBeLessThan(1e-6);
-  });
+  }, 30_000); // 2.2 s alone; slower when the whole suite runs in parallel
   it('a part of a ramp plays exactly what the whole ramp plays there, and the eased curve glides more slowly at first', () => {
     const src = tone(300, 6);
     for (let i = 0; i < src.length; i++) src[i] = src[i]! + 0.2 * Math.sin(i * 0.37) * Math.sin(i * 0.011);
