@@ -827,3 +827,11 @@ async function runPass(type: string, key: string, shader: () => string, numbers:
     return false;
   }
 }
+
+// ---- stylize.digicam and stylize.crt: CPU models of the passes, for their proofs (STUB, lead pre-pass; W3 builds them) ----
+/** Noise tick of stylize.digicam at timeline seconds (15 per second). */
+export const digicamTick = (seconds: number) => Math.floor(seconds * 15 + 1e-6);
+/** stylize.digicam on a flat patch (no noise, no neighbours): straight RGB 0..1 in and out. */
+export function digicamTone(rgb: [number, number, number], p: Record<string, unknown>): [number, number, number] { return rgb; }
+/** Source uv the stylize.crt pass samples for output uv, or null outside the curved glass. */
+export function crtMap(u: number, v: number, p: Record<string, unknown>, aspect: number): [number, number] | null { return [u, v]; }

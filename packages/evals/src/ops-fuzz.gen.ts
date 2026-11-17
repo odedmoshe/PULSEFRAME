@@ -43,7 +43,7 @@ export function createFuzz(seed: number) {
       { op: 'set_transcript', args: { assetId: vid, language: 'he', segments: [0, 1, 2, 3].map((k) => ({ start: T.rt(k * 2, 1), duration: T.rt(2, 1), text: `מילה ${k} word`, words: [{ start: T.rt(k * 2, 1), duration: T.rt(1, 1), text: 'מילה' }, { start: T.rt(k * 2 + 1, 1), duration: T.rt(1, 1), text: `word${k}` }] })) } },
     ];
   };
-  const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.brightness', 'stylize.vignette'];
+  const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.adjust', 'light.vignette', 'time.echo', 'overlay.snow'];
   const SOUND_FX = AUDIO_EFFECTS.map((e) => e.id);
   /** A small change of a sound effect's main control (its wet amount, or the width), in range most of the time and out of it sometimes. */
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });

@@ -23,6 +23,10 @@ export interface FrameProvider {
   (layer: PictureLayer): Promise<FrameImage | null>;
   /** The strip of a colour table asset (core `lutStrip` of the file text, with a key unique per content), or null when there is none. May reject. */
   lut?(assetId: string): Promise<LutStrip | null>;
+  /** Called once at the start of every drawGraph, before any frame is asked for: decoders used from now on are pinned (never evicted) until the next begin. A pool serves one drawGraph at a time. */
+  begin?(): void;
+  /** Why the last request for this layer resolved null (e.g. `decode_budget: …`), or null when unknown. Never throws. */
+  refusal?(layer: PictureLayer): string | null;
 }
 
 /** Text wraps at this fraction of the frame width (before the layer's own scale). */
@@ -271,6 +275,7 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
 /** The frame that is waiting on a GPU pass, if any (see drawGraph). */
 let gpuFrame: Promise<void> | null = null;
 export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
+  frames.begin?.();
   const missing: string[] = [];
   // Colour tables named by effects of this frame are loaded here, with the source frames and before the GPU gate; a table that
   // cannot be had becomes null with its reason, and the effect that needs it is then reported as unavailable, never thrown.
@@ -315,7 +320,7 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
     if (!hasLook) { place(ctx); continue; } // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
-    const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), box, beat: g.beat ?? null, luts, lutReasons };
+    const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), local: layer.local ?? 0, box, beat: g.beat ?? null, luts, lutReasons };
     let buf = scratch(1, g.width, g.height);
     place(buf.ctx);
     if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look

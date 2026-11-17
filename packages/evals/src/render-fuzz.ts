@@ -80,7 +80,12 @@ async function main() {
             if ((await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_transition', args: { clipId: sorted[i].id, type, frames: 4 + ((seed + i) % 8) } }] })).status === 200) dressed++;
           }
           for (const [i, c] of sorted.entries()) {
-            if (i % 3 === 0) await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_effect', args: { clipId: c.id, type: ['blur.gaussian', 'color.grayscale', 'stylize.vignette'][(seed + i) % 3] } }] });
+            if (i % 3 === 0) {
+              const type = ['blur.gaussian', 'color.grayscale', 'light.vignette'][(seed + i) % 3];
+              const r = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_effect', args: { clipId: c.id, type } }] });
+              // a refusal for a reason the session made (a locked track) is fine; any other refusal of a valid effect id is a fault
+              if (r.status !== 200 && r.body?.error?.code !== 'track_locked') throw new Error(`seed ${seed}: adding ${type} to ${c.id} was refused: ${JSON.stringify(r.body).slice(0, 300)}`);
+            }
             if (i % 4 === 1 && c.type === 'media') await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_clip_mask', args: { clipId: c.id, mask: { shape: 'ellipse', x: 0, y: 0, width: 0.7, height: 0.7, feather: 0.1, invert: false } } }] });
             if (i % 5 === 2) await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_clip_blend', args: { clipId: c.id, mode: 'screen' } }] });
           }

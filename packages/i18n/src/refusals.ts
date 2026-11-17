@@ -1,3 +1,5 @@
+import { effectParamLabel } from './effectParams.ts';
+
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
  * English sentences built at about two hundred places; this table recognises the common ones by their shape and words
@@ -5,6 +7,8 @@
  * `packages/evals/src/refusal-wording.test.ts` provokes each of these refusals for real and fails when the server's
  * wording no longer matches a pattern here.
  */
+/** A left-to-right run (a signed number, a row of symbols) isolated inside the Hebrew sentence, so that its minus sign and order survive. */
+const ltr = (s: string) => `⁦${s}⁩`;
 const HE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^range overlaps clip \S+ on track \S+$/, () => 'הטווח תפוס על ידי קליפ אחר באותה רצועה'],
   [/^track \S+ is locked$/, () => 'הרצועה נעולה; יש לבטל את הנעילה כדי לערוך בה'],
@@ -32,6 +36,16 @@ const HE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^a copy would start before 0$/, () => 'העותק היה מתחיל לפני תחילת ציר הזמן'],
   [/^the clip is too short for this change of speed at the end of its source$/, () => 'הקליפ קצר מדי לשינוי המהירות הזה בסוף קובץ המקור'],
   [/^the file could not be read as video, sound or a picture$/, () => 'לא ניתן לקרוא את הקובץ כווידאו, כקול או כתמונה'],
+  [/^a clip can carry one time effect \(echo, time split, shutter or stutter\)$/, () => 'לקליפ יכול להיות אפקט זמן אחד בלבד (הד, פיצול זמן, צמצם או קפיצות פריים)'],
+  [/^"(.+)" of (\S+) cannot follow the beat$/, (m) => `"${effectParamLabel(m[1]!, 'he', m[2])}" אינו יכול לזוז עם הפעימות: רק פרמטרים של צורה ומרקם יכולים, לא בהירות או צבע`],
+  // set_effect_modulator: the message names no effect, so the parameter takes its shared name (the one the look panel shows)
+  [/^depth (\S+) is larger than the range of (\S+) \((\S+)…(\S+)\)$/, (m) => `עומק הפעימה ${ltr(m[1]!)} חורג מהטווח כולו של "${effectParamLabel(m[2]!, 'he')}" (${ltr(m[3]!)} עד ${ltr(m[4]!)})`],
+  // the date-stamp text (STAMP_TEXT) before the general case
+  [/^invalid parameters for stylize\.date-stamp: text$/, () => `בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ${ltr(". : ' / -")}, עד 20 תווים`],
+  [/^invalid parameters for (\S+)(?:: (.+))?$/, (m) => {
+    const names = m[2] ? m[2].split(', ').map((p) => `"${effectParamLabel(p, 'he', m[1])}"`) : [];
+    return names.length === 0 ? 'ערכי הפרמטרים של האפקט אינם תקינים' : names.length === 1 ? `הערך של ${names[0]} אינו תקין` : `הערכים של ${names.join(', ')} אינם תקינים`;
+  }],
 ];
 /**
  * Refusals of the sound-effect operations («אפקטי קול», ADR-0010). Kept as their own list with their own test

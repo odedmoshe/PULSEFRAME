@@ -21,7 +21,7 @@ const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[
 import { lookParams } from './looks.ts';
 import { findTextPreset } from './textPresets.ts';
 import { CAPTION_LOOK_IDS, findCaptionLook } from './captionPresets.ts';
-import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, MaskSchema, TRANSITION_IDS } from './effects.ts';
+import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, isTimeEffect, MaskSchema, modulatableParams, ModulatorSchema, paramRange, TRANSITION_IDS, type EffectInstance, type Modulator } from './effects.ts';
 import { clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
@@ -2040,9 +2040,18 @@ const pictureClip = (d: ProjectDocument, clipId: string) => {
   if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture and title clips', { clipId });
   return f;
 };
+/**
+ * The parameters a failed effect parse names, so that the refusal says which one is wrong (the editor words it per parameter,
+ * packages/i18n/src/refusals.ts): the top-level name of each issue and the names the schema does not know; at most 8, each cut to 48 characters.
+ */
+const badParamNames = (issues: readonly { code?: string; path?: readonly PropertyKey[]; keys?: readonly string[] }[] | undefined): string[] =>
+  [...new Set((issues ?? []).flatMap((i) => (i.code === 'unrecognized_keys' ? (i.keys ?? []) : i.path?.length ? [String(i.path[0])] : [])))].slice(0, 8).map((k) => k.slice(0, 48));
 const parseEffect = (type: string, params: unknown) => {
   if (!findEffect(type)) throw new OpError('not_found', `effect "${type}" does not exist`, { type, available: EFFECTS.map((e) => e.id) }, 'Call list_catalog for the available effects and their parameters.');
-  try { return effectParams(type, params); } catch (e: any) { throw new OpError('invalid_args', `invalid parameters for ${type}`, { issues: e.issues?.slice(0, 8) }, 'Call list_catalog for the parameter schema.'); }
+  try { return effectParams(type, params); } catch (e: any) {
+    const names = badParamNames(e.issues);
+    throw new OpError('invalid_args', `invalid parameters for ${type}${names.length ? `: ${names.join(', ')}` : ''}`, { issues: e.issues?.slice(0, 8) }, 'Call list_catalog for the parameter schema.');
+  }
 };
 /** A color.lut effect that names a table must name a colour table (asset of kind 'lut') of this project. */
 const assertLutRef = (d: ProjectDocument, type: string, params: Record<string, unknown>) => {
@@ -2052,10 +2061,22 @@ const assertLutRef = (d: ProjectDocument, type: string, params: Record<string, u
   if (known?.kind === 'lut') return;
   throw new OpError('not_found', known ? `"${known.name.slice(0, 60)}" is a ${known.kind} file, not a colour table (LUT)` : `colour table ${params.lut} is not in this project's library`, { lut: params.lut, available: lutAssets(d).slice(0, 100).map((x) => ({ id: x.id, name: x.name })) }, 'Upload a .cube file to the project library first; get_summary lists the colour tables (assets of kind lut) with their ids.');
 };
+/**
+ * Where an effect of `type` goes in `list` (which must not contain the effect being moved): a time effect only first and only
+ * one per clip; every other effect never before it.
+ */
+export function effectSlot(list: readonly EffectInstance[], type: string, requested: number | undefined): number {
+  const timeFirst = list.length > 0 && isTimeEffect(list[0]!.type) ? 1 : 0;
+  if (isTimeEffect(type)) {
+    if (list.some((e) => isTimeEffect(e.type))) throw new OpError('incompatible', 'a clip can carry one time effect (echo, time split, shutter or stutter)', { effects: list.filter((e) => isTimeEffect(e.type)).map((e) => e.type) }, 'Remove the time effect the clip has, or put this one on another clip.');
+    return 0;
+  }
+  return Math.max(timeFirst, Math.min(requested ?? list.length, list.length));
+}
 defineOp({
   name: 'apply_look',
   version: 1,
-  description: 'Give a picture or title clip one of the named colour looks (see list_catalog → looks). A look is a setting of the color.grade effect: the clip\'s existing colour grade is replaced, or one is added first in its effect list; every value stays editable with update_effect. Needs a graphics adapter (WebGPU) to be shown and exported.',
+  description: 'Give a picture or title clip one of the named colour looks (see list_catalog → looks). A look is a setting of the color.grade effect: the clip\'s existing colour grade is replaced, or one is added first in its effect list (after a time effect, which always stays first); every value stays editable with update_effect. Needs a graphics adapter (WebGPU) to be shown and exported.',
   args: z.object({ clipId: z.string(), lookId: z.string() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
@@ -2068,7 +2089,7 @@ defineOp({
     else {
       if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
       effectId = ctx.newId('fx');
-      list.unshift({ id: effectId, type: 'color.grade', enabled: true, params });
+      list.splice(effectSlot(list, 'color.grade', 0), 0, { id: effectId, type: 'color.grade', enabled: true, params });
     }
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Applied colour look ${a.lookId}`, output: { effectId, params } };
@@ -2096,7 +2117,7 @@ defineOp({
     } else {
       if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
       effectId = ctx.newId('fx');
-      list.push({ id: effectId, type: 'color.lut', enabled: true, params });
+      list.splice(effectSlot(list, 'color.lut', list.length), 0, { id: effectId, type: 'color.lut', enabled: true, params });
     }
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Applied colour table "${d.assets[a.assetId]!.name.slice(0, 60)}"`, output: { effectId, params } };
@@ -2107,7 +2128,7 @@ defineOp({
   name: 'add_effect',
   version: 1,
   checksOwnIds: ['lut'], // assertLutRef: Object.hasOwn, and the error lists the tables there are
-  description: 'Add an effect to a picture or title clip. Effects run in list order on the clip, before its mask, blend mode and opacity. Unspecified parameters take the effect\'s defaults. Discover effects with list_catalog.',
+  description: 'Add an effect to a picture or title clip. Effects run in list order on the clip after it is placed (with its transform and opacity), before its mask, transition and blend mode. A time effect (time.*) is always first, and a clip carries at most one. Unspecified parameters take the effect\'s defaults. Discover effects with list_catalog.',
   args: z.object({ clipId: z.string(), type: z.string(), params: z.record(z.string(), z.unknown()).optional(), index: z.number().int().min(0).optional() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
@@ -2115,7 +2136,7 @@ defineOp({
     if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
     const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
     assertLutRef(d, fx.type, fx.params);
-    list.splice(Math.min(a.index ?? list.length, list.length), 0, fx);
+    list.splice(effectSlot(list, a.type, a.index), 0, fx);
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Added effect ${a.type}`, output: { effectId: fx.id, params: fx.params } };
   },
@@ -2129,7 +2150,7 @@ defineOp({
   name: 'update_effect',
   version: 1,
   checksOwnIds: ['lut'], // assertLutRef: Object.hasOwn, and the error lists the tables there are
-  description: 'Change parameters of an effect on a clip (unspecified ones are kept), bypass or re-enable it, or move it to another position in the clip\'s effect order.',
+  description: 'Change parameters of an effect on a clip (unspecified ones are kept), bypass or re-enable it, or move it to another position in the clip\'s effect order. A time effect (time.*) stays first; no other effect can move before it.',
   args: z.object({ clipId: z.string(), effectId: z.string(), params: z.record(z.string(), z.unknown()).optional(), enabled: z.boolean().optional(), index: z.number().int().min(0).optional() }).strict(),
   apply(d, a) {
     const { clip } = pictureClip(d, a.clipId);
@@ -2139,7 +2160,7 @@ defineOp({
     if (a.params) { fx.params = parseEffect(fx.type, { ...fx.params, ...a.params }); assertLutRef(d, fx.type, fx.params); }
     if (a.enabled !== undefined) fx.enabled = a.enabled;
     list.splice(i, 1);
-    list.splice(Math.min(a.index ?? i, list.length), 0, fx);
+    list.splice(effectSlot(list, fx.type, a.index ?? i), 0, fx);
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Updated effect ${fx.type}${a.enabled === false ? ' (bypassed)' : ''}`, output: { params: fx.params } };
   },
@@ -2185,6 +2206,31 @@ defineOp({
     if (Object.keys(kf).length) fx.keyframes = kf; else delete fx.keyframes;
     clip.effects = clip.effects!.map((e, n) => (n === i ? fx : e));
     return { affectedIds: [clip.id], summary: `Removed keyframe ${fx.type}.${a.param}`, output: { keyframeCount: rest.length } };
+  },
+});
+defineOp({
+  name: 'set_effect_modulator',
+  version: 1,
+  description: "Make a numeric effect parameter kick on the beats of the music under the clip and settle back: value = base + depth·e^(−decay·seconds since the beat), kept inside the parameter's range. `every` counts beats from the first bar start of the music, as the strobe's `every` does (default 2). modulator=null removes it. Only geometry and texture parameters can follow the beat (list_catalog → effects[].modulatable); brightness and colour cannot, because a beat-driven change of brightness is a flash. Without analysed music the parameter keeps its base value.",
+  args: z.object({ clipId: z.string(), effectId: z.string(), param: z.string().max(48), modulator: z.object({ every: z.number().int().min(1).max(16).optional(), depth: z.number(), decay: z.number().min(1).max(30).optional() }).strict().nullable() }).strict(),
+  apply(d, a) {
+    const { clip } = pictureClip(d, a.clipId);
+    const i = mustEffect(clip, a.effectId);
+    const fx = { ...clip.effects![i]! };
+    const allowed = modulatableParams(fx.type);
+    // the allowlist is checked first: a name such as "__proto__" never reaches the record below
+    if (!allowed.includes(a.param)) throw new OpError('invalid_args', `"${a.param}" of ${fx.type} cannot follow the beat`, { modulatable: allowed }, 'Brightness and colour parameters cannot follow the beat. list_catalog shows each effect\'s modulatable parameters.');
+    const mod: Record<string, Modulator> = { ...fx.modulate };
+    if (a.modulator === null) delete mod[a.param];
+    else {
+      const r = paramRange(fx.type, a.param)!;
+      if (Math.abs(a.modulator.depth) > r.max - r.min) throw new OpError('out_of_bounds', `depth ${a.modulator.depth} is larger than the range of ${a.param} (${r.min}…${r.max})`, { min: r.min, max: r.max });
+      if (!(a.param in mod) && Object.keys(mod).length >= 4) throw new OpError('out_of_bounds', 'an effect can have at most 4 parameters that follow the beat', { modulated: Object.keys(mod) });
+      mod[a.param] = ModulatorSchema.parse({ by: 'beat', ...a.modulator });
+    }
+    if (Object.keys(mod).length) fx.modulate = mod; else delete fx.modulate;
+    clip.effects = clip.effects!.map((e, n) => (n === i ? fx : e));
+    return { affectedIds: [clip.id], summary: a.modulator ? `${fx.type}.${a.param} follows the beat` : `${fx.type}.${a.param} no longer follows the beat`, output: { modulated: Object.keys(mod) } };
   },
 });
 defineOp({
