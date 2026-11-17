@@ -3,7 +3,7 @@ import { ApiFailure, type JobEvent } from '../api.ts';
 import { cardJob, failureOf, providerAfter, recheckProvider, rememberJob } from './aiTools.recheck.ts';
 import fs from 'node:fs';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, sha256Hex, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, sha256Hex, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { dictionaries } from '@pulseframe/i18n';
 import { SETUP_CODES } from '../../../server/src/aiContracts.ts';
 import { AI_STRINGS } from './aiTools.strings.ts';
@@ -245,5 +245,27 @@ describe('sources and the translation review (on a real document)', () => {
     const reviewed = tx(s.doc, [{ op: 'review_translation', args: { variantId: s.variant, review: 'reviewed' } }], true).doc;
     expect(openItems(reviewed, s.variant, reviewRows(reviewed, s.variant, { en: 100 }))).toEqual([]);
     expect(readingLimitFor({ en: 15 }, 'en-GB')).toBe(15);
+  });
+  it('a phrase or cue whose id is also an Object property name is read as data: without a translation it is missing, not a crash', () => {
+    const s = setup();
+    // a document an import can bring (it validates): the second phrase is called «constructor», and it has no translated text
+    const d = structuredClone(s.doc);
+    d.transcripts[s.vid]!.segments[1]!.id = 'constructor';
+    const v = d.variants[s.variant]!;
+    v.translation!.sources = { [s.segs[0]!]: sha256Hex('שלום לכולם'), constructor: sha256Hex('תודה') };
+    v.phraseText = { [s.segs[0]!]: 'Hello everyone' };
+    expect(validateProject(d)).toEqual([]);
+    const rows = reviewRows(d, s.variant, { en: 100 });
+    expect(rows.map((r) => [r.id, r.kind, r.master, r.translated])).toEqual([[s.segs[0], 'phrase', 'שלום לכולם', 'Hello everyone'], ['constructor', 'phrase', 'תודה', null]]);
+    expect(openItems(d, s.variant, rows)).toEqual([{ kind: 'unreviewed', id: null }, { kind: 'missing', id: 'constructor' }]);
+    // the same for a caption cue (its translation is a format change of the clip) and for a variant id
+    const cue = { ...v.translation!, sources: { toString: sha256Hex('x'), valueOf: sha256Hex('y') } };
+    const withCues = structuredClone(d);
+    withCues.variants[s.variant]!.translation = cue;
+    const cueRows = reviewRows(withCues, s.variant, {});
+    expect(cueRows.map((r) => [r.id, r.kind, r.translated])).toEqual([['toString', 'cue', null], ['valueOf', 'cue', null]]);
+    expect(() => openItems(withCues, s.variant, cueRows)).not.toThrow();
+    expect(reviewRows(d, 'constructor', {})).toEqual([]);
+    expect(openItems(d, 'constructor', [])).toEqual([]);
   });
 });

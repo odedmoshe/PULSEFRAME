@@ -190,7 +190,9 @@ export interface ReviewRow { id: string; kind: 'phrase' | 'cue'; master: string;
  * and the flags (stale: the master changed after it was translated; fast: above the reading-speed limit of the variant's language).
  */
 export function reviewRows(doc: ProjectDocument, variantId: string, limits: Record<string, number>): ReviewRow[] {
-  const v = doc.variants?.[variantId];
+  // Ids are data (an imported project can call a phrase «constructor»): every lookup by id is an own-property lookup.
+  const own = <V>(o: Record<string, V> | undefined, id: string): V | undefined => (o && Object.hasOwn(o, id) ? o[id] : undefined);
+  const v = own(doc.variants, variantId);
   const tl = v?.translation;
   if (!v || !tl) return [];
   const stale = new Set(staleTranslations(doc, variantId));
@@ -205,16 +207,16 @@ export function reviewRows(doc: ProjectDocument, variantId: string, limits: Reco
     const f = fast.get(id);
     if (seg.has(id) || Object.hasOwn(v.phraseText ?? {}, id)) {
       const s = seg.get(id);
-      rows.push({ id, kind: 'phrase', master: s?.text ?? '', translated: v.phraseText?.[id] ?? null, stale: stale.has(id), cps: f?.cps ?? null, limit: f?.limit ?? null, ...(s ? { assetId: s.assetId } : {}) });
+      rows.push({ id, kind: 'phrase', master: s?.text ?? '', translated: own(v.phraseText, id) ?? null, stale: stale.has(id), cps: f?.cps ?? null, limit: f?.limit ?? null, ...(s ? { assetId: s.assetId } : {}) });
     } else {
-      rows.push({ id, kind: 'cue', master: cues.get(id)?.text ?? '', translated: v.overrides?.[id]?.text ?? null, stale: stale.has(id), cps: f?.cps ?? null, limit: f?.limit ?? null });
+      rows.push({ id, kind: 'cue', master: cues.get(id)?.text ?? '', translated: own(v.overrides, id)?.text ?? null, stale: stale.has(id), cps: f?.cps ?? null, limit: f?.limit ?? null });
     }
   }
   return rows;
 }
 /** What is still open before exporting this translation, preflight-style: the unreviewed mark, then each stale, too fast or missing row. */
 export function openItems(doc: ProjectDocument, variantId: string, rows: ReviewRow[]): { kind: 'unreviewed' | 'stale' | 'fast' | 'missing'; id: string | null }[] {
-  const tl = doc.variants?.[variantId]?.translation;
+  const tl = doc.variants && Object.hasOwn(doc.variants, variantId) ? doc.variants[variantId]!.translation : undefined;
   if (!tl) return [];
   const out: { kind: 'unreviewed' | 'stale' | 'fast' | 'missing'; id: string | null }[] = [];
   if (tl.review !== 'reviewed') out.push({ kind: 'unreviewed', id: null });
