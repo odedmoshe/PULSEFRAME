@@ -2,13 +2,16 @@
  * The sound-effects block (AudioFxBlock.tsx) decides two things without a browser, checked here: where the arrow keys move in a
  * chip row (visual order, also right to left), and which operations a chip or toggle commits. Those operations are run through
  * the real operation registry, so a chip never sends something the server refuses for a clip it offers the chip on. Also how a
- * slider shows (and announces, aria-valuetext) its number.
+ * slider shows (and announces, aria-valuetext) its number, and what the voice cleanup block «ניקוי קול» commits (ADR-0013).
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, AUDIO_PRESETS, audioEffectParams, createProject, describeAudioCatalog, findClip, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, AUDIO_PRESETS, audioEffectParams, createProject, decodeNoiseProfile, describeAudioCatalog, encodeNoiseProfile, findClip, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioFxParamUnit } from '@pulseframe/i18n';
-import { chipKeyTarget, roomOps, showValue, toggleOps, voiceOps, type ParamSchema } from './AudioFxBlock.tsx';
+import { chipKeyTarget, roomOps, settingsParams, showValue, toggleOps, voiceOps, type ParamSchema } from './AudioFxBlock.tsx';
+import { beforeOps, cleanupStrengthOf, listenLabels, measuredOps, noiseLevelDb, removeCleanupOps, reportTokens, strengthOps, tokensText } from './VoiceCleanBlock.tsx';
+import { VOICE_CLEAN_STRINGS, type VoiceCleanLang } from './voiceClean.strings.ts';
+import type { VoiceCheck } from '../api.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -94,5 +97,89 @@ describe('how a slider shows its number (also its aria-valuetext)', () => {
       }
     }
     expect(wrong).toEqual([]);
+  });
+});
+
+describe('voice cleanup «ניקוי קול» (VoiceCleanBlock, ADR-0013): the operations it commits', () => {
+  /** A VoiceCheck as measure_voice returns it (the measurement itself is the server's and W1's; only its shape matters here). */
+  const check = (clipId: string, assetId: string, mainsHz: '50' | '60' | null, profile = encodeNoiseProfile(Array(24).fill(-55))): VoiceCheck => ({
+    revision: 3, assetId, clipIds: [clipId], method: 'test', recommendedStrength: 0.6, note: 'Candidates only.',
+    report: { analysedSeconds: 20, noise: { mode: 'auto', bandsDb: decodeNoiseProfile(profile), profile, quietSeconds: 6, confidence: 1, ranges: [{ start: 2.1, end: 3 }], warning: null }, hum: mainsHz ? { hz: Number(mainsHz) as 50 | 60, levelDb: -40, harmonics: 4 } : null, speech: { levelDb: -22, peakDb: -8, snrDb: 17.5 } },
+    ops: [{ op: 'clean_voice', args: { clipId, includeLinked: false, strength: 0.6, profile, source: assetId, mainsHz } }],
+  });
+  const fxOf = (d: ProjectDocument, id: string, type: string) => clipOf(d, id).audioFx?.find((x) => x.type === type);
+  it('the measured ops put the three effects on the clip with the measured profile, the recording as source and the mains frequency; the strength reads back; the clip\'s other effects stay', () => {
+    const p = project();
+    const assetId = clipOf(p.doc, p.id).assetId, profile = encodeNoiseProfile(Array.from({ length: 24 }, (_, j) => -60 + j / 2));
+    const withEcho = tx(p.doc, toggleOps(clipOf(p.doc, p.id), 'space.echo')).doc;
+    const c = check(p.id, assetId, '50', profile);
+    expect(measuredOps({ ...c, ops: [...c.ops, { op: 'remove_clip', args: { clipId: p.id } }] })).toEqual(c.ops); // only clean_voice candidates are committed
+    const d = tx(withEcho, measuredOps(c)).doc;
+    expect(clipOf(d, p.id).audioFx!.map((x) => x.type)).toEqual(['cleanup.dehum', 'cleanup.denoise', 'cleanup.speech', 'space.echo']);
+    expect(fxOf(d, p.id, 'cleanup.denoise')!.params).toMatchObject({ profile, source: assetId });
+    expect(fxOf(d, p.id, 'cleanup.dehum')!.params.mainsHz).toBe('50');
+    expect(cleanupStrengthOf(clipOf(d, p.id))).toBe(0.6);
+    expect(cleanupStrengthOf(clipOf(withEcho, p.id))).toBeNull();
+    expect(strengthOps(clipOf(withEcho, p.id), 0.5)).toEqual([]); // nothing to re-commit without a cleanup
+  });
+  it('the strength slider re-commits clean_voice keeping the profile, the source and the mains frequency (and only the parts the clip carries); «הסר ניקוי» removes the cleanup and keeps the rest', () => {
+    const p = project();
+    const assetId = clipOf(p.doc, p.id).assetId, profile = encodeNoiseProfile(Array(24).fill(-48));
+    let d = tx(p.doc, toggleOps(clipOf(p.doc, p.id), 'tone.bassboost')).doc;
+    d = tx(d, measuredOps(check(p.id, assetId, '60', profile))).doc;
+    const ids = clipOf(d, p.id).audioFx!.filter((x) => x.type.startsWith('cleanup.')).map((x) => x.id);
+    const ops = strengthOps(clipOf(d, p.id), 0.9);
+    expect(ops).toEqual([{ op: 'clean_voice', args: { clipId: p.id, includeLinked: false, strength: 0.9, mainsHz: '60', denoise: true, speech: true, profile, source: assetId } }]);
+    const up = tx(d, ops).doc;
+    expect(clipOf(up, p.id).audioFx!.filter((x) => x.type.startsWith('cleanup.')).map((x) => x.id)).toEqual(ids); // replaced in place, same ids
+    expect(fxOf(up, p.id, 'cleanup.denoise')!.params).toMatchObject({ profile, source: assetId, reductionDb: 18.6 });
+    expect(fxOf(up, p.id, 'cleanup.dehum')!.params).toMatchObject({ mainsHz: '60', harmonics: 6 });
+    expect(cleanupStrengthOf(clipOf(up, p.id))).toBe(0.9);
+    // the user took the speech enhancer out: the strength keeps it out; no hum: no hum removal comes back
+    const noSpeech = tx(up, [{ op: 'remove_audio_effect', args: { clipId: p.id, effectId: fxOf(up, p.id, 'cleanup.speech')!.id } }]).doc;
+    expect(clipOf(tx(noSpeech, strengthOps(clipOf(noSpeech, p.id), 0.3)).doc, p.id).audioFx!.map((x) => x.type)).toEqual(['cleanup.dehum', 'cleanup.denoise', 'tone.bassboost']);
+    const humless = tx(tx(p.doc, []).doc, measuredOps(check(p.id, assetId, null))).doc;
+    expect(strengthOps(clipOf(humless, p.id), 0.4)[0]!.args).toMatchObject({ mainsHz: null });
+    expect(clipOf(tx(humless, strengthOps(clipOf(humless, p.id), 0.4)).doc, p.id).audioFx!.map((x) => x.type)).toEqual(['cleanup.denoise', 'cleanup.speech']);
+    // remove
+    expect(clipOf(tx(up, removeCleanupOps(clipOf(up, p.id))).doc, p.id).audioFx!.map((x) => x.type)).toEqual(['tone.bassboost']);
+  });
+  it('«לפני» plays a scratch copy with the cleanup switched off (nothing else changes); «אחרי» the clip as it is', () => {
+    const p = project();
+    const d = tx(tx(p.doc, toggleOps(clipOf(p.doc, p.id), 'space.echo')).doc, measuredOps(check(p.id, clipOf(p.doc, p.id).assetId, '50'))).doc;
+    const draft = tx(d, beforeOps(clipOf(d, p.id))).doc;
+    expect(clipOf(draft, p.id).audioFx!.map((x) => [x.type, x.enabled])).toEqual([['cleanup.dehum', false], ['cleanup.denoise', false], ['cleanup.speech', false], ['space.echo', true]]);
+    expect(beforeOps(clipOf(draft, p.id))).toEqual([]);
+  });
+  it('the noise profile and the recording it was measured on are never shown as controls; every other parameter is', () => {
+    for (const e of describeAudioCatalog().audioEffects) {
+      const props = (e.paramsSchema as { properties: Record<string, ParamSchema> }).properties, shown = settingsParams(e.id, null).map(([p]) => p);
+      for (const [p, s] of Object.entries(props)) expect(shown.includes(p), `${e.id}.${p}`).toBe(!(s.type === 'string' && !s.enum));
+    }
+    expect(settingsParams('cleanup.denoise', 'amount').map(([p]) => p)).toEqual(['reductionDb', 'sensitivityDb']);
+    expect(settingsParams('cleanup.dehum', 'amount').map(([p]) => p)).toEqual(['mainsHz', 'harmonics', 'width']);
+  });
+  it('the status line says what was measured, in Hebrew, with the numbers apart (noise over the bands, hum, speech, signal to noise, confidence, warnings in words)', () => {
+    const c = check('c', 'a', '50', encodeNoiseProfile(Array(24).fill(-50)));
+    expect(noiseLevelDb(Array(24).fill(-50))).toBeCloseTo(-50 + 10 * Math.log10(19950 / 24000), 9);
+    const he = reportTokens(c.report, 'he'), text = tokensText(he);
+    expect(he.filter((x) => 'n' in x).map((x) => (x as { n: string }).n)).toEqual(['-50.8', '50', '-40.0', '-22.0', '17.5', '100%']);
+    expect(text).toMatch(/^נמדד: רעש רקע -50\.8 דציבל ביחס לשיא · זמזום חשמל 50 הרץ/);
+    for (const x of he) if ('t' in x) expect(/[0-9]/.test(x.t), x.t).toBe(false); // every number is its own token (shown in a left-to-right isolate)
+    const quiet = { ...c.report, hum: null, speech: { levelDb: null, peakDb: -60, snrDb: null }, noise: { ...c.report.noise, warning: 'no_pause_found' as const, confidence: 0.02 } };
+    expect(tokensText(reportTokens(quiet, 'he'))).toMatch(/לא נמצא זמזום חשמל · דיבור לא ידוע · יחס אות לרעש לא ידוע · ביטחון במדידת הרעש 2%\. לא נמצאה הפסקה שקטה/);
+    expect(tokensText(reportTokens(c.report, 'en'))).toMatch(/^Measured: background noise -50\.8 dBFS · mains hum 50 Hz/);
+  });
+});
+
+describe('▶ «לפני» / ▶ «אחרי»: the accessible name contains the visible label (WCAG 2.5.3 Label in Name)', () => {
+  it('in every language the name begins with the visible word, so saying «לפני» or «אחרי» reaches the button; the name still says nothing is saved', () => {
+    for (const lang of Object.keys(VOICE_CLEAN_STRINGS) as VoiceCleanLang[]) for (const which of ['before', 'after'] as const) {
+      const { text, name } = listenLabels(which, lang);
+      const word = text.replace(/^▶\s*/, '');
+      expect(word, `${lang} ${which}: a visible word`).toBe(VOICE_CLEAN_STRINGS[lang][which]);
+      expect(name.startsWith(word), `${lang} ${which}: «${name}» begins with «${word}»`).toBe(true);
+      expect(name.length, `${lang} ${which}: the name says more than the word`).toBeGreaterThan(word.length + 5);
+    }
   });
 });
