@@ -484,16 +484,22 @@ function Done({ editor, S }: { editor: Editor; S: ExportStrings }) {
       <h3 className="pf-xs-run-title">{ok.length === 0 ? (bad.every((j) => j.status === 'canceled') ? S.canceledTitle : S.failedTitle) : ok.length === 1 ? S.doneTitle : S.doneMany(ok.length)}</h3>
       {ok.length > 0 && <span className="pf-xs-sr" role="status" data-testid="export-finished">{ok.length === 1 ? S.doneTitle : S.doneMany(ok.length)}</span>}
       {ok.map((j) => <FileCard key={j.id} j={j} S={S} editor={editor} />)}
-      {bad.map((j) => (
-        <div key={j.id} className="pf-xs-card is-bad" data-testid={j.status === 'canceled' ? 'export-canceled' : 'export-failed'} role="alert">
-          <TriangleAlert size={18} aria-hidden="true" />
-          <div className="pf-xs-card-text">
-            <b>{j.label} · {j.status === 'canceled' ? S.canceledTitle : S.failedTitle}</b>
-            <span dir="auto">{j.status === 'canceled' ? S.canceledNote : `${j.error?.message ? (translateRefusal(state.lang, j.error.message) ?? j.error.message) + '. ' : ''}${S.failedFix}`}</span>
-          </div>
-          <Button variant="secondary" size="sm" onClick={() => void retry(j)} data-testid="export-retry">{S.retry}</Button>
-        </div>
-      ))}
+      {bad.map((j) => {
+        const body = (
+          <>
+            <TriangleAlert size={18} aria-hidden="true" />
+            <div className="pf-xs-card-text">
+              <b>{j.label} · {j.status === 'canceled' ? S.canceledTitle : S.failedTitle}</b>
+              <span dir="auto">{j.status === 'canceled' ? S.canceledNote : `${j.error?.message ? (translateRefusal(state.lang, j.error.message) ?? j.error.message) + '. ' : ''}${S.failedFix}`}</span>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => void retry(j)} data-testid="export-retry">{S.retry}</Button>
+          </>
+        );
+        // the ids stay literal attributes (the test id inventory reads them from the source)
+        return j.status === 'canceled'
+          ? <div key={j.id} className="pf-xs-card is-bad" data-testid="export-canceled" role="alert">{body}</div>
+          : <div key={j.id} className="pf-xs-card is-bad" data-testid="export-failed" role="alert">{body}</div>;
+      })}
       <AlsoCard S={S} ok={ok} />
       <div className="pf-xs-run-actions">
         <Button variant="secondary" size="lg" onClick={closeExportSheet}>{S.backToEdit}</Button>
