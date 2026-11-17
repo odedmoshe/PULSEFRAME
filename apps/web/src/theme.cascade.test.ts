@@ -202,6 +202,46 @@ describe('editor stylesheets', () => {
     for (const r of scroll) expect(r.rule.decls.height, '.tl-scroll { height }').toBeUndefined();
   });
 
+  it('no child of the top bar takes its width from the bar: the field that edits the project name has a width of its own', () => {
+    // Every child of the bar is rigid at its own width unless a shell rule lets it give way (pinned above). A child whose
+    // width is a share of its container is then a share of the whole bar: the rename field (100% wide everywhere else) was
+    // 1416px in a 1440px window and pushed the selects, undo, redo and Export out of it.
+    expect(read('./editor/Header.tsx')).toMatch(/<InlineRename [^>]*testid="project-rename"/);
+    expect(read('./editor/InlineRename.tsx')).toMatch(/<input [^>]*className=\{`inline-rename-input /);
+    expect(winner(pick(styles, (s) => s === '.inline-rename-input'), 'inline-size')?.rule.decls['inline-size']).toBe('100%');
+    // the classes the direct children of <header> carry (Header.tsx, InlineRename.tsx), and the rules that can reach such a child
+    const childClasses = ['logo', 'brand', 'title', 'inline-rename-btn', 'inline-rename-input', 'track-btn', 'format-switch', 'format-badge', 'check', 'format-safe', 'spacer', 'save', 'warn', 'rev', 'ghost', 'paused', 'danger', 'export-finished', 'flash-result', 'primary'];
+    const header = read('./editor/Header.tsx');
+    for (const c of ['logo', 'brand', 'title', 'format-switch', 'format-badge', 'check format-safe', 'spacer', 'rev', 'primary', 'flash-result']) expect(header, c).toContain(`className="${c}"`);
+    const compounds = (sel: string) => sel.split(/\s*>\s*|\s+/).filter(Boolean);
+    const reaches = (sel: string, cls: string) => {
+      const parts = compounds(sel), last = parts.at(-1)!;
+      if (!parts.slice(0, -1).every((p) => ['.app', '.header', 'header'].includes(p))) return false; // scoped to another container
+      const base = last.replace(/:(?:not|is|where)\([^)]*\)|::?[\w-]+|\[[^\]]*\]/g, '');
+      const named = [...base.matchAll(/\.([\w-]+)/g)].map((m) => m[1]!);
+      return named.length ? named.includes(cls) && named.every((n) => childClasses.includes(n)) : /^(\*|button|a|input|span|strong|label|details)$/.test(base);
+    };
+    const widthOf = (cls: string) => {
+      const rules = pick(all, (s) => reaches(s, cls)).flatMap((r) => (['inline-size', 'width'] as const).filter((p) => p in r.rule.decls).map((p) => ({ ...r, value: r.rule.decls[p]! })));
+      return rules.sort((a, b) => cmp(specificity(a.selector), specificity(b.selector)) || a.rule.order - b.rule.order).at(-1)?.value ?? 'auto';
+    };
+    for (const cls of childClasses) expect(widthOf(cls), `.header > .${cls} { inline-size }`).not.toMatch(/%|v[wi]\b|stretch|fill-available/);
+    // the field: 12rem to type in, not growing, and narrowing in the same step as the project name it edits
+    expect(widthOf('inline-rename-input')).toBe('auto');
+    const shell = parse('./ds/shell.css');
+    const field = pick(shell, (s) => s === '.app > .header > .inline-rename-input');
+    expect(field.length).toBe(1);
+    const [grow, shrink, basis] = field[0]!.rule.decls.flex!.split(/\s+/);
+    expect(grow).toBe('0');
+    expect(basis).toMatch(/^[\d.]+(rem|px|ch)$/);
+    const step = pick(shell, (s) => s === '.app > .header > :is(.title, .format-safe, .format-switch)')[0]!.rule.decls.flex!.split(/\s+/)[1];
+    expect(Number(shrink)).toBeGreaterThan(0);
+    expect(shrink).toBe(step);
+    expect(field[0]!.rule.decls['min-inline-size']).toMatch(/^[1-9][\d.]*(rem|px|ch)$/); // still a field one can type in when the bar is at its narrowest
+    // nothing after it in the sheets widens it again (theme.css is loaded last)
+    expect(pick(theme, (s) => /inline-rename-input/.test(s) && compounds(s).slice(0, -1).every((p) => ['.app', '.header'].includes(p)))).toEqual([]);
+  });
+
   it('what the preview draws above the stage is cut off at the stage edge, so the handles of an enlarged clip cannot lie over the header', () => {
     expect(componentFiles).toContain('./editor/interactions.css');
     // The handle box is not kept inside the preview (its size is the layer's: natural size × fit × scale) and its move
