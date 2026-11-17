@@ -21,7 +21,8 @@ let outWidth = 0;
 let outHeight = 0;
 let ctx: CanvasRenderingContext2D;
 // Export always decodes the ORIGINAL bytes (never a proxy), read by HTTP range requests.
-const pool = new MediaPool({ assetUrl: (assetId) => `${base}/assets/${assetId}`, maxDecoders: 8 });
+// 12 decoders: two echo-5 clips under a transition, plus room (ADR-0005 budget, to be amended for ADR-0011 decode lanes).
+const pool = new MediaPool({ assetUrl: (assetId) => `${base}/assets/${assetId}`, maxDecoders: 12 });
 
 async function draw(index: number) {
   // `index` is relative to the exported range. Layout is resolution-independent, so a scaled output only changes the raster size.
@@ -36,7 +37,9 @@ async function draw(index: number) {
   if (told.length) throw new Error(`effect_unavailable: frame ${index} cannot be drawn faithfully: ${told.map((id) => `${id}: ${unavailableReasons![id]}`).join('; ')}`);
 }
 
-window.__pf = {
+const page = {
+  /** Decoder counts of this page's pool (diagnostics and proofs: ADR-0011 decode lanes). */
+  stats: () => pool.stats(),
   ready: (async () => {
     if (!token) throw new Error('missing render token');
     const r = await fetch(`${base}/snapshot`);
@@ -52,7 +55,7 @@ window.__pf = {
     document.body.append(canvas);
     return { frameCount };
   })(),
-  async renderPng(index) {
+  async renderPng(index: number) {
     await draw(index);
     const blob: Blob = await new Promise((res, rej) => ctx.canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob failed'))), 'image/png'));
     const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -89,7 +92,10 @@ window.__pf = {
       if (++n === perBatch) await flush();
     }
     await flush();
+    const media = pool.stats();
     await pool.dispose();
-    return { frames: frameCount, stageMs: { draw: Math.round(ms.draw), readback: Math.round(ms.readback), upload: Math.round(ms.upload) } };
+    const stats = { frames: frameCount, stageMs: { draw: Math.round(ms.draw), readback: Math.round(ms.readback), upload: Math.round(ms.upload) }, decoders: { peak: media.peakDecoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed, refused: media.refused } };
+    return stats;
   },
 };
+window.__pf = page;
