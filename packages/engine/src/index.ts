@@ -10,7 +10,8 @@ export { flashSchedule, FlashGuard, SCREEN_FLASH_GAP, SCREEN_FLASH_STEP, flashSi
 export { FlashAnalyser, flashCells, FLASH_GRID, type FlashCells, type FlashRange, type FlashReport } from './flashAnalysis.ts';
 export * from './audiofx/index.ts';
 export { soundEnd, fxSeed, type PlannedVoice, type AudioPlanOptions } from './audio.ts';
-export { TAP_PLACE_SLOT, tapOffsets, tapWeights, pieceAt, runStart, tapMerger, stutterFrame, beatStepFrames, maxDecodeLanes, type TapMerger } from './taps.ts';
+export { TAP_PLACE_SLOT, tapOffsets, tapWeights, pieceAt, runStart, tapMerger, stutterFrame, beatStepFrames, maxDecodeLanes, decodeLaneSteps, type TapMerger } from './taps.ts';
+export { decodeOverBudget, type DecodeStretch } from './decodeBudget.ts';
 export { overlayParticles, speedLines, type Particle, type SpeedLine } from './overlays.ts';
 export { stampPolygons, STAMP_TEXT } from './stamp.ts';
 export { applyModulators } from './modulate.ts';

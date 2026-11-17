@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { handleAfterEnd, sequenceDuration, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, captionCues } from '@pulseframe/engine';
+import { audioPlan, captionCues, decodeOverBudget, type DecodeStretch } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { variantDoc } from './export.ts';
 
@@ -19,6 +19,8 @@ export interface PreflightIssue {
   fix?: { label: string; ops: OpCall[] };
 }
 export interface PreflightOptions { variantId?: string; maxCharsPerSecond?: number }
+/** Video decoders the render worker and browser export open at most (apps/web render.ts, browserExport.ts). */
+const RENDER_DECODERS = 12;
 
 export function preflight(exporter: Exporter, master: ProjectDocument, revision: number, opts: PreflightOptions = {}) {
   const issues: PreflightIssue[] = [];
@@ -46,6 +48,25 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   const ap = audioPlan(doc);
   if (total > 0 && ap.clips.length === 0) issues.push({ code: 'no_sound', severity: 'note', message: 'the programme has no audible sound', ids: [] });
   else if (!doc.settings.loudness && ap.clips.length > 0) issues.push({ code: 'no_loudness_target', severity: 'note', message: 'no loudness target is set, so the export keeps the mix level as it is', ids: [doc.id], fix: { label: 'Normalise to -14 LUFS (common for social video)', ops: [{ op: 'set_loudness_target', args: { target: -14 } }] } });
+
+  // 4a. frames that need more video pictures decoded at once than the renderer opens decoders for (time effects decode each
+  // earlier picture separately, ADR-0011). Counted exactly as the compositor asks for pictures (a source frame that several
+  // layers or taps of a frame show is decoded once), so these frames, and only these, would refuse with effect_unavailable
+  // (decode_budget). Stretches less than a second apart make one issue, so a count that wavers around the budget (slow
+  // motion) is not listed frame by frame.
+  const near = Math.max(1, Math.round(rate.num / rate.den));
+  const groups: DecodeStretch[][] = [];
+  for (const s of decodeOverBudget(doc, RENDER_DECODERS)) {
+    const g = groups.at(-1);
+    if (g && s.fromFrame - g.at(-1)!.toFrame < near) g.push(s); else groups.push([s]);
+  }
+  for (const g of groups) {
+    const from = g[0]!.fromFrame, to = g.at(-1)!.toFrame;
+    const refused = g.reduce((k, s) => k + s.toFrame - s.fromFrame, 0);
+    const frames = to - from === 1 ? `frame ${from}` : `frames ${from}–${to - 1}`;
+    const where = refused === to - from ? frames : `${refused} of the ${frames}`;
+    issues.push({ code: 'decode_budget', severity: 'warning', message: `on ${where}, more video pictures must be decoded at once than the ${RENDER_DECODERS} the renderer can open (up to ${Math.max(...g.map((s) => s.peak))}); those frames would be refused. Time effects such as echo and time split decode each earlier picture separately (a picture shown more than once in a frame is decoded once). Lower the count of a time effect, remove one, or move the overlapping clips apart`, ids: [...new Set(g.flatMap((s) => s.clipIds))], range: { startFrame: from, endFrame: to } });
+  }
 
   for (const track of seq.tracks) {
     for (const c of track.clips) {
@@ -104,6 +125,6 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   return {
     revision, variantId: opts.variantId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: variant?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, transition handles, upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
+    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles, upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
   };
 }

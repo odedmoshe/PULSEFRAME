@@ -39,7 +39,9 @@ export interface BrowserCapabilities {
 }
 export interface BrowserExportPlan { container: 'mp4' | 'webm'; videoCodec: 'avc' | 'vp9'; audioCodec: 'aac' | 'opus'; substitutions: string[]; capabilities: BrowserCapabilities }
 export interface BrowserExportProgress { stage: 'planning' | 'leased' | 'fonts' | 'audio' | 'rendering' | 'finalizing' | 'completing'; framesDone: number; total: number }
-export interface BrowserExportResult { blob: Blob; jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number }
+export interface BrowserExportResult { blob: Blob; jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number;
+  /** Video decoders of this export: the most open at once, the budget, and how many pictures the budget refused (ADR-0011). */
+  decoders: { peak: number; max: number; opened: number; disposed: number; refused: number } }
 export interface BrowserExportRun {
   projectId: string;
   options?: Record<string, unknown>;
@@ -317,7 +319,8 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
   const onAbort = () => stop(new BrowserExportError('aborted', 'export aborted by the caller', { jobId }));
   opts.signal?.addEventListener('abort', onAbort);
 
-  const pool = new MediaPool({ assetUrl: (assetId) => `${apiBase}/projects/${opts.projectId}/assets/${assetId}/content`, maxDecoders: 8 });
+  // 12 decoders, as the render worker (ADR-0005 budget, to be amended for ADR-0011 decode lanes)
+  const pool = new MediaPool({ assetUrl: (assetId) => `${apiBase}/projects/${opts.projectId}/assets/${assetId}/content`, maxDecoders: 12 });
   let output: Output | null = null;
   try {
     progress('fonts', 0, out.frames);
@@ -358,8 +361,8 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
       check();
       if (opts.freezeAfterFrames !== undefined && i === opts.freezeAfterFrames) await new Promise(() => {}); // stuck-render simulation: heartbeats keep running until the page is closed
       const g = evaluate(doc, T.frameTime(out.firstFrame + i, rate));
-      const { missing, unavailableEffects, unavailableReasons } = await drawGraph(ctx, { ...g, width: out.width, height: out.height }, pool.frames);
-      if (missing.length) throw new BrowserExportError('export_failed', `frame ${i}: source frame unavailable for clips ${missing.join(', ')}`, { jobId });
+      const { missing, missingReasons, unavailableEffects, unavailableReasons } = await drawGraph(ctx, { ...g, width: out.width, height: out.height }, pool.frames);
+      if (missing.length) throw new BrowserExportError('export_failed', `frame ${i}: source frame unavailable for clips ${missing.map((id) => (missingReasons?.[id] ? `${id} (${missingReasons[id]})` : id)).join(', ')}`, { jobId });
       // An effect whose own material is missing (a colour table that could not be loaded) says so; the others need the adapter.
       const told = unavailableEffects.filter((id) => unavailableReasons?.[id]);
       const adapter = unavailableEffects.filter((id) => !unavailableReasons?.[id]);
@@ -381,7 +384,8 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
     progress('completing', framesDone, out.frames);
     clearInterval(timer);
     await api(apiBase, `/jobs/${jobId}/complete`, { sessionId, bytes: buffer.byteLength, sha256, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, frames: framesDone, container: decision.container });
-    return { blob: new Blob([buffer], { type: mime }), jobId, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, container: decision.container, frames: framesDone, sha256, bytes: buffer.byteLength, substitutions: decision.substitutions, capabilities: caps, wallMs: performance.now() - started };
+    const media = pool.stats();
+    return { blob: new Blob([buffer], { type: mime }), jobId, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, container: decision.container, frames: framesDone, sha256, bytes: buffer.byteLength, substitutions: decision.substitutions, capabilities: caps, wallMs: performance.now() - started, decoders: { peak: media.peakDecoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed, refused: media.refused } };
   } catch (e: any) {
     const err = stopReason ?? (e instanceof BrowserExportError ? e : new BrowserExportError('export_failed', String(e?.message ?? e), { jobId }));
     await output?.cancel().catch(() => {});

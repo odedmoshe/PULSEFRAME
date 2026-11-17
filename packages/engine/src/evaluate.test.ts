@@ -108,3 +108,25 @@ describe('sound effects in the agent senses (ADR-0010)', () => {
     expect(timeline(doc)!.tracks.flatMap((t) => t.clips).find((c) => c.id === sound.id)).toMatchObject({ tailSeconds: 1 });
   });
 });
+
+describe('time effects leave other documents alone (ADR-0011)', () => {
+  it('a clip without a time effect, or whose first enabled effect is not one, gets no taps and no remap; its effects stay in order', () => {
+    let doc = project();
+    const track = doc.sequences.seq_main!.tracks.find((t) => t.kind === 'video')!;
+    const clipId = track.clips[0]!.id;
+    doc = applyTransaction(doc, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian' } }, { op: 'add_effect', args: { clipId, type: 'time.echo' } }], { idSeed: 'te', actor: 't' }).doc;
+    const layer = evaluate(doc, f(40)).layers[0]!;
+    expect(layer.kind === 'video' && [layer.time?.type, layer.effects?.map((e) => e.type)]).toEqual(['time.echo', ['blur.gaussian']]);
+    // an older document that holds a time effect after another one (validation reports time_effect_order): not applied
+    const old = structuredClone(doc);
+    const c = old.sequences.seq_main!.tracks.find((t) => t.kind === 'video')!.clips[0]!;
+    if (c.type === 'media') c.effects = [...c.effects!].reverse();
+    const l2 = evaluate(old, f(40)).layers[0]!;
+    expect(l2.kind === 'video' && [l2.time, l2.remap, l2.effects?.map((e) => e.type)]).toEqual([undefined, undefined, ['blur.gaussian', 'time.echo']]);
+    // no effect at all: the layer has neither key
+    const plain = evaluate(project(), f(40)).layers[0]!;
+    expect('time' in plain || 'remap' in plain).toBe(false);
+    const text = evaluate(project(), f(50)).layers.find((l) => l.kind === 'text')!;
+    expect('time' in text || 'remap' in text).toBe(false);
+  });
+});

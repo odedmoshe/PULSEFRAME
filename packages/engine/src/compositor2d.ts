@@ -7,10 +7,11 @@
  */
 import * as T from '@pulseframe/time';
 import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip } from './gpu.ts';
-import type { Layer, PictureLayer, RenderGraph, TextLayer } from './evaluate.ts';
+import type { ImageLayer, Layer, PictureLayer, RenderGraph, TextLayer, VideoLayer } from './evaluate.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
 import { textAtRest, unitPose } from './textAnimation.ts';
 import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
+import { TAP_PLACE_SLOT, tapMerger } from './taps.ts';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Something that can paint a decoded source frame into a rectangle. */
@@ -25,9 +26,16 @@ export interface FrameProvider {
   lut?(assetId: string): Promise<LutStrip | null>;
   /** Called once at the start of every drawGraph, before any frame is asked for: decoders used from now on are pinned (never evicted) until the next begin. A pool serves one drawGraph at a time. */
   begin?(): void;
-  /** Why the last request for this layer resolved null (e.g. `decode_budget: …`), or null when unknown. Never throws. */
+  /** Why the last request for this layer resolved null (e.g. `decode_budget: …`, see decodeBudgetReason), or null when unknown. Never throws. */
   refusal?(layer: PictureLayer): string | null;
 }
+/**
+ * The refusal a pool gives for a picture it did not decode because the frame needs more video decoders than it opens
+ * (ADR-0011). Nothing failed to load, and asking for the same frame again cannot help: only fewer pictures in the frame can
+ * (preflight's decode_budget lists those frames). A view tells it apart from a load failure with isDecodeBudgetReason.
+ */
+export const decodeBudgetReason = (maxDecoders: number) => `decode_budget: this frame needs more than ${maxDecoders} video decoders`;
+export const isDecodeBudgetReason = (reason: string | null | undefined) => !!reason && reason.startsWith('decode_budget:');
 
 /** Text wraps at this fraction of the frame width (before the layer's own scale). */
 export const TEXT_MAX_WIDTH_FRAC = 0.9;
@@ -266,17 +274,56 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
   ctx.restore();
 }
 
+/** Size of a placed layer before its own transform: a picture fitted to the frame (contain or cover); a title spans the frame. */
+function placedSize(g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer): { w: number; h: number } {
+  if (layer.kind === 'text') return { w: g.width, h: g.height };
+  // Default placement of pictures, centred: contain (whole picture visible) or cover (frame filled, edges cropped).
+  const fit = (g.fit === 'cover' ? Math.max : Math.min)(g.width / layer.sourceWidth, g.height / layer.sourceHeight);
+  return { w: layer.sourceWidth * fit, h: layer.sourceHeight * fit };
+}
+/** Draw a layer's picture (or title) with its transform and opacity, nothing else: the first step of every layer and of every time tap. */
+function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer, img: FrameImage | null) {
+  if (layer.kind === 'text') { drawText(c, g, layer); return; }
+  const { w, h } = placedSize(g, layer);
+  withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h));
+}
+/** Key under which a decoded picture can serve every layer and tap of one frame that shows the same source frame. */
+const pictureKey = (l: PictureLayer) => (l.kind === 'video' ? `v\n${l.assetId}\n${l.sourceFrameIndex}` : `i\n${l.assetId}`);
+/**
+ * The video decoders drawing `g` asks its frame provider for at once, as drawGraph asks (ADR-0011): every video layer's
+ * own picture, then each time tap whose source frame no earlier request of the frame shows (it shares that image, see
+ * pictureKey). Counted as distinct decode lanes (clip id and lane: the media pool's decoder key within one quality), so a
+ * pool with fewer decoders than `count` refuses some of these pictures (decode_budget). `clipIds`: the clips they are
+ * decoded for (a tap is decoded for its carrier clip). Pure; decodeBudget.test.ts holds it equal to drawGraph's requests.
+ */
+export function frameDecoders(g: RenderGraph): { count: number; clipIds: string[] } {
+  const lanes = new Set<string>(), shown = new Set<string>(), clipIds = new Set<string>();
+  const take = (l: PictureLayer) => { if (l.kind === 'video') { lanes.add(`${l.clipId}\n${l.lane ?? 0}`); clipIds.add(l.clipId); } };
+  for (const l of g.layers) if (l.kind === 'video' || l.kind === 'image') { take(l); shown.add(pictureKey(l)); }
+  for (const l of g.layers) {
+    if (l.kind === 'caption' || !l.time) continue;
+    for (const tap of l.time.taps) {
+      if (tap.layer.kind === 'text' || shown.has(pictureKey(tap.layer))) continue;
+      shown.add(pictureKey(tap.layer));
+      take(tap.layer);
+    }
+  }
+  return { count: lanes.size, clipIds: [...clipIds] };
+}
+
 /** Draw one evaluated frame. Awaits source frames; drawing order equals graph.layers order. */
 /**
  * `unavailableEffects`: ids of GPU effects in this frame that could not run here (ADR-0008). The frame was drawn without them;
  * a preview says so, a still or an export must refuse rather than deliver it.
- * `unavailableReasons`: for those of them whose cause is not the graphics adapter (a colour table that could not be loaded), why.
+ * `unavailableReasons`: for those of them whose cause is not the graphics adapter (a colour table that could not be loaded,
+ * a time effect whose earlier picture could not be decoded), why.
  */
 /** The frame that is waiting on a GPU pass, if any (see drawGraph). */
 let gpuFrame: Promise<void> | null = null;
-export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
+export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; /** For missing clips whose picture the view refused (FrameProvider.refusal, e.g. decode_budget): why, by clip id. */ missingReasons?: Record<string, string>; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
   frames.begin?.();
   const missing: string[] = [];
+  const missingReasons: Record<string, string> = {};
   // Colour tables named by effects of this frame are loaded here, with the source frames and before the GPU gate; a table that
   // cannot be had becomes null with its reason, and the effect that needs it is then reported as unavailable, never thrown.
   const luts = new Map<string, LutStrip | null>();
@@ -289,7 +336,29 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
       if (strip) luts.set(id, strip); else lutReasons.set(id, `colour table ${id} is not available`);
     } catch (e) { lutReasons.set(id, `colour table ${id} could not be loaded: ${String((e as Error)?.message ?? e).slice(0, 200)}`); }
   };
-  const [images] = await Promise.all([Promise.all(g.layers.map((l) => (l.kind === 'text' || l.kind === 'caption' ? null : frames(l)))), Promise.all([...luts.keys()].map(loadLut))]);
+  // Every picture of the frame is asked for at once: first each layer's own (in layer order), then the pictures of the time
+  // taps (ADR-0011), so that when a frame needs more decoders than the pool may open, it is a time effect that is left out
+  // (and reported), never a layer. A tap showing a source frame that an earlier layer or tap of this frame already asked
+  // for shares that image.
+  const shared = new Map<string, Promise<FrameImage | null>>();
+  const ask = (l: PictureLayer) => { const k = pictureKey(l); let p = shared.get(k); if (!p) shared.set(k, (p = frames(l))); return p; };
+  /** Why a tap's picture could not be had, by layer index and tap index. */
+  const tapWhy = new Map<string, string>();
+  const requests = g.layers.map((l) => {
+    if (l.kind === 'text' || l.kind === 'caption') return null;
+    const own = frames(l);
+    if (!shared.has(pictureKey(l))) shared.set(pictureKey(l), own);
+    return own;
+  });
+  const tapRequests = g.layers.map((l, i) => (l.kind === 'caption' || !l.time ? null : l.time.taps.map((tap, k) => {
+    if (tap.layer.kind === 'text') return null;
+    const layer = tap.layer;
+    // a tap whose picture cannot be decoded leaves its time effect out of this frame (reported below), it does not fail the frame
+    return ask(layer).then((img) => { if (!img) tapWhy.set(`${i}:${k}`, frames.refusal?.(layer) ?? 'source frame unavailable'); return img; }, (e) => { tapWhy.set(`${i}:${k}`, `source frame unavailable: ${String((e as Error)?.message ?? e).slice(0, 200)}`); return null; });
+  })));
+  const [images, tapImages] = await Promise.all([Promise.all(requests), Promise.all(tapRequests.map((t) => (t ? Promise.all(t) : null))), Promise.all([...luts.keys()].map(loadLut))]);
+  /** Time effects of this frame that could not be drawn faithfully (a tap picture was missing), with why. */
+  const timeLeftOut = new Map<string, string>();
   // A frame with a GPU effect waits for the pass in the middle of drawing, while the shared scratch buffers hold its layers.
   // No other frame may draw meanwhile, so every frame first waits for such a frame to finish; frames without one stay synchronous.
   while (gpuFrame) await gpuFrame;
@@ -309,21 +378,37 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
   for (const [i, layer] of g.layers.entries()) {
     if (layer.kind === 'caption') { drawCaption(ctx, g, layer); continue; }
     const img = layer.kind === 'text' ? null : images[i];
-    if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); continue; }
-    // Default placement of pictures, centred: contain (whole picture visible) or cover (frame filled, edges cropped).
-    const fit = layer.kind === 'text' ? 1 : (g.fit === 'cover' ? Math.max : Math.min)(g.width / layer.sourceWidth, g.height / layer.sourceHeight);
-    const w = layer.kind === 'text' ? g.width : layer.sourceWidth * fit;
-    const h = layer.kind === 'text' ? g.height : layer.sourceHeight * fit;
-    const place = (c: Ctx2D) => (layer.kind === 'text' ? drawText(c, g, layer) : withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h)));
+    if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); const why = frames.refusal?.(layer); if (why) missingReasons[layer.clipId] = why; continue; }
+    const { w, h } = placedSize(g, layer);
     const colourFix = layer.kind === 'video' ? layer.colourFix : undefined;
-    const hasLook = !!(colourFix || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
-    if (!hasLook) { place(ctx); continue; } // fast path: identical to drawing without the look system
+    const hasLook = !!(colourFix || layer.time || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
+    if (!hasLook) { placeLayer(ctx, g, layer, img ?? null); continue; } // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
     const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), local: layer.local ?? 0, box, beat: g.beat ?? null, luts, lutReasons };
     let buf = scratch(1, g.width, g.height);
-    place(buf.ctx);
-    if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
+    const taps = layer.time?.taps, tapImgs = tapImages[i];
+    const lost = taps ? taps.findIndex((_, k) => tapWhy.has(`${i}:${k}`)) : -1;
+    if (taps && tapImgs && lost < 0) {
+      // Time taps (ADR-0011): each picture is placed on its own with its transform and opacity, corrected like the layer
+      // would be, read back and merged in exact integer arithmetic; the merged picture then goes on like a placed layer.
+      const merger = tapMerger(layer.time!.type, layer.time!.params, taps.map((x) => x.weight), g.width * g.height);
+      taps.forEach((tap, k) => {
+        const slot = scratch(TAP_PLACE_SLOT, g.width, g.height);
+        placeLayer(slot.ctx, g, tap.layer, tapImgs[k] ?? null);
+        if (tap.layer.kind === 'video' && tap.layer.colourFix === 'bt709-as-bt601') applyColourMatrix(slot, BT709_AS_BT601);
+        merger.add(k, slot.ctx.getImageData(0, 0, g.width, g.height).data);
+      });
+      const merged = buf.ctx.createImageData(g.width, g.height);
+      merger.finish(merged.data);
+      buf.ctx.putImageData(merged, 0, 0);
+    } else {
+      // Without its time effect (a tap's picture could not be had): the layer's own picture alone, and the effect is reported,
+      // so a preview says so and a still or an export refuses.
+      if (taps && layer.time) timeLeftOut.set(layer.time.type, tapWhy.get(`${i}:${lost}`) ?? 'source frame unavailable');
+      placeLayer(buf.ctx, g, layer, img ?? null);
+      if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
+    }
     if (layer.effects?.length) buf = await applyEffects(buf, layer.effects, env);
     if (layer.mask) applyMask(buf, layer.mask, env);
     if (layer.transition?.role === 'out') {
@@ -344,6 +429,7 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
   }
   ctx.restore();
   const unavailable = takeUnavailable();
-  return { missing, unavailableEffects: unavailable.effects, ...(Object.keys(unavailable.reasons).length ? { unavailableReasons: unavailable.reasons } : {}) };
+  for (const [id, why] of timeLeftOut) { if (!unavailable.effects.includes(id)) unavailable.effects.push(id); unavailable.reasons[id] = why; }
+  return { missing, ...(Object.keys(missingReasons).length ? { missingReasons } : {}), unavailableEffects: unavailable.effects, ...(Object.keys(unavailable.reasons).length ? { unavailableReasons: unavailable.reasons } : {}) };
   } finally { release?.(); }
 }
