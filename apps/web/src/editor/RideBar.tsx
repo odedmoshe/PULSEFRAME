@@ -5,7 +5,9 @@
  *   a clip      split · speed · animation · effect · transition · sound · replace · duplicate · delete · more
  *   several     duplicate · delete · link · more
  *   a cut       the transition (a short list of common ones, and the gallery) · lock to the beat · move the cut by a frame · remove
- *   nothing     the same clip actions, unavailable and quiet, each saying what it needs
+ *   nothing     empty on screen (§4.7). The clip actions stay in the page, unavailable and hidden (visibility), so what checks
+ *               that delete cannot be used with nothing selected still finds the control; they are out of the tab order and
+ *               of the accessibility tree while hidden
  * Each action is the command the keyboard runs (commands.ts) or one registered op through the editor's commit. The actions
  * that open a tab of the inspector or a gallery ask for it with `openPanel` below: they do not reach into those panels.
  * The bar is one toolbar for assistive technology: Tab enters it, the arrow keys move inside it.
@@ -120,10 +122,14 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
   };
   useLayoutEffect(rove);
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const items = [...(root.current?.querySelectorAll<HTMLElement>('button') ?? [])];
+    const inDom = [...(root.current?.querySelectorAll<HTMLElement>('button') ?? [])];
+    // the arrows go to the neighbour on screen (the frame arrows keep the time axis's order inside the bar); Home and End to
+    // the first and last action in reading order
+    const arrow = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+    const items = arrow ? inDom.map((b) => ({ b, x: b.getBoundingClientRect().left })).sort((a, b) => a.x - b.x).map((q) => q.b) : inDom;
     const i = items.indexOf(document.activeElement as HTMLElement);
     if (i < 0) return;
-    const to = rovingNext(i, e.key, { count: items.length, dir: state.lang === 'he' ? 'rtl' : 'ltr' });
+    const to = rovingNext(i, e.key, { count: items.length, dir: arrow ? 'ltr' : state.lang === 'he' ? 'rtl' : 'ltr' });
     if (to === null) return;
     e.preventDefault(); e.stopPropagation(); // the arrows move inside the bar here, not the playhead
     items[to]?.focus();
@@ -153,9 +159,12 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
         <Act testId="ride-beat-lock" className="ride-beat" label={s.cutBeatLock} icon={<IconBeatLock size={15} />} pressed={tr?.sync === 'beat'} reason={!tr ? s.cutAdd : !grid ? s.rulerBarsNeed : locked ? s.locked : undefined}
           onClick={() => void editor.commit([{ op: 'set_transition_options', args: { clipId: clip.id, sync: tr?.sync === 'beat' ? null : 'beat' } }], 'Beat lock')} />
         <span className="ride-sep" aria-hidden="true" />
-        <Act testId="ride-roll-earlier" iconOnly label={s.cutRollEarlier} keys={key('edit.rollEarlier')} reason={!hasPrev || !can('edit.rollEarlier', editor) ? s.cutNoHandles : undefined} icon={ico(ChevronLeft)} onClick={run('edit.rollEarlier')} />
-        <span className="ride-word">{s.frame}</span>
-        <Act testId="ride-roll-later" iconOnly label={s.cutRollLater} keys={key('edit.rollLater')} reason={!hasPrev || !can('edit.rollLater', editor) ? s.cutNoHandles : undefined} icon={ico(ChevronRight)} onClick={run('edit.rollLater')} />
+        {/* time runs left to right in every language (§4.16): the left arrow moves the cut earlier, also in Hebrew */}
+        <span className="ride-roll" dir="ltr">
+          <Act testId="ride-roll-earlier" iconOnly label={s.cutRollEarlier} keys={key('edit.rollEarlier')} reason={!hasPrev || !can('edit.rollEarlier', editor) ? s.cutNoHandles : undefined} icon={ico(ChevronLeft)} onClick={run('edit.rollEarlier')} />
+          <span className="ride-word" dir={state.lang === 'he' ? 'rtl' : 'ltr'}>{s.frame}</span>
+          <Act testId="ride-roll-later" iconOnly label={s.cutRollLater} keys={key('edit.rollLater')} reason={!hasPrev || !can('edit.rollLater', editor) ? s.cutNoHandles : undefined} icon={ico(ChevronRight)} onClick={run('edit.rollLater')} />
+        </span>
         <span className="ride-sep" aria-hidden="true" />
         <Act testId="ride-transition-remove" danger label={s.cutRemove} icon={ico(Trash2)} reason={!tr ? s.cutAdd : locked ? s.locked : undefined}
           onClick={() => void editor.commit([{ op: 'set_transition', args: { clipId: clip.id, type: null } }], 'Remove transition')} />

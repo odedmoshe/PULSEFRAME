@@ -60,7 +60,8 @@
 .timeline.pf-ds .tl-ride-zone { flex: 1 1 0; min-inline-size: 0; position: relative; align-self: stretch; }
 .timeline.pf-ds .ride { position: absolute; inset-block-start: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: var(--pf-sp-1); max-inline-size: 100%; padding: 3px; border-radius: var(--pf-r-md);
   background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line), var(--pf-hilite); white-space: nowrap; transition: left var(--pf-dur-base) var(--pf-ease-out); }
-.timeline.pf-ds .ride.is-idle { background: transparent; box-shadow: none; }
+.timeline.pf-ds .ride.is-idle { background: transparent; box-shadow: none; visibility: hidden; }
+.timeline.pf-ds .ride-roll { display: inline-flex; align-items: center; gap: var(--pf-sp-1); }
 .timeline.pf-ds .ride-chip { display: inline-flex; align-items: center; gap: var(--pf-sp-3); block-size: var(--pf-h-sm); padding-inline: var(--pf-sp-5); margin-inline-end: var(--pf-sp-2); border-radius: var(--pf-r-sm);
   background: var(--pf-surface-4); color: var(--pf-text); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); }
 .timeline.pf-ds .ride-chip.is-musical, .timeline.pf-ds .ride-chip.is-cut { background: var(--pf-pulse-soft); color: var(--pf-pulse); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-pulse) 30%, transparent); }
