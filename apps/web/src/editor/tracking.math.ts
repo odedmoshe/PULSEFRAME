@@ -10,7 +10,7 @@
  *  - track units: integers in 1/TRACK_UNIT of the source width (x) and height (y), as stored in a motion track.
  */
 import * as T from '@pulseframe/time';
-import { findClip, frameToSource, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, transformAt, type Fit, type Follow, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { findClip, frameToSource, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, transformAt, type Fit, type Follow, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { evaluate, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 
 export interface FrameBox { W: number; H: number; fit: Fit }
@@ -226,6 +226,50 @@ export function redactUnsureFrames(doc: ProjectDocument, clip: MediaClip): numbe
     if (unsure) count++;
   }
   return count;
+}
+
+const unsureMemo = new WeakMap<ProjectDocument, WeakMap<MediaClip, number>>();
+/**
+ * redactUnsureFrames, computed once per document revision and clip: the scan walks every timeline frame of the clip (about
+ * 30 ms for a ten-minute clip), and the panel re-renders on every preview frame. The editor replaces its document on each
+ * revision and never changes it in place (the rule Editor.viewDoc's cache relies on too), so the pair names one answer.
+ */
+export function redactUnsureFramesOf(doc: ProjectDocument, clip: MediaClip): number {
+  let byClip = unsureMemo.get(doc);
+  if (!byClip) unsureMemo.set(doc, (byClip = new WeakMap()));
+  const hit = byClip.get(clip);
+  if (hit !== undefined) return hit;
+  const n = redactUnsureFrames(doc, clip);
+  byClip.set(clip, n);
+  return n;
+}
+
+/** What deleting a motion track takes with it: the clips that follow it, and the privacy regions (and their clips) placed on it. */
+export interface TrackRemoval {
+  /** Distinct clips that use the track (follow it, or hide a region with it). */
+  clips: number;
+  followers: number;
+  regions: number;
+  regionClips: number;
+  /** The track still has users: the op detaches them (unbind), otherwise the server refuses it. */
+  unbind: boolean;
+  /** Privacy regions go with it, so the footage they hide shows: the user is asked first, naming them. */
+  confirm: boolean;
+  op: OpCall;
+}
+export function trackRemoval(doc: ProjectDocument, motionTrackId: string): TrackRemoval {
+  let clips = 0, followers = 0, regions = 0, regionClips = 0;
+  for (const tr of Object.values(doc.sequences).flatMap((s) => s.tracks)) {
+    for (const c of tr.clips) {
+      const follows = c.type !== 'caption' && c.follow?.motionTrackId === motionTrackId;
+      const r = c.type === 'media' ? (c.redact ?? []).filter((x) => x.motionTrackId === motionTrackId).length : 0;
+      if (follows) followers++;
+      if (r) { regions += r; regionClips++; }
+      if (follows || r) clips++;
+    }
+  }
+  const unbind = followers + regions > 0;
+  return { clips, followers, regions, regionClips, unbind, confirm: regions > 0, op: { op: 'remove_motion_track', args: { motionTrackId, ...(unbind ? { unbind: true } : {}) } } };
 }
 
 /** Counts of each stored state code (index = core ST code) of a track. */

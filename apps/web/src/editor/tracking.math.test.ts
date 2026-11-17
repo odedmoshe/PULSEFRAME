@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, findClip, listOps, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, transformAt, type Fit, type Follow, type MediaClip, type MotionTrack, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import {
-  boxToTrackUnits, followCandidates, followCentre, followOffsetAt, layerOf, redactUnsureFrames, stateCounts, followFactor, followPointFromZero, frameToLayerSource, keepOffset, ownFromResolved, pickToSource, screenToFrame, sourceToScreen, timelineFrameOfSource,
+  boxToTrackUnits, followCandidates, followCentre, followOffsetAt, layerOf, redactUnsureFrames, redactUnsureFramesOf, stateCounts, trackRemoval, followFactor, followPointFromZero, frameToLayerSource, keepOffset, ownFromResolved, pickToSource, screenToFrame, sourceToScreen, timelineFrameOfSource,
   toTrackUnits, trackingProgress, trackUnitsToFrame, type FrameBox, type LayerPlacement,
 } from './tracking.math.ts';
 
@@ -244,6 +244,45 @@ describe('what the panels list', () => {
     clip.redact[1]!.motionTrackId = 'mtk_gone';
     expect(redactUnsureFrames(d, clip)).toBe(90);
     expect(stateCounts([1, 1, 2, 3, 6, 9])).toEqual([0, 2, 1, 1, 0, 0, 1]);
+  });
+
+  it('the privacy warning scans a clip once per document revision: the panel re-renders on every preview frame, the answer changes only with the document', () => {
+    const { doc, a, clipA } = setup();
+    const d = structuredClone(doc);
+    d.motionTracks = { mtk_1: track('mtk_1', a, 10, [1, 1, 2, 2, 1, 3, 3, 3, 4, 5]) };
+    const clip = tracksOf(d).flatMap((t) => t.clips).find((c) => c.id === clipA) as MediaClip;
+    const region = { shape: 'ellipse' as const, x: 0, y: 0, width: 0.2, height: 0.2, pad: 0.1, feather: 0.01, style: 'blur' as const, strength: 0.8, color: '#000000', onLoss: 'frame' as const, weakIsLost: true };
+    clip.redact = [{ id: 'rgn_1', motionTrackId: 'mtk_1', ...region }];
+    expect(redactUnsureFramesOf(d, clip)).toBe(85);
+    // the editor never changes a document in place; doing it here shows the second call reads the first answer, not the frames
+    d.motionTracks = {};
+    expect(redactUnsureFrames(d, clip)).toBe(90);
+    expect(redactUnsureFramesOf(d, clip)).toBe(85);
+    // a new revision is a new document object: scanned again
+    const next = structuredClone(d);
+    const nextClip = tracksOf(next).flatMap((t) => t.clips).find((c) => c.id === clipA) as MediaClip;
+    expect(redactUnsureFramesOf(next, nextClip)).toBe(90);
+  });
+
+  it('deleting a track that privacy regions follow is asked first, naming the regions; followers alone are detached in one step; an unused track needs no unbind', () => {
+    const { doc, a, clipA, title } = setup();
+    const d = structuredClone(doc);
+    d.motionTracks = { mtk_1: track('mtk_1', a, 0, [1, 1]), mtk_2: track('mtk_2', a, 0, [1]), mtk_3: track('mtk_3', a, 0, [1]) };
+    const clips = tracksOf(d).flatMap((t) => t.clips);
+    const vclip = clips.find((c) => c.id === clipA) as MediaClip;
+    const tclip = clips.find((c) => c.id === title)!;
+    const region = { shape: 'ellipse' as const, x: 0, y: 0, width: 0.2, height: 0.2, pad: 0.1, feather: 0.01, style: 'blur' as const, strength: 0.8, color: '#000000', onLoss: 'frame' as const, weakIsLost: true };
+    vclip.redact = [{ id: 'rgn_1', motionTrackId: 'mtk_1', ...region }, { id: 'rgn_2', motionTrackId: 'mtk_1', ...region }, { id: 'rgn_3', motionTrackId: null, ...region }];
+    const vt = tracksOf(d).find((t) => t.clips.includes(vclip))!.id;
+    (tclip as { follow?: Follow }).follow = { motionTrackId: 'mtk_1', targetTrackId: vt, scale: false, smooth: 0 };
+
+    const r1 = trackRemoval(d, 'mtk_1');
+    expect(r1).toMatchObject({ clips: 2, followers: 1, regions: 2, regionClips: 1, unbind: true, confirm: true });
+    expect(r1.op).toEqual({ op: 'remove_motion_track', args: { motionTrackId: 'mtk_1', unbind: true } });
+
+    (tclip as { follow?: Follow }).follow = { motionTrackId: 'mtk_2', targetTrackId: vt, scale: false, smooth: 0 };
+    expect(trackRemoval(d, 'mtk_2')).toMatchObject({ clips: 1, followers: 1, regions: 0, unbind: true, confirm: false });
+    expect(trackRemoval(d, 'mtk_3')).toMatchObject({ clips: 0, followers: 0, regions: 0, unbind: false, confirm: false, op: { op: 'remove_motion_track', args: { motionTrackId: 'mtk_3' } } });
   });
 });
 

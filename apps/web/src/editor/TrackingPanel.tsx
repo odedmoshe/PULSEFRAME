@@ -9,8 +9,8 @@ import * as T from '@pulseframe/time';
 import { clipEnd, trackSummary, TRACK_STATES, type Clip, type MotionTrack, type TrackRun } from '@pulseframe/core';
 import { dictionaries, jobStageLabel, translateRefusal, type Lang } from '@pulseframe/i18n';
 import { ApiFailure } from '../api.ts';
-import { timelineFrameOfSource, trackingProgress } from './tracking.math.ts';
-import { stateName, stretch, TRACKING_TESTIDS as ID, trackingT } from './tracking.strings.ts';
+import { timelineFrameOfSource, trackingProgress, trackRemoval } from './tracking.math.ts';
+import { removeRegionsQuestion, stateName, stretch, TRACKING_TESTIDS as ID, trackingT } from './tracking.strings.ts';
 import { InlineRename } from './InlineRename.tsx';
 import { useEditorState } from './store.ts';
 import './tracking.css';
@@ -73,12 +73,14 @@ function TrackItem({ track, clip, videoTrackId, active }: { track: MotionTrack; 
   const doc = state.doc!;
   const [err, setErr] = useState<string | null>(null);
   const [overwrite, setOverwrite] = useState(false);
+  const [asking, setAsking] = useState(false);
   const jobId = state.trackJobFor[track.id];
   const job = jobId ? state.trackJobs[jobId] : undefined;
   const open = !!job && OPEN_JOB.has(job.status);
   const summary = trackSummary(track);
   const tracked = track.st.some((s) => s !== 4) || track.st.length > 1;
-  const usedBy = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips).filter((c) => (c.type !== 'caption' && c.follow?.motionTrackId === track.id) || (c.type === 'media' && c.redact?.some((r) => r.motionTrackId === track.id)));
+  const removal = trackRemoval(doc, track.id);
+  const usedBy = removal.clips;
   const progress = trackingProgress(job?.stage);
   const stage = jobStageLabel(job?.stage, lang) || tt('mtrack.queued');
 
@@ -94,7 +96,13 @@ function TrackItem({ track, clip, videoTrackId, active }: { track: MotionTrack; 
     const hit = d ? timelineFrameOfSource(d, track.assetId, from, to - 1) : null;
     if (hit) { setErr(null); editor.seek(hit.frame); } else setErr(tt('mtrack.jump.none'));
   };
-  const remove = () => void editor.commit([{ op: 'remove_motion_track', args: { motionTrackId: track.id, ...(usedBy.length ? { unbind: true } : {}) } }], 'Remove motion track');
+  // Privacy regions placed on the track go with it, and what they hide shows: that is asked first, never done in one click.
+  const remove = (confirmed = false) => {
+    const now = editor.doc ? trackRemoval(editor.doc, track.id) : removal; // as it is when the button is pressed
+    if (now.confirm && !confirmed) { setAsking(true); return; }
+    setAsking(false);
+    void editor.commit([now.op], 'Remove motion track');
+  };
   // Two commits, two undo steps: the title's id comes from the server's seed, so one transaction cannot name it in its second op.
   const followTitle = async () => {
     const rate = editor.rate;
@@ -169,10 +177,22 @@ function TrackItem({ track, clip, videoTrackId, active }: { track: MotionTrack; 
         {job?.status === 'succeeded' ? tt('mtrack.done') : job?.status === 'canceled' ? tt('mtrack.canceled') : job?.status === 'failed' ? `${tt('mtrack.failed')}: ${refusalText(lang, new ApiFailure(0, job.error?.code ?? 'failed', job.error?.message ?? ''))}` : ''}
       </p>
       {err && <p className="tracking-msg danger" role="alert" data-testid={ID.error}>{err}</p>}
-      {usedBy.length > 0 && <p className="muted">{tt('mtrack.usedBy')}: <bdi>{usedBy.length}</bdi></p>}
-      <div className="row">
-        <button type="button" className="ghost danger" data-testid={usedBy.length ? ID.removeUnbind : ID.remove} onClick={remove}>{tt(usedBy.length ? 'mtrack.deleteUnbind' : 'mtrack.delete')}</button>
-      </div>
+      {usedBy > 0 && <p className="muted">{tt('mtrack.usedBy')}: <bdi>{usedBy}</bdi></p>}
+      {asking && removal.confirm ? (
+        <div className="fields" role="alertdialog" aria-labelledby={`${track.id}-ask`} data-testid={ID.removeAsk} data-regions={removal.regions}>
+          <p className="tracking-msg danger" id={`${track.id}-ask`}>{removeRegionsQuestion(lang, removal)}</p>
+          <div className="row">
+            <button type="button" className="ghost danger" data-testid={ID.removeConfirm} onClick={() => remove(true)}>{tt('mtrack.deleteRegionsGo')}</button>
+            <button type="button" className="ghost" data-testid={ID.removeKeep} autoFocus onClick={() => setAsking(false)}>{tt('mtrack.deleteKeep')}</button>
+          </div>
+        </div>
+      ) : (
+        <div className="row">
+          <button type="button" className="ghost danger" data-testid={removal.confirm ? ID.removeRegions : removal.unbind ? ID.removeUnbind : ID.remove} onClick={() => remove()}>
+            {tt(removal.confirm ? 'mtrack.deleteRegions' : removal.unbind ? 'mtrack.deleteUnbind' : 'mtrack.delete')}
+          </button>
+        </div>
+      )}
     </li>
   );
 }

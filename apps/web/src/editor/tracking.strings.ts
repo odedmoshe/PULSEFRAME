@@ -28,6 +28,7 @@ const he = {
   'mtrack.stop': 'עצירת המעקב', 'mtrack.progress': 'התקדמות המעקב', 'mtrack.queued': 'ממתין בתור…',
   'mtrack.done': 'המעקב הסתיים והתוצאה נשמרה.', 'mtrack.canceled': 'המעקב נעצר. דבר לא נשמר.', 'mtrack.failed': 'המעקב נכשל',
   'mtrack.rename': 'שינוי שם המסלול', 'mtrack.delete': 'מחיקת המסלול', 'mtrack.deleteUnbind': 'מחיקה וניתוק הקליפים',
+  'mtrack.deleteRegions': 'מחיקה והסרת אזורי הפרטיות', 'mtrack.deleteRegionsGo': 'למחוק ולהסיר את הטשטוש', 'mtrack.deleteKeep': 'ביטול, להשאיר את המסלול',
   'mtrack.usedBy': 'קליפים שמשתמשים במסלול',
   'mtrack.followTitle': 'הוספת כותרת שעוקבת', 'mtrack.followTitle.text': 'כותרת',
   'mtrack.atPlayhead': 'בסמן',
@@ -59,6 +60,7 @@ const en: Record<keyof typeof he, S> = {
   'mtrack.stop': 'Stop tracking', 'mtrack.progress': 'Tracking progress', 'mtrack.queued': 'Waiting in the queue…',
   'mtrack.done': 'Tracking finished and the result was saved.', 'mtrack.canceled': 'Tracking stopped. Nothing was saved.', 'mtrack.failed': 'Tracking failed',
   'mtrack.rename': 'Rename track', 'mtrack.delete': 'Delete track', 'mtrack.deleteUnbind': 'Delete and detach the clips',
+  'mtrack.deleteRegions': 'Delete and remove the privacy regions', 'mtrack.deleteRegionsGo': 'Delete and remove the blur', 'mtrack.deleteKeep': 'Cancel, keep the track',
   'mtrack.usedBy': 'Clips using this track',
   'mtrack.followTitle': 'Add a title that follows', 'mtrack.followTitle.text': 'Title',
   'mtrack.atPlayhead': 'At the playhead',
@@ -145,6 +147,13 @@ export const followStateName = (lang: Lang, s: FollowStateName): S => (s in STAT
 export const redactWarning = (lang: Lang, frames: number): S => lang === 'he'
   ? `טשטוש אוטומטי אינו הסתרה מובטחת. ${frames} פריימים במעקב חלש או אבוד — בדקו לפני פרסום`
   : `Automatic blur is not guaranteed redaction. ${frames} frames have weak or lost tracking — check them before publishing`;
+/**
+ * Asked before deleting a motion track that privacy regions follow: those regions are removed with it, so what they hide shows.
+ * Followers are named too, since they are detached in the same step.
+ */
+export const removeRegionsQuestion = (lang: Lang, r: { regions: number; regionClips: number; followers: number }): S => lang === 'he'
+  ? `${r.regions} אזורי פרטיות ב־${r.regionClips} קליפים עוקבים אחרי המסלול הזה. מחיקתו מסירה אותם, ומה שהם מסתירים ייראה בתצוגה ובייצוא${r.followers ? `; ${r.followers} קליפים שעוקבים אחריו ינותקו` : ''}. אפשר לבטל את המחיקה ב־Ctrl+Z.`
+  : `${r.regions} privacy region(s) on ${r.regionClips} clip(s) follow this track. Deleting it removes them, so what they hide shows in the preview and in exports${r.followers ? `; ${r.followers} clip(s) that follow it are detached` : ''}. Ctrl+Z undoes the deletion.`;
 /** Where the picked point or area is, for the picker's live announcement (percent of the picture). */
 export const pickAnnouncement = (lang: Lang, p: { x: number; y: number; w?: number; h?: number; frame: number }): S => {
   const pc = (v: number) => Math.round(v * 100);
@@ -164,7 +173,7 @@ export const TRACKING_TESTIDS = {
   // the tracking panel (TrackingPanel.tsx), in the clip tab of a video clip
   panel: 'tracking-panel', newPoint: 'mtrack-new-point', newRegion: 'mtrack-new-region', status: 'mtrack-status',
   item: 'mtrack-item', counts: 'mtrack-counts', problem: 'mtrack-problem', jump: 'mtrack-jump', run: 'mtrack-run', overwrite: 'mtrack-overwrite',
-  progress: 'mtrack-progress', stop: 'mtrack-stop', jobStatus: 'mtrack-job-status', rename: 'mtrack-rename', remove: 'mtrack-delete', removeUnbind: 'mtrack-delete-unbind', followTitle: 'mtrack-follow-title', error: 'mtrack-error',
+  progress: 'mtrack-progress', stop: 'mtrack-stop', jobStatus: 'mtrack-job-status', rename: 'mtrack-rename', remove: 'mtrack-delete', removeUnbind: 'mtrack-delete-unbind', removeRegions: 'mtrack-delete-regions', removeConfirm: 'mtrack-delete-confirm', removeKeep: 'mtrack-delete-keep', removeAsk: 'mtrack-delete-ask', followTitle: 'mtrack-follow-title', error: 'mtrack-error',
   // follow (FollowControls.tsx), for a title or a picture on a video track
   follow: 'follow-controls', followTrack: 'follow-track', followAttach: 'follow-attach', followDetach: 'follow-detach', followScale: 'follow-scale', followSmooth: 'follow-smooth', followState: 'follow-state', followError: 'follow-error',
   // privacy regions (RedactControls.tsx), on a video clip

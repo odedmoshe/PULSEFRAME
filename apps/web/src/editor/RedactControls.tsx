@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { findClip, type Clip, type RedactRegion } from '@pulseframe/core';
-import { redactUnsureFrames } from './tracking.math.ts';
+import { redactUnsureFramesOf } from './tracking.math.ts';
 import { redactWarning, TRACKING_TESTIDS as ID, trackingT, type TrackingKey } from './tracking.strings.ts';
 import { useEditorState } from './store.ts';
 import './tracking.css';
@@ -36,7 +36,7 @@ function RedactFields({ clipId }: { clipId: string }) {
   const locked = !!found?.track.locked;
   const regions = clip.redact ?? [];
   const tracked = regions.some((r) => r.motionTrackId !== null);
-  const unsure = tracked ? redactUnsureFrames(doc, clip) : 0;
+  const unsure = tracked ? redactUnsureFramesOf(doc, clip) : 0; // once per revision: this panel re-renders on every preview frame
   const src = source === 'fixed' || tracks.some((t) => t.id === source) ? source : 'fixed';
 
   const add = () => void editor.commit([{ op: 'set_redact_region', args: { clipId, region: { motionTrackId: src === 'fixed' ? null : src } } }], 'Add privacy region');
