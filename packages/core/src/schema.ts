@@ -1,5 +1,5 @@
 /**
- * Canonical ProjectDocument (SPEC §5), schema version 1.
+ * Canonical ProjectDocument (SPEC §5), schema version 2 (v2 adds adjustment clips and tracks and template slot records, ADR-0016).
  * JSON-serializable; binary media stays outside and is referenced by asset id.
  * Transient state (selection, playhead, presence, panel layout) is NOT part of this document.
  */
@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const RationalTimeSchema = z
   .object({
@@ -292,7 +292,22 @@ export const VariantSchema = z
   .strict();
 
 
-export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), createdIds: z.array(Id).max(5000), /** Content fingerprint of each created clip as the recipe left it; a clip whose content differs was edited by hand. */ fingerprints: z.record(Id, z.string()).default({}), steps: z.array(z.string().max(400)).max(50) }).strict();
+/** What a template run placed, by role (ADR-0016). Kept on the run, never on clips: a deleted clip leaves an inert, detached slot. */
+export const TEMPLATE_SLOT_KINDS = ['picture', 'text', 'music', 'look', 'element', 'sound'] as const;
+export const SlotRecordSchema = z
+  .object({
+    key: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/),
+    kind: z.enum(TEMPLATE_SLOT_KINDS),
+    clipId: Id,
+    accept: z.enum(['video', 'image', 'any']).optional(),
+    beats: z.object({ from: z.number().int().min(0), count: z.number().int().min(1).max(64), unit: z.enum(['beat', 'bar']) }).strict().optional(),
+  })
+  .strict();
+export type SlotRecord = z.infer<typeof SlotRecordSchema>;
+
+export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), createdIds: z.array(Id).max(5000), /** Content fingerprint of each created clip as the recipe left it; a clip whose content differs was edited by hand. */ fingerprints: z.record(Id, z.string()).default({}), steps: z.array(z.string().max(400)).max(50),
+  /** Template runs only (recipeId `template:<templateId>`, ADR-0016): what each slot of the template holds. */
+  slots: z.array(SlotRecordSchema).max(400).optional() }).strict();
 export type RecipeRun = z.infer<typeof RecipeRunSchema>;
 
 // ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
@@ -307,11 +322,20 @@ export const AnalysisSchema = z
   })
   .strict();
 
-export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema]);
+/**
+ * Adjustment clip (ADR-0016). It has no picture of its own: its enabled effects, mask, opacity and blend act on everything
+ * already drawn below it in its sequence at that time. Captions are drawn last and are never affected.
+ * It lives only on tracks of kind 'adjustment'.
+ * Transform: only opacity is used; x=0, y=0, scale=1, rotation=0. Keyframes: opacity only.
+ * No transition, no time effect, no key.chroma, no stylize.shadow (validate.ts adjustmentRefusal).
+ * The mask is in frame space (the adjustment's box is the whole frame).
+ */
+export const AdjustmentClipSchema = z.object({ ...ClipBase, type: z.literal('adjustment'), label: z.string().max(80).optional(), mask: MaskSchema.optional() }).strict();
+export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema, AdjustmentClipSchema]);
 
 export const TrackSchema = z
   .object({
-    id: Id, kind: z.enum(['video', 'audio', 'text', 'caption']), name: z.string().max(128), locked: z.boolean(), muted: z.boolean(), hidden: z.boolean(), clips: z.array(ClipSchema),
+    id: Id, /** adjustment (ADR-0016): holds only adjustment clips, which act on the tracks below it. */ kind: z.enum(['video', 'audio', 'text', 'caption', 'adjustment']), name: z.string().max(128), locked: z.boolean(), muted: z.boolean(), hidden: z.boolean(), clips: z.array(ClipSchema),
     /** Caption tracks only. transcript mode shows the transcript of whatever is playing on the linked track; manual mode shows this track's own cues. */
     caption: z.object({ mode: z.enum(['manual', 'transcript']), linkedTrackId: Id.nullable(), style: CaptionStyleSchema }).strict().optional(),
     /** Audio tracks only. Absent = unity gain, centred, no ducking. */
@@ -370,6 +394,7 @@ export type TextStyle = z.infer<typeof TextStyleSchema>;
 export type MediaClip = z.infer<typeof MediaClipSchema>;
 export type TextClip = z.infer<typeof TextClipSchema>;
 export type CaptionClip = z.infer<typeof CaptionClipSchema>;
+export type AdjustmentClip = z.infer<typeof AdjustmentClipSchema>;
 export type CaptionStyle = z.infer<typeof CaptionStyleSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;
@@ -410,8 +435,11 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
   };
 }
 
-/** Schema migrations: version N -> N+1. v1 is the first version, so the table is empty but the path is exercised by tests. */
-const MIGRATIONS: Record<number, (doc: any) => any> = {};
+/** Schema migrations: version N -> N+1. Older builds refuse newer documents ("newer than supported"). */
+const MIGRATIONS: Record<number, (doc: any) => any> = {
+  /** v1 -> v2 (ADR-0016): adjustment clips/tracks and template slot records are new and optional; nothing to rewrite. */
+  1: (doc) => ({ ...doc, schemaVersion: 2 }),
+};
 export function migrateProject(raw: unknown): ProjectDocument {
   let doc = raw as { schemaVersion?: number };
   if (typeof doc?.schemaVersion !== 'number') throw new Error('not a PULSEFRAME project: missing schemaVersion');
