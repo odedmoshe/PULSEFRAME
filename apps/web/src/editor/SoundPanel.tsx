@@ -215,8 +215,9 @@ function Meter({ measured, target }: { measured: number | null; target: number |
         <div className="sound-meter-bar" style={{ '--v': `${pct}%` } as React.CSSProperties} />
         <div className="sound-meter-mark" style={{ '--v': `${((-1 - MIN_DB) / -MIN_DB) * 100}%` } as React.CSSProperties} aria-hidden="true" />
       </div>
-      <bdi className="val num" dir="ltr">{db !== null ? fmtDb(Number.isFinite(db) ? db : MIN_DB) : measured !== null ? `${fmtDb(measured)} LUFS` : target !== null ? `${fmtDb(target)} LUFS` : '—'}</bdi>
-      {db === null && <span className="mix-out-note">{measured !== null ? INSPECTOR_STRINGS[state.lang].mixMeasured : target !== null ? INSPECTOR_STRINGS[state.lang].mixTarget : t('sound.meter.idle')}</span>}
+      {/* idle: the measured loudness, else the export target, else a short word that the meter moves while playing */}
+      {(db !== null || measured !== null || target !== null) && <bdi className="val num" dir="ltr">{db !== null ? fmtDb(Number.isFinite(db) ? db : MIN_DB) : measured !== null ? `${fmtDb(measured)} LUFS` : `${fmtDb(target!)} LUFS`}</bdi>}
+      {db === null && <span className="mix-out-note">{measured !== null ? INSPECTOR_STRINGS[state.lang].mixMeasured : target !== null ? INSPECTOR_STRINGS[state.lang].mixTarget : INSPECTOR_STRINGS[state.lang].mixIdle}</span>}
     </div>
   );
 }

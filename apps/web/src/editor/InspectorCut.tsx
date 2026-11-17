@@ -17,7 +17,8 @@ import { cutBefore, framesToNearestBeat, rollCutOps, secondsText } from './inspe
 import { selectCut, setLoupe, useInspectorView } from './inspector.bus.ts';
 
 type Media = Extract<Clip, { type: 'media' }>;
-/** The transitions offered first on a cut: one of each family people reach for, all drawn without a graphics adapter. */
+/** The transitions offered first on a cut: one of each family people reach for, all drawn without a graphics adapter. Each tile
+ * draws the middle of its move as a diagram: the outgoing picture (grey) and the incoming one (the frame colour), left to right. */
 const QUICK = ['dissolve', 'push-left', 'wipe-left', 'zoom-in', 'dip-black', 'slide-left'];
 
 function Meter({ label, frames, fps }: { label: string; frames: number | null; fps: number }) {
@@ -88,9 +89,11 @@ export function CutPanel({ clip }: { clip: Media }) {
         <p className="muted pf-help">{S.handleNote}</p>
       </Section>
       <Section id="cut-transitions" title={S.secFav}>
-        <div className="pf-chips" role="group" aria-label={S.secFav}>
+        <div className="cut-trs" role="group" aria-label={S.secFav}>
           {quick.map((d) => (
-            <button key={d.id} type="button" className="pf-chipbtn" aria-pressed={clip.transition?.type === d.id} data-testid="cut-transition" data-value={d.id} onClick={() => void applyTransition(d.id)}>{d.name[state.lang]}</button>
+            <button key={d.id} type="button" className="cut-tr" aria-pressed={clip.transition?.type === d.id} data-testid="cut-transition" data-value={d.id} onClick={() => void applyTransition(d.id)}>
+              <span className="cut-tr-pic" data-kind={d.id} dir="ltr" aria-hidden="true"><i /></span><span className="cut-tr-name">{d.name[state.lang]}</span>
+            </button>
           ))}
         </div>
         <div className="cut-all"><EffectGalleryButton clip={clip} trackKind="video" /><span className="muted num">{TRANSITIONS.length}</span></div>
