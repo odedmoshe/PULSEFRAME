@@ -6,9 +6,9 @@
  */
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, projectVariant, sequenceDuration, transformAt, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { clipEnd, findClip, projectVariant, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
-import { initGpu, type GpuStatus } from '@pulseframe/engine';
+import { evaluate, initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool } from '../media.ts';
@@ -16,6 +16,7 @@ import { Player } from '../player.ts';
 import { timelineDerivatives } from '../clipVisuals.cache.ts';
 import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
 import { addAssetArgs, dropAssetArgs } from './placement.ts';
+import { followFactor, followPointFromZero, keepOffset, ownFromResolved } from './tracking.math.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -69,6 +70,27 @@ export interface EditorState {
   clipboard: string[];
   /** Clips marked by Cut; they move on the next Paste (nothing is committed until then). */
   cutPending: string[];
+  /** The latest event of each tracking job seen in this session, by job id (ADR-0015). */
+  trackJobs: Record<string, JobEvent>;
+  /** The tracking job this session started for each motion track (motion track id → job id). */
+  trackJobFor: Record<string, string>;
+  /** The track picker on the monitor (TrackPicker.tsx): open while a point or an area of a clip's picture is being picked. */
+  picker: TrackPick | null;
+  /** The motion track the tracking panel shows open (the one just created there). Session state only. */
+  activeTrackId: string | null;
+}
+/** What the track picker is picking, and on which clip's picture. */
+export interface TrackPick { kind: 'point' | 'region'; clipId: string; assetId: string }
+/** A clip as drawn at the playhead: its transform after the follow post-pass (ADR-0015), its own transform, and the follow's scale factor m (resolved scale = own scale · m). */
+export interface ResolvedNow { transform: Transform; own: Transform; m: number; follow: FollowInfo | null }
+type TransformValues = Partial<Record<'x' | 'y' | 'scale' | 'rotation' | 'opacity', number>>;
+
+/** A JSON request to the server API (the tracking routes, ADR-0015), refusals thrown as ApiFailure like api.ts does. */
+async function apiJson<R>(path: string, body?: unknown): Promise<R> {
+  const r = await fetch(`/api/v1${path}`, { credentials: 'same-origin', ...(body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) });
+  const data = r.headers.get('content-type')?.includes('json') ? await r.json() : undefined;
+  if (!r.ok) throw new ApiFailure(r.status, data?.error?.code ?? 'http_error', data?.error?.message ?? `HTTP ${r.status}`, data?.error?.details, data?.error?.hint);
+  return data as R;
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
@@ -90,6 +112,7 @@ export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
     provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
+    trackJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -160,7 +183,9 @@ export class Editor {
       const cut = cutAlive.length === this.state.cutPending.length ? {} : { cutPending: [] as string[], clipboard: [] as string[] };
       // target tracks are remembered per project in this browser
       const targets = this.state.doc?.id === p.project.id ? {} : { targets: readTargets(p.project.id) };
-      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId, ...cut, ...targets });
+      // the track picker closes when the clip it picks on is gone
+      const picker = this.state.picker && !findClip(p.project, this.state.picker.clipId) ? { picker: null } : {};
+      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker });
       const vd = this.viewDoc;
       if (vd) this.player?.setDoc(vd);
     }
@@ -245,7 +270,7 @@ export class Editor {
     void api.controls(projectId).then((c) => this.set({ agentsPaused: c.agentsPaused })).catch(() => {});
     es.addEventListener('job', (m) => {
       const j: JobEvent = JSON.parse((m as MessageEvent).data);
-      this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : {});
+      this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : j.type === TRACKING_JOB_TYPE ? { trackJobs: rememberJob(this.state.trackJobs, j) } : {});
       // An export this tab started saves its file as soon as it is ready, once; the link in the header stays for another copy.
       if (j.type === 'export' && j.status === 'succeeded' && this.myExports.delete(j.id)) {
         const a = document.createElement('a');
@@ -568,6 +593,100 @@ export class Editor {
   }
   /** The selected clip's transform as rendered at the playhead (keyframes applied). */
   transformNow(clip: Clip) { return transformAt(clip, T.max(clip.start, T.min(this.playhead, clipEnd(clip)))); }
+
+  // ---------- motion tracking (ADR-0015) ----------
+  /** The playhead moved into the clip: its first frame before it, its last frame after it. */
+  private timeIn(clip: Clip): T.RationalTime {
+    const last = T.max(clip.start, T.sub(clipEnd(clip), T.frameTime(1, this.rate)));
+    return T.max(clip.start, T.min(this.playhead, last));
+  }
+  /**
+   * A clip's layer as the one evaluator draws it (preview, stills and export alike) at `time` (default: the playhead) in the
+   * viewed format, and the frame it belongs to; null when the clip is not drawn then (another time, a hidden track).
+   */
+  layerAt(clipId: string, time: T.RationalTime = this.playhead, doc: ProjectDocument | null = this.viewDoc): { layer: VideoLayer | ImageLayer | TextLayer; graph: RenderGraph } | null {
+    if (!doc) return null;
+    let graph: RenderGraph;
+    try { graph = evaluate(doc, time); } catch { return null; }
+    // the incoming side of a transition is the clip's own picture; the outgoing one plays on from its handle
+    const ls = graph.layers.filter((l): l is VideoLayer | ImageLayer | TextLayer => l.kind !== 'caption' && l.clipId === clipId);
+    const layer = ls.find((l) => l.transition?.role !== 'out') ?? ls[0];
+    return layer ? { layer, graph } : null;
+  }
+  /**
+   * The clip's transform as drawn at the playhead in the viewed format. For a clip that follows a motion track this is the
+   * resolved one of the evaluator's follow post-pass (its own transform is then an offset from the tracked point); for any
+   * other clip it is its own transform with keyframes applied. The canvas handles, the transform fields and the commands read it.
+   */
+  resolvedTransformNow(clip: Clip): ResolvedNow {
+    const vd = this.viewDoc;
+    const viewClip = (vd && findClip(vd, clip.id)?.clip) || clip;
+    const time = this.timeIn(viewClip);
+    const own = transformAt(viewClip, time);
+    if (viewClip.type === 'caption' || !viewClip.follow) return { transform: own, own, m: 1, follow: null };
+    const at = this.layerAt(clip.id, time, vd);
+    if (!at?.layer.follow) return { transform: own, own, m: 1, follow: at?.layer.follow ?? null };
+    return { transform: at.layer.transform, own, m: followFactor(at.layer.transform.scale, own.scale), follow: at.layer.follow };
+  }
+  /**
+   * A change made on the monitor or in the transform fields, in the values the user sees (resolved ones for a follower),
+   * written as the clip's own values: for a follower a move of Δ is a move of Δ/m of its offset and a scale s is s/m; rotation
+   * and opacity are its own. Through setTransformForView (a keyframe when animated, a format override while a format is viewed).
+   */
+  setShownTransform(clip: Clip, before: ResolvedNow, values: TransformValues, label = 'Transform') {
+    if (!before.follow) return this.setTransformForView(clip, values, label);
+    const { rotation, opacity } = values;
+    const out: TransformValues = { ...ownFromResolved(before.own, before.transform, { ...(values.x !== undefined ? { x: values.x } : {}), ...(values.y !== undefined ? { y: values.y } : {}), ...(values.scale !== undefined ? { scale: values.scale } : {}) }, before.m) };
+    if (rotation !== undefined) out.rotation = rotation;
+    if (opacity !== undefined) out.opacity = opacity;
+    return this.setTransformForView(clip, out, label);
+  }
+  /**
+   * The offset (transform x, y) that attaches `clipId` to `follow` without moving it on the master frame at the playhead
+   * (keepOffset over the evaluator's own resolver): the clip is evaluated as it is now, and once more following with offset
+   * zero, which gives the tracked point P and the scale factor m. With no target there (target-missing) P is the frame
+   * centre and m is 1, so the offset is where the clip is. Null when the clip is not drawn at that time.
+   */
+  followOffset(clipId: string, follow: Follow): { x: number; y: number } | null {
+    const doc = this.state.doc;
+    const found = doc ? findClip(doc, clipId) : undefined;
+    if (!doc || !found || found.clip.type === 'caption') return null;
+    const time = this.timeIn(found.clip);
+    const now = this.layerAt(clipId, time, doc);
+    if (!now) return null;
+    const trial = structuredClone(doc);
+    const tc = findClip(trial, clipId)!.clip;
+    if (tc.type === 'caption') return null;
+    tc.follow = follow;
+    tc.transform = { ...tc.transform, x: 0, y: 0 };
+    const zero = this.layerAt(clipId, time, trial);
+    if (!zero) return null;
+    const { width: W, height: H } = now.graph;
+    const m = followFactor(zero.layer.transform.scale, transformAt(tc, time).scale);
+    const off = keepOffset({ cur: now.layer.transform, P: followPointFromZero(zero.layer.transform, W, H), m, W, H });
+    return { x: Math.max(-4, Math.min(4, off.x)), y: Math.max(-4, Math.min(4, off.y)) };
+  }
+  /** Open the track picker on a clip's picture (TrackPicker.tsx). */
+  openPicker(kind: 'point' | 'region', clipId: string) {
+    const f = this.state.doc ? findClip(this.state.doc, clipId) : undefined;
+    if (!f || f.clip.type !== 'media') return;
+    this.set({ picker: { kind, clipId, assetId: f.clip.assetId } });
+  }
+  closePicker() { if (this.state.picker) this.set({ picker: null }); }
+  /** Start tracking a motion track (a durable job on the server); resolves to the job id. A refusal is thrown to the caller, who says it in place. */
+  async trackMotion(motionTrackId: string, body: Partial<TrackRun> = {}): Promise<string | null> {
+    const d = this.state.doc;
+    if (!d) return null;
+    const r = await apiJson<{ jobId: string; status: string }>(`/projects/${d.id}/motion-tracks/${encodeURIComponent(motionTrackId)}/track`, body);
+    const queued: JobEvent = this.state.trackJobs[r.jobId] ?? { id: r.jobId, type: TRACKING_JOB_TYPE, status: r.status, stage: null, output: null, error: null };
+    this.set({ trackJobs: rememberJob(this.state.trackJobs, queued), trackJobFor: { ...this.state.trackJobFor, [motionTrackId]: r.jobId } });
+    return r.jobId;
+  }
+  /** Stop the tracking job this session started for a motion track (POST /api/v1/jobs/:id/cancel); nothing is attached. */
+  async cancelTracking(motionTrackId: string) {
+    const jobId = this.state.trackJobFor[motionTrackId];
+    if (jobId) await api.cancelJob(jobId);
+  }
 }
 
 export const EditorContext = createContext<Editor | null>(null);

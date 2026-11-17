@@ -136,3 +136,61 @@ export function timelineFrameOfSource(doc: ProjectDocument, assetId: string, fro
   }
   return best;
 }
+
+// ---- what the panels list ----
+/** A motion track a clip can follow: the track, and the timeline track its file's picture is on (follow.targetTrackId). */
+export interface FollowCandidate { motionTrackId: string; name: string; kind: 'point' | 'region'; assetId: string; targetTrackId: string; targetTrackIndex: number }
+/**
+ * The tracks a clip can follow (ADR-0015): those of the files on OTHER video tracks whose clips overlap the clip in time,
+ * one entry per (motion track, timeline track), in timeline-track order and then by name. Follows cannot be chained, so a
+ * track whose clips follow something themselves is skipped.
+ */
+export function followCandidates(doc: ProjectDocument, clipId: string): FollowCandidate[] {
+  const seq = doc.sequences[doc.mainSequenceId];
+  if (!seq) return [];
+  const own = seq.tracks.find((t) => t.clips.some((c) => c.id === clipId));
+  const clip = own?.clips.find((c) => c.id === clipId);
+  if (!own || !clip) return [];
+  const end = T.add(clip.start, clip.duration);
+  const tracks = Object.values(doc.motionTracks ?? {});
+  const out: FollowCandidate[] = [];
+  seq.tracks.forEach((track, targetTrackIndex) => {
+    if (track.id === own.id || track.kind !== 'video' || track.clips.some((c) => c.type !== 'caption' && !!c.follow)) return;
+    const assets = new Set(track.clips.filter((c) => c.type === 'media' && T.lt(c.start, end) && T.lt(clip.start, T.add(c.start, c.duration))).map((c) => (c as MediaClip).assetId));
+    for (const t of tracks.filter((m) => assets.has(m.assetId)).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)))
+      out.push({ motionTrackId: t.id, name: t.name, kind: t.kind, assetId: t.assetId, targetTrackId: track.id, targetTrackIndex });
+  });
+  return out;
+}
+
+/** Stored state codes that leave a privacy region without a trustworthy position: unknown, weak and lost (core ST 0, 2, 3). */
+const UNSURE = new Set([0, 2, 3]);
+/**
+ * The timeline frames of a media clip on which one of its privacy regions that follow a track has no trustworthy position:
+ * the frame's sample is unknown, weak or lost, the frame lies outside the track, or the track is gone. Read straight from the
+ * stored states at each frame's source index (sourceFrameIndexAt), for the editor's warning; the render's own loss filter
+ * (core lossFlags) widens these stretches a little and never narrows them.
+ */
+export function redactUnsureFrames(doc: ProjectDocument, clip: MediaClip): number {
+  const asset = doc.assets[clip.assetId];
+  const tracked = (clip.redact ?? []).filter((r) => r.motionTrackId !== null);
+  if (!asset?.video || !tracked.length) return 0;
+  const rate = doc.settings.frameRate;
+  const a = { ...asset, video: asset.video };
+  const first = T.frameIndexAt(clip.start, rate), n = Math.max(0, T.frameIndexAt(T.add(clip.start, clip.duration), rate) - first);
+  let count = 0;
+  for (let k = 0; k < n; k++) {
+    const idx = sourceFrameIndexAt(a, clip, T.frameTime(first + k, rate), rate);
+    const unsure = tracked.some((r) => {
+      const t = Object.hasOwn(doc.motionTracks ?? {}, r.motionTrackId!) ? doc.motionTracks[r.motionTrackId!] : undefined;
+      if (!t) return true;
+      const i = idx - t.from;
+      return i < 0 || i >= t.st.length || UNSURE.has(t.st[i]!);
+    });
+    if (unsure) count++;
+  }
+  return count;
+}
+
+/** Counts of each stored state code (index = core ST code) of a track. */
+export const stateCounts = (st: readonly number[]): number[] => { const c = [0, 0, 0, 0, 0, 0, 0]; for (const s of st) if (s >= 0 && s < 7) c[s]!++; return c; };

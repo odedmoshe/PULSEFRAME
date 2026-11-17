@@ -4,9 +4,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, type Fit, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, placed, sourceFrameIndexAt, sourceToFrame, TRACK_UNIT, type Fit, type MediaClip, type MotionTrack, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import {
-  boxToTrackUnits, followCentre, followFactor, followPointFromZero, frameToLayerSource, keepOffset, ownFromResolved, pickToSource, screenToFrame, sourceToScreen, timelineFrameOfSource,
+  boxToTrackUnits, followCandidates, followCentre, redactUnsureFrames, stateCounts, followFactor, followPointFromZero, frameToLayerSource, keepOffset, ownFromResolved, pickToSource, screenToFrame, sourceToScreen, timelineFrameOfSource,
   toTrackUnits, trackingProgress, trackUnitsToFrame, type FrameBox, type LayerPlacement,
 } from './tracking.math.ts';
 
@@ -182,5 +182,67 @@ describe('source frames on the timeline', () => {
     expect(sourceFrameIndexAt({ ...asset, video: asset.video }, c2, f(got.frame), R)).toBe(200);
     for (let k = T.frameIndexAt(c2.start, R); k < got.frame; k++) expect(sourceFrameIndexAt({ ...asset, video: asset.video }, c2, f(k), R)).not.toBe(200);
     expect(timelineFrameOfSource(d, 'missing', 0)).toBeNull();
+  });
+});
+
+describe('what the panels list', () => {
+  const R = { num: 30, den: 1 };
+  const f = (n: number) => T.frameTime(n, R);
+  const video = (hash: string) => ({
+    kind: 'video' as const, name: `${hash}.mp4`, contentHash: `sha256:${hash.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(8, 1),
+    video: { width: 1280, height: 720, frameRate: R, codec: 'h264', rotation: 0, frameCount: 240 },
+    provenance: { origin: 'fixture' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'test' },
+  });
+  let n = 0;
+  const tx = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => applyTransaction(doc, ops, { idSeed: `w${n++}_`, actor: 'test', allowInternal });
+  /**
+   * Motion tracks and the follow/redact fields are written straight into a copy of the document here (a test-only stand-in for
+   * create_motion_track, set_clip_follow and set_redact_region, whose bodies belong to the core worker of this wave).
+   */
+  const track = (id: string, assetId: string, from: number, st: number[], name = id): MotionTrack => ({
+    id, assetId, name, kind: 'point', from, x: st.map(() => 5000), y: st.map(() => 5000), q: st.map(() => 90), st,
+    origin: { method: 'test', params: {}, createdAt: '2026-11-17T00:00:00Z', createdBy: 'test', edited: false },
+  });
+  const setup = () => {
+    let r = tx(createProject({ id: 'prj_w', name: 'W' }), [{ op: 'import_asset', args: { asset: video('a') } }, { op: 'import_asset', args: { asset: video('b') } }], true);
+    const [a, b] = r.results.map((x) => x.output!.assetId as string) as [string, string];
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: a, start: f(0), duration: f(90), withLinkedAudio: false } }]);
+    const clipA = r.results[0]!.output!.clipId as string;
+    r = tx(r.doc, [{ op: 'add_text', args: { text: 'T', start: f(30), duration: f(30) } }]);
+    const title = r.results[0]!.output!.clipId as string;
+    return { doc: r.doc, a, b, clipA, title };
+  };
+  const tracksOf = (d: ProjectDocument) => d.sequences[d.mainSequenceId]!.tracks;
+
+  it('a title can follow the tracks of the files under it at its time, never those of its own track; tracks of other files are not offered', () => {
+    const { doc, a, b, clipA, title } = setup();
+    const d = structuredClone(doc);
+    d.motionTracks = { mtk_1: track('mtk_1', a, 0, [1, 1], 'Face'), mtk_2: track('mtk_2', b, 0, [1]), mtk_0: track('mtk_0', a, 0, [1], 'Ball') };
+    const vt = tracksOf(d).find((t) => t.clips.some((c) => c.id === clipA))!;
+    const got = followCandidates(d, title);
+    expect(got.map((c) => [c.motionTrackId, c.targetTrackId])).toEqual([['mtk_0', vt.id], ['mtk_1', vt.id]]); // by name: Ball, Face
+    expect(followCandidates(d, clipA)).toEqual([]); // its own track is never a target
+    // the title moved past the video clip: nothing under it any more
+    const later = tx(doc, [{ op: 'move_clip', args: { clipId: title, start: f(120) } }]).doc;
+    later.motionTracks = d.motionTracks;
+    expect(followCandidates(later, title)).toEqual([]);
+    expect(followCandidates(d, 'nope')).toEqual([]);
+  });
+
+  it('counts the clip frames whose tracked region has no trustworthy position: unknown, weak, lost, outside the track, or a missing track', () => {
+    const { doc, a, clipA } = setup();
+    const d = structuredClone(doc);
+    // source frames 0..89 are shown at timeline frames 0..89; the track covers source 10..19 with 2 weak and 3 lost frames
+    d.motionTracks = { mtk_1: track('mtk_1', a, 10, [1, 1, 2, 2, 1, 3, 3, 3, 4, 5]) };
+    const clip = tracksOf(d).flatMap((t) => t.clips).find((c) => c.id === clipA) as MediaClip;
+    expect(redactUnsureFrames(d, clip)).toBe(0); // no regions yet
+    const region = { shape: 'ellipse' as const, x: 0, y: 0, width: 0.2, height: 0.2, pad: 0.1, feather: 0.01, style: 'blur' as const, strength: 0.8, color: '#000000', onLoss: 'frame' as const, weakIsLost: true };
+    clip.redact = [{ id: 'rgn_fixed', motionTrackId: null, ...region }];
+    expect(redactUnsureFrames(d, clip)).toBe(0); // a fixed region is always where it is
+    clip.redact.push({ id: 'rgn_1', motionTrackId: 'mtk_1', ...region });
+    expect(redactUnsureFrames(d, clip)).toBe(90 - 10 + 5); // 80 frames outside the track + 2 weak + 3 lost
+    clip.redact[1]!.motionTrackId = 'mtk_gone';
+    expect(redactUnsureFrames(d, clip)).toBe(90);
+    expect(stateCounts([1, 1, 2, 3, 6, 9])).toEqual([0, 2, 1, 1, 0, 0, 1]);
   });
 });

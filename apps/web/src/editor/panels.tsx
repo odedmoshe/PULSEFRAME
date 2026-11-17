@@ -556,7 +556,9 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
   const textOverride = variantId ? editor.doc?.variants?.[variantId]?.overrides[clip.id] : undefined;
   const hasTextOverride = !!(textOverride && (textOverride.text !== undefined || textOverride.textStyle));
   const hasOverride = !!(variantId && editor.doc?.variants?.[variantId]?.overrides[clip.id]?.transform);
-  const now = editor.transformNow(variantId ? viewClip : clip);
+  // As drawn at the playhead: for a clip that follows a motion track (ADR-0015) the resolved values, edited as its offset.
+  const shown = editor.resolvedTransformNow(variantId ? viewClip : clip);
+  const now = shown.transform;
   const inside = editor.playheadInsideSelection;
   const on = editor.playheadOnSelection;
   const sizeCommit = (v: number) => void editor.commit(variantId
@@ -654,7 +656,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
       ) : <span hidden data-testid="transform-scope" data-scope="master" />}
       {TRANSFORM_FIELDS.map((fld) => {
         const animated = !!viewClip.keyframes?.[fld.prop]?.length;
-        const commit = (v: number) => on && v !== now[fld.prop] && void editor.setTransformForView(clip, { [fld.prop]: v });
+        const commit = (v: number) => on && v !== now[fld.prop] && void editor.setShownTransform(clip, shown, { [fld.prop]: v });
         return (
           <label key={`${fld.prop}:${now[fld.prop]}`}>
             <span>{t(fld.label)} {animated && <em className="animated" title={t('keyframes.animated')}>◆</em>} <bdi className="val">{+now[fld.prop].toFixed(3)}</bdi></span>

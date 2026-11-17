@@ -100,7 +100,8 @@ const step = (frames: number) => (e: Editor) => e.seek(e.frame + frames);
 const addKeyframe = (e: Editor) => {
   const c = sel(e);
   if (!c) return;
-  const now = e.transformNow(c);
+  // the clip's own values: for a clip that follows a motion track (ADR-0015) its keys are its offset from the tracked point
+  const now = e.resolvedTransformNow(c).own;
   const time = T.sub(e.playhead, c.start);
   return e.commit((['x', 'y', 'scale', 'rotation', 'opacity'] as const).map((property) => ({ op: 'set_keyframe', args: { clipId: c.id, property, time, value: now[property] } })), 'Add keyframe');
 };
