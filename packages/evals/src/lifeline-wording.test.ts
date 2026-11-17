@@ -16,7 +16,7 @@ const SAMPLES: Record<LifeRefusalKey, string> = {
   shiftNoDate: LIFE_REFUSALS.shiftNoDate.message(3), shiftDayOnly: LIFE_REFUSALS.shiftDayOnly.message(41), shiftInherited: LIFE_REFUSALS.shiftInherited.message(7),
   shiftTooFar: LIFE_REFUSALS.shiftTooFar.message(2),
   notATitle: LIFE_REFUSALS.notATitle.message(), fieldsAlready: LIFE_REFUSALS.fieldsAlready.message(true),
-  notFields: LIFE_REFUSALS.notFields.message('{weather}, {date:fancy}, {'), personFields: LIFE_REFUSALS.personFields.message('{age:per_1}, {name:per_1}'),
+  notFields: LIFE_REFUSALS.notFields.message('{weather}, {date:fancy}, {'),
   fieldsStillThere: LIFE_REFUSALS.fieldsStillThere.message(),
   noDatedFiles: LIFE_REFUSALS.noDatedFiles.message(), tooManyEvents: LIFE_REFUSALS.tooManyEvents.message(), eventFileKind: LIFE_REFUSALS.eventFileKind.message(), eventLastFile: LIFE_REFUSALS.eventLastFile.message(),
   eventTooManyFiles: LIFE_REFUSALS.eventTooManyFiles.message(),
@@ -43,7 +43,6 @@ describe('Hebrew wording of the life-line refusals (ADR-0021)', () => {
     expect(translateRefusal('he', SAMPLES.shiftTooFar)).toMatch(/2.*105716160/);
     expect(translateRefusal('he', SAMPLES.eventTooManyFiles)).toContain('5000');
     expect(translateRefusal('he', SAMPLES.notFields)).toContain('{weather}, {date:fancy}, {');
-    expect(translateRefusal('he', SAMPLES.personFields)).toContain('{age:per_1}, {name:per_1}');
     expect(translateRefusal('he', LIFE_REFUSALS.fieldsAlready.message(false))).not.toBe(translateRefusal('he', SAMPLES.fieldsAlready));
   });
   it('the shared strings of the track exist in both languages: a headline for each preflight code, a line for each reason a field has no words, a label for each capture source, and the three palette commands', () => {
@@ -106,7 +105,6 @@ describe('Hebrew wording of the life-line refusals (ADR-0021)', () => {
       notATitle: [d, [{ op: 'set_text_fields', args: { clipId, enabled: true } }]],
       fieldsAlready: [d, [on, on]],
       notFields: [d, [text('{weather} {date:fancy} a { b'), on]],
-      personFields: [d, [text('{age:per_1} בת {name:per_1}'), on]],
       fieldsStillThere: [d, [on, { op: 'set_text_fields', args: { clipId: titleId, enabled: false } }]],
       noDatedFiles: [tx(d, [{ op: 'remove_event', args: { eventId } }, { op: 'set_asset_capture', args: { assetId: a, capture: null } }, { op: 'set_asset_capture', args: { assetId: dayOnly, capture: null } }]).doc, [{ op: 'cluster_events', args: {} }]],
       tooManyEvents: [full, [{ op: 'cluster_events', args: {} }]],

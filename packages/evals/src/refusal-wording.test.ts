@@ -382,7 +382,6 @@ describe('Hebrew wording of common refusals', () => {
       notATitle: [[d, [{ op: 'set_text_fields', args: { clipId, enabled: true } }]]],
       fieldsAlready: [[d, [{ op: 'set_text_fields', args: { clipId: titleId, enabled: false } }]], [tx(d, [on]).doc, [on]]],
       notFields: [[d, [text('{weather} {date:fancy} a { b'), on]]],
-      personFields: [[d, [text('{age:per_1} {name:per_1}'), on]]],
       fieldsStillThere: [[tx(d, [on]).doc, [{ op: 'set_text_fields', args: { clipId: titleId, enabled: false } }]]],
       noDatedFiles: [[tx(createProject({ id: 'prj_none', name: 'N' }), [{ op: 'import_asset', args: { asset: dated('a') } }], true).doc, [{ op: 'cluster_events', args: {} }]]],
       tooManyEvents: [[full, [{ op: 'add_event', args: { assetIds: [a] } }]]],
@@ -416,7 +415,6 @@ describe('Hebrew wording of common refusals', () => {
     expect(translateRefusal('he', messages.shiftNoDate![0]!)).toContain('2');
     expect(translateRefusal('he', messages.dateOutOfRange![0]!)).toMatch(/1900.*2100/);
     expect(translateRefusal('he', messages.notFields![0]!)).toContain('{weather}, {date:fancy}, {');
-    expect(translateRefusal('he', messages.personFields![0]!)).toContain('{age:per_1}, {name:per_1}');
     expect(translateRefusal('he', messages.eventTooManyFiles![0]!)).toContain(String(MAX_EVENT_FILES));
     expect(translateRefusal('he', messages.tooManyEvents![0]!)).toContain(String(MAX_LIFE_EVENTS));
     expect(translateRefusal('he', messages.fieldsAlready![0]!)).not.toBe(translateRefusal('he', messages.fieldsAlready![1]!)); // off, and on

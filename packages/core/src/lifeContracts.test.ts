@@ -220,13 +220,14 @@ describe('life line: events as entities, validation and exact undo', () => {
 
 describe('life line: operation registry and refusal table', () => {
   const PUBLIC = ['set_asset_capture', 'shift_asset_captures', 'set_text_fields', 'cluster_events', 'add_event', 'update_event', 'remove_event'];
-  it('seven public operations and one internal one are registered at version 1; people operations are not', () => {
+  it('seven public operations and one internal one are registered at version 1; the people operations are their own (peopleOps.ts)', () => {
     for (const name of PUBLIC) { const def = getOp(name); expect(def, name).toBeDefined(); expect(def!.version, name).toBe(1); expect(def!.internal, name).toBeFalsy(); expect(def!.description.length, name).toBeGreaterThan(40); }
     expect(getOp('attach_asset_capture')!.internal).toBe(true);
     expect(describeOps().map((o) => o.name)).toEqual(expect.arrayContaining(PUBLIC));
     expect(describeOps().map((o) => o.name)).not.toContain('attach_asset_capture');
-    // scope cut: people wait for the owner's approval; "make it plain text" is a helper that returns literal operations, not an operation
-    for (const name of ['add_person', 'update_person', 'remove_person', 'freeze_text_fields']) expect(listOps().some((o) => o.name === name), name).toBe(false);
+    // "make it plain text" is a helper that returns literal operations, not an operation; the people operations (approved by the
+    // owner after these contracts) are registered by peopleOps.ts and tested in peopleContracts.test.ts
+    expect(listOps().some((o) => o.name === 'freeze_text_fields')).toBe(false);
     // an internal operation is refused for an API caller before it runs
     expect(() => tx(createProject({ id: 'p', name: 'P' }), [{ op: 'attach_asset_capture', args: { assetId: 'ast_1', capture: HANUKKAH } }])).toThrow(/internal/);
   });
@@ -327,7 +328,6 @@ describe('life line: operation registry and refusal table', () => {
       notATitle: [x.doc, [{ op: 'set_text_fields', args: { clipId: x.clipId, enabled: true } }], L.notATitle.message()],
       fieldsAlready: [x.doc, [{ op: 'set_text_fields', args: { clipId: x.titleId, enabled: false } }], L.fieldsAlready.message(false)],
       notFields: [x.doc, [text('{weather}'), on], L.notFields.message('{weather}')],
-      personFields: [x.doc, [text('{age:per_1}'), on], L.personFields.message('{age:per_1}')],
       fieldsStillThere: [tx(x.doc, [on]).doc, [{ op: 'set_text_fields', args: { clipId: x.titleId, enabled: false } }], L.fieldsStillThere.message()],
       noDatedFiles: [tx(createProject({ id: 'p', name: 'P' }), [{ op: 'import_asset', args: { asset: video('a') } }], true).doc, [{ op: 'cluster_events', args: {} }], L.noDatedFiles.message()],
       tooManyEvents: [withEvents(x.doc, Array.from({ length: MAX_LIFE_EVENTS }, (_, i) => event(`evt_${i}`, [x.a]))), [{ op: 'add_event', args: { assetIds: [x.b] } }], L.tooManyEvents.message()],

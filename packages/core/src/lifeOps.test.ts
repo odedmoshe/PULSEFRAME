@@ -350,7 +350,6 @@ describe('every refusal of LIFE_REFUSALS, provoked through its operation', () =>
       ['fieldsAlready', p.doc, [{ op: 'set_text_fields', args: { clipId: p.titleId, enabled: false } }], 'live fields are already off for this title'],
       ['notFields', p.doc, [text('{weather} {date:fancy} a { b {weather}'), on], 'these brace groups are not fields: {weather}, {date:fancy}, {'],
       ['notFields', p.doc, [text('סוף }'), on], 'these brace groups are not fields: }'],
-      ['personFields', p.doc, [text('{name:per_1} בת {age:per_1:words} {date}'), on], 'these fields name a person, and this project holds no people: {name:per_1}, {age:per_1:words}'],
       ['fieldsStillThere', fieldsOn, [{ op: 'set_text_fields', args: { clipId: p.titleId, enabled: false } }], 'this title still holds fields, so turning live fields off would show their names instead of their values'],
       ['noDatedFiles', noDates, [{ op: 'cluster_events', args: {} }], 'no picture or video in the library has a capture date'], // the dated sound file is not a picture
       ['tooManyEvents', full, [{ op: 'add_event', args: { assetIds: [p.morning] } }], `a project holds at most ${MAX_LIFE_EVENTS} events`],

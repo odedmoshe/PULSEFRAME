@@ -25,9 +25,9 @@
  *   given value is the stored one). remove_person: personNotFound, personInUse (fields.ts fieldUsersOfPerson; details
  *   { personId, clipIds } with at most 50 ids).
  * - set_text_fields (lifeOps.ts) changes with this step: turning live fields on is refused with unknownPerson when a people
- *   field names someone who is not in the project (the groups are listed), and no longer with LIFE_REFUSALS.personFields,
- *   which goes away. update_text on a title that already has live fields stays as it is: a person who is not there has no
- *   words and the export preflight says so.
+ *   field names someone who is not in the project (the groups are listed); LIFE_REFUSALS.personFields ("this project holds
+ *   no people") is gone. Built by the lead in lifeOps.ts (that body was already built). update_text on a title that already
+ *   has live fields stays as it is: a person who is not there has no words and the export preflight says so.
  */
 import { z } from 'zod';
 import { defineOp, OpError, type OpErrorCode } from './ops.ts';

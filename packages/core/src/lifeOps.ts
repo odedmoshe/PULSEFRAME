@@ -26,7 +26,9 @@
  *     cluster_events never refuses for size: clusterCaptures (events.ts) cuts a longer run into consecutive clusters of
  *     at most MAX_EVENT_FILES.
  * - "Make it plain text" is NOT an operation: fields.ts freezeOps returns literal operations to commit.
- * - People (add_person, update_person, remove_person, {age}, {name}) are NOT part of this build: they wait for the owner.
+ * - People (ADR-0021, people section, approved by the owner): their operations are in peopleOps.ts. set_text_fields turns
+ *   live fields on for a title whose people fields name people of the project, and refuses (peopleOps.ts
+ *   PEOPLE_REFUSALS.unknownPerson) when one names a person who is not there.
  */
 import { z } from 'zod';
 import { defineOp, mustClip, OpError, type OpErrorCode } from './ops.ts';
@@ -34,6 +36,8 @@ import { CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, CaptureSchema, isRealWallDate, MAX_
 import { addWallSeconds, captureOf, parseWall, shownCapture } from './capture.ts';
 import { clusterCaptures, type DatedAsset } from './events.ts';
 import { isPersonToken, parseFields } from './fields.ts';
+import { personOf } from './people.ts';
+import { peopleRefusal } from './peopleOps.ts';
 import { isValidGregorian } from './hebrewCalendar.ts';
 
 /**
@@ -76,7 +80,7 @@ export interface UpdateEventOutput { /** Events emptied by moving their files he
 // ---------- refusals: code, English wording (fixed) and hint ----------
 interface Refusal<A extends unknown[]> { code: OpErrorCode; message: (...a: A) => string; hint?: string }
 const refusal = <A extends unknown[]>(code: OpErrorCode, message: (...a: A) => string, hint?: string): Refusal<A> => ({ code, message, ...(hint ? { hint } : {}) });
-const FIELD_LIST = '{date} {date:numeric} {date:monthYear} {date:long-en} {date:monthYear-en} {hebrewDate} {hebrewDate:noYear} {year} {hebrewYear} {event}';
+const FIELD_LIST = '{date} {date:numeric} {date:monthYear} {date:long-en} {date:monthYear-en} {hebrewDate} {hebrewDate:noYear} {year} {hebrewYear} {event}; people of the project (add_person): {name:<personId>} {age:<personId>} {age:<personId>:words} {age:<personId>:en}';
 /**
  * Every refusal of the life-line operations. The messages are fixed: the Hebrew table recognises them by their shape
  * (packages/i18n/src/lifeline.ts HE_LIFE), so a change here is a change there. Lists inside a message are joined with ", ".
@@ -99,7 +103,6 @@ export const LIFE_REFUSALS = {
   notATitle: refusal('incompatible', () => 'only a title can hold live fields'),
   fieldsAlready: refusal('invalid_args', (on: boolean) => `live fields are already ${on ? 'on' : 'off'} for this title`),
   notFields: refusal('invalid_args', (groups: string) => `these brace groups are not fields: ${groups}`, `The fields are ${FIELD_LIST}. Write {{ and }} for braces that should be shown as they are.`),
-  personFields: refusal('invalid_args', (groups: string) => `these fields name a person, and this project holds no people: ${groups}`, 'People are not part of this build. Remove those fields from the text.'),
   fieldsStillThere: refusal('incompatible', () => 'this title still holds fields, so turning live fields off would show their names instead of their values', 'Make it plain text first (commit the operations freezeOps returns; in the editor: "Make it plain text"), or delete the fields from the text.'),
   // events
   noDatedFiles: refusal('incompatible', () => 'no picture or video in the library has a capture date', 'Set capture dates first (set_asset_capture), or read them from the files (POST /api/v1/projects/{id}/captures/read).'),
@@ -234,7 +237,7 @@ defineOp({
 defineOp({
   name: 'set_text_fields',
   version: 1,
-  description: `Turn live fields on or off for a title. On: brace groups in its text (and in each format's own wording) become fields that show the capture date of the picture under the title: ${FIELD_LIST}; {{ and }} are braces. Refused when a brace group is not a field or a brace has no pair (the groups are listed), so double the braces of ordinary text first (update_text) in the same transaction. Off: refused while the text still holds a field (make it plain text with the operations freezeOps returns); otherwise {{ and }} are written back as single braces, so the picture does not change.`,
+  description: `Turn live fields on or off for a title. On: brace groups in its text (and in each format's own wording) become fields that show the capture date of the picture under the title: ${FIELD_LIST}; {{ and }} are braces. Refused when a brace group is not a field or a brace has no pair, or when a people field names a person who is not in the project (the groups are listed), so double the braces of ordinary text first (update_text) in the same transaction. Off: refused while the text still holds a field (make it plain text with the operations freezeOps returns); otherwise {{ and }} are written back as single braces, so the picture does not change.`,
   args: SetTextFieldsArgs,
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
@@ -246,8 +249,9 @@ defineOp({
     if (a.enabled) {
       const notFields = [...new Set(all.flatMap((p) => ('bad' in p ? [p.bad] : [])))];
       if (notFields.length) throw lifeRefusal('notFields', { clipId: clip.id, groups: notFields.slice(0, SOME) }, notFields.join(', '));
-      const people = [...new Set(all.flatMap((p) => ('token' in p && isPersonToken(p.token) ? [p.raw] : [])))];
-      if (people.length) throw lifeRefusal('personFields', { clipId: clip.id, groups: people.slice(0, SOME) }, people.join(', '));
+      // people fields (ADR-0021, people section): each must name a person of the project (an own-property lookup)
+      const strangers = [...new Set(all.flatMap((p) => ('token' in p && isPersonToken(p.token) && !personOf(d, p.token.personId) ? [p.raw] : [])))];
+      if (strangers.length) throw peopleRefusal('unknownPerson', { clipId: clip.id, groups: strangers.slice(0, SOME) }, strangers.join(', '));
       clip.fields = true;
       return { affectedIds: [clip.id], summary: `Live fields on for "${clip.text.slice(0, 40)}"`, output: { fields: true, text: clip.text } satisfies SetTextFieldsOutput };
     }
