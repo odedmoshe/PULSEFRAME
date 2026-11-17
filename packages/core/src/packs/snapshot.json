@@ -1,0 +1,25 @@
+{
+ "hash": "bc7b9ee280a4294e18d9fb90480978c252693bb64c629a0cef674add94439bb9",
+ "packs": [
+  {
+   "id": "pack.hanukkah",
+   "version": 1,
+   "templates": 4,
+   "elements": 25,
+   "looks": 3,
+   "captionLooks": 3,
+   "textPresets": 6,
+   "titles": 8
+  },
+  {
+   "id": "pack.birthday",
+   "version": 1,
+   "templates": 3,
+   "elements": 25,
+   "looks": 3,
+   "captionLooks": 3,
+   "textPresets": 6,
+   "titles": 8
+  }
+ ]
+}
