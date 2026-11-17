@@ -139,9 +139,13 @@ export const sfxFfmpegArgs = (graph: string, out: string): string[] => ['-hide_b
 
 // ---- On-demand synthesis: every ffmpeg run that a single request can ask for (a sound here, a graphic element in elements.ts) ----
 
-/** Why an ffmpeg run did not produce its file. */
+/**
+ * Why an ffmpeg run did not produce its file. `unavailable`: the system could not start it (`code` is the system's reason: ENOENT,
+ * EACCES, EAGAIN ...). `timeout`: it ran too long and was killed here. `interrupted`: something else ended it with a signal (`code`
+ * is the signal). `failed`: it ran and gave up by itself; `tail` is the end of what it said.
+ */
 export class SynthFailure extends Error {
-  constructor(public reason: 'unavailable' | 'timeout' | 'failed', public tail = '') { super(`ffmpeg ${reason}`); }
+  constructor(public reason: 'unavailable' | 'timeout' | 'interrupted' | 'failed', public tail = '', public code?: string) { super(`ffmpeg ${reason}`); }
 }
 /** Starts ffmpeg with these arguments and settles when it has ended. Replaceable, so the limits below can be tested without ffmpeg. */
 export type SynthRunner = (args: string[], timeoutMs: number) => Promise<void>;
@@ -149,49 +153,72 @@ export type SynthRunner = (args: string[], timeoutMs: number) => Promise<void>;
 export const runFfmpeg: SynthRunner = (args, timeoutMs) => new Promise((resolve, reject) => {
   execFile('ffmpeg', args, { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 1 << 20 }, (err, _stdout, stderr) => {
     if (!err) return resolve();
-    const e = err as NodeJS.ErrnoException & { killed?: boolean };
-    reject(new SynthFailure(e.code === 'ENOENT' ? 'unavailable' : e.killed && e.code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? 'timeout' : 'failed', String(stderr).trim().slice(-400)));
+    // `code` is ffmpeg's exit status (a number) when it ran to an end, and a name when the system did not start it or node stopped it.
+    const e = err as { code?: string | number | null; killed?: boolean; signal?: string | null };
+    const tail = String(stderr).trim().slice(-400);
+    const overflow = e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'; // it said more than is kept: it ran, and what it ran was wrong
+    if (typeof e.code === 'string' && !overflow) return reject(new SynthFailure('unavailable', tail, e.code));
+    if (e.killed && !overflow) return reject(new SynthFailure('timeout', tail));
+    if (e.signal && !overflow) return reject(new SynthFailure('interrupted', tail, e.signal)); // not our timer: the kernel (out of memory) or another program
+    reject(new SynthFailure('failed', tail));
   });
 });
 
-export interface SynthLimits { /** ffmpeg runs at once */ max: number; /** requests that may wait for a turn */ maxQueue: number; /** a run is killed after this long */ timeoutMs: number; /** results held in memory, per kind */ keep: number; /** what a refused caller is told to wait */ retryAfterSeconds: number }
+/**
+ * Who is asking. `preview`: the bytes are only looked at or listened to (reachable with a read-only credential). `add`: the bytes are
+ * about to be stored in a project, so the caller holds a credential that may edit.
+ */
+export type SynthLane = 'preview' | 'add';
+export interface SynthLimits { /** ffmpeg runs at once */ max: number; /** previews that may wait for a turn */ maxQueue: number; /** adds that may wait for a turn; these places are theirs alone */ maxQueueAdd: number; /** a run is killed after this long */ timeoutMs: number; /** results held in memory, per kind */ keep: number; /** what a refused caller is told to wait */ retryAfterSeconds: number }
 export interface Synth {
   /**
    * The bytes for `key`, made by `make` (which starts ffmpeg through the function it is given and returns the file it wrote).
    * A recent result comes from memory. A request for something that is already being made shares that run. Otherwise it takes a
-   * turn: at most `max` runs are active, at most `maxQueue` requests wait, and one more is refused with 429 `synthesis_busy`.
+   * turn: at most `max` runs are active, at most `maxQueue` previews and `maxQueueAdd` adds wait, and one more of its kind is
+   * refused with 429 `synthesis_busy`. Waiting adds are started before waiting previews.
    */
-  bytes(kind: string, key: string, make: (ffmpeg: (args: string[]) => Promise<void>) => Promise<Buffer>): Promise<Buffer>;
+  bytes(kind: string, key: string, make: (ffmpeg: (args: string[]) => Promise<void>) => Promise<Buffer>, lane?: SynthLane): Promise<Buffer>;
 }
 /**
  * Sound previews are reachable with a read-only credential, and each one used to start its own ffmpeg: a few hundred requests in
  * parallel meant a few hundred processes. This is the bound, shared by sounds and graphic elements so that the two together stay
  * inside it. Results are deterministic (fixed recipes, bit-exact output), which is what makes sharing a run and a cache safe.
+ *
+ * One line for everybody would let that same read-only credential keep every waiting place taken, and the editor's "add sound" and
+ * "add element" would then be refused. So there are two lines: previews can only fill their own, and an add waits at most for the
+ * runs that are active when it arrives and for the adds ahead of it.
  */
 export function createSynth(runner: SynthRunner = runFfmpeg, limits: Partial<SynthLimits> = {}): Synth {
-  const { max, maxQueue, timeoutMs, keep, retryAfterSeconds }: SynthLimits = { max: 2, maxQueue: 16, timeoutMs: 30_000, keep: 24, retryAfterSeconds: 2, ...limits };
+  const { max, maxQueue, maxQueueAdd, timeoutMs, keep, retryAfterSeconds }: SynthLimits = { max: 2, maxQueue: 16, maxQueueAdd: 16, timeoutMs: 30_000, keep: 24, retryAfterSeconds: 2, ...limits };
+  const room: Record<SynthLane, number> = { preview: maxQueue, add: maxQueueAdd };
+  interface Flight { run: Promise<Buffer>; lane: SynthLane; /** called when it is this request's turn */ go: () => void }
   const caches = new Map<string, Map<string, Buffer>>();
-  const inFlight = new Map<string, Promise<Buffer>>();
+  const inFlight = new Map<string, Flight>();
   let running = 0;
-  const waiting: (() => void)[] = [];
-  /** Resolves when it is this request's turn. A finished run hands its place straight to the first waiter, so `running` never passes `max`. */
-  const turn = (): Promise<void> => {
-    if (running < max) { running++; return Promise.resolve(); }
-    if (waiting.length >= maxQueue) throw new ApiError(429, 'synthesis_busy', 'too many sounds or graphic elements are being made at the moment; this one was not started', { running, waiting: waiting.length, retryAfterSeconds }, `Wait ${retryAfterSeconds} s and ask again.`);
-    return new Promise<void>((resolve) => waiting.push(resolve));
-  };
-  const done = () => { const next = waiting.shift(); if (next) next(); else running--; };
+  const waiting: Record<SynthLane, Flight[]> = { add: [], preview: [] };
+  /** A finished run hands its place straight to the next waiter (adds first), so `running` never passes `max`. */
+  const done = () => { const next = waiting.add.shift() ?? waiting.preview.shift(); if (next) next.go(); else running--; };
   return {
-    bytes(kind, key, make) {
+    bytes(kind, key, make, lane = 'preview') {
       const cache = caches.get(kind) ?? new Map<string, Buffer>();
       caches.set(kind, cache);
       const hit = cache.get(key);
       if (hit) return Promise.resolve(hit);
       const id = `${kind}\n${key}`;
       const shared = inFlight.get(id);
-      if (shared) return shared;
-      const run = (async () => {
-        await turn();
+      if (shared) {
+        // An add for something that is still waiting as a preview takes that request with it to the add line (when there is a place).
+        const at = lane === 'add' && shared.lane === 'preview' ? waiting.preview.indexOf(shared) : -1;
+        if (at >= 0 && waiting.add.length < room.add) { waiting.preview.splice(at, 1); shared.lane = 'add'; waiting.add.push(shared); }
+        return shared.run;
+      }
+      const flight: Flight = { run: undefined as never, lane, go: () => {} };
+      let turn = Promise.resolve();
+      if (running < max) running++;
+      else if (waiting[lane].length >= room[lane]) return Promise.reject(new ApiError(429, 'synthesis_busy', 'too many sounds or graphic elements are being made at the moment; this one was not started', { running, waiting: waiting[lane].length, retryAfterSeconds }, `Wait ${retryAfterSeconds} s and ask again.`));
+      else { turn = new Promise<void>((resolve) => { flight.go = resolve; }); waiting[lane].push(flight); }
+      flight.run = (async () => {
+        await turn;
         try {
           const bytes = await make((args) => runner(args, timeoutMs));
           cache.set(key, bytes);
@@ -201,8 +228,8 @@ export function createSynth(runner: SynthRunner = runFfmpeg, limits: Partial<Syn
           done();
         }
       })().finally(() => inFlight.delete(id));
-      inFlight.set(id, run);
-      return run;
+      inFlight.set(id, flight);
+      return flight.run;
     },
   };
 }
@@ -214,27 +241,43 @@ const findSfx = (id: string): SfxDef => {
   if (!def) throw new ApiError(404, 'not_found', `sound effect "${id}" does not exist`, { available: SFX.map((s) => s.id) }, 'Call list_catalog.');
   return def;
 };
-/** A failed run as an answer the caller can act on: which sound, and whether the machine, the load or the recipe is the reason. */
-function sfxFailure(def: SfxDef, e: unknown): unknown {
-  if (!(e instanceof SynthFailure)) return e;
+/** ffmpeg arguments that run a sound's graph and write nothing: what tells a recipe this ffmpeg rejects from a render that failed for another reason. */
+export const sfxProbeArgs = (graph: string): string[] => ['-hide_banner', '-v', 'error', '-nostdin', '-f', 'lavfi', '-i', graph, '-f', 'null', '-'];
+/**
+ * A run that did not end well as an answer the caller can act on: which sound, and whether the machine, the load or the recipe is
+ * the reason. `failed` here is the outcome of the check that writes nothing (see renderSfx), so it does mean the recipe.
+ */
+function sfxFailure(def: SfxDef, e: SynthFailure, said = e.tail): ApiError {
   const which = `the sound "${def.name.en}" (${def.id})`;
-  if (e.reason === 'unavailable') return new ApiError(503, 'sfx_unavailable', `ffmpeg could not be started, so ${which} cannot be synthesised`, { id: def.id }, 'Install ffmpeg, make sure it is on the PATH, and restart the server.');
+  if (e.reason === 'unavailable') {
+    const missing = e.code === undefined || e.code === 'ENOENT' || e.code === 'EACCES';
+    return new ApiError(503, 'sfx_unavailable', `ffmpeg could not be started, so ${which} cannot be synthesised`, { id: def.id, ...(e.code ? { cause: e.code } : {}) }, missing ? 'Install ffmpeg, make sure it is on the PATH, and restart the server.' : `The system refused to start another program (${e.code}); the machine is short of resources. Try again shortly.`);
+  }
   if (e.reason === 'timeout') return new ApiError(503, 'sfx_timeout', `synthesising ${which} took too long and was stopped`, { id: def.id }, 'The machine is very busy; try again shortly.');
-  return new ApiError(501, 'sfx_unsupported', `the installed ffmpeg cannot synthesise ${which}`, { id: def.id, name: def.name.en, ffmpeg: e.tail }, 'The recipe of this sound uses a filter or an option that this ffmpeg build does not have. Install a current, full ffmpeg build and restart the server. The other sounds are not affected.');
+  if (e.reason === 'interrupted') return new ApiError(503, 'sfx_interrupted', `ffmpeg was stopped from outside while synthesising ${which}`, { id: def.id, ...(e.code ? { signal: e.code } : {}) }, 'The system or another program ended the process (the system does this when memory runs out). Try again; if it keeps happening, look at the memory and load of the machine.');
+  return new ApiError(501, 'sfx_unsupported', `the installed ffmpeg cannot synthesise ${which}`, { id: def.id, name: def.name.en, ffmpeg: said }, 'The recipe of this sound uses a filter or an option that this ffmpeg build does not have. Install a current, full ffmpeg build and restart the server. The other sounds are not affected.');
 }
 /** The WAV bytes of one sound: what a preview plays and what adding it stores. Exported for tests (a recipe this ffmpeg rejects, a replaced runner). */
-export function renderSfx(tmpDir: string, def: SfxDef, queue: Synth = synth): Promise<Buffer> {
+export function renderSfx(tmpDir: string, def: SfxDef, queue: Synth = synth, lane: SynthLane = 'preview'): Promise<Buffer> {
   return queue.bytes('sfx', `${def.id}@${def.version}`, async (ffmpeg) => {
     const tmp = path.join(tmpDir, `sfxp_${randomBytes(6).toString('hex')}.wav`);
     try {
       await ffmpeg(sfxFfmpegArgs(def.graph, tmp));
       return fs.readFileSync(tmp);
     } catch (e) {
-      throw sfxFailure(def, e);
+      if (!(e instanceof SynthFailure)) throw e;
+      if (e.reason !== 'failed') throw sfxFailure(def, e);
+      // ffmpeg ran and gave up. That is the recipe's fault only if ffmpeg also refuses the recipe when nothing is written; otherwise
+      // the cause is on this side (no room or no permission for the file, a folder that is gone) and "unsupported" would send the
+      // owner to reinstall ffmpeg for nothing. The check runs inside this request's turn, so the limit on processes holds.
+      const check = await ffmpeg(sfxProbeArgs(def.graph)).then(() => null, (x: unknown) => x);
+      if (check instanceof SynthFailure) throw sfxFailure(def, check, check.tail || e.tail);
+      if (check) throw check;
+      throw new ApiError(500, 'sfx_render_failed', `ffmpeg accepts the recipe of the sound "${def.name.en}" (${def.id}) but could not produce the audio file`, { id: def.id, name: def.name.en, ffmpeg: e.tail }, 'This ffmpeg accepts the recipe, so replacing ffmpeg is unlikely to help. Most often the server cannot write to its temporary folder (it is missing or read-only, or the disk is full): details.ffmpeg has what ffmpeg reported. Put that right and ask again.');
     } finally {
       fs.rmSync(tmp, { force: true });
     }
-  });
+  }, lane);
 }
 
 /** Rendered bytes of one effect for listening before adding it. Held in memory for the few most recent ones; nothing is stored. */
@@ -246,7 +289,7 @@ export async function sfxPreview(tmpDir: string, id: string, queue: Synth = synt
 export async function makeSfx(store: Store, id: string, actor: string, queue: Synth = synth): Promise<Omit<Asset, 'id'>> {
   const def = findSfx(id);
   // -bitexact and a fixed graph: the same build produces the same bytes, so the asset is content-addressed and de-duplicated.
-  const bytes = await renderSfx(store.tmpDir, def, queue);
+  const bytes = await renderSfx(store.tmpDir, def, queue, 'add');
   const tmp = path.join(store.tmpDir, `sfx_${randomBytes(6).toString('hex')}.wav`);
   try {
     fs.writeFileSync(tmp, bytes);

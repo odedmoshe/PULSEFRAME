@@ -5,7 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Principal } from './governance.ts';
 import { addElement, addSfx } from './http.ts';
 import { startServer, type RunningServer } from './index.ts';
-import { SFX } from './sfx.ts';
+import { canRasteriseSvg, makeElement } from './elements.ts';
+import { createSynth, makeSfx, runFfmpeg, SFX, sfxPreview, type SynthRunner } from './sfx.ts';
 
 /**
  * Built-in sounds and graphic elements over the real routes (real ffmpeg): a refused placement changes nothing,
@@ -102,6 +103,50 @@ describe('adding a sound or an element: a refused placement leaves the project u
     expect(await shape(pid)).toEqual({ revision: 2, assets: ['Square.png'], clips: 1 });
   }, 60_000);
 
+  it('a temporary folder that cannot be written is a 500 that says so, not 501 "this ffmpeg cannot synthesise the sound"; nothing is added, and it works again once the folder is back', async () => {
+    const pid = await create('no tmp');
+    const ro = { authorization: `Bearer ${s.auth.tokens.observer}`, connection: 'close' };
+    const aside = `${s.store.tmpDir}.aside`;
+    fs.renameSync(s.store.tmpDir, aside);
+    try {
+      const preview = await fetch(`${s.url}/api/v1/sfx/sfx.boom/audio`, { headers: ro });
+      const body = (await preview.json()) as { error: { code: string; message: string; details: { ffmpeg: string }; hint: string } };
+      expect([preview.status, body.error.code]).toEqual([500, 'sfx_render_failed']);
+      expect(body.error.details.ffmpeg).toContain(s.store.tmpDir);
+      expect(body.error.hint).not.toMatch(/ffmpeg build|Install/);
+      const add = await post(`/projects/${pid}/sfx`, { sfxId: 'sfx.thud', start: at(0) });
+      expect([add.status, ((await add.json()) as { error: { code: string } }).error.code]).toEqual([500, 'sfx_render_failed']);
+      expect(await shape(pid)).toEqual({ revision: 0, assets: [], clips: 0 });
+    } finally {
+      fs.renameSync(aside, s.store.tmpDir);
+    }
+    expect((await fetch(`${s.url}/api/v1/sfx/sfx.boom/audio`, { headers: ro })).status).toBe(200); // the failure was not remembered
+    expect((await post(`/projects/${pid}/sfx`, { sfxId: 'sfx.thud', start: at(0) })).status).toBe(201);
+  }, 60_000);
+
+  it('adding a sound or an element is not refused while previews hold every waiting place (real ffmpeg behind a gate)', async () => {
+    expect(await canRasteriseSvg()).toBe(true);
+    let open!: () => void; const gate = new Promise<void>((r) => { open = r; });
+    const started: string[] = [];
+    const gated: SynthRunner = async (args, timeoutMs) => { started.push(args[args.indexOf('-i') + 1]!); await gate; return runFfmpeg(args, timeoutMs); };
+    const q = createSynth(gated);
+    const ids = SFX.map((x) => x.id);
+    const previews = ids.slice(0, 18).map((id) => sfxPreview(s.store.tmpDir, id, q)); // 2 at the gate, 16 waiting: what a read-only credential can do
+    await expect(sfxPreview(s.store.tmpDir, ids[18]!, q)).rejects.toMatchObject({ status: 429, code: 'synthesis_busy' });
+    const sound = makeSfx(s.store, ids[30]!, 'user:owner', q);
+    const picture = makeElement(s.store, 'element.shape.circle', { color: '#ABCDEF' }, 'user:owner', q);
+    const early = await Promise.race([Promise.allSettled([sound, picture]).then((r) => r.map((x) => x.status)), new Promise((r) => setTimeout(() => r('both waiting'), 100))]);
+    expect(early).toBe('both waiting'); // used to be refused here with 429 synthesis_busy
+    open();
+    expect((await sound).name).toBe(`${SFX[30]!.name.en}.wav`);
+    expect((await picture).name).toBe('Circle.png');
+    expect((await Promise.all(previews)).every((b) => b.subarray(0, 4).toString('ascii') === 'RIFF')).toBe(true);
+    // the two adds were started as soon as the two runs at the gate ended, ahead of the sixteen waiting previews
+    expect(started).toHaveLength(20);
+    expect(started[2]).toBe(SFX[30]!.graph);
+    expect(started[3]).toMatch(/\.svg$/);
+  }, 60_000);
+
   it('a read-only credential asking for every sound at once is held to the queue: 200 or 429 with Retry-After, never an error, and the server recovers', async () => {
     const ro = { authorization: `Bearer ${s.auth.tokens.observer}`, connection: 'close' };
     const audio = (id: string) => fetch(`${s.url}/api/v1/sfx/${id}/audio`, { headers: ro });
@@ -119,6 +164,38 @@ describe('adding a sound or an element: a refused placement leaves the project u
     expect(again.status).toBe(200);
     expect((await audio('sfx.nope')).status).toBe(404);
     expect(fs.readdirSync(s.store.tmpDir).filter((f) => f.startsWith('sfxp_'))).toEqual([]);
+  }, 120_000);
+
+  it('while a read-only credential keeps the preview queue full, every add over the routes still succeeds', async () => {
+    const pid = await create('adds during a preview flood');
+    const ro = { authorization: `Bearer ${s.auth.tokens.observer}`, connection: 'close' };
+    const ids = SFX.map((x) => x.id);
+    let stop = false; let refusedPreviews = 0; let otherPreviews = 0; let next = 0;
+    const flood = Array.from({ length: 40 }, async () => {
+      while (!stop) {
+        const r = await fetch(`${s.url}/api/v1/sfx/${ids[next++ % ids.length]}/audio`, { headers: ro });
+        await r.arrayBuffer();
+        if (r.status === 429) refusedPreviews++; else if (r.status !== 200) otherPreviews++;
+      }
+    });
+    const adds: number[] = [];
+    try {
+      await new Promise((r) => setTimeout(r, 200)); // the flood is under way
+      for (let i = 0; i < 16; i++) {
+        const r = i % 2 === 0
+          ? await post(`/projects/${pid}/sfx`, { sfxId: ids[(i * 5 + 3) % ids.length] })
+          : await post(`/projects/${pid}/elements`, { elementId: 'element.shape.circle', color: `#00${(0x40 + i).toString(16)}FF` });
+        adds.push(r.status);
+        await r.arrayBuffer();
+      }
+    } finally {
+      stop = true;
+      await Promise.all(flood);
+    }
+    expect(adds).toEqual(Array.from({ length: 16 }, () => 201));
+    expect(refusedPreviews).toBeGreaterThan(0); // the preview places really were all taken during that time
+    expect(otherPreviews).toBe(0);
+    expect((await shape(pid)).assets).toHaveLength(16);
   }, 120_000);
 });
 

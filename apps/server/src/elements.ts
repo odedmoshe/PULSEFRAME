@@ -10,7 +10,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { ELEMENT_IDS, ELEMENTS, elementSvg, type Asset } from '@pulseframe/core';
 import { describeMedia } from './ingest.ts';
-import { synth, SynthFailure, type Synth } from './sfx.ts';
+import { synth, SynthFailure, type Synth, type SynthLane } from './sfx.ts';
 import { assertStorageRoom } from './storage.ts';
 import { ApiError, type Store } from './store.ts';
 
@@ -67,7 +67,7 @@ function validate(id: string, o: Opts): { svg: string; longSide: number; color: 
  * The PNG bytes of one element in these colours at this size. Drawing goes through the queue shared with the sound effects
  * (sfx.ts): the same picture asked for twice at once is drawn once, and the few most recent pictures are held in memory.
  */
-async function render(tmpDir: string, id: string, o: Opts, queue: Synth): Promise<Buffer> {
+async function render(tmpDir: string, id: string, o: Opts, queue: Synth, lane: SynthLane): Promise<Buffer> {
   const v = validate(id, o);
   if (!(await canRasteriseSvg())) throw new ApiError(501, 'element_rasteriser_missing', 'this ffmpeg cannot read SVG, so graphic elements cannot be turned into pictures', { needs: 'ffmpeg built with librsvg (decoder "librsvg")' }, 'Install an ffmpeg build with --enable-librsvg (for example the full build from your distribution), then restart the server.');
   return queue.bytes('element', JSON.stringify([id, v.color, v.color2, v.longSide]), async (ffmpeg) => {
@@ -84,7 +84,7 @@ async function render(tmpDir: string, id: string, o: Opts, queue: Synth): Promis
       fs.rmSync(svgFile, { force: true });
       fs.rmSync(png, { force: true });
     }
-  });
+  }, lane);
 }
 
 const ceilings = new WeakMap<Store, number>();
@@ -97,7 +97,7 @@ export function setElementStorageCeiling(store: Store, maxStorageBytes: number):
 /** Render one element and return it as an image asset (blob stored, not yet attached to a project). */
 export async function makeElement(store: Store, id: string, options: Opts, actor: string, queue: Synth = synth): Promise<Omit<Asset, 'id'>> {
   const def = ELEMENTS.find((e) => e.id === id);
-  const bytes = await render(store.tmpDir, id, options, queue);
+  const bytes = await render(store.tmpDir, id, options, queue, 'add'); // what is being added to a project does not wait behind previews (see createSynth)
   const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
   // The colours are the caller's choice, so there is no end to the distinct pictures that can be asked for: a new one needs room
   // under the storage ceiling, like an upload. A picture that is already stored needs none.
@@ -116,5 +116,5 @@ export async function makeElement(store: Store, id: string, options: Opts, actor
 
 /** PNG bytes for looking at an element before adding it. Held in memory for the most recent few; nothing is stored. */
 export async function elementPreview(tmpDir: string, id: string, options: Opts, queue: Synth = synth): Promise<Buffer> {
-  return render(tmpDir, id, options, queue);
+  return render(tmpDir, id, options, queue, 'preview');
 }

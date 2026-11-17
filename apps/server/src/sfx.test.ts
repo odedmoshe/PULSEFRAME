@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createSynth, renderSfx, runFfmpeg, SFX, sfxFfmpegArgs, sfxPreview, SynthFailure, type SfxDef, type SynthRunner } from './sfx.ts';
+import { createSynth, renderSfx, runFfmpeg, SFX, sfxFfmpegArgs, sfxPreview, sfxProbeArgs, SynthFailure, type SfxDef, type SynthRunner } from './sfx.ts';
 
 const exec = promisify(execFile);
 /** The four sounds whose recipe was corrected (band-pass width in hertz): version 2, other bytes than version 1. */
@@ -159,6 +159,85 @@ describe('sound synthesis failures are typed and name the sound', () => {
       expect(alive).toEqual([]);
     }
   }, 30_000);
+  // ffmpeg can fail for reasons that have nothing to do with its build. Only a recipe it rejects may be called "unsupported" (501, which a client reads as permanent).
+  it('an output folder that cannot be written is 500 sfx_render_failed with what ffmpeg said, not "this ffmpeg cannot synthesise the sound"', async () => {
+    const gone = path.join(dir, 'no-such-folder');
+    const e = await sfxPreview(gone, 'sfx.click', createSynth()).catch((x) => x);
+    expect(e).toMatchObject({ status: 500, code: 'sfx_render_failed', details: { id: 'sfx.click', name: 'Click' } });
+    expect(e.details.ffmpeg).toContain(gone);
+    expect(e.message).not.toMatch(/cannot synthesise/);
+    expect(e.hint).not.toMatch(/ffmpeg build|Install/);
+    expect(e.hint).toMatch(/temporary folder/);
+  }, 30_000);
+  it.skipIf(!fs.existsSync('/proc/self/cmdline'))('ffmpeg ended from outside (as the kernel does when memory runs out) is 503 sfx_interrupted and names the signal', async () => {
+    const sub = fs.mkdtempSync(path.join(dir, 'killed-'));
+    const pending = renderSfx(sub, fake({ id: 'sfx.test-killed', name: { he: 'נהרג', en: 'Killed' }, graph: 'anullsrc=r=48000:d=60,arealtime' }), createSynth()).catch((x) => x);
+    let pid = 0;
+    for (let i = 0; i < 200 && !pid; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+      pid = Number(fs.readdirSync('/proc').filter((d) => /^\d+$/.test(d)).find((d) => { try { const c = fs.readFileSync(`/proc/${d}/cmdline`, 'utf8'); return c.startsWith('ffmpeg\0') && c.includes(sub); } catch { return false; } }) ?? 0);
+    }
+    expect(pid).toBeGreaterThan(0);
+    process.kill(pid, 'SIGKILL'); // not the runner's own timer: another process
+    const e = await pending;
+    expect(e).toMatchObject({ status: 503, code: 'sfx_interrupted', details: { id: 'sfx.test-killed', signal: 'SIGKILL' } });
+    expect(e.hint).not.toMatch(/ffmpeg build|Install/);
+    expect(fs.readdirSync(sub)).toEqual([]);
+  }, 30_000);
+  it('the runner tells apart: could not be started (with the system\'s code), ended by a signal, exited with an error', async () => {
+    const run = (args: string[]) => runFfmpeg(['-hide_banner', '-v', 'error', '-nostdin', ...args], 10_000).catch((x) => x);
+    expect(await run(['-f', 'lavfi', '-i', 'nosuchsource', '-f', 'null', '-'])).toMatchObject({ reason: 'failed' });
+    const PATH = process.env.PATH;
+    const empty = fs.mkdtempSync(path.join(dir, 'path-empty-')), blocked = fs.mkdtempSync(path.join(dir, 'path-blocked-'));
+    fs.writeFileSync(path.join(blocked, 'ffmpeg'), 'not a program', { mode: 0o644 });
+    try {
+      process.env.PATH = empty;
+      expect(await run(['-version'])).toMatchObject({ reason: 'unavailable', code: 'ENOENT' });
+      process.env.PATH = blocked;
+      expect(await run(['-version'])).toMatchObject({ reason: 'unavailable', code: 'EACCES' }); // used to count as "failed", and so as "unsupported"
+    } finally {
+      process.env.PATH = PATH;
+    }
+  }, 30_000);
+  /** Stand-in runner (labelled: no ffmpeg is started): the first call is the render, the second the check of the recipe that writes nothing. */
+  const scripted = (...outcomes: (SynthFailure | null)[]) => {
+    const calls: string[][] = [];
+    const runner: SynthRunner = async (args) => { calls.push(args); const o = outcomes[calls.length - 1]; if (o) throw o; };
+    return { runner, calls };
+  };
+  it('after a failed render the recipe is checked on its own; "unsupported" is said only when that check fails too', async () => {
+    const def = fake();
+    // the render fails, the recipe is accepted: not the build
+    const a = scripted(new SynthFailure('failed', 'Error opening output /x/y.wav: No space left on device'), null);
+    const ea = await renderSfx(dir, def, createSynth(a.runner)).catch((x) => x);
+    expect(ea).toMatchObject({ status: 500, code: 'sfx_render_failed', details: { id: def.id, ffmpeg: 'Error opening output /x/y.wav: No space left on device' } });
+    expect(a.calls).toHaveLength(2);
+    expect(a.calls[1]).toEqual(sfxProbeArgs(def.graph));
+    expect(a.calls[1]!.slice(-3)).toEqual(['-f', 'null', '-']); // the check writes no file
+    expect(a.calls[1]).toContain(def.graph);
+    // both fail: the recipe is the reason, and the check's own words are reported
+    const b = scripted(new SynthFailure('failed', 'first'), new SynthFailure('failed', "No such filter: 'x'"));
+    expect(await renderSfx(dir, def, createSynth(b.runner)).catch((x) => x)).toMatchObject({ status: 501, code: 'sfx_unsupported', details: { id: def.id, ffmpeg: "No such filter: 'x'" } });
+    // the check itself is stopped or cannot start: that is what is reported, not a verdict about the recipe
+    const c = scripted(new SynthFailure('failed', 'first'), new SynthFailure('timeout'));
+    expect(await renderSfx(dir, def, createSynth(c.runner)).catch((x) => x)).toMatchObject({ status: 503, code: 'sfx_timeout' });
+    const d = scripted(new SynthFailure('failed', 'first'), new SynthFailure('interrupted', '', 'SIGKILL'));
+    expect(await renderSfx(dir, def, createSynth(d.runner)).catch((x) => x)).toMatchObject({ status: 503, code: 'sfx_interrupted', details: { signal: 'SIGKILL' } });
+    // a run that was stopped or never started is not followed by a check
+    for (const f of [new SynthFailure('timeout'), new SynthFailure('interrupted', '', 'SIGTERM'), new SynthFailure('unavailable', '', 'EAGAIN')]) {
+      const s = scripted(f);
+      await renderSfx(dir, def, createSynth(s.runner)).catch((x) => x);
+      expect(s.calls, f.reason).toHaveLength(1);
+    }
+  });
+  it('ffmpeg that the system would not start is 503 sfx_unavailable with the system\'s code; only a missing program is answered with "install ffmpeg"', async () => {
+    const e1 = await renderSfx(dir, fake(), createSynth(() => Promise.reject(new SynthFailure('unavailable', '', 'ENOENT')))).catch((x) => x);
+    expect(e1).toMatchObject({ status: 503, code: 'sfx_unavailable', details: { cause: 'ENOENT' } });
+    expect(e1.hint).toMatch(/Install ffmpeg/);
+    const e2 = await renderSfx(dir, fake(), createSynth(() => Promise.reject(new SynthFailure('unavailable', '', 'EAGAIN')))).catch((x) => x);
+    expect(e2).toMatchObject({ status: 503, code: 'sfx_unavailable', details: { cause: 'EAGAIN' } });
+    expect(e2.hint).not.toMatch(/Install ffmpeg/);
+  });
   it('a missing ffmpeg and a failing one are told apart', async () => {
     const missing: SynthRunner = () => Promise.reject(new SynthFailure('unavailable'));
     expect(await renderSfx(dir, fake(), createSynth(missing)).catch((x) => x)).toMatchObject({ status: 503, code: 'sfx_unavailable' });
@@ -169,14 +248,14 @@ describe('sound synthesis failures are typed and name the sound', () => {
 /** The limits of on-demand synthesis, with a stand-in for ffmpeg (labelled: it only writes a marker file) so that process starts can be counted exactly. */
 describe('synthesis queue: bounded, de-duplicated, cached', () => {
   function counting() {
-    let starts = 0, active = 0, most = 0; const release: (() => void)[] = [];
+    let starts = 0, active = 0, most = 0; const release: (() => void)[] = []; const order: string[] = [];
     const runner: SynthRunner = async (args) => {
-      const n = ++starts; active++; most = Math.max(most, active);
+      const n = ++starts; active++; most = Math.max(most, active); order.push(args[args.indexOf('-i') + 1]!);
       await new Promise<void>((r) => release.push(r));
       fs.writeFileSync(args.at(-1)!, `stand-in output ${n}`);
       active--;
     };
-    return { runner, get starts() { return starts; }, get active() { return active; }, get most() { return most; }, finishOne: () => release.shift()?.(), finishAll: async () => { for (let i = 0; i < 400; i++) { release.shift()?.(); await new Promise((r) => setImmediate(r)); } } };
+    return { runner, /** the graphs in the order their runs started */ order, get starts() { return starts; }, get active() { return active; }, get most() { return most; }, finishOne: () => release.shift()?.(), finishAll: async () => { for (let i = 0; i < 400; i++) { release.shift()?.(); await new Promise((r) => setImmediate(r)); } } };
   }
   const ids = SFX.map((s) => s.id);
 
@@ -214,11 +293,79 @@ describe('synthesis queue: bounded, de-duplicated, cached', () => {
   });
   it('a failed run frees its place and is not remembered', async () => {
     let n = 0;
-    const flaky: SynthRunner = async (args) => { if (n++ === 0) throw new SynthFailure('failed', 'boom'); fs.writeFileSync(args.at(-1)!, 'ok'); };
+    // the first request's render and the check of its recipe both fail; from the third call on the stand-in writes a file
+    const flaky: SynthRunner = async (args) => { if (n++ < 2) throw new SynthFailure('failed', 'boom'); fs.writeFileSync(args.at(-1)!, 'ok'); };
     const q = createSynth(flaky, { max: 1, maxQueue: 0 });
     await expect(sfxPreview(dir, 'sfx.click', q)).rejects.toMatchObject({ status: 501, code: 'sfx_unsupported' });
-    expect((await sfxPreview(dir, 'sfx.click', q)).toString()).toBe('ok');
     expect(n).toBe(2);
+    expect((await sfxPreview(dir, 'sfx.click', q)).toString()).toBe('ok');
+    expect(n).toBe(3);
+  });
+  // A read-only credential can keep the preview places taken. What is being added to a project must not be refused because of that.
+  it('previews fill their places; an add still gets in, waits in a place of its own and starts before the waiting previews', async () => {
+    const c = counting(); const q = createSynth(c.runner);
+    const def = (id: string) => SFX.find((x) => x.id === id)!;
+    const settle = (p: Promise<Buffer>) => p.then(() => 'ok', (e: { status?: number; code?: string }) => `${e.status} ${e.code}`);
+    const previews = ids.slice(0, 18).map((id) => settle(sfxPreview(dir, id, q))); // 2 running, 16 waiting
+    expect(await settle(sfxPreview(dir, ids[18]!, q))).toBe('429 synthesis_busy'); // the preview places are all taken
+    const add = settle(renderSfx(dir, def(ids[40]!), q, 'add'));
+    expect(await settle(sfxPreview(dir, ids[19]!, q))).toBe('429 synthesis_busy'); // an add does not open a way in for more previews
+    const addWaitingAsPreview = settle(renderSfx(dir, def(ids[17]!), q, 'add')); // last in the preview line: it moves to the add line
+    const addRunning = settle(renderSfx(dir, def(ids[0]!), q, 'add')); // already being made: shares that run
+    await new Promise((r) => setImmediate(r));
+    expect(c.starts).toBe(2);
+    await c.finishAll();
+    expect(await Promise.all([add, addWaitingAsPreview, addRunning, ...previews])).toEqual(Array.from({ length: 21 }, () => 'ok'));
+    expect(c.most).toBe(2);
+    expect(c.order.map((g) => SFX.find((x) => x.graph === g)!.id)).toEqual([ids[0], ids[1], ids[40], ids[17], ...ids.slice(2, 17)]);
+  });
+  it('adds are bounded too: two running, sixteen waiting, one more is refused; previews keep their own sixteen', async () => {
+    const c = counting(); const q = createSynth(c.runner);
+    const def = (id: string) => SFX.find((x) => x.id === id)!;
+    const settle = (p: Promise<Buffer>) => p.then(() => 'ok', (e: { status?: number; code?: string; details?: { waiting?: number } }) => `${e.status} ${e.code} ${e.details?.waiting}`);
+    const adds = ids.slice(0, 18).map((id) => settle(renderSfx(dir, def(id), q, 'add')));
+    expect(await settle(renderSfx(dir, def(ids[18]!), q, 'add'))).toBe('429 synthesis_busy 16');
+    const previews = ids.slice(20, 36).map((id) => settle(sfxPreview(dir, id, q)));
+    expect(await settle(sfxPreview(dir, ids[36]!, q))).toBe('429 synthesis_busy 16');
+    await new Promise((r) => setImmediate(r));
+    expect([c.starts, c.active]).toEqual([2, 2]);
+    await c.finishAll();
+    expect(await Promise.all([...adds, ...previews])).toEqual(Array.from({ length: 34 }, () => 'ok'));
+    expect([c.starts, c.most]).toEqual([34, 2]); // never more than two at once, and never more than 2 + 16 + 16 accepted
+    expect(c.order.map((g) => SFX.find((x) => x.graph === g)!.id)).toEqual([...ids.slice(0, 18), ...ids.slice(20, 36)]);
+  });
+  it('random mix of previews and adds, some failing (3 seeds): never more than two at once, every request settles, no place is lost', async () => {
+    for (const seed of [1, 2, 3]) {
+      let x = seed * 0x9e3779b1; const rnd = () => { x |= 0; x = (x + 0x6d2b79f5) | 0; let t = Math.imul(x ^ (x >>> 15), 1 | x); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      let active = 0, most = 0, starts = 0; let hold = false; const held: (() => void)[] = [];
+      const runner: SynthRunner = async () => {
+        starts++; active++; most = Math.max(most, active);
+        if (hold) await new Promise<void>((r) => held.push(r));
+        else for (let i = Math.floor(rnd() * 4); i > 0; i--) await new Promise((r) => setImmediate(r));
+        active--;
+        if (!hold && rnd() < 0.15) throw new SynthFailure(rnd() < 0.5 ? 'failed' : 'timeout');
+      };
+      const q = createSynth(runner, { keep: 2 });
+      const ask = (key: string, lane: 'preview' | 'add') => q.bytes('fuzz', key, async (ffmpeg) => { await ffmpeg([key]); return Buffer.from(key); }, lane).then((b) => (b.toString() === key ? 'ok' : 'wrong bytes'), (e: { code?: string; reason?: string }) => e.code ?? e.reason ?? 'error');
+      const all: Promise<string>[] = [];
+      for (let round = 0; round < 300; round++) {
+        for (let i = Math.floor(rnd() * 12); i > 0; i--) all.push(ask(`k${Math.floor(rnd() * 60)}`, rnd() < 0.3 ? 'add' : 'preview'));
+        for (let i = Math.floor(rnd() * 3); i > 0; i--) await new Promise((r) => setImmediate(r));
+      }
+      const out = await Promise.all(all);
+      expect(out.filter((o) => !['ok', 'synthesis_busy', 'failed', 'timeout'].includes(o)), `seed ${seed}`).toEqual([]);
+      expect(out.filter((o) => o === 'ok').length, `seed ${seed}`).toBeGreaterThan(100);
+      expect(most, `seed ${seed}`).toBe(2);
+      // afterwards the queue is as new: two start at once, sixteen of each kind wait, the next of each kind is refused
+      hold = true; const before = starts;
+      const tail = [...Array.from({ length: 18 }, (_, i) => ask(`p${i}`, 'preview')), ...Array.from({ length: 16 }, (_, i) => ask(`a${i}`, 'add'))];
+      expect([await ask('p-extra', 'preview'), await ask('a-extra', 'add')], `seed ${seed}`).toEqual(['synthesis_busy', 'synthesis_busy']);
+      await new Promise((r) => setImmediate(r));
+      expect([starts - before, active], `seed ${seed}`).toEqual([2, 2]);
+      for (let i = 0; i < 100; i++) { held.shift()?.(); await new Promise((r) => setImmediate(r)); }
+      expect(await Promise.all(tail), `seed ${seed}`).toEqual(Array.from({ length: 34 }, () => 'ok'));
+      expect(most, `seed ${seed}`).toBe(2);
+    }
   });
   it('holds the most recent results only', async () => {
     let n = 0;
