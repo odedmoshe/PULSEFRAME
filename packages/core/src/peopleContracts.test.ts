@@ -297,9 +297,63 @@ describe('people: the wording of ages, for the owner\'s review', () => {
     expect(AGE_FORMS.find((r) => r.parts.years === 6 && r.parts.months === 6)!.he.f).toBe('בת 6'); // no «וחצי» from six
     expect(AGE_FORMS.find((r) => r.parts.years === 3 && r.parts.months === 0)!.heWords!.m).toBe('בן שלוש'); // years are counted in the feminine
   });
-  it.todo('W1: ageParts(birth, at) gives `parts` for every AGE_FORMS row and every AGE_PARTS_EDGES row (29 February counts on 1 March in common years)');
-  it.todo('W1: ageHe(parts, form, style) and ageEn(parts) give the strings of every AGE_FORMS row');
-  it.todo('W1: documentPeople resolves {name}, {age}, {age:words}, {age:en} and reports unknown_person, no_birth_date, no_date and before_birth; set PEOPLE_FIELDS_BUILT');
-  it.todo('W1: fieldUsersOfPerson lists the titles (and format wordings) that name a person, live fields on or off');
-  it.todo('W1: add_person / update_person / remove_person: every refusal of PEOPLE_REFUSALS provoked, undo then redo byte-equal; set PEOPLE_OPS_BUILT');
+  // W1's parts, built (in depth: ageWords.test.ts and peopleOps.test.ts); imported here inside the tests
+  it('W1: ageParts(birth, at) gives `parts` for every AGE_FORMS row and every AGE_PARTS_EDGES row (29 February counts on 1 March in common years)', async () => {
+    const { ageParts } = await import('./index.ts');
+    for (const row of AGE_FORMS) expect(ageParts(row.birth, row.at), `${row.birth}→${row.at}`).toEqual(row.parts);
+    for (const e of AGE_PARTS_EDGES) expect(ageParts(e.birth, e.at), `${e.birth}→${e.at}`).toEqual(e.parts);
+  });
+  it('W1: ageHe(parts, form, style) and ageEn(parts) give the strings of every AGE_FORMS row', async () => {
+    const { ageEn, ageHe } = await import('./index.ts');
+    for (const row of AGE_FORMS) {
+      for (const [form, key] of [['m', 'm'], ['f', 'f'], [undefined, 'none']] as const) {
+        expect(ageHe(row.parts, form, 'digits'), `${row.rule} ${key}`).toBe(row.he[key]);
+        expect(ageHe(row.parts, form, 'words'), `${row.rule} ${key} words`).toBe((row.heWords ?? row.he)[key]);
+      }
+      expect(ageEn(row.parts), row.rule).toBe(row.en);
+    }
+  });
+  it('W1: documentPeople resolves {name}, {age}, {age:words}, {age:en} and reports unknown_person, no_birth_date, no_date and before_birth; PEOPLE_FIELDS_BUILT is set', async () => {
+    const { documentPeople, PEOPLE_FIELDS_BUILT } = await import('./index.ts');
+    expect(PEOPLE_FIELDS_BUILT).toBe(true);
+    const s = documentPeople(withPeople(createProject({ id: 'p', name: 'P' }), [NOA, ITAI]));
+    expect(s.resolve({ name: 'name', personId: 'per_noa', format: null }, null)).toBe('נועה');
+    expect(s.resolve({ name: 'age', personId: 'per_noa', format: null }, '2019-11-04')).toBe('בת 3');
+    expect(s.resolve({ name: 'age', personId: 'per_noa', format: 'words' }, '2019-11-04')).toBe('בת שלוש');
+    expect(s.resolve({ name: 'age', personId: 'per_noa', format: 'en' }, '2019-11-04')).toBe('3 years old');
+    expect(s.resolve({ name: 'age', personId: 'per_gone', format: null }, '2019-11-04')).toBeNull();
+    expect(s.resolve({ name: 'age', personId: 'per_itai', format: null }, '2019-11-04')).toEqual({ missing: 'no_birth_date' });
+    expect(s.resolve({ name: 'age', personId: 'per_noa', format: null }, null)).toEqual({ missing: 'no_date' });
+    expect(s.resolve({ name: 'age', personId: 'per_noa', format: null }, '2016-11-03')).toEqual({ missing: 'before_birth' });
+  });
+  it('W1: fieldUsersOfPerson lists the titles (and format wordings) that name a person, live fields on or off', async () => {
+    const { fieldUsersOfPerson } = await import('./index.ts');
+    const { doc, titleId } = titled();
+    const d = withPeople(doc, [NOA, ITAI]);
+    expect(fieldUsersOfPerson(d, 'per_noa')).toEqual([]);
+    expect(fieldUsersOfPerson(tx(d, [text(titleId, '{age:per_noa}')]).doc, 'per_noa')).toEqual([titleId]); // live fields off
+    const v = tx(d, [{ op: 'add_variant', args: { profileId: 'vertical-9x16' } }, text(titleId, '{name:per_noa}'), on(titleId)]);
+    const variantId = v.results[0]!.output!.variantId as string;
+    const worded = tx(v.doc, [{ op: 'set_variant_override', args: { variantId, clipId: titleId, text: '{age:per_itai:en}' } }]).doc;
+    expect([fieldUsersOfPerson(worded, 'per_noa'), fieldUsersOfPerson(worded, 'per_itai')]).toEqual([[titleId], [titleId]]);
+  });
+  it('W1: add_person / update_person / remove_person: refusals provoked and undo then redo byte-equal (every refusal: peopleOps.test.ts); PEOPLE_OPS_BUILT is set', async () => {
+    const { PEOPLE_OPS_BUILT } = await import('./index.ts');
+    expect(PEOPLE_OPS_BUILT).toBe(true);
+    const { doc } = titled();
+    const r = tx(doc, [{ op: 'add_person', args: { name: 'נועה', birthDate: '2016-11-04', form: 'f' } }]);
+    const id = r.results[0]!.output!.personId as string;
+    const u = tx(r.doc, [{ op: 'update_person', args: { personId: id, birthDate: null, form: null } }]);
+    const x = tx(u.doc, [{ op: 'remove_person', args: { personId: id } }]);
+    for (const [before, after] of [[doc, r.doc], [r.doc, u.doc], [u.doc, x.doc]] as const) {
+      const changes = diffEntities(before, after);
+      const back = structuredClone(after);
+      restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.before })));
+      expect(JSON.stringify(back)).toBe(JSON.stringify(before));
+      restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.after })));
+      expect(JSON.stringify(back)).toBe(JSON.stringify(after));
+    }
+    expect(refusedWith(() => tx(r.doc, [{ op: 'add_person', args: { name: 'נועה ' } }])).code).toBe('incompatible');
+    expect(JSON.stringify([r.results, u.results, x.results])).not.toMatch(/2016|11-04/);
+  });
 });

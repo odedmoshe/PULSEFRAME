@@ -31,14 +31,16 @@
  */
 import { z } from 'zod';
 import { defineOp, OpError, type OpErrorCode } from './ops.ts';
-import { CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, MAX_PEOPLE, MAX_PERSON_NAME, WALL_DATE } from './schema.ts';
+import { CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, MAX_PEOPLE, MAX_PERSON_NAME, WALL_DATE, type Person, type ProjectDocument } from './schema.ts';
+import { peopleOf, personNameKey, personOf, storedPersonName } from './people.ts';
+import { fieldUsersOfPerson } from './fields.ts';
+import { isValidGregorian } from './hebrewCalendar.ts';
 
 /**
- * False while the three apply bodies are the lead's placeholders (they refuse). W1 sets it true in the commit that builds
- * them: the operations fuzz (packages/evals/src/ops-fuzz.gen.ts) then draws the people rows, and the lead's tests that are
- * skipped until then (people contracts, wording, the walk of the server's surfaces after real commits) start to run.
+ * True: the three apply bodies are built (W1). The operations fuzz (packages/evals/src/ops-fuzz.gen.ts) draws the people rows
+ * because of it.
  */
-export const PEOPLE_OPS_BUILT = false;
+export const PEOPLE_OPS_BUILT = true;
 
 // ---------- argument schemas ----------
 /** Shape only: the body refuses the characters a name cannot hold by name (personNameCharacters), so the refusal can be worded. */
@@ -90,26 +92,88 @@ export const PERSON_SUMMARIES = {
   removed: (name: string) => `Removed "${name}" from the people of the project`,
 } as const;
 
-const notBuilt = (op: string): OpError => new OpError('incompatible', `people: ${op} is not built yet`, {}, 'This build registers the operation and its rules; its body is not written.');
+// ---------- the checks, in the order of the rules above ----------
+/** The characters a name may not hold: they would break the field grammar (`{name:…}`, the readable `{שם: …}`) or a line. */
+const NAME_CHARACTERS = /[{}:|\n\r]/;
+/** personNameCharacters, personNameEmpty: the name as it will be stored. */
+function checkedName(name: string, personId: string | null): string {
+  const details = personId ? { personId } : {};
+  if (NAME_CHARACTERS.test(name)) throw peopleRefusal('personNameCharacters', details);
+  const stored = storedPersonName(name);
+  if (stored === '') throw peopleRefusal('personNameEmpty', details);
+  return stored;
+}
+/** noSuchBirthDay, birthDateOutOfRange (a day that does not exist is told first, whatever its year). */
+function checkBirthDate(birthDate: string, personId: string | null): void {
+  const details = personId ? { personId } : {};
+  const y = Number(birthDate.slice(0, 4)), m = Number(birthDate.slice(5, 7)), d = Number(birthDate.slice(8, 10));
+  if (!WALL_DATE.test(birthDate) || !isValidGregorian({ y, m, d })) throw peopleRefusal('noSuchBirthDay', details);
+  if (y < CAPTURE_MIN_YEAR || y > CAPTURE_MAX_YEAR) throw peopleRefusal('birthDateOutOfRange', details);
+}
+/** personNameTaken: another person (not `self`) whose name is the same by personNameKey. The refusal names that person as stored; details hold ids only. */
+function checkNameFree(d: ProjectDocument, name: string, self: string | null): void {
+  const key = personNameKey(name);
+  for (const other of Object.values(peopleOf(d))) if (other.id !== self && personNameKey(other.name) === key) throw peopleRefusal('personNameTaken', { ...(self ? { personId: self } : {}), otherPersonId: other.id }, other.name);
+}
+/** personNotFound: the person, by own property. */
+function mustPerson(d: ProjectDocument, personId: string): Person {
+  const p = personOf(d, personId);
+  if (!p) throw peopleRefusal('personNotFound', { personId }, personId);
+  return p;
+}
 
 defineOp({
   name: 'add_person',
   version: 1,
   description: `Add a person to the project so that titles can show their name ({name:<personId>}) and their age at the time a picture was taken ({age:<personId>}, {age:<personId>:words}, {age:<personId>:en}). A person is a name, an optional birth date and an optional Hebrew word choice (m = «בן», f = «בת»); nothing else is kept. Names are unique in a project; at most ${MAX_PEOPLE} people. The birth date stays inside the project file on this machine: a connected agent reads names only unless the owner granted it birth dates, and a credential without that grant is refused when it gives birthDate or form.`,
   args: AddPersonArgs,
-  apply() { throw notBuilt('add_person'); },
+  apply(d, a, ctx) {
+    const name = checkedName(a.name, null);
+    if (a.birthDate != null) checkBirthDate(a.birthDate, null);
+    checkNameFree(d, name, null);
+    if (Object.keys(peopleOf(d)).length >= MAX_PEOPLE) throw peopleRefusal('tooManyPeople', {});
+    const id = ctx.newId('per');
+    const person: Person = { id, name, birthDate: a.birthDate ?? null, ...(a.form ? { form: a.form } : {}) };
+    (d.people ??= {})[id] = person;
+    return { affectedIds: [id], summary: PERSON_SUMMARIES.added(name), output: { personId: id } satisfies AddPersonOutput };
+  },
 });
 defineOp({
   name: 'update_person',
   version: 1,
   description: 'Change a person: the name (titles follow, they name the person by id), the birth date (null removes it) and the Hebrew word choice (null removes it). Age fields over dated pictures follow at once. A credential without the grant for birth dates may change the name only.',
   args: UpdatePersonArgs,
-  apply() { throw notBuilt('update_person'); },
+  apply(d, a) {
+    const p = mustPerson(d, a.personId);
+    if (a.name === undefined && a.birthDate === undefined && a.form === undefined) throw peopleRefusal('personNothingToChange', { personId: p.id });
+    const name = a.name === undefined ? undefined : checkedName(a.name, p.id);
+    if (a.birthDate != null) checkBirthDate(a.birthDate, p.id);
+    if (name !== undefined) checkNameFree(d, name, p.id);
+    const renamed = name !== undefined && name !== p.name;
+    const dated = a.birthDate !== undefined && a.birthDate !== p.birthDate;
+    const worded = a.form !== undefined && (a.form ?? undefined) !== p.form;
+    if (!renamed && !dated && !worded) throw peopleRefusal('personUnchanged', { personId: p.id });
+    const before = p.name;
+    if (renamed) p.name = name;
+    if (dated) p.birthDate = a.birthDate!;
+    if (worded) { if (a.form) p.form = a.form; else delete p.form; }
+    // the name and nothing else about the person (history is readable by every credential)
+    const summary = [renamed ? PERSON_SUMMARIES.renamed(before, p.name) : null, dated || worded ? PERSON_SUMMARIES.changed(p.name) : null].filter((x) => x !== null).join('; ');
+    return { affectedIds: [p.id], summary };
+  },
 });
 defineOp({
   name: 'remove_person',
   version: 1,
   description: 'Remove a person from the project. Refused while a title (or a format\'s wording of one) holds a field for them; the titles are listed. Make those titles plain text first, or delete the fields.',
   args: RemovePersonArgs,
-  apply() { throw notBuilt('remove_person'); },
+  apply(d, a) {
+    const p = mustPerson(d, a.personId);
+    const users = fieldUsersOfPerson(d, p.id);
+    if (users.length) throw peopleRefusal('personInUse', { personId: p.id, clipIds: users.slice(0, 50) }, users.length);
+    delete d.people![p.id];
+    // a project without people is stored exactly as before this build: no `people` key
+    if (Object.keys(d.people!).length === 0) delete d.people;
+    return { affectedIds: [p.id], summary: PERSON_SUMMARIES.removed(p.name) };
+  },
 });

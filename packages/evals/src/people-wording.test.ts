@@ -1,8 +1,8 @@
 /**
  * Keeps the Hebrew wording of the refusals of the people operations (packages/i18n/src/people.ts HE_PEOPLE) in step with the
  * fixed English sentences (packages/core/src/peopleOps.ts PEOPLE_REFUSALS), and the shared strings of the people step
- * complete (ADR-0021, people section). Provoking each refusal through its operation is W1's test (the bodies are W1's); the
- * one refusal of an operation that is already built (set_text_fields → unknownPerson) is provoked here.
+ * complete (ADR-0021, people section). Every refusal is provoked through its operation in refusal-wording.test.ts (the
+ * people case) and in packages/core/src/peopleOps.test.ts; set_text_fields → unknownPerson is provoked here too.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
