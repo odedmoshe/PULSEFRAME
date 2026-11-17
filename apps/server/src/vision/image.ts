@@ -7,20 +7,20 @@
 import type { GreyFrame } from './types.ts';
 
 export interface Plane { readonly width: number; readonly height: number; readonly data: Float32Array }
-/** One pyramid level; its Scharr gradients are computed on first use and kept. */
-export interface Level extends Plane { gx: Float32Array | null; gy: Float32Array | null }
+/** One pyramid level; its Scharr gradients are computed on first use and kept (into the spare arrays when it has them). */
+export interface Level extends Plane { gx: Float32Array | null; gy: Float32Array | null; spareGx?: Float32Array | null; spareGy?: Float32Array | null }
 export interface Pyramid { readonly levels: Level[] }
 
-export function planeOf(f: GreyFrame): Plane {
-  const data = new Float32Array(f.width * f.height);
+export function planeOf(f: GreyFrame, into?: Float32Array): Plane {
+  const data = into && into.length === f.width * f.height ? into : new Float32Array(f.width * f.height);
   for (let i = 0; i < data.length; i++) data[i] = f.data[i]!;
   return { width: f.width, height: f.height, data };
 }
 
 /** Next level: each pixel is the mean of a 2×2 block; an odd last row or column is dropped. */
-export function downsample(p: Plane): Plane {
+export function downsample(p: Plane, into?: Float32Array): Plane {
   const w = Math.max(1, Math.floor(p.width / 2)), h = Math.max(1, Math.floor(p.height / 2));
-  const data = new Float32Array(w * h);
+  const data = into && into.length === w * h ? into : new Float32Array(w * h);
   const sw = p.width, s = p.data;
   const lastX = p.width - 1, lastY = p.height - 1;
   for (let y = 0; y < h; y++) {
@@ -33,13 +33,18 @@ export function downsample(p: Plane): Plane {
   return { width: w, height: h, data };
 }
 
-export function buildPyramid(f: GreyFrame, levels: number): Pyramid {
+/**
+ * The pyramid of a frame. `reuse` (a pyramid of a frame of the same size that is no longer needed) lends its arrays, so a
+ * tracker that keeps two pyramids allocates none per frame; the values are the same either way.
+ */
+export function buildPyramid(f: GreyFrame, levels: number, reuse?: Pyramid | null): Pyramid {
   const out: Level[] = [];
-  let p: Plane = planeOf(f);
+  const spare = reuse && reuse.levels[0]?.width === f.width && reuse.levels[0]?.height === f.height ? reuse.levels : [];
+  let p: Plane = planeOf(f, spare[0]?.data);
   for (let l = 0; l < Math.max(1, levels); l++) {
-    out.push({ ...p, gx: null, gy: null });
+    out.push({ ...p, gx: null, gy: null, spareGx: spare[l]?.gx ?? spare[l]?.spareGx ?? null, spareGy: spare[l]?.gy ?? spare[l]?.spareGy ?? null });
     if (p.width < 8 || p.height < 8) break; // too small to halve usefully
-    p = downsample(p);
+    p = downsample(p, spare[l + 1]?.data);
   }
   return { levels: out };
 }
@@ -48,7 +53,8 @@ export function buildPyramid(f: GreyFrame, levels: number): Pyramid {
 export function gradients(l: Level): { gx: Float32Array; gy: Float32Array } {
   if (l.gx && l.gy) return { gx: l.gx, gy: l.gy };
   const w = l.width, h = l.height, d = l.data;
-  const gx = new Float32Array(w * h), gy = new Float32Array(w * h);
+  const gx = l.spareGx?.length === w * h ? l.spareGx : new Float32Array(w * h), gy = l.spareGy?.length === w * h ? l.spareGy : new Float32Array(w * h);
+  l.spareGx = l.spareGy = null;
   for (let y = 0; y < h; y++) {
     const ym = y > 0 ? y - 1 : 0, yp = y < h - 1 ? y + 1 : h - 1;
     for (let x = 0; x < w; x++) {

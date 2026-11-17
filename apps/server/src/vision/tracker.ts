@@ -52,6 +52,8 @@ export class MedianFlowTracker implements Tracker {
   private readonly seedH: number;
   private prev: Pyramid;
   private prevFrame: GreyFrame;
+  /** A pyramid no longer needed, whose arrays the next one reuses. */
+  private spare: Pyramid | null = null;
   private pose: Pose;
   private good: Pose;
   private readonly templates: Picture[] = [];
@@ -110,15 +112,17 @@ export class MedianFlowTracker implements Tracker {
 
   step(next: GreyFrame): TrackerStep {
     this.frame++;
-    const pyr = buildPyramid(next, this.P.levels);
+    const pyr = buildPyramid(next, this.P.levels, this.spare);
+    this.spare = null;
     const out = this.lost ? this.redetect(pyr) : this.track(pyr);
+    this.spare = this.prev; // nothing refers to the old pyramid any more: its arrays serve the next frame
     this.prev = pyr;
     this.prevFrame = next;
     return out;
   }
 
   anchor(frame: GreyFrame, at: { cx: number; cy: number; s: number }): void {
-    if (frame !== this.prevFrame) { this.prev = buildPyramid(frame, this.P.levels); this.prevFrame = frame; }
+    if (frame !== this.prevFrame) { this.prev = buildPyramid(frame, this.P.levels, this.spare); this.spare = null; this.prevFrame = frame; }
     this.pose = { cx: at.cx, cy: at.cy, s: at.s };
     this.good = { ...this.pose };
     this.lost = false;
