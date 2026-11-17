@@ -1520,6 +1520,49 @@ defineOp({
 });
 
 // ---------- recipes (SPEC §23): a planned list of ordinary ops applied and recorded as one step ----------
+// The run machinery below is shared by apply_recipe and apply_template (templateOps.ts, ADR-0016).
+/**
+ * Regeneration of a run: remove the previous run's untouched clips (ids that no longer exist are skipped; a clip on a locked
+ * track stops the edit). A clip of that run that was edited by hand stays; if what it was linked to goes, it is no longer
+ * linked. Returns the ids this changed.
+ */
+export function removeRunClips(d: ProjectDocument, clipIds: readonly string[]): string[] {
+  const affected: string[] = [];
+  const left = new Set<string>(); // link groups that lose a clip here
+  for (const id of clipIds) {
+    const f = findClip(d, id);
+    if (!f) continue;
+    if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: id });
+    f.track.clips.splice(f.index, 1);
+    for (const g of linkIdsOf([f.clip])) left.add(g);
+    affected.push(id);
+  }
+  // the previous run's clip that was edited by hand stays; if what it was linked to goes, it is no longer linked
+  affected.push(...dissolveLoneLinks(d, left));
+  return affected;
+}
+/** The ids an operation's output names as made by it: clipId, audioClipId, trackId, variantId and createdClipIds. */
+export function createdIdsOf(out: Readonly<Record<string, unknown>>): string[] {
+  const ids: string[] = [];
+  for (const key of ['clipId', 'audioClipId', 'trackId', 'variantId'] as const) if (typeof out[key] === 'string') ids.push(out[key] as string);
+  if (Array.isArray(out.createdClipIds)) ids.push(...(out.createdClipIds as string[]));
+  return ids;
+}
+/**
+ * What a run record keeps of the ids a run made: those that still exist (clips, variants, tracks), and the content
+ * fingerprint of each clip among them. Clips kept from an earlier run keep their ORIGINAL fingerprint (`previous`), so they
+ * stay recognisable as hand-edited next time too.
+ */
+export function runFingerprints(d: ProjectDocument, created: readonly string[], keepIds: readonly string[], previous: Readonly<Record<string, string>>): { createdIds: string[]; fingerprints: Record<string, string> } {
+  const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!d.variants[x] || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
+  const fingerprints: Record<string, string> = {};
+  for (const cid of createdIds) {
+    const f = findClip(d, cid);
+    if (!f) continue;
+    fingerprints[cid] = keepIds.includes(cid) && previous[cid] ? previous[cid]! : fingerprint(f.clip);
+  }
+  return { createdIds, fingerprints };
+}
 defineOp({
   name: 'apply_recipe',
   version: 1,
@@ -1527,18 +1570,7 @@ defineOp({
   description: 'Apply a recipe plan (ordinary public ops) as one step and record which objects it created. Issued by the server from a plan it built; on regeneration it first removes the previous run\'s untouched clips.',
   args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000) }).strict(),
   apply(d, a, ctx) {
-    const affected = new Set<string>();
-    const left = new Set<string>(); // link groups that lose a clip here
-    for (const id of a.removeClipIds ?? []) {
-      const f = findClip(d, id);
-      if (!f) continue;
-      if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: id });
-      f.track.clips.splice(f.index, 1);
-      for (const g of linkIdsOf([f.clip])) left.add(g);
-      affected.add(id);
-    }
-    // the previous run's clip that was edited by hand stays; if what it was linked to goes, it is no longer linked
-    for (const id of dissolveLoneLinks(d, left)) affected.add(id);
+    const affected = new Set<string>(removeRunClips(d, a.removeClipIds ?? []));
     const created: string[] = [...(a.keepIds ?? [])];
     for (const [i, call] of a.ops.entries()) {
       const def = getOp(call.op);
@@ -1548,20 +1580,11 @@ defineOp({
       refuseInheritedIds(parsed.data, `recipe step ${i} (${call.op})`, '', def.checksOwnIds);
       const r = def.apply(d, parsed.data, ctx);
       for (const id of r.affectedIds) affected.add(id);
-      const out = r.output ?? {};
-      for (const key of ['clipId', 'audioClipId', 'trackId', 'variantId'] as const) if (typeof out[key] === 'string') created.push(out[key] as string);
-      if (Array.isArray(out.createdClipIds)) created.push(...(out.createdClipIds as string[]));
+      created.push(...createdIdsOf(r.output ?? {}));
     }
     const id = a.runId ?? ctx.newId('run');
     const previous = a.runId ? d.recipeRuns[a.runId]?.fingerprints ?? {} : {};
-    const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!d.variants[x] || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
-    const fingerprints: Record<string, string> = {};
-    for (const cid of createdIds) {
-      const f = findClip(d, cid);
-      if (!f) continue;
-      // Clips kept from an earlier run keep their ORIGINAL fingerprint, so they stay recognisable as hand-edited next time too.
-      fingerprints[cid] = (a.keepIds ?? []).includes(cid) && previous[cid] ? previous[cid]! : fingerprint(f.clip);
-    }
+    const { createdIds, fingerprints } = runFingerprints(d, created, a.keepIds ?? [], previous);
     d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps };
     affected.add(id);
     return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} recipe ${a.recipeId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: { runId: id, createdIds: d.recipeRuns[id]!.createdIds } };
