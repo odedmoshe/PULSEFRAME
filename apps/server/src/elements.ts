@@ -87,21 +87,17 @@ async function render(tmpDir: string, id: string, o: Opts, queue: Synth, lane: S
   }, lane);
 }
 
-const ceilings = new WeakMap<Store, number>();
 /**
- * The storage ceiling (bytes; 0 = none) that element pictures stored in `store` must respect. The HTTP app sets it once from its
- * configuration; makeElement reads it, so the editor's route and the agent tool are held to the same limit.
+ * Render one element and return it as an image asset (blob stored, not yet attached to a project). The editor's route and the
+ * agent tool both come here, so both are held to the store's storage ceiling.
  */
-export function setElementStorageCeiling(store: Store, maxStorageBytes: number): void { ceilings.set(store, maxStorageBytes); }
-
-/** Render one element and return it as an image asset (blob stored, not yet attached to a project). */
 export async function makeElement(store: Store, id: string, options: Opts, actor: string, queue: Synth = synth): Promise<Omit<Asset, 'id'>> {
   const def = ELEMENTS.find((e) => e.id === id);
   const bytes = await render(store.tmpDir, id, options, queue, 'add'); // what is being added to a project does not wait behind previews (see createSynth)
   const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
   // The colours are the caller's choice, so there is no end to the distinct pictures that can be asked for: a new one needs room
   // under the storage ceiling, like an upload. A picture that is already stored needs none.
-  if (!fs.existsSync(store.blobPath(contentHash))) assertStorageRoom(store, ceilings.get(store) ?? 0, bytes.length, 'store this element');
+  if (!fs.existsSync(store.blobPath(contentHash))) assertStorageRoom(store, bytes.length, 'store this element');
   const png = path.join(store.tmpDir, `el_${randomBytes(6).toString('hex')}.png`);
   try {
     fs.writeFileSync(png, bytes);

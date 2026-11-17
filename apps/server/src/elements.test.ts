@@ -7,7 +7,7 @@ import zlib from 'node:zlib';
 import { AssetSchema } from '@pulseframe/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ELEMENT_CATEGORIES, ELEMENTS, elementSvg } from '../../../packages/core/src/elements.ts';
-import { canRasteriseSvg, elementFfmpegArgs, elementPreview, makeElement, setElementStorageCeiling, sizeSvg } from './elements.ts';
+import { canRasteriseSvg, elementFfmpegArgs, elementPreview, makeElement, sizeSvg } from './elements.ts';
 import { createSynth, sfxPreview, type SynthRunner } from './sfx.ts';
 import { Store } from './store.ts';
 
@@ -244,12 +244,12 @@ describe('element pictures respect the storage ceiling', () => {
       const have = await makeElement(s2, 'element.shape.heart', { color: '#AA0000', longSide: 128 }, 't'); // no ceiling set: stored
       const blobs = () => fs.readdirSync(path.join(s2.dataDir, 'blobs')).length;
       expect(blobs()).toBe(1);
-      setElementStorageCeiling(s2, 1000); // far below what the data directory already holds
+      s2.maxStorageBytes = 1000; // far below what the data directory already holds
       await expect(makeElement(s2, 'element.shape.heart', { color: '#AA0001', longSide: 128 }, 't')).rejects.toMatchObject({ status: 507, code: 'storage_quota_exceeded', details: { quotaBytes: 1000 } });
       expect(blobs()).toBe(1);
       expect(fs.readdirSync(s2.tmpDir).filter((f) => f.startsWith('el_'))).toEqual([]);
       expect((await makeElement(s2, 'element.shape.heart', { color: '#AA0000', longSide: 128 }, 't')).contentHash).toBe(have.contentHash);
-      setElementStorageCeiling(s2, 0);
+      s2.maxStorageBytes = 0;
       expect((await makeElement(s2, 'element.shape.heart', { color: '#AA0001', longSide: 128 }, 't')).contentHash).not.toBe(have.contentHash);
       expect(blobs()).toBe(2);
     } finally {
