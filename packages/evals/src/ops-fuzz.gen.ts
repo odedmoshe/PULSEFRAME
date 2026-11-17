@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, sha256Hex, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, sha256Hex, transitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -157,15 +157,19 @@ export function createFuzz(seed: number) {
       // transition options (ADR-0012): real types with and without colour and seed, then options on clips that carry a transition
       () => ({ op: 'set_transition', args: { clipId: touchingVideo.length && rnd() < 0.85 ? pick(touchingVideo).c.id : videoId(), type: pick(['dissolve', 'slices-h', 'shape-heart', 'film-burn', 'punch-in']), frames: 1 + int(20) } }),
       () => {
+        // aim at what the transition allows (ADR-0012): beat lock on 3+ frames, colour and seed only where the type declares them;
+        // velocity needs source handles, so it is often refused, and that refusal is exercised too
         const withTr = videoClips.filter((x) => x.c.type === 'media' && !!x.c.transition);
+        const target = withTr.length && rnd() < 0.9 ? pick(withTr).c : null;
+        const tr = target && target.type === 'media' ? target.transition : undefined;
+        const options: readonly string[] = (tr && transitionDef(tr.type)?.options) || [];
         const r = rnd();
-        return { op: 'set_transition_options', args: {
-          clipId: withTr.length && rnd() < 0.9 ? pick(withTr).c.id : videoId(),
-          ...(r < 0.4 ? { sync: rnd() < 0.75 ? 'beat' : null } : {}),
-          ...(r >= 0.3 && r < 0.7 ? { velocity: rnd() < 0.2 ? null : pick([2, 3, 4] as const) } : {}),
-          ...(r >= 0.7 && r < 0.85 ? { color: rnd() < 0.2 ? null : '#3DE0C8' } : {}),
-          ...(r >= 0.85 ? { seed: rnd() < 0.2 ? null : int(10000) } : {}),
-        } };
+        const args: Record<string, unknown> = { clipId: target ? target.id : videoId() };
+        if (r < 0.35) args.sync = tr && tr.frames < 3 && rnd() < 0.8 ? null : rnd() < 0.85 ? 'beat' : null;
+        else if (r < 0.6) args.velocity = rnd() < 0.3 ? null : pick([2, 3, 4] as const);
+        else if (r < 0.8) args.color = options.includes('color') || rnd() < 0.15 ? (rnd() < 0.2 ? null : '#3DE0C8') : null;
+        else args.seed = options.includes('seed') || rnd() < 0.15 ? (rnd() < 0.2 ? null : int(10000)) : null;
+        return { op: 'set_transition_options', args };
       },
       () => ({ op: 'add_marker', args: { time: at(), label: pick(['', 'note', 'סמן']) } }),
       () => ({ op: 'update_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none', time: fr(), color: pick(['blue', 'green', 'yellow', 'red', 'purple'] as const) } }),
@@ -177,7 +181,11 @@ export function createFuzz(seed: number) {
       () => ({ op: 'move_track', args: { trackId: trackId(), toIndex: int(tracks.length + 1) } }),
       () => ({ op: 'remove_track', args: { trackId: trackId() } }),
       () => ({ op: 'speed_ramp', args: { clipId: any(), from: pick([0.5, 1, 2]), to: pick([0.25, 1, 3]), steps: 2 + int(5) } }),
-      () => ({ op: 'fit_music', args: { clipId: any(), ...(rnd() < 0.3 ? { to: fr() } : {}) } }),
+      () => {
+        // prefer an unlinked sound clip on a sound track (the only kind fit_music accepts); otherwise any clip, to exercise the refusals
+        const sounds = tracks.filter((t) => t.kind === 'audio').flatMap((t) => t.clips.filter((c) => c.type === 'media' && !c.linkGroupId && !c.reverse));
+        return { op: 'fit_music', args: { clipId: sounds.length && rnd() < 0.8 ? pick(sounds).id : any(), ...(rnd() < 0.3 ? { to: fr() } : {}) } };
+      },
       () => {
         // prefer a pair that can really be linked (a detached picture and sound that still cover the same stretch); otherwise any two clips
         const all = tracks.flatMap((t) => t.clips.filter((c) => c.type === 'media' && !c.linkGroupId).map((c) => ({ c, t: t.id })));
