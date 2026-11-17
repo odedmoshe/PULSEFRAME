@@ -57,6 +57,14 @@ export class Player {
    * a strobe flash start less than a third of a second after the last one (engine strobeSchedule.ts FlashGuard).
    */
   readonly flashGuard = new FlashGuard();
+  /** Session setting: hear the mix without sound effects (A/B). Never stored in the project. */
+  bypassAudioFx = false;
+  setBypassAudioFx(on: boolean): void { this.bypassAudioFx = on; /* to do (audio effects, W2): re-plan and reschedule like setDoc */ }
+  /** Sound clips whose effects could not run in this browser, by clip id: why. They play without effects; the editor says so. */
+  unavailableAudioFx: Record<string, string> = {};
+  /** Play `seconds` of one clip's sound from a draft document (nothing is committed, the revision does not change). Resolves when it ends or is stopped. */
+  async audition(_draft: ProjectDocument, _clipId: string, _seconds = 4): Promise<void> { /* to do (audio effects, W2) */ }
+  stopAudition(): void { /* to do (audio effects, W2) */ }
   /**
    * Frames are drawn here first and copied to the visible canvas in one step when complete. drawGraph paints the
    * background and then waits (for decoded pictures, colour tables and GPU passes) in the middle of a frame; drawn

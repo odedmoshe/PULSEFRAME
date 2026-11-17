@@ -27,3 +27,4 @@ export * from './volume.ts';
 export * from './notices.ts';
 export * from './pacing.ts';
 export * from './flashSafety.ts';
+export * from './audioEffects.ts';

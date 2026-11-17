@@ -1,6 +1,7 @@
 import * as T from '@pulseframe/time';
 import { animatableParams, findEffect, NOT_ANIMATABLE } from './effects.ts';
-import { sourceEnd } from './speed.ts';
+import { sourceEnd, speedValue } from './speed.ts';
+import { findAudioEffect } from './audioEffects.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -136,6 +137,23 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if (c.volume) {
           if (tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: volume automation belongs to clips on audio tracks`, ids: [c.id] });
           if (c.volume.some((k, i) => !T.isFrameAligned(k.time, doc.settings.frameRate) || (i > 0 && !T.lt(c.volume![i - 1]!.time, k.time)))) issues.push({ code: 'volume_keys', message: `clip ${c.id}: volume keys must be frame-aligned and strictly ascending`, ids: [c.id] });
+        }
+        if (c.audioFx) {
+          if (tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: sound effects belong to clips on audio tracks`, ids: [c.id, tr.id] });
+          const ids = new Set<string>(), types = new Set<string>();
+          let voices = 0;
+          for (const fx of c.audioFx) {
+            const d = findAudioEffect(fx.type);
+            if (!d) issues.push({ code: 'unknown_audio_effect', message: `clip ${c.id} uses sound effect "${fx.type}", which this build does not have`, ids: [c.id] });
+            else if (!d.params.safeParse(fx.params).success) issues.push({ code: 'audio_effect_params', message: `clip ${c.id} sound effect ${fx.type} has invalid parameters`, ids: [c.id] });
+            if (ids.has(fx.id)) issues.push({ code: 'duplicate_id', message: `clip ${c.id} has two sound effects with id ${fx.id}`, ids: [c.id] });
+            if (types.has(fx.type)) issues.push({ code: 'audio_effect_duplicate', message: `clip ${c.id} carries sound effect ${fx.type} twice`, ids: [c.id] });
+            ids.add(fx.id); types.add(fx.type);
+            if (d?.exclusive === 'voice') voices++;
+          }
+          if (voices > 1) issues.push({ code: 'audio_effect_voice', message: `clip ${c.id} carries more than one character voice`, ids: [c.id] });
+          if (c.audioFx.some((f) => f.enabled) && (c.speedEnd || (c.keepPitch && speedValue(c) !== 1)))
+            issues.push({ code: 'audio_fx_time_map', message: `clip ${c.id}: a sound that keeps its pitch at another speed, or changes speed gradually, cannot carry sound effects yet`, ids: [c.id] });
         }
         if ((c.fadeIn || c.fadeOut) && tr.kind !== 'audio') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: audio fades belong to clips on audio tracks`, ids: [c.id] });
         if ((c.fadeIn && T.isNegative(c.fadeIn)) || (c.fadeOut && T.isNegative(c.fadeOut)) || T.lt(c.duration, T.add(c.fadeIn ?? T.ZERO, c.fadeOut ?? T.ZERO))) issues.push({ code: 'fade_out_of_bounds', message: `clip ${c.id}: fades are negative or longer than the clip`, ids: [c.id] });

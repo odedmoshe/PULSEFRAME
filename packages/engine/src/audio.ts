@@ -7,7 +7,9 @@
  * envelopes in clip-local samples. Mixers must evaluate them per sample (or with exact linear ramps).
  */
 import * as T from '@pulseframe/time';
-import { isRamped, sourceEnd, speedEndValue, speedValue, timelineAt, volumePoints, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
+import { isRamped, sourceEnd, speedEndValue, speedValue, timelineAt, volumePoints, type AudioFxParams, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
+import type { PlannedFx } from './audiofx/kernel.ts';
+export type { PlannedFx } from './audiofx/kernel.ts';
 
 export interface EnvPoint { s: number; g: number }
 export interface PlannedAudioClip {
@@ -33,8 +35,32 @@ export interface PlannedAudioClip {
   duck: EnvPoint[];
   /** Volume automation of the clip, same shape as the other envelopes. Absent = no automation. */
   vol?: EnvPoint[];
+  /** The clip's sound effects (ADR-0010). With a voice, `duck` spans [0, length + tail]. */
+  voice?: PlannedVoice;
 }
-export interface AudioPlan { sampleRate: number; totalSamples: number; clips: PlannedAudioClip[]; loudness: { target: number; truePeak: number } | null }
+export interface PlannedVoice {
+  /** Enabled, non-identity effects in processing order (stage, then registry order). Never empty. */
+  chain: PlannedFx[];
+  /** Exact source mapping (RationalTimeJson), so every host's time map reads the same positions. */
+  sourceIn: { value: string; timescale: number };
+  sourceEnd: { value: string; timescale: number };
+  speed: { num: number; den: number };
+  reverse: boolean;
+  /** asset.audio.sampleRate (the server decodes at this rate; browsers open the voice with the decoder's own rate). */
+  sourceRate: number;
+  /** Samples at plan rate (chainReach). */
+  warmWindow: number; warmRing: number;
+  /** Output after `length`, already cut at the programme end. */
+  tail: number;
+  /** Present when the tail was cut: linear fade to 0 over [cutFrom, length + tail). */
+  cutFrom?: number;
+}
+export interface AudioPlan { sampleRate: number; totalSamples: number; clips: PlannedAudioClip[]; loudness: { target: number; truePeak: number } | null;
+  cutTails: { clipId: string; seconds: number }[];
+  /** Effects of the document this build has no kernel for (left out of the plan; export blocks on them). */
+  missingFx: { clipId: string; type: string; version: number }[] }
+export interface AudioPlanOptions { /** output rate (browser export); default doc.settings.sampleRate */ sampleRate?: number; /** session A/B: plan without effects */ bypassFx?: boolean }
+
 
 /** Value of a piecewise-linear envelope at sample `s` (clamped to the end values outside its range). */
 export function envAt(env: EnvPoint[], s: number): number {
@@ -95,9 +121,10 @@ export function duckEnvelope(ranges: [number, number][], reductionDb: number, at
 
 const audible = (t: Track) => t.kind === 'audio' && !t.muted;
 
-export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId): AudioPlan {
+/** Interim body (lead contract): sound effects are not planned yet; `opts.sampleRate` and `bypassFx` are accepted. */
+export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId, opts: AudioPlanOptions = {}): AudioPlan {
   const seq = doc.sequences[sequenceId]!;
-  const sr = doc.settings.sampleRate;
+  const sr = opts.sampleRate ?? doc.settings.sampleRate;
   const clips: PlannedAudioClip[] = [];
   let total = 0;
   for (const tr of seq.tracks) for (const c of tr.clips) total = Math.max(total, T.nearestSampleIndex(T.add(c.start, c.duration), sr));
@@ -124,8 +151,16 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId)
       clips.push({ ...(vol ? { vol } : {}), ...(c.reverse ? { reverse: true as const } : {}), ...(isRamped(c) ? { speedEnd: speedEndValue(c), ...(c.rampWindow ? { rampOffset: T.nearestSampleIndex(c.rampWindow.offset, sr), rampTotal: T.nearestSampleIndex(c.rampWindow.total, sr) } : {}), ...(c.speedCurve ? { rampCurve: c.speedCurve } : {}) } : c.keepPitch && speedValue(c) !== 1 ? { keepPitch: true as const } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
     }
   }
-  return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null };
+  return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null, cutTails: [], missingFx: [] };
 }
+export const soundEnd = (c: PlannedAudioClip): number => c.at + c.length + (c.voice?.tail ?? 0);
+/** FNV-1a 32-bit hash of the instance id, xor params.seed (integer): deterministic per document. */
+export function fxSeed(instanceId: string, params: AudioFxParams): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < instanceId.length; i++) { h ^= instanceId.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h ^ ((typeof params.seed === 'number' ? params.seed : 0) | 0)) >>> 0;
+}
+
 
 /**
  * Reference mixer: add `pcm` (interleaved stereo float, the clip's samples starting at clip-local sample `clipOffset`)
