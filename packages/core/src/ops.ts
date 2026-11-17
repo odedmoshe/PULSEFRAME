@@ -2011,13 +2011,14 @@ defineOp({
     if (src.id !== a.fromClipId && sources.length > 1) throw new OpError('incompatible', 'this picture clip is linked to more than one sound clip', { clipId: a.fromClipId, soundClipIds: sources.map((s) => s.clip.id) }, 'Give the sound clip to copy from.');
     if (!src.audioFx?.length) throw new OpError('invalid_args', 'the clip to copy from has no sound effects', { clipId: src.id }, 'Add sound effects to it first (add_audio_effect or apply_audio_preset).');
     const targets = new Map<string, SoundTarget>();
+    const own = (clipId: string) => new OpError('invalid_args', 'a clip cannot take its own sound effects', { clipId }, 'Leave the clip to copy from out of toClipIds.');
     for (const id of a.toClipIds) {
       const found = soundTargets(d, id);
-      for (const t of found[0]!.clip.id === id ? [found[0]!] : found) { // a sound clip stands for itself; a picture clip for the sound linked to it
-        if (t.clip.id === src.id) throw new OpError('invalid_args', 'a clip cannot take its own sound effects', { clipId: id }, 'Leave the clip to copy from out of toClipIds.');
-        targets.set(t.clip.id, t);
-      }
+      const direct = found[0]!.clip.id === id; // a sound clip stands for itself; a picture clip for the sounds linked to it
+      if (direct && id === src.id) throw own(id);
+      for (const t of direct ? [found[0]!] : found) if (t.clip.id !== src.id) targets.set(t.clip.id, t); // the source, reached through a picture, is left out
     }
+    if (!targets.size) throw own(a.toClipIds[0]!); // only the source's own picture was given
     const voiceCopied = src.audioFx.some(isVoice);
     const effects: { clipId: string; effectId: string; params: AudioFxParams }[] = [];
     for (const { clip } of unlockedTargets([...targets.values()])) {

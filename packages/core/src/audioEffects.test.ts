@@ -205,6 +205,53 @@ describe('copy_audio_effects', () => {
     expect(refusal(() => tx(src, [{ op: 'copy_audio_effects', args: { fromClipId: p.sound, toClipIds: [p.music] } }])).message).toBe('the clip to copy from has no sound effects');
     expect(refusal(() => tx(src, [{ op: 'copy_audio_effects', args: { fromClipId: p.music, toClipIds: Array.from({ length: 201 }, () => p.sound) } }])).code).toBe('invalid_args');
   });
+  it('refuses a list that would pass the limit (replace=true is the way out) and a picture linked to two sound clips as the source', () => {
+    const p = project();
+    const src = tx(p.doc, [{ op: 'add_audio_effect', args: { clipId: p.music, type: 'space.echo' } }]).doc;
+    const full = structuredClone(src);
+    clipOf(full, p.sound).audioFx = Array.from({ length: 8 }, (_, i) => ({ id: `afx_future${i}`, type: `future.fx${i}`, enabled: true, params: {} }));
+    const over = refusal(() => tx(full, [{ op: 'copy_audio_effects', args: { fromClipId: p.music, toClipIds: [p.sound] } }]));
+    expect(over.code).toBe('out_of_bounds');
+    expect(over.hint).toMatch(/replace=true/);
+    expect(typesOf(tx(full, [{ op: 'copy_audio_effects', args: { fromClipId: p.music, toClipIds: [p.sound], replace: true } }]).doc, p.sound)).toEqual(['space.echo']);
+    // the picture now stands for two sound clips (its own and the music): it cannot say which to copy from
+    const two = tx(src, [{ op: 'trim_clip', args: { clipId: p.music, edge: 'end', to: f(120) } }, { op: 'unlink_clip', args: { clipId: p.picture } }, { op: 'link_clips', args: { clipIds: [p.picture, p.sound, p.music] } }]).doc;
+    const which = refusal(() => tx(two, [{ op: 'copy_audio_effects', args: { fromClipId: p.picture, toClipIds: [p.title] } }]));
+    expect([which.code, which.message]).toEqual(['incompatible', 'this picture clip is linked to more than one sound clip']);
+    expect(which.details.soundClipIds).toEqual(expect.arrayContaining([p.sound, p.music]));
+    // a picture as a target stands for every sound linked to it
+    const both = tx(two, [{ op: 'copy_audio_effects', args: { fromClipId: p.music, toClipIds: [p.picture] } }]);
+    expect((both.results[0]!.output as { clipIds: string[] }).clipIds).toEqual([p.sound]); // the source itself is left out
+    // a picture that stands only for the source gives nothing to copy to
+    const own = tx(p.doc, [{ op: 'add_audio_effect', args: { clipId: p.sound, type: 'voice.robot' } }]).doc;
+    expect(refusal(() => tx(own, [{ op: 'copy_audio_effects', args: { fromClipId: p.sound, toClipIds: [p.picture] } }])).message).toBe('a clip cannot take its own sound effects');
+  });
+});
+
+describe('locked tracks', () => {
+  it('every sound-effect operation refuses a sound clip on a locked track, and changes nothing', () => {
+    const p = project();
+    const d = tx(p.doc, [{ op: 'add_audio_effect', args: { clipId: p.music, type: 'space.echo' } }, { op: 'add_audio_effect', args: { clipId: p.sound, type: 'voice.robot' } }]).doc;
+    const tracks = d.sequences[d.mainSequenceId]!.tracks;
+    const musicTrack = tracks.find((t) => t.clips.some((c) => c.id === p.music))!.id;
+    const locked = tx(d, [{ op: 'update_track', args: { trackId: musicTrack, locked: true } }]).doc;
+    const echo = fxOf(locked, p.music)[0]!.id;
+    const calls: OpCall[] = [
+      { op: 'add_audio_effect', args: { clipId: p.music, type: 'tone.bassboost' } },
+      { op: 'update_audio_effect', args: { clipId: p.music, effectId: echo, enabled: false } },
+      { op: 'remove_audio_effect', args: { clipId: p.music, effectId: echo } },
+      { op: 'apply_audio_preset', args: { clipId: p.music, presetId: 'hall' } },
+      { op: 'apply_audio_preset', args: { clipId: p.music, presetId: null } },
+      { op: 'copy_audio_effects', args: { fromClipId: p.sound, toClipIds: [p.music] } },
+    ];
+    for (const call of calls) {
+      const e = refusal(() => tx(locked, [call]));
+      expect([call.op, e.code]).toEqual([call.op, 'track_locked']);
+      expect(e.details.trackId).toBe(musicTrack);
+    }
+    // copying FROM a clip on a locked track only reads it
+    expect(typesOf(tx(locked, [{ op: 'copy_audio_effects', args: { fromClipId: p.music, toClipIds: [p.sound], replace: true } }]).doc, p.sound)).toEqual(['space.echo']);
+  });
 });
 
 describe('effects through other edits', () => {
