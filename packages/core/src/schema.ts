@@ -142,7 +142,7 @@ export const KeyframeSchema = z
 export const KeyframesSchema = z.object(Object.fromEntries(ANIMATABLE.map((p) => [p, z.array(KeyframeSchema).max(2000).optional()])) as Record<Animatable, z.ZodOptional<z.ZodArray<typeof KeyframeSchema>>>).strict();
 const ClipBase = {
   id: Id, start: RationalTimeSchema, duration: RationalTimeSchema, transform: TransformSchema, keyframes: KeyframesSchema.optional(),
-  /** Applied in order to the transformed layer, before mask, blend and opacity compositing. */
+  /** Applied in order after the layer is placed (with its transform and opacity), before its mask, transition and blend mode. A time effect (time.*) is always first (ops.ts effectSlot). */
   effects: z.array(EffectInstanceSchema).max(16).optional(),
   blend: z.enum(BLEND_MODES).optional(),
 };

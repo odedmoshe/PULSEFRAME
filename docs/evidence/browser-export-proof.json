@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T05:57:21.071Z",
+  "ranAt": "2026-11-17T08:06:42.181Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -59,14 +59,14 @@
     },
     "browserExport": {
       "frames": 105,
-      "wallSeconds": 0.54,
-      "realtimeFactor": 6.494,
+      "wallSeconds": 0.78,
+      "realtimeFactor": 4.51,
       "bytes": 283785,
-      "wallInPageMs": 516,
+      "wallInPageMs": 747,
       "note": "headless Chromium, software (no GPU), 640x360 high quality; wall time includes asset fetch, audio mix, encode, SHA-256, base64 transfer"
     },
     "parity": {
-      "serverRouteWallSeconds": 1.593,
+      "serverRouteWallSeconds": 3.555,
       "serverBytes": 76665,
       "browserBytes": 283785,
       "ssimByFrame": {
@@ -80,7 +80,7 @@
       "note": "two different encoders (WebCodecs H.264 vs libx264 crf16), decoded frames compared as PNG"
     },
     "leaseLoss": {
-      "closedTabToFailedSeconds": 12.39,
+      "closedTabToFailedSeconds": 11.88,
       "leaseSeconds": 15
     }
   },
@@ -214,7 +214,7 @@
           "location": "client-download",
           "note": "the media bytes were produced and stay in the browser tab that held the lease; the server stores only this record",
           "bytes": 283785,
-          "sha256": "e1d8714832a489ac90cdbdcf0274d8b09cadd3e7f1f3e0b551900aefa4ad6be2",
+          "sha256": "34551d1173bc3ed604d60f20aa3e0cd7a65537275e2e9c4c4ea2e6ff36b22282",
           "videoCodec": "avc",
           "audioCodec": "opus",
           "frames": 105,
@@ -234,8 +234,8 @@
       "name": "job row sha256 and bytes equal those of the file the proof received",
       "ok": true,
       "detail": {
-        "server": "e1d8714832a489ac90cdbdcf0274d8b09cadd3e7f1f3e0b551900aefa4ad6be2",
-        "received": "e1d8714832a489ac90cdbdcf0274d8b09cadd3e7f1f3e0b551900aefa4ad6be2"
+        "server": "34551d1173bc3ed604d60f20aa3e0cd7a65537275e2e9c4c4ea2e6ff36b22282",
+        "received": "34551d1173bc3ed604d60f20aa3e0cd7a65537275e2e9c4c4ea2e6ff36b22282"
       }
     },
     {
@@ -275,7 +275,7 @@
       "detail": {
         "status": "failed",
         "error": "lease_lost",
-        "afterSeconds": 12.39
+        "afterSeconds": 11.88
       }
     },
     {
@@ -290,8 +290,8 @@
       "name": "restart: a NEW job over a fresh snapshot succeeds; exactly one succeeded job carries its output; the lost job published nothing",
       "ok": true,
       "detail": {
-        "newJob": "job_QVtCssAZesU",
-        "lostJob": "job_e3ZZh9iuZPs"
+        "newJob": "job_gdUZUUd1aKM",
+        "lostJob": "job_9zJJ3TJeMrE"
       }
     },
     {

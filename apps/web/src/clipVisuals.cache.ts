@@ -118,6 +118,20 @@ export class ClipDerivativeCache<P extends { close(): void }> {
     }
   }
 
+  /**
+   * The event stream (re)connected: an announcement may have been missed while it was down (the stream replays revisions,
+   * not derivative events). Every entry of the project that is still waiting, or failed, looks once more.
+   */
+  reconnected(projectId: string): void {
+    for (const e of this.entries.values()) {
+      if (e.key.projectId !== projectId || e.value?.state === 'ready' || e.value?.state === 'none') continue;
+      if (e.busy) { e.again = true; continue; }
+      this.stopTimer(e);
+      e.tries = 0;
+      this.look(e);
+    }
+  }
+
   /** Drops everything (the editor went away): aborts what is in flight and closes every picture. */
   clear(): void {
     for (const e of [...this.entries.values()]) this.drop(e);

@@ -29,6 +29,15 @@ describe('Hebrew wording of common refusals', () => {
     const kept = tx(d, [{ op: 'set_clip_pitch', args: { clipId: aSound, keepPitch: true } }]).doc;
     // a clip that plays the very end of the source (6 s..8 s), followed directly by another: nothing is left after it for a transition
     const tail = tx(d, [{ op: 'add_clip', args: { assetId, start: f(120), sourceIn: f(180), duration: f(60) } }, { op: 'add_clip', args: { assetId, start: f(180), duration: f(60) } }]);
+    // a clip with a time effect, and one with a colour effect whose brightness may not follow the beat
+    const echoed = tx(d, [{ op: 'add_effect', args: { clipId: a, type: 'time.echo' } }]).doc;
+    const adjusted = tx(d, [{ op: 'add_effect', args: { clipId: a, type: 'color.adjust' } }]);
+    const adjustId = adjusted.results[0]!.output!.effectId as string;
+    // a blur whose radius may follow the beat, and a date stamp whose text is edited
+    const blurred = tx(d, [{ op: 'add_effect', args: { clipId: a, type: 'blur.gaussian' } }]);
+    const blurId = blurred.results[0]!.output!.effectId as string;
+    const stamped = tx(d, [{ op: 'add_effect', args: { clipId: a, type: 'stylize.date-stamp' } }]);
+    const stampId = stamped.results[0]!.output!.effectId as string;
     const cases: [string, ProjectDocument, OpCall[]][] = [
       ['a move onto another clip', d, [{ op: 'move_clip', args: { clipId: a, start: f(30), includeLinked: false } }]],
       ['an edit on a locked track', locked, [{ op: 'delete_clip', args: { clipId: a } }]],
@@ -53,6 +62,12 @@ describe('Hebrew wording of common refusals', () => {
       ['pitch follows speed when it already does', d, [{ op: 'set_clip_pitch', args: { clipId: aSound, keepPitch: false } }]],
       ['a copy before the start', d, [{ op: 'duplicate_clips', args: { clipIds: [a], offset: T.sub(T.ZERO, f(30)) } }]],
       ['a freeze of a ramped clip', ramped, [{ op: 'freeze_frame', args: { clipId: a, at: f(10), duration: f(30) } }]],
+      ['a second time effect on a clip', echoed, [{ op: 'add_effect', args: { clipId: a, type: 'time.split' } }]],
+      ['brightness following the beat', adjusted.doc, [{ op: 'set_effect_modulator', args: { clipId: a, effectId: adjustId, param: 'brightness', modulator: { depth: 0.5 } } }]],
+      ['a beat deeper than the range of the parameter', blurred.doc, [{ op: 'set_effect_modulator', args: { clipId: a, effectId: blurId, param: 'radius', modulator: { depth: 0.5 } } }]],
+      ['a date stamp added with letters in its text', d, [{ op: 'add_effect', args: { clipId: a, type: 'stylize.date-stamp', params: { text: 'MAY 5' } } }]],
+      ['a date stamp text changed to letters', stamped.doc, [{ op: 'update_effect', args: { clipId: a, effectId: stampId, params: { text: 'abc' } } }]],
+      ['an effect value outside its range', d, [{ op: 'add_effect', args: { clipId: a, type: 'blur.gaussian', params: { radius: 5 } } }]],
     ];
     void bSound;
     const matched = new Set<number>();
@@ -70,11 +85,48 @@ describe('Hebrew wording of common refusals', () => {
     const notProvoked = REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source);
     expect(notProvoked.sort()).toEqual([
       '^a freeze frame has no speed$',
+      '^decode_budget: this frame needs more than (\\d+) video decoders$',
       '^remove the transition at this clip first$',
       '^the clip is too short for this change of speed at the end of its source$',
       '^the file could not be read as video, sound or a picture$',
       '^this clip is already a freeze frame$',
     ].sort());
     expect(translateRefusal('he', 'something the table does not know')).toBeUndefined();
+  });
+  it('the visual wave refusals name the parameter and keep the numbers; the date stamp says which characters its text may hold', () => {
+    let r = tx(createProject({ id: 'prj_v', name: 'V' }), [{ op: 'import_asset', args: { asset: video } }], true);
+    const assetId = r.results[0]!.output!.assetId as string;
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(0), duration: f(60) } }]);
+    const clipId = (r.results[0]!.output as any).clipId as string;
+    r = tx(r.doc, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian' } }, { op: 'add_effect', args: { clipId, type: 'stylize.date-stamp' } }]);
+    const [blurId, stampId] = r.results.map((x) => x.output!.effectId as string);
+    const refusal = (ops: OpCall[]) => { try { tx(r.doc, ops); } catch (e) { if (e instanceof OpError) return e; throw e; } throw new Error('not refused'); };
+    const deep = refusal([{ op: 'set_effect_modulator', args: { clipId, effectId: blurId!, param: 'radius', modulator: { depth: -0.5 } } }]);
+    expect([deep.code, deep.message]).toEqual(['out_of_bounds', 'depth -0.5 is larger than the range of radius (0…0.2)']);
+    expect(translateRefusal('he', deep.message)).toBe('עומק הפעימה ⁦-0.5⁩ חורג מהטווח כולו של "רדיוס" (⁦0⁩ עד ⁦0.2⁩)');
+    // bad text through update_effect and through add_effect, too long or with letters: the refusal names the text
+    for (const ops of [
+      [{ op: 'update_effect', args: { clipId, effectId: stampId!, params: { text: 'abc' } } }],
+      [{ op: 'update_effect', args: { clipId, effectId: stampId!, params: { text: '1'.repeat(21) } } }],
+      [{ op: 'add_effect', args: { clipId, type: 'stylize.date-stamp', params: { text: 'MAY 5' } } }],
+    ] as OpCall[][]) {
+      const e = refusal(ops);
+      expect([e.code, e.message]).toEqual(['invalid_args', 'invalid parameters for stylize.date-stamp: text']);
+      expect(translateRefusal('he', e.message)).toBe('בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : \' / -⁩, עד 20 תווים');
+    }
+    // any other bad value names the parameter, with the effect's own name for it
+    const big = refusal([{ op: 'update_effect', args: { clipId, effectId: stampId!, params: { size: 1 } } }]);
+    expect(big.message).toBe('invalid parameters for stylize.date-stamp: size');
+    expect(translateRefusal('he', big.message)).toBe('הערך של "גובה הספרות" אינו תקין');
+    const two = refusal([{ op: 'update_effect', args: { clipId, effectId: stampId!, params: { text: 'x', size: 1 } } }]);
+    expect(two.message).toBe('invalid parameters for stylize.date-stamp: text, size');
+    expect(translateRefusal('he', two.message)).toBe('הערכים של "טקסט", "גובה הספרות" אינם תקינים');
+    const unknown = refusal([{ op: 'add_effect', args: { clipId, type: 'blur.gaussian', params: { radius: 0.1, wobble: 1 } } }]);
+    expect(unknown.message).toBe('invalid parameters for blur.gaussian: wobble');
+    const key = refusal([{ op: 'set_effect_keyframe', args: { clipId, effectId: blurId!, param: 'radius', time: f(10), value: 9 } }]);
+    expect(key.message).toBe('invalid parameters for blur.gaussian: radius');
+    expect(translateRefusal('he', key.message)).toBe('הערך של "רדיוס" אינו תקין');
+    // a refusal that names no parameter still reads in Hebrew
+    expect(translateRefusal('he', 'invalid parameters for blur.gaussian')).toBe('ערכי הפרמטרים של האפקט אינם תקינים');
   });
 });

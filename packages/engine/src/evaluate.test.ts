@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject } from '@pulseframe/core';
-import { evaluate, resolveDirection } from './index.ts';
+import { applyTransaction, createProject, timeline, type ProjectDocument } from '@pulseframe/core';
+import { audioPlan, describeMoment, evaluate, kernelFor, resolveDirection, soundAt, soundTailsOf, type AudioPlan, type PlannedAudioClip } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -58,5 +58,75 @@ describe('animated layers', () => {
     expect(layer(55).transform.y).toBeCloseTo(-0.1, 10);
     const seq = Array.from({ length: 15 }, (_, i) => JSON.stringify(layer(45 + i).transform));
     for (const i of [14, 0, 7, 3, 11]) expect(JSON.stringify(layer(45 + i).transform)).toBe(seq[i]);
+  });
+});
+
+describe('sound effects in the agent senses (ADR-0010)', () => {
+  const SR = 48000;
+  /** A planned clip of 1 s at 2 s with a 1.5 s tail, as the plan gives it to every route. */
+  const planned = (clipId: string, at: number, length: number, tail: number, cutFrom?: number): PlannedAudioClip => ({
+    clipId, trackId: 'trk_a', assetId: 'ast_a', at, length, source: 0, speed: 1, gain: 1, pan: 0, fade: [{ s: 0, g: 1 }, { s: length, g: 1 }], duck: [{ s: 0, g: 1 }, { s: length + tail, g: 1 }],
+    voice: { chain: [{ id: 'afx_1', type: 'voice.robot', version: 1, stage: 3, params: {}, seed: 0 }, { id: 'afx_2', type: 'space.echo', version: 1, stage: 4, params: {}, seed: 0 }], sourceIn: { value: '0', timescale: 1 }, sourceEnd: { value: '1', timescale: 1 }, speed: { num: 1, den: 1 }, reverse: false, sourceRate: SR, warmWindow: 0, warmRing: 0, tail, ...(cutFrom !== undefined ? { cutFrom } : {}) },
+  });
+  const plan = (clips: PlannedAudioClip[]): AudioPlan => ({ sampleRate: SR, totalSamples: 10 * SR, clips, loudness: null, cutTails: [], missingFx: [] });
+  it('lists the effects of each planned clip and the clips heard only through their tail, with the seconds since their end', () => {
+    const p = plan([planned('clp_a', 2 * SR, SR, 1.5 * SR), { ...planned('clp_b', 0, SR, 0), voice: undefined }]);
+    const inBody = soundAt(p, 2.5 * SR, new Set(['clp_a']));
+    expect(inBody.fx.get('clp_a')).toEqual(['voice.robot', 'space.echo']);
+    expect(inBody.fx.has('clp_b')).toBe(false); // no effects: no voice in the plan
+    expect(inBody.tails).toEqual([]); // the body covers the moment: it is an ordinary audio entry, not a tail
+    expect(soundAt(p, 3.25 * SR, new Set()).tails).toEqual([{ clipId: 'clp_a', trackId: 'trk_a', assetId: 'ast_a', tail: true, secondsAfterEnd: 0.25, fx: ['voice.robot', 'space.echo'] }]);
+    expect(soundAt(p, 3 * SR, new Set()).tails.map((x) => x.secondsAfterEnd)).toEqual([0]); // the first sample after the end is tail
+    expect(soundAt(p, 4.5 * SR - 1, new Set()).tails.length).toBe(1);
+    expect(soundAt(p, 4.5 * SR, new Set()).tails).toEqual([]); // soundEnd is exclusive
+    expect(soundAt(p, 1.9 * SR, new Set()).tails).toEqual([]); // before the clip
+    expect(soundAt(plan([planned('clp_c', 0, SR, 0)]), SR, new Set()).tails).toEqual([]); // a voice without a ring stage has no tail
+  });
+  it('describe_moment gives every audio entry its effects; loading the engine connects the planned tails to core timeline()', () => {
+    const doc = project();
+    const m = describeMoment(doc, f(40));
+    expect(m.audio.length).toBe(1);
+    expect(m.audio[0]).toMatchObject({ fx: [] });
+    const sound = timeline(doc)!.tracks.flatMap((t) => t.clips).find((c) => c.id === m.audio[0]!.clipId) as Record<string, unknown>;
+    expect(sound.tailSeconds).toBe(0); // a number, measured by the engine's plan (core on its own says null)
+    expect(soundTailsOf(doc).size).toBe(0);
+  });
+  // Runs once the kernels (W2) and the voice plan (W1) are in the tree; until then the interim plan has no voices to look at.
+  it.skipIf(!kernelFor('space.echo', 1))('an echo heard after its clip ends shows as a tail entry in describe_moment and as tailSeconds in timeline()', () => {
+    let doc: ProjectDocument = project();
+    const sound = doc.sequences.seq_main!.tracks.find((t) => t.kind === 'audio')!.clips[0]!;
+    doc = applyTransaction(doc, [
+      { op: 'add_audio_effect', args: { clipId: sound.id, type: 'space.echo', params: { delayMs: 250, repeats: 4 } } },
+      { op: 'add_text', args: { text: 'סוף', start: f(90), duration: f(90) } }, // the programme runs on 3 s past the clip end, so the 1 s tail is not cut
+    ], { idSeed: 'e', actor: 't' }).doc;
+    const p = audioPlan(doc).clips.find((c) => c.clipId === sound.id)!;
+    expect(p.voice?.tail).toBe(4 * Math.round(0.25 * doc.settings.sampleRate));
+    const after = describeMoment(doc, f(105)); // half a second after the clip end (frame 90)
+    expect(after.audio).toEqual([expect.objectContaining({ clipId: sound.id, tail: true, fx: ['space.echo'] })]);
+    expect((after.audio[0] as { secondsAfterEnd: number }).secondsAfterEnd).toBeCloseTo(0.5, 3);
+    expect(describeMoment(doc, f(130)).audio).toEqual([]); // past the tail
+    expect(timeline(doc)!.tracks.flatMap((t) => t.clips).find((c) => c.id === sound.id)).toMatchObject({ tailSeconds: 1 });
+  });
+});
+
+describe('time effects leave other documents alone (ADR-0011)', () => {
+  it('a clip without a time effect, or whose first enabled effect is not one, gets no taps and no remap; its effects stay in order', () => {
+    let doc = project();
+    const track = doc.sequences.seq_main!.tracks.find((t) => t.kind === 'video')!;
+    const clipId = track.clips[0]!.id;
+    doc = applyTransaction(doc, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian' } }, { op: 'add_effect', args: { clipId, type: 'time.echo' } }], { idSeed: 'te', actor: 't' }).doc;
+    const layer = evaluate(doc, f(40)).layers[0]!;
+    expect(layer.kind === 'video' && [layer.time?.type, layer.effects?.map((e) => e.type)]).toEqual(['time.echo', ['blur.gaussian']]);
+    // an older document that holds a time effect after another one (validation reports time_effect_order): not applied
+    const old = structuredClone(doc);
+    const c = old.sequences.seq_main!.tracks.find((t) => t.kind === 'video')!.clips[0]!;
+    if (c.type === 'media') c.effects = [...c.effects!].reverse();
+    const l2 = evaluate(old, f(40)).layers[0]!;
+    expect(l2.kind === 'video' && [l2.time, l2.remap, l2.effects?.map((e) => e.type)]).toEqual([undefined, undefined, ['blur.gaussian', 'time.echo']]);
+    // no effect at all: the layer has neither key
+    const plain = evaluate(project(), f(40)).layers[0]!;
+    expect('time' in plain || 'remap' in plain).toBe(false);
+    const text = evaluate(project(), f(50)).layers.find((l) => l.kind === 'text')!;
+    expect('time' in text || 'remap' in text).toBe(false);
   });
 });

@@ -1,26 +1,72 @@
 {
-  "ranAt": "2026-11-17T05:17:58.155Z",
+  "ranAt": "2026-11-17T09:05:50.784Z",
   "result": "PASSED",
-  "passed": 78,
-  "total": 78,
+  "passed": 90,
+  "total": 90,
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
-  "scope": "Twenty-nine effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and thirty-three transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
+  "scope": "Thirty-one effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and thirty-nine transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
   "measurements": {
     "previewVsStill": {
       "meanDifference": 0,
       "maxDifference": 0
     },
+    "whip": [
+      {
+        "id": "whip-right",
+        "light": 9216,
+        "x": 90,
+        "y": 320,
+        "varX": 2481.4,
+        "varY": 2.9,
+        "alongOverAcross": 855.7,
+        "expectedCentre": 90,
+        "ok": true
+      },
+      {
+        "id": "whip-left",
+        "light": 9216,
+        "x": 270,
+        "y": 320,
+        "varX": 2481.4,
+        "varY": 2.9,
+        "alongOverAcross": 855.7,
+        "expectedCentre": 270,
+        "ok": true
+      },
+      {
+        "id": "whip-down",
+        "light": 9216,
+        "x": 180,
+        "y": 160,
+        "varX": 2.9,
+        "varY": 7837.1,
+        "alongOverAcross": 2702.4,
+        "expectedCentre": 160,
+        "ok": true
+      },
+      {
+        "id": "whip-up",
+        "light": 9216,
+        "x": 180,
+        "y": 480,
+        "varX": 2.9,
+        "varY": 7837.1,
+        "alongOverAcross": 2702.4,
+        "expectedCentre": 480,
+        "ok": true
+      }
+    ],
     "lut": {
       "gridPoints": 288,
       "worstFromModel": 0.5,
       "meanChange": 77.563
     },
     "lutPreviewRecovery": {
-      "seconds": 1.4,
+      "seconds": 1.1,
       "meanDifferenceFromStill": 0
     },
     "lutPreviewVsStill": {
@@ -61,6 +107,140 @@
     "lutExportVsStill": {
       "meanDifferenceFromStill": 1.385,
       "meanDifferenceFromPlain": 77.617
+    },
+    "digicamTone": {
+      "worstOf255": 0.48,
+      "rows": [
+        {
+          "at": [
+            90,
+            160
+          ],
+          "plain": [
+            128,
+            128,
+            128
+          ],
+          "still": [
+            126,
+            128,
+            131
+          ],
+          "model": [
+            126,
+            128.4,
+            131.3
+          ]
+        },
+        {
+          "at": [
+            270,
+            160
+          ],
+          "plain": [
+            205,
+            150,
+            120
+          ],
+          "still": [
+            202,
+            150,
+            123
+          ],
+          "model": [
+            201.7,
+            150.5,
+            123.1
+          ]
+        },
+        {
+          "at": [
+            90,
+            480
+          ],
+          "plain": [
+            240,
+            236,
+            225
+          ],
+          "still": [
+            252,
+            251,
+            249
+          ],
+          "model": [
+            252,
+            251.2,
+            249
+          ]
+        },
+        {
+          "at": [
+            270,
+            480
+          ],
+          "plain": [
+            40,
+            70,
+            200
+          ],
+          "still": [
+            39,
+            70,
+            205
+          ],
+          "model": [
+            39.4,
+            70.2,
+            205.1
+          ]
+        }
+      ]
+    },
+    "digicamNoise": {
+      "grey": {
+        "meanOffset": [
+          0.442,
+          -0.488,
+          0.099
+        ],
+        "meanSize": 3.82,
+        "largest": 8
+      },
+      "skin": {
+        "meanOffset": [
+          -0.1,
+          -0.404,
+          -0.164
+        ],
+        "meanSize": 3.83,
+        "largest": 8
+      }
+    },
+    "digicamPreviewVsStill": {
+      "meanDifference": 0,
+      "maxDifference": 0
+    },
+    "digicamFlash": {
+      "frames": 150,
+      "verdict": "pass",
+      "ranges": []
+    },
+    "crtMaskPeriod": {
+      "pitch0010": {
+        "expected": 6.4,
+        "measured": 6.4
+      },
+      "pitch0007": {
+        "expected": 4.48,
+        "measured": 4.481
+      }
+    },
+    "crtCurve": {
+      "worstPixels": 0.05,
+      "points": 82,
+      "largestDisplacement": 8.6,
+      "flatVsPlain": 0
     }
   },
   "checks": [
@@ -641,9 +821,9 @@
       "ok": true,
       "detail": {
         "shuttle": "▶▶ ×8",
-        "samples": 167,
-        "flashesOnScreen": 6,
-        "mostInOneSecond": 3,
+        "samples": 173,
+        "flashesOnScreen": 4,
+        "mostInOneSecond": 2,
         "framesHeldBack": 10
       }
     },
@@ -665,10 +845,10 @@
       }
     },
     {
-      "name": "All 33 GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash is checked at its ends only)",
+      "name": "All 39 GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash is checked at its ends only)",
       "ok": true,
       "detail": {
-        "transitions": 33
+        "transitions": 39
       }
     },
     {
@@ -676,7 +856,7 @@
       "ok": true,
       "detail": {
         "repeatable": true,
-        "distinctMiddleFrames": 33
+        "distinctMiddleFrames": 39
       }
     },
     {
@@ -702,6 +882,72 @@
     {
       "name": "Blinds, half-way: in each of the nine slats the first half shows the incoming picture and the second half the outgoing one",
       "ok": true
+    },
+    {
+      "name": "Spin (both directions): the centre of the frame shows the outgoing picture before progress 0.45 and the incoming one after 0.55 (blue 0 = outgoing, 255 = incoming)",
+      "ok": true,
+      "detail": [
+        {
+          "id": "spin-cw",
+          "centreBlueAtP0.407": 0,
+          "centreBlueAtP0.593": 255
+        },
+        {
+          "id": "spin-ccw",
+          "centreBlueAtP0.407": 0,
+          "centreBlueAtP0.593": 255
+        }
+      ]
+    },
+    {
+      "name": "Whip (four directions), middle frame: a dot of the outgoing picture is smeared along the move (variance along at least 4 times across) and lies where the moving strip puts it (within 4 pixels)",
+      "ok": true,
+      "detail": [
+        {
+          "id": "whip-right",
+          "light": 9216,
+          "x": 90,
+          "y": 320,
+          "varX": 2481.4,
+          "varY": 2.9,
+          "alongOverAcross": 855.7,
+          "expectedCentre": 90,
+          "ok": true
+        },
+        {
+          "id": "whip-left",
+          "light": 9216,
+          "x": 270,
+          "y": 320,
+          "varX": 2481.4,
+          "varY": 2.9,
+          "alongOverAcross": 855.7,
+          "expectedCentre": 270,
+          "ok": true
+        },
+        {
+          "id": "whip-down",
+          "light": 9216,
+          "x": 180,
+          "y": 160,
+          "varX": 2.9,
+          "varY": 7837.1,
+          "alongOverAcross": 2702.4,
+          "expectedCentre": 160,
+          "ok": true
+        },
+        {
+          "id": "whip-up",
+          "light": 9216,
+          "x": 180,
+          "y": 480,
+          "varX": 2.9,
+          "varY": 7837.1,
+          "alongOverAcross": 2702.4,
+          "expectedCentre": 480,
+          "ok": true
+        }
+      ]
     },
     {
       "name": "A GPU transition in an export: the half-way frame of the file shows the iris as the still does",
@@ -808,7 +1054,7 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_c3d873ee630 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_da72ce03f70 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
       }
@@ -817,7 +1063,7 @@
       "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
       "ok": true,
       "detail": {
-        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_c3d873ee630 could not be loaded: Missing LUT_3D_SIZE",
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_da72ce03f70 could not be loaded: Missing LUT_3D_SIZE",
         "previewVsPlain": 0
       }
     },
@@ -825,7 +1071,7 @@
       "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
       "ok": true,
       "detail": {
-        "seconds": 1.4,
+        "seconds": 1.1,
         "meanDifferenceFromStill": 0,
         "errors": []
       }
@@ -842,10 +1088,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_c3d873ee630",
+        "value": "ast_da72ce03f70",
         "options": [
           "",
-          "ast_c3d873ee630"
+          "ast_da72ce03f70"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -858,7 +1104,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_6fbccaae480",
+        "selected": "ast_afded91b530",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47
@@ -948,6 +1194,288 @@
     },
     {
       "name": "No uncaught errors in the editor page with a colour table",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "stylize.digicam, noise 0: on every flat patch (grey, skin, a near-white that blooms, blue) each pixel is what digicamTone gives for the plain pixel (within 2 of 255), and the picture did change",
+      "ok": true,
+      "detail": {
+        "worstOf255": 0.48,
+        "rows": [
+          {
+            "at": [
+              90,
+              160
+            ],
+            "plain": [
+              128,
+              128,
+              128
+            ],
+            "still": [
+              126,
+              128,
+              131
+            ],
+            "model": [
+              126,
+              128.4,
+              131.3
+            ]
+          },
+          {
+            "at": [
+              270,
+              160
+            ],
+            "plain": [
+              205,
+              150,
+              120
+            ],
+            "still": [
+              202,
+              150,
+              123
+            ],
+            "model": [
+              201.7,
+              150.5,
+              123.1
+            ]
+          },
+          {
+            "at": [
+              90,
+              480
+            ],
+            "plain": [
+              240,
+              236,
+              225
+            ],
+            "still": [
+              252,
+              251,
+              249
+            ],
+            "model": [
+              252,
+              251.2,
+              249
+            ]
+          },
+          {
+            "at": [
+              270,
+              480
+            ],
+            "plain": [
+              40,
+              70,
+              200
+            ],
+            "still": [
+              39,
+              70,
+              205
+            ],
+            "model": [
+              39.4,
+              70.2,
+              205.1
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "stylize.digicam, amount 0 (with the noise at 1): the plain picture (largest difference 1 of 255)",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "stylize.digicam noise at 1: it is there (mean size over 1 of 255), no channel moves by more than 0.03 of the range (+1 for rounding), and over the area its mean is zero (within 0.5 of 255): it adds no brightness",
+      "ok": true,
+      "detail": {
+        "grey": {
+          "meanOffset": [
+            0.442,
+            -0.488,
+            0.099
+          ],
+          "meanSize": 3.82,
+          "largest": 8
+        },
+        "skin": {
+          "meanOffset": [
+            -0.1,
+            -0.404,
+            -0.164
+          ],
+          "meanSize": 3.83,
+          "largest": 8
+        }
+      }
+    },
+    {
+      "name": "stylize.digicam: the same tick gives the identical picture (also rendered again), and the noise changes exactly where digicamTick changes (15 times a second: every second frame at 30 fps)",
+      "ok": true,
+      "detail": [
+        {
+          "frames": [
+            0,
+            1
+          ],
+          "ticks": [
+            0,
+            0
+          ],
+          "identical": true
+        },
+        {
+          "frames": [
+            1,
+            2
+          ],
+          "ticks": [
+            0,
+            1
+          ],
+          "identical": false
+        },
+        {
+          "frames": [
+            2,
+            3
+          ],
+          "ticks": [
+            1,
+            1
+          ],
+          "identical": true
+        },
+        {
+          "frames": [
+            3,
+            4
+          ],
+          "ticks": [
+            1,
+            2
+          ],
+          "identical": false
+        },
+        {
+          "frames": [
+            4,
+            5
+          ],
+          "ticks": [
+            2,
+            2
+          ],
+          "identical": true
+        },
+        {
+          "frames": [
+            5,
+            6
+          ],
+          "ticks": [
+            2,
+            3
+          ],
+          "identical": false
+        },
+        {
+          "frames": [
+            6,
+            7
+          ],
+          "ticks": [
+            3,
+            3
+          ],
+          "identical": true
+        },
+        {
+          "frames": [
+            7,
+            8
+          ],
+          "ticks": [
+            3,
+            4
+          ],
+          "identical": false
+        }
+      ]
+    },
+    {
+      "name": "stylize.digicam: the editor preview and the still agree (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "meanDifference": 0,
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "stylize.digicam at noise 1 and amount 1, exported: the FlashAnalyser reads every frame of the file and its verdict is pass",
+      "ok": true,
+      "detail": {
+        "frames": 150,
+        "verdict": "pass",
+        "ranges": []
+      }
+    },
+    {
+      "name": "stylize.crt: along a row the phosphor mask repeats every pitch x frame height pixels (within 0.1 pixel; pitch 0.01 and 0.007 on a 640-pixel-high frame)",
+      "ok": true,
+      "detail": {
+        "pitch0010": {
+          "expected": 6.4,
+          "measured": 6.4
+        },
+        "pitch0007": {
+          "expected": 4.48,
+          "measured": 4.481
+        }
+      }
+    },
+    {
+      "name": "stylize.crt reads no time: frames 0, 15 and 90 are identical; the corner outside the curved glass is black and the centre is not",
+      "ok": true,
+      "detail": {
+        "frames15": 0,
+        "frames90": 0,
+        "corner": [
+          0,
+          0,
+          0
+        ],
+        "centre": [
+          139,
+          139,
+          230
+        ]
+      }
+    },
+    {
+      "name": "stylize.crt: with no curvature and amount 0 the picture is unchanged (largest difference 1); at curvature 0.2 every measured line lies where crtMap puts it (within 1.5 pixels) on at least 30 points, and lines near the edge moved by more than 3 pixels",
+      "ok": true,
+      "detail": {
+        "worstPixels": 0.05,
+        "points": 82,
+        "largestDisplacement": 8.6,
+        "flatVsPlain": 0
+      }
+    },
+    {
+      "name": "No uncaught errors in the editor page with the digicam preview",
       "ok": true,
       "detail": []
     },

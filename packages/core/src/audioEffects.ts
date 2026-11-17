@@ -69,7 +69,7 @@ export const AUDIO_EFFECTS: readonly AudioFxDef[] = [
     description: 'Game-console sound: fewer levels and a lower sample rate.',
     limits: 'Aliasing is the intended sound.',
     params: z.object({ amount: amount(1), bits: z.number().int().min(3).max(10).default(6), rateKhz: z.number().int().min(3).max(24).default(8) }).strict() }),
-  def({ id: 'space.echo', version: 1, stage: 4, category: 'space', name: { he: 'הד', en: 'Echo' }, seeded: false, maxTailSeconds: 8, isIdentity: dry,
+  def({ id: 'space.echo', version: 1, stage: 4, category: 'space', name: { he: 'הד', en: 'Echo' }, seeded: false, maxTailSeconds: 8.01, isIdentity: dry, // 8 repeats of 1 s, plus the ring of the tone filter (under 3 ms)
     description: 'Distinct repeats that ring on past the end of the clip (cut at the end of the video).',
     limits: 'At most 8 repeats of at most 1 s.',
     params: z.object({ amount: amount(0.5), delayMs: z.number().int().min(50).max(1000).default(250), repeats: z.number().int().min(1).max(8).default(4), feedback: z.number().min(0.2).max(0.8).default(0.5), pingPong: z.boolean().default(false), tone: z.number().min(0).max(1).default(0).describe('0 = bright, 1 = dark repeats') }).strict() }),

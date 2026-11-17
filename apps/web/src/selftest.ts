@@ -4,8 +4,28 @@
  * Result: document.body.dataset.ready = '1' and a JSON report in #out / window.__pfSelfTest.
  */
 import './strictPage.ts';
+import { audioEffectParams, type AudioFxParams } from '@pulseframe/core';
 import { mixClip, type PlannedAudioClip } from '@pulseframe/engine';
+import { FX_FIXTURE_SECONDS, fxFixture, renderFx } from '@pulseframe/engine/audiofx/kernels/index.ts';
 import { plannedClipInput } from './audioGraph.ts';
+
+/**
+ * Sound-effect kernels in this browser (ADR-0010 D6): window.__pfFxRun(type, params) runs one kernel over the fixed fixture
+ * (48 kHz, FX_FIXTURE_SECONDS, 1024-frame blocks, at = 0; the same input and harness as the golden hashes in Node) and returns
+ * the output as base64 of little-endian Float32 interleaved stereo, so the preview proof can compare it with Node's.
+ */
+function fxRun(type: string, params: AudioFxParams = {}): { base64: string; frames: number; ms: number } {
+  const input = fxFixture(48000);
+  const t = performance.now();
+  const out = renderFx(type, audioEffectParams(type, params), input, { sampleRate: 48000 });
+  const ms = performance.now() - t;
+  const bytes = new Uint8Array(out.buffer, out.byteOffset, out.byteLength);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { base64: btoa(bin), frames: out.length >> 1, ms: +ms.toFixed(2) };
+}
+(window as unknown as { __pfFxRun: typeof fxRun; __pfFxFixtureSeconds: number }).__pfFxRun = fxRun;
+(window as unknown as { __pfFxFixtureSeconds: number }).__pfFxFixtureSeconds = FX_FIXTURE_SECONDS;
 
 async function audioChainMatchesReference() {
   const sr = 48000, total = 60000;

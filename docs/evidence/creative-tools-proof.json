@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-17T05:58:49.086Z",
+ "generatedAt": "2026-11-17T09:23:36.310Z",
  "profile": {
   "os": "Linux 6.18.44-fc-v553",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -192,10 +192,39 @@
    "name": "the gallery opens on the effects tab with a thumbnail drawn for every effect this browser can run",
    "ok": true,
    "detail": {
-    "nEffects": 41,
-    "rendered": 41,
+    "nEffects": 53,
+    "rendered": 53,
     "unavailable": 0,
     "webgpu": true
+   }
+  },
+  {
+   "name": "the strobe tile shows its flash: its mean difference from the plain picture at the tile's size is more than 20 levels",
+   "ok": true,
+   "detail": {
+    "rendered": true,
+    "unavailable": false,
+    "meanDifference": 54.98
+   }
+  },
+  {
+   "name": "under reduced motion, hovering the snow, echo and strobe tiles animates nothing: no tile's picture changes over a second",
+   "ok": true,
+   "detail": {
+    "tiles": 53,
+    "changed": []
+   }
+  },
+  {
+   "name": "a hovered strobe tile animates (its light rises again) but shows at most three rises in any second of real time (sampled on every animation frame for at least 2 s and until 60 samples, at most 20 s), and the dialog carries data-flashes-held from its flash guard",
+   "ok": true,
+   "detail": {
+    "samples": 56,
+    "seconds": 69.46,
+    "rises": 7,
+    "mostInOneSecond": 1,
+    "flashesHeld": "0",
+    "errors": []
    }
   },
   {
@@ -555,8 +584,15 @@
    "fast-forward": 127,
    "smooth-ramp": 160,
    "stutter": 338
+  },
+  "galleryStrobeHover": {
+   "samples": 56,
+   "seconds": 69.46,
+   "rises": 7,
+   "mostInOneSecond": 1,
+   "flashesHeld": "0"
   }
  },
- "passed": 38,
+ "passed": 41,
  "failed": 0
 }

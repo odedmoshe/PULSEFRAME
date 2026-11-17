@@ -9,12 +9,15 @@
  *  - Output goes to an in-memory BufferTarget (follow-up: StreamTarget -> OPFS/File System Access so memory is bounded by
  *    the muxer, not the file). Backpressure: every `add()` is awaited, so frames are never queued unboundedly.
  *  - Audio is mixed with an OfflineAudioContext from whole decoded assets (limitation: long media is decoded whole; a
- *    streaming AudioBufferSink path is the follow-up).
+ *    streaming AudioBufferSink path is the follow-up). The plan is made at the output rate, so every position is in samples of
+ *    the rate the context renders at.
+ *  - Clips with sound effects (ADR-0010) are not mixed by WebAudio: the shared engine voice (the same code as the server export
+ *    and the preview) renders them from the decoded pieces, and its output is added sample by sample to the rendered buffer.
  */
 import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Input, Mp4OutputFormat, Output, Quality, UrlSource, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, initGpu, RampResampler, rampSpanOf, stretchKeepingPitch } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, fillPlayingOrder, initGpu, openClipVoice, RampResampler, rampSpanOf, soundEnd, stretchKeepingPitch, type PlannedAudioClip } from '@pulseframe/engine';
 import { plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
@@ -36,7 +39,9 @@ export interface BrowserCapabilities {
 }
 export interface BrowserExportPlan { container: 'mp4' | 'webm'; videoCodec: 'avc' | 'vp9'; audioCodec: 'aac' | 'opus'; substitutions: string[]; capabilities: BrowserCapabilities }
 export interface BrowserExportProgress { stage: 'planning' | 'leased' | 'fonts' | 'audio' | 'rendering' | 'finalizing' | 'completing'; framesDone: number; total: number }
-export interface BrowserExportResult { blob: Blob; jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number }
+export interface BrowserExportResult { blob: Blob; jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number;
+  /** Video decoders of this export: the most open at once, the budget, and how many pictures the budget refused (ADR-0011). */
+  decoders: { peak: number; max: number; opened: number; disposed: number; refused: number } }
 export interface BrowserExportRun {
   projectId: string;
   options?: Record<string, unknown>;
@@ -128,6 +133,34 @@ export async function probeSound(url: string): Promise<{ codec: string | null; f
     return { codec: track.codec ?? null, firstTimestamp: await track.getFirstTimestamp(), pieces: n, onsets, samples, lastEnd, sampleRate: sr };
   } finally { input.dispose(); }
 }
+/**
+ * The sound of one clip with effects over timeline samples [s0, s1), from the decoded pieces of its file: the playing-order source
+ * the voice asks for is filled from the pieces (positions from their own timestamps, as everywhere else in the browser), at the
+ * decoder's rate. Mono is heard in both channels; of more channels the first two are used (wave 1).
+ */
+function voiceSound(c: PlannedAudioClip, pieces: SoundPiece[], rate: number, s0: number, s1: number): Float32Array {
+  const sourceRate = pieces[0]?.buffer.sampleRate ?? c.voice!.sourceRate;
+  const voice = openClipVoice(c, rate, sourceRate, s0 - c.at, s1 - c.at);
+  const { origin, first, last, reverse } = voice.input;
+  const P = new Float32Array(Math.max(0, last - first) * 2);
+  // native indices the voice reads
+  const lo = reverse ? origin - last : origin + first, hi = reverse ? origin - first : origin + last;
+  for (const p of pieces) {
+    if (p.buffer.sampleRate !== sourceRate) throw new Error(`the decoder changed its sample rate within one file (${sourceRate} Hz, then ${p.buffer.sampleRate} Hz)`);
+    const start = Math.round(p.at * p.buffer.sampleRate), n = p.buffer.length;
+    if (start + n <= lo || start >= hi) continue;
+    const l = p.buffer.getChannelData(0), r = p.buffer.numberOfChannels > 1 ? p.buffer.getChannelData(1) : l;
+    const data = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) { data[i * 2] = l[i]!; data[i * 2 + 1] = r[i]!; }
+    fillPlayingOrder(P, first, voice.input, { start, data });
+  }
+  const a = voice.push(P), b = voice.finish();
+  const y = new Float32Array(a.length + b.length);
+  y.set(a);
+  y.set(b, a.length);
+  return y;
+}
+
 async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, out: Leased['manifest']['output'], rate: number, stopped: () => void): Promise<AudioBuffer> {
   const firstSample = T.nearestSampleIndex(T.frameTime(out.firstFrame, out.frameRate), rate);
   const totalSamples = T.nearestSampleIndex(T.frameTime(out.firstFrame + out.frames, out.frameRate), rate) - firstSample;
@@ -141,7 +174,24 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
   // Same audio plan as the server export and the preview: gain, pan, fades and ducking mean the same thing on every route.
   // Sound pieces are placed by their own timestamps on the file's clock, exactly as the preview does, so a sound stream that
   // starts late (or a container the browser's built-in audio decoder cannot read) behaves the same on every route.
-  for (const c of audioPlan(doc).clips) {
+  // The plan is made at the rate this context renders at (Opus is always 48 kHz), so its sample positions are this context's samples.
+  const plan = audioPlan(doc, undefined, { sampleRate: rate });
+  const end = firstSample + totalSamples;
+  const starts = new Map(plan.clips.map((c) => [c.clipId, c.at]));
+  const missing = plan.missingFx.filter((m) => (starts.get(m.clipId) ?? -1) < end);
+  if (missing.length) throw new BrowserExportError('export_failed', `sound effect ${missing.map((m) => `"${m.type}" on clip ${m.clipId}`).join(', ')} is not available in this build; the export would drop it`);
+  let fxMix: Float32Array | null = null; // the sound of the clips with effects, added after rendering
+  for (const c of plan.clips) {
+    if (c.voice) {
+      const s0 = Math.max(c.at, firstSample), s1 = Math.min(soundEnd(c), end);
+      if (s1 <= s0) continue;
+      stopped();
+      const y = voiceSound(c, await decode(c.assetId), rate, s0, s1);
+      fxMix ??= new Float32Array(totalSamples * 2);
+      const o = (s0 - firstSample) * 2;
+      for (let i = 0; i < y.length; i++) fxMix[o + i] = fxMix[o + i]! + y[i]!;
+      continue;
+    }
     const s0 = Math.max(c.at, firstSample);
     const s1 = Math.min(c.at + c.length, firstSample + totalSamples);
     if (s1 <= s0) continue;
@@ -208,7 +258,16 @@ async function mixAudio(doc: ProjectDocument, assetUrl: (id: string) => string, 
     }
   }
   stopped();
-  return ctx.startRendering();
+  const rendered = await ctx.startRendering();
+  if (fxMix) {
+    // exact alignment: sample i of the effects mix is sample i of the rendered buffer
+    for (let ch = 0; ch < 2; ch++) {
+      const x = rendered.getChannelData(ch);
+      for (let i = 0; i < x.length && i < totalSamples; i++) x[i] = x[i]! + fxMix[i * 2 + ch]!;
+      rendered.copyToChannel(x, ch);
+    }
+  }
+  return rendered;
 }
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -260,7 +319,8 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
   const onAbort = () => stop(new BrowserExportError('aborted', 'export aborted by the caller', { jobId }));
   opts.signal?.addEventListener('abort', onAbort);
 
-  const pool = new MediaPool({ assetUrl: (assetId) => `${apiBase}/projects/${opts.projectId}/assets/${assetId}/content`, maxDecoders: 8 });
+  // 12 decoders, as the render worker (ADR-0005 budget, to be amended for ADR-0011 decode lanes)
+  const pool = new MediaPool({ assetUrl: (assetId) => `${apiBase}/projects/${opts.projectId}/assets/${assetId}/content`, maxDecoders: 12 });
   let output: Output | null = null;
   try {
     progress('fonts', 0, out.frames);
@@ -285,6 +345,13 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
 
     progress('audio', 0, out.frames);
     const mix = await mixAudio(doc, (id) => `${apiBase}/projects/${opts.projectId}/assets/${id}/content`, out, audioRate, check);
+    // Measurement only (tests set window.__pfExportAudioTap = {}): the mix exactly as handed to the encoder, before lossy coding.
+    const tap = (globalThis as { __pfExportAudioTap?: { last?: unknown } }).__pfExportAudioTap;
+    if (tap && typeof tap === 'object') {
+      const data = new Float32Array(mix.length * 2), l = mix.getChannelData(0), r = mix.getChannelData(1);
+      for (let i = 0; i < mix.length; i++) { data[i * 2] = l[i]!; data[i * 2 + 1] = r[i]!; }
+      tap.last = { jobId, sampleRate: audioRate, firstFrame: out.firstFrame, frames: mix.length, data };
+    }
     // Audio is a single buffer; it is fed concurrently with video so interleaving backpressure between the tracks cannot deadlock.
     const audioDone = audio.add(mix);
     audioDone.catch(() => {});
@@ -294,8 +361,8 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
       check();
       if (opts.freezeAfterFrames !== undefined && i === opts.freezeAfterFrames) await new Promise(() => {}); // stuck-render simulation: heartbeats keep running until the page is closed
       const g = evaluate(doc, T.frameTime(out.firstFrame + i, rate));
-      const { missing, unavailableEffects, unavailableReasons } = await drawGraph(ctx, { ...g, width: out.width, height: out.height }, pool.frames);
-      if (missing.length) throw new BrowserExportError('export_failed', `frame ${i}: source frame unavailable for clips ${missing.join(', ')}`, { jobId });
+      const { missing, missingReasons, unavailableEffects, unavailableReasons } = await drawGraph(ctx, { ...g, width: out.width, height: out.height }, pool.frames);
+      if (missing.length) throw new BrowserExportError('export_failed', `frame ${i}: source frame unavailable for clips ${missing.map((id) => (missingReasons?.[id] ? `${id} (${missingReasons[id]})` : id)).join(', ')}`, { jobId });
       // An effect whose own material is missing (a colour table that could not be loaded) says so; the others need the adapter.
       const told = unavailableEffects.filter((id) => unavailableReasons?.[id]);
       const adapter = unavailableEffects.filter((id) => !unavailableReasons?.[id]);
@@ -317,7 +384,8 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
     progress('completing', framesDone, out.frames);
     clearInterval(timer);
     await api(apiBase, `/jobs/${jobId}/complete`, { sessionId, bytes: buffer.byteLength, sha256, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, frames: framesDone, container: decision.container });
-    return { blob: new Blob([buffer], { type: mime }), jobId, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, container: decision.container, frames: framesDone, sha256, bytes: buffer.byteLength, substitutions: decision.substitutions, capabilities: caps, wallMs: performance.now() - started };
+    const media = pool.stats();
+    return { blob: new Blob([buffer], { type: mime }), jobId, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, container: decision.container, frames: framesDone, sha256, bytes: buffer.byteLength, substitutions: decision.substitutions, capabilities: caps, wallMs: performance.now() - started, decoders: { peak: media.peakDecoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed, refused: media.refused } };
   } catch (e: any) {
     const err = stopReason ?? (e instanceof BrowserExportError ? e : new BrowserExportError('export_failed', String(e?.message ?? e), { jobId }));
     await output?.cancel().catch(() => {});

@@ -258,7 +258,7 @@ export class Editor {
       }
     });
     es.onerror = () => this.set({ save: 'save.offline' });
-    es.onopen = () => this.set({ save: 'save.saved' });
+    es.onopen = () => { this.set({ save: 'save.saved' }); timelineDerivatives.reconnected(projectId); }; // a derivative announced while the stream was down is looked up again
     // Listing capabilities only reads provider status; it never starts a worker.
     // A failure is kept and shown (AI tools panel) with a way to ask again; it is not taken for "no provider".
     this.set({ providerAsking: true });

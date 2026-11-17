@@ -4,6 +4,7 @@ import { splitSentences, volumeLevelAt, type Clip, type ProjectDocument } from '
 import { api, type LoudnessResult, type SpeechStatus } from '../api.ts';
 import { useEditorState } from './store.ts';
 import { SfxBrowser } from './SfxBrowser.tsx';
+import { AudioFxBlock, CommitSlider } from './AudioFxBlock.tsx';
 
 type Track = ProjectDocument['sequences'][string]['tracks'][number];
 
@@ -12,22 +13,6 @@ const linearToDb = (g: number) => (g <= 0 ? MIN_DB : Math.max(MIN_DB, Math.min(M
 const dbToLinear = (db: number) => (db <= MIN_DB ? 0 : Math.min(4, 10 ** (db / 20)));
 const fmtDb = (db: number) => (db <= MIN_DB ? '−∞' : `${db > 0 ? '+' : ''}${db.toFixed(1)}`);
 const fmt = (n: number | null, unit: string) => (n === null || !Number.isFinite(n) ? '—' : `${n.toFixed(1)} ${unit}`);
-
-/** Slider that shows its value live but commits once, when the gesture ends. */
-function CommitSlider({ label, value, min, max, step, display, onCommit, testid }: { label: string; value: number; min: number; max: number; step: number; display: (v: number) => string; onCommit: (v: number) => void; testid: string }) {
-  const [v, setV] = useState(value);
-  const dirty = useRef(false);
-  useEffect(() => { setV(value); dirty.current = false; }, [value]);
-  const commit = (el: HTMLInputElement) => { if (!dirty.current) return; dirty.current = false; onCommit(Number(el.value)); };
-  return (
-    <label>
-      <span>{label}<bdi className="val" dir="ltr">{display(v)}</bdi></span>
-      <input type="range" min={min} max={max} step={step} value={v} data-testid={testid} aria-valuetext={display(v)}
-        onChange={(e) => { dirty.current = true; setV(Number(e.target.value)); }}
-        onPointerUp={(e) => commit(e.currentTarget)} onKeyUp={(e) => commit(e.currentTarget)} onBlur={(e) => commit(e.currentTarget)} />
-    </label>
-  );
-}
 
 function NumberCommit({ label, value, min, max, step, onCommit, testid }: { label: string; value: number; min: number; max?: number; step: number; onCommit: (v: number) => void; testid: string }) {
   const [v, setV] = useState(String(value));
@@ -299,6 +284,7 @@ export function SoundPanel() {
           <NumberCommit key={`in:${clip.id}`} label={t('sound.fadeIn')} value={fadeSeconds(clip.fadeIn)} min={0} step={0.1} testid="sound-fade-in" onCommit={(v) => setFade('fadeIn', v)} />
           <NumberCommit key={`out:${clip.id}`} label={t('sound.fadeOut')} value={fadeSeconds(clip.fadeOut)} min={0} step={0.1} testid="sound-fade-out" onCommit={(v) => setFade('fadeOut', v)} />
           <VolumeKeys key={`vol:${clip.id}`} clip={clip} />
+          <AudioFxBlock key={`fx:${clip.id}`} clip={clip} />
           <div className="fields" key={`xf:${clip.id}`}>
             <label>{t('sound.crossfade')}
               <input type="number" dir="ltr" min={0} step={0.1} value={xf} data-testid="sound-crossfade" onChange={(e) => setXf(e.target.value)} />

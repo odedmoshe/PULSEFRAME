@@ -1,5 +1,5 @@
 import * as T from '@pulseframe/time';
-import { animatableParams, findEffect, NOT_ANIMATABLE } from './effects.ts';
+import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
@@ -117,6 +117,16 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (d && NOT_ANIMATABLE[fx.type]?.includes(param)) continue;
             const ok = !!d && animatableParams(fx.type).includes(param) && keys.every((k, i) => (i === 0 || T.lt(keys[i - 1]!.time, k.time)) && T.isFrameAligned(k.time, rate) && d.params.safeParse({ ...fx.params, [param]: k.value }).success);
             if (!ok) issues.push({ code: 'effect_keyframes', message: `clip ${c.id} effect ${fx.type}: keyframes of "${param}" are not animatable, out of range, unsorted or off the frame grid`, ids: [c.id] });
+          }
+          // Time effects and beat modulators are new fields: these rules can only fire on documents that use them, so an
+          // older project stays editable (see the note on NOT_ANIMATABLE keys above).
+          const list = c.effects ?? [];
+          if (d?.cost === 'time' && list.indexOf(fx) > 0) issues.push({ code: 'time_effect_order', message: `clip ${c.id}: the time effect ${fx.type} must be the first effect`, ids: [c.id] });
+          if (d?.cost === 'time' && list.filter((e) => isTimeEffect(e.type)).length > 1 && list.find((e) => isTimeEffect(e.type)) === fx) issues.push({ code: 'time_effect_count', message: `clip ${c.id} carries more than one time effect`, ids: [c.id] });
+          for (const [param, m] of Object.entries(fx.modulate ?? {})) {
+            if (!d || !modulatableParams(fx.type).includes(param)) { issues.push({ code: 'modulator_param', message: `clip ${c.id} effect ${fx.type}: "${param}" cannot follow the beat`, ids: [c.id] }); continue; }
+            const r = paramRange(fx.type, param);
+            if (!r || Math.abs(m.depth) > r.max - r.min) issues.push({ code: 'modulator_range', message: `clip ${c.id} effect ${fx.type}: modulation depth of "${param}" exceeds its range`, ids: [c.id] });
           }
           if (seenFx.has(fx.id)) issues.push({ code: 'duplicate_id', message: `clip ${c.id} has two effects with id ${fx.id}`, ids: [c.id] });
           seenFx.add(fx.id);

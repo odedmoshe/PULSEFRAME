@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -676,9 +676,14 @@ export function findFillerWords(store: Store, projectId: string, a: z.infer<type
   };
 }
 
-/** Everything creative that is registered in this build: effects, transitions, blends, masks, caption presets, clip motions, fonts. */
+/**
+ * Everything creative that is registered in this build: effects, transitions, blends, masks, caption presets, clip motions, fonts,
+ * and the sound effects with their presets (audioEffects, audioPresets; ADR-0010). `soundEffects` are the synthesised sound files of
+ * the sound library, a different thing.
+ */
 export const catalog = () => ({
   ...describeCatalog(),
+  ...describeAudioCatalog(),
   captionPresets: [...CAPTION_PRESETS],
   clipMotions: CLIP_MOTIONS.filter((m) => m !== 'none'),
   looks: COLOR_LOOKS.map((l) => ({ id: l.id, name: l.name, effect: 'color.grade', params: l.params, note: 'A setting of the color.grade effect; apply with apply_look. Chosen by description, not graded against reference pictures.' })),
@@ -692,7 +697,7 @@ export const catalog = () => ({
   formatProfiles: FORMAT_PROFILES.map((p) => ({ ...p, note: 'Generic safe-area guide, editable per variant; not a platform specification.' })),
   soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, category: s.category, source: 'synthesised by formula in this build; no third-party content' })),
   fonts: FONT_CATALOG,
-  note: 'This is the complete list for this build; anything not listed here does not exist. All entries render through the same Canvas2D compositor in preview and export.',
+  note: 'This is the complete list for this build; anything not listed here does not exist. Picture entries render through the Canvas2D compositor (GPU passes where listed); sound entries through the shared engine DSP in preview and export alike. audioEffects are effects applied to sound clips (add_audio_effect, apply_audio_preset); soundEffects are sound files of the sound library.',
 });
 
 /** Mix the current timeline exactly as export would and measure it (EBU R128). Read-only. */

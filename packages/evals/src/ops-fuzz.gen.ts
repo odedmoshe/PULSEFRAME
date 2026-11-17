@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -43,7 +43,10 @@ export function createFuzz(seed: number) {
       { op: 'set_transcript', args: { assetId: vid, language: 'he', segments: [0, 1, 2, 3].map((k) => ({ start: T.rt(k * 2, 1), duration: T.rt(2, 1), text: `מילה ${k} word`, words: [{ start: T.rt(k * 2, 1), duration: T.rt(1, 1), text: 'מילה' }, { start: T.rt(k * 2 + 1, 1), duration: T.rt(1, 1), text: `word${k}` }] })) } },
     ];
   };
-  const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.brightness', 'stylize.vignette'];
+  const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.adjust', 'light.vignette', 'time.echo', 'overlay.snow'];
+  const SOUND_FX = AUDIO_EFFECTS.map((e) => e.id);
+  /** A small change of a sound effect's main control (its wet amount, or the width), in range most of the time and out of it sometimes. */
+  const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
 
   const gen = (doc: ProjectDocument): OpCall => {
     const seq = Object.values(doc.sequences)[0]!;
@@ -78,6 +81,11 @@ export function createFuzz(seed: number) {
     const ofVid = movingVideo.filter((x) => x.c.type === 'media' && x.c.assetId === vid);
     const volumeKeyed = audioClips.filter((x) => x.c.type === 'media' && x.c.volume?.length);
     const fxPick = () => { const x = withFx.length ? pick(withFx).c : null; const fx = x?.effects?.length ? pick(x.effects) : undefined; return { clipId: x?.id ?? any(), fx }; };
+    /** sound clips that carry sound effects, and one of their effects */
+    const withSoundFx = audioClips.filter((x) => x.c.type === 'media' && x.c.audioFx?.length);
+    const soundFxPick = () => { const x = withSoundFx.length && rnd() < 0.9 ? pick(withSoundFx).c : null; const fx = x?.type === 'media' && x.audioFx?.length ? pick(x.audioFx) : undefined; return { clipId: x?.id ?? audioId(), fx }; };
+    /** a sound clip or, a third of the time, a picture (resolves to its linked sound) or any clip at all (refused) */
+    const soundTarget = () => (rnd() < 0.67 ? audioId() : rnd() < 0.7 ? videoId() : any());
     const wordList = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((sg) => (sg.words ?? []).map((w) => w.id)));
     const words = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((s) => (s.words ?? []).map((w) => w.id)));
     const menu: (() => OpCall)[] = [
@@ -163,6 +171,26 @@ export function createFuzz(seed: number) {
       () => ({ op: 'set_ducking', args: { trackId: audioTracks.length ? pick(audioTracks).id : trackId(), sourceTrackIds: rnd() < 0.2 ? null : [audioTracks.length ? pick(audioTracks).id : trackId()] } }),
       () => ({ op: 'set_loudness_target', args: { target: pick([null, -14, -16, -23]) } }),
       () => ({ op: 'edit_analysis', args: { assetId: vid, kind: 'scenes', add: [T.frameTime(1 + int(230), SRC)] } }),
+      // sound effects (ADR-0010): sound clips, pictures that resolve to their linked sound, and invalid cases (unknown types, bad parameters, ids that do not exist)
+      () => { const type = rnd() < 0.06 ? 'voice.chipmunk' : pick(SOUND_FX); return { op: 'add_audio_effect', args: { clipId: soundTarget(), type, ...(rnd() < 0.35 ? { params: soundParams(type) } : {}), ...(rnd() < 0.15 ? { enabled: false } : {}), ...(rnd() < 0.1 ? { includeLinked: false } : {}) } }; },
+      () => {
+        // a type the sound clip does not have yet, and no second character voice: accepted most of the time, so that effects exist
+        // often enough for the other four operations to be accepted in a run
+        const x = audioClips.length ? pick(audioClips).c : null;
+        const has = x?.type === 'media' ? x.audioFx ?? [] : [];
+        const voiced = has.some((h) => AUDIO_EFFECTS.find((e) => e.id === h.type)?.exclusive === 'voice');
+        const free = AUDIO_EFFECTS.filter((e) => !has.some((h) => h.type === e.id) && !(voiced && e.exclusive === 'voice')).map((e) => e.id);
+        return { op: 'add_audio_effect', args: { clipId: x?.id ?? any(), type: free.length ? pick(free) : pick(SOUND_FX) } };
+      },
+      () => { const { clipId, fx } = soundFxPick(); return { op: 'update_audio_effect', args: { clipId, effectId: fx?.id ?? 'afx_none', ...(rnd() < 0.6 ? { params: soundParams(fx?.type ?? 'space.echo') } : {}), ...(rnd() < 0.5 ? { enabled: rnd() < 0.5 } : {}) } }; },
+      () => { const { clipId, fx } = soundFxPick(); return { op: 'remove_audio_effect', args: { clipId, effectId: fx?.id ?? 'afx_none' } }; },
+      () => ({ op: 'apply_audio_preset', args: { clipId: soundTarget(), presetId: rnd() < 0.15 ? null : rnd() < 0.06 ? 'chipmunk' : pick(AUDIO_PRESETS).id, ...(rnd() < 0.1 ? { includeLinked: false } : {}) } }),
+      () => {
+        const { clipId } = soundFxPick();
+        const others = audioClips.filter((x) => x.c.id !== clipId);
+        const to = () => (others.length && rnd() < 0.8 ? pick(others).c.id : soundTarget()); // mostly another sound clip; sometimes a picture, the source itself or a clip without sound (refused)
+        return { op: 'copy_audio_effects', args: { fromClipId: clipId, toClipIds: [to(), ...(rnd() < 0.3 ? [to()] : [])], ...(rnd() < 0.5 ? { replace: rnd() < 0.7 } : {}) } };
+      },
     ];
     return pick(menu)();
   };

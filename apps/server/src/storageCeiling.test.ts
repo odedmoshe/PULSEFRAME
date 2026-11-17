@@ -23,6 +23,7 @@ import { Store } from './store.ts';
 const QUOTA = 3_000_000;
 let dir: string, cfg: Config, store: Store, auth: Auth, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, capabilities: Capabilities, derivatives: Derivatives, exporter: Exporter;
 let pid = '';
+let speech: Speech;
 const filler = () => path.join(dir, 'filler.bin');
 const fill = () => fs.writeFileSync(filler(), Buffer.alloc(QUOTA)); // stands in for accumulated media and exports
 const unfill = () => fs.rmSync(filler(), { force: true });
@@ -54,7 +55,7 @@ beforeAll(() => {
   const presence = new Presence();
   const governance = new Governance(store);
   auth.resolveGrant = (token) => governance.principalForToken(token);
-  const speech = new Speech(store, cfg);
+  speech = new Speech(store, cfg);
   mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech);
   app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, undefined, speech);
   pid = store.createProject({ name: 'ceiling', width: 640, height: 360, frameRate: { num: 30, den: 1 } }).doc.id;
@@ -147,7 +148,15 @@ describe('generated media: the agent tools and the routes refuse a new file past
       expect(again.body.assetId).toBe(stored.body.assetId); // the same bytes: the asset already in the project
     } finally { unfill(); }
   }, 60_000);
-  it('generate_narration, narrate_script and their routes: 507 past the ceiling; below it the honest setup state (no voice engine here)', async () => {
+  it('generate_narration, narrate_script and their routes: without a voice engine the honest setup state comes first, even past the ceiling; with one, 507 past the ceiling', async () => {
+    fill();
+    try {
+      const unset = await tool('generate_narration', { projectId: pid, text: 'שלום' });
+      expect([unset.isError, unset.body.error.code]).toEqual([true, 'voice_not_ready']);
+    } finally { unfill(); }
+    // a narration that could run (the voice engine reported ready; nothing is synthesised because the ceiling refuses first)
+    const real = speech.status.bind(speech);
+    (speech as unknown as { status: () => Promise<unknown> }).status = async () => ({ ...(await real()), narration: { ready: true, detail: 'ready', reason: null }, models: [{ id: 'test-tts', kind: 'tts', ready: true }] });
     fill();
     try {
       const one = await tool('generate_narration', { projectId: pid, text: 'שלום' });
@@ -156,7 +165,7 @@ describe('generated media: the agent tools and the routes refuse a new file past
       expect([script.isError, script.body.error.code]).toEqual([true, 'storage_quota_exceeded']);
       expect((await rest('POST', `/projects/${pid}/narration`, { text: 'שלום' })).status).toBe(507);
       expect((await rest('POST', `/projects/${pid}/narration/script`, { text: 'One. Two.', start: { value: '0', timescale: 30 } })).status).toBe(507);
-    } finally { unfill(); }
+    } finally { unfill(); (speech as unknown as { status: unknown }).status = real; }
     const below = await tool('generate_narration', { projectId: pid, text: 'שלום' });
     expect([below.isError, below.body.error.code]).toEqual([true, 'voice_not_ready']);
   }, 60_000);

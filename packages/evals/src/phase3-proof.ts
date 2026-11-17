@@ -35,6 +35,8 @@ async function main() {
   await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  /** Library files this proof removed (see the last check). */
+  const removedAssets = new Set<string>();
   page.on('console', (m) => m.type() === 'error' && errors.push(`${m.text()}${m.location().url ? ` [${m.location().url.replace(/^https?:\/\/[^/]+/, '')}]` : ''}`)); // with the address, so a failed request can be traced
   try {
     await page.goto(s.ownerUrl);
@@ -448,7 +450,7 @@ async function main() {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await key('Control+z');
     for (let i = 0; i < 50 && endOf(osA.project) !== endOf(osB.project); i++) { await new Promise((r) => setTimeout(r, 100)); osA = await getDoc(); }
-    if (newAsset) await post([{ op: 'remove_asset', args: { assetId: newAsset.id } }]);
+    if (newAsset) { removedAssets.add(newAsset.id); await post([{ op: 'remove_asset', args: { assetId: newAsset.id } }]); }
     check('a file dropped from the computer onto a picture track is imported into the library and placed on that track at the frame under the pointer (within one frame)', osInfo.imported === 'dropped.mp4' && osInfo.clipFrame !== null && Math.abs(osInfo.clipFrame - osFrame) <= 1, osInfo);
 
     console.log('\n# drop two files from the computer at once');
@@ -472,7 +474,9 @@ async function main() {
     await post(two.filter((x) => x.clip).map((x) => ({ op: 'delete_clip', args: { clipId: x.clip.id } })));
     await new Promise((r) => setTimeout(r, 1500));
     twoA = await getDoc();
-    await post(Object.values(twoA.project.assets).filter((a) => !twoB.project.assets[a.id]).map((a) => ({ op: 'remove_asset', args: { assetId: a.id } })));
+    const goneTwo = Object.values(twoA.project.assets).filter((a) => !twoB.project.assets[a.id]);
+    for (const a of goneTwo) removedAssets.add(a.id);
+    await post(goneTwo.map((a) => ({ op: 'remove_asset', args: { assetId: a.id } })));
 
     console.log('\n# slip');
     const sb = await getDoc();
@@ -833,7 +837,11 @@ async function main() {
     const back = await tabsShown();
     const wa = await getDoc();
     check('workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload, and so does a chosen target track; Pro offers every panel again; the project is not changed by any of it', targetKept === 1 && proTabs.length === 8 && JSON.stringify(quick.tabs) === JSON.stringify(['recipes', 'speech', 'captions', 'deliver']) && JSON.stringify(quick.panels) === JSON.stringify(['recipes']) && JSON.stringify(sound.tabs) === JSON.stringify(['sound', 'clip']) && JSON.stringify(sound.panels) === JSON.stringify(['sound']) && afterReload.ws === 'sound' && JSON.stringify(afterReload.tabs) === JSON.stringify(['sound', 'clip']) && back.length === 8 && wa.revision === wb.revision && JSON.stringify(wa.project) === JSON.stringify(wb.project), { proTabs: proTabs.length, quick, sound, afterReload, back: back.length });
-    check('no uncaught errors in the editor page', errors.length === 0, errors.slice(0, 4));
+    // A library file the proof removed may still be being looked up by the editor at that moment (its thumbnails, its list of
+    // derived files): the server then rightly answers 404, which the browser logs. Those, and only those, are not errors of the editor.
+    const removedLookup = (e: string) => /status of 404/.test(e) && [...removedAssets].some((id) => e.includes(`/assets/${id}/derivatives`));
+    const unexpected = errors.filter((e) => !removedLookup(e));
+    check('no uncaught errors in the editor page (404s for derived files of library files this proof had just removed are left out)', unexpected.length === 0, { unexpected: unexpected.slice(0, 4), leftOut: errors.length - unexpected.length });
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.
     console.error(e);

@@ -121,13 +121,23 @@ const numericExtreme = (type: string): Record<string, number> => {
 
 const tiles: Tile[] = [];
 const catalog = describeCatalog();
+/**
+ * A time effect changes only what moves (ADR-0011): its clip slides across the frame (keyframed x, 0.4 of the width a second)
+ * and is drawn at frame 17, so echo, time split, shutter and stutter each show, and their default and extreme settings differ.
+ */
+const TIME_FRAME = 17;
+const moving = (c: string): OpCall[] => [
+  { op: 'set_keyframe', args: { clipId: c, property: 'x', time: f(0), value: -0.2 } },
+  { op: 'set_keyframe', args: { clipId: c, property: 'x', time: f(30), value: 0.2 } },
+];
 for (const e of EFFECTS) {
   const defaults = catalog.effects.find((x) => x.id === e.id)!.defaults;
+  const time = e.category === 'time';
   for (const aspect of ['16:9', '9:16'] as const) {
-    const variants: [string, Record<string, unknown>, number][] = [['default', {}, 0], ['extreme', numericExtreme(e.id), 0]];
+    const variants: [string, Record<string, unknown>, number][] = [['default', {}, time ? TIME_FRAME : 0], ['extreme', numericExtreme(e.id), time ? TIME_FRAME : 0]];
     if (e.id === 'stylize.grain') variants.push(['default frame 1', {}, 1], ['default frame 2', {}, 2]);
     for (const [variant, params, frame] of variants) {
-      tiles.push({ kind: 'effect', id: e.id, variant, aspect, params: { ...defaults, ...params }, build: (s) => ({ doc: withClip(s, (c) => [...(e.id === 'stylize.shadow' ? [{ op: 'set_clip_transform', args: { clipId: c, transform: { scale: 0.7 } } }] : []), { op: 'add_effect', args: { clipId: c, type: e.id, params } }], e.id === 'stylize.shadow'), frame }) });
+      tiles.push({ kind: 'effect', id: e.id, variant, aspect, params: { ...defaults, ...params }, build: (s) => ({ doc: withClip(s, (c) => [...(e.id === 'stylize.shadow' ? [{ op: 'set_clip_transform', args: { clipId: c, transform: { scale: 0.7 } } }] : []), ...(time ? moving(c) : []), { op: 'add_effect', args: { clipId: c, type: e.id, params } }], e.id === 'stylize.shadow'), frame }) });
     }
   }
 }
@@ -142,9 +152,11 @@ for (const [variant, m] of maskVariants) {
 }
 const TFRAMES = 15;
 const OFFSETS = [1, 4, 7, 10, 13];
-for (const tr of TRANSITIONS) {
+/** Transitions whose picture depends on the frame's shape (a whip pan moves a strip of the frame, a spin zooms about its centre) are drawn in both shapes. */
+const BOTH_SHAPES = new Set(['whip', 'spin']);
+for (const tr of TRANSITIONS) for (const aspect of BOTH_SHAPES.has(tr.kernel) ? (['16:9', '9:16'] as const) : (['16:9'] as const)) {
   OFFSETS.forEach((off, i) => tiles.push({
-    kind: 'transition', id: tr.id, variant: `step ${i + 1}/5 (frame +${off} of ${TFRAMES})`, aspect: '16:9', params: { frames: TFRAMES }, strip: true,
+    kind: 'transition', id: tr.id, variant: `step ${i + 1}/5 (frame +${off} of ${TFRAMES})`, aspect, params: { frames: TFRAMES }, strip: true,
     build: (s) => {
       const a = step(s.base, [clipOps(s, s.a, s.v1, 0, 60), clipOps(s, s.b, s.v1, 60, 60)]);
       const clipId = a.out[1]!.clipId as string;

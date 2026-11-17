@@ -59,12 +59,22 @@ function hsl(h: number, s: number, l: number): [number, number, number] {
 
 /** Read the frame-index barcode from packed RGB(A) pixels, given where the source picture sits in the image. */
 export function readBarcode(pixels: Uint8Array, stride: number, channels: number, rect: { x: number; y: number; w: number; h: number }): number {
+  return barcodeBits(rect, (o) => (pixels[o * channels]! + pixels[o * channels + 1]! + pixels[o * channels + 2]!) / 3, stride);
+}
+/**
+ * Read the frame-index barcode from one colour channel only (0 red, 1 green, 2 blue). A picture whose channels come from
+ * different moments (time.split) carries one barcode per channel.
+ */
+export function readBarcodeChannel(pixels: Uint8Array, stride: number, channels: number, rect: { x: number; y: number; w: number; h: number }, channel: 0 | 1 | 2): number {
+  return barcodeBits(rect, (o) => pixels[o * channels + channel]!, stride);
+}
+/** The 16 bits of the barcode strip, sampled at the middle of each cell; `level(o)` is the brightness at pixel offset o. */
+function barcodeBits(rect: { x: number; y: number; w: number; h: number }, level: (offset: number) => number, stride: number): number {
   let value = 0;
   const y = Math.round(rect.y + (rect.h * BARCODE.stripFrac) / 2);
   for (let i = 0; i < BARCODE.bits; i++) {
     const x = Math.round(rect.x + ((i + 0.5) * rect.w) / BARCODE.bits);
-    const o = (y * stride + x) * channels;
-    value = (value << 1) | ((pixels[o]! + pixels[o + 1]! + pixels[o + 2]!) / 3 > 128 ? 1 : 0);
+    value = (value << 1) | (level(y * stride + x) > 128 ? 1 : 0);
   }
   return value;
 }
@@ -84,6 +94,29 @@ function beepWav(seconds: number, sampleRate: number): Buffer {
   h.write('RIFF', 0); h.writeUInt32LE(36 + data.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(2, 22);
   h.writeUInt32LE(sampleRate, 24); h.writeUInt32LE(sampleRate * 4, 28); h.writeUInt16LE(4, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(data.length, 40);
   return Buffer.concat([h, data]);
+}
+
+/** The grey level of frame `index` of the grey fixture: every level is used, neighbouring frames differ by a lot, never black or white. */
+export const greyLevel = (index: number) => 40 + ((index * 53) % 176);
+export interface GreyFixtureOptions { out: string; frames?: number; fps?: { num: number; den: number }; width?: number; height?: number }
+/**
+ * A video whose frame F is one flat grey, greyLevel(F), all over: H.264 at -qp 0 (lossless), no sound. A flat picture
+ * decodes flat at any quality, so a merge of earlier frames (time.echo) can be checked exactly against the levels the same
+ * decoder gives for each frame on its own.
+ */
+export async function generateGreyFixture(o: GreyFixtureOptions) {
+  const width = o.width ?? 320, height = o.height ?? 180, frames = o.frames ?? 120, fps = o.fps ?? { num: 30, den: 1 };
+  fs.mkdirSync(path.dirname(o.out), { recursive: true });
+  await run(
+    'ffmpeg',
+    ['-hide_banner', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${width}x${height}`, '-framerate', `${fps.num}/${fps.den}`, '-i', 'pipe:0',
+      '-c:v', 'libx264', '-preset', 'medium', '-qp', '0', '-pix_fmt', 'yuv420p', '-g', String(Math.round(fps.num / fps.den)), '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
+      '-an', '-movflags', '+faststart', '-fflags', '+bitexact', '-flags:v', '+bitexact', o.out],
+    async (stdin) => {
+      for (let i = 0; i < frames; i++) if (!stdin.write(Buffer.alloc(width * height * 3, greyLevel(i)))) await new Promise((r) => stdin.once('drain', r));
+    },
+  );
+  return { file: o.out, width, height, fps, frames, levels: Array.from({ length: frames }, (_, i) => greyLevel(i)) };
 }
 
 /** Default: H.264 (High, B-frames, 1 s GOP) + AAC in MP4. See options for VP9/AV1, webm, B-frames and GOP. */

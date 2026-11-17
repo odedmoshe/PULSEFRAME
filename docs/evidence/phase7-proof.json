@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T05:50:12.553Z",
+  "ranAt": "2026-11-17T09:07:35.085Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -7,29 +7,139 @@
     "logicalCpus": 4,
     "gpu": "none"
   },
-  "scope": "Canvas2D look system on one synthetic fixture. No GPU compositor; shader effect families, keying, time effects and speed ramps are not built.",
+  "scope": "Canvas2D look system on one synthetic fixture, and the Lab page for every registered entry. GPU passes, time effects, overlays against their model and speed ramps have their own proofs (proof:gpu, proof:time, proof:overlays, proof:speed).",
   "measurements": {
     "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
     "exportWithLooks": {
       "frames": 30,
-      "wallMs": 1440,
+      "wallMs": 1421,
       "minPsnrDb": 42.16,
       "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
     },
     "lab": {
       "gpuEffectTilesUnavailable": 0,
-      "tiles": 415,
-      "effects": 41,
+      "tiles": 523,
+      "effects": 53,
       "blends": 17,
-      "transitions": 45,
+      "transitions": 51,
       "masks": 5
-    }
+    },
+    "labWave": [
+      {
+        "id": "time.echo",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "time.split",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "time.shutter",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "time.stutter",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.snow",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.confetti",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.hearts",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.bokeh",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.speed-lines",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "stylize.date-stamp",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "stylize.digicam",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "stylize.crt",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "whip-left",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "whip-right",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "whip-up",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "whip-down",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "spin-cw",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "spin-ccw",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      }
+    ]
   },
-  "passed": 31,
-  "total": 31,
+  "passed": 32,
+  "total": 32,
   "checks": [
     {
-      "name": "catalog lists exactly what is registered: 41 effects with parameter schemas and defaults, 45 transitions, 17 blend modes",
+      "name": "catalog lists exactly what is registered: 53 effects with parameter schemas and defaults, 51 transitions, 17 blend modes",
       "ok": true,
       "detail": {
         "effects": [
@@ -73,7 +183,19 @@
           "light.strobe",
           "stylize.film",
           "digital.rgb-shake",
-          "light.sparkle"
+          "light.sparkle",
+          "time.echo",
+          "time.split",
+          "time.shutter",
+          "time.stutter",
+          "overlay.snow",
+          "overlay.confetti",
+          "overlay.hearts",
+          "overlay.bokeh",
+          "overlay.speed-lines",
+          "stylize.date-stamp",
+          "stylize.digicam",
+          "stylize.crt"
         ]
       }
     },
@@ -278,7 +400,7 @@
       "ok": true
     },
     {
-      "name": "all 45 transitions render a mid-frame that differs from both sides",
+      "name": "all 51 transitions render a mid-frame that differs from both sides",
       "ok": true,
       "detail": [
         "dissolve:ok",
@@ -325,7 +447,13 @@
         "checker:ok",
         "bars-h:ok",
         "bars-v:ok",
-        "ripple:ok"
+        "ripple:ok",
+        "whip-left:ok",
+        "whip-right:ok",
+        "whip-up:ok",
+        "whip-down:ok",
+        "spin-cw:ok",
+        "spin-ccw:ok"
       ]
     },
     {
@@ -338,7 +466,7 @@
       "ok": true,
       "detail": {
         "frames": 30,
-        "wallMs": 1440,
+        "wallMs": 1421,
         "minPsnrDb": 42.16,
         "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
       }
@@ -367,10 +495,10 @@
       "ok": true,
       "detail": {
         "gpuEffectTilesUnavailable": 0,
-        "tiles": 415,
-        "effects": 41,
+        "tiles": 523,
+        "effects": 53,
         "blends": 17,
-        "transitions": 45,
+        "transitions": 51,
         "masks": 5,
         "sameVariants": [
           "color.grayscale",
@@ -394,6 +522,11 @@
         ],
         "labErrors": []
       }
+    },
+    {
+      "name": "Lab, visual wave: the 12 new effects and 6 new transitions are tiled in 16:9 and 9:16, none flat; each effect's default and extreme differ and each transition's steps differ (a tile without a graphics adapter says so)",
+      "ok": true,
+      "detail": []
     }
   ]
 }

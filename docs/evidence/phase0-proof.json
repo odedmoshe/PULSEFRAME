@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T05:53:52.081Z",
+  "ranAt": "2026-11-17T09:14:07.986Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 466,
+    "editorShellInteractiveMs": 622,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 14,
-      "requestToVisibleInEditorMs": 41.3,
+      "requestToCommitMs": 23.1,
+      "requestToVisibleInEditorMs": 66.7,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 4.46,
-      "p95": 9.15,
-      "max": 10.94
+      "median": 5.62,
+      "p95": 10.95,
+      "max": 16.7
     },
     "export": {
-      "file": "job_mxHlx7B3dPU.mp4",
+      "file": "job_umPR4xlKMf4.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -57,6 +57,7 @@
         "engine": {
           "compositor": "canvas2d/1",
           "evaluator": "evaluate/1",
+          "audio": "plan/2 voice/1",
           "fontFamilies": [
             "Heebo",
             "Rubik",
@@ -68,7 +69,7 @@
         },
         "assets": [
           {
-            "id": "ast_12b37e364d0",
+            "id": "ast_5513d72cbd0",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -98,6 +99,7 @@
             ]
           }
         ],
+        "audioEffects": [],
         "output": {
           "width": 1080,
           "height": 1920,
@@ -135,13 +137,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 626,
-        "readback": 711,
-        "upload": 4432
+        "draw": 780,
+        "readback": 763,
+        "upload": 5427
       },
-      "wallSeconds": 6.88,
-      "realtimeFactor": 0.5087209302325582,
-      "uiWallSeconds": 6.967
+      "wallSeconds": 8.166,
+      "realtimeFactor": 0.4286064168503551,
+      "uiWallSeconds": 8.635
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -169,29 +171,32 @@
     "previewMedia": {
       "decoders": 2,
       "stills": 0,
-      "maxDecoders": 6,
+      "maxDecoders": 10,
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_12b37e364d0": "original"
+        "ast_5513d72cbd0": "original"
       },
       "sourcesUsed": {
-        "ast_12b37e364d0": [
+        "ast_5513d72cbd0": [
           "original"
         ]
       },
       "opened": 2,
       "disposed": 0,
+      "peakDecoders": 2,
+      "refused": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_12b37e364d0/content:206"
+        "ast_5513d72cbd0/content:206"
       ]
     },
     "previewSync": {
       "clock": "audio",
       "audioContextState": "running",
+      "audioSampleRate": 48000,
       "outputLatencyMs": 42.02,
-      "audioScheduledAheadMaxMs": 2090.7,
+      "audioScheduledAheadMaxMs": 2069.3,
       "audioLookaheadMs": 1500,
       "liveAudioNodes": 0,
       "loops": 0,
@@ -491,12 +496,20 @@
         }
       ],
       "framesRequested": 104,
-      "framesPainted": 104,
+      "framesPainted": 103,
       "paintLatenessMs": {
-        "median": 16,
-        "p95": 25.33,
-        "max": 46.67
+        "median": 17.33,
+        "p95": 37.33,
+        "max": 93.33
       },
+      "fxVoices": 0,
+      "fxPrimeMs": 0,
+      "fxPrimeTimedOut": false,
+      "fxLateStarts": 0,
+      "fxLateSkips": 0,
+      "bypassAudioFx": false,
+      "auditioning": false,
+      "unavailableAudioFx": {},
       "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
       "audioOnsetMaxErrorMs": 0.06
     }
@@ -616,7 +629,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 120
+        "count": 126
       }
     },
     {
@@ -624,7 +637,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_87ac8740a61",
+          "id": "clp_8c43fbdf0b1",
           "start": {
             "value": "2",
             "timescale": 1
@@ -644,8 +657,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 14,
-        "requestToVisibleInEditorMs": 41.3,
+        "requestToCommitMs": 23.1,
+        "requestToVisibleInEditorMs": 66.7,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -659,11 +672,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_0c312c465e0"
+          "selected": "clip-clp_dab88c01870"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_0c312c465e0"
+          "selected": "clip-clp_dab88c01870"
         }
       }
     },
@@ -709,7 +722,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_0c312c465e0",
+          "entityId": "clp_dab88c01870",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -765,7 +778,7 @@
       "name": "when the export finishes the editor says so and the file starts saving by itself; the link stays for another copy",
       "ok": true,
       "detail": {
-        "savedName": "pulseframe-job_mxHlx7B3dPU.mp4"
+        "savedName": "pulseframe-job_umPR4xlKMf4.mp4"
       }
     },
     {
@@ -849,22 +862,24 @@
         "statuses": {
           "decoders": 2,
           "stills": 0,
-          "maxDecoders": 6,
+          "maxDecoders": 10,
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_12b37e364d0": "original"
+            "ast_5513d72cbd0": "original"
           },
           "sourcesUsed": {
-            "ast_12b37e364d0": [
+            "ast_5513d72cbd0": [
               "original"
             ]
           },
           "opened": 2,
           "disposed": 0,
+          "peakDecoders": 2,
+          "refused": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_12b37e364d0/content:206"
+            "ast_5513d72cbd0/content:206"
           ]
         }
       }
@@ -875,8 +890,9 @@
       "detail": {
         "clock": "audio",
         "audioContextState": "running",
+        "audioSampleRate": 48000,
         "outputLatencyMs": 42.02,
-        "audioScheduledAheadMaxMs": 2090.7,
+        "audioScheduledAheadMaxMs": 2069.3,
         "audioLookaheadMs": 1500,
         "liveAudioNodes": 0,
         "loops": 0,
@@ -1176,12 +1192,20 @@
           }
         ],
         "framesRequested": 104,
-        "framesPainted": 104,
+        "framesPainted": 103,
         "paintLatenessMs": {
-          "median": 16,
-          "p95": 25.33,
-          "max": 46.67
+          "median": 17.33,
+          "p95": 37.33,
+          "max": 93.33
         },
+        "fxVoices": 0,
+        "fxPrimeMs": 0,
+        "fxPrimeTimedOut": false,
+        "fxLateStarts": 0,
+        "fxLateSkips": 0,
+        "bypassAudioFx": false,
+        "auditioning": false,
+        "unavailableAudioFx": {},
         "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
         "audioOnsetMaxErrorMs": 0.06
       }
@@ -1196,7 +1220,7 @@
           2.50006
         ],
         "maxErrorMs": 0.06,
-        "scheduledAheadMaxMs": 2090.7
+        "scheduledAheadMaxMs": 2069.3
       }
     },
     {
@@ -1204,7 +1228,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_12b37e364d0": [
+          "ast_5513d72cbd0": [
             "original",
             "proxy"
           ]
@@ -1216,7 +1240,7 @@
       "ok": true,
       "detail": {
         "decoders": 2,
-        "max": 6,
+        "max": 10,
         "opened": 2,
         "disposed": 0
       }
