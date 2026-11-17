@@ -25,6 +25,7 @@ import type { Config } from './config.ts';
 import type { Governance } from './governance.ts';
 import { describeMedia } from './ingest.ts';
 import { ModelStore, type ModelStatus } from './models.ts';
+import { assertStorageRoom } from './storage.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
 type ModelFile = CapabilityDescriptor['models'][number];
@@ -463,6 +464,9 @@ export class Speech {
     const p = this.store.getProject(projectId);
     const reference = this.referenceInput(principal, p.doc, a);
     if (!a.text.trim()) throw new ApiError(400, 'invalid_request', 'there is no text to speak');
+    // Every narration is a new sound file (another text or seed is another file), so it is refused once the storage ceiling is
+    // reached, like an export. Here rather than in the route: the REST route and the MCP tool both start narration through this.
+    assertStorageRoom(this.store, 1, 'generate narration');
     const st = await this.status();
     if (!st.narration.ready) throw new ApiError(409, 'voice_not_ready', `narration is not set up: ${st.narration.detail}`, { reason: st.narration.reason }, 'A recorded or imported voice file works without it.');
     const model = st.models.find((m) => m.kind === 'tts' && m.ready)!;
@@ -486,6 +490,7 @@ export class Speech {
     const sentences = splitSentences(a.text, 300);
     if (!sentences.length) throw new ApiError(400, 'invalid_request', 'there is no text to speak');
     if (sentences.length > MAX_SCRIPT_SENTENCES) throw new ApiError(422, 'script_too_long', `the script has ${sentences.length} sentences; at most ${MAX_SCRIPT_SENTENCES} are narrated in one request`, { sentences: sentences.length, max: MAX_SCRIPT_SENTENCES }, 'Send it in parts.');
+    assertStorageRoom(this.store, 1, 'generate narration'); // as in startNarration
     const st = await this.status();
     if (!st.narration.ready) throw new ApiError(409, 'voice_not_ready', `narration is not set up: ${st.narration.detail}`, { reason: st.narration.reason }, 'A recorded or imported voice file works without it.');
     const model = st.models.find((m) => m.kind === 'tts' && m.ready)!;
@@ -567,6 +572,8 @@ export class Speech {
       await this.ffmpeg(['-i', raw, '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le', '-bitexact', '-fflags', '+bitexact', '-y', out], jobId, 'the generated speech could not be converted');
       const bytes = fs.readFileSync(out);
       const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+      // The ceiling may have been reached while the voice was speaking (the start only checked that some room was left).
+      if (!fs.existsSync(this.store.blobPath(contentHash))) assertStorageRoom(this.store, bytes.length, 'store the narration');
       const meta = await describeMedia(out);
       this.store.putBlob(contentHash, out, bytes.length, meta.mimeType);
       const eng = this.probes.get('tts')?.value;

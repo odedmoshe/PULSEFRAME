@@ -68,7 +68,12 @@ export class Store {
   readonly outDir: string;
   readonly tmpDir: string;
 
-  constructor(public dataDir: string) {
+  /**
+   * @param maxStorageBytes Ceiling for everything in the data directory, in bytes (config `maxStorageBytes`; 0 = none). It lives
+   * here, with the directory it limits, so that every path that adds files (uploads, imports, exports, generated pictures, sounds
+   * and speech) reads the same number: a REST route and its MCP tool call the same function and cannot disagree (storage.ts).
+   */
+  constructor(public dataDir: string, public maxStorageBytes = 0) {
     for (const d of ['', 'blobs', 'out', 'tmp']) fs.mkdirSync(path.join(dataDir, d), { recursive: true, mode: 0o700 });
     this.blobDir = path.join(dataDir, 'blobs');
     this.outDir = path.join(dataDir, 'out');

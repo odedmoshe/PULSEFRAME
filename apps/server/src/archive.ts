@@ -98,12 +98,14 @@ export function importArchive(store: Store, file: string): { doc: ProjectDocumen
       } else if (blob) {
         const tmp = path.join(store.tmpDir, `arc_${randomBytes(8).toString('hex')}`);
         const out = fs.openSync(tmp, 'w', 0o600);
+        // Listed as staged before the first byte is written, so a copy that fails half-way (disk full, a read error) is removed
+        // with the others below instead of being left behind in the temporary folder.
+        staged.push({ hash: `sha256:${blob[1]}`, tmp, size });
         const hash = createHash('sha256');
         const buf = Buffer.alloc(1 << 20);
         try {
           for (let done = 0; done < size; ) { const n = fs.readSync(fd, buf, 0, Math.min(buf.length, size - done), pos + done); if (n <= 0) throw bad('the archive ends unexpectedly'); hash.update(buf.subarray(0, n)); fs.writeSync(out, buf, 0, n); done += n; }
         } finally { fs.closeSync(out); }
-        staged.push({ hash: `sha256:${blob[1]}`, tmp, size });
         if (hash.digest('hex') !== blob[1]) throw bad(`media ${blob[1]!.slice(0, 12)}… does not match its content hash; the archive is damaged or was altered`, { name });
       } else throw bad(`unexpected entry "${name.slice(0, 80)}"`, { name });
       pos += size + pad(size);

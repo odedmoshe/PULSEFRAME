@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as T from '@pulseframe/time';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { ApiError, Store } from './store.ts';
@@ -92,6 +92,27 @@ describe('project archive', () => {
     // truncated file, and something that is not a tar at all
     expect(attempt((b) => b.subarray(0, b.length - 3000))).toEqual({ result: '422:invalid_archive', ...clean });
     expect(attempt(() => Buffer.from('this is not an archive'.repeat(100)))).toEqual({ result: '422:invalid_archive', ...clean });
+  });
+  it('a media copy that fails half-way (disk full) leaves no temporary file behind, and nothing is added', async () => {
+    const src = world();
+    const { pid } = seeded(src);
+    const { buf } = await toFile(src, pid);
+    const dst = world();
+    const file = path.join(dst.tmpDir, 'in.tar');
+    fs.writeFileSync(file, buf);
+    // importArchive is synchronous, so while the stand-in is installed nothing else writes through fs.writeSync in this thread.
+    const real = fs.writeSync;
+    let calls = 0;
+    const spy = vi.spyOn(fs, 'writeSync').mockImplementation(((...a: Parameters<typeof fs.writeSync>) => {
+      if (++calls === 2) throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' }); // the second media file
+      return (real as (...x: unknown[]) => number)(...a);
+    }) as typeof fs.writeSync);
+    let thrown: unknown;
+    try { importArchive(dst, file); } catch (e) { thrown = e; } finally { spy.mockRestore(); }
+    expect((thrown as { code?: string }).code).toBe('ENOSPC');
+    expect(calls).toBe(2);
+    expect(fs.readdirSync(dst.tmpDir).filter((n) => n.startsWith('arc_'))).toEqual([]); // used to keep the half-written copy
+    expect([dst.listProjects().length, fs.readdirSync(path.join(dst.dataDir, 'blobs')).length]).toEqual([0, 0]);
   });
   it('a project whose media is missing from the store cannot be archived (it would not be restorable)', () => {
     const src = world();

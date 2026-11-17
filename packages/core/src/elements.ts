@@ -6,7 +6,14 @@
  */
 export type ElementCategory = 'arrow' | 'shape' | 'badge' | 'bubble' | 'frame' | 'bar' | 'line' | 'symbol';
 export interface ElementDef {
-  id: string; version: number; category: ElementCategory; name: { he: string; en: string };
+  id: string;
+  /**
+   * Version of the element's picture as it is stored in a project (recorded in the asset's provenance). Raised whenever the bytes
+   * produced for the same id, colours and size change, so pictures made by different recipes never share an identity; see
+   * ELEMENT_PICTURE_VERSION. Assets made earlier keep their bytes and their recorded version.
+   */
+  version: number;
+  category: ElementCategory; name: { he: string; en: string };
   /** viewBox width and height in user units */
   width: number; height: number;
   /** how many colours the element uses (1 or 2) */
@@ -80,11 +87,20 @@ function rrPath(x: number, y: number, w: number, h: number, r: number, tail?: { 
 }
 
 // ---- the table ----
+/**
+ * Picture version shared by every element (ElementDef.version), the same rule as the built-in sounds: a recipe that gives other
+ * bytes gets a new number.
+ *   1  the first PNGs: they kept the rasteriser's premultiplied colour, so partly transparent edges came out darker, and a short
+ *      side of odd length was resampled by one row or column.
+ *   2  straight (unpremultiplied) alpha, and the short side drawn at an even size directly (2026-11-17).
+ * An element whose own drawing changes later gets a higher number of its own.
+ */
+export const ELEMENT_PICTURE_VERSION = 2;
 type Body = (c: string, k: string) => string;
 interface Entry extends ElementDef { body: Body }
 const TABLE: Entry[] = [];
 const add = (category: ElementCategory, slug: string, he: string, en: string, width: number, height: number, colors: 1 | 2, body: Body): void => {
-  TABLE.push({ id: `element.${category}.${slug}`, version: 1, category, name: { he, en }, width, height, colors, body });
+  TABLE.push({ id: `element.${category}.${slug}`, version: ELEMENT_PICTURE_VERSION, category, name: { he, en }, width, height, colors, body });
 };
 
 // ================= arrows (100 x 100) =================
