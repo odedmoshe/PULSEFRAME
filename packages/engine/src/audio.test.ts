@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, findClip, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, duckEnvelope, envAt, mixClip, panGains, type PlannedAudioClip } from './index.ts';
+import { applyTransaction, createProject, findAudioEffect, findClip, isRamped, sourceEnd, speedEndValue, speedValue, validateProject, volumePoints, type AudioFxInstance, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { audioPlan, chainReach, duckEnvelope, envAt, fxSeed, kernelFor, mixClip, panGains, registerKernel, soundEnd, speechRanges, type EnvPoint, type FxKernel, type PlannedAudioClip } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -151,5 +151,227 @@ describe('audio plan', () => {
       for (let i = 0; i < out.length; i++) if (Math.abs(out[i]! - whole[i]!) > 1e-6) return false;
       return true;
     }), { numRuns: 40 });
+  });
+});
+
+/**
+ * The plan as it was before sound effects existed (frozen copy of the interim body, ADR-0010): a document without effects
+ * must still be planned exactly like this.
+ */
+function planBeforeEffects(doc: ProjectDocument) {
+  const seq = doc.sequences[doc.mainSequenceId]!;
+  const sr = doc.settings.sampleRate;
+  const FLAT: EnvPoint[] = [{ s: 0, g: 1 }];
+  const sliceEnv = (global: EnvPoint[], from: number, length: number): EnvPoint[] => {
+    if (global.length === 1) return [{ s: 0, g: global[0]!.g }, { s: length, g: global[0]!.g }];
+    const out: EnvPoint[] = [{ s: 0, g: envAt(global, from) }];
+    for (const p of global) if (p.s > from && p.s < from + length) out.push({ s: p.s - from, g: p.g });
+    out.push({ s: length, g: envAt(global, from + length) });
+    return out;
+  };
+  const clips: PlannedAudioClip[] = [];
+  let total = 0;
+  for (const tr of seq.tracks) for (const c of tr.clips) total = Math.max(total, T.nearestSampleIndex(T.add(c.start, c.duration), sr));
+  for (const tr of seq.tracks) {
+    if (tr.kind !== 'audio' || tr.muted) continue;
+    const trackGain = tr.audio?.gain ?? 1;
+    const d = tr.audio?.duck;
+    const ms = (v: number) => Math.round((v * sr) / 1000);
+    const duckGlobal = d ? duckEnvelope(speechRanges(doc, seq, d.sourceTrackIds), d.reductionDb, ms(d.attackMs), ms(d.releaseMs)) : FLAT;
+    for (const c of tr.clips) {
+      if (c.type !== 'media' || !doc.assets[c.assetId]?.audio) continue;
+      const gain = c.gain * trackGain;
+      if (gain <= 0) continue;
+      const at = T.nearestSampleIndex(c.start, sr);
+      const length = T.nearestSampleIndex(T.add(c.start, c.duration), sr) - at;
+      if (length <= 0) continue;
+      const fin = Math.min(length, c.fadeIn ? T.nearestSampleIndex(c.fadeIn, sr) : 0);
+      const fout = Math.min(length - fin, c.fadeOut ? T.nearestSampleIndex(c.fadeOut, sr) : 0);
+      const fade: EnvPoint[] = [];
+      if (fin > 0) fade.push({ s: 0, g: 0 }, { s: fin, g: 1 }); else fade.push({ s: 0, g: 1 });
+      if (fout > 0) fade.push({ s: length - fout, g: 1 }, { s: length, g: 0 }); else fade.push({ s: length, g: 1 });
+      const vol = c.volume?.length ? sliceEnv(volumePoints(c.volume, (t) => T.nearestSampleIndex(t, sr)).map((p) => ({ s: Math.round(p.x), g: p.value })), 0, length) : undefined;
+      clips.push({ ...(vol ? { vol } : {}), ...(c.reverse ? { reverse: true as const } : {}), ...(isRamped(c) ? { speedEnd: speedEndValue(c), ...(c.rampWindow ? { rampOffset: T.nearestSampleIndex(c.rampWindow.offset, sr), rampTotal: T.nearestSampleIndex(c.rampWindow.total, sr) } : {}), ...(c.speedCurve ? { rampCurve: c.speedCurve } : {}) } : c.keepPitch && speedValue(c) !== 1 ? { keepPitch: true as const } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
+    }
+  }
+  return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null };
+}
+
+// Kernels for the real effect types, for builds where the kernels worker's registrations are absent (labelled test kernels:
+// they pass the sound through and declare a reach of the same shape). With the real kernels present those are used instead;
+// every expectation below derives its numbers from chainReach, so it holds for either.
+const passThrough = (type: string, stage: FxKernel['stage'], reach: FxKernel['reach']): void => { if (!kernelFor(type, findAudioEffect(type)!.version)) registerKernel({ type, version: findAudioEffect(type)!.version, stage, reach, create: () => ({ process() {} }) }); };
+passThrough('voice.telephone', 3, () => ({ warm: 600, tail: 0 }));
+passThrough('voice.robot', 3, (_p, sr) => ({ warm: Math.round(0.0165 * sr), tail: 0 }));
+passThrough('tone.bassboost', 2, () => ({ warm: 4000, tail: 0 }));
+passThrough('space.echo', 4, (p, sr) => { const n = Number(p.repeats) * Math.round((Number(p.delayMs) * sr) / 1000); return { warm: n, tail: n }; });
+passThrough('space.reverb', 4, (p, sr) => { const n = Math.round(2.41 * Number(p.decaySeconds) * sr) + 3000; return { warm: n, tail: n }; });
+passThrough('utility.width', 6, () => ({ warm: 0, tail: 0 }));
+
+const withFx = (doc: ProjectDocument, clipId: string, list: AudioFxInstance[]): ProjectDocument => {
+  const d = structuredClone(doc);
+  (findClip(d, clipId)!.clip as any).audioFx = list;
+  return d;
+};
+const inst = (id: string, type: string, params: Record<string, number | string | boolean> = {}, enabled = true): AudioFxInstance => ({ id, type, enabled, params });
+
+describe('audio plan with sound effects (ADR-0010)', () => {
+  /** Documents covering what the plan has to express without effects. */
+  function fixtures() {
+    const p = project();
+    const docs: Record<string, ProjectDocument> = { plain: p.doc };
+    docs.fadesAndTrack = tx(p.doc, [{ op: 'set_clip_fades', args: { clipId: p.mc, fadeIn: T.rt(1, 2), fadeOut: T.rt(1, 1) } }, { op: 'set_track_audio', args: { trackId: p.mt, gain: 0.5, pan: -0.5 } }]).doc;
+    const ducked = tx(p.doc, [{ op: 'set_ducking', args: { trackId: p.mt, sourceTrackIds: [p.vt], reductionDb: 20, attackMs: 100, releaseMs: 200 } }]).doc;
+    docs.ducked = ducked;
+    docs.duckedTranscript = tx(ducked, [{ op: 'set_transcript', args: { assetId: p.voice, language: 'he', segments: [{ start: T.rt(1, 2), duration: T.rt(1, 2), text: 'שלום' }] } }]).doc;
+    const split = tx(p.doc, [{ op: 'split_clip', args: { clipId: p.mc, at: f(90) } }]);
+    docs.crossfade = tx(split.doc, [{ op: 'set_audio_crossfade', args: { clipId: split.results[0]!.output!.rightClipId as string, duration: f(15) } }]).doc;
+    docs.volumeKeys = tx(p.doc, [{ op: 'set_volume_keyframe', args: { clipId: p.mc, time: f(30), value: 1 } }, { op: 'set_volume_keyframe', args: { clipId: p.mc, time: f(90), value: 0.25 } }, { op: 'set_clip_gain', args: { clipId: p.mc, gain: 0.5 } }]).doc;
+    docs.reversedFast = tx(p.doc, [{ op: 'set_clip_speed', args: { clipId: p.vc, speed: 1.5 } }, { op: 'set_clip_reverse', args: { clipId: p.mc, reverse: true } }]).doc;
+    docs.keepPitch = tx(p.doc, [{ op: 'set_clip_speed', args: { clipId: p.vc, speed: 0.5 } }, { op: 'set_clip_pitch', args: { clipId: p.vc, keepPitch: true } }]).doc;
+    docs.ramp = tx(p.doc, [{ op: 'set_clip_speed_ramp', args: { clipId: p.vc, from: 1, to: 0.5 } }]).doc;
+    docs.muted = tx(ducked, [{ op: 'set_track_audio', args: { trackId: p.vt, muted: true } }]).doc;
+    for (const [name, d] of Object.entries(docs)) expect(validateProject(d), name).toEqual([]);
+    return { p, docs };
+  }
+
+  it('a document without sound effects is planned exactly as before effects existed, with cutTails [] and missingFx []', () => {
+    const { docs } = fixtures();
+    for (const [name, d] of Object.entries(docs)) {
+      const plan = audioPlan(d);
+      const { cutTails, missingFx, ...rest } = plan;
+      expect(JSON.stringify(rest), name).toBe(JSON.stringify(planBeforeEffects(d)));
+      expect([cutTails, missingFx], name).toEqual([[], []]);
+      expect(plan.clips.some((c) => c.voice), name).toBe(false);
+      // and the bypass (session A/B) plan is the same plan
+      expect(audioPlan(d, undefined, { bypassFx: true }), name).toEqual(plan);
+    }
+  });
+
+  it('disabled effects and effects at their identity settings give no voice; the other clips are unchanged', () => {
+    const { p } = fixtures();
+    const before = audioPlan(p.doc);
+    for (const list of [[inst('afx_1', 'voice.telephone', {}, false)], [inst('afx_1', 'voice.telephone', { amount: 0 })], [inst('afx_1', 'utility.width', { stereoWidth: 1 }), inst('afx_2', 'space.echo', { amount: 0 }, true), inst('afx_3', 'voice.robot', {}, false)]]) {
+      const d = withFx(p.doc, p.vc, list);
+      expect(validateProject(d)).toEqual([]);
+      const plan = audioPlan(d);
+      expect(plan).toEqual(before);
+    }
+  });
+
+  it('voice fields: chain in stage order with registry versions and seeds, exact source mapping, reach from chainReach, duck over length + tail', () => {
+    const { p, docs } = fixtures();
+    // listed out of order on purpose: the plan processes in the fixed stage order
+    const list = [inst('afx_w', 'utility.width', { stereoWidth: 0.5 }), inst('afx_e', 'space.echo', { delayMs: 200, repeats: 3 }), inst('afx_t', 'voice.telephone', { hiss: 0.5, seed: 9 }), inst('afx_b', 'tone.bassboost')];
+    const d = withFx(docs.ducked!, p.mc, list);
+    expect(validateProject(d)).toEqual([]);
+    const plan = audioPlan(d);
+    const m = plan.clips.find((c) => c.clipId === p.mc)!;
+    const v = m.voice!;
+    expect(v.chain.map((x) => x.type)).toEqual(['tone.bassboost', 'voice.telephone', 'space.echo', 'utility.width']);
+    expect(v.chain.map((x) => [x.id, x.version, x.stage])).toEqual([['afx_b', 1, 2], ['afx_t', 1, 3], ['afx_e', 1, 4], ['afx_w', 1, 6]]);
+    const tel = v.chain[1]!;
+    expect(tel.params).toEqual({ amount: 1, grit: 0.4, hiss: 0.5, seed: 9 }); // defaults filled in
+    expect(tel.seed).toBe(fxSeed('afx_t', tel.params));
+    expect(v.chain.filter((x) => x.type !== 'voice.telephone').every((x) => x.seed === 0)).toBe(true);
+    const clip = findClip(d, p.mc)!.clip as any;
+    expect([v.sourceIn, v.sourceEnd, v.speed, v.reverse, v.sourceRate]).toEqual([T.normalize(clip.sourceIn), T.normalize(sourceEnd(clip)), { num: 1, den: 1 }, false, 48000]);
+    const reach = chainReach(v.chain, 48000);
+    expect([v.warmWindow, v.warmRing]).toEqual([reach.warmWindow, reach.warmRing]);
+    // the music clip ends at the programme end: its whole tail is cut there (none of it is kept)
+    expect(m.at + m.length).toBe(plan.totalSamples);
+    expect(v.tail).toBe(0);
+    expect(v.cutFrom).toBe(m.length);
+    expect(plan.cutTails).toEqual([{ clipId: p.mc, seconds: Number((reach.tail / 48000).toFixed(3)) }]);
+    expect(soundEnd(m)).toBe(plan.totalSamples);
+    // everything else about the clip is as without effects
+    const { voice, ...rest } = m;
+    void voice;
+    expect(rest).toEqual(audioPlan(docs.ducked!).clips.find((c) => c.clipId === p.mc));
+    expect(plan.missingFx).toEqual([]);
+
+    // on the voice clip (2 s .. 5 s of a 10 s programme) the tail is kept whole, and a ducked track ducks it
+    const dv = tx(withFx(docs.ducked!, p.vc, [inst('afx_e', 'space.echo', { delayMs: 200, repeats: 3 })]), [{ op: 'set_ducking', args: { trackId: p.vt, sourceTrackIds: [p.mt], reductionDb: 12, attackMs: 50, releaseMs: 50 } }]).doc;
+    expect(validateProject(dv)).toEqual([]);
+    const pv = audioPlan(dv);
+    const vc = pv.clips.find((c) => c.clipId === p.vc)!;
+    const echoTail = chainReach(vc.voice!.chain, 48000).tail;
+    expect(echoTail).toBeGreaterThan(0);
+    expect([vc.voice!.tail, vc.voice!.cutFrom, pv.cutTails]).toEqual([echoTail, undefined, []]);
+    expect(vc.duck.at(-1)!.s).toBe(vc.length + echoTail);
+    // music plays under the whole voice clip, so the voice track is ducked over the clip and its tail alike
+    expect(vc.duck.every((x) => x.g < 1)).toBe(true);
+    // tails never trigger ducking: the music under the voice is ducked exactly as without the echo
+    expect(pv.clips.find((c) => c.clipId === p.mc)!.duck).toEqual(audioPlan(docs.ducked!).clips.find((c) => c.clipId === p.mc)!.duck);
+  });
+
+  it('a tail that would pass the programme end is cut there with a fade of at most 10 ms, and reported', () => {
+    const { p } = fixtures();
+    // the voice clip moved to end 0.5 s before the programme end, with an echo of 1.2 s
+    const moved = tx(p.doc, [{ op: 'move_clip', args: { clipId: p.vc, start: f(195) } }]).doc;
+    const d = withFx(moved, p.vc, [inst('afx_e', 'space.echo', { delayMs: 300, repeats: 4 })]);
+    expect(validateProject(d)).toEqual([]);
+    const plan = audioPlan(d);
+    const c = plan.clips.find((x) => x.clipId === p.vc)!;
+    const full = chainReach(c.voice!.chain, 48000).tail;
+    expect(full).toBeGreaterThan(24000);
+    expect(c.at + c.length).toBe(plan.totalSamples - 24000);
+    expect(c.voice!.tail).toBe(24000);
+    expect(c.voice!.cutFrom).toBe(c.length + 24000 - 480);
+    expect(soundEnd(c)).toBe(plan.totalSamples);
+    expect(plan.cutTails).toEqual([{ clipId: p.vc, seconds: Number(((full - 24000) / 48000).toFixed(3)) }]);
+    expect(c.duck.at(-1)!.s).toBe(c.length + 24000);
+    // a programme that ends 3 ms after the clip: the fade covers what is left of the tail, never the clip itself
+    const short = tx(p.doc, [{ op: 'trim_clip', args: { clipId: p.mc, edge: 'end', to: f(150) } }]).doc;
+    const d2 = withFx(short, p.vc, [inst('afx_e', 'space.echo', { delayMs: 300, repeats: 4 })]);
+    const c2 = audioPlan(d2).clips.find((x) => x.clipId === p.vc)!;
+    expect([c2.voice!.tail, c2.voice!.cutFrom]).toEqual([0, c2.length]);
+  });
+
+  it('effects this build cannot run are reported in missingFx and left out; the wave-1 time-map limit too', () => {
+    const { p, docs } = fixtures();
+    const d = withFx(p.doc, p.vc, [inst('afx_x', 'voice.future'), inst('afx_e', 'space.echo')]);
+    const plan = audioPlan(d);
+    expect(plan.missingFx).toEqual([{ clipId: p.vc, type: 'voice.future', version: 0 }]);
+    expect(plan.clips.find((c) => c.clipId === p.vc)!.voice!.chain.map((x) => x.type)).toEqual(['space.echo']);
+    // a clip that keeps its pitch at another speed (refused by validation as audio_fx_time_map) gets no voice and is reported
+    const kp = withFx(docs.keepPitch!, p.vc, [inst('afx_e', 'space.echo')]);
+    expect(validateProject(kp).map((i) => i.code)).toContain('audio_fx_time_map');
+    const kpPlan = audioPlan(kp);
+    expect(kpPlan.clips.find((c) => c.clipId === p.vc)!.voice).toBeUndefined();
+    expect(kpPlan.missingFx).toEqual([{ clipId: p.vc, type: 'space.echo', version: 1 }]);
+    // the bypass plan has no voices and reports nothing
+    const bypass = audioPlan(d, undefined, { bypassFx: true });
+    expect([bypass.clips.some((c) => c.voice), bypass.missingFx, bypass.cutTails]).toEqual([false, [], []]);
+    expect(bypass).toEqual(audioPlan(p.doc));
+  });
+
+  it('a reversed clip at another speed carries the exact rational mapping; split parts keep their own sources', () => {
+    const { p } = fixtures();
+    const d0 = tx(p.doc, [{ op: 'set_clip_speed', args: { clipId: p.vc, speed: 1.5 } }, { op: 'set_clip_reverse', args: { clipId: p.vc, reverse: true } }]).doc;
+    const d = withFx(d0, p.vc, [inst('afx_r', 'voice.robot')]);
+    expect(validateProject(d)).toEqual([]);
+    const c = audioPlan(d).clips.find((x) => x.clipId === p.vc)!;
+    const clip = findClip(d, p.vc)!.clip as any;
+    expect([c.voice!.speed, c.voice!.reverse, c.voice!.sourceIn, c.voice!.sourceEnd]).toEqual([{ num: 3, den: 2 }, true, T.normalize(clip.sourceIn), T.normalize(sourceEnd(clip))]);
+    expect(c.voice!.tail).toBe(0); // a window stage has no tail
+  });
+
+  it('opts.sampleRate places every clip and speech range at that rate (a 48 kHz document at 44.1 kHz)', () => {
+    const { p, docs } = fixtures();
+    for (const [name, d] of Object.entries(docs)) {
+      const at44 = audioPlan(d, undefined, { sampleRate: 44100 });
+      const asIf44 = planBeforeEffects({ ...d, settings: { ...d.settings, sampleRate: 44100 } });
+      expect(JSON.stringify({ ...at44, cutTails: undefined, missingFx: undefined }), name).toBe(JSON.stringify(asIf44));
+    }
+    const m = audioPlan(docs.ducked!, undefined, { sampleRate: 44100 }).clips.find((c) => c.clipId === p.mc)!;
+    // voice clip at 2 s..5 s -> 88200..220500 at 44.1 kHz; attack 100 ms = 4410, release 200 ms = 8820
+    expect(m.duck).toEqual([{ s: 0, g: 1 }, { s: 83790, g: 1 }, { s: 88200, g: 0.1 }, { s: 220500, g: 0.1 }, { s: 229320, g: 1 }, { s: 441000, g: 1 }]);
+    expect(speechRanges(docs.ducked!, docs.ducked!.sequences[docs.ducked!.mainSequenceId]!, [p.vt], 44100)).toEqual([[88200, 220500]]);
+    const v = audioPlan(docs.ducked!, undefined, { sampleRate: 44100 }).clips.find((c) => c.clipId === p.vc)!;
+    expect([v.at, v.length]).toEqual([88200, 132300]);
+    // a voice planned at 44.1 kHz: reach and tail in samples of that rate
+    const fx44 = audioPlan(withFx(p.doc, p.vc, [inst('afx_e', 'space.echo')]), undefined, { sampleRate: 44100 }).clips.find((c) => c.clipId === p.vc)!.voice!;
+    expect(fx44.tail).toBe(chainReach(fx44.chain, 44100).tail);
   });
 });

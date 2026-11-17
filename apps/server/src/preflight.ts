@@ -32,7 +32,8 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   // 1. what would stop the render
   const plan = exporter.plan(master, revision, opts.variantId ? { variantId: opts.variantId } : {});
   for (const b of plan.blockers) issues.push({ code: b.code, severity: 'blocker', message: b.message, ids: b.ids });
-  for (const w of plan.warnings) issues.push({ code: w.code, severity: 'warning', message: w.message, ids: w.ids });
+  // A sound-effect tail cut at the end of the video is how effects are designed to behave (ADR-0010), so it is a note here.
+  for (const w of plan.warnings) issues.push({ code: w.code, severity: w.code === 'audio_tail_cut' ? 'note' : 'warning', message: w.message, ids: w.ids });
 
   // 2. stretches with no picture at all (the background colour would show)
   const covered = seq.tracks.filter((t) => (t.kind === 'video' || t.kind === 'text') && !t.hidden).flatMap((t) => t.clips.map((c) => [fi(c.start), fi(T.add(c.start, c.duration))] as [number, number])).sort((a, b) => a[0] - b[0]);
@@ -103,6 +104,6 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   return {
     revision, variantId: opts.variantId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: variant?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, transition handles, upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), accessibility contrast, platform rules.',
+    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, transition handles, upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
   };
 }

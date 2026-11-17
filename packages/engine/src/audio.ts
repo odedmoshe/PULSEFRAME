@@ -7,8 +7,10 @@
  * envelopes in clip-local samples. Mixers must evaluate them per sample (or with exact linear ramps).
  */
 import * as T from '@pulseframe/time';
-import { isRamped, sourceEnd, speedEndValue, speedValue, timelineAt, volumePoints, type AudioFxParams, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
+import { findAudioEffect, isRamped, sortAudioFx, sourceEnd, speedEndValue, speedOf, speedValue, timelineAt, volumePoints, type AudioFxParams, type MediaClip, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
 import type { PlannedFx } from './audiofx/kernel.ts';
+import { chainReach, kernelFor } from './audiofx/registry.ts';
+import './audiofx/kernels/index.ts'; // every kernel of this build is registered before a plan is made
 export type { PlannedFx } from './audiofx/kernel.ts';
 
 export interface EnvPoint { s: number; g: number }
@@ -56,6 +58,7 @@ export interface PlannedVoice {
   cutFrom?: number;
 }
 export interface AudioPlan { sampleRate: number; totalSamples: number; clips: PlannedAudioClip[]; loudness: { target: number; truePeak: number } | null;
+  /** Clips whose ring-out would pass the programme end: `seconds` of ring-out removed there (the kept part fades out over at most 10 ms). */
   cutTails: { clipId: string; seconds: number }[];
   /** Effects of the document this build has no kernel for (left out of the plan; export blocks on them). */
   missingFx: { clipId: string; type: string; version: number }[] }
@@ -81,9 +84,8 @@ const sliceEnv = (global: EnvPoint[], from: number, length: number): EnvPoint[] 
   return out;
 };
 
-/** Timeline sample ranges in which the source tracks carry speech: transcript phrases where a transcript exists, else whole clips. */
-export function speechRanges(doc: ProjectDocument, seq: Sequence, sourceTrackIds: string[]): [number, number][] {
-  const sr = doc.settings.sampleRate;
+/** Timeline sample ranges (at `sr`, default the project rate) in which the source tracks carry speech: transcript phrases where a transcript exists, else whole clips. Sound-effect tails never count as speech. */
+export function speechRanges(doc: ProjectDocument, seq: Sequence, sourceTrackIds: string[], sr = doc.settings.sampleRate): [number, number][] {
   const out: [number, number][] = [];
   for (const tr of seq.tracks) {
     if (!sourceTrackIds.includes(tr.id) || tr.kind !== 'audio' || tr.muted) continue;
@@ -121,11 +123,34 @@ export function duckEnvelope(ranges: [number, number][], reductionDb: number, at
 
 const audible = (t: Track) => t.kind === 'audio' && !t.muted;
 
-/** Interim body (lead contract): sound effects are not planned yet; `opts.sampleRate` and `bypassFx` are accepted. */
+/**
+ * The planned effects of a clip (ADR-0010): enabled, non-identity effects in processing order (stage, then registry order), with
+ * the registry version and their noise seed. Effects this build cannot run (unknown type, no kernel, invalid settings) are
+ * reported in `missing` and left out; export blocks on them, so nothing is ever dropped silently.
+ */
+function plannedChain(c: MediaClip, missing: AudioPlan['missingFx']): PlannedFx[] {
+  const chain: PlannedFx[] = [];
+  for (const fx of sortAudioFx(c.audioFx ?? [])) {
+    if (!fx.enabled) continue;
+    const def = findAudioEffect(fx.type);
+    const parsed = def?.params.safeParse(fx.params);
+    if (!def || !parsed?.success || !kernelFor(fx.type, def.version)) { missing.push({ clipId: c.id, type: fx.type, version: def?.version ?? 0 }); continue; }
+    const params = parsed.data as AudioFxParams;
+    if (def.isIdentity(params)) continue;
+    chain.push({ id: fx.id, type: fx.type, version: def.version, stage: def.stage, params, seed: def.seeded ? fxSeed(fx.id, params) : 0 });
+  }
+  return chain;
+}
+
+/**
+ * The plan of a sequence. `opts.sampleRate` places everything at another output rate (browser export); `opts.bypassFx` plans
+ * without sound effects (the session A/B switch). A clip without effects is planned exactly as before effects existed.
+ */
 export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId, opts: AudioPlanOptions = {}): AudioPlan {
   const seq = doc.sequences[sequenceId]!;
   const sr = opts.sampleRate ?? doc.settings.sampleRate;
   const clips: PlannedAudioClip[] = [];
+  const cutTails: AudioPlan['cutTails'] = [], missingFx: AudioPlan['missingFx'] = [];
   let total = 0;
   for (const tr of seq.tracks) for (const c of tr.clips) total = Math.max(total, T.nearestSampleIndex(T.add(c.start, c.duration), sr));
   for (const tr of seq.tracks) {
@@ -133,7 +158,7 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId,
     const trackGain = tr.audio?.gain ?? 1;
     const d = tr.audio?.duck;
     const ms = (v: number) => Math.round((v * sr) / 1000);
-    const duckGlobal = d ? duckEnvelope(speechRanges(doc, seq, d.sourceTrackIds), d.reductionDb, ms(d.attackMs), ms(d.releaseMs)) : FLAT;
+    const duckGlobal = d ? duckEnvelope(speechRanges(doc, seq, d.sourceTrackIds, sr), d.reductionDb, ms(d.attackMs), ms(d.releaseMs)) : FLAT;
     for (const c of tr.clips) {
       if (c.type !== 'media' || !doc.assets[c.assetId]?.audio) continue;
       const gain = c.gain * trackGain;
@@ -148,10 +173,32 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId,
       if (fout > 0) fade.push({ s: length - fout, g: 1 }, { s: length, g: 0 }); else fade.push({ s: length, g: 1 });
       // smooth segments become short straight pieces here, so every mixer follows the same curve
       const vol = c.volume?.length ? sliceEnv(volumePoints(c.volume, (t) => T.nearestSampleIndex(t, sr)).map((p) => ({ s: Math.round(p.x), g: p.value })), 0, length) : undefined;
-      clips.push({ ...(vol ? { vol } : {}), ...(c.reverse ? { reverse: true as const } : {}), ...(isRamped(c) ? { speedEnd: speedEndValue(c), ...(c.rampWindow ? { rampOffset: T.nearestSampleIndex(c.rampWindow.offset, sr), rampTotal: T.nearestSampleIndex(c.rampWindow.total, sr) } : {}), ...(c.speedCurve ? { rampCurve: c.speedCurve } : {}) } : c.keepPitch && speedValue(c) !== 1 ? { keepPitch: true as const } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) });
+      const planned: PlannedAudioClip = { ...(vol ? { vol } : {}), ...(c.reverse ? { reverse: true as const } : {}), ...(isRamped(c) ? { speedEnd: speedEndValue(c), ...(c.rampWindow ? { rampOffset: T.nearestSampleIndex(c.rampWindow.offset, sr), rampTotal: T.nearestSampleIndex(c.rampWindow.total, sr) } : {}), ...(c.speedCurve ? { rampCurve: c.speedCurve } : {}) } : c.keepPitch && speedValue(c) !== 1 ? { keepPitch: true as const } : {}), clipId: c.id, trackId: tr.id, assetId: c.assetId, at, length, source: T.nearestSampleIndex(c.sourceIn, sr), speed: speedValue(c), gain, pan: tr.audio?.pan ?? 0, fade, duck: sliceEnv(duckGlobal, at, length) };
+      const chain = opts.bypassFx || !c.audioFx?.length ? [] : plannedChain(c, missingFx);
+      if (chain.length && (planned.keepPitch || planned.speedEnd !== undefined)) {
+        // Wave-1 limit (validation code audio_fx_time_map): the stretcher and the ramp resampler have no seekable time map yet.
+        // Such a document cannot be committed; if one is read anyway, its effects are reported as unavailable, never dropped silently.
+        for (const fx of chain) missingFx.push({ clipId: c.id, type: fx.type, version: fx.version });
+      } else if (chain.length) {
+        const asset = doc.assets[c.assetId]!;
+        const reach = chainReach(chain, sr);
+        // Tails ring on past the clip but never past the programme end: there they are cut with a fade of at most 10 ms.
+        const tail = Math.min(reach.tail, total - at - length);
+        const voice: PlannedVoice = {
+          chain, sourceIn: T.normalize(c.sourceIn), sourceEnd: T.normalize(sourceEnd(c)), speed: { ...speedOf(c) }, reverse: !!c.reverse,
+          sourceRate: asset.audio!.sampleRate, warmWindow: reach.warmWindow, warmRing: reach.warmRing, tail,
+        };
+        if (tail < reach.tail) {
+          voice.cutFrom = Math.min(length + tail, Math.max(length, total - at - Math.round(0.01 * sr)));
+          cutTails.push({ clipId: c.id, seconds: Number(((reach.tail - tail) / sr).toFixed(3)) });
+        }
+        planned.duck = sliceEnv(duckGlobal, at, length + tail); // a ducked track ducks the tail too
+        planned.voice = voice;
+      }
+      clips.push(planned);
     }
   }
-  return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null, cutTails: [], missingFx: [] };
+  return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null, cutTails, missingFx };
 }
 export const soundEnd = (c: PlannedAudioClip): number => c.at + c.length + (c.voice?.tail ?? 0);
 /** FNV-1a 32-bit hash of the instance id, xor params.seed (integer): deterministic per document. */

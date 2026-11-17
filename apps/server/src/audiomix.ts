@@ -6,10 +6,10 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import fs from 'node:fs';
 import type { Readable } from 'node:stream';
-import { mixClip, PitchStretcher, RampResampler, rampSpanOf, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
+import { mixClip, openClipVoice, PitchStretcher, RampResampler, rampSpanOf, soundEnd, type AudioPlan, type ClipVoice, type PlannedAudioClip } from '@pulseframe/engine';
 import { ApiError } from './store.ts';
 
-const CHUNK = 48_000; // frames per mixing step
+const CHUNK = 48_000; // frames per mixing step (default)
 const HIGH_WATER = 8 << 20;
 
 /** Sequential reader of a child process's stdout with backpressure. Short streams are padded with silence. */
@@ -108,6 +108,65 @@ class StretchReader {
   close() { this.source.close(); }
 }
 
+/**
+ * A clip with sound effects (ADR-0010): ffmpeg only decodes the stretch of native source the voice asks for (in playing order),
+ * and the shared engine voice does everything else — time map, effects, volume keys, fades, gain, ducking, balance and the tail
+ * cut. Its output is added straight into the mix. The voice is opened at the first sample this export needs, so a range starts
+ * with the same warm-up as any other route.
+ */
+class VoiceReader {
+  private ready: Float32Array[] = [];
+  private size = 0; // output frames ready
+  private pad: number; // leading silence (native indices below 0, forward clips)
+  private left: number; // frames still to read from ffmpeg
+  private done = false;
+  constructor(private voice: ClipVoice, private source: PcmReader | null, pad: number, fromSource: number) {
+    this.pad = pad;
+    this.left = source ? fromSource : 0;
+  }
+  private add(out: Float32Array) { if (out.length) { this.ready.push(out); this.size += out.length >> 1; } }
+  async read(frames: number): Promise<Float32Array> {
+    while (this.size < frames && !this.done) {
+      if (this.pad > 0) { const n = Math.min(this.pad, 16384); this.pad -= n; this.add(this.voice.push(new Float32Array(n * 2))); }
+      else if (this.left > 0) { const n = Math.min(this.left, 16384); this.left -= n; this.add(this.voice.push(await this.source!.read(n))); }
+      else { this.add(this.voice.finish()); this.done = true; }
+    }
+    const out = new Float32Array(frames * 2); // short of output at the very end: silence
+    let filled = 0;
+    while (filled < out.length && this.ready.length) {
+      const c = this.ready[0]!;
+      const take = Math.min(c.length, out.length - filled);
+      out.set(c.subarray(0, take), filled);
+      filled += take;
+      if (take === c.length) this.ready.shift(); else this.ready[0] = c.subarray(take);
+    }
+    this.size -= filled >> 1;
+    return out;
+  }
+  close() { this.source?.close(); }
+}
+/**
+ * Open the voice of `clip` for clip-local output [from, to) and the ffmpeg process that decodes its input: native PCM at the
+ * source rate from the file's own time zero (first_pts, as for plain clips), mono heard in both channels, padded with silence
+ * after the end of the file, trimmed to the native stretch the voice reads and reversed for a reversed clip.
+ */
+function openVoiceReader(plan: AudioPlan, clip: PlannedAudioClip, path: string, originSeconds: number, mono: boolean, from: number, to: number): VoiceReader {
+  const v = clip.voice!;
+  const voice = openClipVoice(clip, plan.sampleRate, v.sourceRate, from, to);
+  const { origin, first, last, reverse } = voice.input;
+  const total = Math.max(0, last - first);
+  // native indices of P[first, last): forward origin+first .. origin+last; reversed origin−last .. origin−first (read backwards)
+  const lo = reverse ? origin - last : origin + first, hi = reverse ? origin - first : origin + last;
+  const a = Math.max(0, lo), b = Math.max(0, hi);
+  // forward: native indices below 0 come first in playing order and are silence; reversed they come last and finish() supplies them
+  const pad = reverse ? 0 : Math.min(total, a - lo);
+  const fromSource = b - a;
+  if (fromSource <= 0) return new VoiceReader(voice, null, pad, 0);
+  const af = `aresample=${v.sourceRate}:first_pts=${Math.round(originSeconds * v.sourceRate)},${mono ? 'pan=stereo|c0=c0|c1=c0,' : ''}aformat=sample_fmts=flt:channel_layouts=stereo,apad,atrim=start_sample=${a}:end_sample=${b},asetpts=PTS-STARTPTS${reverse ? ',areverse' : ''}`;
+  const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-copyts', '-i', path, '-map', '0:a:0', '-af', af, '-f', 'f32le', '-ac', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
+  return new VoiceReader(voice, new PcmReader(child), pad, fromSource);
+}
+
 /** The single static gain export applies for a loudness target: reach the target, but never push true peak above the ceiling. */
 export function normalisationGain(m: Loudness, target: number, ceiling: number): { gainDb: number; limitedByPeak: boolean } {
   if (m.integratedLufs === null) return { gainDb: 0, limitedByPeak: false };
@@ -116,22 +175,35 @@ export function normalisationGain(m: Loudness, target: number, ceiling: number):
   return want > room ? { gainDb: room, limitedByPeak: true } : { gainDb: want, limitedByPeak: false };
 }
 
-/** Mix timeline samples [firstSample, firstSample + totalSamples) of the plan into a raw float stereo file. */
-export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) => string, firstSample: number, totalSamples: number, rawFile: string, isCanceled: () => boolean = () => false, originOf: (assetId: string) => number = () => 0, monoOf: (assetId: string) => boolean = () => false): Promise<{ clips: number; peak: number }> {
+/**
+ * Mix timeline samples [firstSample, firstSample + totalSamples) of the plan into a raw float stereo file. `chunk` (frames per
+ * mixing step) changes nothing in the result; it is a parameter so that tests can prove that.
+ */
+export async function mixToRaw(plan: AudioPlan, blobPathOf: (assetId: string) => string, firstSample: number, totalSamples: number, rawFile: string, isCanceled: () => boolean = () => false, originOf: (assetId: string) => number = () => 0, monoOf: (assetId: string) => boolean = () => false, chunk = CHUNK): Promise<{ clips: number; peak: number }> {
   const end = firstSample + totalSamples;
-  const active = plan.clips.filter((c) => c.at < end && c.at + c.length > firstSample);
-  const readers = new Map<PlannedAudioClip, PcmReader | StretchReader>();
+  // a clip with effects sounds until the end of its tail (soundEnd), not only until its own end
+  const active = plan.clips.filter((c) => c.at < end && soundEnd(c) > firstSample);
+  const readers = new Map<PlannedAudioClip, PcmReader | StretchReader | VoiceReader>();
   const fd = fs.openSync(rawFile, 'w');
   let peak = 0;
   try {
-    for (let a = firstSample; a < end; a += CHUNK) {
+    for (let a = firstSample; a < end; a += chunk) {
       if (isCanceled()) throw new Error('canceled');
-      const len = Math.min(CHUNK, end - a);
+      const len = Math.min(chunk, end - a);
       const out = new Float32Array(len * 2);
       for (const clip of active) {
-        const from = Math.max(a, clip.at), to = Math.min(a + len, clip.at + clip.length);
+        const from = Math.max(a, clip.at), to = Math.min(a + len, soundEnd(clip));
         if (to <= from) continue;
-        let r = readers.get(clip);
+        if (clip.voice) {
+          let vr = readers.get(clip) as VoiceReader | undefined;
+          if (!vr) { vr = openVoiceReader(plan, clip, blobPathOf(clip.assetId), originOf(clip.assetId), monoOf(clip.assetId), from - clip.at, Math.min(end, soundEnd(clip)) - clip.at); readers.set(clip, vr); }
+          const y = await vr.read(to - from); // gain, duck, balance and the tail cut are already applied
+          const o = (from - a) * 2;
+          for (let i = 0; i < y.length; i++) out[o + i] = out[o + i]! + y[i]!;
+          if (to === soundEnd(clip)) { vr.close(); readers.delete(clip); }
+          continue;
+        }
+        let r = readers.get(clip) as PcmReader | StretchReader | undefined;
         if (!r) {
           // Start reading at the first clip-local sample this export needs; positions are absolute sample indices.
           // A mono source is heard at full level in both channels (as players and the browser preview do); ffmpeg's default
