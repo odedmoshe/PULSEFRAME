@@ -1,0 +1,742 @@
+{
+  "ranAt": "2026-11-17T19:44:47.968Z",
+  "result": "PASSED",
+  "passed": 17,
+  "total": 17,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v553 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "gpu": "none: the WebGPU adapter here is a software one"
+  },
+  "scope": "Colour match and automatic colour balance (ADR-0014) on synthetic pictures (ffmpeg's test pattern, blurred and brought into the mid-tones, with casts made by ffmpeg filters; M2b on the pattern as it is) at 640x360, through the real server, render worker (software WebGPU) and editor. It proves the measurement, the fit, the verification, the op, the refusals and the panel; it does not show that a match looks right on real footage: nobody has compared the results by eye yet.",
+  "measurements": {
+    "m2": {
+      "known": {
+        "exposure": 0.3,
+        "temperature": 0.35,
+        "tint": -0.2,
+        "contrast": 1.15,
+        "saturation": 0.85,
+        "shadows": 0.2,
+        "highlights": 0.1,
+        "fade": 0.05
+      },
+      "found": {
+        "exposure": 0.301,
+        "temperature": 0.349,
+        "tint": -0.198,
+        "contrast": 1.151,
+        "saturation": 0.849,
+        "shadows": 0.2,
+        "highlights": 0.1,
+        "fade": 0.05
+      },
+      "errors": {
+        "exposure": 0,
+        "temperature": 0,
+        "tint": 0,
+        "contrast": 0,
+        "saturation": 0,
+        "shadows": 0,
+        "highlights": 0,
+        "fade": 0
+      },
+      "verified": 0.05,
+      "model": 0.06,
+      "seconds": 7.802
+    },
+    "m2b": {
+      "known": {
+        "exposure": 0.3,
+        "temperature": 0.35,
+        "tint": -0.2,
+        "contrast": 1.15,
+        "saturation": 0.85,
+        "shadows": 0.2,
+        "highlights": 0.1,
+        "fade": 0.05
+      },
+      "found": {
+        "exposure": 0.318,
+        "temperature": 0.347,
+        "tint": -0.011,
+        "contrast": 1.156,
+        "saturation": 0.837,
+        "shadows": 0.2,
+        "highlights": 0.1,
+        "fade": 0.05
+      },
+      "errors": {
+        "exposure": 0.02,
+        "temperature": 0,
+        "tint": 0.19,
+        "contrast": 0.01,
+        "saturation": 0.01,
+        "shadows": 0,
+        "highlights": 0,
+        "fade": 0
+      },
+      "verified": 0.06,
+      "model": 0.06,
+      "limitedBy": [],
+      "verdict": "close"
+    },
+    "m3": {
+      "before": 6.17,
+      "after": 0.52,
+      "reduction": 0.92,
+      "params": {
+        "exposure": 0.013,
+        "temperature": -0.371,
+        "tint": -0.105,
+        "contrast": 0.995,
+        "saturation": 0.956,
+        "shadows": 0,
+        "highlights": 0,
+        "fade": 0
+      },
+      "verdict": "close",
+      "verdictBefore": "partial"
+    },
+    "m4": {
+      "params": {
+        "exposure": -0.002,
+        "temperature": -1,
+        "tint": 1,
+        "contrast": 0.804,
+        "saturation": 1.247,
+        "shadows": 0,
+        "highlights": 0,
+        "fade": 0
+      },
+      "limitedBy": [
+        "temperature",
+        "tint"
+      ],
+      "verdict": "partial",
+      "model": 14.35,
+      "verified": 14.43
+    },
+    "m5": {
+      "targets": [
+        {
+          "clipId": "clp_af6230aa4f0",
+          "verdict": "close",
+          "verified": 0.52,
+          "limitedBy": [],
+          "warnings": []
+        },
+        {
+          "clipId": "clp_57d32513a10",
+          "verdict": "close",
+          "verified": 0.64,
+          "limitedBy": [],
+          "warnings": []
+        },
+        {
+          "clipId": "clp_43e49e01ff0",
+          "verdict": "close",
+          "verified": 0.13,
+          "limitedBy": [],
+          "warnings": []
+        },
+        {
+          "clipId": "clp_50eda632290",
+          "verdict": "close",
+          "verified": 0.14,
+          "limitedBy": [],
+          "warnings": []
+        },
+        {
+          "clipId": "clp_8ed7e638cb0",
+          "verdict": "close",
+          "verified": 0.27,
+          "limitedBy": [],
+          "warnings": []
+        }
+      ],
+      "ops": 5,
+      "revisions": {
+        "before": 12,
+        "afterApply": 13,
+        "afterUndo": 14
+      },
+      "updateEffect": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ]
+    },
+    "m7": {
+      "before": {
+        "status": "succeeded",
+        "verdict": "pass",
+        "failingArea": 0,
+        "error": null
+      },
+      "after": {
+        "status": "succeeded",
+        "verdict": "pass",
+        "failingArea": 0,
+        "error": null
+      }
+    },
+    "m6": {
+      "cut": [
+        "changes_within_clip"
+      ],
+      "plain": []
+    },
+    "m9": {
+      "before": {
+        "a": 3.36,
+        "b": 8.59
+      },
+      "after": {
+        "a": 0.01,
+        "b": 0.01
+      },
+      "params": {
+        "exposure": 0.39,
+        "temperature": -0.768,
+        "tint": -0.055,
+        "contrast": 1.588,
+        "saturation": 1,
+        "shadows": 0,
+        "highlights": 0,
+        "fade": 0
+      },
+      "verdict": "close"
+    },
+    "m10": {
+      "dir": {
+        "html": "rtl",
+        "lang": "he",
+        "panel": "rtl"
+      },
+      "reached": {
+        "setReference": true,
+        "radio": true,
+        "measure": true,
+        "apply": true
+      },
+      "referenceTextBefore": "לא נקבע קטע ייחוס",
+      "referenceText": "הקטע הזה הוא קטע הייחוס",
+      "referenceSet": true,
+      "playingAfterSpace": false,
+      "started": true,
+      "ended": "done",
+      "progressText": "מודד את הקטעים בשרת. עם כמה קטעים זה לוקח זמן.",
+      "statusRole": {
+        "role": "status",
+        "live": "polite"
+      },
+      "rows": [
+        {
+          "verdict": "close",
+          "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.5"
+        }
+      ],
+      "measured": {
+        "verdict": "close",
+        "verified": 0.52
+      },
+      "tiles": [
+        "drawn",
+        "drawn",
+        "drawn"
+      ],
+      "sameTilePixels": true,
+      "motion": {
+        "running": 0,
+        "moving": 0
+      },
+      "revisions": {
+        "before": 4,
+        "after": 5
+      },
+      "unnamed": [],
+      "errors": []
+    },
+    "m8": {
+      "unavailable": "the render worker has no graphics adapter for the colour grade (WebGPU), so the result was not rendered and checked: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 us",
+      "verified": null,
+      "statsAfter": null,
+      "warnings": [
+        "replaces_grade",
+        "not_verified"
+      ],
+      "ops": 1,
+      "note": "Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it). Each op replaces the clip's colour grade (a look included); every value stays editable with update_effect. Matched by picture statistics (lightness spread and the mean colour of the m",
+      "error": null
+    },
+    "timing": [
+      {
+        "check": "M2",
+        "targets": 1,
+        "seconds": 7.8,
+        "secondsPerTarget": 7.8
+      },
+      {
+        "check": "M2b",
+        "targets": 1,
+        "seconds": 8.53,
+        "secondsPerTarget": 8.53
+      },
+      {
+        "check": "M3",
+        "targets": 1,
+        "seconds": 6.63,
+        "secondsPerTarget": 6.63
+      },
+      {
+        "check": "M5",
+        "targets": 5,
+        "seconds": 24.91,
+        "secondsPerTarget": 4.98
+      },
+      {
+        "check": "M6",
+        "targets": 2,
+        "seconds": 10.29,
+        "secondsPerTarget": 5.14
+      },
+      {
+        "check": "M9",
+        "targets": 1,
+        "seconds": 4.27,
+        "secondsPerTarget": 4.27
+      }
+    ]
+  },
+  "checks": [
+    {
+      "name": "M2 recovery: a reference graded with known values, matched from an ungraded copy: every value within ±0.05, verified difference ≤ 1.5, the revision unchanged",
+      "ok": true,
+      "detail": {
+        "known": {
+          "exposure": 0.3,
+          "temperature": 0.35,
+          "tint": -0.2,
+          "contrast": 1.15,
+          "saturation": 0.85,
+          "shadows": 0.2,
+          "highlights": 0.1,
+          "fade": 0.05
+        },
+        "found": {
+          "exposure": 0.301,
+          "temperature": 0.349,
+          "tint": -0.198,
+          "contrast": 1.151,
+          "saturation": 0.849,
+          "shadows": 0.2,
+          "highlights": 0.1,
+          "fade": 0.05
+        },
+        "errors": {
+          "exposure": 0,
+          "temperature": 0,
+          "tint": 0,
+          "contrast": 0,
+          "saturation": 0,
+          "shadows": 0,
+          "highlights": 0,
+          "fade": 0
+        },
+        "verified": 0.05,
+        "model": 0.06,
+        "seconds": 7.802
+      }
+    },
+    {
+      "name": "M2b a picture that hides tint (the flat saturated test pattern, graded with the same known values): verified difference ≤ 1.5, exposure, temperature, contrast and saturation within ±0.05, tint between the known value and no change (0.05 either side), no value reported as limited",
+      "ok": true,
+      "detail": {
+        "known": {
+          "exposure": 0.3,
+          "temperature": 0.35,
+          "tint": -0.2,
+          "contrast": 1.15,
+          "saturation": 0.85,
+          "shadows": 0.2,
+          "highlights": 0.1,
+          "fade": 0.05
+        },
+        "found": {
+          "exposure": 0.318,
+          "temperature": 0.347,
+          "tint": -0.011,
+          "contrast": 1.156,
+          "saturation": 0.837,
+          "shadows": 0.2,
+          "highlights": 0.1,
+          "fade": 0.05
+        },
+        "errors": {
+          "exposure": 0.02,
+          "temperature": 0,
+          "tint": 0.19,
+          "contrast": 0.01,
+          "saturation": 0.01,
+          "shadows": 0,
+          "highlights": 0,
+          "fade": 0
+        },
+        "verified": 0.06,
+        "model": 0.06,
+        "limitedBy": [],
+        "verdict": "close"
+      }
+    },
+    {
+      "name": "M3 cast: an ffmpeg colorbalance cast (noticeable: the difference before is above 2) matched to the neutral picture: the verified difference falls by at least 60 %",
+      "ok": true,
+      "detail": {
+        "before": 6.17,
+        "after": 0.52,
+        "reduction": 0.92,
+        "params": {
+          "exposure": 0.013,
+          "temperature": -0.371,
+          "tint": -0.105,
+          "contrast": 0.995,
+          "saturation": 0.956,
+          "shadows": 0,
+          "highlights": 0,
+          "fade": 0
+        },
+        "verdict": "close",
+        "verdictBefore": "partial"
+      }
+    },
+    {
+      "name": "M4 extreme cast (R/B about 2.3): limitedBy includes temperature, every value in range, the remaining difference and verdict are reported, the verdict from the verified render",
+      "ok": true,
+      "detail": {
+        "params": {
+          "exposure": -0.002,
+          "temperature": -1,
+          "tint": 1,
+          "contrast": 0.804,
+          "saturation": 1.247,
+          "shadows": 0,
+          "highlights": 0,
+          "fade": 0
+        },
+        "limitedBy": [
+          "temperature",
+          "tint"
+        ],
+        "verdict": "partial",
+        "model": 14.35,
+        "verified": 14.43
+      }
+    },
+    {
+      "name": "M5 match all through MCP: 5 targets (every picture clip but the reference), one op each, applied as ONE transaction (one revision)",
+      "ok": true,
+      "detail": {
+        "targets": [
+          {
+            "clipId": "clp_af6230aa4f0",
+            "verdict": "close",
+            "verified": 0.52,
+            "limitedBy": [],
+            "warnings": []
+          },
+          {
+            "clipId": "clp_57d32513a10",
+            "verdict": "close",
+            "verified": 0.64,
+            "limitedBy": [],
+            "warnings": []
+          },
+          {
+            "clipId": "clp_43e49e01ff0",
+            "verdict": "close",
+            "verified": 0.13,
+            "limitedBy": [],
+            "warnings": []
+          },
+          {
+            "clipId": "clp_50eda632290",
+            "verdict": "close",
+            "verified": 0.14,
+            "limitedBy": [],
+            "warnings": []
+          },
+          {
+            "clipId": "clp_8ed7e638cb0",
+            "verdict": "close",
+            "verified": 0.27,
+            "limitedBy": [],
+            "warnings": []
+          }
+        ],
+        "ops": 5,
+        "revisions": {
+          "before": 12,
+          "afterApply": 13,
+          "afterUndo": 14
+        },
+        "updateEffect": [
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      }
+    },
+    {
+      "name": "M5: one undo restores all 5 clips exactly; after redo every grade is still editable with update_effect",
+      "ok": true,
+      "detail": {
+        "updateEffect": [
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      }
+    },
+    {
+      "name": "M7 flash: the export of the matched timeline passes the flash check, and its failing area is not above the unmatched export's",
+      "ok": true,
+      "detail": {
+        "before": {
+          "status": "succeeded",
+          "verdict": "pass",
+          "failingArea": 0,
+          "error": null
+        },
+        "after": {
+          "status": "succeeded",
+          "verdict": "pass",
+          "failingArea": 0,
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "M6 a hard cut inside a clip: changes_within_clip on that clip, not on a clip without a cut",
+      "ok": true,
+      "detail": {
+        "cut": [
+          "changes_within_clip"
+        ],
+        "plain": []
+      }
+    },
+    {
+      "name": "M9 auto balance of a warm cast on a grey scene: verified mid-tone a* and b* within 2 of 0 (the cast was larger before), no reference used",
+      "ok": true,
+      "detail": {
+        "before": {
+          "a": 3.36,
+          "b": 8.59
+        },
+        "after": {
+          "a": 0.01,
+          "b": 0.01
+        },
+        "params": {
+          "exposure": 0.39,
+          "temperature": -0.768,
+          "tint": -0.055,
+          "contrast": 1.588,
+          "saturation": 1,
+          "shadows": 0,
+          "highlights": 0,
+          "fade": 0
+        },
+        "verdict": "close"
+      }
+    },
+    {
+      "name": "M10 the panel in Hebrew, right to left; Space on «קבע כייחוס» sets the reference (and does not start playback), the method and «מדוד» are reached and pressed by keyboard and the measurement starts; the measuring status is a polite live region",
+      "ok": true,
+      "detail": {
+        "dir": {
+          "html": "rtl",
+          "lang": "he",
+          "panel": "rtl"
+        },
+        "reached": {
+          "setReference": true,
+          "radio": true,
+          "measure": true,
+          "apply": true
+        },
+        "referenceTextBefore": "לא נקבע קטע ייחוס",
+        "referenceText": "הקטע הזה הוא קטע הייחוס",
+        "referenceSet": true,
+        "playingAfterSpace": false,
+        "started": true,
+        "ended": "done",
+        "progressText": "מודד את הקטעים בשרת. עם כמה קטעים זה לוקח זמן.",
+        "statusRole": {
+          "role": "status",
+          "live": "polite"
+        },
+        "rows": [
+          {
+            "verdict": "close",
+            "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.5"
+          }
+        ],
+        "measured": {
+          "verdict": "close",
+          "verified": 0.52
+        },
+        "tiles": [
+          "drawn",
+          "drawn",
+          "drawn"
+        ],
+        "sameTilePixels": true,
+        "motion": {
+          "running": 0,
+          "moving": 0
+        },
+        "revisions": {
+          "before": 4,
+          "after": 5
+        },
+        "unnamed": [],
+        "errors": []
+      }
+    },
+    {
+      "name": "M10 the results show still tiles (drawn once, identical a moment later, nothing animated in the panel)",
+      "ok": true,
+      "detail": {
+        "ended": "done",
+        "tiles": [
+          "drawn",
+          "drawn",
+          "drawn"
+        ],
+        "same": true,
+        "motion": {
+          "running": 0,
+          "moving": 0
+        }
+      }
+    },
+    {
+      "name": "M10 the result row says what was measured: the verdict word follows the difference verified in a render, the number shown is that difference, and it never reads as no difference",
+      "ok": true,
+      "detail": {
+        "rows": [
+          {
+            "verdict": "close",
+            "text": "קרוב מאודהבדל שנמדד בעיבוד: 0.5"
+          }
+        ],
+        "measured": {
+          "verdict": "close",
+          "verified": 0.5201491444583148
+        }
+      }
+    },
+    {
+      "name": "M10 «החל» by keyboard adds exactly one revision and gives the clip the proposed grade",
+      "ok": true,
+      "detail": {
+        "revisions": {
+          "before": 4,
+          "after": 5
+        },
+        "grade": {
+          "exposure": 0.013,
+          "temperature": -0.371,
+          "tint": -0.105,
+          "contrast": 0.995,
+          "saturation": 0.956,
+          "shadows": 0,
+          "highlights": 0,
+          "fade": 0
+        }
+      }
+    },
+    {
+      "name": "M10 without a graphics adapter in the browser: the panel says why and «מדוד» is disabled",
+      "ok": true,
+      "detail": {
+        "reason": "התאמת צבע דורשת כרטיס מסך, והוא אינו זמין בדפדפן הזה: the browser offers WebGPU but gave no graphics adapter",
+        "measureDisabled": true
+      }
+    },
+    {
+      "name": "M8 PF_RENDER_GPU=off: `unavailable` gives the reason, no target claims a verified result (not_verified, verified null, no stats after), the ops are still offered",
+      "ok": true,
+      "detail": {
+        "unavailable": "the render worker has no graphics adapter for the colour grade (WebGPU), so the result was not rendered and checked: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 us",
+        "verified": null,
+        "statsAfter": null,
+        "warnings": [
+          "replaces_grade",
+          "not_verified"
+        ],
+        "ops": 1,
+        "note": "Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it). Each op replaces the clip's colour grade (a look included); every value stays editable with update_effect. Matched by picture statistics (lightness spread and the mean colour of the m",
+        "error": null
+      }
+    },
+    {
+      "name": "M8: a reference that has a grade cannot be measured without an adapter: 503 with the reason, nothing returned as a result",
+      "ok": true,
+      "detail": {
+        "status": 503,
+        "error": "the reference clip clp_39bcfa72b80 uses an effect that needs a graphics adapter, and the render worker has none, so it cannot be measured: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_u"
+      }
+    },
+    {
+      "name": "timing: seconds per target clip are reported for every match that ran",
+      "ok": true,
+      "detail": [
+        {
+          "check": "M2",
+          "targets": 1,
+          "seconds": 7.8,
+          "secondsPerTarget": 7.8
+        },
+        {
+          "check": "M2b",
+          "targets": 1,
+          "seconds": 8.53,
+          "secondsPerTarget": 8.53
+        },
+        {
+          "check": "M3",
+          "targets": 1,
+          "seconds": 6.63,
+          "secondsPerTarget": 6.63
+        },
+        {
+          "check": "M5",
+          "targets": 5,
+          "seconds": 24.91,
+          "secondsPerTarget": 4.98
+        },
+        {
+          "check": "M6",
+          "targets": 2,
+          "seconds": 10.29,
+          "secondsPerTarget": 5.14
+        },
+        {
+          "check": "M9",
+          "targets": 1,
+          "seconds": 4.27,
+          "secondsPerTarget": 4.27
+        }
+      ]
+    }
+  ]
+}
