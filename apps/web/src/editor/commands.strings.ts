@@ -9,7 +9,7 @@ export const COMMAND_STRINGS = {
     cutRollLater5: 'גלגול החיתוך: 5 פריימים מאוחר יותר',
     cutToBeat: 'הזזת החיתוך לפעימה הקרובה',
     exportOpen: 'ייצוא…',
-    deleted: (n: number, name?: string | null) => (n === 1 ? (name ? `הקליפ "${name}" נמחק` : 'הקליפ נמחק') : `${n} קליפים נמחקו`),
+    deleted: (n: number, name?: string | null) => (n === 1 ? (name ? `הקליפ "\u2068${name}\u2069" נמחק` : 'הקליפ נמחק') : `${n} קליפים נמחקו`),
     rippled: (n: number) => (n === 0 ? 'הרווח נסגר' : n === 1 ? 'הרווח נסגר · קליפ אחד זז אחורה' : `הרווח נסגר · ${n} קליפים זזו אחורה`),
   },
   en: {
@@ -18,7 +18,7 @@ export const COMMAND_STRINGS = {
     cutRollLater5: 'Roll the cut five frames later',
     cutToBeat: 'Move the cut to the nearest beat',
     exportOpen: 'Export…',
-    deleted: (n: number, name?: string | null) => (n === 1 ? (name ? `Clip “${name}” deleted` : 'Clip deleted') : `${n} clips deleted`),
+    deleted: (n: number, name?: string | null) => (n === 1 ? (name ? `Clip “\u2068${name}\u2069” deleted` : 'Clip deleted') : `${n} clips deleted`),
     rippled: (n: number) => (n === 0 ? 'Gap closed' : n === 1 ? 'Gap closed · 1 clip moved earlier' : `Gap closed · ${n} clips moved earlier`),
   },
 } as const;

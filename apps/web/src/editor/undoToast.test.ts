@@ -53,7 +53,7 @@ describe('the undo toast of a delete', () => {
     const { doc, ids } = project();
     const e = fakeEditor(doc);
     e.select([ids[1]!]); await run('edit.delete', e);
-    expect(e.notices[0]!.title).toBe('הקליפ "beach.mp4" נמחק');
+    expect(e.notices[0]!.title).toBe('הקליפ "\u2068beach.mp4\u2069" נמחק') // isolated, so a Latin name reads in its own order inside Hebrew;
     e.select([ids[0]!, ids[2]!]); await run('edit.deleteKeepGap', e);
     expect(e.notices[1]!.title).toBe('2 קליפים נמחקו');
   });
