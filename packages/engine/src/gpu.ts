@@ -805,7 +805,7 @@ const shaderOf = (body: string, withLut = false) => `${VERTEX}
 const REFERENCE = { wgsl: `${VERTEX}
   @fragment fn f(i: V) -> @location(0) vec4f { let p = i.pos; var c = vec3f(0); for (var k = 0; k < 16; k++) { c += 0.0625 * (0.5 + 0.5 * sin(vec3f(p.x, p.y, p.x + p.y) * 0.01 * f32(k + 1))); } return vec4f(c, 1); }`, first: [133, 133, 138, 255], middle: [116, 128, 133, 255] };
 
-interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; size: { source: any; source2: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any; /** Colour-table textures by LutStrip.key: made once per table, bounded, gone with the device. */ luts: Map<string, any> }
+interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; /** Why the shader of a pass key did not compile on this device: never compiled again, always reported. */ brokenPipelines: Map<string, string>; size: { source: any; source2: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any; /** Colour-table textures by LutStrip.key: made once per table, bounded, gone with the device. */ luts: Map<string, any> }
 /** Colour-table textures kept on the device at once (the largest is 4225 x 65, about 1.1 MB). */
 const MAX_LUT_TEXTURES = 8;
 let state: State | null = null;
@@ -859,7 +859,7 @@ export function initGpu(): Promise<GpuStatus> {
       buf.unmap(); buf.destroy(); target.destroy();
       if (!same(first, REFERENCE.first) || !same(middle, REFERENCE.middle)) return fail(`the adapter renders the reference shader differently (${JSON.stringify(middle)} instead of ${JSON.stringify(REFERENCE.middle)})`, about);
       // ---- ready ----
-      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 32, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }), luts: new Map() };
+      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), brokenPipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 32, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }), luts: new Map() };
       const made = state;
       device.lost.then((l: { message?: string }) => { for (const t of made.luts.values()) { try { t.destroy(); } catch { /* already gone with the device */ } } made.luts.clear(); state = null; status = { available: false, reason: `the graphics device was lost: ${l?.message ?? 'no reason given'}`, adapter: about }; starting = null; });
       return (status = { available: true, reason: `${about.software ? 'software' : 'hardware'} adapter${about.vendor ? ` (${about.vendor})` : ''}, reference pixels match`, adapter: about });
@@ -871,7 +871,8 @@ export function initGpu(): Promise<GpuStatus> {
 /**
  * Run one GPU effect from `src` into `dst` (both the size of the frame; `dst` is replaced).
  * Resolves to false, and records the effect as unavailable, when WebGPU is not ready or the pass fails: the caller then
- * draws the layer unchanged. Callers must not let another frame use the same buffers while this is pending.
+ * draws the layer unchanged. When the adapter rejects the pass (its shader does not compile there, say) the adapter's message
+ * is recorded as the reason. Callers must not let another frame use the same buffers while this is pending.
  */
 export function gpuEffect(type: string, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
   const fx = GPU_EFFECTS[type];
@@ -909,6 +910,23 @@ function lutTexture(s: State, strip: LutStrip): any {
   s.luts.set(strip.key, tex);
   return tex;
 }
+/**
+ * Validation errors of what `make` sends to the device. WebGPU does not throw for an invalid shader, pipeline, bind group or
+ * command buffer: the object is invalid, a submit of it does nothing, and the error is seen only through an error scope.
+ * The scope is popped even when `make` throws (the stack is shared by every pass), and nothing is awaited inside it.
+ */
+function validated<T>(device: any, make: () => T): { value: T; error: Promise<{ message: string } | null> } {
+  device.pushErrorScope('validation');
+  let value: T;
+  try { value = make(); } catch (e) { (device.popErrorScope() as Promise<unknown>).catch(() => {}); throw e; }
+  return { value, error: device.popErrorScope() };
+}
+/** Records `type` as unavailable because the adapter rejected its pass, with the adapter's message. */
+function rejected(type: string, why: string): false {
+  skipped.add(type);
+  if (!skippedWhy.has(type)) skippedWhy.set(type, why);
+  return false;
+}
 /** One pass: `first` (and for a transition `second`) in, `dst` replaced. `first` null means a transparent picture. `lut`: the colour table an effect samples at binding 3. */
 async function runPass(type: string, key: string, shader: () => string, numbers: number[], first: OffscreenCanvas | null, second: OffscreenCanvas | null, dst: C2D, env: EffectEnv, lut: LutStrip | null = null): Promise<boolean> {
   const s = state;
@@ -916,36 +934,62 @@ async function runPass(type: string, key: string, shader: () => string, numbers:
   const { device } = s;
   const W = env.width, H = env.height;
   try {
-    if (!s.size || s.size.width !== W || s.size.height !== H) {
-      s.size?.source.destroy(); s.size?.source2.destroy(); s.size?.target.destroy(); s.size?.readback.destroy();
-      const stride = Math.ceil((W * 4) / 256) * 256;
-      s.size = {
-        source: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ | 0x10 /* RENDER_ATTACHMENT */ }),
-        source2: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x02 | 0x04 | 0x10 }),
-        target: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x10 /* RENDER_ATTACHMENT */ | 0x01 /* COPY_SRC */ }),
-        readback: device.createBuffer({ size: stride * H, usage: 0x01 /* MAP_READ */ | 0x08 /* COPY_DST */ }), stride, width: W, height: H,
-      };
-    }
-    const z = s.size;
-    if (first) device.queue.copyExternalImageToTexture({ source: first }, { texture: z.source, premultipliedAlpha: true }, [W, H]);
-    else { const e0 = device.createCommandEncoder(); e0.beginRenderPass({ colorAttachments: [{ view: z.source.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] }).end(); device.queue.submit([e0.finish()]); }
-    if (second) device.queue.copyExternalImageToTexture({ source: second }, { texture: z.source2, premultipliedAlpha: true }, [W, H]);
+    // The pipeline first, alone in its error scope: a shader this adapter does not compile is remembered and never drawn.
     let pipe = s.pipelines.get(key);
     if (!pipe) {
-      const mod = device.createShaderModule({ code: shader() });
-      pipe = device.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'v' }, fragment: { module: mod, entryPoint: 'f', targets: [{ format: 'rgba8unorm' }] } });
+      const broken = s.brokenPipelines.get(key);
+      if (broken) return rejected(type, broken);
+      const made = validated(device, () => {
+        const mod = device.createShaderModule({ code: shader() });
+        return device.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'v' }, fragment: { module: mod, entryPoint: 'f', targets: [{ format: 'rgba8unorm' }] } });
+      });
+      const invalid = await made.error;
+      if (invalid) {
+        const why = `its GPU pass did not compile on this adapter: ${String(invalid.message).slice(0, 300)}`;
+        s.brokenPipelines.set(key, why);
+        return rejected(type, why);
+      }
+      pipe = made.value;
       s.pipelines.set(key, pipe);
     }
-    const p = new Float32Array(8);
-    p.set(numbers.slice(0, 8));
-    device.queue.writeBuffer(s.uniforms, 0, p);
-    const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : lut ? [{ binding: 3, resource: lutTexture(s, lut).createView() }] : [])] });
-    const enc = device.createCommandEncoder();
-    const pass = enc.beginRenderPass({ colorAttachments: [{ view: z.target.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] });
-    pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.draw(3); pass.end();
-    enc.copyTextureToBuffer({ texture: z.target }, { buffer: z.readback, bytesPerRow: z.stride }, [W, H]);
-    device.queue.submit([enc.finish()]);
-    await z.readback.mapAsync(0x01);
+    // The rest of the pass in one error scope: if the adapter rejects any of it, the submit did nothing and the shared readback
+    // buffer still holds the last pass that did run, so its bytes must not be used.
+    const sent = validated(device, () => {
+      if (!s.size || s.size.width !== W || s.size.height !== H) {
+        s.size?.source.destroy(); s.size?.source2.destroy(); s.size?.target.destroy(); s.size?.readback.destroy();
+        const stride = Math.ceil((W * 4) / 256) * 256;
+        s.size = {
+          source: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ | 0x10 /* RENDER_ATTACHMENT */ }),
+          source2: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x02 | 0x04 | 0x10 }),
+          target: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x10 /* RENDER_ATTACHMENT */ | 0x01 /* COPY_SRC */ }),
+          readback: device.createBuffer({ size: stride * H, usage: 0x01 /* MAP_READ */ | 0x08 /* COPY_DST */ }), stride, width: W, height: H,
+        };
+      }
+      const z = s.size;
+      if (first) device.queue.copyExternalImageToTexture({ source: first }, { texture: z.source, premultipliedAlpha: true }, [W, H]);
+      else { const e0 = device.createCommandEncoder(); e0.beginRenderPass({ colorAttachments: [{ view: z.source.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] }).end(); device.queue.submit([e0.finish()]); }
+      if (second) device.queue.copyExternalImageToTexture({ source: second }, { texture: z.source2, premultipliedAlpha: true }, [W, H]);
+      const p = new Float32Array(8);
+      p.set(numbers.slice(0, 8));
+      device.queue.writeBuffer(s.uniforms, 0, p);
+      const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : lut ? [{ binding: 3, resource: lutTexture(s, lut).createView() }] : [])] });
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginRenderPass({ colorAttachments: [{ view: z.target.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] });
+      pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.draw(3); pass.end();
+      enc.copyTextureToBuffer({ texture: z.target }, { buffer: z.readback, bytesPerRow: z.stride }, [W, H]);
+      device.queue.submit([enc.finish()]);
+      return z;
+    });
+    const z = sent.value;
+    // Both settled before either is used: the adapter's own message wins over the map failing because of the same error.
+    const [checked, mapped] = await Promise.allSettled([sent.error, z.readback.mapAsync(0x01)]);
+    const invalid = checked.status === 'fulfilled' ? checked.value : null;
+    if (invalid) {
+      if (mapped.status === 'fulfilled') z.readback.unmap();
+      return rejected(type, `the adapter rejected its GPU pass: ${String(invalid.message).slice(0, 300)}`);
+    }
+    if (checked.status === 'rejected') throw checked.reason;
+    if (mapped.status === 'rejected') throw mapped.reason;
     const bytes = new Uint8Array(z.readback.getMappedRange());
     const img = dst.createImageData(W, H);
     if (z.stride === W * 4) img.data.set(bytes.subarray(0, W * H * 4));
@@ -954,7 +998,7 @@ async function runPass(type: string, key: string, shader: () => string, numbers:
     dst.putImageData(img, 0, 0);
     return true;
   } catch (e) {
-    // a lost device or a rejected pass: say so once, never draw something else in its place
+    // a lost device or a call that threw: say so once, never draw something else in its place
     status = { ...status, available: !!state, reason: `a GPU pass failed: ${String((e as Error)?.message ?? e).slice(0, 160)}` };
     skipped.add(type);
     return false;
