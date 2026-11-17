@@ -342,6 +342,13 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
 
     progress('audio', 0, out.frames);
     const mix = await mixAudio(doc, (id) => `${apiBase}/projects/${opts.projectId}/assets/${id}/content`, out, audioRate, check);
+    // Measurement only (tests set window.__pfExportAudioTap = {}): the mix exactly as handed to the encoder, before lossy coding.
+    const tap = (globalThis as { __pfExportAudioTap?: { last?: unknown } }).__pfExportAudioTap;
+    if (tap && typeof tap === 'object') {
+      const data = new Float32Array(mix.length * 2), l = mix.getChannelData(0), r = mix.getChannelData(1);
+      for (let i = 0; i < mix.length; i++) { data[i * 2] = l[i]!; data[i * 2 + 1] = r[i]!; }
+      tap.last = { jobId, sampleRate: audioRate, firstFrame: out.firstFrame, frames: mix.length, data };
+    }
     // Audio is a single buffer; it is fed concurrently with video so interleaving backpressure between the tracks cannot deadlock.
     const audioDone = audio.add(mix);
     audioDone.catch(() => {});
