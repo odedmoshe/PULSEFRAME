@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "line": "ש שָׁלוֹם, יְלָדִים! חֲנֻכָּה שְׂמֵחָה — תשפ״ז ש",
+  "note": "No recording yet. `pnpm proof:fonts` writes SHA-256 hashes of the decoded pixels of the golden line, one per family and weight, per Chromium version. A first recording proves nothing by itself.",
+  "em": 200,
+  "size": { "w": 1920, "h": 1080 },
+  "recordings": {}
+}
