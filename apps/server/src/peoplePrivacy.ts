@@ -37,7 +37,7 @@
  * (Store.wholeProject). Outside any request (server start, recovered jobs, the owner's exports) the reader is 'full'.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { holdsAgeFields, PERSON_OPS, PERSON_PRIVATE_ARGS, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, freezeOps, holdsAgeFields, isPersonToken, OpError, parseFields, PERSON_OPS, PERSON_PRIVATE_ARGS, validateProject, type OpCall, type ProjectDocument, type TextClip } from '@pulseframe/core';
 import type { Principal } from './governance.ts';
 import { ApiError } from './store.ts';
 
@@ -173,17 +173,95 @@ export interface FamilyFreeDocument {
   /** Titles with a people field that has no words at their first frame (no date under them, no birth date): the field becomes nothing, and they are listed. */
   empty: string[];
 }
+/** True when this stored text holds a people field ({name:…}, {age:…}, also an age with a format outside AGE_FORMATS). */
+const holdsPeopleField = (text: string): boolean => text.includes('{') && parseFields(text).some((p) => 'token' in p && isPersonToken(p.token));
 /**
- * The document for an archive «בלי פרטי משפחה» (rule 4). W2 fills it:
- * - every title with live fields that holds a people field ({age}, {name}), and each format's wording of it, is made plain
- *   text with core freezeOps(doc, sequenceId, clipId) applied through applyTransaction (so the result is exactly what "Make
- *   it plain text" gives); titles without people fields keep their live fields;
- * - `people` is removed; nothing else changes (media files are untouched: say so in the dialog);
- * - never silently broken: a title whose value changes inside it goes to `varying`, one whose people field has no words at
- *   its first frame goes to `empty`; the result must pass validateProject, hold no person and no people field, and render
- *   every unchanged title exactly as before.
- * Until then it refuses: an archive is never written with people data left in under this name.
+ * The titles with live fields whose text, or a format's wording of it, holds a people field: in document order (sequences,
+ * tracks bottom to top as stored, clips in time order), with their track and whether that track is locked.
  */
-export function withoutFamily(_doc: ProjectDocument): FamilyFreeDocument {
-  throw new ApiError(501, 'not_implemented', 'the archive without family details is not built yet', {}, 'Download the full archive, or remove the people first.');
+function peopleTitles(doc: ProjectDocument): { sequenceId: string; trackId: string; clipId: string; locked: boolean }[] {
+  const worded = new Set<string>();
+  for (const v of Object.values(doc.variants ?? {}))
+    for (const [clipId, ov] of Object.entries(v.overrides)) if (ov.text !== undefined && holdsPeopleField(ov.text)) worded.add(clipId);
+  const out: { sequenceId: string; trackId: string; clipId: string; locked: boolean }[] = [];
+  for (const [sequenceId, seq] of Object.entries(doc.sequences))
+    for (const track of seq.tracks)
+      for (const c of track.clips)
+        if (c.type === 'text' && c.fields && (holdsPeopleField(c.text) || worded.has(c.id))) out.push({ sequenceId, trackId: track.id, clipId: c.id, locked: track.locked });
+  return out;
+}
+/**
+ * Stands for an empty frozen text inside the transaction: update_text and set_variant_override take one character at least,
+ * while a field without words can leave a title with none. Replaced right after the transaction, in the outputs it was put in.
+ */
+const EMPTY_TEXT = '\u0000';
+/**
+ * The document for an archive «בלי פרטי משפחה» (rule 4):
+ * - every title with live fields that holds a people field ({age}, {name}) in its text or in a format's wording of it is
+ *   made plain text with core freezeOps(doc, sequenceId, clipId) at its first frame, all of them in ONE applyTransaction
+ *   (so each is exactly what "Make it plain text" gives, and the result is validated once). A title on a locked track is
+ *   unlocked and locked again inside that transaction, so the lock is kept. Titles without people fields keep their live
+ *   fields, and every other part of the document is unchanged (the media files too: the dialog says so);
+ * - `people` is removed;
+ * - never silently broken: a title whose words change inside it is frozen at its first value and listed in `varying`; a
+ *   title with a field that has no words at its first frame (no date under it, no birth date, a person who is not there,
+ *   or a document read without birth dates) is frozen with nothing in that field's place and listed in `empty`. When that
+ *   leaves no words at all, the text is stored empty (as the title drew it); a format's own wording that is left with no
+ *   words takes the master's when the master is empty too, else the title is hidden in that format;
+ * - refused (409) rather than written partly: a title whose plain text would pass 2000 characters, or a transaction the
+ *   operations refuse. The result is checked before it is returned: it passes validateProject and holds no person and no
+ *   people field.
+ * Pure: `doc` is not changed. It is the document as the caller may read it (the owner's whole document, or one without
+ * birth dates), so a 'names' credential's family-free archive has ages frozen to nothing and listed in `empty`.
+ */
+export function withoutFamily(doc: ProjectDocument): FamilyFreeDocument {
+  const titles = peopleTitles(doc);
+  const varying: string[] = [], empty: string[] = [], tooLong: string[] = [];
+  const ops: OpCall[] = [];
+  const emptied: { clipId: string; variantId: string | null }[] = [];
+  const locked = new Map<string, string>(); // trackId → sequenceId
+  for (const t of titles) {
+    const frozen = freezeOps(doc, t.sequenceId, t.clipId);
+    if (frozen.varies) varying.push(t.clipId);
+    if (frozen.missing.length) empty.push(t.clipId);
+    if (frozen.tooLong.length) { tooLong.push(t.clipId); continue; }
+    for (const call of frozen.ops) {
+      const args = call.args as Record<string, unknown>;
+      if ((call.op === 'update_text' || call.op === 'set_variant_override') && args.text === '') {
+        emptied.push({ clipId: t.clipId, variantId: call.op === 'update_text' ? null : String(args.variantId) });
+        ops.push({ op: call.op, args: { ...args, text: EMPTY_TEXT } });
+      } else ops.push(call);
+    }
+    if (t.locked) locked.set(t.trackId, t.sequenceId);
+  }
+  if (tooLong.length) throw new ApiError(409, 'title_too_long', `${tooLong.length === 1 ? 'a title' : `${tooLong.length} titles`} would pass 2000 characters as plain text, so the archive without family details cannot be written`, { clipIds: tooLong.slice(0, 20) }, 'Shorten the title, or make it plain text yourself and shorten it then.');
+  let out: ProjectDocument;
+  if (ops.length) {
+    const lock = (on: boolean): OpCall[] => [...locked].map(([trackId, sequenceId]) => ({ op: 'update_track', args: { sequenceId, trackId, locked: on } }));
+    try {
+      out = applyTransaction(doc, [...lock(false), ...ops, ...lock(true)], { idSeed: 'family_free_', actor: 'archive' }).doc;
+    } catch (e) {
+      if (!(e instanceof OpError)) throw e;
+      throw new ApiError(409, 'family_free_refused', `the titles could not be made plain text for the archive without family details: ${e.message}`, { code: e.code, op: e.details.op ?? null, index: e.details.index ?? null });
+    }
+    for (const { clipId, variantId } of emptied) {
+      const clip = findText(out, clipId);
+      if (variantId === null) { if (clip) clip.text = ''; continue; }
+      const ov = out.variants[variantId]?.overrides[clipId];
+      if (!ov || ov.text !== EMPTY_TEXT) continue;
+      delete ov.text;
+      if (clip?.text !== '') ov.hidden = true; // no words in this format, and the master has some: show nothing here rather than the master's
+    }
+  } else out = { ...doc };
+  delete out.people;
+  // the archive is never written with people data left in under this name
+  const issues = validateProject(out);
+  const left = peopleTitles(out).map((t) => t.clipId);
+  if (issues.length || left.length || out.people !== undefined) throw new ApiError(500, 'family_free_incomplete', 'the archive without family details came out incomplete, so it is not written', { issues: issues.slice(0, 5).map((i) => i.message), titlesWithPeopleFields: left.slice(0, 20) });
+  return { doc: out, varying, empty };
+}
+/** A title anywhere in the document, by id. */
+function findText(doc: ProjectDocument, clipId: string): TextClip | null {
+  for (const seq of Object.values(doc.sequences)) for (const track of seq.tracks) for (const c of track.clips) if (c.id === clipId) return c.type === 'text' ? c : null;
+  return null;
 }

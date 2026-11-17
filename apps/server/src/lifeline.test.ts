@@ -2,7 +2,8 @@
  * Server side of the life line (ADR-0021): reading capture dates again from the stored originals, and "on this day".
  * Files are made here with ffmpeg and a hand-built EXIF segment. The first group needs nothing but this server's own code;
  * the groups marked "core" run once the core bodies of the life line are built (LIFE_OPS_BUILT, set by the core worker):
- * they commit attach_asset_capture and call onThisDay, which until then refuse or throw "not built".
+ * they commit attach_asset_capture and call onThisDay, which until then refuse or throw "not built". The people suggestions
+ * (ADR-0021, people section) are the last group; they need no core body of the people step.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -11,12 +12,12 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { LIFE_OPS_BUILT, creativeProjection, type Asset, type Capture } from '@pulseframe/core';
+import { LIFE_OPS_BUILT, createProject, creativeProjection, personNameKey, type Asset, type Capture, type Person } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { withExif } from './captureMeta.fixtures.ts';
 import type { CaptureContext } from './captureMeta.ts';
 import { ingestUpload } from './ingest.ts';
-import { MAX_CAPTURE_READS, MAX_ON_THIS_DAY, onThisDayFor, planCaptureReads, readMissingCaptures } from './lifeline.ts';
+import { MAX_CAPTURE_READS, MAX_ON_THIS_DAY, MAX_PEOPLE_SUGGESTIONS, onThisDayFor, peopleSuggestions, planCaptureReads, readMissingCaptures } from './lifeline.ts';
 import { ApiError, Store } from './store.ts';
 
 const cx: CaptureContext = { homeZone: 'Asia/Jerusalem', now: new Date('2026-11-17T10:00:00Z') };
@@ -251,5 +252,53 @@ describe.runIf(LIFE_OPS_BUILT)('"on this day" across the owner\'s projects (core
     const item = onThisDayFor(own, owner, '2026-03-03').find((i) => i.assetId === leap);
     expect(item).toMatchObject({ match: 'hebrew', yearsAgo: 2, wall: '2024-03-24T11:00:00' });
     expect(item!.hebrewDate).toMatch(/^י״ד באדר ב׳ תשפ״ד$/);
+  });
+});
+
+describe('people suggestions («העתקה מפרויקט אחר»): the people of the owner\'s other projects, so they are typed once', () => {
+  // A store of its own: the suggestions read every project of the store. People are planted in the documents as an archive
+  // holds them (the people operations are W1's); nothing here needs their bodies.
+  let own: Store;
+  beforeAll(() => { own = new Store(path.join(dir, 'people-suggestions')); });
+  afterAll(() => own.close());
+  const withPeople = (name: string, people: Person[], updatedAt: string) => {
+    const pid = own.importProject({ ...createProject({ id: 'x', name, width: 640, height: 360, frameRate: R }), people: Object.fromEntries(people.map((p) => [p.id, p])) }).doc.id;
+    own.db.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').run(updatedAt, pid); // the order of "most recently changed", made certain
+    return pid;
+  };
+
+  it('is refused for anything but the owner\'s own session, a grant with people "full" included, before a project is read', () => {
+    const full = { ...agent, grant: { people: 'full' } } as unknown as Principal;
+    for (const p of [agent, { ...agent, scopes: ['observe'] as Principal['scopes'] }, full]) {
+      let thrown: unknown;
+      try { peopleSuggestions(own, p); } catch (e) { thrown = e; }
+      expect(thrown).toMatchObject({ status: 403, code: 'owner_required' });
+    }
+  });
+
+  it('one row per name across projects (names compared as the project compares them), the most recently changed project winning, in name order, with birth dates and word choices', () => {
+    const older = withPeople('ישן', [{ id: 'per_a', name: 'נועה', birthDate: '2019-01-01', form: 'f' }, { id: 'per_b', name: 'Itai  Cohen', birthDate: null, form: 'm' }, { id: 'per_c', name: 'אבא', birthDate: '1980-05-05' }], '2026-01-01T00:00:00.000Z');
+    const newer = withPeople('חדש', [{ id: 'per_x', name: 'נועה', birthDate: '2020-03-10', form: 'f' }, { id: 'per_y', name: 'itai cohen', birthDate: '2018-08-08' }], '2026-06-01T00:00:00.000Z');
+    withPeople('בלי אנשים', [], '2026-07-01T00:00:00.000Z');
+    // a project this build cannot open is left out, not a reason to answer nothing
+    const broken = withPeople('מחר', [{ id: 'per_z', name: 'זאב', birthDate: '2001-01-01' }], '2026-08-01T00:00:00.000Z');
+    own.db.prepare('UPDATE projects SET doc = json_set(doc, \'$.schemaVersion\', 99) WHERE id = ?').run(broken);
+    const got = peopleSuggestions(own, owner);
+    expect(got).toEqual([
+      { name: 'itai cohen', birthDate: '2018-08-08', projectId: newer, projectName: 'חדש' },
+      { name: 'אבא', birthDate: '1980-05-05', projectId: older, projectName: 'ישן' },
+      { name: 'נועה', birthDate: '2020-03-10', form: 'f', projectId: newer, projectName: 'חדש' },
+    ]);
+    expect(got.some((s) => s.name === 'זאב')).toBe(false);
+  });
+
+  it(`answers at most ${MAX_PEOPLE_SUGGESTIONS}, in name order`, () => {
+    const many = (prefix: string) => Array.from({ length: 130 }, (_, i): Person => ({ id: `per_${prefix}${i}`, name: `${prefix} ${String(i).padStart(3, '0')}`, birthDate: null }));
+    withPeople('רבים א', many('m'), '2026-02-01T00:00:00.000Z');
+    withPeople('רבים ב', many('n'), '2026-02-02T00:00:00.000Z');
+    const got = peopleSuggestions(own, owner);
+    expect(got).toHaveLength(MAX_PEOPLE_SUGGESTIONS);
+    const keys = got.map((s) => personNameKey(s.name));
+    expect(keys).toEqual([...keys].sort());
   });
 });
