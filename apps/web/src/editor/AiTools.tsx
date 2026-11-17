@@ -8,7 +8,7 @@ import { dictionaries } from '@pulseframe/i18n';
 import { api, ApiFailure } from '../api.ts';
 import { useEditorState } from './store.ts';
 import { AI_STRINGS } from './aiTools.strings.ts';
-import { providerAfter, recheckProvider } from './aiTools.recheck.ts';
+import { cardJob, failureOf, providerAfter, recheckProvider } from './aiTools.recheck.ts';
 import './aiTools.css';
 
 interface ModelInfo { path: string; status?: { state: string; missingBytes: number; expectedBytes: number | null } }
@@ -33,9 +33,40 @@ export function AiTools() {
   const [msg, setMsg] = useState<{ text: string; failed: boolean }>({ text: '', failed: false });
   const [checking, setChecking] = useState(false);
   const [pick, setPick] = useState<Record<string, string>>({});
-  const [mine, setMine] = useState<{ capId: string; jobId: string } | null>(null);
+  /** Tool id -> the job this panel last started for it. A card shows that job only (aiTools.recheck.ts cardJob). */
+  const [mine, setMine] = useState<Record<string, string>>({});
   const [runError, setRunError] = useState<{ capId: string; message: string } | null>(null);
-  if (!provider) return null;
+  const why = (f: { code: string | null; message: string }) => (f.code ? (dictionaries[lang] as Record<string, string>)[`error.code.${f.code}`] ?? f.message : f.message);
+
+  if (!provider) {
+    // The first request for the provider state failed: say so, and what came back, with a way to ask again. Nothing about
+    // the provider is assumed from a failed request (it may be connected or not).
+    const failed = state.providerError;
+    if (failed) {
+      const retry = async () => {
+        setChecking(true); setMsg({ text: S.rechecking, failed: false });
+        const r = await recheckProvider(api.capabilities);
+        if (r.ok) { editor.set({ provider: r.provider, providerError: null }); setMsg({ text: '', failed: false }); }
+        else { editor.set({ providerError: failureOf(r.error) }); setMsg({ text: S.loadStillFailing, failed: true }); }
+        setChecking(false);
+      };
+      return (
+        <section className="pf-ai" data-testid="ai-tools" aria-label={S.tools}>
+          <div className="pf-ai-failed" role="alert" data-testid="ai-load-failed" data-code={failed.code ?? undefined}>
+            <p>{S.loadFailed}</p>
+            <p className="muted">{failed.code ? <>{S.loadAnswered} <bdi dir="auto" data-testid="ai-load-reason">{why(failed)}</bdi></> : <>{S.loadNoAnswer} <bdi dir="auto" data-testid="ai-load-reason">{failed.message}</bdi></>}</p>
+          </div>
+          <div className="pf-ai-row">
+            <button type="button" className="ghost" disabled={checking} onClick={() => void retry()} data-testid="ai-load-retry">{S.loadRetry}</button>
+          </div>
+          <div role="status" className={`muted${msg.failed ? ' danger' : ''}`} data-testid="ai-load-status">{msg.text}</div>
+          <p className="muted">{S.works}</p>
+        </section>
+      );
+    }
+    if (state.providerAsking) return <section className="pf-ai" data-testid="ai-tools" aria-label={S.tools}><p className="muted" role="status" data-testid="ai-loading">{S.loading}</p></section>;
+    return null; // not asked yet (no project loaded)
+  }
   const pr = provider.provider;
   const connected = pr.configured && !!pr.readiness?.reachable;
 
@@ -45,7 +76,7 @@ export function AiTools() {
     // A failed check keeps the panel as it is (setup steps, this message, the button): it says nothing about the provider.
     editor.set({ provider: providerAfter(editor.getState().provider, r) });
     if (r.ok) setMsg({ text: r.connected ? S.recheckedOk : S.rechecked, failed: false });
-    else if (r.error instanceof ApiFailure) setMsg({ text: S.recheckRefused((dictionaries[lang] as Record<string, string>)[`error.code.${r.error.code}`] ?? r.error.message), failed: true });
+    else if (r.error instanceof ApiFailure) setMsg({ text: S.recheckRefused(why(failureOf(r.error))), failed: true });
     else setMsg({ text: S.recheckFailed, failed: true });
     setChecking(false);
   };
@@ -99,9 +130,8 @@ export function AiTools() {
     if (!doc) return;
     setRunError(null);
     try {
-      const r = await api.runCapability(doc.id, cap.id, assetId ? { image: assetId } : {});
-      setMine(assetId ? { capId: cap.id, jobId: r.jobId } : null);
-      editor.set({ capJob: { id: r.jobId, type: 'capability', status: 'queued', stage: null, output: null, error: null } });
+      const jobId = await editor.runCapability(cap.id, assetId ? { image: assetId } : {});
+      if (jobId) setMine((m) => ({ ...m, [cap.id]: jobId }));
     } catch (e) {
       setRunError({ capId: cap.id, message: e instanceof Error ? e.message : String(e) });
     }
@@ -136,11 +166,10 @@ export function AiTools() {
         const pending = approvals.some((a) => a.action?.capabilityId === c.id);
         const value = pick[c.id] ?? selAsset;
         const chosen = images.some((a) => a.id === value) ? value : '';
-        const mineHere = mine?.capId === c.id && job?.id === mine.jobId;
         const smoke = !takesImage;
-        const smokeJob = smoke && c.id === 'comfy.smoke.solid-image' && (!mine || job?.id !== mine.jobId);
-        const active = (mineHere || smokeJob) && job ? job : null;
-        const runBusy = busy && (mineHere || smokeJob);
+        // only the job this card's own button started, never another tool's (or an agent's) job
+        const active = cardJob(c.id, mine, state.capJobs);
+        const runBusy = !!active && ['queued', 'running', 'cancel-requested'].includes(active.status);
         return (
           <article className="pf-ai-card" key={c.id} data-testid="ai-tool" data-id={c.id} data-runnable={c.runnable ? 'true' : 'false'}>
             <h3>{c.title[lang]}</h3>
@@ -175,11 +204,11 @@ export function AiTools() {
             <div className="pf-ai-row">
               {takesImage
                 ? <button className="primary" disabled={!c.runnable || !chosen || busy} onClick={() => void run(c, chosen)} data-testid="ai-run">{runBusy ? S.running : S.run}</button>
-                : <button className="ghost" disabled={!c.runnable || busy} onClick={() => (c.id === 'comfy.smoke.solid-image' ? editor.runCapability(c.id) : void run(c, null))} data-testid={c.id === 'comfy.smoke.solid-image' ? 'provider-smoke' : 'ai-run'}>{runBusy ? `${t('providers.running')} ${job?.stage ?? ''}` : c.id === 'comfy.smoke.solid-image' ? t('providers.smoke') : S.run}</button>}
-              {runBusy && job && <button className="ghost" onClick={() => void api.cancelJob(job.id).catch(() => {})} data-testid="ai-cancel">{S.cancel}</button>}
+                : <button className="ghost" disabled={!c.runnable || busy} onClick={() => void run(c, null)} data-testid={c.id === 'comfy.smoke.solid-image' ? 'provider-smoke' : 'ai-run'}>{runBusy ? `${t('providers.running')} ${active?.stage ?? ''}` : c.id === 'comfy.smoke.solid-image' ? t('providers.smoke') : S.run}</button>}
+              {runBusy && active && <button className="ghost" onClick={() => void api.cancelJob(active.id).catch(() => {})} data-testid="ai-cancel">{S.cancel}</button>}
             </div>
-            <div role="status" className="muted" data-testid="ai-job-status">
-              {runBusy && job ? <>{S.running}: <bdi>{job.stage ?? job.status}</bdi></> : active?.status === 'canceled' ? S.cancelled : ''}
+            <div role="status" className="muted" data-testid="ai-job-status" data-job={active?.id}>
+              {runBusy && active ? <>{S.running}: <bdi>{active.stage ?? active.status}</bdi></> : active?.status === 'canceled' ? S.cancelled : ''}
             </div>
             {active?.status === 'succeeded' && (
               <p className="pf-ai-result muted" data-testid={smoke ? 'provider-result' : 'ai-result'} data-job={active.id}>

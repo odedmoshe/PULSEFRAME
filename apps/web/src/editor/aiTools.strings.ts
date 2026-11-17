@@ -43,6 +43,10 @@ export const AI_STRINGS = {
     } as Record<string, string>,
     notConfiguredBlock: 'ComfyUI לא מחובר.',
     smokeHint: 'בדיקת חיבור שלא משתמשת בשום מודל ואינה לוקחת תמונה.',
+    loading: 'בודק אילו כלי AI זמינים…',
+    loadFailed: 'לא הצלחנו לקבל מהשרת את רשימת כלי ה-AI ואת מצב החיבור ל-ComfyUI, ולכן אין כאן מידע עליהם.',
+    loadAnswered: 'תשובת השרת:', loadNoAnswer: 'לא התקבלה תשובה מהשרת:',
+    loadRetry: 'ניסיון חוזר', loadStillFailing: 'ניסינו שוב, ועדיין לא הצלחנו.',
   },
   en: {
     howTitle: 'How to connect ComfyUI',
@@ -86,5 +90,9 @@ export const AI_STRINGS = {
     } as Record<string, string>,
     notConfiguredBlock: 'ComfyUI is not connected.',
     smokeHint: 'A connection test that uses no model and takes no picture.',
+    loading: 'Checking which AI tools are available…',
+    loadFailed: 'The list of AI tools and the state of the ComfyUI connection could not be read from the server, so nothing is known about them here.',
+    loadAnswered: 'The server answered:', loadNoAnswer: 'The server did not answer:',
+    loadRetry: 'Try again', loadStillFailing: 'Tried again; it still failed.',
   },
 } as const;
