@@ -1,15 +1,20 @@
 /**
  * ADR-0017 server contracts: run request schemas, the AI configuration variables and their defaults, and the honest refusals of the
- * L0 bridge in Capabilities (estimates and source/apply runs answer 501 until the frame-job work lands). No port is opened.
+ * L0 bridge in Capabilities (estimates and source/apply runs answer 501 until the frame-job work lands; size contracts fail closed).
+ * No port is opened and no provider is contacted.
  */
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { LocalToolDescriptor } from '@pulseframe/providers';
+import { Readable } from 'node:stream';
+import { BUILTIN_CAPABILITIES, IMAGE_SOFT_BLUR, type ComfyDescriptor, type LocalToolDescriptor, type ProviderAdapter } from '@pulseframe/providers';
 import { afterAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { ApplyModeSchema, RunSourceSchema, SETUP_CODES, type CapabilityService, type LocalToolRunner, type SetupCode } from './aiContracts.ts';
 import { Capabilities } from './capabilities.ts';
 import { DEFAULT_MODEL_HOSTS, loadConfig } from './config.ts';
+import { ingestUpload } from './ingest.ts';
 import { ApiError, Store, type JobRow } from './store.ts';
 
 const dirs: string[] = [];
@@ -88,4 +93,81 @@ describe('contract shape: a run is refused or created in one synchronous step', 
       expect(store.getJob(job.id).input).toEqual({ capabilityId: d.id, range: { from: 0, samples: 48_000 } });
     } finally { store.close(); }
   });
+});
+
+/**
+ * The L0 bridge checks every declared size contract on the stored file before a job may succeed (ADR-0007), and a contract it cannot
+ * compute fails the job: it is never skipped. Test-only descriptors (labelled `test.size.*`) are copies of the soft-blur built-in with
+ * another size contract, added to the registry for this block and removed after it. The adapter is a labelled fake that writes a PNG of
+ * the size the test asks for; no ComfyUI runs.
+ */
+describe('Capabilities: the size contract of every expectSize variant is enforced (fails closed)', () => {
+  const ff = (args: string[]) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', ...args]);
+  it('scaleOfInput and scaleOfInputByParam: the exact size succeeds, any other size fails with output_invalid; a contract naming no recorded input fails too', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-aicontracts-size-'));
+    dirs.push(dir);
+    const png = (w: number, h: number) => { const f = path.join(dir, `in_${w}x${h}.png`); if (!fs.existsSync(f)) ff(['-f', 'lavfi', '-i', `color=c=gray:s=${w}x${h}`, '-frames:v', '1', f]); return f; };
+    let produce = { width: 0, height: 0 };
+    const fakeAdapter: ProviderAdapter = { // labelled fake: never contacts a provider
+      id: 'fake-size-adapter',
+      probe: async () => ({ reachable: true, wokeWorker: false, runtimeVersion: 'fake', device: { name: 'fake', type: 'cpu', vramTotalBytes: null }, hostRamBytes: null, missingNodeClasses: [], missingModels: [], problems: [] }),
+      estimate: () => ({ downloadBytes: 0, durationSeconds: null, costUsd: null, basis: 'none' }),
+      stage: async (_p, name) => name,
+      submit: async (_g, clientRequestId) => ({ providerJobId: `fake_${clientRequestId}`, clientRequestId }),
+      status: async () => ({ state: 'succeeded' }),
+      findByClientRequestId: async () => null,
+      cancel: async () => 'not-supported',
+      running: async () => [],
+      collect: async (_d, _id, destDir) => {
+        fs.mkdirSync(destDir, { recursive: true });
+        const out = path.join(destDir, 'out.png');
+        fs.copyFileSync(png(produce.width, produce.height), out);
+        const bytes = fs.readFileSync(out);
+        return [{ name: 'image', role: 'primary', mediaType: 'image', encoding: 'display', fileName: 'out.png', path: out, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }];
+      },
+    };
+    const sigmaAllowed = { ...IMAGE_SOFT_BLUR.inputs[2]!, default: 1, allowed: [0.5, 0.75, 1] };
+    const withSize = (id: string, expectSize: NonNullable<ComfyDescriptor['outputs'][number]['expectSize']>, inputs = IMAGE_SOFT_BLUR.inputs): ComfyDescriptor =>
+      ({ ...IMAGE_SOFT_BLUR, id, inputs, outputs: [{ ...IMAGE_SOFT_BLUR.outputs[0]!, expectSize }] });
+    const testDescriptors = [
+      withSize('test.size.same', { sameAsInput: 'image' }),
+      withSize('test.size.x4', { scaleOfInput: { input: 'image', factor: 4 } }),
+      withSize('test.size.by-param', { scaleOfInputByParam: { input: 'image', param: 'sigma', base: 4 } }, [IMAGE_SOFT_BLUR.inputs[0]!, IMAGE_SOFT_BLUR.inputs[1]!, sigmaAllowed]),
+      withSize('test.size.unknown-input', { sameAsInput: 'picture' }),
+    ];
+    BUILTIN_CAPABILITIES.push(...testDescriptors);
+    const store = new Store(path.join(dir, 'data'));
+    const caps = new Capabilities(store, { ...loadConfig({}), dataDir: path.join(dir, 'data') }, fakeAdapter);
+    try {
+      const pid = store.createProject({ name: 'sizes', width: 640, height: 360 }).doc.id;
+      const asset = await ingestUpload(store, Readable.toWeb(fs.createReadStream(png(32, 24))) as any, 'source.png', 'user:owner', 1 << 20);
+      const assetId = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] }).results[0]!.output!.assetId as string;
+      const outcome = async (capabilityId: string, size: { width: number; height: number }, params: Record<string, unknown> = {}) => {
+        produce = size;
+        let job;
+        try { job = caps.start({ projectId: pid, capabilityId, params: { image: assetId, ...params }, actor: 'user:owner' }); } catch (e) { if (e instanceof ApiError) return `refused:${e.code}:${JSON.stringify((e.details as any)?.blockers?.map((b: any) => b.code) ?? [])}`; throw e; }
+        for (let i = 0; i < 400; i++) {
+          const j = store.getJob(job.id);
+          if (j.status === 'succeeded') return 'succeeded';
+          if (j.status === 'failed' || j.status === 'canceled') return `${j.status}:${j.error?.code}${j.error?.code === 'output_invalid' ? ` (${j.error.message})` : ''}`;
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        return `still ${store.getJob(job.id).status}`;
+      };
+      expect(await outcome('test.size.same', { width: 50, height: 50 })).toBe('failed:output_invalid (output "image" is 50x50, expected 32x24)');
+      expect(await outcome('test.size.same', { width: 32, height: 24 })).toBe('succeeded');
+      expect(await outcome('test.size.x4', { width: 50, height: 50 })).toBe('failed:output_invalid (output "image" is 50x50, expected 128x96)');
+      expect(await outcome('test.size.x4', { width: 128, height: 96 })).toBe('succeeded');
+      // 32x24 at base 4 and 0.75: round(128 × 0.75) × round(96 × 0.75) = 96 × 72
+      expect(await outcome('test.size.by-param', { width: 128, height: 96 }, { sigma: 0.75 })).toBe('failed:output_invalid (output "image" is 128x96, expected 96x72)');
+      expect(await outcome('test.size.by-param', { width: 96, height: 72 }, { sigma: 0.75 })).toBe('succeeded');
+      expect(await outcome('test.size.by-param', { width: 64, height: 48 }, { sigma: 0.5 })).toBe('succeeded');
+      // A contract that names no recorded input is refused before a job exists, never skipped at validation.
+      expect(await outcome('test.size.unknown-input', { width: 50, height: 50 })).toBe('refused:capability_blocked:["invalid_size_contract"]');
+    } finally {
+      await caps.stop();
+      store.close();
+      BUILTIN_CAPABILITIES.splice(BUILTIN_CAPABILITIES.length - testDescriptors.length, testDescriptors.length);
+    }
+  }, 60_000);
 });

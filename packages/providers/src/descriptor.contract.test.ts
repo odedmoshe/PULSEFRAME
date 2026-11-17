@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  AI_WAVE_PINS, ALL_CAPABILITIES, BUILTIN_CAPABILITIES, DescriptorSchema, IMAGE_UPSCALE_4X, graphDigest, IMAGE_SOFT_BLUR, LOCAL_TOOLS, logicDigest, publicationBlockers, resolveGraph, resolveParams,
+  AI_WAVE_PINS, ALL_CAPABILITIES, BUILTIN_CAPABILITIES, DescriptorSchema, expectedOutputSize, IMAGE_UPSCALE_4X, graphDigest, IMAGE_SOFT_BLUR, LOCAL_TOOLS, logicDigest, publicationBlockers, pythonRound, resolveGraph, resolveParams,
   type CapabilityDescriptor, type ComfyDescriptor, type LocalToolDescriptor,
 } from './index.ts';
 
@@ -112,6 +112,45 @@ describe('ComfyUI contracts: size by a reviewed scale, frame plans, data outputs
     expect(codes({ ...base, frames: null })).toEqual(['frames_input_missing']); // the output's frame-count contract has no plan
     expect(codes({ ...base, frames: { ...base.frames!, input: 'nope' } })).toEqual(['frames_input_missing']);
     expect(codes({ ...base, frames: { ...base.frames!, multiplierParam: undefined } })).toEqual(['frames_input_missing']);
+  });
+});
+
+describe('size contracts: the exact size every variant promises, failing closed', () => {
+  const at = (width: number, height: number) => () => ({ width, height });
+  const byParam = (base: number) => ({ scaleOfInputByParam: { input: 'image', param: 'scaleBy', base } });
+  it('scaleOfInputByParam at base 4 gives exactly 2W, 3W and 4W for 320x240 and 333x199', () => {
+    for (const [w, h] of [[320, 240], [333, 199]] as const)
+      for (const [k, m] of [[0.5, 2], [0.75, 3], [1, 4]] as const)
+        expect(expectedOutputSize(byParam(4), { scaleBy: k }, at(w, h)), `${w}x${h} at ${k}`).toEqual({ width: w * m, height: h * m });
+  });
+  it('rounds like Python (an exact half goes to the even neighbour), the way ImageScaleBy sizes its result', () => {
+    expect([0.5, 1.5, 2.5, 3.5, 2.4999, 2.5001].map(pythonRound)).toEqual([0, 2, 2, 4, 2, 3]);
+    expect(expectedOutputSize(byParam(1), { scaleBy: 0.5 }, at(5, 7))).toEqual({ width: 2, height: 4 }); // 2.5 -> 2, 3.5 -> 4
+  });
+  it('the other variants: from parameters, same as an input, a whole-number multiple of an input', () => {
+    expect(expectedOutputSize({ fromParams: ['width', 'height'] }, { width: 256, height: 128 }, at(1, 1))).toEqual({ width: 256, height: 128 });
+    expect(expectedOutputSize({ sameAsInput: 'image' }, {}, at(33, 19))).toEqual({ width: 33, height: 19 });
+    expect(expectedOutputSize({ scaleOfInput: { input: 'image', factor: 4 } }, {}, at(33, 19))).toEqual({ width: 132, height: 76 });
+  });
+  it('a contract that cannot be computed throws size_contract_unresolved instead of being skipped', () => {
+    const none = () => null;
+    expect(thrown(() => expectedOutputSize({ sameAsInput: 'image' }, {}, none))).toBe('size_contract_unresolved');
+    expect(thrown(() => expectedOutputSize({ scaleOfInput: { input: 'image', factor: 4 } }, {}, none))).toBe('size_contract_unresolved');
+    expect(thrown(() => expectedOutputSize(byParam(4), { scaleBy: 0.75 }, none))).toBe('size_contract_unresolved');
+    for (const scaleBy of [undefined, 0, -1, Number.NaN, '0.75']) expect(thrown(() => expectedOutputSize(byParam(4), { scaleBy }, at(320, 240))), String(scaleBy)).toBe('size_contract_unresolved');
+    expect(thrown(() => expectedOutputSize(byParam(1), { scaleBy: 0.01 }, at(10, 10)))).toBe('size_contract_unresolved'); // rounds to 0 pixels
+    expect(thrown(() => expectedOutputSize({ fromParams: ['width', 'height'] }, { width: 256 }, at(1, 1)))).toBe('size_contract_unresolved');
+    expect(thrown(() => expectedOutputSize({ sameAsInput: 'image' }, {}, at(0, 10)))).toBe('size_contract_unresolved');
+    expect(thrown(() => expectedOutputSize({ cropOfInput: 'image' } as never, {}, at(10, 10)))).toBe('size_contract_unresolved');
+  });
+  it('a contract naming something other than an image or video input, or sized by a non-whole-number input, is a publication blocker', () => {
+    const blur = (expectSize: NonNullable<ComfyDescriptor['outputs'][number]['expectSize']>): ComfyDescriptor => ({ ...IMAGE_SOFT_BLUR, qualification: pass as any, outputs: [{ ...IMAGE_SOFT_BLUR.outputs[0]!, expectSize }] });
+    expect(codes(blur({ sameAsInput: 'image' }))).toEqual([]);
+    expect(codes(blur({ scaleOfInput: { input: 'image', factor: 2 } }))).toEqual([]);
+    expect(codes(blur({ sameAsInput: 'picture' }))).toEqual(['invalid_size_contract']);
+    expect(codes(blur({ scaleOfInput: { input: 'radius', factor: 2 } }))).toEqual(['invalid_size_contract']);
+    expect(codes(blur({ fromParams: ['radius', 'sigma'] }))).toEqual(['invalid_size_contract']); // sigma is a float
+    for (const d of ALL_CAPABILITIES) expect(codes(d), d.id).not.toContain('invalid_size_contract');
   });
 });
 

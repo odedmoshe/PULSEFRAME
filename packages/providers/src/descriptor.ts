@@ -192,8 +192,8 @@ const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'mask', 'transcript']);
 const integral = (x: number) => Math.abs(x - Math.round(x)) < 1e-9;
 /**
  * Every reason this capability may not be published/run under a distribution profile. Empty = eligible.
- * Shared codes: unreviewed_control, unbounded_control, invalid_allowed, no_outputs, unreviewed_output, data_output_without_schema,
- *   unresolved_model, model_license_unknown, model_not_commercially_eligible, not_<dimension>.
+ * Shared codes: unreviewed_control, unbounded_control, invalid_allowed, invalid_size_contract, no_outputs, unreviewed_output,
+ *   data_output_without_schema, unresolved_model, model_license_unknown, model_not_commercially_eligible, not_<dimension>.
  * comfyui only: graph_digest_mismatch, dangling_binding (including null bindings), unknown_node_pack, unpinned_node_pack,
  *   frames_input_missing, graph_defined_egress.
  * local only: code_digest_mismatch (when ctx.codeDigest differs), binding_on_local_tool, local_tool_egress (a local tool has no graph,
@@ -228,6 +228,12 @@ export function publicationBlockers(d: CapabilityDescriptor, profile: Distributi
     if (!o.reviewed) add('unreviewed_output', `output "${o.name}" role has not been reviewed`);
     if ((o.mediaType === 'data') !== (o.dataSchema !== null)) add('data_output_without_schema', o.mediaType === 'data' ? `data output "${o.name}" declares no data schema` : `output "${o.name}" declares a data schema but is not a data output`);
     const s = o.expectSize;
+    // A size contract must name what it is computed from; one that names nothing the run records could only be skipped (fail open).
+    const sizedFrom = s && ('sameAsInput' in s ? s.sameAsInput : 'scaleOfInput' in s ? s.scaleOfInput.input : 'scaleOfInputByParam' in s ? s.scaleOfInputByParam.input : null);
+    if (sizedFrom !== null && sizedFrom !== undefined && !d.inputs.some((i) => i.name === sizedFrom && (i.type === 'image' || i.type === 'video')))
+      add('invalid_size_contract', `output "${o.name}" is sized from "${sizedFrom}", which is not an image or video input`);
+    if (s && 'fromParams' in s) for (const n of s.fromParams) if (!d.inputs.some((i) => i.name === n && i.type === 'int'))
+      add('invalid_size_contract', `output "${o.name}" is sized by "${n}", which is not a whole-number input`);
     if (s && 'scaleOfInputByParam' in s) {
       const p = d.inputs.find((i) => i.name === s.scaleOfInputByParam.param);
       if (!p?.allowed) add('invalid_allowed', `output "${o.name}" is sized by parameter "${s.scaleOfInputByParam.param}", which must list its allowed values`);
@@ -324,4 +330,44 @@ export function resolveGraph(d: ComfyDescriptor, params: Record<string, unknown>
     graph[i.binding.nodeId]!.inputs[i.binding.input] = resolved[i.name];
   }
   return { graph, resolved, media };
+}
+
+export type ExpectSize = NonNullable<z.infer<typeof ExpectSizeSchema>>;
+export interface PixelSize { width: number; height: number }
+/** Python's round() of a float: an exact half goes to the even neighbour (round(2.5) = 2), as ComfyUI computes ImageScaleBy. */
+export const pythonRound = (x: number): number => {
+  const r = Math.round(x);
+  return x - Math.floor(x) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+};
+/**
+ * The exact pixel size a declared size contract promises, computed the way the provider computes it. For scaleOfInputByParam the
+ * model first scales each side by `base` (a whole number), then ImageScaleBy takes Python round(scaled side × params[param])
+ * (ComfyUI nodes.py:1939-1940), so the result is pythonRound((side × base) × value) in that order of operations.
+ * `inputSize(name)` gives the recorded size of a media input of this run, or null.
+ * A contract that cannot be computed (an input with no recorded size, a parameter that is not a positive number, a result below one
+ * pixel, a variant this build does not know) throws CapabilityError 'size_contract_unresolved': the size check fails closed and is
+ * never skipped (ADR-0007: results are validated before success).
+ */
+export function expectedOutputSize(exp: ExpectSize, params: Record<string, unknown>, inputSize: (input: string) => PixelSize | null): PixelSize {
+  const fail = (why: string): never => { throw new CapabilityError('size_contract_unresolved', `the declared output size cannot be computed: ${why}`, { expectSize: exp }); };
+  const whole = (v: unknown, what: string): number => (typeof v === 'number' && Number.isInteger(v) && v >= 1 ? v : fail(`${what} is ${JSON.stringify(v) ?? 'missing'}, not a whole number of pixels`));
+  const of = (input: string): PixelSize => {
+    const s = inputSize(input) ?? fail(`input "${input}" has no recorded size in this run`);
+    return { width: whole(s.width, `the width of input "${input}"`), height: whole(s.height, `the height of input "${input}"`) };
+  };
+  if ('fromParams' in exp) return { width: whole(params[exp.fromParams[0]], `parameter "${exp.fromParams[0]}"`), height: whole(params[exp.fromParams[1]], `parameter "${exp.fromParams[1]}"`) };
+  if ('sameAsInput' in exp) return of(exp.sameAsInput);
+  if ('scaleOfInput' in exp) {
+    const s = of(exp.scaleOfInput.input);
+    return { width: s.width * exp.scaleOfInput.factor, height: s.height * exp.scaleOfInput.factor };
+  }
+  if ('scaleOfInputByParam' in exp) {
+    const { input, param, base } = exp.scaleOfInputByParam;
+    const s = of(input);
+    const k = params[param];
+    if (typeof k !== 'number' || !Number.isFinite(k) || k <= 0) return fail(`parameter "${param}" is ${JSON.stringify(k) ?? 'missing'}, not a positive number`);
+    return { width: whole(pythonRound(s.width * base * k), 'the scaled width'), height: whole(pythonRound(s.height * base * k), 'the scaled height') };
+  }
+  const unknown: never = exp;
+  return fail(`size contract ${JSON.stringify(unknown)} is not one this build knows`);
 }

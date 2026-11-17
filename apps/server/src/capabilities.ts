@@ -9,8 +9,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph,
-  type Blocker, type CapabilityDescriptor, type ComfyDescriptor, type ProviderAdapter,
+  BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, expectedOutputSize, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph,
+  type Blocker, type CapabilityDescriptor, type ComfyDescriptor, type PixelSize, type ProviderAdapter,
 } from '@pulseframe/providers';
 import type { CapabilityEstimate, CapabilityService, RunRequest } from './aiContracts.ts';
 import type { Config } from './config.ts';
@@ -355,12 +355,22 @@ export class Capabilities implements CapabilityService {
         const v = probe.streams?.find((x: any) => x.codec_type === 'video');
         const a = probe.streams?.find((x: any) => x.codec_type === 'audio');
         if ((f.mediaType === 'audio' && !a) || (f.mediaType !== 'audio' && !v)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" does not contain ${f.mediaType}`); }
-        // Declared size contract from the reviewed descriptor.
-        const exp = d.outputs.find((o) => o.name === f.name)?.expectSize;
-        const p = job.input.params;
-        const src = exp && 'sameAsInput' in exp ? (job.input.sources as any[]).find((x) => x.input === exp.sameAsInput) : null;
-        const want = exp && 'fromParams' in exp ? { w: p[exp.fromParams[0]], h: p[exp.fromParams[1]] } : src ? { w: src.width, h: src.height } : null;
-        if (v && want && (v.width !== want.w || v.height !== want.h)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" is ${v.width}x${v.height}, expected ${want.w}x${want.h}`); }
+        // Declared size contract from the reviewed descriptor, every variant; one that cannot be computed fails the job (never skipped).
+        const exp = d.outputs.find((o) => o.name === f.name)?.expectSize ?? null;
+        if (exp) {
+          let want: PixelSize;
+          try {
+            want = expectedOutputSize(exp, job.input.params, (input) => {
+              const s = (job.input.sources as { input: string; width: number; height: number }[]).find((x) => x.input === input);
+              return s ? { width: s.width, height: s.height } : null;
+            });
+          } catch (e) {
+            fs.rmSync(tmp, { force: true });
+            if (e instanceof CapabilityError) throw new ApiError(502, 'output_invalid', `output "${f.name}": ${e.message}`, { sizeContract: e.code });
+            throw e;
+          }
+          if (!v || v.width !== want.width || v.height !== want.height) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" is ${v ? `${v.width}x${v.height}` : 'not a picture'}, expected ${want.width}x${want.height}`); }
+        }
         const mime = f.mediaType === 'image' ? `image/${v.codec_name === 'mjpeg' ? 'jpeg' : v.codec_name}` : f.mediaType === 'video' ? 'video/mp4' : 'audio/wav';
         // the result is stored only if it fits under the ceiling; otherwise the job fails with that reason and nothing is kept
         if (!fs.existsSync(this.store.blobPath(contentHash))) { try { assertStorageRoom(this.store, size, 'store this result'); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; } }
