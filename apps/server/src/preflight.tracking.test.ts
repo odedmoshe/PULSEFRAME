@@ -22,7 +22,7 @@ vi.mock('@pulseframe/engine', async (importOriginal) => {
     const g = real.evaluate(doc, time, sequenceId);
     const clipOf = (id: string) => { for (const s of Object.values(doc.sequences)) for (const tr of s.tracks) for (const c of tr.clips) if (c.id === id) return c; return undefined; };
     for (const l of g.layers) {
-      if (l.kind === 'caption') continue;
+      if (l.kind === 'caption' || l.kind === 'adjust') continue;
       const c = clipOf(l.clipId);
       if (!c) continue;
       if (l.kind === 'video' && c.type === 'media' && c.redact && l.regions === undefined)

@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, projectVariant, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun } from '@pulseframe/core';
+import { clipEnd, findClip, projectVariant, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -18,6 +18,7 @@ import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.
 import { aiApi, type ApplyMode, type RunSource } from './api.ts';
 import { addAssetArgs, dropAssetArgs } from './placement.ts';
 import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
+import { wholeEditOps, type WholeEditPick } from './commands.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -81,6 +82,12 @@ export interface EditorState {
   picker: TrackPick | null;
   /** The motion track the tracking panel shows open (the one just created there). Session state only. */
   activeTrackId: string | null;
+  /** The Templates drawer of the library is expanded (session view state). */
+  templatesOpen: boolean;
+  /** Bumped by openTemplates: the drawer moves the keyboard focus to its first card once the cards are there. */
+  templatesFocus: number;
+  /** The template run applied from this tab, for the post-apply bar (shuffle, another tempo, undo); session state only. */
+  templateRun: TemplateRunInfo | null;
 }
 /** What the track picker is picking, and on which clip's picture. */
 export interface TrackPick { kind: 'point' | 'region'; clipId: string; assetId: string }
@@ -94,6 +101,18 @@ async function apiJson<R>(path: string, body?: unknown): Promise<R> {
   const data = r.headers.get('content-type')?.includes('json') ? await r.json() : undefined;
   if (!r.ok) throw new ApiFailure(r.status, data?.error?.code ?? 'http_error', data?.error?.message ?? `HTTP ${r.status}`, data?.error?.details, data?.error?.hint);
   return data as R;
+}
+/** What the post-apply bar knows of the last template applied here (ADR-0016): its run, the params it ran with and the plan's alternatives. */
+export interface TemplateRunInfo {
+  runId: string;
+  templateId: string;
+  name: { he: string; en: string };
+  params: Partial<TemplateInput>;
+  alternatives: { label: string; params: Partial<TemplateInput> }[];
+  /** Items the run placed. */
+  created: number;
+  /** The revision the apply (or the last regenerate) made. */
+  revision: number;
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
@@ -116,6 +135,7 @@ export class Editor {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
     provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [], actor: null,
     trackJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
+    templatesOpen: false, templatesFocus: 0, templateRun: null,
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -609,6 +629,25 @@ export class Editor {
     const end = clips.reduce((m, c) => T.max(m, clipEnd(c)), clips[0]!.start);
     return this.duplicate(clips.map((c) => c.id), T.snapToFrame(end, this.rate), 'Duplicate');
   }
+  // ---------- adjustment layers and templates (ADR-0016) ----------
+  /** An adjustment layer over the whole edit, selected so its Look panel is in view (palette: cmd.addAdjustment). */
+  async addWholeEditAdjustment() {
+    const r = await this.commit([{ op: 'add_adjustment', args: { span: 'edit' } }], 'Adjustment layer');
+    const id = r?.results[0]?.output?.clipId;
+    if (typeof id === 'string') this.select(id);
+    return r;
+  }
+  /**
+   * "Apply to: the whole edit": the effect or look goes on the existing whole-edit adjustment, or on a new one made over the
+   * edit (commands.ts wholeEditOps). Decided when the write's turn comes; one transaction either way.
+   */
+  applyToWholeEdit(pick: WholeEditPick, label = 'Adjust the whole edit') {
+    return this.commit(() => (this.state.doc ? wholeEditOps(this.state.doc, pick) : null), label);
+  }
+  /** Expand the Templates drawer of the library and move the keyboard focus to its first card (palette, Welcome; TemplatesDrawer.tsx). */
+  openTemplates() { this.set({ templatesOpen: true, templatesFocus: this.state.templatesFocus + 1 }); }
+  setTemplateRun(run: TemplateRunInfo | null) { this.set({ templateRun: run }); }
+
   /** The selected clip's transform as rendered at the playhead (keyframes applied). */
   transformNow(clip: Clip) { return transformAt(clip, T.max(clip.start, T.min(this.playhead, clipEnd(clip)))); }
 

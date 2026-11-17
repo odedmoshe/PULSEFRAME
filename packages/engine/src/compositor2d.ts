@@ -7,10 +7,10 @@
  */
 import * as T from '@pulseframe/time';
 import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip } from './gpu.ts';
-import type { ImageLayer, Layer, PictureLayer, RenderGraph, TextLayer, VideoLayer } from './evaluate.ts';
+import { ADJUST_PASS_SLOT, type AdjustLayer, type ImageLayer, type PictureLayer, type RenderGraph, type TextLayer, type VideoLayer } from './evaluate.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
 import { textAtRest, unitPose } from './textAnimation.ts';
-import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, compositeLayer, scratch, type Buf, type LayerBox } from './look.ts';
+import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, COMPOSITE, compositeLayer, scratch, type Buf, type LayerBox, type LookEnv } from './look.ts';
 import { fitScale } from '@pulseframe/core';
 import { TAP_PLACE_SLOT, tapMerger } from './taps.ts';
 
@@ -55,7 +55,7 @@ export function resolveDirection(text: string, dir: 'auto' | 'rtl' | 'ltr'): 'rt
   return m && RTL.test(m[0]) ? 'rtl' : 'ltr';
 }
 
-function withTransform(ctx: Ctx2D, g: RenderGraph, layer: Exclude<Layer, CaptionLayer>, body: () => void) {
+function withTransform(ctx: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer, body: () => void) {
   const t = layer.transform;
   ctx.save();
   ctx.globalAlpha = t.opacity;
@@ -300,6 +300,29 @@ function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | T
   const { w, h } = placedSize(g, layer);
   withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h));
 }
+/**
+ * The adjustment pass (ADR-0016): the frame drawn so far (every layer before this one) is copied into scratch slot
+ * ADJUST_PASS_SLOT, run through the adjustment's effects with a whole-frame box (effects ping-pong slots 1 and 2), masked in
+ * frame space (slots 4 and 5) and composited back with the clip's opacity and blend mode. For the normal blend that is
+ * exactly frame·(1 − α·m) + adjusted·α·m (α opacity, m mask coverage): masked-out pixels are transparent in the adjusted copy,
+ * so they stay byte-identical. Nothing else is drawn: no picture is asked for, no transform, no transition.
+ */
+async function adjustPass(ctx: Ctx2D, g: RenderGraph, layer: AdjustLayer, tables: Pick<LookEnv, 'luts' | 'lutReasons'>) {
+  const snap = scratch(ADJUST_PASS_SLOT, g.width, g.height);
+  snap.ctx.drawImage(ctx.canvas, 0, 0);
+  const box: LayerBox = { cx: g.width / 2, cy: g.height / 2, w: g.width, h: g.height, rotation: 0, scale: 1 };
+  const env: LookEnv = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), local: layer.local ?? 0, box, beat: g.beat ?? null, ...tables };
+  let buf: Buf = snap;
+  if (layer.effects?.length) buf = await applyEffects(buf, layer.effects, env);
+  if (layer.mask) applyMask(buf, layer.mask, env);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = layer.opacity;
+  ctx.globalCompositeOperation = COMPOSITE[layer.blend ?? 'normal'];
+  ctx.drawImage(buf.canvas, 0, 0);
+  ctx.restore();
+}
+
 /** Key under which a decoded picture can serve every layer and tap of one frame that shows the same source frame. */
 const pictureKey = (l: PictureLayer) => (l.kind === 'video' ? `v\n${l.assetId}\n${l.sourceFrameIndex}` : `i\n${l.assetId}`);
 /**
@@ -314,7 +337,7 @@ export function frameDecoders(g: RenderGraph): { count: number; clipIds: string[
   const take = (l: PictureLayer) => { if (l.kind === 'video') { lanes.add(`${l.clipId}\n${l.lane ?? 0}`); clipIds.add(l.clipId); } };
   for (const l of g.layers) if (l.kind === 'video' || l.kind === 'image') { take(l); shown.add(pictureKey(l)); }
   for (const l of g.layers) {
-    if (l.kind === 'caption' || !l.time) continue;
+    if (l.kind === 'caption' || l.kind === 'adjust' || !l.time) continue;
     for (const tap of l.time.taps) {
       if (tap.layer.kind === 'text' || shown.has(pictureKey(tap.layer))) continue;
       shown.add(pictureKey(tap.layer));
@@ -365,12 +388,12 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
   /** Why a tap's picture could not be had, by layer index and tap index. */
   const tapWhy = new Map<string, string>();
   const requests = g.layers.map((l) => {
-    if (l.kind === 'text' || l.kind === 'caption') return null;
+    if (l.kind === 'text' || l.kind === 'caption' || l.kind === 'adjust') return null; // an adjustment has no picture of its own (ADR-0016)
     const own = frames(l);
     if (!shared.has(pictureKey(l))) shared.set(pictureKey(l), own);
     return own;
   });
-  const tapRequests = g.layers.map((l, i) => (l.kind === 'caption' || !l.time ? null : l.time.taps.map((tap, k) => {
+  const tapRequests = g.layers.map((l, i) => (l.kind === 'caption' || l.kind === 'adjust' || !l.time ? null : l.time.taps.map((tap, k) => {
     if (tap.layer.kind === 'text') return null;
     const layer = tap.layer;
     // a tap whose picture cannot be decoded leaves its time effect out of this frame (reported below), it does not fail the frame
@@ -383,7 +406,7 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
   // No other frame may draw meanwhile, so every frame first waits for such a frame to finish; frames without one stay synchronous.
   while (gpuFrame) await gpuFrame;
   let release: (() => void) | undefined;
-  if (g.layers.some((l) => l.kind !== 'caption' && ((l.effects && hasGpuEffect(l.effects)) || (l.transition && isGpuTransition(l.transition.type))))) gpuFrame = new Promise<void>((r) => { release = () => { gpuFrame = null; r(); }; });
+  if (g.layers.some((l) => l.kind !== 'caption' && ((l.effects && hasGpuEffect(l.effects)) || (l.kind !== 'adjust' && l.transition && isGpuTransition(l.transition.type))))) gpuFrame = new Promise<void>((r) => { release = () => { gpuFrame = null; r(); }; });
   takeUnavailable();
   try {
   ctx.save();
@@ -397,6 +420,7 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
   let outgoing: Buf | null = null;
   for (const [i, layer] of g.layers.entries()) {
     if (layer.kind === 'caption') { drawCaption(ctx, g, layer); continue; }
+    if (layer.kind === 'adjust') { await adjustPass(ctx, g, layer, { luts, lutReasons }); continue; }
     const img = layer.kind === 'text' ? null : images[i];
     if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); const why = frames.refusal?.(layer); if (why) missingReasons[layer.clipId] = why; continue; }
     const { w, h } = placedSize(g, layer);

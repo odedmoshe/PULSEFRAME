@@ -241,7 +241,7 @@ export function trackingIssues(doc: ProjectDocument, rate: { num: number; den: n
       cursor = f + 1;
       const g = evaluate(only, T.frameTime(f, rate));
       for (const l of g.layers) {
-        if (l.kind === 'caption') continue;
+        if (l.kind === 'caption' || l.kind === 'adjust') continue; // an adjustment layer never follows a track or carries regions (ADR-0016)
         const b0 = bound.get(l.clipId);
         if (!b0) continue;
         const c = b0.clip;

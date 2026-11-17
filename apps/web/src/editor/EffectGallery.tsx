@@ -5,10 +5,10 @@
  * Tiles that move by themselves (motions, time effects, overlays, the strobe) animate while hovered or focused, never under
  * prefers-reduced-motion; every animated frame passes one FlashGuard per dialog (ADR-0009 decision 2), like the player.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import * as T from '@pulseframe/time';
-import { applyTransaction, COLOR_LOOKS, createProject, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { adjustmentRefusal, applyTransaction, COLOR_LOOKS, createProject, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate, FlashGuard, type FrameImage } from '@pulseframe/engine';
 import type { Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
@@ -16,7 +16,27 @@ import { useEditorState } from './store.ts';
 import { GALLERY_STRINGS } from './gallery.strings.ts';
 import { DEFAULT_TRANSITION_FRAMES, isOn, pickCall, pickRefusal, thumbSize, transitionLength, transitionRoom } from './gallery.pick.ts';
 import { singleFlight } from './oneAtATime.ts';
+import { ADJUST_STRINGS } from './adjust.strings.ts';
+import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
+import { wholeEditAdjustment } from './commands.ts';
 import './effectGallery.css';
+
+/** Where a look picked in the Look panel or the gallery goes (ADR-0016): this clip, or an adjustment layer over the whole edit. */
+export type ApplyTo = 'clip' | 'edit';
+/** The "apply to" radio group of the Look panel and the effects gallery: this clip / the whole edit. */
+export function ApplyToGroup({ value, onChange }: { value: ApplyTo; onChange: (v: ApplyTo) => void }) {
+  const { state } = useEditorState();
+  const A = ADJUST_STRINGS[state.lang];
+  const name = useId(), note = useId();
+  return (
+    <fieldset className="pf-apply-to" data-testid={TID.applyTo} aria-describedby={value === 'edit' ? note : undefined}>
+      <legend>{A.applyTo}</legend>
+      <label className="check"><input type="radio" name={name} value="clip" checked={value === 'clip'} data-testid={TID.applyToClip} onChange={() => onChange('clip')} /> {A.applyToClip}</label>
+      <label className="check"><input type="radio" name={name} value="edit" checked={value === 'edit'} data-testid={TID.applyToEdit} onChange={() => onChange('edit')} /> {A.applyToEdit}</label>
+      {value === 'edit' && <p id={note} className="muted">{A.applyToEditNote}</p>}
+    </fieldset>
+  );
+}
 
 type Kind = 'effect' | 'look' | 'transition' | 'text' | 'motion';
 type TabId = 'effects' | 'looks' | 'transitions' | 'text' | 'motion';
@@ -108,7 +128,7 @@ function buildDoc(s: Scene, it: Item, isText = false): { doc: ProjectDocument; f
   return { doc: step(a.doc, [...moving, { op: 'add_effect', args: { clipId, type: it.id } }]).doc, frame: effectFrame(it.id) };
 }
 
-export function EffectGalleryButton({ clip, trackKind }: { clip: Clip; trackKind: string }) {
+export function EffectGalleryButton({ clip, trackKind, applyTo = 'clip', onApplyTo }: { clip: Clip; trackKind: string; applyTo?: ApplyTo; onApplyTo?: (v: ApplyTo) => void }) {
   const { state } = useEditorState();
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -116,19 +136,25 @@ export function EffectGalleryButton({ clip, trackKind }: { clip: Clip; trackKind
   return (
     <>
       <button ref={btn} type="button" data-testid="gallery-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>{G.open}</button>
-      {open && <EffectGallery clip={clip} trackKind={trackKind} onClose={() => { setOpen(false); setTimeout(() => btn.current?.focus(), 0); }} />}
+      {open && <EffectGallery clip={clip} trackKind={trackKind} applyTo={applyTo} onApplyTo={onApplyTo} onClose={() => { setOpen(false); setTimeout(() => btn.current?.focus(), 0); }} />}
     </>
   );
 }
 
-function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: string; onClose: () => void }) {
+function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onApplyTo }: { clip: Clip; trackKind: string; onClose: () => void; applyTo: ApplyTo; onApplyTo?: (v: ApplyTo) => void }) {
   const { editor, state, t } = useEditorState();
   const lang = state.lang;
   const G = GALLERY_STRINGS[lang];
+  const A = ADJUST_STRINGS[lang];
   const gpuOk = !!state.gpu?.available;
   const isText = clip.type === 'text';
   const media = clip.type === 'media' && trackKind === 'video';
-  const tabs = useMemo<TabId[]>(() => [...(isText || media ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media ? (['motion'] as TabId[]) : [])], [isText, media]);
+  // An adjustment clip (ADR-0016) takes effects and looks only; for a picture or a title, effects and looks may go on an
+  // adjustment layer over the whole edit instead ("apply to").
+  const adjustment = clip.type === 'adjustment';
+  const [applyTo, setApplyToState] = useState<ApplyTo>(adjustment ? 'clip' : initialApplyTo);
+  const setApplyTo = (v: ApplyTo) => { setApplyToState(v); onApplyTo?.(v); };
+  const tabs = useMemo<TabId[]>(() => [...(isText || media || adjustment ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media ? (['motion'] as TabId[]) : [])], [isText, media, adjustment]);
   const [tab, setTab] = useState<TabId>(tabs[0] ?? 'effects');
   const [query, setQuery] = useState('');
   const [snap, setSnap] = useState<{ bitmap: ImageBitmap; dim: ImageBitmap; w: number; h: number } | null | undefined>(undefined);
@@ -281,17 +307,26 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
         if (frames < wanted) short = { frames, limit: room.limit };
       }
     }
-    const call = pickCall(live, it, frames);
+    const toEdit = wholeEdit && (it.kind === 'effect' || it.kind === 'look');
+    const onEdit = toEdit && editor.doc ? wholeEditAdjustment(editor.doc)?.clip : undefined;
+    // the whole edit: on its adjustment layer (made by the same transaction when there is none yet), never twice the same effect
+    const call = toEdit ? (onEdit && it.kind === 'effect' && isOn(onEdit, it) ? null : 'edit') : pickCall(live, it, frames);
     if (!call) { setStatus({ kind: 'info', text: G.alreadyOn(name) }); return; }
     setBusyKey(it.key);
     try {
-      const done = await flight.run(() => editor.commit([call], `Gallery: ${it.id}`));
+      const done = await flight.run(() => (call === 'edit'
+        ? editor.applyToWholeEdit(it.kind === 'effect' ? { kind: 'effect', type: it.id } : { kind: 'look', lookId: it.id }, `Gallery: ${it.id} (whole edit)`)
+        : editor.commit([call], `Gallery: ${it.id}`)));
       if (done.dropped) return;
       if (done.value) { setStatus({ kind: 'info', text: short ? G.appliedShort(name, short.frames, short.limit === 'previous') : G.applied(name) }); return; }
       const why = pickRefusal(editor.getState());
       setStatus({ kind: 'error', text: G.refused(name), reason: why.reason ?? (why.conflict ? G.conflict : G.noReason) });
     } finally { setBusyKey(null); }
   };
+
+  // "apply to the whole edit" holds for effects and looks; the tiles are pressed by what the whole-edit layer carries
+  const wholeEdit = !adjustment && applyTo === 'edit' && (tab === 'effects' || tab === 'looks');
+  const pressedOn: Clip | null = wholeEdit ? (editor.doc ? wholeEditAdjustment(editor.doc)?.clip ?? null : null) : clip;
 
   // the clips as they are now: is there room for any transition at the start of this clip?
   const room = media && editor.doc ? transitionRoom(editor.doc, clip.id) : null;
@@ -338,17 +373,19 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
   };
 
   const tileOf = (it: Item) => {
-    const unavailable = it.gpu && !gpuOk;
+    // an adjustment (this clip, or the layer over the whole edit) refuses time effects, the chroma key and the shadow
+    const refused = it.kind === 'effect' && (adjustment || wholeEdit) && !!adjustmentRefusal(it.id);
+    const unavailable = (it.gpu && !gpuOk) || refused;
     const name = lang === 'he' ? it.he : it.en;
     return (
       <button key={it.key} type="button" className="pf-gal-tile" data-testid="gallery-tile" data-kind={it.kind} data-id={it.id}
         data-rendered={rendered.has(it.key) ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
-        disabled={unavailable} aria-pressed={isOn(clip, it)} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
+        disabled={unavailable} aria-pressed={pressedOn ? isOn(pressedOn, it) : false} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
         onPointerEnter={animates(it) ? () => setHot(it.key) : undefined} onPointerLeave={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
         onFocus={animates(it) ? () => setHot(it.key) : undefined} onBlur={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
         <canvas ref={(c) => { if (c) canvases.current.set(it.key, c); else canvases.current.delete(it.key); }} width={tw} height={th} aria-hidden="true" style={{ ['--pf-gal-aspect' as string]: `${tw} / ${th}` }} />
         <span className="pf-gal-name"><bdi>{name}</bdi></span>
-        {unavailable && <span className="pf-gal-unavail">{G.needsGpu}</span>}
+        {unavailable && <span className="pf-gal-unavail">{refused ? A.notOnAdjustment : G.needsGpu}</span>}
       </button>
     );
   };
@@ -401,6 +438,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
           ))}
         </div>
         <div className="pf-gal-body">
+          {!adjustment && (tab === 'effects' || tab === 'looks') && <ApplyToGroup value={applyTo} onChange={setApplyTo} />}
           <p className="pf-gal-note" role="status">{tab !== 'text' && snap === null ? G.noFrame : G.thumbNote}</p>
           {tab === 'motion' && <p className="pf-gal-note pf-gal-note-small" data-testid="gallery-motion-note">{G.motionNote}</p>}
           {tabs.map(panel)}

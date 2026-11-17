@@ -5,6 +5,8 @@
  * beat toggle with its fieldset and undo, the date-stamp field with its inline refusal, and the time-first separator.
  * Motion tracking (ADR-0015): a point picked with the keyboard only, an area picked by dragging, tracking progress that rises
  * and Stop, a title attached to a track without a jump, a handle drag on that follower, and the preview against the still.
+ * Adjustment layers and templates (ADR-0016): the FX track, "apply to: the whole edit", the opacity-only inspector and
+ * "cover the whole edit", "Replace media…", the Templates drawer and a keyboard-only template flow with Shuffle and undo.
  * Still not covered here: audible fades/ducking during live playback (only the offline WebAudio chain is measured).
  *   pnpm build && pnpm proof:editor-interactions
  */
@@ -18,7 +20,9 @@ import { generateTrackingFixture, trackingTruth } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
-import { effectParamLabel, translateRefusal } from '../../i18n/src/index.ts';
+import { dictionaries, effectParamLabel, translateRefusal } from '../../i18n/src/index.ts';
+import { creativeProjection } from '@pulseframe/core';
+import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
@@ -808,6 +812,190 @@ async function main() {
       });
       const pv = preview && dragged ? Math.hypot(preview.x - dragged.x, preview.y - dragged.y) : Infinity;
       check('tracking, preview: the follower\'s centre in the editor preview is within 2 px of the still of the same frame (one evaluator); no page errors', pv <= 2 && tErrors.length === 0, { px: Number(pv.toFixed(3)), preview, still: dragged, errors: tErrors.slice(0, 3) });
+      await tctx.close();
+    }
+
+    console.log('\n# adjustment layers and templates (ADR-0016)');
+    {
+      const TID = TEMPLATE_TESTIDS;
+      const tp = (await call('/projects', { name: 'adjust-and-templates', width: 640, height: 360 })).body.project.id as string;
+      const stills: string[] = [];
+      for (const [i, c] of ['0x4a6f8c', '0x8c5a4a', '0x5a8c6a', '0x7a5a8c'].entries()) { const file = path.join(art, `still-${i}.png`); ff(['-f', 'lavfi', '-i', `color=c=${c}:s=640x360,drawbox=x=${60 + i * 100}:y=90:w=120:h=180:color=0xc0b07a:t=fill`, '-frames:v', '1', file]); stills.push(file); }
+      const tvid = await upload(tp, picFile);
+      const timgs: string[] = [];
+      for (const file of stills) timgs.push((await upload(tp, file)).assetId as string);
+      const tmusic = await upload(tp, musicFile);
+      const measured = await call(`/projects/${tp}/assets/${tmusic.assetId}/analyze`, { kind: 'beats' });
+      const vclip = (await txs(tp, [{ op: 'add_clip', args: { assetId: tvid.assetId, start: f(0), duration: f(90), withLinkedAudio: false } }])).results[0].output.clipId as string;
+      const tdoc = async () => (await call(`/projects/${tp}`)).body as { project: any; revision: number };
+      const tuntil = async (pred: (d: any) => boolean, ms = 10000) => { const t0 = Date.now(); for (;;) { const d = await tdoc(); if (pred(d.project)) return true; if (Date.now() - t0 > ms) return false; await sleep(100); } };
+      const opsSince = async (rev: number) => ((await call(`/projects/${tp}/history?since=${rev}`)).body.events as any[]).filter((e) => e.revision > rev).map((e) => e.ops);
+      const adjOf = (d: any) => d.sequences.seq_main.tracks.filter((t: any) => t.kind === 'adjustment').flatMap((t: any) => t.clips);
+      const tctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+      const tpage = await tctx.newPage();
+      const tErrors: string[] = [];
+      tpage.on('pageerror', (e) => tErrors.push(String(e)));
+      await tpage.goto(`${s.ownerUrl}&project=${tp}`);
+      await tpage.locator(`.clip[data-clip-id="${vclip}"]`).waitFor();
+      const truler = (await tpage.getByTestId('ruler').boundingBox())!;
+
+      // an FX track from the timeline's add-track buttons
+      const r0 = (await tdoc()).revision;
+      await tpage.getByTestId(TID.addTrackAdjustment).click();
+      const fxTrack = await tuntil((d) => d.sequences.seq_main.tracks.some((t: any) => t.kind === 'adjustment'));
+      await tpage.locator('.track.adjustment').first().waitFor({ timeout: 5000 }).catch(() => {});
+      const fxLabel = await tpage.locator('.track.adjustment').first().getAttribute('aria-label').catch(() => null);
+      check('adjustment layers: the timeline\'s add-track button adds an FX track in one transaction, shown as an adjustment track («התאמה»)', fxTrack && (await tdoc()).revision === r0 + 1 && /התאמה/.test(fxLabel ?? ''), { fxLabel });
+
+      // "apply to: the whole edit" in the Look panel
+      await tpage.locator(`.clip[data-clip-id="${vclip}"]`).click();
+      await tpage.getByTestId(TID.applyToEdit).check();
+      const r1 = (await tdoc()).revision;
+      await tpage.getByTestId('effect-add').selectOption('color.grayscale');
+      const made = await tuntil((d) => adjOf(d).length === 1 && adjOf(d)[0].effects?.[0]?.type === 'color.grayscale');
+      const after1 = await tdoc();
+      const ops1 = await opsSince(r1);
+      const layer = adjOf(after1.project)[0];
+      const covers = !!layer && fr(layer.start) === 0 && fr(layer.duration) === 90;
+      const clipUntouched = !(clipOf(after1.project, vclip).effects?.length);
+      await tpage.waitForFunction(() => !!document.querySelector('[data-testid=adjust-select]'), undefined, { timeout: 5000 }).catch(() => {});
+      await tpage.getByTestId('effect-add').selectOption('light.vignette');
+      const second = await tuntil((d) => adjOf(d).length === 1 && adjOf(d)[0].effects?.length === 2);
+      const ops2 = await opsSince(after1.revision);
+      check('"apply to: the whole edit" (Look panel): exactly 1 transaction containing add_adjustment over the whole edit with the effect on it, the clip itself untouched; a second effect joins the same layer (add_effect)', made && after1.revision === r1 + 1 && JSON.stringify(ops1) === '[["add_adjustment"]]' && covers && clipUntouched && second && JSON.stringify(ops2) === '[["add_effect"]]', { ops1, ops2, covers, clipUntouched });
+
+      // the inspector of an adjustment clip: opacity only, mask, and "cover the whole edit"
+      const adjId = adjOf((await tdoc()).project)[0].id as string;
+      await tpage.locator(`.clip[data-clip-id="${adjId}"]`).click();
+      await tpage.mouse.click(truler.x + 30.5, truler.y + 5); // frame 10, inside the layer
+      await tpage.getByTestId(TID.adjustOpacity).waitFor({ timeout: 8000 });
+      const panel = { opacity: await tpage.getByTestId(TID.adjustOpacity).count(), placeOrSize: await tpage.locator('[data-testid=transform-x], [data-testid=transform-y], [data-testid=transform-scale], [data-testid=transform-rotation]').count(), look: await tpage.getByTestId('look-panel').count(), mask: await tpage.getByTestId('mask-controls').count(), note: await tpage.getByTestId('adjust-note').count() };
+      const before3 = adjOf((await tdoc()).project)[0];
+      const r3 = (await tdoc()).revision;
+      await tpage.getByTestId(TID.adjustOpacity).fill('0.5');
+      await tpage.getByTestId(TID.adjustOpacity).dispatchEvent('pointerup');
+      const op3 = await tuntil((d) => adjOf(d)[0]?.transform.opacity === 0.5);
+      const after3 = adjOf((await tdoc()).project)[0];
+      const ops3 = await opsSince(r3);
+      const onlyOpacity = JSON.stringify({ ...before3, transform: { ...before3.transform, opacity: 0.5 } }) === JSON.stringify(after3);
+      check('an adjustment clip\'s inspector offers its opacity (no place, size or turn), the Look panel and the mask; moving the opacity commits one opacity-only change (set_clip_transform; nothing else on the clip changes)', panel.opacity === 1 && panel.placeOrSize === 0 && panel.look === 1 && panel.mask === 1 && panel.note === 1 && op3 && onlyOpacity && JSON.stringify(ops3) === '[["set_clip_transform"]]', { panel, ops3, transform: after3?.transform });
+      await txs(tp, [{ op: 'add_text', args: { text: 'סוף', start: f(90), duration: f(30) } }]); // the edit now ends at frame 120
+      await tpage.waitForFunction(() => (document.querySelector('[data-testid=adjust-cover-edit]') as HTMLButtonElement | null)?.disabled === false, undefined, { timeout: 8000 }).catch(() => {});
+      const r4 = (await tdoc()).revision;
+      await tpage.getByTestId(TID.adjustCoverEdit).click();
+      const coveredAll = await tuntil((d) => fr(adjOf(d)[0].start) === 0 && fr(adjOf(d)[0].duration) === 120);
+      check('"cover the whole edit" stretches the layer to the new end of the edit (frame 120) in one transaction of trim_clip', coveredAll && JSON.stringify(await opsSince(r4)) === '[["trim_clip"]]', { ops: await opsSince(r4) });
+
+      // replace media keeps the clip
+      await tpage.locator(`.clip[data-clip-id="${vclip}"]`).click();
+      const before5 = clipOf((await tdoc()).project, vclip);
+      await tpage.getByTestId(TID.replaceMedia).click();
+      const r5 = (await tdoc()).revision;
+      await tpage.locator(`[data-testid=${TID.replaceMediaOption}][data-asset-id="${timgs[0]}"]`).click();
+      const replaced = await tuntil((d) => clipOf(d, vclip)?.assetId === timgs[0]);
+      const after5 = clipOf((await tdoc()).project, vclip);
+      check('"Replace media…" commits replace_clip_media: the same clip id, place and length, now showing the chosen file', replaced && !!after5 && fr(after5.start) === fr(before5.start) && fr(after5.duration) === fr(before5.duration) && JSON.stringify(await opsSince(r5)) === '[["replace_clip_media"]]', { ops: await opsSince(r5) });
+
+      // the Templates drawer
+      const list = (await call('/templates')).body?.templates as any[] | undefined;
+      await tpage.getByTestId('templates-toggle').click();
+      await tpage.locator(`[data-testid=${TID.card}]`).first().waitFor({ timeout: 10000 }).catch(() => {});
+      const cards = await tpage.locator(`[data-testid=${TID.card}]`).evaluateAll((els) => els.map((e) => ({ id: e.getAttribute('data-template-id'), available: e.getAttribute('data-available') === 'true', reason: e.querySelector('[data-testid=template-unavailable-reason]')?.textContent ?? null })));
+      const he = dictionaries.he as Record<string, string>;
+      const gatedOk = cards.filter((c) => !c.available).every((c) => { const model = list?.find((t) => t.id === c.id)?.needs?.model; return !!model && c.reason === he[`template.unavailable.${model}`]; });
+      check('the Templates drawer lists 8 cards: the 6 built-ins, available, then Text-Behind-Subject and 3D-Zoom, unavailable with their Hebrew reason (template.unavailable.<model>)', cards.length === 8 && cards.filter((c) => c.available).length === 6 && cards.filter((c) => !c.available).map((c) => c.id).sort().join() === 'tpl.3d-zoom,tpl.text-behind-subject' && gatedOk, { cards });
+      const chip = tpage.locator(`[data-testid=${TID.genreChip}]`).first();
+      const genre = await chip.getAttribute('data-genre');
+      await chip.click();
+      const filtered = await tpage.locator(`[data-testid=${TID.card}]`).evaluateAll((els) => els.map((e) => e.getAttribute('data-genre')));
+      const pressed = await chip.getAttribute('aria-pressed');
+      await chip.click();
+      const unfiltered = await tpage.locator(`[data-testid=${TID.card}]`).count();
+      check('a genre chip is an aria-pressed toggle that narrows the cards to its kind and, pressed again, shows them all', pressed === 'true' && filtered.length > 0 && filtered.every((g) => g === genre) && unfiltered === cards.length, { genre, filtered: filtered.length, unfiltered });
+
+      // the keyboard-only flow: pick → order → music → Hebrew text → plan → use
+      const pick = list?.find((t) => t.available && t.texts.length > 0 && t.needs.music !== 'none' && t.slots.every((x: any) => x.accept !== 'video')) ?? list?.find((t) => t.available && t.texts.length > 0) ?? list?.find((t) => t.available);
+      const card = tpage.locator(`[data-testid=${TID.card}][data-template-id="${pick?.id}"]`);
+      await card.focus();
+      await tpage.keyboard.press('Enter');
+      await tpage.getByTestId(TID.dialog).waitFor({ timeout: 8000 });
+      const startsInside = await tpage.evaluate(() => !!document.querySelector('[data-testid=template-dialog]')?.contains(document.activeElement));
+      await tpage.keyboard.press('Escape');
+      await tpage.getByTestId(TID.dialog).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      await sleep(100);
+      const focusBack = await tpage.evaluate((id) => document.activeElement?.getAttribute('data-template-id') === id, pick?.id ?? '');
+      const rf0 = (await tdoc()).revision;
+      const projectionBefore = creativeProjection((await tdoc()).project);
+      await card.focus();
+      await tpage.keyboard.press('Enter');
+      await tpage.getByTestId(TID.dialog).waitFor({ timeout: 8000 });
+      const item = (id: string) => tpage.locator(`[data-testid=${TID.media}][data-asset-id="${id}"]`);
+      const orderNow = () => tpage.locator(`[data-testid=${TID.media}]`).evaluateAll((els) => els.map((e) => e.getAttribute('data-asset-id')));
+      const order0 = await orderNow();
+      await item(tvid.assetId).locator('input[type=checkbox]').focus();
+      await tpage.keyboard.press('Space'); // the 4-second video stays out: still pictures only
+      await item(timgs[2]!).getByTestId(TID.mediaEarlier).focus();
+      await tpage.keyboard.press('Enter');
+      await tpage.waitForFunction((id) => [...document.querySelectorAll('[data-testid=template-media]')].findIndex((e) => e.getAttribute('data-asset-id') === id) === 2, timgs[2], { timeout: 5000 }).catch(() => {});
+      await tpage.keyboard.press('Enter'); // the focus stayed on the moved picture's button
+      await tpage.waitForFunction((id) => [...document.querySelectorAll('[data-testid=template-media]')].findIndex((e) => e.getAttribute('data-asset-id') === id) === 1, timgs[2], { timeout: 5000 }).catch(() => {});
+      const order1 = await orderNow();
+      const videoOut = (await item(tvid.assetId).getAttribute('data-included')) === 'false';
+      const next = async () => { await tpage.getByTestId('template-next').focus(); await tpage.keyboard.press('Enter'); };
+      await next();
+      const musicRadio = tpage.locator(`[data-testid=${TID.music}][data-asset-id="${tmusic.assetId}"]`);
+      await musicRadio.waitFor({ timeout: 5000 }).catch(() => {});
+      if (await musicRadio.count()) { await musicRadio.focus(); await tpage.keyboard.press('Space'); }
+      const musicChosen = (await musicRadio.count()) ? await musicRadio.isChecked() : pick?.needs.music === 'none';
+      await next();
+      const firstText = tpage.getByTestId(TID.text).first();
+      let textKey: string | null = null, counted: string | null = null;
+      if (await firstText.count()) {
+        await firstText.focus();
+        await tpage.keyboard.type('יום הולדת שמח');
+        textKey = await firstText.getAttribute('data-key');
+        counted = await tpage.locator(`[data-testid=${TID.textCount}][data-key="${textKey}"]`).getAttribute('data-used');
+      }
+      await next();
+      await tpage.waitForFunction(() => !!document.querySelector('[data-testid=template-plan-summary]') || !!document.querySelector('[data-testid=template-error]'), undefined, { timeout: 30000 }).catch(() => {});
+      const planned = { summary: await tpage.getByTestId('template-plan-summary').count(), blocking: await tpage.getByTestId(TID.blocking).count(), error: (await tpage.getByTestId('template-error').count()) ? await tpage.getByTestId('template-error').textContent() : null, live: await tpage.getByTestId(TID.plan).getAttribute('aria-live') };
+      await tpage.getByTestId(TID.use).focus();
+      await tpage.keyboard.press('Enter');
+      await tpage.getByTestId(TID.applied).waitFor({ timeout: 30000 }).catch(() => {});
+      const appliedShown = (await tpage.getByTestId(TID.applied).count()) === 1 && (await tpage.getByTestId(TID.dialog).count()) === 0;
+      await sleep(300);
+      const afterApply = await tdoc();
+      const applyOps = await opsSince(rf0);
+      const hebrewOnTitle = afterApply.project.sequences.seq_main.tracks.flatMap((t: any) => t.clips).some((c: any) => c.type === 'text' && c.text.includes('יום הולדת שמח'));
+      check('keyboard only, in Hebrew: a card opens the template dialog (focus inside), Escape closes it and the focus is back on the card; then pick → leave the video out and move a picture earlier → music → a Hebrew text (its counter counts it) → plan (a polite live region, nothing blocking) → Use adds exactly 1 revision (apply_template) with that text on a title, and the post-apply bar appears',
+        !!pick && startsInside && focusBack && JSON.stringify(order1) === JSON.stringify([order0[0], timgs[2], ...order0.slice(1).filter((x) => x !== timgs[2])]) && videoOut && musicChosen && (textKey === null || counted === '13') && planned.summary === 1 && planned.blocking === 0 && planned.live === 'polite' && appliedShown && afterApply.revision === rf0 + 1 && JSON.stringify(applyOps) === '[["apply_template"]]' && (textKey === null || hebrewOnTitle),
+        { template: pick?.id, order0, order1, videoOut, musicChosen, textKey, counted, planned, applyOps, hebrewOnTitle, beats: measured.body?.beats ?? null });
+      const projectionApplied = creativeProjection(afterApply.project);
+      await tpage.getByTestId(TID.shuffle).focus();
+      await tpage.keyboard.press('Enter');
+      const revisionReaches = async (want: number, ms = 20000) => { const t0 = Date.now(); for (;;) { if ((await tdoc()).revision >= want) return true; if (Date.now() - t0 > ms) return false; await sleep(150); } };
+      const shuffled = await revisionReaches(afterApply.revision + 1);
+      await sleep(300);
+      const afterShuffle = await tdoc();
+      check('Shuffle on the post-apply bar (regenerate with the next seed, shuffled) adds exactly 1 revision', shuffled && afterShuffle.revision === afterApply.revision + 1, { ops: await opsSince(afterApply.revision) });
+      await tpage.getByTestId('template-undo').click();
+      const undoShuffle = await tuntil((d) => creativeProjection(d) === projectionApplied, 10000);
+      await tpage.getByTestId('undo').click();
+      const undoApply = await tuntil((d) => creativeProjection(d) === projectionBefore, 10000);
+      check('undo restores an equal creativeProjection: once after Shuffle (the applied template), once more after Use (the project before the template)', undoShuffle && undoApply, { undoShuffle, undoApply });
+
+      // Welcome: a fourth way in
+      const wp = (await call('/projects', { name: 'welcome', width: 640, height: 360 })).body.project.id as string;
+      await tpage.goto(`${s.ownerUrl}&project=${wp}`);
+      await tpage.getByTestId(TID.welcomeTemplate).waitFor({ timeout: 10000 });
+      await tpage.getByTestId(TID.welcomeTemplate).click();
+      await tpage.locator(`[data-testid=${TID.card}]`).first().waitFor({ timeout: 10000 }).catch(() => {});
+      const opened = (await tpage.getByTestId('templates-toggle').getAttribute('aria-expanded')) === 'true';
+      await sleep(100);
+      const cardFocused = await tpage.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'template-card');
+      check('Welcome (an empty project) offers «התחל מתבנית», which opens the Templates drawer with the focus on its first card', opened && cardFocused, { opened, cardFocused });
+      check('no uncaught errors in the page with the adjustment and template controls', tErrors.length === 0, tErrors.slice(0, 4));
       await tctx.close();
     }
 
