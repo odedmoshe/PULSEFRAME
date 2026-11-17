@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-17T17:06:28.462Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-17T17:38:57.126Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -28,19 +28,19 @@
       "to": 239
     }
   },
-  "passed": 23,
-  "total": 25,
+  "passed": 26,
+  "total": 26,
   "measurements": {
     "trackingJob": {
       "status": "succeeded",
       "output": {
-        "motionTrackId": "mtk_4ec9e1584a0",
+        "motionTrackId": "mtk_3b85b3370f0",
         "revision": 4,
         "from": 0,
         "to": 240,
         "frames": 240,
         "decodedFrames": 240,
-        "trackingFps": 48.6,
+        "trackingFps": 52.46,
         "input": "proxy",
         "counts": {
           "unknown": 0,
@@ -258,22 +258,22 @@
       }
     ],
     "P13": {
-      "trackingFps": 48.6,
+      "trackingFps": 52.46,
       "framesTracked": 240,
       "framesDecoded": 240,
       "input": "proxy",
       "eventLoopLagMs": {
-        "p50": 12.1,
-        "p99": 89,
-        "max": 109.3,
+        "p50": 12.8,
+        "p99": 62.6,
+        "max": 77.9,
         "budgetP99": 100,
         "withinBudget": true
       },
       "commitMs": {
         "samples": 43200,
-        "baselineP95": 27.7,
-        "withSamplesP95": 160.4,
-        "deltaP95": 132.7,
+        "baselineP95": 8.6,
+        "withSamplesP95": 115.7,
+        "deltaP95": 107.1,
         "budgetDelta": 15,
         "withinBudget": false
       }
@@ -348,18 +348,14 @@
       }
     },
     {
-      "name": "P4 the look-alike: no usable sample within 100 px of it",
-      "ok": false,
+      "name": "P4 the look-alike (shown on frames 160–239): no usable sample within 100 px of it while it is shown",
+      "ok": true,
       "detail": {
-        "nearDecoy": [
+        "nearDecoy": [],
+        "framesChecked": 80,
+        "truePathNearItsPlaceBeforeItAppears": [
           120,
-          121,
-          122,
-          123,
-          124,
-          125,
-          126,
-          127
+          128
         ]
       }
     },
@@ -378,13 +374,13 @@
       "detail": {
         "stageWhenCanceled": "reading frames",
         "cancel": {
-          "jobId": "job_ggQMic0PlLY",
+          "jobId": "job_zUpmkES3Nk0",
           "status": "cancel-requested",
           "outcome": "stopping",
           "note": "the tracker is being stopped; nothing will be attached"
         },
         "status": "canceled",
-        "ms": 31,
+        "ms": 12,
         "ffmpegLeft": 0,
         "revision": [
           8,
@@ -823,11 +819,10 @@
       ]
     },
     {
-      "name": "P11 FlashAnalyser passes the exported picture with the whole-picture loss fallback, at speed 1 and at speed 4",
-      "ok": false,
-      "detail": [
-        {
-          "speed": 1,
+      "name": "P11 control: the fixture alone passes the analyser once its barcode strip is left out (so the check below is about the fallback, not the barcode)",
+      "ok": true,
+      "detail": {
+        "sourceWithStrip": {
           "frames": 240,
           "verdict": "fail",
           "ranges": [
@@ -836,24 +831,51 @@
               "to": 239,
               "kind": "general",
               "flashesPerSecond": 15,
-              "area": 0.061
+              "area": 0.035
             }
           ],
+          "peak": {
+            "general": 30,
+            "red": 0
+          }
+        },
+        "sourceWithoutStrip": {
+          "frames": 240,
+          "verdict": "pass",
+          "ranges": [],
+          "peak": {
+            "general": 4,
+            "red": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "P11 FlashAnalyser passes the exported picture with the whole-picture loss fallback, at speed 1 and at speed 4 (barcode strip left out)",
+      "ok": true,
+      "detail": [
+        {
+          "speed": 1,
+          "frames": 240,
+          "verdict": "pass",
+          "ranges": [],
+          "peak": {
+            "general": 30,
+            "red": 0
+          },
+          "withStrip": "fail",
           "exportsOwnCheck": "fail"
         },
         {
           "speed": 4,
           "frames": 240,
-          "verdict": "fail",
-          "ranges": [
-            {
-              "from": 0,
-              "to": 61,
-              "kind": "general",
-              "flashesPerSecond": 15,
-              "area": 0.035
-            }
-          ],
+          "verdict": "pass",
+          "ranges": [],
+          "peak": {
+            "general": 4,
+            "red": 0
+          },
+          "withStrip": "fail",
           "exportsOwnCheck": "fail"
         }
       ]
