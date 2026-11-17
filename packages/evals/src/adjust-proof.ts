@@ -4,9 +4,14 @@
  *
  *  1. A whole-edit color.adjust over three full-frame clips equals the same effect on each clip: max |Δ| ≤ 1/255 on every
  *     pixel of three stills (one per clip).
- *  2. Opacity 0.5: every pixel within 1 of round((with + without) / 2).
- *  3. Untouched where it must be: pixels outside the mask, frames outside the span, and the caption and title pixels (a title
- *     on a track above the FX track): 0 differing bytes against a render without the adjustment.
+ *  2. Opacity 0.5: every byte within 1 of round((with + without) / 2). (The pass puts the opacity into the adjusted copy's
+ *     alpha and composites it at full alpha; one drawImage with globalAlpha 0.5 is up to 2 below in Chromium's software
+ *     canvas, see adjustPass in compositor2d.ts.)
+ *  3. Untouched where it must be: pixels outside the mask, frames outside the span, and the pixels the captions and a title
+ *     on a track above the FX track cover fully: 0 differing bytes against a render without the adjustment. Which pixels a
+ *     text covers fully is measured, not guessed: the text alone on a black and on a white project background, equal in
+ *     both. A pixel it covers only partly (the antialiased rim) mixes with the picture below and changes with it; those
+ *     are counted and left out.
  *  4. The FX track moved above the title track: the title's pixels change (> 0), the caption's still do not.
  *  5. Still against exported frame at 3 frames within the parity-suite tolerance (PSNR ≥ 36 dB, SSIM ≥ 0.985).
  *  6. Undo of every adjustment edit gives an equal creativeProjection; replaying the op log equals the live document.
@@ -182,9 +187,15 @@ async function main() {
       const full = await still(pid, 45);
       await tx(pid, [{ op: 'set_clip_transform', args: { clipId: adjId, transform: { opacity: 0.5 } } }]);
       const half = await still(pid, 45);
-      let worst = 0;
-      for (let i = 0; i < half.length; i++) worst = Math.max(worst, Math.abs(half[i]! - Math.round((full[i]! + without[i]!) / 2)));
-      check('2. Opacity 0.5: every byte of the still is within 1 of round((with + without) / 2) (a whole-edit color.invert)', worst <= 1 && maxDiff(full, without) > 100, { worstDifference: worst, fullVsWithout: maxDiff(full, without) });
+      let worst = 0, exact = 0;
+      const pairs = new Set<number>(); // the (without, with) byte pairs this still puts through the composite
+      for (let i = 0; i < half.length; i++) {
+        const d = Math.abs(half[i]! - Math.round((full[i]! + without[i]!) / 2));
+        worst = Math.max(worst, d);
+        if (d === 0) exact++;
+        pairs.add(without[i]! * 256 + full[i]!);
+      }
+      check('2. Opacity 0.5: every byte of the still is within 1 of round((with + without) / 2) (a whole-edit color.invert)', worst <= 1 && maxDiff(full, without) > 100, { worstDifference: worst, fullVsWithout: maxDiff(full, without), bytes: half.length, bytesEqual: exact, distinctBytePairsInTheStill: pairs.size });
     }
 
     // ---------- 3a. outside the mask, outside the span ----------
@@ -216,35 +227,47 @@ async function main() {
       await tx(pid, [{ op: 'add_text', args: { text: 'כותרת גדולה', start: f(0), duration: f(90), style: { color: '#FFFFFF', stroke: '#000000', sizeFrac: 0.12 } } }]);
       const cap = (await tx(pid, [{ op: 'add_caption_track', args: { mode: 'manual', style: { preset: 'classic', background: null, color: '#FFFFFF', stroke: '#000000', sizeFrac: 0.08 } } }])).results[0].output.trackId as string;
       await tx(pid, [{ op: 'add_cue', args: { trackId: cap, start: f(0), duration: f(90), text: 'כתובית שלא משתנה' } }]);
-      const titleTrack = (await tracksOf(pid)).find((t) => t.kind === 'text')!.id;
+      const tracks0 = await tracksOf(pid);
+      const titleTrack = tracks0.find((t) => t.kind === 'text')!.id, pictureTrack = tracks0.find((t) => t.kind === 'video')!.id;
+      const background0 = (await docOf(pid)).project.settings.background;
       const A = await still(pid, 30);
-      await tx(pid, [{ op: 'update_track', args: { trackId: titleTrack, hidden: true } }, { op: 'update_track', args: { trackId: cap, hidden: true } }]);
-      const P = await still(pid, 30);
-      await tx(pid, [{ op: 'update_track', args: { trackId: titleTrack, hidden: false } }, { op: 'update_track', args: { trackId: cap, hidden: false } }]);
-      // the text's own pixels: drawn by a title or a caption (A ≠ P), exactly the fill or the outline colour, and with all eight
-      // neighbours drawn too (the antialiased rim, which mixes with the picture below, is left out)
-      const drawn = new Uint8Array(W * H);
-      for (let p = 0; p < W * H; p++) if (A[p * 3] !== P[p * 3] || A[p * 3 + 1] !== P[p * 3 + 1] || A[p * 3 + 2] !== P[p * 3 + 2]) drawn[p] = 1;
-      const isInk = (p: number) => (A[p * 3] === 255 && A[p * 3 + 1] === 255 && A[p * 3 + 2] === 255) || (A[p * 3] === 0 && A[p * 3 + 1] === 0 && A[p * 3 + 2] === 0);
-      const titleInk = new Uint8Array(W * H), captionInk = new Uint8Array(W * H);
-      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
-        const p = y * W + x;
-        if (!drawn[p] || !isInk(p)) continue;
-        let all = true;
-        for (let dy = -1; dy <= 1 && all; dy++) for (let dx = -1; dx <= 1; dx++) if (!drawn[p + dy * W + dx]) { all = false; break; }
-        if (all) (y > H * 0.7 ? captionInk : titleInk)[p] = 1;
-      }
+      /**
+       * The pixels one text track covers fully and partly, measured: that track alone (the picture and the other text track
+       * hidden) on a black and on a white project background. Where the two stills are equal nothing of the background
+       * shows, so the text covers the pixel fully; and because drawing over a pixel never gives less when the pixel below is
+       * raised, a pixel that is equal on black and on white is that same value on any picture: it must not differ when only
+       * the picture below changes. Where they differ the text covers the pixel partly (the antialiased rim, or not at all:
+       * 0 on black and 255 on white) and the pixel mixes with what is below.
+       */
+      const coverage = async (shown: string) => {
+        const others = [pictureTrack, titleTrack, cap].filter((t) => t !== shown);
+        await tx(pid, [...others.map((trackId) => ({ op: 'update_track', args: { trackId, hidden: true } })), { op: 'set_project_format', args: { background: '#000000' } }]);
+        const onBlack = await still(pid, 30);
+        await tx(pid, [{ op: 'set_project_format', args: { background: '#FFFFFF' } }]);
+        const onWhite = await still(pid, 30);
+        await tx(pid, [...others.map((trackId) => ({ op: 'update_track', args: { trackId, hidden: false } })), { op: 'set_project_format', args: { background: background0 } }]);
+        const full = new Uint8Array(W * H), partly = new Uint8Array(W * H);
+        for (let p = 0; p < W * H; p++) {
+          let same = true, bare = true;
+          for (let c = 0; c < 3; c++) { const k = onBlack[p * 3 + c]!, w = onWhite[p * 3 + c]!; if (k !== w) same = false; if (k !== 0 || w !== 255) bare = false; }
+          if (same) full[p] = 1; else if (!bare) partly[p] = 1;
+        }
+        return { full, partly };
+      };
+      const title = await coverage(titleTrack), caption = await coverage(cap);
+      const titleInk = title.full, captionInk = caption.full;
+      const restored = differingBytes(await still(pid, 30), A); // the tracks and the background are back as they were
       const { fxTrackId } = await addAdjustment(pid, { span: 'edit', effects: [{ type: 'color.invert' }] });
       const order = (await tracksOf(pid)).map((t) => t.kind);
       const B = await still(pid, 30);
       const titleDiff = differingBytes(B, A, titleInk), captionDiff = differingBytes(B, A, captionInk), pictureChanged = differingBytes(B, A);
-      check('3b. Caption pixels and the pixels of a title on a track above the FX track: 0 differing bytes against the render without the adjustment (a whole-edit color.invert that changes the picture under them)', order.join() === 'video,adjustment,text,caption,audio' && count(titleInk) > 200 && count(captionInk) > 100 && titleDiff === 0 && captionDiff === 0 && pictureChanged > W * H, { trackOrder: order, titlePixels: count(titleInk), titleDifferingBytes: titleDiff, captionPixels: count(captionInk), captionDifferingBytes: captionDiff, pictureDifferingBytes: pictureChanged });
+      check('3b. The pixels the captions cover fully, and those a title on a track above the FX track covers fully (each text alone is equal on a black and on a white background there): 0 differing bytes against the render without the adjustment (a whole-edit color.invert that changes the picture under them). Rim pixels a text covers only partly mix with the picture below; they are counted, not compared', order.join() === 'video,adjustment,text,caption,audio' && restored === 0 && count(titleInk) > 200 && count(captionInk) > 100 && titleDiff === 0 && captionDiff === 0 && pictureChanged > W * H, { trackOrder: order, titlePixels: count(titleInk), titleDifferingBytes: titleDiff, captionPixels: count(captionInk), captionDifferingBytes: captionDiff, pictureDifferingBytes: pictureChanged, leftOut: { titleRimPixels: count(title.partly), titleRimDifferingBytes: differingBytes(B, A, title.partly), captionRimPixels: count(caption.partly), captionRimDifferingBytes: differingBytes(B, A, caption.partly) }, stillAfterMeasuringCoverageDifferingBytes: restored });
       // 4. the FX track moved above the title track: the look covers the title; captions stay last
       await tx(pid, [{ op: 'move_track', args: { trackId: fxTrackId, toIndex: 2 } }]);
       const moved = (await tracksOf(pid)).map((t) => t.kind);
       const C = await still(pid, 30);
       const titleNow = differingBytes(C, A, titleInk), captionNow = differingBytes(C, A, captionInk);
-      check('4. The FX track moved above the title track: the title\'s pixels differ (> 0); the caption\'s still do not (captions are drawn last)', moved.join() === 'video,text,adjustment,caption,audio' && titleNow > 0 && captionNow === 0, { trackOrder: moved, titleDifferingBytes: titleNow, captionDifferingBytes: captionNow });
+      check('4. The FX track moved above the title track: the title\'s fully covered pixels differ (> 0); the caption\'s still do not (captions are drawn last)', moved.join() === 'video,text,adjustment,caption,audio' && titleNow > 0 && captionNow === 0, { trackOrder: moved, titleDifferingBytes: titleNow, captionDifferingBytes: captionNow });
       // 5. still against exported frame
       const exp = await exportFrames(pid, 0, 60);
       const rows: { frame: number; psnr: number; ssim: number }[] = [];
