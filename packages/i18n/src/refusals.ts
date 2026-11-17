@@ -70,13 +70,29 @@ const HE_AUDIO_FX: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^this picture clip is linked to more than one sound clip$/, () => 'קליפ התמונה מקושר ליותר מקליפ קול אחד; יש לבחור את קליפ הקול'],
   [/^give params and\/or enabled$/, () => 'לא צוין מה לשנות באפקט הקול'],
 ];
+/**
+ * Refusals of the transition options (ADR-0012: set_transition_options, and set_transition when it keeps an option). Kept as
+ * their own list, provoked one by one in packages/evals/src/refusal-wording.test.ts, so the inventory of the list above stays as it is.
+ */
+const HE_TREND: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^the previous clip has only (\d+) unused source frames after its end; the transition at velocity ×(\d) needs (\d+)$/, (m) => `לקליפ הקודם נשארו רק ${m[1]} פריימים של חומר מקור אחרי סופו; מעבר עם רמפת מהירות ${ltr(`×${m[2]}`)} צריך ${m[3]}`],
+  [/^the clip has only (\d+) source frames before its start; the transition at velocity ×(\d) needs (\d+)$/, (m) => `לקליפ נשארו רק ${m[1]} פריימים של חומר מקור לפני תחילתו; מעבר עם רמפת מהירות ${ltr(`×${m[2]}`)} צריך ${m[3]}`],
+  [/^a velocity ramp cannot remap a clip that plays backwards or is a freeze frame$/, () => 'רמפת מהירות אינה אפשרית כשאחד הקליפים מתנגן לאחור או הוא פריים קפוא'],
+  [/^a velocity ramp cannot remap a clip whose first effect is a time effect$/, () => 'רמפת מהירות אינה אפשרית כשהאפקט הראשון של אחד הקליפים הוא אפקט זמן'],
+  [/^a velocity ramp needs a video on at least one side of the transition$/, () => 'רמפת מהירות צריכה וידאו לפחות בצד אחד של המעבר; בתמונה סטטית אין תנועה להאיץ'],
+  [/^a transition locked to the beat needs at least 3 frames; this one has (\d+)$/, (m) => `מעבר שננעל לפעימה צריך לפחות 3 פריימים; במעבר הזה יש ${m[1]}`],
+  [/^the \S+ transition has no (color|seed) option$/, (m) => (m[1] === 'color' ? 'לסוג המעבר הזה אין בחירת צבע' : 'לסוג המעבר הזה אין וריאציות')],
+  [/^clip \S+ has no transition$/, () => 'אין מעבר בתחילת הקליפ הזה; יש לבחור קודם סוג מעבר'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_TREND]) { const m = re.exec(message); if (m) return say(m); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
 export const REFUSAL_PATTERNS: readonly RegExp[] = HE.map(([re]) => re);
 /** The sound-effect patterns, for their own test. */
 export const AUDIO_FX_REFUSAL_PATTERNS: readonly RegExp[] = HE_AUDIO_FX.map(([re]) => re);
+/** The transition-option patterns (ADR-0012), for their own test. */
+export const TREND_REFUSAL_PATTERNS: readonly RegExp[] = HE_TREND.map(([re]) => re);

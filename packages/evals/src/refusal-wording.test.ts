@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
+import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -128,5 +128,38 @@ describe('Hebrew wording of common refusals', () => {
     expect(translateRefusal('he', key.message)).toBe('הערך של "רדיוס" אינו תקין');
     // a refusal that names no parameter still reads in Hebrew
     expect(translateRefusal('he', 'invalid parameters for blur.gaussian')).toBe('ערכי הפרמטרים של האפקט אינם תקינים');
+  });
+  it('the transition-option refusals (ADR-0012) are each provoked and worded in Hebrew, with their numbers', () => {
+    let r = tx(createProject({ id: 'prj_t', name: 'T' }), [{ op: 'import_asset', args: { asset: video } }, { op: 'import_asset', args: { asset: still } }], true);
+    const assetId = r.results[0]!.output!.assetId as string, stillId = r.results[1]!.output!.assetId as string;
+    // A at 0..60 leaves 22 source frames after its end; B at 60..120 has 10 source frames before its start
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(0), sourceIn: f(158), duration: f(60) } }, { op: 'add_clip', args: { assetId, start: f(60), sourceIn: f(10), duration: f(60) } },
+      { op: 'add_clip', args: { assetId: stillId, start: f(300), duration: f(30) } }, { op: 'add_clip', args: { assetId: stillId, start: f(330), duration: f(30) } }]);
+    const a = (r.results[0]!.output as any).clipId as string, b = (r.results[1]!.output as any).clipId as string, s2 = (r.results[3]!.output as any).clipId as string;
+    const d = tx(r.doc, [{ op: 'set_transition', args: { clipId: b, type: 'dissolve', frames: 15 } }, { op: 'set_transition', args: { clipId: s2, type: 'dissolve', frames: 10 } }]).doc;
+    const two = tx(r.doc, [{ op: 'set_transition', args: { clipId: b, type: 'dissolve', frames: 2 } }]).doc;
+    const reversed = tx(r.doc, [{ op: 'set_clip_reverse', args: { clipId: a, reverse: true } }, { op: 'set_transition', args: { clipId: b, type: 'dissolve', frames: 15 } }]).doc;
+    const echoed = tx(d, [{ op: 'add_effect', args: { clipId: a, type: 'time.echo' } }]).doc;
+    const opt = (clipId: string, args: Record<string, unknown>): OpCall[] => [{ op: 'set_transition_options', args: { clipId, ...args } }];
+    const cases: [string, ProjectDocument, OpCall[], string][] = [
+      ['velocity past the previous clip\'s handle', d, opt(b, { velocity: 3 }), 'לקליפ הקודם נשארו רק 22 פריימים של חומר מקור אחרי סופו; מעבר עם רמפת מהירות ⁦×3⁩ צריך 29'],
+      ['velocity past the clip\'s head', tx(d, [{ op: 'set_transition', args: { clipId: b, type: 'dissolve', frames: 9 } }]).doc, opt(b, { velocity: 4 }), 'לקליפ נשארו רק 10 פריימים של חומר מקור לפני תחילתו; מעבר עם רמפת מהירות ⁦×4⁩ צריך 12'],
+      ['velocity on a reversed side', reversed, opt(b, { velocity: 2 }), 'רמפת מהירות אינה אפשרית כשאחד הקליפים מתנגן לאחור או הוא פריים קפוא'],
+      ['velocity on a side with a time effect first', echoed, opt(b, { velocity: 2 }), 'רמפת מהירות אינה אפשרית כשהאפקט הראשון של אחד הקליפים הוא אפקט זמן'],
+      ['velocity between two stills', d, opt(s2, { velocity: 2 }), 'רמפת מהירות צריכה וידאו לפחות בצד אחד של המעבר; בתמונה סטטית אין תנועה להאיץ'],
+      ['a beat lock on 2 frames', two, opt(b, { sync: 'beat' }), 'מעבר שננעל לפעימה צריך לפחות 3 פריימים; במעבר הזה יש 2'],
+      ['a colour on a type without one', d, opt(b, { color: '#FF0000' }), 'לסוג המעבר הזה אין בחירת צבע'],
+      ['a seed on a type without one', d, opt(b, { seed: 4 }), 'לסוג המעבר הזה אין וריאציות'],
+      ['options with no transition', r.doc, opt(a, { sync: 'beat' }), 'אין מעבר בתחילת הקליפ הזה; יש לבחור קודם סוג מעבר'],
+    ];
+    const matched = new Set<number>();
+    for (const [what, doc, ops, he] of cases) {
+      let message = '';
+      try { tx(doc, ops); message = '(not refused)'; } catch (e) { if (!(e instanceof OpError)) throw e; message = e.message; }
+      expect(translateRefusal('he', message), `${what}: ${message}`).toBe(he);
+      expect(translateRefusal('en', message)).toBeUndefined();
+      TREND_REFUSAL_PATTERNS.forEach((re, i) => { if (re.test(message)) matched.add(i); });
+    }
+    expect(TREND_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
   });
 });

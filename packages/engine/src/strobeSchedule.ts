@@ -21,6 +21,21 @@ import { flashGapFrames, followedBeats, type ProjectDocument } from '@pulseframe
 import { FLASH_SINCE, STROBE_FADE, thinnedHits } from './gpu.ts';
 import type { RenderGraph } from './evaluate.ts';
 
+/**
+ * The flash start a light transition (film-burn, light-leak: TransitionDef.light) asks for (ADR-0012, an amendment to
+ * ADR-0009 decision 1): the first frame its light envelope is above 0. It joins the strobe starts and is kept by the same
+ * gap rule; a transition whose start is not kept draws its matte with light 0, and the editor says why.
+ */
+export interface LightPlan {
+  /** Timeline frame the light would start on. */
+  frame: number;
+  kept: boolean;
+  /** When held back: frames since the last kept start of any strobe or light; null when kept. */
+  since: number | null;
+}
+/** Key of a light transition's start among the strobe keys of the walk (`clipId\neffectId`). */
+export const lightKey = (clipId: string) => `${clipId}\ntransition`;
+
 export interface FlashSchedule {
   /** Frames per second of the timeline. */
   fps: number;
@@ -34,6 +49,12 @@ export interface FlashSchedule {
    * a cut fades on across it instead of being cut off. Copies that are not back to back, or whose settings differ, stay separate.
    */
   runOf: Map<string, string>;
+  /**
+   * Per light transition, by the id of the clip that carries it: where its light would start and whether the schedule
+   * kept that start (ADR-0012). PLACEHOLDER: created empty here; worker W2 fills it in the walk below. Until then no
+   * light transition is kept, so every light transition draws with light 0 (never a light the schedule did not allow).
+   */
+  lights: Map<string, LightPlan>;
 }
 const keyOf = (clipId: string, effectId: string) => `${clipId}\n${effectId}`;
 const schedules = new WeakMap<ProjectDocument, Map<string, FlashSchedule>>();
@@ -50,7 +71,7 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
   const had = bySequence.get(sequenceId);
   if (had) return had;
   const rate = doc.settings.frameRate, fps = rate.num / rate.den, gapFrames = flashGapFrames(fps);
-  const schedule: FlashSchedule = { fps, gapFrames, shown: new Map(), runOf: new Map() };
+  const schedule: FlashSchedule = { fps, gapFrames, shown: new Map(), runOf: new Map(), lights: new Map() };
   bySequence.set(sequenceId, schedule);
   const seq = doc.sequences[sequenceId];
   if (!seq) return schedule;

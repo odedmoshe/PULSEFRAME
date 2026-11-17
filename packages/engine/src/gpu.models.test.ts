@@ -98,9 +98,9 @@ describe('registration', () => {
       expect(depth, id).toBe(0);
     }
   });
-  it('39 GPU transitions, the same as core lists; whip and spin with their directions', () => {
+  it('46 GPU transitions, the same as core lists; whip and spin with their directions', () => {
     expect(Object.keys(GPU_TRANSITIONS).sort()).toEqual([...GPU_TRANSITION_IDS].sort());
-    expect(GPU_TRANSITION_IDS.length).toBe(39);
+    expect(GPU_TRANSITION_IDS.length).toBe(46);
     expect(Object.fromEntries(['whip-left', 'whip-right', 'whip-up', 'whip-down', 'spin-cw', 'spin-ccw'].map((id) => [id, GPU_TRANSITIONS[id]]))).toEqual({
       'whip-left': { kernel: 'whip', v: [-1, 0, 0] }, 'whip-right': { kernel: 'whip', v: [1, 0, 0] }, 'whip-up': { kernel: 'whip', v: [0, -1, 0] }, 'whip-down': { kernel: 'whip', v: [0, 1, 0] },
       'spin-cw': { kernel: 'spin', v: [1, 0, 0] }, 'spin-ccw': { kernel: 'spin', v: [-1, 0, 0] },

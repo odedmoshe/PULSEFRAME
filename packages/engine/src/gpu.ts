@@ -738,6 +738,19 @@ const T2: Record<string, string> = {
       a += O(q); b += I(q);
     }
     return mix(a / 12.0, b / 12.0, smoothstep(0.45, 0.55, p));`,
+  // ---- trend pack (ADR-0012), uniform v2: `light` (0..1, already the envelope the flash schedule allowed), `tint` (rgb) and
+  // `seed` (u32) are read in transition(); `fbm`/`vnoise` are module helpers. PLACEHOLDER bodies (a hard cut half-way, no light):
+  // worker W2 replaces each one; a test fails while any body still says PLACEHOLDER.
+  burn: `
+    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+  leak: `
+    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+  ink: `
+    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+  brush: `
+    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+  page: `
+    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
 };
 /** Transition id -> kernel and the numbers that set its variant. */
 export const GPU_TRANSITIONS: Record<string, { kernel: string; v: [number, number, number] }> = {
@@ -760,10 +773,26 @@ export const GPU_TRANSITIONS: Record<string, { kernel: string; v: [number, numbe
   // whip: the direction the camera turns (the picture moves the other way); spin: 1 clockwise, -1 counter-clockwise
   'whip-left': { kernel: 'whip', v: [-1, 0, 0] }, 'whip-right': { kernel: 'whip', v: [1, 0, 0] }, 'whip-up': { kernel: 'whip', v: [0, -1, 0] }, 'whip-down': { kernel: 'whip', v: [0, 1, 0] },
   'spin-cw': { kernel: 'spin', v: [1, 0, 0] }, 'spin-ccw': { kernel: 'spin', v: [-1, 0, 0] },
+  // trend pack (ADR-0012): brush and page, v0 = -1 left, 1 right
+  'film-burn': { kernel: 'burn', v: [0, 0, 0] }, 'light-leak': { kernel: 'leak', v: [0, 0, 0] }, 'ink-bleed': { kernel: 'ink', v: [0, 0, 0] },
+  'brush-left': { kernel: 'brush', v: [-1, 0, 0] }, 'brush-right': { kernel: 'brush', v: [1, 0, 0] },
+  'page-turn-left': { kernel: 'page', v: [-1, 0, 0] }, 'page-turn-right': { kernel: 'page', v: [1, 0, 0] },
 };
 export const isGpuTransition = (type: string) => type in GPU_TRANSITIONS;
+/** What a GPU transition pass needs of the frame's transition state (evaluate.ts LayerLook.transition). */
+export interface TransitionState { type: string; progress: number; light?: number; color?: string | null; seed?: number }
+/**
+ * The twelve numbers of a transition pass, uniform v2 (ADR-0012): a = (p, v0, v1, v2), b = (W/H, W, H, light),
+ * c = (tint r, g, b, seed). A missing or malformed colour is white; light and seed default to 0.
+ */
+export function transitionUniforms(t: TransitionState, width: number, height: number): number[] {
+  const g = GPU_TRANSITIONS[t.type];
+  if (!g) throw new Error(`no GPU transition ${t.type}`);
+  const n = /^#[0-9a-fA-F]{6}$/.test(t.color ?? '') ? parseInt(t.color!.slice(1), 16) : 0xffffff;
+  return [t.progress, ...g.v, width / height, width, height, t.light ?? 0, ((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, t.seed ?? 0];
+}
 const transitionShader = (body: string) => `${VERTEX}
-  struct Params { a: vec4f, b: vec4f }
+  struct Params { a: vec4f, b: vec4f, c: vec4f }
   @group(0) @binding(0) var outT: texture_2d<f32>;
   @group(0) @binding(1) var smp: sampler;
   @group(0) @binding(2) var<uniform> P: Params;
@@ -771,12 +800,16 @@ const transitionShader = (body: string) => `${VERTEX}
   fn hash(x: u32) -> u32 { let v = x * 747796405u + 2891336453u; let w = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u; return (w >> 22u) ^ w; }
   fn unit(x: u32) -> f32 { return f32(x >> 8u) / 16777216.0; }
   fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
+  fn h2(i: vec2i, s: u32) -> f32 { return unit(hash((bitcast<u32>(i.x) * 73856093u) ^ hash((bitcast<u32>(i.y) * 19349663u) ^ s))); }
+  fn vnoise(x: vec2f, s: u32) -> f32 { let i = vec2i(floor(x)); let f = fract(x); let u = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i, s), h2(i + vec2i(1, 0), s), u.x), mix(h2(i + vec2i(0, 1), s), h2(i + vec2i(1, 1), s), u.x), u.y); }
+  fn fbm(x: vec2f, s: u32) -> f32 { var a = 0.5; var t = 0.0; var q = x; for (var o = 0u; o < 5u; o++) { t += a * vnoise(q, hash(s + o)); q = q * 2.03 + vec2f(17.0, 31.0); a *= 0.5; } return t / 0.96875; }
   fn O(uv: vec2f) -> vec4f { return textureSampleLevel(outT, smp, uv, 0.0); }
   fn I(uv: vec2f) -> vec4f { return textureSampleLevel(inT, smp, uv, 0.0); }
   fn transition(uv: vec2f) -> vec4f {
     let p = P.a.x; let va = vec3f(P.a.y, P.a.z, P.a.w); let asp = P.b.x; let dim = vec2f(P.b.y, P.b.z);
+    let light = P.b.w; let tint = P.c.xyz; let seed = u32(P.c.w);
     // every body reads all of them or not; touching them here keeps one binding layout for all kernels
-    let keep = va.z + asp + dim.x + O(vec2f(0.0)).a * 0.0 + I(vec2f(0.0)).a * 0.0;
+    let keep = va.z + asp + dim.x + O(vec2f(0.0)).a * 0.0 + I(vec2f(0.0)).a * 0.0 + light + tint.x + f32(seed);
     if (keep != keep) { return vec4f(0.0); }${body}
   }
   @fragment fn f(i: V) -> @location(0) vec4f { let c = transition(i.uv); if (c.a <= 0.0) { return vec4f(0.0); } return vec4f(c.rgb / c.a, c.a); }`;
@@ -859,7 +892,7 @@ export function initGpu(): Promise<GpuStatus> {
       buf.unmap(); buf.destroy(); target.destroy();
       if (!same(first, REFERENCE.first) || !same(middle, REFERENCE.middle)) return fail(`the adapter renders the reference shader differently (${JSON.stringify(middle)} instead of ${JSON.stringify(REFERENCE.middle)})`, about);
       // ---- ready ----
-      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), brokenPipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 32, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }), luts: new Map() };
+      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), brokenPipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 48, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }), luts: new Map() }; // 48 bytes: the transition Params {a, b, c} (ADR-0012); a 32-byte effect struct binds the same buffer
       const made = state;
       device.lost.then((l: { message?: string }) => { for (const t of made.luts.values()) { try { t.destroy(); } catch { /* already gone with the device */ } } made.luts.clear(); state = null; status = { available: false, reason: `the graphics device was lost: ${l?.message ?? 'no reason given'}`, adapter: about }; starting = null; });
       return (status = { available: true, reason: `${about.software ? 'software' : 'hardware'} adapter${about.vendor ? ` (${about.vendor})` : ''}, reference pixels match`, adapter: about });
@@ -891,13 +924,14 @@ export function gpuEffect(type: string, params: Record<string, unknown>, src: Of
   return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl, true), fx.params(params, env), src, null, dst, env, strip);
 }
 /**
- * Run one GPU transition: `outgoing` (may be absent: then it is transparent) and `incoming` into `dst`, at `progress` 0..1.
+ * Run one GPU transition: `outgoing` (may be absent: then it is transparent) and `incoming` into `dst`, in the state `t`
+ * (its progress 0..1, and for the trend-pack kernels its light, colour and seed: transitionUniforms).
  * Same contract as gpuEffect: false, and recorded as unavailable, when it cannot run.
  */
-export function gpuTransition(type: string, progress: number, outgoing: OffscreenCanvas | null, incoming: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
-  const t = GPU_TRANSITIONS[type];
-  if (!t) { skipped.add(type); return Promise.resolve(false); }
-  return runPass(type, `tr:${t.kernel}`, () => transitionShader(T2[t.kernel]!), [progress, ...t.v, env.width / env.height, env.width, env.height], outgoing, incoming, dst, env);
+export function gpuTransition(t: TransitionState, outgoing: OffscreenCanvas | null, incoming: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+  const g = GPU_TRANSITIONS[t.type];
+  if (!g) { skipped.add(t.type); return Promise.resolve(false); }
+  return runPass(t.type, `tr:${g.kernel}`, () => transitionShader(T2[g.kernel]!), transitionUniforms(t, env.width, env.height), outgoing, incoming, dst, env);
 }
 /** The texture of a colour table, made on first use. Raw bytes (writeTexture), so no premultiplication or colour conversion touches the table. */
 function lutTexture(s: State, strip: LutStrip): any {
@@ -969,8 +1003,8 @@ async function runPass(type: string, key: string, shader: () => string, numbers:
       if (first) device.queue.copyExternalImageToTexture({ source: first }, { texture: z.source, premultipliedAlpha: true }, [W, H]);
       else { const e0 = device.createCommandEncoder(); e0.beginRenderPass({ colorAttachments: [{ view: z.source.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] }).end(); device.queue.submit([e0.finish()]); }
       if (second) device.queue.copyExternalImageToTexture({ source: second }, { texture: z.source2, premultipliedAlpha: true }, [W, H]);
-      const p = new Float32Array(8);
-      p.set(numbers.slice(0, 8));
+      const p = new Float32Array(12);
+      p.set(numbers.slice(0, 12));
       device.queue.writeBuffer(s.uniforms, 0, p);
       const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : lut ? [{ binding: 3, resource: lutTexture(s, lut).createView() }] : [])] });
       const enc = device.createCommandEncoder();

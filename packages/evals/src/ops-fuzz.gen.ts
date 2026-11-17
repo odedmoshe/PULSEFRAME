@@ -129,6 +129,19 @@ export function createFuzz(seed: number) {
       () => ({ op: 'set_clip_blend', args: { clipId: any(), mode: pick(['normal', 'multiply', 'screen', 'overlay', 'soft-light'] as const) } }),
       () => ({ op: 'set_clip_mask', args: { clipId: mediaId(), mask: rnd() < 0.3 ? null : { shape: pick(['rect', 'ellipse'] as const), x: 0, y: 0, width: 0.6, height: 0.5, feather: 0.05, invert: rnd() < 0.3 } } }),
       () => ({ op: 'set_transition', args: { clipId: touchingVideo.length && rnd() < 0.85 ? pick(touchingVideo).c.id : videoId(), type: rnd() < 0.2 ? null : pick(['cross-dissolve', 'dip-to-black', 'wipe-left', 'slide-left']), frames: 1 + int(30) } }),
+      // transition options (ADR-0012): real types with and without colour and seed, then options on clips that carry a transition
+      () => ({ op: 'set_transition', args: { clipId: touchingVideo.length && rnd() < 0.85 ? pick(touchingVideo).c.id : videoId(), type: pick(['dissolve', 'slices-h', 'shape-heart', 'film-burn', 'punch-in']), frames: 1 + int(20) } }),
+      () => {
+        const withTr = videoClips.filter((x) => x.c.type === 'media' && !!x.c.transition);
+        const r = rnd();
+        return { op: 'set_transition_options', args: {
+          clipId: withTr.length && rnd() < 0.9 ? pick(withTr).c.id : videoId(),
+          ...(r < 0.4 ? { sync: rnd() < 0.75 ? 'beat' : null } : {}),
+          ...(r >= 0.3 && r < 0.7 ? { velocity: rnd() < 0.2 ? null : pick([2, 3, 4] as const) } : {}),
+          ...(r >= 0.7 && r < 0.85 ? { color: rnd() < 0.2 ? null : '#3DE0C8' } : {}),
+          ...(r >= 0.85 ? { seed: rnd() < 0.2 ? null : int(10000) } : {}),
+        } };
+      },
       () => ({ op: 'add_marker', args: { time: at(), label: pick(['', 'note', 'סמן']) } }),
       () => ({ op: 'update_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none', time: fr(), color: pick(['blue', 'green', 'yellow', 'red', 'purple'] as const) } }),
       () => { const t = tracks.length ? pick(tracks) : { id: 'trk_none', kind: 'video' as const }; return { op: 'update_track', args: { trackId: t.id, ...(rnd() < 0.4 ? { locked: rnd() < 0.25 } : rnd() < 0.5 ? (t.kind === 'audio' || rnd() < 0.1 ? { muted: rnd() < 0.4 } : { hidden: rnd() < 0.4 }) : { name: pick(['A', 'רצועה', 'B-roll']) }) } }; },
