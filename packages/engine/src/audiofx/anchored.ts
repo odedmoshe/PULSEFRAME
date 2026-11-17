@@ -18,6 +18,8 @@ export class AnchoredMin {
   /** suffix minima of the previous complete block: suf[o] = min of its values at offsets o..L−1 */
   private readonly suf: Float64Array;
   private pre = Infinity;
+  /** the offset of the next index, so a consecutive push needs no division */
+  private nextT = NaN; private nextO = 0;
   constructor(L: number) {
     if (!Number.isInteger(L) || L < 1) throw new RangeError('AnchoredMin: L is a whole number ≥ 1');
     this.L = L;
@@ -30,8 +32,10 @@ export class AnchoredMin {
    */
   push(t: number, v: number): number {
     const L = this.L, cur = this.cur;
-    let o = t % L;
-    if (o < 0) o += L;
+    let o = this.nextO;
+    if (t !== this.nextT) { o = t % L; if (o < 0) o += L; }
+    this.nextT = t + 1;
+    this.nextO = o + 1 === L ? 0 : o + 1;
     cur[o] = v;
     const pre = o === 0 ? v : v < this.pre ? v : this.pre;
     this.pre = pre;
@@ -54,6 +58,7 @@ export class AnchoredSum {
   /** suffix sums of the previous complete block, each accumulated from the block end backwards */
   private readonly suf: Float64Array;
   private pre = 0;
+  private nextT = NaN; private nextO = 0;
   constructor(L: number) {
     if (!Number.isInteger(L) || L < 1) throw new RangeError('AnchoredSum: L is a whole number ≥ 1');
     this.L = L;
@@ -63,8 +68,10 @@ export class AnchoredSum {
   /** Push the value at timeline index t (consecutive pushes) and return the sum over [t − L + 1, t] (values before the first push count as 0). */
   push(t: number, v: number): number {
     const L = this.L, cur = this.cur;
-    let o = t % L;
-    if (o < 0) o += L;
+    let o = this.nextO;
+    if (t !== this.nextT) { o = t % L; if (o < 0) o += L; }
+    this.nextT = t + 1;
+    this.nextO = o + 1 === L ? 0 : o + 1;
     cur[o] = v;
     const pre = o === 0 ? v : this.pre + v;
     this.pre = pre;
