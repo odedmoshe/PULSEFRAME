@@ -119,7 +119,7 @@ export interface SincTable { taps: number; half: number; cutoff: number; /** (SI
 const tableCache = new Map<number, SincTable>();
 /** The interpolation table for a step (cached by tap count and cutoff). */
 export function sincTable(step: number): SincTable {
-  const widen = Math.max(1, Math.ceil(step));
+  const widen = Math.max(1, -Math.floor(-step)); // ceil(step)
   const taps = 32 * widen, half = taps / 2, cutoff = 0.45 * Math.min(1, 1 / step);
   const key = taps * 1e7 + Math.round(cutoff * 1e6);
   const hit = tableCache.get(key);
