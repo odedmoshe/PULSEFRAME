@@ -329,6 +329,19 @@ describe('the picture a title takes its date from', () => {
       expect(at(ev.doc, t.id, frame, { index: other }), String(frame)).toEqual(plain); // an index of another document is not used
     }
     expect(index.doc).toBe(ev.doc);
+    // what a kept index hands out twice is the same answer, and nobody can change it for the next caller
+    const once = at(ev.doc, t.id, 100, { index });
+    expect(at(ev.doc, t.id, 101, { index })).toBe(once); // the same picture and second: answered from memory
+    expect(Object.isFrozen(once) && Object.isFrozen(once.missing) && Object.isFrozen(once.anchor)).toBe(true);
+    expect(at(ev.doc, t.id, 131, { index })).not.toBe(once); // a second later
+    // a people source is asked every time: its answers are not kept
+    let asked = 0;
+    const people: PeopleSource = { resolve: () => { asked++; return null; } };
+    const withPerson = structuredClone(ev.doc);
+    (findClip(withPerson, t.id)!.clip as TextClip).text = '{name:per_1} {date}';
+    const personIndex = makeFieldIndex(withPerson);
+    for (let i = 0; i < 3; i++) at(withPerson, t.id, 100, { index: personIndex, people });
+    expect(asked).toBe(3);
   });
   it('never throws on a document the schema accepts: a clip of a missing file, a time no clock can count in, a title that is not in the sequence', () => {
     const lib = library();

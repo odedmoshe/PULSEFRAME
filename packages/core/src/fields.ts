@@ -143,16 +143,28 @@ export const MISSING_REASONS = ['no_date', 'sunset_undecided', 'no_event_name', 
 export interface FieldAnchor { clipId: string; assetId: string; wall: string; circa: boolean; how: 'under' | 'next' | 'previous' }
 /** `missing` lists each field without data as it is written in the text, with the reason; `eventId` is set when the anchor's file is in an event. */
 export interface ResolvedFields { text: string; anchor: FieldAnchor | null; eventId: string | null; missing: { token: string; reason: MissingReason }[] }
-/** What an index keeps as it is asked: titles in parts, each file's capture, file → event, event names, and the picture tracks of each sequence. */
+/** What an index keeps as it is asked: titles in parts, each file's capture, file → event (and the event a file's date belongs to), event names, and the picture tracks of each sequence. */
 export interface FieldMemo {
   parsed: Map<string, FieldPart[]>;
   captures: Map<string, ReturnType<typeof captureOf>>;
   eventOf: Map<string, LifeEvent> | null;
+  anchorEvents: Map<string, LifeEvent | null>;
   eventNames: Map<string, string>;
   layouts: Map<string, SequenceLayout | null>;
+  /** The words of a title's text for one moment of one picture: by text, then by anchor clip, rule and wall-clock second. */
+  resolved: Map<string, Map<string, ResolvedFields>>;
+  /** One frame of the document as a time, and the whole seconds of each video file. */
+  frame: T.RationalTime | null;
+  videoSeconds: Map<string, number | null | undefined>;
 }
-/** The picture clips of one visible video track, in time order, with their ends. */
-interface PictureTrack { index: number; clips: MediaClip[]; ends: T.RationalTime[] }
+/** A rational time with its two integers ready, so that comparing does not read them from their strings again. */
+interface Q { n: bigint; d: bigint }
+const q = (t: T.RationalTime): Q => ({ n: BigInt(t.value), d: BigInt(t.timescale) });
+/** a ≤ b, a < b (exact). */
+const lteQ = (a: Q, b: Q): boolean => a.n * b.d <= b.n * a.d;
+const ltQ = (a: Q, b: Q): boolean => a.n * b.d < b.n * a.d;
+/** The picture clips of one visible video track, in time order, with their starts and ends. */
+interface PictureTrack { index: number; clips: MediaClip[]; ends: T.RationalTime[]; from: Q[]; to: Q[] }
 /** A sequence as the anchor rules see it: the track each clip is on, and the visible video tracks from the bottom up. */
 interface SequenceLayout { trackOf: Map<string, number>; pictures: PictureTrack[] }
 /**
@@ -161,7 +173,7 @@ interface SequenceLayout { trackOf: Map<string, number>; pictures: PictureTrack[
  */
 export interface FieldIndex { readonly doc: ProjectDocument; readonly memo: FieldMemo }
 /** Pure: builds the (empty) index of a document. Never call it on a draft inside an operation. */
-export function makeFieldIndex(doc: ProjectDocument): FieldIndex { return { doc, memo: { parsed: new Map(), captures: new Map(), eventOf: null, eventNames: new Map(), layouts: new Map() } }; }
+export function makeFieldIndex(doc: ProjectDocument): FieldIndex { return { doc, memo: { parsed: new Map(), captures: new Map(), eventOf: null, anchorEvents: new Map(), eventNames: new Map(), layouts: new Map(), resolved: new Map(), frame: null, videoSeconds: new Map() } }; }
 export interface FieldOptions {
   /** Default NO_PEOPLE. */
   people?: PeopleSource;
@@ -181,13 +193,17 @@ function captureIn(ix: FieldIndex, assetId: string): ReturnType<typeof captureOf
   return c;
 }
 function eventIn(ix: FieldIndex, assetId: string): LifeEvent | null {
+  const known = ix.memo.anchorEvents.get(assetId);
+  if (known !== undefined) return known;
   if (!ix.memo.eventOf) {
     const map = new Map<string, LifeEvent>();
     for (const e of Object.values(ix.doc.events ?? {})) for (const id of e.assetIds) if (!map.has(id)) map.set(id, e);
     ix.memo.eventOf = map;
   }
   const map = ix.memo.eventOf;
-  return eventForCapture(ix.doc, assetId, (id) => map.get(id) ?? null);
+  const event = eventForCapture(ix.doc, assetId, (id) => map.get(id) ?? null);
+  ix.memo.anchorEvents.set(assetId, event);
+  return event;
 }
 function eventNameIn(ix: FieldIndex, event: LifeEvent): string {
   let name = ix.memo.eventNames.get(event.id);
@@ -205,23 +221,23 @@ function layoutIn(ix: FieldIndex, sequenceId: string): SequenceLayout | null {
       for (const c of track.clips) if (!layout.trackOf.has(c.id)) layout.trackOf.set(c.id, index);
       if (track.kind !== 'video' || track.hidden) continue;
       const clips = track.clips.filter((c): c is MediaClip => c.type === 'media').sort((a, b) => T.cmp(a.start, b.start));
-      layout.pictures.push({ index, clips, ends: clips.map((c) => T.add(c.start, c.duration)) });
+      const ends = clips.map((c) => T.add(c.start, c.duration));
+      layout.pictures.push({ index, clips, ends, from: clips.map((c) => q(c.start)), to: ends.map(q) });
     }
   }
   ix.memo.layouts.set(sequenceId, layout);
   return layout;
 }
 /** How many of `times` (in rising order) are at or before `t`. */
-function countUpTo(times: readonly T.RationalTime[], t: T.RationalTime): number {
+function countUpTo(times: readonly Q[], t: Q): number {
   let lo = 0, hi = times.length;
-  while (lo < hi) { const mid = (lo + hi) >> 1; if (T.lte(times[mid]!, t)) lo = mid + 1; else hi = mid; }
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (lteQ(times[mid]!, t)) lo = mid + 1; else hi = mid; }
   return lo;
 }
 /** The clip of a track that contains `t`, or null. */
-function clipAt(track: PictureTrack, t: T.RationalTime): MediaClip | null {
-  let lo = 0, hi = track.clips.length; // the clips that start at or before t
-  while (lo < hi) { const mid = (lo + hi) >> 1; if (T.lte(track.clips[mid]!.start, t)) lo = mid + 1; else hi = mid; }
-  return lo > 0 && T.lt(t, track.ends[lo - 1]!) ? track.clips[lo - 1]! : null;
+function clipAt(track: PictureTrack, t: Q): MediaClip | null {
+  const k = countUpTo(track.from, t) - 1; // the last clip that starts at or before t
+  return k >= 0 && ltQ(t, track.to[k]!) ? track.clips[k]! : null;
 }
 type Dated = NonNullable<ReturnType<typeof captureOf>>;
 interface Found { clip: MediaClip; dated: Dated; how: FieldAnchor['how']; at: T.RationalTime }
@@ -231,10 +247,11 @@ interface Found { clip: MediaClip; dated: Dated; how: FieldAnchor['how']; at: T.
  */
 function pictureUnder(ix: FieldIndex, layout: SequenceLayout, below: number, t: T.RationalTime): { found: Found | null; under: boolean } {
   let under = false;
+  const at = q(t);
   for (let i = layout.pictures.length - 1; i >= 0; i--) {
     const track = layout.pictures[i]!;
     if (track.index >= below) continue;
-    const clip = clipAt(track, t);
+    const clip = clipAt(track, at);
     if (!clip) continue;
     under = true;
     const dated = captureIn(ix, clip.assetId);
@@ -249,9 +266,10 @@ function anchorClip(ix: FieldIndex, layout: SequenceLayout, below: number, title
   const tracks = layout.pictures.filter((p) => p.index < below).reverse(); // topmost first, so the upper clip wins a tie
   // 2. a title card over black: the dated clip that starts first, at or after the title's start, at its first frame
   let next: Found | null = null;
+  const from = q(titleStart), at = q(t);
   for (const track of tracks) {
     let k = 0, hi = track.clips.length; // the first clip that starts at or after the title's start
-    while (k < hi) { const mid = (k + hi) >> 1; if (T.lt(track.clips[mid]!.start, titleStart)) k = mid + 1; else hi = mid; }
+    while (k < hi) { const mid = (k + hi) >> 1; if (ltQ(track.from[mid]!, from)) k = mid + 1; else hi = mid; }
     for (; k < track.clips.length; k++) {
       const clip = track.clips[k]!;
       if (next && !T.lt(clip.start, next.clip.start)) break;
@@ -263,7 +281,7 @@ function anchorClip(ix: FieldIndex, layout: SequenceLayout, below: number, title
   // 3. a closing card: the dated clip that ended last, at or before t, at its last frame
   let previous: (Found & { end: T.RationalTime }) | null = null;
   for (const track of tracks) {
-    for (let k = countUpTo(track.ends, t) - 1; k >= 0; k--) {
+    for (let k = countUpTo(track.to, at) - 1; k >= 0; k--) {
       const clip = track.clips[k]!, end = track.ends[k]!;
       if (previous && !T.lt(previous.end, end)) break;
       const dated = captureIn(ix, clip.assetId);
@@ -276,27 +294,38 @@ function anchorClip(ix: FieldIndex, layout: SequenceLayout, below: number, title
   return previous;
 }
 /** The wall-clock moment a dated clip shows at `at`: its capture, the offset it inherits, and the whole source seconds played (a still picture and a day-only date do not tick). null when it cannot be written. */
-function momentOf(doc: ProjectDocument, found: Found): string | null {
-  const asset = doc.assets[found.clip.assetId];
+function momentOf(ix: FieldIndex, found: Found): string | null {
+  const length = videoSecondsIn(ix, found.clip.assetId);
   let seconds = 0;
-  if (asset?.kind === 'video') {
-    const played = T.frameIndexAt(pictureSourceAt(found.clip, found.at, T.frameTime(1, doc.settings.frameRate)), { num: 1, den: 1 });
-    const length = T.frameIndexAt(asset.duration, { num: 1, den: 1 });
-    if (!Number.isSafeInteger(played) || !Number.isSafeInteger(length)) return null;
-    seconds = Math.max(0, Math.min(played, Math.max(0, length))); // a clip asked to play past its source holds its last picture (evaluate.ts)
+  if (length !== undefined) {
+    if (length === null) return null;
+    const played = T.frameIndexAt(pictureSourceAt(found.clip, found.at, frameIn(ix)), { num: 1, den: 1 });
+    if (!Number.isSafeInteger(played)) return null;
+    seconds = Math.max(0, Math.min(played, length)); // a clip asked to play past its source holds its last picture (evaluate.ts)
   }
   try { return addWallSeconds(found.dated.capture.at, found.dated.offsetSeconds + seconds); } catch { return null; }
+}
+/** One frame of the document, as a time. */
+function frameIn(ix: FieldIndex): T.RationalTime { return (ix.memo.frame ??= T.frameTime(1, ix.doc.settings.frameRate)); }
+/** The whole seconds of a video file (null = too long to count in); undefined for a file that is not a video, whose picture has no clock. */
+function videoSecondsIn(ix: FieldIndex, assetId: string): number | null | undefined {
+  if (ix.memo.videoSeconds.has(assetId)) return ix.memo.videoSeconds.get(assetId);
+  const asset = Object.hasOwn(ix.doc.assets, assetId) ? ix.doc.assets[assetId] : undefined;
+  let length: number | null | undefined;
+  if (asset?.kind === 'video') { const whole = T.frameIndexAt(asset.duration, { num: 1, den: 1 }); length = Number.isSafeInteger(whole) ? Math.max(0, whole) : null; }
+  ix.memo.videoSeconds.set(assetId, length);
+  return length;
 }
 /** What a field is resolved from: the anchor, the capture behind it, and the event of its file. */
 interface Moment { anchor: FieldAnchor; capture: Capture; event: LifeEvent | null }
 function momentAt(ix: FieldIndex, sequenceId: string, clip: Clip, time: T.RationalTime, rules: 'all' | 'under'): Moment | null {
   const layout = layoutIn(ix, sequenceId), below = layout?.trackOf.get(clip.id);
   if (!layout || below === undefined) return null;
-  const found = rules === 'under' ? pictureUnder(ix, layout, below, time).found : anchorClip(ix, layout, below, clip.start, time, T.frameTime(1, ix.doc.settings.frameRate));
+  const found = rules === 'under' ? pictureUnder(ix, layout, below, time).found : anchorClip(ix, layout, below, clip.start, time, frameIn(ix));
   return found ? momentOfFound(ix, found) : null;
 }
 function momentOfFound(ix: FieldIndex, found: Found): Moment | null {
-  const wall = momentOf(ix.doc, found);
+  const wall = momentOf(ix, found);
   if (wall === null) return null;
   return { anchor: { clipId: found.clip.id, assetId: found.clip.assetId, wall, circa: found.dated.capture.circa === true, how: found.how }, capture: found.dated.capture, event: eventIn(ix, found.clip.assetId) };
 }
@@ -332,6 +361,21 @@ function valueOf(ix: FieldIndex, token: FieldToken, m: Moment | null, people: Pe
   }
 }
 function resolveIn(ix: FieldIndex, clip: TextClip, m: Moment | null, people: PeopleSource): ResolvedFields {
+  if (people !== NO_PEOPLE) return resolveNow(ix, clip, m, people); // another source may answer differently each time it is asked
+  // the words change only when the picture or its wall-clock second does: a kept index answers the frames in between from memory
+  let byMoment = ix.memo.resolved.get(clip.text);
+  if (!byMoment) { byMoment = new Map(); ix.memo.resolved.set(clip.text, byMoment); }
+  const key = m ? `${m.anchor.clipId}\n${m.anchor.how}\n${m.anchor.wall}` : '';
+  let known = byMoment.get(key);
+  if (!known) {
+    known = resolveNow(ix, clip, m, people);
+    // handed out more than once: nobody may change it
+    Object.freeze(known.missing); for (const x of known.missing) Object.freeze(x); if (known.anchor) Object.freeze(known.anchor);
+    byMoment.set(key, Object.freeze(known));
+  }
+  return known;
+}
+function resolveNow(ix: FieldIndex, clip: TextClip, m: Moment | null, people: PeopleSource): ResolvedFields {
   const missing: ResolvedFields['missing'] = [];
   let text = '';
   for (const part of partsOf(ix, clip.text)) {
@@ -417,7 +461,7 @@ export function stampText(doc: ProjectDocument, sequenceId: string, clip: Clip, 
   const ix = indexFor(doc, opts);
   let wall: string | null = null;
   try {
-    if (clip.type === 'media') { const dated = captureIn(ix, clip.assetId); wall = dated ? momentOf(doc, { clip, dated, how: 'under', at: time }) : null; }
+    if (clip.type === 'media') { const dated = captureIn(ix, clip.assetId); wall = dated ? momentOf(ix, { clip, dated, how: 'under', at: time }) : null; }
     else if (clip.type === 'adjustment' || clip.type === 'text') wall = momentAt(ix, sequenceId, clip, time, 'under')?.anchor.wall ?? null;
   } catch (e) { if (!(e instanceof RangeError)) throw e; }
   if (wall === null) return '';
