@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { barcodeFrame, BARCODE, decoyDistance, generateGreyFixture, generateTrackingFixture, greyLevel, readBarcode, readBarcodeChannel, TRACKING_FIXTURE, trackingFrame, trackingTruth } from './index.ts';
+import { barcodeFrame, BARCODE, decoyDistance, FLAT_LEVEL, generateGreyFixture, generateTrackingFixture, greyLevel, readBarcode, readBarcodeChannel, TRACKING_FIXTURE, trackingFrame, trackingTruth } from './index.ts';
 
 const W = 320, H = 180;
 const rect = { x: 0, y: 0, w: W, h: H };
@@ -61,6 +61,18 @@ describe('grey fixture', () => {
 
 describe('motion tracking fixture (ADR-0015)', () => {
   const F = TRACKING_FIXTURE;
+  it('the flat variant draws the same disc on a flat grey background', () => {
+    const noise = trackingFrame(37, { coverage: true }), flat = trackingFrame(37, { background: 'flat', coverage: true });
+    expect(Array.from(flat.coverage!)).toEqual(Array.from(noise.coverage!));
+    let diskDiff = 0, flatOff = 0;
+    for (let i = 0; i < F.width * F.height; i++) {
+      const y = Math.floor(i / F.width);
+      if (flat.coverage![i] === 1) diskDiff += Math.abs(flat.rgb[i * 3]! - noise.rgb[i * 3]!);
+      else if (flat.coverage![i] === 0 && y >= F.height / 6 + 1 && flat.rgb[i * 3] !== FLAT_LEVEL) flatOff++;
+    }
+    expect(diskDiff).toBe(0); // inside the disc the two variants are the same picture
+    expect(flatOff).toBe(0); // outside it (and below the barcode) only the flat level
+  });
   it('the look-alike stays at least 400 px from the disc on every frame it is shown, and only then', () => {
     let shown = 0, nearest = Infinity;
     for (let f = 0; f < F.frames; f++) {

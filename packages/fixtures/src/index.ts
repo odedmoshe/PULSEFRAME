@@ -256,15 +256,17 @@ function drawDisc(buf: Buffer, W: number, H: number, cx: number, cy: number, r: 
     }
 }
 
+/** Grey level of the flat background variant (no texture around the disc: an echo's ghosts can be measured on their own). */
+export const FLAT_LEVEL = 110;
 /**
  * Frame `index` of the tracking fixture as packed RGB, before encoding: background, frame-index barcode (top sixth), the
  * look-alike (frames 160–239), the disc, and over frames 150–169 a flat grey square (side 3r) that hides the disc.
  * With `coverage`, also the disc's own coverage per pixel (0..1, the look-alike and the square left out), from which its
  * centroid can be measured independently of the truth formulas.
  */
-export function trackingFrame(index: number, o: { coverage?: boolean } = {}): { rgb: Buffer; coverage?: Float32Array } {
+export function trackingFrame(index: number, o: { coverage?: boolean; background?: 'noise' | 'flat' } = {}): { rgb: Buffer; coverage?: Float32Array } {
   const F = TRACKING_FIXTURE, W = F.width, H = F.height;
-  const rgb = Buffer.from(backgroundOf());
+  const rgb = o.background === 'flat' ? Buffer.alloc(W * H * 3, FLAT_LEVEL) : Buffer.from(backgroundOf());
   const strip = Math.round(H * BARCODE.stripFrac), cell = W / BARCODE.bits;
   for (let y = 0; y < strip; y++)
     for (let x = 0; x < W; x++) { const bit = (index >> (BARCODE.bits - 1 - Math.floor(x / cell))) & 1; const p = (y * W + x) * 3; rgb[p] = rgb[p + 1] = rgb[p + 2] = bit ? 235 : 16; }
@@ -288,7 +290,7 @@ export function decoyDistance(f: number): number | null {
   return Math.hypot(t.cx - d.cx, t.cy - d.cy);
 }
 
-export interface TrackingFixtureOptions { out: string; /** default: `<out without extension>.truth.json` */ truthOut?: string }
+export interface TrackingFixtureOptions { out: string; /** default: `<out without extension>.truth.json` */ truthOut?: string; /** 'flat': the same disc, occluder and look-alike on a flat grey background (FLAT_LEVEL). Default 'noise'. */ background?: 'noise' | 'flat' }
 /**
  * Encode the tracking fixture (TRACKING_FIXTURE: 1280×720, 30 fps, 240 frames) as H.264 CRF 14 with 2 B-frames and a 1 s GOP,
  * with AAC sound (the beep track of the barcode fixture), and write its truth: per frame { cx, cy, r, occluded } in frame
@@ -309,13 +311,13 @@ export async function generateTrackingFixture(o: TrackingFixtureOptions) {
         '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-bf', '2', '-pix_fmt', 'yuv420p', '-g', String(Math.round(fps.num / fps.den)), '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
         '-c:a', 'aac', '-b:a', '160k', '-shortest', '-movflags', '+faststart', '-fflags', '+bitexact', '-flags:v', '+bitexact', o.out],
       async (stdin) => {
-        for (let i = 0; i < F.frames; i++) if (!stdin.write(trackingFrame(i).rgb)) await new Promise((r) => stdin.once('drain', r));
+        for (let i = 0; i < F.frames; i++) if (!stdin.write(trackingFrame(i, { background: o.background ?? 'noise' }).rgb)) await new Promise((r) => stdin.once('drain', r));
       },
     );
   } finally {
     fs.rmSync(wav, { force: true });
   }
-  const meta = { width: W, height: H, fps, frames: F.frames, coordinates: 'continuous frame pixels: pixel i spans [i, i+1); u = cx / width', radius: F.radius, occluded: F.occluded, decoy: { ...F.decoy, r: F.radius * F.decoy.scale }, truth };
+  const meta = { width: W, height: H, fps, frames: F.frames, background: o.background ?? 'noise', coordinates: 'continuous frame pixels: pixel i spans [i, i+1); u = cx / width', radius: F.radius, occluded: F.occluded, decoy: { ...F.decoy, r: F.radius * F.decoy.scale }, truth };
   fs.writeFileSync(truthFile, JSON.stringify(meta, null, 1) + '\n');
   return { file: o.out, truthFile, width: W, height: H, fps, frames: F.frames, codec: 'h264' as const, bframes: 2, truth, occluded: F.occluded, decoy: meta.decoy };
 }
