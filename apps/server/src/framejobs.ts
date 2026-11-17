@@ -252,7 +252,6 @@ export class FrameJobDriver {
     let job = store.getJob(jobId);
     const plan: FramePlan = job.input.frames;
     const src: FrameSource = job.input.frameSource;
-    const base: string = job.input.clientRequestId;
     const work = this.workDir(jobId);
     try {
       if (TERMINAL.has(job.status)) return;
