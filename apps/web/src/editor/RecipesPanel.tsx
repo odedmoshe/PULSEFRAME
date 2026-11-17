@@ -4,9 +4,10 @@ import { describeRecipes, FORMAT_PROFILES } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { api, ApiFailure, type RecipeAlternative, type RecipeParams, type RecipePlanResult } from '../api.ts';
 import { useEditorState } from './store.ts';
+import { RECIPE_FORM_IDS, recipeParams, recipeSources } from './recipeParams.ts';
 
-const RECIPES = describeRecipes();
-const DEFAULT_PROFILES = ['vertical-9x16', 'square-1x1', 'portrait-4x5'];
+/** Only the recipes this panel has a form for (recipeParams.test.ts checks that every recipe has one). */
+const RECIPES = describeRecipes().filter((r) => RECIPE_FORM_IDS.includes(r.id));
 const LOUDNESS = ['off', '-14', '-16', '-23'] as const;
 type Form = Record<string, unknown>;
 interface Failure { message: string; hint?: string; code?: string }
@@ -29,45 +30,13 @@ export function RecipesPanel() {
   const [regen, setRegen] = useState<Record<string, { replaced: number; protectedCount: number }>>({});
 
   const rate = doc?.settings.frameRate;
-  const assets = doc ? Object.values(doc.assets) : [];
-  const pictureAssets = assets.filter((a) => a.video || a.image);
-  const audioAssets = assets.filter((a) => a.audio);
-  const audioClips = doc ? (doc.sequences[doc.mainSequenceId]?.tracks ?? []).filter((tr) => tr.kind === 'audio').flatMap((tr) => tr.clips.filter((c) => c.type === 'media')) : [];
-  const selected = editor.selected;
-  const selectedMusic = selected && selected.track.kind === 'audio' && selected.clip.type === 'media' ? selected.clip.id : undefined;
+  const sources = recipeSources(doc ?? null, editor.selected?.clip.id);
+  const { pictureAssets, audioAssets, audioClips, pictureClips } = sources;
 
   const patch = (recipeId: string, p: Form) => setForms((f) => ({ ...f, [recipeId]: { ...f[recipeId], ...p } }));
 
   /** Effective parameters sent to the server, built from the form plus defaults. */
-  const paramsFor = (recipeId: string): RecipeParams => {
-    const f = forms[recipeId] ?? {};
-    if (recipeId === 'beat-montage') {
-      const unchecked = (f.unchecked as string[] | undefined) ?? [];
-      const musicClipId = (f.musicClipId as string | undefined) ?? selectedMusic ?? audioClips[0]?.id ?? '';
-      return {
-        musicClipId,
-        assetIds: pictureAssets.map((a) => a.id).filter((id) => !unchecked.includes(id)),
-        everyBeats: (f.everyBeats as number | undefined) ?? 4,
-        ...(f.cutOn === 'bars' ? { cutOn: 'bars' } : {}),
-        order: (f.order as string | undefined) ?? 'sequence',
-        ...(f.seed !== undefined ? { seed: f.seed } : {}),
-      };
-    }
-    if (recipeId === 'social-pack') {
-      return {
-        profiles: (f.profiles as string[] | undefined) ?? DEFAULT_PROFILES,
-        captions: (f.captions as boolean | undefined) ?? true,
-        ...(f.captionPreset !== undefined ? { captionPreset: f.captionPreset } : {}),
-        loudness: f.loudness === undefined ? -14 : f.loudness,
-      };
-    }
-    return {
-      assetId: (f.assetId as string | undefined) ?? audioAssets[0]?.id ?? '',
-      keepSeconds: (f.keepSeconds as number | undefined) ?? 0.12,
-      ...(f.loudness !== undefined ? { loudness: f.loudness } : {}),
-      ...(f.captions !== undefined ? { captions: f.captions } : {}),
-    };
-  };
+  const paramsFor = (recipeId: string): RecipeParams => recipeParams(recipeId, forms[recipeId], sources);
 
   /** Load server-provided params (an alternative) into the form. */
   const loadParams = (recipeId: string, p: RecipeParams) => {
@@ -175,6 +144,34 @@ export function RecipesPanel() {
             <select data-testid="recipe-loudness" id={`${dom}-loudness`} value={loudnessValue(p.loudness)} onChange={(e) => patch(recipeId, { loudness: loudnessParam(e.target.value) })}>
               {LOUDNESS.map((l) => <option key={l} value={l}>{l === 'off' ? t('recipes.loudness.off') : `${l} LUFS`}</option>)}
             </select>
+          </label>
+        </div>
+      );
+    }
+    if (recipeId === 'portrait-blur') {
+      const chosen = pictureClips.find((c) => c.clipId === p.clipId);
+      const cutouts = chosen?.cutoutIds ?? [];
+      const radius = p.radius as number;
+      return (
+        <div className="fields">
+          <label>{t('recipes.pictureClip')}
+            <select data-testid="recipe-picture-clip" value={p.clipId as string} onChange={(e) => patch(recipeId, { clipId: e.target.value, cutoutAssetId: undefined })}>
+              {pictureClips.length === 0 && <option value="">{t('recipes.pictureClip.none')}</option>}
+              {pictureClips.map((c) => <option key={c.clipId} value={c.clipId}>{`${assetName(c.assetId)} · ${rate ? T.toTimecode(c.start, rate) : ''}`}</option>)}
+            </select>
+          </label>
+          {chosen && (cutouts.length === 0
+            ? <p className="muted" data-testid="recipe-cutout-none" dir="auto">{t('recipes.cutout.none')}</p>
+            : (
+              <label>{t('recipes.cutout')}
+                <select data-testid="recipe-cutout" value={(p.cutoutAssetId as string | undefined) ?? cutouts[0]} onChange={(e) => patch(recipeId, { cutoutAssetId: e.target.value })}>
+                  {cutouts.map((id) => <option key={id} value={id}>{assetName(id)}</option>)}
+                </select>
+              </label>
+            ))}
+          <label>{t('recipes.radius')}
+            <input type="number" dir="ltr" data-testid="recipe-radius" min={0.2} max={20} step={0.1} value={Number((radius * 100).toFixed(2))}
+              onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0.2 && v <= 20) patch(recipeId, { radius: Number((v / 100).toFixed(5)) }); }} />
           </label>
         </div>
       );

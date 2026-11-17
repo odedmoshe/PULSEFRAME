@@ -6,11 +6,12 @@
  */
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { CAPTION_PRESETS, type ProjectDocument } from './schema.ts';
+import { CAPTION_PRESETS, type Asset, type MediaClip, type ProjectDocument, type Track } from './schema.ts';
 import { cutOps, sourceTimesToTimeline, sourceRangesToTimeline, type TimeRange } from './cleanup.ts';
 import { FORMAT_PROFILES } from './variants.ts';
-import { findClip, type OpCall } from './ops.ts';
+import { defineOp, findClip, getOp, OpError, type OpCall } from './ops.ts';
 import { flashGapFrames } from './flashSafety.ts';
+import { clipEnd } from './validate.ts';
 
 export class RecipeError extends Error {
   constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do', message: string, public hint?: string) { super(message); }
@@ -47,6 +48,12 @@ const SocialPack = z.object({
   captionPreset: z.enum(CAPTION_PRESETS).default('classic'),
   loudness: z.number().min(-40).max(-5).nullable().default(-14).describe('Loudness target to set if none is set (null = leave)'),
 }).strict();
+/** Portrait blur (ADR-0017): a still picture's background blurred behind its subject, from a cut-out made of that picture. */
+const PortraitBlur = z.object({
+  clipId: z.string().describe('Picture clip (a still) whose background to blur'),
+  cutoutAssetId: z.string().optional().describe('Cut-out of the clip\'s picture (transparent background) made by the background-removal tool; default: the newest one'),
+  radius: z.number().min(0.002).max(0.2).default(0.02).describe('Blur radius as a fraction of the frame height; it stays editable afterwards (update_effect)'),
+}).strict();
 const TidySpeech = z.object({
   assetId: z.string().describe('Speech recording to tighten'),
   keepSeconds: z.number().min(0).max(2).default(0.12).describe('Pause left on each side of a cut'),
@@ -55,11 +62,21 @@ const TidySpeech = z.object({
 }).strict();
 
 export const RECIPES = [
-  { id: 'beat-montage', name: { he: 'מונטאז׳ לפי קצב', en: 'Beat montage' }, description: 'Cut between the chosen pictures on the beats of a music clip.', params: Montage, needs: 'beat analysis of the music asset', regenerable: true },
-  { id: 'social-pack', name: { he: 'חבילת רשתות', en: 'Social pack' }, description: 'Add the usual output formats, captions from the transcript, and a loudness target. Skips whatever already exists.', params: SocialPack, needs: 'nothing; captions need a transcript', regenerable: false },
-  { id: 'tidy-speech', name: { he: 'הידוק דיבור', en: 'Tidy speech' }, description: 'Remove measured silences from a speech recording on every track, set a loudness target and show its transcript as captions.', params: TidySpeech, needs: 'silence measurement (done by the server when the recipe is planned)', regenerable: false },
+  { id: 'beat-montage', name: { he: 'מונטאז׳ לפי קצב', en: 'Beat montage' }, description: 'Cut between the chosen pictures on the beats of a music clip.', params: Montage, needs: 'beat analysis of the music asset', regenerable: true, aiInput: null },
+  { id: 'social-pack', name: { he: 'חבילת רשתות', en: 'Social pack' }, description: 'Add the usual output formats, captions from the transcript, and a loudness target. Skips whatever already exists.', params: SocialPack, needs: 'nothing; captions need a transcript', regenerable: false, aiInput: null },
+  { id: 'tidy-speech', name: { he: 'הידוק דיבור', en: 'Tidy speech' }, description: 'Remove measured silences from a speech recording on every track, set a loudness target and show its transcript as captions.', params: TidySpeech, needs: 'silence measurement (done by the server when the recipe is planned)', regenerable: false, aiInput: null },
+  { id: 'portrait-blur', name: { he: 'טשטוש רקע לתמונה', en: 'Portrait blur' }, description: 'Blur the background of a still picture behind its subject: the clip shows the cut-out of the subject, and a blurred copy of the picture goes on a new picture track directly below it, with the same timing, position and keyframes. The blur radius stays editable.', params: PortraitBlur, needs: 'a cut-out of the picture, made by the background-removal tool (AI tools)', regenerable: false,
+    aiInput: 'the cut-out: made earlier by the background-removal tool (BiRefNet, an AI model), which is run on its own (run_capability) and whose result is validated before it enters the project' },
 ] as const;
-export const describeRecipes = () => RECIPES.map((r) => ({ id: r.id, name: r.name, description: r.description, needs: r.needs, regenerable: r.regenerable, paramsSchema: z.toJSONSchema(r.params), method: 'rule-based plan from project data; no language model' }));
+/**
+ * method: how the plan is made. No recipe runs a model when it is planned or applied; aiInput names the project data a recipe
+ * rests on that an AI model made earlier (null: none), so "no language model" is never read as "nothing here came from AI".
+ */
+export const describeRecipes = () => RECIPES.map((r) => ({
+  id: r.id, name: r.name, description: r.description, needs: r.needs, regenerable: r.regenerable, paramsSchema: z.toJSONSchema(r.params),
+  method: `rule-based plan from project data; no language model${r.aiInput ? '; no AI model runs when it is planned or applied, but it uses a result an AI model made earlier (aiInput)' : ''}`,
+  aiInput: r.aiInput as string | null,
+}));
 
 const mulberry = (a: number) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const parse = <S extends z.ZodType>(schema: S, raw: unknown): z.infer<S> => {
@@ -170,10 +187,106 @@ function planTidySpeech(doc: ProjectDocument, raw: unknown, ctx: PlanContext): R
   return { recipeId: 'tidy-speech', params: p, steps, basis, ops, alternatives: [{ label: 'Tighter (keep 0.05 s)', params: { ...p, keepSeconds: 0.05 } }, { label: 'Looser (keep 0.25 s)', params: { ...p, keepSeconds: 0.25 } }] };
 }
 
+// ---------- portrait blur (ADR-0017): one public op, because a recipe plan cannot name the clips it creates ----------
+/**
+ * Tool outputs that are a cut-out of a picture's subject (transparent background). A cut-out is recognised by the derived
+ * provenance a validated provider result carries: which reviewed capability made it, which of its outputs it is, from which file.
+ */
+export const CUTOUT_SOURCES: readonly { capabilityId: string; outputName: string }[] = [{ capabilityId: 'comfy.image.remove-background', outputName: 'cutout' }];
+/** True when `a` is a still cut-out made from the asset `fromAssetId` by one of CUTOUT_SOURCES. */
+export function isCutoutOf(a: Asset | undefined, fromAssetId: string): boolean {
+  const der = a?.provenance.derived;
+  return !!a && a.kind === 'image' && !!a.image && !!der && der.sourceAssetIds[0] === fromAssetId
+    && CUTOUT_SOURCES.some((c) => c.capabilityId === der.capabilityId && c.outputName === der.outputName);
+}
+/** The cut-outs made from a picture, newest first (by import time, then id). */
+export function cutoutsOf(doc: ProjectDocument, fromAssetId: string): Asset[] {
+  return Object.values(doc.assets).filter((a) => isCutoutOf(a, fromAssetId))
+    .sort((x, y) => (x.provenance.importedAt < y.provenance.importedAt ? 1 : x.provenance.importedAt > y.provenance.importedAt ? -1 : x.id < y.id ? 1 : -1));
+}
+const PORTRAIT_DEFAULT_RADIUS = 0.02;
+defineOp({
+  name: 'portrait_blur',
+  version: 1,
+  checksOwnIds: ['cutoutAssetId'],
+  description: 'Blur the background of a still picture clip behind its subject, in one step: the clip shows the cut-out of its picture (sharp subject, clear background; made by the background-removal tool from this picture), and a copy of the clip showing the original picture, with a blur.gaussian effect added, goes on a new picture track directly below it. The copy keeps the clip\'s start, length, position, size, rotation, opacity, keyframes, effects, mask and per-format changes, and its track is hidden when the clip\'s track is. The blur radius stays editable (update_effect on the copy). Refused for moving pictures, on a locked track, and while a transition joins the clip to its neighbours.',
+  args: z.object({
+    clipId: z.string(),
+    cutoutAssetId: z.string().describe('The cut-out asset (an image made from the clip\'s picture by the background-removal tool)'),
+    radius: z.number().min(0.002).max(0.2).optional().describe(`Blur radius as a fraction of the frame height (default ${PORTRAIT_DEFAULT_RADIUS})`),
+  }).strict(),
+  apply(d, a, ctx) {
+    const f = findClip(d, a.clipId);
+    if (!f) throw new OpError('not_found', `clip ${a.clipId} not found`, { clipId: a.clipId }, 'Call get_timeline for clip ids.');
+    if (f.clip.type !== 'media' || f.track.kind !== 'video' || d.assets[f.clip.assetId]?.kind !== 'image') throw new OpError('incompatible', 'portrait blur works on a still picture clip', { clipId: f.clip.id }, 'A moving picture needs a cut-out of every frame, which this build does not make.');
+    if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: f.clip.id });
+    const photo = d.assets[f.clip.assetId]!;
+    if (!Object.hasOwn(d.assets, a.cutoutAssetId)) throw new OpError('not_found', `the cut-out ${a.cutoutAssetId} is not in the project`, { assetId: a.cutoutAssetId }, 'get_summary lists the assets; run the background-removal tool on the picture to make a cut-out.');
+    const cutout = d.assets[a.cutoutAssetId]!;
+    if (!isCutoutOf(cutout, photo.id)) throw new OpError('incompatible', 'the cut-out was not made from the picture this clip shows', { clipId: f.clip.id, assetId: cutout.id, pictureAssetId: photo.id }, 'Run the background-removal tool on this clip\'s picture and use its cut-out.');
+    const clip = f.clip as MediaClip;
+    // A transition draws this clip past its own ends; the blurred copy below would not follow it.
+    if (clip.transition) throw new OpError('incompatible', 'remove the transition at this clip first', { clipId: clip.id }, 'set_transition with type none, then blur the background.');
+    const end = clipEnd(clip);
+    const into = f.track.clips.find((c) => c.type === 'media' && c.id !== clip.id && c.transition && T.eq(c.start, end));
+    if (into) throw new OpError('incompatible', 'remove the transition into the next clip first', { clipId: clip.id, nextClipId: into.id }, 'set_transition with type none on the next clip, then blur the background.');
+    // 1. the copy that shows the original picture, on a new picture track directly below the clip's track
+    const copy = structuredClone(clip);
+    copy.id = ctx.newId('clp');
+    copy.linkGroupId = null;
+    const count = f.seq.tracks.filter((t) => t.kind === 'video').length + 1;
+    // The copy is part of the clip's picture: it is shown exactly when the clip's own track is (a clip on a hidden track stays unseen).
+    const below: Track = { id: ctx.newId('trk'), kind: 'video', name: `V${count}`, locked: false, muted: false, hidden: f.track.hidden, clips: [copy] };
+    f.seq.tracks.splice(f.seq.tracks.indexOf(f.track), 0, below);
+    for (const v of Object.values(d.variants)) if (Object.hasOwn(v.overrides, clip.id)) v.overrides[copy.id] = structuredClone(v.overrides[clip.id]!);
+    // 2. the blur on the copy, and 3. the clip shows the cut-out: both through the ordinary public ops, with their own checks
+    const run = (op: string, args: unknown) => { const def = getOp(op)!; return def.apply(d, def.args.parse(args), ctx); };
+    const fx = run('add_effect', { clipId: copy.id, type: 'blur.gaussian', params: { radius: a.radius ?? PORTRAIT_DEFAULT_RADIUS } });
+    const swap = run('replace_clip_asset', { clipId: clip.id, assetId: cutout.id });
+    return {
+      affectedIds: [below.id, copy.id, clip.id],
+      summary: `Portrait blur: "${photo.name.slice(0, 60)}" over a blurred copy`,
+      output: { cutoutClipId: clip.id, backgroundClipId: copy.id, createdClipIds: [copy.id], trackId: below.id, effectId: fx.output!.effectId, previousAssetId: swap.output!.previousAssetId },
+    };
+  },
+});
+
+function planPortraitBlur(doc: ProjectDocument, raw: unknown): RecipePlan {
+  const p = parse(PortraitBlur, raw);
+  const f = findClip(doc, p.clipId);
+  if (!f) throw new RecipeError('not_found', `clip ${p.clipId} not found`);
+  const photo = f.clip.type === 'media' ? doc.assets[f.clip.assetId] : undefined;
+  if (!photo || photo.kind !== 'image' || f.track.kind !== 'video') throw new RecipeError('invalid_args', 'portrait blur works on a still picture clip', 'Select a picture clip (a still image) on a picture track.');
+  const choices = cutoutsOf(doc, photo.id);
+  let cutout: Asset | undefined;
+  if (p.cutoutAssetId !== undefined) {
+    cutout = Object.hasOwn(doc.assets, p.cutoutAssetId) ? doc.assets[p.cutoutAssetId] : undefined;
+    if (!cutout) throw new RecipeError('not_found', `asset ${p.cutoutAssetId} not found`);
+    if (!isCutoutOf(cutout, photo.id)) throw new RecipeError('invalid_args', 'the chosen file is not a cut-out made from this picture', 'Pick a cut-out the background-removal tool made from this picture.');
+  } else cutout = choices[0];
+  if (!cutout) throw new RecipeError('needs_analysis', `the picture "${photo.name.slice(0, 60)}" has no cut-out yet`, 'Run the background-removal tool (AI tools, picture tab) on this picture first; its cut-out is what stays sharp.');
+  const der = cutout.provenance.derived!;
+  const pct = (r: number) => `${(r * 100).toFixed(1)}% of the frame height`;
+  return {
+    recipeId: 'portrait-blur', params: { ...p, cutoutAssetId: cutout.id },
+    steps: [
+      `Show the cut-out "${cutout.name.slice(0, 60)}" in the clip, in place of the picture: the subject stays sharp`,
+      `Put a copy of the clip with the picture "${photo.name.slice(0, 60)}" on a new picture track directly below, with the same start, length, position, size and keyframes, blurred by ${pct(p.radius)}`,
+    ],
+    basis: [
+      `cut-out made by ${der.capabilityId} ${der.capabilityVersion} (job ${der.jobId}) from "${photo.name.slice(0, 60)}"${choices.length > 1 ? `; ${choices.length} cut-outs of this picture exist, the ${p.cutoutAssetId ? 'chosen' : 'newest'} one is used` : ''}`,
+      'the blur radius stays editable afterwards (the blur effect of the copy)',
+    ],
+    ops: [{ op: 'portrait_blur', args: { clipId: f.clip.id, cutoutAssetId: cutout.id, radius: p.radius } }],
+    alternatives: [0.01, 0.04].filter((r) => r !== p.radius).map((r) => ({ label: r < p.radius ? 'Softer blur' : 'Stronger blur', params: { ...p, cutoutAssetId: cutout.id, radius: r } })),
+  };
+}
+
 /** Build the plan for a recipe from the current document. Pure; throws RecipeError when the recipe cannot apply. */
 export function planRecipe(doc: ProjectDocument, recipeId: string, params: unknown, ctx: PlanContext = {}): RecipePlan {
   if (recipeId === 'beat-montage') return planMontage(doc, params, ctx);
   if (recipeId === 'social-pack') return planSocialPack(doc, params);
   if (recipeId === 'tidy-speech') return planTidySpeech(doc, params, ctx);
+  if (recipeId === 'portrait-blur') return planPortraitBlur(doc, params);
   throw new RecipeError('not_found', `recipe "${recipeId}" does not exist`, `Available: ${RECIPES.map((r) => r.id).join(', ')}`);
 }
