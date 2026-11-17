@@ -9,10 +9,10 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  AGE_FORMS, AGE_PARTS_EDGES, AGE_YEAR_WORDS_HE, AddPersonArgs, applyTransaction, createProject, diffEntities, findClip, entityMap, getOp, holdsAgeFields, isRealWallDate, listOps, MAX_PEOPLE,
+  AGE_FORMS, AGE_PARTS_EDGES, fieldsFromDisplay, freezeOps, isUnknownAgeFormat, MISSING_REASONS, resolveFields, AGE_YEAR_WORDS_HE, AddPersonArgs, applyTransaction, createProject, diffEntities, findClip, entityMap, getOp, holdsAgeFields, isRealWallDate, listOps, MAX_PEOPLE,
   MAX_PERSON_NAME, OpError, parseFields, PEOPLE_REFUSALS, peopleOf, peopleRefusal, PERSON_OPS, PERSON_PRIVATE_ARGS, PERSON_SUMMARIES, personNameKey, personOf, PersonSchema, ProjectSchema,
   RemovePersonArgs, restoreEntities, SCHEMA_VERSION, storedPersonName, summarize, timeline, UpdatePersonArgs, validateProject,
-  type OpCall, type Person, type ProjectDocument,
+  type OpCall, type Person, type ProjectDocument, type TextClip,
 } from './index.ts';
 
 const f = (n: number) => T.frameTime(n, { num: 30, den: 1 });
@@ -187,12 +187,61 @@ describe('people: set_text_fields with people fields', () => {
     restoreEntities(undone, diffEntities(d, r.doc).map((c) => ({ id: c.id, state: c.before })));
     expect(undone).toEqual(d);
   });
-  it('people fields parse with their formats; the default age format is not written; any other format is not a field', () => {
-    const parts = parseFields('{age:per_noa:digits}{age:per_noa:words}{age:per_noa:en}{name:per_noa}{age:per_noa:fancy}{name:per_noa:x}');
-    expect(parts.slice(0, 4).map((p) => ('token' in p ? p.token : p))).toEqual([
+  it('people fields parse with their formats; the default age format is not written; an age format outside AGE_FORMATS is kept as stored but is no known format', () => {
+    const parts = parseFields('{age:per_noa:digits}{age:per_noa:words}{age:per_noa:en}{name:per_noa}{age:per_noa:fancy}{name:per_noa:x}{age:per_noa:Words}');
+    expect(parts.slice(0, 5).map((p) => ('token' in p ? p.token : p))).toEqual([
       { name: 'age', personId: 'per_noa', format: null }, { name: 'age', personId: 'per_noa', format: 'words' }, { name: 'age', personId: 'per_noa', format: 'en' }, { name: 'name', personId: 'per_noa' },
+      { name: 'age', personId: 'per_noa', format: 'fancy' },
     ].map((t) => expect.objectContaining(t)));
-    expect(parts.slice(4).every((p) => 'bad' in p)).toBe(true);
+    expect(parts.slice(0, 5).map((p) => 'token' in p && isUnknownAgeFormat(p.token))).toEqual([false, false, false, false, true]);
+    // what the grammar of 159a301 already refused stays refused
+    expect(parts.slice(5).every((p) => 'bad' in p)).toBe(true);
+  });
+  it('turning live fields on is refused, listing the groups, when an age field has a format outside AGE_FORMATS, even for a person of the project', () => {
+    const { doc, titleId } = titled();
+    const e = refusedWith(() => tx(withPeople(doc, [NOA]), [text(titleId, '{age:per_noa} {age:per_noa:years} {weather}'), on(titleId)]));
+    expect([e.code, e.message]).toEqual(['invalid_args', 'these brace groups are not fields: {age:per_noa:years}, {weather}']); // in the order of the text
+    expect(e.details).toMatchObject({ clipId: titleId, groups: ['{age:per_noa:years}', '{weather}'] });
+  });
+  it('the editor form refuses an age format outside AGE_FORMATS', () => {
+    expect(fieldsFromDisplay('he', '{age:per_noa:years}')).toEqual({ ok: false, problems: [{ token: '{age:per_noa:years}', reason: 'unknown_format' }] });
+    expect(fieldsFromDisplay('he', '{age:per_noa:words}')).toEqual({ ok: true, text: '{age:per_noa:words}' });
+  });
+});
+
+describe('people: documents and op logs from before AGE_FORMATS (159a301) still validate and replay', () => {
+  // At 159a301 any {age:<id>:<format>} with format [a-z-]{1,16} was a field, set_text_fields refused every people field when
+  // turning fields on, and update_text has no field check: a title that already had live fields could take one.
+  const history = (): { initial: ProjectDocument; log: { ops: OpCall[]; idSeed: string }[] } => {
+    const initial = createProject({ id: 'prj_old', name: 'Old' });
+    const log: { ops: OpCall[]; idSeed: string }[] = [
+      { ops: [{ op: 'add_text', args: { text: '{date}', start: f(0), duration: f(30) } }], idSeed: 'old0_' },
+    ];
+    const titleId = applyTransaction(initial, log[0]!.ops, { idSeed: 'old0_', actor: 'test' }).results[0]!.output!.clipId as string;
+    log.push({ ops: [on(titleId)], idSeed: 'old1_' }, { ops: [text(titleId, '{date} {age:per_x:years}')], idSeed: 'old2_' });
+    return { initial, log };
+  };
+  const replay = (initial: ProjectDocument, log: { ops: OpCall[]; idSeed: string }[]) => log.reduce((d, t) => applyTransaction(d, t.ops, { idSeed: t.idSeed, actor: 'test' }).doc, initial);
+  it('the op log replays, the stored document validates, and it takes an unrelated edit', () => {
+    const { initial, log } = history();
+    const doc = replay(initial, log);
+    expect(validateProject(doc)).toEqual([]);
+    const later = tx(doc, [{ op: 'add_text', args: { text: 'another title', start: f(30), duration: f(30) } }]);
+    expect(validateProject(later.doc)).toEqual([]);
+    expect(ProjectSchema.parse(doc)).toEqual(doc);
+  });
+  it('the age field with that format draws no words and says why (field_no_data in the preflight), without asking the people source', () => {
+    const { initial, log } = history();
+    const doc = withPeople(replay(initial, log), [{ id: 'per_x', name: 'X', birthDate: '2016-11-04' }]);
+    const clip = timeline(doc)!.tracks.flatMap((t) => t.clips).find((c) => c.type === 'text') as TextClip;
+    const asked: string[] = [];
+    const r = resolveFields(doc, doc.mainSequenceId, clip, f(0), { people: { resolve: (t) => { asked.push(t.personId); return 'words'; } } });
+    expect(r.missing).toEqual(expect.arrayContaining([{ token: '{age:per_x:years}', reason: 'unknown_age_format' }]));
+    expect(asked).toEqual([]);
+    expect(MISSING_REASONS).toContain('unknown_age_format');
+    // it is still a field: turning fields off is refused as at 159a301, and freezeOps reports it instead of writing it out
+    expect(refusedWith(() => tx(doc, [{ op: 'set_text_fields', args: { clipId: clip.id, enabled: false } }])).code).toBe('incompatible');
+    expect(freezeOps(doc, doc.mainSequenceId, clip.id).missing).toEqual(expect.arrayContaining([{ variantId: null, token: '{age:per_x:years}', reason: 'unknown_age_format' }]));
   });
 });
 

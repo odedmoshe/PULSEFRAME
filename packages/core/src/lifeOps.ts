@@ -35,7 +35,7 @@ import { defineOp, mustClip, OpError, type OpErrorCode } from './ops.ts';
 import { CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, CaptureSchema, isRealWallDate, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS, WALL_DATE_TIME, type Asset, type Capture, type LifeEvent, type ProjectDocument } from './schema.ts';
 import { addWallSeconds, captureOf, parseWall, shownCapture } from './capture.ts';
 import { clusterCaptures, type DatedAsset } from './events.ts';
-import { isPersonToken, parseFields } from './fields.ts';
+import { isPersonToken, isUnknownAgeFormat, parseFields } from './fields.ts';
 import { personOf } from './people.ts';
 import { peopleRefusal } from './peopleOps.ts';
 import { isValidGregorian } from './hebrewCalendar.ts';
@@ -247,7 +247,8 @@ defineOp({
     const wordings = Object.values(d.variants ?? {}).flatMap((v) => (Object.hasOwn(v.overrides, clip.id) && v.overrides[clip.id]!.text !== undefined ? [{ variant: v, parts: parseFields(v.overrides[clip.id]!.text!) }] : []));
     const master = parseFields(clip.text), all = [master, ...wordings.map((w) => w.parts)].flat();
     if (a.enabled) {
-      const notFields = [...new Set(all.flatMap((p) => ('bad' in p ? [p.bad] : [])))];
+      // an age format outside AGE_FORMATS is a field only where a document already stored one (fields.ts grammar); never a new one
+      const notFields = [...new Set(all.flatMap((p) => ('bad' in p ? [p.bad] : 'token' in p && isUnknownAgeFormat(p.token) ? [p.raw] : [])))];
       if (notFields.length) throw lifeRefusal('notFields', { clipId: clip.id, groups: notFields.slice(0, SOME) }, notFields.join(', '));
       // people fields (ADR-0021, people section): each must name a person of the project (an own-property lookup)
       const strangers = [...new Set(all.flatMap((p) => ('token' in p && isPersonToken(p.token) && !personOf(d, p.token.personId) ? [p.raw] : [])))];

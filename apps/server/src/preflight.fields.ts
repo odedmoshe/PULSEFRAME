@@ -45,6 +45,8 @@ const WHY: Record<MissingReason, string> = {
   // document without birth dates (peoplePrivacy.ts): it is never told whether one is recorded.
   no_birth_date: 'no birth date is available for this person (none was entered, or this credential may not read birth dates)',
   before_birth: 'the picture was taken before this person was born',
+  // an age field stored before the age formats were fixed (fields.ts grammar): it is kept, and drawn as nothing
+  unknown_age_format: 'the age field has a format that does not exist (the formats are digits, words and en); write it again in the editor',
 };
 const quote = (text: string) => `"${text.replace(/\s+/g, ' ').slice(0, 30)}"`;
 const framesOf = (c: Clip, rate: T.Rate): Frames => ({ startFrame: T.frameIndexAt(c.start, rate), endFrame: T.frameIndexAt(T.add(c.start, c.duration), rate) });

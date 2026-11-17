@@ -12,8 +12,13 @@
  *   {event}. `{{` and `}}` are literal braces. serialiseToken writes the short form for a default format.
  *   People (ADR-0021, people section; approved by the owner): {name:<personId>} · {age:<personId>} = {age:<personId>:digits}
  *   «בת 3» · {age:<personId>:words} «בת שלוש» · {age:<personId>:en} "3 years old", with personId = [A-Za-z0-9_-]{1,64}
- *   (AGE_FORMATS; any other format is not a field). They resolve through a PeopleSource: the caller's, or the document's
- *   own people (documentPeople). A person who is not in the document, or has no birth date, gives no words.
+ *   (AGE_FORMATS). They resolve through a PeopleSource: the caller's, or the document's own people (documentPeople). A
+ *   person who is not in the document, or has no birth date, gives no words.
+ *   Stored grammar vs. new edits: an {age:<id>:<format>} with any format [a-z-]{1,16} is a field, as it was before
+ *   AGE_FORMATS existed (159a301), so documents and op logs written then still validate and replay. A format outside
+ *   AGE_FORMATS (isUnknownAgeFormat) draws no words (reason unknown_age_format, which the export preflight reports as
+ *   field_no_data) and is refused only where an edit brings it in as a new field: set_text_fields enabled:true (notFields)
+ *   and the editor form (fieldsFromDisplay, unknown_format). update_text never checked fields and still does not.
  *
  * RULES (plan §4.5, with the verifier's corrections, which win):
  * - Anchor of a title at time t (same sequence, picture clips on visible video tracks BELOW the title's track):
@@ -52,12 +57,16 @@ export type FieldName = (typeof FIELD_NAMES)[number];
 export const PERSON_FIELD_NAMES = ['age', 'name'] as const;
 /** The formats of {age:<id>:<format>}; the first is the default and is not written. {name:<id>} has none. */
 export const AGE_FORMATS = ['digits', 'words', 'en'] as const;
+export type AgeFormat = (typeof AGE_FORMATS)[number];
 export const DATE_FORMATS = ['long', 'numeric', 'monthYear', 'long-en', 'monthYear-en'] as const;
 export const HEBREW_DATE_FORMATS = ['full', 'noYear'] as const;
 /** The shape of a person id and of a people-field format inside a token. */
 export const PERSON_ID_IN_FIELD = /^[A-Za-z0-9_-]{1,64}$/;
 export const PERSON_FORMAT_IN_FIELD = /^[a-z-]{1,16}$/;
-/** A field that names a person; `format` null = the default of that field. */
+/**
+ * A field that names a person; `format` null = the default of that field. For {age:…} it is one of AGE_FORMATS, or, in a
+ * document stored before AGE_FORMATS existed, another [a-z-]{1,16} word (isUnknownAgeFormat); {name:…} has none.
+ */
 export interface PersonFieldToken { name: (typeof PERSON_FIELD_NAMES)[number]; personId: string; format: string | null }
 export type FieldToken =
   | { name: 'date'; format: (typeof DATE_FORMATS)[number] }
@@ -99,7 +108,8 @@ function tokenOf(content: string): FieldToken | Exclude<BadFieldReason, 'lone_br
   if (name === 'age' || name === 'name') {
     const personId = parts[1], format = parts[2];
     if (personId === undefined || !PERSON_ID_IN_FIELD.test(personId) || parts.length > (name === 'age' ? 3 : 2)) return 'unknown_format';
-    if (format !== undefined && (!PERSON_FORMAT_IN_FIELD.test(format) || !isOneOf(AGE_FORMATS, format))) return 'unknown_format';
+    // the stored grammar of 159a301: any [a-z-]{1,16} format is a field (isUnknownAgeFormat tells the ones outside AGE_FORMATS)
+    if (format !== undefined && !PERSON_FORMAT_IN_FIELD.test(format)) return 'unknown_format';
     // the default format is not written, so `{age:x:digits}` and `{age:x}` are one token
     return { name, personId, format: format === undefined || format === AGE_FORMATS[0] ? null : format };
   }
@@ -127,6 +137,11 @@ export function serialiseToken(t: FieldToken): string {
 export function escapeFieldText(text: string): string { return text.replace(/[{}]/g, (b) => b + b); }
 /** True for a field that names a person. */
 export const isPersonToken = (t: FieldToken): t is PersonFieldToken => t.name === 'age' || t.name === 'name';
+/**
+ * True for an {age:…} field whose format is none of AGE_FORMATS (a document stored before they existed can hold one): it
+ * draws no words (unknown_age_format), and set_text_fields enabled:true and the editor form refuse it as a new field.
+ */
+export const isUnknownAgeFormat = (t: FieldToken): boolean => t.name === 'age' && t.format !== null && !isOneOf(AGE_FORMATS, t.format);
 
 /** Why a people field has no words: the source does not know the person; the person has no birth date; the picture has no date; the picture was taken before the person was born. */
 export type PersonMissingReason = 'unknown_person' | 'no_birth_date' | 'no_date' | 'before_birth';
@@ -154,6 +169,7 @@ export const PEOPLE_FIELDS_BUILT = false;
  *
  * W1 fills this (pure, no Intl, no Date, never throws on a schema-valid document; people.ts personOf for the lookup):
  * - `{name:<id>}` → the person's name; a person who is not in the document → { missing: 'unknown_person' }.
+ * - An {age:…} with a format outside AGE_FORMATS never reaches a source (valueOf answers unknown_age_format first).
  * - `{age:<id>}` / `{age:<id>:words}` / `{age:<id>:en}`: no such person → unknown_person; the person has no birth date →
  *   no_birth_date; `day` is null → no_date; `day` is before the birth date → before_birth; else
  *   ageHe(ageParts(birthDate, day)!, person.form, 'digits' | 'words') or ageEn(ageParts(birthDate, day)!) (ageWords.ts).
@@ -193,9 +209,9 @@ export function holdsAgeFields(doc: ProjectDocument): boolean {
   return false;
 }
 
-/** Why a field has no words: the anchor has no capture date (or there is no anchor); the Hebrew day depends on an undecided sunset answer; the file is in no event or its event has no name; the people source does not know the person; the person has no birth date; the picture was taken before the person was born. */
-export type MissingReason = 'no_date' | 'sunset_undecided' | 'no_event_name' | PersonMissingReason;
-export const MISSING_REASONS = ['no_date', 'sunset_undecided', 'no_event_name', 'unknown_person', 'no_birth_date', 'before_birth'] as const satisfies readonly MissingReason[];
+/** Why a field has no words: the anchor has no capture date (or there is no anchor); the Hebrew day depends on an undecided sunset answer; the file is in no event or its event has no name; the people source does not know the person; the person has no birth date; the picture was taken before the person was born; an age field has a format that is none of AGE_FORMATS (isUnknownAgeFormat; the people source is not asked). */
+export type MissingReason = 'no_date' | 'sunset_undecided' | 'no_event_name' | PersonMissingReason | 'unknown_age_format';
+export const MISSING_REASONS = ['no_date', 'sunset_undecided', 'no_event_name', 'unknown_person', 'no_birth_date', 'before_birth', 'unknown_age_format'] as const satisfies readonly MissingReason[];
 /** The picture a title takes its date from: `wall` is the capture moment shown (day, or day and time), `how` the anchor rule that found it. */
 export interface FieldAnchor { clipId: string; assetId: string; wall: string; circa: boolean; how: 'under' | 'next' | 'previous' }
 /** `missing` lists each field without data as it is written in the text, with the reason; `eventId` is set when the anchor's file is in an event. */
@@ -392,6 +408,7 @@ const words = (w: string): FieldValue => ({ words: w });
 const none = (missing: MissingReason): FieldValue => ({ missing });
 function valueOf(ix: FieldIndex, token: FieldToken, m: Moment | null, people: PeopleSource): FieldValue {
   if (isPersonToken(token)) {
+    if (isUnknownAgeFormat(token)) return none('unknown_age_format');
     const answer = people.resolve(token, m ? m.anchor.wall.slice(0, 10) : null);
     return typeof answer === 'string' ? words(answer) : none(answer === null ? 'unknown_person' : answer.missing);
   }
@@ -584,7 +601,11 @@ export function fieldsFromDisplay(_lang: 'he' | 'en', text: string, _doc?: Proje
     if ('literal' in p) { out += escapeFieldText(p.literal); continue; }
     if ('lone' in p) { problems.push({ token: p.lone, reason: 'lone_brace' }); continue; }
     const stored = tokenOf(p.content);
-    if (typeof stored !== 'string') { out += serialiseToken(stored); continue; }
+    if (typeof stored !== 'string') {
+      // a new field: an age format outside AGE_FORMATS is only kept where it is already stored, never typed in
+      if (isUnknownAgeFormat(stored)) problems.push({ token: p.group, reason: 'unknown_format' }); else out += serialiseToken(stored);
+      continue;
+    }
     // the readable form: a field's word, then optionally a colon and a format's word
     const colon = p.content.indexOf(':');
     const name = fromWords(FIELD_NAMES, FIELD_WORDS, colon < 0 ? p.content : p.content.slice(0, colon));
@@ -660,9 +681,10 @@ export function freezeOps(doc: ProjectDocument, sequenceId: string, clipId: stri
 /**
  * Validation issues of live fields (validate.ts calls it at the end of validateProject): code life_unknown_field for a title
  * with `fields`, or a format's wording of one, that holds a brace group which is not a field (unknown name, unknown format,
- * a lone brace, an age format that is none of AGE_FORMATS), with ids [clipId] or [clipId, variantId]. A people field whose
- * person is not in the document is NOT an issue here: it resolves to no data and the export preflight reports it
- * (field_no_data), so undoing an add_person never leaves a document that cannot be stored.
+ * a lone brace), with ids [clipId] or [clipId, variantId]. A people field whose person is not in the document is NOT an
+ * issue here: it resolves to no data and the export preflight reports it (field_no_data), so undoing an add_person never
+ * leaves a document that cannot be stored. Nor is an age format outside AGE_FORMATS (isUnknownAgeFormat): such a document
+ * was valid when it was stored (159a301), so it stays valid, replays, and reports field_no_data (unknown_age_format).
  */
 export function lifeIssues(doc: ProjectDocument): { code: string; message: string; ids: string[] }[] {
   const issues: { code: string; message: string; ids: string[] }[] = [];

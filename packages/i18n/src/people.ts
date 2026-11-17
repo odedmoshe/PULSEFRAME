@@ -1,6 +1,6 @@
 /**
  * Shared interface strings of the people of a project (ADR-0021, people section): the names of the three operations
- * (`op.*`, op-wording.test.ts), the two new reasons an age field has no words (`life.missing.*`, core fields.ts
+ * (`op.*`, op-wording.test.ts), the three new reasons an age field has no words (the third for an age format stored before the formats were fixed) (`life.missing.*`, core fields.ts
  * MISSING_REASONS) and the palette command that opens the people sheet. Spread into `he` and `en` (index.ts); Hebrew first,
  * and the English dictionary must cover the same keys. The sheet's own strings live next to it
  * (apps/web/src/editor/lifeline/people.strings.ts).
@@ -11,11 +11,13 @@
 export const PEOPLE_HE = {
   'op.add_person': 'הוספת אדם', 'op.update_person': 'עדכון פרטי אדם', 'op.remove_person': 'הסרת אדם',
   'life.missing.no_birth_date': 'אין תאריך לידה לאדם הזה', 'life.missing.before_birth': 'התמונה צולמה לפני שהאדם הזה נולד',
+  'life.missing.unknown_age_format': 'צורת הגיל בשדה הזה אינה קיימת. אפשר לכתוב את השדה מחדש',
   'cmd.people': 'אנשים…',
 } as const;
 export const PEOPLE_EN: Record<keyof typeof PEOPLE_HE, string> = {
   'op.add_person': 'Added a person', 'op.update_person': 'Changed a person\'s details', 'op.remove_person': 'Removed a person',
   'life.missing.no_birth_date': 'This person has no birth date', 'life.missing.before_birth': 'The picture was taken before this person was born',
+  'life.missing.unknown_age_format': 'This age field has a format that does not exist. Write the field again',
   'cmd.people': 'People…',
 };
 

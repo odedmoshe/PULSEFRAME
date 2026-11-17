@@ -53,8 +53,8 @@ describe('Hebrew wording of the refusals of the people operations (ADR-0021, peo
     expect((thrown as OpError).message).toBe(PEOPLE_REFUSALS.unknownPerson.message('{name:per_x}, {age:per_x:words}'));
     expect(translateRefusal('he', (thrown as OpError).message)).toContain('{name:per_x}, {age:per_x:words}');
   });
-  it('the shared strings of the step exist in both languages and differ: the three operation names, the two new reasons an age has no words, the palette command', () => {
-    const keys = [...PERSON_OPS.map((op) => `op.${op}`), 'life.missing.no_birth_date', 'life.missing.before_birth', 'life.missing.unknown_person', 'cmd.people'];
+  it('the shared strings of the step exist in both languages and differ: the three operation names, the three new reasons an age has no words, the palette command', () => {
+    const keys = [...PERSON_OPS.map((op) => `op.${op}`), 'life.missing.no_birth_date', 'life.missing.before_birth', 'life.missing.unknown_age_format', 'life.missing.unknown_person', 'cmd.people'];
     for (const k of keys) {
       const he = (dictionaries.he as Record<string, string>)[k], en = (dictionaries.en as Record<string, string>)[k];
       expect(he?.trim(), `he ${k}`).toBeTruthy();
