@@ -60,7 +60,7 @@ describe('caption looks', () => {
     expect(LOOKS.length).toBe(40);
     expect(IDS.length).toBe(LOOKS.length);
     // what apply_caption_look accepts (and so what describe_ops and the catalogue list) is this same list
-    const lookId = (describeOps().find((o) => o.name === 'apply_caption_look')!.argsSchema as { properties: { lookId: { enum: string[] } } }).properties.lookId;
+    const lookId = (describeOps().find((o) => o.name === 'apply_caption_look')!.argsSchema as unknown as { properties: { lookId: { enum: string[] } } }).properties.lookId;
     expect(lookId.enum).toEqual(IDS);
   });
   it('the paper look: dark ink on a light plate, a highlight that reads on the plate as well as against the ink', () => {
