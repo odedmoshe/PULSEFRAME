@@ -345,9 +345,10 @@ export class Capabilities implements CapabilityService {
       const bundle = [];
       try {
       for (const f of files) {
-        if (f.bytes === 0) throw new ApiError(502, 'output_invalid', `output "${f.name}" is empty`);
-        // L0 compile bridge: the digest is recomputed from the stored file rather than taken from the adapter (W1 decides the streamed path).
+        // L0 compile bridge: size and digest are read from the stored file rather than taken from the adapter (W1 decides the streamed path).
         const tmp = f.path;
+        const size = fs.statSync(tmp).size;
+        if (size === 0) throw new ApiError(502, 'output_invalid', `output "${f.name}" is empty`);
         const contentHash = `sha256:${createHash('sha256').update(fs.readFileSync(tmp)).digest('hex')}`;
         let probe;
         try { probe = await ffprobe(tmp); } catch { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" (${f.fileName}) is not decodable media`); }
@@ -362,9 +363,9 @@ export class Capabilities implements CapabilityService {
         if (v && want && (v.width !== want.w || v.height !== want.h)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" is ${v.width}x${v.height}, expected ${want.w}x${want.h}`); }
         const mime = f.mediaType === 'image' ? `image/${v.codec_name === 'mjpeg' ? 'jpeg' : v.codec_name}` : f.mediaType === 'video' ? 'video/mp4' : 'audio/wav';
         // the result is stored only if it fits under the ceiling; otherwise the job fails with that reason and nothing is kept
-        if (!fs.existsSync(this.store.blobPath(contentHash))) { try { assertStorageRoom(this.store, f.bytes, 'store this result'); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; } }
-        this.store.putBlob(contentHash, tmp, f.bytes, mime);
-        bundle.push({ name: f.name, role: f.role, mediaType: f.mediaType, encoding: f.encoding, contentHash, bytes: f.bytes, mimeType: mime, codec: (v ?? a).codec_name, width: v?.width ?? null, height: v?.height ?? null, pixFmt: v?.pix_fmt ?? null, hasAlpha: /a/.test(String(v?.pix_fmt ?? '').replace(/^(gray|pal|ya)/, '')) && /rgba|bgra|ya|yuva|gbrap/.test(String(v?.pix_fmt)), durationSeconds: probe.format?.duration ? Number(probe.format.duration) : null });
+        if (!fs.existsSync(this.store.blobPath(contentHash))) { try { assertStorageRoom(this.store, size, 'store this result'); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; } }
+        this.store.putBlob(contentHash, tmp, size, mime);
+        bundle.push({ name: f.name, role: f.role, mediaType: f.mediaType, encoding: f.encoding, contentHash, bytes: size, mimeType: mime, codec: (v ?? a).codec_name, width: v?.width ?? null, height: v?.height ?? null, pixFmt: v?.pix_fmt ?? null, hasAlpha: /a/.test(String(v?.pix_fmt ?? '').replace(/^(gray|pal|ya)/, '')) && /rgba|bgra|ya|yuva|gbrap/.test(String(v?.pix_fmt)), durationSeconds: probe.format?.duration ? Number(probe.format.duration) : null });
       }
       } finally { fs.rmSync(destDir, { recursive: true, force: true }); }
       lap('validation');
