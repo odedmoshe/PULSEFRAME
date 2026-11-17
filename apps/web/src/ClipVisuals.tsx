@@ -24,6 +24,8 @@ export function ClipVisuals(props: {
   heightPx: number;
   /** The clip plays its source backwards: thumbnails run in the order the clip shows them. */
   reverse?: boolean;
+  /** Changes when the colour the waveform should take changes (the clip's kind): the wave is redrawn in the new colour. */
+  tintKey?: string;
 }) {
   const { projectId, asset, kind, sourceIn, duration, widthPx, heightPx, reverse } = props;
   const want = kind === 'video' ? 'thumbnails' : 'waveform';
@@ -41,6 +43,8 @@ export function ClipVisuals(props: {
     return timelineDerivatives.use({ projectId, assetId, contentHash: hash, kind: want });
   }, [projectId, assetId, hash, want, applicable]);
   const layer = value?.state ?? null;
+  // the colour the waveform is drawn in follows the theme and the clip's kind: read once per kind and theme
+  const tint = `${kind}:${typeof document === 'undefined' ? '' : document.documentElement.dataset.theme ?? ''}:${props.tintKey ?? ''}`;
 
   // Draw. Rational math decides what is shown; only pixel positions are floats.
   useEffect(() => {
@@ -76,7 +80,8 @@ export function ClipVisuals(props: {
         const peaks = peaksForColumns({ view: new DataView(entry.buffer), level, firstSample: first, sampleCount: count, columns: W });
         const mid = H / 2;
         const k = H / 2 / 32768;
-        ctx.fillStyle = 'rgba(210, 225, 255, 0.85)';
+        // the wave takes the colour of its kind (voice, music, sound effect): the layer's own CSS colour (clip-visuals.css)
+        ctx.fillStyle = getComputedStyle(host).color;
         for (let x = 0; x < W; x++) {
           const mn = peaks[x * 2]!, mx = peaks[x * 2 + 1]!;
           if (mn === 0 && mx === 0 && first + Math.floor((x * count) / W) >= m.totalSamples) continue; // no data here
@@ -89,7 +94,7 @@ export function ClipVisuals(props: {
     } catch {
       // Nothing is drawn rather than anything invented (the cache never closes a picture a clip still shows).
     }
-  }, [value, widthPx, heightPx, sourceIn.value, sourceIn.timescale, duration.value, duration.timescale, asset.video?.frameRate.num, asset.video?.frameRate.den, want, reverse]);
+  }, [value, widthPx, heightPx, tint, sourceIn.value, sourceIn.timescale, duration.value, duration.timescale, asset.video?.frameRate.num, asset.video?.frameRate.den, want, reverse]);
 
   // Not asked yet, or not applicable: nothing (the server has said nothing about it, so nothing is shown).
   if (!applicable || layer === null || layer === 'none') return null;
