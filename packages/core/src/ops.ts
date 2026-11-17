@@ -2448,8 +2448,8 @@ defineOp({
 
 // ---------- replace media (ADR-0016) ----------
 /**
- * Arguments of the public op replace_clip_media (v1). Contract only: the op itself is implemented in this file by the
- * templates track (W1). It keeps the clip id and everything on the clip; it changes assetId and sourceIn.
+ * Arguments of the public op replace_clip_media (v1). It keeps the clip id and everything on the clip; it changes assetId and
+ * sourceIn.
  */
 export const ReplaceClipMediaArgsSchema = z.object({
   clipId: z.string(),
@@ -2457,6 +2457,69 @@ export const ReplaceClipMediaArgsSchema = z.object({
   sourceIn: RT.optional(),
   linked: z.enum(['follow', 'detach']).optional().describe('default follow: a linked sound partner takes the new asset too (refused if it has no sound); detach: unlink it and leave it'),
 }).strict();
+defineOp({
+  name: 'replace_clip_media',
+  version: 1,
+  description: 'Give a clip another file from the library and keep everything else about it: its id (so per-format overrides and template slots stay), place and length on the timeline, transform and keyframes, effects, blend mode, mask, transition, speed and direction, fades and volume. Only the file and the point of it the clip starts from (sourceIn) change. sourceIn defaults to the current one when the new file is long enough from there, else 0 (always 0 for a still picture). A picture clip needs a file with a picture, a sound clip one with sound, and the file must be long enough for the clip from sourceIn; a transition into the next clip needs that many spare frames after it. A still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed. linked=follow (default): the clips linked to this one take the same file and sourceIn (refused when the file lacks what one of them plays); linked=detach: they are unlinked and left as they are.',
+  args: ReplaceClipMediaArgsSchema,
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given another file');
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a file can take another file', { clipId: a.clipId }, 'A title changes with update_text, a caption cue with update_cue.');
+    const clip = f.clip;
+    const asset = d.assets[a.assetId];
+    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId }, 'Call get_summary to list assets.');
+    if (asset.kind === 'lut') throw new OpError('incompatible', 'a colour table (LUT) is not placed on the timeline; it is applied to a clip as an effect', { assetId: asset.id }, 'Use apply_lut with a clipId, or add the effect color.lut with this id as its lut parameter.');
+    const isStill = asset.kind === 'image';
+    const hasPicture = !!asset.video || (isStill && !!asset.image);
+    const group = clip.linkGroupId;
+    const partners = partnersOf(d, clip);
+    const follow = a.linked !== 'detach';
+    if (follow) for (const p of partners) if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, 'Unlock the track, or pass linked:detach to leave that clip as it is.');
+    const targets = [{ track: f.track, clip }, ...(follow ? partners : [])];
+    // What each clip plays on its track: a picture on a video track, sound on a sound track.
+    const plays = (t: Track) => (t.kind === 'video' ? 'shows a picture' : 'plays sound');
+    for (const [i, { track, clip: c }] of targets.entries()) {
+      const ok = track.kind === 'video' ? hasPicture : track.kind === 'audio' ? !!asset.audio : false;
+      if (ok) continue;
+      const lacks = track.kind === 'video' ? 'picture' : 'sound';
+      if (i === 0) throw new OpError('incompatible', `this clip ${plays(track)}, and the file has no ${lacks}`, { clipId: c.id, assetId: asset.id }, `Choose a file with ${lacks === 'picture' ? 'a picture' : 'sound'}.`);
+      throw new OpError('incompatible', `the clip linked to this one (${c.id}) ${plays(track)}, and the file has no ${lacks}`, { clipId: c.id, assetId: asset.id }, 'Pass linked:detach to unlink that clip and leave it as it is.');
+    }
+    if (isStill) for (const { clip: c } of targets)
+      if (c.reverse || c.freeze || c.speedEnd || speedValue(c) !== 1) throw new OpError('incompatible', 'a still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed', { clipId: c.id }, 'Choose a video, or give the clip speed 1, forwards, first (set_clip_speed, set_clip_reverse).');
+    // Privacy regions (ADR-0015) are drawn on video pictures, and a region that follows a motion track follows one of this clip's file.
+    for (const { clip: c } of targets) {
+      if (!c.redact) continue;
+      if (!asset.video) throw new OpError('incompatible', 'this clip has privacy regions, which are drawn on video pictures only', { clipId: c.id }, 'Remove its privacy regions first (set_redact_region), or choose a video.');
+      if (c.redact.some((r) => r.motionTrackId && d.motionTracks?.[r.motionTrackId]?.assetId !== asset.id)) throw new OpError('incompatible', 'a privacy region of this clip follows a motion track of its current file', { clipId: c.id }, 'Make that region fixed or remove it first (set_redact_region).');
+    }
+    // The source a clip needs from sourceIn: its stretch of source (a freeze frame needs one picture inside the file).
+    const needed = (c: MediaClip) => toSourceSpan(c, c.duration);
+    const fits = (c: MediaClip, sourceIn: T.RationalTime) => isStill || (!T.isNegative(sourceIn) && (c.freeze ? T.lt(sourceIn, asset.duration) : T.lte(T.add(sourceIn, needed(c)), asset.duration)));
+    const sourceIn = a.sourceIn ?? (isStill ? T.ZERO : targets.every((t) => fits(t.clip, clip.sourceIn)) ? clip.sourceIn : T.ZERO);
+    if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'sourceIn is outside the asset', { sourceIn, assetDuration: asset.duration });
+    for (const { clip: c } of targets)
+      if (!fits(c, sourceIn)) throw new OpError('out_of_bounds', 'the file is too short for this clip from that point', { clipId: c.id, sourceIn, available: T.max(T.ZERO, T.sub(asset.duration, sourceIn)), needed: needed(c) }, 'Choose an earlier sourceIn or a longer file, or shorten the clip first (trim_clip).');
+    // A transition into the next picture plays on over spare source after this clip's end (as set_transition checks it).
+    const rate = d.settings.frameRate;
+    if (!isStill) for (const { track, clip: c } of targets) {
+      if (track.kind !== 'video') continue;
+      const next = track.clips.find((o) => o.type === 'media' && o.id !== c.id && o.transition && T.eq(o.start, clipEnd(c)));
+      if (!next || next.type !== 'media' || !next.transition) continue;
+      const after = T.frameIndexAt(handleAfterEnd({ ...c, sourceIn }, asset.duration), rate);
+      if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames after this clip, and the file has only ${after}`, { clipId: c.id, nextClipId: next.id, maxFrames: Math.max(0, after) }, 'Choose an earlier sourceIn or a longer file, or shorten that transition first (set_transition).');
+    }
+    const unchanged = targets.every((t) => t.clip.assetId === asset.id && T.eq(t.clip.sourceIn, sourceIn)) && (follow || !partners.length);
+    if (unchanged) throw new OpError('invalid_args', 'the clip already plays this file from this point', { clipId: clip.id, assetId: asset.id, sourceIn });
+    for (const { clip: c } of targets) { c.assetId = asset.id; c.sourceIn = sourceIn; }
+    // detach: this clip leaves its link group; a partner left alone in it is unlinked too (refused while it is on a locked track)
+    let unlinked: string[] = [];
+    if (!follow && group && partners.length) { clip.linkGroupId = null; unlinked = [clip.id, ...dissolveLoneLinks(d, [group])]; }
+    const ids = targets.map((t) => t.clip.id);
+    return { affectedIds: [...new Set([...ids, ...unlinked])], summary: `Clip now plays "${asset.name.slice(0, 60)}"${targets.length > 1 ? ` (with ${targets.length - 1} linked clip(s))` : ''}`, output: { clipIds: ids, assetId: asset.id, sourceIn, unlinkedClipIds: unlinked } };
+  },
+});
 
 // ---------- captions, transcripts and range cuts (SPEC §16) ----------
 function newCaptionTrack(seq: Sequence, ctx: OpContext, mode: 'manual' | 'transcript', linkedTrackId: string | null, style?: Partial<CaptionStyle>, name?: string): Track {
