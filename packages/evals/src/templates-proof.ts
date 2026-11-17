@@ -10,7 +10,9 @@
  *      adjustment, title and element tracks hidden (0 errors);
  *   5. the exported frame count equals the predicted end (±0);  6. the export's flash check reports no failing range;
  *   7. one undo gives an equal creativeProjection, and replay equals the live document;
- *   8. a shuffle regeneration keeps one hand-edited slot and replaces the rest (counts recorded).
+ *   8. a shuffle regeneration keeps one hand-edited slot (with what is linked to it) and replaces the rest, leaving no frame of
+ *      the run without a picture and nothing new over the kept one (counts recorded); at another tempo it is refused
+ *      (409 template_blocked naming the slot) and changes nothing.
  * Also recorded: plan time (median and p95 over 20 runs per template), export seconds per template, and the MCP
  * plan_template / apply_template round trip (one revision). Rule-based; no model is used anywhere.
  *   pnpm build && pnpm proof:templates
@@ -201,17 +203,33 @@ async function main() {
       check(`${def.id}: one undo gives an equal creativeProjection`, undo.status === 200 && creativeProjection(undone.project) === creativeProjection(before.project));
       await call(`/projects/${m.pid}/redo`, {});
 
-      // 8. shuffle keeps a hand-edited slot and replaces the rest
+      // 8. shuffle keeps a hand-edited slot (with whatever is linked to it, such as its own sound) and replaces the rest,
+      //    leaving no frame of the run without a picture and nothing new over the kept picture
       const handSlot = slots[1] ?? slots[0]!;
       await txs(m.pid, [{ op: 'set_clip_transform', args: { clipId: handSlot.clipId, transform: { rotation: 3 } } }]);
-      const edited = clipOf((await get(m.pid)).project, handSlot.clipId)!.clip;
+      const editedDoc = (await get(m.pid)).project;
+      const edited = clipOf(editedDoc, handSlot.clipId)!.clip;
+      const link = edited.type === 'media' ? edited.linkGroupId : null;
+      const group = link ? editedDoc.sequences[editedDoc.mainSequenceId]!.tracks.flatMap((t) => t.clips).filter((c) => c.type === 'media' && c.linkGroupId === link) : [edited];
       const r0 = (await get(m.pid)).revision;
       const regen = await call(`/projects/${m.pid}/template-runs/${runId}/regenerate`, { params: { order: 'shuffle', seed: 2 } });
       const regenerated = await get(m.pid);
-      const kept = clipOf(regenerated.project, handSlot.clipId)?.clip;
       const newSlots = pictureSlots(regenerated.project, runId);
-      rec.shuffle = regen.status === 200 ? { replaced: regen.body.replaced, protected: regen.body.protected.length, slotsAfter: newSlots.length } : regen.body.error;
-      check(`${def.id}: shuffle keeps the hand-edited slot exactly and replaces every untouched item, as one revision`, regen.status === 200 && regenerated.revision === r0 + 1 && JSON.stringify(regen.body.protected) === JSON.stringify([handSlot.clipId]) && regen.body.replaced > 0 && JSON.stringify(kept) === JSON.stringify(edited) && newSlots.filter((x) => x.key !== handSlot.key).every((x) => !slots.some((o) => o.clipId === x.clipId)), rec.shuffle);
+      const rd = regenerated.project, videoTracks = rd.sequences[rd.mainSequenceId]!.tracks.filter((t) => t.kind === 'video');
+      const isPicture = (c: Doc['sequences'][string]['tracks'][number]['clips'][number]) => c.type === 'media' && ['video', 'image'].includes(rd.assets[c.assetId]?.kind ?? '');
+      const spans = newSlots.map((x) => clipOf(rd, x.clipId)?.clip).filter((c) => !!c).map((c) => [fr(c.start), fr(T.add(c.start, c.duration))] as const);
+      let holes = 0;
+      if (spans.length) for (let f = Math.min(...spans.map((x) => x[0])); f < Math.max(...spans.map((x) => x[1])); f++) if (!videoTracks.some((t) => t.clips.some((c) => isPicture(c) && fr(c.start) <= f && f < fr(T.add(c.start, c.duration))))) holes++;
+      const keptAt = clipOf(rd, handSlot.clipId);
+      const covered = !keptAt || videoTracks.slice(videoTracks.indexOf(keptAt.track) + 1).some((t) => t.clips.some((c) => isPicture(c) && T.lt(c.start, T.add(keptAt.clip.start, keptAt.clip.duration)) && T.lt(keptAt.clip.start, T.add(c.start, c.duration))));
+      const groupKept = group.every((c) => JSON.stringify(clipOf(rd, c.id)?.clip) === JSON.stringify(c));
+      rec.shuffle = regen.status === 200 ? { replaced: regen.body.replaced, protected: regen.body.protected.length, linked: group.length - 1, slotsAfter: newSlots.length, holes, covered } : regen.body.error;
+      check(`${def.id}: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a picture`, regen.status === 200 && regenerated.revision === r0 + 1 && JSON.stringify([...regen.body.protected].sort()) === JSON.stringify(group.map((c) => c.id).sort()) && regen.body.replaced > 0 && groupKept && newSlots.filter((x) => x.key !== handSlot.key).every((x) => !slots.some((o) => o.clipId === x.clipId)) && holes === 0 && !covered, rec.shuffle);
+      // another tempo would move the kept slot: refused, naming it, and nothing changes
+      const moved = await call(`/projects/${m.pid}/template-runs/${runId}/regenerate`, { params: { tempo: 'half' } });
+      const afterMoved = await get(m.pid);
+      rec.otherTempo = moved.status === 200 ? { status: 200, protected: moved.body.protected } : { status: moved.status, code: moved.body.error?.code, kept: moved.body.error?.details?.kept };
+      check(`${def.id}: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing`, moved.status === 409 && moved.body.error?.code === 'template_blocked' && moved.body.error?.details?.kept?.[0]?.key === handSlot.key && afterMoved.revision === regenerated.revision, rec.otherTempo);
 
       // 4b. barcode truth on exported pixels: motion none, adjustment, title and element tracks hidden
       const b = await seed(`${def.id}-barcode`, 'barcode');
