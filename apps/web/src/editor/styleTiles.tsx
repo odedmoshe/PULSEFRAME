@@ -10,6 +10,7 @@ import type { ProjectDocument } from '@pulseframe/core';
 import { ensureFonts } from '../fonts.ts';
 import { useEditorState } from './store.ts';
 import { thumbSize } from './gallery.pick.ts';
+import { nextTileIndex, tabStopIndex } from './styleTiles.nav.ts';
 import { f, makeScene, type Scene } from './EffectGallery.tsx';
 import { CheckIcon } from '../ds/util.tsx';
 import './styleTiles.css';
@@ -125,15 +126,30 @@ export function StyleTiles({ items, value, onPick, label, testId, disabledReason
     return () => { stop = true; };
   }, [snap, key, cacheTag, tw, th]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const stop = tabStopIndex(items.map((i) => i.id), value);
+  const gridRef = useRef<HTMLDivElement>(null);
+  /** arrows move focus between the tiles (one Tab stop for the group); Space and Enter choose, so moving never edits the project */
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const tiles = [...(gridRef.current?.querySelectorAll<HTMLButtonElement>('button[role=radio]') ?? [])];
+    const at = tiles.indexOf(document.activeElement as HTMLButtonElement);
+    if (at < 0) return;
+    const first = tiles[0]?.getBoundingClientRect().top;
+    const columns = tiles.filter((t) => t.getBoundingClientRect().top === first).length;
+    const rtl = getComputedStyle(e.currentTarget).direction === 'rtl';
+    const next = nextTileIndex(e.key, at, tiles.length, columns, rtl);
+    if (next === null) return;
+    e.preventDefault();
+    tiles[next]?.focus();
+  };
   return (
-    <div className="pf-ds pf-st-grid" role="radiogroup" aria-label={label} data-testid={testId}>
-      {items.map((it) => {
+    <div ref={gridRef} className="pf-ds pf-st-grid" role="radiogroup" aria-label={label} data-testid={testId} onKeyDown={onKeyDown}>
+      {items.map((it, idx) => {
         const on = value === it.id;
         return (
-          <button key={it.id} type="button" role="radio" aria-checked={on} className={`pf-st-tile${on ? ' is-on' : ''}${disabledReason ? ' is-locked' : ''}`} data-value={it.id} data-drawn={drawn.has(it.id) ? '1' : undefined}
+          <button key={it.id} type="button" role="radio" aria-checked={on} tabIndex={idx === stop ? 0 : -1} className={`pf-st-tile${on ? ' is-on' : ''}${disabledReason ? ' is-locked' : ''}`} data-value={it.id} data-drawn={drawn.has(it.id) ? '1' : undefined}
             aria-disabled={disabledReason ? true : undefined} title={disabledReason ?? it.hint} onClick={() => { if (!disabledReason) onPick(it.id); }}>
             <span className="pf-st-img" aria-hidden="true">
-              <canvas width={tw} height={th} ref={(c) => { if (c) canvases.current.set(it.id, c); else canvases.current.delete(it.id); }} />
+              <canvas width={tw} height={th} style={{ aspectRatio: `${tw} / ${th}` }} ref={(c) => { if (c) canvases.current.set(it.id, c); else canvases.current.delete(it.id); }} />
               {!drawn.has(it.id) && <i className="pf-st-shimmer" />}
               {on && <span className="pf-st-check"><CheckIcon size={14} strokeWidth={2.5} /></span>}
             </span>

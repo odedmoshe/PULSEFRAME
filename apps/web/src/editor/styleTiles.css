@@ -2,7 +2,7 @@
 .pf-st-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--pf-sp-5) var(--pf-sp-4); }
 .pf-st-tile { display: flex; flex-direction: column; gap: var(--pf-sp-2); padding: 0; background: transparent; border: 0; color: var(--pf-text); font: inherit; text-align: start; cursor: pointer; border-radius: var(--pf-r-md); min-inline-size: 0; }
 .pf-st-img { position: relative; display: block; overflow: hidden; border-radius: var(--pf-r-md); background: var(--pf-surface-3); box-shadow: 0 0 0 1px var(--pf-line-strong); }
-.pf-st-img canvas { display: block; inline-size: 100%; block-size: auto; aspect-ratio: 16 / 9; }
+.pf-st-img canvas { display: block; inline-size: 100%; block-size: auto; }
 .pf-st-tile:hover .pf-st-img { box-shadow: 0 0 0 1px var(--pf-text-3); }
 .pf-st-tile.is-on .pf-st-img { box-shadow: var(--pf-glow-frame); }
 .pf-st-tile.is-locked { cursor: not-allowed; opacity: 0.7; }

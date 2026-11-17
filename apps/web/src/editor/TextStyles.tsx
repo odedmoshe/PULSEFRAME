@@ -5,6 +5,7 @@
  */
 import { useMemo } from 'react';
 import { TEXT_PRESETS } from '@pulseframe/core';
+import { currentTextPresetId } from './textStyles.current.ts';
 import { useEditorState } from './store.ts';
 import { StyleTiles, type StyleItem } from './styleTiles.tsx';
 import { SPREAD_STRINGS } from './gallery.strings.ts';
@@ -30,7 +31,7 @@ export function TextStyles({ titleClipId }: { titleClipId?: string }) {
     },
   })), [lang, words]);
   return (
-    <StyleTiles items={items} value={null} label={lang === 'he' ? 'סגנונות טקסט' : 'Text styles'} testId="text-preset" cacheTag={`text:${words}`} appliedLabel={SP.checkMark}
+    <StyleTiles items={items} value={clip && clip.type === 'text' ? currentTextPresetId(clip, TEXT_PRESETS) : null} label={lang === 'he' ? 'סגנונות טקסט' : 'Text styles'} testId="text-preset" cacheTag={`text:${words}`} appliedLabel={SP.checkMark}
       disabledReason={clipId ? undefined : NEED_TITLE[lang]}
       onPick={(id) => { if (clipId) void editor.commit([{ op: 'apply_text_preset', args: { clipId, presetId: id } }], 'Text style'); }} />
   );

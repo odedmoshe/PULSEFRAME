@@ -103,11 +103,13 @@ export function AiTools() {
     setChecking(false);
   };
 
+  // the owner's words: no product or version names; the state is in data-state for the tests
+  const E = HUB_STRINGS[lang].engine;
   const status = !pr.configured
-    ? <p className="muted" data-testid="provider-status" data-state="not-configured">{t('providers.notConfigured')}</p>
+    ? <p className="muted" data-testid="provider-status" data-state="not-configured">{E.notConfigured}</p>
     : !pr.readiness?.reachable
-      ? <p className="muted" data-testid="provider-status" data-state="unreachable">{t('providers.unreachable')}</p>
-      : <p className="muted" data-testid="provider-status" data-state="ready">{t('providers.ready')} · <bdi>{pr.readiness.runtimeVersion} · {pr.readiness.device?.type}</bdi></p>;
+      ? <p className="muted" data-testid="provider-status" data-state="unreachable">{E.unreachable}</p>
+      : <p className="muted" data-testid="provider-status" data-state="ready">{E.ready}</p>;
 
   const caps = provider.capabilities as unknown as CapInfo[];
   const byTab = Object.fromEntries(AI_TABS.map((x) => [x, caps.filter((c) => tabOf(c) === x)])) as Record<AiTab, CapInfo[]>;
@@ -158,7 +160,7 @@ export function AiTools() {
         {AI_TABS.map((x) => (
           <button key={x} type="button" role="tab" id={`${uid}-tab-${x}`} aria-selected={x === current} aria-controls={`${uid}-panel-${x}`} tabIndex={x === current ? 0 : -1}
             onClick={() => choose(x)} data-testid="ai-tab" data-tab={x}>
-            {S.tabs[x]} <bdi className="muted">({byTab[x].length + (x === 'image' ? 1 : 0)})</bdi>
+            {S.tabs[x]} <bdi className="muted">({byTab[x].filter((c) => !isSmoke(c)).length + (x === 'image' ? 1 : 0)})</bdi>
           </button>
         ))}
       </div>
@@ -166,12 +168,22 @@ export function AiTools() {
         <div key={x} role="tabpanel" id={`${uid}-panel-${x}`} aria-labelledby={`${uid}-tab-${x}`} hidden={x !== current} className="pf-ai-panel" data-testid="ai-tabpanel" data-tab={x}>
           {x === current && (
             <>
-              {byTab[x].length === 0 && x !== 'image' && <p className="muted">{S.emptyTab}</p>}
-              {byTab[x].map((c) => (
+              {byTab[x].filter((c) => !isSmoke(c)).length === 0 && x !== 'image' && <p className="muted">{S.emptyTab}</p>}
+              {byTab[x].filter((c) => !isSmoke(c)).map((c) => (
                 <ToolCard key={c.id} cap={c} tab={x} S={S} editor={editor} job={cardJob(c.id, mine, state.capJobs)} run={runs[mine[c.id] ?? ''] ?? null}
                   onStarted={(jobId, info) => { setMine((m) => ({ ...m, [c.id]: jobId })); setRuns((r) => ({ ...r, [jobId]: info })); }} />
               ))}
               {x === 'image' && <PortraitCard S={S} editor={editor} />}
+              {byTab[x].some(isSmoke) && (
+                <details className="pf-hub-how pf-hub-installer" data-testid="ai-installer-check">
+                  <summary>{H.installerCheck}</summary>
+                  <p className="muted">{H.installerCheckHint}</p>
+                  {byTab[x].filter(isSmoke).map((c) => (
+                    <ToolCard key={c.id} cap={c} tab={x} S={S} editor={editor} job={cardJob(c.id, mine, state.capJobs)} run={runs[mine[c.id] ?? ''] ?? null}
+                      onStarted={(jobId, info) => { setMine((m) => ({ ...m, [c.id]: jobId })); setRuns((r) => ({ ...r, [jobId]: info })); }} />
+                  ))}
+                </details>
+              )}
             </>
           )}
         </div>
@@ -271,10 +283,10 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
     <article className={`pf-ai-card pf-hub-card is-${kind}`} data-testid="ai-tool" data-id={c.id} data-runnable={c.runnable ? 'true' : 'false'} data-setup={setup.code} data-tab={tab} aria-labelledby={`${uid}-h`}>
       <div className="pf-hub-card-top">
         <span className="pf-hub-ico" aria-hidden="true"><Icon size={20} strokeWidth={1.75} /></span>
-        <h3 id={`${uid}-h`}>{title}</h3>
+        <h3 id={`${uid}-h`}>{smoke ? H.connectTest : title}</h3>
         {kind === 'running' && <Ring value={pct} label={title} size={28} />}
       </div>
-      {c.description && <p className="pf-hub-purpose">{c.description[lang]}</p>}
+      {c.description && !smoke && <p className="pf-hub-purpose">{c.description[lang]}</p>}
       <div className="pf-ai-badges">
         {c.experimental && <span className="pf-ai-badge" title={S.experimentalHint} data-testid="ai-badge-experimental">{S.experimental}</span>}
         {open_.includes('qualityReviewed') && <span className="pf-ai-badge" title={S.badgeQualityHint} data-testid="ai-badge-quality">{S.badgeQuality}</span>}

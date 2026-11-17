@@ -35,10 +35,10 @@ export const GALLERY_STRINGS = {
 export const SPREAD_STRINGS = {
   he: {
     count: (n: number) => String(n), cutChip: (a: string, b: string, at: string) => `התצוגה המקדימה בחיתוך: ${a} ← ${b} ${at}`, clipChip: (name: string) => `על: ${name}`,
-    fitsHere: 'מתאימים לחיתוך הזה', fitsBasis: '(לפי החומר שנשאר בקליפים)', recent: 'השתמשת לאחרונה', all: (what: string, n: number) => `כל ${what} ${n}`,
+recent: 'השתמשת לאחרונה', all: (what: string, n: number) => `כל ${what} ${n}`,
     allWord: { effects: 'האפקטים', looks: 'המראות', transitions: 'המעברים', text: 'הסגנונות', motion: 'התנועות' },
     filterAll: 'הכול', filterFav: 'מועדפים', favourite: 'הוספה למועדפים', unfavourite: 'הסרה מהמועדפים',
-    fits: 'מתאים', shortens: (s: string) => `יקצר ${s} ש׳`, noRoom: 'אין חומר עודף', notSaved: 'לא נשמר', appliedOn: 'מוחל', checkMark: 'הוחל',
+    cutShortens: (s: string) => `בחיתוך הזה יש חומר ליותר קצר: כל מעבר יקוצר ב-${s} שניות.`, notSaved: 'לא נשמר', appliedOn: 'מוחל', checkMark: 'הוחל',
     needsGpuTile: 'דורש כרטיס מסך', gpuWhy: 'אין כרטיס מסך מתאים בדפדפן הזה', adjWhy: 'לא על שכבת התאמה',
     loadingTiles: 'מכינים תמונות…', favEmpty: 'עוד אין מועדפים. סמנו כוכב על אריח כדי לשמור אותו כאן.',
     applyAll: (n: number) => (n === 1 ? 'להחיל על החיתוך' : `להחיל על כל ${n} החיתוכים`), applyAllNone: 'אין חיתוכים נוספים', applyAllNeedsPick: 'בחרו קודם מעבר', shuffle: 'ערבוב', shuffleWhy: 'אין חיתוכים לערבב',
@@ -49,10 +49,10 @@ export const SPREAD_STRINGS = {
   },
   en: {
     count: (n: number) => String(n), cutChip: (a: string, b: string, at: string) => `Previewed on the cut: ${a} ← ${b} ${at}`, clipChip: (name: string) => `On: ${name}`,
-    fitsHere: 'Fit this cut', fitsBasis: '(by the material left in the clips)', recent: 'Used recently', all: (what: string, n: number) => `All ${what} ${n}`,
+recent: 'Used recently', all: (what: string, n: number) => `All ${what} ${n}`,
     allWord: { effects: 'effects', looks: 'looks', transitions: 'transitions', text: 'styles', motion: 'motions' },
     filterAll: 'All', filterFav: 'Favourites', favourite: 'Add to favourites', unfavourite: 'Remove from favourites',
-    fits: 'Fits', shortens: (s: string) => `Shortens ${s} s`, noRoom: 'No spare material', notSaved: 'Not saved', appliedOn: 'Applied', checkMark: 'Applied',
+    cutShortens: (s: string) => `This cut has less material than the usual length: any transition is shortened by ${s} s.`, notSaved: 'Not saved', appliedOn: 'Applied', checkMark: 'Applied',
     needsGpuTile: 'Needs a graphics card', gpuWhy: 'No suitable graphics card in this browser', adjWhy: 'Not on an adjustment layer',
     loadingTiles: 'Preparing pictures…', favEmpty: 'No favourites yet. Star a tile to keep it here.',
     applyAll: (n: number) => (n === 1 ? 'Apply to the cut' : `Apply to all ${n} cuts`), applyAllNone: 'There are no other cuts', applyAllNeedsPick: 'Pick a transition first', shuffle: 'Shuffle', shuffleWhy: 'There are no cuts to shuffle',

@@ -20,7 +20,7 @@ import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../a
 import { useEditorState, type Editor } from './store.ts';
 import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
 import {
-  DEFAULT_CHOICES, DESTINATIONS, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
+  DEFAULT_CHOICES, DESTINATIONS, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
 } from './exportSheet.logic.ts';
 import './exportSheet.css';
@@ -72,14 +72,23 @@ export function ExportSheetHost() {
   const active = s.jobs.some((j) => isActiveJob(j.status));
   useEffect(() => {
     if (!primary || !active) return;
-    const tick = () => void Promise.all(sheet.jobs.map(async (j) => {
-      if (!isActiveJob(j.status) && j.status !== 'queued') return j;
-      try { const v = await api.job(j.id); return { ...j, status: v.status, stage: v.stage, output: v.output, error: v.error }; } catch { return j; }
-    })).then((jobs) => setSheet({ jobs }));
+    // answers are folded into the list as it is when they arrive (by id), so a file started while a poll was in flight is not dropped
+    const tick = () => {
+      const asked = sheet.jobs.filter((j) => isActiveJob(j.status));
+      void Promise.all(asked.map(async (j) => {
+        try { const v = await api.job(j.id); return { id: j.id, status: v.status, stage: v.stage, output: v.output, error: v.error }; } catch { return null; }
+      })).then((views) => setSheet({ jobs: mergeJobViews(sheet.jobs, views.filter((v) => v !== null)) }));
+    };
     const h = window.setInterval(tick, 600);
     tick();
     return () => window.clearInterval(h);
   }, [primary, active]);
+  // the editor hears the newest export through the event stream; that is fresher than the next poll, so the sheet takes it too
+  const heard = state.exportJob;
+  useEffect(() => {
+    if (!primary || !heard || !sheet.jobs.some((j) => j.id === heard.id)) return;
+    setSheet({ jobs: mergeJobViews(sheet.jobs, [heard]) });
+  }, [primary, heard]);
   if (!primary || !state.doc) return null;
   return <Sheet editor={editor} />;
 }
@@ -88,7 +97,8 @@ function Sheet({ editor }: { editor: Editor }) {
   const s = useSheet();
   const { state } = useEditorState();
   const S: ExportStrings = EXPORT_STRINGS[state.lang];
-  const phase: 'settings' | 'running' | 'done' = s.jobs.length === 0 ? 'settings' : s.jobs.some((j) => isActiveJob(j.status)) ? 'running' : 'done';
+  // while more files are still being started the sheet is not done, even if the first one already finished
+  const phase: 'settings' | 'running' | 'done' = s.jobs.length === 0 ? 'settings' : s.starting || s.jobs.some((j) => isActiveJob(j.status)) ? 'running' : 'done';
   const step = phase === 'settings' ? 0 : phase === 'running' ? 1 : 2;
   return (
     <Dialog open={s.open} onClose={closeExportSheet} title={S.title} closeLabel={S.close} size="lg" className="pf-xs" testId="export-sheet" dismissOnBackdrop={phase !== 'running'}
@@ -370,16 +380,16 @@ function SettingsFooter({ editor, S }: { editor: Editor; S: ExportStrings }) {
         if (!r) { setSheet({ starting: false, error: S.startFailed }); return; }
         need.forEach((c, i) => { const v = r.results[i]?.output?.variantId; if (v) made.set(c.key, v); });
       }
-      const jobs: SheetJob[] = [];
       for (const c of chosen) {
         const variantId = c.kind === 'master' ? null : c.kind === 'variant' ? c.variantId : made.get(c.key) ?? null;
         const out = scaledSize(c, p.choices.scale);
         const r = await api.startExport(doc.id, exportOptions(p.choices, variantId) as { variantId?: string });
         // the editor saves a file it started when it is ready (store.ts); a job started here is registered the same way
         (editor as unknown as { myExports?: Set<string> }).myExports?.add(r.jobId);
-        jobs.push({ id: r.jobId, label: c.name[lang], variantId, status: 'queued', stage: null, output: null, error: null, ext: p.choices.format === 'webm-vp9-opus' ? 'webm' : 'mp4', w: out.width, h: out.height });
-        setSheet({ jobs: [...jobs], starting: false });
+        // append to the list as it is now (a poll may have updated the earlier files meanwhile); `starting` stays on until the last is added
+        setSheet({ jobs: [...sheet.jobs, { id: r.jobId, label: c.name[lang], variantId, status: 'queued', stage: null, output: null, error: null, ext: p.choices.format === 'webm-vp9-opus' ? 'webm' : 'mp4', w: out.width, h: out.height }] });
       }
+      setSheet({ starting: false });
     } catch (e) {
       const blockers = e instanceof ApiFailure && Array.isArray((e.details as { blockers?: unknown })?.blockers) ? ((e.details as { blockers: { code: string; message: string }[] }).blockers) : [];
       setSheet({ starting: false, blockers, error: e instanceof ApiFailure ? (translateRefusal(lang, e.message) ?? e.message) : S.startFailed });

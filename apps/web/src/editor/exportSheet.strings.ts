@@ -2,6 +2,7 @@
 export const EXPORT_STRINGS = {
   he: {
     title: 'ייצוא', close: 'סגירה',
+    scope: 'נבדקו: דברים שמונעים ייצוא, תמונה ריקה, הגדרת עוצמת הקול, סוף אפקטי הצליל, מעברים וחומר מספיק להם, הגדלות, אזורים בטוחים לטקסט, מהירות קריאת כתוביות ומעקב תנועה. לא נבדקו: איכות התמונה, עיוות בצליל, איך אפקטי הצליל נשמעים, ניגודיות וכללים של כל פלטפורמה.',
     steps: ['הגדרות', 'התקדמות', 'סיום'],
     where: 'לאן?', formats: 'פורמטים', resolution: 'רזולוציה', quality: 'איכות', captions: 'כתוביות', fileName: 'שם הקובץ', preflight: 'בדיקה לפני ייצוא', fileType: 'סוג קובץ',
     dest: { reels: 'ריל · טיקטוק · שורטס', youtube: 'יוטיוב', whatsapp: 'ווטסאפ', computer: 'שמירה במחשב', custom: 'מותאם אישית' },
@@ -54,6 +55,7 @@ export const EXPORT_STRINGS = {
   },
   en: {
     title: 'Export', close: 'Close',
+    scope: 'Checked: anything that blocks the export, an empty picture, the loudness setting, the ends of sound effects, transitions and whether they have enough material, upscaling, safe areas for text, caption reading speed and motion tracking. Not checked: picture quality, sound distortion, how the sound effects sound, contrast and each platform\'s own rules.',
     steps: ['Settings', 'Progress', 'Done'],
     where: 'Where to?', formats: 'Formats', resolution: 'Resolution', quality: 'Quality', captions: 'Captions', fileName: 'File name', preflight: 'Checks before export', fileType: 'File type',
     dest: { reels: 'Reels · TikTok · Shorts', youtube: 'YouTube', whatsapp: 'WhatsApp', computer: 'Save to computer', custom: 'Custom' },

@@ -27,6 +27,8 @@ export const HUB_STRINGS = {
       disk_insufficient: ['אין מספיק מקום פנוי בדיסק להורדת המודל.', 'צריך לפנות מקום ואז ללחוץ "בדיקה חוזרת".'],
     } as Record<string, string[]>,
     comfyHow: 'חיבור כלי התמונה והווידאו', connectTest: 'בדיקת חיבור',
+    engine: { notConfigured: 'כלי התמונה והווידאו עוד לא מחוברים. העורך פועל במלואו גם בלעדיהם.', unreachable: 'כלי התמונה והווידאו מחוברים אבל לא עונים כרגע.', ready: 'כלי התמונה והווידאו מחוברים ועונים.' },
+    installerCheck: 'בדיקת החיבור (למי שמתקין)', installerCheckHint: 'בדיקה קצרה שלא משתמשת בשום מודל ולא לוקחת תמונה. היא רק מוודאת שהחיבור עובד.',
     // copilot
     cop: { title: 'עוזר', subtitle: 'עוזר העריכה', chat: 'שיחה', receipts: 'קבלות', guide: 'הדרכה', run: 'ביצוע', mode: 'מצב העוזר',
       off: 'העוזר לא מחובר', offWhy: 'העוזר צריך חיבור למודל שפה, והוא עדיין לא הוגדר. עד אז אפשר לערוך ביד, לחפש פקודות ב־Ctrl K ולהשתמש בכלי ה־AI. שום דבר לא נשלח החוצה.', offHow: 'איך מחברים',
@@ -34,7 +36,7 @@ export const HUB_STRINGS = {
       plan: 'תוכנית', planEmpty: 'כשהעוזר יתחבר, התוכנית שלו תופיע כאן: צעדים שאפשר לסמן ולאשר יחד כעסקה אחת.',
       composer: 'בקשו מהעוזר…', composerOff: 'העוזר לא מחובר',
       receiptsEmpty: 'עוד אין קבלות. כשעוזר או סוכן יערכו את הפרויקט, כל שינוי יירשם כאן, עם קפיצה לרגע בציר ואפשרות לבטל.',
-      by: 'בוצע על ידי', agent: 'סוכן', undo: 'החזרה', undoWhy: 'יש עריכות מאוחרות יותר, אז אי אפשר לבטל רק את זה', jump: 'מעבר לרגע',
+      by: 'בוצע על ידי', agent: 'סוכן', undo: 'החזרה', undoWhy: 'לא ניתן להחזיר: הפריטים האלה שונו מאז. אפשר להחזיר קודם את השינויים המאוחרים.', undone: 'השינוי הזה כבר הוחזר', undoFailed: 'ההחזרה לא הצליחה, אפשר לנסות שוב', jump: 'מעבר לרגע',
       refused: 'סורב', ago: (s: number) => (s < 60 ? 'ברגע זה' : s < 3600 ? `לפני ${Math.floor(s / 60)} דק׳` : `לפני ${Math.floor(s / 3600)} שע׳`) },
   },
   en: {
@@ -60,6 +62,8 @@ export const HUB_STRINGS = {
       host_not_allowed: ['The site the model is downloaded from is not on the allowed list.', 'Whoever installs the editor can add it, or place the files by hand.', 'Then press "Check again".'],
       disk_insufficient: ['There is not enough free disk space for the model download.', 'Free some space, then press "Check again".'],
     } as Record<string, string[]>,
+    engine: { notConfigured: 'The picture and video tools are not connected yet. The editor works fully without them.', unreachable: 'The picture and video tools are connected but not answering right now.', ready: 'The picture and video tools are connected and answering.' },
+    installerCheck: 'Connection check (for whoever installs)', installerCheckHint: 'A short check that uses no model and takes no picture. It only confirms the connection works.',
     comfyHow: 'Connecting the picture and video tools', connectTest: 'Connection test',
     cop: { title: 'Assistant', subtitle: 'Editing assistant', chat: 'Chat', receipts: 'Receipts', guide: 'Guide', run: 'Do it', mode: 'Assistant mode',
       off: 'The assistant is not connected', offWhy: 'The assistant needs a connection to a language model, which has not been set up yet. Until then you can edit by hand, search commands with Ctrl K and use the AI tools. Nothing is sent out.', offHow: 'How to connect',
@@ -67,7 +71,7 @@ export const HUB_STRINGS = {
       plan: 'Plan', planEmpty: 'When the assistant is connected, its plan shows here: steps you can tick and approve together as one transaction.',
       composer: 'Ask the assistant…', composerOff: 'The assistant is not connected',
       receiptsEmpty: 'No receipts yet. When an assistant or agent edits the project, each change is recorded here, with a jump to the moment on the timeline and a way to undo.',
-      by: 'Done by', agent: 'an agent', undo: 'Undo', undoWhy: 'There are later edits, so this one cannot be undone alone', jump: 'Go to the moment',
+      by: 'Done by', agent: 'an agent', undo: 'Undo', undoWhy: 'Cannot undo: those items were changed since. Undo the later changes first.', undone: 'This change was already undone', undoFailed: 'The undo did not go through; try again', jump: 'Go to the moment',
       refused: 'Refused', ago: (s: number) => (s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min ago` : `${Math.floor(s / 3600)} h ago`) },
   },
 } as const;

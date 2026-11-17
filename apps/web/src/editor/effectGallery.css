@@ -36,10 +36,6 @@
 .pf-gal-check { position: absolute; inset-block-start: 6px; inset-inline-start: 6px; display: grid; place-items: center; inline-size: 20px; block-size: 20px; border-radius: 50%; background: var(--pf-frame); color: var(--pf-frame-ink); }
 .pf-gal-unsaved { position: absolute; inset-block-end: 6px; inset-inline-start: 6px; padding: 1px var(--pf-sp-4); border-radius: var(--pf-r-pill); background: var(--pf-plate); color: var(--pf-text); font-size: 12px; line-height: 16px; }
 .pf-gal-name { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-semibold); color: var(--pf-text); }
-.pf-gal-fit { display: inline-flex; align-items: center; gap: var(--pf-sp-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
-.pf-gal-fit.is-fits { color: var(--pf-ok); }
-.pf-gal-fit.is-shortens { color: var(--pf-attention); }
-.pf-gal-fit.is-none { color: var(--pf-text-3); }
 .pf-gal-star { position: absolute; inset-block-start: 4px; inset-inline-end: 4px; display: grid; place-items: center; inline-size: 28px; block-size: 28px; padding: 0; border: 0; border-radius: 50%; background: var(--pf-plate); color: var(--pf-text); cursor: pointer; opacity: 0; transition: opacity var(--pf-dur-fast); }
 .pf-gal-cell:hover .pf-gal-star, .pf-gal-star:focus-visible, .pf-gal-star.is-on { opacity: 1; }
 .pf-gal-star.is-on { color: var(--pf-pulse); }

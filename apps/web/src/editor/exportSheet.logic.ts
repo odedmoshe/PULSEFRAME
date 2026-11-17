@@ -9,6 +9,20 @@ import { FORMAT_PROFILES, type ProjectDocument } from '@pulseframe/core';
 export const ACTIVE_JOB = ['queued', 'running', 'cancel-requested'] as const;
 export const isActiveJob = (status: string) => (ACTIVE_JOB as readonly string[]).includes(status);
 
+export interface JobView { id: string; status: string; stage: string | null; output: unknown; error: unknown }
+/**
+ * Fold fresher views of jobs into the list the sheet holds RIGHT NOW, by id. The list is never replaced by an older copy: a job added
+ * after a poll began stays, and a job that has already finished is not taken back to a running state by a late answer.
+ */
+export function mergeJobViews<J extends JobView>(current: J[], views: JobView[]): J[] {
+  const byId = new Map(views.map((v) => [v.id, v]));
+  return current.map((j) => {
+    const v = byId.get(j.id);
+    if (!v || !isActiveJob(j.status)) return j;
+    return { ...j, status: v.status, stage: v.stage, output: v.output, error: v.error };
+  });
+}
+
 /** The words the server reports as a job's stage, in the order an export passes through them. */
 export const STAGE_ORDER = ['preparing', 'rendering audio', 'rendering', 'encoding', 'validating'] as const;
 export type StageId = (typeof STAGE_ORDER)[number];

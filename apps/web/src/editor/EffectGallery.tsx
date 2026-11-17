@@ -505,22 +505,23 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
   const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const wanted = clip.type === 'media' && clip.transition ? clip.transition.frames : DEFAULT_TRANSITION_FRAMES;
   const fps = editor.rate.num / editor.rate.den;
-  /** What a transition tile says about this cut: it fits as it is, it would be shortened (by how much), or there is no material for it. */
-  const fitOf = (it: Item): { kind: 'fits' } | { kind: 'shortens'; secs: string } | { kind: 'none' } | null => {
-    if (it.kind !== 'transition' || !room) return null;
+  /**
+   * What this cut allows. The room depends on the two clips and the current length only, not on which transition is picked, so it is
+   * said ONCE for the cut (never per tile, and never as a selection of "fitting" tiles: every tile would read the same).
+   */
+  const cutFit = ((): { kind: 'shortens'; secs: string } | null => {
+    if (!room || room.maxFrames < 1) return null;
     const n = transitionLength(room, wanted);
-    if (n >= wanted) return { kind: 'fits' };
-    return n > 0 ? { kind: 'shortens', secs: ((wanted - n) / fps).toFixed(1) } : { kind: 'none' };
-  };
+    return n > 0 && n < wanted ? { kind: 'shortens', secs: ((wanted - n) / fps).toFixed(1) } : null;
+  })();
 
-  const tileOf = (it: Item, section?: 'fit' | 'recent') => {
+  const tileOf = (it: Item, section?: 'recent') => {
     // an adjustment (this clip, or the layer over the whole edit) refuses time effects, the chroma key and the shadow
     const refused = it.kind === 'effect' && (adjustment || wholeEdit) && !!adjustmentRefusal(it.id);
     const unavailable = (it.gpu && !gpuOk) || refused;
     const name = lang === 'he' ? it.he : it.en;
     const main = !section;
     const pressed = pressedOn ? isOn(pressedOn, it) : false;
-    const fit = fitOf(it);
     const fav = favs.has(it.key);
     const isRendered = rendered.has(it.key);
     return (
@@ -548,11 +549,6 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
             {unavailable && <span className="pf-gal-off"><span>{refused ? A.notOnAdjustment : SP.needsGpuTile}</span><small>{refused ? '' : SP.gpuWhy}</small></span>}
           </span>
           <span className="pf-gal-name"><bdi>{name}</bdi></span>
-          {fit && !unavailable && (
-            <span className={`pf-gal-fit is-${fit.kind}`}>
-              {fit.kind === 'fits' ? <>{SP.fits} <CheckIcon size={12} strokeWidth={2.5} /></> : fit.kind === 'shortens' ? SP.shortens(fit.secs) : SP.noRoom}
-            </span>
-          )}
           {pressed && <span className="pf-sr">{SP.checkMark}</span>}
         </button>
         {!unavailable && <button type="button" className={`pf-gal-star${fav ? ' is-on' : ''}`} aria-pressed={fav} aria-label={`${fav ? SP.unfavourite : SP.favourite}: ${name}`} onClick={() => toggleFav(it.key)}><Star size={14} strokeWidth={1.75} fill={fav ? 'currentColor' : 'none'} aria-hidden="true" /></button>}
@@ -566,7 +562,6 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
   const tabAll = ITEMS.filter((i) => i.kind === TAB_KIND[tab]);
   const catCount = (c: string) => tabAll.filter((i) => catOf(i) === c).length;
   const filtered = cat !== 'all' || q !== '';
-  const fitting = tab === 'transitions' && room && !filtered ? tabAll.filter((i) => !i.gpu || gpuOk).filter((i) => fitOf(i)?.kind === 'fits').slice(0, 6) : [];
   const recentItems = filtered ? [] : recents.map((k) => tabAll.find((i) => i.key === k)).filter((i): i is Item => !!i && (!i.gpu || gpuOk));
 
   const panel = (id: TabId) => {
@@ -576,19 +571,14 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
     return (
       <div key={id} id={`pf-gal-panel-${id}`} role="tabpanel" aria-labelledby={`pf-gal-panel-tab-${id}`} hidden={!active} data-testid={`gallery-panel-${id}`}>
         {id === 'transitions' && noTransitionRoom && <p className="pf-gal-note pf-gal-room" role="note" data-testid="gallery-transition-room">{G.noHandle}</p>}
-        {active && fitting.length > 0 && (
-          <section aria-labelledby="pf-gal-fit-h" className="pf-gal-sec">
-            <h3 className="pf-gal-heading" id="pf-gal-fit-h">{SP.fitsHere} <small>{SP.fitsBasis}</small></h3>
-            <div className="pf-gal-grid">{fitting.map((i) => tileOf(i, 'fit'))}</div>
-          </section>
-        )}
+        {id === 'transitions' && cutFit && <p className="pf-gal-note pf-gal-fitnote" role="note" data-testid="gallery-cut-fit">{SP.cutShortens(cutFit.secs)}</p>}
         {active && recentItems.length > 0 && (
           <section aria-labelledby="pf-gal-rec-h" className="pf-gal-sec">
             <h3 className="pf-gal-heading" id="pf-gal-rec-h">{SP.recent}</h3>
             <div className="pf-gal-grid">{recentItems.map((i) => tileOf(i, 'recent'))}</div>
           </section>
         )}
-        {active && (fitting.length > 0 || recentItems.length > 0) && <h3 className="pf-gal-heading pf-gal-all">{SP.all(SP.allWord[id], items.length)}</h3>}
+        {active && recentItems.length > 0 && <h3 className="pf-gal-heading pf-gal-all">{SP.all(SP.allWord[id], items.length)}</h3>}
         {id === 'effects' || id === 'transitions' || id === 'motion'
           ? (id === 'effects' ? CATEGORIES : id === 'transitions' ? TRANSITION_CATEGORIES : MOTION_GROUPS).map((c) => {
             const group = items.filter((i) => (id === 'motion' ? i.mkind : i.category) === c);

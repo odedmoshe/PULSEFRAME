@@ -176,7 +176,7 @@ export function DeliverPanel() {
                 ))}
               </ul>
             )}
-            <p className="muted small-text" data-testid="preflight-scope" dir="auto">{report.r.scope}</p>
+            <p className="muted small-text" data-testid="preflight-scope" dir="auto">{XS.scope}</p>
           </div>
         )}
       </section>

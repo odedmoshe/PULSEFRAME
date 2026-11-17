@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createProject } from '@pulseframe/core';
-import { destinationKey, DESTINATIONS, exportOptions, DEFAULT_CHOICES, exportTargets, fourKReachable, formatFileSize, jobFraction, overallFraction, parseStage, scaledSize, shortSideLabel } from './exportSheet.logic.ts';
+import { destinationKey, DESTINATIONS, exportOptions, DEFAULT_CHOICES, exportTargets, fourKReachable, formatFileSize, jobFraction, mergeJobViews, overallFraction, parseStage, scaledSize, shortSideLabel } from './exportSheet.logic.ts';
 
 describe('export sheet logic', () => {
   it('reads the stage words and frame counts the server reports', () => {
@@ -38,5 +38,20 @@ describe('export sheet logic', () => {
     expect(fourKReachable({ width: 1920, height: 1080 })).toBe(false);
     expect(fourKReachable({ width: 3840, height: 2160 })).toBe(true);
     expect(formatFileSize(37_600_000)).toBe('37.6 MB');
+  });
+});
+
+describe('mergeJobViews (a poll that was in flight must not drop a file started meanwhile)', () => {
+  const job = (id: string, status: string, stage: string | null = null) => ({ id, status, stage, output: null, error: null, label: id });
+  it('keeps a job that is not in the answers', () => {
+    // the poll asked about [a]; meanwhile b was appended; the answer must not replace the list with [a]
+    const now = [job('a', 'running'), job('b', 'queued')];
+    const out = mergeJobViews(now, [{ id: 'a', status: 'running', stage: 'rendering 9/540', output: null, error: null }]);
+    expect(out.map((j) => j.id)).toEqual(['a', 'b']);
+    expect(out[0]!.stage).toBe('rendering 9/540');
+  });
+  it('does not take a finished job back to running', () => {
+    const out = mergeJobViews([job('a', 'succeeded')], [{ id: 'a', status: 'running', stage: 'encoding', output: null, error: null }]);
+    expect(out[0]!.status).toBe('succeeded');
   });
 });
