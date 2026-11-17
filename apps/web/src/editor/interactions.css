@@ -6,27 +6,27 @@
    Handles outside the viewer get stand-ins at its edge (.ch-proxy, interactions.math.ts edgeProxies). */
 .ch-clip { position: absolute; inset: 0; overflow: clip; pointer-events: none; }
 .ch-root { position: absolute; pointer-events: none; direction: ltr; touch-action: none; overflow: visible; }
-.ch-box { position: absolute; box-sizing: border-box; border: 1px solid #4c8dff; pointer-events: none; }
+.ch-box { position: absolute; box-sizing: border-box; border: 1.5px solid var(--pf-frame); box-shadow: 0 0 18px -4px var(--pf-frame-glow); pointer-events: none; }
 .ch-move { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: transparent; cursor: move; pointer-events: auto; touch-action: none; }
-.ch-move:focus-visible { outline: 2px solid #4c8dff; outline-offset: 2px; }
-.ch-handle { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; padding: 0; border: 1px solid #4c8dff; background: #fff; border-radius: 2px; pointer-events: auto; touch-action: none; z-index: 1; }
-.ch-handle:focus-visible { outline: 2px solid #ffb020; outline-offset: 1px; }
+.ch-move:focus-visible { outline: 2px solid var(--pf-frame); outline-offset: 2px; }
+.ch-handle { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; padding: 0; border: 1px solid var(--pf-frame); background: var(--pf-text); border-radius: 2px; pointer-events: auto; touch-action: none; z-index: 1; }
+.ch-handle:focus-visible { outline: 2px solid var(--pf-pulse); outline-offset: 1px; }
 .ch-n, .ch-s { cursor: ns-resize; }
 .ch-e, .ch-w { cursor: ew-resize; }
 .ch-ne, .ch-sw { cursor: nesw-resize; }
 .ch-nw, .ch-se { cursor: nwse-resize; }
 .ch-rotate { left: 50%; top: -28px; border-radius: 50%; cursor: grab; }
-.ch-stem { position: absolute; left: 50%; top: -22px; width: 1px; height: 22px; background: #4c8dff; pointer-events: none; }
-.ch-guide { position: absolute; background: #ff4fa3; pointer-events: none; }
+.ch-stem { position: absolute; left: 50%; top: -22px; width: 1px; height: 22px; background: var(--pf-frame); pointer-events: none; }
+.ch-guide { position: absolute; background: var(--pf-k-text); pointer-events: none; }
 .ch-guide-v { left: 50%; top: 0; bottom: 0; width: 1px; }
 .ch-guide-h { top: 50%; left: 0; right: 0; height: 1px; }
 /* A stand-in for a handle outside the viewer: the same grip, filled, so it reads as "this handle, brought to the edge". */
-.ch-proxy { position: absolute; box-sizing: border-box; width: 12px; height: 12px; margin: -6px 0 0 -6px; border: 1px solid #fff; background: #4c8dff; border-radius: 2px; box-shadow: 0 0 0 1px #4c8dff; pointer-events: auto; touch-action: none; z-index: 1; }
+.ch-proxy { position: absolute; box-sizing: border-box; width: 12px; height: 12px; margin: -6px 0 0 -6px; border: 1px solid var(--pf-text); background: var(--pf-frame); border-radius: 2px; box-shadow: 0 0 0 1px var(--pf-frame); pointer-events: auto; touch-action: none; z-index: 1; }
 .ch-proxy[data-proxy='n'], .ch-proxy[data-proxy='s'] { cursor: ns-resize; }
 .ch-proxy[data-proxy='e'], .ch-proxy[data-proxy='w'] { cursor: ew-resize; }
 .ch-proxy[data-proxy='ne'], .ch-proxy[data-proxy='sw'] { cursor: nesw-resize; }
 .ch-proxy[data-proxy='nw'], .ch-proxy[data-proxy='se'] { cursor: nwse-resize; }
 .ch-proxy[data-proxy='rotate'] { border-radius: 50%; cursor: grab; }
-.ch-proxy[data-proxy='move'] { width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; border: 2px solid #4c8dff; background: rgba(255, 255, 255, 0.85); box-shadow: none; cursor: move; }
+.ch-proxy[data-proxy='move'] { width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; border: 2px solid var(--pf-frame); background: var(--pf-text); box-shadow: none; cursor: move; }
 /* the handle it stands for has the keyboard focus but is cut off: the ring shows here (the colour of a focused handle) */
-.ch-proxy.ch-mirror { outline: 2px solid #ffb020; outline-offset: 1px; }
+.ch-proxy.ch-mirror { outline: 2px solid var(--pf-pulse); outline-offset: 1px; }

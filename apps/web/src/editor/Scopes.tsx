@@ -122,7 +122,7 @@ export function Scopes() {
           <dt>{t('scopes.saturation')}</dt><dd><bdi dir="ltr">{stats.saturationPct}%</bdi></dd>
         </dl>
       )}
-      <p className="muted">{t('scopes.note')}</p>
+      <p className="muted pf-help">{t('scopes.note')}</p>
     </fieldset>
   );
 }
