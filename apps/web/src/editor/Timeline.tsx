@@ -15,6 +15,7 @@ import { BAR_ICON_COMPONENTS, IconHide, IconLock, IconMute, IconShow, IconSound,
 import { soundTailsFor } from './AudioFxBlock.tsx';
 import { findEffect } from '@pulseframe/core';
 import './templates.css';
+import './timeline.css';
 
 const MAX_MARKERS = 3000;
 

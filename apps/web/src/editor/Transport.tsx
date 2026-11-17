@@ -3,6 +3,7 @@ import * as T from '@pulseframe/time';
 import { COMMANDS } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
 import { IconLoop, IconNextFrame, IconPause, IconPlay, IconPrevFrame } from './icons.tsx';
+import './stage.css';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
 

@@ -1,3 +1,7 @@
+// These two sheets come before every component sheet (the first imports of this file): their rules stood in styles.css,
+// ahead of all the components' own sheets, and keep that place in the cascade.
+import './editor/stage.css';
+import './editor/timeline.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasHandles } from './editor/CanvasHandles.tsx';
 import { TrackPicker } from './editor/TrackPicker.tsx';

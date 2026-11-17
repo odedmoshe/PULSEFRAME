@@ -1,10 +1,5 @@
-/* Direct manipulation: timeline ghost hints and canvas handles. Physical left/top on purpose (canvas is never mirrored). */
-[data-timeline-drag]:not([data-timeline-drag='idle']) { cursor: grabbing; user-select: none; }
-[data-timeline-drag='trim-start'], [data-timeline-drag='trim-end'] { cursor: ew-resize !important; }
-.clip-ghost { position: absolute; top: 0; bottom: 0; pointer-events: none; border: 1px dashed currentColor; background: rgba(120, 160, 255, 0.25); border-radius: 4px; z-index: 5; }
-.clip-ghost.invalid { border-color: #e5484d; background: rgba(229, 72, 77, 0.25); cursor: not-allowed; }
-.clip-ghost.snapped { border-style: solid; }
-
+/* Direct manipulation on the canvas: the handles of the selected clip. Physical left/top on purpose (the canvas is never mirrored).
+   The ghost hints of a timeline drag moved to timeline.css. */
 /* The handles are drawn in a layer that covers the viewer (the canvas wrap) and cuts off what lies outside it: the box of an
    enlarged clip, and its handles, can neither be seen nor clicked over the transport bar, the side panels or the header.
    `clip` (not `hidden`) makes no scroll container, so focusing a handle that lies outside can never scroll the layer.
