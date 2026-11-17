@@ -15,7 +15,7 @@ import { flashSchedule, flashSince } from './strobeSchedule.ts';
 import { applyModulators } from './modulate.ts';
 import { OVERLAY_TYPES, heldOverlayParams } from './overlays.ts';
 import { pieceAt, runStart, stutterFrame, tapOffsets, tapWeights } from './taps.ts';
-import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, sourceFrameIndexAt, transformAt, type BlendMode, type Clip, type FollowInfo, type Mask, type ProjectDocument, type ResolvedRegion, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
 
 /**
@@ -44,6 +44,8 @@ export interface LayerLook {
   remap?: { type: string; shownFrame: number };
   /** Clip-local seconds of this frame (render quantity, never stored). */
   local?: number;
+  /** Present when the clip follows a motion track (ADR-0015); `transform` is then already the resolved one (post-pass). */
+  follow?: FollowInfo;
 }
 export interface VideoLayer extends LayerLook {
   kind: 'video';
@@ -61,6 +63,8 @@ export interface VideoLayer extends LayerLook {
   transform: Transform;
   /** Decode lane (TimeTap.lane); absent = 0. */
   lane?: number;
+  /** Privacy regions (ADR-0015) resolved at THIS picture's sourceFrameIndex (taps and the stutter picture carry their own); drawn right after placement, before effects. */
+  regions?: ResolvedRegion[];
 }
 /** A still picture. Same placement rules as video; one decoded image for the whole clip. */
 export interface ImageLayer extends LayerLook { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform }
@@ -111,10 +115,9 @@ function barePicture(doc: ProjectDocument, track: Track, clip: Extract<Clip, { t
   if (!asset.video) return null;
   const rate = asset.video.frameRate;
   // Frames are counted from the first picture in the file. When that picture does not sit at time 0, it is shown that many
-  // frames later (and held until then), which keeps it in step with the sound.
-  let idx = Math.max(0, T.frameIndexAt(sourceTime, rate) - startOffsetFrames(asset.video));
-  const lastFrame = asset.video.frameCount !== null ? asset.video.frameCount - 1 : Math.max(0, T.frameIndexAt(asset.duration, rate) - 1);
-  idx = Math.min(idx, lastFrame);
+  // frames later (and held until then), which keeps it in step with the sound. The rule lives in core (speed.ts), where motion
+  // tracks and the editor number frames by it too.
+  const idx = sourceFrameIndexAt({ ...asset, video: asset.video }, clip, time, doc.settings.frameRate);
   return {
     kind: 'video', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime, sourceFrameIndex: idx,
     sourceSeekSeconds: ((idx + 0.5) * rate.den) / rate.num,
