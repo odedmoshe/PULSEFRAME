@@ -6,10 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, CaptureSchema, createProject, creativeProjection, describeOps, diffEntities, entityMap, getOp, isRealWallDate, LIFE_REFUSALS, lifeRefusal, LifeEventSchema, listOps,
-  MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS,
-  OpError, ProjectSchema, restoreEntities, SCHEMA_VERSION, summarize, TextClipSchema, timeline, validateProject, WALL_DATE, WALL_DATE_TIME, effectParams, findEffect,
-  type Capture, type LifeEvent, type OpCall, type ProjectDocument,
+  applyTransaction, CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, CaptureSchema, clusterCaptures, createProject, creativeProjection, describeOps, diffEntities, entityMap, fieldSpans, findClip, getOp, isRealWallDate, LIFE_REFUSALS, lifeRefusal, LifeEventSchema, listOps,
+  makeFieldIndex, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS,
+  OpError, ProjectSchema, resolveFields, restoreEntities, SCHEMA_VERSION, stampText, summarize, TextClipSchema, timeline, validateProject, WALL_DATE, WALL_DATE_TIME, effectParams, findEffect,
+  type Capture, type LifeEvent, type LifeRefusalKey, type OpCall, type ProjectDocument, type TextClip,
 } from './index.ts';
 
 const f = (n: number) => T.frameTime(n, { num: 30, den: 1 });
@@ -284,12 +284,187 @@ describe('life line: operation registry and refusal table', () => {
     expect(MAX_EVENT_FILES).toBe(5000);
   });
 
-  // W1 (packages/core/src/lifeOps.test.ts and the files beside it) makes these pass:
-  it.todo('every refusal of LIFE_REFUSALS is provoked through its operation, and nothing else is thrown');
-  it.todo('undo then redo of each operation restores the creative projection exactly');
-  it.todo('remove_asset takes the file out of its event (an emptied event goes) and hands its capture date down to its copies');
-  it.todo('shift_asset_captures refuses shiftTooFar for a file whose stored total plus the step passes MAX_CAPTURE_SHIFT_MINUTES, and set_asset_capture starts the total again');
-  it.todo('update_event refuses eventTooManyFiles when the event would end with more than MAX_EVENT_FILES files; clusterCaptures cuts a longer run into clusters of at most that many');
-  it.todo('update_text + set_text_fields in one transaction gives the same document as two transactions (no cache on a draft)');
-  it.todo('a title without `fields` and every earlier fixture resolve to their stored text unchanged');
+  // The bodies are W1's (packages/core/src/lifeOps.test.ts and the files beside it hold the full tests); here, one check of each promise the contract made:
+  const refused = (doc: ProjectDocument, ops: OpCall[], internal = false): OpError => { try { tx(doc, ops, internal); } catch (e) { if (e instanceof OpError) return e; throw e; } throw new Error(`not refused: ${JSON.stringify(ops).slice(0, 160)}`); };
+  /** The project with a clip of the first video under a title, and a copy of that video that keeps its timing from 2 s on. */
+  function scene() {
+    const p = project();
+    const copy = { ...video('d'), provenance: { origin: 'derived' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'test', derived: { jobId: 'job_t', capabilityId: 'test.fixture', capabilityVersion: '0.0.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: [p.ids[0]!], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' }, sourceRangeStart: T.rt(2, 1), audio: 'source-copied' } } };
+    const lut = { kind: 'lut' as const, name: 'look.cube', contentHash: `sha256:${'8'.repeat(64)}`, byteSize: 1, container: 'cube', mimeType: 'text/plain', duration: T.ZERO, lut: { size: 2, title: null }, provenance: prov };
+    let r = tx(p.doc, [{ op: 'import_asset', args: { asset: copy } }, { op: 'import_asset', args: { asset: lut } }], true);
+    const [copyId, lutId] = r.results.map((x) => x.output!.assetId as string) as [string, string];
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: p.ids[0]!, start: f(0), duration: f(60) } }, { op: 'add_text', args: { text: '{date}', start: f(0), duration: f(60) } }]);
+    const [a, b, c, s] = p.ids as [string, string, string, string];
+    return { doc: r.doc, a, b, c, s, copyId, lutId, clipId: r.results[0]!.output!.clipId as string, titleId: r.results[1]!.output!.clipId as string };
+  }
+  it('every refusal of LIFE_REFUSALS is provoked through its operation, and nothing else is thrown', () => {
+    const x = scene();
+    const on: OpCall = { op: 'set_text_fields', args: { clipId: x.titleId, enabled: true } };
+    const text = (t: string): OpCall => ({ op: 'update_text', args: { clipId: x.titleId, text: t } });
+    const made = tx(x.doc, [{ op: 'add_event', args: { assetIds: [x.a, x.b] } }]);
+    const eventId = made.results[0]!.output!.eventId as string;
+    const drifted = structuredClone(x.doc);
+    drifted.assets[x.a]!.capture = { ...HANUKKAH, shiftedMinutes: -MAX_CAPTURE_SHIFT_MINUTES };
+    const crowded = structuredClone(x.doc);
+    const many = Array.from({ length: MAX_EVENT_FILES }, (_, i) => `ast_m${i}`);
+    for (const id of many) crowded.assets[id] = { ...structuredClone(crowded.assets[x.c]!), id };
+    crowded.events = { evt_big: event('evt_big', many) };
+    const L = LIFE_REFUSALS;
+    /** For each refusal: the document, the call, and the sentence of the table it must be refused with. */
+    const cases: Record<LifeRefusalKey, [ProjectDocument, OpCall[], string, boolean?]> = {
+      assetNotFound: [x.doc, [{ op: 'attach_asset_capture', args: { assetId: 'ast_none', capture: HANUKKAH } }], L.assetNotFound.message('ast_none'), true],
+      eventNotFound: [x.doc, [{ op: 'remove_event', args: { eventId: 'evt_none' } }], L.eventNotFound.message('evt_none')],
+      lutHasNoDate: [x.doc, [{ op: 'set_asset_capture', args: { assetId: x.lutId, capture: { at: '2024-12-25' } } }], L.lutHasNoDate.message()],
+      noSuchDay: [x.doc, [{ op: 'set_asset_capture', args: { assetId: x.c, capture: { at: '2024-02-30' } } }], L.noSuchDay.message()],
+      dateOutOfRange: [x.doc, [{ op: 'set_asset_capture', args: { assetId: x.c, capture: { at: '1850-06-01' } } }], L.dateOutOfRange.message()],
+      captureUnchanged: [tx(x.doc, [{ op: 'set_asset_capture', args: { assetId: x.c, capture: { at: '2021-06-01' } } }]).doc, [{ op: 'set_asset_capture', args: { assetId: x.c, capture: { at: '2021-06-01' } } }], L.captureUnchanged.message()],
+      noCaptureToRemove: [x.doc, [{ op: 'set_asset_capture', args: { assetId: x.c, capture: null } }], L.noCaptureToRemove.message()],
+      listedTwice: [x.doc, [{ op: 'shift_asset_captures', args: { assetIds: [x.a, x.a], minutes: 60 } }], L.listedTwice.message()],
+      shiftNoDate: [x.doc, [{ op: 'shift_asset_captures', args: { assetIds: [x.c], minutes: 60 } }], L.shiftNoDate.message(1)],
+      shiftDayOnly: [x.doc, [{ op: 'shift_asset_captures', args: { assetIds: [x.b], minutes: 60 } }], L.shiftDayOnly.message(1)],
+      shiftInherited: [x.doc, [{ op: 'shift_asset_captures', args: { assetIds: [x.copyId], minutes: 60 } }], L.shiftInherited.message(1)],
+      shiftTooFar: [drifted, [{ op: 'shift_asset_captures', args: { assetIds: [x.a], minutes: -60 } }], L.shiftTooFar.message(1)],
+      notATitle: [x.doc, [{ op: 'set_text_fields', args: { clipId: x.clipId, enabled: true } }], L.notATitle.message()],
+      fieldsAlready: [x.doc, [{ op: 'set_text_fields', args: { clipId: x.titleId, enabled: false } }], L.fieldsAlready.message(false)],
+      notFields: [x.doc, [text('{weather}'), on], L.notFields.message('{weather}')],
+      personFields: [x.doc, [text('{age:per_1}'), on], L.personFields.message('{age:per_1}')],
+      fieldsStillThere: [tx(x.doc, [on]).doc, [{ op: 'set_text_fields', args: { clipId: x.titleId, enabled: false } }], L.fieldsStillThere.message()],
+      noDatedFiles: [tx(createProject({ id: 'p', name: 'P' }), [{ op: 'import_asset', args: { asset: video('a') } }], true).doc, [{ op: 'cluster_events', args: {} }], L.noDatedFiles.message()],
+      tooManyEvents: [withEvents(x.doc, Array.from({ length: MAX_LIFE_EVENTS }, (_, i) => event(`evt_${i}`, [x.a]))), [{ op: 'add_event', args: { assetIds: [x.b] } }], L.tooManyEvents.message()],
+      eventFileKind: [x.doc, [{ op: 'add_event', args: { assetIds: [x.s] } }], L.eventFileKind.message()],
+      eventLastFile: [made.doc, [{ op: 'update_event', args: { eventId, removeAssetIds: [x.a, x.b] } }], L.eventLastFile.message()],
+      eventTooManyFiles: [crowded, [{ op: 'update_event', args: { eventId: 'evt_big', addAssetIds: [x.a] } }], L.eventTooManyFiles.message()],
+      eventNothingToChange: [made.doc, [{ op: 'update_event', args: { eventId } }], L.eventNothingToChange.message()],
+      eventFileNotIn: [made.doc, [{ op: 'update_event', args: { eventId, removeAssetIds: [x.c] } }], L.eventFileNotIn.message()],
+      eventAddAndRemove: [made.doc, [{ op: 'update_event', args: { eventId, addAssetIds: [x.c], removeAssetIds: [x.c] } }], L.eventAddAndRemove.message()],
+    };
+    expect(Object.keys(cases).sort()).toEqual(Object.keys(LIFE_REFUSALS).sort());
+    for (const [key, [doc, ops, message, internal]] of Object.entries(cases) as [LifeRefusalKey, [ProjectDocument, OpCall[], string, boolean?]][]) {
+      const before = JSON.stringify(doc);
+      const e = refused(doc, ops, internal);
+      expect(e.toJSON(), key).toMatchObject({ code: LIFE_REFUSALS[key].code, message });
+      expect(e.hint, key).toBe(LIFE_REFUSALS[key].hint);
+      expect(JSON.stringify(doc), key).toBe(before); // a refusal changes nothing
+    }
+  });
+  it('undo then redo of each operation restores the creative projection exactly', () => {
+    const x = scene();
+    const made = tx(x.doc, [{ op: 'add_event', args: { assetIds: [x.a] } }]);
+    const eventId = made.results[0]!.output!.eventId as string;
+    const steps: [string, ProjectDocument, OpCall[], boolean?][] = [
+      ['set_asset_capture', x.doc, [{ op: 'set_asset_capture', args: { assetId: x.c, capture: { at: '2021-06-01T08:00:00', utcOffsetMinutes: 180, circa: true } } }]],
+      ['shift_asset_captures', x.doc, [{ op: 'shift_asset_captures', args: { assetIds: [x.a, x.b], minutes: -2880 } }]],
+      ['attach_asset_capture', x.doc, [{ op: 'attach_asset_capture', args: { assetId: x.c, capture: HANUKKAH } }], true],
+      ['set_text_fields', x.doc, [{ op: 'set_text_fields', args: { clipId: x.titleId, enabled: true } }]],
+      ['cluster_events', made.doc, [{ op: 'cluster_events', args: { gapMinutes: 30 } }]],
+      ['add_event', made.doc, [{ op: 'add_event', args: { assetIds: [x.a, x.c], name: 'חנוכה' } }]], // empties the event that held the first file
+      ['update_event', made.doc, [{ op: 'update_event', args: { eventId, name: 'חנוכה', afterSunset: true, addAssetIds: [x.b] } }]],
+      ['remove_event', made.doc, [{ op: 'remove_event', args: { eventId } }]],
+    ];
+    expect(steps.map((st) => st[0]).sort()).toEqual([...PUBLIC, 'attach_asset_capture'].sort());
+    for (const [op, before, ops, internal] of steps) {
+      const after = tx(before, ops, internal).doc;
+      expect(creativeProjection(after), op).not.toBe(creativeProjection(before));
+      const changes = diffEntities(before, after);
+      const back = structuredClone(after);
+      restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.before })));
+      expect(creativeProjection(back), `${op}: undo`).toBe(creativeProjection(before));
+      restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.after })));
+      expect(creativeProjection(back), `${op}: redo`).toBe(creativeProjection(after));
+      expect(validateProject(after), op).toEqual([]);
+      expect(ProjectSchema.safeParse(after).success, op).toBe(true);
+    }
+  });
+  it('remove_asset takes the file out of its event (an emptied event goes) and hands its capture date down to its copies', () => {
+    const x = scene();
+    const base = tx(x.doc, [{ op: 'delete_clip', args: { clipId: x.clipId } }, { op: 'add_event', args: { assetIds: [x.a] } }, { op: 'add_event', args: { assetIds: [x.b, x.c] } }]);
+    const [alone, pair] = [base.results[1]!.output!.eventId as string, base.results[2]!.output!.eventId as string];
+    const r = tx(base.doc, [{ op: 'remove_asset', args: { assetId: x.a } }, { op: 'remove_asset', args: { assetId: x.b } }]);
+    expect(Object.keys(r.doc.events)).toEqual([pair]);
+    expect(r.doc.events[pair]!.assetIds).toEqual([x.c]);
+    expect(r.doc.assets[x.copyId]!.capture).toEqual({ ...HANUKKAH, at: '2024-12-25T17:30:02' }); // what it showed before, now its own
+    expect([...r.affectedIds].sort()).toEqual([x.a, x.b, x.copyId, alone, pair].sort());
+    const changes = diffEntities(base.doc, r.doc);
+    const back = structuredClone(r.doc);
+    restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.before })));
+    expect(creativeProjection(back)).toBe(creativeProjection(base.doc));
+  });
+  it('shift_asset_captures refuses shiftTooFar for a file whose stored total plus the step passes MAX_CAPTURE_SHIFT_MINUTES, and set_asset_capture starts the total again', () => {
+    const x = scene();
+    const drifted = structuredClone(x.doc);
+    drifted.assets[x.a]!.capture = { ...HANUKKAH, shiftedMinutes: MAX_CAPTURE_SHIFT_MINUTES - 59 };
+    expect(refused(drifted, [{ op: 'shift_asset_captures', args: { assetIds: [x.a], minutes: 60 } }]).message).toBe(LIFE_REFUSALS.shiftTooFar.message(1));
+    expect(tx(drifted, [{ op: 'shift_asset_captures', args: { assetIds: [x.a], minutes: 59 } }]).doc.assets[x.a]!.capture!.shiftedMinutes).toBe(MAX_CAPTURE_SHIFT_MINUTES);
+    const reset = tx(drifted, [{ op: 'set_asset_capture', args: { assetId: x.a, capture: { at: HANUKKAH.at } } }]).doc;
+    expect('shiftedMinutes' in reset.assets[x.a]!.capture!).toBe(false);
+    expect(tx(reset, [{ op: 'shift_asset_captures', args: { assetIds: [x.a], minutes: 60 } }]).doc.assets[x.a]!.capture).toEqual({ at: '2024-12-25T18:30:00', utcOffsetMinutes: null, source: 'manual', shiftedMinutes: 60 });
+    // shifts that keep a date inside the years can never reach the bound: from the first minute of 1900 to the last of 2100, a step at a time
+    let d = tx(x.doc, [{ op: 'set_asset_capture', args: { assetId: x.c, capture: { at: '1900-01-01T00:00:00' } } }]).doc;
+    for (let moved = 0; moved + 5256000 < MAX_CAPTURE_SHIFT_MINUTES; moved += 5256000) d = tx(d, [{ op: 'shift_asset_captures', args: { assetIds: [x.c], minutes: 5256000 } }]).doc;
+    d = tx(d, [{ op: 'shift_asset_captures', args: { assetIds: [x.c], minutes: MAX_CAPTURE_SHIFT_MINUTES - 1 - d.assets[x.c]!.capture!.shiftedMinutes! } }]).doc;
+    expect(d.assets[x.c]!.capture).toMatchObject({ at: '2100-12-31T23:59:00', shiftedMinutes: MAX_CAPTURE_SHIFT_MINUTES - 1 });
+    expect(refused(d, [{ op: 'shift_asset_captures', args: { assetIds: [x.c], minutes: 1 } }]).message).toBe(LIFE_REFUSALS.dateOutOfRange.message()); // the year, before the total
+    expect(ProjectSchema.safeParse(d).success).toBe(true);
+  });
+  it('update_event refuses eventTooManyFiles when the event would end with more than MAX_EVENT_FILES files; clusterCaptures cuts a longer run into clusters of at most that many', () => {
+    const x = scene();
+    const crowded = structuredClone(x.doc);
+    const many = Array.from({ length: MAX_EVENT_FILES }, (_, i) => `ast_m${String(i).padStart(4, '0')}`);
+    for (const [i, id] of many.entries()) crowded.assets[id] = { ...structuredClone(crowded.assets[x.c]!), id, capture: { at: `2024-07-01T${String(6 + Math.floor(i / 3600)).padStart(2, '0')}:${String(Math.floor(i / 60) % 60).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}`, utcOffsetMinutes: null, source: 'manual' } };
+    crowded.events = { evt_big: event('evt_big', many) };
+    expect(validateProject(crowded)).toEqual([]);
+    expect(refused(crowded, [{ op: 'update_event', args: { eventId: 'evt_big', addAssetIds: [x.a] } }]).toJSON()).toMatchObject({ code: 'out_of_bounds', message: `an event holds at most ${MAX_EVENT_FILES} files`, details: { eventId: 'evt_big' } });
+    // counted after the call's own removals, and a file it already holds is not counted twice
+    expect(tx(crowded, [{ op: 'update_event', args: { eventId: 'evt_big', addAssetIds: [x.a, many[5]!], removeAssetIds: [many[0]!] } }]).doc.events.evt_big!.assetIds.length).toBe(MAX_EVENT_FILES);
+    expect(refused(crowded, [{ op: 'update_event', args: { eventId: 'evt_big', addAssetIds: [x.a, x.b], removeAssetIds: [many[0]!] } }]).message).toBe(LIFE_REFUSALS.eventTooManyFiles.message());
+    // the arrangement never refuses for size: one run of 5000 files a second apart, and a file in the minute after them, become two events
+    const one = structuredClone(crowded);
+    one.events = {};
+    one.assets[x.c]!.capture = { at: '2024-07-01T07:24:00', utcOffsetMinutes: null, source: 'manual' }; // the last of them is at 07:23:19
+    const r = tx(one, [{ op: 'cluster_events', args: { gapMinutes: 30 } }]);
+    const long = Object.values(r.doc.events).filter((e) => e.assetIds.some((id) => id === x.c || many.includes(id))).map((e) => e.assetIds);
+    expect(long.map((ids) => ids.length)).toEqual([MAX_EVENT_FILES, 1]);
+    expect(long[0]).toEqual(many);
+    expect(long[1]).toEqual([x.c]);
+    expect(ProjectSchema.safeParse(r.doc).success).toBe(true);
+    const run = Array.from({ length: MAX_EVENT_FILES + 1 }, (_, i) => ({ assetId: `f${String(i).padStart(5, '0')}`, wall: '2024-07-01T06:00:00' }));
+    expect(clusterCaptures(run, 30).map((c) => c.length)).toEqual([MAX_EVENT_FILES, 1]);
+  });
+  it('update_text + set_text_fields in one transaction gives the same document as two transactions (no cache on a draft)', () => {
+    const x = scene();
+    const text: OpCall = { op: 'update_text', args: { clipId: x.titleId, text: '{{כך}} {date:numeric}' } }, on: OpCall = { op: 'set_text_fields', args: { clipId: x.titleId, enabled: true } };
+    const together = applyTransaction(x.doc, [text, on], { idSeed: 'k_', actor: 'test' }).doc;
+    const apart = applyTransaction(applyTransaction(x.doc, [text], { idSeed: 'k_', actor: 'test' }).doc, [on], { idSeed: 'k2_', actor: 'test' }).doc;
+    expect(creativeProjection(together)).toBe(creativeProjection(apart));
+    const clip = findClip(together, x.titleId)!.clip as TextClip;
+    expect(resolveFields(together, together.mainSequenceId, clip, f(0)).text).toBe('{כך} 25.12.2024');
+    // and the other way round in one transaction: the text the second operation checks is the one the first wrote
+    const off = applyTransaction(together, [{ op: 'update_text', args: { clipId: x.titleId, text: '{{כך}}' } }, { op: 'set_text_fields', args: { clipId: x.titleId, enabled: false } }], { idSeed: 'k3_', actor: 'test' }).doc;
+    expect((findClip(off, x.titleId)!.clip as TextClip).text).toBe('{כך}');
+    // a kept index of the document before does not leak into the document after
+    const index = makeFieldIndex(x.doc);
+    expect(resolveFields(together, together.mainSequenceId, clip, f(0), { index }).text).toBe('{כך} 25.12.2024');
+  });
+  it('a title without `fields` and every earlier fixture resolve to their stored text unchanged', () => {
+    // this file's own fixtures, a document from before this build, and titles whose text holds every kind of brace group
+    const x = scene();
+    const texts = ['{date}', 'a {date} b {{c}}', '{weather} {', '}{', '{age:per_1}', 'שלום {hebrewDate:noYear}', '{{', 'plain'];
+    let d = x.doc;
+    for (const [i, text] of texts.entries()) d = tx(d, [{ op: 'add_text', args: { text, start: f(100 + i * 40), duration: f(30) } }]).doc;
+    const { events: _e, ...old } = structuredClone(d);
+    for (const doc of [d, old as ProjectDocument, project().doc, createProject({ id: 'p', name: 'P' })]) {
+      const index = makeFieldIndex(doc);
+      for (const seq of Object.values(doc.sequences)) for (const track of seq.tracks) for (const clip of track.clips) {
+        if (clip.type !== 'text') continue;
+        expect('fields' in clip).toBe(false);
+        for (const time of [clip.start, T.add(clip.start, f(7))]) for (const opts of [undefined, { index }]) expect(resolveFields(doc, seq.id, clip, time, opts)).toEqual({ text: clip.text, anchor: null, eventId: null, missing: [] });
+        expect(fieldSpans(doc, seq.id, clip).map((s) => s.resolved.text)).toEqual([clip.text]);
+      }
+      expect(validateProject(doc)).toEqual([]);
+    }
+    // a date stamp on a file without a date has no text (and one with a typed text is not asked at all: evaluate.ts)
+    expect(stampText(d, d.mainSequenceId, findClip(d, x.clipId)!.clip, f(0), {})).toBe("'24 12 25");
+    const undated = tx(d, [{ op: 'set_asset_capture', args: { assetId: x.a, capture: null } }]).doc;
+    expect(stampText(undated, undated.mainSequenceId, findClip(undated, x.clipId)!.clip, f(0), { clock: true })).toBe('');
+  });
 });
