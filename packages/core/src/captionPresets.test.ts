@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CAPTION_PRESETS, CaptionStyleSchema, DEFAULT_CAPTION_STYLE } from './schema.ts';
 import { FONT_CATALOG } from './fonts.ts';
 import { CAPTION_LOOKS as LOOKS, CAPTION_LOOK_IDS as IDS, findCaptionLook as find } from './captionPresets.ts';
+import { describeOps } from './ops.ts';
 
 const lum = (hex: string) => {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
@@ -54,6 +55,23 @@ describe('caption looks', () => {
       const expected = l.style.preset !== 'classic' || (l.style.wordEntrance !== undefined && l.style.wordEntrance !== 'none');
       expect(l.needsWordTiming, l.id).toBe(expected);
     }
+  });
+  it('has exactly 40 looks: the number the documentation and the caption controls state, and what the operation offers', () => {
+    expect(LOOKS.length).toBe(40);
+    expect(IDS.length).toBe(LOOKS.length);
+    // what apply_caption_look accepts (and so what describe_ops and the catalogue list) is this same list
+    const lookId = (describeOps().find((o) => o.name === 'apply_caption_look')!.argsSchema as { properties: { lookId: { enum: string[] } } }).properties.lookId;
+    expect(lookId.enum).toEqual(IDS);
+  });
+  it('the paper look: dark ink on a light plate, a highlight that reads on the plate as well as against the ink', () => {
+    const l = find('caption.karaoke-paper')!;
+    expect(l.style).toMatchObject({ preset: 'karaoke', fontFamily: 'Frank Ruhl Libre', position: 'bottom' });
+    expect(l.needsWordTiming).toBe(true);
+    const plate = l.style.background!.slice(0, 7);
+    expect(lum(l.style.color!)).toBeLessThan(lum(plate)); // the only karaoke look whose text is darker than its plate
+    expect(LOOKS.filter((x) => x.style.preset === 'karaoke' && x.style.background && lum(x.style.color!) < lum(x.style.background.slice(0, 7))).map((x) => x.id)).toEqual([l.id]);
+    expect(contrast(l.style.color!, plate)).toBeGreaterThanOrEqual(7);
+    expect(contrast(l.style.highlightColor!, plate)).toBeGreaterThanOrEqual(4.5); // the spoken word is itself readable text on the plate
   });
   it('no two looks are the same, and every behaviour has at least two looks', () => {
     expect(new Set(LOOKS.map((l) => JSON.stringify(Object.entries(l.style).sort()))).size).toBe(LOOKS.length);

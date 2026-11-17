@@ -91,6 +91,9 @@ export const CAPTION_LOOKS: readonly CaptionLook[] = [
     { preset: 'karaoke', font: 'Secular One', weight: 400, size: 0.052, color: W, hl: '#FF8A00', bg: null, stroke: K, strokeFrac: 0.1 }),
   look('karaoke-plate', 'קריוקי על פס', 'Karaoke on plate', 'צבע טורקיז על פס כהה', 'Turquoise sweep on a dark plate',
     { preset: 'karaoke', font: 'Heebo', weight: 700, size: 0.046, color: W, hl: '#3DE0C8', bg: PLATE, stroke: null, strokeFrac: 0.08, entrance: 'fade' }),
+  // the one karaoke look in dark ink on a light plate: serif type on warm paper, the spoken word in crimson (also legible on the plate)
+  look('karaoke-paper', 'קריוקי על נייר', 'Karaoke on paper', 'דיו כהה בכתב סריף על פס בהיר, המילה הנאמרת באדום', 'Dark serif ink on a light paper plate; the spoken word turns crimson',
+    { preset: 'karaoke', font: 'Frank Ruhl Libre', weight: 700, size: 0.048, color: '#1C1A17', hl: '#C8102E', bg: '#FFF8E7EB', stroke: null, strokeFrac: 0.08, chars: 30 }),
   // word pop
   look('pop-heavy', 'מילה אחר מילה, מודגש', 'One word at a time, heavy', 'מילה גדולה אחת, עם קפיצה קלה', 'One large word, with a small pop',
     { preset: 'word-pop', font: 'Secular One', weight: 400, size: 0.09, color: W, hl: '#FFC400', bg: null, stroke: K, strokeFrac: 0.16, position: 'center', lines: 1, chars: 12, entrance: 'pop' }),
