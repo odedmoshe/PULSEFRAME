@@ -25,7 +25,7 @@
  * filter reset to zero at s·S − Wf (two filters take turns), where Wf is the restart warm-up: what a never-reset filter would
  * still carry from before it is below 2^-20 of the input peak (−120 dB, below the 16-bit step). S = Wf, so steps 1–2 cost two
  * filter runs per sample and need S + Wf − 1 samples of history. Every block, window and segment grid is keyed on the timeline
- * sample t = at + n, so moving a clip by a non-multiple of 10 ms changes the result very slightly (the catalogue limits say so).
+ * sample t = at + n, so moving a clip by a non-multiple of the grids changes the result very slightly (ADR-0013 accepts this).
  *
  * Runtime arithmetic per sample: + − × ÷, sqrt (per block), min and max. Every dB conversion is a design-time constant (design.ts).
  * The leveller compares and clamps in the linear domain, so no gain table is needed. The clip speed does not matter: every
