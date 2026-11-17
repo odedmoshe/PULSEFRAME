@@ -1,7 +1,8 @@
 export * from './evaluate.ts';
 export * from './compositor2d.ts';
 export * from './captions.ts';
-export { grainOffset, COMPOSITE } from './look.ts';
+export { grainOffset, COMPOSITE, REGION_COPY_SLOT, REGION_MASK_SLOT, regionBlurPx, regionBlocks } from './look.ts';
+export { resolveFollows, resolveRegions, WHOLE_BLUR_MIN_STRENGTH, type Follower, type LayerAt } from './follow.ts';
 export * from './audio.ts';
 export * from './stretch.ts';
 export { motionAt, musicHit, smoothNoise, hash32, unit32, initGpu, gpuStatus, isGpuEffect, isGpuTransition, GPU_EFFECTS, GPU_TRANSITIONS, digicamTick, digicamTone, crtMap, thinnedHits, type GpuStatus, type LutStrip } from './gpu.ts';
