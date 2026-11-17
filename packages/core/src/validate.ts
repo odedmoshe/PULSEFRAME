@@ -2,7 +2,8 @@ import * as T from '@pulseframe/time';
 import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange, transitionDef } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
-import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE, PersonSchema, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { personNameKey } from './people.ts';
 import { lifeIssues } from './fields.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 
@@ -330,6 +331,23 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     }
   }
   if (Object.keys(doc.events ?? {}).length > MAX_LIFE_EVENTS) issues.push({ code: 'life_event_limit', message: `the project has more than ${MAX_LIFE_EVENTS} events`, ids: [] });
+  // people (ADR-0021, people section): the same net as for events. A person must be one the stored format holds, an entity
+  // of its own, and the only one with that name (compared as people.ts personNameKey does). A live field that names a
+  // person who is not here is NOT an issue: it has no words and the export preflight reports it (field_no_data), so that
+  // undoing an add_person never leaves a document that cannot be stored. No message here ever holds a birth date.
+  const names = new Map<string, string>();
+  for (const [key, person] of Object.entries(doc.people ?? {})) {
+    if (key !== person.id) issues.push({ code: 'key_mismatch', message: `person key ${key} != id ${person.id}`, ids: [key] });
+    const parsed = PersonSchema.safeParse(person);
+    // only the name of the field that is wrong is given: the schema's own message could quote a value
+    if (!parsed.success) issues.push({ code: 'life_person_shape', message: `person ${person.id} cannot be stored (${parsed.error.issues[0]?.path.map(String).join('.') || 'value'})`, ids: [person.id] });
+    uniq(person.id);
+    const nameKey = typeof person.name === 'string' ? personNameKey(person.name) : '';
+    const other = names.get(nameKey);
+    if (other !== undefined) issues.push({ code: 'life_person_name', message: `people ${other} and ${person.id} have the same name`, ids: [other, person.id] });
+    names.set(nameKey, person.id);
+  }
+  if (Object.keys(doc.people ?? {}).length > MAX_PEOPLE) issues.push({ code: 'life_person_limit', message: `the project has more than ${MAX_PEOPLE} people`, ids: [] });
   issues.push(...lifeIssues(doc));
   return issues;
 }

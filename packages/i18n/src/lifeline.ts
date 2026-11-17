@@ -8,7 +8,7 @@
  * The panels' own strings live next to them (apps/web/src/editor/lifeline/lifeline.strings.ts).
  * Also here: the Hebrew wording of every refusal of the life-line operations (HE_LIFE), which refusals.ts adds to
  * translateRefusal; packages/evals/src/lifeline-wording.test.ts keeps it in step with core lifeOps.ts LIFE_REFUSALS.
- * People (names, ages) are not part of this build and have no strings.
+ * People (names, ages, the people sheet) have their own table: people.ts.
  */
 export const LIFELINE_HE = {
   'op.set_asset_capture': 'קביעת תאריך צילום', 'op.shift_asset_captures': 'הזזת השעון של קבצים', 'op.attach_asset_capture': 'קריאת תאריך צילום מהקובץ',
@@ -50,7 +50,6 @@ export const HE_LIFE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^only a title can hold live fields$/, () => 'רק כותרת יכולה להכיל שדות'],
   [/^live fields are already (on|off) for this title$/, (m) => (m[1] === 'on' ? 'השדות בכותרת הזו כבר פעילים' : 'השדות בכותרת הזו כבר כבויים')],
   [/^these brace groups are not fields: ([\s\S]+)$/, (m) => `הסוגריים המסולסלים האלה אינם שדות: ${ltr(m[1]!)}. כדי שסוגריים מסולסלים יוצגו כמו שהם יש לכפול אותם`],
-  [/^these fields name a person, and this project holds no people: ([\s\S]+)$/, (m) => `השדות האלה מפנים לאדם, ובפרויקט אין אנשים: ${ltr(m[1]!)}. יש למחוק אותם מהטקסט`],
   [/^this title still holds fields, so turning live fields off would show their names instead of their values$/, () => 'בכותרת עדיין יש שדות, וכיבוי השדות היה מציג את שמותיהם במקום את הערכים. אפשר לקבוע אותה כטקסט רגיל, או למחוק את השדות מהטקסט'],
   [/^no picture or video in the library has a capture date$/, () => 'לאף תמונה או סרטון בספרייה אין תאריך צילום. אפשר לקבוע תאריכים ידנית או לקרוא אותם מהקבצים'],
   [/^a project holds at most (\d+) events$/, (m) => `בפרויקט יכולים להיות עד ${m[1]} אירועים`],

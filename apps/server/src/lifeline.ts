@@ -10,7 +10,9 @@
  *   file has in the library, and commits ONE transaction of internal attach_asset_capture operations (allowInternal, actor =
  *   the caller, label naming the action). `read` = files looked at, `dated` = files that got a date, `revision` = the
  *   project's revision afterwards (unchanged when nothing was dated: no empty transaction).
- * - People suggestions («העתקה מפרויקט אחר») are not part of this build: people wait for the owner's approval.
+ * - peopleSuggestions («העתקה מפרויקט אחר», ADR-0021 people section): the people already entered in the owner's other
+ *   projects, so they are typed once. It reads birth dates across every project, which no grant covers: the owner's own
+ *   session only (the route refuses first; the function refuses again). W2 fills it.
  *
  * What re-reading looks at: files a person brought in (provenance upload or fixture). A generated or derived file has no
  * capture of its own; it shows the date of the file it was made from (core captureOf), so its bytes are never read for one.
@@ -45,6 +47,20 @@ export function onThisDayFor(store: Store, p: Principal, today: string): OnThisD
     try { projects.push({ projectId: row.id, projectName: row.name, doc: store.getProject(row.id).doc }); } catch { /* skipped */ }
   }
   return onThisDay(projects, today, MAX_ON_THIS_DAY).slice(0, MAX_ON_THIS_DAY);
+}
+
+/** One person as another project of the owner holds them, for «העתקה מפרויקט אחר». */
+export interface PersonSuggestion { name: string; birthDate: string | null; form?: 'm' | 'f'; /** The project it was read from (the newest that has this name). */ projectId: string; projectName: string }
+/** At most this many suggestions are answered. */
+export const MAX_PEOPLE_SUGGESTIONS = 200;
+/**
+ * The people of the owner's projects, one per name (core personNameKey; the most recently changed project wins), by name,
+ * at most MAX_PEOPLE_SUGGESTIONS. A project that cannot be opened is left out. W2 fills the body: read each project with
+ * store.wholeProject (this is the owner's session). Until then it refuses.
+ */
+export function peopleSuggestions(_store: Store, p: Principal): PersonSuggestion[] {
+  if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+  throw new ApiError(501, 'not_implemented', 'copying people from another project is not built yet');
 }
 
 /** A file whose own bytes can carry a capture date and that has none yet: a picture, video or sound a person brought in. */

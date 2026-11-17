@@ -127,6 +127,35 @@ export const LifeEventSchema = z
   .strict();
 export type LifeEvent = z.infer<typeof LifeEventSchema>;
 
+// ---------- people (ADR-0021, people section). Optional; no schema version bump. ----------
+/** A project holds at most this many people. */
+export const MAX_PEOPLE = 200;
+/** The longest name of a person. */
+export const MAX_PERSON_NAME = 80;
+/** A person's id as a live field writes it: `{age:<id>}`, `{name:<id>}` (fields.ts PERSON_ID_IN_FIELD is the same shape). */
+export const PERSON_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** A name is one line and holds none of the characters the field grammar uses: braces, a colon, a bar. */
+export const PERSON_NAME = /^[^{}:|\n\r]+$/;
+/**
+ * A person named in titles (ADR-0021, people section): a name, an optional birth date and an optional word choice for the
+ * Hebrew age wording. Nothing else is ever stored about a person: no picture, no face data, no place, no relation.
+ *
+ * PRIVACY: `birthDate` and `form` leave the server only for the owner's own session or a credential whose grant says
+ * people: 'full' (apps/server/src/peoplePrivacy.ts). Every other credential reads the id and the name only.
+ */
+export const PersonSchema = z
+  .object({
+    id: z.string().regex(PERSON_ID),
+    /** As typed, in Unicode NFC and without spaces around it; unique in the project when compared by people.ts personNameKey. */
+    name: z.string().min(1).max(MAX_PERSON_NAME).regex(PERSON_NAME).refine((n) => n === n.trim() && n === n.normalize('NFC'), { message: 'a name is stored trimmed and in Unicode NFC' }),
+    /** The day of birth on the Gregorian calendar, YYYY-MM-DD (a real day in 1900–2100), or null = not given: age fields of this person then have no words. */
+    birthDate: z.string().regex(WALL_DATE).refine(isRealWallDate, { message: 'not a real calendar day between 1900 and 2100' }).nullable(),
+    /** The Hebrew word before the age: 'm' = «בן», 'f' = «בת»; absent = «גיל» (ageWords.ts). A wording choice, not a record of anything. */
+    form: z.enum(['m', 'f']).optional(),
+  })
+  .strict();
+export type Person = z.infer<typeof PersonSchema>;
+
 export const AssetSchema = z
   .object({
     id: Id,
@@ -567,6 +596,11 @@ export const ProjectSchema = z
     motionTracks: z.record(Id, MotionTrackSchema).default({}),
     /** Events (life line, ADR-0021): groups of library files by capture time, by event id. */
     events: z.record(Id, LifeEventSchema).default({}),
+    /**
+     * People named in titles (ADR-0021, people section), by person id. OPTIONAL and absent until the first person is added
+     * (no default, so a project without people is stored exactly as before); read it as `doc.people ?? {}` (people.ts peopleOf).
+     */
+    people: z.record(Id, PersonSchema).optional(),
   })
   .strict();
 

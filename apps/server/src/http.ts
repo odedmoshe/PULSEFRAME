@@ -38,6 +38,8 @@ import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.t
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
 import { ApplyModeSchema, RunSourceSchema, type RunRequest } from './aiContracts.ts';
+import { assertMayTakeRendered, forPrincipal, mayHoldPeople, peopleAccess, peopleNote, readingAs, scrubPeople, withoutFamily } from './peoplePrivacy.ts';
+import { peopleSuggestions } from './lifeline.ts';
 
 const TxBody = z
   .object({
@@ -194,8 +196,20 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
   app.all('/mcp', (c) => mcp(c.req.raw));
   app.use('/api/v1/*', async (c, next) => {
-    c.set('principal', auth.authenticate(c.req.raw));
-    await next();
+    const principal = auth.authenticate(c.req.raw);
+    c.set('principal', principal);
+    // People (ADR-0021, people section; peoplePrivacy.ts): everything this request reads from the store is what its credential
+    // may read. For a credential without the people scope, the JSON answer is also passed through the net that takes birth
+    // dates out of rows that were not read as a document (proposals, and whatever a later route returns).
+    await readingAs(principal, next);
+    if (peopleAccess(principal) === 'full' || !(c.res.headers.get('content-type') ?? '').startsWith('application/json')) return;
+    const text = await c.res.clone().text();
+    if (!mayHoldPeople(text)) return;
+    const headers = new Headers(c.res.headers);
+    headers.delete('content-length');
+    const status = c.res.status;
+    c.res = undefined;
+    c.res = new Response(JSON.stringify(scrubPeople(JSON.parse(text))), { status, headers });
   });
   // Grants limited to certain projects cannot even read others.
   app.use('/api/v1/projects/:id/*', async (c, next) => { gov.assertMayAct(c.var.principal, c.req.param('id'), 'observe'); await next(); });
@@ -220,8 +234,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/projects/:id', (c) => {
     need(c, 'observe');
     const rev = c.req.query('revision');
+    // Both reads answer with what this credential may read about people (Store.getProject / Store.replay).
     const p = rev === undefined ? store.getProject(c.req.param('id')) : store.replay(c.req.param('id'), Number(rev));
-    return c.json({ project: p.doc, revision: p.revision });
+    return c.json({ project: p.doc, revision: p.revision, ...peopleNote(c.var.principal, p.doc) });
   });
   app.post('/api/v1/projects/:id/delete', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ confirmName: z.string() }).strict()); return c.json(deleteProject(store, p, c.req.param('id'), b.confirmName)); });
   // Automatic backups: status for anyone who may observe; running one now is the owner's action (it writes outside the data directory).
@@ -236,10 +251,22 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/storage', (c) => { const p = need(c, 'observe'); const rep = storageReport(store, p); const { hashes: _h, ...unref } = rep.unreferenced; return c.json({ ...rep, unreferenced: unref }); });
   app.post('/api/v1/storage/gc', async (c) => { const p = need(c, 'observe'); const b = await body(c, z.object({ apply: z.boolean().optional() }).strict()); return c.json(collectGarbage(store, p, b.apply === true)); });
   app.get('/api/v1/projects/:id/archive', (c) => {
-    need(c, 'observe');
-    const plan = planArchive(store, c.req.param('id'));
+    const who = need(c, 'observe');
+    // ?family=omit: the archive «בלי פרטי משפחה» (people left out, their fields made plain text). A credential without the
+    // people scope gets the document as it may read it either way (names, no birth dates): planArchive reads through the store.
+    const family = c.req.query('family') ?? 'keep';
+    if (family !== 'keep' && family !== 'omit') throw new ApiError(400, 'invalid_request', 'family must be keep or omit', { family: family.slice(0, 16) });
+    void who;
+    const plan = planArchive(store, c.req.param('id'), { family });
     const name = plan.doc.name.replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 60) || 'project';
     return new Response(Readable.toWeb(Readable.from(writeArchive(plan))) as ReadableStream, { headers: { 'content-type': 'application/x-tar', 'content-length': String(plan.bytes), 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}.pulseframe.tar` } });
+  });
+  // What the archive «בלי פרטי משפחה» would change, for the dialog before the download: titles whose words change inside them
+  // (frozen at their first value) and titles whose people field has no words. The owner's own session only.
+  app.get('/api/v1/projects/:id/archive/family-check', (c) => {
+    if (need(c, 'observe').kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+    const { varying, empty } = withoutFamily(store.wholeProject(c.req.param('id')).doc);
+    return c.json({ varying, empty });
   });
   app.post('/api/v1/projects/import', async (c) => {
     const who = need(c, 'edit');
@@ -261,7 +288,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       fs.rmSync(tmp, { force: true });
     }
   });
-  app.get('/api/v1/projects/:id/summary', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, ...summarize(p.doc) }); });
+  app.get('/api/v1/projects/:id/summary', (c) => { const who = need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, ...summarize(p.doc), ...peopleNote(who, p.doc) }); });
   app.get('/api/v1/projects/:id/timeline', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, ...timeline(p.doc) }); });
   app.get('/api/v1/projects/:id/transcripts/:assetId', (c) => {
     need(c, 'observe');
@@ -333,10 +360,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
   app.get('/api/v1/projects/:id/preflight', (c) => {
-    need(c, 'observe');
+    const who = need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     const cps = c.req.query('maxCharsPerSecond');
-    return c.json(preflight(exporter, p.doc, p.revision, { variantId: c.req.query('variant'), ...(cps ? { maxCharsPerSecond: Number(cps) } : {}) }));
+    return c.json({ ...preflight(exporter, p.doc, p.revision, { variantId: c.req.query('variant'), ...(cps ? { maxCharsPerSecond: Number(cps) } : {}) }), ...peopleNote(who, p.doc) });
   });
   app.post('/api/v1/projects/:id/exports/batch', async (c) => {
     const pr = need(c, 'edit');
@@ -344,6 +371,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(pr, projectId, 'job');
     assertStorageRoom(store, 1, 'start exports'); // once for the whole batch, before any job exists (each start below is told so)
     const b = await body(c, z.object({ variantIds: z.array(z.string()).min(1).max(8), options: z.record(z.string(), z.unknown()).optional() }).strict());
+    assertMayTakeRendered(pr, store.wholeProject(projectId).doc, 'export this project');
     const doc = store.getProject(projectId).doc;
     // All-or-nothing: every variant must exist and plan without blockers before any job is created.
     for (const id of b.variantIds) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, variantId: id }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `format ${id} cannot be exported: ${plan.blockers[0]!.message}`, { variantId: id, blockers: plan.blockers }); }
@@ -386,25 +414,29 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const projectId = c.req.param('id');
     const current = store.getProject(projectId).revision;
     const since = Number(c.req.query('since') ?? c.req.header('last-event-id') ?? current);
+    // Events are written from whichever request committed, so each is reduced here for the credential that LISTENS: a revision,
+    // job, proposal or presence event never carries a birth date to one without the people scope (peoplePrivacy.ts).
+    const listener = c.var.principal;
+    const seen = <X,>(e: X): X => forPrincipal(e, listener);
     return streamSSE(c, async (stream) => {
       let last = since;
       const send = async (e: RevisionEvent) => {
         if (e.projectId !== projectId || e.revision <= last) return; // drop duplicates
         last = e.revision;
-        await stream.writeSSE({ event: 'revision', id: String(e.revision), data: JSON.stringify(e) });
+        await stream.writeSSE({ event: 'revision', id: String(e.revision), data: JSON.stringify(seen(e)) });
       };
       const pending: RevisionEvent[] = [];
       let live = false;
       const onEvent = (e: RevisionEvent) => (live ? void send(e) : pending.push(e));
-      const onJob = (j: any) => j.projectId === projectId && void stream.writeSSE({ event: 'job', data: JSON.stringify({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error }) });
+      const onJob = (j: any) => j.projectId === projectId && void stream.writeSSE({ event: 'job', data: JSON.stringify(seen({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error })) });
       store.events.on('revision', onEvent);
       const onDerivative = (d: any) => { const a = Object.values(store.getProject(projectId).doc.assets).find((x) => x.contentHash === d.assetHash); if (a) void stream.writeSSE({ event: 'derivative', data: JSON.stringify({ assetId: a.id, kind: d.kind, status: d.status }) }); };
       store.events.on('job', onJob);
       store.events.on('derivative', onDerivative);
-      const onGov = (kind: string) => (e: any) => e.projectId === projectId && void stream.writeSSE({ event: kind, data: JSON.stringify(e) });
+      const onGov = (kind: string) => (e: any) => e.projectId === projectId && void stream.writeSSE({ event: kind, data: JSON.stringify(seen(e)) });
       const govHandlers = (['control', 'proposal', 'approval'] as const).map((k) => [k, onGov(k)] as const);
       for (const [k, fn] of govHandlers) store.events.on(k, fn);
-      const onPresence = (p: any) => p.projectId === projectId && void stream.writeSSE({ event: 'presence', data: JSON.stringify(p) });
+      const onPresence = (p: any) => p.projectId === projectId && void stream.writeSSE({ event: 'presence', data: JSON.stringify(seen(p)) });
       presence.events.on('presence', onPresence);
       try {
         await stream.writeSSE({ event: 'hello', data: JSON.stringify({ revision: current }) });
@@ -438,11 +470,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/projects/:id/proposals', (c) => {
     need(c, 'observe');
     const rate = store.getProject(c.req.param('id')).doc.settings.frameRate;
-    return c.json({ proposals: gov.listProposals(c.req.param('id'), c.req.query('status')).map((p) => ({ ...p, previewFrame: previewFrame(p.changes, rate) })) });
+    // entity states and operation arguments of a proposal: without birth dates for a credential that may not read them
+    return c.json({ proposals: forPrincipal(gov.listProposals(c.req.param('id'), c.req.query('status')), c.var.principal).map((p) => ({ ...p, previewFrame: previewFrame(p.changes, rate) })) });
   });
   app.post('/api/v1/projects/:id/proposals', async (c) => { const b = await body(c, TxBody); return c.json(gov.propose(c.var.principal, c.req.param('id'), b.ops, b.label), 201); });
   const proposalIn = (c: Context<Env>) => { const pr = gov.getProposal(c.req.param('proposalId')!); if (pr.projectId !== c.req.param('id')) throw new ApiError(404, 'proposal_not_found', 'proposal not found in this project'); return pr; };
-  app.get('/api/v1/projects/:id/proposals/:proposalId', (c) => { need(c, 'observe'); return c.json({ proposal: proposalIn(c) }); });
+  app.get('/api/v1/projects/:id/proposals/:proposalId', (c) => { const who = need(c, 'observe'); return c.json({ proposal: forPrincipal(proposalIn(c), who) }); });
   /** Before/after stills of a proposal, rendered by the same compositor as export. `side=before|after`. */
   app.get('/api/v1/projects/:id/proposals/:proposalId/frame', async (c) => {
     need(c, 'observe');
@@ -527,6 +560,13 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (!WALL_DATE.test(date) || !isRealWallDate(date)) throw new ApiError(400, 'invalid_request', 'date must be a real day written YYYY-MM-DD (the day on the viewer\'s own clock)', { date: date.slice(0, 32) });
     return c.json({ items: onThisDayFor(store, p, date) });
   });
+  // People already entered in the owner's other projects (names, birth dates, word choices), so they are typed once. Across
+  // every project and with birth dates, so it answers the owner's own session only, never a token or a grant.
+  app.get('/api/v1/people-suggestions', (c) => {
+    const p = need(c, 'observe');
+    if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+    return c.json({ people: peopleSuggestions(store, p) });
+  });
   app.post('/api/v1/projects/:id/sfx', async (c) => {
     const p = need(c, 'edit');
     const projectId = c.req.param('id');
@@ -581,8 +621,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = store.getProject(c.req.param('id'));
     const index = c.req.query('index') !== undefined ? Number(c.req.query('index')) : T.frameIndexAt(T.fromSeconds(c.req.query('seconds') ?? '0'), p.doc.settings.frameRate);
     // ?variant= renders the frame as that linked format would export it.
+    // `p.doc` is what this credential may read: for one without the people scope the frame is drawn without ages, and says so.
     const png = await exporter.renderStill(variantDoc(p.doc, c.req.query('variant')), p.revision, index);
-    return c.body(new Uint8Array(png), 200, { 'Content-Type': 'image/png', 'X-PF-Revision': String(p.revision), 'X-PF-Frame-Index': String(index) });
+    return c.body(new Uint8Array(png), 200, { 'Content-Type': 'image/png', 'X-PF-Revision': String(p.revision), 'X-PF-Frame-Index': String(index), ...(peopleNote(c.var.principal, p.doc).peopleAccess ? { 'X-PF-People': 'names; age fields are drawn empty' } : {}) });
   });
 
   // ----- jobs / export -----
@@ -591,6 +632,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(pr, c.req.param('id'), 'job');
     const options = await c.req.json().catch(() => ({}));
     gov.takeExportQuota(pr, 1, true);
+    assertMayTakeRendered(pr, store.wholeProject(c.req.param('id')).doc, 'export this project');
     // exporter.start refuses once the storage ceiling is reached (the same check for this route, the batch route, retries and MCP)
     const job = exporter.start(c.req.param('id'), pr.actor, options);
     gov.takeExportQuota(pr);
@@ -598,16 +640,17 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
   /** Dry run: what would be exported, what it depends on, and what blocks it. Starts nothing. */
   app.post('/api/v1/projects/:id/exports/plan', async (c) => {
-    need(c, 'observe');
+    const who = need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
-    return c.json(exporter.plan(p.doc, p.revision, await c.req.json().catch(() => ({}))));
+    return c.json({ ...exporter.plan(p.doc, p.revision, await c.req.json().catch(() => ({}))), ...peopleNote(who, p.doc) });
   });
   app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); gov.releaseUnknown(p, c.req.param('jobId')); return c.json({ jobId: c.req.param('jobId'), ledger: gov.ledgerFor(c.req.param('jobId')) }); });
-  app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); gov.assertMayAct(pr, store.getJob(c.req.param('jobId')).projectId, 'job'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
+  app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId')); gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => { need(c, 'observe'); return c.json(jobView(store.getJob(c.req.param('jobId')))); });
   app.get('/api/v1/jobs/:jobId/output', (c) => {
-    need(c, 'observe');
+    const who = need(c, 'observe');
     const j = store.getJob(c.req.param('jobId'));
+    assertMayTakeJobOutput(who, j, 'download this export');
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
     return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), j.output.mimeType ?? 'video/mp4', `pulseframe-${j.id}${path.extname(j.output.file)}`);
   });
@@ -1004,6 +1047,14 @@ export function cancelAnalysisJob(store: Store, jobId: string, actor: string) {
   return { jobId, status: 'cancel-requested', outcome: 'result-will-be-discarded', note: 'the measurement in progress runs to its end; its result is not attached' };
 }
 
+/**
+ * A finished export is a film rendered from the WHOLE document of its snapshot. A credential without the people scope may not
+ * take one whose snapshot holds an age field, nor start it again (ADR-0021, people section; peoplePrivacy.ts rule 2b). The
+ * same check for REST and MCP. Other kinds of job hold no rendered film.
+ */
+export function assertMayTakeJobOutput(p: Principal, job: JobRow, what: string): void {
+  if (job.type === 'export' && job.input?.snapshot) assertMayTakeRendered(p, job.input.snapshot as ProjectDocument, what);
+}
 /** Cancelling is an action: a paused agent may not do it, and an agent may only cancel jobs it started. The owner may cancel any job. */
 export function assertMayCancel(gov: Governance, p: Principal, job: JobRow) {
   if (p.kind !== 'agent') return;

@@ -56,3 +56,7 @@ export * from './packs/index.ts';
 export * from './packs/suggest.ts';
 export * from './packs/use.ts';
 export * from './packs/check.ts';
+// people (ADR-0021, people section)
+export * from './people.ts';
+export * from './ageWords.ts';
+export * from './peopleOps.ts';

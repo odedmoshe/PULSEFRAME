@@ -10,9 +10,15 @@
  *   {date} = {date:long} «15 במרץ 2024» · {date:numeric} «15.3.2024» · {date:monthYear} «מרץ 2024» · {date:long-en} ·
  *   {date:monthYear-en} · {hebrewDate} = {hebrewDate:full} «כ״ה בכסלו תשפ״ה» · {hebrewDate:noYear} · {year} · {hebrewYear} ·
  *   {event}. `{{` and `}}` are literal braces. serialiseToken writes the short form for a default format.
- *   Reserved for people, who wait for the owner's approval: {age:<personId>}, {age:<personId>:<format>}, {name:<personId>}
- *   with personId = [A-Za-z0-9_-]{1,64} and format = [a-z-]{1,16}. They parse as tokens and resolve through a PeopleSource;
- *   the only source today is NO_PEOPLE, which knows nobody, so they resolve to no data (reason unknown_person).
+ *   People (ADR-0021, people section; approved by the owner): {name:<personId>} · {age:<personId>} = {age:<personId>:digits}
+ *   «בת 3» · {age:<personId>:words} «בת שלוש» · {age:<personId>:en} "3 years old", with personId = [A-Za-z0-9_-]{1,64}
+ *   (AGE_FORMATS). They resolve through a PeopleSource: the caller's, or the document's own people (documentPeople). A
+ *   person who is not in the document, or has no birth date, gives no words.
+ *   Stored grammar vs. new edits: an {age:<id>:<format>} with any format [a-z-]{1,16} is a field, as it was before
+ *   AGE_FORMATS existed (159a301), so documents and op logs written then still validate and replay. A format outside
+ *   AGE_FORMATS (isUnknownAgeFormat) draws no words (reason unknown_age_format, which the export preflight reports as
+ *   field_no_data) and is refused only where an edit brings it in as a new field: set_text_fields enabled:true (notFields)
+ *   and the editor form (fieldsFromDisplay, unknown_format). update_text never checked fields and still does not.
  *
  * RULES (plan §4.5, with the verifier's corrections, which win):
  * - Anchor of a title at time t (same sequence, picture clips on visible video tracks BELOW the title's track):
@@ -47,14 +53,20 @@ import { formatHebrewDate, GREGORIAN_MONTH_NAMES, hebrewFromRd, hebrewNumeral } 
 
 export const FIELD_NAMES = ['date', 'hebrewDate', 'year', 'hebrewYear', 'event'] as const;
 export type FieldName = (typeof FIELD_NAMES)[number];
-/** Reserved: fields that name a person. People are not part of this build (they wait for the owner's approval). */
+/** Fields that name a person (ADR-0021, people section). */
 export const PERSON_FIELD_NAMES = ['age', 'name'] as const;
+/** The formats of {age:<id>:<format>}; the first is the default and is not written. {name:<id>} has none. */
+export const AGE_FORMATS = ['digits', 'words', 'en'] as const;
+export type AgeFormat = (typeof AGE_FORMATS)[number];
 export const DATE_FORMATS = ['long', 'numeric', 'monthYear', 'long-en', 'monthYear-en'] as const;
 export const HEBREW_DATE_FORMATS = ['full', 'noYear'] as const;
 /** The shape of a person id and of a people-field format inside a token. */
 export const PERSON_ID_IN_FIELD = /^[A-Za-z0-9_-]{1,64}$/;
 export const PERSON_FORMAT_IN_FIELD = /^[a-z-]{1,16}$/;
-/** A field that names a person; `format` null = the default of that field. */
+/**
+ * A field that names a person; `format` null = the default of that field. For {age:…} it is one of AGE_FORMATS, or, in a
+ * document stored before AGE_FORMATS existed, another [a-z-]{1,16} word (isUnknownAgeFormat); {name:…} has none.
+ */
 export interface PersonFieldToken { name: (typeof PERSON_FIELD_NAMES)[number]; personId: string; format: string | null }
 export type FieldToken =
   | { name: 'date'; format: (typeof DATE_FORMATS)[number] }
@@ -96,8 +108,10 @@ function tokenOf(content: string): FieldToken | Exclude<BadFieldReason, 'lone_br
   if (name === 'age' || name === 'name') {
     const personId = parts[1], format = parts[2];
     if (personId === undefined || !PERSON_ID_IN_FIELD.test(personId) || parts.length > (name === 'age' ? 3 : 2)) return 'unknown_format';
+    // the stored grammar of 159a301: any [a-z-]{1,16} format is a field (isUnknownAgeFormat tells the ones outside AGE_FORMATS)
     if (format !== undefined && !PERSON_FORMAT_IN_FIELD.test(format)) return 'unknown_format';
-    return { name, personId, format: format ?? null };
+    // the default format is not written, so `{age:x:digits}` and `{age:x}` are one token
+    return { name, personId, format: format === undefined || format === AGE_FORMATS[0] ? null : format };
   }
   return 'unknown_field';
 }
@@ -123,22 +137,81 @@ export function serialiseToken(t: FieldToken): string {
 export function escapeFieldText(text: string): string { return text.replace(/[{}]/g, (b) => b + b); }
 /** True for a field that names a person. */
 export const isPersonToken = (t: FieldToken): t is PersonFieldToken => t.name === 'age' || t.name === 'name';
-
 /**
- * Where the words of people fields come from. PEOPLE WAIT FOR THE OWNER'S APPROVAL (wave-5 decisions): the document holds no
- * people, and the only source is NO_PEOPLE. The resolver takes its source as a parameter so that an approved people list can
- * be connected later without changing the resolver or any stored title.
+ * True for an {age:…} field whose format is none of AGE_FORMATS (a document stored before they existed can hold one): it
+ * draws no words (unknown_age_format), and set_text_fields enabled:true and the editor form refuse it as a new field.
+ */
+export const isUnknownAgeFormat = (t: FieldToken): boolean => t.name === 'age' && t.format !== null && !isOneOf(AGE_FORMATS, t.format);
+
+/** Why a people field has no words: the source does not know the person; the person has no birth date; the picture has no date; the picture was taken before the person was born. */
+export type PersonMissingReason = 'unknown_person' | 'no_birth_date' | 'no_date' | 'before_birth';
+/**
+ * Where the words of people fields come from. resolveFields takes its source as a parameter; without one it uses the
+ * document's own people (documentPeople), so the evaluator draws what the document it was handed says. A credential that
+ * may not read birth dates is handed a document without them (apps/server/src/peoplePrivacy.ts), and so gets no age.
  */
 export interface PeopleSource {
-  /** The words of a people field on the capture day `day` (a WALL_DATE; null = the anchor has no date), or null when this source does not know the person. */
-  resolve(token: PersonFieldToken, day: string | null): string | null;
+  /**
+   * The words of a people field on the capture day `day` (a WALL_DATE; null = the anchor has no date): the words, or why
+   * there are none. `null` is short for { missing: 'unknown_person' }.
+   */
+  resolve(token: PersonFieldToken, day: string | null): string | null | { missing: PersonMissingReason };
 }
 /** Knows nobody: every people field resolves to no data (reason unknown_person). */
 export const NO_PEOPLE: PeopleSource = Object.freeze({ resolve: () => null });
+/**
+ * True when documentPeople, fieldUsersOfPerson and ageWords.ts are built (W1). While false, documentPeople knows nobody, so
+ * a people field has no words and the export preflight stops on it: nothing is drawn that is not the finished wording.
+ */
+export const PEOPLE_FIELDS_BUILT = false;
+/**
+ * The people source of a document: what resolveFields uses when the caller gives none.
+ *
+ * W1 fills this (pure, no Intl, no Date, never throws on a schema-valid document; people.ts personOf for the lookup):
+ * - `{name:<id>}` → the person's name; a person who is not in the document → { missing: 'unknown_person' }.
+ * - An {age:…} with a format outside AGE_FORMATS never reaches a source (valueOf answers unknown_age_format first).
+ * - `{age:<id>}` / `{age:<id>:words}` / `{age:<id>:en}`: no such person → unknown_person; the person has no birth date →
+ *   no_birth_date; `day` is null → no_date; `day` is before the birth date → before_birth; else
+ *   ageHe(ageParts(birthDate, day)!, person.form, 'digits' | 'words') or ageEn(ageParts(birthDate, day)!) (ageWords.ts).
+ * - It is a pure function of the document, so its answers may be kept in a FieldIndex of that document: resolveIn keeps
+ *   answers only for NO_PEOPLE today, and W1 extends that to this source when it builds it.
+ * Until then it is NO_PEOPLE.
+ */
+export function documentPeople(_doc: ProjectDocument): PeopleSource {
+  return NO_PEOPLE;
+}
+/**
+ * The titles that hold a field naming this person, in their own text or in a format's wording of them (whether or not live
+ * fields are on for the title): clip ids, each once, in document order. remove_person refuses while this is not empty.
+ * W1 fills it; until then it refuses to answer.
+ */
+export function fieldUsersOfPerson(_doc: ProjectDocument, _personId: string): string[] {
+  throw new Error('people: fieldUsersOfPerson is not built yet');
+}
+/**
+ * True when a title with live fields, or a format's wording of one, holds an {age:…} field: the document can draw words
+ * computed from a birth date. The server asks this before it hands a rendered film to a credential that may not read birth
+ * dates (apps/server/src/peoplePrivacy.ts). It does not look at the people: whether a birth date is recorded is not told.
+ */
+export function holdsAgeFields(doc: ProjectDocument): boolean {
+  const age = (text: string): boolean => text.includes('{age:') && parseFields(text).some((p) => 'token' in p && p.token.name === 'age');
+  const titles = new Set<string>();
+  for (const seq of Object.values(doc.sequences))
+    for (const track of seq.tracks)
+      for (const c of track.clips) {
+        if (c.type !== 'text' || !c.fields) continue;
+        if (age(c.text)) return true;
+        titles.add(c.id);
+      }
+  if (titles.size === 0) return false;
+  for (const v of Object.values(doc.variants ?? {}))
+    for (const [clipId, ov] of Object.entries(v.overrides)) if (ov.text !== undefined && titles.has(clipId) && age(ov.text)) return true;
+  return false;
+}
 
-/** Why a field has no words: the anchor has no capture date (or there is no anchor); the Hebrew day depends on an undecided sunset answer; the file is in no event or its event has no name; the people source does not know the person. */
-export type MissingReason = 'no_date' | 'sunset_undecided' | 'no_event_name' | 'unknown_person';
-export const MISSING_REASONS = ['no_date', 'sunset_undecided', 'no_event_name', 'unknown_person'] as const satisfies readonly MissingReason[];
+/** Why a field has no words: the anchor has no capture date (or there is no anchor); the Hebrew day depends on an undecided sunset answer; the file is in no event or its event has no name; the people source does not know the person; the person has no birth date; the picture was taken before the person was born; an age field has a format that is none of AGE_FORMATS (isUnknownAgeFormat; the people source is not asked). */
+export type MissingReason = 'no_date' | 'sunset_undecided' | 'no_event_name' | PersonMissingReason | 'unknown_age_format';
+export const MISSING_REASONS = ['no_date', 'sunset_undecided', 'no_event_name', 'unknown_person', 'no_birth_date', 'before_birth', 'unknown_age_format'] as const satisfies readonly MissingReason[];
 /** The picture a title takes its date from: `wall` is the capture moment shown (day, or day and time), `how` the anchor rule that found it. */
 export interface FieldAnchor { clipId: string; assetId: string; wall: string; circa: boolean; how: 'under' | 'next' | 'previous' }
 /** `missing` lists each field without data as it is written in the text, with the reason; `eventId` is set when the anchor's file is in an event. */
@@ -175,7 +248,7 @@ export interface FieldIndex { readonly doc: ProjectDocument; readonly memo: Fiel
 /** Pure: builds the (empty) index of a document. Never call it on a draft inside an operation. */
 export function makeFieldIndex(doc: ProjectDocument): FieldIndex { return { doc, memo: { parsed: new Map(), captures: new Map(), eventOf: null, anchorEvents: new Map(), eventNames: new Map(), layouts: new Map(), resolved: new Map(), frame: null, videoSeconds: new Map() } }; }
 export interface FieldOptions {
-  /** Default NO_PEOPLE. */
+  /** Default: the document's own people (documentPeople). */
   people?: PeopleSource;
   /** An index made from the SAME document object; without one the function works it out again. */
   index?: FieldIndex;
@@ -335,8 +408,9 @@ const words = (w: string): FieldValue => ({ words: w });
 const none = (missing: MissingReason): FieldValue => ({ missing });
 function valueOf(ix: FieldIndex, token: FieldToken, m: Moment | null, people: PeopleSource): FieldValue {
   if (isPersonToken(token)) {
+    if (isUnknownAgeFormat(token)) return none('unknown_age_format');
     const answer = people.resolve(token, m ? m.anchor.wall.slice(0, 10) : null);
-    return typeof answer === 'string' ? words(answer) : none('unknown_person');
+    return typeof answer === 'string' ? words(answer) : none(answer === null ? 'unknown_person' : answer.missing);
   }
   if (!m) return none('no_date');
   const { date } = parseWall(m.anchor.wall);
@@ -395,7 +469,7 @@ function resolveNow(ix: FieldIndex, clip: TextClip, m: Moment | null, people: Pe
  */
 export function resolveFields(doc: ProjectDocument, sequenceId: string, clip: TextClip, time: T.RationalTime, opts?: FieldOptions): ResolvedFields {
   if (!clip.fields) return { text: clip.text, anchor: null, eventId: null, missing: [] };
-  const ix = indexFor(doc, opts), people = opts?.people ?? NO_PEOPLE;
+  const ix = indexFor(doc, opts), people = opts?.people ?? documentPeople(doc);
   let m: Moment | null;
   try { m = momentAt(ix, sequenceId, clip, time, 'all'); } catch (e) { if (!(e instanceof RangeError)) throw e; m = null; } // a time no clock can count in: no date
   return resolveIn(ix, clip, m, people);
@@ -480,6 +554,16 @@ const FORMAT_WORDS: Readonly<Record<string, { he: string; en: string }>> = {
   long: { he: 'מלא', en: 'long' }, numeric: { he: 'מספרי', en: 'numeric' }, monthYear: { he: 'חודש ושנה', en: 'month and year' }, 'long-en': { he: 'באנגלית', en: 'in English' },
   'monthYear-en': { he: 'חודש ושנה באנגלית', en: 'month and year in English' }, full: { he: 'מלא', en: 'full' }, noYear: { he: 'בלי שנה', en: 'no year' },
 };
+/**
+ * The readable words of the people fields and of the age formats (ADR-0021, people section), for the editor form:
+ * `{age:per_1a2b}` ↔ `{גיל: נועה}` / `{age: Noa}`, `{age:per_1a2b:words}` ↔ `{גיל: נועה: במילים}`, `{name:per_1a2b}` ↔
+ * `{שם: נועה}`. The person is written by name (a name holds no brace, colon or bar: schema.ts PERSON_NAME) and found again
+ * by people.ts personNameKey. W1 uses these in fieldsToDisplay / fieldsFromDisplay when a document is given.
+ */
+export const PERSON_FIELD_WORDS: Readonly<Record<(typeof PERSON_FIELD_NAMES)[number], { he: string; en: string }>> = { age: { he: 'גיל', en: 'age' }, name: { he: 'שם', en: 'name' } };
+export const AGE_FORMAT_WORDS: Readonly<Record<(typeof AGE_FORMATS)[number], { he: string; en: string }>> = { digits: { he: 'בספרות', en: 'digits' }, words: { he: 'במילים', en: 'in words' }, en: { he: 'באנגלית', en: 'in English' } };
+/** Why what was typed in the editor form cannot be stored: as BadFieldReason, or a people field whose name is nobody in the project. */
+export type DisplayProblemReason = BadFieldReason | 'unknown_person';
 const formatsOf = (name: FieldName): readonly string[] => (name === 'date' ? DATE_FORMATS : name === 'hebrewDate' ? HEBREW_DATE_FORMATS : []);
 /** One spelling for comparing what was typed: trimmed, single spaces, lower case. */
 const typed = (s: string): string => s.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -488,8 +572,14 @@ function fromWords<X extends string>(names: readonly X[], words: Readonly<Record
   const w = typed(word);
   return names.find((n) => typed(n) === w || typed(words[n]!.he) === w || typed(words[n]!.en) === w);
 }
-/** The text of a title with fields as the editor shows it: `{date}` ↔ `{תאריך}` / `{date}`, `{hebrewDate:noYear}` ↔ `{תאריך עברי: בלי שנה}`. Bad groups and people fields are shown as written. */
-export function fieldsToDisplay(lang: 'he' | 'en', text: string): string {
+/**
+ * The text of a title with fields as the editor shows it: `{date}` ↔ `{תאריך}` / `{date}`, `{hebrewDate:noYear}` ↔
+ * `{תאריך עברי: בלי שנה}`. Bad groups are shown as written.
+ * People fields: with `doc`, a field whose person is in the document is shown by name (`{גיל: נועה}`, PERSON_FIELD_WORDS,
+ * AGE_FORMAT_WORDS); a field whose person is not there, and every people field when no `doc` is given, is shown as written.
+ * (The people half is W1's; until it is built people fields are always shown as written, which fieldsFromDisplay reads back.)
+ */
+export function fieldsToDisplay(lang: 'he' | 'en', text: string, _doc?: ProjectDocument): string {
   return parseFields(text).map((p) => {
     if ('literal' in p) return escapeFieldText(p.literal);
     if ('bad' in p) return p.bad;
@@ -498,15 +588,24 @@ export function fieldsToDisplay(lang: 'he' | 'en', text: string): string {
     return format === null ? `{${name}}` : `{${name}: ${FORMAT_WORDS[format]![lang]}}`;
   }).join('');
 }
-/** The stored text for what was typed in the editor form; accepts canonical tokens and the readable names of both languages. */
-export function fieldsFromDisplay(_lang: 'he' | 'en', text: string): { ok: true; text: string } | { ok: false; problems: { token: string; reason: BadFieldReason }[] } {
-  const problems: { token: string; reason: BadFieldReason }[] = [];
+/**
+ * The stored text for what was typed in the editor form; accepts canonical tokens and the readable names of both languages.
+ * People fields: with `doc`, `{גיל: נועה}` / `{age: Noa}` / `{שם: נועה}` (and an age format's word after a second colon)
+ * become `{age:<id>}` / `{name:<id>}` for the person of that name (personNameKey); a name that is nobody in the document is
+ * a problem with reason unknown_person. Without `doc` the readable people form is an unknown field, as today. (W1's half.)
+ */
+export function fieldsFromDisplay(_lang: 'he' | 'en', text: string, _doc?: ProjectDocument): { ok: true; text: string } | { ok: false; problems: { token: string; reason: DisplayProblemReason }[] } {
+  const problems: { token: string; reason: DisplayProblemReason }[] = [];
   let out = '';
   for (const p of scanBraces(text)) {
     if ('literal' in p) { out += escapeFieldText(p.literal); continue; }
     if ('lone' in p) { problems.push({ token: p.lone, reason: 'lone_brace' }); continue; }
     const stored = tokenOf(p.content);
-    if (typeof stored !== 'string') { out += serialiseToken(stored); continue; }
+    if (typeof stored !== 'string') {
+      // a new field: an age format outside AGE_FORMATS is only kept where it is already stored, never typed in
+      if (isUnknownAgeFormat(stored)) problems.push({ token: p.group, reason: 'unknown_format' }); else out += serialiseToken(stored);
+      continue;
+    }
     // the readable form: a field's word, then optionally a colon and a format's word
     const colon = p.content.indexOf(':');
     const name = fromWords(FIELD_NAMES, FIELD_WORDS, colon < 0 ? p.content : p.content.slice(0, colon));
@@ -582,8 +681,10 @@ export function freezeOps(doc: ProjectDocument, sequenceId: string, clipId: stri
 /**
  * Validation issues of live fields (validate.ts calls it at the end of validateProject): code life_unknown_field for a title
  * with `fields`, or a format's wording of one, that holds a brace group which is not a field (unknown name, unknown format,
- * a lone brace), with ids [clipId] or [clipId, variantId]. People fields are NOT an issue here: they resolve to no data
- * and the export preflight reports them (field_no_data).
+ * a lone brace), with ids [clipId] or [clipId, variantId]. A people field whose person is not in the document is NOT an
+ * issue here: it resolves to no data and the export preflight reports it (field_no_data), so undoing an add_person never
+ * leaves a document that cannot be stored. Nor is an age format outside AGE_FORMATS (isUnknownAgeFormat): such a document
+ * was valid when it was stored (159a301), so it stays valid, replays, and reports field_no_data (unknown_age_format).
  */
 export function lifeIssues(doc: ProjectDocument): { code: string; message: string; ids: string[] }[] {
   const issues: { code: string; message: string; ids: string[] }[] = [];

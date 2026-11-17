@@ -59,6 +59,9 @@ describe('ids that are names of Object.prototype members', () => {
       update_event: (id) => ({ eventId: id, name: 'x' }),
       remove_event: (id) => ({ eventId: id }),
       set_text_fields: (id) => ({ clipId: id, enabled: true }),
+      // people (ADR-0021, people section): people are a plain object keyed by id as well
+      update_person: (id) => ({ personId: id, name: 'x' }),
+      remove_person: (id) => ({ personId: id }),
     };
     let reached = 0;
     for (const def of listOps()) {
