@@ -6,12 +6,14 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import * as T from '@pulseframe/time';
-import { applyTransaction, COLOR_LOOKS, createProject, EFFECTS, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, COLOR_LOOKS, createProject, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate, type FrameImage } from '@pulseframe/engine';
 import type { Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
 import { useEditorState } from './store.ts';
 import { GALLERY_STRINGS } from './gallery.strings.ts';
+import { isOn, pickCall, pickRefusal, thumbSize } from './gallery.pick.ts';
+import { singleFlight } from './oneAtATime.ts';
 import './effectGallery.css';
 
 type Kind = 'effect' | 'look' | 'transition' | 'text' | 'motion';
@@ -92,16 +94,6 @@ function buildDoc(s: Scene, it: Item, isText = false): { doc: ProjectDocument; f
   return { doc: step(a.doc, [op]).doc, frame: FRAME_AT };
 }
 
-const sameParams = (a: Record<string, unknown>, b: Record<string, unknown>) => Object.keys(b).every((k) => a[k] === b[k]);
-function pressed(clip: Clip, it: Item): boolean {
-  if (it.kind === 'transition') return clip.type === 'media' && clip.transition?.type === it.id;
-  if (it.kind === 'text' || it.kind === 'motion') return false;
-  const fx = clip.type === 'caption' ? [] : clip.effects ?? [];
-  if (it.kind === 'effect') return fx.some((e) => e.type === it.id);
-  const look = COLOR_LOOKS.find((l) => l.id === it.id)!;
-  return fx.some((e) => e.type === 'color.grade' && sameParams(e.params as Record<string, unknown>, look.params));
-}
-
 export function EffectGalleryButton({ clip, trackKind }: { clip: Clip; trackKind: string }) {
   const { state } = useEditorState();
   const [open, setOpen] = useState(false);
@@ -139,9 +131,13 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     if (!d) { d = buildDoc(motionScene, it, isText); motionDocs.current.set(it.key, d); }
     return d;
   };
-  const settings = editor.doc?.settings;
-  const aspect = settings ? settings.width / settings.height : 16 / 9;
-  const [tw, th] = aspect >= 1 ? [LONG_SIDE, Math.max(16, Math.round(LONG_SIDE / aspect))] : [Math.max(16, Math.round(LONG_SIDE * aspect)), LONG_SIDE];
+  // The snapshot below is taken from the preview, which shows the VIEWED format: the tiles take that format's shape, not the master's.
+  const settings = editor.viewDoc?.settings;
+  const [tw, th] = thumbSize(settings?.width ?? 16, settings?.height ?? 9, LONG_SIDE);
+  // One pick at a time, and what became of the last one, said inside the dialog (the editor's error bar is behind the backdrop).
+  const [flight] = useState(singleFlight);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ kind: 'error' | 'info'; text: string; reason?: string } | null>(null);
 
   const motionScene = useMemo(() => makeScene(tw, th), [tw, th]);
   useEffect(() => { searchRef.current?.focus(); }, []);
@@ -246,24 +242,49 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hot, tab, snap]);
 
-  const commit = (it: Item) => {
-    const clipId = clip.id;
-    const call: OpCall = it.kind === 'effect' ? { op: 'add_effect', args: { clipId, type: it.id } }
-      : it.kind === 'look' ? { op: 'apply_look', args: { clipId, lookId: it.id } }
-      : it.kind === 'transition' ? { op: 'set_transition', args: { clipId, type: it.id } }
-      : it.kind === 'motion' ? { op: 'apply_motion_preset', args: { clipId, presetId: it.id } }
-      : { op: 'apply_text_preset', args: { clipId, presetId: it.id } };
-    void editor.commit([call], `Gallery: ${it.id}`);
+  const commit = async (it: Item) => {
+    if (flight.busy) return; // a pick is on its way: this activation (the second half of a double-click) is not a second edit
+    const name = lang === 'he' ? it.he : it.en;
+    const live = (editor.doc && findClip(editor.doc, clip.id)?.clip) || clip; // the clip as it is now, not as it was when the tile was drawn
+    const call = pickCall(live, it);
+    if (!call) { setStatus({ kind: 'info', text: G.alreadyOn(name) }); return; }
+    setBusyKey(it.key);
+    try {
+      const done = await flight.run(() => editor.commit([call], `Gallery: ${it.id}`));
+      if (done.dropped) return;
+      if (done.value) { setStatus({ kind: 'info', text: G.applied(name) }); return; }
+      const why = pickRefusal(editor.getState());
+      setStatus({ kind: 'error', text: G.refused(name), reason: why.reason ?? (why.conflict ? G.conflict : G.noReason) });
+    } finally { setBusyKey(null); }
   };
 
+  const focusables = () => [...(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].filter((n) => n.offsetParent !== null);
+  // Escape and Tab must work wherever focus is: a click on a disabled tile or outside any control can leave focus on the page
+  // body, where the dialog's own key handler below never hears the key.
+  useEffect(() => {
+    const onDocKey = (e: globalThis.KeyboardEvent) => {
+      const dlg = dialogRef.current;
+      if (!dlg) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return; }
+      if (e.key === 'Tab' && !dlg.contains(document.activeElement)) {
+        const nodes = focusables();
+        if (!nodes.length) return;
+        e.preventDefault(); e.stopPropagation();
+        (e.shiftKey ? nodes[nodes.length - 1]! : nodes[0]!).focus();
+      }
+    };
+    document.addEventListener('keydown', onDocKey, true);
+    return () => document.removeEventListener('keydown', onDocKey, true);
+  }, [onClose]);
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     e.stopPropagation(); // keys typed here are not editor shortcuts
     if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
     if (e.key === 'Tab') {
-      const nodes = [...(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].filter((n) => n.offsetParent !== null);
+      const nodes = focusables();
       if (!nodes.length) return;
+      // the dialog itself takes focus when a heading, a note or the gap between tiles is clicked: Shift+Tab from there wraps too
       const first = nodes[0]!, last = nodes[nodes.length - 1]!, at = document.activeElement;
-      if (e.shiftKey && (at === first || !dialogRef.current?.contains(at))) { e.preventDefault(); last.focus(); }
+      if (e.shiftKey && (at === first || at === dialogRef.current || !dialogRef.current?.contains(at))) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && (at === last || !dialogRef.current?.contains(at))) { e.preventDefault(); first.focus(); }
     }
   };
@@ -283,7 +304,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     return (
       <button key={it.key} type="button" className="pf-gal-tile" data-testid="gallery-tile" data-kind={it.kind} data-id={it.id}
         data-rendered={rendered.has(it.key) ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
-        disabled={unavailable} aria-pressed={pressed(clip, it)} hidden={!matches(it)} onClick={() => commit(it)}
+        disabled={unavailable} aria-pressed={isOn(clip, it)} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
         onPointerEnter={it.kind === 'motion' ? () => setHot(it.key) : undefined} onPointerLeave={it.kind === 'motion' ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
         onFocus={it.kind === 'motion' ? () => setHot(it.key) : undefined} onBlur={it.kind === 'motion' ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
         <canvas ref={(c) => { if (c) canvases.current.set(it.key, c); else canvases.current.delete(it.key); }} width={tw} height={th} aria-hidden="true" style={{ ['--pf-gal-aspect' as string]: `${tw} / ${th}` }} />
@@ -328,7 +349,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
 
   return createPortal(
     <div className="pf-gal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={dialogRef} className="pf-gal-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-gal-title" dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang} data-testid="effect-gallery" onKeyDown={onKey}>
+      <div ref={dialogRef} className="pf-gal-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-gal-title" dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang} data-testid="effect-gallery" tabIndex={-1} onKeyDown={onKey}>
         <div className="pf-gal-head">
           <h2 className="pf-gal-title" id="pf-gal-title">{G.title}</h2>
           <input ref={searchRef} className="pf-gal-search" type="search" data-testid="gallery-search" aria-label={G.search} placeholder={G.searchPlaceholder} autoComplete="off" spellCheck={false} value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -344,6 +365,10 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
           {tab === 'motion' && <p className="pf-gal-note pf-gal-note-small" data-testid="gallery-motion-note">{G.motionNote}</p>}
           {tabs.map(panel)}
         </div>
+        {/* always present, outside the scrolling list, so what became of a pick is on screen wherever the list is scrolled to */}
+        <p className="pf-gal-status" role="status" data-testid="gallery-status" data-kind={status?.kind}>
+          {status && <>{status.text}{status.reason && <> <bdi dir="auto" data-testid="gallery-status-reason">{status.reason}</bdi></>}</>}
+        </p>
       </div>
     </div>,
     document.body,

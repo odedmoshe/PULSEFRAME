@@ -30,7 +30,12 @@ body { background: radial-gradient(1200px 500px at 50% -10%, #151a22 0%, var(--p
    words, track buttons, timeline clips, keyframe dots) keeps exactly the geometry and background its component gave it. */
 :where(button:not(.word, .ch-move, .ch-handle, .track-btn, .vol-key, .clip, .pacing-cell, .user-marker, .inspector-tab, .sc-point), .file, a.ghost) { box-shadow: var(--pf-shadow-1); transition: background-color 0.12s, border-color 0.12s; }
 :where(button:hover:not(:disabled), .file:hover, a.ghost:hover) { background: var(--pf-surface-2); }
-:where(button[aria-pressed='true']) { border-color: var(--pf-accent); background: color-mix(in srgb, var(--pf-accent) 14%, var(--pf-surface-raised)); }
+/* A toggle that is on. This one is deliberately NOT a bare :where(): it has to outrank the base `button` rule in styles.css
+   (with no specificity it never applied, and toggles showed no on/off state). It still ranks below every component's own
+   pressed rule, and the controls that draw their own pressed state are left out by name. */
+button[aria-pressed='true']:where(:not(.word, .clip, .track-btn, .effect-key, .pf-gal-tile)) { border-color: var(--pf-accent); background-color: color-mix(in srgb, var(--pf-accent) 14%, var(--pf-surface-raised)); }
+/* a control that is held back for a moment without losing the keyboard focus (the `disabled` attribute would drop it) */
+button[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; }
 /* the gradient is an image over the solid accent colour, so tools that read the background colour see what the text sits on */
 .primary, button.primary { background-color: var(--pf-accent); background-image: var(--pf-grad-accent); color: #04211d; border-color: transparent; font-weight: 700; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 4px 14px rgba(61, 224, 200, 0.22); }
 .primary:hover:not(:disabled), button.primary:hover:not(:disabled) { background-color: var(--pf-accent); background-image: var(--pf-grad-accent); filter: brightness(1.07); border-color: transparent; }
@@ -47,7 +52,10 @@ fieldset { border-color: var(--pf-border); border-radius: var(--pf-r-md); }
 
 /* ---- shell ---- */
 .app { grid-template-rows: auto auto minmax(0, 1fr) clamp(230px, 34vh, 420px); grid-template-columns: 290px minmax(0, 1fr) 330px; }
-.header { background: linear-gradient(180deg, #171b22 0%, #12151a 100%); border-bottom: 1px solid var(--pf-border); box-shadow: 0 1px 0 var(--pf-border-soft) inset, 0 6px 18px rgba(0, 0, 0, 0.25); padding-block: 7px; position: relative; z-index: 5; }
+.header { background: linear-gradient(180deg, #171b22 0%, #12151a 100%); border-bottom: 1px solid var(--pf-border); box-shadow: 0 1px 0 var(--pf-border-soft) inset, 0 6px 18px rgba(0, 0, 0, 0.25); padding-block: 7px; position: relative; }
+/* The header is positioned so its shadow paints over the panels below, but it has NO z-index: with one it became a stacking
+   context, and the Projects dialog opened from it (rendered inside the header) was trapped under the start panel and the
+   marker bar, which sit at z-index 5 in the page. */
 .header button { box-shadow: none; background: transparent; border-color: transparent; }
 .header button:hover:not(:disabled) { background: var(--pf-surface-3); border-color: var(--pf-border); }
 .header button.primary { background-color: var(--pf-accent); background-image: var(--pf-grad-accent); padding-inline: 18px; border-radius: 999px; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 4px 14px rgba(61, 224, 200, 0.25); }
@@ -78,7 +86,8 @@ canvas[data-testid='preview'] { border-radius: 10px; box-shadow: 0 0 0 1px var(-
 .fields label { color: var(--pf-text-muted); }
 .fields .val { color: var(--pf-text); font-variant-numeric: tabular-nums; }
 .look-panel .effect-row, .sound-track, .recipe-card, .deliver-list li, .phrase, .ramp, .speed-curves, .custom-panels { background: rgba(255, 255, 255, 0.02); border-color: var(--pf-border); border-radius: var(--pf-r-md); }
-.muted { color: var(--pf-text-muted); }
+/* .muted is not given its colour again here: styles.css already does, before its .danger rule. Repeating it in this later
+   sheet outranked .danger, and every "muted danger" error message lost its red. */
 
 /* ---- timeline ---- */
 .timeline { background: #0f1216; border-top: 1px solid var(--pf-border); box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25); }

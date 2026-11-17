@@ -3,6 +3,7 @@ import { CanvasHandles } from './editor/CanvasHandles.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
 import { chordOf, Keymap } from './editor/commands.ts';
 import { ErrorBar, Header, Inspector, Library, Transport } from './editor/panels.tsx';
+import { shortcutAllowed } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
@@ -25,9 +26,8 @@ export function App() {
       const chord = chordOf(e);
       const cmd = keymap.lookup(chord);
       if (!cmd) return;
-      if (typing && !(chord.startsWith('Mod+') && cmd.group === 'view')) return;
-      if (editor.getState().paletteOpen && cmd.id !== 'view.palette') return;
-      if (document.querySelector('.pf-dlg[aria-modal="true"]')) return; // a modal dialog is open: editor shortcuts do not act on the timeline behind it
+      // any modal dialog (whatever its class) is open: editor shortcuts do not act on the timeline behind it
+      if (!shortcutAllowed(chord, cmd, { typing, paletteOpen: editor.getState().paletteOpen, modalOpen: !!document.querySelector('[aria-modal="true"]') })) return;
       e.preventDefault();
       if (!cmd.enabled || cmd.enabled(editor)) void cmd.run(editor);
     };

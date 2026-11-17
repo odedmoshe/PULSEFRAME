@@ -6,6 +6,7 @@ import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, ty
 import * as T from '@pulseframe/time';
 import { curvePolyline, segmentsFromPoints, SPEED_CURVES, toSourceSpan, type Clip, type CurvePoint, type CurveSegment } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
+import { curveApplier } from './speedCurves.apply.ts';
 import './speedCurves.css';
 
 type Media = Extract<Clip, { type: 'media' }>;
@@ -16,7 +17,8 @@ const STR = {
     smooth: 'מעברים רכים בין המהירויות', apply: 'החלת העקומה', reset: 'איפוס', newLength: (a: string, b: string) => `אורך אחרי ההחלה: כ-${a} שנ׳ (עכשיו ${b} שנ׳)`,
     point: (i: number, at: string, v: string) => `נקודה ${i}: מיקום ${at}%, מהירות ${v}×`, graph: 'גרף מהירות: מיקום בקליפ מול מהירות',
     blocked: { keyframes: 'יש בקליפ נקודות מפתח או עוצמת קול משתנה. יש להסיר אותן קודם.', transition: 'יש מעבר בקליפ הזה או אחריו. יש להסיר אותו קודם.', reverse: 'קליפ שמתנגן לאחור לא יכול לקבל עקומת מהירות.' },
-    done: (n: number) => `העקומה הוחלה: ${n} חלקים נבחרו בציר הזמן. Ctrl+Z מבטל.`,
+    done: (n: number) => `העקומה הוחלה: ${n} חלקים נבחרו בציר הזמן. Ctrl+Z מבטל. כדי לנסות עקומה אחרת, מבטלים קודם.`,
+    repeat: 'העקומה כבר הוחלה והחלקים שלה נבחרו. כדי לנסות עקומה אחרת מבטלים קודם (Ctrl+Z); כדי לתת עקומה לחלק אחד, בוחרים אותו בציר הזמן.',
   },
   en: {
     title: 'Speed curves', intro: 'A ready-made shape of speed along the clip. The clip is divided into parts, each at its own speed; picture and linked sound change together.',
@@ -24,7 +26,8 @@ const STR = {
     smooth: 'Ease between speeds', apply: 'Apply curve', reset: 'Reset', newLength: (a: string, b: string) => `Length after applying: about ${a} s (now ${b} s)`,
     point: (i: number, at: string, v: string) => `Point ${i}: position ${at}%, speed ${v}×`, graph: 'Speed graph: position in the clip against speed',
     blocked: { keyframes: 'The clip has keyframes or volume keys. Remove them first.', transition: 'There is a transition on this clip or after it. Remove it first.', reverse: 'A clip that plays backwards cannot take a speed curve.' },
-    done: (n: number) => `Curve applied: ${n} parts selected on the timeline. Ctrl+Z undoes it.`,
+    done: (n: number) => `Curve applied: ${n} parts selected on the timeline. Ctrl+Z undoes it. To try another curve, undo first.`,
+    repeat: 'The curve is already applied and its parts are selected. To try another curve, undo first (Ctrl+Z); to give one part a curve of its own, choose that part on the timeline.',
   },
 } as const;
 
@@ -58,6 +61,9 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
   const [points, setPoints] = useState<CurvePoint[]>(DEFAULT_POINTS);
   const [smooth, setSmooth] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
+  // One action at a time: see speedCurves.apply.ts. `busy` only repaints the controls; the guard itself reads live state.
+  const [curve] = useState(() => curveApplier({ commit: (ops, label) => editor.commit(ops, label), select: (id, mode) => editor.select(id, mode), selection: () => editor.getState().selection }));
+  const [busy, setBusy] = useState(false);
   const svg = useRef<SVGSVGElement>(null);
   const drag = useRef<number | null>(null);
   const doc = editor.doc;
@@ -69,14 +75,16 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
     : clip.transition || (next?.type === 'media' && next.transition && T.eq(next.start, T.add(clip.start, clip.duration))) ? S.blocked.transition : null;
   const nowSeconds = T.toSeconds(clip.duration), sourceSeconds = T.toSeconds(toSourceSpan(clip, clip.duration));
 
+  // Not the `disabled` attribute: a tile that disables itself under the keyboard focus would drop the focus (and with it Ctrl+Z).
+  const held = busy || curve.repeat();
   const apply = async (args: Record<string, unknown>, label: string) => {
-    setStatus(null);
-    const r = await editor.commit([{ op: 'apply_speed_curve', args: { clipId: clip.id, ...args, ...(ripple ? {} : { ripple: false }) } }], label);
-    const ids = (r?.results[0]?.output as { partClipIds?: string[] } | undefined)?.partClipIds;
-    if (!ids?.length) return;
-    editor.select(ids[0]!);
-    for (const id of ids.slice(1)) editor.select(id, 'toggle');
-    setStatus(S.done(ids.length));
+    if (curve.busy) return; // a commit is on its way: this click is not a second edit
+    if (curve.repeat()) { setStatus(S.repeat); return; }
+    setStatus(null); setBusy(true);
+    try {
+      const r = await curve.apply(clip.id, { ...args, ...(ripple ? {} : { ripple: false }) }, label);
+      if (r.kind === 'applied') setStatus(S.done(r.partIds.length));
+    } finally { setBusy(false); }
   };
 
   // ---- the hand-made curve ----
@@ -146,7 +154,7 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
       <div className="sc-grid" role="group" aria-label={S.title}>
         {SPEED_CURVES.map((c) => (
           <button key={c.id} type="button" className="sc-tile" data-testid="speed-curve" data-id={c.id} title={c.hint[state.lang]} aria-label={`${c.name[state.lang]}: ${c.hint[state.lang]}`}
-            onClick={() => void apply({ preset: c.id }, `Speed curve ${c.id}`)}>
+            aria-disabled={held || undefined} aria-busy={busy || undefined} onClick={() => void apply({ preset: c.id }, `Speed curve ${c.id}`)}>
             <Thumb segments={c.segments} smooth={c.smooth} />
             <span className="sc-name">{c.name[state.lang]}</span>
             <span className="sc-len"><bdi>{S.length(num(lengthFactor(c.segments), 2))}</bdi></span>
@@ -172,7 +180,7 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
         <p className="muted" data-testid="speed-curve-length" aria-live="polite">{segments && line.length ? S.newLength(num(sourceSeconds * lengthFactor(segments), 1), num(nowSeconds, 1)) : ''}</p>
         <label className="check"><input type="checkbox" checked={smooth} onChange={(e) => setSmooth(e.target.checked)} data-testid="speed-curve-smooth" /> {S.smooth}</label>
         <div className="row">
-          <button type="button" className="primary" disabled={!segments || flat} data-testid="speed-curve-apply" onClick={() => void apply({ points, ...(smooth ? {} : { smooth: false }) }, 'Speed curve')}>{S.apply}</button>
+          <button type="button" className="primary" disabled={!segments || flat} aria-disabled={held || undefined} aria-busy={busy || undefined} data-testid="speed-curve-apply" onClick={() => void apply({ points, ...(smooth ? {} : { smooth: false }) }, 'Speed curve')}>{S.apply}</button>
           <button type="button" className="ghost" data-testid="speed-curve-reset" onClick={() => setPoints(DEFAULT_POINTS)}>{S.reset}</button>
         </div>
       </details>

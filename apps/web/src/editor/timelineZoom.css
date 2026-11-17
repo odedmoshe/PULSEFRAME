@@ -1,4 +1,9 @@
-.tl-zoom { position: absolute; top: 0; right: 520px; z-index: 3; display: inline-flex; align-items: center; gap: var(--pf-s-1); background: var(--pf-surface); padding: 2px var(--pf-s-2); font-size: var(--pf-fs-sm); color: var(--pf-text-muted); }
+/* In the normal flow of the timeline's top bar, so it can never lie over another control. It comes first on the bar, before
+   the clip actions. From 1360px it shares their line; below that there is no room for both beside the track and snap
+   controls pinned to the right, so the zoom takes a short line of its own above the clip actions (never a jump while
+   editing: the choice depends on the window's width only). */
+.tl-zoom { display: flex; inline-size: fit-content; align-items: center; gap: var(--pf-s-1); margin-inline-start: var(--pf-s-3, 12px); padding-block: 2px; font-size: var(--pf-fs-sm); color: var(--pf-text-muted); }
+@media (min-width: 1360px) { .tl-zoom { display: inline-flex; vertical-align: middle; } }
 .tl-zoom-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 1px 6px; min-height: 20px; font-size: 11px; color: var(--pf-text); background: transparent; border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); cursor: pointer; }
 .tl-zoom-btn:hover { background: var(--pf-surface-raised); }
 .tl-zoom-slider { width: 96px; accent-color: var(--pf-accent); }
