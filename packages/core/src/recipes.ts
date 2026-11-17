@@ -200,7 +200,7 @@ defineOp({
   name: 'portrait_blur',
   version: 1,
   checksOwnIds: ['cutoutAssetId'],
-  description: 'Blur the background of a still picture clip behind its subject, in one step: the clip shows the cut-out of its picture (sharp subject, clear background; made by the background-removal tool from this picture), and a copy of the clip showing the original picture, with a blur.gaussian effect added, goes on a new picture track directly below it. The copy keeps the clip\'s start, length, position, size, rotation, opacity, keyframes, effects, mask and per-format changes. The blur radius stays editable (update_effect on the copy). Refused for moving pictures, on a locked track, and while a transition joins the clip to its neighbours.',
+  description: 'Blur the background of a still picture clip behind its subject, in one step: the clip shows the cut-out of its picture (sharp subject, clear background; made by the background-removal tool from this picture), and a copy of the clip showing the original picture, with a blur.gaussian effect added, goes on a new picture track directly below it. The copy keeps the clip\'s start, length, position, size, rotation, opacity, keyframes, effects, mask and per-format changes, and its track is hidden when the clip\'s track is. The blur radius stays editable (update_effect on the copy). Refused for moving pictures, on a locked track, and while a transition joins the clip to its neighbours.',
   args: z.object({
     clipId: z.string(),
     cutoutAssetId: z.string().describe('The cut-out asset (an image made from the clip\'s picture by the background-removal tool)'),
@@ -226,7 +226,8 @@ defineOp({
     copy.id = ctx.newId('clp');
     copy.linkGroupId = null;
     const count = f.seq.tracks.filter((t) => t.kind === 'video').length + 1;
-    const below: Track = { id: ctx.newId('trk'), kind: 'video', name: `V${count}`, locked: false, muted: false, hidden: false, clips: [copy] };
+    // The copy is part of the clip's picture: it is shown exactly when the clip's own track is (a clip on a hidden track stays unseen).
+    const below: Track = { id: ctx.newId('trk'), kind: 'video', name: `V${count}`, locked: false, muted: false, hidden: f.track.hidden, clips: [copy] };
     f.seq.tracks.splice(f.seq.tracks.indexOf(f.track), 0, below);
     for (const v of Object.values(d.variants)) if (Object.hasOwn(v.overrides, clip.id)) v.overrides[copy.id] = structuredClone(v.overrides[clip.id]!);
     // 2. the blur on the copy, and 3. the clip shows the cut-out: both through the ordinary public ops, with their own checks

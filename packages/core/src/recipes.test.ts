@@ -153,6 +153,19 @@ describe('portrait blur recipe (ADR-0017): a still picture over a blurred copy o
     expect(undoes(s.doc, direct.doc)).toBe(true);
   });
 
+  it('the new track takes the clip track\'s visibility: a clip on a hidden track does not gain a visible blurred copy', () => {
+    const s = setup();
+    const trackId = findClip(s.doc, s.clip)!.track.id;
+    for (const hidden of [true, false]) {
+      const doc = tx(s.doc, [{ op: 'update_track', args: { trackId, hidden } }]).doc;
+      const r = tx(doc, [{ op: 'portrait_blur', args: { clipId: s.clip, cutoutAssetId: s.cut } }]);
+      const top = findClip(r.doc, s.clip)!.track, below = findClip(r.doc, r.results[0]!.output!.backgroundClipId as string)!.track;
+      expect([top.hidden, below.hidden], `hidden: ${hidden}`).toEqual([hidden, hidden]);
+      expect(validateProject(r.doc)).toEqual([]);
+      expect(undoes(doc, r.doc)).toBe(true);
+    }
+  });
+
   it('a missing cut-out is a clear refusal that names the picture and the tool to run; so are a wrong cut-out and a moving picture', () => {
     const s = setup();
     const noCut = structuredClone(s.doc);
