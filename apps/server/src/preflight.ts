@@ -53,7 +53,8 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   const lanes = maxDecodeLanes(doc);
   if (lanes.lanes > RENDER_DECODERS) {
     const at = T.frameTime(lanes.fromFrame, rate), until = T.frameTime(lanes.toFrame, rate);
-    const ids = seq.tracks.filter((t) => t.kind === 'video' && !t.hidden).flatMap((t) => t.clips.filter((c) => c.type === 'media' && T.lt(c.start, until) && T.lt(at, T.add(c.start, c.duration))).map((c) => c.id));
+    // the video clips drawn somewhere in that stretch (stills and titles decode nothing)
+    const ids = seq.tracks.filter((t) => t.kind === 'video' && !t.hidden).flatMap((t) => t.clips.filter((c) => c.type === 'media' && !!doc.assets[c.assetId]?.video && T.lt(c.start, until) && T.lt(at, T.add(c.start, c.duration))).map((c) => c.id));
     issues.push({ code: 'decode_budget', severity: 'warning', message: `frames ${lanes.fromFrame}–${lanes.toFrame - 1} need ${lanes.lanes} video pictures decoded at once, more than the ${RENDER_DECODERS} the renderer can open; those frames would be refused (time effects such as echo and time split decode each earlier picture separately). Lower the count of a time effect, remove one, or move the overlapping clips apart`, ids, range: { startFrame: lanes.fromFrame, endFrame: lanes.toFrame } });
   }
 

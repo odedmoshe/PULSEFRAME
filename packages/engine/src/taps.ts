@@ -10,8 +10,9 @@
  * (delay, lag, hold) or whole degrees (angle). Floats appear only as render quantities (weights before rounding).
  */
 import * as T from '@pulseframe/time';
-import { flashGapFrames, followedBeats, isTimeEffect, TAP_WEIGHT_TOTAL, temporalOf, type Clip, type ProjectDocument, type Track } from '@pulseframe/core';
+import { followedBeats, isTimeEffect, TAP_WEIGHT_TOTAL, temporalOf, type Clip, type ProjectDocument, type Track } from '@pulseframe/core';
 import { thinnedHits } from './gpu.ts';
+import { flashGapFrames } from './strobeSchedule.ts'; // the flash schedule's spacing (core flashSafety.ts, re-exported there)
 
 type Params = Record<string, number | string | boolean>;
 /** Scratch slot (look.ts scratch) in which drawGraph places one tap at a time. Slots 0–7 are taken (look.ts, compositor2d.ts). */

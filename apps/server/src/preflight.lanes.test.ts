@@ -41,6 +41,14 @@ describe('preflight: video decoders needed at once', () => {
     expect(issue!.ids.sort()).toEqual([...ids].sort());
     expect(issue!.message).toMatch(/15 video pictures decoded at once, more than the 12/);
   });
+  it('a still image drawn in that stretch decodes nothing and is not named', () => {
+    const { doc, ids } = clips([0, 10, 20]);
+    const still = { kind: 'image' as const, name: 'p.png', contentHash: `sha256:${'a'.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 640, height: 360, codec: 'png', hasAlpha: false }, provenance: asset.provenance };
+    let r = tx(doc, [{ op: 'import_asset', args: { asset: still } }], true);
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: r.results[0]!.output!.assetId as string, start: f(25), duration: f(10) } }]);
+    const issue = preflight(stubExporter, r.doc, 1).issues.find((i) => i.code === 'decode_budget');
+    expect(issue!.ids.sort()).toEqual([...ids].sort());
+  });
   it('two of them (10 pictures) fit', () => {
     expect(preflight(stubExporter, clips([0, 10]).doc, 1).issues.some((i) => i.code === 'decode_budget')).toBe(false);
   });
