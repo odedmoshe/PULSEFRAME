@@ -40,7 +40,7 @@ function MarkerBar({ marker }: { marker: Marker }) {
  */
 export function Timeline() {
   const { editor, state, t } = useEditorState();
-  const { doc, selection, pxPerSecond: pps, derivativeTick, ghosts } = state;
+  const { doc, selection, pxPerSecond: pps, ghosts } = state;
   const ghostSel = new Set(ghosts.flatMap((g) => g.selection));
   const rate = editor.rate;
   const { containerProps, ghost } = useTimelineDrag();
@@ -153,7 +153,7 @@ export function Timeline() {
                     onContextMenu={(e) => { e.preventDefault(); if (!selection.includes(c.id)) editor.select(c.id); setMenu({ x: e.clientX, y: e.clientY }); }}
                     aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
-                      <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={34} refreshKey={derivativeTick} reverse={c.type === 'media' && !!c.reverse} />
+                      <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={34} reverse={c.type === 'media' && !!c.reverse} />
                     )}
                     <span dir="auto" className="clip-label">{c.type === 'media' && c.freeze ? '❄ ' : ''}{c.type === 'media' && c.reverse ? '◀ ' : ''}{c.type === 'media' && c.speedEnd ? '⤴ ' : ''}{clipLabel(doc, c)}</span>
                     {c.keyframes && [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.toSeconds(k.time))))].filter((s) => s >= 0 && s <= T.toSeconds(c.duration)).map((s) => (
