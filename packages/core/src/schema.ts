@@ -183,8 +183,13 @@ export const AssetSchema = z
         origin: z.enum(['upload', 'fixture', 'generated', 'derived']),
         importedAt: z.string(),
         importedBy: z.string(),
-        /** Present for built-in synthesised sounds: which formula made this file. */
-        procedural: z.object({ id: z.string(), version: z.number().int(), generator: z.string() }).strict().optional(),
+        /**
+         * Present for media made by a formula of this build (built-in sounds, graphic elements, built-in music): which formula
+         * made this file. `params` (ADR-0022) is what the formula was asked for when the id alone does not say it: built-in music
+         * records bars, seed, bpm, meter and synth (musicStyles.ts musicProvenanceParams). At most 8 entries.
+         */
+        procedural: z.object({ id: z.string(), version: z.number().int(), generator: z.string(),
+          params: z.record(z.string().min(1).max(24), z.union([z.number(), z.string().max(64)])).refine((r) => Object.keys(r).length <= 8, { message: 'at most 8 entries' }).optional() }).strict().optional(),
         /** Present for generated speech (SPEC §17): what was said, by which engine and model, in which voice. A voice taken from a recording carries the consent statement its owner made; an agent cannot make one. */
         voice: z
           .object({
@@ -475,6 +480,16 @@ export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), 
 export type RecipeRun = z.infer<typeof RecipeRunSchema>;
 
 // ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
+/**
+ * Sections of a piece of music (ADR-0022): the one shape for built-in music (known by construction, musicStyles.ts) and for
+ * any later music analysis. A section starts at `start` (source time) and ends where the next one starts; the last ends with
+ * the file. `level` is how full the arrangement is, 0 (sparse) to 3 (fullest).
+ */
+export const MUSIC_SECTION_KINDS = ['intro', 'build', 'peak', 'break', 'ending'] as const;
+export const MusicSectionSchema = z.object({ start: RationalTimeSchema, kind: z.enum(MUSIC_SECTION_KINDS), level: z.number().int().min(0).max(3) }).strict();
+export type MusicSection = z.infer<typeof MusicSectionSchema>;
+/** A beat analysis holds at most this many sections. */
+export const MAX_MUSIC_SECTIONS = 200;
 const AnalysisOrigin = z.object({ method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), createdBy: z.string(), edited: z.boolean().describe('true once a person or agent corrected the result by hand') }).strict();
 export const AnalysisSchema = z
   .object({
@@ -482,7 +497,9 @@ export const AnalysisSchema = z
     /** Picture cuts inside the source file (the first frame of each new shot), ascending. */
     scenes: z.object({ origin: AnalysisOrigin, cuts: z.array(RationalTimeSchema).max(20000) }).strict().optional(),
     /** Beat grid of the source audio, ascending. bpm and confidence describe the detector's estimate; beats are what editing tools use. */
-    beats: z.object({ origin: AnalysisOrigin, bpm: z.number().min(20).max(400).nullable(), confidence: z.number().min(0).max(1).nullable(), beats: z.array(RationalTimeSchema).max(50000), /** Beats that start a bar (each is one of `beats`); absent when no bar pattern was found or entered. */ downbeats: z.array(RationalTimeSchema).max(50000).optional(), /** Beats per bar behind `downbeats`, when known. */ meter: z.number().int().min(2).max(12).nullable().optional() }).strict().optional(),
+    beats: z.object({ origin: AnalysisOrigin, bpm: z.number().min(20).max(400).nullable(), confidence: z.number().min(0).max(1).nullable(), beats: z.array(RationalTimeSchema).max(50000), /** Beats that start a bar (each is one of `beats`); absent when no bar pattern was found or entered. */ downbeats: z.array(RationalTimeSchema).max(50000).optional(), /** Beats per bar behind `downbeats`, when known. */ meter: z.number().int().min(2).max(12).nullable().optional(),
+      /** Sections of the music, ascending, the first at 0 (validate.ts). Present for built-in music; attach_analysis (a measurement) never writes them. */
+      sections: z.array(MusicSectionSchema).max(MAX_MUSIC_SECTIONS).optional() }).strict().optional(),
   })
   .strict();
 

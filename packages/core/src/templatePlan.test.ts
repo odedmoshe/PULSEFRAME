@@ -298,7 +298,9 @@ describe('planTemplate: what it refuses, blocks and reports', () => {
     expect(code(() => planTemplate(doc, def, { media: ['snd'] }))).toBe('invalid_args');
     expect(code(() => planTemplate(doc, def, { media: ['vid_a'], at: T.rt(1, 1000) }))).toBe('invalid_args');
     expect(code(() => planTemplate(doc, { ...def, slots: [{ ...one({ seconds: '1' }), key: 's1' }], elements: PROP.elements }, { media: ['vid_a'] }, { elementsAvailable: false }))).toBe('needs_capability');
-    const many: TemplateDef = { ...def, slots: Array.from({ length: 40 }, (_, i) => ({ ...one({ seconds: '1' }), key: `k${i}` })), elements: Array.from({ length: 20 }, (_, i) => ({ key: `e${i}`, elementId: 'element.symbol.location-pin', perSlot: 'count-up' as const, at: { slot: 'k0' }, place: { x: 0, y: 0 }, motion: { presetId: 'motion.in.drop' } })) };
+    // forty titles on each of forty slots: 1600 titles of two operations each. (Until ADR-0022 this was provoked with twenty
+    // elements on every slot; elements that would share a track range are now left out of the plan, so they no longer add up.)
+    const many: TemplateDef = { ...def, slots: Array.from({ length: 40 }, (_, i) => ({ ...one({ seconds: '1' }), key: `k${i}` })), texts: Array.from({ length: 40 }, (_, i) => ({ key: `t${i}`, role: { he: 'כותרת', en: 'Title' }, default: { he: 'מספר {n}', en: 'Number {n}' }, maxChars: 20, presetId: 'clean-white', perSlot: 'count-up' as const, at: { slot: 'k0' }, place: { x: 0, y: 0 } })) };
     expect(code(() => planTemplate(doc, many, { media: ['vid_a'] }))).toBe('invalid_args');
     expect(code(() => planTemplate(doc, { ...def, slots: [one({ seconds: '1' }), one({ seconds: '1' })] }, { media: ['vid_a'] }))).toBe('invalid_args'); // duplicate key
   });

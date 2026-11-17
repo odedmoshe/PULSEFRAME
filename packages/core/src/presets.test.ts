@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, COLOR_LOOKS, createProject, findFont, hasTextLook, lookParams, TEXT_LOOK_FIELDS, TEXT_PRESETS, TextStyleSchema, TREND_TEXT_PRESET_IDS, type ProjectDocument } from './index.ts';
+import { applyTransaction, BUILTIN_TEXT_PRESETS, COLOR_LOOKS, PACKS, createProject, findFont, hasTextLook, lookParams, TEXT_LOOK_FIELDS, TEXT_PRESETS, TextStyleSchema, TREND_TEXT_PRESET_IDS, type ProjectDocument } from './index.ts';
 
 let n = 0;
 const ctxOf = () => ({ idSeed: `p${n++}`, actor: 'test' });
@@ -13,10 +13,13 @@ describe('colour looks', () => {
   });
 });
 describe('text styles', () => {
-  it('there are 50, distinct, valid as text style, using only bundled fonts and weights', () => {
-    expect(TEXT_PRESETS).toHaveLength(50);
-    expect(new Set(TEXT_PRESETS.map((p) => p.id)).size).toBe(50);
-    expect(new Set(TEXT_PRESETS.map((p) => JSON.stringify([p.style, p.shadow]))).size).toBe(50);
+  it('there are 50 of their own and then those of the content packs, distinct, valid as text style, using only bundled fonts and weights', () => {
+    // ADR-0022: the content packs add their text styles after the fifty built-in ones
+    expect(BUILTIN_TEXT_PRESETS).toHaveLength(50);
+    expect(TEXT_PRESETS).toHaveLength(50 + PACKS.reduce((k, p) => k + p.textPresets.length, 0));
+    expect(TEXT_PRESETS.slice(0, 50)).toEqual(BUILTIN_TEXT_PRESETS);
+    expect(new Set(TEXT_PRESETS.map((p) => p.id)).size).toBe(TEXT_PRESETS.length);
+    expect(new Set(TEXT_PRESETS.map((p) => JSON.stringify([p.style, p.shadow]))).size).toBe(TEXT_PRESETS.length);
     for (const p of TEXT_PRESETS) {
       expect(() => TextStyleSchema.partial().strict().parse(p.style)).not.toThrow();
       const font = findFont(p.style.fontFamily);

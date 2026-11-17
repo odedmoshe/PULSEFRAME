@@ -6,7 +6,8 @@
  * Rule-based; no model. Templates that would need a model are listed as unavailable (MODEL_GATED_TEMPLATES) and never run.
  */
 import { z } from 'zod';
-import { AssetSchema, RationalTimeSchema, SlotRecordSchema, TEMPLATE_SLOT_KINDS, TEXT_ANIM_IN, TEXT_ANIM_LOOP, TEXT_ANIM_OUT, type SlotRecord } from './schema.ts';
+import { AssetSchema, isRealWallDate, RationalTimeSchema, SlotRecordSchema, TEMPLATE_SLOT_KINDS, TEXT_ANIM_IN, TEXT_ANIM_LOOP, TEXT_ANIM_OUT, WALL_DATE, type SlotRecord } from './schema.ts';
+import { KnownGridSchema, MUSIC_MAX_SEED, MUSIC_STYLE_ID } from './musicStyles.ts';
 
 export const BIND_NAME = /^[a-z][a-z0-9_-]{0,31}$/;
 export const BindName = z.string().regex(BIND_NAME);
@@ -28,7 +29,11 @@ export const TemplateStepSchema = z.object({ op: z.string().min(1).max(64), args
 export type TemplateStep = z.infer<typeof TemplateStepSchema>;
 export const PlannedSlotSchema = z.object({ key: BindName, kind: z.enum(TEMPLATE_SLOT_KINDS), clipId: z.union([z.string().min(1).max(64), RefSchema]), accept: z.enum(['video', 'image', 'any']).optional(), beats: SlotRecordSchema.shape.beats }).strict();
 export type PlannedSlot = z.infer<typeof PlannedSlotSchema>;
-export const TemplateAssetSchema = z.object({ key: BindName, asset: AssetSchema.omit({ id: true }) }).strict();
+/**
+ * Procedural media a template carries. `analysis` (ADR-0022) is the known beat grid of a built-in music track: apply_template
+ * attaches it to the asset as attachKnownGrid does (packOps.ts), in the same step. Optional, so old logs replay unchanged.
+ */
+export const TemplateAssetSchema = z.object({ key: BindName, asset: AssetSchema.omit({ id: true }), analysis: KnownGridSchema.optional() }).strict();
 export const ApplyTemplateArgsSchema = z.object({
   runId: z.string().optional(),
   templateId: z.string().regex(/^tpl\.[a-z0-9-]{1,40}$/),
@@ -47,6 +52,50 @@ export type ApplyTemplateArgs = z.infer<typeof ApplyTemplateArgsSchema>;
 export interface ApplyTemplateOutput { runId: string; createdIds: string[]; slots: SlotRecord[]; assetIds: Record<string, string> }
 
 export const TEMPLATE_GENRES = ['montage', 'celebration', 'promo', 'quote', 'list', 'memories'] as const;
+/** The id of a content pack (packs/contract.ts). */
+export const PACK_ID = /^pack\.[a-z0-9-]{1,24}$/;
+const Colour = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+const MusicStyleId = z.string().regex(MUSIC_STYLE_ID);
+
+// ---------- pack fields (ADR-0022) ----------
+/**
+ * Fields a pack template's titles may hold: `{name}`, `{name2}`, `{age}`, `{night}`, `{place}`, `{when}`. They are LITERAL: the
+ * caller gives their words (TemplateInput.fields) and the planner writes them into the title's text once, at plan time, so
+ * the result is ordinary editable text and a regeneration with the same parameters gives the same title.
+ * They are not the life line's live fields (fields.ts: {date} {hebrewDate} {year} {hebrewYear} {event}), which a title may
+ * hold as well and which stay live: such a title is made with its live fields on. `{n}` stays the planner's own per-slot
+ * counter of count-down titles. `night` is the Hanukkah candle (1..8); when it is not given, the planner works it out from
+ * `date` and `atLighting` (packs/suggest.ts candleNight). Nothing here reads a clock: the date is an input.
+ */
+export const PACK_FIELD_KEYS = ['name', 'name2', 'age', 'night', 'place', 'when'] as const;
+export type PackFieldKey = (typeof PACK_FIELD_KEYS)[number];
+export type PackFieldValues = Readonly<Partial<Record<PackFieldKey, string>>>;
+const FieldWords = z.string().min(1).max(80).regex(/^[^\n\r]*$/);
+export const PackFieldsInputSchema = z.object({
+  name: FieldWords.optional(), name2: FieldWords.optional(), age: FieldWords.optional(), night: FieldWords.optional(), place: FieldWords.optional(), when: FieldWords.optional(),
+  date: z.string().regex(WALL_DATE).refine(isRealWallDate, { message: 'not a real calendar day between 1900 and 2100' }).optional().describe('YYYY-MM-DD, the day it was filmed: used only to work out {night} (the Hanukkah candle) when night is not given'),
+  atLighting: z.boolean().optional().describe('with date: true (the default) = filmed at that evening\'s candle lighting, which belongs to the next Hebrew day'),
+}).strict();
+export type PackFieldsInput = z.infer<typeof PackFieldsInputSchema>;
+const PACK_TOKEN = new RegExp(`\\{(${PACK_FIELD_KEYS.join('|')})\\}`, 'g');
+/** The pack fields a text holds, each once, in the order of PACK_FIELD_KEYS. */
+export const packFieldsIn = (text: string): PackFieldKey[] => { const found = new Set([...text.matchAll(PACK_TOKEN)].map((m) => m[1] as PackFieldKey)); return PACK_FIELD_KEYS.filter((k) => found.has(k)); };
+/**
+ * Replace the pack tokens of `text` by their values. Only the six tokens of PACK_FIELD_KEYS are touched: every other brace
+ * group (the planner's own `{n}`, a live field such as `{hebrewDate}`) is left exactly as it is. `missing` lists the pack
+ * fields of the text without a value (their tokens are left in place; the caller then uses the title's fallback words).
+ * `escape` is applied to each value before it is written in (a title with live fields stores plain braces doubled:
+ * fields.ts escapeFieldText). A value is written once and never read again as text with tokens.
+ */
+export function fillFields(text: string, fields: PackFieldValues, escape: (value: string) => string = (v) => v): { text: string; missing: PackFieldKey[] } {
+  const missing = new Set<PackFieldKey>();
+  const filled = text.replace(PACK_TOKEN, (token, key: PackFieldKey) => {
+    const value = Object.hasOwn(fields, key) ? fields[key] : undefined;
+    if (value === undefined || value === '') { missing.add(key); return token; }
+    return escape(value);
+  });
+  return { text: filled, missing: PACK_FIELD_KEYS.filter((k) => missing.has(k)) };
+}
 /** Slot length: whole beats or bars of the grid, or exact seconds 'n' or 'n/d'. Every absolute end is snapped once; durations are differences of snapped ends. */
 export const SpanSchema = z.union([
   z.object({ beats: z.number().int().min(1).max(64) }).strict(),
@@ -69,6 +118,11 @@ export const SlotDefSchema = z.object({
 const TimingSchema = z.object({ slot: BindName, offsetBeats: z.number().int().min(0).max(32).optional(), spanSlots: z.number().int().min(1).max(40).optional() }).strict();
 export const TextDefSchema = z.object({
   key: BindName, role: Words(40), default: Words(200), maxChars: z.number().int().min(1).max(500),
+  /**
+   * The words used instead of `default` when a pack field of `default` has no value, or a live field of it has no capture
+   * date to read (ADR-0022). No pack field and no live field in it. Required when `default` holds either (checkDef).
+   */
+  fallback: Words(200).optional(),
   /** TEXT_PRESETS id, applied with apply_text_preset (direction stays auto). */
   presetId: z.string().max(48),
   anim: z.object({ by: z.enum(['letter', 'word', 'line']), in: z.enum(TEXT_ANIM_IN).nullable(), out: z.enum(TEXT_ANIM_OUT).nullable(), loop: z.enum(TEXT_ANIM_LOOP).nullable(), inSeconds: z.number().min(0.04).max(10), outSeconds: z.number().min(0.04).max(10) }).strict().optional(),
@@ -78,7 +132,8 @@ export const TextDefSchema = z.object({
   perSlot: z.enum(['none', 'count-down', 'count-up']).optional(),
   place: PlaceSchema,
 }).strict();
-export const ElementDefSchema = z.object({ key: BindName, elementId: z.string().max(64), color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(), at: TimingSchema, perSlot: z.enum(['none', 'count-down', 'count-up']).optional(), place: PlaceSchema, motion: z.object({ presetId: z.string().max(48) }).strict().optional() }).strict();
+/** color / color2: left out = the element's own default colours (ElementDef.defaults), else white and teal. */
+export const ElementDefSchema = z.object({ key: BindName, elementId: z.string().max(64), color: Colour.optional(), color2: Colour.optional(), at: TimingSchema, perSlot: z.enum(['none', 'count-down', 'count-up']).optional(), place: PlaceSchema, motion: z.object({ presetId: z.string().max(48) }).strict().optional() }).strict();
 export const SfxDefSchema = z.object({
   key: BindName, sfxId: z.string().max(48),
   /** boundaries = every slot start except the first (every everyN-th); first = template start; last = last slot start; {slot}/{text} = that item's start. */
@@ -104,7 +159,11 @@ export const TemplateDefSchema = z.object({
    * - none = music is never placed.
    * startAt: the music's sourceIn is its first bar start (else its first beat), or 0.
    */
-  music: z.object({ need: z.enum(['beats', 'optional', 'none']), startAt: z.enum(['first-downbeat', 'zero']) }).strict(),
+  music: z.object({ need: z.enum(['beats', 'optional', 'none']), startAt: z.enum(['first-downbeat', 'zero']),
+    /** A built-in music style that suits the template (musicStyles.ts). A suggestion for the dialog only: nothing is made or preselected from it. */
+    builtin: MusicStyleId.optional() }).strict(),
+  /** The content pack this template belongs to (packs/contract.ts PackDef.templates). */
+  pack: z.string().regex(PACK_ID).optional(),
   slots: z.array(SlotDefSchema).min(1).max(40),
   /** all = every slot is used (media cycle, each reuse of a video starts further in); media = the first max(min, media count) slots are used. */
   slotUse: z.object({ mode: z.enum(['all', 'media']), min: z.number().int().min(1).max(40) }).strict(),
@@ -122,19 +181,38 @@ export const TemplateInputSchema = z.object({
   seed: z.number().int().min(0).max(1_000_000).default(1),
   tempo: z.enum(['normal', 'half', 'double']).default('normal').describe('half = slots twice as long; double = half as long (never under the flash gap)'),
   motion: z.enum(['full', 'none']).default('full').describe('none = no camera moves or animated titles (reduced motion)'),
+  /** Optional without a default, like `fields`, so the parameters of plans and runs made before ADR-0022 are unchanged. */
+  builtinMusic: z.object({ styleId: MusicStyleId, seed: z.number().int().min(0).max(MUSIC_MAX_SEED).default(1) }).strict().nullable().optional()
+    .describe('Built-in synthesised music (GET /api/v1/music) made to the length of the template; not together with musicAssetId (send musicAssetId: null with it)'),
+  fields: PackFieldsInputSchema.optional().describe('Words for {name} {name2} {age} {night} {place} {when} in the template\'s own titles; literal text'),
 }).strict();
 export type TemplateInput = z.infer<typeof TemplateInputSchema>;
 export const TEMPLATE_WARNING_CODES = ['slot_too_short', 'slots_dropped', 'cuts_merged', 'media_unused', 'media_reused', 'transition_shortened', 'text_too_long', 'designed_for_other_shape', 'kept_by_hand'] as const;
 export interface TemplateWarning { code: (typeof TEMPLATE_WARNING_CODES)[number]; message: string; details: Record<string, unknown> }
+/**
+ * What the planner decided by itself about fields, built-in music and elements (ADR-0022), with the reason. A list of its
+ * own beside `warnings` (which name chosen media or slots that did not fit): nothing here needs an answer before applying.
+ * - field_missing: a title's pack field has no value; the title's fallback words were used.
+ * - field_no_date: a title's live field would have no capture date to read under it; the fallback words were used.
+ * - builtin_music_faded: the built-in track is longer than the pictures; it is cut at the last picture and faded out.
+ * - element_dropped: two graphic elements of the plan would lie on the same track range; the earlier one was left out.
+ */
+export const TEMPLATE_NOTICE_CODES = ['field_missing', 'field_no_date', 'builtin_music_faded', 'element_dropped'] as const;
+export interface TemplateNotice { code: (typeof TEMPLATE_NOTICE_CODES)[number]; message: string; details: Record<string, unknown> }
 export interface PredictedSlot { key: string; startFrame: number; frames: number; assetId: string | null; sourceInFrame: number | null; /** 1 - visible share of the picture under the project fit (cover) or letterbox share (contain); null for no picture. */ cropShare: number | null }
 export interface TemplatePlan {
   templateId: string; version: number; params: TemplateInput;
   steps: string[]; basis: string[]; warnings: TemplateWarning[];
+  /** See TEMPLATE_NOTICE_CODES. Always present; empty for a plan without fields, built-in music or dropped elements. */
+  notices: TemplateNotice[];
   /** Non-empty = apply refuses (409 template_blocked). */
   blocking: TemplateWarning[];
   alternatives: { label: string; params: Partial<TemplateInput> }[];
-  /** Procedural media the server makes (makeSfx / makeElement) and passes as apply_template.assets under `key`. */
-  assetsNeeded: { key: string; kind: 'sfx' | 'element'; id: string; color?: string }[];
+  /**
+   * Procedural media the server makes (makeSfx / makeElement / makeMusic) and passes as apply_template.assets under `key`.
+   * music: `id` is the style, the track has exactly `bars` bars, and the server passes its known grid as assets[].analysis.
+   */
+  assetsNeeded: ({ key: string; kind: 'sfx' | 'element'; id: string; color?: string; color2?: string } | { key: string; kind: 'music'; id: string; bars: number; seed: number })[];
   ops: TemplateStep[];
   slots: PlannedSlot[];
   predicted: { startFrame: number; endFrame: number; boundaries: number[]; gapFrames: number; slots: PredictedSlot[] };
@@ -160,6 +238,8 @@ export interface TemplateSummary {
   seconds: number; needs: { music: 'beats' | 'optional' | 'none'; elements: boolean; gpu: boolean; model: TemplateModelNeed | null };
   /** unavailableReason is English (API wording); the editor words it from `needs` (i18n `template.unavailable.*`). */
   available: boolean; unavailableReason: string | null; method: typeof TEMPLATE_METHOD | typeof GATED_TEMPLATE_METHOD;
+  /** ADR-0022. pack: the content pack it belongs to; fields: the pack fields its titles hold (the dialog asks for these); liveFields: a title holds a live field of the life line; builtinMusic: the style it suggests. */
+  pack: string | null; fields: PackFieldKey[]; liveFields: boolean; builtinMusic: string | null;
 }
 
 /**
@@ -195,14 +275,14 @@ export function gatedTemplateSummary(t: ModelGatedTemplate): TemplateSummary {
   return {
     id: t.id, version: t.version, name: t.name, hint: t.hint, genre: t.genre, designedFor: t.designedFor, slots: [], texts: [], seconds: 0,
     needs: { music: 'none', elements: false, gpu: false, model: t.needsModel },
-    available: false, unavailableReason: t.reason, method: GATED_TEMPLATE_METHOD,
+    available: false, unavailableReason: t.reason, method: GATED_TEMPLATE_METHOD, pack: null, fields: [], liveFields: false, builtinMusic: null,
   };
 }
 /** The refusal for planning or applying a gated template (the server maps needs_capability to 409). */
 export const gatedTemplateError = (t: ModelGatedTemplate) => new TemplateError('needs_capability', `template ${t.id} ${t.reason}`, 'Choose one of the available templates (GET /api/v1/templates).');
 
-export interface TemplatePlanView { revision: number; templateId: string; version: number; params: TemplateInput; steps: string[]; basis: string[]; warnings: TemplateWarning[]; blocking: TemplateWarning[]; alternatives: TemplatePlan['alternatives']; operations: number; predicted: TemplatePlan['predicted']; method: string; note: string }
-export interface TemplateApplyResult { revision: number; runId: string; createdIds: string[]; slots: SlotRecord[]; steps: string[]; warnings: TemplateWarning[] }
+export interface TemplatePlanView { revision: number; templateId: string; version: number; params: TemplateInput; steps: string[]; basis: string[]; warnings: TemplateWarning[]; /** The server always sends it (ADR-0022); optional so that a view made without it stays one. */ notices?: TemplateNotice[]; blocking: TemplateWarning[]; alternatives: TemplatePlan['alternatives']; operations: number; predicted: TemplatePlan['predicted']; method: string; note: string }
+export interface TemplateApplyResult { revision: number; runId: string; createdIds: string[]; slots: SlotRecord[]; steps: string[]; warnings: TemplateWarning[]; notices?: TemplateNotice[] }
 export interface TemplateRegenerateResult extends TemplateApplyResult { replaced: number; protected: string[] }
 export const TemplateBodySchema = z.object({ params: z.unknown().optional(), expectedRevision: z.number().int().min(0).optional() }).strict();
 /**

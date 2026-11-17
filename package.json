@@ -72,7 +72,11 @@
     "proof:trend": "pnpm proof:trend-transitions && pnpm proof:trend-light && pnpm proof:trend-text",
     "proof:tracking": "tsx packages/evals/src/tracking-proof.ts",
     "proof:lifeline": "tsx packages/evals/src/lifeline-proof.ts",
-    "proof:lifeline-ui": "tsx packages/evals/src/lifeline-ui-proof.ts"
+    "proof:lifeline-ui": "tsx packages/evals/src/lifeline-ui-proof.ts",
+    "proof:packs": "tsx packages/evals/src/packs-proof.ts",
+    "proof:fonts": "tsx packages/evals/src/fonts-proof.ts",
+    "proof:music": "tsx packages/evals/src/music-proof.ts",
+    "packs:sheet": "tsx packages/evals/src/packs-sheet.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

@@ -5,6 +5,7 @@
  * `direction` and `marginFrac` are left out on purpose, so they keep the user's value.
  */
 import type { CaptionStyle } from './schema.ts';
+import { PACKS } from './packs/index.ts';
 
 export interface CaptionLook {
   id: string;
@@ -47,7 +48,8 @@ const look = (slug: string, he: string, en: string, hintHe: string, hintEn: stri
 const W = '#FFFFFF', K = '#000000', Y = '#FFE600';
 const PLATE = '#000000B3', PLATE_DEEP = '#000000E6';
 
-export const CAPTION_LOOKS: readonly CaptionLook[] = [
+/** The forty caption looks of this file. */
+export const BUILTIN_CAPTION_LOOKS: readonly CaptionLook[] = [
   // clean subtitles
   look('clean-plate', 'כתובית נקייה על פס כהה', 'Clean on dark plate', 'טקסט לבן על פס שחור שקוף למחצה', 'White text on a translucent black plate',
     { preset: 'classic', font: 'Heebo', weight: 700, size: 0.045, color: W, hl: '#3DE0C8', bg: PLATE, stroke: null, strokeFrac: 0.08 }),
@@ -139,5 +141,7 @@ export const CAPTION_LOOKS: readonly CaptionLook[] = [
     { preset: 'dim-ahead', font: 'Assistant', weight: 700, size: 0.06, color: W, hl: '#FF4FA3', bg: null, stroke: K, strokeFrac: 0.11, position: 'center', lines: 3, chars: 24, entrance: 'fade' }),
 ];
 
+/** Every caption look of the build: the built-ins, then the looks the content packs bring (ADR-0022; packs/index.ts), in pack order. */
+export const CAPTION_LOOKS: readonly CaptionLook[] = [...BUILTIN_CAPTION_LOOKS, ...PACKS.flatMap((p) => p.captionLooks)];
 export const CAPTION_LOOK_IDS = CAPTION_LOOKS.map((l) => l.id) as [string, ...string[]];
 export const findCaptionLook = (id: string): CaptionLook | undefined => CAPTION_LOOKS.find((l) => l.id === id);

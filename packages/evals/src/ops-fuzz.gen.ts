@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, LIFE_OPS_BUILT, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -44,6 +44,7 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * does; ADR-0016): a small plan with bindings, sometimes malformed, sometimes the regeneration of an earlier template run.
  * `genLife(doc)` returns a random call of the life line (ADR-0021): its seven public operations and the text edits that give titles
  * brace groups. `gen` draws from these rows too once the operations are built (LIFE_OPS_BUILT).
+ * `genMusic()` returns a random add_builtin_music call (internal; ADR-0022), for packs-fuzz.test.ts.
  */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
@@ -192,6 +193,15 @@ export function createFuzz(seed: number) {
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), trackId: trackId() } }),
       () => { const x = media.length ? pick(media) : null; return { op: 'add_clip', args: { assetId: x && x.c.type === 'media' ? x.c.assetId : pick(assetIds), start: x ? T.add(x.c.start, x.c.duration) : fr(), ...(x ? { trackId: x.t.id } : {}), duration: f(10 + int(60)), sourceIn: T.frameTime(int(60), SRC) } }; },
       () => ({ op: 'add_text', args: { text: pick(['שלום', 'Hello עולם 123', 'בְּרֵאשִׁית']), start: fr(), duration: dur() } }),
+      // a finished title in one step (ADR-0022): a text style, an animation and live fields with the add; an unknown style or a
+      // text that is not fields refuses the whole add
+      () => ({ op: 'add_text', args: {
+        text: pick(['נר 3 של חנוכה', 'בן 7', '{hebrewDate}', 'חנוכה שמח {{כן}}', '{weather}']), start: fr(), duration: dur(),
+        ...(rnd() < 0.7 ? { presetId: pick(['clean-white', 'neon-tube-pink', 'gradient-gold', 'no-such-style']) } : {}),
+        ...(rnd() < 0.5 ? { style: { sizeFrac: pick([0.05, 0.1]) } } : {}),
+        ...(rnd() < 0.5 ? { animation: { by: pick(['letter', 'word'] as const), in: pick(['rise', 'pop', null] as const), out: pick(['fade', null] as const), loop: null, inFrames: 1 + int(20), outFrames: 1 + int(20) } } : {}),
+        ...(rnd() < 0.4 ? { fields: true as const } : {}),
+      } }),
       () => ({ op: 'add_track', args: { kind: pick(['video', 'audio', 'text', 'adjustment'] as const) } }),
       () => ({ op: 'move_clip', args: { clipId: any(), start: fr(), ...(rnd() < 0.2 ? { trackId: trackId() } : {}) } }),
       () => ({ op: 'move_clips', args: { clipIds: [any(), any()], delta: f(int(121) - 60) } }),
@@ -398,6 +408,22 @@ export function createFuzz(seed: number) {
     };
   };
   /**
+   * A random add_builtin_music call (ADR-0022; internal: a driver commits it with allowInternal, as the server does): a track of
+   * a style, a number of bars and a seed with its known grid, sometimes placed on the timeline; now and then the same track
+   * again (deduplicated), or a malformed grid or a file that is not built-in music (refused).
+   */
+  const genMusic = (): OpCall => {
+    const styleId = pick(['music.festive', 'music.calm', 'music.cinematic']);
+    const layout = musicLayout(styleId, pick([4, 6, 13]));
+    const seedOf = int(3);
+    const asset = { kind: 'audio' as const, name: `${styleId}.wav`, contentHash: `sha256:${sha256Hex(`${styleId}/${layout.bars}/${seedOf}`)}`, byteSize: 44 + 4 * layout.totalFrames, container: 'wav', mimeType: 'audio/wav', duration: layout.duration, audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: { origin: 'generated' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'system', procedural: { id: styleId, version: 1, generator: MUSIC_GENERATOR, params: musicProvenanceParams(layout, seedOf) } } };
+    const grid = knownGridOf(layout, seedOf, '2026-11-17T00:00:00Z');
+    const fault = rnd();
+    const g = fault < 0.05 ? { ...grid, beats: [...grid.beats].reverse() } : fault < 0.08 ? { ...grid, beats: [...grid.beats, layout.duration] } : fault < 0.1 ? { ...grid, sections: [...grid.sections].reverse() } : grid;
+    const a = fault > 0.96 ? { ...asset, provenance: { ...asset.provenance, procedural: { id: 'sfx.pop', version: 1, generator: 'fuzz' } } } : asset;
+    return { op: 'add_builtin_music', args: { asset: a, grid: g, ...(rnd() < 0.6 ? { place: { start: rnd() < 0.9 ? fr() : T.rt(1, 1000) } } : {}) } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -406,5 +432,5 @@ export function createFuzz(seed: number) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic };
 }
