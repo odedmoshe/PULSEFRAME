@@ -29,6 +29,10 @@ describe('Hebrew wording of common refusals', () => {
     const kept = tx(d, [{ op: 'set_clip_pitch', args: { clipId: aSound, keepPitch: true } }]).doc;
     // a clip that plays the very end of the source (6 s..8 s), followed directly by another: nothing is left after it for a transition
     const tail = tx(d, [{ op: 'add_clip', args: { assetId, start: f(120), sourceIn: f(180), duration: f(60) } }, { op: 'add_clip', args: { assetId, start: f(180), duration: f(60) } }]);
+    // a clip with a time effect, and one with a colour effect whose brightness may not follow the beat
+    const echoed = tx(d, [{ op: 'add_effect', args: { clipId: a, type: 'time.echo' } }]).doc;
+    const adjusted = tx(d, [{ op: 'add_effect', args: { clipId: a, type: 'color.adjust' } }]);
+    const adjustId = adjusted.results[0]!.output!.effectId as string;
     const cases: [string, ProjectDocument, OpCall[]][] = [
       ['a move onto another clip', d, [{ op: 'move_clip', args: { clipId: a, start: f(30), includeLinked: false } }]],
       ['an edit on a locked track', locked, [{ op: 'delete_clip', args: { clipId: a } }]],
@@ -53,6 +57,8 @@ describe('Hebrew wording of common refusals', () => {
       ['pitch follows speed when it already does', d, [{ op: 'set_clip_pitch', args: { clipId: aSound, keepPitch: false } }]],
       ['a copy before the start', d, [{ op: 'duplicate_clips', args: { clipIds: [a], offset: T.sub(T.ZERO, f(30)) } }]],
       ['a freeze of a ramped clip', ramped, [{ op: 'freeze_frame', args: { clipId: a, at: f(10), duration: f(30) } }]],
+      ['a second time effect on a clip', echoed, [{ op: 'add_effect', args: { clipId: a, type: 'time.split' } }]],
+      ['brightness following the beat', adjusted.doc, [{ op: 'set_effect_modulator', args: { clipId: a, effectId: adjustId, param: 'brightness', modulator: { depth: 0.5 } } }]],
     ];
     void bSound;
     const matched = new Set<number>();
