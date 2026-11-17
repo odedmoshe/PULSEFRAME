@@ -30,3 +30,35 @@ export const GALLERY_STRINGS = {
     noRoom: 'There is no room for a transition at the start of this clip.',
   },
 } as const;
+
+/** Words of the catalogue spread (UX_REDESIGN §4.4): sections, filters, notes on tiles and the footer. */
+export const SPREAD_STRINGS = {
+  he: {
+    count: (n: number) => String(n), cutChip: (a: string, b: string, at: string) => `התצוגה המקדימה בחיתוך: ${a} ← ${b} ${at}`, clipChip: (name: string) => `על: ${name}`,
+    fitsHere: 'מתאימים לחיתוך הזה', fitsBasis: '(לפי החומר שנשאר בקליפים)', recent: 'השתמשת לאחרונה', all: (what: string, n: number) => `כל ${what} ${n}`,
+    allWord: { effects: 'האפקטים', looks: 'המראות', transitions: 'המעברים', text: 'הסגנונות', motion: 'התנועות' },
+    filterAll: 'הכול', filterFav: 'מועדפים', favourite: 'הוספה למועדפים', unfavourite: 'הסרה מהמועדפים',
+    fits: 'מתאים', shortens: (s: string) => `יקצר ${s} ש׳`, noRoom: 'אין חומר עודף', notSaved: 'לא נשמר', appliedOn: 'מוחל', checkMark: 'הוחל',
+    needsGpuTile: 'דורש כרטיס מסך', gpuWhy: 'אין כרטיס מסך מתאים בדפדפן הזה', adjWhy: 'לא על שכבת התאמה',
+    loadingTiles: 'מכינים תמונות…', favEmpty: 'עוד אין מועדפים. סמנו כוכב על אריח כדי לשמור אותו כאן.',
+    applyAll: (n: number) => (n === 1 ? 'להחיל על החיתוך' : `להחיל על כל ${n} החיתוכים`), applyAllNone: 'אין חיתוכים נוספים', applyAllNeedsPick: 'בחרו קודם מעבר', shuffle: 'ערבוב', shuffleWhy: 'אין חיתוכים לערבב',
+    appliedAll: (name: string, n: number) => `${name}: הוחל על ${n} חיתוכים`, shuffled: (n: number) => `ערבוב: הוחלו מעברים שונים על ${n} חיתוכים`, skippedNoRoom: (n: number) => ` · ${n} חיתוכים בלי חומר עודף נשארו כמות שהם`,
+    enterApplies: 'החלה', hint: 'בלחיצה על אריח הוא מוחל על הקליפ, ופעולה אחת בטלה בביטול.', hoverNote: 'ריחוף מציג תצוגה בלבד',
+    textTitle: 'סגנונות טקסט', textCount: (n: number) => `${n}`, captionLooks: 'מראות כתוביות', captionLooksHint: 'המראות מוצגים על הטקסט האמיתי של הכתוביות', chosen: 'נבחר',
+    sampleText: 'סוף שבוע',
+  },
+  en: {
+    count: (n: number) => String(n), cutChip: (a: string, b: string, at: string) => `Previewed on the cut: ${a} ← ${b} ${at}`, clipChip: (name: string) => `On: ${name}`,
+    fitsHere: 'Fit this cut', fitsBasis: '(by the material left in the clips)', recent: 'Used recently', all: (what: string, n: number) => `All ${what} ${n}`,
+    allWord: { effects: 'effects', looks: 'looks', transitions: 'transitions', text: 'styles', motion: 'motions' },
+    filterAll: 'All', filterFav: 'Favourites', favourite: 'Add to favourites', unfavourite: 'Remove from favourites',
+    fits: 'Fits', shortens: (s: string) => `Shortens ${s} s`, noRoom: 'No spare material', notSaved: 'Not saved', appliedOn: 'Applied', checkMark: 'Applied',
+    needsGpuTile: 'Needs a graphics card', gpuWhy: 'No suitable graphics card in this browser', adjWhy: 'Not on an adjustment layer',
+    loadingTiles: 'Preparing pictures…', favEmpty: 'No favourites yet. Star a tile to keep it here.',
+    applyAll: (n: number) => (n === 1 ? 'Apply to the cut' : `Apply to all ${n} cuts`), applyAllNone: 'There are no other cuts', applyAllNeedsPick: 'Pick a transition first', shuffle: 'Shuffle', shuffleWhy: 'There are no cuts to shuffle',
+    appliedAll: (name: string, n: number) => `${name}: applied to ${n} cuts`, shuffled: (n: number) => `Shuffle: different transitions applied to ${n} cuts`, skippedNoRoom: (n: number) => ` · ${n} cuts with no spare material were left as they are`,
+    enterApplies: 'Apply', hint: 'Clicking a tile applies it to the clip; one undo reverts it.', hoverNote: 'Hovering only previews',
+    textTitle: 'Text styles', textCount: (n: number) => `${n}`, captionLooks: 'Caption looks', captionLooksHint: 'The looks are drawn on the real caption text', chosen: 'Selected',
+    sampleText: 'Weekend',
+  },
+} as const;
