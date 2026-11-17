@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, smooth, velocityOffsets, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, lightEnvelope, lightStartFrame, smooth, switchFrame, velocityOffsets, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { evaluate, flashSchedule, type VideoLayer } from './index.ts';
 
 const R = { num: 30, den: 1 };
@@ -48,10 +48,35 @@ describe('transition state on the layers (ADR-0012)', () => {
     expect(sides(pair('slices-h', 15, { seed: 5 }).doc, 64).in.transition).toMatchObject({ color: null, seed: 5 });
     expect(sides(pair('block-left', 15).doc, 64).in.transition).toMatchObject({ color: '#3DE0C8', seed: 0 });
   });
-  it('a light transition has light 0 while the schedule has not kept its start (the lights plan is W2\'s; empty until then)', () => {
-    const p = pair('film-burn', 15);
-    expect(flashSchedule(p.doc).lights.size).toBe(0);
-    for (let l = 0; l < 15; l++) expect(sides(p.doc, 60 + l).in.transition!.light).toBe(0);
+  // The lights plan is filled by W2's walk (strobeSchedule.ts). These two tests state the evaluator's side of the contract
+  // only, so they hold whatever the walk decides: light = lightEnvelope(n, fps, switchFrame(n, k), l) on the 'in' layer when
+  // lights.get(clipId)?.kept, 0 when the start is held or not planned, and always 0 on the 'out' layer.
+  it('light follows the flash schedule\'s plan: the envelope on the incoming layer when the start is kept, 0 otherwise, 0 on the outgoing layer', () => {
+    for (const [type, n] of [['film-burn', 15], ['light-leak', 29], ['film-burn', 2], ['dissolve', 15]] as const) {
+      const p = pair(type, n), plan = flashSchedule(p.doc).lights.get(p.b), sw = switchFrame(n, null);
+      for (let l = 0; l < n; l++) {
+        const s = sides(p.doc, 60 + l);
+        expect(s.in.transition!.light, `${type} n=${n} l=${l}`).toBe(plan?.kept ? lightEnvelope(n, 30, sw, l) : 0);
+        expect(s.out.transition!.light).toBe(0);
+      }
+    }
+  });
+  it('the evaluator reads the plan as given: a kept start lights the matte with the envelope (1 on the switch frame), a held one gives 0, a type without light ignores it', () => {
+    // the plan is set by hand on the document's cached schedule, which is what evaluate reads
+    const sw = switchFrame(15, null);
+    for (const kept of [true, false]) {
+      const p = pair('film-burn', 15);
+      flashSchedule(p.doc).lights.set(p.b, { frame: 60 + lightStartFrame(15, 30, sw)!, kept, since: kept ? null : 4 });
+      const light = Array.from({ length: 15 }, (_, l) => sides(p.doc, 60 + l));
+      light.forEach((s, l) => {
+        expect(s.in.transition!.light, `kept=${kept} l=${l}`).toBe(kept ? lightEnvelope(15, 30, sw, l) : 0);
+        expect(s.out.transition!.light).toBe(0);
+      });
+      if (kept) expect(light[sw]!.in.transition!.light).toBe(1);
+    }
+    const d = pair('dissolve', 15);
+    flashSchedule(d.doc).lights.set(d.b, { frame: 60, kept: true, since: null });
+    for (let l = 0; l < 15; l++) expect(sides(d.doc, 60 + l).in.transition!.light).toBe(0);
   });
   it('a beat lock with no analysed beat in the window plays exactly as without it', () => {
     const plain = pair('dissolve', 29), locked = pair('dissolve', 29, { sync: 'beat' });
