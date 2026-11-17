@@ -7,6 +7,7 @@
  */
 import * as T from '@pulseframe/time';
 import type { Analysis, Asset, Clip, Marker, ProjectDocument, RecipeRun, Track, Transcript, Variant } from './schema.ts';
+import type { MotionTrack } from './tracking.ts';
 
 export type EntityState =
   | { kind: 'project'; name: string; settings: ProjectDocument['settings'] }
@@ -18,6 +19,8 @@ export type EntityState =
   | { kind: 'variant'; variant: Variant }
   | { kind: 'recipeRun'; run: RecipeRun }
   | { kind: 'marker'; marker: Marker }
+  /** A motion track (ADR-0015), keyed by its own id like a marker, so an edit sent from an out-of-date view of it conflicts. */
+  | { kind: 'motionTrack'; track: MotionTrack }
   /** The stacking order of a sequence's tracks. Compared only over the tracks both sides have, so adding or removing a track is not an order change. */
   | { kind: 'trackOrder'; sequenceId: string; ids: string[] };
 /** Entity id of an asset's analysis results. */
@@ -47,6 +50,7 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
   for (const v of Object.values(doc.variants ?? {})) m.set(v.id, { kind: 'variant', variant: v });
   for (const r of Object.values(doc.recipeRuns ?? {})) m.set(r.id, { kind: 'recipeRun', run: r });
   for (const k of Object.values(doc.markers ?? {})) m.set(k.id, { kind: 'marker', marker: k });
+  for (const k of Object.values(doc.motionTracks ?? {})) m.set(k.id, { kind: 'motionTrack', track: k });
   for (const seq of Object.values(doc.sequences)) {
     m.set(trackOrderEntityId(seq.id), { kind: 'trackOrder', sequenceId: seq.id, ids: seq.tracks.map((t) => t.id) });
     seq.tracks.forEach((t, index) => {
@@ -118,6 +122,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
       if (cur?.kind === 'variant') delete draft.variants[cur.variant.id];
       if (cur?.kind === 'recipeRun') delete draft.recipeRuns[cur.run.id];
       if (cur?.kind === 'marker') delete draft.markers[cur.marker.id];
+      if (cur?.kind === 'motionTrack') delete draft.motionTracks[cur.track.id];
       if (cur?.kind === 'track') { const seq = draft.sequences[cur.sequenceId]!; seq.tracks.splice(seq.tracks.findIndex((t) => t.id === id), 1); }
     } else if (state.kind === 'project') { draft.name = state.name; draft.settings = structuredClone(state.settings); }
     else if (state.kind === 'asset') draft.assets[id] = structuredClone(state.asset);
@@ -126,6 +131,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
     else if (state.kind === 'variant') draft.variants[state.variant.id] = structuredClone(state.variant);
     else if (state.kind === 'recipeRun') draft.recipeRuns[state.run.id] = structuredClone(state.run);
     else if (state.kind === 'marker') (draft.markers ??= {})[state.marker.id] = structuredClone(state.marker);
+    else if (state.kind === 'motionTrack') (draft.motionTracks ??= {})[state.track.id] = structuredClone(state.track);
   }
   // 2. tracks (so restored clips have a home), lowest original index first
   for (const { id, state } of targets.filter((t) => t.state?.kind === 'track').sort((x, y) => (x.state as any).index - (y.state as any).index)) {

@@ -28,3 +28,6 @@ export * from './notices.ts';
 export * from './pacing.ts';
 export * from './flashSafety.ts';
 export * from './audioEffects.ts';
+export * from './tracking.ts';
+export * from './trackingApi.ts';
+export * from './geometry.ts';
