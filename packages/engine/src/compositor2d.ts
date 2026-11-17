@@ -434,7 +434,7 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
     if (layer.transition && isGpuTransition(layer.transition.type)) {
       // A GPU transition mixes both pictures in one pass; the result is then composited like any layer (blend mode, no transition).
       const mixed = scratch(6, g.width, g.height);
-      const ok = await gpuTransition(layer.transition.type, layer.transition.progress, outgoing ? (outgoing as Buf).canvas : null, buf.canvas, mixed.ctx, env);
+      const ok = await gpuTransition(layer.transition, outgoing ? (outgoing as Buf).canvas : null, buf.canvas, mixed.ctx, env);
       // Not available: the incoming picture alone (a cut), recorded as missing so a still or an export refuses.
       compositeLayer(ctx, ok ? mixed : buf, { ...layer, transition: undefined }, g.width, g.height, null);
     } else compositeLayer(ctx, buf, layer, g.width, g.height, layer.transition ? outgoing : null);

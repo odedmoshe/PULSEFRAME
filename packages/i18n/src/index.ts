@@ -1,6 +1,7 @@
 /** Bilingual UI strings (SPEC §3, §29). Hebrew is the default. Keys are stable ids. */
 import { VISUAL_WAVE_EN, VISUAL_WAVE_HE } from './visualWave.ts';
 import { TEMPLATES_EN, TEMPLATES_HE } from './templates.ts';
+import { TREND_PACK_EN, TREND_PACK_HE } from './trendPack.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -160,6 +161,7 @@ export const he = {
   'op.add_audio_effect': 'הוספת אפקט קול', 'op.update_audio_effect': 'עדכון אפקט קול', 'op.remove_audio_effect': 'הסרת אפקט קול', 'op.apply_audio_preset': 'מתכון אפקטי קול', 'op.copy_audio_effects': 'העתקת אפקטי קול',
   ...VISUAL_WAVE_HE,
   ...TEMPLATES_HE,
+  ...TREND_PACK_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -319,6 +321,7 @@ export const en: Record<keyof typeof he, string> = {
   'op.add_audio_effect': 'Added sound effect', 'op.update_audio_effect': 'Updated sound effect', 'op.remove_audio_effect': 'Removed sound effect', 'op.apply_audio_preset': 'Sound effect preset', 'op.copy_audio_effects': 'Copied sound effects',
   ...VISUAL_WAVE_EN,
   ...TEMPLATES_EN,
+  ...TREND_PACK_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -328,3 +331,4 @@ export * from './refusals.ts';
 export * from './effectParams.ts';
 export * from './visualWave.ts';
 export * from './templates.ts';
+export * from './trendPack.ts';

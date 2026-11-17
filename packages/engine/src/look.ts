@@ -10,6 +10,7 @@ import type { LayerLook } from './evaluate.ts';
 import { gpuEffect, isGpuEffect, type LutStrip } from './gpu.ts';
 import { boundRadius, overlayParticles, shapeAlpha, speedLines, wedgeCorners, type Particle } from './overlays.ts';
 import { STAMP_TEXT, stampPolygons } from './stamp.ts';
+import { CANVAS_KERNELS, CANVAS_TRANSITIONS } from './canvasTransitions.ts';
 
 type C2D = OffscreenCanvasRenderingContext2D;
 export interface Buf { canvas: OffscreenCanvas; ctx: C2D }
@@ -18,7 +19,11 @@ export interface LayerBox { cx: number; cy: number; w: number; h: number; rotati
 export interface LookEnv { width: number; height: number; frameIndex: number; /** Timeline time of the frame in seconds. */ seconds: number; /** Clip-local seconds of the frame (bursts at the clip start). */ local?: number; box: LayerBox; /** Where the frame falls in the beats of the music playing there, if any (core beatgrid.ts). */ beat?: BeatPosition | null; /** Colour tables of this frame by asset id (null = could not be supplied; the reason is in `lutReasons`). Filled by drawGraph for color.lut. */ luts?: ReadonlyMap<string, LutStrip | null>; lutReasons?: ReadonlyMap<string, string> }
 
 const pools = new Map<string, Buf[]>();
-/** Scratch buffer `slot` of the given size, cleared and reset. Buffers are reused across frames (bounded: a few per size). */
+/**
+ * Scratch buffer `slot` of the given size, cleared and reset. Buffers are reused across frames (bounded: a few per size).
+ * Slots 0–9 are used by the look system; 10–12 are reserved for the trend-pack title effects (textEffects.ts) and 13 for the
+ * trend-pack Canvas2D transitions (canvasTransitions.ts), ADR-0012; 14 and up belong to other wave-3 tracks.
+ */
 export function scratch(slot: number, width: number, height: number): Buf {
   const key = `${width}x${height}`;
   let pool = pools.get(key);
@@ -364,48 +369,19 @@ export function applyMask(buf: Buf, mask: Mask, env: LookEnv) {
   buf.ctx.globalCompositeOperation = 'source-over';
 }
 
-const DIR: Record<string, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
 /**
  * Composite a finished layer buffer onto the frame, applying its transition state and blend mode.
  * `outgoing` is the previous clip's finished buffer when this layer is the incoming side of a transition.
+ * A Canvas2D transition is drawn by the kernel its registry row names (canvasTransitions.ts, ADR-0012); GPU transitions
+ * are mixed before this (compositor2d.ts) and arrive here without a transition.
  */
 export function compositeLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, layer: Buf, look: LayerLook, W: number, H: number, outgoing: Buf | null) {
   const t = look.transition;
   ctx.save();
   ctx.globalCompositeOperation = COMPOSITE[look.blend ?? 'normal'];
   if (!t) { ctx.drawImage(layer.canvas, 0, 0); ctx.restore(); return; }
-  const p = t.progress;
-  const [kind, dirName] = t.type.split('-') as [string, string | undefined];
-  if (kind === 'dissolve' || kind === 'zoom') {
-    // Exact cross-fade: out*(1-p) + in*p, mixed additively in a buffer so two opaque pictures never dip toward the background.
-    const mix = scratch(6, W, H);
-    if (outgoing) { mix.ctx.globalAlpha = 1 - p; mix.ctx.drawImage(outgoing.canvas, 0, 0); mix.ctx.globalCompositeOperation = 'lighter'; }
-    mix.ctx.globalAlpha = p;
-    if (kind === 'zoom') { const s = 1.3 - 0.3 * p; mix.ctx.translate(W / 2, H / 2); mix.ctx.scale(s, s); mix.ctx.translate(-W / 2, -H / 2); }
-    mix.ctx.drawImage(layer.canvas, 0, 0);
-    ctx.drawImage(mix.canvas, 0, 0);
-  } else if (kind === 'dip') {
-    const first = p < 0.5;
-    const shown = first ? outgoing : layer;
-    if (shown) ctx.drawImage(shown.canvas, 0, 0);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = first ? p * 2 : (1 - p) * 2;
-    ctx.fillStyle = dirName === 'white' ? '#ffffff' : '#000000';
-    ctx.fillRect(0, 0, W, H);
-  } else if (kind === 'wipe') {
-    if (outgoing) ctx.drawImage(outgoing.canvas, 0, 0);
-    const [dx, dy] = DIR[dirName ?? 'left']!;
-    ctx.beginPath();
-    // The reveal edge travels in the named direction: "wipe-left" starts at the right edge and moves left.
-    if (dx !== 0) ctx.rect(dx < 0 ? W * (1 - p) : 0, 0, W * p, H);
-    else ctx.rect(0, dy < 0 ? H * (1 - p) : 0, W, H * p);
-    ctx.clip();
-    ctx.drawImage(layer.canvas, 0, 0);
-  } else if (kind === 'push') {
-    const [dx, dy] = DIR[dirName ?? 'left']!;
-    if (outgoing) ctx.drawImage(outgoing.canvas, dx * W * p, dy * H * p);
-    ctx.drawImage(layer.canvas, -dx * W * (1 - p), -dy * H * (1 - p));
-  } else ctx.drawImage(layer.canvas, 0, 0);
+  const c = CANVAS_TRANSITIONS[t.type], k = c && CANVAS_KERNELS[c.kernel];
+  if (k) k({ ctx, incoming: layer, outgoing, t, v: c.v, W, H }); else ctx.drawImage(layer.canvas, 0, 0);
   ctx.restore();
 }
 

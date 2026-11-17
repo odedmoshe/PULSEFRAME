@@ -61,7 +61,12 @@
     "proof:ai-frames": "tsx packages/evals/src/ai-frames-proof.ts",
     "proof:ai-trials": "tsx packages/evals/src/ai-trials-proof.ts",
     "proof:ai-local": "tsx packages/evals/src/ai-local-proof.ts",
-    "proof:ai-ui": "tsx packages/evals/src/ai-ui-proof.ts"
+    "proof:ai-ui": "tsx packages/evals/src/ai-ui-proof.ts",
+    "proof:trend-baseline": "tsx packages/evals/src/trend-baseline.ts",
+    "proof:trend-transitions": "tsx packages/evals/src/trend-transitions-proof.ts",
+    "proof:trend-light": "tsx packages/evals/src/trend-light-proof.ts",
+    "proof:trend-text": "tsx packages/evals/src/trend-text-proof.ts",
+    "proof:trend": "pnpm proof:trend-transitions && pnpm proof:trend-light && pnpm proof:trend-text"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

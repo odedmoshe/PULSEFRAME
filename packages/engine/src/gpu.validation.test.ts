@@ -147,17 +147,17 @@ describe('a GPU pass the adapter rejects (mock device)', () => {
 
   it('a pass that compiles draws its own picture', async () => {
     const out = fakeContext();
-    expect(await gpuTransition('ripple', 0.5, picture, picture, out.ctx, env)).toBe(true);
+    expect(await gpuTransition({ type: 'ripple', progress: 0.5 }, picture, picture, out.ctx, env)).toBe(true);
     expect(Array.from(out.pixels()!.slice(0, 4))).toEqual(colourOf(2)); // pipeline 1 was the reference check
     expect(takeUnavailable()).toEqual({ effects: [], reasons: {} });
   });
 
   it('a transition whose shader does not compile is unavailable with the adapter\'s message, and leaves the picture alone instead of the last pass\'s pixels', async () => {
     const before = fakeContext();
-    expect(await gpuTransition('ripple', 0.5, picture, picture, before.ctx, env)).toBe(true); // the readback now holds ripple's pixels
+    expect(await gpuTransition({ type: 'ripple', progress: 0.5 }, picture, picture, before.ctx, env)).toBe(true); // the readback now holds ripple's pixels
     fake.rules.brokenShader = (code) => code.includes(WHIP);
     const out = fakeContext();
-    expect(await gpuTransition('whip-left', 0.5, picture, picture, out.ctx, env)).toBe(false);
+    expect(await gpuTransition({ type: 'whip-left', progress: 0.5 }, picture, picture, out.ctx, env)).toBe(false);
     expect(out.pixels()).toBeNull();
     const told = takeUnavailable();
     expect(told.effects).toEqual(['whip-left']);
@@ -173,7 +173,7 @@ describe('a GPU pass the adapter rejects (mock device)', () => {
     expect(first).toBeGreaterThan(0);
     for (const type of ['whip-right', 'whip-up']) { // the same kernel, other variants
       const out = fakeContext();
-      expect(await gpuTransition(type, 0.25, picture, picture, out.ctx, env)).toBe(false);
+      expect(await gpuTransition({ type: type, progress: 0.25 }, picture, picture, out.ctx, env)).toBe(false);
       expect(out.pixels()).toBeNull();
       const told = takeUnavailable();
       expect(told.effects).toEqual([type]);
@@ -181,7 +181,7 @@ describe('a GPU pass the adapter rejects (mock device)', () => {
     }
     expect(compiled()).toBe(first);
     const ok = fakeContext();
-    expect(await gpuTransition('ripple', 0.5, picture, picture, ok.ctx, env)).toBe(true);
+    expect(await gpuTransition({ type: 'ripple', progress: 0.5 }, picture, picture, ok.ctx, env)).toBe(true);
     expect(takeUnavailable().effects).toEqual([]);
     expect(fake.scopes).toEqual([]);
   });
@@ -200,10 +200,10 @@ describe('a GPU pass the adapter rejects (mock device)', () => {
 
   it('a pass the adapter rejects after compiling (here its bind group) is unavailable with the message, not the last pass\'s pixels, and is tried again next time', async () => {
     const warm = fakeContext();
-    expect(await gpuTransition('checker', 0.5, picture, picture, warm.ctx, env)).toBe(true);
+    expect(await gpuTransition({ type: 'checker', progress: 0.5 }, picture, picture, warm.ctx, env)).toBe(true);
     fake.rules.rejectBindGroups = true;
     const out = fakeContext();
-    expect(await gpuTransition('checker', 0.5, picture, picture, out.ctx, env)).toBe(false);
+    expect(await gpuTransition({ type: 'checker', progress: 0.5 }, picture, picture, out.ctx, env)).toBe(false);
     expect(out.pixels()).toBeNull();
     const told = takeUnavailable();
     expect(told.effects).toEqual(['checker']);
@@ -211,7 +211,7 @@ describe('a GPU pass the adapter rejects (mock device)', () => {
     expect(fake.scopes).toEqual([]);
     fake.rules.rejectBindGroups = false;
     const again = fakeContext();
-    expect(await gpuTransition('checker', 0.5, picture, picture, again.ctx, env)).toBe(true);
+    expect(await gpuTransition({ type: 'checker', progress: 0.5 }, picture, picture, again.ctx, env)).toBe(true);
     expect(again.pixels()).not.toBeNull();
     expect(fake.uncaptured).toEqual([]);
   });
@@ -224,21 +224,21 @@ describe('a GPU pass the adapter rejects (mock device)', () => {
     expect(takeUnavailable().effects).toEqual(['color.lut']);
     expect(fake.scopes).toEqual([]);
     const ok = fakeContext();
-    expect(await gpuTransition('ripple', 0.5, picture, picture, ok.ctx, env)).toBe(true);
+    expect(await gpuTransition({ type: 'ripple', progress: 0.5 }, picture, picture, ok.ctx, env)).toBe(true);
     expect(takeUnavailable().effects).toEqual([]);
   });
 
   it('a frame larger than the adapter allows is unavailable with the adapter\'s message (not a failed map), and the next frame of an allowed size draws', async () => {
     fake.rules.maxSide = 32;
     const out = fakeContext();
-    expect(await gpuTransition('ripple', 0.5, picture, picture, out.ctx, { ...env, width: 64, height: 16 })).toBe(false);
+    expect(await gpuTransition({ type: 'ripple', progress: 0.5 }, picture, picture, out.ctx, { ...env, width: 64, height: 16 })).toBe(false);
     expect(out.pixels()).toBeNull();
     const told = takeUnavailable();
     expect(told.effects).toEqual(['ripple']);
     expect(told.reasons.ripple).toMatch(/rejected.*Texture size \(64x16\) exceeds/);
     expect(fake.scopes).toEqual([]);
     const ok = fakeContext();
-    expect(await gpuTransition('ripple', 0.5, picture, picture, ok.ctx, env)).toBe(true);
+    expect(await gpuTransition({ type: 'ripple', progress: 0.5 }, picture, picture, ok.ctx, env)).toBe(true);
     expect(ok.pixels()).not.toBeNull();
     expect(fake.uncaptured).toEqual([]);
   });

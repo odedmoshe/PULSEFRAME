@@ -63,6 +63,8 @@ export function unitPose(a: TextAnimation & { local: number; total: number; fps:
       else if (a.in === 'slide') { p.alpha *= u; p.dx += (1 - e) * 1.2 * startSide; }
       else if (a.in === 'zoom') { p.alpha *= u; p.scale *= 1 + (1 - e) * 1.2; }
       else if (a.in === 'pop') { p.alpha *= clamp01(u * 3); p.scale *= u >= 1 ? 1 : Math.max(0.01, 0.3 + 0.7 * outBack(u)); }
+      // PLACEHOLDER (ADR-0012; W3 writes the blur and write-on poses): a plain fade until then, never presented as the effect
+      else if (a.in === 'blur' || a.in === 'write') p.alpha *= u;
     }
   }
   if (a.out) {
@@ -74,6 +76,7 @@ export function unitPose(a: TextAnimation & { local: number; total: number; fps:
       else if (a.out === 'lift') p.dy -= e * 0.7;
       else if (a.out === 'shrink') p.scale *= Math.max(0.01, 1 - e * 0.7);
       else if (a.out === 'slide') p.dx -= e * 1.2 * startSide;
+      // out 'blur': PLACEHOLDER (ADR-0012, W3): the plain fade above until its pose lands
     }
   }
   if (a.loop) {
