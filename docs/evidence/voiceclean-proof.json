@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-17T18:02:40.424Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-17T19:00:40.166Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -8,7 +8,7 @@
     "gpu": "none"
   },
   "scope": "One deterministic synthetic recording (speech-like formant pulses at -20 dBFS RMS with 30 % pauses, noise of a known 24-band spectrum at -48 dBFS, 50 Hz hum k = 1..4 at -40 dBFS in total), 1 kHz bursts for sync, 48 kHz projects, the server mix and export, the editor preview and the self-test page in headless Chromium. No real speech, no recorded room, nobody has listened: this shows the cleanup measures, cleans, stays in sync and sounds the same on every route, not that it sounds good.",
-  "passed": 9,
+  "passed": 11,
   "total": 11,
   "checks": [
     {
@@ -61,11 +61,11 @@
           {
             "op": "clean_voice",
             "args": {
-              "clipId": "clp_9ada99bdee0",
+              "clipId": "clp_0de2c119b00",
               "includeLinked": false,
               "strength": 0.6,
               "profile": "KtKlLDL6M1NiOZO3PRPiPkPjPdPYPPPEPAO_PDPOPhP5QWQ3",
-              "source": "ast_868e4dab310",
+              "source": "ast_4c9f3666a90",
               "mainsHz": "50"
             }
           }
@@ -163,11 +163,33 @@
       }
     },
     {
-      "name": "C4 1 kHz bursts with hard onsets through the cleanup: every burst of the cleaned mix lines up with the dry mix within 1 sample (cross-correlation)",
-      "ok": false,
+      "name": "C4 bursts with hard onsets through the cleanup (dehum, denoise, speech enhancer), the cleaned mix against the dry mix by cross-correlation (every burst correlates at 0.9 or more): every white-noise burst lines up within 1 sample (the chain delays nothing); the carrier of every 1 kHz burst sits within 1 sample of the phase delay the chain's filters have at 1 kHz by design (the low cut, the presence EQ and the hum notches turn the phase of a tone; that is not a delay)",
+      "ok": true,
       "detail": {
-        "bursts": 15,
-        "lagsSamples": [
+        "effects": [
+          "cleanup.dehum",
+          "cleanup.denoise",
+          "cleanup.speech"
+        ],
+        "broadbandBursts": 14,
+        "broadbandLagsSamples": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "toneBursts": 15,
+        "toneCarrierLagsSamples": [
           -3,
           -3,
           -3,
@@ -184,12 +206,36 @@
           -3,
           -3
         ],
-        "effects": {
-          "clipId": "clp_400b7856540",
+        "designedPhaseDelayAt1kHzSamples": -2.51,
+        "designedPhaseDelayPerEffect": {
+          "cleanup.dehum": -0.156,
+          "cleanup.denoise": 0,
+          "cleanup.speech": -2.354
+        },
+        "toneAgainstDesignSamples": [
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49
+        ],
+        "weakestNormalisedCorrelation": 0.981,
+        "cleanVoice": {
+          "clipId": "clp_3a37f9b1520",
           "includeLinked": false,
           "strength": 0.6,
-          "profile": "KsKkLJL7M6NlORO3POPiPqPpPjPZPOPFO_O-PEPOPhP5QWQ4",
-          "source": "ast_e3a1bfb70d0",
+          "profile": "F9F8GiLyMyNkOQO1PPPiPqPpPkPYPNPFO_O-PEPOPhP5QWQ4",
+          "source": "ast_6e5062c4290",
           "mainsHz": "50"
         }
       }
@@ -200,19 +246,19 @@
       "detail": [
         {
           "effects": "cleanup.dehum",
-          "realtime": 130
+          "realtime": 120
         },
         {
           "effects": "cleanup.denoise",
-          "realtime": 32
+          "realtime": 52
         },
         {
           "effects": "cleanup.speech",
-          "realtime": 72
+          "realtime": 89
         },
         {
           "effects": "cleanup.dehum + cleanup.denoise + cleanup.speech",
-          "realtime": 24
+          "realtime": 35
         }
       ]
     },
@@ -280,12 +326,47 @@
       }
     },
     {
-      "name": "C5 four clips cleaned in one transaction (scope asset), played in the editor preview: every 50 ms window above -40 dBFS within 0.5 dB of the export; starting 10 s in, the voices are primed within 500 ms with no late start; main-thread long tasks at most twice the bypassed playback (100 ms allowed over a near-zero baseline)",
-      "ok": false,
+      "name": "C5 four clips cleaned in one transaction (scope asset), played in the editor preview with nothing scheduled late: the samples the preview schedules are the export within one 16-bit step; every 50 ms window above -40 dBFS, as heard at the output (left channel), within 0.5 dB of the export; starting 10 s in, the voices are primed within 500 ms with no late start; main-thread long tasks at most twice the bypassed playback (100 ms allowed over a near-zero baseline)",
+      "ok": true,
       "detail": {
+        "failing": [],
         "opsApplied": 4,
+        "machineLoad": {
+          "cores": 4,
+          "loadAverageBefore": [
+            3.08,
+            5.11,
+            5.96
+          ],
+          "loadAverageAfter": [
+            6.66,
+            5.77,
+            6.14
+          ]
+        },
+        "comparedRun": {
+          "fxVoices": 4,
+          "fxPrimeMs": 289,
+          "fxLateStarts": 0,
+          "fxLateSkips": 0,
+          "firstWindowAtSeconds": -0.12
+        },
+        "scheduledSamples": {
+          "captured": true,
+          "buffers": 403,
+          "notOnTheSampleGrid": 0,
+          "comparedSeconds": 12,
+          "maxDifferenceFromExportIn16BitSteps": 0.5,
+          "maxDifferenceFromServerFloatMix": 5.960464477539063e-8,
+          "peak": 0.332
+        },
         "windows": 229,
-        "worstWindowDb": 0.61,
+        "worstWindowDb": 0.02,
+        "worstWindow": {
+          "t": 1.03,
+          "previewDb": -31.63,
+          "exportDb": -31.65
+        },
         "sample": [
           {
             "t": 0.58,
@@ -349,7 +430,7 @@
           }
         ],
         "prime": {
-          "fxPrimeMs": 556,
+          "fxPrimeMs": 408,
           "fxPrimeTimedOut": false,
           "fxLateStarts": 0
         },
@@ -358,13 +439,13 @@
             "fxVoices": 4,
             "fxLateStarts": 0,
             "fxLateSkips": 0,
-            "longTaskMs": 244,
-            "longTasks": 4
+            "longTaskMs": 0,
+            "longTasks": 0
           },
           "bypassed": {
             "fxVoices": 0,
-            "longTaskMs": 0,
-            "longTasks": 0
+            "longTaskMs": 203,
+            "longTasks": 3
           }
         }
       }
@@ -470,11 +551,11 @@
         {
           "op": "clean_voice",
           "args": {
-            "clipId": "clp_9ada99bdee0",
+            "clipId": "clp_0de2c119b00",
             "includeLinked": false,
             "strength": 0.6,
             "profile": "KtKlLDL6M1NiOZO3PRPiPkPjPdPYPPPEPAO_PDPOPhP5QWQ3",
-            "source": "ast_868e4dab310",
+            "source": "ast_4c9f3666a90",
             "mainsHz": "50"
           }
         }
@@ -563,8 +644,30 @@
       }
     },
     "C4": {
-      "bursts": 15,
-      "lagsSamples": [
+      "effects": [
+        "cleanup.dehum",
+        "cleanup.denoise",
+        "cleanup.speech"
+      ],
+      "broadbandBursts": 14,
+      "broadbandLagsSamples": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "toneBursts": 15,
+      "toneCarrierLagsSamples": [
         -3,
         -3,
         -3,
@@ -581,31 +684,55 @@
         -3,
         -3
       ],
-      "effects": {
-        "clipId": "clp_400b7856540",
+      "designedPhaseDelayAt1kHzSamples": -2.51,
+      "designedPhaseDelayPerEffect": {
+        "cleanup.dehum": -0.156,
+        "cleanup.denoise": 0,
+        "cleanup.speech": -2.354
+      },
+      "toneAgainstDesignSamples": [
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49
+      ],
+      "weakestNormalisedCorrelation": 0.981,
+      "cleanVoice": {
+        "clipId": "clp_3a37f9b1520",
         "includeLinked": false,
         "strength": 0.6,
-        "profile": "KsKkLJL7M6NlORO3POPiPqPpPjPZPOPFO_O-PEPOPhP5QWQ4",
-        "source": "ast_e3a1bfb70d0",
+        "profile": "F9F8GiLyMyNkOQO1PPPiPqPpPkPYPNPFO_O-PEPOPhP5QWQ4",
+        "source": "ast_6e5062c4290",
         "mainsHz": "50"
       }
     },
     "C6": [
       {
         "effects": "cleanup.dehum",
-        "realtime": 130
+        "realtime": 120
       },
       {
         "effects": "cleanup.denoise",
-        "realtime": 32
+        "realtime": 52
       },
       {
         "effects": "cleanup.speech",
-        "realtime": 72
+        "realtime": 89
       },
       {
         "effects": "cleanup.dehum + cleanup.denoise + cleanup.speech",
-        "realtime": 24
+        "realtime": 35
       }
     ],
     "C8": {
@@ -660,9 +787,44 @@
       "pausesUsed": 7
     },
     "C5": {
+      "failing": [],
       "opsApplied": 4,
+      "machineLoad": {
+        "cores": 4,
+        "loadAverageBefore": [
+          3.08,
+          5.11,
+          5.96
+        ],
+        "loadAverageAfter": [
+          6.66,
+          5.77,
+          6.14
+        ]
+      },
+      "comparedRun": {
+        "fxVoices": 4,
+        "fxPrimeMs": 289,
+        "fxLateStarts": 0,
+        "fxLateSkips": 0,
+        "firstWindowAtSeconds": -0.12
+      },
+      "scheduledSamples": {
+        "captured": true,
+        "buffers": 403,
+        "notOnTheSampleGrid": 0,
+        "comparedSeconds": 12,
+        "maxDifferenceFromExportIn16BitSteps": 0.5,
+        "maxDifferenceFromServerFloatMix": 5.960464477539063e-8,
+        "peak": 0.332
+      },
       "windows": 229,
-      "worstWindowDb": 0.61,
+      "worstWindowDb": 0.02,
+      "worstWindow": {
+        "t": 1.03,
+        "previewDb": -31.63,
+        "exportDb": -31.65
+      },
       "sample": [
         {
           "t": 0.58,
@@ -726,7 +888,7 @@
         }
       ],
       "prime": {
-        "fxPrimeMs": 556,
+        "fxPrimeMs": 408,
         "fxPrimeTimedOut": false,
         "fxLateStarts": 0
       },
@@ -735,13 +897,13 @@
           "fxVoices": 4,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
-          "longTaskMs": 244,
-          "longTasks": 4
+          "longTaskMs": 0,
+          "longTasks": 0
         },
         "bypassed": {
           "fxVoices": 0,
-          "longTaskMs": 0,
-          "longTasks": 0
+          "longTaskMs": 203,
+          "longTasks": 3
         }
       }
     },
@@ -751,42 +913,42 @@
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 22.8
+        "chromiumMs": 31.5
       },
       {
         "type": "cleanup.dehum",
         "params": "{\"mainsHz\":\"60\",\"harmonics\":8,\"width\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 38.5
+        "chromiumMs": 31.3
       },
       {
         "type": "cleanup.denoise",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 82.6
+        "chromiumMs": 113
       },
       {
         "type": "cleanup.denoise",
         "params": "{\"reductionDb\":30,\"sensitivityDb\":10,\"profile\":\"MgMgMgMgMgMgMgMgMgMgMgMgMgMgMgMg",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 62.5
+        "chromiumMs": 46.9
       },
       {
         "type": "cleanup.speech",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 53.6
+        "chromiumMs": 70.7
       },
       {
         "type": "cleanup.speech",
         "params": "{\"lowCutHz\":150,\"presence\":1,\"levelDb\":15,\"targetDb\":-12,\"ceilingDb\":-6}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 33.6
+        "chromiumMs": 38.4
       }
     ]
   }
