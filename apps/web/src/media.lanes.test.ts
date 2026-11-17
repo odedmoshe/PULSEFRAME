@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import type { VideoLayer } from '@pulseframe/engine';
+import { isDecodeBudgetReason, type VideoLayer } from '@pulseframe/engine';
 import { MediaPool, type PoolDecoder } from './media.ts';
 
 /** A stub decoder: answers every request with a picture that names its key and the time asked for. */
@@ -64,6 +64,8 @@ describe('decode lanes', () => {
     const got = await draw(pool, four);
     expect(got.map((x) => x !== null)).toEqual([true, true, true, false]);
     expect(pool.frames.refusal!(four[3]!)).toBe('decode_budget: this frame needs more than 3 video decoders');
+    expect(isDecodeBudgetReason(pool.frames.refusal!(four[3]!))).toBe(true); // how a view tells it from a load failure
+    expect(isDecodeBudgetReason('colour table ast_x could not be loaded: 404')).toBe(false);
     expect(pool.frames.refusal!(four[0]!)).toBeNull();
     expect(pool.frames.refusal!({ kind: 'image', clipId: 'clp_i', trackId: 'trk', assetId: 'ast_i', sourceWidth: 1, sourceHeight: 1, transform: four[0]!.transform })).toBeNull();
     await settle();

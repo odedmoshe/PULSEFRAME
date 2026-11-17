@@ -26,9 +26,16 @@ export interface FrameProvider {
   lut?(assetId: string): Promise<LutStrip | null>;
   /** Called once at the start of every drawGraph, before any frame is asked for: decoders used from now on are pinned (never evicted) until the next begin. A pool serves one drawGraph at a time. */
   begin?(): void;
-  /** Why the last request for this layer resolved null (e.g. `decode_budget: …`), or null when unknown. Never throws. */
+  /** Why the last request for this layer resolved null (e.g. `decode_budget: …`, see decodeBudgetReason), or null when unknown. Never throws. */
   refusal?(layer: PictureLayer): string | null;
 }
+/**
+ * The refusal a pool gives for a picture it did not decode because the frame needs more video decoders than it opens
+ * (ADR-0011). Nothing failed to load, and asking for the same frame again cannot help: only fewer pictures in the frame can
+ * (preflight's decode_budget lists those frames). A view tells it apart from a load failure with isDecodeBudgetReason.
+ */
+export const decodeBudgetReason = (maxDecoders: number) => `decode_budget: this frame needs more than ${maxDecoders} video decoders`;
+export const isDecodeBudgetReason = (reason: string | null | undefined) => !!reason && reason.startsWith('decode_budget:');
 
 /** Text wraps at this fraction of the frame width (before the layer's own scale). */
 export const TEXT_MAX_WIDTH_FRAC = 0.9;

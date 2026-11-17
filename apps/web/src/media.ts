@@ -10,7 +10,7 @@
  */
 import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type Source, type VideoSample } from 'mediabunny';
 import { LUT_MAX_TEXT_LENGTH, LutError, lutStrip } from '@pulseframe/core';
-import type { FrameImage, FrameProvider, LutStrip, PictureLayer } from '@pulseframe/engine';
+import { decodeBudgetReason, type FrameImage, type FrameProvider, type LutStrip, type PictureLayer } from '@pulseframe/engine';
 
 /** What the pool needs of a decoder: the picture at a time from the stream's first frame, and prompt disposal. */
 export interface PoolDecoder {
@@ -264,7 +264,7 @@ export class MediaPool {
     const dec = this.decoderFor(layer, quality, key);
     if (!dec) {
       this.refused++;
-      this.refusals.set(key, `decode_budget: this frame needs more than ${this.maxDecoders} video decoders`);
+      this.refusals.set(key, decodeBudgetReason(this.maxDecoders));
       return Promise.resolve(null);
     }
     this.refusals.delete(key);
