@@ -108,10 +108,112 @@ const HE_TREND: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the \S+ transition has no (color|seed) option$/, (m) => (m[1] === 'color' ? 'לסוג המעבר הזה אין בחירת צבע' : 'לסוג המעבר הזה אין וריאציות')],
   [/^clip \S+ has no transition$/, () => 'אין מעבר בתחילת הקליפ הזה; יש לבחור קודם סוג מעבר'],
 ];
+/**
+ * Refusals of portrait blur («טשטוש רקע לתמונה», ADR-0017; packages/core/src/recipes.ts). Their own list, provoked one by one in
+ * packages/core/src/recipes.test.ts, so the AI list above keeps its own inventory test.
+ */
+const HE_PORTRAIT: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^portrait blur works on a still picture clip$/, () => 'טשטוש רקע פועל על קליפ של תמונה סטטית; לווידאו צריך חיתוך של כל פריים, ואת זה הגרסה הזו לא עושה'],
+  [/^the cut-out \S+ is not in the project$/, () => 'החיתוך (התמונה בלי הרקע) כבר לא נמצא בפרויקט. אפשר להריץ שוב את הסרת הרקע על התמונה'],
+  [/^the cut-out was not made from the picture this clip shows$/, () => 'החיתוך לא נוצר מהתמונה שהקליפ מציג. יש להריץ את הסרת הרקע על התמונה של הקליפ הזה'],
+  [/^remove the transition into the next clip first$/, () => 'יש להסיר קודם את המעבר אל הקליפ הבא'],
+];
+/**
+ * Refusals of the motion tracking operations («מעקב תנועה», ADR-0015): motion tracks, following them and privacy regions.
+ * Their own list, so the inventory of the list above stays as it is; packages/evals/src/refusal-wording.test.ts provokes
+ * every one of them in a case of its own. A motion track is «מסלול מעקב» (a timeline track stays «רצועה»).
+ */
+const TIME_EFFECTS_HE = '(הד, פיצול זמן, צמצם או קפיצות פריים)';
+const HE_TRACKING: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^motion track \S+ not found$/, () => 'מסלול המעקב לא נמצא'],
+  [/^track \S+ not found$/, () => 'הרצועה לא נמצאה'],
+  [/^a motion track follows something in a video; this file has no video$/, () => 'מסלול מעקב עוקב אחרי משהו בתוך וידאו, ולקובץ הזה אין וידאו'],
+  [/^frame (\d+) is past the last frame of the video \((\d+)\)$/, (m) => `הפריים ${m[1]} נמצא אחרי הפריים האחרון של הווידאו (${m[2]})`],
+  [/^the samples reach past the last frame of the video \((\d+)\)$/, (m) => `הדגימות מגיעות אל מעבר לפריים האחרון של הווידאו (${m[1]})`],
+  [/^a region track needs the size of its box \(w and h\)$/, () => 'מעקב אחרי אזור צריך את גודל המסגרת שלו (רוחב וגובה)'],
+  [/^a point track has no box: w and h belong to region tracks$/, () => 'למעקב אחרי נקודה אין מסגרת: רוחב וגובה שייכים למעקב אחרי אזור'],
+  [/^a region track needs sizes \(s\)$/, () => 'במעקב אחרי אזור חסרים הגדלים של הדגימות'],
+  [/^a point track has no sizes \(s\)$/, () => 'למעקב אחרי נקודה אין גודל'],
+  [/^x, y, s, q and st must have the same length$/, () => 'עמודות הדגימות שהתקבלו אינן באותו אורך'],
+  [/^measured samples cannot be marked manual$/, () => 'דגימות שנמדדו אינן יכולות להיות מסומנות כמיקום שנקבע ביד'],
+  [/^a project can hold at most (\d+) motion tracks$/, (m) => `בפרויקט יכולים להיות עד ${m[1]} מסלולי מעקב. אפשר למחוק מסלול שכבר אינו בשימוש`],
+  [/^a motion track can hold at most (\d+) samples; this edit would make (\d+)$/, (m) => `מסלול מעקב יכול להכיל עד ${m[1]} דגימות, והעריכה הזו הייתה מגיעה ל־${m[2]}. אפשר לעקוב אחרי קטע קצר יותר`],
+  [/^the motion tracks of a project can hold at most (\d+) samples in all; this edit would make (\d+)$/, (m) => `כל מסלולי המעקב בפרויקט יחד יכולים להכיל עד ${m[1]} דגימות, והעריכה הזו הייתה מגיעה ל־${m[2]}. אפשר למחוק מסלול שכבר אינו בשימוש`],
+  [/^nothing to change: give name, set, markLost or interpolate$/, () => 'לא צוין מה לשנות במסלול המעקב'],
+  [/^frame (\d+) is set twice$/, (m) => `הפריים ${m[1]} נקבע פעמיים באותה עריכה`],
+  [/^(markLost|interpolate): the stretch must end after it starts \(to is one past its last frame\)$/, () => 'הקטע חייב להסתיים אחרי שהוא מתחיל'],
+  [/^(markLost|interpolate): the stretch must lie inside the track \(source frames (\d+) to (\d+)\)$/, (m) => `הקטע חייב להיות בתוך מסלול המעקב (פריימי מקור ${m[2]} עד ${m[3]})`],
+  [/^filling in needs a usable sample before the stretch and another after it$/, () => 'כדי להשלים קטע צריך מיקום אמין לפניו ומיקום אמין אחריו. אפשר לסמן מיקום ביד בכל צד'],
+  [/^(\d+) clip\(s\) follow this motion track or hide a region with it$/, (m) => `${m[1]} קליפים עוקבים אחרי מסלול המעקב הזה או מסתירים אזור בעזרתו; יש לנתק אותם קודם, או למחוק עם ניתוק`],
+  [/^(\d+) clip\(s\) still follow a motion track of this file or hide a region with one$/, (m) => `${m[1]} קליפים עדיין עוקבים אחרי מסלול מעקב של הקובץ הזה או מסתירים אזור בעזרתו; יש לנתק אותם קודם`],
+  [/^only a title, or a picture on a video track, can follow a motion track$/, () => 'רק כותרת, או תמונה ברצועת וידאו, יכולות לעקוב אחרי מסלול מעקב'],
+  [/^a clip follows a picture on a video track; track \S+ is a \S+ track$/, () => 'קליפ עוקב אחרי תמונה ברצועת וידאו, והרצועה שנבחרה אינה רצועת וידאו'],
+  [/^a clip cannot follow the picture on its own track$/, () => 'קליפ אינו יכול לעקוב אחרי התמונה שברצועה שלו עצמו; אפשר להעביר אותו לרצועה שמעליה'],
+  [/^a clip with a time effect \(echo, time split, shutter or stutter\) cannot follow a motion track yet$/, () => `קליפ עם אפקט זמן ${TIME_EFFECTS_HE} עדיין אינו יכול לעקוב אחרי מסלול מעקב`],
+  [/^clip \S+ on that track follows a motion track itself; follows cannot be chained$/, () => 'קליפ ברצועה שנבחרה עוקב בעצמו אחרי מסלול מעקב, ואי אפשר לשרשר מעקבים; אפשר לעקוב ישירות אחרי אותו מסלול'],
+  [/^clip \S+ follows the picture on this clip's track; follows cannot be chained$/, () => 'קליפ אחר עוקב אחרי התמונה שברצועה של הקליפ הזה, ואי אפשר לשרשר מעקבים'],
+  [/^privacy regions apply to video clips on video tracks$/, () => 'אזורי פרטיות חלים על קליפי וידאו ברצועות וידאו'],
+  [/^privacy regions are drawn on video pictures only; this clip shows a still image$/, () => 'אזורי פרטיות מצוירים רק על וידאו, והקליפ הזה מציג תמונה סטטית. לתמונה סטטית אפשר לשים עותק שלה ברצועה שמעליה עם אפקט טשטוש ומסכה'],
+  [/^name the region to delete \(regionId\)$/, () => 'יש לציין איזה אזור פרטיות למחוק'],
+  [/^region \S+ not found on clip \S+$/, () => 'אזור הפרטיות לא נמצא בקליפ הזה'],
+  [/^a clip can carry at most (\d+) privacy regions$/, (m) => `לקליפ אפשר להוסיף עד ${m[1]} אזורי פרטיות`],
+  [/^a privacy region follows a motion track of the clip's own video file$/, () => 'אזור פרטיות יכול לעקוב רק אחרי מסלול מעקב של קובץ הווידאו של הקליפ עצמו'],
+];
+/**
+ * Refusals of adjustment layers, replacing a clip's media and applying a template («שכבת התאמה», «החלפת מדיה», «תבנית»;
+ * ADR-0016), including the two validation codes adjustment_transform and adjustment_effect as an invalid result. Their own
+ * list, so the inventory of the list above stays as it is; packages/evals/src/refusal-wording.test.ts provokes every one of
+ * them in a case of its own. A refusal of a template step names a fault of the template, not of the person's edit.
+ */
+const ADJUSTMENT_REASONS_HE: Record<string, string> = {
+  "a time effect needs a clip's own source; it cannot act on the picture below": 'אפקט זמן צריך את המקור של הקליפ עצמו, ואינו יכול לפעול על התמונה שמתחת',
+  'a chroma key over the whole picture below would cut holes through to the background': 'מסך ירוק על כל התמונה שמתחת היה פותח חורים עד הרקע',
+  'a drop shadow has no visible result on a full-frame picture': 'לצל אין תוצאה נראית על תמונה שממלאת את כל הפריים',
+};
+const adjustmentReasonHe = (why: string) => ADJUSTMENT_REASONS_HE[why] ?? 'הוא אינו מתאים לשכבת התאמה';
+const TEMPLATE_FAULT_HE = 'זו תקלה בתבנית, לא בעריכה שלך';
+const HE_TEMPLATES: [RegExp, (m: RegExpExecArray) => string][] = [
+  // add_adjustment and the adjustment rules of the other operations
+  [/^the edit has no picture or title to cover yet$/, () => 'בעריכה עדיין אין תמונה או כותרת ששכבת ההתאמה תכסה. אפשר להוסיף קליפים קודם, או לבחור טווח זמן'],
+  [/^(\S+) cannot go on an adjustment: (.+)$/, (m) => `האפקט הזה אינו יכול לחול על שכבת התאמה: ${adjustmentReasonHe(m[2]!)}. אפשר לשים אותו על הקליפ עצמו`],
+  [/^an adjustment goes on an adjustment track, not on \S+ track \S+$/, () => 'שכבת התאמה נמצאת רק ברצועת התאמה'],
+  [/^start must be >= 0 and duration > 0$/, () => 'ההתחלה אינה יכולה להיות לפני תחילת ציר הזמן, והאורך חייב להיות לפחות פריים אחד'],
+  [/^an adjustment clip has no source or picture of its own, so it cannot be (.+)$/, () => 'לשכבת התאמה אין מקור או תמונה משלה, ולכן הפעולה הזו אינה אפשרית בה. אפשר לבצע אותה על הקליפים שמתחתיה'],
+  [/^only the opacity of an adjustment clip can be (set|animated): it has no picture of its own to move, scale or turn$/, () => 'בשכבת התאמה אפשר לשנות רק את האטימות: אין לה תמונה משלה להזיז, להגדיל או לסובב. כדי להגביל את המראה לחלק מהפריים אפשר להוסיף לה מסכה'],
+  [/^an adjustment clip can only change its opacity; (\S+) also changes (.+)$/, () => 'שכבת התאמה יכולה לשנות רק את האטימות שלה, והתנועה הזו גם מזיזה, מגדילה או מסובבת. אפשר לבחור הופעה או היעלמות בדהייה'],
+  [/^only adjustment clips go on adjustment track \S+$/, () => 'ברצועת התאמה יכולות להיות רק שכבות התאמה'],
+  [/^masks apply to picture clips on video tracks and to adjustment clips$/, () => 'מסכה חלה על קליפי תמונה ברצועות וידאו ועל שכבות התאמה'],
+  [/^effects, blends, masks and transitions apply to picture, title and adjustment clips$/, () => 'אפקטים, מצבי מיזוג, מסכות ומעברים חלים על קליפי תמונה, על כותרות ועל שכבות התאמה'],
+  // the validation codes adjustment_transform and adjustment_effect, met as an invalid result
+  [/^transaction would produce an invalid project: adjustment clip \S+: only opacity can be set or animated$/, () => 'בשכבת התאמה אפשר לשנות רק את האטימות: אין לה תמונה משלה להזיז, להגדיל או לסובב'],
+  [/^transaction would produce an invalid project: adjustment clip \S+: (\S+): (.+)$/, (m) => `אפקט בשכבת ההתאמה אינו יכול לחול עליה: ${adjustmentReasonHe(m[2]!)}`],
+  // replace_clip_media
+  [/^only clips that play a file can take another file$/, () => 'רק לקליפ שמנגן קובץ אפשר לתת קובץ אחר. כותרת משנים בעריכת הטקסט'],
+  [/^a colour table \(LUT\) is not placed on the timeline; it is applied to a clip as an effect$/, () => 'טבלת צבע (LUT) אינה מונחת על ציר הזמן; היא חלה על קליפ כאפקט'],
+  [/^this clip (shows a picture|plays sound), and the file has no (picture|sound)$/, (m) => (m[2] === 'picture' ? 'הקליפ הזה מציג תמונה, ולקובץ שנבחר אין תמונה' : 'הקליפ הזה מנגן קול, ולקובץ שנבחר אין קול')],
+  [/^the clip linked to this one \(\S+\) (shows a picture|plays sound), and the file has no (picture|sound)$/, (m) => `הקליפ המקושר לקליפ הזה ${m[2] === 'picture' ? 'מציג תמונה, ולקובץ שנבחר אין תמונה' : 'מנגן קול, ולקובץ שנבחר אין קול'}. אפשר לנתק אותו ולהשאיר אותו כמו שהוא`],
+  [/^a still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed$/, () => 'תמונה סטטית אינה יכולה להחליף קליפ שמתנגן במהירות אחרת, לאחור, כפריים קפוא או בשינוי מהירות הדרגתי'],
+  [/^this clip has privacy regions, which are drawn on video pictures only$/, () => 'לקליפ הזה יש אזורי פרטיות, והם מצוירים רק על וידאו'],
+  [/^a privacy region of this clip follows a motion track of its current file$/, () => 'אזור פרטיות בקליפ הזה עוקב אחרי מסלול מעקב של הקובץ הנוכחי שלו; יש להפוך אותו לקבוע או להסיר אותו קודם'],
+  [/^sourceIn is outside the asset$/, () => 'נקודת ההתחלה נמצאת מחוץ לקובץ'],
+  [/^the file is too short for this clip from that point$/, () => 'הקובץ קצר מדי לקליפ הזה מהנקודה שנבחרה'],
+  [/^the transition into the next clip needs (\d+) spare source frames after this clip, and the file has only (\d+)$/, (m) => `המעבר לקליפ הבא צריך ${m[1]} פריימים של חומר מקור אחרי הקליפ הזה, ובקובץ יש רק ${m[2]}`],
+  [/^the clip already plays this file from this point$/, () => 'הקליפ כבר מנגן את הקובץ הזה מהנקודה הזו'],
+  [/^linked clip \S+ is on locked track \S+$/, () => 'קליפ מקושר לקליפ הזה נמצא ברצועה נעולה'],
+  // apply_template: a plan the server built is wrong
+  // [\s\S]: a step whose arguments fail its operation's schema is worded by z.prettifyError over more than one line
+  [/^template step \d+ \(\S+\): [\s\S]+$/, () => `אחד השלבים של התבנית אינו תקין, ולכן היא לא הוחלה. ${TEMPLATE_FAULT_HE}`],
+  [/^template step \d+ uses ".*", which is not a public operation$/, () => `התבנית ביקשה פעולה שאינה מותרת לה, ולכן היא לא הוחלה. ${TEMPLATE_FAULT_HE}`],
+  [/^slot \d+ \(\S+\) names no clip the template made$/, () => `משבצת בתבנית אינה מצביעה על קליפ שהתבנית יצרה. ${TEMPLATE_FAULT_HE}`],
+  [/^asset key ".*" is given twice$/, () => `קובץ של התבנית מופיע פעמיים. ${TEMPLATE_FAULT_HE}`],
+  [/^a template run holds at most (\d+) slots; this one would hold (\d+)$/, (m) => `בהחלת תבנית יכולות להיות עד ${m[1]} משבצות, וכאן היו ${m[2]}`],
+  [/^run \S+ is a run of \S+, not of \S+$/, () => 'ההחלה הקודמת שייכת לתבנית אחרת, ולכן אי אפשר ליצור אותה מחדש בתבנית הזו'],
+  [/^template \S+ needs a model that is not installed, so it is never applied$/, () => 'התבנית הזו צריכה מודל שאינו מותקן במחשב הזה, ולכן היא לעולם אינה מוחלת. תבנית לעולם אינה מורידה מודלים'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES]) { const m = re.exec(message); if (m) return say(m); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
@@ -122,3 +224,9 @@ export const AUDIO_FX_REFUSAL_PATTERNS: readonly RegExp[] = HE_AUDIO_FX.map(([re
 export const AI_REFUSAL_PATTERNS: readonly RegExp[] = HE_AI.map(([re]) => re);
 /** The transition-option patterns (ADR-0012), for their own test. */
 export const TREND_REFUSAL_PATTERNS: readonly RegExp[] = HE_TREND.map(([re]) => re);
+/** The portrait-blur patterns (ADR-0017), for their own test (packages/core/src/recipes.test.ts). */
+export const PORTRAIT_REFUSAL_PATTERNS: readonly RegExp[] = HE_PORTRAIT.map(([re]) => re);
+/** The motion tracking patterns (ADR-0015), for their own case of refusal-wording.test.ts. */
+export const TRACKING_REFUSAL_PATTERNS: readonly RegExp[] = HE_TRACKING.map(([re]) => re);
+/** The patterns of adjustment layers, replacing media and templates (ADR-0016), for their own test. */
+export const TEMPLATE_REFUSAL_PATTERNS: readonly RegExp[] = HE_TEMPLATES.map(([re]) => re);

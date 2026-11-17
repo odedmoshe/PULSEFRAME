@@ -52,6 +52,19 @@ describe('openapi structure', () => {
   it('contains known routes', () => {
     for (const p of ['/api/v1/projects', '/api/v1/ops', '/api/v1/capabilities', '/api/v1/projects/{id}/undo']) expect(doc.paths[p], p).toBeTruthy();
   });
+  it('lists the AI-model wave routes (ADR-0017): the run estimate and the owner-only translation review, and the run body\'s source, apply and confirmLongRun', () => {
+    const est = doc.paths['/api/v1/projects/{id}/capabilities/{capabilityId}/estimate']?.get;
+    expect(est?.operationId).toBe('estimateCapability');
+    expect(est['x-required-scope']).toBe('observe');
+    expect(est.parameters.map((p: any) => p.name)).toEqual(['id', 'capabilityId', 'source', 'params']);
+    expect(est.responses['200'].content['application/json'].schema).toEqual({ $ref: '#/components/schemas/CapabilityEstimate' });
+    const rev = doc.paths['/api/v1/projects/{id}/variants/{variantId}/translation/review']?.post;
+    expect(rev?.operationId).toBe('reviewTranslation');
+    expect(rev['x-owner-session-only']).toBe(true);
+    expect(rev.responses['403']).toBeTruthy();
+    expect(Object.keys(doc.components.schemas.RunRequest.properties)).toEqual(expect.arrayContaining(['source', 'apply', 'confirmLongRun']));
+    expect(doc.components.schemas.SetupState.properties.code.enum).toHaveLength(10);
+  });
   it('transaction ops oneOf covers the registry exactly once', () => {
     const items = doc.components.schemas.TransactionRequest.properties.ops.items.oneOf as any[];
     const names = items.map((i) => i.properties.op.const);

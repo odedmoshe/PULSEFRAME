@@ -1,0 +1,969 @@
+{
+  "ranAt": "2026-11-17T17:38:57.126Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v553 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Model-free motion tracking (ADR-0015) on the synthetic tracking fixture only (a textured disc on noise, an occluder, a look-alike; no real face or person). Stills through render_frame, the export decoded with ffmpeg, the editor preview in headless Chromium. P13 is recorded, not gated. Not covered: real footage, faces, a GPU.",
+  "fixture": {
+    "width": 1280,
+    "height": 720,
+    "frames": 240,
+    "fps": {
+      "num": 30,
+      "den": 1
+    },
+    "occluded": {
+      "from": 150,
+      "to": 169
+    },
+    "decoy": {
+      "cx": 180,
+      "cy": 560,
+      "scale": 0.85,
+      "from": 160,
+      "to": 239
+    }
+  },
+  "passed": 26,
+  "total": 26,
+  "measurements": {
+    "trackingJob": {
+      "status": "succeeded",
+      "output": {
+        "motionTrackId": "mtk_3b85b3370f0",
+        "revision": 4,
+        "from": 0,
+        "to": 240,
+        "frames": 240,
+        "decodedFrames": 240,
+        "trackingFps": 52.46,
+        "input": "proxy",
+        "counts": {
+          "unknown": 0,
+          "tracked": 216,
+          "weak": 0,
+          "lost": 22,
+          "manual": 1,
+          "interpolated": 0,
+          "reacquired": 1
+        },
+        "problems": [
+          {
+            "from": 150,
+            "to": 172,
+            "state": "lost"
+          },
+          {
+            "from": 172,
+            "to": 173,
+            "state": "reacquired"
+          }
+        ]
+      },
+      "error": null
+    },
+    "P2": {
+      "usable": 218,
+      "medianPx": 0.18,
+      "p95Px": 0.33,
+      "maxPx": 0.45,
+      "sizeMedian": 0.0082,
+      "counts": {
+        "unknown": 0,
+        "tracked": 216,
+        "weak": 0,
+        "lost": 22,
+        "manual": 1,
+        "interpolated": 0,
+        "reacquired": 1
+      }
+    },
+    "P7": {
+      "n": 27,
+      "medianPx": 0.22,
+      "maxPx": 0.62
+    },
+    "P8": {
+      "speed 0.5": {
+        "n": 20,
+        "medianPx": 0.27,
+        "maxPx": 0.59,
+        "pairsSame": true
+      },
+      "speed 2": {
+        "n": 18,
+        "medianPx": 0.25,
+        "maxPx": 0.6
+      },
+      "reversed": {
+        "n": 18,
+        "medianPx": 0.2,
+        "maxPx": 0.67
+      },
+      "slipped": {
+        "n": 13,
+        "medianPx": 0.22,
+        "maxPx": 0.69
+      },
+      "split": {
+        "n": 12,
+        "medianPx": 0.21,
+        "maxPx": 0.53
+      },
+      "stutter": {
+        "n": 18,
+        "medianPx": 0.26,
+        "maxPx": 0.69
+      },
+      "9:16 cover": {
+        "n": 6,
+        "medianPx": 0.28,
+        "maxPx": 0.6
+      }
+    },
+    "P9": {
+      "drops": [
+        {
+          "frame": 20,
+          "drop": 0.845
+        },
+        {
+          "frame": 60,
+          "drop": 0.834
+        },
+        {
+          "frame": 100,
+          "drop": 0.841
+        },
+        {
+          "frame": 200,
+          "drop": 0.83
+        },
+        {
+          "frame": 230,
+          "drop": 0.838
+        }
+      ],
+      "wholeDrops": [
+        {
+          "frame": 155,
+          "drop": 0.989
+        },
+        {
+          "frame": 160,
+          "drop": 0.99
+        },
+        {
+          "frame": 165,
+          "drop": 0.991
+        }
+      ],
+      "fills": [
+        {
+          "frame": 20,
+          "checked": 6253,
+          "off": 0,
+          "worst": 0
+        },
+        {
+          "frame": 60,
+          "checked": 7425,
+          "off": 0,
+          "worst": 0
+        },
+        {
+          "frame": 100,
+          "checked": 6281,
+          "off": 0,
+          "worst": 0
+        }
+      ]
+    },
+    "P10": [
+      {
+        "frame": 100,
+        "ghost": 0,
+        "source": 100,
+        "drop": 0.835
+      },
+      {
+        "frame": 100,
+        "ghost": 1,
+        "source": 85,
+        "drop": 0.857
+      },
+      {
+        "frame": 100,
+        "ghost": 2,
+        "source": 70,
+        "drop": 0.897
+      },
+      {
+        "frame": 100,
+        "ghost": 3,
+        "source": 55,
+        "drop": 0.926
+      },
+      {
+        "frame": 105,
+        "ghost": 0,
+        "source": 105,
+        "drop": 0.842
+      },
+      {
+        "frame": 105,
+        "ghost": 1,
+        "source": 90,
+        "drop": 0.855
+      },
+      {
+        "frame": 105,
+        "ghost": 2,
+        "source": 75,
+        "drop": 0.898
+      },
+      {
+        "frame": 105,
+        "ghost": 3,
+        "source": 60,
+        "drop": 0.925
+      },
+      {
+        "frame": 110,
+        "ghost": 0,
+        "source": 110,
+        "drop": 0.838
+      },
+      {
+        "frame": 110,
+        "ghost": 1,
+        "source": 95,
+        "drop": 0.854
+      },
+      {
+        "frame": 110,
+        "ghost": 2,
+        "source": 80,
+        "drop": 0.897
+      },
+      {
+        "frame": 110,
+        "ghost": 3,
+        "source": 65,
+        "drop": 0.924
+      }
+    ],
+    "P13": {
+      "trackingFps": 52.46,
+      "framesTracked": 240,
+      "framesDecoded": 240,
+      "input": "proxy",
+      "eventLoopLagMs": {
+        "p50": 12.8,
+        "p99": 62.6,
+        "max": 77.9,
+        "budgetP99": 100,
+        "withinBudget": true
+      },
+      "commitMs": {
+        "samples": 43200,
+        "baselineP95": 8.6,
+        "withSamplesP95": 115.7,
+        "deltaP95": 107.1,
+        "budgetDelta": 15,
+        "withinBudget": false
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "P1 the reader's frame index equals the frame barcode on 100% of frames of the original, the proxy and a file whose picture starts 0.5 s late (also for a window 17..40)",
+      "ok": true,
+      "detail": [
+        {
+          "kind": "original",
+          "frames": 240,
+          "read": 240,
+          "seen": 240,
+          "wrong": 0,
+          "firstWrong": [],
+          "window17to40Ok": true,
+          "digest": "a9b1ac4cdbee0f6b"
+        },
+        {
+          "kind": "proxy",
+          "frames": 240,
+          "read": 240,
+          "seen": 240,
+          "wrong": 0,
+          "firstWrong": [],
+          "window17to40Ok": true,
+          "digest": "9b67b77c90068310"
+        },
+        {
+          "kind": "late-start",
+          "frames": 240,
+          "read": 240,
+          "seen": 240,
+          "wrong": 0,
+          "firstWrong": [],
+          "window17to40Ok": true,
+          "digest": "a9b1ac4cdbee0f6b"
+        }
+      ]
+    },
+    {
+      "name": "P2 accuracy on usable frames: median error ≤ 1.0 px, p95 ≤ 3.0 px; size error median ≤ 5%",
+      "ok": true,
+      "detail": {
+        "usable": 218,
+        "medianPx": 0.18,
+        "p95Px": 0.33,
+        "maxPx": 0.45,
+        "sizeMedian": 0.0082,
+        "counts": {
+          "unknown": 0,
+          "tracked": 216,
+          "weak": 0,
+          "lost": 22,
+          "manual": 1,
+          "interpolated": 0,
+          "reacquired": 1
+        }
+      }
+    },
+    {
+      "name": "P3 occlusion: at least 90% of frames 150–169 are weak or lost; no usable sample anywhere is more than 8 px off; re-acquired by frame 175",
+      "ok": true,
+      "detail": {
+        "weakOrLost": 20,
+        "of": 20,
+        "worstUsablePx": 0.45,
+        "firstUsableAfter": 172,
+        "stateThere": 6
+      }
+    },
+    {
+      "name": "P4 the look-alike (shown on frames 160–239): no usable sample within 100 px of it while it is shown",
+      "ok": true,
+      "detail": {
+        "nearDecoy": [],
+        "framesChecked": 80,
+        "truePathNearItsPlaceBeforeItAppears": [
+          120,
+          128
+        ]
+      }
+    },
+    {
+      "name": "P5 two runs on the same seed give the same SHA-256 of the sample arrays",
+      "ok": true,
+      "detail": {
+        "a": "56e8aaa5342415cb94b9605cb5c3bfcf412acaa078ccacd177f6ddc048c1dc86",
+        "b": "56e8aaa5342415cb94b9605cb5c3bfcf412acaa078ccacd177f6ddc048c1dc86",
+        "job": "succeeded"
+      }
+    },
+    {
+      "name": "P6 cancel: a running tracking job ends canceled within 2 s, no ffmpeg of this server is left, the revision is unchanged and the track still holds only its seed",
+      "ok": true,
+      "detail": {
+        "stageWhenCanceled": "reading frames",
+        "cancel": {
+          "jobId": "job_zUpmkES3Nk0",
+          "status": "cancel-requested",
+          "outcome": "stopping",
+          "note": "the tracker is being stopped; nothing will be attached"
+        },
+        "status": "canceled",
+        "ms": 12,
+        "ffmpegLeft": 0,
+        "revision": [
+          8,
+          8
+        ],
+        "samples": 1
+      }
+    },
+    {
+      "name": "P7 the sticker that follows the disc, on stills: centroid median ≤ 2 px and max ≤ 5 px from the truth projected independently (usable frames)",
+      "ok": true,
+      "detail": {
+        "n": 27,
+        "medianPx": 0.22,
+        "maxPx": 0.62,
+        "worst": [
+          {
+            "frame": 40,
+            "source": 40,
+            "err": 0.6196748336696583,
+            "at": {
+              "x": 1019.5,
+              "y": 484.5
+            }
+          },
+          {
+            "frame": 144,
+            "source": 144,
+            "err": 0.6031187891741889,
+            "at": {
+              "x": 416.5,
+              "y": 564.5
+            }
+          },
+          {
+            "frame": 88,
+            "source": 88,
+            "err": 0.5297965804591179,
+            "at": {
+              "x": 522.5,
+              "y": 287.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "P7 the export (mp4 decoded with ffmpeg) puts the sticker where the stills do, within 2 px",
+      "ok": true,
+      "detail": {
+        "frames": 27,
+        "maxPx": 0.71,
+        "worst": [
+          {
+            "frame": 96,
+            "px": 0.71
+          },
+          {
+            "frame": 104,
+            "px": 0.71
+          },
+          {
+            "frame": 136,
+            "px": 0.7
+          }
+        ]
+      }
+    },
+    {
+      "name": "P7 the editor preview (the proxy, same evaluator) puts the sticker where the stills do, within 2 px; no page errors",
+      "ok": true,
+      "detail": {
+        "frames": 9,
+        "maxPx": 0,
+        "errors": []
+      }
+    },
+    {
+      "name": "P8 speed 0.5: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px); the two timeline frames of each held source frame are identical",
+      "ok": true,
+      "detail": {
+        "n": 20,
+        "medianPx": 0.27,
+        "maxPx": 0.59,
+        "pairsSame": true,
+        "worst": [
+          {
+            "frame": 168,
+            "source": 84,
+            "err": 0.5888250293737229,
+            "at": {
+              "x": 580.5,
+              "y": 275.5
+            }
+          },
+          {
+            "frame": 169,
+            "source": 84,
+            "err": 0.5888250293737229,
+            "at": {
+              "x": 580.5,
+              "y": 275.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "P8 speed 2: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
+      "ok": true,
+      "detail": {
+        "n": 18,
+        "medianPx": 0.25,
+        "maxPx": 0.6,
+        "worst": [
+          {
+            "frame": 72,
+            "source": 144,
+            "err": 0.6031187891741889,
+            "at": {
+              "x": 416.5,
+              "y": 564.5
+            }
+          },
+          {
+            "frame": 42,
+            "source": 84,
+            "err": 0.5888250293737229,
+            "at": {
+              "x": 580.5,
+              "y": 275.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "P8 reversed: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
+      "ok": true,
+      "detail": {
+        "n": 18,
+        "medianPx": 0.2,
+        "maxPx": 0.67,
+        "worst": [
+          {
+            "frame": 180,
+            "source": 59,
+            "err": 0.6734203381118361,
+            "at": {
+              "x": 918.5,
+              "y": 341.5
+            }
+          },
+          {
+            "frame": 192,
+            "source": 47,
+            "err": 0.6330702305049406,
+            "at": {
+              "x": 1005.5,
+              "y": 431.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "P8 slipped: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
+      "ok": true,
+      "detail": {
+        "n": 13,
+        "medianPx": 0.22,
+        "maxPx": 0.69,
+        "worst": [
+          {
+            "frame": 36,
+            "source": 66,
+            "err": 0.6943182889316887,
+            "at": {
+              "x": 838.5,
+              "y": 300.5
+            }
+          },
+          {
+            "frame": 24,
+            "source": 54,
+            "err": 0.5435546167712231,
+            "at": {
+              "x": 963.5,
+              "y": 377.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "P8 split: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
+      "ok": true,
+      "detail": {
+        "n": 12,
+        "medianPx": 0.21,
+        "maxPx": 0.53,
+        "worst": [
+          {
+            "frame": 88,
+            "source": 88,
+            "err": 0.5297965804591179,
+            "at": {
+              "x": 522.5,
+              "y": 287.5
+            }
+          },
+          {
+            "frame": 112,
+            "source": 112,
+            "err": 0.49015460624241297,
+            "at": {
+              "x": 278.5,
+              "y": 447.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "P8 stutter: the sticker follows the disc on stills (median ≤ 2 px, max ≤ 5 px)",
+      "ok": true,
+      "detail": {
+        "n": 18,
+        "medianPx": 0.26,
+        "maxPx": 0.69,
+        "worst": [
+          {
+            "frame": 67,
+            "source": 66,
+            "err": 0.6943182889316887,
+            "at": {
+              "x": 838.5,
+              "y": 300.5
+            }
+          },
+          {
+            "frame": 144,
+            "source": 144,
+            "err": 0.6031187891741889,
+            "at": {
+              "x": 416.5,
+              "y": 564.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "P8 9:16 cover format: the sticker follows the disc where it is in the cropped frame (median ≤ 2 px, max ≤ 5 px)",
+      "ok": true,
+      "detail": {
+        "n": 6,
+        "medianPx": 0.28,
+        "maxPx": 0.6
+      }
+    },
+    {
+      "name": "P12 preflight at speed 1: the privacy-region ranges are exactly the lost/weak frames widened by the loss filter, the follow ranges exactly the unknown/weak/lost frames; warnings only, saying tracking is not guaranteed redaction",
+      "ok": true,
+      "detail": {
+        "redact": {
+          "got": [
+            [
+              140,
+              182
+            ]
+          ],
+          "want": [
+            [
+              140,
+              182
+            ]
+          ]
+        },
+        "follow": {
+          "got": [
+            [
+              150,
+              172
+            ]
+          ],
+          "want": [
+            [
+              150,
+              172
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "name": "P12 preflight at speed 2: the same runs at half the timeline frame (source 2t); the sticker after the clip ends follows a missing target",
+      "ok": true,
+      "detail": {
+        "redact": {
+          "got": [
+            [
+              70,
+              91
+            ]
+          ],
+          "want": [
+            [
+              70,
+              91
+            ]
+          ]
+        },
+        "follow": {
+          "got": [
+            [
+              75,
+              86
+            ]
+          ],
+          "want": [
+            [
+              75,
+              86
+            ]
+          ]
+        },
+        "missing": {
+          "got": [
+            [
+              120,
+              240
+            ]
+          ],
+          "want": [
+            [
+              120,
+              240
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "name": "P9 blur: the |Laplacian| energy inside the disc drops by at least 80% on every measured frame",
+      "ok": true,
+      "detail": [
+        {
+          "frame": 20,
+          "drop": 0.845
+        },
+        {
+          "frame": 60,
+          "drop": 0.834
+        },
+        {
+          "frame": 100,
+          "drop": 0.841
+        },
+        {
+          "frame": 200,
+          "drop": 0.83
+        },
+        {
+          "frame": 230,
+          "drop": 0.838
+        }
+      ]
+    },
+    {
+      "name": "P9 outside the padded box (plus four feather radii) the picture is byte-identical to the clip without the region",
+      "ok": true,
+      "detail": [
+        {
+          "frame": 20,
+          "differing": 0
+        },
+        {
+          "frame": 60,
+          "differing": 0
+        },
+        {
+          "frame": 100,
+          "differing": 0
+        },
+        {
+          "frame": 200,
+          "differing": 0
+        },
+        {
+          "frame": 230,
+          "differing": 0
+        }
+      ]
+    },
+    {
+      "name": "P9 on occluded frames (tracking lost) the whole picture is blurred: its energy drops by at least 60%",
+      "ok": true,
+      "detail": [
+        {
+          "frame": 155,
+          "drop": 0.989
+        },
+        {
+          "frame": 160,
+          "drop": 0.99
+        },
+        {
+          "frame": 165,
+          "drop": 0.991
+        }
+      ]
+    },
+    {
+      "name": "P9 full cover: every pixel of the region's inner half is exactly #00c800",
+      "ok": true,
+      "detail": [
+        {
+          "frame": 20,
+          "checked": 6253,
+          "off": 0,
+          "worst": 0
+        },
+        {
+          "frame": 60,
+          "checked": 7425,
+          "off": 0,
+          "worst": 0
+        },
+        {
+          "frame": 100,
+          "checked": 6281,
+          "off": 0,
+          "worst": 0
+        }
+      ]
+    },
+    {
+      "name": "P11 control: the fixture alone passes the analyser once its barcode strip is left out (so the check below is about the fallback, not the barcode)",
+      "ok": true,
+      "detail": {
+        "sourceWithStrip": {
+          "frames": 240,
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0,
+              "to": 239,
+              "kind": "general",
+              "flashesPerSecond": 15,
+              "area": 0.035
+            }
+          ],
+          "peak": {
+            "general": 30,
+            "red": 0
+          }
+        },
+        "sourceWithoutStrip": {
+          "frames": 240,
+          "verdict": "pass",
+          "ranges": [],
+          "peak": {
+            "general": 4,
+            "red": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "P11 FlashAnalyser passes the exported picture with the whole-picture loss fallback, at speed 1 and at speed 4 (barcode strip left out)",
+      "ok": true,
+      "detail": [
+        {
+          "speed": 1,
+          "frames": 240,
+          "verdict": "pass",
+          "ranges": [],
+          "peak": {
+            "general": 30,
+            "red": 0
+          },
+          "withStrip": "fail",
+          "exportsOwnCheck": "fail"
+        },
+        {
+          "speed": 4,
+          "frames": 240,
+          "verdict": "pass",
+          "ranges": [],
+          "peak": {
+            "general": 4,
+            "red": 0
+          },
+          "withStrip": "fail",
+          "exportsOwnCheck": "fail"
+        }
+      ]
+    },
+    {
+      "name": "P10 echo (4 pictures, 15 frames apart) on a clip with a tracked privacy region: the picture and each of its 3 ghosts lose at least 80% of their |Laplacian| energy (each covered at its own source frame)",
+      "ok": true,
+      "detail": [
+        {
+          "frame": 100,
+          "ghost": 0,
+          "source": 100,
+          "drop": 0.835
+        },
+        {
+          "frame": 100,
+          "ghost": 1,
+          "source": 85,
+          "drop": 0.857
+        },
+        {
+          "frame": 100,
+          "ghost": 2,
+          "source": 70,
+          "drop": 0.897
+        },
+        {
+          "frame": 100,
+          "ghost": 3,
+          "source": 55,
+          "drop": 0.926
+        },
+        {
+          "frame": 105,
+          "ghost": 0,
+          "source": 105,
+          "drop": 0.842
+        },
+        {
+          "frame": 105,
+          "ghost": 1,
+          "source": 90,
+          "drop": 0.855
+        },
+        {
+          "frame": 105,
+          "ghost": 2,
+          "source": 75,
+          "drop": 0.898
+        },
+        {
+          "frame": 105,
+          "ghost": 3,
+          "source": 60,
+          "drop": 0.925
+        },
+        {
+          "frame": 110,
+          "ghost": 0,
+          "source": 110,
+          "drop": 0.838
+        },
+        {
+          "frame": 110,
+          "ghost": 1,
+          "source": 95,
+          "drop": 0.854
+        },
+        {
+          "frame": 110,
+          "ghost": 2,
+          "source": 80,
+          "drop": 0.897
+        },
+        {
+          "frame": 110,
+          "ghost": 3,
+          "source": 65,
+          "drop": 0.924
+        }
+      ]
+    },
+    {
+      "name": "P13 recorded (not a gate): the project held 43,200 track samples while commit time was measured",
+      "ok": true,
+      "detail": {
+        "samples": 43200
+      }
+    }
+  ]
+}

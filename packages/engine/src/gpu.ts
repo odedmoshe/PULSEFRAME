@@ -738,19 +738,84 @@ const T2: Record<string, string> = {
       a += O(q); b += I(q);
     }
     return mix(a / 12.0, b / 12.0, smoothstep(0.45, 0.55, p));`,
-  // ---- trend pack (ADR-0012), uniform v2: `light` (0..1, already the envelope the flash schedule allowed), `tint` (rgb) and
-  // `seed` (u32) are read in transition(); `fbm`/`vnoise` are module helpers. PLACEHOLDER bodies (a hard cut half-way, no light):
-  // worker W2 replaces each one; a test fails while any body still says PLACEHOLDER.
+  // ---- trend pack (ADR-0012), uniform v2: `light` (0..1, already the envelope the flash schedule allowed: 0 when the schedule
+  // held this transition's flash start), `tint` (rgb, the transition's colour) and `seed` (u32) are read in transition();
+  // `fbm`/`vnoise` are module helpers. With light 0 every incoming share below only grows with p; light is only ever added as
+  // light * (…) * tint, so a held light adds exactly nothing. JavaScript models of the geometry: burnThreshold, brushFront,
+  // pageFold and pageTurnSource (below), for the proofs.
+  //
+  // Film burn: the incoming picture burns in where seeded fbm noise falls below a threshold that sweeps 1.25 p - 0.1; the
+  // burning rim and, with less weight, the whole frame are lit by the tint, whitened toward the rim. The noise is first spread
+  // evenly over 0..1 (fbm is about normal, mean 0.5, sd 0.13; a logistic of slope 13 is its distribution function), so the
+  // burnt area grows evenly with the threshold and the rim covers about the same area all along: the light it adds then
+  // follows the scheduled envelope (ADR-0012).
   burn: `
-    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+    let n = 1.0 / (1.0 + exp((0.5 - fbm(uv * vec2f(asp, 1.0) * 2.5 + vec2f(f32(seed) * 0.37, 0.0), seed)) * 13.0));
+    let th = 1.25 * p - 0.1;
+    let inn = 1.0 - smoothstep(th - 0.02, th + 0.02, n);
+    let e = 1.0 - smoothstep(0.0, 0.12, abs(n - th));
+    let col = mix(tint, vec3f(1.0, 0.95, 0.85), 0.6 * e);
+    let base = mix(O(uv), I(uv), inn);
+    return vec4f(min(base.rgb + light * (0.35 + 0.65 * e) * col * base.a, vec3f(base.a)), base.a);`,
+  // Light leak: three soft blobs of the tint (Gaussian, sigma 0.25..0.45 of the frame height, strength 0.5..0.8) drift
+  // between seeded points inside the frame while the pictures cross-fade; the light is screened over the picture.
   leak: `
-    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+    let pic = mix(O(uv), I(uv), smoothstep(0.35, 0.65, p));
+    let q = uv * vec2f(asp, 1.0);
+    var field = 0.0;
+    for (var i = 0u; i < 3u; i++) {
+      let h = hash(seed + i);
+      let a0 = vec2f(0.1 + 0.8 * unit(hash(h + 1u)), 0.1 + 0.8 * unit(hash(h + 2u))) * vec2f(asp, 1.0);
+      let a1 = vec2f(0.1 + 0.8 * unit(hash(h + 3u)), 0.1 + 0.8 * unit(hash(h + 4u))) * vec2f(asp, 1.0);
+      let sg = 0.25 + 0.2 * unit(hash(h + 5u));
+      let d = q - mix(a0, a1, p);
+      field += (0.5 + 0.3 * unit(hash(h + 6u))) * exp(-dot(d, d) / (2.0 * sg * sg));
+    }
+    field = min(field * (0.8 + 0.4 * fbm(q * 3.0, seed + 17u)), 1.0);
+    let add = light * field * tint;
+    return vec4f(pic.rgb + add * (vec3f(pic.a) - pic.rgb), pic.a);`,
+  // Ink bleed: domain-warped seeded fbm, weighted toward the centre of the frame, spreads the incoming picture outward as its
+  // threshold sweeps 1.3 p - 0.15.
   ink: `
-    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+    let w = uv * 3.0;
+    let q = uv * vec2f(asp, 1.0) * 3.0 + 0.35 * vec2f(fbm(w + 11.0, seed + 1u), fbm(w + 23.0, seed + 2u));
+    let n = fbm(q, seed);
+    let r = length((uv - vec2f(0.5)) * vec2f(asp, 1.0)) / (0.5 * length(vec2f(asp, 1.0)));
+    let v = 1.0 - mix(n, 1.0 - r, 0.4);
+    let th = 1.3 * p - 0.15;
+    return mix(O(uv), I(uv), smoothstep(v - 0.015, v + 0.015, th));`,
+  // Brush stroke: four horizontal bands, each starting up to a quarter of the way late (seeded), paint the incoming picture
+  // across the frame (va.x < 0: from right to left) with a bristle edge.
   brush: `
-    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+    let band = min(u32(floor(uv.y * 4.0)), 3u);
+    let delay = unit(hash(band + seed)) * 0.25;
+    let along = select(uv.x, 1.0 - uv.x, va.x < 0.0);
+    let bristle = fbm(vec2f(1.5 * uv.x, 40.0 * uv.y), seed);
+    return mix(O(uv), I(uv), smoothstep(-0.01, 0.01, (1.5 * p - delay) - along - 0.08 * bristle));`,
+  // Page turn: the outgoing picture is a page rolled up from one edge around a cylinder of radius r = 0.12 (of the width)
+  // whose axis sweeps from 1 + r to -r; s is the distance from the edge the page is turned toward (va.x < 0: the left edge,
+  // so the right edge lifts first). On the curl the upper half shows the back of the page and the lower half its front,
+  // shaded by at most 0.3; flat on top lies the back of the page, mirrored and 25% toward white; where the page has gone the
+  // incoming picture shows, under the curl's shadow 0.25 exp(-d / 0.04).
   page: `
-    /*PLACEHOLDER*/ return mix(O(uv), I(uv), step(0.5, p));`,
+    let r = 0.12; let pi = 3.14159265;
+    let f = mix(1.0 + r, -r, p);
+    let left = va.x < 0.0;
+    let s = select(1.0 - uv.x, uv.x, left);
+    let edge = f + r * sin(min(max(1.0 - f, 0.0) / r, 0.5 * pi));
+    if (s > edge) { let i = I(uv); return vec4f(i.rgb * (1.0 - 0.25 * exp(-(s - edge) / 0.04)), i.a); }
+    if (s > f) {
+      let a = asin(clamp((s - f) / r, 0.0, 1.0));
+      let up = f + r * (pi - a);
+      let shade = 1.0 - 0.3 * clamp((s - f) / r, 0.0, 1.0);
+      if (up <= 1.0) { let o = O(vec2f(select(1.0 - up, up, left), uv.y)); return vec4f(mix(o.rgb, vec3f(o.a), 0.25) * shade, o.a); }
+      let dn = f + r * a;
+      let o = O(vec2f(select(1.0 - dn, dn, left), uv.y));
+      return vec4f(o.rgb * shade, o.a);
+    }
+    let top = 2.0 * f + pi * r - s;
+    if (top <= 1.0) { let o = O(vec2f(select(1.0 - top, top, left), uv.y)); return vec4f(mix(o.rgb, vec3f(o.a), 0.25), o.a); }
+    return O(uv);`,
 };
 /** Transition id -> kernel and the numbers that set its variant. */
 export const GPU_TRANSITIONS: Record<string, { kernel: string; v: [number, number, number] }> = {
@@ -1076,4 +1141,38 @@ export function crtMap(u: number, v: number, p: Record<string, unknown>, aspect:
   const sd = Math.hypot(Math.max(ex, 0), Math.max(ey, 0)) + Math.min(Math.max(ex, ey), 0) - rr;
   if (sd > 0) return null;
   return [0.5 + qx / aspect, 0.5 + qy];
+}
+
+// ---- trend-pack transitions (ADR-0012): JavaScript models of the geometry the proofs measure, in the shader's order ----
+// No CPU twin of the passes (ADR-0008 decision 2): these give only the positions a still can be checked against.
+/** film-burn: the (evenly spread) noise level below which a pixel already shows the incoming picture at progress p. */
+export const burnThreshold = (p: number) => 1.25 * p - 0.1;
+/**
+ * brush-left/right: how far along its stroke (0 at the edge the stroke starts from, 1 at the other) band 0..3 (top to bottom,
+ * quarters of the height) has painted the incoming picture at progress p, before the bristle edge (which holds the front
+ * back by at most 0.08) and the ±0.01 soft edge. brush-right paints from the left edge, brush-left from the right edge.
+ */
+export const brushFront = (p: number, band: number, seed: number) => 1.5 * p - unit32(hash32((band + seed) >>> 0)) * 0.25;
+/** page-turn: radius of the curl (a fraction of the frame width). */
+export const PAGE_RADIUS = 0.12;
+/**
+ * page-turn at progress p, in s = the distance (fraction of the width) from the edge the page is turned toward (page-turn-left:
+ * the left edge, s = u; page-turn-right: s = 1 − u): `fold` is the axis of the curl, `edge` the farthest the page still
+ * reaches (the incoming picture shows beyond it), and `mirror` the line about which the flat back of the page mirrors the
+ * outgoing picture (a point at s shows the outgoing picture's s' = 2·mirror − s).
+ */
+export function pageFold(p: number): { fold: number; edge: number; mirror: number } {
+  const r = PAGE_RADIUS, f = (1 + r) * (1 - p) + -r * p; // WGSL mix(1 + r, −r, p)
+  return { fold: f, edge: f + r * Math.sin(Math.min(Math.max(1 - f, 0) / r, Math.PI / 2)), mirror: f + (Math.PI * r) / 2 };
+}
+/** page-turn: what the pass shows at s (as in pageFold) and progress p: the page's back or front at its own s', or the incoming picture. */
+export function pageTurnSource(s: number, p: number): { face: 'front' | 'back' | 'incoming'; at: number } {
+  const r = PAGE_RADIUS, { fold: f, edge } = pageFold(p);
+  if (s > edge) return { face: 'incoming', at: s };
+  if (s > f) {
+    const a = Math.asin(Math.min(1, Math.max(0, (s - f) / r))), up = f + r * (Math.PI - a);
+    return up <= 1 ? { face: 'back', at: up } : { face: 'front', at: f + r * a };
+  }
+  const top = 2 * f + Math.PI * r - s;
+  return top <= 1 ? { face: 'back', at: top } : { face: 'front', at: s };
 }

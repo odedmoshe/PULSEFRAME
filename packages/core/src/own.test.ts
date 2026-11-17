@@ -72,11 +72,12 @@ function studio() {
   run('edit_analysis', { assetId, kind: 'scenes', replace: [T.rt(2, 1)] });
   run('edit_analysis', { assetId, kind: 'beats', replace: [T.rt(1, 1), T.rt(2, 1), T.rt(3, 1)] });
   const effectId = run('add_effect', { clipId, type: 'blur.gaussian' }).effectId as string;
+  const motionTrackId = run('create_motion_track', { assetId, kind: 'point', frame: 0, x: 100, y: 100 }).motionTrackId as string;
   const audioEffectId = (run('add_audio_effect', { clipId: audioClipId, type: 'tone.bassboost' }).effects as { effectId: string }[])[0]!.effectId;
   run('set_effect_keyframe', { clipId, effectId, param: 'radius', time: f(0), value: 0.02 });
   const runId = run('apply_recipe', { recipeId: 'fixture', params: {}, steps: ['add a title'], ops: [{ op: 'add_text', args: { text: 'From a recipe', start: f(150), duration: f(30) } }] }, true).runId as string;
   expect(validateProject(doc)).toEqual([]);
-  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, runId };
+  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, runId };
 }
 
 describe('own', () => {
@@ -275,7 +276,7 @@ describe('every registered op', () => {
     const s = studio();
     const ids: Record<string, unknown> = {
       assetId: s.assetId, clipId: s.clipId, trackId: s.trackId, audioTrackId: s.audioTrackId, linkedTrackId: s.audioTrackId, sequenceId: 'seq_main', variantId: s.variantId, markerId: s.markerId,
-      effectId: s.effectId, segmentId: s.segmentId, fromWordId: s.fromWordId, toWordId: s.toWordId, runId: s.runId, presetId: TEXT_PRESETS[0]!.id, lookId: COLOR_LOOKS[0]!.id, type: 'blur.gaussian', param: 'radius',
+      effectId: s.effectId, motionTrackId: s.motionTrackId, targetTrackId: s.trackId, segmentId: s.segmentId, fromWordId: s.fromWordId, toWordId: s.toWordId, runId: s.runId, presetId: TEXT_PRESETS[0]!.id, lookId: COLOR_LOOKS[0]!.id, type: 'blur.gaussian', param: 'radius',
       language: 'en', clipIds: [s.clipId, s.audioClipId], trackIds: [s.trackId], sourceTrackIds: [s.trackId], preferTrackIds: [s.trackId], removeClipIds: [s.textId], keepIds: [s.clipId],
     };
     // The clip or track an op is about, where it is not the picture clip on the picture track.
@@ -283,7 +284,7 @@ describe('every registered op', () => {
     const about: Record<string, Record<string, unknown>> = {
       apply_text_preset: title, update_text: title, set_text_animation: title, add_text: { trackId: undefined }, update_cue: cue, merge_cues: cue,
       set_volume_keyframe: sound, draw_volume: sound, delete_volume_keyframe: sound, set_clip_fades: sound, set_audio_crossfade: sound, fit_music: sound,
-      set_track_audio: soundTrack, add_adjustment: { trackId: undefined },
+      set_track_audio: soundTrack, add_adjustment: { trackId: undefined }, set_clip_follow: title,
       add_audio_effect: sound, apply_audio_preset: sound, update_audio_effect: { ...sound, effectId: s.audioEffectId }, remove_audio_effect: { ...sound, effectId: s.audioEffectId }, set_ducking: { ...soundTrack, sourceTrackIds: [s.trackId] }, set_caption_style: captions, apply_caption_look: captions, add_cue: captions,
     };
     // Arguments the schema alone cannot make meaningful.
@@ -298,6 +299,7 @@ describe('every registered op', () => {
       duplicate_clips: { clipIds: [s.clipId, s.audioClipId], offset: f(300), preferTrackIds: [s.trackId] },
       set_effect_keyframe: { clipId: s.clipId, effectId: s.effectId, param: 'radius', time: f(30), value: 0.05 },
       add_audio_effect: { clipId: s.audioClipId, type: 'cleanup.dehum' },
+      edit_motion_track: { motionTrackId: s.motionTrackId, name: 'Renamed' },
       update_audio_effect: { clipId: s.audioClipId, effectId: s.audioEffectId, enabled: false },
       apply_audio_preset: { clipId: s.audioClipId, presetId: 'telephone' },
       set_effect_modulator: { clipId: s.clipId, effectId: s.effectId, param: 'radius', modulator: { depth: 0.05 } },
@@ -355,7 +357,7 @@ describe('every registered op', () => {
 });
 
 describe('a document that carries such an id', () => {
-  it('is refused by validation: no asset, sequence, track, clip, marker, motion track, format, phrase or word may be named that way', () => {
+  it('is refused by validation: no asset, sequence, track, clip, marker, motion track or format may be named that way', () => {
     const s = studio();
     expect(validateProject(s.doc)).toEqual([]);
     for (const id of [...HOSTILE, 'hasOwnProperty']) {
@@ -367,16 +369,15 @@ describe('a document that carries such an id', () => {
       delete marker.markers[s.markerId];
       Object.defineProperty(marker.markers, id, { value: { ...m, id }, enumerable: true, writable: true, configurable: true });
       expect(validateProject(marker).map((i) => i.code)).toEqual(['reserved_id']);
-      const word = structuredClone(s.doc);
-      word.transcripts[s.assetId]!.segments[0]!.words[0]!.id = id;
-      expect(validateProject(word).map((i) => i.code)).toEqual(['reserved_id']);
-      // a motion track is kept by id like a marker (only its id is read here; the rest of its shape is the schema's business)
+      // a motion track is kept by id like a marker
       const tracked = structuredClone(s.doc);
-      Object.defineProperty((tracked.motionTracks ??= {}), id, { value: { id, assetId: s.assetId }, enumerable: true, writable: true, configurable: true });
+      const mt = tracked.motionTracks[s.motionTrackId]!;
+      delete tracked.motionTracks[s.motionTrackId];
+      Object.defineProperty(tracked.motionTracks, id, { value: { ...mt, id }, enumerable: true, writable: true, configurable: true });
       expect(validateProject(tracked).map((i) => i.code)).toEqual(['reserved_id']);
     }
     const mismatched = structuredClone(s.doc);
-    (mismatched.motionTracks ??= {}).mtk_a = { id: 'mtk_b', assetId: s.assetId } as never;
+    mismatched.motionTracks.mtk_other = { ...mismatched.motionTracks[s.motionTrackId]!, id: 'mtk_b' };
     expect(validateProject(mismatched).map((i) => i.code)).toEqual(['key_mismatch']);
   });
 
@@ -393,6 +394,43 @@ describe('a document that carries such an id', () => {
       marker.markers[s.markerId]!.sequenceId = id;
       expect(validateProject(marker).map((i) => i.code)).toEqual(['missing_sequence']);
     }
+  });
+});
+
+describe('a phrase or word named that way (data, as an imported transcript may carry it)', () => {
+  it('validates, except "__proto__", which cannot key the records a phrase id keys', () => {
+    const s = studio();
+    for (const id of ['constructor', 'toString', 'hasOwnProperty']) {
+      const phrase = structuredClone(s.doc);
+      phrase.transcripts[s.assetId]!.segments[0]!.id = id;
+      expect(validateProject(phrase), id).toEqual([]);
+      const word = structuredClone(s.doc);
+      word.transcripts[s.assetId]!.segments[0]!.words[0]!.id = id;
+      expect(validateProject(word), id).toEqual([]);
+    }
+    for (const where of ['phrase', 'word'] as const) {
+      const d = structuredClone(s.doc);
+      const seg = d.transcripts[s.assetId]!.segments[0]!;
+      if (where === 'phrase') seg.id = '__proto__'; else seg.words[0]!.id = '__proto__';
+      expect(validateProject(d).map((i) => i.code), where).toEqual(['reserved_id']);
+    }
+  });
+
+  it('a format shows its own wording of such a phrase and otherwise the master wording, never an inherited value', () => {
+    const s = studio();
+    const d = structuredClone(s.doc);
+    d.transcripts[s.assetId]!.segments[0]!.id = 'constructor';
+    expect(validateProject(d)).toEqual([]);
+    // the format rewords some other phrase but not this one: the master text stays (a plain lookup found the Object function here)
+    d.variants[s.variantId]!.phraseText = { seg_elsewhere: 'other wording' };
+    const plain = projectVariant(d, s.variantId).transcripts[s.assetId]!.segments[0]!;
+    expect(plain.text).toBe('one two');
+    expect(plain.words).toHaveLength(2);
+    // the format's own wording of it is used (stored in the document: ops refuse such a segmentId before they run)
+    d.variants[s.variantId]!.phraseText = { constructor: 'shorter' };
+    expect(validateProject(d)).toEqual([]);
+    expect(projectVariant(d, s.variantId).transcripts[s.assetId]!.segments[0]!.text).toBe('shorter');
+    expect(protoDamage()).toEqual([]);
   });
 });
 

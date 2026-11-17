@@ -1,16 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { BRAND, LOGO_SVG } from '@pulseframe/brand';
 import type { Clip, OpCall } from '@pulseframe/core';
 import { assetNotices, clipEnd, FONT_CATALOG, speedValue, TEXT_PRESETS } from '@pulseframe/core';
 import { dictionaries, jobStageLabel, type Key } from '@pulseframe/i18n';
-import { chordLabel, COMMANDS, type Keymap } from './commands.ts';
+import { chordLabel, COMMANDS, coverEditOps, keyframeProps, type Keymap } from './commands.ts';
+import { ADJUST_STRINGS } from './adjust.strings.ts';
+import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
+import { TemplatesDrawer } from './TemplatesDrawer.tsx';
 import { Scopes } from './Scopes.tsx';
 import { repeatClick, singleFlight } from './oneAtATime.ts';
 import { ASSET_DRAG_TYPE, useEditorState, WORKSPACES, type Editor, type Workspace } from './store.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { MediaGrid } from './MediaLibrary.tsx';
 import { AnalysisPanel } from './AnalysisPanel.tsx';
+import { TrackingPanel } from './TrackingPanel.tsx';
+import { FollowControls } from './FollowControls.tsx';
+import { RedactControls } from './RedactControls.tsx';
+import { trackingT } from './tracking.strings.ts';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { LookPanel } from './LookPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
@@ -21,6 +28,7 @@ import { PacingPanel } from './PacingPanel.tsx';
 import { LayoutPicker } from './LayoutPicker.tsx';
 import { ElementsBrowser } from './ElementsBrowser.tsx';
 import { TextAnimationField } from './TextAnimationField.tsx';
+import { TextEffectsField } from './TextEffectsField.tsx';
 import { Section, SECTION_STRINGS, setAllSections } from './Section.tsx';
 import { formatBytes, ProjectsDialog } from './ProjectsDialog.tsx';
 import { AccessPanel } from './AccessPanel.tsx';
@@ -154,6 +162,7 @@ export function Library() {
       <MediaGrid onView={setViewing} />
       <h2>{t('text')}</h2>
       <button className="ghost" disabled={!doc} onClick={() => void editor.addText()} data-testid="add-text">{t('text.add')}</button>
+      <TemplatesDrawer />
       <ElementsBrowser />
       <h2>{t('providers')}</h2>
       <AiTools />
@@ -420,9 +429,13 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         {clipFocus !== 'color' && <LayoutPicker />}
         {!sel ? <p className="muted">{t('inspector.none')}</p> : clipFocus !== 'color' && <ClipInspector key={sel.clip.id} clip={sel.clip} keymap={keymap} />}
         {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <Section id="entrance" title={SECTION_STRINGS[state.lang].entrance}><AnimateControls key={`anim:${sel.clip.id}`} clipId={sel.clip.id} /></Section>}
-        {clipFocus !== 'motion' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video') && <Section id="look" title={SECTION_STRINGS[state.lang].look}><LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} /></Section>}
-        {clipFocus === 'color' && sel && !(state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video')) && <p className="muted" data-testid="color-none">{t('workspace.color.none')}</p>}
+        {clipFocus !== 'motion' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video' || sel.track.kind === 'adjustment') && <Section id="look" title={SECTION_STRINGS[state.lang].look}><LookPanel key={`look:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} /></Section>}
+        {clipFocus === 'color' && sel && !(state.selection.length === 1 && (sel.clip.type === 'text' || sel.track.kind === 'video' || sel.track.kind === 'adjustment')) && <p className="muted" data-testid="color-none">{t('workspace.color.none')}</p>}
         {clipFocus === 'all' && sel && state.selection.length === 1 && sel.clip.type === 'media' && <Section id="analysis" title={SECTION_STRINGS[state.lang].analysis}><AnalysisPanel key={`analysis:${sel.clip.id}`} /></Section>}
+        {/* motion tracking (ADR-0015): the tracks of a video clip's file; follow for a title or a picture; privacy regions on a video clip */}
+        {clipFocus !== 'color' && sel && state.selection.length === 1 && sel.clip.type === 'media' && sel.track.kind === 'video' && !!state.doc?.assets[sel.clip.assetId]?.video && <Section id="tracking" title={trackingT(state.lang)('mtrack.title')}><TrackingPanel key={`tracking:${sel.clip.id}`} /></Section>}
+        {clipFocus !== 'color' && sel && state.selection.length === 1 && (sel.clip.type === 'text' || (sel.clip.type === 'media' && sel.track.kind === 'video')) && <Section id="follow" title={trackingT(state.lang)('follow.title')}><FollowControls key={`follow:${sel.clip.id}`} /></Section>}
+        {clipFocus !== 'motion' && sel && state.selection.length === 1 && sel.clip.type === 'media' && sel.track.kind === 'video' && !!state.doc?.assets[sel.clip.assetId]?.video && <Section id="redact" title={trackingT(state.lang)('redact.title')}><RedactControls key={`redact:${sel.clip.id}`} /></Section>}
       </div>
       <div {...panelProps('speech')}>
         <h2>{t('transcript')}</h2>
@@ -545,6 +558,64 @@ function AnimateControls({ clipId }: { clipId: string }) {
   );
 }
 
+/** "Cover the whole edit" of an adjustment clip (ADR-0016): trims it to [0, end of the last picture or title), one transaction. */
+function CoverEdit({ clipId }: { clipId: string }) {
+  const { editor, state } = useEditorState();
+  const A = ADJUST_STRINGS[state.lang];
+  const ops = state.doc ? coverEditOps(state.doc, clipId) : null;
+  const hint = useId();
+  return (
+    <div className="row">
+      <button type="button" className="ghost" disabled={!ops} aria-describedby={hint} data-testid={TID.adjustCoverEdit}
+        onClick={() => void editor.commit(() => (editor.doc ? coverEditOps(editor.doc, clipId) : null), 'Cover the whole edit')}>{A.coverEdit}</button>
+      <span id={hint} className="muted">{ops ? A.coverEditHint : A.coverEditDone}</span>
+    </div>
+  );
+}
+
+/**
+ * "Replace media…" of a picture or sound clip (ADR-0016, replace_clip_media): another library file in the same clip, which
+ * keeps its id, place, length, effects, motion and transition. Offered: files that suit the track (a picture or video on a
+ * picture track, sound on a sound track). A clip with a linked sound partner takes a file without sound only by unlinking
+ * it (linked: 'detach', said on the option); with sound, the partner follows.
+ */
+function ReplaceMedia({ clip }: { clip: Extract<Clip, { type: 'media' }> }) {
+  const { editor, state } = useEditorState();
+  const A = ADJUST_STRINGS[state.lang];
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const doc = state.doc;
+  const track = editor.selected?.track.kind;
+  if (!doc || (track !== 'video' && track !== 'audio')) return null;
+  const candidates = Object.values(doc.assets).filter((a) => a.id !== clip.assetId && a.kind !== 'lut' && (track === 'video' ? !!(a.video || a.image) : !!a.audio));
+  const kindOf = (a: (typeof candidates)[number]) => (a.video ? A.video : a.image ? A.image : A.audio);
+  return (
+    <div className="pf-replace" data-testid="replace-media-block">
+      <button type="button" className="ghost" aria-expanded={open} aria-controls={listId} data-testid={TID.replaceMedia} title={A.replaceMediaTitle} onClick={() => setOpen((o) => !o)}>{A.replaceMedia}</button>
+      {open && (
+        <div id={listId} className="pf-replace-list">
+          <p className="muted">{A.replaceMediaNote}</p>
+          {candidates.length === 0 ? <p className="muted" role="note">{A.replaceMediaNone}</p> : (
+            <ul>
+              {candidates.map((a) => {
+                const detach = !!clip.linkGroupId && track === 'video' && !a.audio;
+                return (
+                  <li key={a.id}>
+                    <button type="button" className="ghost" data-testid={TID.replaceMediaOption} data-asset-id={a.id}
+                      onClick={() => { setOpen(false); void editor.commit([{ op: 'replace_clip_media', args: { clipId: clip.id, assetId: a.id, ...(detach ? { linked: 'detach' } : {}) } }], 'Replace media'); }}>
+                      <bdi>{a.name}</bdi> <span className="muted">({kindOf(a)}{detach ? ` · ${A.replaceDetach}` : ''})</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
   const { editor, state, t } = useEditorState();
   const variantId = editor.getState().viewVariantId;
@@ -556,7 +627,9 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
   const textOverride = variantId ? editor.doc?.variants?.[variantId]?.overrides[clip.id] : undefined;
   const hasTextOverride = !!(textOverride && (textOverride.text !== undefined || textOverride.textStyle));
   const hasOverride = !!(variantId && editor.doc?.variants?.[variantId]?.overrides[clip.id]?.transform);
-  const now = editor.transformNow(variantId ? viewClip : clip);
+  // As drawn at the playhead: for a clip that follows a motion track (ADR-0015) the resolved values, edited as its offset.
+  const shown = editor.resolvedTransformNow(variantId ? viewClip : clip);
+  const now = shown.transform;
   const inside = editor.playheadInsideSelection;
   const on = editor.playheadOnSelection;
   const sizeCommit = (v: number) => void editor.commit(variantId
@@ -567,6 +640,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
     void editor.commit(variantId ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text } }] : [{ op: clip.type === 'caption' ? 'update_cue' : 'update_text', args: { clipId: clip.id, text } }], 'Edit text');
   };
   const S = SECTION_STRINGS[state.lang];
+  const A = ADJUST_STRINGS[state.lang];
   const notImage = clip.type === 'media' && !variantId && editor.doc?.assets[clip.assetId]?.kind !== 'image' && !clip.freeze;
   const canFreeze = clip.type === 'media' && !variantId && !clip.freeze && editor.selected?.track.kind === 'video' && !!editor.doc?.assets[clip.assetId]?.video;
   const canReverse = clip.type === 'media' && !variantId && !clip.freeze && (editor.selected?.track.kind === 'video' ? !!editor.doc?.assets[clip.assetId]?.video : editor.selected?.track.kind === 'audio' && !!editor.doc?.assets[clip.assetId]?.audio);
@@ -592,6 +666,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
             </select>
           </label>
           <TextAnimationField clip={clip} />
+          <TextEffectsField clip={clip} style={viewClip.type === 'text' ? viewClip.style : clip.style} variantId={variantId ?? null} />
           <label>{t('font.family')}
             <select value={clip.style.fontFamily} data-testid="text-font" onChange={(e) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: e.target.value } } }], 'Font')}>
               {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}
@@ -640,6 +715,7 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
       )}
       {clip.type === 'media' && clip.freeze && <p className="muted" data-testid="freeze-note">{t('freeze.note')}</p>}
       </Section>}
+      {clip.type === 'media' && !variantId && <ReplaceMedia key={`replace:${clip.id}`} clip={clip} />}
       {clip.type === 'media' && clip.linkGroupId && !variantId && (
         <div className="row"><button type="button" className="ghost" data-testid="unlink-clip" title={t('unlink.hint')} onClick={() => void editor.commit([{ op: 'unlink_clip', args: { clipId: clip.id } }], 'Detach clip')}>{t('unlink.label')}</button></div>
       )}
@@ -652,17 +728,20 @@ function ClipInspector({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
             onClick={() => void editor.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, transform: null } }], 'Reset format transform')}>{t('transform.resetFormat')}</button>
         </div>
       ) : <span hidden data-testid="transform-scope" data-scope="master" />}
-      {TRANSFORM_FIELDS.map((fld) => {
+      {/* an adjustment clip (ADR-0016) has opacity only: no place, size or turn of its own */}
+      {clip.type === 'adjustment' && <p className="muted" role="note" data-testid="adjust-transform-note">{A.adjustNote}</p>}
+      {TRANSFORM_FIELDS.filter((fld) => (keyframeProps(clip) as readonly string[]).includes(fld.prop)).map((fld) => {
         const animated = !!viewClip.keyframes?.[fld.prop]?.length;
-        const commit = (v: number) => on && v !== now[fld.prop] && void editor.setTransformForView(clip, { [fld.prop]: v });
+        const commit = (v: number) => on && v !== now[fld.prop] && void editor.setShownTransform(clip, shown, { [fld.prop]: v });
         return (
           <label key={`${fld.prop}:${now[fld.prop]}`}>
-            <span>{t(fld.label)} {animated && <em className="animated" title={t('keyframes.animated')}>◆</em>} <bdi className="val">{+now[fld.prop].toFixed(3)}</bdi></span>
-            <input type="range" min={fld.min} max={fld.max} step={fld.step} defaultValue={now[fld.prop]} disabled={!on} data-testid={`transform-${fld.prop}`}
+            <span>{clip.type === 'adjustment' ? A.opacity : t(fld.label)} {animated && <em className="animated" title={t('keyframes.animated')}>◆</em>} <bdi className="val">{+now[fld.prop].toFixed(3)}</bdi></span>
+            <input type="range" min={fld.min} max={fld.max} step={fld.step} defaultValue={now[fld.prop]} disabled={!on} data-testid={clip.type === 'adjustment' ? TID.adjustOpacity : `transform-${fld.prop}`}
               onPointerUp={(e) => commit(Number(e.currentTarget.value))} onKeyUp={(e) => commit(Number(e.currentTarget.value))} />
           </label>
         );
       })}
+      {clip.type === 'adjustment' && !variantId && <CoverEdit clipId={clip.id} />}
       <div className="row">
         <button className="ghost" disabled={!on || !!variantId} title={variantId ? t('transform.keyframesMasterOnly') : undefined} onClick={() => run(editor, 'keyframe.add')} data-testid="keyframe-add">◆ {t('cmd.keyframeAdd')} {hint(keymap, 'keyframe.add')}</button>
         <button className="ghost" disabled={!on || !clip.keyframes || !!variantId} title={variantId ? t('transform.keyframesMasterOnly') : undefined} onClick={() => run(editor, 'keyframe.remove')}>{t('cmd.keyframeRemove')} {hint(keymap, 'keyframe.remove')}</button>

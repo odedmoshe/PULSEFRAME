@@ -3,6 +3,9 @@
  * in a still and in an export, agreement between those three, repeatability, and the refusals when no adapter is available.
  * Wave 1 of the visual effects (ADR-0011) adds the old-digicam and CRT looks, checked against their JavaScript models
  * (digicamTone, crtMap), the digicam noise ticks and a flash check of a digicam export, and the whip and spin transitions.
+ * The trend pack (ADR-0012) brings the GPU transitions to 46; its own proof is `pnpm proof:trend-light`. Here the two light
+ * transitions (film-burn, light-leak) are checked at their ends only, as the flash transition is, and then again with their
+ * light held by the flash schedule (a strobe flash 4 frames before the light's start), where they must not go backwards.
  *
  *   pnpm build && pnpm proof:gpu
  * Exits 2 (blocked) when this machine's browser gives no WebGPU adapter even with WebGPU enabled.
@@ -16,7 +19,7 @@ import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
 import { beatPositionAt, identityLut, lutStrip, sampleLut, sampleStrip, serializeCube, type Lut3D } from '@pulseframe/core';
-import { crtMap, digicamTick, digicamTone, FlashAnalyser, flashCells, hash32, motionAt, unit32 } from '@pulseframe/engine';
+import { crtMap, digicamTick, digicamTone, FlashAnalyser, flashCells, flashSchedule, hash32, motionAt, unit32 } from '@pulseframe/engine';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { startServer } from '@pulseframe/server';
@@ -487,7 +490,10 @@ async function main() {
     await tx(tp, [{ op: 'add_clip', args: { assetId: aOut, start: T.rt(0, 1), duration: T.frameTime(60, R30) } }]);
     const inClip = (await tx(tp, [{ op: 'add_clip', args: { assetId: aIn, start: T.frameTime(60, R30), duration: T.frameTime(60, R30) } }])).results[0].output.clipId as string;
     const blueMean = (img: Img) => { let t = 0; for (let i = 2; i < img.length; i += 3) t += img[i]!; return t / (img.length / 3); };
-    const gpuTransitions = (await call('/catalog')).body.transitions.filter((t: any) => t.gpu).map((t: any) => t.id) as string[];
+    const catalogTransitions = (await call('/catalog')).body.transitions as { id: string; gpu: boolean; light?: boolean }[];
+    const gpuTransitions = catalogTransitions.filter((t) => t.gpu).map((t) => t.id);
+    // light transitions (ADR-0012) add light around their middle frame, which can make it brighter in blue than the last one
+    const lightIds = catalogTransitions.filter((t) => t.gpu && t.light).map((t) => t.id);
     const rowsT: Record<string, unknown>[] = [];
     let allOrdered = true, allRepeat = true;
     const mids: Record<string, Img> = {};
@@ -497,12 +503,31 @@ async function main() {
       const early = await still(tp, 61), mid = await still(tp, 74), late = await still(tp, 87);
       mids[id] = mid;
       const b = [blueMean(early), blueMean(mid), blueMean(late)];
-      const ordered = id === 'flash' ? b[0]! < 110 && b[2]! > 145 : b[0]! < 70 && b[2]! > 185 && b[0]! <= b[1]! + 1 && b[1]! <= b[2]! + 1;
+      const ordered = id === 'flash' ? b[0]! < 110 && b[2]! > 145 : lightIds.includes(id) ? b[0]! < 70 && b[2]! > 185 : b[0]! < 70 && b[2]! > 185 && b[0]! <= b[1]! + 1 && b[1]! <= b[2]! + 1;
       const repeat = maxDiff(mid, await still(tp, 74)) === 0;
       allOrdered &&= ordered; allRepeat &&= repeat;
       rowsT.push({ id, incomingShare: b.map((x) => Number((x / 255).toFixed(2))), ordered, repeat });
     }
-    check(`All ${gpuTransitions.length} GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash is checked at its ends only)`, gpuTransitions.length === 39 && allOrdered, rowsT.filter((r) => !r.ordered).length ? rowsT.filter((r) => !r.ordered) : { transitions: gpuTransitions.length });
+    check(`All ${gpuTransitions.length} GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash and the ${lightIds.length} light transitions are checked at their ends only here)`, gpuTransitions.length === 46 && lightIds.length === 2 && allOrdered, rowsT.filter((r) => !r.ordered).length ? rowsT.filter((r) => !r.ordered) : { transitions: gpuTransitions.length, light: lightIds });
+    {
+      // The light ids with their light held by the flash schedule (ADR-0012): a steady strobe on a title shown on frames 65–69
+      // flashes on frame 65 (rate 30/65 a second: its flash time 65/30 s); the light of a 29-frame transition at frame 60 would
+      // start on frame 69, 4 frames later, under the 11-frame gap, so it is held and the transition draws no light at all.
+      const title = (await tx(tp, [{ op: 'add_text', args: { text: '.', start: T.frameTime(65, R30), duration: T.frameTime(5, R30) } }])).results[0].output.clipId as string;
+      await tx(tp, [{ op: 'add_effect', args: { clipId: title, type: 'light.strobe', params: { amount: 1, rate: 30 / 65 } } }]);
+      const rowsL: Record<string, unknown>[] = [];
+      let heldOk = true;
+      for (const id of lightIds) {
+        await tx(tp, [{ op: 'set_transition', args: { clipId: inClip, type: id, frames: 29 } }]);
+        const plan = flashSchedule((await call(`/projects/${tp}`)).body.project).lights.get(inClip);
+        const b = [blueMean(await still(tp, 61)), blueMean(await still(tp, 74)), blueMean(await still(tp, 87))];
+        const ok = !!plan && !plan.kept && plan.frame === 69 && plan.since === 4 && b[0]! < 70 && b[2]! > 185 && b[0]! <= b[1]! + 1 && b[1]! <= b[2]! + 1;
+        heldOk &&= ok;
+        rowsL.push({ id, plan, incomingShare: b.map((x) => Number((x / 255).toFixed(2))), ok });
+      }
+      check('The light transitions with their light held by the flash schedule (a strobe flash 4 frames before): start on the outgoing picture, end on the incoming one, never go backwards', lightIds.length === 2 && heldOk, rowsL);
+      await tx(tp, [{ op: 'delete_clip', args: { clipId: title } }]);
+    }
     check('Every GPU transition gives the identical middle frame when rendered again, and no two of them give the same middle frame', allRepeat && new Set(Object.values(mids).map((m) => createHash('sha256').update(m).digest('hex'))).size === gpuTransitions.length, { repeatable: allRepeat, distinctMiddleFrames: new Set(Object.values(mids).map((m) => createHash('sha256').update(m).digest('hex'))).size });
     const isIn = (img: Img, x: number, y: number) => px(img, x, y)[2]! > 200, isOut = (img: Img, x: number, y: number) => px(img, x, y)[2]! < 55;
     check('Soft wipe right, half-way: the left side already shows the incoming picture and the right side still the outgoing one; wipe left is the opposite', isIn(mids['soft-wipe-right']!, 40, 320) && isOut(mids['soft-wipe-right']!, 320, 320) && isOut(mids['soft-wipe-left']!, 40, 320) && isIn(mids['soft-wipe-left']!, 320, 320));
@@ -966,6 +991,47 @@ async function main() {
     }
     check('No uncaught errors in the editor page with the digicam preview', errors.length === 0, errors);
 
+    // ---------- M1 (colour match, ADR-0014): color.grade against its model gradePixel on a 9×9×9 colour grid ----------
+    // Colour match fits grade values with gradePixel (engine colourMatch.ts), so the model must be the pass. Fixture: 729 flat
+    // patches, every combination of 9 levels per channel (0, 32, 64 … 255), 27 × 27 patches of 13 × 23 pixels. Six seeded sets of
+    // all eight values (wider than a match ever proposes); each patch's centre in the still, against gradePixel of the same pixel
+    // in the plain still (so decoding is the same on both sides). The pass runs in f32 and stores 8 bits: within 2 of 255.
+    {
+      const { gradePixel } = await import('@pulseframe/engine');
+      const LV = 9, PW = Math.floor(W / 27), PH = Math.floor(H / 27), level = (i: number) => Math.round((255 * i) / (LV - 1));
+      const gridRaw = Buffer.alloc(W * H * 3);
+      const patches: [number, number][] = [];
+      for (let k = 0; k < LV; k++) for (let j = 0; j < LV; j++) for (let i = 0; i < LV; i++) {
+        const col = i + LV * (k % 3), row = j + LV * Math.floor(k / 3);
+        patches.push([col * PW + Math.floor(PW / 2), row * PH + Math.floor(PH / 2)]);
+        for (let y = row * PH; y < (row + 1) * PH; y++) for (let x = col * PW; x < (col + 1) * PW; x++) { const o = (y * W + x) * 3; gridRaw[o] = level(i); gridRaw[o + 1] = level(j); gridRaw[o + 2] = level(k); }
+      }
+      const gridFile = path.join(art, 'grade-grid.png');
+      ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', gridFile], gridRaw);
+      const gp = await newProject('grade-grid', gridFile);
+      const plainGrid = await still(gp.pid);
+      // seeded sets (mulberry32, seed 20261117), rounded to 0.001 like every fitted value
+      let seed = 20261117 >>> 0;
+      const rnd = () => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      const r3 = (v: number) => Math.round(v * 1000) / 1000;
+      const sets = Array.from({ length: 6 }, () => ({ exposure: r3((rnd() * 2 - 1) * 1.5), temperature: r3(rnd() * 2 - 1), tint: r3(rnd() * 2 - 1), contrast: r3(0.3 + rnd() * 1.4), saturation: r3(rnd() * 2), shadows: r3(rnd() * 2 - 1), highlights: r3(rnd() * 2 - 1), fade: r3(rnd()) }));
+      const gradeFx = (await tx(gp.pid, [{ op: 'add_effect', args: { clipId: gp.clipId, type: 'color.grade' } }])).results[0].output.effectId as string;
+      const perSet: { params: Record<string, number>; worst: number; changed: number }[] = [];
+      for (const p of sets) {
+        await tx(gp.pid, [{ op: 'update_effect', args: { clipId: gp.clipId, effectId: gradeFx, params: p } }]);
+        const img = await still(gp.pid);
+        let worst = 0;
+        for (const [x, y] of patches) {
+          const src = px(plainGrid, x, y), got = px(img, x, y), want = gradePixel([src[0]! / 255, src[1]! / 255, src[2]! / 255], p);
+          for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(got[c]! - want[c]! * 255));
+        }
+        perSet.push({ params: p, worst: Number(worst.toFixed(2)), changed: meanDiff(img, plainGrid) });
+      }
+      const worstAll = Math.max(...perSet.map((x) => x.worst));
+      measurements.gradeGrid = { patches: patches.length, sets: perSet };
+      check('M1 color.grade against gradePixel: a 9×9×9 colour grid at 6 seeded sets of all eight values, every patch within 2 of 255, and every set changed the picture', patches.length === 729 && perSet.length === 6 && worstAll <= 2 && perSet.every((x) => x.changed > 1), { worst: worstAll, perSet: perSet.map((x) => x.worst) });
+    }
+
     // ---------- no adapter in the browser ----------
     const p2 = await plain.newPage({ viewport: { width: 1500, height: 950 } });
     await p2.goto(`${s.ownerUrl}&project=${key.pid}`);
@@ -1003,7 +1069,7 @@ async function main() {
     const report = {
       ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', passed: checks.length - failed.length, total: checks.length,
       machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none: the WebGPU adapter here is a software one' },
-      scope: 'Thirty-one effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and thirty-nine transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
+      scope: 'Thirty-one effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and forty-six transitions (the seven of the trend pack, ADR-0012, included; their own proof is proof:trend-light) on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.',
       measurements, checks,
     };
     fs.writeFileSync(path.join(root, 'docs/evidence/gpu-proof.json'), JSON.stringify(report, null, 2) + '\n');

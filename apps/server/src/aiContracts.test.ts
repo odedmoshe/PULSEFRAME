@@ -1,6 +1,6 @@
 /**
- * ADR-0017 server contracts: run request schemas, the AI configuration variables and their defaults, and the honest refusals of the
- * L0 bridge in Capabilities (estimates and source/apply runs answer 501 until the frame-job work lands; size contracts fail closed).
+ * ADR-0017 server contracts: run request schemas, the AI configuration variables and their defaults, and honest refusals in
+ * Capabilities (unknown project or capability, placement without a clip; size contracts fail closed).
  * No port is opened and no provider is contacted.
  */
 import { execFileSync } from 'node:child_process';
@@ -48,8 +48,8 @@ describe('AI configuration (PF_TOOLS_*, PF_DENOISE_BIN, PF_AI_*)', () => {
   });
 });
 
-describe('Capabilities: the L0 bridge refuses what it cannot do yet, never guesses', () => {
-  it('estimate and runs on a source or with a placement mode answer 501 not_implemented; an unknown capability is still 404', async () => {
+describe('Capabilities: honest refusals for sources and placement (the L0 501 bridge was replaced by the frame-job work, W1)', () => {
+  it('an unknown project or capability is 404; replace-clip without a clip source is 422; nothing is guessed', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-aicontracts-'));
     dirs.push(dir);
     const store = new Store(dir);
@@ -57,9 +57,9 @@ describe('Capabilities: the L0 bridge refuses what it cannot do yet, never guess
       const caps = new Capabilities(store, { ...loadConfig({}), dataDir: dir });
       const code = async (fn: () => unknown) => { try { await fn(); } catch (e) { if (e instanceof ApiError) return `${e.status}:${e.code}`; throw e; } return 'ok'; };
       const req = { projectId: 'prj_x', capabilityId: 'comfy.image.soft-blur', params: {}, actor: 'user:owner' };
-      expect(await code(() => caps.estimate(req))).toBe('501:not_implemented');
-      expect(await code(() => caps.start({ ...req, source: { clipId: 'clp_1' } }))).toBe('501:not_implemented');
-      expect(await code(() => caps.start({ ...req, apply: 'replace-clip' }))).toBe('501:not_implemented');
+      expect(await code(() => caps.estimate(req))).toBe('404:project_not_found');
+      expect(await code(() => caps.start({ ...req, source: { clipId: 'clp_1' } }))).toBe('404:project_not_found');
+      expect(await code(() => caps.start({ ...req, apply: 'replace-clip' }))).toBe('422:invalid_request');
       expect(await code(() => caps.estimate({ ...req, capabilityId: 'nope.nope' }))).toBe('404:capability_not_found');
     } finally { store.close(); }
   });

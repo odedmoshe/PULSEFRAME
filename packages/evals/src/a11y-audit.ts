@@ -3,14 +3,23 @@
  * It checks things a script can decide: every control has an accessible name, text contrast, visible keyboard focus,
  * document language/direction, tab semantics. It is not a WCAG conformance statement and does not replace testing with a
  * screen reader or with users. Findings are written to docs/evidence/a11y-audit.json. The transient states include the
- * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator).
+ * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator), and the
+ * AI-model wave's surfaces (ADR-0017): the AI tools panel with a run sheet open, the before/after compare slider after a run of the
+ * ffmpeg-only classic vocal remover, and the translation review (a typed translation fixture; no model runs).
+ * motion tracking UI (ADR-0015): the tracking panel, follow and privacy-region controls with their warning, and the track picker.
+ * Templates and adjustment layers (ADR-0016): an adjustment clip's inspector, the Templates drawer (its first card at the inline
+ * start), the template dialog (first step and plan step) and the post-apply bar.
+ * The trend pack's panels (ADR-0012): the title effects panel with all six look fields on, and the transition options of a light
+ * transition (beat lock, velocity, colour, seed, light status).
  *   pnpm build && pnpm audit:a11y
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
+import { sha256Hex } from '@pulseframe/core';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 
@@ -104,6 +113,27 @@ async function main() {
     const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
     const tx = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }, { op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60) } }, { op: 'add_caption_track', args: { mode: 'manual' } }, { op: 'add_variant', args: { profileId: 'vertical-9x16' } }, { op: 'add_marker', args: { time: f(0), label: 'סמן פתיחה' } }] });
     const clipId = tx.results[0].output.clipId;
+    // ADR-0017: a stereo sound (two different channels, so the classic vocal remover accepts it) on its own clip, with a typed Hebrew
+    // transcript and an English translation fixture (stored by the op the translation tool commits; no model runs here).
+    const mix = path.join(art, 'mix.wav');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', "aevalsrc=exprs='0.3*sin(2*PI*440*t)+0.3*sin(2*PI*660*t)|0.3*sin(2*PI*440*t)':s=48000:d=2", '-c:a', 'pcm_s16le', mix]);
+    const upMix: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'mix.wav' }, body: fs.readFileSync(mix) })).json();
+    const mixClip = (await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: upMix.assetId, start: f(0) } }] })).results[0].output.clipId as string;
+    s.store.commit({ projectId: pid, actor: 'fixture', ops: [{ op: 'set_transcript', args: { assetId: upMix.assetId, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(1, 1), text: 'שלום לכולם' }] } }] });
+    const seg = s.store.getProject(pid).doc.transcripts[upMix.assetId]!.segments[0]!.id;
+    s.store.commit({ projectId: pid, actor: 'fixture', allowInternal: true, ops: [{ op: 'attach_translation', args: { baseVariantId: null, name: 'English', language: 'en', translation: { from: 'he', to: 'en', engine: 'typed fixture (no model ran)', model: 'none', createdAt: new Date().toISOString(), createdBy: 'fixture', sources: { [seg]: sha256Hex('שלום לכולם') } }, phraseText: { [seg]: 'Hello everyone' }, cueText: {} } }] });
+    // templates and adjustment layers (ADR-0016): a project of four still pictures with an adjustment layer over the edit
+    const tplPid = (await post('/projects', { name: 'a11y-templates', width: 640, height: 360 })).project.id as string;
+    for (const [i, c] of ['0x4a6f8c', '0x8c5a4a', '0x5a8c6a', '0x7a5a8c'].entries()) {
+      const file = path.join(art, `still-${i}.png`);
+      execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${c}:s=640x360,drawbox=x=${60 + i * 100}:y=90:w=120:h=180:color=0xc0b07a:t=fill`, '-frames:v', '1', file]);
+      await fetch(`${s.url}/api/v1/projects/${tplPid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(file) }, body: fs.readFileSync(file) });
+    }
+    const tplAssets = Object.keys(((await (await fetch(`${s.url}/api/v1/projects/${tplPid}`, { headers: h })).json()) as any).project.assets);
+    await post(`/projects/${tplPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: tplAssets[0], start: f(0), duration: f(60) } }] });
+    const adjClip = (await post(`/projects/${tplPid}/transactions`, { ops: [{ op: 'add_adjustment', args: { span: 'edit', effects: [{ type: 'color.grayscale' }] } }] })).results?.[0]?.output?.clipId as string | undefined;
+    const tplList = (((await (await fetch(`${s.url}/api/v1/templates`, { headers: h })).json()) as any).templates ?? []) as any[];
+    const tplPick = tplList.find((t) => t.available && t.needs.music !== 'beats' && t.slots.every((x: any) => x.accept !== 'video')) ?? tplList.find((t) => t.available);
     for (const lang of ['he', 'en'] as const) {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
@@ -233,6 +263,138 @@ async function main() {
       await auditState('look-visual-wave', { shown: lookShown.fieldset === 1 && lookShown.separator === 1 && lookShown.stampField === 1 && lookShown.beatToggles >= 1, ...lookShown }, true);
       await post(`/projects/${pid}/transactions`, { ops: waveFx.map((effectId) => ({ op: 'remove_effect', args: { clipId, effectId } })) });
       await page.getByTestId('beat-fieldset').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+      // ---- AI-model wave (ADR-0017) ----
+      // the AI tools panel, sound tab, with the classic vocal remover's run sheet open on the selected stereo clip
+      await page.locator(`.clip[data-clip-id="${mixClip}"]`).click();
+      const soundTab = page.locator('[data-testid=ai-tab][data-tab=sound]');
+      if (await soundTab.count()) await soundTab.click();
+      const vocals = page.locator('[data-testid=ai-tool][data-id="local.audio.vocals-classic"]');
+      const vocalsShown = (await vocals.count()) === 1;
+      if (vocalsShown) { await vocals.getByTestId('ai-open-run').click(); await vocals.getByTestId('ai-run-sheet').waitFor({ timeout: 8000 }).catch(() => {}); await vocals.getByTestId('ai-open-run').focus(); }
+      await auditState('ai-tools-run-sheet', { shown: vocalsShown && (await vocals.getByTestId('ai-run-sheet').count()) === 1, tabs: await page.locator('[data-testid=ai-tab]').count() }, true);
+      // a run in place of the clip's file, then the before/after compare slider (focused; the focus walk starts there)
+      let compareShown = false;
+      if (vocalsShown) {
+        await vocals.getByTestId('ai-apply-replace-clip').check().catch(() => {});
+        await vocals.getByTestId('ai-run').click().catch(() => {});
+        await vocals.getByTestId('ai-compare-slider').waitFor({ timeout: 60000 }).catch(() => {});
+        compareShown = (await vocals.getByTestId('ai-compare-slider').count()) === 1;
+        if (compareShown) await vocals.getByTestId('ai-compare-slider').focus();
+      }
+      await auditState('ai-result-compare', { shown: compareShown, progressbar: await vocals.locator('[role=progressbar]').count() }, true);
+      if (compareShown) { await vocals.getByTestId('ai-undo').click().catch(() => {}); await page.waitForTimeout(500); }
+      // the translation review in the transcript panel (all Inspector panels are shown)
+      const review = page.getByTestId('translation-review');
+      await review.waitFor({ timeout: 8000 }).catch(() => {});
+      const reviewShown = (await review.count()) === 1;
+      if (reviewShown) { await review.scrollIntoViewIfNeeded().catch(() => {}); await review.getByTestId('translation-limit').focus().catch(() => {}); }
+      await auditState('translation-review', { shown: reviewShown && (await review.getByTestId('translation-row').count()) === 1 }, true);
+
+      // motion tracking (ADR-0015): a track of the clip's file, a privacy region that follows it and the title following it.
+      // States: the video clip (tracking panel, follow controls, privacy regions with the standing warning), the title (its
+      // follow controls), and the track picker on the monitor (focus on the picture; Escape closes it and gives the focus back).
+      const mt = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'create_motion_track', args: { assetId: up.assetId, name: 'נקודה', kind: 'point', frame: 0, x: 5000, y: 6000 } }] });
+      const mtk = mt.results?.[0]?.output?.motionTrackId as string | undefined;
+      if (!mtk) throw new Error(`creating a motion track failed: ${JSON.stringify(mt).slice(0, 300)}`);
+      const projectNow: any = (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json()).project;
+      const videoTrackId = projectNow.sequences.seq_main.tracks.find((t: any) => t.clips.some((c: any) => c.id === clipId)).id as string;
+      const titleId = tx.results[1].output.clipId as string;
+      const bound = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'set_redact_region', args: { clipId, region: { motionTrackId: mtk } } }, { op: 'set_clip_follow', args: { clipId: titleId, follow: { motionTrackId: mtk, targetTrackId: videoTrackId, scale: false, smooth: 0 }, offset: { x: 0, y: 0 } } }] });
+      if (!bound.results) throw new Error(`binding the motion track failed: ${JSON.stringify(bound).slice(0, 300)}`);
+      await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
+      await page.getByTestId('redact-warning').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('tracking-panel').scrollIntoViewIfNeeded().catch(() => {});
+      const trackingShown = { panel: await page.getByTestId('tracking-panel').count(), items: await page.getByTestId('mtrack-item').count(), follow: await page.getByTestId('follow-controls').count(), redact: await page.getByTestId('redact-controls').count(), warning: await page.getByTestId('redact-warning').count(), warningRole: await page.getByTestId('redact-warning').getAttribute('role').catch(() => null) };
+      await auditState('tracking-video-clip', { shown: trackingShown.panel === 1 && trackingShown.items === 1 && trackingShown.follow === 1 && trackingShown.redact === 1 && trackingShown.warning === 1 && trackingShown.warningRole === 'status', ...trackingShown });
+      await page.locator(`.clip[data-clip-id="${titleId}"]`).click();
+      await page.getByTestId('follow-detach').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('follow-controls').scrollIntoViewIfNeeded().catch(() => {});
+      const followShown = { detach: await page.getByTestId('follow-detach').count(), scale: await page.getByTestId('follow-scale').count(), smooth: await page.getByTestId('follow-smooth').count(), state: await page.getByTestId('follow-state').count() };
+      await auditState('tracking-follower', { shown: followShown.detach === 1 && followShown.scale === 1 && followShown.smooth === 1 && followShown.state === 1, ...followShown });
+      await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
+      await page.getByTestId('mtrack-new-point').click();
+      await page.getByTestId('track-picker').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(150);
+      const pickerFocused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'track-picker');
+      await auditState('track-picker', { shown: (await page.getByTestId('track-picker').count()) === 1 && (await page.getByTestId('track-picker-confirm').count()) === 1, pickerFocused }, true);
+      await page.getByTestId('track-picker').focus().catch(() => {});
+      await page.keyboard.press('Escape');
+      await page.getByTestId('track-picker').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(150);
+      Object.assign(states.at(-1), { closed: (await page.getByTestId('track-picker').count()) === 0, focusReturned: await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'mtrack-new-point'), startsInside: pickerFocused });
+      await post(`/projects/${pid}/transactions`, { ops: [{ op: 'remove_motion_track', args: { motionTrackId: mtk, unbind: true } }] });
+      await page.getByTestId('mtrack-item').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+
+      // the title effects panel (ADR-0012): the title selected and all six look fields on, so every control shows; the focus walk starts in the panel
+      const textClipId = tx.results[1].output.clipId as string;
+      const looks = { gradient: { colors: ['#FFD166', '#3A5BFF', '#8A2BE2'], angle: 90 }, tracking: 0.1, stroke2: { color: '#111111', widthFrac: 0.06 }, glow: { color: '#FF2BD6', radiusFrac: 0.5, intensity: 0.8 }, extrude: { color: '#1D3557', depthFrac: 0.15, angle: 45, shade: 0.5 }, longShadow: { color: '#0000004D', lengthFrac: 1.5, angle: 45 } };
+      const fxOn = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: textClipId, style: looks } }] });
+      if (!fxOn.results) throw new Error(`turning the title looks on failed: ${JSON.stringify(fxOn).slice(0, 300)}`);
+      await page.locator(`.clip[data-clip-id="${textClipId}"]`).click();
+      await page.getByTestId('text-effects').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid=text-effects] input[type=checkbox]:checked').length >= 7, undefined, { timeout: 8000 }).catch(() => {});
+      await page.getByTestId('text-effects').scrollIntoViewIfNeeded().catch(() => {});
+      await page.getByTestId('text-fx-gradient').focus().catch(() => {});
+      const fxShown = { panel: await page.getByTestId('text-effects').count(), checked: await page.locator('[data-testid=text-effects] input[type=checkbox]:checked').count(), status: await page.getByTestId('text-fx-status').count(), removeAll: await page.getByTestId('text-fx-remove-all').count(), colourFields: await page.locator('[data-testid=text-effects] input[type=color]').count() };
+      await auditState('text-effects', { shown: fxShown.panel === 1 && fxShown.checked >= 6 && fxShown.status === 1 && fxShown.removeAll === 1 && fxShown.colourFields >= 7, ...fxShown }, true);
+      await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: textClipId, style: Object.fromEntries(Object.keys(looks).map((k) => [k, null])) } }] });
+      // the transition options (ADR-0012) of a light transition between two short clips of the fixture (film-burn declares colour,
+      // seed and light, so every control of the panel shows); the clips are removed again afterwards
+      const pair = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(200), duration: f(40), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: up.assetId, start: f(240), duration: f(40), withLinkedAudio: false } }] });
+      const [pairA, pairB] = (pair.results ?? []).map((r: any) => r.output.clipId as string);
+      const trSet = pairB ? await post(`/projects/${pid}/transactions`, { ops: [{ op: 'set_transition', args: { clipId: pairB, type: 'film-burn', frames: 10 } }] }) : null;
+      if (pairB && trSet?.results) {
+        await page.locator(`.clip[data-clip-id="${pairB}"]`).click();
+        await page.getByTestId('transition-options').waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('transition-options').scrollIntoViewIfNeeded().catch(() => {});
+        await page.getByTestId('transition-sync').focus().catch(() => {});
+      }
+      const trShown = { options: await page.getByTestId('transition-options').count(), sync: await page.getByTestId('transition-sync').count(), velocity: await page.getByTestId('transition-velocity').count(), colour: await page.getByTestId('transition-color').count(), seed: await page.getByTestId('transition-seed').count(), lightStatus: await page.getByTestId('transition-light-status').count(), transitionSet: !!trSet?.results };
+      await auditState('transition-options', { shown: trShown.transitionSet && trShown.options === 1 && trShown.sync === 1 && trShown.velocity === 1 && trShown.colour >= 1 && trShown.seed >= 1 && trShown.lightStatus === 1, ...trShown }, true);
+      if (pairA || pairB) await post(`/projects/${pid}/transactions`, { ops: [pairA, pairB].filter(Boolean).map((id) => ({ op: 'delete_clip', args: { clipId: id } })) });
+
+      // ---- templates and adjustment layers (ADR-0016), in their own project ----
+      await page.goto(`${s.ownerUrl}&project=${tplPid}`);
+      await page.getByTestId('timecode').waitFor();
+      if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      // an adjustment clip's inspector: opacity only, its note, mask and blend, "apply to" absent (it is the adjustment)
+      if (adjClip) await page.locator(`.clip[data-clip-id="${adjClip}"]`).click();
+      await page.getByTestId('adjust-opacity').waitFor({ timeout: 8000 }).catch(() => {});
+      await auditState('adjustment-inspector', { shown: (await page.getByTestId('adjust-opacity').count()) === 1 && (await page.getByTestId('adjust-note').count()) === 1 });
+      // the Look panel of a picture clip with "apply to: the whole edit" chosen
+      await page.locator('.track.video .clip').first().click();
+      await page.getByTestId('apply-to-edit').check().catch(() => {});
+      await auditState('apply-to-whole-edit', { shown: (await page.getByTestId('apply-to-edit').isChecked().catch(() => false)) === true });
+      // the Templates drawer: its first card sits at the inline start (the right edge in Hebrew)
+      await page.getByTestId('templates-toggle').click();
+      await page.locator('[data-testid=template-card]').first().waitFor({ timeout: 10000 }).catch(() => {});
+      const cards = await page.locator('[data-testid=template-card]').count();
+      const edge = await page.evaluate((rtl) => {
+        const list = document.querySelector('[data-testid=templates-drawer] .pf-tpl-cards'), first = document.querySelector('[data-testid=template-card]');
+        if (!list || !first) return null;
+        const a = list.getBoundingClientRect(), b = first.getBoundingClientRect();
+        return { gapAtInlineStart: Number((rtl ? a.right - b.right : b.left - a.left).toFixed(2)), cardWidth: Math.round(b.width), listWidth: Math.round(a.width) };
+      }, lang === 'he');
+      await auditState('templates-drawer', { shown: cards > 0, cards, firstCardAtInlineStart: !!edge && Math.abs(edge.gapAtInlineStart) <= 1, edge });
+      // the template dialog: its first step, then the plan step (a polite live region); Escape gives the focus back to the card
+      const tplCard = `[data-testid=template-card][data-template-id="${tplPick?.id ?? ''}"]`;
+      const td = await dialogBehaviour('template-dialog', async () => { await page.locator(tplCard).click(); }, tplCard);
+      await auditState('template-dialog', { startsInside: td.startsInside, tabStepsThatLeftTheDialog: td.tabStepsThatLeftTheDialog }, true);
+      const dialogState = states.at(-1);
+      await page.locator('[data-testid=template-step][data-step=plan]').click();
+      await page.waitForFunction(() => !!document.querySelector('[data-testid=template-plan-summary]') || !!document.querySelector('[data-testid=template-error]'), undefined, { timeout: 30000 }).catch(() => {});
+      await auditState('template-dialog-plan', { shown: (await page.getByTestId('template-plan-summary').count()) === 1, live: await page.getByTestId('template-plan').getAttribute('aria-live').catch(() => null) }, true);
+      Object.assign(dialogState, await td.close());
+      // the post-apply bar: the template is applied from the dialog, audited, and undone
+      await page.locator(tplCard).click();
+      await page.getByTestId('template-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.locator('[data-testid=template-step][data-step=plan]').click().catch(() => {});
+      await page.waitForFunction(() => !!document.querySelector('[data-testid=template-plan-summary]') || !!document.querySelector('[data-testid=template-error]'), undefined, { timeout: 30000 }).catch(() => {});
+      await page.getByTestId('template-use').click({ timeout: 5000 }).catch(() => {});
+      await page.getByTestId('template-applied').waitFor({ timeout: 30000 }).catch(() => {});
+      if (await page.getByTestId('template-dialog').count()) await page.keyboard.press('Escape');
+      await auditState('template-applied', { shown: (await page.getByTestId('template-applied').count()) === 1, template: tplPick?.id ?? null });
+      if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
@@ -243,7 +405,7 @@ async function main() {
     await s.close();
   }
   const stateFindings = (st: any) => st.unnamed.length + st.lowContrast.length + st.tabIssues.length + st.noFocusRing.length
-    + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0);
+    + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0) + (st.firstCardAtInlineStart === false ? 1 : 0);
   const total = report.runs.reduce((n: number, r: any) => n + r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length + (r.states ?? []).reduce((m: number, st: any) => m + stateFindings(st), 0), 0);
   report.findings = total;
   report.result = total === 0 ? 'NO FINDINGS (heuristic)' : 'FINDINGS';

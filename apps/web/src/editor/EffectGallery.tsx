@@ -2,21 +2,42 @@
  * Visual browser for the selected clip's looks: effects, colour looks, transitions and text styles, each as a live thumbnail.
  * Thumbnails go through the same evaluate + drawGraph as the preview (ADR-0005), one tile at a time. Picking a tile is an ordinary
  * registered op through editor.commit; nothing here keeps project state.
- * Tiles that move by themselves (motions, time effects, overlays, the strobe) animate while hovered or focused, never under
- * prefers-reduced-motion; every animated frame passes one FlashGuard per dialog (ADR-0009 decision 2), like the player.
+ * Tiles that move by themselves (motions, time effects, overlays, the strobe) and transition tiles animate while hovered or
+ * focused, never under prefers-reduced-motion; every animated frame passes one FlashGuard per dialog (ADR-0009 decision 2),
+ * like the player. Transitions are grouped by their registry category (ADR-0012).
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import * as T from '@pulseframe/time';
-import { applyTransaction, COLOR_LOOKS, createProject, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { adjustmentRefusal, applyTransaction, COLOR_LOOKS, createProject, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument, switchFrame, TRANSITION_CATEGORIES, velocityNeeds } from '@pulseframe/core';
 import { drawGraph, evaluate, FlashGuard, type FrameImage } from '@pulseframe/engine';
-import type { Key } from '@pulseframe/i18n';
+import { fillIn, type Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
 import { useEditorState } from './store.ts';
 import { GALLERY_STRINGS } from './gallery.strings.ts';
 import { DEFAULT_TRANSITION_FRAMES, isOn, pickCall, pickRefusal, thumbSize, transitionLength, transitionRoom } from './gallery.pick.ts';
 import { singleFlight } from './oneAtATime.ts';
+import { ADJUST_STRINGS } from './adjust.strings.ts';
+import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
+import { wholeEditAdjustment } from './commands.ts';
 import './effectGallery.css';
+
+/** Where a look picked in the Look panel or the gallery goes (ADR-0016): this clip, or an adjustment layer over the whole edit. */
+export type ApplyTo = 'clip' | 'edit';
+/** The "apply to" radio group of the Look panel and the effects gallery: this clip / the whole edit. */
+export function ApplyToGroup({ value, onChange }: { value: ApplyTo; onChange: (v: ApplyTo) => void }) {
+  const { state } = useEditorState();
+  const A = ADJUST_STRINGS[state.lang];
+  const name = useId(), note = useId();
+  return (
+    <fieldset className="pf-apply-to" data-testid={TID.applyTo} aria-describedby={value === 'edit' ? note : undefined}>
+      <legend>{A.applyTo}</legend>
+      <label className="check"><input type="radio" name={name} value="clip" checked={value === 'clip'} data-testid={TID.applyToClip} onChange={() => onChange('clip')} /> {A.applyToClip}</label>
+      <label className="check"><input type="radio" name={name} value="edit" checked={value === 'edit'} data-testid={TID.applyToEdit} onChange={() => onChange('edit')} /> {A.applyToEdit}</label>
+      {value === 'edit' && <p id={note} className="muted">{A.applyToEditNote}</p>}
+    </fieldset>
+  );
+}
 
 type Kind = 'effect' | 'look' | 'transition' | 'text' | 'motion';
 type TabId = 'effects' | 'looks' | 'transitions' | 'text' | 'motion';
@@ -30,6 +51,18 @@ const RATE = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, RATE);
 const FRAME_AT = 12; // 0.4 s at 30 fps, so time-driven effects show something
 const TRANSITION_FRAMES = 15;
+/** A transition tile's scene: the outgoing clip at frames 0–60, the incoming one from 60 with the transition over 60–74. */
+const TRANSITION_START = 60;
+/** The loop a hovered transition tile plays: from a little before the transition to a little after it. */
+const TRANSITION_LOOP = { from: 56, to: 78 } as const;
+/**
+ * The frame a transition tile shows at rest: the middle of the transition; for a zoom punch the switch frame (its strongest
+ * moment), and for colour blocks two frames before it, where the bars are crossing (on the switch frame they cover all).
+ */
+function transitionStill(kernel: string | undefined): number {
+  const sw = switchFrame(TRANSITION_FRAMES, null);
+  return TRANSITION_START + (kernel === 'punch' ? sw : kernel === 'block' ? sw - 2 : Math.floor(TRANSITION_FRAMES / 2));
+}
 /** Length of an effect tile's clip, and of its animation loop while hovered. */
 const EFFECT_FRAMES = 150;
 /** A time effect shows only on movement (ADR-0011): its tile's picture is made smaller and swings, through the same ops as any clip. */
@@ -40,13 +73,13 @@ const TIME_MOTION = 'motion.loop.pendulum';
  */
 const effectFrame = (id: string) => (id === 'light.strobe' ? 1 : id === 'time.stutter' ? 13 : FRAME_AT);
 
-interface Item { key: string; kind: Kind; id: string; he: string; en: string; gpu: boolean; category?: string; mkind?: (typeof MOTION_GROUPS)[number]; mframes?: number }
-/** Tiles whose picture moves by itself, so they animate while hovered or focused. */
-const animates = (it: Item) => it.kind === 'motion' || (it.kind === 'effect' && (it.category === 'time' || it.category === 'overlay' || it.id === 'light.strobe'));
+interface Item { key: string; kind: Kind; id: string; he: string; en: string; gpu: boolean; category?: string; kernel?: string; mkind?: (typeof MOTION_GROUPS)[number]; mframes?: number }
+/** Tiles whose picture moves by itself, so they animate while hovered or focused; and every transition. */
+const animates = (it: Item) => it.kind === 'motion' || it.kind === 'transition' || (it.kind === 'effect' && (it.category === 'time' || it.category === 'overlay' || it.id === 'light.strobe'));
 const ITEMS: Item[] = [
   ...EFFECTS.map((e) => ({ key: `effect:${e.id}`, kind: 'effect' as const, id: e.id, he: e.name.he, en: e.name.en, gpu: e.cost === 'gpu', category: e.category })),
   ...COLOR_LOOKS.map((l) => ({ key: `look:${l.id}`, kind: 'look' as const, id: l.id, he: l.name.he, en: l.name.en, gpu: true })),
-  ...TRANSITIONS.map((x) => ({ key: `transition:${x.id}`, kind: 'transition' as const, id: x.id, he: x.name.he, en: x.name.en, gpu: x.gpu })),
+  ...TRANSITIONS.map((x) => ({ key: `transition:${x.id}`, kind: 'transition' as const, id: x.id, he: x.name.he, en: x.name.en, gpu: x.gpu, category: x.category, kernel: x.kernel })),
   ...TEXT_PRESETS.map((p) => ({ key: `text:${p.id}`, kind: 'text' as const, id: p.id, he: p.name.he, en: p.name.en, gpu: false })),
   ...MOTION_PRESETS.map((m) => ({ key: `motion:${m.id}`, kind: 'motion' as const, id: m.id, he: m.name.he, en: m.name.en, gpu: false, mkind: m.kind as (typeof MOTION_GROUPS)[number], mframes: m.defaultFrames })),
 ];
@@ -92,9 +125,9 @@ function buildDoc(s: Scene, it: Item, isText = false): { doc: ProjectDocument; f
     return { doc: step(a.doc, [{ op: 'apply_motion_preset', args: { clipId: a.out[0]!.clipId as string, presetId: it.id } }]).doc, frame };
   }
   if (it.kind === 'transition') {
-    const a = step(s.base, [addPicture(s, s.a, 0, 60), addPicture(s, s.b, 60, 60)]);
+    const a = step(s.base, [addPicture(s, s.a, 0, TRANSITION_START), addPicture(s, s.b, TRANSITION_START, 60)]);
     const clipId = a.out[1]!.clipId as string;
-    return { doc: step(a.doc, [{ op: 'set_transition', args: { clipId, type: it.id, frames: TRANSITION_FRAMES } }]).doc, frame: 60 + Math.floor(TRANSITION_FRAMES / 2) };
+    return { doc: step(a.doc, [{ op: 'set_transition', args: { clipId, type: it.id, frames: TRANSITION_FRAMES } }]).doc, frame: transitionStill(it.kernel) };
   }
   if (it.kind === 'text') {
     const doc = { ...s.base, settings: { ...s.base.settings, background: '#2b2b2b' } };
@@ -108,7 +141,7 @@ function buildDoc(s: Scene, it: Item, isText = false): { doc: ProjectDocument; f
   return { doc: step(a.doc, [...moving, { op: 'add_effect', args: { clipId, type: it.id } }]).doc, frame: effectFrame(it.id) };
 }
 
-export function EffectGalleryButton({ clip, trackKind }: { clip: Clip; trackKind: string }) {
+export function EffectGalleryButton({ clip, trackKind, applyTo = 'clip', onApplyTo }: { clip: Clip; trackKind: string; applyTo?: ApplyTo; onApplyTo?: (v: ApplyTo) => void }) {
   const { state } = useEditorState();
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -116,19 +149,25 @@ export function EffectGalleryButton({ clip, trackKind }: { clip: Clip; trackKind
   return (
     <>
       <button ref={btn} type="button" data-testid="gallery-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>{G.open}</button>
-      {open && <EffectGallery clip={clip} trackKind={trackKind} onClose={() => { setOpen(false); setTimeout(() => btn.current?.focus(), 0); }} />}
+      {open && <EffectGallery clip={clip} trackKind={trackKind} applyTo={applyTo} onApplyTo={onApplyTo} onClose={() => { setOpen(false); setTimeout(() => btn.current?.focus(), 0); }} />}
     </>
   );
 }
 
-function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: string; onClose: () => void }) {
+function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onApplyTo }: { clip: Clip; trackKind: string; onClose: () => void; applyTo: ApplyTo; onApplyTo?: (v: ApplyTo) => void }) {
   const { editor, state, t } = useEditorState();
   const lang = state.lang;
   const G = GALLERY_STRINGS[lang];
+  const A = ADJUST_STRINGS[lang];
   const gpuOk = !!state.gpu?.available;
   const isText = clip.type === 'text';
   const media = clip.type === 'media' && trackKind === 'video';
-  const tabs = useMemo<TabId[]>(() => [...(isText || media ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media ? (['motion'] as TabId[]) : [])], [isText, media]);
+  // An adjustment clip (ADR-0016) takes effects and looks only; for a picture or a title, effects and looks may go on an
+  // adjustment layer over the whole edit instead ("apply to").
+  const adjustment = clip.type === 'adjustment';
+  const [applyTo, setApplyToState] = useState<ApplyTo>(adjustment ? 'clip' : initialApplyTo);
+  const setApplyTo = (v: ApplyTo) => { setApplyToState(v); onApplyTo?.(v); };
+  const tabs = useMemo<TabId[]>(() => [...(isText || media || adjustment ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media ? (['motion'] as TabId[]) : [])], [isText, media, adjustment]);
   const [tab, setTab] = useState<TabId>(tabs[0] ?? 'effects');
   const [query, setQuery] = useState('');
   const [snap, setSnap] = useState<{ bitmap: ImageBitmap; dim: ImageBitmap; w: number; h: number } | null | undefined>(undefined);
@@ -236,8 +275,13 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     const canvas = canvases.current.get(hot);
     if (!it || !animates(it) || it.kind !== TAB_KIND[tab] || !canvas || ((it.kind !== 'motion' || !isText) && !snap) || (it.gpu && !gpuOk)) return;
     const { doc, frame } = motionDoc(it);
-    const loop = it.kind === 'motion' ? MOTION_FRAMES : EFFECT_FRAMES;
-    const provider = async (): Promise<FrameImage | null> => (snap ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(snap.bitmap, dx, dy, dw, dh) } : null);
+    // a transition plays frames 56..78 around its window; everything else loops from frame 0
+    const [first, loop] = it.kind === 'transition' ? [TRANSITION_LOOP.from, TRANSITION_LOOP.to - TRANSITION_LOOP.from + 1] : [0, it.kind === 'motion' ? MOTION_FRAMES : EFFECT_FRAMES];
+    // the outgoing side of a transition tile is the dimmed snapshot, as in its still (the incoming one is the snapshot itself)
+    const provider = async (l: { assetId: string }): Promise<FrameImage | null> => {
+      const bm = snap ? (it.kind === 'transition' && l.assetId === motionScene.a ? snap.dim : snap.bitmap) : null;
+      return bm ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(bm, dx, dy, dw, dh) } : null;
+    };
     const ctx = canvas.getContext('2d')!;
     const draw = (n: number) => drawGraph(ctx, guard.apply(evaluate(doc, f(n)), performance.now() / 1000), provider).finally(showHeld);
     let stop = false;
@@ -247,7 +291,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
       if (stop) return;
       raf = requestAnimationFrame(tick);
       if (!startAt) startAt = now;
-      const n = Math.floor(((now - startAt) * 30) / 1000) % loop;
+      const n = first + (Math.floor(((now - startAt) * 30) / 1000) % loop);
       if (n === last || inflight) return;
       last = n;
       inflight = true;
@@ -270,28 +314,49 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     const live = (editor.doc && findClip(editor.doc, clip.id)?.clip) || clip; // the clip as it is now, not as it was when the tile was drawn
     // A transition is asked for at a length the op accepts: the clip's current length (or the default), cut to what the clips
     // allow (gallery.pick.ts transitionRoom). When nothing fits, nothing is sent and the status says what to do.
+    // The transition's options are kept on the new type (set_transition, ADR-0012), so the room counts a velocity ramp's needs.
     let frames: number | undefined;
-    let short: { frames: number; limit: 'clip' | 'previous' | 'max' } | null = null;
+    let short: { frames: number; limit: 'clip' | 'previous' | 'start' | 'max'; velocity?: 2 | 3 | 4 } | null = null;
     if (it.kind === 'transition' && editor.doc) {
       const room = transitionRoom(editor.doc, live.id);
       if (room) {
         const wanted = live.type === 'media' && live.transition ? live.transition.frames : DEFAULT_TRANSITION_FRAMES;
         frames = transitionLength(room, wanted);
-        if (frames < 1) { setStatus({ kind: 'error', text: G.refused(name), reason: room.limit === 'previous' ? G.noHandle : G.noRoom }); return; }
-        if (frames < wanted) short = { frames, limit: room.limit };
+        // only the kept beat lock's minimum (3 frames) stands in the way: the op is asked, and its refusal says why
+        if (frames < 1 && room.maxFrames >= 1) frames = room.maxFrames;
+        else if (frames < 1) { setStatus({ kind: 'error', text: G.refused(name), reason: room.limit === 'previous' ? G.noHandle : G.noRoom }); return; }
+        if (frames < wanted) short = { frames, limit: room.limit, ...(room.velocity ? { velocity: room.velocity } : {}) };
       }
     }
-    const call = pickCall(live, it, frames);
+    const toEdit = wholeEdit && (it.kind === 'effect' || it.kind === 'look');
+    const onEdit = toEdit && editor.doc ? wholeEditAdjustment(editor.doc)?.clip : undefined;
+    // the whole edit: on its adjustment layer (made by the same transaction when there is none yet), never twice the same effect
+    const call = toEdit ? (onEdit && it.kind === 'effect' && isOn(onEdit, it) ? null : 'edit') : pickCall(live, it, frames);
     if (!call) { setStatus({ kind: 'info', text: G.alreadyOn(name) }); return; }
     setBusyKey(it.key);
     try {
-      const done = await flight.run(() => editor.commit([call], `Gallery: ${it.id}`));
+      const done = await flight.run(() => (call === 'edit'
+        ? editor.applyToWholeEdit(it.kind === 'effect' ? { kind: 'effect', type: it.id } : { kind: 'look', lookId: it.id }, `Gallery: ${it.id} (whole edit)`)
+        : editor.commit([call], `Gallery: ${it.id}`)));
       if (done.dropped) return;
-      if (done.value) { setStatus({ kind: 'info', text: short ? G.appliedShort(name, short.frames, short.limit === 'previous') : G.applied(name) }); return; }
+      if (done.value) {
+        if (!short) setStatus({ kind: 'info', text: G.applied(name) });
+        else if (!short.velocity) setStatus({ kind: 'info', text: G.appliedShort(name, short.frames, short.limit === 'previous') });
+        else {
+          // shortened so that the kept velocity ramp has the source it reads on both sides
+          const need = velocityNeeds(short.frames, short.velocity);
+          setStatus({ kind: 'info', text: short.limit === 'previous' ? G.appliedShort(name, short.frames, true) : G.applied(name), reason: `${t('look.transition.frames')}: ${short.frames} · ${t('look.transition.velocity')} ×${short.velocity}: ${fillIn(t('look.transition.velocity.need'), { out: need.outFrames, head: need.headFrames })}` });
+        }
+        return;
+      }
       const why = pickRefusal(editor.getState());
       setStatus({ kind: 'error', text: G.refused(name), reason: why.reason ?? (why.conflict ? G.conflict : G.noReason) });
     } finally { setBusyKey(null); }
   };
+
+  // "apply to the whole edit" holds for effects and looks; the tiles are pressed by what the whole-edit layer carries
+  const wholeEdit = !adjustment && applyTo === 'edit' && (tab === 'effects' || tab === 'looks');
+  const pressedOn: Clip | null = wholeEdit ? (editor.doc ? wholeEditAdjustment(editor.doc)?.clip ?? null : null) : clip;
 
   // the clips as they are now: is there room for any transition at the start of this clip?
   const room = media && editor.doc ? transitionRoom(editor.doc, clip.id) : null;
@@ -338,17 +403,19 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
   };
 
   const tileOf = (it: Item) => {
-    const unavailable = it.gpu && !gpuOk;
+    // an adjustment (this clip, or the layer over the whole edit) refuses time effects, the chroma key and the shadow
+    const refused = it.kind === 'effect' && (adjustment || wholeEdit) && !!adjustmentRefusal(it.id);
+    const unavailable = (it.gpu && !gpuOk) || refused;
     const name = lang === 'he' ? it.he : it.en;
     return (
       <button key={it.key} type="button" className="pf-gal-tile" data-testid="gallery-tile" data-kind={it.kind} data-id={it.id}
         data-rendered={rendered.has(it.key) ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
-        disabled={unavailable} aria-pressed={isOn(clip, it)} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
+        disabled={unavailable} aria-pressed={pressedOn ? isOn(pressedOn, it) : false} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
         onPointerEnter={animates(it) ? () => setHot(it.key) : undefined} onPointerLeave={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
         onFocus={animates(it) ? () => setHot(it.key) : undefined} onBlur={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
         <canvas ref={(c) => { if (c) canvases.current.set(it.key, c); else canvases.current.delete(it.key); }} width={tw} height={th} aria-hidden="true" style={{ ['--pf-gal-aspect' as string]: `${tw} / ${th}` }} />
         <span className="pf-gal-name"><bdi>{name}</bdi></span>
-        {unavailable && <span className="pf-gal-unavail">{G.needsGpu}</span>}
+        {unavailable && <span className="pf-gal-unavail">{refused ? A.notOnAdjustment : G.needsGpu}</span>}
       </button>
     );
   };
@@ -381,7 +448,18 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
                 </section>
               );
             })
-            : <div className="pf-gal-grid">{items.map(tileOf)}</div>}
+            : id === 'transitions'
+              ? TRANSITION_CATEGORIES.map((c) => {
+                const group = items.filter((i) => i.category === c);
+                if (!group.some(matches)) return null;
+                return (
+                  <section key={c} aria-labelledby={`pf-gal-trcat-${c}`} data-testid={`gallery-transition-group-${c}`}>
+                    <h3 className="pf-gal-heading" id={`pf-gal-trcat-${c}`}>{t(`look.trcat.${c}` as Key)}</h3>
+                    <div className="pf-gal-grid">{group.map(tileOf)}</div>
+                  </section>
+                );
+              })
+              : <div className="pf-gal-grid">{items.map(tileOf)}</div>}
         {id === tab && shown === 0 && <div className="pf-gal-empty" role="status">{G.empty}</div>}
       </div>
     );
@@ -401,6 +479,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
           ))}
         </div>
         <div className="pf-gal-body">
+          {!adjustment && (tab === 'effects' || tab === 'looks') && <ApplyToGroup value={applyTo} onChange={setApplyTo} />}
           <p className="pf-gal-note" role="status">{tab !== 'text' && snap === null ? G.noFrame : G.thumbNote}</p>
           {tab === 'motion' && <p className="pf-gal-note pf-gal-note-small" data-testid="gallery-motion-note">{G.motionNote}</p>}
           {tabs.map(panel)}

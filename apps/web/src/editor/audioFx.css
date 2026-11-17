@@ -37,3 +37,13 @@
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pf-clip-audio) 70%, transparent) 0 4px, transparent 4px 9px); }
 .clip-tail[data-cut='true'] { border-right-style: solid; border-right-color: var(--pf-warn, #e5a50a); }
 .clip-fx-badge { font-weight: 700; }
+
+/* Voice cleanup «ניקוי קול» (VoiceCleanBlock.tsx, ADR-0013), at the top of the block. Steady: the «טרם נבדק בהאזנה» badge is a plain
+   outlined label, a playing ▶ a steady fill (.afx-listen above); nothing animates or transitions. */
+.vclean { display: grid; gap: 6px; padding: 6px var(--pf-s-2); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); background: var(--pf-bg); }
+.vclean-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-s-2); }
+.vclean-head h4 { margin: 0; margin-inline-end: auto; }
+.vclean-badge { font-size: var(--pf-fs-sm); color: var(--pf-text); border: 1px solid var(--pf-text-muted); border-radius: 99px; padding: 0 8px; }
+.vclean-actions { align-items: center; }
+.vclean-actions > button { padding: 2px 10px; font-size: var(--pf-fs-sm); }
+.vclean-actions .check { margin-bottom: 0; }

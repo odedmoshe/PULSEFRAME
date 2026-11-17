@@ -1,8 +1,10 @@
-import { Download, FolderOpen, Scissors, Sparkles, Upload } from 'lucide-react';
+import { Download, FolderOpen, LayoutTemplate, Scissors, Sparkles, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useEditorState } from './store.ts';
 import { WELCOME_STRINGS } from './welcome.strings.ts';
+import { TEMPLATE_TESTIDS } from './templates.testids.ts';
 import './welcome.css';
+import './templates.css';
 
 const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp,.cube'; // same list as the library input (.cube = a colour table)
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -39,6 +41,11 @@ export function Welcome() {
         <li><span className="n">1</span><FolderOpen size={18} aria-hidden="true" />{s.s1}</li>
         <li><span className="n">2</span><Scissors size={18} aria-hidden="true" />{s.s2}</li>
         <li><span className="n">3</span><Sparkles size={18} aria-hidden="true" /><Download size={18} aria-hidden="true" />{s.s3}</li>
+        {/* a fourth way in (ADR-0016): the Templates drawer of the library, with its dialog (pictures, music, texts, plan) */}
+        <li className="welcome-template-step"><span className="n">4</span><LayoutTemplate size={18} aria-hidden="true" />
+          <button type="button" className="ghost" data-testid={TEMPLATE_TESTIDS.welcomeTemplate} aria-describedby="welcome-template-hint" onClick={() => editor.openTemplates()}>{s.s4}</button>
+          <span id="welcome-template-hint" className="muted">{s.s4Hint}</span>
+        </li>
       </ol>
       <p className="welcome-hints">
         <span><kbd>{s.space}</kbd> {s.hintPlay}</span>

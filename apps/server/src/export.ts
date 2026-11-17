@@ -24,6 +24,7 @@ import { ffprobe } from './ingest.ts';
 import { assertStorageRoom } from './storage.ts';
 import { FrameFlashCheck, type PhotosensitivityReport } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import type { ComputeLane } from './aiContracts.ts';
 
 const exec = promisify(execFile);
 
@@ -116,6 +117,8 @@ export class Exporter {
   private queue: Promise<void> = Promise.resolve();
   private cancelRequested = new Set<string>();
   private running: { jobId: string; ff?: ChildProcessWithoutNullStreams; abort?: () => void } | null = null;
+  /** The compute lane (ADR-0017), set by the server: while a server export runs, frame jobs dispatch no new chunk. */
+  lane: Pick<ComputeLane, 'setExportActive'> | null = null;
   constructor(private store: Store, private host: RenderHost, private renderPageUrl: () => string, private webDist: string) {}
 
   /**
@@ -366,6 +369,7 @@ export class Exporter {
     const started = Date.now();
     const canceled = () => this.cancelRequested.has(jobId);
     this.running = { jobId };
+    this.lane?.setExportActive(true);
     try {
       // The manifest is re-verified at run time: bytes must still be the ones the job was planned against.
       for (const a of manifest.assets) {
@@ -476,6 +480,7 @@ export class Exporter {
       if (canceled()) this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'export was canceled; partial output was discarded', retryable: true } });
       else this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'export_failed', message: String(e?.message ?? e), retryable: true } });
     } finally {
+      this.lane?.setExportActive(false);
       this.running = null;
       this.cancelRequested.delete(jobId);
       if (token) {

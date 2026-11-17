@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import type { Key } from '@pulseframe/i18n';
-import { findClip, type Clip, clipEnd } from '@pulseframe/core';
+import { adjustmentRefusal, COLOR_LOOKS, findClip, type Clip, type OpCall, type ProjectDocument, type Track, clipEnd } from '@pulseframe/core';
 import type { Editor } from './store.ts';
 
 export interface Command {
@@ -19,6 +19,65 @@ export interface Command {
 }
 
 const sel = (e: Editor) => e.selected?.clip;
+
+// ---------- adjustment layers over the whole edit (ADR-0016) ----------
+type AdjustmentClip = Extract<Clip, { type: 'adjustment' }>;
+/** End of the edit as add_adjustment's span 'edit' measures it: the end of the last picture or title clip of the main sequence. */
+export function editEnd(doc: ProjectDocument): T.RationalTime {
+  let end = T.ZERO;
+  for (const t of doc.sequences[doc.mainSequenceId]?.tracks ?? []) if (t.kind === 'video' || t.kind === 'text') for (const c of t.clips) end = T.max(end, clipEnd(c));
+  return end;
+}
+/**
+ * The adjustment clip that already covers the whole edit (from 0 to at least its end) on a shown, unlocked adjustment track:
+ * what "apply to the whole edit" adds to. The topmost such clip when there are several; null when there is none.
+ */
+export function wholeEditAdjustment(doc: ProjectDocument): { clip: AdjustmentClip; track: Track } | null {
+  const end = editEnd(doc);
+  if (!T.lt(T.ZERO, end)) return null;
+  const tracks = doc.sequences[doc.mainSequenceId]?.tracks ?? [];
+  for (const track of [...tracks].reverse()) {
+    if (track.kind !== 'adjustment' || track.locked || track.hidden) continue;
+    const clip = track.clips.find((c): c is AdjustmentClip => c.type === 'adjustment' && T.eq(c.start, T.ZERO) && !T.lt(clipEnd(c), end));
+    if (clip) return { clip, track };
+  }
+  return null;
+}
+/** What "apply to the whole edit" adds: an effect (with optional parameters) or one of the named colour looks. */
+export type WholeEditPick = { kind: 'effect'; type: string; params?: Record<string, unknown> } | { kind: 'look'; lookId: string };
+/**
+ * The ops of "apply to the whole edit": on the existing whole-edit adjustment, add_effect or apply_look; otherwise one
+ * add_adjustment over the edit carrying the effect (a look is its color.grade parameters). One transaction either way. Null
+ * when there is nothing to do: an empty edit, an effect an adjustment refuses (adjustmentRefusal), or an unknown look.
+ */
+export function wholeEditOps(doc: ProjectDocument, pick: WholeEditPick): OpCall[] | null {
+  if (!T.lt(T.ZERO, editEnd(doc))) return null;
+  const on = wholeEditAdjustment(doc);
+  if (pick.kind === 'effect') {
+    if (adjustmentRefusal(pick.type)) return null;
+    const effect = { type: pick.type, ...(pick.params ? { params: pick.params } : {}) };
+    return on ? [{ op: 'add_effect', args: { clipId: on.clip.id, ...effect } }] : [{ op: 'add_adjustment', args: { span: 'edit', effects: [effect] } }];
+  }
+  const look = COLOR_LOOKS.find((l) => l.id === pick.lookId);
+  if (!look) return null;
+  return on ? [{ op: 'apply_look', args: { clipId: on.clip.id, lookId: look.id } }] : [{ op: 'add_adjustment', args: { span: 'edit', effects: [{ type: 'color.grade', params: { ...look.params } }] } }];
+}
+/**
+ * "Cover the whole edit" for an adjustment clip: trim_clip its start to 0 and its end to the end of the edit (the start
+ * first, so a clip that lies after the end still has room). Null when it already covers exactly that, the edit is empty
+ * or the clip is not an adjustment.
+ */
+export function coverEditOps(doc: ProjectDocument, clipId: string): OpCall[] | null {
+  const f = findClip(doc, clipId);
+  const end = editEnd(doc);
+  if (!f || f.clip.type !== 'adjustment' || !T.lt(T.ZERO, end)) return null;
+  const ops: OpCall[] = [];
+  if (!T.eq(f.clip.start, T.ZERO)) ops.push({ op: 'trim_clip', args: { clipId, edge: 'start', to: T.ZERO } });
+  if (!T.eq(clipEnd(f.clip), end)) ops.push({ op: 'trim_clip', args: { clipId, edge: 'end', to: end } });
+  return ops.length ? ops : null;
+}
+/** The transform properties a clip's keyframes may use: an adjustment clip has opacity only (ADR-0016). */
+export const keyframeProps = (c: Clip) => (c.type === 'adjustment' ? (['opacity'] as const) : (['x', 'y', 'scale', 'rotation', 'opacity'] as const));
 /** Selected clips that still exist, read when the command runs. */
 const selectedClips = (e: Editor) => { const doc = e.doc; return doc ? e.getState().selection.map((id) => findClip(doc, id)?.clip).filter((c): c is Clip => !!c) : []; };
 /** Slip: the selected clip stays where it is and shows source material `frames` later (or earlier). A refusal (no material that far) is shown like any other. */
@@ -100,15 +159,17 @@ const step = (frames: number) => (e: Editor) => e.seek(e.frame + frames);
 const addKeyframe = (e: Editor) => {
   const c = sel(e);
   if (!c) return;
+  // the master clip's own values (keyframes live on the master, so a viewed format's override never enters them); for a clip
+  // that follows a motion track (ADR-0015) these are its offset from the tracked point
   const now = e.transformNow(c);
   const time = T.sub(e.playhead, c.start);
-  return e.commit((['x', 'y', 'scale', 'rotation', 'opacity'] as const).map((property) => ({ op: 'set_keyframe', args: { clipId: c.id, property, time, value: now[property] } })), 'Add keyframe');
+  return e.commit(keyframeProps(c).map((property) => ({ op: 'set_keyframe', args: { clipId: c.id, property, time, value: now[property] } })), 'Add keyframe');
 };
 const removeKeyframe = (e: Editor) => {
   const c = sel(e);
   if (!c?.keyframes) return;
   const time = T.sub(e.playhead, c.start);
-  const ops = (['x', 'y', 'scale', 'rotation', 'opacity'] as const).filter((p) => c.keyframes?.[p]?.some((k) => T.eq(k.time, time))).map((property) => ({ op: 'delete_keyframe', args: { clipId: c.id, property, time } }));
+  const ops = keyframeProps(c).filter((p) => c.keyframes?.[p]?.some((k) => T.eq(k.time, time))).map((property) => ({ op: 'delete_keyframe', args: { clipId: c.id, property, time } }));
   return ops.length ? e.commit(ops, 'Remove keyframe') : undefined;
 };
 /** Jump to the previous/next keyframe of the selected clip. */
@@ -187,6 +248,9 @@ export const COMMANDS: Command[] = [
   { id: 'edit.selectPrev', label: 'cmd.selectPrev', group: 'edit', keys: ['Alt+ArrowUp'], run: selectAdjacent(-1) },
   { id: 'edit.deselect', label: 'cmd.deselect', group: 'edit', keys: ['Escape'], enabled: (e) => (!!sel(e) || e.getState().cutPending.length > 0) && !e.getState().paletteOpen, run: (e) => { e.clearCut(); e.select(null); } },
   { id: 'edit.addText', label: 'text.add', group: 'edit', keys: ['KeyT'], run: (e) => e.addText() },
+  // An adjustment layer over the whole edit (ADR-0016): empty until an effect is added to it in the Look panel (it is selected).
+  { id: 'edit.addAdjustment', label: 'cmd.addAdjustment', group: 'edit', keys: [], enabled: (e) => !!e.doc && T.lt(T.ZERO, editEnd(e.doc)), run: (e) => e.addWholeEditAdjustment() },
+  { id: 'view.openTemplates', label: 'cmd.openTemplates', group: 'view', keys: [], enabled: (e) => !!e.doc, run: (e) => e.openTemplates() },
   // K stops playback or a shuttle (the J K L convention); when nothing is playing it adds a keyframe.
   { id: 'keyframe.add', label: 'cmd.keyframeAddOrStop', group: 'keyframe', keys: ['KeyK'], enabled: (e) => !!e.player?.playing || (!e.selectionLocked && e.playheadOnSelection), run: (e) => (e.player?.playing ? e.player.pause() : addKeyframe(e)) }, // stopping is allowed whatever is selected; adding a key is not on a locked track
   { id: 'keyframe.remove', label: 'cmd.keyframeRemove', group: 'keyframe', keys: ['Shift+KeyK'], enabled: (e) => e.playheadOnSelection && !!sel(e)?.keyframes, run: removeKeyframe },

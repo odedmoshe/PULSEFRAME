@@ -9,6 +9,8 @@
  * - Recognition is a durable job. Its result is checked (times inside the media, ascending, no empty words) and attached with
  *   the internal `attach_transcript` operation, so it is an ordinary undoable transaction. Nothing is attached when no speech
  *   was recognised, and nothing is ever invented here: text, times and confidence are the recogniser's.
+ * - Recognition and narration hold the compute lane (ADR-0017) while they run, so they never share the machine with a frame chunk or
+ *   a local tool; `releaseKept()` lets the lane free the memory of an idle kept worker before other heavy work starts.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
@@ -20,6 +22,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { alignPhrase, own, RationalTimeSchema, splitSentences, timeOriginSeconds, type Asset } from '@pulseframe/core';
 import type { CapabilityDescriptor } from '@pulseframe/providers';
 import * as T from '@pulseframe/time';
+import type { ComputeLane } from './aiContracts.ts';
 import type { Principal } from './auth.ts';
 import type { Config } from './config.ts';
 import type { Governance } from './governance.ts';
@@ -162,9 +165,42 @@ export class Speech {
   private running = new Map<string, ChildProcess>();
   private chain: Promise<void> = Promise.resolve();
   private stopped = false;
-  constructor(private store: Store, private cfg: Config) {
+  private laneWaits = new Map<string, AbortController>();
+  /** @param lane the compute lane (ADR-0017); null = no lane (speech jobs then only queue behind each other). */
+  constructor(private store: Store, private cfg: Config, private lane: ComputeLane | null = null) {
     this.dir = cfg.speechModelsDir;
     this.models = new ModelStore(this.dir, cfg.modelHosts);
+  }
+  /**
+   * Wait for the compute lane; the job row says what it waits for. Resolves to the release function, or null when the job was canceled
+   * (or the server stopped) while it waited.
+   */
+  private async acquireLane(jobId: string, label: string): Promise<(() => void) | null> {
+    if (!this.lane) return () => {};
+    const ctl = new AbortController();
+    this.laneWaits.set(jobId, ctl);
+    const holder = this.lane.busy().holder;
+    if (holder) this.store.updateJob(jobId, { stage: `queued (waiting for compute: ${holder})` });
+    try {
+      const release = await this.lane.acquire(label, ctl.signal);
+      if (ctl.signal.aborted) { release(); return null; }
+      return release;
+    } catch (e) {
+      if (ctl.signal.aborted) return null;
+      throw e;
+    } finally { this.laneWaits.delete(jobId); }
+  }
+  /** Stop idle kept workers so their memory (2–4 GB each) is free for other heavy work. A worker serving a request is left alone. */
+  async releaseKept(): Promise<void> {
+    const waits: Promise<unknown>[] = [];
+    for (const [key, k] of this.kept) {
+      if (k.done) continue;
+      if (k.idle) clearTimeout(k.idle);
+      this.kept.delete(key);
+      if (k.p.exitCode !== null || k.p.signalCode !== null) continue;
+      waits.push(new Promise((r) => { k.p.once('close', r); setTimeout(r, 5000).unref(); k.p.kill('SIGKILL'); }));
+    }
+    await Promise.all(waits);
   }
 
   private worker(python: string, args: string[], onLine: (o: any) => void, jobId?: string): Promise<{ code: number | null; stderr: string }> {
@@ -360,7 +396,14 @@ export class Speech {
     this.chain = this.chain.then(() => (this.store.getJob(jobId).type === NARRATE ? this.narrate(jobId) : this.run(jobId))).catch((e) => console.error(e));
   }
   private canceled(jobId: string) { return ['cancel-requested', 'canceled'].includes(this.store.getJob(jobId).status); }
+  /** Recognition holds the compute lane from start to finish. */
   private async run(jobId: string) {
+    if (this.stopped || this.store.getJob(jobId).status !== 'queued') return;
+    const release = await this.acquireLane(jobId, `speech recognition (${jobId})`);
+    if (!release) return;
+    try { await this.recognise(jobId); } finally { release(); }
+  }
+  private async recognise(jobId: string) {
     if (this.stopped || this.store.getJob(jobId).status !== 'queued') return;
     const j = this.store.getJob(jobId);
     const started = Date.now();
@@ -529,7 +572,14 @@ export class Speech {
       p.on('close', (code) => { this.running.delete(jobId); code === 0 ? resolve() : reject(new ApiError(422, 'analysis_failed', what, { tail: err.slice(-400) })); });
     });
   }
+  /** Narration holds the compute lane from start to finish. */
   private async narrate(jobId: string) {
+    if (this.stopped || this.store.getJob(jobId).status !== 'queued') return;
+    const release = await this.acquireLane(jobId, `narration (${jobId})`);
+    if (!release) return;
+    try { await this.speak(jobId); } finally { release(); }
+  }
+  private async speak(jobId: string) {
     if (this.stopped || this.store.getJob(jobId).status !== 'queued') return;
     const j = this.store.getJob(jobId);
     const started = Date.now();
@@ -618,7 +668,7 @@ export class Speech {
     const j = this.store.getJob(jobId);
     if (['succeeded', 'failed', 'canceled'].includes(j.status)) return { jobId, status: j.status, outcome: 'already-finished' };
     if (j.type === DOWNLOAD) { this.aborts.get(jobId)?.abort(); if (!this.aborts.has(jobId)) this.finishCanceled(jobId); return { jobId, status: 'canceled', outcome: 'download-stopped' }; }
-    if (j.status === 'queued') { this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: `canceled by ${actor} before it started` } }); return { jobId, status: 'canceled', outcome: 'removed-from-queue' }; }
+    if (j.status === 'queued') { this.laneWaits.get(jobId)?.abort(); this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: `canceled by ${actor} before it started` } }); return { jobId, status: 'canceled', outcome: 'removed-from-queue' }; }
     this.store.updateJob(jobId, { status: 'cancel-requested' });
     this.running.get(jobId)?.kill('SIGKILL');
     return { jobId, status: 'cancel-requested', outcome: 'stopping', note: 'the recogniser is being stopped; nothing will be attached' };
@@ -632,6 +682,7 @@ export class Speech {
   }
   async stop() {
     this.stopped = true;
+    for (const c of this.laneWaits.values()) c.abort();
     for (const c of this.aborts.values()) c.abort();
     for (const p of this.running.values()) p.kill('SIGKILL');
     for (const k of this.kept.values()) { if (k.idle) clearTimeout(k.idle); k.p.kill('SIGKILL'); }

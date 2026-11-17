@@ -13,6 +13,12 @@
  *     opens the same block for its linked sound; a reason the player gives for playing a clip without its effects is shown.
  * J. Agents over MCP: list_catalog lists audioEffects with JSON schemas; add_audio_effect on a picture clip lands on the sound linked to
  *   it; get_timeline shows audioFx, fades, reverse and tailSeconds; describe_moment lists a clip heard only through its tail.
+ * K. Voice cleanup «ניקוי קול» (ADR-0013), keyboard only, on a synthetic recording (speech-like phrases, noise at −50 dBFS, 50 Hz hum):
+ *   «נקה את הקול» (Tab, Space) measures and commits ONE revision with the three cleanup effects in their fixed order and a Hebrew
+ *   status line with the measured numbers; the scope checkbox changes nothing stored; the strength slider moves with the arrows in
+ *   the order it is seen (right to left: ArrowLeft is more) and re-commits keeping the profile, source and mains frequency;
+ *   ▶ «לפני» and ▶ «אחרי» play without changing the revision; nothing in the block animates; the a11y-audit heuristics (and axe-core,
+ *   when it is installed) find nothing in it; Ctrl+Z restores, step by step.
  *
  * Nobody has listened to these effects yet: this proof measures levels, revisions and states; it does not judge how anything sounds.
  * The accessibility checks are a copy of a11y-audit.ts's in-page heuristics (that script runs its own fixed flow on import), not a
@@ -143,6 +149,37 @@ function beepsAndGaps(levels: Level[], seconds: number) {
     else if (x >= 0.2 && x < 0.9) gaps.push(l.peak);
   }
   return { windows: levels.length, beepMax: +Math.max(0, ...beeps).toFixed(4), gapMax: +Math.max(0, ...gaps).toFixed(4), gapWindows: gaps.length };
+}
+
+/**
+ * K's fixture: a synthetic "recording", 48 kHz stereo 16-bit WAV: speech-like phrases (a 130 Hz harmonic complex shaped by three
+ * formants, syllables at 4 Hz, −20 dBFS RMS) in the first 2.1 s of every 3 s, the rest a pause; white noise at −50 dBFS RMS per
+ * channel throughout; mains hum at 50·k Hz, k = 1..4, −40 dBFS in all. Deterministic (xorshift32 + Box–Muller).
+ */
+function voiceRecording(seconds: number): Buffer {
+  const SR = 48000, n = Math.round(seconds * SR), noiseAmp = 10 ** (-50 / 20), humAmp = Math.sqrt((2 * 10 ** (-40 / 10)) / 4);
+  let st = 7;
+  const u = () => { st ^= st << 13; st >>>= 0; st ^= st >>> 17; st ^= st << 5; st >>>= 0; return (st + 0.5) / 4294967296; };
+  const g = () => Math.sqrt(-2 * Math.log(u())) * Math.cos(2 * Math.PI * u());
+  const H = 12, f0 = 130, form = [700, 1200, 2600];
+  const w = Array.from({ length: H }, (_, k) => form.reduce((a, fq) => a + 1 / (1 + (((k + 1) * f0 - fq) / 150) ** 2), 0.05));
+  const speechAmp = 10 ** (-20 / 20) / Math.sqrt(w.reduce((a, x) => a + (x * x) / 2, 0));
+  const b = Buffer.alloc(44 + n * 4);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + n * 4, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(2, 22);
+  b.writeUInt32LE(SR, 24); b.writeUInt32LE(SR * 4, 28); b.writeUInt16LE(4, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 4, 40);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR, c = t % 3, env = c < 2.1 ? Math.min(1, c / 0.01, (2.1 - c) / 0.01) * (0.55 + 0.45 * Math.sin(2 * Math.PI * 4 * t) ** 2) : 0;
+    let v = 0, hum = 0;
+    if (env > 0) for (let k = 0; k < H; k++) v += w[k]! * Math.sin(2 * Math.PI * (k + 1) * f0 * t);
+    for (let k = 1; k <= 4; k++) hum += humAmp * Math.sin(2 * Math.PI * 50 * k * t);
+    for (const ch of [0, 1]) b.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round((env * speechAmp * v + hum + noiseAmp * g()) * 32767))), 44 + i * 4 + ch * 2);
+  }
+  return b;
+}
+/** axe-core, when it is installed (it is not a dependency of this repository today): its source, to inject into the page; else null. */
+async function axeSource(): Promise<string | null> {
+  const name = 'axe-core';
+  try { const m: any = await import(name); return typeof m?.source === 'string' ? m.source : typeof m?.default?.source === 'string' ? m.default.source : null; } catch { return null; }
 }
 
 async function main() {
@@ -427,6 +464,144 @@ async function main() {
     } finally {
       await mcp.close();
     }
+
+    // =================================================================== K: «ניקוי קול»
+    console.log('# K. the «ניקוי קול» block (voice cleanup, ADR-0013), keyboard only');
+    const wavFile = path.join(art, 'voice.wav');
+    fs.writeFileSync(wavFile, voiceRecording(9));
+    const kPid = (await call('/projects', { name: 'ניקוי קול', width: 640, height: 360 })).body.project.id as string;
+    const kUp: any = await (await fetch(`${s.url}/api/v1/projects/${kPid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'voice.wav' }, body: fs.readFileSync(wavFile) })).json();
+    const kAdd = (await call(`/projects/${kPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: kUp.assetId, start: f(0) } }, { op: 'add_text', args: { text: 'סוף', start: f(270), duration: f(60) } }] })).body;
+    const kClip = kAdd.results[0].output.clipId as string;
+    const pk = await (await browser.newContext({ viewport: { width: 1500, height: 950 }, reducedMotion: 'reduce' })).newPage();
+    const kErrors: string[] = [];
+    pk.on('pageerror', (e) => kErrors.push(String(e)));
+    await pk.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } (window as any).__pfAudioTap = true; });
+    await pk.addInitScript('globalThis.__name = (f) => f');
+    await pk.goto(`${s.ownerUrl}&project=${kPid}`);
+    await pk.getByTestId('timecode').waitFor();
+    if ((await pk.evaluate(() => document.documentElement.lang)) !== 'he') await pk.getByTestId('lang-toggle').click();
+    const kRev = async () => Number((await pk.getByTestId('revision').textContent())!.replace(/\D+/g, ''));
+    const kWait = (rev: number, timeout = 15000) => pk.waitForFunction((r) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) >= r, rev, { timeout }).then(() => true, () => false);
+    const kActive = () => pk.evaluate(() => { const el = document.activeElement as HTMLElement | null; return el && el !== document.body ? { testid: el.dataset.testid ?? null, inBlock: !!el.closest('[data-testid=voice-clean]') } : null; });
+    const kTabTo = async (testid: string, max = 40) => { for (let i = 0; i < max; i++) { if ((await kActive())?.testid === testid) return i; await pk.keyboard.press('Tab'); } return (await kActive())?.testid === testid ? max : -1; };
+    const kSync = () => pk.evaluate(() => (window as any).__pfSync?.() ?? null);
+    const VC = `[data-testid=voice-clean][data-clip-id="${kClip}"]`, KB = `[data-testid=afx-block][data-clip-id="${kClip}"]`;
+    await pk.locator(`.clip[data-clip-id="${kClip}"]`).focus();
+    await pk.keyboard.press('Enter');
+    await pk.locator(VC).waitFor({ timeout: 15000 });
+    const vcState = () => pk.evaluate((b) => {
+      const q = (id: string) => document.querySelector<HTMLElement>(`${b} [data-testid=${id}]`);
+      const st = q('voice-clean-status');
+      return { status: st?.textContent ?? null, statusRole: st?.getAttribute('role') ?? null, statusLive: st?.getAttribute('aria-live') ?? null, numbersIsolated: st ? [...st.querySelectorAll('bdi')].every((x) => x.getAttribute('dir') === 'ltr') && st.querySelectorAll('bdi').length >= 4 : false,
+        badge: q('voice-clean-unlistened')?.textContent ?? null, runDisabled: (q('voice-clean-run') as HTMLButtonElement | null)?.disabled ?? null,
+        disabled: ['voice-clean-strength', 'voice-clean-before', 'voice-clean-after', 'voice-clean-remove'].map((id) => (q(id) as HTMLInputElement | null)?.disabled ?? null), strength: q('voice-clean-strength')?.getAttribute('aria-valuetext') ?? null };
+    }, VC);
+    const k0 = await vcState();
+    check('K: the «ניקוי קול» block sits at the top of «אפקטי קול», with the steady badge «טרם נבדק בהאזנה» and a polite status line; before any cleanup, strength, ▶ «לפני», ▶ «אחרי» and «הסר ניקוי» are disabled',
+      await pk.evaluate(([kb, vc]) => { const block = document.querySelector(kb); const first = block?.querySelector('h3, h4')?.nextElementSibling; return !!block && first === document.querySelector(vc); }, [KB, VC] as const)
+      && k0.badge === 'טרם נבדק בהאזנה' && k0.statusRole === 'status' && k0.statusLive === 'polite' && k0.runDisabled === false && k0.disabled.every((d) => d === true), k0);
+
+    // --- Tab to «נקה את הקול», Space: measure and commit ONE revision
+    await pk.getByTestId('sound-fade-out').focus();
+    const kTabs = await kTabTo('voice-clean-run');
+    const kr0 = await kRev();
+    const kt0 = performance.now();
+    await pk.keyboard.press('Space');
+    const kCommitted = await kWait(kr0 + 1, 60000);
+    const kMeasureSeconds = +((performance.now() - kt0) / 1000).toFixed(2);
+    await sleep(800);
+    const kS1 = await stored(kPid);
+    const kList1 = fxList(kS1.project, kClip);
+    const k1 = await vcState();
+    const kRows = await pk.locator(`${KB} [data-testid=afx-row]`).evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.type));
+    const kDenoise = kList1.find((x) => x.type === 'cleanup.denoise');
+    measurements.voiceClean = { tabsToRun: kTabs, measureAndCommitSeconds: kMeasureSeconds, status: k1.status, rows: kRows, effects: kList1, note: 'synthetic recording; levels and numbers are measurements, nobody has listened' };
+    check('K: «נקה את הקול» (Tab, Space) measures and commits ONE revision: the three cleanup effects in their fixed order (hum removal, noise reduction, speech enhancer), the noise profile measured on this recording; three rows in that order in the block',
+      kTabs >= 0 && kCommitted && kS1.revision === kr0 + 1 && (await kRev()) === kr0 + 1 && JSON.stringify(types(kList1)) === '["cleanup.dehum","cleanup.denoise","cleanup.speech"]' && JSON.stringify(kRows) === JSON.stringify(types(kList1))
+      && kDenoise?.params.source === kUp.assetId && /^[A-Za-z0-9_-]{48}$/.test(String(kDenoise?.params.profile)) && kList1.find((x) => x.type === 'cleanup.dehum')?.params.mainsHz === '50',
+      measurements.voiceClean);
+    check('K: the status line says what was measured, in Hebrew, with the numbers in left-to-right isolates (background noise, the 50 Hz hum, speech level, signal to noise, confidence), and that the cleanup was applied',
+      !!k1.status && HEBREW.test(k1.status) && /רעש רקע/.test(k1.status) && /זמזום חשמל 50 הרץ/.test(k1.status) && /יחס אות לרעש/.test(k1.status) && /הוחל/.test(k1.status) && k1.numbersIsolated, { status: k1.status, numbersIsolated: k1.numbersIsolated });
+
+    // --- the scope checkbox: Tab, Space; nothing stored
+    const kScopeTabs = await kTabTo('voice-clean-scope-asset');
+    await pk.keyboard.press('Space');
+    const kScopeOn = await pk.getByTestId('voice-clean-scope-asset').isChecked();
+    await pk.keyboard.press('Space');
+    await sleep(300);
+    check('K: «החל על כל הקטעים מאותה הקלטה» is reached by Tab and toggled by Space; it changes nothing stored', kScopeTabs >= 0 && kScopeOn && !(await pk.getByTestId('voice-clean-scope-asset').isChecked()) && (await stored(kPid)).revision === kr0 + 1, { tabs: kScopeTabs });
+
+    // --- the strength slider: the arrows in the order it is seen, one revision per step, the measured profile, source and hum kept
+    const kStrTabs = await kTabTo('voice-clean-strength');
+    const kDir = await pk.getByTestId('voice-clean-strength').evaluate((el) => getComputedStyle(el).direction);
+    const kV0 = await pk.getByTestId('voice-clean-strength').getAttribute('aria-valuetext');
+    await pk.keyboard.press('ArrowLeft');
+    const kStepped = await kWait(kr0 + 2);
+    await sleep(800);
+    const kV1 = await pk.getByTestId('voice-clean-strength').getAttribute('aria-valuetext');
+    const kS2 = await stored(kPid);
+    const kList2 = fxList(kS2.project, kClip);
+    const pct = (v: string | null) => Number((v ?? '').replace(/[^0-9.]/g, ''));
+    const kept = (a: typeof kList1, b: typeof kList1) => JSON.stringify(a.map((x) => [x.id, x.type, x.params.profile ?? null, x.params.source ?? null, x.params.mainsHz ?? null])) === JSON.stringify(b.map((x) => [x.id, x.type, x.params.profile ?? null, x.params.source ?? null, x.params.mainsHz ?? null]));
+    measurements.voiceCleanStrength = { tabs: kStrTabs, direction: kDir, before: kV0, afterArrowLeft: kV1, reductionDb: [kDenoise?.params.reductionDb, kList2.find((x) => x.type === 'cleanup.denoise')?.params.reductionDb] };
+    check('K: the strength slider, right to left, ArrowLeft is more (the order it is seen): one revision, the same three effects (same ids) with the measured profile, source and mains frequency kept and a stronger noise reduction',
+      kStrTabs >= 0 && kDir === 'rtl' && kStepped && kS2.revision === kr0 + 2 && pct(kV1) > pct(kV0) && kept(kList1, kList2) && Number(kList2.find((x) => x.type === 'cleanup.denoise')?.params.reductionDb) > Number(kDenoise?.params.reductionDb),
+      measurements.voiceCleanStrength);
+
+    // --- ▶ «לפני» and ▶ «אחרי»: played from a scratch copy, nothing stored
+    const kAud: Record<string, unknown> = {};
+    for (const which of ['before', 'after'] as const) {
+      const id = `voice-clean-${which}`;
+      const tabs = await kTabTo(id);
+      const r = await kRev();
+      await pk.keyboard.press('Space');
+      const on = await pk.waitForFunction(() => (window as any).__pfSync?.()?.auditioning === true, undefined, { timeout: 10000 }).then(() => true, () => false);
+      await sleep(1500);
+      const sy = await kSync();
+      const pressed = await pk.getByTestId(id).getAttribute('aria-pressed');
+      const animated = await pk.evaluate((b) => document.getAnimations().filter((a) => { const t = (a.effect as KeyframeEffect | null)?.target; return !!t && !!(t as Element).closest?.(b); }).length, VC);
+      await pk.keyboard.press('Space');
+      const off = await pk.waitForFunction(() => (window as any).__pfSync?.()?.auditioning === false, undefined, { timeout: 8000 }).then(() => true, () => false);
+      const levels: Level[] = sy?.audioLevels ?? [];
+      kAud[which] = { tabs, auditioning: on, pressedWhilePlaying: pressed, animated, stopped: off, windows: levels.length, peak: +Math.max(0, ...levels.map((l) => l.peak)).toFixed(4), revisionBefore: r, revisionAfter: await kRev(), stored: (await stored(kPid)).revision };
+    }
+    measurements.voiceCleanListen = { ...kAud, note: 'peaks of 50 ms windows at the preview output tap while each played; nobody has listened' };
+    const okListen = (x: any) => x.tabs >= 0 && x.auditioning && x.pressedWhilePlaying === 'true' && x.animated === 0 && x.stopped && x.revisionAfter === x.revisionBefore && x.stored === kr0 + 2 && x.peak > 0;
+    check('K: ▶ «לפני» and ▶ «אחרי» (Tab, Space) play the clip from a scratch copy (before: its cleanup switched off in the copy): the tap shows signal, the button is pressed while it plays (nothing animated), Space stops it, and the revision and the stored project do not change',
+      okListen(kAud.before) && okListen(kAud.after), measurements.voiceCleanListen);
+
+    // --- nothing in the block moves; the accessibility heuristics (and axe-core when installed) in the block
+    const kMotion = await pk.evaluate((b) => { const els = [...document.querySelectorAll(`${b}, ${b} *`)]; return { elements: els.length, animated: els.filter((e) => getComputedStyle(e).animationName !== 'none').length, transitioning: els.filter((e) => !/^0s(, 0s)*$/.test(getComputedStyle(e).transitionDuration)).length, reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches }; }, VC);
+    check('K: nothing in the «ניקוי קול» block is animated or transitions', kMotion.reducedMotion && kMotion.elements > 8 && kMotion.animated === 0 && kMotion.transitioning === 0, kMotion);
+    const kAudit = await pk.evaluate(auditInPage, VC);
+    const kNames = await pk.evaluate(controlNames, VC);
+    const kFocus = await focusWalk(pk, VC, '[data-testid=sound-fade-out]');
+    const kInBlock = kAudit.unnamed.filter((x) => x.inBlock).length + kAudit.lowContrast.filter((x) => x.inBlock).length;
+    check('K: the a11y-audit heuristics find no unnamed control and no low-contrast text in the block; every control has a Hebrew name; every Tab stop in it shows a focus ring',
+      kInBlock === 0 && kNames.length >= 6 && kNames.every((n) => HEBREW.test(n.name)) && kFocus.stops >= 3 && kFocus.missing.length === 0, { inBlock: kInBlock, unnamed: kAudit.unnamed.filter((x) => x.inBlock), lowContrast: kAudit.lowContrast.filter((x) => x.inBlock), names: kNames, focus: kFocus });
+    const axe = await axeSource();
+    if (axe) {
+      await pk.addScriptTag({ content: axe });
+      const v = await pk.evaluate(async (b) => (await (window as any).axe.run(document.querySelector(b))).violations.map((x: any) => ({ id: x.id, impact: x.impact, nodes: x.nodes.length })), VC);
+      check('K: axe-core reports 0 violations in the block', v.length === 0, v);
+    } else measurements.voiceCleanAxe = 'axe-core is not installed in this repository: only the a11y-audit heuristics above ran (no axe check, not a pass)';
+
+    // --- Ctrl+Z restores, step by step: first the strength, then the cleanup itself
+    await pk.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await pk.keyboard.press('Control+z');
+    await kWait(kr0 + 3);
+    await sleep(800);
+    const kS3 = await stored(kPid);
+    await pk.keyboard.press('Control+z');
+    await kWait(kr0 + 4);
+    await sleep(800);
+    const kS4 = await stored(kPid);
+    check('K: Ctrl+Z restores: once, the effects as «נקה את הקול» left them (same ids and settings); twice, the clip without any cleanup',
+      kS3.revision === kr0 + 3 && canon(fxList(kS3.project, kClip)) === canon(kList1) && kS4.revision === kr0 + 4 && fxList(kS4.project, kClip).length === 0 && (await vcState()).disabled.every((d) => d === true),
+      { afterFirst: types(fxList(kS3.project, kClip)), afterSecond: types(fxList(kS4.project, kClip)) });
+    check('K: no page errors', kErrors.length === 0, kErrors.slice(0, 3));
+    await pk.close();
   } catch (e) {
     console.error(e);
     check('run completed', false, String((e as Error)?.stack ?? e).slice(0, 800));
@@ -437,7 +612,7 @@ async function main() {
     const report = {
       ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED',
       machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, gpu: 'none', browser: 'headless Chromium (Playwright)' },
-      scope: 'Plan section 9, check I (the «אפקטי קול» block in the editor: keyboard flow in Hebrew, listen, A/B, names, accessibility heuristics, timeline tail, clip-tab disclosure) and the agent part of check J (list_catalog, add_audio_effect on a picture over MCP, get_timeline, describe_moment). One synthetic 4-second fixture (frame barcode with a 1 kHz beep at every second). Levels come from the measurement tap at the preview output; nobody has listened, and nothing here says how the effects sound. The accessibility checks are the a11y-audit.ts heuristics (copied: that script runs its own flow), not a WCAG conformance claim and no screen-reader or user testing. The notice of a clip played without its effects is checked with a reason set by the script, not with a real failure.',
+      scope: 'Plan section 9, check I (the «אפקטי קול» block in the editor: keyboard flow in Hebrew, listen, A/B, names, accessibility heuristics, timeline tail, clip-tab disclosure), the agent part of check J (list_catalog, add_audio_effect on a picture over MCP, get_timeline, describe_moment) and K, the voice cleanup block «ניקוי קול» (ADR-0013) on a synthetic 9-second recording (measure, one commit, strength, before/after, undo). One synthetic 4-second fixture (frame barcode with a 1 kHz beep at every second). Levels come from the measurement tap at the preview output; nobody has listened, and nothing here says how the effects sound. The accessibility checks are the a11y-audit.ts heuristics (copied: that script runs its own flow), not a WCAG conformance claim and no screen-reader or user testing. The notice of a clip played without its effects is checked with a reason set by the script, not with a real failure.',
       passed: checks.length - failed.length, total: checks.length, checks, measurements,
     };
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });

@@ -40,7 +40,10 @@ Status: accepted (Phase 0); extended in Phase 1 (see "Phase 1 additions")
   callers already had.
 - **Rule 2.** No entity may carry an id that names an inherited member: `validateProject` reports `reserved_id` for it. This is what makes ids the document
   itself holds (a clip's `assetId`, a clip id used as an override key) safe as keys everywhere, the engine and the editor included. Ids made by ops
-  (`prefix_seed…`) never collide with it; a restored archive that carries such an id is refused.
+  (`prefix_seed…`) never collide with it; a restored archive that carries such an id is refused. Phrase and word ids of a transcript are data instead (an
+  imported transcript may call a phrase `constructor`, and the main line's translation review reads them as such): every record keyed by them (a format's
+  wording, a translation's sources) is read with `own`, and only `__proto__` is refused for them, because loading drops that key and assigning under it
+  replaces a record's prototype instead of storing.
 - **Writes.** An entry is written under a generated id or under the id of an entity that was just found. `apply_recipe` with a `runId` therefore requires that
   run to exist (`not_found` otherwise); `restore_entities` refuses a reserved id instead of assigning under it.
 - `packages/core/src/own.test.ts` applies every registered op with such a name in each string argument and fails on anything but a typed refusal or an ordinary

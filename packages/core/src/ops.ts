@@ -8,7 +8,7 @@ import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
   normaliseTextStyle, TEXT_LOOK_FIELDS,
   CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
-  type AdjustmentClip, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
+  type AdjustmentClip, type Asset, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
@@ -29,6 +29,7 @@ import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequen
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 import { isInheritedName, own } from './own.ts';
+import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
@@ -252,6 +253,38 @@ function refuseFxTimeMap(clip: MediaClip, editing: 'effects' | 'speed') {
 const refuseRamped = (clip: Clip, action: string) => {
   if (isRamped(clip)) throw new OpError('incompatible', `this clip changes speed gradually over its length, so it cannot be ${action}`, { clipId: clip.id }, 'Give it one speed first (set_clip_speed), make the edit, then apply the gradual change again.');
 };
+// ---------- adjustment clips (ADR-0016): what they cannot take, said plainly ----------
+const ADJUSTMENT_HINT = 'Make this edit on the clips below the adjustment. An adjustment takes effects, a mask, a blend mode and opacity.';
+/**
+ * An adjustment clip has no source and no picture of its own: it acts on what is drawn below it. Edits that need a source
+ * or a picture of the clip's own (speed, reverse, slip, freeze, link, scenes, transitions, layouts) refuse it in these words
+ * instead of a generic refusal.
+ */
+function refuseAdjustment(clip: Clip, action: string, hint = ADJUSTMENT_HINT) {
+  if (clip.type === 'adjustment') throw new OpError('incompatible', `an adjustment clip has no source or picture of its own, so it cannot be ${action}`, { clipId: clip.id }, hint);
+}
+/** The effect types an adjustment clip refuses (validate.ts adjustmentRefusal), in the words add_adjustment uses. */
+function refuseAdjustmentEffect(clip: Clip, type: string) {
+  if (clip.type !== 'adjustment') return;
+  const why = adjustmentRefusal(type);
+  if (why) throw new OpError('incompatible', `${type} cannot go on an adjustment: ${why}`, { clipId: clip.id, type }, 'Put it on the clip itself.');
+}
+const ADJUSTMENT_FIXED = ['x', 'y', 'scale', 'rotation'] as const;
+/**
+ * An adjustment clip's transform is the identity apart from its opacity (its box is the whole frame). A position, size or
+ * turn other than the identity is refused here, with a way to limit the look to part of the frame.
+ */
+function refuseAdjustmentTransform(clip: Clip, transform: Partial<Record<(typeof ADJUSTMENT_FIXED)[number], number>> | null | undefined, verb: 'set' | 'animated') {
+  if (clip.type !== 'adjustment' || !transform) return;
+  const moved = ADJUSTMENT_FIXED.filter((p) => transform[p] !== undefined && transform[p] !== DEFAULT_TRANSFORM[p]);
+  if (moved.length) throw new OpError('incompatible', `only the opacity of an adjustment clip can be ${verb}: it has no picture of its own to move, scale or turn`, { clipId: clip.id, properties: moved }, 'Set opacity only. To limit the look to part of the frame, give the adjustment a mask (set_clip_mask).');
+}
+/** A motion on an adjustment clip may change its opacity and nothing else. */
+function refuseAdjustmentMotion(clip: Clip, name: string, properties: readonly string[]) {
+  if (clip.type !== 'adjustment') return;
+  const others = properties.filter((p) => p !== 'opacity');
+  if (others.length) throw new OpError('incompatible', `an adjustment clip can only change its opacity; ${name} also changes ${others.join(', ')}`, { clipId: clip.id, properties: others }, 'Use a fade (motion.in.fade, motion.out.fade, animate_clip fade) or an opacity loop (motion.loop.fade-pulse).');
+}
 /**
  * Make `part` the piece of `whole` that starts `fromOffset` into it and is `length` long: its source start and, for a
  * ramped clip, its place in the ramp (so the piece shows exactly what the whole showed there). `part` may be `whole`
@@ -329,7 +362,7 @@ defineOp({
 defineOp({
   name: 'remove_asset',
   version: 1,
-  description: 'Remove a file from the project library, together with its transcript and analysis results. Refused while any clip uses it, or while a colour table (LUT) effect on any clip refers to it. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
     const asset = mustAsset(d, a.assetId);
@@ -337,7 +370,13 @@ defineOp({
     if (users.length) throw new OpError('incompatible', `${users.length} clip(s) on the timeline still use this file`, { assetId: asset.id, clipIds: users.slice(0, 50) }, 'Delete those clips first.');
     const graded = lutUsers(d, asset.id);
     if (graded.length) throw new OpError('incompatible', `${graded.length} clip(s) still use this colour table in a colour table (LUT) effect`, { assetId: asset.id, clipIds: graded.slice(0, 50) }, 'Remove that effect from those clips, or choose another table for it, first.');
+    // motion tracks of the file (ADR-0015) go with it, unless a clip still follows one or hides a region with one
+    const tracks = Object.values(d.motionTracks ?? {}).filter((t) => t.assetId === asset.id).map((t) => t.id);
+    const bound = motionTrackUsers(d, new Set(tracks));
+    const boundIds = [...new Set([...bound.follow, ...bound.redact])];
+    if (boundIds.length) throw new OpError('incompatible', `${boundIds.length} clip(s) still follow a motion track of this file or hide a region with one`, { assetId: asset.id, clipIds: boundIds.slice(0, 50), motionTrackIds: tracks.slice(0, 64) }, 'Detach those clips first (set_clip_follow follow=null, set_redact_region region=null), or delete the motion track with remove_motion_track unbind=true.');
     const affected = [asset.id];
+    for (const id of tracks) { delete d.motionTracks[id]; affected.push(id); }
     if (own(d.transcripts, asset.id)) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
     if (own(d.analyses, asset.id)) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
     delete d.assets[asset.id];
@@ -556,10 +595,11 @@ defineOp({
 defineOp({
   name: 'set_clip_transform',
   version: 1,
-  description: 'Set position/scale/rotation/opacity of a picture or text clip. Unspecified fields are kept.',
+  description: 'Set position/scale/rotation/opacity of a picture or text clip. Unspecified fields are kept. An adjustment clip has only its opacity (position, size and rotation stay at the identity).',
   args: z.object({ clipId: z.string(), transform: TransformSchema.partial() }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseAdjustmentTransform(clip, a.transform, 'set');
     clip.transform = { ...clip.transform, ...a.transform };
     return { affectedIds: [clip.id], summary: `Transformed clip ${clip.id}` };
   },
@@ -569,10 +609,11 @@ const KfTarget = { clipId: z.string(), property: z.enum(ANIMATABLE), time: RT.de
 defineOp({
   name: 'set_keyframe',
   version: 1,
-  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key.',
+  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key. An adjustment clip animates its opacity only.',
   args: z.object({ ...KfTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear') }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    if (a.property !== 'opacity') refuseAdjustmentTransform(clip, { [a.property]: NaN }, 'animated'); // any key on these properties, whatever its value
     assertAligned(d, a.time, 'time');
     if (!TransformSchema.shape[a.property].safeParse(a.value).success) throw new OpError('invalid_args', `value ${a.value} is out of range for ${a.property}`, { property: a.property });
     const keys = [...(clip.keyframes?.[a.property] ?? [])];
@@ -632,6 +673,7 @@ defineOp({
   args: z.object({ clipId: z.string(), speed: z.number().min(0.1).max(8), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have a speed', { clipId: a.clipId });
     if (f.clip.freeze) throw new OpError('incompatible', 'a freeze frame has no speed', { clipId: a.clipId }, 'Trim it to change how long the picture is held.');
     const rate = d.settings.frameRate;
@@ -661,6 +703,7 @@ defineOp({
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), curve: z.enum(['even', 'smooth']).optional().describe('even (default) = the speed changes at a steady pace; smooth = it eases out of the first speed and into the last'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const v0 = speedFromNumber(a.from), v1 = speedFromNumber(a.to);
@@ -704,6 +747,7 @@ defineOp({
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), steps: z.number().int().min(2).max(24).optional().describe('Default 8'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const steps = a.steps ?? 8;
@@ -775,6 +819,7 @@ defineOp({
     if (!segments) throw new OpError('invalid_args', 'points must start at 0, end at 1 and be in increasing order (positions are taken to a thousandth)', { points: a.points });
     const smooth = preset ? preset.smooth : a.smooth !== false;
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const lead = f.clip as MediaClip;
@@ -966,6 +1011,7 @@ defineOp({
   args: z.object({ clipId: z.string(), gain: z.number().min(0).max(8) }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseAdjustment(clip, 'given a sound level');
     if (clip.type !== 'media') throw new OpError('incompatible', 'gain applies to media clips', { clipId: a.clipId });
     clip.gain = a.gain;
     return { affectedIds: [clip.id], summary: `Set gain of ${clip.id} to ${a.gain}` };
@@ -986,6 +1032,9 @@ defineOp({
     let target = f.track;
     if (a.trackId && a.trackId !== f.track.id) {
       target = mustTrack(f.seq, a.trackId);
+      // Adjustment clips live only on adjustment tracks, and those hold nothing else (ADR-0016): said here rather than by validation afterwards.
+      if (f.clip.type === 'adjustment' && target.kind !== 'adjustment') throw new OpError('incompatible', `an adjustment goes on an adjustment track, not on ${target.kind} track ${target.id}`, { trackId: target.id }, 'Choose another adjustment track, or leave trackId out.');
+      if (f.clip.type !== 'adjustment' && target.kind === 'adjustment') throw new OpError('incompatible', `only adjustment clips go on adjustment track ${target.id}`, { trackId: target.id }, `Choose a ${f.track.kind} track.`);
       if (target.kind !== f.track.kind) throw new OpError('incompatible', `cannot move a ${f.track.kind} clip to a ${target.kind} track`, { trackId: target.id });
     }
     for (const m of [{ track: target, clip: f.clip }, ...others]) {
@@ -1070,6 +1119,7 @@ defineOp({
     if (T.eq(a.by, T.ZERO)) throw new OpError('invalid_args', 'by must not be zero');
     const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
     for (const { clip } of targets) {
+      refuseAdjustment(clip, 'slipped');
       if (clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be slipped', { clipId: clip.id });
       refuseRamped(clip, 'slipped');
       const asset = d.assets[clip.assetId]!;
@@ -1110,6 +1160,7 @@ defineOp({
     const found = a.clipIds.map((id) => mustClip(d, id));
     const first = found[0]!.clip;
     for (const f of found) {
+      refuseAdjustment(f.clip, 'linked');
       if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be linked', { clipId: f.clip.id });
       // a link id that no other clip carries (left in a project saved before edits cleared such ids) links to nothing
       if (partnersOf(d, f.clip).length) throw new OpError('incompatible', 'this clip is already linked', { clipId: f.clip.id }, 'Use unlink_clip first.');
@@ -1132,6 +1183,7 @@ defineOp({
   args: z.object({ clipId: z.string(), keepPitch: z.boolean() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a pitch setting');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have sound to stretch', { clipId: a.clipId });
     const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...linked(d, f.clip)].filter((t) => t.track.kind === 'audio' && !!d.assets[t.clip.assetId]?.audio);
     if (!targets.length) throw new OpError('incompatible', 'this clip has no sound clip', { clipId: a.clipId }, 'Give the sound clip, or a picture clip that is linked to one.');
@@ -1148,6 +1200,7 @@ defineOp({
   args: z.object({ clipId: z.string(), reverse: z.boolean(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'played backwards');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can play backwards', { clipId: a.clipId });
     const others = linked(d, f.clip);
     const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : others)];
@@ -1230,6 +1283,7 @@ defineOp({
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
     const src = f.clip;
+    refuseAdjustment(src, 'held on a freeze frame');
     const asset = src.type === 'media' ? d.assets[src.assetId] : undefined;
     if (src.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'a freeze frame needs a video clip on a video track', { clipId: a.clipId });
     if (src.freeze) throw new OpError('incompatible', 'this clip is already a freeze frame', { clipId: a.clipId }, 'Trim it to make the hold longer or shorter.');
@@ -1246,6 +1300,8 @@ defineOp({
       transform: { ...transformAt(src, a.at) },
       ...(src.effects ? { effects: src.effects.map((fx) => { const { keyframes: _k, ...rest } = fx; return { ...structuredClone(rest), id: ctx.newId('fx'), params: { ...effectParamsAt(fx, local) } }; }) } : {}),
       ...(src.blend ? { blend: src.blend } : {}), ...(src.mask ? { mask: structuredClone(src.mask) } : {}),
+      // privacy regions (ADR-0015) stay on the held picture, resolved at its own source frame; a follow goes on too
+      ...(src.redact ? { redact: structuredClone(src.redact) } : {}), ...(src.follow ? { follow: { ...src.follow } } : {}),
     };
     const affected = new Set<string>([held.id]);
     const created: string[] = [held.id];
@@ -1408,6 +1464,7 @@ defineOp({
     for (const [kind, name, frames] of [['in', enter, nIn], ['out', exit, nOut]] as const) {
       if (name === 'none') continue;
       const made = animateClipKeys(kind, name, { totalFrames: total, rest: clip.transform, frames });
+      refuseAdjustmentMotion(clip, name, Object.keys(made));
       placeMotion(clip, rate, kind, made);
       for (const p of Object.keys(made)) props.add(p);
     }
@@ -1424,6 +1481,7 @@ defineOp({
     const { clip, track } = mustClip(d, a.clipId);
     if (clip.type === 'caption' || track.kind === 'audio') throw new OpError('incompatible', 'only text and picture clips can be animated', { clipId: clip.id });
     const preset = MOTION_PRESETS.find((m) => m.id === a.presetId)!;
+    refuseAdjustmentMotion(clip, preset.id, preset.properties);
     const rate = d.settings.frameRate;
     const total = T.frameIndexAt(clip.duration, rate);
     if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
@@ -1481,6 +1539,51 @@ defineOp({
 });
 
 // ---------- recipes (SPEC §23): a planned list of ordinary ops applied and recorded as one step ----------
+// The run machinery below is shared by apply_recipe and apply_template (templateOps.ts, ADR-0016).
+/**
+ * Regeneration of a run: remove the previous run's untouched clips (ids that no longer exist are skipped; a clip on a locked
+ * track stops the edit). A clip of that run that was edited by hand stays; if what it was linked to goes, it is no longer
+ * linked. Returns the ids this changed.
+ */
+export function removeRunClips(d: ProjectDocument, clipIds: readonly string[]): string[] {
+  const affected: string[] = [];
+  const left = new Set<string>(); // link groups that lose a clip here
+  for (const id of clipIds) {
+    const f = findClip(d, id);
+    if (!f) continue;
+    if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: id });
+    f.track.clips.splice(f.index, 1);
+    for (const g of linkIdsOf([f.clip])) left.add(g);
+    affected.push(id);
+  }
+  // the previous run's clip that was edited by hand stays; if what it was linked to goes, it is no longer linked
+  affected.push(...dissolveLoneLinks(d, left));
+  return affected;
+}
+/** The ids an operation's output names as made by it: clipId, audioClipId, trackId, variantId and createdClipIds. */
+export function createdIdsOf(out: Readonly<Record<string, unknown>>): string[] {
+  const ids: string[] = [];
+  for (const key of ['clipId', 'audioClipId', 'trackId', 'variantId'] as const) if (typeof out[key] === 'string') ids.push(out[key] as string);
+  if (Array.isArray(out.createdClipIds)) ids.push(...(out.createdClipIds as string[]));
+  return ids;
+}
+/**
+ * What a run record keeps of the ids a run made: those that still exist (clips, variants, tracks), and the content
+ * fingerprint of each clip among them. Clips kept from an earlier run keep their ORIGINAL fingerprint (`previous`), so they
+ * stay recognisable as hand-edited next time too.
+ */
+export function runFingerprints(d: ProjectDocument, created: readonly string[], keepIds: readonly string[], previous: Readonly<Record<string, string>>): { createdIds: string[]; fingerprints: Record<string, string> } {
+  const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!own(d.variants, x) || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
+  const fingerprints: Record<string, string> = {};
+  for (const cid of createdIds) {
+    const f = findClip(d, cid);
+    if (!f) continue;
+    // Clips kept from an earlier run keep their ORIGINAL fingerprint, so they stay recognisable as hand-edited next time too.
+    const original = keepIds.includes(cid) ? own(previous, cid) : undefined;
+    fingerprints[cid] = original || fingerprint(f.clip);
+  }
+  return { createdIds, fingerprints };
+}
 defineOp({
   name: 'apply_recipe',
   version: 1,
@@ -1491,18 +1594,7 @@ defineOp({
     // Regeneration replaces an existing run. A run id the project does not hold is refused rather than written under whatever key the caller chose.
     const prior = a.runId === undefined ? undefined : own(d.recipeRuns, a.runId);
     if (a.runId !== undefined && !prior) throw new OpError('not_found', `recipe run ${a.runId} not found`, { runId: a.runId });
-    const affected = new Set<string>();
-    const left = new Set<string>(); // link groups that lose a clip here
-    for (const id of a.removeClipIds ?? []) {
-      const f = findClip(d, id);
-      if (!f) continue;
-      if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId: id });
-      f.track.clips.splice(f.index, 1);
-      for (const g of linkIdsOf([f.clip])) left.add(g);
-      affected.add(id);
-    }
-    // the previous run's clip that was edited by hand stays; if what it was linked to goes, it is no longer linked
-    for (const id of dissolveLoneLinks(d, left)) affected.add(id);
+    const affected = new Set<string>(removeRunClips(d, a.removeClipIds ?? []));
     const created: string[] = [...(a.keepIds ?? [])];
     for (const [i, call] of a.ops.entries()) {
       const def = getOp(call.op);
@@ -1512,21 +1604,11 @@ defineOp({
       refuseInheritedIds(parsed.data, `recipe step ${i} (${call.op})`, '', def.checksOwnIds);
       const r = def.apply(d, parsed.data, ctx);
       for (const id of r.affectedIds) affected.add(id);
-      const out = r.output ?? {};
-      for (const key of ['clipId', 'audioClipId', 'trackId', 'variantId'] as const) if (typeof out[key] === 'string') created.push(out[key] as string);
-      if (Array.isArray(out.createdClipIds)) created.push(...(out.createdClipIds as string[]));
+      created.push(...createdIdsOf(r.output ?? {}));
     }
     const id = a.runId ?? ctx.newId('run');
     const previous = prior?.fingerprints ?? {};
-    const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!own(d.variants, x) || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
-    const fingerprints: Record<string, string> = {};
-    for (const cid of createdIds) {
-      const f = findClip(d, cid);
-      if (!f) continue;
-      // Clips kept from an earlier run keep their ORIGINAL fingerprint, so they stay recognisable as hand-edited next time too.
-      const original = (a.keepIds ?? []).includes(cid) ? own(previous, cid) : undefined;
-      fingerprints[cid] = original || fingerprint(f.clip);
-    }
+    const { createdIds, fingerprints } = runFingerprints(d, created, a.keepIds ?? [], previous);
     d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps };
     affected.add(id);
     return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} recipe ${a.recipeId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: { runId: id, createdIds } };
@@ -1653,6 +1735,7 @@ defineOp({
     if (f.track.kind === 'audio') throw new OpError('incompatible', 'format overrides apply to picture, title and caption clips', { clipId: a.clipId });
     // a caption cue can be reworded or hidden per format; where and how captions are drawn is the caption style (update_variant.captionStyle)
     if (f.clip.type === 'caption' && (a.transform != null || a.textStyle != null)) throw new OpError('incompatible', 'a caption cue can only be reworded or hidden per format; position and style come from the caption style of the format', { clipId: a.clipId }, 'Use update_variant with captionStyle.');
+    refuseAdjustmentTransform(f.clip, a.transform, 'set'); // per format too: an adjustment has only its opacity
     const cur = own(v.overrides, f.clip.id) ?? {};
     const next = { ...cur };
     if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
@@ -1850,6 +1933,7 @@ defineOp({
   args: z.object({ clipId: z.string(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'split at scene cuts');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have scenes', { clipId: a.clipId });
     const cuts = d.analyses[f.clip.assetId]?.scenes?.cuts;
     if (!cuts) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
@@ -2208,7 +2292,7 @@ defineOp({
 // ---------- effects, blend, mask, transitions (SPEC §8, §13) ----------
 const pictureClip = (d: ProjectDocument, clipId: string) => {
   const f = mustClip(d, clipId);
-  if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture and title clips', { clipId });
+  if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture, title and adjustment clips', { clipId });
   return f;
 };
 /**
@@ -2250,6 +2334,7 @@ defineOp({
   args: z.object({ clipId: z.string(), lookId: z.string() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, 'color.grade');
     const params = lookParams(a.lookId);
     if (!params) throw new OpError('not_found', `colour look "${a.lookId}" does not exist`, { lookId: a.lookId }, 'Call list_catalog for the looks.');
     const list = [...(clip.effects ?? [])];
@@ -2309,6 +2394,7 @@ defineOp({
   args: z.object({ clipId: z.string(), assetId: z.string().min(1).max(64), intensity: z.number().min(0).max(1).optional() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, 'color.lut');
     const list = [...(clip.effects ?? [])];
     const at = list.findIndex((e) => e.type === 'color.lut');
     const params = parseEffect('color.lut', { lut: a.assetId, intensity: a.intensity ?? (at >= 0 ? list[at]!.params.intensity : undefined) });
@@ -2337,15 +2423,22 @@ defineOp({
   args: z.object({ clipId: z.string(), type: z.string(), params: z.record(z.string(), z.unknown()).optional(), index: z.number().int().min(0).optional() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, a.type);
     const list = [...(clip.effects ?? [])];
     if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
     const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
     assertLutRef(d, fx.type, fx.params);
     list.splice(effectSlot(list, a.type, a.index), 0, fx);
+    refuseFollowTimeEffect(clip, list);
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Added effect ${a.type}`, output: { effectId: fx.id, params: fx.params } };
   },
 });
+/** A clip that follows a motion track (ADR-0015) cannot have a time effect as its first enabled effect (wave 1: the follow is resolved per frame, not per earlier picture). */
+const refuseFollowTimeEffect = (clip: Clip, list: readonly EffectInstance[]) => {
+  const first = list.find((e) => e.enabled);
+  if (clip.follow && first && isTimeEffect(first.type)) throw new OpError('incompatible', FOLLOW_TIME_EFFECT, { clipId: clip.id, effect: first.type }, 'Detach the clip from its motion track first (set_clip_follow follow=null), or put the time effect on another clip.');
+};
 const mustEffect = (clip: Clip, effectId: string) => {
   const i = (clip.effects ?? []).findIndex((e) => e.id === effectId);
   if (i < 0) throw new OpError('not_found', `effect ${effectId} not found on clip ${clip.id}`, { effectId, clipId: clip.id });
@@ -2362,10 +2455,12 @@ defineOp({
     const i = mustEffect(clip, a.effectId);
     const list = [...clip.effects!];
     const fx = { ...list[i]! };
+    refuseAdjustmentEffect(clip, fx.type); // changed or moved, it is still an effect the adjustment may carry
     if (a.params) { fx.params = parseEffect(fx.type, { ...fx.params, ...a.params }); assertLutRef(d, fx.type, fx.params); }
     if (a.enabled !== undefined) fx.enabled = a.enabled;
     list.splice(i, 1);
     list.splice(effectSlot(list, fx.type, a.index ?? i), 0, fx);
+    refuseFollowTimeEffect(clip, list);
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Updated effect ${fx.type}${a.enabled === false ? ' (bypassed)' : ''}`, output: { params: fx.params } };
   },
@@ -2466,11 +2561,11 @@ defineOp({
 defineOp({
   name: 'set_clip_mask',
   version: 1,
-  description: 'Set, change or clear (mask=null) a rectangle/ellipse mask on a picture clip. Position and size are fractions of the clip\'s own picture, so the mask moves and scales with it. Unspecified fields keep their current value (or the default for a new mask).',
+  description: 'Set, change or clear (mask=null) a rectangle/ellipse mask on a picture clip or an adjustment clip. On a picture, position and size are fractions of the clip\'s own picture, so the mask moves and scales with it; on an adjustment they are fractions of the frame, and the look applies inside the mask only (outside it when inverted). Unspecified fields keep their current value (or the default for a new mask).',
   args: z.object({ clipId: z.string(), mask: MaskSchema.partial().nullable() }).strict(),
   apply(d, a) {
     const { clip, track } = pictureClip(d, a.clipId);
-    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'masks apply to picture clips on video tracks', { clipId: clip.id });
+    if (!(clip.type === 'media' && track.kind === 'video') && !(clip.type === 'adjustment' && track.kind === 'adjustment')) throw new OpError('incompatible', 'masks apply to picture clips on video tracks and to adjustment clips', { clipId: clip.id });
     if (a.mask === null) { delete clip.mask; return { affectedIds: [clip.id], summary: 'Removed mask' }; }
     clip.mask = { ...(clip.mask ?? DEFAULT_MASK), ...a.mask };
     return { affectedIds: [clip.id], summary: `Mask ${clip.mask.shape}${clip.mask.invert ? ' (inverted)' : ''}`, output: { mask: clip.mask } };
@@ -2489,6 +2584,7 @@ defineOp({
     const order = new Map<Track, number>();
     for (const seq of Object.values(d.sequences)) seq.tracks.forEach((t, i) => order.set(t, i));
     const sorted = found.map((f) => {
+      refuseAdjustment(f.clip, 'arranged in a layout', 'A layout arranges picture clips. To limit a look to part of the frame, give the adjustment a mask (set_clip_mask).');
       if (f.clip.type !== 'media' || f.track.kind !== 'video') throw new OpError('incompatible', 'a layout arranges picture clips on video tracks', { clipId: f.clip.id });
       const asset = d.assets[f.clip.assetId]!;
       const size = asset.video ?? asset.image;
@@ -2577,6 +2673,7 @@ function checkTransition(d: ProjectDocument, track: Track, clip: MediaClip, tr: 
 }
 const transitionTarget = (d: ProjectDocument, clipId: string): { clip: MediaClip; track: Track } => {
   const { clip, track } = pictureClip(d, clipId);
+  refuseAdjustment(clip, 'given a transition', 'Fade the adjustment in or out with its opacity instead (apply_motion_preset motion.in.fade or motion.out.fade).');
   if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
   return { clip, track };
 };
@@ -2641,6 +2738,311 @@ export function velocityLimit(d: ProjectDocument, clipId: string): { maxVelocity
   return { maxVelocity, haveOutFrames: haveOut, haveHeadFrames: haveHead, refusal: maxVelocity > 1 ? null : refusal };
 }
 
+// ---------- motion tracking (ADR-0015) ----------
+/** Last source frame of a video asset, numbered as sourceFrameIndexAt (speed.ts) numbers the frames a clip shows. */
+export const lastSourceFrame = (asset: Asset): number => {
+  const v = asset.video;
+  if (!v) return -1;
+  return v.frameCount !== null ? v.frameCount - 1 : Math.max(0, T.frameIndexAt(asset.duration, v.frameRate) - 1);
+};
+const mustMotionTrack = (d: ProjectDocument, id: string): MotionTrack => {
+  // an own entry only: refuseInheritedIds already refuses names such as "__proto__"; this keeps the lookup honest on its own too
+  const t = own(d.motionTracks, id);
+  if (!t) throw new OpError('not_found', `motion track ${id} not found`, { motionTrackId: id }, 'get_motion_track describes a track; motion track ids start with mtk_.');
+  return t;
+};
+/** The clips (in every sequence) that follow a motion track, or carry a privacy region that follows it. */
+export function motionTrackUsers(d: ProjectDocument, motionTrackIds: ReadonlySet<string>): { follow: string[]; redact: string[] } {
+  const follow: string[] = [], redact: string[] = [];
+  for (const seq of Object.values(d.sequences))
+    for (const t of seq.tracks)
+      for (const c of t.clips) {
+        if (c.follow && motionTrackIds.has(c.follow.motionTrackId)) follow.push(c.id);
+        if (c.type === 'media' && c.redact?.some((r) => r.motionTrackId !== null && motionTrackIds.has(r.motionTrackId))) redact.push(c.id);
+      }
+  return { follow, redact };
+}
+/** Refuse a track of n samples, past the per-track cap. Edits that grow a track call it with the final span BEFORE growing the columns, so a far-away frame is refused without building millions of samples first. */
+function assertTrackLength(motionTrackId: string, n: number) {
+  if (n > MAX_TRACK_SAMPLES) throw new OpError('out_of_bounds', `a motion track can hold at most ${MAX_TRACK_SAMPLES} samples; this edit would make ${n}`, { motionTrackId, samples: n, max: MAX_TRACK_SAMPLES }, 'Track a shorter stretch of the video.');
+}
+/** Refuse a track that would hold too many samples, alone or with the project's other tracks (tracking.ts caps). */
+function assertTrackCaps(d: ProjectDocument, t: MotionTrack) {
+  const n = t.x.length;
+  assertTrackLength(t.id, n);
+  const total = Object.values(d.motionTracks ?? {}).reduce((sum, x) => sum + (x.id === t.id ? 0 : x.x.length), n);
+  if (total > MAX_PROJECT_TRACK_SAMPLES) throw new OpError('out_of_bounds', `the motion tracks of a project can hold at most ${MAX_PROJECT_TRACK_SAMPLES} samples in all; this edit would make ${total}`, { samples: total, max: MAX_PROJECT_TRACK_SAMPLES }, 'Delete a motion track that is no longer needed (remove_motion_track), or track a shorter stretch.');
+}
+/** The sample columns of a track being edited. `filled` marks samples made only to close a gap (unknown, placed later at the nearest known sample). */
+interface Columns { from: number; x: number[]; y: number[]; s: number[] | null; q: number[]; st: number[]; filled: boolean[] }
+const columnsOf = (t: MotionTrack): Columns => ({ from: t.from, x: [...t.x], y: [...t.y], s: t.s ? [...t.s] : null, q: [...t.q], st: [...t.st], filled: t.x.map(() => false) });
+/** Grow the columns to cover [lo, hi) with gap samples (unknown, confidence 0). */
+function extendColumns(c: Columns, lo: number, hi: number) {
+  if (lo < c.from) {
+    const k = c.from - lo;
+    // concat, never unshift(...spread): a spread passes one argument per frame and overflows the call stack past ~125,000 frames
+    const gap = <X,>(v: X): X[] => new Array<X>(k).fill(v);
+    c.x = gap(0).concat(c.x); c.y = gap(0).concat(c.y); if (c.s) c.s = gap(SIZE_UNIT).concat(c.s); c.q = gap(0).concat(c.q); c.st = gap<number>(ST.unknown).concat(c.st); c.filled = gap(true).concat(c.filled);
+    c.from = lo;
+  }
+  const end = c.from + c.x.length;
+  if (hi > end) for (let f = end; f < hi; f++) { c.x.push(0); c.y.push(0); c.s?.push(SIZE_UNIT); c.q.push(0); c.st.push(ST.unknown); c.filled.push(true); }
+}
+/** Place every gap sample at the nearest sample that is not a gap sample (the earlier one on a tie). */
+function settleGaps(c: Columns) {
+  const n = c.x.length;
+  const prev = new Array<number>(n).fill(-1), next = new Array<number>(n).fill(-1);
+  for (let i = 0, p = -1; i < n; i++) { if (!c.filled[i]) p = i; prev[i] = p; }
+  for (let i = n - 1, q = -1; i >= 0; i--) { if (!c.filled[i]) q = i; next[i] = q; }
+  for (let i = 0; i < n; i++) {
+    if (!c.filled[i]) continue;
+    const a = prev[i]!, b = next[i]!;
+    const j = a < 0 ? b : b < 0 ? a : i - a <= b - i ? a : b;
+    if (j < 0) continue;
+    c.x[i] = c.x[j]!; c.y[i] = c.y[j]!; if (c.s) c.s[i] = c.s[j]!;
+  }
+}
+const writeColumns = (t: MotionTrack, c: Columns) => {
+  t.from = c.from; t.x = c.x; t.y = c.y; t.q = c.q; t.st = c.st;
+  if (c.s) t.s = c.s; else delete t.s;
+};
+/** The source stretch [from, to) of a track edit, which must lie inside the track. */
+function spanIn(c: Columns, span: { from: number; to: number }, what: string): [number, number] {
+  const end = c.from + c.x.length;
+  if (!(span.from < span.to)) throw new OpError('invalid_args', `${what}: the stretch must end after it starts (to is one past its last frame)`, { from: span.from, to: span.to });
+  if (span.from < c.from || span.to > end) throw new OpError('out_of_bounds', `${what}: the stretch must lie inside the track (source frames ${c.from} to ${end - 1})`, { from: span.from, to: span.to, trackFrom: c.from, trackTo: end }, 'Add samples with set first, or choose a stretch inside the track.');
+  return [span.from - c.from, span.to - c.from];
+}
+
+defineOp({
+  name: 'create_motion_track',
+  version: 1,
+  description: 'Start a motion track on a video file (ADR-0015): one hand-placed sample at a SOURCE frame of the file (frame 0 = its first picture; describe_moment gives the sourceFrameIndex a clip shows). x and y are the point (or the centre of the box) in 1/10000 of the picture\'s width and height; kind=region also takes the box size w, h in the same units. The tracking job (track_motion) then follows it through the video without any AI model. Output: motionTrackId.',
+  args: TrackOpArgs.create_motion_track,
+  apply(d, a, ctx) {
+    const asset = mustAsset(d, a.assetId);
+    if (!asset.video) throw new OpError('incompatible', 'a motion track follows something in a video; this file has no video', { assetId: asset.id, kind: asset.kind }, 'Choose a video file.');
+    const last = lastSourceFrame(asset);
+    if (a.frame > last) throw new OpError('out_of_bounds', `frame ${a.frame} is past the last frame of the video (${last})`, { frame: a.frame, lastFrame: last });
+    if (a.kind === 'region' && (a.w === undefined || a.h === undefined)) throw new OpError('invalid_args', 'a region track needs the size of its box (w and h)', { kind: a.kind });
+    if (a.kind === 'point' && (a.w !== undefined || a.h !== undefined)) throw new OpError('invalid_args', 'a point track has no box: w and h belong to region tracks', { kind: a.kind });
+    const count = Object.keys(d.motionTracks ?? {}).length;
+    if (count >= MAX_MOTION_TRACKS) throw new OpError('out_of_bounds', `a project can hold at most ${MAX_MOTION_TRACKS} motion tracks`, { max: MAX_MOTION_TRACKS }, 'Delete a motion track that is no longer needed (remove_motion_track).');
+    const id = ctx.newId('mtk');
+    const track: MotionTrack = {
+      id, assetId: asset.id, name: a.name ?? `Track ${count + 1}`, kind: a.kind, from: a.frame,
+      ...(a.kind === 'region' ? { box: { w: a.w!, h: a.h! } } : {}),
+      x: [a.x], y: [a.y], ...(a.kind === 'region' ? { s: [SIZE_UNIT] } : {}), q: [100], st: [ST.manual],
+      origin: { method: 'manual', params: {}, createdAt: 'op', createdBy: ctx.actor, edited: false },
+    };
+    assertTrackCaps(d, track);
+    (d.motionTracks ??= {})[id] = track;
+    return { affectedIds: [id], summary: `Started ${a.kind} motion track "${track.name.slice(0, 40)}" at source frame ${a.frame}`, output: { motionTrackId: id } };
+  },
+});
+defineOp({
+  name: 'attach_motion_track',
+  version: 1,
+  internal: true,
+  description: 'Attach tracked samples measured by the server\'s tracking job (ADR-0015) for source frames [from, from+n). Hand-placed (manual) samples are kept; the track grows to cover the new stretch, and frames between the old and the new stretch become unknown.',
+  args: TrackOpArgs.attach_motion_track,
+  apply(d, a, ctx) {
+    const t = mustMotionTrack(d, a.motionTrackId);
+    const asset = mustAsset(d, t.assetId);
+    const n = a.x.length;
+    if (a.y.length !== n || a.q.length !== n || a.st.length !== n || (a.s && a.s.length !== n)) throw new OpError('invalid_args', 'x, y, s, q and st must have the same length', { x: n, y: a.y.length, s: a.s?.length ?? null, q: a.q.length, st: a.st.length });
+    if (!!a.s !== (t.kind === 'region')) throw new OpError('invalid_args', t.kind === 'region' ? 'a region track needs sizes (s)' : 'a point track has no sizes (s)', { kind: t.kind });
+    if (a.st.includes(ST.manual)) throw new OpError('invalid_args', 'measured samples cannot be marked manual', {});
+    const last = lastSourceFrame(asset);
+    if (a.from + n - 1 > last) throw new OpError('out_of_bounds', `the samples reach past the last frame of the video (${last})`, { from: a.from, samples: n, lastFrame: last });
+    const oldEnd = t.from + t.x.length, newEnd = a.from + n;
+    assertTrackLength(t.id, Math.max(oldEnd, newEnd) - Math.min(t.from, a.from)); // before the columns are built
+    const c: Columns = { from: Math.min(t.from, a.from), x: [], y: [], s: t.s ? [] : null, q: [], st: [], filled: [] };
+    for (let f = c.from, hi = Math.max(oldEnd, newEnd); f < hi; f++) {
+      const o = f >= t.from && f < oldEnd ? f - t.from : -1, k = f >= a.from && f < newEnd ? f - a.from : -1;
+      if (k >= 0 && !(o >= 0 && t.st[o] === ST.manual)) { c.x.push(a.x[k]!); c.y.push(a.y[k]!); c.s?.push(a.s![k]!); c.q.push(a.q[k]!); c.st.push(a.st[k]!); c.filled.push(false); }
+      else if (o >= 0) { c.x.push(t.x[o]!); c.y.push(t.y[o]!); c.s?.push(t.s![o]!); c.q.push(t.q[o]!); c.st.push(t.st[o]!); c.filled.push(false); }
+      else { c.x.push(0); c.y.push(0); c.s?.push(SIZE_UNIT); c.q.push(0); c.st.push(ST.unknown); c.filled.push(true); }
+    }
+    settleGaps(c);
+    // hand edits survive only outside the stretch measured now (manual samples are kept everywhere: they are anchors, not edits)
+    const edited = t.origin.edited && (t.from < a.from || oldEnd > newEnd);
+    const next: MotionTrack = { ...t, origin: { method: a.method, params: a.params, createdAt: a.createdAt, createdBy: ctx.actor, edited } };
+    writeColumns(next, c);
+    assertTrackCaps(d, next);
+    d.motionTracks[t.id] = next;
+    return { affectedIds: [t.id], summary: `Attached ${n} tracked samples to "${t.name.slice(0, 40)}"` };
+  },
+});
+defineOp({
+  name: 'edit_motion_track',
+  version: 1,
+  description: 'Correct a motion track by hand (ADR-0015), in this order: rename it; `set` places samples at SOURCE frames (state manual, kept by later tracking runs; a frame outside the track extends it, and the frames between become unknown); `markLost` marks the stretch [from, to) lost, holding the last usable position before it; `interpolate` fills [from, to) on a straight line between the usable samples on either side (hand-placed samples inside are kept). Frames are source frames; `to` is one past the last frame. Any change of samples marks the track as edited.',
+  args: TrackOpArgs.edit_motion_track,
+  apply(d, a) {
+    const t = mustMotionTrack(d, a.motionTrackId);
+    if (a.name === undefined && !a.set && !a.markLost && !a.interpolate) throw new OpError('invalid_args', 'nothing to change: give name, set, markLost or interpolate');
+    const next: MotionTrack = { ...t };
+    if (a.name !== undefined) next.name = a.name;
+    const changesSamples = !!(a.set || a.markLost || a.interpolate);
+    if (changesSamples) {
+      const c = columnsOf(t);
+      if (a.set) {
+        const asset = mustAsset(d, t.assetId), last = lastSourceFrame(asset);
+        const frames = new Set<number>();
+        for (const p of a.set) {
+          if (frames.has(p.frame)) throw new OpError('invalid_args', `frame ${p.frame} is set twice`, { frame: p.frame });
+          frames.add(p.frame);
+          if (p.frame > last) throw new OpError('out_of_bounds', `frame ${p.frame} is past the last frame of the video (${last})`, { frame: p.frame, lastFrame: last });
+          if (p.s !== undefined && t.kind !== 'region') throw new OpError('invalid_args', 'a point track has no sizes (s)', { kind: t.kind });
+        }
+        // the span the track would cover, checked before any column grows
+        let lo = c.from, hi = c.from + c.x.length;
+        for (const p of a.set) { lo = Math.min(lo, p.frame); hi = Math.max(hi, p.frame + 1); }
+        assertTrackLength(t.id, hi - lo);
+        for (const p of [...a.set].sort((x, y) => x.frame - y.frame)) {
+          const s = p.s ?? trackSampleAt(t, p.frame).s; // a region sample without a size keeps the size the track has there (or at its nearest end)
+          extendColumns(c, Math.min(c.from, p.frame), Math.max(c.from + c.x.length, p.frame + 1));
+          const i = p.frame - c.from;
+          c.x[i] = p.x; c.y[i] = p.y; if (c.s) c.s[i] = s; c.q[i] = 100; c.st[i] = ST.manual; c.filled[i] = false;
+        }
+        settleGaps(c);
+      }
+      if (a.markLost) {
+        const [i0, i1] = spanIn(c, a.markLost, 'markLost');
+        let h = -1;
+        for (let i = i0 - 1; i >= 0 && h < 0; i--) if (isUsable(c.st[i]!)) h = i;
+        for (let i = i1; i < c.x.length && h < 0; i++) if (isUsable(c.st[i]!)) h = i;
+        for (let i = i0; i < i1; i++) {
+          if (h >= 0) { c.x[i] = c.x[h]!; c.y[i] = c.y[h]!; if (c.s) c.s[i] = c.s[h]!; }
+          c.q[i] = 0; c.st[i] = ST.lost;
+        }
+      }
+      if (a.interpolate) {
+        const [i0, i1] = spanIn(c, a.interpolate, 'interpolate');
+        let left = -1, right = -1;
+        for (let i = i0 - 1; i >= 0 && left < 0; i--) if (isUsable(c.st[i]!)) left = i;
+        for (let i = i1; i < c.x.length && right < 0; i++) if (isUsable(c.st[i]!)) right = i;
+        if (left < 0 || right < 0) throw new OpError('incompatible', 'filling in needs a usable sample before the stretch and another after it', { from: a.interpolate.from, to: a.interpolate.to }, 'Place a sample by hand on each side first (set), or track the video around the stretch.');
+        // hand-placed samples inside the stretch stay; the line runs from one kept sample to the next
+        const anchors = [left];
+        for (let i = i0; i < i1; i++) if (c.st[i] === ST.manual) anchors.push(i);
+        anchors.push(right);
+        for (let k = 0; k + 1 < anchors.length; k++) {
+          const p = anchors[k]!, q = anchors[k + 1]!, len = q - p, conf = Math.min(c.q[p]!, c.q[q]!);
+          for (let i = Math.max(p + 1, i0); i < Math.min(q, i1); i++) {
+            c.x[i] = c.x[p]! + roundHalfUp((c.x[q]! - c.x[p]!) * (i - p), len);
+            c.y[i] = c.y[p]! + roundHalfUp((c.y[q]! - c.y[p]!) * (i - p), len);
+            if (c.s) c.s[i] = c.s[p]! + roundHalfUp((c.s[q]! - c.s[p]!) * (i - p), len);
+            c.q[i] = conf; c.st[i] = ST.interpolated;
+          }
+        }
+      }
+      writeColumns(next, c);
+      next.origin = { ...t.origin, edited: true };
+      assertTrackCaps(d, next);
+    }
+    d.motionTracks[t.id] = next;
+    const parts = [a.name !== undefined ? 'renamed' : null, a.set ? `${a.set.length} sample(s) placed` : null, a.markLost ? `frames ${a.markLost.from}–${a.markLost.to - 1} marked lost` : null, a.interpolate ? `frames ${a.interpolate.from}–${a.interpolate.to - 1} filled in` : null].filter(Boolean);
+    return { affectedIds: [t.id], summary: `Motion track "${next.name.slice(0, 40)}": ${parts.join(', ')}` };
+  },
+});
+defineOp({
+  name: 'remove_motion_track',
+  version: 1,
+  description: 'Delete a motion track (ADR-0015). Refused while a clip follows it or a privacy region on a clip follows it, unless unbind=true: then those clips stop following it and those regions are removed, in the same step (a clip that follows keeps its own position, which was an offset from the tracked point).',
+  args: TrackOpArgs.remove_motion_track,
+  apply(d, a) {
+    const t = mustMotionTrack(d, a.motionTrackId);
+    const users = motionTrackUsers(d, new Set([t.id]));
+    const ids = [...new Set([...users.follow, ...users.redact])];
+    if (ids.length && !a.unbind) throw new OpError('incompatible', `${ids.length} clip(s) follow this motion track or hide a region with it`, { motionTrackId: t.id, follow: users.follow.slice(0, 50), redact: users.redact.slice(0, 50) }, 'Pass unbind=true to detach them in the same step, or detach them first (set_clip_follow follow=null, set_redact_region region=null).');
+    for (const id of ids) {
+      const { clip } = mustClip(d, id); // a clip on a locked track cannot be changed
+      if (clip.follow?.motionTrackId === t.id) delete clip.follow;
+      if (clip.type === 'media' && clip.redact) {
+        const keep = clip.redact.filter((r) => r.motionTrackId !== t.id);
+        if (keep.length) clip.redact = keep; else delete clip.redact;
+      }
+    }
+    delete d.motionTracks[t.id];
+    return { affectedIds: [t.id, ...ids], summary: `Deleted motion track "${t.name.slice(0, 40)}"${ids.length ? ` and detached ${ids.length} clip(s)` : ''}`, output: { detachedClipIds: ids } };
+  },
+});
+/** Why a clip cannot follow a motion track, or carry a time effect while it follows one: the follow is resolved per frame, not per earlier picture. */
+const FOLLOW_TIME_EFFECT = 'a clip with a time effect (echo, time split, shutter or stutter) cannot follow a motion track yet';
+defineOp({
+  name: 'set_clip_follow',
+  version: 1,
+  description: 'Make a title, or a picture on a video track, follow a motion track (ADR-0015): the clip moves with the tracked point as the picture of the track\'s video file on timeline track targetTrackId shows it (through every cut, speed change, reverse, freeze and format). The clip\'s own position becomes an offset from the tracked point (offset, when given, sets it in the same step: compute it from describe_moment so nothing jumps). scale=true also scales the clip with the tracked size and with the target clip\'s scale; smooth averages the usable samples within ±smooth source frames. follow=null detaches it. Refused for a clip whose first effect is a time effect, and for chains (a clip cannot follow a picture that itself follows, or be followed while it follows).',
+  args: TrackOpArgs.set_clip_follow,
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    const { clip, track } = f;
+    if (!(clip.type === 'text' || (clip.type === 'media' && track.kind === 'video')))
+      throw new OpError('incompatible', 'only a title, or a picture on a video track, can follow a motion track', { clipId: clip.id, type: clip.type, trackKind: track.kind });
+    const offset = () => { if (a.offset) clip.transform = { ...clip.transform, x: a.offset.x, y: a.offset.y }; };
+    if (a.follow === null) {
+      const had = !!clip.follow;
+      delete clip.follow;
+      offset();
+      return { affectedIds: [clip.id], summary: had ? 'Clip no longer follows a motion track' : 'Clip did not follow a motion track' };
+    }
+    const mt = mustMotionTrack(d, a.follow.motionTrackId);
+    const target = f.seq.tracks.find((t) => t.id === a.follow!.targetTrackId);
+    if (!target) throw new OpError('not_found', `track ${a.follow.targetTrackId} not found`, { trackId: a.follow.targetTrackId }, 'Name the video track whose clip shows the tracked file (get_timeline lists the tracks).');
+    if (target.kind !== 'video') throw new OpError('incompatible', `a clip follows a picture on a video track; track ${target.id} is a ${target.kind} track`, { trackId: target.id, kind: target.kind });
+    if (target.id === track.id) throw new OpError('incompatible', 'a clip cannot follow the picture on its own track', { trackId: target.id }, 'Put the clip on a track above the picture it follows.');
+    const first = clip.effects?.find((e) => e.enabled);
+    if (first && isTimeEffect(first.type)) throw new OpError('incompatible', FOLLOW_TIME_EFFECT, { clipId: clip.id, effect: first.type }, 'Remove or turn off the time effect first.');
+    const leader = target.clips.find((c) => c.follow);
+    if (leader) throw new OpError('incompatible', `clip ${leader.id} on that track follows a motion track itself; follows cannot be chained`, { clipId: leader.id, trackId: target.id }, 'Follow the same motion track directly instead.');
+    const follower = f.seq.tracks.flatMap((t) => t.clips).find((c) => c.id !== clip.id && c.follow?.targetTrackId === track.id);
+    if (follower) throw new OpError('incompatible', `clip ${follower.id} follows the picture on this clip's track; follows cannot be chained`, { clipId: follower.id, trackId: track.id }, 'Detach that clip first, or let both follow the motion track directly.');
+    clip.follow = { motionTrackId: mt.id, targetTrackId: target.id, scale: a.follow.scale, smooth: a.follow.smooth };
+    offset();
+    return { affectedIds: [clip.id], summary: `Clip follows motion track "${mt.name.slice(0, 40)}"`, output: { follow: clip.follow, transform: clip.transform } };
+  },
+});
+defineOp({
+  name: 'set_redact_region',
+  version: 1,
+  description: 'Add, change or delete (region=null) a privacy region on a video clip (ADR-0015): a blurred, pixelated or fully covered part of the picture, fixed or following a motion track of the clip\'s own video file. Position and size are fractions of the clip\'s own picture (as for masks); for a track they are an offset from the tracked point, and a region track also gives the size. The region is drawn on every picture the clip shows, before its effects, also on each earlier picture an echo shows. onLoss=frame blurs the whole picture while the track is lost (and while it is weak, when weakIsLost); hold keeps the region where it was last seen. Automatic tracking is not guaranteed redaction: check the lost and weak frames before publishing. Omit regionId to add one (output: regionId). A still image is refused.',
+  args: TrackOpArgs.set_redact_region,
+  apply(d, a, ctx) {
+    const { clip, track } = pictureClip(d, a.clipId);
+    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'privacy regions apply to video clips on video tracks', { clipId: clip.id });
+    const asset = mustAsset(d, clip.assetId);
+    if (!asset.video) throw new OpError('incompatible', 'privacy regions are drawn on video pictures only; this clip shows a still image', { clipId: clip.id, assetId: asset.id }, 'For a still, put a copy of the clip on the track above with a blur effect (blur.gaussian) and a mask over the area, or edit the image before importing it.');
+    const list = [...(clip.redact ?? [])];
+    if (a.region === null) {
+      if (a.regionId === undefined) throw new OpError('invalid_args', 'name the region to delete (regionId)');
+      const at = list.findIndex((r) => r.id === a.regionId);
+      if (at < 0) throw new OpError('not_found', `region ${a.regionId} not found on clip ${clip.id}`, { regionId: a.regionId, clipId: clip.id });
+      list.splice(at, 1);
+      if (list.length) clip.redact = list; else delete clip.redact; // never an empty list
+      return { affectedIds: [clip.id], summary: 'Removed privacy region', output: { regionId: a.regionId } };
+    }
+    let region: RedactRegion;
+    if (a.regionId !== undefined) {
+      const at = list.findIndex((r) => r.id === a.regionId);
+      if (at < 0) throw new OpError('not_found', `region ${a.regionId} not found on clip ${clip.id}`, { regionId: a.regionId, clipId: clip.id });
+      region = { ...list[at]!, ...a.region };
+      list[at] = region;
+    } else {
+      if (list.length >= MAX_REDACT_REGIONS) throw new OpError('out_of_bounds', `a clip can carry at most ${MAX_REDACT_REGIONS} privacy regions`, { clipId: clip.id, max: MAX_REDACT_REGIONS });
+      region = { id: ctx.newId('rgn'), motionTrackId: null, ...DEFAULT_REDACT_REGION, ...a.region };
+      list.push(region);
+    }
+    if (region.motionTrackId !== null) {
+      const mt = mustMotionTrack(d, region.motionTrackId);
+      if (mt.assetId !== clip.assetId) throw new OpError('incompatible', 'a privacy region follows a motion track of the clip\'s own video file', { motionTrackId: mt.id, trackAssetId: mt.assetId, clipAssetId: clip.assetId }, 'Track the person or object in this clip\'s file (create_motion_track with its assetId).');
+    }
+    clip.redact = list;
+    return { affectedIds: [clip.id], summary: `Privacy region ${region.style}${region.motionTrackId ? ' following a motion track' : ''}`, output: { regionId: region.id, region } };
+  },
+});
+
 // ---------- adjustment clips (ADR-0016) ----------
 export const AddAdjustmentArgsSchema = z.object({
   sequenceId: z.string().optional(),
@@ -2689,8 +3091,8 @@ defineOp({
 
 // ---------- replace media (ADR-0016) ----------
 /**
- * Arguments of the public op replace_clip_media (v1). Contract only: the op itself is implemented in this file by the
- * templates track (W1). It keeps the clip id and everything on the clip; it changes assetId and sourceIn.
+ * Arguments of the public op replace_clip_media (v1). It keeps the clip id and everything on the clip; it changes assetId and
+ * sourceIn.
  */
 export const ReplaceClipMediaArgsSchema = z.object({
   clipId: z.string(),
@@ -2698,6 +3100,69 @@ export const ReplaceClipMediaArgsSchema = z.object({
   sourceIn: RT.optional(),
   linked: z.enum(['follow', 'detach']).optional().describe('default follow: a linked sound partner takes the new asset too (refused if it has no sound); detach: unlink it and leave it'),
 }).strict();
+defineOp({
+  name: 'replace_clip_media',
+  version: 1,
+  description: 'Give a clip another file from the library and keep everything else about it: its id (so per-format overrides and template slots stay), place and length on the timeline, transform and keyframes, effects, blend mode, mask, transition, speed and direction, fades and volume. Only the file and the point of it the clip starts from (sourceIn) change. sourceIn defaults to the current one when the new file is long enough from there, else 0 (always 0 for a still picture). A picture clip needs a file with a picture, a sound clip one with sound, and the file must be long enough for the clip from sourceIn; a transition into the next clip needs that many spare frames after it. A still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed. linked=follow (default): the clips linked to this one take the same file and sourceIn (refused when the file lacks what one of them plays); linked=detach: they are unlinked and left as they are.',
+  args: ReplaceClipMediaArgsSchema,
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given another file');
+    if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a file can take another file', { clipId: a.clipId }, 'A title changes with update_text, a caption cue with update_cue.');
+    const clip = f.clip;
+    const asset = d.assets[a.assetId];
+    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId }, 'Call get_summary to list assets.');
+    if (asset.kind === 'lut') throw new OpError('incompatible', 'a colour table (LUT) is not placed on the timeline; it is applied to a clip as an effect', { assetId: asset.id }, 'Use apply_lut with a clipId, or add the effect color.lut with this id as its lut parameter.');
+    const isStill = asset.kind === 'image';
+    const hasPicture = !!asset.video || (isStill && !!asset.image);
+    const group = clip.linkGroupId;
+    const partners = partnersOf(d, clip);
+    const follow = a.linked !== 'detach';
+    if (follow) for (const p of partners) if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, 'Unlock the track, or pass linked:detach to leave that clip as it is.');
+    const targets = [{ track: f.track, clip }, ...(follow ? partners : [])];
+    // What each clip plays on its track: a picture on a video track, sound on a sound track.
+    const plays = (t: Track) => (t.kind === 'video' ? 'shows a picture' : 'plays sound');
+    for (const [i, { track, clip: c }] of targets.entries()) {
+      const ok = track.kind === 'video' ? hasPicture : track.kind === 'audio' ? !!asset.audio : false;
+      if (ok) continue;
+      const lacks = track.kind === 'video' ? 'picture' : 'sound';
+      if (i === 0) throw new OpError('incompatible', `this clip ${plays(track)}, and the file has no ${lacks}`, { clipId: c.id, assetId: asset.id }, `Choose a file with ${lacks === 'picture' ? 'a picture' : 'sound'}.`);
+      throw new OpError('incompatible', `the clip linked to this one (${c.id}) ${plays(track)}, and the file has no ${lacks}`, { clipId: c.id, assetId: asset.id }, 'Pass linked:detach to unlink that clip and leave it as it is.');
+    }
+    if (isStill) for (const { clip: c } of targets)
+      if (c.reverse || c.freeze || c.speedEnd || speedValue(c) !== 1) throw new OpError('incompatible', 'a still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed', { clipId: c.id }, 'Choose a video, or give the clip speed 1, forwards, first (set_clip_speed, set_clip_reverse).');
+    // Privacy regions (ADR-0015) are drawn on video pictures, and a region that follows a motion track follows one of this clip's file.
+    for (const { clip: c } of targets) {
+      if (!c.redact) continue;
+      if (!asset.video) throw new OpError('incompatible', 'this clip has privacy regions, which are drawn on video pictures only', { clipId: c.id }, 'Remove its privacy regions first (set_redact_region), or choose a video.');
+      if (c.redact.some((r) => r.motionTrackId && own(d.motionTracks, r.motionTrackId)?.assetId !== asset.id)) throw new OpError('incompatible', 'a privacy region of this clip follows a motion track of its current file', { clipId: c.id }, 'Make that region fixed or remove it first (set_redact_region).');
+    }
+    // The source a clip needs from sourceIn: its stretch of source (a freeze frame needs one picture inside the file).
+    const needed = (c: MediaClip) => toSourceSpan(c, c.duration);
+    const fits = (c: MediaClip, sourceIn: T.RationalTime) => isStill || (!T.isNegative(sourceIn) && (c.freeze ? T.lt(sourceIn, asset.duration) : T.lte(T.add(sourceIn, needed(c)), asset.duration)));
+    const sourceIn = a.sourceIn ?? (isStill ? T.ZERO : targets.every((t) => fits(t.clip, clip.sourceIn)) ? clip.sourceIn : T.ZERO);
+    if (T.isNegative(sourceIn)) throw new OpError('out_of_bounds', 'sourceIn is outside the asset', { sourceIn, assetDuration: asset.duration });
+    for (const { clip: c } of targets)
+      if (!fits(c, sourceIn)) throw new OpError('out_of_bounds', 'the file is too short for this clip from that point', { clipId: c.id, sourceIn, available: T.max(T.ZERO, T.sub(asset.duration, sourceIn)), needed: needed(c) }, 'Choose an earlier sourceIn or a longer file, or shorten the clip first (trim_clip).');
+    // A transition into the next picture plays on over spare source after this clip's end (as set_transition checks it).
+    const rate = d.settings.frameRate;
+    if (!isStill) for (const { track, clip: c } of targets) {
+      if (track.kind !== 'video') continue;
+      const next = track.clips.find((o) => o.type === 'media' && o.id !== c.id && o.transition && T.eq(o.start, clipEnd(c)));
+      if (!next || next.type !== 'media' || !next.transition) continue;
+      const after = T.frameIndexAt(handleAfterEnd({ ...c, sourceIn }, asset.duration), rate);
+      if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames after this clip, and the file has only ${after}`, { clipId: c.id, nextClipId: next.id, maxFrames: Math.max(0, after) }, 'Choose an earlier sourceIn or a longer file, or shorten that transition first (set_transition).');
+    }
+    const unchanged = targets.every((t) => t.clip.assetId === asset.id && T.eq(t.clip.sourceIn, sourceIn)) && (follow || !partners.length);
+    if (unchanged) throw new OpError('invalid_args', 'the clip already plays this file from this point', { clipId: clip.id, assetId: asset.id, sourceIn });
+    for (const { clip: c } of targets) { c.assetId = asset.id; c.sourceIn = sourceIn; }
+    // detach: this clip leaves its link group; a partner left alone in it is unlinked too (refused while it is on a locked track)
+    let unlinked: string[] = [];
+    if (!follow && group && partners.length) { clip.linkGroupId = null; unlinked = [clip.id, ...dissolveLoneLinks(d, [group])]; }
+    const ids = targets.map((t) => t.clip.id);
+    return { affectedIds: [...new Set([...ids, ...unlinked])], summary: `Clip now plays "${asset.name.slice(0, 60)}"${targets.length > 1 ? ` (with ${targets.length - 1} linked clip(s))` : ''}`, output: { clipIds: ids, assetId: asset.id, sourceIn, unlinkedClipIds: unlinked } };
+  },
+});
 
 // ---------- captions, transcripts and range cuts (SPEC §16) ----------
 function newCaptionTrack(seq: Sequence, ctx: OpContext, mode: 'manual' | 'transcript', linkedTrackId: string | null, style?: Partial<CaptionStyle>, name?: string): Track {

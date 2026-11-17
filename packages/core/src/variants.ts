@@ -44,7 +44,7 @@ export function projectVariant(doc: ProjectDocument, variantId: string): Project
   if (v.phraseText)
     for (const tr of Object.values(out.transcripts ?? {}))
       for (const seg of tr.segments) {
-        const text = v.phraseText[seg.id];
+        const text = own(v.phraseText, seg.id); // a phrase may be called "constructor": only the format's own wording counts
         if (text === undefined) continue;
         seg.text = text; seg.words = []; seg.timing = 'segment'; // the word timing described the master wording
       }

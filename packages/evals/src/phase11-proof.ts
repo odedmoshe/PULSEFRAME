@@ -54,7 +54,8 @@ async function main() {
   try {
     console.log('\n# catalog');
     const cat = (await call('/catalog')).body.recipes;
-    check('three recipes are listed with parameter schemas and state plainly that no language model is used', cat.length === 3 && cat.every((r: any) => r.paramsSchema?.type === 'object' && /no language model/.test(r.method) && r.name.he), cat.map((r: any) => r.id));
+    // Later waves add recipes (ADR-0017: portrait-blur); the phase 11 three must be there, and every listed recipe must say how it is planned.
+    check('the three phase 11 recipes are listed, and every recipe has a parameter schema and states plainly that no language model is used', ['beat-montage', 'social-pack', 'tidy-speech'].every((id) => cat.some((r: any) => r.id === id)) && cat.every((r: any) => r.paramsSchema?.type === 'object' && /no language model/.test(r.method) && r.name.he), cat.map((r: any) => r.id));
 
     console.log('\n# beat montage: grounded, one step, alternatives');
     const pid = (await call('/projects', { name: 'phase11', width: 640, height: 360 })).body.project.id;

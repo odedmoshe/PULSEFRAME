@@ -266,3 +266,128 @@ export function highShelf(f0: number, db: number, sampleRate: number): Biquad {
   return section(A * (A + 1 + (A - 1) * c + sa), -2 * A * (A - 1 + (A + 1) * c), A * (A + 1 + (A - 1) * c - sa), A + 1 - (A - 1) * c + sa, 2 * (A - 1 - (A + 1) * c), A + 1 - (A - 1) * c - sa);
 }
 // W1 may APPEND its section "cleanup.denoise/dehum design" below this line; W2 never edits design.ts (it appends to tables.ts).
+
+// ---- cleanup.denoise / cleanup.dehum design (ADR-0013), W1 ------------------------------------------------------------------------
+// (imports of this appended section are kept here, so the section is a pure append to the file)
+import { decodeNoiseProfile, NOISE_BAND_EDGES_HZ } from '@pulseframe/core';
+import { sqrtHann, stftSize } from './fft.ts';
+
+/**
+ * cleanup.dehum: −3 dB bandwidth, in heard Hz, of every notch: 2.5·4^width Hz (2.5, 5 and 10 Hz at width 0, 0.5 and 1). Above
+ * speed 1 it widens with the speed (the hum's own drift is heard multiplied by it); below speed 1 it stays as it is, so the
+ * warm-up (about 18.7/(π·bandwidth) s for eight notches) stays under 3 s at every speed from 0.25 to 4.
+ */
+export const dehumBandwidthHz = (width: number, speed = 1): number => 2.5 * Math.pow(4, width) * Math.max(1, speed);
+export interface DehumDesign {
+  /** Exactly the dry sound: amount 0, or every notch left out (below 20 Hz or at or above 0.45·sr). */
+  identity: boolean;
+  /** Heard notch frequencies k·mainsHz·speed that were kept, and their sections (design.ts notch). */
+  freqs: number[]; sections: Biquad[];
+  amount: number;
+  /** Smallest W with amount·Σ_{k≥W}|h[k]| ≤ 2^-24 (cascadeWarm with the amount as the Lipschitz constant). */
+  warm: number;
+  /** l1 norm of the impulse response of y = (1 − amount)·x + amount·notches(x): the largest output for inputs within [-1, 1]. */
+  bound: number;
+}
+const dehumCache = new Map<string, DehumDesign>();
+export function dehumDesign(p: Readonly<AudioFxParams>, sampleRate: number, speed = 1): DehumDesign {
+  const q = fxParams('cleanup.dehum', p);
+  const amount = q.num('amount'), mains = Number(q.str('mainsHz')), harmonics = q.num('harmonics'), width = q.num('width');
+  const key = `${amount}|${mains}|${harmonics}|${width}|${sampleRate}|${speed}`;
+  const hit = dehumCache.get(key);
+  if (hit) return hit;
+  const bw = dehumBandwidthHz(width, speed), freqs: number[] = [], sections: Biquad[] = [];
+  for (let k = 1; k <= harmonics; k++) {
+    const f = k * mains * speed;
+    if (f < 20 || f >= 0.45 * sampleRate) continue;
+    freqs.push(f);
+    sections.push(notch(f, f / bw, sampleRate));
+  }
+  const identity = q.identity || sections.length === 0;
+  let warm = 0, bound = 1;
+  if (!identity) {
+    const h = impulseResponse(sections, horizon(sections, 1));
+    let sum = 0;
+    for (let k = h.length - 1; k >= 1; k--) {
+      sum += Math.abs(h[k]!);
+      if (warm === 0 && amount * sum > WARM_EPS) warm = k + 1;
+    }
+    bound = Math.abs(1 - amount + amount * h[0]!) + amount * sum;
+  }
+  const d: DehumDesign = { identity, freqs, sections, amount, warm, bound };
+  if (dehumCache.size > 256) dehumCache.clear();
+  dehumCache.set(key, d);
+  return d;
+}
+
+/** cleanup.denoise hop: N/4 (sqrt-Hann analysis and synthesis then overlap-add to exactly 2, scaled back by 1/2). */
+export const DENOISE_HOP_DIVISOR = 4;
+/** Gain hold of cleanup.denoise: G′ = max(G[t], 0.7·G[t−1], 0.49·G[t−2]) (finite memory: two frames back). */
+export const DENOISE_HOLD1 = 0.7, DENOISE_HOLD2 = 0.49;
+/** Over-subtraction at sensitivity 0 dB: β = 2·10^(sensitivityDb/10). */
+export const DENOISE_BETA = 2;
+/** Declared largest output of cleanup.denoise for inputs within [-1, 1] (per-bin gains are at most 1; checked by measurement, as for the reverb). */
+export const DENOISE_BOUND = 2;
+export interface DenoiseFraming {
+  /** STFT size (fft.ts stftSize) and hop. */
+  n: number; hop: number;
+  /** Look-ahead N + H − 1: a frame's output is final once the next frame (the newest one in the smoothed power) is in. */
+  ahead: number;
+  /** N − 1 + 4H: frames back to t − 4 (the smoothed power of frame t − 2, which the gain hold reads): exact, finite memory. */
+  warm: number;
+}
+export function denoiseFraming(sampleRate: number): DenoiseFraming {
+  const n = stftSize(sampleRate), hop = n / DENOISE_HOP_DIVISOR;
+  return { n, hop, ahead: n + hop - 1, warm: n - 1 + 4 * hop };
+}
+export interface DenoiseDesign extends DenoiseFraming {
+  identity: boolean;
+  amount: number;
+  /** Analysis window (periodic sqrt-Hann), and the synthesis window × the overlap-add scale 2H/N × the 1/N of the unscaled inverse FFT. */
+  window: Float64Array; synth: Float64Array;
+  /** β·λ_k for k = 0..N/2: the subtracted noise power per bin (bins as heard; λ from the profile, core voiceClean.ts). */
+  noise: Float64Array;
+  /** 10^(−reductionDb/20): the smallest gain. */
+  floor: number;
+}
+/**
+ * Source band levels → heard bin noise power, per the core definition (voiceClean.ts): λ_k = 10^(b(f_k/speed)/10) · (sr/48000) ·
+ * Σw² / speed, with b interpolated linearly in dB over log frequency between the band centres (√(lo·hi)) and held flat outside
+ * the first and last centres. Σw² = N/2 for the sqrt-Hann window.
+ */
+export function noiseBinPower(bandsDb: readonly number[], n: number, sampleRate: number, speed = 1): Float64Array {
+  const edges = NOISE_BAND_EDGES_HZ, B = bandsDb.length;
+  const lc = Array.from({ length: B }, (_, j) => 0.5 * (Math.log(edges[j]!) + Math.log(edges[j + 1]!)));
+  const out = new Float64Array(n / 2 + 1), scale = ((sampleRate / 48000) * (n / 2)) / speed;
+  for (let k = 0; k <= n / 2; k++) {
+    const f = (k * sampleRate) / n / speed, x = f > 0 ? Math.log(f) : -Infinity;
+    let b: number;
+    if (x <= lc[0]!) b = bandsDb[0]!;
+    else if (x >= lc[B - 1]!) b = bandsDb[B - 1]!;
+    else {
+      let j = 0;
+      while (lc[j + 1]! <= x) j++;
+      const t = (x - lc[j]!) / (lc[j + 1]! - lc[j]!);
+      b = bandsDb[j]! + t * (bandsDb[j + 1]! - bandsDb[j]!);
+    }
+    out[k] = Math.pow(10, b / 10) * scale;
+  }
+  return out;
+}
+const denoiseCache = new Map<string, DenoiseDesign>();
+export function denoiseDesign(p: Readonly<AudioFxParams>, sampleRate: number, speed = 1): DenoiseDesign {
+  const q = fxParams('cleanup.denoise', p);
+  const amount = q.num('amount'), reduction = q.num('reductionDb'), sensitivity = q.num('sensitivityDb'), profile = q.str('profile');
+  const key = `${amount}|${reduction}|${sensitivity}|${profile}|${sampleRate}|${speed}`;
+  const hit = denoiseCache.get(key);
+  if (hit) return hit;
+  const fr = denoiseFraming(sampleRate), { n, hop } = fr;
+  const window = sqrtHann(n), synth = new Float64Array(n), ola = (2 * hop) / n / n;
+  for (let i = 0; i < n; i++) synth[i] = window[i]! * ola;
+  const noise = noiseBinPower(decodeNoiseProfile(profile), n, sampleRate, speed), beta = DENOISE_BETA * Math.pow(10, sensitivity / 10);
+  for (let k = 0; k < noise.length; k++) noise[k] = noise[k]! * beta;
+  const d: DenoiseDesign = { ...fr, identity: q.identity, amount, window, synth, noise, floor: dbToGain(-reduction) };
+  if (denoiseCache.size > 64) denoiseCache.clear();
+  denoiseCache.set(key, d);
+  return d;
+}

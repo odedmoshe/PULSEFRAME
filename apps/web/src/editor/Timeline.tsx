@@ -13,6 +13,8 @@ import { InlineRename } from './InlineRename.tsx';
 import { TimelineZoom, useWheelZoom } from './TimelineZoom.tsx';
 import { BAR_ICON_COMPONENTS, IconHide, IconLock, IconMute, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
 import { soundTailsFor } from './AudioFxBlock.tsx';
+import { findEffect } from '@pulseframe/core';
+import './templates.css';
 
 const MAX_MARKERS = 3000;
 
@@ -79,7 +81,7 @@ export function Timeline() {
       <TimelineZoom />
       <span className="tl-add-track" role="group" aria-label={t('track.add')}>
         <span className="muted">{t('track.add')}:</span>
-        {(['video', 'audio', 'text'] as const).map((k) => (
+        {(['video', 'audio', 'text', 'adjustment'] as const).map((k) => (
           <button key={k} type="button" className="ghost" disabled={!doc} data-testid={`add-track-${k}`} onClick={() => void editor.commit([{ op: 'add_track', args: { kind: k } }], 'Add track')}>{t(`track.${k}` as Key)}</button>
         ))}
       </span>
@@ -124,7 +126,7 @@ export function Timeline() {
           {doc && [...doc.sequences[doc.mainSequenceId]!.tracks].reverse().map((tr) => (
             <div className={`track ${tr.kind}${tr.locked ? ' locked' : ''}${tr.hidden || tr.muted ? ' off' : ''}`} data-locked={tr.locked ? 'true' : undefined} data-off={tr.hidden || tr.muted ? 'true' : undefined} key={tr.id} role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`} data-track-id={tr.id}>
               <span className="track-head">
-                <span className="track-name" dir="auto" title={tr.name}>{tr.kind === 'caption' ? `${t('track.caption')}${tr.caption?.mode === 'transcript' ? ' ✦' : ''}` : tr.name}</span>
+                <span className="track-name" dir="auto" title={tr.name}>{tr.kind === 'caption' ? `${t('track.caption')}${tr.caption?.mode === 'transcript' ? ' ✦' : ''}` : tr.kind === 'adjustment' ? <><span className="track-kind">{t('track.adjustment')}</span> <bdi>{tr.name}</bdi></> : tr.name}</span>
                 <span className="track-buttons">
                   {tr.kind !== 'caption' && <InlineRename value={tr.name} label={`${t('track.rename')}: ${tr.name}`} testid="track-rename" onCommit={(name) => void editor.commit([{ op: 'update_track', args: { trackId: tr.id, name } }], 'Rename track')} />}
                   {(tr.kind === 'video' || tr.kind === 'audio') && (
@@ -152,18 +154,21 @@ export function Timeline() {
                 // sound effects of a sound clip: «∿» on the clip, its names and tail in the clip's accessible name, the tail drawn after the clip
                 const fxNames = c.type === 'media' && tr.kind === 'audio' ? sortAudioFx(c.audioFx ?? []).filter((x) => x.enabled).map((x) => findAudioEffect(x.type)?.name[state.lang] ?? x.type) : [];
                 const tail = tails.get(c.id);
+                // an adjustment clip (ADR-0016) is named by its label, else by the track kind and its effects
+                const adjFx = c.type === 'adjustment' ? (c.effects ?? []).filter((x) => x.enabled).map((x) => findEffect(x.type)?.name[state.lang] ?? x.type) : [];
+                const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : clipLabel(doc, c);
                 const tailS = tail && tail.seconds >= 0.05 ? tail.seconds : 0;
                 const fxLabel = `${fxNames.length ? `; ${t('timeline.fx')}: ${fxNames.join(', ')}` : ''}${tailS ? `; ${t('timeline.fx.tail')} ${tailS.toFixed(1)} ${t('sound.fx.seconds')}` : ''}`;
                 return (
                   <Fragment key={c.id}>
-                  <button role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-ramp={c.type === 'media' && c.speedEnd ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
+                  <button role="listitem" className={`clip ${c.type === 'caption' ? 'caption-cue' : ''}${c.type === 'adjustment' ? ' adjust-clip' : ''} ${selection.includes(c.id) ? 'selected' : ''} ${ghostSel.has(c.id) ? 'ghost-selected' : ''}${state.cutPending.includes(c.id) ? ' cut-pending' : ''}`} data-testid={`clip-${c.id}`} data-clip-id={c.id} data-freeze={c.type === 'media' && c.freeze ? 'true' : undefined} data-reverse={c.type === 'media' && c.reverse ? 'true' : undefined} data-ramp={c.type === 'media' && c.speedEnd ? 'true' : undefined} data-clip-type={c.type} data-track-kind={tr.kind}
                     style={{ left: T.toSeconds(c.start) * pps, width }} onClick={(e) => editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace')} aria-pressed={selection.includes(c.id)}
                     onContextMenu={(e) => { e.preventDefault(); if (!selection.includes(c.id)) editor.select(c.id); setMenu({ x: e.clientX, y: e.clientY }); }}
-                    aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}${fxLabel}`} data-fx={fxNames.length ? 'true' : undefined}>
+                    aria-label={`${label} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}${fxLabel}`} data-fx={fxNames.length ? 'true' : undefined}>
                     {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                       <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as Extract<Clip, { type: 'media' }>).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={34} reverse={c.type === 'media' && !!c.reverse} />
                     )}
-                    <span dir="auto" className="clip-label">{c.type === 'media' && c.freeze ? '❄ ' : ''}{c.type === 'media' && c.reverse ? '◀ ' : ''}{c.type === 'media' && c.speedEnd ? '⤴ ' : ''}{fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿ </span> : ''}{clipLabel(doc, c)}</span>
+                    <span dir="auto" className="clip-label">{c.type === 'media' && c.freeze ? '❄ ' : ''}{c.type === 'media' && c.reverse ? '◀ ' : ''}{c.type === 'media' && c.speedEnd ? '⤴ ' : ''}{fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿ </span> : ''}{c.type === 'adjustment' ? <span className="adjust-badge" aria-hidden="true">◐ </span> : ''}{label}</span>
                     {c.keyframes && [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.toSeconds(k.time))))].filter((s) => s >= 0 && s <= T.toSeconds(c.duration)).map((s) => (
                       <i key={s} className="kf" style={{ left: s * pps }} aria-hidden="true" />
                     ))}

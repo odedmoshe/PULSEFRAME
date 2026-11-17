@@ -3,6 +3,7 @@
  * outline, and optionally a drop shadow or glow (the Canvas2D `stylize.shadow` effect, so presets need no graphics adapter).
  * Applying one keeps the text, its position, alignment and direction; every value stays editable afterwards.
  * Only the bundled fonts are used. The styles were written from descriptions; nobody has judged them on a video yet.
+ * The last ten (trend pack, ADR-0012) use the title look fields: glow, gradient, a second outline, extrusion, long shadow, tracking.
  */
 import type { TextLookField, TextStyle } from './schema.ts';
 
@@ -56,5 +57,18 @@ export const TEXT_PRESETS: readonly TextPreset[] = [
   { id: 'whisper', name: { he: "לחישה", en: "Whisper" }, style: { fontFamily: 'Assistant', fontWeight: 400, sizeFrac: 0.04, color: '#FFFFFF', background: null, stroke: null, strokeFrac: 0 }, shadow: { color: '#000000', opacity: 0.6, blur: 0.02, x: 0, y: 0 } },
   { id: 'retro', name: { he: "רטרו", en: "Retro" }, style: { fontFamily: 'Secular One', fontWeight: 400, sizeFrac: 0.085, color: '#FFB703', background: null, stroke: '#6A040F', strokeFrac: 0.1 }, shadow: { color: '#6A040F', opacity: 0.9, blur: 0.0, x: 0.006, y: 0.006 } },
   { id: 'ghost', name: { he: "שקוף למחצה", en: "Ghost outline" }, style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.08, color: '#FFFFFF', background: null, stroke: '#FFFFFF', strokeFrac: 0.02 }, shadow: { color: '#000000', opacity: 0.4, blur: 0.02, x: 0, y: 0 } },
+  // ---- trend pack (ADR-0012): styles built on the title look fields, drawn by Canvas2D (no graphics adapter needed) ----
+  { id: 'neon-tube-pink', name: { he: 'צינור ניאון ורוד', en: 'Neon tube pink' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.07, color: '#FFE8FA', background: null, stroke: null, strokeFrac: 0, glow: { color: '#FF2BD6', radiusFrac: 0.6, intensity: 0.9 } }, shadow: null },
+  { id: 'neon-tube-cyan', name: { he: 'צינור ניאון טורקיז', en: 'Neon tube cyan' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.07, color: '#E8FFFF', background: null, stroke: null, strokeFrac: 0, glow: { color: '#00E5FF', radiusFrac: 0.6, intensity: 0.9 } }, shadow: null },
+  { id: 'gradient-sunset', name: { he: 'מעבר צבע שקיעה', en: 'Sunset gradient' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.08, color: '#FFD166', background: null, stroke: '#2B0A1A', strokeFrac: 0.06, gradient: { colors: ['#FFD166', '#EF476F'], angle: 90 } }, shadow: null },
+  { id: 'gradient-ocean', name: { he: 'מעבר צבע אוקיינוס', en: 'Ocean gradient' }, style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.08, color: '#3DF5FF', background: null, stroke: null, strokeFrac: 0, gradient: { colors: ['#3DF5FF', '#3A5BFF', '#8A2BE2'], angle: 135 } }, shadow: null },
+  { id: 'gradient-gold', name: { he: 'מעבר צבע זהב', en: 'Gold gradient' }, style: { fontFamily: 'Frank Ruhl Libre', fontWeight: 700, sizeFrac: 0.08, color: '#FFF3B0', background: null, stroke: '#3D2B00', strokeFrac: 0.04, gradient: { colors: ['#FFF3B0', '#D4A017', '#8C6A00'], angle: 90 } }, shadow: null },
+  { id: 'double-outline-pop', name: { he: 'קו מתאר כפול', en: 'Double outline pop' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.08, color: '#FFFFFF', background: null, stroke: '#E0218A', strokeFrac: 0.08, stroke2: { color: '#111111', widthFrac: 0.08 } }, shadow: null },
+  { id: 'extrude-retro', name: { he: 'תלת־ממד רטרו', en: 'Retro 3D' }, style: { fontFamily: 'Secular One', fontWeight: 400, sizeFrac: 0.09, color: '#FFB703', background: null, stroke: '#3A0CA3', strokeFrac: 0.05, extrude: { color: '#3A0CA3', depthFrac: 0.18, angle: 45, shade: 0.5 } }, shadow: null },
+  { id: 'extrude-block', name: { he: 'תלת־ממד בלוק', en: 'Block 3D' }, style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.1, color: '#FFFFFF', background: null, stroke: null, strokeFrac: 0, extrude: { color: '#1D3557', depthFrac: 0.25, angle: 60, shade: 0.6 } }, shadow: null },
+  { id: 'long-shadow-flat', name: { he: 'צל ארוך שטוח', en: 'Flat long shadow' }, style: { fontFamily: 'Rubik', fontWeight: 700, sizeFrac: 0.09, color: '#FFFFFF', background: null, stroke: null, strokeFrac: 0, longShadow: { color: '#0000004D', lengthFrac: 2, angle: 45 } }, shadow: null },
+  { id: 'wide-minimal', name: { he: 'מינימלי מרווח', en: 'Wide minimal' }, style: { fontFamily: 'Assistant', fontWeight: 400, sizeFrac: 0.05, color: '#FFFFFF', background: null, stroke: null, strokeFrac: 0, tracking: 0.25 }, shadow: null },
 ];
+/** The ten styles of the trend pack (ADR-0012); each sets at least one title look field. */
+export const TREND_TEXT_PRESET_IDS = ['neon-tube-pink', 'neon-tube-cyan', 'gradient-sunset', 'gradient-ocean', 'gradient-gold', 'double-outline-pop', 'extrude-retro', 'extrude-block', 'long-shadow-flat', 'wide-minimal'] as const;
 export const findTextPreset = (id: string) => TEXT_PRESETS.find((p) => p.id === id);

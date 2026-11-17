@@ -68,7 +68,8 @@
     "proof:trend-transitions": "tsx packages/evals/src/trend-transitions-proof.ts",
     "proof:trend-light": "tsx packages/evals/src/trend-light-proof.ts",
     "proof:trend-text": "tsx packages/evals/src/trend-text-proof.ts",
-    "proof:trend": "pnpm proof:trend-transitions && pnpm proof:trend-light && pnpm proof:trend-text"
+    "proof:trend": "pnpm proof:trend-transitions && pnpm proof:trend-light && pnpm proof:trend-text",
+    "proof:tracking": "tsx packages/evals/src/tracking-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

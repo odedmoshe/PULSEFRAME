@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -21,19 +21,22 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, findClip, OpError, type Asset, type OpCall } from '@pulseframe/core';
+import { applyTransaction, findClip, OpError, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
+import { applyTemplateFor, listTemplates, planTemplateFor, probeElements, regenerateTemplateFor, templateCatalog } from './templates.ts';
 import { variantDoc } from './export.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
+import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import type { Presence } from './presence.ts';
 import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
+import { ApplyModeSchema, RunSourceSchema, type RunRequest } from './aiContracts.ts';
 
 const TxBody = z
   .object({
@@ -52,14 +55,47 @@ type Env = { Variables: { principal: Principal } };
 /** Public job shape, identical for REST and MCP. Snapshots and resolved graphs stay server-side. */
 export const jobView = ({ input, ...j }: JobRow) => ({ ...j, revision: input.revision ?? input.projectRevision, ...(j.type === 'export' ? { options: input.manifest?.options, estimate: input.manifest?.estimate, warnings: input.warnings ?? [], retryOf: input.retryOf ?? null } : {}), ...(j.type === 'capability' ? { capabilityId: input.capabilityId, capabilityVersion: input.capabilityVersion, graphDigest: input.graphDigest, params: input.params } : {}) });
 
-const RunBody = z
+/** The body of a capability run, the same for REST (POST …/runs) and MCP (run_capability). ADR-0017 adds source, apply and confirmLongRun. */
+export const RunBody = z
   .object({
     params: z.record(z.string(), z.unknown()).default({}),
     idempotencyKey: z.string().min(1).max(128).optional(),
     attach: z.object({ start: RationalTimeSchema, duration: RationalTimeSchema.optional(), trackId: z.string().optional() }).strict().optional().describe('Place the primary output on the timeline when the job finishes, if nothing it depends on changed meanwhile'),
     dependsOn: z.array(z.string()).max(100).optional().describe('Entity ids the placement depends on; a change to any of them turns the placement into a proposal'),
+    source: RunSourceSchema.optional().describe('What the tool reads: {clipId} (the exact source span of a timeline clip) or {assetId, range?: {firstFrame, frameCount}} (a library file, optionally a frame range of it)'),
+    apply: ApplyModeSchema.optional().describe('Where the result goes: library (default; the media library only), replace-clip (in place of the source clip\'s file, when nothing it depends on changed), new-track (a new clip on a new track)'),
+    confirmLongRun: z.boolean().optional().describe('Required (true) when the estimate says needsConfirm: a run measured to take longer than PF_AI_CONFIRM_MINUTES'),
   })
   .strict();
+/** One RunRequest from a REST or MCP run body: both surfaces hand the capability service exactly the same request. */
+export const runRequestOf = (projectId: string, capabilityId: string, b: z.input<typeof RunBody>, p: Principal): RunRequest => ({
+  projectId, capabilityId, params: b.params ?? {}, actor: p.actor, principal: p,
+  ...(b.idempotencyKey !== undefined ? { idempotencyKey: b.idempotencyKey } : {}), ...(b.attach !== undefined ? { attach: b.attach } : {}), ...(b.dependsOn !== undefined ? { dependsOn: b.dependsOn } : {}),
+  ...(b.source !== undefined ? { source: b.source } : {}), ...(b.apply !== undefined ? { apply: b.apply } : {}), ...(b.confirmLongRun !== undefined ? { confirmLongRun: b.confirmLongRun } : {}),
+});
+/** The query of GET …/estimate (and the arguments of MCP estimate_capability): what the run would read, and its parameters. */
+export const EstimateBody = z.object({
+  params: z.record(z.string(), z.unknown()).default({}),
+  source: RunSourceSchema.optional(),
+}).strict();
+/**
+ * Ask the owner for a capability's model download (REST models/request and MCP request_model_download). Any credential that may
+ * propose can ask; it creates a pending approval bound to the exact missing bytes and model hashes and starts no job. Only the
+ * owner's decision (POST …/approvals/{id}/approve) starts the download.
+ */
+export async function requestModelDownload(capabilities: Capabilities, gov: Governance, p: Principal, projectId: string, capabilityId: string) {
+  gov.assertMayAct(p, projectId, 'propose'); // asking for something is a proposal-level act: refused while paused or in Observe mode
+  const info = (await capabilities.list()).capabilities.find((x) => x.id === capabilityId);
+  if (!info) throw new ApiError(404, 'capability_not_found', 'capability not found');
+  if (info.missingDownloadBytes === 0) throw new ApiError(409, 'models_already_ready', 'all model files for this capability are present and verified');
+  return gov.requestApproval({ projectId, kind: 'model-download', requestedBy: p.actor, action: { capabilityId: info.id, bytes: info.missingDownloadBytes, models: info.models.map((m) => ({ path: m.path, sha256: m.sha256 })) } });
+}
+/** The translation review mark (ADR-0017): only the owner's own session may set it; an agent credential is refused. */
+export const ReviewBody = z.object({ review: z.enum(['reviewed', 'needed']) }).strict();
+export function reviewTranslation(gov: Governance, p: Principal, projectId: string, variantId: string, review: 'reviewed' | 'needed') {
+  if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'only the project owner can mark a translation reviewed or not, from their own session', { variantId }, 'Tell the owner which phrases to read; they mark it in the editor.');
+  return gov.commitAs(p, { projectId, allowInternal: true, label: review === 'reviewed' ? 'Translation reviewed' : 'Translation needs review', ops: [{ op: 'review_translation', args: { variantId, review, at: new Date().toISOString() } }] });
+}
 const ImportBody = z.object({ id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/), title: z.string().min(1).max(120), graph: z.unknown() }).strict();
 
 /** Content security policy of the app's pages: same-origin code only, no inline or blob: scripts, no plugins, no framing. Style attributes set from code are allowed by the browser without 'unsafe-inline'. */
@@ -78,6 +114,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return parsed.data;
   };
   const need = (c: Context<Env>, scope: Scope) => { auth.require(c.var.principal, scope); return c.var.principal; };
+  // Templates with graphic elements are available only where ffmpeg can draw SVG: ask once now, so catalog() knows (ADR-0016).
+  void probeElements();
 
   app.onError((e, c) => {
     if (e instanceof ApiError) { if (e.status === 429 && typeof e.details.retryAfterSeconds === 'number') c.header('Retry-After', String(e.details.retryAfterSeconds)); return c.json(e.toJSON(), e.status as any); }
@@ -271,10 +309,28 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (!a) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
     return c.json({ revision: p.revision, ...analysisView(a) });
   });
+  // ----- motion tracking (ADR-0015): a durable job; its samples are attached by the internal op attach_motion_track -----
+  app.post('/api/v1/projects/:id/motion-tracks/:motionTrackId/track', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, TrackRunBody);
+    const j = startTrackingJob(store, gov, p, c.req.param('id'), c.req.param('motionTrackId'), b, { derivatives });
+    return c.json({ jobId: j.id, status: j.status }, 202);
+  });
+  app.get('/api/v1/projects/:id/motion-tracks/:motionTrackId', (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    return c.json(motionTrackView(p.doc, p.revision, c.req.param('motionTrackId')));
+  });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params)); });
   app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/recipe-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await regenerateRecipe(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params)); });
+  // Templates (ADR-0016): the gallery, a read-only plan, apply as one undoable step, regenerate keeping hand edits. Edit rights and
+  // the propose-mode refusal are checked inside (templates.ts), so the refusal names the mode.
+  app.get('/api/v1/templates', async (c) => { need(c, 'observe'); return c.json({ templates: await listTemplates() }); });
+  app.post('/api/v1/projects/:id/templates/:templateId/plan', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await planTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params)); });
+  app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
+  app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
   app.get('/api/v1/projects/:id/preflight', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
@@ -401,11 +457,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   /** An agent (or anyone) may ASK for a model download; only the owner's decision starts it, and only for exactly the bytes that were shown. */
   app.post('/api/v1/projects/:id/capabilities/:capabilityId/models/request', async (c) => {
     const p = need(c, 'observe');
-    gov.assertMayAct(p, c.req.param('id'), 'propose'); // asking for something is a proposal-level act: refused while paused or in Observe mode
-    const info = (await capabilities.list()).capabilities.find((x) => x.id === c.req.param('capabilityId'));
-    if (!info) throw new ApiError(404, 'capability_not_found', 'capability not found');
-    if (info.missingDownloadBytes === 0) throw new ApiError(409, 'models_already_ready', 'all model files for this capability are present and verified');
-    return c.json({ approval: gov.requestApproval({ projectId: c.req.param('id'), kind: 'model-download', requestedBy: p.actor, action: { capabilityId: info.id, bytes: info.missingDownloadBytes, models: info.models.map((m) => ({ path: m.path, sha256: m.sha256 })) } }) }, 201);
+    return c.json({ approval: await requestModelDownload(capabilities, gov, p, c.req.param('id'), c.req.param('capabilityId')) }, 201);
+  });
+  /** Mark a machine translation reviewed (or back to needs review): the owner's own session only (ADR-0017); agents get 403. */
+  app.post('/api/v1/projects/:id/variants/:variantId/translation/review', async (c) => {
+    const p = need(c, 'edit');
+    if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'only the project owner can mark a translation reviewed or not, from their own session', { variantId: c.req.param('variantId') }, 'Tell the owner which phrases to read; they mark it in the editor.');
+    const b = await body(c, ReviewBody);
+    return c.json(reviewTranslation(gov, p, c.req.param('id'), c.req.param('variantId'), b.review));
   });
   for (const decision of ['approve', 'reject'] as const)
     app.post(`/api/v1/projects/:id/approvals/:approvalId/${decision}`, async (c) => {
@@ -553,8 +612,17 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(p, c.req.param('id'), 'job');
     gov.assertUnrestricted(p, 'run provider jobs (their results are added to the library and may be placed on any track)');
     const b = await body(c, RunBody);
-    const job = capabilities.start({ projectId: c.req.param('id'), capabilityId: c.req.param('capabilityId'), params: b.params, idempotencyKey: b.idempotencyKey, attach: b.attach, dependsOn: b.dependsOn, actor: p.actor, principal: p });
+    const job = capabilities.start(runRequestOf(c.req.param('id'), c.req.param('capabilityId'), b, p));
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
+  });
+  /** What a run would read and cost here (frames, chunks, scratch, missing downloads, a measured time or none) and its setup state. Read-only. */
+  app.get('/api/v1/projects/:id/capabilities/:capabilityId/estimate', async (c) => {
+    const p = need(c, 'observe');
+    const json = (name: string) => { const v = c.req.query(name); if (v === undefined) return undefined; try { return JSON.parse(v) as unknown; } catch { throw new ApiError(400, 'invalid_request', `query parameter "${name}" must be JSON`, { parameter: name }); } };
+    const parsed = EstimateBody.safeParse({ ...(json('params') !== undefined ? { params: json('params') } : {}), ...(json('source') !== undefined ? { source: json('source') } : {}) });
+    if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
+    store.getProject(c.req.param('id'));
+    return c.json(await capabilities.estimate(runRequestOf(c.req.param('id'), c.req.param('capabilityId'), parsed.data, p)));
   });
   // Model downloads are a deliberate human action: not exposed as an MCP tool, and bound to the exact byte count shown.
   app.post('/api/v1/projects/:id/capabilities/:capabilityId/models/download', async (c) => {
@@ -602,6 +670,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     assertMayCancel(gov, p, j);
     if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
+    if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
   });
@@ -710,6 +779,7 @@ export const catalog = () => ({
   motionPresets: MOTION_PRESETS.map((m) => ({ id: m.id, kind: m.kind, name: m.name, defaultFrames: m.defaultFrames, properties: m.properties, note: 'Apply with apply_motion_preset. Written as keyframe recipes; not judged on a video.' })),
   textPresets: TEXT_PRESETS.map((p) => ({ id: p.id, name: p.name, style: p.style, shadow: p.shadow, note: 'Apply with apply_text_preset. Written from descriptions, not judged on a video.' })),
   recipes: describeRecipes(),
+  templates: templateCatalog(),
   formatProfiles: FORMAT_PROFILES.map((p) => ({ ...p, note: 'Generic safe-area guide, editable per variant; not a platform specification.' })),
   soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, category: s.category, source: 'synthesised by formula in this build; no third-party content' })),
   fonts: FONT_CATALOG,

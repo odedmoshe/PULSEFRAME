@@ -1,14 +1,14 @@
 {
-  "ranAt": "2026-11-17T09:38:52.940Z",
-  "result": "PASSED",
-  "passed": 90,
-  "total": 90,
+  "ranAt": "2026-11-17T18:01:13.640Z",
+  "result": "FAILED",
+  "passed": 91,
+  "total": 92,
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
-  "scope": "Thirty-one effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and thirty-nine transitions on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
+  "scope": "Thirty-one effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and forty-six transitions (the seven of the trend pack, ADR-0012, included; their own proof is proof:trend-light) on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
   "measurements": {
     "previewVsStill": {
       "meanDifference": 0,
@@ -66,7 +66,7 @@
       "meanChange": 77.563
     },
     "lutPreviewRecovery": {
-      "seconds": 1.3,
+      "seconds": 0.7,
       "meanDifferenceFromStill": 0
     },
     "lutPreviewVsStill": {
@@ -241,6 +241,95 @@
       "points": 82,
       "largestDisplacement": 8.6,
       "flatVsPlain": 0
+    },
+    "gradeGrid": {
+      "patches": 729,
+      "sets": [
+        {
+          "params": {
+            "exposure": 1.128,
+            "temperature": -0.827,
+            "tint": 0.996,
+            "contrast": 0.309,
+            "saturation": 0.392,
+            "shadows": -0.689,
+            "highlights": 0.316,
+            "fade": 0.627
+          },
+          "worst": 0.5,
+          "changed": 57.412
+        },
+        {
+          "params": {
+            "exposure": -1.056,
+            "temperature": 0.199,
+            "tint": -0.169,
+            "contrast": 0.389,
+            "saturation": 0.091,
+            "shadows": -0.737,
+            "highlights": -0.193,
+            "fade": 0.808
+          },
+          "worst": 0.5,
+          "changed": 70.013
+        },
+        {
+          "params": {
+            "exposure": -1.442,
+            "temperature": 0.159,
+            "tint": -0.44,
+            "contrast": 0.309,
+            "saturation": 1.581,
+            "shadows": 0.024,
+            "highlights": 0.618,
+            "fade": 0.059
+          },
+          "worst": 0.5,
+          "changed": 63.824
+        },
+        {
+          "params": {
+            "exposure": -0.784,
+            "temperature": -0.084,
+            "tint": 0.515,
+            "contrast": 0.353,
+            "saturation": 1.13,
+            "shadows": 0.553,
+            "highlights": -0.241,
+            "fade": 0.143
+          },
+          "worst": 0.5,
+          "changed": 59.32
+        },
+        {
+          "params": {
+            "exposure": -1.36,
+            "temperature": 0.093,
+            "tint": 0.178,
+            "contrast": 0.777,
+            "saturation": 1.829,
+            "shadows": -0.305,
+            "highlights": 0.84,
+            "fade": 0.446
+          },
+          "worst": 0.5,
+          "changed": 59.309
+        },
+        {
+          "params": {
+            "exposure": -0.839,
+            "temperature": -0.497,
+            "tint": 0.365,
+            "contrast": 0.482,
+            "saturation": 0.866,
+            "shadows": 0.996,
+            "highlights": -0.007,
+            "fade": 0.245
+          },
+          "worst": 0.5,
+          "changed": 59.079
+        }
+      ]
     }
   },
   "checks": [
@@ -818,13 +907,13 @@
     },
     {
       "name": "Strobes together, in the editor shuttled at 8x: the preview keeps flashing but shows at most three flashes in any second of real time (sampled on every animation frame); the player's safety guard held flashes back, so without it there would have been more",
-      "ok": true,
+      "ok": false,
       "detail": {
         "shuttle": "▶▶ ×8",
-        "samples": 173,
-        "flashesOnScreen": 4,
-        "mostInOneSecond": 3,
-        "framesHeldBack": 12
+        "samples": 137,
+        "flashesOnScreen": 3,
+        "mostInOneSecond": 2,
+        "framesHeldBack": 0
       }
     },
     {
@@ -845,18 +934,56 @@
       }
     },
     {
-      "name": "All 39 GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash is checked at its ends only)",
+      "name": "All 46 GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash and the 2 light transitions are checked at their ends only here)",
       "ok": true,
       "detail": {
-        "transitions": 39
+        "transitions": 46,
+        "light": [
+          "film-burn",
+          "light-leak"
+        ]
       }
+    },
+    {
+      "name": "The light transitions with their light held by the flash schedule (a strobe flash 4 frames before): start on the outgoing picture, end on the incoming one, never go backwards",
+      "ok": true,
+      "detail": [
+        {
+          "id": "film-burn",
+          "plan": {
+            "frame": 69,
+            "kept": false,
+            "since": 4
+          },
+          "incomingShare": [
+            0,
+            0.33,
+            1
+          ],
+          "ok": true
+        },
+        {
+          "id": "light-leak",
+          "plan": {
+            "frame": 69,
+            "kept": false,
+            "since": 4
+          },
+          "incomingShare": [
+            0,
+            0.5,
+            1
+          ],
+          "ok": true
+        }
+      ]
     },
     {
       "name": "Every GPU transition gives the identical middle frame when rendered again, and no two of them give the same middle frame",
       "ok": true,
       "detail": {
         "repeatable": true,
-        "distinctMiddleFrames": 39
+        "distinctMiddleFrames": 46
       }
     },
     {
@@ -1054,7 +1181,7 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_c159dd319f0 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_5ac6d4ba460 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
       }
@@ -1063,7 +1190,7 @@
       "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
       "ok": true,
       "detail": {
-        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_c159dd319f0 could not be loaded: Missing LUT_3D_SIZE",
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_5ac6d4ba460 could not be loaded: Missing LUT_3D_SIZE",
         "previewVsPlain": 0
       }
     },
@@ -1071,7 +1198,7 @@
       "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
       "ok": true,
       "detail": {
-        "seconds": 1.3,
+        "seconds": 0.7,
         "meanDifferenceFromStill": 0,
         "errors": []
       }
@@ -1088,10 +1215,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_c159dd319f0",
+        "value": "ast_5ac6d4ba460",
         "options": [
           "",
-          "ast_c159dd319f0"
+          "ast_5ac6d4ba460"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -1104,7 +1231,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_e9ddb0b5250",
+        "selected": "ast_e188a5cd1f0",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47
@@ -1478,6 +1605,21 @@
       "name": "No uncaught errors in the editor page with the digicam preview",
       "ok": true,
       "detail": []
+    },
+    {
+      "name": "M1 color.grade against gradePixel: a 9×9×9 colour grid at 6 seeded sets of all eight values, every patch within 2 of 255, and every set changed the picture",
+      "ok": true,
+      "detail": {
+        "worst": 0.5,
+        "perSet": [
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ]
+      }
     },
     {
       "name": "Editor without an adapter: the clip is shown WITHOUT the effect (green still there), a warning says why, and the effect cannot be added",

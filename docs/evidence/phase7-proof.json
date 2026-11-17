@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T09:33:30.175Z",
+  "ranAt": "2026-11-17T18:16:53.952Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -12,16 +12,16 @@
     "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
     "exportWithLooks": {
       "frames": 30,
-      "wallMs": 1428,
+      "wallMs": 1598,
       "minPsnrDb": 42.16,
       "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
     },
     "lab": {
       "gpuEffectTilesUnavailable": 0,
-      "tiles": 523,
+      "tiles": 633,
       "effects": 53,
       "blends": 17,
-      "transitions": 51,
+      "transitions": 69,
       "masks": 5
     },
     "labWave": [
@@ -133,13 +133,163 @@
         "tiles": 10,
         "unavailable": false
       }
+    ],
+    "labTrend": [
+      {
+        "id": "punch-in",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "punch-out",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "blur-dissolve",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "split-open-h",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "split-open-v",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "shape-heart",
+        "ok": true,
+        "tiles": 10,
+        "bothShapes": true,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "shape-star",
+        "ok": true,
+        "tiles": 10,
+        "bothShapes": true,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "block-left",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": [
+          "16:9 step 3/5 (frame +7 of 15)"
+        ]
+      },
+      {
+        "id": "block-right",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": [
+          "16:9 step 3/5 (frame +7 of 15)"
+        ]
+      },
+      {
+        "id": "slices-h",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "slices-v",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "film-burn",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "light-leak",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "ink-bleed",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "brush-left",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "brush-right",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "page-turn-left",
+        "ok": true,
+        "tiles": 10,
+        "bothShapes": true,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "page-turn-right",
+        "ok": true,
+        "tiles": 10,
+        "bothShapes": true,
+        "unavailable": false,
+        "flat": []
+      }
     ]
   },
-  "passed": 32,
-  "total": 32,
+  "passed": 33,
+  "total": 33,
   "checks": [
     {
-      "name": "catalog lists exactly what is registered: 53 effects with parameter schemas and defaults, 51 transitions, 17 blend modes",
+      "name": "catalog lists exactly what is registered: 53 effects with parameter schemas and defaults, 69 transitions, 17 blend modes",
       "ok": true,
       "detail": {
         "effects": [
@@ -400,7 +550,7 @@
       "ok": true
     },
     {
-      "name": "all 51 transitions render a mid-frame that differs from both sides",
+      "name": "all 69 transitions render a mid-frame that differs from both sides",
       "ok": true,
       "detail": [
         "dissolve:ok",
@@ -453,7 +603,25 @@
         "whip-up:ok",
         "whip-down:ok",
         "spin-cw:ok",
-        "spin-ccw:ok"
+        "spin-ccw:ok",
+        "punch-in:ok",
+        "punch-out:ok",
+        "blur-dissolve:ok",
+        "split-open-h:ok",
+        "split-open-v:ok",
+        "shape-heart:ok",
+        "shape-star:ok",
+        "block-left:ok",
+        "block-right:ok",
+        "slices-h:ok",
+        "slices-v:ok",
+        "film-burn:ok",
+        "light-leak:ok",
+        "ink-bleed:ok",
+        "brush-left:ok",
+        "brush-right:ok",
+        "page-turn-left:ok",
+        "page-turn-right:ok"
       ]
     },
     {
@@ -466,7 +634,7 @@
       "ok": true,
       "detail": {
         "frames": 30,
-        "wallMs": 1428,
+        "wallMs": 1598,
         "minPsnrDb": 42.16,
         "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
       }
@@ -491,14 +659,14 @@
       }
     },
     {
-      "name": "Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip or of the flash, which is meant to be a flat colour, the chroma key at full tolerance, which removes the whole picture, and the strobe at full amount at the instant of its flash, which is the flash colour), default and extreme variants differ (where the default is not already the maximum), no page errors",
+      "name": "Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip or of the flash, which is meant to be a flat colour, the middle step of the colour blocks, which cover the whole frame on the switch frame, the chroma key at full tolerance, which removes the whole picture, and the strobe at full amount at the instant of its flash, which is the flash colour), default and extreme variants differ (where the default is not already the maximum), no page errors",
       "ok": true,
       "detail": {
         "gpuEffectTilesUnavailable": 0,
-        "tiles": 523,
+        "tiles": 633,
         "effects": 53,
         "blends": 17,
-        "transitions": 51,
+        "transitions": 69,
         "masks": 5,
         "sameVariants": [
           "color.grayscale",
@@ -518,13 +686,19 @@
           "effect:key.chroma:extreme",
           "effect:light.strobe:extreme",
           "effect:light.strobe:extreme",
-          "transition:flash:step 3/5 (frame +7 of 15)"
+          "transition:flash:step 3/5 (frame +7 of 15)",
+          "transition:block-left:step 3/5 (frame +7 of 15)"
         ],
         "labErrors": []
       }
     },
     {
       "name": "Lab, visual wave: the 12 new effects and 6 new transitions are tiled in 16:9 and 9:16, none flat; each effect's default and extreme differ and each transition's steps differ (a tile without a graphics adapter says so)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Lab, trend pack: the 18 new transitions are tiled in five steps (in 16:9 and 9:16 where the registry marks them shape-dependent), none flat except the colour blocks' switch frame, at least three different steps in each shape (a tile without a graphics adapter says so)",
       "ok": true,
       "detail": []
     }

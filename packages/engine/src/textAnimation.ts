@@ -6,7 +6,13 @@
  */
 import type { TextAnimation } from '@pulseframe/core';
 
-export interface UnitPose { alpha: number; /** horizontal offset in font sizes; positive = toward the right of the screen */ dx: number; /** vertical offset in font sizes; positive = down */ dy: number; scale: number }
+export interface UnitPose {
+  alpha: number; /** horizontal offset in font sizes; positive = toward the right of the screen */ dx: number; /** vertical offset in font sizes; positive = down */ dy: number; scale: number;
+  /** Blur of the unit, as the standard deviation in font sizes (ADR-0012 'blur' entrance and exit). Absent at rest. */
+  blur?: number;
+  /** How much of the unit shows, 0…1, from the side its reading starts on (the right for right-to-left text): the 'write' entrance. Absent at rest. */
+  reveal?: number;
+}
 const REST: UnitPose = { alpha: 1, dx: 0, dy: 0, scale: 1 };
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const outCubic = (u: number) => 1 - (1 - u) ** 3;
@@ -16,6 +22,26 @@ const outBack = (u: number) => { const c = 1.70158; return 1 + (c + 1) * (u - 1)
 /** Share of an entrance or exit that one unit takes; the rest is the stagger between the first and the last unit. */
 const UNIT_SHARE = 0.45;
 const hash = (a: number, b: number) => { let h = (a * 374761393 + b * 668265263) >>> 0; h = ((h ^ (h >>> 13)) * 1274126177) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+/**
+ * Write-on (ADR-0012): the units of a title are written one after another, each taking a share of the entrance equal to
+ * its share of the measured width. Unit `i` starts at Σ_{j<i} w_j / Σw of the entrance and is complete at Σ_{j≤i} w_j / Σw;
+ * returns how much of it shows (0…1) at entrance progress `t` (0…1). Without usable widths every unit gets an equal share.
+ */
+export function writeProgress(widths: readonly number[], i: number, t: number): number {
+  const n = widths.length;
+  if (n === 0) return 1;
+  const w = widths.map((x) => (Number.isFinite(x) && x > 0 ? x : 0));
+  let total = w.reduce((a, b) => a + b, 0);
+  const share = total > 0 ? w : w.map(() => 1);
+  if (!(total > 0)) total = n;
+  let before = 0;
+  for (let j = 0; j < i && j < n; j++) before += share[j]!;
+  const start = before / total, end = (before + (share[i] ?? 0)) / total;
+  if (t >= end - 1e-9) return 1; // finished exactly: no rounding leaves a unit a hair short of rest
+  if (t <= start) return 0;
+  return clamp01((t - start) / (end - start));
+}
 
 /** Progress (0…1) of unit `index` through a staggered phase that lasts `length` seconds, `t` seconds after it began. */
 export function unitProgress(index: number, count: number, t: number, length: number): number {
@@ -47,9 +73,10 @@ export function textAtRest(a: TextAnimation & { local: number; total: number; fp
 
 /**
  * The pose of one unit. `rtl` is the reading direction of the unit's line: a slide comes from the side reading starts on
- * (the right for Hebrew) and leaves toward the side reading ends on.
+ * (the right for Hebrew) and leaves toward the side reading ends on. `widths`: the measured widths of all `count` units in
+ * reading order, for the write-on entrance (equal shares without them).
  */
-export function unitPose(a: TextAnimation & { local: number; total: number; fps: number }, index: number, count: number, rtl: boolean): UnitPose {
+export function unitPose(a: TextAnimation & { local: number; total: number; fps: number }, index: number, count: number, rtl: boolean, widths?: readonly number[]): UnitPose {
   const p: UnitPose = { ...REST };
   const startSide = rtl ? 1 : -1;
   if (a.in) {
@@ -63,8 +90,15 @@ export function unitPose(a: TextAnimation & { local: number; total: number; fps:
       else if (a.in === 'slide') { p.alpha *= u; p.dx += (1 - e) * 1.2 * startSide; }
       else if (a.in === 'zoom') { p.alpha *= u; p.scale *= 1 + (1 - e) * 1.2; }
       else if (a.in === 'pop') { p.alpha *= clamp01(u * 3); p.scale *= u >= 1 ? 1 : Math.max(0.01, 0.3 + 0.7 * outBack(u)); }
-      // PLACEHOLDER (ADR-0012; W3 writes the blur and write-on poses): a plain fade until then, never presented as the effect
-      else if (a.in === 'blur' || a.in === 'write') p.alpha *= u;
+      // ADR-0012: out of focus and transparent, sharpening as it fades in (a blur of a quarter of the font size at the start)
+      else if (a.in === 'blur') { p.alpha *= u; const b = 0.25 * (1 - e); if (b > 0) p.blur = b; }
+    }
+    // ADR-0012 write-on: one unit after another, each by its share of the width, uncovered from its reading-start side
+    if (a.in === 'write') {
+      const t = length > 0 ? Math.min(1, entranceTime(a) / length) : 1;
+      const r = writeProgress(widths && widths.length === count ? widths : Array.from({ length: count }, () => 1), index, t);
+      p.alpha = r > 0 ? p.alpha : 0;
+      if (r < 1) p.reveal = r;
     }
   }
   if (a.out) {
@@ -76,7 +110,7 @@ export function unitPose(a: TextAnimation & { local: number; total: number; fps:
       else if (a.out === 'lift') p.dy -= e * 0.7;
       else if (a.out === 'shrink') p.scale *= Math.max(0.01, 1 - e * 0.7);
       else if (a.out === 'slide') p.dx -= e * 1.2 * startSide;
-      // out 'blur': PLACEHOLDER (ADR-0012, W3): the plain fade above until its pose lands
+      else if (a.out === 'blur') { const b = 0.25 * e; if (b > 0) p.blur = b; } // ADR-0012: the blur entrance played backwards
     }
   }
   if (a.loop) {
@@ -97,6 +131,9 @@ const DIRECTION_CONTROL = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
 const HEBREW = '\\u0590-\\u05FF\\uFB1D-\\uFB4F';
 /** Arabic and the other scripts of those blocks. Their letters join, and European digits after them follow rules of their own. */
 const ARABIC = '\\u0600-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFE';
+const ARABIC_SCRIPT = new RegExp(`[${ARABIC}]`, 'u');
+/** True when the text has a letter of Arabic script (or another script of those blocks): its letters join, so no space is put between them (ADR-0012 tracking). */
+export const hasArabicScript = (text: string): boolean => ARABIC_SCRIPT.test(text);
 const DIGIT = /[0-9\u0660-\u0669\u06F0-\u06F9]/;
 /**
  * Characters that take the direction of the line whatever stands next to them, or belong to a number: the space, ASCII

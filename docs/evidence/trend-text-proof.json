@@ -1,0 +1,1142 @@
+{
+ "ranAt": "2026-11-17T17:54:08.289Z",
+ "commit": "54abcdcce61c3816ad5425eb5c333afa33d07c6f",
+ "baselineCommit": "33a78fce3ea78f9c37867a3d07efdf5722f3be05",
+ "machine": {
+  "platform": "Linux 6.18.44-fc-v553 x64",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "gpu": "none used: every title look is Canvas2D; the editor browser has no WebGPU; the render worker started as for the trend baseline (PF_RENDER_GPU unset), and no project here uses a GPU effect"
+ },
+ "scope": "Server stills and exports at 1080x1920 through the render worker, and the editor in headless Chromium (Playwright), on this container. X1 compares pixel hashes with docs/evidence/trend-baseline.json, which holds only on the machine and build that recorded it. Nobody has judged the looks on a video by eye.",
+ "result": "FAILED",
+ "checks": [
+  {
+   "id": "X1",
+   "name": "the 42 text stills of the trend baseline (40 legacy styles and the two classic-outline stills) are byte-identical",
+   "ok": true,
+   "detail": {
+    "baselineCommit": "33a78fce3ea78f9c37867a3d07efdf5722f3be05",
+    "compared": 42,
+    "differ": []
+   }
+  },
+  {
+   "id": "X1",
+   "name": "the ten new styles each render a still, all different",
+   "ok": true
+  },
+  {
+   "id": "X2",
+   "name": "for each look field (and none), with the blur and the write-on entrance by letter: at frame 40 (at rest) the still is byte-identical to the title without animation",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "id": "X3",
+   "name": "stroke2: on a scanline through the stem of ו the outline ring is strokeFrac·px and the second ring widthFrac·px wide, ±1 px, on both sides",
+   "ok": true,
+   "detail": {
+    "scanRow": 1011,
+    "left": {
+     "red": 30.73,
+     "blue": 23.04
+    },
+    "right": {
+     "red": 30.72,
+     "blue": 23.04
+    },
+    "expected": {
+     "red": 30.72,
+     "blue": 23.04
+    }
+   }
+  },
+  {
+   "id": "X3",
+   "name": "gradient 90°: the top and bottom ink rows (fully covered pixels) are within 3/255 of the two stops, and every row between moves toward the bottom stop",
+   "ok": false,
+   "detail": {
+    "topRow": 803,
+    "top": [
+     254.3,
+     208.8,
+     102.5
+    ],
+    "bottomRow": 1096,
+    "bottom": [
+     61.9,
+     93.5,
+     251.7
+    ],
+    "stops": [
+     [
+      255,
+      209,
+      102
+     ],
+     [
+      58,
+      91,
+      255
+     ]
+    ],
+    "rowsMeasured": 294,
+    "stepsAgainstTheDirection": 0
+   }
+  },
+  {
+   "id": "X3",
+   "name": "glow: from the letter's edge the light falls monotonically (±1), is above 8/255 at R/2 and at most 2/255 beyond 1.6R",
+   "ok": true,
+   "detail": {
+    "R": 57.6,
+    "scanRow": 1011,
+    "edgeX": 514,
+    "atHalfR": 16,
+    "maxBeyond16R": 0,
+    "risesAlongTheProfile": 0,
+    "profileEvery8px": [
+     218,
+     100,
+     44,
+     23,
+     12,
+     7,
+     3,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "id": "X3",
+   "name": "extrude: the ink box grows by depth·(cos, sin) toward 45° (±1 px) and not elsewhere; the side darkens monotonically with depth",
+   "ok": true,
+   "detail": {
+    "depthPx": 38.4,
+    "expectedGrowth": 27.15,
+    "grow": {
+     "left": 0,
+     "top": 0,
+     "right": 27,
+     "bottom": 27
+    },
+    "sideRed": [
+     208,
+     190,
+     170,
+     149,
+     130,
+     110,
+     88
+    ],
+    "brighterSteps": 0
+   }
+  },
+  {
+   "id": "X3",
+   "name": "longShadow: the ink box grows by L toward 45° (±1 px); every shadow pixel off the edges is exactly the colour; 0 gaps along its direction",
+   "ok": false,
+   "detail": {
+    "lengthPx": 307.2,
+    "expectedGrowth": 217.22,
+    "grow": {
+     "left": 0,
+     "top": 0,
+     "right": 216,
+     "bottom": 217
+    },
+    "exactColourPixels": 60417,
+    "notTheColourInside": 0,
+    "walks": 1515,
+    "gaps": 0
+   }
+  },
+  {
+   "id": "X3",
+   "name": "tracking: the ink width grows by t·px·(graphemes − 1), ±2 px",
+   "ok": true,
+   "detail": {
+    "graphemes": 9,
+    "inkWidthPlain": 529,
+    "inkWidthSpaced": 714,
+    "grew": 185,
+    "expected": 184.32
+   }
+  },
+  {
+   "id": "X3",
+   "name": "tracking 0.5 with niqqud: the four letters stand where the unpointed ones do, and the centroid of every vowel point lies on its letter's columns (a fifth of the spacing allowed for the font's placement)",
+   "ok": true,
+   "detail": {
+    "spacingPx": 96,
+    "letters": [
+     [
+      135,
+      230
+     ],
+     [
+      349,
+      387
+     ],
+     [
+      505,
+      596
+     ],
+     [
+      714,
+      848
+     ]
+    ],
+    "lettersPointed": [
+     [
+      135,
+      230
+     ],
+     [
+      349,
+      387
+     ],
+     [
+      505,
+      596
+     ],
+     [
+      714,
+      848
+     ]
+    ],
+    "points": [
+     {
+      "x": 369,
+      "y": 890,
+      "n": 267
+     },
+     {
+      "x": 833,
+      "y": 890,
+      "n": 264
+     },
+     {
+      "x": 780,
+      "y": 1056,
+      "n": 870
+     }
+    ],
+    "outside": [],
+    "lettersMoved": []
+   }
+  },
+  {
+   "id": "X3",
+   "name": "tracking on an Arabic line: the still is SHA-equal to the same title with tracking 0",
+   "ok": true,
+   "detail": {
+    "without": "5741ec6b1edc271ddbe236dc9b284033d467cb134145b253fc389739bb68e3d3",
+    "withTracking025": "5741ec6b1edc271ddbe236dc9b284033d467cb134145b253fc389739bb68e3d3"
+   }
+  },
+  {
+   "id": "X4",
+   "name": "blur-in by word over 20 frames: the Sobel edge energy never falls from one frame to the next, and ends at the still title's",
+   "ok": true,
+   "detail": {
+    "relativeEnergy": [
+     0.0001,
+     0.0002,
+     0.0016,
+     0.0091,
+     0.032,
+     0.0982,
+     0.3174,
+     0.4173,
+     0.5267,
+     0.5267,
+     0.5267,
+     0.5268,
+     0.5269,
+     0.5283,
+     0.5347,
+     0.5549,
+     0.6138,
+     0.8119,
+     0.9016,
+     1,
+     1
+    ],
+    "falls": []
+   }
+  },
+  {
+   "id": "X4",
+   "name": "write-on 'שלום עולם' by letter over 40 frames: at frame 3 there is ink, and only in the rightmost letter's columns",
+   "ok": true,
+   "detail": {
+    "he": {
+     "rightmostLetter": [
+      786,
+      893
+     ],
+     "inkAtFrame3": [
+      [
+       834,
+       893
+      ]
+     ],
+     "area": [
+      0,
+      6281,
+      9809,
+      12288,
+      17544,
+      22103,
+      24638,
+      28425,
+      33285
+     ]
+    },
+    "en": {
+     "leftmostLetter": [
+      158,
+      247
+     ],
+     "inkAtFrame3": [
+      [
+       158,
+       237
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "id": "X4",
+   "name": "write-on: the ink area never decreases over the entrance, and the title at rest is reached",
+   "ok": true,
+   "detail": {
+    "shrinksHe": 0,
+    "shrinksEn": 0
+   }
+  },
+  {
+   "id": "X4",
+   "name": "write-on, English control 'Hello world': at frame 3 the ink is only in the leftmost letter's columns",
+   "ok": true,
+   "detail": {
+    "he": {
+     "rightmostLetter": [
+      786,
+      893
+     ],
+     "inkAtFrame3": [
+      [
+       834,
+       893
+      ]
+     ],
+     "area": [
+      0,
+      6281,
+      9809,
+      12288,
+      17544,
+      22103,
+      24638,
+      28425,
+      33285
+     ]
+    },
+    "en": {
+     "leftmostLetter": [
+      158,
+      247
+     ],
+     "inkAtFrame3": [
+      [
+       158,
+       237
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "id": "X5",
+   "name": "rise by letter with a 90° gradient: on every frame where a letter shows at half opacity or more, its top and bottom colours equal its colours at rest ±3/255 (also while it is moved down)",
+   "ok": true,
+   "detail": {
+    "letters": [
+     [
+      115,
+      304
+     ],
+     [
+      350,
+      427
+     ],
+     [
+      471,
+      653
+     ],
+     [
+      697,
+      964
+     ]
+    ],
+    "compared": 38,
+    "moved": 12,
+    "worstDifference": 1.04,
+    "bad": []
+   }
+  },
+  {
+   "id": "X6",
+   "name": "five looks (glow, gradient, double outline, extrusion, long shadow): the paused editor preview (no graphics adapter) is byte-identical to the worker's still",
+   "ok": true,
+   "detail": [
+    {
+     "preset": "neon-tube-pink",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 46.13
+    },
+    {
+     "preset": "gradient-sunset",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 46.34
+    },
+    {
+     "preset": "double-outline-pop",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 41.36
+    },
+    {
+     "preset": "extrude-retro",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 35.93
+    },
+    {
+     "preset": "long-shadow-flat",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 56.59
+    }
+   ]
+  },
+  {
+   "id": "X6",
+   "name": "and the exported frame reaches PSNR ≥ 40 dB against the still",
+   "ok": false,
+   "detail": [
+    {
+     "preset": "neon-tube-pink",
+     "psnr": 46.13
+    },
+    {
+     "preset": "gradient-sunset",
+     "psnr": 46.34
+    },
+    {
+     "preset": "double-outline-pop",
+     "psnr": 41.36
+    },
+    {
+     "preset": "extrude-retro",
+     "psnr": 35.93
+    },
+    {
+     "preset": "long-shadow-flat",
+     "psnr": 56.59
+    }
+   ]
+  },
+  {
+   "id": "X7",
+   "name": "server exports of every new style with blur-in and write-on, at the default length and at one frame: the FlashAnalyser reads every frame and passes each",
+   "ok": true,
+   "detail": [
+    {
+     "preset": "neon-tube-pink",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "neon-tube-cyan",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "gradient-sunset",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "gradient-ocean",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "gradient-gold",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "double-outline-pop",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "extrude-retro",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "extrude-block",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "long-shadow-flat",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "wide-minimal",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    }
+   ]
+  },
+  {
+   "id": "X8",
+   "name": "time per decorated title per frame is recorded; any style over 25 ms is named in the evidence",
+   "ok": true,
+   "detail": {
+    "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
+    "plainStillMs": 499.2,
+    "addedMsPerFrame": {
+     "neon-tube-pink": 157,
+     "neon-tube-cyan": 150.6,
+     "gradient-sunset": 31.6,
+     "gradient-ocean": 7.2,
+     "gradient-gold": -5.1,
+     "double-outline-pop": 31.8,
+     "extrude-retro": 210.9,
+     "extrude-block": 317.4,
+     "long-shadow-flat": 479.6,
+     "wide-minimal": 56.5
+    },
+    "over25ms": [
+     "neon-tube-pink",
+     "neon-tube-cyan",
+     "gradient-sunset",
+     "double-outline-pop",
+     "extrude-retro",
+     "extrude-block",
+     "long-shadow-flat",
+     "wide-minimal"
+    ]
+   }
+  },
+  {
+   "id": "X9",
+   "name": "'letterSpacing' is in the canvas context of the editor's browser and of the render worker",
+   "ok": true,
+   "detail": {
+    "editor": {
+     "letterSpacing": true,
+     "filter": true,
+     "webgpu": true
+    },
+    "worker": {
+     "letterSpacing": true,
+     "how": "a still with tracking 0.2 was delivered and its ink is wider; without letterSpacing the worker reports text.tracking unavailable and refuses the still"
+    }
+   }
+  },
+  {
+   "id": "X10",
+   "name": "keyboard only: Tab to the glow checkbox and Space commits update_text with the glow; Tab to undo and Enter restores the title exactly",
+   "ok": true,
+   "detail": {
+    "reachedByTab": true,
+    "glow": {
+     "color": "#FF2BD6",
+     "radiusFrac": 0.5,
+     "intensity": 0.8
+    },
+    "op": [
+     "update_text"
+    ],
+    "undoReachedByTab": true,
+    "undoEvent": "undo",
+    "restored": true
+   }
+  },
+  {
+   "id": "X10",
+   "name": "in a format view the same keys commit set_variant_override with the glow, and the master title keeps no glow",
+   "ok": true,
+   "detail": {
+    "reachedByTab": true,
+    "override": {
+     "glow": {
+      "color": "#FF2BD6",
+      "radiusFrac": 0.5,
+      "intensity": 0.8
+     }
+    },
+    "op": [
+     "set_variant_override"
+    ],
+    "masterGlow": null
+   }
+  }
+ ],
+ "measurements": {
+  "x1": {
+   "baselineCommit": "33a78fce3ea78f9c37867a3d07efdf5722f3be05",
+   "compared": 42,
+   "differ": []
+  },
+  "newStyleHashes": {
+   "neon-tube-pink": "4079c368c06ab0c7130febb208a6fcad3a8ac968197babd97b37f79aa2fe0e2d",
+   "neon-tube-cyan": "a8b2e0d98c6933bf2309c390b432bbb3391ac5f8c73a5daffd30d64dbdb52cb7",
+   "gradient-sunset": "24ea313df49e6abda072bdd98ed3241d332fa6b38af1e77de5fe840545cc5c3c",
+   "gradient-ocean": "ad90ee33950ae9385f2886247d5ffb8ff53318ba4fe1ec5fc895fd82b48b8a46",
+   "gradient-gold": "6d8a4b73ae7247e8450e2f8899dbbd7cb84d8b5fb2b29d45a5dc111c287fa721",
+   "double-outline-pop": "c1dc9d5832f937059fd8e743065d68c4d7ef5476f09040863a8a8188c3e3f922",
+   "extrude-retro": "701faaf4926bcad49d8e353cf39b92712a07251381253408a905ebd3c9a3695a",
+   "extrude-block": "9f88dfc46d6313dd3286fef52149d82f6385e1ad3e667030cfd5ea35dceb1887",
+   "long-shadow-flat": "a13108674270915dccb42979b17c6efdc72c9f39a2e4dc761195a1961197e620",
+   "wide-minimal": "e8f18ee71dfb573fe98dec079cc4668b32f8a0252fb1fc088b3321cae3329600"
+  },
+  "x2": [
+   {
+    "look": "none",
+    "entrance": "blur",
+    "same": true
+   },
+   {
+    "look": "none",
+    "entrance": "write",
+    "same": true
+   },
+   {
+    "look": "gradient",
+    "entrance": "blur",
+    "same": true
+   },
+   {
+    "look": "gradient",
+    "entrance": "write",
+    "same": true
+   },
+   {
+    "look": "tracking",
+    "entrance": "blur",
+    "same": true
+   },
+   {
+    "look": "tracking",
+    "entrance": "write",
+    "same": true
+   },
+   {
+    "look": "stroke2",
+    "entrance": "blur",
+    "same": true
+   },
+   {
+    "look": "stroke2",
+    "entrance": "write",
+    "same": true
+   },
+   {
+    "look": "glow",
+    "entrance": "blur",
+    "same": true
+   },
+   {
+    "look": "glow",
+    "entrance": "write",
+    "same": true
+   },
+   {
+    "look": "extrude",
+    "entrance": "blur",
+    "same": true
+   },
+   {
+    "look": "extrude",
+    "entrance": "write",
+    "same": true
+   },
+   {
+    "look": "longShadow",
+    "entrance": "blur",
+    "same": true
+   },
+   {
+    "look": "longShadow",
+    "entrance": "write",
+    "same": true
+   }
+  ],
+  "workerTracking": {
+   "delivered": true,
+   "grew": 185
+  },
+  "x3": {
+   "stroke2": {
+    "scanRow": 1011,
+    "left": {
+     "red": 30.73,
+     "blue": 23.04
+    },
+    "right": {
+     "red": 30.72,
+     "blue": 23.04
+    },
+    "expected": {
+     "red": 30.72,
+     "blue": 23.04
+    }
+   },
+   "gradient": {
+    "topRow": 803,
+    "top": [
+     254.3,
+     208.8,
+     102.5
+    ],
+    "bottomRow": 1096,
+    "bottom": [
+     61.9,
+     93.5,
+     251.7
+    ],
+    "stops": [
+     [
+      255,
+      209,
+      102
+     ],
+     [
+      58,
+      91,
+      255
+     ]
+    ],
+    "rowsMeasured": 294,
+    "stepsAgainstTheDirection": 0
+   },
+   "glow": {
+    "R": 57.6,
+    "scanRow": 1011,
+    "edgeX": 514,
+    "atHalfR": 16,
+    "maxBeyond16R": 0,
+    "risesAlongTheProfile": 0,
+    "profileEvery8px": [
+     218,
+     100,
+     44,
+     23,
+     12,
+     7,
+     3,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "extrude": {
+    "depthPx": 38.4,
+    "expectedGrowth": 27.15,
+    "grow": {
+     "left": 0,
+     "top": 0,
+     "right": 27,
+     "bottom": 27
+    },
+    "sideRed": [
+     208,
+     190,
+     170,
+     149,
+     130,
+     110,
+     88
+    ],
+    "brighterSteps": 0
+   },
+   "longShadow": {
+    "lengthPx": 307.2,
+    "expectedGrowth": 217.22,
+    "grow": {
+     "left": 0,
+     "top": 0,
+     "right": 216,
+     "bottom": 217
+    },
+    "exactColourPixels": 60417,
+    "notTheColourInside": 0,
+    "walks": 1515,
+    "gaps": 0
+   },
+   "tracking": {
+    "graphemes": 9,
+    "inkWidthPlain": 529,
+    "inkWidthSpaced": 714,
+    "grew": 185,
+    "expected": 184.32
+   },
+   "niqqud": {
+    "spacingPx": 96,
+    "letters": [
+     [
+      135,
+      230
+     ],
+     [
+      349,
+      387
+     ],
+     [
+      505,
+      596
+     ],
+     [
+      714,
+      848
+     ]
+    ],
+    "lettersPointed": [
+     [
+      135,
+      230
+     ],
+     [
+      349,
+      387
+     ],
+     [
+      505,
+      596
+     ],
+     [
+      714,
+      848
+     ]
+    ],
+    "points": [
+     {
+      "x": 369,
+      "y": 890,
+      "n": 267
+     },
+     {
+      "x": 833,
+      "y": 890,
+      "n": 264
+     },
+     {
+      "x": 780,
+      "y": 1056,
+      "n": 870
+     }
+    ],
+    "outside": [],
+    "lettersMoved": []
+   },
+   "arabic": {
+    "without": "5741ec6b1edc271ddbe236dc9b284033d467cb134145b253fc389739bb68e3d3",
+    "withTracking025": "5741ec6b1edc271ddbe236dc9b284033d467cb134145b253fc389739bb68e3d3"
+   }
+  },
+  "x4blur": {
+   "relativeEnergy": [
+    0.0001,
+    0.0002,
+    0.0016,
+    0.0091,
+    0.032,
+    0.0982,
+    0.3174,
+    0.4173,
+    0.5267,
+    0.5267,
+    0.5267,
+    0.5268,
+    0.5269,
+    0.5283,
+    0.5347,
+    0.5549,
+    0.6138,
+    0.8119,
+    0.9016,
+    1,
+    1
+   ],
+   "falls": []
+  },
+  "x4write": {
+   "he": {
+    "rightmostLetter": [
+     786,
+     893
+    ],
+    "inkAtFrame3": [
+     [
+      834,
+      893
+     ]
+    ],
+    "area": [
+     0,
+     6281,
+     9809,
+     12288,
+     17544,
+     22103,
+     24638,
+     28425,
+     33285
+    ]
+   },
+   "en": {
+    "leftmostLetter": [
+     158,
+     247
+    ],
+    "inkAtFrame3": [
+     [
+      158,
+      237
+     ]
+    ]
+   }
+  },
+  "x5": {
+   "letters": [
+    [
+     115,
+     304
+    ],
+    [
+     350,
+     427
+    ],
+    [
+     471,
+     653
+    ],
+    [
+     697,
+     964
+    ]
+   ],
+   "compared": 38,
+   "moved": 12,
+   "worstDifference": 1.04,
+   "bad": []
+  },
+  "editorCanvas": {
+   "letterSpacing": true,
+   "filter": true,
+   "webgpu": true
+  },
+  "x6": {
+   "rows": [
+    {
+     "preset": "neon-tube-pink",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 46.13
+    },
+    {
+     "preset": "gradient-sunset",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 46.34
+    },
+    {
+     "preset": "double-outline-pop",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 41.36
+    },
+    {
+     "preset": "extrude-retro",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 35.93
+    },
+    {
+     "preset": "long-shadow-flat",
+     "previewIdentical": true,
+     "maxDifference": 0,
+     "psnr": 56.59
+    }
+   ],
+   "pageErrors": []
+  },
+  "x7": {
+   "layout": "per style one export of 180 frames: blur-in 20, blur-in 1, write-on 20, write-on 1 (each title 30 frames after 15 black frames), the sample title at 1080x1920; frames decoded at 270x480 by point sampling for the FlashAnalyser (it samples every 4th pixel of a full frame)",
+   "rows": [
+    {
+     "preset": "neon-tube-pink",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "neon-tube-cyan",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "gradient-sunset",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "gradient-ocean",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "gradient-gold",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "double-outline-pop",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "extrude-retro",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "extrude-block",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "long-shadow-flat",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    },
+    {
+     "preset": "wide-minimal",
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": []
+    }
+   ]
+  },
+  "x8": {
+   "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
+   "plainStillMs": 499.2,
+   "addedMsPerFrame": {
+    "neon-tube-pink": 157,
+    "neon-tube-cyan": 150.6,
+    "gradient-sunset": 31.6,
+    "gradient-ocean": 7.2,
+    "gradient-gold": -5.1,
+    "double-outline-pop": 31.8,
+    "extrude-retro": 210.9,
+    "extrude-block": 317.4,
+    "long-shadow-flat": 479.6,
+    "wide-minimal": 56.5
+   },
+   "over25ms": [
+    "neon-tube-pink",
+    "neon-tube-cyan",
+    "gradient-sunset",
+    "double-outline-pop",
+    "extrude-retro",
+    "extrude-block",
+    "long-shadow-flat",
+    "wide-minimal"
+   ]
+  },
+  "x9": {
+   "editor": {
+    "letterSpacing": true,
+    "filter": true,
+    "webgpu": true
+   },
+   "worker": {
+    "letterSpacing": true,
+    "how": "a still with tracking 0.2 was delivered and its ink is wider; without letterSpacing the worker reports text.tracking unavailable and refuses the still"
+   }
+  },
+  "x10master": {
+   "reachedByTab": true,
+   "glow": {
+    "color": "#FF2BD6",
+    "radiusFrac": 0.5,
+    "intensity": 0.8
+   },
+   "op": [
+    "update_text"
+   ],
+   "undoReachedByTab": true,
+   "undoEvent": "undo",
+   "restored": true
+  },
+  "x10format": {
+   "reachedByTab": true,
+   "override": {
+    "glow": {
+     "color": "#FF2BD6",
+     "radiusFrac": 0.5,
+     "intensity": 0.8
+    }
+   },
+   "op": [
+    "set_variant_override"
+   ],
+   "masterGlow": null
+  }
+ }
+}
