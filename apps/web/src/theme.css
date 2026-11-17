@@ -71,8 +71,10 @@ fieldset { border-color: var(--pf-border); border-radius: var(--pf-r-md); }
 .stage { background: radial-gradient(900px 420px at 50% 40%, #171b22 0%, #0b0d11 70%); overflow-y: clip; }
 /* The handle box of a selected clip is as large as the clip is drawn, so on an enlarged clip it reaches above the preview,
    and its move handle fills it. With no z-index on the header (above) it lay over the header and took the clicks meant for
-   Undo, Projects and the rest. The stage cuts off what its children draw above and below it; sideways nothing is cut, so
-   the corner handles of a wide clip stay in reach. `clip` on one axis makes no scroll container and no stacking context. */
+   Undo, Projects and the rest. The handles are now cut off at the edge of the viewer itself (interactions.css: .ch-clip),
+   which also keeps them off the transport bar and the side panels, with stand-ins at the edge for handles outside it; the
+   stage still cuts off whatever else its children draw above and below it. `clip` on one axis makes no scroll container
+   and no stacking context. */
 canvas[data-testid='preview'] { border-radius: 10px; box-shadow: 0 0 0 1px var(--pf-border), 0 24px 60px rgba(0, 0, 0, 0.55); }
 
 /* ---- transport ---- */

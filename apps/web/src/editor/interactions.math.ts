@@ -73,6 +73,93 @@ export function rotationFromDrag(centre: { x: number; y: number }, startPoint: {
   return clampRotation(snap15 ? Math.round(r / 15) * 15 : r);
 }
 
+// ---- canvas handles that lie outside the viewer ----
+// The handle overlay is clipped to the viewer (CanvasHandles.tsx): nothing of it can lie over the transport bar, the panels or
+// the header and take their clicks. A handle whose centre is outside the viewer therefore cannot be reached there; it gets
+// a stand-in (a "proxy") at the viewer edge that does the same thing when dragged. The positions below are in the
+// coordinates of the overlay root (the displayed canvas: 0,0 is its top-left corner, pixels on screen).
+
+export type ScaleHandle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
+export type LayerHandle = ScaleHandle | 'rotate' | 'move';
+/** Where the scale handles sit on the box, as fractions of its width and height from its top-left corner. */
+export const SCALE_ANCHORS: Readonly<Record<ScaleHandle, readonly [number, number]>> = { n: [0.5, 0], ne: [1, 0], e: [1, 0.5], se: [1, 1], s: [0.5, 1], sw: [0, 1], w: [0, 0.5], nw: [0, 0] };
+/** The rotate handle sits this far above the top edge of the box (interactions.css: .ch-rotate). */
+export const ROTATE_ABOVE_PX = 28;
+export interface ViewRect { left: number; top: number; right: number; bottom: number }
+export interface HandlePoint { id: Exclude<LayerHandle, 'move'>; x: number; y: number }
+export interface Proxy { id: LayerHandle; x: number; y: number; /** stands in for the handle that has the keyboard focus, whose own ring cannot be seen */ mirror: boolean }
+
+/** The centre of every scale handle and of the rotate handle of a box drawn centred at (cx, cy) and turned clockwise by rotationDeg. */
+export function handlePoints(box: LayerBox): HandlePoint[] {
+  const a = (box.rotationDeg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const at = (dx: number, dy: number) => ({ x: box.cx + dx * cos - dy * sin, y: box.cy + dx * sin + dy * cos });
+  const out: HandlePoint[] = (Object.entries(SCALE_ANCHORS) as [ScaleHandle, readonly [number, number]][]).map(([id, [u, v]]) => ({ id, ...at((u - 0.5) * box.w, (v - 0.5) * box.h) }));
+  out.push({ id: 'rotate', ...at(0, -box.h / 2 - ROTATE_ABOVE_PX) });
+  return out;
+}
+
+/**
+ * Stand-ins at the viewer edge for the handles that cannot be reached inside it. `margin` is half a handle: a handle counts
+ * as inside when all of it is, and a stand-in is placed that far inside the edge. `gap` is the least distance between two
+ * grips; a stand-in that would land on another grip slides along the edge.
+ * - all scale handles do the same thing (a uniform scale about the centre, by the ratio of pointer distances from it), so
+ *   only when none of them is inside is one stand-in added: for the one nearest the viewer;
+ * - the rotate handle gets one when it is outside;
+ * - the box can always be moved by dragging its visible part; when nothing of it (its bounding box) is inside, a move
+ *   stand-in is placed at its centre, pulled to the edge;
+ * - `focused`: the handle that has the keyboard focus. When its focus ring cannot be seen (it is outside; for the move
+ *   handle, the box covers the whole viewer or lies outside it), its stand-in is shown with the ring (`mirror`), first.
+ * The result depends only on the box and the viewer, so it stays put while a drag runs from the committed transform.
+ */
+export function edgeProxies(a: { box: LayerBox; view: ViewRect; margin: number; gap: number; focused?: LayerHandle | null }): Proxy[] {
+  const { box, view, margin: m, gap } = a;
+  const lo = { x: view.left + m, y: view.top + m }, hi = { x: view.right - m, y: view.bottom - m };
+  if (!(hi.x >= lo.x && hi.y >= lo.y) || ![box.cx, box.cy, box.w, box.h, box.rotationDeg].every(Number.isFinite)) return [];
+  const inside = (p: { x: number; y: number }) => p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y;
+  const pull = (p: { x: number; y: number }) => ({ x: clamp(p.x, lo.x, hi.x), y: clamp(p.y, lo.y, hi.y) });
+  const points = handlePoints(box);
+  const scale = points.filter((p) => p.id !== 'rotate');
+  const rotate = points.find((p) => p.id === 'rotate')!;
+  // every handle that shows at least in part is a grip a stand-in must not cover
+  const shows = (p: { x: number; y: number }) => p.x >= view.left - m && p.x <= view.right + m && p.y >= view.top - m && p.y <= view.bottom + m;
+  const taken = points.filter(shows).map((p) => ({ x: p.x, y: p.y }));
+  const out: Proxy[] = [];
+  const place = (id: LayerHandle, at: { x: number; y: number }, mirror: boolean) => {
+    const q = pull(at);
+    const onTopOrBottom = Math.abs(q.y - lo.y) < 0.5 || Math.abs(q.y - hi.y) < 0.5;
+    const tries = [q];
+    for (let k = 1; k <= 4; k++) for (const s of [k, -k]) tries.push(onTopOrBottom ? { x: q.x + s * gap, y: q.y } : { x: q.x, y: q.y + s * gap });
+    const spot = tries.find((t) => inside(t) && taken.every((o) => Math.hypot(o.x - t.x, o.y - t.y) >= gap)) ?? q;
+    taken.push(spot);
+    out.push({ id, x: spot.x, y: spot.y, mirror });
+  };
+  // the box's bounding box: how much of it the viewer shows decides the move stand-in
+  const r = (box.rotationDeg * Math.PI) / 180, ex = Math.abs((box.w / 2) * Math.cos(r)) + Math.abs((box.h / 2) * Math.sin(r)), ey = Math.abs((box.w / 2) * Math.sin(r)) + Math.abs((box.h / 2) * Math.cos(r));
+  const boxOutside = box.cx + ex < lo.x || box.cx - ex > hi.x || box.cy + ey < lo.y || box.cy - ey > hi.y;
+  const boxCovers = box.cx - ex <= view.left && box.cx + ex >= view.right && box.cy - ey <= view.top && box.cy + ey >= view.bottom;
+  const f = a.focused ?? null;
+  let scaleDone = scale.some(inside);
+  let rotateDone = inside(rotate);
+  let moveDone = !boxOutside;
+  if (f === 'move') {
+    if (boxOutside || boxCovers) { place('move', { x: box.cx, y: box.cy }, true); moveDone = true; }
+  } else if (f === 'rotate') {
+    if (!rotateDone) { place('rotate', rotate, true); rotateDone = true; }
+  } else if (f) {
+    const own = scale.find((p) => p.id === f);
+    if (own && !inside(own)) { place(f, own, true); scaleDone = true; }
+  }
+  if (!rotateDone) place('rotate', rotate, false);
+  if (!scaleDone) {
+    const dist = (p: { x: number; y: number }) => { const q = pull(p); return Math.hypot(q.x - p.x, q.y - p.y); };
+    const order = ['n', 'e', 's', 'w', 'ne', 'se', 'sw', 'nw'].map((id) => scale.find((p) => p.id === id)!); // on a tie, the middle of a side
+    const near = order.reduce((best, p) => (dist(p) < dist(best) ? p : best));
+    place(near.id, near, false);
+  }
+  if (!moveDone) place('move', { x: box.cx, y: box.cy }, false);
+  return out;
+}
+
 /** True when [start, end) overlaps any clip on the track other than the moving ones (rational compare). */
 export function overlapsOnTrack(clips: readonly { id: string; start: T.RationalTime; duration: T.RationalTime }[], movingIds: Iterable<string>, start: T.RationalTime, end: T.RationalTime): boolean {
   const moving = new Set(movingIds);
