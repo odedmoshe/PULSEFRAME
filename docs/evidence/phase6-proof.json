@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-16T22:51:40.253Z",
+  "ranAt": "2026-11-17T04:02:29.484Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v470 x64",
+    "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -305,12 +305,12 @@
       "name": "caption renders match the committed baselines (SSIM ≥ 0.995), or were written on first run",
       "ok": true,
       "detail": {
-        "classic-mixed": "baseline written",
-        "classic-long-wrap": "baseline written",
-        "top-stroke": "baseline written",
-        "karaoke": "baseline written",
-        "box-highlight": "baseline written",
-        "word-pop": "baseline written"
+        "classic-mixed": 1,
+        "classic-long-wrap": 1,
+        "top-stroke": 1,
+        "karaoke": 1,
+        "box-highlight": 1,
+        "word-pop": 1
       }
     },
     {

@@ -1,10 +1,10 @@
 {
-  "ranAt": "2026-11-17T00:59:20.014Z",
+  "ranAt": "2026-11-17T04:32:04.001Z",
   "result": "PASSED",
-  "passed": 76,
-  "total": 76,
+  "passed": 77,
+  "total": 77,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v509 x64",
+    "platform": "Linux 6.18.44-fc-v553 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
@@ -20,7 +20,7 @@
       "meanChange": 77.563
     },
     "lutPreviewRecovery": {
-      "seconds": 1.3,
+      "seconds": 1.4,
       "meanDifferenceFromStill": 0
     },
     "lutPreviewVsStill": {
@@ -560,7 +560,7 @@
       }
     },
     {
-      "name": "motion.pulse set to follow the music: on a clip under a drum loop whose beats were detected by the analysis, the stills at the frame nearest a beat and at the frame latest in a beat match the pulse computed from the detected beats (within 3 pixels); the picture is larger near the beat",
+      "name": "motion.pulse set to follow the music: on a clip under a drum loop whose beats were detected by the analysis, the stills at the frame soonest after a beat and at the frame latest in a beat match the pulse computed from the detected beats (within 3 pixels); the picture is larger near the beat",
       "ok": true,
       "detail": {
         "detectedBeats": 8,
@@ -609,6 +609,31 @@
         "atFlash": 102,
         "before_next": 0,
         "fivePerSecond": 422
+      }
+    },
+    {
+      "name": "Strobes together, on an exported file: two strobes on a picture and a strobing title over it start at most three flashes in any one second (30 frames), and do keep flashing (at least 2.4 starts a second on average)",
+      "ok": true,
+      "detail": {
+        "frames": 150,
+        "flashStarts": [
+          0,
+          11,
+          22,
+          33,
+          44,
+          55,
+          66,
+          77,
+          88,
+          99,
+          110,
+          121,
+          132,
+          143
+        ],
+        "mostInOneSecond": 3,
+        "perSecond": 2.8
       }
     },
     {
@@ -772,7 +797,7 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_e5943c86c60 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_baaf9aa1e60 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
       }
@@ -781,7 +806,7 @@
       "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
       "ok": true,
       "detail": {
-        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_e5943c86c60 could not be loaded: Missing LUT_3D_SIZE",
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_baaf9aa1e60 could not be loaded: Missing LUT_3D_SIZE",
         "previewVsPlain": 0
       }
     },
@@ -789,7 +814,7 @@
       "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
       "ok": true,
       "detail": {
-        "seconds": 1.3,
+        "seconds": 1.4,
         "meanDifferenceFromStill": 0,
         "errors": []
       }
@@ -806,10 +831,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_e5943c86c60",
+        "value": "ast_baaf9aa1e60",
         "options": [
           "",
-          "ast_e5943c86c60"
+          "ast_baaf9aa1e60"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -822,7 +847,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_8fa873cc6c0",
+        "selected": "ast_8fcb02947b0",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47

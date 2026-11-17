@@ -1,7 +1,7 @@
 {
- "generatedAt": "2026-11-17T01:02:08.318Z",
+ "generatedAt": "2026-11-17T04:29:51.770Z",
  "profile": {
-  "os": "Linux 6.18.44-fc-v509",
+  "os": "Linux 6.18.44-fc-v553",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "note": "CPU-only container; Chromium with the software WebGPU adapter. Functional checks only; nothing here judges how a curve, motion, thumbnail or sound looks or sounds."
  },
@@ -173,7 +173,7 @@
    "ok": true,
    "detail": {
     "selected": 5,
-    "statusText": "העקומה הוחלה: 5 חלקים נבחרו בציר הזמן. Ctrl+Z מבטל."
+    "statusText": "העקומה הוחלה: 5 חלקים נבחרו בציר הזמן. Ctrl+Z מבטל. כדי לנסות עקומה אחרת, מבטלים קודם."
    }
   },
   {
@@ -291,7 +291,7 @@
    }
   },
   {
-   "name": "a layout for the wrong number of pictures is refused with the layouts that do fit; with two picture clips selected the editor offers the two-picture layouts, and \"side by side\" fills the left half with the lower track's picture and the right half with the upper one, each cropped to its cell, on a rendered still",
+   "name": "a layout for the wrong number of pictures is refused with the layouts that do fit; with two picture clips selected the editor offers the two-picture layouts, and \"side by side\" fills the left half with the lower track's picture and the right half with the upper one, each cropped to its cell by its mask, on a rendered still (without the masks the upper picture covers part of the left half, so this check depends on them)",
    "ok": true,
    "detail": {
     "refusedStatus": 422,
@@ -315,7 +315,30 @@
      0,
      0,
      254
-    ]
+    ],
+    "nearSeamLeft": [
+     253,
+     0,
+     0
+    ],
+    "seamLeft": [
+     253,
+     0,
+     0
+    ],
+    "withoutMasks": [
+     [
+      0,
+      0,
+      254
+     ],
+     [
+      0,
+      0,
+      254
+     ]
+    ],
+    "restored": true
    }
   },
   {
@@ -344,12 +367,44 @@
    }
   },
   {
-   "name": "fade out by word: unchanged before the exit begins, less ink during it, almost none on the last frame",
+   "name": "fade out by word: unchanged before the exit begins, less ink during it, almost none on the last frame, and the words leave one after another (the first and last word differ in what is left of them during the exit)",
    "ok": true,
    "detail": {
     "rest": 1144,
     "during": 470,
-    "last": 0
+    "last": 0,
+    "shares": [
+     {
+      "k": 72,
+      "first": 0.92,
+      "last": 1
+     },
+     {
+      "k": 75,
+      "first": 0.14,
+      "last": 1
+     },
+     {
+      "k": 78,
+      "first": 0.1,
+      "last": 1
+     },
+     {
+      "k": 81,
+      "first": 0,
+      "last": 0.95
+     },
+     {
+      "k": 84,
+      "first": 0,
+      "last": 0.85
+     },
+     {
+      "k": 87,
+      "first": 0,
+      "last": 0
+     }
+    ]
    }
   },
   {
@@ -386,16 +441,22 @@
    }
   },
   {
-   "name": "the title panel sets a text animation through the same operation; the timeline zoom buttons change the clip's width on screen and \"fit\" brings the whole timeline into view",
+   "name": "the title panel sets a text animation through the same operation; the timeline zoom buttons change the clip's width on screen both ways; after zooming far in, \"fit\" brings the whole timeline into view and lets it fill at least half of the view",
    "ok": true,
    "detail": {
     "widthBefore": 269,
     "widthAfterZoomIn": 404,
+    "widthAfterZoomOut": 179,
+    "widthFarIn": 2049,
     "fit": {
      "right": 1134,
      "scrollRight": 1500,
      "left": 76,
-     "scrollLeft": 0
+     "scrollLeft": 0,
+     "width": 1058,
+     "viewWidth": 1500,
+     "scrolledBy": 0,
+     "canScroll": true
     }
    }
   },
@@ -410,8 +471,8 @@
      "codec": "png",
      "hasAlpha": true
     },
-    "redPixels": 14561,
-    "otherBrightPixels": 284,
+    "redPixels": 14603,
+    "otherBrightPixels": 274,
     "unknown": 404,
     "badColour": 400
    }

@@ -366,7 +366,7 @@ async function main() {
         rows.push({ frame: fr.k, beatsIntoBar: Number(fr.beat!.sinceBar.toFixed(3)), scale: Number(m.scale.toFixed(4)), ...w });
       }
       const sOn = motionAt('motion.pulse', params, onBeatFrame.k / 30, onBeatFrame.beat).scale, sLate = motionAt('motion.pulse', params, lateFrame.k / 30, lateFrame.beat).scale;
-      check('motion.pulse set to follow the music: on a clip under a drum loop whose beats were detected by the analysis, the stills at the frame nearest a beat and at the frame latest in a beat match the pulse computed from the detected beats (within 3 pixels); the picture is larger near the beat', ok && sOn > sLate + 0.05, { detectedBeats: docNow.analyses[musicAsset]?.beats?.beats?.length, detectedBpm: docNow.analyses[musicAsset]?.beats?.bpm, rows });
+      check('motion.pulse set to follow the music: on a clip under a drum loop whose beats were detected by the analysis, the stills at the frame soonest after a beat and at the frame latest in a beat match the pulse computed from the detected beats (within 3 pixels); the picture is larger near the beat', ok && sOn > sLate + 0.05, { detectedBeats: docNow.analyses[musicAsset]?.beats?.beats?.length, detectedBpm: docNow.analyses[musicAsset]?.beats?.bpm, rows });
       // muting the music track: nothing to follow, so the effect falls back to its own tempo (77 beats per minute)
       await tx(ramp.pid, [{ op: 'update_track', args: { trackId: musicTrack, muted: true } }]);
       const fb = motionAt('motion.pulse', params, onBeatFrame.k / 30, null);
@@ -390,6 +390,31 @@ async function main() {
     const tooFast = await call(`/projects/${ramp.pid}/transactions`, { ops: [{ op: 'update_effect', args: { clipId: ramp.clipId, effectId: fx.id, params: { rate: 5 } } }] });
     check('light.strobe: brightest at the start of each cycle and nearly gone before the next; a rate above three flashes per second is refused', meanDiff(flashOn, plainRamp) > 60 && meanDiff(flashOff, plainRamp) < 6 && tooFast.status >= 400, { atFlash: meanDiff(flashOn, plainRamp), before_next: meanDiff(flashOff, plainRamp), fivePerSecond: tooFast.status });
     await fx.remove();
+
+    // SAFETY RULE across strobes, end to end: two steady strobes on the picture (3 and 2.5 a second) and a title above it
+    // with its own strobe (3 a second, starting off the others' grid). Each alone may flash up to three times a second;
+    // together they must still start at most three flashes in any second of the exported file.
+    {
+      const sp = await newProject('strobes', rampFile);
+      await tx(sp.pid, [{ op: 'add_effect', args: { clipId: sp.clipId, type: 'light.strobe', params: { rate: 3, amount: 0.8 } } }, { op: 'add_effect', args: { clipId: sp.clipId, type: 'light.strobe', params: { rate: 2.5, amount: 0.8 } } }]);
+      const clipLen = (await call(`/projects/${sp.pid}`)).body.project.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === sp.clipId).duration;
+      const title = (await tx(sp.pid, [{ op: 'add_text', args: { text: 'FLASH', start: T.frameTime(5, { num: 30, den: 1 }), duration: T.sub(clipLen, T.frameTime(5, { num: 30, den: 1 })) } }])).results[0].output.clipId as string;
+      await tx(sp.pid, [{ op: 'add_effect', args: { clipId: title, type: 'light.strobe', params: { rate: 3, amount: 1 } } }]);
+      const sj = await waitJob((await call(`/projects/${sp.pid}/exports`, {})).body.jobId);
+      if (sj.status !== 'succeeded') check('Strobes together (export)', false, { status: sj.status, error: sj.error });
+      else {
+        const out = path.join(art, 'strobes.mp4');
+        fs.writeFileSync(out, (await call(`/jobs/${sj.id}/output`)).body);
+        const grey = ff(['-i', out, '-vf', 'scale=16:16', '-f', 'rawvideo', '-pix_fmt', 'gray', '-']);
+        const means: number[] = [];
+        for (let k = 0; k + 256 <= grey.length; k += 256) { let sum = 0; for (let i = k; i < k + 256; i++) sum += grey[i]!; means.push(sum / 256); }
+        const starts = means.flatMap((m, i) => (i > 0 && m - means[i - 1]! > 8) || (i === 0 && m > means[means.length - 1]! + 8) ? [i] : []);
+        let most = 0;
+        for (let i = 0; i < starts.length; i++) { let j = i; while (j + 1 < starts.length && starts[j + 1]! - starts[i]! < 30) j++; most = Math.max(most, j - i + 1); }
+        const seconds = means.length / 30;
+        check('Strobes together, on an exported file: two strobes on a picture and a strobing title over it start at most three flashes in any one second (30 frames), and do keep flashing (at least 2.4 starts a second on average)', means.length > 60 && most <= 3 && starts.length >= Math.floor(2.4 * seconds), { frames: means.length, flashStarts: starts, mostInOneSecond: most, perSecond: Number((starts.length / seconds).toFixed(2)) });
+      }
+    }
 
     fx = await withEffect('stylize.film', { amount: 0.8, seed: 3 }, 0);
     check('stylize.film: changes the picture, is identical for the same frame, and differs on another frame', meanDiff(fx.img, plainRamp) > 2 && maxDiff(fx.img, await still(ramp.pid, 0)) === 0 && meanDiff(fx.img, await still(ramp.pid, 15)) > 0.2, { changed: meanDiff(fx.img, plainRamp) });
