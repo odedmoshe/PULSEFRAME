@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AudioLines, Check, Ellipsis, Eye, FileMusic, Film, Image as ImageIcon, Palette, Plus, Trash2, Info } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { assetNotices, lutUsers, type Asset, type ProjectDocument } from '@pulseframe/core';
@@ -117,7 +118,7 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
   return (
     <>
       <button ref={btn} type="button" className="pf-mc-btn" aria-haspopup="menu" aria-expanded={!!at} aria-label={`${S.cardMore}: ${a.name}`} title={S.cardMore} data-testid={`more-${a.id}`} onClick={() => (at ? setAt(null) : open())}><Ellipsis size={16} strokeWidth={1.75} aria-hidden="true" /></button>
-      {at && (
+      {at && createPortal(
         <div ref={pop} className="pf-ds pf-mc-pop" role="menu" aria-label={`${S.cardMore}: ${a.name}`} style={{ top: at.top, left: at.left }}>
           {a.kind !== 'image' && !isLut && <button type="button" role="menuitem" className="pf-mc-item" data-testid={`view-${a.id}`} onClick={() => { setAt(null); onView(a.id); }}><Eye size={16} strokeWidth={1.75} aria-hidden="true" />{t('source.open')}</button>}
           {notices.length > 0 && (
@@ -145,8 +146,7 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
           <button type="button" role="menuitem" className="pf-mc-item is-danger" disabled={isUsed} aria-disabled={isUsed || undefined} title={isUsed ? (isLut ? M.lutRemoveUsed : t('media.remove.used')) : undefined} data-testid={`remove-${a.id}`}
             onClick={() => { close(); void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file'); }}><Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />{S.cardRemove}</button>
           {isUsed && <p className="pf-mc-why">{isLut ? M.lutRemoveUsed : t('media.remove.used')}</p>}
-        </div>
-      )}
+        </div>, document.body)}
     </>
   );
 }
@@ -180,10 +180,10 @@ export function MediaGrid({ onView, query = '', filter = 'all' }: { onView: (id:
             onDragStart={isLut ? undefined : (e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
             <div className="mc-thumb pf-mc-thumb" onDoubleClick={isLut ? undefined : add}>
               <Thumb projectId={doc.id} a={a} refreshKey={derivativeTick} />
-              <span className="pf-mc-badge pf-mc-fmt num" dir="ltr">{isLut ? 'CUBE' : formatOf(a)}</span>
-              <span className="pf-mc-badge pf-mc-dur num" dir="ltr">
+              <span className="pf-mc-badge pf-mc-fmt num"><bdi dir="ltr">{isLut ? 'CUBE' : formatOf(a)}</bdi></span>
+              <span className="pf-mc-badge pf-mc-dur num"><bdi dir="ltr" className="pf-mc-durIn">
                 <KindIcon size={11} aria-hidden="true" />{isLut ? <span data-testid={`lut-size-${a.id}`} title={`${S.lut}: ${S.lutSize}`}>{a.lut ? `${a.lut.size}³` : 'LUT'}</span> : a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : fmtDur(T.toSeconds(a.duration))}
-              </span>
+              </bdi></span>
               {isUsed && <span className="pf-mc-used" title={usedLabel} role="img" aria-label={usedLabel} data-testid={`used-${a.id}`}><Check size={12} strokeWidth={2.5} aria-hidden="true" /></span>}
               <span className="pf-mc-hover">
                 {!isLut && <button type="button" className="pf-mc-add" onClick={add} data-testid={`add-${a.id}`} aria-label={`${t('media.add')}: ${a.name}`} title={C.cardAdd}><Plus size={18} strokeWidth={2} aria-hidden="true" /></button>}

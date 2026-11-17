@@ -99,7 +99,7 @@ export function Header() {
         </span>
       </button>
 
-      {doc && (
+      {doc && Object.keys(doc.variants ?? {}).length > 0 && (
         <div className="pf-top-format">
           <label>
             <span className="pf-sr">{t('format.switch')}</span>

@@ -243,7 +243,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
               ))}
               {scope !== 'assistant' && catShown.length > 0 && (
                 <div role="group" aria-label={C.palCatalogue}>
-                  <div className="pf-pal-heading" aria-hidden="true">{C.palCatalogue}</div>
+                  <div className="pf-pal-heading" aria-hidden="true">{C.palCatalogue}{!clip && <span className="pf-pal-unavail"> · {C.palSelectClip}</span>}</div>
                   {catShown.map((c) => (
                     <div key={c.key} id={optionDomId(c.key)} role="option" data-testid="palette-catalogue" data-kind={c.kind} data-id={c.id} aria-selected={c.key === activeKey} aria-disabled={clip ? undefined : 'true'} className="pf-pal-option"
                       data-active={c.key === activeKey || undefined} onMouseMove={() => c.key !== activeKey && setActiveId(c.key)} onClick={() => runKey(c.key)}>
@@ -251,7 +251,6 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                         <Sparkles size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic" />
                         <span className="pf-pal-label" lang={lang}>{c[lang]}</span>
                         {c[other] !== c[lang] && <span className="pf-pal-alt" lang={other}>{c[other]}</span>}
-                        {!clip && <span className="pf-pal-unavail">{C.palSelectClip}</span>}
                       </span>
                       <span className="pf-pal-kind">{c.kind === 'effect' ? C.palEffect : c.kind === 'transition' ? C.palTransition : C.palLook}</span>
                     </div>

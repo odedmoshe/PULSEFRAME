@@ -29,6 +29,7 @@ export function StatusBar() {
     <footer className="pf-ds pf-status" data-shell-slot="status" aria-label={S.statusFormat}>
       <div className="pf-status-start">
         {doc && <span className="num pf-status-fmt" dir="ltr" title={S.statusFormat}>{doc.settings.width}×{doc.settings.height} · {fps} fps</span>}
+        {doc && <span className="num pf-status-dur" dir="ltr">{clock}</span>}
         {job && (
           <span className="pf-status-job" role="status" aria-label={S.statusJobs}>
             <Ring value={pct} label={S.statusJobs} size={28} />
@@ -41,7 +42,6 @@ export function StatusBar() {
           <span className="pf-status-dots" aria-hidden="true"><i className={gpu ? (gpu.available ? 'ok' : 'off') : ''} /><i className={provider ? (provider.provider.configured ? 'ok' : 'off') : ''} /></span>
           <span>{needs ? S.pipsNeed(needs) : S.pipsAll}</span>
         </button>
-        <span className="num pf-status-dur" dir="ltr" title={t('export')}>{clock}</span>
         {flash && <FlashResult report={flash} />}
       </div>
     </footer>

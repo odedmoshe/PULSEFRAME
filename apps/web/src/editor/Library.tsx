@@ -5,7 +5,7 @@
  * looks list the catalogue and apply it to the selected clip through the same registered ops the gallery uses.
  * `.library` stays the class the grid and the proofs find the drawer by.
  */
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowUpFromLine, Captions as CaptionsIcon, ImagePlus, Plus, Search, Sparkles, Type } from 'lucide-react';
 import { COLOR_LOOKS, EFFECTS, TRANSITIONS, type Clip } from '@pulseframe/core';
 import { Button, Chip } from '../ds/index.ts';
@@ -30,6 +30,8 @@ export function Library() {
   const S = CHROME_STRINGS[state.lang];
   const [viewing, setViewing] = useState<string | null>(null);
   const [over, setOver] = useState(false);
+  // the Templates drawer is collapsible on its own; in the drawer it is always open
+  useEffect(() => { if (rail === 'templates' && !state.templatesOpen) editor.set({ templatesOpen: true }); }, [rail, state.templatesOpen, editor]);
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
   return (
     <aside className="library pf-ds pf-browser" id="pf-browser" aria-label={S.rail[rail]} data-testid="library" data-category={rail}
@@ -163,12 +165,13 @@ function CatalogueDrawer({ kind }: { kind: 'effects' | 'transitions' | 'looks' }
   const title = kind === 'effects' ? S.catEffectsTitle : kind === 'transitions' ? S.catTransitionsTitle : S.catLooksTitle;
   const gallery = () => document.querySelector<HTMLElement>('[data-testid=gallery-open]')?.click();
   return (
-    <Pane title={title} count={all.length} action={<Button size="sm" variant="secondary" icon={<Sparkles size={16} aria-hidden="true" />} disabledReason={clip ? undefined : S.catNeedGallery} onClick={gallery} data-testid="catalogue-open-gallery">{S.catOpen}</Button>}>
+    <Pane title={title} count={all.length} >
       <label className="pf-bw-search">
         <Search size={16} strokeWidth={1.75} aria-hidden="true" />
         <input type="search" dir="auto" value={q} onChange={(e) => setQ(e.target.value)} placeholder={S.searchPlaceholder} aria-label={S.searchPlaceholder} data-testid="catalogue-search" />
       </label>
-      {!clip && <p className="pf-bw-lead" role="status">{S.catNeedGallery}</p>}
+      {clip ? <Button size="sm" variant="secondary" icon={<Sparkles size={16} aria-hidden="true" />} onClick={gallery} data-testid="catalogue-open-gallery">{S.catOpen}</Button>
+        : <p className="pf-bw-lead" role="status">{S.catNeedGallery}</p>}
       <ul className="pf-bw-list" aria-label={title}>
         {shown.map((i) => (
           <li key={i.id}>
