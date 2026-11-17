@@ -165,7 +165,7 @@ describe('makeElement', () => {
     expect(parsed.kind).toBe('image');
     expect(parsed.name).toBe('Check mark.png');
     expect(parsed.image).toMatchObject({ width: 256, height: 256, hasAlpha: true });
-    expect(parsed.provenance).toMatchObject({ origin: 'generated', importedBy: 'tester', procedural: { id: 'element.symbol.check', version: 1 } });
+    expect(parsed.provenance).toMatchObject({ origin: 'generated', importedBy: 'tester', procedural: { id: 'element.symbol.check', version: 2 } }); // 2: straight alpha (ELEMENT_PICTURE_VERSION)
     expect(fs.readdirSync(store.tmpDir).filter((f) => f.startsWith('el_'))).toEqual([]);
     const wide = await makeElement(store, 'element.bar.solid', {}, 'tester');
     expect(wide.image).toMatchObject({ width: 1024, height: 256 });
@@ -258,3 +258,105 @@ describe('element pictures respect the storage ceiling', () => {
   }, 60_000);
 });
 
+
+/**
+ * Element PNGs changed recipe (straight alpha, even short side), so the element version was raised to 2: new pictures carry the new
+ * version and, having other bytes, a new content hash, so nothing keyed by the hash (the blob, its thumbnails and proxies, a
+ * de-duplicating import) can hand back the old pixels. A project made before the change keeps its stored picture and still opens.
+ */
+describe('element version: a new recipe is a new identity, and old projects keep their pictures', () => {
+  /** The ffmpeg arguments of version 1, as they were before the straight-alpha change (only the filter differed). */
+  const version1Args = (svgFile: string, pngFile: string, longSide: number) => {
+    const args = elementFfmpegArgs(svgFile, pngFile, longSide);
+    const vf = args.indexOf('-vf') + 1;
+    args[vf] = `scale='if(gte(iw,ih),${longSide},-2)':'if(gte(iw,ih),-2,${longSide})',format=rgba`;
+    return args;
+  };
+
+  it('every element is at version 2 and the asset made now records it', async () => {
+    expect(new Set(ELEMENTS.map((e) => e.version))).toEqual(new Set([2]));
+    const { ELEMENT_PICTURE_VERSION } = await import('@pulseframe/core');
+    expect(ELEMENT_PICTURE_VERSION).toBe(2);
+  });
+
+  it('a project holding a version-1 element picture opens, replays, plans an export from its stored bytes and survives an archive round trip; adding the element again makes a separate version-2 asset', async () => {
+    const { validateProject } = await import('@pulseframe/core');
+    const { Exporter } = await import('./export.ts');
+    const { importArchive, planArchive, writeArchive } = await import('./archive.ts');
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-elements-v1-'));
+    const dataDir = path.join(d, 'data');
+    let s = new Store(dataDir);
+    try {
+      // what a server before the change stored: premultiplied bytes, provenance version 1
+      const id = 'element.shape.circle', colour = '#FFFFFF', longSide = 256;
+      const svgFile = path.join(d, 'old.svg'), oldPng = path.join(d, 'old.png');
+      fs.writeFileSync(svgFile, sizeSvg(elementSvg(id, { color: colour, color2: '#3DE0C8' }), id, longSide));
+      await exec('ffmpeg', version1Args(svgFile, oldPng, longSide), { timeout: 30_000 });
+      const oldBytes = fs.readFileSync(oldPng);
+      const { createHash } = await import('node:crypto');
+      const oldHash = `sha256:${createHash('sha256').update(oldBytes).digest('hex')}`;
+      const staged = path.join(s.tmpDir, 'old-element.png');
+      fs.writeFileSync(staged, oldBytes);
+      s.putBlob(oldHash, staged, oldBytes.length, 'image/png');
+      const oldAsset = { kind: 'image' as const, container: 'png', mimeType: 'image/png', duration: { value: '0', timescale: 1 }, image: { width: longSide, height: longSide, codec: 'png', hasAlpha: true }, name: 'Circle.png', contentHash: oldHash, byteSize: oldBytes.length, provenance: { origin: 'generated' as const, importedAt: '2026-11-01T00:00:00.000Z', importedBy: 'user:local', procedural: { id, version: 1, generator: 'svg by formula, rasterised by ffmpeg librsvg; no third-party content' } } };
+      const pid = s.createProject({ name: 'made before the change', width: 640, height: 360, frameRate: { num: 30, den: 1 } }).doc.id;
+      const imp = s.commit({ projectId: pid, actor: 'user:local', label: 'Add element Circle.png', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: oldAsset } }] });
+      const oldId = imp.results[0]!.output!.assetId as string;
+      s.commit({ projectId: pid, actor: 'user:local', label: 'Place element', ops: [{ op: 'add_clip', args: { assetId: oldId, start: { value: '0', timescale: 30 }, duration: { value: '90', timescale: 30 } } }] });
+
+      // reopened by the new build: same document, same bytes, nothing to repair
+      s.close();
+      s = new Store(dataDir);
+      const p = s.getProject(pid);
+      expect(p.doc.assets[oldId]).toMatchObject({ contentHash: oldHash, byteSize: oldBytes.length, provenance: { procedural: { id, version: 1 } } });
+      expect(validateProject(p.doc)).toEqual([]);
+      expect(s.replay(pid).doc).toEqual(p.doc);
+      expect(fs.readFileSync(s.blobPath(oldHash)).equals(oldBytes)).toBe(true);
+      // the export plan renders from the stored version-1 bytes: no blocker, the asset is in the manifest with its own hash
+      const exporter = new Exporter(s, null as never, () => '', path.join(d, 'no-web-dist'));
+      const plan = exporter.plan(p.doc, p.revision, { format: 'png', frame: 10 });
+      expect(plan.blockers).toEqual([]);
+      expect(plan.manifest.assets).toEqual([{ id: oldId, contentHash: oldHash, byteSize: oldBytes.length, kind: 'image', clips: 1 }]);
+      // and it travels in an archive and comes back as it was
+      const tar = path.join(d, 'old.tar');
+      const chunks: Buffer[] = [];
+      for await (const c of writeArchive(planArchive(s, pid))) chunks.push(c);
+      fs.writeFileSync(tar, Buffer.concat(chunks));
+      const back = importArchive(s, tar);
+      expect(Object.values(back.doc.assets)).toEqual([expect.objectContaining({ contentHash: oldHash, provenance: expect.objectContaining({ procedural: { id, version: 1, generator: expect.any(String) } }) })]);
+
+      // the same element in the same colour and size, made now: version 2, other bytes, so another asset (not the old one re-used)
+      const fresh = await makeElement(s, id, { color: colour, longSide }, 'user:local');
+      expect(fresh.provenance).toMatchObject({ procedural: { id, version: 2 } });
+      expect(fresh.contentHash).not.toBe(oldHash);
+      const again = s.commit({ projectId: pid, actor: 'user:local', label: 'Add element Circle.png', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: fresh } }] });
+      expect(again.results[0]!.output).toMatchObject({ deduplicated: false });
+      const after = s.getProject(pid).doc;
+      expect(Object.keys(after.assets)).toHaveLength(2);
+      expect(after.assets[oldId]).toEqual(p.doc.assets[oldId]); // the old picture is untouched
+      expect(fs.readFileSync(s.blobPath(oldHash)).equals(oldBytes)).toBe(true);
+    } finally {
+      s.close();
+      fs.rmSync(d, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('pictures held in memory are keyed by the version: after a version change the same request is drawn again (stand-in runner, labelled)', async () => {
+    await canRasteriseSvg();
+    let starts = 0;
+    const q = createSynth(async (args) => { starts++; fs.writeFileSync(args.at(-1)!, `stand-in output ${starts}`); });
+    const def = ELEMENTS.find((e) => e.id === 'element.shape.square')! as { version: number };
+    const was = def.version;
+    try {
+      const a = await elementPreview(store.tmpDir, 'element.shape.square', { color: '#102030' }, q);
+      expect(await elementPreview(store.tmpDir, 'element.shape.square', { color: '#102030' }, q)).toBe(a); // remembered
+      expect(starts).toBe(1);
+      def.version = was + 1; // as a later recipe change would
+      const b = await elementPreview(store.tmpDir, 'element.shape.square', { color: '#102030' }, q);
+      expect(starts).toBe(2);
+      expect(b.equals(a)).toBe(false);
+    } finally {
+      def.version = was;
+    }
+  });
+});
