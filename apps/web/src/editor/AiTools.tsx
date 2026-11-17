@@ -4,9 +4,11 @@
  * validated; the server imports its primary output into the library as a derived asset.
  */
 import { useState } from 'react';
-import { api } from '../api.ts';
+import { dictionaries } from '@pulseframe/i18n';
+import { api, ApiFailure } from '../api.ts';
 import { useEditorState } from './store.ts';
 import { AI_STRINGS } from './aiTools.strings.ts';
+import { providerAfter, recheckProvider } from './aiTools.recheck.ts';
 import './aiTools.css';
 
 interface ModelInfo { path: string; status?: { state: string; missingBytes: number; expectedBytes: number | null } }
@@ -28,7 +30,7 @@ export function AiTools() {
   const { editor, state, t } = useEditorState();
   const { provider, capJob: job, doc, lang, approvals } = state;
   const S = AI_STRINGS[lang];
-  const [msg, setMsg] = useState('');
+  const [msg, setMsg] = useState<{ text: string; failed: boolean }>({ text: '', failed: false });
   const [checking, setChecking] = useState(false);
   const [pick, setPick] = useState<Record<string, string>>({});
   const [mine, setMine] = useState<{ capId: string; jobId: string } | null>(null);
@@ -38,15 +40,14 @@ export function AiTools() {
   const connected = pr.configured && !!pr.readiness?.reachable;
 
   const recheck = async () => {
-    setChecking(true); setMsg(S.rechecking);
-    try {
-      const next = await api.capabilities();
-      editor.set({ provider: next });
-      setMsg(next.provider.configured && next.provider.readiness?.reachable ? S.recheckedOk : S.rechecked);
-    } catch {
-      editor.set({ provider: null });
-      setMsg(S.recheckFailed);
-    } finally { setChecking(false); }
+    setChecking(true); setMsg({ text: S.rechecking, failed: false });
+    const r = await recheckProvider(api.capabilities);
+    // A failed check keeps the panel as it is (setup steps, this message, the button): it says nothing about the provider.
+    editor.set({ provider: providerAfter(editor.getState().provider, r) });
+    if (r.ok) setMsg({ text: r.connected ? S.recheckedOk : S.rechecked, failed: false });
+    else if (r.error instanceof ApiFailure) setMsg({ text: S.recheckRefused((dictionaries[lang] as Record<string, string>)[`error.code.${r.error.code}`] ?? r.error.message), failed: true });
+    else setMsg({ text: S.recheckFailed, failed: true });
+    setChecking(false);
   };
 
   const status = !pr.configured
@@ -74,7 +75,7 @@ export function AiTools() {
         <div className="pf-ai-row">
           <button className="ghost" disabled={checking} onClick={() => void recheck()} data-testid="ai-recheck">{S.recheck}</button>
         </div>
-        <div role="status" className="muted" data-testid="ai-recheck-status">{msg}</div>
+        <div role="status" className={`muted${msg.failed ? ' danger' : ''}`} data-testid="ai-recheck-status" data-failed={msg.failed ? 'true' : undefined}>{msg.text}</div>
         <p className="muted">{S.works}</p>
       </section>
     );

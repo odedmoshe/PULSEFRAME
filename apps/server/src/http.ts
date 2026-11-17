@@ -20,7 +20,8 @@ import { Governance } from './governance.ts';
 import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
-import { canRasteriseSvg, makeElement } from './elements.ts';
+import { canRasteriseSvg, makeElement, setElementStorageCeiling } from './elements.ts';
+import { applyTransaction, OpError, type Asset, type OpCall } from '@pulseframe/core';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
@@ -443,6 +444,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600' });
   });
   // Graphic elements: the same route for the editor and for agents.
+  setElementStorageCeiling(store, cfg.maxStorageBytes); // element pictures count against the storage ceiling like uploads, also when the agent tool makes them
   app.get('/api/v1/elements', async (c) => { need(c, 'observe'); return c.json({ available: await canRasteriseSvg(), count: ELEMENTS.length, note: 'Elements are listed in the catalog. available=false means this machine\'s ffmpeg cannot read SVG, so elements cannot be made here.' }); });
   app.post('/api/v1/projects/:id/elements', async (c) => {
     const p = need(c, 'edit');
@@ -725,29 +727,48 @@ export const ElementBody = z.object({
   duration: RationalTimeSchema.optional().describe('How long it stays, frame-aligned; default three seconds'),
   trackId: z.string().optional(),
 }).strict();
+/**
+ * Attach a synthesised asset to the project and, when a place on the timeline was asked for, put it there.
+ * A refused placement must leave the project as it was. So the placement is tried first on a copy of the current document (the same
+ * two operations; nothing is stored), and only when that passes are the import and the placement committed, one straight after the
+ * other. They stay two transactions because the import is the trusted internal step every media source uses, while the placement is
+ * an ordinary edit that goes through governance. Making the asset took time, so the right to act is checked again before anything
+ * is written: an owner who paused agents meanwhile must not find an agent's change dated after the pause.
+ */
+function attachGenerated(store: Store, gov: Governance, principal: Principal, projectId: string, asset: Omit<Asset, 'id'>, what: 'element' | 'sound', clip: { start: T.RationalTime; duration?: T.RationalTime; trackId?: string } | null) {
+  gov.assertMayAct(principal, projectId, 'edit');
+  const importOp: OpCall = { op: 'import_asset', args: { asset } };
+  const placeOp = (assetId: string, c: NonNullable<typeof clip>): OpCall => ({ op: 'add_clip', args: { assetId, start: c.start, ...(c.duration ? { duration: c.duration } : {}), ...(c.trackId ? { trackId: c.trackId } : {}) } });
+  if (clip) {
+    try {
+      const imported = applyTransaction(store.getProject(projectId).doc, [importOp], { idSeed: 'dryrun-a', actor: principal.actor, allowInternal: true });
+      applyTransaction(imported.doc, [placeOp(imported.results[0]!.output!.assetId as string, clip)], { idSeed: 'dryrun-b', actor: principal.actor });
+    } catch (e) {
+      if (e instanceof OpError) throw new ApiError(e.code === 'forbidden_op' ? 403 : e.code === 'not_found' ? 404 : 422, e.code, e.message, e.details, e.hint); // as Store.commit reports it
+      throw e;
+    }
+  }
+  const imp = store.commit({ projectId, actor: principal.actor, label: `Add ${what} ${asset.name}`, allowInternal: true, ops: [importOp] });
+  const assetId = imp.results[0]!.output!.assetId as string;
+  if (!clip) return { assetId, revision: imp.revision, placed: null };
+  const placed = gov.commitAs(principal, { projectId, ops: [placeOp(assetId, clip)], label: `Place ${what} ${asset.name}` }) as { revision?: number; results?: { output?: Record<string, unknown> }[]; proposal?: unknown };
+  return { assetId, revision: placed.revision ?? imp.revision, placed: placed.results?.[0]?.output ?? null, ...(placed.proposal ? { proposal: placed.proposal } : {}) };
+}
+
 /** Make a graphic element (see list_catalog → elements) as a PNG image asset and optionally place it as an ordinary picture clip. */
 export async function addElement(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof ElementBody>) {
   gov.assertMayAct(principal, projectId, 'edit');
   gov.assertUnrestricted(principal, 'add media to the library');
   const asset = await makeElement(store, a.elementId, { ...(a.color ? { color: a.color } : {}), ...(a.color2 ? { color2: a.color2 } : {}) }, principal.actor);
-  const imp = store.commit({ projectId, actor: principal.actor, label: `Add element ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
-  const assetId = imp.results[0]!.output!.assetId as string;
-  if (!a.start) return { assetId, revision: imp.revision, placed: null };
   const rate = store.getProject(projectId).doc.settings.frameRate;
-  const duration = a.duration ?? T.frameTime(Math.round((3 * rate.num) / rate.den), rate);
-  const placed = gov.commitAs(principal, { projectId, ops: [{ op: 'add_clip', args: { assetId, start: a.start, duration, ...(a.trackId ? { trackId: a.trackId } : {}) } }], label: `Place element ${asset.name}` }) as { revision?: number; results?: { output?: Record<string, unknown> }[]; proposal?: unknown };
-  return { assetId, revision: placed.revision ?? imp.revision, placed: placed.results?.[0]?.output ?? null, ...(placed.proposal ? { proposal: placed.proposal } : {}) };
+  return attachGenerated(store, gov, principal, projectId, asset, 'element', a.start ? { start: a.start, duration: a.duration ?? T.frameTime(Math.round((3 * rate.num) / rate.den), rate), ...(a.trackId ? { trackId: a.trackId } : {}) } : null);
 }
 
 export async function addSfx(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof SfxBody>) {
   gov.assertMayAct(principal, projectId, 'edit'); // same rule as uploading media: needs edit rights and agents must not be paused
   gov.assertUnrestricted(principal, 'add media to the library');
   const asset = await makeSfx(store, a.sfxId, principal.actor);
-  const imp = store.commit({ projectId, actor: principal.actor, label: `Add sound ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
-  const assetId = imp.results[0]!.output!.assetId as string;
-  if (!a.start) return { assetId, revision: imp.revision, placed: null };
-  const placed = gov.commitAs(principal, { projectId, ops: [{ op: 'add_clip', args: { assetId, start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}) } }], label: `Place sound ${asset.name}` }) as { revision?: number; results?: { output?: Record<string, unknown> }[]; proposal?: unknown };
-  return { assetId, revision: placed.revision ?? imp.revision, placed: placed.results?.[0]?.output ?? null, ...(placed.proposal ? { proposal: placed.proposal } : {}) };
+  return attachGenerated(store, gov, principal, projectId, asset, 'sound', a.start ? { start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}) } : null);
 }
 
 const secs = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
