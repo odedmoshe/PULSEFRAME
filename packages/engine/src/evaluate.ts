@@ -72,13 +72,14 @@ export interface TextLayer extends LayerLook { kind: 'text'; clipId: string; tra
 /**
  * Adjustment clip active at this time (ADR-0016). It never asks the FrameProvider for a picture: drawGraph copies the frame
  * so far into scratch slot ADJUST_PASS_SLOT, runs `effects` with a whole-frame box, applies `mask` (frame space) and
- * composites back with `opacity` and `blend`. Not yet a member of `Layer`: the templates track (W2) adds it there together
- * with the evaluator branch and the drawGraph pass.
+ * composites back with `opacity` and `blend`. It sits in the graph in track order (it acts on every layer before it: the
+ * pictures and titles of the tracks below it) and before the captions, which are drawn last and never affected.
+ * `opacity` is the clip's opacity at this time (its only transform property, keyframes included).
  */
 export interface AdjustLayer extends Pick<LayerLook, 'effects' | 'blend' | 'mask' | 'local'> { kind: 'adjust'; clipId: string; trackId: string; opacity: number }
 /** Scratch canvas slot (look.ts `scratch`) reserved for the adjustment pass (wave-3 allocation: 14 = templates track). */
 export const ADJUST_PASS_SLOT = 14;
-export type Layer = VideoLayer | ImageLayer | TextLayer | CaptionLayer;
+export type Layer = VideoLayer | ImageLayer | TextLayer | AdjustLayer | CaptionLayer;
 export type PictureLayer = VideoLayer | ImageLayer;
 export interface ActiveAudio { clipId: string; trackId: string; assetId: string; sourceTime: T.RationalTime; gain: number }
 export interface RenderGraph {
@@ -106,7 +107,8 @@ const look = (clip: Clip, time: T.RationalTime, flash: (clipId: string, effectId
     const params = e.modulate ? applyModulators(e, base, beat) : base;
     return { type: e.type, params: e.type === 'light.strobe' ? { ...params, [FLASH_SINCE]: flash(clip.id, e.id) } : params };
   });
-  return { ...(fx?.length ? { effects: fx } : {}), ...(clip.blend ? { blend: clip.blend } : {}), ...(clip.type === 'media' && clip.mask ? { mask: clip.mask } : {}), local: T.toSeconds(local) };
+  // a mask lives on media clips (layer space) and on adjustment clips (frame space: the adjustment's box is the whole frame, ADR-0016)
+  return { ...(fx?.length ? { effects: fx } : {}), ...(clip.blend ? { blend: clip.blend } : {}), ...((clip.type === 'media' || clip.type === 'adjustment') && clip.mask ? { mask: clip.mask } : {}), local: T.toSeconds(local) };
 };
 const smooth = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
 
@@ -142,6 +144,21 @@ const bareText = (doc: ProjectDocument, track: Track, clip: Extract<Clip, { type
 type Bare = VideoLayer | ImageLayer | TextLayer;
 const bareLayer = (doc: ProjectDocument, track: Track, clip: Clip, time: T.RationalTime): Bare | null =>
   clip.type === 'media' ? barePicture(doc, track, clip, time) : clip.type === 'text' ? bareText(doc, track, clip, time) : null;
+
+/**
+ * The adjustment pass of an adjustment clip at `time` (ADR-0016), or null when it would change nothing: at opacity 0, and
+ * without effects, mask and blend mode. Its effects are the clip's enabled effects in order (a strobe takes its flashes from
+ * the one schedule of the timeline, like a strobe on a picture: strobeSchedule.ts walks adjustment tracks too). A time effect
+ * cannot act on the picture below (validation refuses it on an adjustment); one found in an older document is left out here.
+ */
+function adjustLayer(cx: Ctx, track: Track, clip: Extract<Clip, { type: 'adjustment' }>, time: T.RationalTime): AdjustLayer | null {
+  const opacity = transformAt(clip, time).opacity;
+  if (!(opacity > 0)) return null;
+  const lk = look(clip, time, cx.flash, cx.beat);
+  const effects = lk.effects?.filter((e) => !isTimeEffect(e.type));
+  if (!effects?.length && !lk.mask && (!lk.blend || lk.blend === 'normal')) return null;
+  return { kind: 'adjust', clipId: clip.id, trackId: track.id, opacity, ...(effects?.length ? { effects } : {}), ...(lk.blend ? { blend: lk.blend } : {}), ...(lk.mask ? { mask: lk.mask } : {}), ...(lk.local !== undefined ? { local: lk.local } : {}) };
+}
 
 /** What one evaluation shares between its layers. */
 interface Ctx { doc: ProjectDocument; sequenceId: string; flash: (clipId: string, effectId: string) => number; beat: BeatPosition | undefined }
@@ -219,6 +236,11 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       if (T.lt(time, clip.start) || !T.lt(time, T.add(clip.start, clip.duration))) continue;
       if (clip.type === 'text') {
         if (!track.hidden) { const l = clipLayer(cx, track, clip, time); if (l) graph.layers.push(l); }
+        continue;
+      }
+      if (clip.type === 'adjustment') {
+        // an adjustment acts on everything already in the graph: the tracks below it (ADR-0016); validation keeps it on adjustment tracks
+        if (track.kind === 'adjustment' && !track.hidden) { const l = adjustLayer(cx, track, clip, time); if (l) graph.layers.push(l); }
         continue;
       }
       if (clip.type !== 'media') continue;
@@ -318,7 +340,7 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
   const sound = soundAt(plan, T.nearestSampleIndex(time, plan.sampleRate), new Set(g.audio.map((a) => a.clipId)));
   const seq = doc.sequences[doc.mainSequenceId];
   const clipOf = (l: { clipId: string; trackId: string }) => seq?.tracks.find((t) => t.id === l.trackId)?.clips.find((c) => c.id === l.clipId);
-  const lookOf = (l: Exclude<Layer, CaptionLayer>) => {
+  const lookOf = (l: Exclude<Layer, CaptionLayer | AdjustLayer>) => {
     // the effect instances behind the layer's effects: the clip's enabled effects, without the time effect the evaluator took out
     const clip = clipOf(l);
     const instances = (clip && clip.type !== 'caption' ? clip.effects ?? [] : []).filter((e) => e.enabled).slice(l.time || l.remap ? 1 : 0);
@@ -337,7 +359,7 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
     time: g.time,
     seconds: T.toSeconds(g.time),
     frameIndex: g.frameIndex,
-    layers: g.layers.map((l) => (l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...(l.colourFix ? { colourFix: l.colourFix } : {}), ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
+    layers: g.layers.map((l) => (l.kind === 'adjust' ? { kind: l.kind, clipId: l.clipId, effects: (l.effects ?? []).map((e) => e.type), opacity: Number(l.opacity.toFixed(4)), ...(l.mask ? { mask: l.mask.shape } : {}), ...(l.blend ? { blend: l.blend } : {}) } : l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...(l.colourFix ? { colourFix: l.colourFix } : {}), ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
     audio: [...g.audio.map((a) => ({ ...a, fx: sound.fx.get(a.clipId) ?? [] })), ...sound.tails],
   };
 }
