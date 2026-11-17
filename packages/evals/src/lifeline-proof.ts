@@ -4,11 +4,10 @@
  * preflight, and the calendar inside headless Chromium (through window.__pfLife on the self-test page).
  * Evidence: docs/evidence/lifeline-proof.json.
  *
- *   pnpm build && pnpm proof:lifeline          needs ffmpeg/ffprobe and Playwright's Chromium; port 8887 free
+ *   pnpm build && pnpm proof:lifeline          needs ffmpeg/ffprobe and Playwright's Chromium; ports 8887 and 8888 free
  *   exit 0 = every check passed · 1 = a check failed · 2 = blocked (the web bundle is not built)
  *
- * Eleven checks, with the numbers of plan §8 (10 and 11 were about people and the family-free archive, which are not part
- * of this build and have no check here):
+ * Thirteen checks, with the numbers of plan §8:
  *   1. Capture dates: eight generated files of different shapes, each uploaded through the route, get exactly the date
  *      typed here (8/8), including one UTC hour that is 17:30 in a Jerusalem winter and 18:30 in a Jerusalem summer and a
  *      rotated variable-frame-rate file whose date survives the conform. A dead clock gets no date; a file that says where
@@ -37,6 +36,20 @@
  *      is empty (the still equals the title without it), the preflight has the blocker field_no_data with the title's id
  *      and frames, and an export is refused. An evening picture with {hebrewDate}: field_sunset_undecided naming the
  *      event; after update_event afterSunset=true the still equals «כ״ה בכסלו תשפ״ה» typed by hand and the plan is clear.
+ *  10. People and what an agent reads (ADR-0021, people section), through the real server: the owner's session enters a
+ *      child with a birth date (add_person) and titles show her name and age. 10a: the agent token, the observer token and
+ *      a grant left at its default read each person as id and name with a null birth date, are refused both owner routes
+ *      (people suggestions, on this day; and the family check) and get an archive with names and no birth date; the agent's
+ *      still of «{name} ({age})» equals «נועה ()» typed here, the owner's «נועה (בת שנה)»; the owner and a grant with
+ *      people "full" read the date (controls). 10b (run last on that project, because it calls every route, undo and the
+ *      editing tools included): with the date also planted in a proposal by the "full" grant and in the owner's export
+ *      job, every route of the surface table (apps/server/src/peopleSurfaces.ts) and every MCP tool, resource and prompt,
+ *      called as each of the three credentials, answers nothing that holds the birth date in any spelling with its year,
+ *      the Hebrew-calendar day, an age or the word choice (pictures are not searched as text; 10a checks what they show).
+ *  11. The archive «בלי פרטי משפחה» (family=omit) of that project, imported on a second server: no people and no birth
+ *      date in it, no title with a people field, each such title plain text with the words typed here for its first
+ *      frame, the {date} title still live, the stills of three frames byte-equal to the source server's, and the family
+ *      check listed the title whose words change (varying) and the one with a field without words (empty).
  *  12. The calendar inside headless Chromium: every day of 2022–2027 against the page's own Intl (Hebrew year, month and
  *      day; the Hebrew-letter day and year; the weekday; both round trips): 0 mismatches. The holiday table of 5785–5787
  *      is written into the evidence for the owner's review.
@@ -44,8 +57,9 @@
  *      against the same timeline with plain titles (added median time per frame; budget 0.2 ms), and the commit latency
  *      of a project with 500 dated files and 60 events.
  *
- * Fourteen lines are printed for these eleven checks: 1 and 9 have two lines each (1, 1b; 9a, 9b) and 4 has its
- * determinism line (4a). The result is PASSED only when all fourteen hold.
+ * Seventeen lines are printed for these thirteen checks: 1, 9 and 10 have two lines each (1, 1b; 9a, 9b; 10a, 10b) and
+ * 4 has its determinism line (4a). The result is PASSED only when all seventeen hold. Checks 10 and 11 need the people
+ * operations and wording (core W1: add_person, documentPeople, ageWords) and a second free port, 8888.
  * What a check must be able to fail for is why the expected words are typed in this file, why 4 and 5 measure against
  * BOTH stills, and why the "no data" fixture of 9 has a dated picture on the same track.
  * Synthetic files only; nobody looked at the pictures. The one time-zone conversion is the import's (Asia/Jerusalem here).
@@ -58,11 +72,12 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, freezeOps, gregorianFromRd, holidayTable, type Asset, type Capture, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, formatHebrewDate, freezeOps, gregorianFromRd, hebrewFromRd, holidayTable, rdFromGregorian, type Asset, type Capture, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { evaluate } from '@pulseframe/engine';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 import { PLACE_PHOTO, PLACE_VIDEO, placeLeak, withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
+import { PEOPLE_REST_SURFACES } from '../../../apps/server/src/peopleSurfaces.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/lifeline-proof');
@@ -139,6 +154,62 @@ const KINDS: [string, string, string][] = [
 const EVENT_NAME = 'חנוכה אצל סבתא';
 const JUNE_WORDS = '1 ביוני 2021', DECEMBER_WORDS = '26 בדצמבר 2024';
 const TITLE_STYLE = { sizeFrac: 0.11, color: '#FFFFFF', stroke: '#000000', strokeFrac: 0.06, background: '#101418CC' };
+
+// ---------- people (checks 10 and 11) ----------
+/** Born 10 March 2020 (14 Adar 5780); the pictures are of 1 June 2021 (she is one, «בת שנה») and 1 June 2024 (she is four). */
+const NOA_NAME = 'נועה', NOA_BIRTH = '2020-03-10', ITAI_NAME = 'איתי', AGE_AT_2021 = 'בת שנה';
+/** Every way an age of hers at the two capture dates can be written (Hebrew digits and words, the three word choices, English). */
+const AGE_WORDS: readonly RegExp[] = [/(בת|בן|גיל) (שנה|4|ארבע)(?![0-9])/, /(?<![0-9])[14] years? old/];
+/** A credential, as the headers it sends. */
+type Who = { name: string; headers: Record<string, string> };
+/**
+ * What gives the birth date away: the date written with its year in every common spelling, the same day on the Hebrew calendar
+ * (with and without the year), and `ages`. The year alone and the day and month alone are not searched: other words of the
+ * server hold them (a model's citation year, today's date), so they would fail the check for nothing; every spelling of the
+ * whole date is. Built from core's own calendar, which is the oracle here, not the code under test (that is the redaction).
+ */
+function familyNeedles(birth: string, ages: readonly RegExp[]): { patterns: RegExp[]; numbers: Set<number> } {
+  const [y, m, d] = birth.split('-').map(Number) as [number, number, number];
+  const h = hebrewFromRd(rdFromGregorian({ y, m, d }));
+  const full = formatHebrewDate(h), noYear = formatHebrewDate(h, { year: false });
+  const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  const spellings = [`${y}-${p2(m)}-${p2(d)}`, `${y}:${p2(m)}:${p2(d)}`, `${y}${p2(m)}${p2(d)}`, `${y}/${p2(m)}/${p2(d)}`, ...[`${d}`, p2(d)].flatMap((dd) => [`${m}`, p2(m)].flatMap((mm) => ['.', '/', '-'].flatMap((sep) => [`${dd}${sep}${mm}${sep}${y}`, `${mm}${sep}${dd}${sep}${y}`])))];
+  return { patterns: [...new Set(spellings)].map((x) => new RegExp(`(?<![0-9])${esc(x)}(?![0-9])`)).concat([new RegExp(esc(noYear)), new RegExp(esc(full.slice(noYear.length).trim())), ...ages]), numbers: new Set([Number(`${y}${p2(m)}${p2(d)}`)]) };
+}
+/** The first place in these values where the birth date, an age or the word choice shows, or null (keys are searched too). After peopleSurfaces.test.ts familyLeak. */
+function familyLeak(needles: { patterns: RegExp[]; numbers: Set<number> }, ...values: unknown[]): string | null {
+  let found: string | null = null;
+  const text = (x: string, where: string) => { for (const re of needles.patterns) { const hit = x.match(re); if (hit && found === null) found = `"${hit[0]}" in ${where}: ${JSON.stringify(x.slice(Math.max(0, (hit.index ?? 0) - 60), (hit.index ?? 0) + 60))}`; } };
+  const walk = (v: unknown, where: string): void => {
+    if (found !== null) return;
+    if (typeof v === 'string') text(v, where);
+    else if (typeof v === 'number') { if (needles.numbers.has(v)) found = `${v} in ${where}`; }
+    else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${where}[${i}]`));
+    else if (v !== null && typeof v === 'object') {
+      const o = v as Record<string, unknown>;
+      if (Object.hasOwn(o, 'form') && (o.form === 'f' || o.form === 'm') && (Object.hasOwn(o, 'birthDate') || Object.hasOwn(o, 'name'))) found = `form "${String(o.form)}" in ${where}`;
+      if (Object.hasOwn(o, 'birthDate') && typeof o.birthDate === 'string') found = `birthDate in ${where}`;
+      for (const [k, x] of Object.entries(o)) { text(k, `a key of ${where}`); walk(x, `${where}.${k}`); }
+    }
+  };
+  values.forEach((v, i) => walk(v, `value ${i}`));
+  return found;
+}
+/** An MCP tool result with its JSON text parts parsed (so their keys are searched) and the bytes of pictures left out (what they show is checked by stills). */
+const unpackTool = (res: any) => ({ ...res, content: (res?.content ?? []).map((c: any) => (c.type === 'text' ? (() => { try { return JSON.parse(c.text); } catch { return c.text; } })() : c.type === 'image' ? { type: 'image', mimeType: c.mimeType } : c)) });
+/** The entries of an uncompressed tar (the archive format of archive.ts), by name. */
+function tarEntries(buf: Buffer): Map<string, Buffer> {
+  const out = new Map<string, Buffer>();
+  for (let off = 0; off + 512 <= buf.length; ) {
+    const name = buf.toString('utf8', off, off + 100).replace(/\0[\s\S]*$/, '');
+    if (!name) break;
+    const size = parseInt(buf.toString('ascii', off + 124, off + 136).replace(/\0[\s\S]*$/, '').trim(), 8);
+    out.set(name, buf.subarray(off + 512, off + 512 + size));
+    off += 512 + Math.ceil(size / 512) * 512;
+  }
+  return out;
+}
 
 async function main() {
   fs.rmSync(art, { recursive: true, force: true });
@@ -448,6 +519,183 @@ async function main() {
       check('9b. an evening picture with {hebrewDate}: field_sunset_undecided naming the title and the event; after update_event afterSunset=true the still equals «כ״ה בכסלו תשפ״ה» typed by hand (not the day before) and the plan has no blocker', sunset && blockedPlan.some((b) => b.code === 'field_sunset_undecided') && cleared.length === 0 && clearPlan.length === 0 && answered === typed && answered !== dayBefore, { undecided, blockedPlan: blockedPlan.map((b) => b.code), cleared, clearPlan: clearPlan.map((b) => b.code), stillEqualsTyped: answered === typed, differsFromTheDayBefore: answered !== dayBefore });
     }
 
+    // ================================================================ 10, 11. people: what an agent reads, and the family-free archive
+    {
+      // Through the real server: the owner's session enters a child with a birth date (the people operations, W1), titles
+      // show her name and age over two dated pictures. 10a: what a credential without the people scope reads, against
+      // controls that do read the date. 11: the archive «בלי פרטי משפחה» imported on a second server. 10b (last, because its
+      // walk calls every route, undo and the editing tools included): every REST route and MCP tool, resource and prompt.
+      const as = async (who: Who, p: string, body?: unknown, base = s.url) => {
+        const r = await fetch(`${base}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...who.headers, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+        return { status: r.status, body: r.headers.get('content-type')?.includes('json') ? await r.json() : Buffer.from(await r.arrayBuffer()) } as { status: number; body: any };
+      };
+      let rpcId = 0;
+      /** One JSON-RPC call to the server's MCP endpoint as this credential: the result, or the protocol error. */
+      const rpc = async (who: Who, method: string, params: unknown): Promise<any> => {
+        const r = await fetch(`${s.url}/mcp`, { method: 'POST', headers: { ...who.headers, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }) });
+        const text = await r.text();
+        try {
+          const msg = JSON.parse((r.headers.get('content-type') ?? '').includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : text);
+          return msg.error ? { protocolError: msg.error } : msg.result;
+        } catch { return { status: r.status, text: text.slice(0, 4000) }; }
+      };
+      const origin = s.url;
+      const ownerCookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
+      const OWNER_WHO: Who = { name: 'owner session', headers: { origin, cookie: ownerCookie, connection: 'close' } };
+      const grant = async (name: string, people?: 'full') => { const r = await as(OWNER_WHO, '/grants', { name, mode: 'edit', ...(people ? { people } : {}) }); if (r.status !== 201) throw new Error(`grant ${name}: ${r.status} ${JSON.stringify(r.body).slice(0, 300)}`); return r.body.token as string; };
+      const bearer = (name: string, token: string): Who => ({ name, headers: { authorization: `Bearer ${token}`, connection: 'close' } });
+      const AGENT = bearer('agent token', s.auth.tokens.agent), OBSERVER = bearer('observer token', s.auth.tokens.observer), NAMES = bearer('grant with people left at its default', await grant('names'));
+      const FULL = bearer('grant with people "full"', await grant('full', 'full'));
+      const WITHOUT_SCOPE = [AGENT, OBSERVER, NAMES];
+      const ownerTx = async (pid: string, ops: OpCall[]) => { const r = await as(OWNER_WHO, `/projects/${pid}/transactions`, { ops }); if (r.status !== 200) throw new Error(`owner transaction failed ${r.status}: ${JSON.stringify(r.body).slice(0, 400)}`); return r.body as { revision: number; results: { output?: Record<string, any> }[] }; };
+      const stillAs = async (who: Who, pid: string, n: number) => { const r = await as(who, `/projects/${pid}/frame?index=${n}`); if (r.status !== 200) throw new Error(`still ${n} of ${pid} as ${who.name}: ${r.status} ${JSON.stringify(r.body).slice(0, 300)}`); return sha(r.body as Buffer); };
+
+      // two pictures with the same pixels: 1 June 2021 (she is one) and 1 June 2024 (she is four)
+      const pictures = [photo('people-2021.jpg', { date: '2021:06:01 10:00:00', offset: '+03:00' }), photo('people-2024.jpg', { le: false, date: '2024:06:01 10:00:00', offset: '+03:00' })];
+      /** The film, the same for the project with fields and for its twin typed by hand: [name, cut, date, plain, itai]. */
+      const film = async (pid: string, texts: string[]) => {
+        const [a, b] = [await upload(pid, pictures[0]!), await upload(pid, pictures[1]!)];
+        await tx(pid, [{ op: 'add_clip', args: { assetId: a.assetId, start: f(0), duration: f(60) } }, { op: 'add_clip', args: { assetId: b.assetId, start: f(60), duration: f(60) } }]);
+        const spans: [number, number, number][] = [[0, 30, 0.2], [30, 60, 0.2], [90, 30, 0.2], [0, 30, -0.25], [90, 30, -0.25]];
+        const r = await tx(pid, spans.map(([start, frames, y], i) => ({ op: 'add_text', args: { text: texts[i]!, start: f(start), duration: f(frames), style: TITLE_STYLE, transform: { y } } })));
+        return { assetId: a.assetId, ids: r.results.map((x) => x.output!.clipId as string) };
+      };
+      const pid = await newProject('10 people');
+      const born = await ownerTx(pid, [{ op: 'add_person', args: { name: NOA_NAME, birthDate: NOA_BIRTH, form: 'f' } }, { op: 'add_person', args: { name: ITAI_NAME } }]);
+      const [noa, itai] = born.results.map((x) => x.output!.personId as string) as [string, string];
+      const { assetId, ids } = await film(pid, [`{name:${noa}} ({age:${noa}})`, `{age:${noa}} · {date}`, '{date}', 'כותרת רגילה', `${ITAI_NAME}: {age:${itai}}`]);
+      const [nameId, cutId, dateId, plainId, itaiId] = ids as [string, string, string, string, string];
+      await ownerTx(pid, [nameId, cutId, dateId, itaiId].map((clipId): OpCall => ({ op: 'set_text_fields', args: { clipId, enabled: true } })));
+      const twin = await newProject('10 people, typed by hand');
+      const typedFilm = await film(twin, ['x', 'x', 'x', 'כותרת רגילה', 'x']);
+      const typedStill = async (text: string) => { await tx(twin, [{ op: 'update_text', args: { clipId: typedFilm.ids[0]!, text } }]); return stillAs(OWNER_WHO, twin, 10); };
+      const needles = familyNeedles(NOA_BIRTH, AGE_WORDS);
+
+      // ---------------------------------------------------------------- 10a. what a credential without the scope reads
+      const reads: Record<string, unknown> = {};
+      let readsOk = true;
+      for (const who of WITHOUT_SCOPE) {
+        const r = await as(who, `/projects/${pid}`);
+        const people = r.body?.project?.people;
+        const ok = r.status === 200 && JSON.stringify(people) === JSON.stringify({ [noa]: { id: noa, name: NOA_NAME, birthDate: null }, [itai]: { id: itai, name: ITAI_NAME, birthDate: null } }) && r.body?.peopleAccess?.access === 'names' && familyLeak(needles, r.body) === null;
+        const owners = await Promise.all(['/people-suggestions', '/on-this-day?date=2026-06-01', `/projects/${pid}/archive/family-check`].map(async (p) => (await as(who, p)).status));
+        const arc = await as(who, `/projects/${pid}/archive`);
+        const arcText = Buffer.isBuffer(arc.body) ? arc.body.toString('utf8') : '';
+        const manifest = Buffer.isBuffer(arc.body) ? JSON.parse(tarEntries(arc.body).get('manifest.json')?.toString('utf8') ?? 'null') : null;
+        const archiveOk = arc.status === 200 && arcText.includes(NOA_NAME) && familyLeak(needles, arcText) === null && manifest?.people === 'names';
+        reads[who.name] = { projectRead: ok, ownerRoutes: owners, archive: { status: arc.status, people: manifest?.people ?? null, leak: familyLeak(needles, arcText) } };
+        readsOk &&= ok && owners.every((st) => st === 403) && archiveOk;
+      }
+      // controls: the owner and a grant with people "full" read the date, so the plant is there to be found; the owner routes stay the owner's
+      const fullRead = await as(FULL, `/projects/${pid}`);
+      const ownerRead = await as(OWNER_WHO, `/projects/${pid}`);
+      const fullOwnerRoutes = await Promise.all(['/people-suggestions', `/projects/${pid}/archive/family-check`].map(async (p) => (await as(FULL, p)).status));
+      const suggestions = await as(OWNER_WHO, '/people-suggestions');
+      const controls = fullRead.body?.project?.people?.[noa]?.birthDate === NOA_BIRTH && ownerRead.body?.project?.people?.[noa]?.birthDate === NOA_BIRTH && familyLeak(needles, fullRead.body) !== null && fullOwnerRoutes.every((st) => st === 403) && suggestions.status === 200 && (suggestions.body.people as { name: string; birthDate: string | null }[]).some((p) => p.name === NOA_NAME && p.birthDate === NOA_BIRTH);
+      // pictures: the agent's still of the name title equals «נועה ()» typed by hand (no age drawn), the owner's «נועה (בת שנה)»
+      const agentStill = await stillAs(AGENT, pid, 10), ownerStill = await stillAs(OWNER_WHO, pid, 10);
+      const typedNoAge = await typedStill(`${NOA_NAME} ()`), typedAge = await typedStill(`${NOA_NAME} (${AGE_AT_2021})`);
+      // the twin and its history hold the age typed by hand; it is deleted, so the walk of 10b (which reads every project's resources) finds only what the server derives
+      const gone = await as(OWNER_WHO, `/projects/${twin}/delete`, { confirmName: '10 people, typed by hand' });
+      if (gone.status !== 200) throw new Error(`deleting the typed twin: ${gone.status} ${JSON.stringify(gone.body).slice(0, 300)}`);
+      const pictureOk = agentStill === typedNoAge && ownerStill === typedAge && agentStill !== ownerStill;
+      check(`10a. privacy: a credential without the people scope (agent token, observer token, a grant left at its default) reads each person as id and name with a null birth date, is refused both owner routes (403) and gets an archive with names and no birth date; its still of «{name} ({age})» equals «${NOA_NAME} ()» typed by hand while the owner's equals «${NOA_NAME} (${AGE_AT_2021})»; controls: the owner and a grant with people "full" read the birth date`, readsOk && controls && pictureOk, { reads, controls, fullGrantOwnerRoutes: fullOwnerRoutes, agentStillEqualsTypedWithoutAge: agentStill === typedNoAge, ownerStillEqualsTypedAge: ownerStill === typedAge });
+
+      // ---------------------------------------------------------------- 11. the archive «בלי פרטי משפחה», imported on a second server
+      {
+        const familyCheck = (await as(OWNER_WHO, `/projects/${pid}/archive/family-check`)).body as { varying: string[]; empty: string[] };
+        const arc = await as(OWNER_WHO, `/projects/${pid}/archive?family=omit`);
+        if (!Buffer.isBuffer(arc.body)) throw new Error(`family-free archive: ${arc.status} ${JSON.stringify(arc.body).slice(0, 300)}`);
+        const entries = tarEntries(arc.body);
+        const manifest = JSON.parse(entries.get('manifest.json')!.toString('utf8'));
+        const arcProject = entries.get('project.json')!.toString('utf8');
+        // birth dates in any spelling, the word choice, a people map: the archive holds none (ages the titles showed are plain words now, as anyone watching sees them)
+        const birthLeak = familyLeak(familyNeedles(NOA_BIRTH, []), arc.body.toString('utf8'), arc.body.toString('latin1'));
+        const s2 = await startServer({ port: PORT + 1, dataDir: path.join(art, 'data2'), homeZone: 'Asia/Jerusalem' });
+        try {
+          const owner2: Who = { name: 'owner session of the second server', headers: { origin: s2.url, connection: 'close', cookie: (await fetch(`${s2.url}/api/v1/session`, { headers: { origin: s2.url, connection: 'close', 'x-pf-owner-key': s2.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]! } };
+          const imp = await fetch(`${s2.url}/api/v1/projects/import`, { method: 'POST', headers: { ...owner2.headers, 'content-type': 'application/x-tar' }, body: new Uint8Array(arc.body) });
+          const impBody = (await imp.json()) as { project?: { id: string } };
+          if (imp.status !== 201 || !impBody.project) throw new Error(`import on the second server: ${imp.status} ${JSON.stringify(impBody).slice(0, 300)}`);
+          const pid2 = impBody.project.id;
+          const doc2 = (await as(owner2, `/projects/${pid2}`, undefined, s2.url)).body.project as ProjectDocument;
+          const titles = new Map(Object.values(doc2.sequences).flatMap((sq) => sq.tracks.flatMap((tr) => tr.clips)).filter((c) => c.type === 'text').map((c) => [c.id, c as Extract<typeof c, { type: 'text' }>]));
+          const peopleFieldLeft = [...titles.values()].filter((c) => c.fields && /\{(name|age):/.test(c.text)).map((c) => c.id);
+          const frozen = { name: titles.get(nameId)?.text, cut: titles.get(cutId)?.text, itai: titles.get(itaiId)?.text };
+          const wantFrozen = { name: `${NOA_NAME} (${AGE_AT_2021})`, cut: `${AGE_AT_2021} · ${JUNE_WORDS}`, itai: `${ITAI_NAME}: ` };
+          const plainFields = [nameId, cutId, itaiId].every((id) => titles.get(id)?.fields === undefined) && titles.get(dateId)?.fields === true && titles.get(plainId)?.fields === undefined;
+          // stills on the second server against the source server: the untouched titles, and every frozen title inside the stretch of its first value
+          const frames = [10, 45, 95];
+          const stills = await Promise.all(frames.map(async (n) => ({ frame: n, source: await stillAs(OWNER_WHO, pid, n), imported: sha((await as(owner2, `/projects/${pid2}/frame?index=${n}`, undefined, s2.url)).body as Buffer) })));
+          // the cut title after the cut: its words changed there, so the plain copy shows the first value (listed in varying)
+          const afterCut = { source: await stillAs(OWNER_WHO, pid, 75), imported: sha((await as(owner2, `/projects/${pid2}/frame?index=75`, undefined, s2.url)).body as Buffer) };
+          const ok = manifest.family === 'omit' && manifest.people === 'none' && !/"people"\s*:\s*\{/.test(arcProject) && birthLeak === null && (doc2.people === undefined || Object.keys(doc2.people).length === 0) && peopleFieldLeft.length === 0 && plainFields && JSON.stringify(frozen) === JSON.stringify(wantFrozen) && stills.every((x) => x.source === x.imported) && JSON.stringify(familyCheck) === JSON.stringify({ varying: [cutId], empty: [itaiId] }) && afterCut.source !== afterCut.imported;
+          check(`11. the archive «בלי פרטי משפחה» imported on a second server: no people and no birth date in it, no title with a people field, each such title plain text with the words it showed at its first frame («${wantFrozen.name}»), the {date} title still live; the stills of the frames ${frames.join(', ')} are byte-equal to the source server's; the family check listed the title whose words change (varying) and the one with a field without words (empty)`, ok, { manifest: { family: manifest.family, people: manifest.people }, birthLeak, peopleOnSecondServer: doc2.people ?? null, peopleFieldLeft, frozen, plainFields, stills: stills.map((x) => ({ frame: x.frame, equal: x.source === x.imported })), familyCheck, afterTheCutTheCopyShowsTheFirstValue: afterCut.source !== afterCut.imported });
+          measurements.familyFreeArchive = { bytes: arc.body.length, familyCheck, frozen, stills: stills.map((x) => ({ frame: x.frame, sha256: x.imported, equal: x.source === x.imported })) };
+        } finally {
+          await s2.close();
+        }
+      }
+
+      // ---------------------------------------------------------------- 10b. the walk: every surface, with the plant in every place it can be
+      {
+        // a proposal by the grant with people "full" (its operation arguments and entity states hold the birth date), and the owner's PNG export (its job holds the whole document)
+        const proposal = await as(FULL, `/projects/${pid}/proposals`, { ops: [{ op: 'add_person', args: { name: 'תאומה', birthDate: NOA_BIRTH, form: 'f' } }] });
+        const proposalId = proposal.body?.proposalId as string | undefined;
+        const job = await as(OWNER_WHO, `/projects/${pid}/exports`, { format: 'png', frame: 10 });
+        const jobId = job.body?.jobId as string | undefined;
+        if (jobId) await waitJob(jobId);
+        const planted = proposal.status < 300 && !!proposalId && !!jobId && familyLeak(needles, (await as(OWNER_WHO, `/projects/${pid}/proposals/${proposalId}`)).body) !== null;
+        const params: Record<string, string> = { id: pid, jobId: jobId ?? 'job_none', proposalId: proposalId ?? 'prp_none', assetId, token: 'rnd_none', kind: 'thumb', motionTrackId: 'mtk_none', capabilityId: 'none.cap', recipeId: 'none', runId: 'run_none', templateId: 'none', variantId: 'var_none', approvalId: 'apr_none', grantId: 'grt_none', sfxId: 'none', modelId: 'none', index: '0' };
+        const rename: OpCall = { op: 'update_person', args: { personId: noa, name: NOA_NAME } };
+        const bodies: Record<string, unknown> = {
+          'POST /api/v1/projects/:id/transactions': { ops: [rename] }, 'POST /api/v1/projects/:id/operations': { ops: [rename] }, 'POST /api/v1/projects/:id/operations/validate': { ops: [rename] }, 'POST /api/v1/projects/:id/proposals': { ops: [rename] },
+          'POST /api/v1/projects/:id/exports': {}, 'POST /api/v1/projects/:id/exports/plan': {}, 'POST /api/v1/projects/:id/exports/batch': { variantIds: ['var_none'] }, 'POST /api/v1/projects/:id/exports/browser': { sessionId: 'walk-session-1' },
+          'POST /api/v1/projects/:id/undo': {}, 'POST /api/v1/projects/:id/redo': {}, 'POST /api/v1/jobs/:jobId/retry': {},
+        };
+        const queries: Record<string, string> = { 'GET /api/v1/projects/:id/frame': '?index=10', 'GET /api/v1/on-this-day': '?date=2026-06-01', 'GET /api/v1/projects/:id/proposals/:proposalId/frame': '?index=10' };
+        const tools = (await rpc(OWNER_WHO, 'tools/list', {})).tools.map((t: { name: string }) => t.name) as string[];
+        const toolArgs: Record<string, Record<string, unknown>> = {
+          describe_moment: { frameIndex: 10 }, render_frame: { frameIndex: 10 }, render_contact_sheet: { frames: [0, 10, 45] }, get_job: { jobId }, retry_job: { jobId }, get_transcript: { assetId }, get_analysis: { assetId },
+          apply_transaction: { ops: [rename], dryRun: true }, propose_transaction: { ops: [rename] }, export_captions: {}, export_project: {}, plan_export: {}, preflight: {}, list_proposals: {}, set_view: { frame: 10 },
+          update_person: { personId: noa, name: NOA_NAME }, remove_person: { personId: itai }, add_person: { name: 'איתן' },
+        };
+        const walk: Record<string, { answered: number; refused: number; leaks: string[] }> = {};
+        for (const who of WITHOUT_SCOPE) {
+          const row = { answered: 0, refused: 0, leaks: [] as string[] };
+          for (const key of Object.keys(PEOPLE_REST_SURFACES)) {
+            if (PEOPLE_REST_SURFACES[key]!.includes('renderer-only') || key === 'ALL /mcp' || key === 'GET /api/v1/projects/:id/events') continue;
+            const [method, route] = key.split(' ') as [string, string];
+            const url = `${s.url}${route.replace(/:([A-Za-z]+)/g, (_, k: string) => encodeURIComponent(params[k] ?? 'none'))}${queries[key] ?? ''}`;
+            const r = await fetch(url, { method, headers: { ...who.headers, ...(method === 'GET' ? {} : { 'content-type': 'application/json' }) }, ...(method === 'GET' ? {} : { body: JSON.stringify(Object.hasOwn(bodies, key) ? bodies[key] : { __walk: 1 }) }) });
+            const type = r.headers.get('content-type') ?? '';
+            const buf = Buffer.from(await r.arrayBuffer());
+            if (r.status < 300) row.answered++; else row.refused++;
+            // pictures are not searched as text (their bytes spell anything); what they show is checked in 10a
+            const content = type.includes('json') ? JSON.parse(buf.toString('utf8') || 'null') : /^(image|video|audio)\//.test(type) ? null : [buf.toString('utf8'), buf.toString('latin1')];
+            const leak = familyLeak(needles, Object.fromEntries(r.headers.entries()), content);
+            if (leak) row.leaks.push(`${key} → ${r.status}: ${leak}`);
+          }
+          for (const name of tools) {
+            const res = await rpc(who, 'tools/call', { name, arguments: { projectId: pid, ...(toolArgs[name] ?? {}) } });
+            const leak = familyLeak(needles, unpackTool(res));
+            if (leak) row.leaks.push(`tool ${name}: ${leak}`);
+          }
+          const listed = await rpc(who, 'resources/list', {});
+          for (const uri of new Set([...(listed.resources ?? []).map((x: { uri: string }) => x.uri), 'pulseframe://guide', 'pulseframe://ops', 'pulseframe://catalog'])) {
+            const leak = familyLeak(needles, ((await rpc(who, 'resources/read', { uri })).contents ?? []).map((c: { text?: string }) => c.text ?? null));
+            if (leak) row.leaks.push(`resource ${uri}: ${leak}`);
+          }
+          for (const p of (await rpc(who, 'prompts/list', {})).prompts ?? []) { const leak = familyLeak(needles, await rpc(who, 'prompts/get', { name: p.name, arguments: { projectId: pid } })); if (leak) row.leaks.push(`prompt ${p.name}: ${leak}`); }
+          walk[who.name] = row;
+        }
+        const leaks = Object.values(walk).flatMap((w) => w.leaks);
+        const routes = Object.keys(PEOPLE_REST_SURFACES).length;
+        check(`10b. the walk: with the birth date planted in the project, a proposal's arguments and entity states and an export job, every REST route of the surface table (${routes}) and every MCP tool (${tools.length}), resource and prompt, called as each credential without the people scope: ${leaks.length} answers hold the birth date (any spelling, also on the Hebrew calendar), an age or the word choice`, planted && leaks.length === 0 && Object.values(walk).every((w) => w.answered > 25), { planted, walk: Object.fromEntries(Object.entries(walk).map(([k, w]) => [k, { answered: w.answered, refused: w.refused, leaks: w.leaks.slice(0, 5) }])) });
+        measurements.peopleWalk = { routes, tools: tools.length, perCredential: Object.fromEntries(Object.entries(walk).map(([k, w]) => [k, { answered: w.answered, refused: w.refused, leaks: w.leaks.length }])) };
+      }
+    }
+
     // ================================================================ 12. the calendar inside headless Chromium
     {
       const page = await (await browser.newContext()).newPage();
@@ -560,7 +808,7 @@ main().catch((e) => { console.error(e); check('the proof ran to the end', false,
   const report = {
     proof: 'lifeline', adr: 'ADR-0021', ranAt: new Date().toISOString(), result, passed: checks.length - failed.length, total: checks.length, ...(blocked ? { blocked } : {}),
     machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, node: process.version, icu: process.versions.icu, ffmpeg: (() => { try { return execFileSync('ffmpeg', ['-version'], { encoding: 'utf8' }).split('\n')[0]; } catch { return null; } })() },
-    scope: 'The life line (ADR-0021) through the real server, the render worker and headless Chromium, on files generated here (ffmpeg -metadata, a hand-built EXIF segment) at 640x360: capture dates at import, title fields and the capture-sourced date stamp against the same words typed by hand, H.264 export and the paused preview against the stills, "make it plain text", undo of every operation, the preflight, the calendar in Chromium, cost. Not covered: real phone files (the owner\'s own clips), cameras that write local time labelled as UTC or the end of the recording, HEIC photos, people (not part of this build), the editor screens (proof:lifeline-ui). Nobody looked at the pictures.',
+    scope: 'The life line (ADR-0021) through the real server, the render worker and headless Chromium, on files generated here (ffmpeg -metadata, a hand-built EXIF segment) at 640x360: capture dates at import, title fields and the capture-sourced date stamp, people (what a credential without the people scope reads on every surface, and the archive without family details on a second server) against the same words typed by hand, H.264 export and the paused preview against the stills, "make it plain text", undo of every operation, the preflight, the calendar in Chromium, cost. Not covered: real phone files (the owner\'s own clips), cameras that write local time labelled as UTC or the end of the recording, HEIC photos, the editor screens (proof:lifeline-ui). Nobody looked at the pictures.',
     homeZone: 'Asia/Jerusalem', measurements, checks,
   };
   if (!blocked) {
