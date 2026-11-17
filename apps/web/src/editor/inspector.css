@@ -317,7 +317,7 @@
 .pf-insp label.mix-mute input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; opacity: 0; margin: 0; }
 .pf-insp label.mix-mute:has(input:checked) { background: var(--pf-attention); color: var(--pf-canvas); box-shadow: none; }
 .pf-insp label.mix-mute:has(input:focus-visible) { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
-.pf-insp .mix-out { grid-column: 2; grid-row: 1; grid-template-rows: auto minmax(0, 1fr) auto; }
+.pf-insp .mix-out { grid-column: 2; grid-row: 1; grid-template-rows: auto minmax(0, 1fr) auto auto; }
 .pf-insp .mix-out > strong { border-color: var(--pf-text-2); }
 .pf-insp .mix-out > .muted { display: none; }
 .pf-insp .sound-meter { position: relative; inline-size: 12px; block-size: 100%; border: 0; border-radius: 4px; background: var(--pf-surface-4); overflow: hidden; }
@@ -326,7 +326,7 @@
 .pf-insp .sound-meter-mark { position: absolute; inset-inline: 0; inset-block-end: var(--v, 0%); inline-size: auto; block-size: 2px; background: var(--pf-frame); }
 .pf-insp .mix-duck-head { grid-row: 2; grid-column: 1 / -1; display: flex; align-items: center; gap: var(--pf-sp-3); margin-block-start: var(--pf-sp-3); color: var(--pf-text); font-size: var(--pf-fs-sm); font-weight: var(--pf-fw-semibold); }
 .pf-insp .mix-duck-head .pf-ico { color: var(--pf-pulse); }
-.pf-insp .mix-duck { grid-column: 1 / -1; display: grid; grid-template-columns: 40px minmax(0, 1fr) 52px; align-items: center; gap: var(--pf-sp-3); font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.pf-insp .mix-duck { grid-column: 1 / -1; display: grid; grid-template-columns: 40px minmax(0, 1fr) 76px; align-items: center; gap: var(--pf-sp-3); font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
 .pf-insp .mix-duck > label { grid-template-columns: minmax(0, 1fr); min-block-size: 0; }
 .pf-insp .mix-duck > label > :is(select, input) { grid-column: 1; grid-row: auto; }
 .pf-insp .mix-duck > label:last-child { font-size: 0; gap: 0; }
@@ -376,3 +376,18 @@
 .pf-insp button.beat-row:hover { background: color-mix(in srgb, var(--pf-pulse) 12%, var(--pf-surface-2)); border: 0; }
 .pf-insp .beat-row > .pf-ico:first-child { flex: none; color: var(--pf-pulse); }
 .pf-insp .beat-row strong { color: var(--pf-pulse); }
+
+/* the mixer strip names what the track carries (music, speech, the sound of the video, or its first file) above its code */
+.pf-insp .mix-strip > .mix-name { display: grid; justify-items: center; gap: 1px; max-inline-size: 100%; padding-inline: var(--pf-sp-2); text-align: center; line-height: 15px; }
+.pf-insp .mix-role { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pf-text); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); }
+.pf-insp .mix-code { color: var(--pf-text-3); font-size: var(--pf-fs-digits); font-weight: var(--pf-fw-regular); }
+.pf-insp .mix-strip[data-muted='true'] .mix-role { color: var(--pf-text-disabled); }
+/* the depth of a give-way row: the number and its unit on the select's line */
+.pf-insp .mix-duck > label.num-unit, .pf-insp .mix-duck > label.num-unit:last-child { display: flex; align-items: center; gap: var(--pf-sp-2); font-size: var(--pf-fs-xs); min-block-size: 0; margin: 0; }
+.pf-insp .mix-duck > label.num-unit > input { flex: 1; min-inline-size: 0; inline-size: auto; }
+.pf-insp label.num-unit > u { text-decoration: none; color: var(--pf-text-3); font-family: var(--pf-font-mono); font-size: var(--pf-fs-digits); }
+.pf-insp .mix-out-note { color: var(--pf-text-3); font-size: var(--pf-fs-xs); text-align: center; line-height: 14px; }
+/* the colour tab's "this clip / the whole edit" line, above the ready looks */
+.pf-insp .look-target-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3) var(--pf-sp-4); margin-block-end: var(--pf-sp-4); }
+.pf-insp .look-target-line .look-target-label { color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
+.pf-insp .look-target-line > p { flex-basis: 100%; margin: 0; }

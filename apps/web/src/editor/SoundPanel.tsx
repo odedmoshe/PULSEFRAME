@@ -7,6 +7,7 @@ import { SfxBrowser } from './SfxBrowser.tsx';
 import { CommitSlider } from './AudioFxBlock.tsx';
 import { Section } from './Section.tsx';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
+import { trackRole } from './inspector.model.ts';
 import { Switch } from '../ds/index.ts';
 import { IconOnBeat } from './icons.tsx';
 
@@ -18,7 +19,7 @@ const dbToLinear = (db: number) => (db <= MIN_DB ? 0 : Math.min(4, 10 ** (db / 2
 const fmtDb = (db: number) => (db <= MIN_DB ? '−∞' : `${db > 0 ? '+' : ''}${db.toFixed(1)}`);
 const fmt = (n: number | null, unit: string) => (n === null || !Number.isFinite(n) ? '—' : `${n.toFixed(1)} ${unit}`);
 
-function NumberCommit({ label, value, min, max, step, onCommit, testid }: { label: string; value: number; min: number; max?: number; step: number; onCommit: (v: number) => void; testid: string }) {
+function NumberCommit({ label, value, min, max, step, onCommit, testid, unit, hideLabel }: { label: string; value: number; min: number; max?: number; step: number; onCommit: (v: number) => void; testid: string; unit?: string; hideLabel?: boolean }) {
   const [v, setV] = useState(String(value));
   // Only text the user typed since the last commit is ever committed. Without this, a field whose value follows the
   // playhead re-committed its old text on blur after the playhead had moved (a stray volume key at the new position).
@@ -32,9 +33,10 @@ function NumberCommit({ label, value, min, max, step, onCommit, testid }: { labe
     if (n !== value) onCommit(n);
   };
   return (
-    <label>{label}
+    <label className={unit ? 'num-unit' : undefined}>{hideLabel ? <span className="sr-only">{label}</span> : label}
       <input type="number" dir="ltr" min={min} max={max} step={step} value={v} data-testid={testid}
         onChange={(e) => { dirty.current = true; setV(e.target.value); }} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); }} />
+      {unit && <u aria-hidden="true">{unit}</u>}
     </label>
   );
 }
@@ -142,10 +144,14 @@ function TrackRow({ track, others, index }: { track: Track; others: Track[]; ind
   const setDuck = (source: string, reductionDb: number) =>
     void editor.commit([{ op: 'set_ducking', args: { trackId: track.id, sourceTrackIds: source ? [source] : null, ...(source ? { reductionDb } : {}) } }], 'Ducking');
   const source = duck?.sourceTrackIds[0] ?? '';
+  const doc = state.doc;
+  const kind = doc ? trackRole(doc, track) : null;
+  const first = track.clips.find((c) => c.type === 'media');
+  const role = kind ? S.trackRole[kind] : first?.type === 'media' && doc?.assets[first.assetId] ? doc.assets[first.assetId]!.name.replace(/\.[a-z0-9]{2,5}$/i, '') : null;
   return (
     <li className="sound-track" data-testid="sound-track" data-track-id={track.id}>
       <div className="mix-strip" style={{ gridColumn: index + 1 }} data-muted={track.muted ? 'true' : 'false'}>
-        <strong dir="auto" title={track.name}>{track.name}</strong>
+        <strong className="mix-name" title={role ? `${role} · ${track.name}` : track.name}><span className="mix-role" dir="auto">{role ?? '—'}</span><bdi className="mix-code num" dir="ltr">{track.name}</bdi></strong>
         <Fader label={`${t('sound.volume')}: ${track.name}`} value={linearToDb(gain)} min={MIN_DB} max={MAX_DB} step={0.5} testid="sound-gain"
           display={(v) => `${fmtDb(v)} dB`} onCommit={(v) => set({ gain: dbToLinear(v) })} />
         <label className="mix-pan">
@@ -165,7 +171,7 @@ function TrackRow({ track, others, index }: { track: Track; others: Track[]; ind
             {others.map((o) => <option key={o.id} value={o.id}>{S.duckRow} {o.name}</option>)}
           </select>
         </label>
-        <NumberCommit label={t('sound.duck.db')} value={db} min={1} max={40} step={1} testid="sound-duck-db"
+        <NumberCommit label={`${t('sound.duck.db')}: ${track.name}`} hideLabel unit="dB" value={db} min={1} max={40} step={1} testid="sound-duck-db"
           onCommit={(v) => { const c = Math.max(1, Math.min(40, v)); setDb(c); if (source) setDuck(source, c); }} />
       </div>
     </li>
@@ -185,7 +191,7 @@ function PanSlider({ value, label, display, onCommit }: { value: number; label: 
   );
 }
 
-function Meter() {
+function Meter({ measured, target }: { measured: number | null; target: number | null }) {
   const { editor, state, t } = useEditorState();
   const player = editor.player;
   const playing = !!player?.playing;
@@ -209,8 +215,8 @@ function Meter() {
         <div className="sound-meter-bar" style={{ '--v': `${pct}%` } as React.CSSProperties} />
         <div className="sound-meter-mark" style={{ '--v': `${((-1 - MIN_DB) / -MIN_DB) * 100}%` } as React.CSSProperties} aria-hidden="true" />
       </div>
-      <bdi className="val num" dir="ltr">{db === null ? '—' : fmtDb(Number.isFinite(db) ? db : MIN_DB)}</bdi>
-      {db === null && <p className="muted pf-help">{t('sound.meter.idle')}</p>}
+      <bdi className="val num" dir="ltr">{db !== null ? fmtDb(Number.isFinite(db) ? db : MIN_DB) : measured !== null ? `${fmtDb(measured)} LUFS` : target !== null ? `${fmtDb(target)} LUFS` : '—'}</bdi>
+      {db === null && <span className="mix-out-note">{measured !== null ? INSPECTOR_STRINGS[state.lang].mixMeasured : target !== null ? INSPECTOR_STRINGS[state.lang].mixTarget : t('sound.meter.idle')}</span>}
     </div>
   );
 }
@@ -390,7 +396,7 @@ export function SoundPanel() {
             <li className="mix-duck-head" role="presentation"><IconOnBeat size={16} /> {S.secDuck}</li>
           </ul>
         )}
-        <Meter />
+        <Meter measured={res && resRev === state.revision && res.integratedLufs !== null && Number.isFinite(res.integratedLufs) ? res.integratedLufs : null} target={target} />
       </div>
       {tracks.length > 0 && <p className="muted pf-help mix-duck-hint" data-ducked={ducked}>{t('sound.duck.hint')}</p>}
 

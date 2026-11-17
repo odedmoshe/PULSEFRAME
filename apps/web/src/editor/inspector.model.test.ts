@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, clipEnd, createProject, findClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { activeTab, cutBefore, firstTab, framesToNearestBeat, keyframeSummary, objectActions, objectKind, pagesFor, pinnedTab, rollCutOps, shortTimecode, tabsFor } from './inspector.model.ts';
+import { activeTab, cutBefore, firstTab, framesToNearestBeat, keyframeSummary, objectActions, objectKind, trackRole, pagesFor, pinnedTab, rollCutOps, shortTimecode, tabsFor } from './inspector.model.ts';
 import { ratioLabel } from './FormatPrism.tsx';
 
 const R = { num: 30, den: 1 };
@@ -151,5 +151,19 @@ describe('objectActions: what the ⋯ menu and the footer may do to what the pan
     expect(objectActions('none')).toEqual([]);
     expect(objectActions('multi')).toEqual(['duplicate', 'delete']);
     for (const k of ['video', 'image', 'text', 'caption', 'sound', 'adjustment'] as const) expect(objectActions(k)).toEqual(['duplicate', 'split', 'delete']);
+  });
+});
+
+describe('trackRole: what a mixer strip says its track carries', () => {
+  const doc = { analyses: { music: { beats: { bpm: 120 } } }, transcripts: { talk: { segments: [] } } } as unknown as ProjectDocument;
+  const m = (assetId: string, linkGroupId?: string) => ({ type: 'media', assetId, ...(linkGroupId ? { linkGroupId } : {}) }) as unknown as Parameters<typeof trackRole>[1]['clips'][number];
+  it('music when its sound was analysed for beats, speech when it has a transcript, the video sound when every clip is linked', () => {
+    expect(trackRole(doc, { clips: [m('other'), m('music')] })).toBe('music');
+    expect(trackRole(doc, { clips: [m('talk')] })).toBe('speech');
+    expect(trackRole(doc, { clips: [m('v1', 'g1'), m('v2', 'g2')] })).toBe('linked');
+  });
+  it('nothing is claimed for an empty track or plain files (the strip shows the first file)', () => {
+    expect(trackRole(doc, { clips: [] })).toBeNull();
+    expect(trackRole(doc, { clips: [m('fx1'), m('v1', 'g1')] })).toBeNull();
   });
 });
