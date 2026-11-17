@@ -5,7 +5,7 @@
  * and Undo (each one transaction: regenerate keeps hand-edited items; Undo is the editor's own). No animated previews in
  * wave 1; nothing here keeps project state.
  */
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { TEMPLATE_GENRES, type TemplateSummary } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { LayoutTemplate } from 'lucide-react';
@@ -31,6 +31,13 @@ export function TemplatesDrawer() {
   const [dialog, setDialog] = useState<TemplateSummary | null>(null);
   const load = () => { setFailed(null); templateApi.list().then((r) => setList(r.templates)).catch((e) => setFailed(e instanceof ApiFailure ? `${e.message} (${e.code})` : String(e))); };
   useEffect(() => { if (open && !list) load(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  // opened from the palette or Welcome: the focus goes to the first card once the cards are there (to the toggle if none load)
+  const focused = useRef(0);
+  useEffect(() => {
+    if (!state.templatesFocus || focused.current === state.templatesFocus || (!list && !failed)) return;
+    focused.current = state.templatesFocus;
+    setTimeout(() => (document.querySelector<HTMLElement>(`[data-testid=${TID.drawer}] [data-testid=${TID.card}]`) ?? document.querySelector<HTMLElement>(`[data-testid=${TID.drawer}] [data-testid=templates-toggle]`))?.focus(), 0);
+  }, [state.templatesFocus, list, failed]);
 
   const applied = (s: TemplateSummary, a: AppliedTemplate) => {
     setDialog(null);

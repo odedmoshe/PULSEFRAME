@@ -3,9 +3,12 @@
  * It checks things a script can decide: every control has an accessible name, text contrast, visible keyboard focus,
  * document language/direction, tab semantics. It is not a WCAG conformance statement and does not replace testing with a
  * screen reader or with users. Findings are written to docs/evidence/a11y-audit.json. The transient states include the
- * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator).
+ * effect gallery dialog and the look panel with the visual wave's controls (beat fieldset, date stamp, time separator), and
+ * (ADR-0016) an adjustment clip's inspector, the Templates drawer (its first card at the inline start), the template dialog
+ * (first step and plan step) and the post-apply bar.
  *   pnpm build && pnpm audit:a11y
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -104,6 +107,18 @@ async function main() {
     const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
     const tx = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }, { op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60) } }, { op: 'add_caption_track', args: { mode: 'manual' } }, { op: 'add_variant', args: { profileId: 'vertical-9x16' } }, { op: 'add_marker', args: { time: f(0), label: 'סמן פתיחה' } }] });
     const clipId = tx.results[0].output.clipId;
+    // templates and adjustment layers (ADR-0016): a project of four still pictures with an adjustment layer over the edit
+    const tplPid = (await post('/projects', { name: 'a11y-templates', width: 640, height: 360 })).project.id as string;
+    for (const [i, c] of ['0x4a6f8c', '0x8c5a4a', '0x5a8c6a', '0x7a5a8c'].entries()) {
+      const file = path.join(art, `still-${i}.png`);
+      execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${c}:s=640x360,drawbox=x=${60 + i * 100}:y=90:w=120:h=180:color=0xc0b07a:t=fill`, '-frames:v', '1', file]);
+      await fetch(`${s.url}/api/v1/projects/${tplPid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(file) }, body: fs.readFileSync(file) });
+    }
+    const tplAssets = Object.keys(((await (await fetch(`${s.url}/api/v1/projects/${tplPid}`, { headers: h })).json()) as any).project.assets);
+    await post(`/projects/${tplPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: tplAssets[0], start: f(0), duration: f(60) } }] });
+    const adjClip = (await post(`/projects/${tplPid}/transactions`, { ops: [{ op: 'add_adjustment', args: { span: 'edit', effects: [{ type: 'color.grayscale' }] } }] })).results?.[0]?.output?.clipId as string | undefined;
+    const tplList = (((await (await fetch(`${s.url}/api/v1/templates`, { headers: h })).json()) as any).templates ?? []) as any[];
+    const tplPick = tplList.find((t) => t.available && t.needs.music !== 'beats' && t.slots.every((x: any) => x.accept !== 'video')) ?? tplList.find((t) => t.available);
     for (const lang of ['he', 'en'] as const) {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
@@ -233,6 +248,48 @@ async function main() {
       await auditState('look-visual-wave', { shown: lookShown.fieldset === 1 && lookShown.separator === 1 && lookShown.stampField === 1 && lookShown.beatToggles >= 1, ...lookShown }, true);
       await post(`/projects/${pid}/transactions`, { ops: waveFx.map((effectId) => ({ op: 'remove_effect', args: { clipId, effectId } })) });
       await page.getByTestId('beat-fieldset').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+      // ---- templates and adjustment layers (ADR-0016), in their own project ----
+      await page.goto(`${s.ownerUrl}&project=${tplPid}`);
+      await page.getByTestId('timecode').waitFor();
+      if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      // an adjustment clip's inspector: opacity only, its note, mask and blend, "apply to" absent (it is the adjustment)
+      if (adjClip) await page.locator(`.clip[data-clip-id="${adjClip}"]`).click();
+      await page.getByTestId('adjust-opacity').waitFor({ timeout: 8000 }).catch(() => {});
+      await auditState('adjustment-inspector', { shown: (await page.getByTestId('adjust-opacity').count()) === 1 && (await page.getByTestId('adjust-note').count()) === 1 });
+      // the Look panel of a picture clip with "apply to: the whole edit" chosen
+      await page.locator('.track.video .clip').first().click();
+      await page.getByTestId('apply-to-edit').check().catch(() => {});
+      await auditState('apply-to-whole-edit', { shown: (await page.getByTestId('apply-to-edit').isChecked().catch(() => false)) === true });
+      // the Templates drawer: its first card sits at the inline start (the right edge in Hebrew)
+      await page.getByTestId('templates-toggle').click();
+      await page.locator('[data-testid=template-card]').first().waitFor({ timeout: 10000 }).catch(() => {});
+      const cards = await page.locator('[data-testid=template-card]').count();
+      const edge = await page.evaluate((rtl) => {
+        const list = document.querySelector('[data-testid=templates-drawer] .pf-tpl-cards'), first = document.querySelector('[data-testid=template-card]');
+        if (!list || !first) return null;
+        const a = list.getBoundingClientRect(), b = first.getBoundingClientRect();
+        return { gapAtInlineStart: Number((rtl ? a.right - b.right : b.left - a.left).toFixed(2)), cardWidth: Math.round(b.width), listWidth: Math.round(a.width) };
+      }, lang === 'he');
+      await auditState('templates-drawer', { shown: cards > 0, cards, firstCardAtInlineStart: !!edge && Math.abs(edge.gapAtInlineStart) <= 1, edge });
+      // the template dialog: its first step, then the plan step (a polite live region); Escape gives the focus back to the card
+      const tplCard = `[data-testid=template-card][data-template-id="${tplPick?.id ?? ''}"]`;
+      const td = await dialogBehaviour('template-dialog', async () => { await page.locator(tplCard).click(); }, tplCard);
+      await auditState('template-dialog', { startsInside: td.startsInside, tabStepsThatLeftTheDialog: td.tabStepsThatLeftTheDialog }, true);
+      const dialogState = states.at(-1);
+      await page.locator('[data-testid=template-step][data-step=plan]').click();
+      await page.waitForFunction(() => !!document.querySelector('[data-testid=template-plan-summary]') || !!document.querySelector('[data-testid=template-error]'), undefined, { timeout: 30000 }).catch(() => {});
+      await auditState('template-dialog-plan', { shown: (await page.getByTestId('template-plan-summary').count()) === 1, live: await page.getByTestId('template-plan').getAttribute('aria-live').catch(() => null) }, true);
+      Object.assign(dialogState, await td.close());
+      // the post-apply bar: the template is applied from the dialog, audited, and undone
+      await page.locator(tplCard).click();
+      await page.getByTestId('template-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.locator('[data-testid=template-step][data-step=plan]').click().catch(() => {});
+      await page.waitForFunction(() => !!document.querySelector('[data-testid=template-plan-summary]') || !!document.querySelector('[data-testid=template-error]'), undefined, { timeout: 30000 }).catch(() => {});
+      await page.getByTestId('template-use').click({ timeout: 5000 }).catch(() => {});
+      await page.getByTestId('template-applied').waitFor({ timeout: 30000 }).catch(() => {});
+      if (await page.getByTestId('template-dialog').count()) await page.keyboard.press('Escape');
+      await auditState('template-applied', { shown: (await page.getByTestId('template-applied').count()) === 1, template: tplPick?.id ?? null });
+      if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
@@ -243,7 +300,7 @@ async function main() {
     await s.close();
   }
   const stateFindings = (st: any) => st.unnamed.length + st.lowContrast.length + st.tabIssues.length + st.noFocusRing.length
-    + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0);
+    + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0) + (st.firstCardAtInlineStart === false ? 1 : 0);
   const total = report.runs.reduce((n: number, r: any) => n + r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length + (r.states ?? []).reduce((m: number, st: any) => m + stateFindings(st), 0), 0);
   report.findings = total;
   report.result = total === 0 ? 'NO FINDINGS (heuristic)' : 'FINDINGS';

@@ -72,6 +72,8 @@ export interface EditorState {
   cutPending: string[];
   /** The Templates drawer of the library is expanded (session view state). */
   templatesOpen: boolean;
+  /** Bumped by openTemplates: the drawer moves the keyboard focus to its first card once the cards are there. */
+  templatesFocus: number;
   /** The template run applied from this tab, for the post-apply bar (shuffle, another tempo, undo); session state only. */
   templateRun: TemplateRunInfo | null;
 }
@@ -107,7 +109,7 @@ export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
     provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
-    templatesOpen: false, templateRun: null,
+    templatesOpen: false, templatesFocus: 0, templateRun: null,
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -599,11 +601,8 @@ export class Editor {
   applyToWholeEdit(pick: WholeEditPick, label = 'Adjust the whole edit') {
     return this.commit(() => (this.state.doc ? wholeEditOps(this.state.doc, pick) : null), label);
   }
-  /** Expand the Templates drawer of the library and move the keyboard focus to it (palette, Welcome). */
-  openTemplates() {
-    this.set({ templatesOpen: true });
-    setTimeout(() => document.querySelector<HTMLElement>('[data-testid=templates-drawer] [data-testid=template-card], [data-testid=templates-drawer] [data-testid=templates-toggle]')?.focus(), 0);
-  }
+  /** Expand the Templates drawer of the library and move the keyboard focus to its first card (palette, Welcome; TemplatesDrawer.tsx). */
+  openTemplates() { this.set({ templatesOpen: true, templatesFocus: this.state.templatesFocus + 1 }); }
   setTemplateRun(run: TemplateRunInfo | null) { this.set({ templateRun: run }); }
 
   /** The selected clip's transform as rendered at the playhead (keyframes applied). */
