@@ -9,8 +9,9 @@
  * for a catalogue face without a loaded file, and the export manifest pins the files by SHA-256):
  *   1. TITLE_FONT_ROWS below: families whose licence was read at the package, pinned at an exact version in
  *      apps/web/package.json, with their CSS imports listed in apps/web/src/titleFonts.ts. NOT offered yet.
- *   2. The lead moves the rows into FONT_CATALOG and imports titleFonts.ts from apps/web/src/fonts.ts in ONE commit, after a
- *      browser run (ensureFonts, check:notices, proof:fonts). From then on preview, stills and export draw them alike.
+ *   2. The lead moves the rows into FONT_CATALOG and imports titleFonts.ts from apps/web/src/fonts.ts in ONE commit, after the
+ *      owner has approved the families by name (content-pack plan, ORDER 1) and after a browser run (ensureFonts,
+ *      check:notices, proof:fonts). From then on preview, stills and export draw them alike.
  * HELD_TITLE_FONTS names the families that wait for an owner decision and are not pinned.
  */
 export type FontCategory = 'sans' | 'serif' | 'display' | 'handwriting';
@@ -49,6 +50,9 @@ export const FONT_CATALOG: readonly FontEntry[] = [
  * - Karantina: the same package the interface already bundles (apps/web/src/ds/uiFonts.css). As a title font its files must
  *   be emitted once: the lead checks that with check:notices when the rows go live.
  * `nikud` is left out until apps/web/src/fonts.glyphs.test.ts has measured the row.
+ * The owner's approval of these families by name is NOT recorded yet (the wave-5 approvals cover people, the holiday symbols
+ * and phone drop). The pins are inert until it is: nothing imports titleFonts.ts and check:notices reads FONT_CATALOG only.
+ * Without that approval the rows must not go live; should the owner say no, the pins come out with their rows.
  */
 export const TITLE_FONT_ROWS: readonly FontEntry[] = [
   { family: 'Suez One', slug: 'suez-one', package: '@fontsource/suez-one', version: '5.3.0', license: 'OFL-1.1', weights: [400], category: 'display', hebrew: true, tags: ['bold'] },
