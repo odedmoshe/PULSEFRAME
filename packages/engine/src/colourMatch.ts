@@ -228,8 +228,29 @@ const RANGE: Readonly<Record<keyof GradeParams, { min: number; max: number }>> =
   if (!r) throw new Error(`color.grade has no range for ${k}`);
   return [k, r];
 })) as Record<keyof GradeParams, { min: number; max: number }>;
-/** Weight of the pull toward the defaults, per ((value − default)/range)²: small, it only settles values the picture cannot decide. */
-const PULL = 0.01;
+/**
+ * Weight of the pull toward no change, per ((value − default)/range)², in squared CIELAB units like the rest of the loss: a value
+ * moved across its whole range must buy half a unit (√0.25) of the statistics, a quarter of the smallest difference people
+ * notice. It settles the values a picture cannot decide, so it has to outweigh what the statistics cannot measure: a still stored
+ * in 8 bits moves them by about 0.05, and on a picture that hides a value (tint, where green is absent or clipped in the
+ * mid-tones) the whole range of that value moves them by less than that. With a weaker pull (it was 0.01) the rounding chose such
+ * a value, anywhere up to the edge of its range. A pull this strong also holds back the values a picture does show a little; a match
+ * finishes with a pull toward the estimate instead of toward no change (see `search`).
+ */
+const PULL = 0.25;
+/**
+ * The match's last stage (see `search`): rounds of reweighting, refinement iterations per round, the smallest residual a weight is
+ * taken from, and the pull toward the estimate, per ((value − estimate)/range)², in the distance's own units (without it, tint
+ * on colour bars, which they hide, drifts to 0.25). The floor, in CIELAB units, keeps the finish from chasing minima sharper than
+ * an 8-bit render holds. It was chosen on 25 matches (15 on stills the proof's first run took through the real render, 10 on
+ * ffmpeg decodes of its fixtures), each also measured with the graded points rounded to 8 bits: with 0.05 the rounded result was
+ * worse than the sum-of-squares fit's (by more than 0.02) in 3 matches, with 0.3 in 1,
+ * and the reported distance sat on average 0.076 from the rounded one against 0.045. No unit test tells 0.3 from 0.01.
+ */
+const FINISH_ROUNDS = 2;
+const FINISH_ITERATIONS = 8;
+const FINISH_FLOOR = 0.3;
+const FINISH_PULL = 5;
 /** Halvings of the search step after the first (¼ of each range). */
 const HALVINGS = 8;
 /** Halvings of the first, saturation-free stage of the coordinate search: it only has to point temperature and tint the right way. */
@@ -243,7 +264,7 @@ const MAX_SWEEPS = 6;
 const DIFF_STEP = 2e-3;
 /** Iterations of the refinement, at most. */
 const MAX_REFINE = 40;
-/** The search and refinement measure at most this many points (an even stride of the sample); a larger sample then gets FINAL_REFINE iterations on every point. */
+/** The search and refinement measure at most this many points (`thinned`); a match then finishes on every point, and balance gets FINAL_REFINE iterations on every point of a larger sample. */
 const FIT_POINTS = 4096;
 const FINAL_REFINE = 3;
 
@@ -253,10 +274,23 @@ interface Goal { lPct: readonly number[]; a: number; b: number; spread: number; 
 const COARSE_POINTS = 512;
 const GRID_EXPOSURE = [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2];
 const GRID_CONTRAST = [0.4, 0.7, 1, 1.3, 1.6, 2];
-const strided = (s: PictureSample, max: number): PictureSample => {
+/** The points of a sample from dark to bright: by BT.709 luma of the stored values, equal ones in the order given. */
+function byLuma(s: PictureSample): Int32Array {
+  const luma = new Float64Array(s.count), order = new Int32Array(s.count);
+  for (let i = 0; i < s.count; i++) { luma[i] = 0.2126 * s.rgb[i * 3]! + 0.7152 * s.rgb[i * 3 + 1]! + 0.0722 * s.rgb[i * 3 + 2]!; order[i] = i; }
+  return order.sort((x, y) => luma[x]! - luma[y]! || x - y);
+}
+/**
+ * At most `max` points of a sample for the stages that measure fewer: evenly along its points from dark to bright (`order`,
+ * byLuma), so the few carry the lightness distribution of them all and every flat area in proportion to its size. An even stride
+ * through the points in picture order (as it was) meets the picture's own pattern: of six colour bars it took uneven shares, the
+ * statistics of the few then sat several units from those of the whole, and the coarse stage settled in a valley the whole
+ * picture does not have (temperature and tint at −1 with a difference of 5.7 where 0.05 was in reach).
+ */
+const thinned = (s: PictureSample, max: number, order: Int32Array): PictureSample => {
   if (s.count <= max) return s;
   const rgb = new Float64Array(max * 3);
-  for (let i = 0; i < max; i++) { const j = Math.floor((i * s.count) / max); rgb[i * 3] = s.rgb[j * 3]!; rgb[i * 3 + 1] = s.rgb[j * 3 + 1]!; rgb[i * 3 + 2] = s.rgb[j * 3 + 2]!; }
+  for (let i = 0; i < max; i++) { const j = order[Math.floor(((i + 0.5) * s.count) / max)]!; rgb[i * 3] = s.rgb[j * 3]!; rgb[i * 3 + 1] = s.rgb[j * 3 + 1]!; rgb[i * 3 + 2] = s.rgb[j * 3 + 2]!; }
   return { rgb, count: max };
 };
 const round3 = (v: number) => { const r = Math.round(v * 1000) / 1000; return r === 0 ? 0 : r; };
@@ -285,21 +319,23 @@ function dampedStep(A: number[][], g: number[], mu: number): number[] | null {
 function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], start: GradeParams, amount: number): GradeFit {
   if (!(amount >= 0 && amount <= 1)) throw new RangeError(`amount must be within 0..1, got ${amount}`);
   if (target.count === 0) throw new RangeError('the picture has no points to measure');
-  const lp = [0, 0, 0, 0, 0], pull = Math.sqrt(PULL), ab = goal.weightAB ?? 1;
-  /** The residual vector over a set of points; the loss is its squared length: Σ(ΔL* percentiles)² + Δā² + Δb̄² + Δspread², plus the pull toward the defaults. */
-  const residualsOver = (pts: PictureSample) => {
+  const lp = [0, 0, 0, 0, 0], ab = goal.weightAB ?? 1;
+  /** The residual vector over a set of points; the loss is its squared length: Σ(ΔL* percentiles)² + Δā² + Δb̄² + Δspread², plus the pull (`weight`) toward the defaults, or toward the values given. */
+  const residualsOver = (pts: PictureSample, weight = PULL, toward: Readonly<GradeParams> = GRADE_DEFAULTS) => {
+    const pull = Math.sqrt(weight);
     const meter = new Meter(pts.count);
     return (p: GradeParams): number[] => {
       const m = meter.measure(pts.rgb, constantsOf(p), lp), r = lp.map((l, j) => l - goal.lPct[j]!);
       r.push(ab * (m.a - goal.a), ab * (m.b - goal.b));
       if (goal.useSpread) r.push(colourSpread({ meanA: m.a, meanB: m.b, meanC: m.c }) - goal.spread);
-      for (const k of keys) r.push((pull * (p[k] - GRADE_DEFAULTS[k])) / span(k));
+      for (const k of keys) r.push((pull * (p[k] - toward[k])) / span(k));
       return r;
     };
   };
   const sq = (r: readonly number[]) => r.reduce((s, v) => s + v * v, 0);
-  const residuals = residualsOver(strided(target, FIT_POINTS));
-  const coarse = residualsOver(strided(target, COARSE_POINTS)), coarseLoss = (p: GradeParams) => sq(coarse(p));
+  const order = target.count > COARSE_POINTS ? byLuma(target) : new Int32Array(0);
+  const fitPoints = thinned(target, FIT_POINTS, order), coarsePoints = thinned(target, COARSE_POINTS, order);
+  const residuals = residualsOver(fitPoints), coarse = residualsOver(coarsePoints), coarseLoss = (p: GradeParams) => sq(coarse(p));
 
   /** Coordinate search in a fixed order over `over`: each value in turn tries one step up, then one down, keeping a move that lowers the loss; steps start at ¼ of each range and halve. */
   const coordinate = (from: GradeParams, over: readonly FitKey[], measure: (p: GradeParams) => number, halvings = HALVINGS): GradeParams => {
@@ -363,17 +399,48 @@ function search(target: PictureSample, goal: Goal, keys: readonly FitKey[], star
     const found = refine(coordinate(coordinate(s0, colourFirst, coarseLoss, ORIENT_HALVINGS), keys, coarseLoss), coarse);
     if (!best || found.f < best.f) best = found;
   }
-  let { p, f } = refine(best!.p, residuals);
-  // A larger sample: a few more iterations on every point, so the result fits the same points the reference statistics describe
-  // (a stride of a picture with large flat areas can sit a little off them).
-  let full = residuals;
-  if (target.count > FIT_POINTS) { full = residualsOver(target); ({ p, f } = refine(p, full, FINAL_REFINE)); }
-  const loss = (q: GradeParams) => sq(full(q));
-  // A value at the edge of its range while the loss still falls beyond it: the grade cannot reach the goal (reported as limitedBy).
+  let { p } = refine(best!.p, residuals);
+  /** What the result is judged by, and limitedBy with it. */
+  let cost: (q: GradeParams) => number;
+  if (goal.useSpread) {
+    // A match finishes on the distance it reports (statsDistance), over every point, not on the sum of squares above: that sum
+    // spreads an error over all five L* percentiles, where the distance (their mean absolute error) would rather leave one off and
+    // meet the others. The two disagree on a picture whose percentiles no grade meets all at once: the sum-of-squares fit of the
+    // proof's first M3 stills (flat colours) stopped at 0.55 where a search found 0.28, and a picture with a lighter middle ended
+    // further than no change (unit test). Each round weights the residuals so that their squared length equals the distance where
+    // the round starts (iteratively reweighted least squares), every residual taken as at least FINISH_FLOOR. The pull toward the
+    // estimate keeps values the statistics do not hold where the estimate put them. The result is kept only if it is lower by this
+    // measure, so this never ends worse by it. Limit: on flat colours the distance has minima narrower than the 0.001 steps of a
+    // value and than an 8-bit render; this reaches 0.41 on those M3 stills (0.42 rounded to 8 bits), not 0.28 (0.40 rounded).
+    const meter = new Meter(target.count), estimate = p;
+    const toGoal = (q: GradeParams): number[] => {
+      const m = meter.measure(target.rgb, constantsOf(q), lp), r = lp.map((l, j) => l - goal.lPct[j]!);
+      r.push(m.a - goal.a, m.b - goal.b, colourSpread({ meanA: m.a, meanB: m.b, meanC: m.c }) - goal.spread);
+      return r;
+    };
+    const colour = (r: readonly number[]) => Math.hypot(r[5]!, r[6]!, r[7]!);
+    const moved = (q: GradeParams) => keys.map((k) => (q[k] - estimate[k]) / span(k));
+    cost = (q) => { const r = toGoal(q); return colour(r) + r.slice(0, 5).reduce((s, v) => s + Math.abs(v), 0) / 5 + FINISH_PULL * sq(moved(q)); };
+    let q = p;
+    for (let round = 0; round < FINISH_ROUNDS; round++) {
+      const r0 = toGoal(q), wc = 1 / Math.sqrt(Math.max(colour(r0), FINISH_FLOOR));
+      const w = [...r0.slice(0, 5).map((v) => 1 / Math.sqrt(5 * Math.max(Math.abs(v), FINISH_FLOOR))), wc, wc, wc];
+      q = refine(q, (x) => [...toGoal(x).map((v, i) => v * w[i]!), ...moved(x).map((v) => v * Math.sqrt(FINISH_PULL))], FINISH_ITERATIONS).p;
+    }
+    if (cost(q) < cost(p)) p = q;
+  } else {
+    // Balance aims at a goal that is only a direction for lightness (see BALANCE_AB_WEIGHT): it stays on its weighted squares. A
+    // larger sample gets a few more iterations on every point, so the result fits the points the goal was taken from.
+    const full = target.count > FIT_POINTS ? residualsOver(target) : residuals;
+    if (target.count > FIT_POINTS) p = refine(p, full, FINAL_REFINE).p;
+    cost = (q) => sq(full(q));
+  }
+  const f = cost(p);
+  // A value at the edge of its range while the cost still falls beyond it: the grade cannot reach the goal (reported as limitedBy).
   const limitedBy: (keyof GradeParams)[] = [];
   for (const k of keys) {
     const edge = p[k] >= RANGE[k].max ? 1 : p[k] <= RANGE[k].min ? -1 : 0;
-    if (edge && loss({ ...p, [k]: p[k] + (edge * span(k)) / 100 }) < f) limitedBy.push(k);
+    if (edge && cost({ ...p, [k]: p[k] + (edge * span(k)) / 100 }) < f) limitedBy.push(k);
   }
   // Blend toward no change by `amount`, then round to 0.001 (inside the range, because both ends are).
   const params = Object.fromEntries(GRADE_KEYS.map((k) => [k, round3(inRange(k, GRADE_DEFAULTS[k] + amount * (p[k] - GRADE_DEFAULTS[k])))])) as unknown as GradeParams;
