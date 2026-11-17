@@ -118,6 +118,7 @@ const HE_TEMPLATES: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^asset key ".*" is given twice$/, () => `קובץ של התבנית מופיע פעמיים. ${TEMPLATE_FAULT_HE}`],
   [/^a template run holds at most (\d+) slots; this one would hold (\d+)$/, (m) => `בהחלת תבנית יכולות להיות עד ${m[1]} משבצות, וכאן היו ${m[2]}`],
   [/^run \S+ is a run of \S+, not of \S+$/, () => 'ההחלה הקודמת שייכת לתבנית אחרת, ולכן אי אפשר ליצור אותה מחדש בתבנית הזו'],
+  [/^template \S+ needs a model that is not installed, so it is never applied$/, () => 'התבנית הזו צריכה מודל שאינו מותקן במחשב הזה, ולכן היא לעולם אינה מוחלת. תבנית לעולם אינה מורידה מודלים'],
 ];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {

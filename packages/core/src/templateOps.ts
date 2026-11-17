@@ -11,7 +11,7 @@
  */
 import { z } from 'zod';
 import { createdIdsOf, defineOp, findClip, getOp, OpError, refuseInheritedIds, removeRunClips, runFingerprints } from './ops.ts';
-import { ApplyTemplateArgsSchema, AssetRefSchema, RefSchema, type ApplyTemplateOutput } from './templateContract.ts';
+import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, type ApplyTemplateOutput } from './templateContract.ts';
 import type { SlotRecord } from './schema.ts';
 
 /** How deep a step's arguments are walked for bindings. */
@@ -74,6 +74,10 @@ defineOp({
   description: 'Apply a template plan (ordinary public ops with bindings to earlier steps and to the procedural media it carries) as one step, and record the run with its slots. Issued by the server from a plan it built; on regeneration it first removes the previous run\'s untouched clips. Rule-based; no model.',
   args: ApplyTemplateArgsSchema,
   apply(d, a, ctx) {
+    // a template that needs a model this build does not have is never applied (MODEL_GATED_TEMPLATES); the server refuses it
+    // before planning, and so does the op, whatever the plan says
+    const gated = findGatedTemplate(a.templateId);
+    if (gated) throw new OpError('incompatible', `template ${gated.id} needs a model that is not installed, so it is never applied`, { templateId: gated.id, needsModel: gated.needsModel }, 'Choose one of the available templates (GET /api/v1/templates).');
     const recipeId = `template:${a.templateId}`;
     const earlier = a.runId ? d.recipeRuns[a.runId] : undefined;
     if (earlier && earlier.recipeId !== recipeId) throw new OpError('invalid_args', `run ${a.runId} is a run of ${earlier.recipeId}, not of ${recipeId}`, { runId: a.runId, recipeId: earlier.recipeId });

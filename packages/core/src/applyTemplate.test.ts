@@ -134,6 +134,12 @@ describe('what a template may do', () => {
       expect([op, e.code]).toEqual([op, 'forbidden_op']);
     }
   });
+  it('a template that needs a model is never applied, whatever the plan', () => {
+    for (const id of ['tpl.text-behind-subject', 'tpl.3d-zoom']) {
+      const e = refusal(() => tx(base(), [call(PLAN, { templateId: id })]));
+      expect([e.code, e.message]).toEqual(['incompatible', `template ${id} needs a model that is not installed, so it is never applied`]);
+    }
+  });
   it('2001 steps are refused; 2000 parse', () => {
     const step: TemplateStep = { op: 'add_track', args: { kind: 'video' } };
     expect(refusal(() => tx(base(), [call(Array.from({ length: 2001 }, () => step))])).code).toBe('invalid_args');

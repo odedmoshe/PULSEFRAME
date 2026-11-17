@@ -193,6 +193,7 @@ describe('Hebrew wording of common refusals', () => {
       ['a template slot that names no clip', d, template([{ op: 'add_track', args: { kind: 'video' } }], { slots: [{ key: 's', kind: 'picture', clipId: 'clp_none' }] }), true],
       ['a template asset key given twice', d, template([{ op: 'add_track', args: { kind: 'video' } }], { assets: [{ key: 'p', asset: still }, { key: 'p', asset: still }] }), true],
       ['a template run with too many slots', d, template([{ op: 'add_text', args: { text: 'x', start: f(0), duration: f(30) }, bind: 't' }], { keepSlots: Array.from({ length: 400 }, (_, i) => ({ key: `k${i}`, kind: 'picture', clipId: `clp_${i}` })), slots: [{ key: 't', kind: 'text', clipId: { $ref: 't' } }] }), true],
+      ['a template that needs a model', d, template([{ op: 'add_track', args: { kind: 'video' } }], { templateId: 'tpl.3d-zoom' }), true],
       ['regenerating the run of another template', firstRun.doc, [{ op: 'apply_template', args: { ...(template([{ op: 'add_track', args: { kind: 'video' } }])[0]!.args as object), templateId: 'tpl.y', runId } }], true],
     ];
     void aSound;
