@@ -86,10 +86,10 @@ function translator(from: 'he' | 'en', to: 'he' | 'en', models: CapabilityModel[
   });
 }
 
-/** Digests of the listed code files (sha256 over their bytes in order). Checked by local-registry.test.ts. */
+/** Digests of the listed code files (sha256 over their bytes in order, CRLF read as LF: see installedCodeDigest). Checked by local-registry.test.ts. */
 const DIGEST = {
-  translate: 'sha256:9d4af8b838cde362425ee5a459a5b90ee0f43eed0862d67f54e0a3262c7c2587',
-  runner: 'sha256:869e4368e648fa5bb20fa4de581b965c558e68a765aa02edcb6c1b8fd81940c9',
+  translate: 'sha256:0554aaec9f8fc5ce8367a01a7f59ba4fb1c29ae04291c5476fb6f18e3996c700',
+  runner: 'sha256:4018c1b7ba6467857354008f8d007772c2b35db771be1fdbcaf7ba75752c24f5',
 };
 
 export const TRANSLATE_HE_EN = translator('he', 'en', opusModels('translate/opus-mt-tc-big-he-en', 'Helsinki-NLP/opus-mt-tc-big-he-en', AI_WAVE_PINS.opusMtHeEnWeights, OPUS_MT_SMALL_FILES['he-en'], 'CC-BY-4.0'), DIGEST.translate);

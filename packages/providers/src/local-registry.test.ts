@@ -23,12 +23,13 @@ describe('local tools registry', () => {
       expect(BUILTIN_CAPABILITIES.some((b) => b.id === d.id)).toBe(false);
     }
   });
-  it('every codeDigest equals the sha256 of its code files, concatenated in the listed order', () => {
+  it('every codeDigest equals the sha256 of its code files, concatenated in the listed order, with CRLF line endings read as LF', () => {
     for (const d of LOCAL_TOOLS) {
       const h = createHash('sha256');
       for (const f of d.codeFiles) {
         expect(fs.existsSync(path.join(root, f)), f).toBe(true);
-        h.update(fs.readFileSync(path.join(root, f)));
+        // A Windows checkout (core.autocrlf) has CRLF files with the same code; the digest is over the LF form (localtools.ts).
+        h.update(fs.readFileSync(path.join(root, f), 'latin1').replace(/\r\n/g, '\n'), 'latin1');
       }
       expect(d.codeDigest, `${d.id}: update DIGEST in local-registry.ts after changing ${d.codeFiles.join(', ')}`).toBe(`sha256:${h.digest('hex')}`);
     }

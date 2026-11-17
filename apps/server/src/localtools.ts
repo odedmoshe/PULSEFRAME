@@ -70,7 +70,13 @@ const DISK_MARGIN = 2 * 1024 ** 3;
 // ---------------------------------------------------------------- code digest and blockers
 
 const codeCache = new Map<string, { key: string; digest: string }>();
-/** sha256 over the descriptor's code files as installed, in listed order (the descriptor's codeDigest must equal it). */
+/** The bytes with every CRLF pair as LF (latin1 maps each byte to one code unit and back, so nothing else changes). */
+const lfBytes = (b: Buffer) => (b.includes('\r\n') ? Buffer.from(b.toString('latin1').replace(/\r\n/g, '\n'), 'latin1') : b);
+/**
+ * sha256 over the descriptor's code files as installed, in listed order, with CRLF line endings read as LF (the descriptor's codeDigest
+ * must equal it). A Windows checkout (Git for Windows defaults to core.autocrlf=true) writes the same code with CRLF; TypeScript and
+ * Python read both the same way. Any other byte, a lone CR included, still changes the digest.
+ */
 export function installedCodeDigest(d: LocalToolDescriptor, root = REPO_ROOT): string {
   const files = d.codeFiles.map((f) => path.resolve(root, f));
   if (files.some((f) => !f.startsWith(root + path.sep))) return 'sha256:outside-repository';
@@ -79,7 +85,7 @@ export function installedCodeDigest(d: LocalToolDescriptor, root = REPO_ROOT): s
   const hit = codeCache.get(d.id);
   if (hit?.key === key) return hit.digest;
   const h = createHash('sha256');
-  for (const f of files) h.update(fs.readFileSync(f));
+  for (const f of files) h.update(lfBytes(fs.readFileSync(f)));
   const digest = `sha256:${h.digest('hex')}`;
   codeCache.set(d.id, { key, digest });
   return digest;

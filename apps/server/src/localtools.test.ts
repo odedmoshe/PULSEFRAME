@@ -17,7 +17,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ComputeLane, RunRequest } from './aiContracts.ts';
 import { loadConfig, type Config } from './config.ts';
 import { describeMedia } from './ingest.ts';
-import { estimateLag, installedCodeDigest, LocalTools, readWavFrames, readWavInfo, SAMPLE_RATE } from './localtools.ts';
+import { estimateLag, installedCodeDigest, LocalTools, readWavFrames, readWavInfo, REPO_ROOT, SAMPLE_RATE } from './localtools.ts';
 import { ApiError, Store, type JobRow } from './store.ts';
 
 const HERE = import.meta.dirname;
@@ -201,6 +201,25 @@ describe('setup states (honest, in the order a person fixes them)', () => {
     expect(refusal(() => fx.tools.prepare(blocked, { projectId: fx.pid, capabilityId: blocked.id, params: {}, actor: 'user:owner', source: { assetId: 'ast_x' } }))).toBe('409:capability_blocked');
     fx.store.close();
   }, 30_000);
+  it('a checkout with CRLF line endings (Git for Windows, core.autocrlf) has the same code digest; any other change does not', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-crlf-'));
+    dirs.push(root);
+    const copy = (d: LocalToolDescriptor, edit: (s: string) => string) => {
+      for (const f of d.codeFiles) {
+        fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true });
+        fs.writeFileSync(path.join(root, f), edit(fs.readFileSync(path.join(REPO_ROOT, f), 'utf8')), 'utf8');
+      }
+    };
+    for (const d of [TRANSLATE_HE_EN, VOICE_CLEAN, VOCALS_CLASSIC]) {
+      copy(d, (s) => s.replace(/\n/g, '\r\n'));
+      expect(fs.readFileSync(path.join(root, d.codeFiles[0]!), 'utf8')).toContain('\r\n');
+      expect(installedCodeDigest(d, root), d.id).toBe(d.codeDigest);
+      copy(d, (s) => s.replace(/\n/g, '\r\n').replace('\r\n', '\r\n\r\n')); // one line more
+      expect(installedCodeDigest(d, root), d.id).not.toBe(d.codeDigest);
+      copy(d, (s) => s.replace(/\n/g, '\r')); // lone CR is not a line ending git writes; it stays a change
+      expect(installedCodeDigest(d, root), d.id).not.toBe(d.codeDigest);
+    }
+  });
   it('the installed code digest is the reviewed one; a changed digest blocks the run', () => {
     for (const d of [TRANSLATE_HE_EN, VOICE_CLEAN, VOCALS_CLASSIC]) expect(installedCodeDigest(d)).toBe(d.codeDigest);
     const fx = fixture();
