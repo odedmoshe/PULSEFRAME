@@ -1,13 +1,13 @@
 /**
  * The voice-cleanup proof fixtures (voiceclean-fixtures.ts) and an in-process dry run of the proof's C1, C2 and C4 measurements on
- * the engine alone (voiceMeter, then cleanup.dehum + cleanup.denoise as clean_voice sets them at strength 0.6, without the speech
- * enhancer, which is not W1's): what the proof will find through the server, minus the server.
+ * the engine alone (voiceMeter, then the cleanup effects as clean_voice sets them at strength 0.6; C2 without the speech
+ * enhancer): what the proof will find through the server, minus the server.
  */
 import { describe, expect, it } from 'vitest';
 import { cleanVoiceEffects, NOISE_BAND_EDGES_HZ } from '@pulseframe/core';
 import { voiceMeter } from '@pulseframe/engine';
 import { renderFx } from '@pulseframe/engine/audiofx/kernels/index.ts';
-import { band, bestLag, between, burstRecording, coverage, lineOver, rmsDbOver, voiceRecording, VC_SR } from './voiceclean-fixtures.ts';
+import { band, bestLag, between, burstRecording, cleanupPhaseDelay, coverage, lagAndMatch, lineOver, rmsDbOver, voiceRecording, VC_SR } from './voiceclean-fixtures.ts';
 
 const db = (v: number) => 20 * Math.log10(Math.max(v, 1e-12));
 
@@ -46,13 +46,49 @@ describe('voice-cleanup fixtures', () => {
     for (const v of hum) expect(v).toBeGreaterThanOrEqual(30);
     expect(Math.abs(vowel)).toBeLessThanOrEqual(1.5);
   });
-  it('C4 dry run: every burst lines up within 1 sample after the cleanup', () => {
+  describe('C4 dry run (sync), each effect alone and the whole chain with the speech enhancer', () => {
     const b = burstRecording(12, 1302), mb = voiceMeter();
     mb.push(b.pcm);
-    let y = b.pcm;
-    for (const e of cleanVoiceEffects({ strength: 0.6, profile: mb.finish().noise.profile, mainsHz: '50', speech: false })) y = renderFx(e.type, e.params, y, { sampleRate: VC_SR });
-    const lags = b.onsets.map((n0) => bestLag(b.pcm, y, n0 - 240, 0.05 * VC_SR));
-    expect(lags.length).toBeGreaterThanOrEqual(10);
-    expect(lags.every((l) => Math.abs(l) <= 1)).toBe(true);
+    const chain = cleanVoiceEffects({ strength: 0.6, profile: mb.finish().noise.profile, mainsHz: '50' });
+    const through = (effects: typeof chain) => { let y = b.pcm; for (const e of effects) y = renderFx(e.type, e.params, y, { sampleRate: VC_SR }); return y; };
+    const lagsOf = (y: Float32Array, onsets: number[]) => onsets.map((n0) => bestLag(b.pcm, y, n0 - 240, 0.05 * VC_SR));
+    const sets = [...chain.map((e) => ({ name: e.type, effects: [e] })), { name: 'the chain', effects: chain }];
+    it('the recording holds at least ten tone bursts and ten noise bursts, and the chain is dehum, denoise, speech', () => {
+      expect(b.onsets.length).toBeGreaterThanOrEqual(10);
+      expect(b.noiseOnsets.length).toBeGreaterThanOrEqual(10);
+      expect(chain.map((e) => e.type)).toEqual(['cleanup.dehum', 'cleanup.denoise', 'cleanup.speech']);
+    });
+    for (const set of sets) {
+      it(`${set.name}: no latency: every broadband burst lines up exactly (lag 0)`, () => {
+        expect(lagsOf(through(set.effects), b.noiseOnsets).every((l) => l === 0)).toBe(true);
+      });
+      it(`${set.name}: the carrier of every 1 kHz burst sits where the phase of its filters puts it, within one sample (the lag is a whole number)`, () => {
+        const designed = cleanupPhaseDelay(set.effects, 1000);
+        const lags = lagsOf(through(set.effects), b.onsets);
+        console.log(`C4 dry run, ${set.name}: 1 kHz carrier lag ${[...new Set(lags)].join(', ')} samples; designed phase delay ${designed.toFixed(2)} samples`);
+        expect(lags.every((l) => Math.abs(l - designed) < 1)).toBe(true);
+      });
+    }
+    it('the filters of the chain lead a 1 kHz tone by more than two samples of phase (why a tone cannot show the latency)', () => {
+      const designed = cleanupPhaseDelay(chain, 1000);
+      expect(designed).toBeLessThan(-2);
+      expect(designed).toBeGreaterThan(-4);
+      expect(cleanupPhaseDelay(chain.filter((e) => e.type === 'cleanup.denoise'), 1000)).toBeCloseTo(0, 12);
+    });
+    it('a lag counts only where the sounds match: the cleaned bursts match the dry ones (normalised correlation above 0.8); silence and a broken signal match nothing', () => {
+      const y = through(chain);
+      const matches = [...b.noiseOnsets, ...b.onsets].map((n0) => lagAndMatch(b.pcm, y, n0 - 240, 0.05 * VC_SR).match);
+      console.log(`C4 dry run: normalised correlation of the cleaned bursts with the dry ones ${Math.min(...matches).toFixed(3)} to ${Math.max(...matches).toFixed(3)}`);
+      expect(Math.min(...matches)).toBeGreaterThan(0.8);
+      expect(lagAndMatch(b.pcm, new Float32Array(y.length), b.noiseOnsets[0]! - 240, 0.05 * VC_SR).match).toBe(0);
+      expect(lagAndMatch(b.pcm, new Float32Array(y.length).fill(NaN), b.noiseOnsets[0]! - 240, 0.05 * VC_SR)).toEqual({ lag: 0, match: 0 });
+    });
+    it('the measurement can fail: a cleaned sound that is 2 samples late shows as a lag of 2 on the noise bursts and more than 1 sample off the designed phase on the tone bursts', () => {
+      const y = through(chain), late = new Float32Array(y.length);
+      late.set(y.subarray(0, y.length - 4), 4);
+      expect(lagsOf(late, b.noiseOnsets).every((l) => l === 2)).toBe(true);
+      const designed = cleanupPhaseDelay(chain, 1000);
+      expect(lagsOf(late, b.onsets).every((l) => Math.abs(l - designed - 2) < 1 && Math.abs(l - designed) > 1)).toBe(true);
+    });
   });
 });
