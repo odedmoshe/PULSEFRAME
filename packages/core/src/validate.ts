@@ -73,6 +73,14 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   for (const [key, a] of Object.entries(doc.assets)) {
     if (key !== a.id) issues.push({ code: 'key_mismatch', message: `asset key ${key} != id ${a.id}`, ids: [key] });
     uniq(a.id);
+    // ADR-0017: the frame mapping of a frame-job result
+    const fr = a.provenance.derived?.frames;
+    if (fr) {
+      if ((fr.mapping === 'interpolated') !== (fr.multiplier !== undefined)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: an interpolated result names its multiplier, and only it does`, ids: [a.id] });
+      if (fr.heldFrames.some((f, i) => i > 0 && f <= fr.heldFrames[i - 1]!)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: held frames must be strictly ascending`, ids: [a.id] });
+    }
+    const rangeStart = a.provenance.derived?.sourceRangeStart;
+    if (rangeStart && T.isNegative(rangeStart)) issues.push({ code: 'derived_range', message: `asset ${a.id}: its source range cannot start before 0`, ids: [a.id] });
   }
   for (const [key, seq] of Object.entries(doc.sequences)) {
     if (key !== seq.id) issues.push({ code: 'key_mismatch', message: `sequence key ${key} != id ${seq.id}`, ids: [key] });
@@ -206,6 +214,11 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   for (const [key, va] of Object.entries(doc.variants ?? {})) {
     if (key !== va.id) issues.push({ code: 'key_mismatch', message: `variant key ${key} != id ${va.id}`, ids: [key] });
     uniq(va.id);
+    // ADR-0017: a language variant made by translation says which language it is in, and a reviewed one says who reviewed it
+    const tl = va.translation;
+    if (tl && va.language !== tl.to) issues.push({ code: 'variant_translation', message: `variant ${va.id}: its language must be the language it was translated to`, ids: [va.id] });
+    if (tl && tl.review === 'reviewed' && !tl.reviewedBy) issues.push({ code: 'variant_translation', message: `variant ${va.id}: a reviewed translation names its reviewer`, ids: [va.id] });
+    if (tl && tl.review === 'needed' && (tl.reviewedBy || tl.reviewedAt)) issues.push({ code: 'variant_translation', message: `variant ${va.id}: a translation that needs review names no reviewer`, ids: [va.id] });
   }
   for (const [key, an] of Object.entries(doc.analyses ?? {})) {
     if (key !== an.assetId || !doc.assets[an.assetId]) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });

@@ -35,3 +35,5 @@ export * from './templateContract.ts';
 export * from './templateCatalog.ts';
 export * from './templatePlan.ts';
 export * from './templateOps.ts';
+export * from './lineage.ts';
+export * from './sha256.ts';

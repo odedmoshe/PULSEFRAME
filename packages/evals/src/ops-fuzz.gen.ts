@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, sha256Hex, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -41,6 +41,23 @@ export function createFuzz(seed: number) {
       { op: 'edit_analysis', args: { assetId: vid, kind: 'scenes', add: [T.rt(2, 1), T.rt(4, 1), T.rt(13, 2)] } },
       { op: 'edit_analysis', args: { assetId: aud, kind: 'beats', add: Array.from({ length: 12 }, (_, i) => T.rt(1 + i, 2)), bpm: 120 } },
       { op: 'set_transcript', args: { assetId: vid, language: 'he', segments: [0, 1, 2, 3].map((k) => ({ start: T.rt(k * 2, 1), duration: T.rt(2, 1), text: `מילה ${k} word`, words: [{ start: T.rt(k * 2, 1), duration: T.rt(1, 1), text: 'מילה' }, { start: T.rt(k * 2 + 1, 1), duration: T.rt(1, 1), text: `word${k}` }] })) } },
+    ];
+  };
+  /**
+   * Call after setup (it needs the transcript); internal operations, so they need allowInternal (ADR-0017). Imports derived copies
+   * standing in for provider results (labelled fixtures: no provider ran): a whole-file enhanced copy of the video and a partial one,
+   * and a processed copy of the music, so that replace_clip_asset is accepted and refused in a run; and a machine translation of the
+   * transcript as a language format, so the format operations meet one.
+   */
+  const aiSetup = (doc: ProjectDocument): OpCall[] => {
+    const derived = (src: string, extra: Record<string, unknown>) => ({ origin: 'derived' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'fuzz', derived: { jobId: 'job_fuzz', capabilityId: 'fuzz.fixture', capabilityVersion: '0.0.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: [src], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' }, ...extra } });
+    const [v, m] = ASSETS as unknown as [typeof ASSETS[0], typeof ASSETS[1]];
+    const segs = doc.transcripts?.[vid]?.segments ?? [];
+    return [
+      { op: 'import_asset', args: { asset: { ...v, name: 'v-enhanced.mp4', contentHash: `sha256:${'5'.repeat(64)}`, video: { ...v.video, width: 1280, height: 720 }, provenance: derived(vid, { sourceRangeStart: T.ZERO, audio: 'source-copied', frames: { sourceStartFrame: 0, sourceFrameCount: 240, sourceRate: SRC, outputRate: SRC, mapping: 'identity', heldFrames: [] } }) } } },
+      { op: 'import_asset', args: { asset: { ...v, name: 'v-part.mp4', contentHash: `sha256:${'6'.repeat(64)}`, duration: T.rt(2, 1), video: { ...v.video, frameCount: 60 }, provenance: derived(vid, { sourceRangeStart: T.rt(2, 1), audio: 'source-copied' }) } } },
+      { op: 'import_asset', args: { asset: { ...m, name: 'm-clean.wav', contentHash: `sha256:${'7'.repeat(64)}`, provenance: derived(aud, { sourceRangeStart: T.ZERO, audio: 'processed' }) } } },
+      ...(segs.length ? [{ op: 'attach_translation', args: { baseVariantId: null, name: 'EN', language: 'en', translation: { from: 'he', to: 'en', engine: 'fixture', model: 'fixture', createdAt: '2026-11-17T00:00:00Z', createdBy: 'fuzz', sources: Object.fromEntries(segs.map((sg) => [sg.id, sha256Hex(sg.text)])) }, phraseText: Object.fromEntries(segs.map((sg, i) => [sg.id, `phrase ${i}`])), cueText: {} } }] : []),
     ];
   };
   const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.adjust', 'light.vignette', 'time.echo', 'overlay.snow'];
@@ -88,7 +105,15 @@ export function createFuzz(seed: number) {
     const soundTarget = () => (rnd() < 0.67 ? audioId() : rnd() < 0.7 ? videoId() : any());
     const wordList = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((sg) => (sg.words ?? []).map((w) => w.id)));
     const words = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((s) => (s.words ?? []).map((w) => w.id)));
+    const derivedAssets = Object.values(doc.assets).filter((x) => x.provenance.derived);
     const menu: (() => OpCall)[] = [
+      // ADR-0017: a derived copy in place of a clip's file; mostly a copy made from the clip's own file, sometimes any copy or file (refused)
+      () => {
+        const x = media.length ? pick(media).c : null;
+        const made = x?.type === 'media' ? derivedAssets.filter((a) => a.provenance.derived!.sourceAssetIds.includes(x.assetId)) : [];
+        const assetId = made.length && rnd() < 0.85 ? pick(made).id : derivedAssets.length && rnd() < 0.8 ? pick(derivedAssets).id : pick(assetIds);
+        return { op: 'replace_clip_asset', args: { clipId: x?.id ?? any(), assetId } };
+      },
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), ...(rnd() < 0.5 ? { duration: dur() } : {}), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(120), SRC) } : {}) } }),
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), trackId: trackId() } }),
       () => { const x = media.length ? pick(media) : null; return { op: 'add_clip', args: { assetId: x && x.c.type === 'media' ? x.c.assetId : pick(assetIds), start: x ? T.add(x.c.start, x.c.duration) : fr(), ...(x ? { trackId: x.t.id } : {}), duration: f(10 + int(60)), sourceIn: T.frameTime(int(60), SRC) } }; },
@@ -194,5 +219,5 @@ export function createFuzz(seed: number) {
     ];
     return pick(menu)();
   };
-  return { rate, f, int, importOps, setup, gen };
+  return { rate, f, int, importOps, setup, aiSetup, gen };
 }

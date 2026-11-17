@@ -7,6 +7,7 @@
  */
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -212,7 +213,7 @@ async function main() {
 
   console.log('\n# fault injection around the real provider (labelled: injected faults, real execution)');
   const wrap = (over: Partial<ProviderAdapter>): ProviderAdapter => Object.assign(Object.create(real), over);
-  s = await boot({}, wrap({ collect: async (d, id) => (await real.collect(d, id)).map((o) => ({ ...o, bytes: o.bytes.subarray(0, 40) })) }));
+  s = await boot({}, wrap({ collect: async (d, id, dir) => (await real.collect(d, id, dir)).map((o) => { fs.truncateSync(o.path, 40); return { ...o, bytes: 40, sha256: createHash('sha256').update(fs.readFileSync(o.path)).digest('hex') }; }) }));
   call = api(s);
   pid = (await call('/projects', { name: 'f' })).body.project.id;
   let fj = await waitJob(call, (await call(`/projects/${pid}/capabilities/${SMOKE}/runs`, { params })).body.jobId);

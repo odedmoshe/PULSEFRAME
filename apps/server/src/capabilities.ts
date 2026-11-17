@@ -9,9 +9,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph,
-  type Blocker, type CapabilityDescriptor, type ProviderAdapter,
+  BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, expectedOutputSize, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph,
+  type Blocker, type CapabilityDescriptor, type ComfyDescriptor, type PixelSize, type ProviderAdapter,
 } from '@pulseframe/providers';
+import type { CapabilityEstimate, CapabilityService, RunRequest } from './aiContracts.ts';
 import type { Config } from './config.ts';
 import { describeMedia, ffprobe } from './ingest.ts';
 import { ModelStore, type ModelStatus } from './models.ts';
@@ -30,7 +31,7 @@ const EARNED_BY_RUNNING = new Set(['not_executed', 'not_hardwareQualified', 'not
 const NEEDS_REVIEW = new Set(['not_qualityReviewed', 'not_hebrewQualified']);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export class Capabilities {
+export class Capabilities implements CapabilityService {
   private adapter: ProviderAdapter | null = null;
   private configError: string | null = null;
   private active = new Map<string, Promise<void>>();
@@ -47,13 +48,15 @@ export class Capabilities {
     }
   }
 
-  private descriptor(id: string): CapabilityDescriptor {
+  // L0 compile bridge: still only the ComfyUI built-ins. The capability work (W1) looks descriptors up in ALL_CAPABILITIES and
+  // dispatches provider 'local' to the LocalToolRunner.
+  private descriptor(id: string): ComfyDescriptor {
     const d = BUILTIN_CAPABILITIES.find((c) => c.id === id);
     if (!d) throw new ApiError(404, 'capability_not_found', `capability ${id} is not in the reviewed registry`, {}, 'Call list_capabilities.');
     return d;
   }
   /** Descriptor with run-earned evidence filled in from recorded successful jobs. */
-  private withEvidence(d: CapabilityDescriptor): CapabilityDescriptor {
+  private withEvidence(d: ComfyDescriptor): ComfyDescriptor {
     const run = this.store.lastSucceeded(TYPE, d.id, d.graphDigest);
     if (!run) return d;
     const p = run.output.recipe.provider;
@@ -136,9 +139,20 @@ export class Capabilities {
     }
   }
 
+  /**
+   * Run estimate (ADR-0017): frames, scratch, missing downloads and a measured-or-none time. L0 contract stub: answers 501 until the
+   * frame-job work (W1) implements it; it never guesses a figure.
+   */
+  async estimate(req: RunRequest): Promise<CapabilityEstimate> {
+    this.descriptor(req.capabilityId);
+    throw new ApiError(501, 'not_implemented', 'run estimates are not implemented yet');
+  }
+
   /** The single entry point used by UI, REST and MCP. */
-  start(req: { projectId: string; capabilityId: string; params: Record<string, unknown>; actor: string; principal?: Principal; idempotencyKey?: string; attach?: { start: unknown; duration?: unknown; trackId?: string }; dependsOn?: string[] }): JobRow {
+  start(req: RunRequest): JobRow {
     const d = this.descriptor(req.capabilityId);
+    // L0 contract bridge: a source range or an apply mode other than the library needs the frame-job work (W1); refused, never ignored.
+    if (req.source || (req.apply && req.apply !== 'library')) throw new ApiError(501, 'not_implemented', 'running a tool on a clip or source range, or placing its result in the clip, is not implemented yet');
     if (req.idempotencyKey) {
       const prior = this.store.findJobByKey(TYPE, req.actor, req.idempotencyKey);
       if (prior) return prior;
@@ -161,6 +175,7 @@ export class Capabilities {
     const { doc, revision } = this.store.getProject(req.projectId);
     // Media inputs are project assets. Bind a content-addressed name now; the bytes are staged when the job runs.
     const sources = resolved.media.map((m) => {
+      if (m.nodeId === null || m.input === null) throw new ApiError(422, 'dangling_binding', `parameter "${m.name}" is not bound to a field of the graph`, { parameter: m.name });
       const a = doc.assets[m.assetId];
       if (!a) throw new ApiError(404, 'asset_not_found', `asset ${m.assetId} is not in this project`, { parameter: m.name });
       if (a.kind !== m.type || !a.image) throw new ApiError(422, 'incompatible', `parameter "${m.name}" needs an ${m.type} asset; ${m.assetId} is ${a.kind}`, { parameter: m.name });
@@ -324,31 +339,45 @@ export class Capabilities {
       lap('providerQueueAndInference');
       job = this.store.getJob(jobId);
       if (job.status !== 'cancel-requested') this.store.updateJob(jobId, { stage: 'transfer (downloading outputs)' });
-      const files = await adapter.collect(d, providerJobId);
+      const destDir = path.join(this.store.tmpDir, `cap_${randomUUID()}`);
+      const files = await adapter.collect(d, providerJobId, destDir).catch((e) => { fs.rmSync(destDir, { recursive: true, force: true }); throw e; });
       lap('transfer');
       const bundle = [];
+      try {
       for (const f of files) {
-        if (f.bytes.length === 0) throw new ApiError(502, 'output_invalid', `output "${f.name}" is empty`);
-        const contentHash = `sha256:${createHash('sha256').update(f.bytes).digest('hex')}`;
-        const tmp = path.join(this.store.tmpDir, `cap_${randomUUID()}`);
-        fs.writeFileSync(tmp, f.bytes, { mode: 0o600 });
+        // L0 compile bridge: size and digest are read from the stored file rather than taken from the adapter (W1 decides the streamed path).
+        const tmp = f.path;
+        const size = fs.statSync(tmp).size;
+        if (size === 0) throw new ApiError(502, 'output_invalid', `output "${f.name}" is empty`);
+        const contentHash = `sha256:${createHash('sha256').update(fs.readFileSync(tmp)).digest('hex')}`;
         let probe;
         try { probe = await ffprobe(tmp); } catch { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" (${f.fileName}) is not decodable media`); }
         const v = probe.streams?.find((x: any) => x.codec_type === 'video');
         const a = probe.streams?.find((x: any) => x.codec_type === 'audio');
         if ((f.mediaType === 'audio' && !a) || (f.mediaType !== 'audio' && !v)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" does not contain ${f.mediaType}`); }
-        // Declared size contract from the reviewed descriptor.
-        const exp = d.outputs.find((o) => o.name === f.name)?.expectSize;
-        const p = job.input.params;
-        const src = exp && 'sameAsInput' in exp ? (job.input.sources as any[]).find((x) => x.input === exp.sameAsInput) : null;
-        const want = exp && 'fromParams' in exp ? { w: p[exp.fromParams[0]], h: p[exp.fromParams[1]] } : src ? { w: src.width, h: src.height } : null;
-        if (v && want && (v.width !== want.w || v.height !== want.h)) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" is ${v.width}x${v.height}, expected ${want.w}x${want.h}`); }
+        // Declared size contract from the reviewed descriptor, every variant; one that cannot be computed fails the job (never skipped).
+        const exp = d.outputs.find((o) => o.name === f.name)?.expectSize ?? null;
+        if (exp) {
+          let want: PixelSize;
+          try {
+            want = expectedOutputSize(exp, job.input.params, (input) => {
+              const s = (job.input.sources as { input: string; width: number; height: number }[]).find((x) => x.input === input);
+              return s ? { width: s.width, height: s.height } : null;
+            });
+          } catch (e) {
+            fs.rmSync(tmp, { force: true });
+            if (e instanceof CapabilityError) throw new ApiError(502, 'output_invalid', `output "${f.name}": ${e.message}`, { sizeContract: e.code });
+            throw e;
+          }
+          if (!v || v.width !== want.width || v.height !== want.height) { fs.rmSync(tmp, { force: true }); throw new ApiError(502, 'output_invalid', `output "${f.name}" is ${v ? `${v.width}x${v.height}` : 'not a picture'}, expected ${want.width}x${want.height}`); }
+        }
         const mime = f.mediaType === 'image' ? `image/${v.codec_name === 'mjpeg' ? 'jpeg' : v.codec_name}` : f.mediaType === 'video' ? 'video/mp4' : 'audio/wav';
         // the result is stored only if it fits under the ceiling; otherwise the job fails with that reason and nothing is kept
-        if (!fs.existsSync(this.store.blobPath(contentHash))) { try { assertStorageRoom(this.store, f.bytes.length, 'store this result'); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; } }
-        this.store.putBlob(contentHash, tmp, f.bytes.length, mime);
-        bundle.push({ name: f.name, role: f.role, mediaType: f.mediaType, encoding: f.encoding, contentHash, bytes: f.bytes.length, mimeType: mime, codec: (v ?? a).codec_name, width: v?.width ?? null, height: v?.height ?? null, pixFmt: v?.pix_fmt ?? null, hasAlpha: /a/.test(String(v?.pix_fmt ?? '').replace(/^(gray|pal|ya)/, '')) && /rgba|bgra|ya|yuva|gbrap/.test(String(v?.pix_fmt)), durationSeconds: probe.format?.duration ? Number(probe.format.duration) : null });
+        if (!fs.existsSync(this.store.blobPath(contentHash))) { try { assertStorageRoom(this.store, size, 'store this result'); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; } }
+        this.store.putBlob(contentHash, tmp, size, mime);
+        bundle.push({ name: f.name, role: f.role, mediaType: f.mediaType, encoding: f.encoding, contentHash, bytes: size, mimeType: mime, codec: (v ?? a).codec_name, width: v?.width ?? null, height: v?.height ?? null, pixFmt: v?.pix_fmt ?? null, hasAlpha: /a/.test(String(v?.pix_fmt ?? '').replace(/^(gray|pal|ya)/, '')) && /rgba|bgra|ya|yuva|gbrap/.test(String(v?.pix_fmt)), durationSeconds: probe.format?.duration ? Number(probe.format.duration) : null });
       }
+      } finally { fs.rmSync(destDir, { recursive: true, force: true }); }
       lap('validation');
       const openReviews = publicationBlockers(d, this.cfg.distributionProfile).filter((b) => NEEDS_REVIEW.has(b.code)).map((b) => b.code.slice(4));
       const recipe = { experimental: openReviews.length > 0, openReviews, capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, params: job.input.params, sources: job.input.sources, provider: { id: adapter.id, runtimeVersion: readiness?.runtimeVersion ?? null, device: readiness?.device ?? null } };
