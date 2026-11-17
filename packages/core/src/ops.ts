@@ -11,7 +11,9 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
+import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, speedValue, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
+import { AUDIO_EFFECTS, AUDIO_PRESETS, findAudioEffect, MAX_AUDIO_FX, sortAudioFx, type AudioFxInstance, type AudioFxParams } from './audioEffects.ts';
+import { soundTails } from './queries.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
 import { ANIMATE_CLIP_MOTIONS, animateClipKeys, defaultMotionFrames, MOTION_PRESETS, motionKeys, previousMotion, shortestSafeLoopFrames } from './motionPresets.ts';
 import { findLayout, layoutPlacements, LAYOUT_IDS, LAYOUTS } from './layouts.ts';
@@ -216,6 +218,17 @@ function fitTextAnimation(clip: Clip, rate: T.Rate, keep: { in: boolean; out: bo
 const fmt = (t: T.RationalTime) => `${T.toSeconds(t).toFixed(3)}s`;
 
 // ---------- operations ----------
+/**
+ * Wave-1 limit of the sound effects (ADR-0010 D7): a sound that keeps its pitch at a speed other than 1, or that changes speed
+ * gradually, cannot carry enabled sound effects yet (validation code audio_fx_time_map is the backstop). Checked on the clip
+ * as the edit leaves it, so every operation that could reach that state says why, with a way out, instead of the generic
+ * invalid_result. `editing` says which side of the edit is new: the effects, or the speed and pitch of a sound that has them.
+ */
+function refuseFxTimeMap(clip: MediaClip, editing: 'effects' | 'speed') {
+  if (!clip.audioFx?.some((f) => f.enabled) || !(clip.speedEnd || (clip.keepPitch && speedValue(clip) !== 1))) return;
+  if (editing === 'effects') throw new OpError('incompatible', 'this sound keeps its pitch at another speed or changes speed gradually, so it cannot carry sound effects yet', { clipId: clip.id }, 'Give it one speed and let its pitch follow the speed (set_clip_speed, set_clip_pitch keepPitch=false), then add the sound effect.');
+  throw new OpError('incompatible', 'this sound has sound effects, which cannot follow a gradual change of speed or a stretch that keeps the pitch yet', { clipId: clip.id }, 'Remove its sound effects first (apply_audio_preset with presetId null) or turn them off (update_audio_effect enabled=false), make the change, then add them again.');
+}
 /** Refuse an edit that a clip with a continuous speed ramp cannot take (see speed.ts isRamped). */
 const refuseRamped = (clip: Clip, action: string) => {
   if (isRamped(clip)) throw new OpError('incompatible', `this clip changes speed gradually over its length, so it cannot be ${action}`, { clipId: clip.id }, 'Give it one speed first (set_clip_speed), make the edit, then apply the gradual change again.');
@@ -611,6 +624,7 @@ defineOp({
       const span = toSourceSpan(clip, clip.duration); // source shown now; stays the same
       delete clip.speedEnd; delete clip.rampWindow; delete clip.speedCurve; // one speed from here on: a gradual change, if there was one, ends
       if (speed.num === speed.den) delete clip.speed; else clip.speed = speed;
+      refuseFxTimeMap(clip, 'speed'); // a sound that keeps its pitch and carries sound effects stays at speed 1 (wave 1)
       const frames = Math.max(1, T.frameIndexAt(toTimelineSpan(clip, span), rate));
       const duration = T.frameTime(frames, rate);
       assertFree(track, clip.start, T.add(clip.start, duration), new Set([clip.id]));
@@ -625,7 +639,7 @@ defineOp({
 defineOp({
   name: 'set_clip_speed_ramp',
   version: 1,
-  description: 'Change a clip\'s speed gradually and continuously over its length, from `from` at its start to `to` at its end (each 0.1–8), for example 1 → 0.25 to ease into slow motion. The clip stays one clip and keeps showing the same stretch of source (its new length is that stretch divided by the average of the two speeds, rounded down to a whole frame; nothing else moves). Linked picture and sound change together; the sound\'s pitch glides with the speed. A ramped clip can be trimmed and cut like any other (each part keeps its place in the ramp and shows what the whole clip showed there). It cannot be slipped, reversed, frozen, given a transition or crossfade, or set to keep its pitch: give it one speed first (set_clip_speed). `speed_ramp` is the older stepped variant, which divides the clip into steps of constant speed.',
+  description: 'Change a clip\'s speed gradually and continuously over its length, from `from` at its start to `to` at its end (each 0.1–8), for example 1 → 0.25 to ease into slow motion. The clip stays one clip and keeps showing the same stretch of source (its new length is that stretch divided by the average of the two speeds, rounded down to a whole frame; nothing else moves). Linked picture and sound change together; the sound\'s pitch glides with the speed. A ramped clip can be trimmed and cut like any other (each part keeps its place in the ramp and shows what the whole clip showed there). It cannot be slipped, reversed, frozen, given a transition or crossfade, set to keep its pitch, or carry sound effects: give it one speed first (set_clip_speed). `speed_ramp` is the older stepped variant, which divides the clip into steps of constant speed.',
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), curve: z.enum(['even', 'smooth']).optional().describe('even (default) = the speed changes at a steady pace; smooth = it eases out of the first speed and into the last'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
@@ -638,6 +652,7 @@ defineOp({
       if (d.assets[clip.assetId]?.kind === 'image') throw new OpError('incompatible', 'a still image has no speed', { clipId: clip.id });
       if (clip.freeze || clip.reverse) throw new OpError('incompatible', 'a freeze frame or a clip that plays backwards cannot change speed gradually', { clipId: clip.id });
       if (clip.keepPitch) throw new OpError('incompatible', 'this sound is set to keep its pitch, which works at one speed only', { clipId: clip.id }, 'Turn that off first (set_clip_pitch keepPitch=false).');
+      refuseFxTimeMap({ ...clip, speedEnd: v1 }, 'speed');
       const i = track.clips.indexOf(clip), next = track.clips[i + 1];
       if (clip.transition || (next && next.type === 'media' && next.transition && T.eq(next.start, clipEnd(clip)))) throw new OpError('incompatible', 'remove the transition at this clip first', { clipId: clip.id });
       const span = toSourceSpan(clip, clip.duration); // source shown now (whatever its speed was); the ramp shows at most this
@@ -667,7 +682,7 @@ const volumeTarget = (d: ProjectDocument, clipId: string) => {
 defineOp({
   name: 'speed_ramp',
   version: 1,
-  description: 'Change a clip\'s speed gradually from one value to another over its length. The clip is replaced by `steps` consecutive clips (and the same for its linked sound), each at a constant speed between `from` and `to`, playing the source on without gaps or repeats; a stepped ramp keeps every time exact. The ramp plays the same stretch of source as before (to within the rounding of each step to whole frames), so its length on the timeline changes; nothing else moves, and it is refused if the new length would run into the next clip. Not for clips with keyframes, volume keys or a transition, freeze frames, reversed clips or stills. With includeLinked=false the steps are linked to nothing, and a clip left alone in the link is unlinked too (refused while it is on a locked track). One undo restores the single clip.',
+  description: 'Change a clip\'s speed gradually from one value to another over its length. The clip is replaced by `steps` consecutive clips (and the same for its linked sound), each at a constant speed between `from` and `to`, playing the source on without gaps or repeats; a stepped ramp keeps every time exact. The ramp plays the same stretch of source as before (to within the rounding of each step to whole frames), so its length on the timeline changes; nothing else moves, and it is refused if the new length would run into the next clip. Not for clips with keyframes, volume keys or a transition, freeze frames, reversed clips or stills. With includeLinked=false the steps are linked to nothing, and a clip left alone in the link is unlinked too (refused while it is on a locked track). One undo restores the single clip. Sound effects are copied to each part; an echo or reverb rings on past each cut.',
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), steps: z.number().int().min(2).max(24).optional().describe('Default 8'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
@@ -708,6 +723,7 @@ defineOp({
         if (k > 0) delete p.fadeIn;
         if (k < steps - 1) delete p.fadeOut;
         clampFades(p);
+        refuseFxTimeMap(p, 'speed'); // each step keeps the sound effects; a step that keeps its pitch at another speed cannot carry them yet
         const used = toSourceSpan(p, duration);
         if (T.lt(asset.duration, T.add(sourceIn, used))) throw new OpError('out_of_bounds', 'the ramp would read past the end of the source', { clipId: clip.id });
         if (k > 0) { copyOverrides(d, clip.id, p.id); created.push(p.id); }
@@ -725,7 +741,7 @@ defineOp({
 defineOp({
   name: 'apply_speed_curve',
   version: 1,
-  description: 'Give a clip a speed curve: a named shape such as hero (fast, a deep slow-down in the middle, fast again), bullet, montage, jump-cut, flash-in, flash-out, smooth-ramp, stutter, slow-down, build-up, wave, emphasis, surge or fast-forward, or a hand-made one from `points` (position in the clip 0–1 and the speed there; between two points the speed changes gradually). The clip is replaced by one clip per segment of the curve (and the same for its linked sound), each playing the source on without gaps or repeats at one speed or with a gradual change, so every time stays exact and each part can still be edited. The curve shows the same stretch of source as before, to within the rounding of each part to whole frames. The total length changes: by default the clips after it on the same tracks (and what is linked to them) move by the difference, and other tracks such as music stay where they are; with ripple=false nothing else moves and the new length must fit. Markers and hand-timed captions do not move. Sound is resampled with the picture, so its pitch follows the speed. A sound that plays on over the start of the next clip on its track, or whose start the previous clip plays over, is refused: remove the crossfade first (set_audio_crossfade with duration 0), or trim the earlier clip back if the overlap is not a crossfade. A sound layered wholly inside a longer one is not in the way. With includeLinked=false the clip is curved alone and is no longer linked to its other half (refused while that other half is on a locked track, since its link would have to be cleared).',
+  description: 'Give a clip a speed curve: a named shape such as hero (fast, a deep slow-down in the middle, fast again), bullet, montage, jump-cut, flash-in, flash-out, smooth-ramp, stutter, slow-down, build-up, wave, emphasis, surge or fast-forward, or a hand-made one from `points` (position in the clip 0–1 and the speed there; between two points the speed changes gradually). The clip is replaced by one clip per segment of the curve (and the same for its linked sound), each playing the source on without gaps or repeats at one speed or with a gradual change, so every time stays exact and each part can still be edited. The curve shows the same stretch of source as before, to within the rounding of each part to whole frames. The total length changes: by default the clips after it on the same tracks (and what is linked to them) move by the difference, and other tracks such as music stay where they are; with ripple=false nothing else moves and the new length must fit. Markers and hand-timed captions do not move. Sound is resampled with the picture, so its pitch follows the speed. A sound that plays on over the start of the next clip on its track, or whose start the previous clip plays over, is refused: remove the crossfade first (set_audio_crossfade with duration 0), or trim the earlier clip back if the overlap is not a crossfade. A sound layered wholly inside a longer one is not in the way. With includeLinked=false the clip is curved alone and is no longer linked to its other half (refused while that other half is on a locked track, since its link would have to be cleared). Sound effects are copied to each part; an echo or reverb rings on past each cut. A curve with gradual changes is refused for a sound that carries sound effects (they cannot follow a gradual change of speed yet).',
   args: z.object({
     clipId: z.string(),
     preset: z.enum(SPEED_CURVE_IDS).optional(),
@@ -834,6 +850,7 @@ defineOp({
         if (k > 0) delete p.fadeIn;
         if (k < plan.length - 1) delete p.fadeOut;
         clampFades(p);
+        refuseFxTimeMap(p, 'speed'); // the parts keep the sound effects, which cannot follow a gradual part (or one that keeps its pitch) yet
         const used = toSourceSpan(p, p.duration);
         if (T.lt(asset.duration, T.add(sourceIn, used))) throw new OpError('out_of_bounds', 'the curve would read past the end of the source', { clipId: clip.id });
         if (k > 0) { copyOverrides(d, clip.id, p.id); created.push(p.id); }
@@ -1093,7 +1110,7 @@ defineOp({
 defineOp({
   name: 'set_clip_pitch',
   version: 1,
-  description: 'Choose what a speed change does to the pitch of a clip\'s sound: keepPitch=true keeps the pitch (the sound is stretched or tightened instead), false lets the pitch rise and fall with the speed (the default). Give a sound clip, or a picture clip to set its linked sound. It has an audible effect only while the clip\'s speed is not 1. Keeping the pitch is meant for speech and music between about half and double speed.',
+  description: 'Choose what a speed change does to the pitch of a clip\'s sound: keepPitch=true keeps the pitch (the sound is stretched or tightened instead), false lets the pitch rise and fall with the speed (the default). Give a sound clip, or a picture clip to set its linked sound. It has an audible effect only while the clip\'s speed is not 1. Keeping the pitch is meant for speech and music between about half and double speed. A sound that carries sound effects cannot keep its pitch at a speed other than 1 yet.',
   args: z.object({ clipId: z.string(), keepPitch: z.boolean() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
@@ -1102,7 +1119,7 @@ defineOp({
     if (!targets.length) throw new OpError('incompatible', 'this clip has no sound clip', { clipId: a.clipId }, 'Give the sound clip, or a picture clip that is linked to one.');
     if (targets.every((t) => !!t.clip.keepPitch === a.keepPitch)) throw new OpError('invalid_args', `the sound already ${a.keepPitch ? 'keeps its pitch' : 'follows the speed'}`, { clipId: a.clipId });
     if (a.keepPitch) for (const { clip } of targets) refuseRamped(clip, 'stretched at one speed to keep its pitch');
-    for (const { clip } of targets) { if (a.keepPitch) clip.keepPitch = true; else delete clip.keepPitch; }
+    for (const { clip } of targets) { if (a.keepPitch) clip.keepPitch = true; else delete clip.keepPitch; refuseFxTimeMap(clip, 'speed'); }
     return { affectedIds: targets.map((t) => t.clip.id), summary: a.keepPitch ? 'Sound keeps its pitch at other speeds' : 'Sound pitch follows the speed', output: { clipIds: targets.map((t) => t.clip.id) } };
   },
 });
@@ -1151,7 +1168,7 @@ defineOp({
 defineOp({
   name: 'split_clip',
   version: 1,
-  description: 'Split a clip at a frame-aligned timeline time strictly inside it. Linked clips are split too and the right-hand halves stay linked to each other.',
+  description: 'Split a clip at a frame-aligned timeline time strictly inside it. Linked clips are split too and the right-hand halves stay linked to each other. Sound effects are copied to each part; an echo or reverb rings on past each cut.',
   args: z.object({ clipId: z.string(), at: RT, includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
@@ -1845,6 +1862,174 @@ defineOp({
   apply(d, a) {
     if (a.target === null) delete d.settings.loudness; else d.settings.loudness = { target: a.target, truePeak: a.truePeak ?? d.settings.loudness?.truePeak ?? -1 };
     return { affectedIds: [d.id], summary: a.target === null ? 'Loudness normalisation off' : `Loudness target ${a.target} LUFS` };
+  },
+});
+
+// ---------- sound effects (ADR-0010, SPEC §10) ----------
+// Per-clip DSP effects of sound clips (voices, 8-bit, echo, reverb, bass boost, stereo width). The one implementation of every
+// effect is packages/engine/src/audiofx, heard the same in preview, browser export and server export; these operations only
+// keep the list. Lists are kept in the fixed processing order (sortAudioFx): users choose effects, never their order. Undo is the
+// generic restore of the clips' before-states (restore_entities). Not voice conversion: that is a separate, labelled provider job.
+const FX_CATALOG_HINT = 'Call list_catalog for the sound effects (audioEffects), their parameters and the ready-made presets (audioPresets).';
+type SoundTarget = { track: Track; clip: MediaClip };
+const isVoice = (f: { type: string }) => findAudioEffect(f.type)?.exclusive === 'voice';
+/**
+ * The sound clips an edit of sound effects applies to. A sound clip (a media clip on a sound track whose file has sound) is its
+ * own target, and the other sound clips linked to it come along unless includeLinked=false. A picture clip has no sound of its
+ * own: it resolves to the sound clips linked to it. Only these targets change, so only their tracks need to be unlocked
+ * (unlockedTargets); a picture on a locked track does not stop an edit of its sound.
+ */
+function soundTargets(d: ProjectDocument, clipId: string, includeLinked?: boolean): SoundTarget[] {
+  const f = findClip(d, clipId);
+  if (!f) throw new OpError('not_found', `clip ${clipId} not found`, { clipId }, 'Call get_timeline to list current clip ids.');
+  const sounding = (t: Track, c: Clip): c is MediaClip => c.type === 'media' && t.kind === 'audio' && !!d.assets[c.assetId]?.audio;
+  const out: SoundTarget[] = sounding(f.track, f.clip) ? [{ track: f.track, clip: f.clip }] : [];
+  if (includeLinked !== false) for (const p of partnersOf(d, f.clip)) if (sounding(p.track, p.clip)) out.push(p);
+  if (!out.length) throw new OpError('incompatible', 'this clip has no sound clip', { clipId },
+    includeLinked === false && f.track.kind !== 'audio' ? 'A picture clip has no sound of its own: leave includeLinked on to reach its linked sound, or give the sound clip.' : 'Give the sound clip, or a picture clip that is linked to one (get_timeline lists the clips of the sound tracks).');
+  return out;
+}
+const unlockedTargets = <X extends SoundTarget>(targets: X[]): X[] => {
+  for (const t of targets) if (t.track.locked) throw new OpError('track_locked', `track ${t.track.id} is locked`, { trackId: t.track.id, clipId: t.clip.id });
+  return targets;
+};
+/** A sound effect on one of the clip's sound targets (a picture clip finds the effect on its linked sound). */
+function soundEffect(d: ProjectDocument, clipId: string, effectId: string): SoundTarget & { index: number } {
+  for (const t of soundTargets(d, clipId)) {
+    const index = (t.clip.audioFx ?? []).findIndex((x) => x.id === effectId);
+    if (index >= 0) return { ...t, index };
+  }
+  throw new OpError('not_found', `sound effect ${effectId} not found on clip ${clipId}`, { effectId, clipId }, 'get_timeline lists the sound effects of each sound clip (audioFx) with their ids.');
+}
+/** Parameters of a sound effect, completed with its defaults and checked against its schema. */
+function parseAudioFx(type: string, params: unknown): AudioFxParams {
+  const def = findAudioEffect(type);
+  if (!def) throw new OpError('not_found', `sound effect "${type}" does not exist`, { type, available: AUDIO_EFFECTS.map((e) => e.id) }, FX_CATALOG_HINT);
+  const r = def.params.safeParse(params ?? {});
+  if (!r.success) throw new OpError('invalid_args', `invalid parameters for sound effect ${type}`, { issues: r.error.issues.slice(0, 8) }, 'Call list_catalog for the parameter schema of each sound effect (audioEffects).');
+  return r.data as AudioFxParams;
+}
+/** Store a clip's list in the processing order; an empty list drops the field. */
+function setAudioFx(clip: MediaClip, list: AudioFxInstance[]) {
+  if (list.length) clip.audioFx = sortAudioFx(list); else delete clip.audioFx;
+}
+/**
+ * The longest ring-out after the end of these clips (seconds, three decimals), as the engine plans it: an echo or a reverb plays on
+ * past the clip end, cut at the end of the video. Null only where no engine is loaded (core on its own; see queries.ts soundTails).
+ */
+function tailSecondsOf(d: ProjectDocument, clipIds: string[]): number | null {
+  const tails = soundTails(d);
+  if (!tails) return null;
+  return Number(Math.max(0, ...clipIds.map((id) => tails.get(id)?.seconds ?? 0)).toFixed(3));
+}
+const fxOut = (clip: MediaClip) => (clip.audioFx ?? []).map((x) => ({ clipId: clip.id, effectId: x.id, params: x.params }));
+
+defineOp({
+  name: 'add_audio_effect',
+  version: 1,
+  description: 'Add a sound effect to a sound clip: a character voice (voice.telephone, voice.megaphone, voice.radio, voice.robot), texture.8bit, space.echo, space.reverb (room, hall, cave, bathroom), tone.bassboost or utility.width. Give the sound clip, or a picture clip to put it on the sound linked to it (includeLinked=false keeps a sound clip\'s linked sound clips out). Unspecified parameters take the effect\'s defaults; amount 0 is the dry sound. Effects always run in a fixed order whatever order they were added in; a clip has each effect at most once and one character voice. An echo or reverb rings on past the end of the clip and is cut at the end of the video (the video is never lengthened). These are DSP effects, not voice conversion. Not yet for a sound that keeps its pitch at another speed or changes speed gradually. Discover effects and presets with list_catalog (audioEffects, audioPresets).',
+  args: z.object({ clipId: z.string(), type: z.string().min(1).max(48), params: z.record(z.string(), z.unknown()).optional(), enabled: z.boolean().optional(), includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a, ctx) {
+    const params = parseAudioFx(a.type, a.params);
+    const def = findAudioEffect(a.type)!;
+    const targets = unlockedTargets(soundTargets(d, a.clipId, a.includeLinked));
+    const effects: { clipId: string; effectId: string; params: AudioFxParams }[] = [];
+    for (const { clip } of targets) {
+      const list = clip.audioFx ?? [];
+      const same = list.find((x) => x.type === a.type);
+      if (same) throw new OpError('invalid_args', `this clip already has the sound effect ${a.type}`, { clipId: clip.id, effectId: same.id }, 'Change it with update_audio_effect (effectId given), or remove it first.');
+      const voice = def.exclusive === 'voice' ? list.find(isVoice) : undefined;
+      if (voice) throw new OpError('invalid_args', `this clip already has a character voice (${voice.type})`, { clipId: clip.id, effectId: voice.id }, 'A clip has one character voice: remove the other one first (remove_audio_effect), or replace the whole list in one step with apply_audio_preset.');
+      if (list.length >= MAX_AUDIO_FX) throw new OpError('out_of_bounds', `a clip can carry at most ${MAX_AUDIO_FX} sound effects`, { clipId: clip.id });
+      const fx: AudioFxInstance = { id: ctx.newId('afx'), type: a.type, enabled: a.enabled ?? true, params: { ...params } };
+      setAudioFx(clip, [...list, fx]);
+      refuseFxTimeMap(clip, 'effects');
+      effects.push({ clipId: clip.id, effectId: fx.id, params: fx.params });
+    }
+    const ids = targets.map((t) => t.clip.id);
+    return { affectedIds: ids, summary: `Added sound effect ${a.type}`, output: { effects, tailSeconds: tailSecondsOf(d, ids) } };
+  },
+});
+defineOp({
+  name: 'update_audio_effect',
+  version: 1,
+  description: 'Change parameters of a sound effect (unspecified ones are kept), or turn it off and on again (enabled). Give the sound clip, or a picture clip whose linked sound carries the effect; get_timeline lists each sound clip\'s effects (audioFx) with their ids. The order of effects is fixed and cannot be changed.',
+  args: z.object({ clipId: z.string(), effectId: z.string(), params: z.record(z.string(), z.unknown()).optional(), enabled: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    if (a.params === undefined && a.enabled === undefined) throw new OpError('invalid_args', 'give params and/or enabled', { effectId: a.effectId });
+    const t = unlockedTargets([soundEffect(d, a.clipId, a.effectId)])[0]!;
+    const list = [...t.clip.audioFx!];
+    const fx = { ...list[t.index]! };
+    if (a.params) fx.params = parseAudioFx(fx.type, { ...fx.params, ...a.params });
+    if (a.enabled !== undefined) fx.enabled = a.enabled;
+    list[t.index] = fx;
+    setAudioFx(t.clip, list);
+    refuseFxTimeMap(t.clip, 'effects');
+    return { affectedIds: [t.clip.id], summary: `Updated sound effect ${fx.type}${fx.enabled ? '' : ' (off)'}`, output: { effects: [{ clipId: t.clip.id, effectId: fx.id, params: fx.params }], enabled: fx.enabled, tailSeconds: tailSecondsOf(d, [t.clip.id]) } };
+  },
+});
+defineOp({
+  name: 'remove_audio_effect',
+  version: 1,
+  description: 'Remove a sound effect from a sound clip (or from the sound linked to a picture clip).',
+  args: z.object({ clipId: z.string(), effectId: z.string() }).strict(),
+  apply(d, a) {
+    const t = unlockedTargets([soundEffect(d, a.clipId, a.effectId)])[0]!;
+    const type = t.clip.audioFx![t.index]!.type;
+    setAudioFx(t.clip, t.clip.audioFx!.filter((_, k) => k !== t.index));
+    return { affectedIds: [t.clip.id], summary: `Removed sound effect ${type}`, output: { clipId: t.clip.id, effects: fxOut(t.clip), tailSeconds: tailSecondsOf(d, [t.clip.id]) } };
+  },
+});
+defineOp({
+  name: 'apply_audio_preset',
+  version: 1,
+  description: 'Give a sound clip one of the ready-made sound presets (list_catalog → audioPresets: telephone, megaphone, radio, robot, 8bit, room, hall, cave, bathroom, stadium, thoughts): its whole list of sound effects is replaced in one step (one undo restores the old list). presetId=null removes every sound effect. Give the sound clip, or a picture clip to set the sound linked to it.',
+  args: z.object({ clipId: z.string(), presetId: z.string().min(1).max(48).nullable(), includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a, ctx) {
+    const preset = a.presetId === null ? null : AUDIO_PRESETS.find((p) => p.id === a.presetId);
+    if (a.presetId !== null && !preset) throw new OpError('not_found', `sound preset "${a.presetId}" does not exist`, { presetId: a.presetId, available: AUDIO_PRESETS.map((p) => p.id) }, FX_CATALOG_HINT);
+    const targets = unlockedTargets(soundTargets(d, a.clipId, a.includeLinked));
+    if (!preset && targets.every((t) => !t.clip.audioFx?.length)) throw new OpError('invalid_args', 'this clip has no sound effects to remove', { clipId: a.clipId });
+    const effects: { clipId: string; effectId: string; params: AudioFxParams }[] = [];
+    for (const { clip } of targets) {
+      setAudioFx(clip, (preset?.effects ?? []).map((e) => ({ id: ctx.newId('afx'), type: e.type, enabled: true, params: parseAudioFx(e.type, e.params) })));
+      refuseFxTimeMap(clip, 'effects');
+      effects.push(...fxOut(clip));
+    }
+    const ids = targets.map((t) => t.clip.id);
+    return { affectedIds: ids, summary: preset ? `Sound preset ${preset.id}` : 'Removed all sound effects', output: { presetId: preset?.id ?? null, effects, tailSeconds: tailSecondsOf(d, ids) } };
+  },
+});
+defineOp({
+  name: 'copy_audio_effects',
+  version: 1,
+  description: 'Copy the sound effects of one sound clip to other sound clips (picture clips stand for the sound linked to them), as new instances with their own ids, so noise in effects such as telephone hiss or radio static differs per clip. replace=true replaces each target\'s list; otherwise the copies join it, and an effect of a type the target already has, and its character voice when a voice is copied, are replaced by the copy. At most 200 targets.',
+  args: z.object({ fromClipId: z.string(), toClipIds: z.array(z.string()).min(1).max(200), replace: z.boolean().optional() }).strict(),
+  apply(d, a, ctx) {
+    const sources = soundTargets(d, a.fromClipId);
+    const src = sources[0]!.clip;
+    if (src.id !== a.fromClipId && sources.length > 1) throw new OpError('incompatible', 'this picture clip is linked to more than one sound clip', { clipId: a.fromClipId, soundClipIds: sources.map((s) => s.clip.id) }, 'Give the sound clip to copy from.');
+    if (!src.audioFx?.length) throw new OpError('invalid_args', 'the clip to copy from has no sound effects', { clipId: src.id }, 'Add sound effects to it first (add_audio_effect or apply_audio_preset).');
+    const targets = new Map<string, SoundTarget>();
+    for (const id of a.toClipIds) {
+      const found = soundTargets(d, id);
+      for (const t of found[0]!.clip.id === id ? [found[0]!] : found) { // a sound clip stands for itself; a picture clip for the sound linked to it
+        if (t.clip.id === src.id) throw new OpError('invalid_args', 'a clip cannot take its own sound effects', { clipId: id }, 'Leave the clip to copy from out of toClipIds.');
+        targets.set(t.clip.id, t);
+      }
+    }
+    const voiceCopied = src.audioFx.some(isVoice);
+    const effects: { clipId: string; effectId: string; params: AudioFxParams }[] = [];
+    for (const { clip } of unlockedTargets([...targets.values()])) {
+      const copies = src.audioFx.map((x) => ({ ...structuredClone(x), id: ctx.newId('afx') }));
+      const kept = a.replace ? [] : (clip.audioFx ?? []).filter((x) => !copies.some((c) => c.type === x.type) && !(voiceCopied && isVoice(x)));
+      if (kept.length + copies.length > MAX_AUDIO_FX) throw new OpError('out_of_bounds', `a clip can carry at most ${MAX_AUDIO_FX} sound effects`, { clipId: clip.id }, 'Pass replace=true to replace its list.');
+      setAudioFx(clip, [...kept, ...copies]);
+      refuseFxTimeMap(clip, 'effects');
+      effects.push(...fxOut(clip).filter((e) => copies.some((c) => c.id === e.effectId)));
+    }
+    const ids = [...targets.keys()];
+    return { affectedIds: ids, summary: `Copied ${src.audioFx.length} sound effect(s) to ${ids.length} clip(s)`, output: { clipIds: ids, effects, tailSeconds: tailSecondsOf(d, ids) } };
   },
 });
 
