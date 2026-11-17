@@ -95,6 +95,7 @@ const upload = async (pid: string, name: string, bytes: Buffer) => ((await (awai
 const tx = async (pid: string, ops: unknown[], expectedRevision?: number) => call(`/projects/${pid}/transactions`, { ops, ...(expectedRevision !== undefined ? { expectedRevision } : {}) });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const done = async (jobId: string) => { for (let i = 0; i < 600; i++) { const j = (await call(`/jobs/${jobId}`)).body; if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j; await sleep(100); } throw new Error('job did not finish'); };
+const argsOf = (o: { args?: unknown }) => o.args as Record<string, unknown>;
 const rt = (value: number, timescale = 1000) => ({ value: String(value), timescale });
 /** ffmpeg, for the picture files (a still without sound, a short video with this recording as its sound). */
 function ffmpeg(args: string[]) { const r = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...args]); if (r.status !== 0) throw new Error(String(r.stderr)); }
@@ -184,11 +185,11 @@ describe('measure_voice: the server plumbing (with the labelled test-only stand-
   it('scope asset: one op per sound clip of the same recording (not the other recording); a picture clip finds its linked sound; a clip on a locked track is left out and named in the note', async () => {
     const all = await measureVoiceCheckWith(s.store, pid, { clipId: clipB, scope: 'asset' }, testMeter({ frames: 0 }, false));
     expect(all.clipIds.sort()).toEqual([clipA, clipB].sort());
-    expect(all.ops.map((o) => o.args.clipId).sort()).toEqual([clipA, clipB].sort());
-    expect(all.ops.every((o) => o.op === 'clean_voice' && o.args.source === voiceAsset)).toBe(true);
+    expect(all.ops.map((o) => argsOf(o).clipId).sort()).toEqual([clipA, clipB].sort());
+    expect(all.ops.every((o) => o.op === 'clean_voice' && argsOf(o).source === voiceAsset)).toBe(true);
     expect(all.clipIds).not.toContain(otherClip);
     const linked = await measureVoiceCheckWith(s.store, pid, { clipId: videoPicture }, testMeter({ frames: 0 }, false));
-    expect([linked.clipIds, linked.ops[0]!.args.clipId]).toEqual([[videoSound], videoSound]);
+    expect([linked.clipIds, argsOf(linked.ops[0]!).clipId]).toEqual([[videoSound], videoSound]);
     expect(linked.report.analysedSeconds).toBeGreaterThan(3.9);
     // lock the track of the recording's clips: they are left out (clean_voice would refuse them) and the note names them
     const trackId = findClip(s.store.getProject(pid).doc, clipB)!.track.id;
