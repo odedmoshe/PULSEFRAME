@@ -8,6 +8,9 @@ export const GALLERY_STRINGS = {
     motionNote: 'אפשר לשלב כניסה ויציאה. לולאה או תנועה לאורך הקליפ מחליפות את המפתחות של המאפיינים שבהם הן משתמשות.',
     needsGpu: 'דורש כרטיס מסך', empty: 'אין תוצאות', noFrame: 'אין תמונה בתצוגה המקדימה, לכן אין תמונות ממוזערות.', rendering: 'מצייר תמונות ממוזערות…',
     thumbNote: 'התמונות הממוזערות מצוירות מהפריים המוצג עכשיו, באותו מַרכֵּב של התצוגה והייצוא.', sample: 'אבג Abc',
+    applied: (name: string) => `הוחל: ${name}`, refused: (name: string) => `${name} לא הוחל.`,
+    alreadyOn: (name: string) => `${name} כבר נמצא על הקליפ, ולכן לא נוסף שוב. אפשר לכוון או להסיר אותו ברשימת האפקטים של הקליפ.`,
+    conflict: 'מישהו אחר שינה את הפרויקט באותו רגע, והפרויקט נטען מחדש. אפשר לבחור שוב.', noReason: 'העורך לא מסר סיבה.',
   },
   en: {
     open: 'Effects gallery', title: 'Effects gallery', close: 'Close gallery', search: 'Search by name', searchPlaceholder: 'Search…',
@@ -16,5 +19,8 @@ export const GALLERY_STRINGS = {
     motionNote: 'Entrances and exits can be combined. A loop or a move replaces the keys of the properties it uses.',
     needsGpu: 'needs a graphics adapter', empty: 'No results', noFrame: 'The preview shows no picture, so there are no thumbnails.', rendering: 'Drawing thumbnails…',
     thumbNote: 'Thumbnails are drawn from the frame on screen, by the same compositor as preview and export.', sample: 'אבג Abc',
+    applied: (name: string) => `Applied: ${name}`, refused: (name: string) => `${name} was not applied.`,
+    alreadyOn: (name: string) => `${name} is already on this clip, so it was not added again. Adjust or remove it in the clip's Effects list.`,
+    conflict: 'Someone else changed the project at the same moment, and it was reloaded. Pick again.', noReason: 'The editor gave no reason.',
   },
 } as const;

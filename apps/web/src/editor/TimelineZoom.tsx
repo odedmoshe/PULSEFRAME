@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import * as T from '@pulseframe/time';
-import { ZoomIn, ZoomOut } from 'lucide-react';
+import { MoveHorizontal, ZoomIn, ZoomOut } from 'lucide-react';
 import type { Editor } from './store.ts';
 import { useEditorState } from './store.ts';
 import { ZOOM_STRINGS } from './zoom.strings.ts';
@@ -63,7 +63,8 @@ export function TimelineZoom() {
       <input type="range" className="tl-zoom-slider" data-testid="tl-zoom-slider" min={0} max={SLIDER_MAX} step={1} value={Math.round(ppsToSlider(pps))}
         aria-label={s.slider} aria-valuetext={s.value(pps)} onChange={(e) => zoomTo(editor, el(), sliderToPps(Number(e.target.value)))} />
       <button type="button" className="tl-zoom-btn" data-testid="tl-zoom-in" aria-label={s.in} title={s.in} onClick={() => zoomTo(editor, el(), pps * ZOOM_STEP)}><ZoomIn size={14} aria-hidden="true" /></button>
-      <button type="button" className="tl-zoom-btn tl-zoom-fit" data-testid="tl-zoom-fit" title={s.fitTitle} onClick={fit}>{s.fit}</button>
+      {/* the label and the icon are never shown together (timelineZoom.css); the name is the label at every width */}
+      <button type="button" className="tl-zoom-btn tl-zoom-fit" data-testid="tl-zoom-fit" aria-label={s.fit} title={s.fitTitle} onClick={fit}><MoveHorizontal className="tl-zoom-fit-ico" size={14} aria-hidden="true" /><span className="tl-zoom-fit-label">{s.fit}</span></button>
     </span>
   );
 }
