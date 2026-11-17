@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { handleAfterEnd, sequenceDuration, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, captionCues, maxDecodeLanes } from '@pulseframe/engine';
+import { audioPlan, captionCues, decodeOverBudget, type DecodeStretch } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { variantDoc } from './export.ts';
 
@@ -48,14 +48,23 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   if (total > 0 && ap.clips.length === 0) issues.push({ code: 'no_sound', severity: 'note', message: 'the programme has no audible sound', ids: [] });
   else if (!doc.settings.loudness && ap.clips.length > 0) issues.push({ code: 'no_loudness_target', severity: 'note', message: 'no loudness target is set, so the export keeps the mix level as it is', ids: [doc.id], fix: { label: 'Normalise to -14 LUFS (common for social video)', ops: [{ op: 'set_loudness_target', args: { target: -14 } }] } });
 
-  // 4a. more pictures to decode at once than the renderer opens decoders for (time effects decode each earlier picture
-  // separately, ADR-0011): those frames would refuse with effect_unavailable (decode_budget)
-  const lanes = maxDecodeLanes(doc);
-  if (lanes.lanes > RENDER_DECODERS) {
-    const at = T.frameTime(lanes.fromFrame, rate), until = T.frameTime(lanes.toFrame, rate);
-    // the video clips drawn somewhere in that stretch (stills and titles decode nothing)
-    const ids = seq.tracks.filter((t) => t.kind === 'video' && !t.hidden).flatMap((t) => t.clips.filter((c) => c.type === 'media' && !!doc.assets[c.assetId]?.video && T.lt(c.start, until) && T.lt(at, T.add(c.start, c.duration))).map((c) => c.id));
-    issues.push({ code: 'decode_budget', severity: 'warning', message: `frames ${lanes.fromFrame}–${lanes.toFrame - 1} need ${lanes.lanes} video pictures decoded at once, more than the ${RENDER_DECODERS} the renderer can open; those frames would be refused (time effects such as echo and time split decode each earlier picture separately). Lower the count of a time effect, remove one, or move the overlapping clips apart`, ids, range: { startFrame: lanes.fromFrame, endFrame: lanes.toFrame } });
+  // 4a. frames that need more video pictures decoded at once than the renderer opens decoders for (time effects decode each
+  // earlier picture separately, ADR-0011). Counted exactly as the compositor asks for pictures (a source frame that several
+  // layers or taps of a frame show is decoded once), so these frames, and only these, would refuse with effect_unavailable
+  // (decode_budget). Stretches less than a second apart make one issue, so a count that wavers around the budget (slow
+  // motion) is not listed frame by frame.
+  const near = Math.max(1, Math.round(rate.num / rate.den));
+  const groups: DecodeStretch[][] = [];
+  for (const s of decodeOverBudget(doc, RENDER_DECODERS)) {
+    const g = groups.at(-1);
+    if (g && s.fromFrame - g.at(-1)!.toFrame < near) g.push(s); else groups.push([s]);
+  }
+  for (const g of groups) {
+    const from = g[0]!.fromFrame, to = g.at(-1)!.toFrame;
+    const refused = g.reduce((k, s) => k + s.toFrame - s.fromFrame, 0);
+    const frames = to - from === 1 ? `frame ${from}` : `frames ${from}–${to - 1}`;
+    const where = refused === to - from ? frames : `${refused} of the ${frames}`;
+    issues.push({ code: 'decode_budget', severity: 'warning', message: `on ${where}, more video pictures must be decoded at once than the ${RENDER_DECODERS} the renderer can open (up to ${Math.max(...g.map((s) => s.peak))}); those frames would be refused. Time effects such as echo and time split decode each earlier picture separately (a picture shown more than once in a frame is decoded once). Lower the count of a time effect, remove one, or move the overlapping clips apart`, ids: [...new Set(g.flatMap((s) => s.clipIds))], range: { startFrame: from, endFrame: to } });
   }
 
   for (const track of seq.tracks) {
