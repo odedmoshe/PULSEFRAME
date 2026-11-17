@@ -13,62 +13,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CaptureSchema, type Capture } from '@pulseframe/core';
 import { generateBarcodeFixture, mulberry32 } from '../../../packages/fixtures/src/index.ts';
 import { HEAD_BYTES, captureFromExif, captureFromFileName, captureFromTags, isMessagingAppName, readCapture, wallInZone, type CaptureContext } from './captureMeta.ts';
+import { SOI, exifSegment, exifTiff, jpegHead, jpegSegment, withExif, type ExifOptions } from './captureMeta.fixtures.ts';
 import { ingestUpload, jpegOrientation } from './ingest.ts';
 import { Store } from './store.ts';
 
 const cx: CaptureContext = { homeZone: 'Asia/Jerusalem', now: new Date('2026-11-17T10:00:00Z') };
 const utc = (iso: string) => Date.parse(iso);
 
-// ---------- a hand-built EXIF segment ----------
-interface ExifOptions {
-  le?: boolean;
-  /** DateTimeOriginal as written; null = no such tag. */
-  date?: string | null;
-  /** OffsetTimeOriginal as written. */
-  offset?: string;
-  /** Adds a GPS IFD (pointer 0x8825) with a latitude and a longitude. */
-  gps?: boolean;
-  orientation?: number;
-  /** Overrides, for hostile files. */
-  exifPointer?: number; dateOffset?: number; dateCount?: number; dateType?: number; ifd0Count?: number; exifCount?: number; magic?: number;
-}
-/** The TIFF block of an EXIF segment: IFD0 (orientation, Exif pointer, optional GPS pointer), the Exif IFD, the GPS IFD and their data. */
-function tiff(o: ExifOptions = {}): Buffer {
-  const le = o.le ?? true;
-  const b = Buffer.alloc(512);
-  const w16 = (p: number, v: number) => (le ? b.writeUInt16LE(v, p) : b.writeUInt16BE(v, p));
-  const w32 = (p: number, v: number) => (le ? b.writeUInt32LE(v >>> 0, p) : b.writeUInt32BE(v >>> 0, p));
-  const entry = (p: number, tagId: number, type: number, count: number, value: number) => { w16(p, tagId); w16(p + 2, type); w32(p + 4, count); w32(p + 8, value); };
-  b.write(le ? 'II' : 'MM', 0, 'latin1'); w16(2, o.magic ?? 42); w32(4, 8);
-  const exifIfd = 100, gpsIfd = 160, dateAt = 220, offsetAt = 244, latAt = 256, lonAt = 280;
-  const ifd0 = [[0x0112, 3, 1, 0], [0x8769, 4, 1, o.exifPointer ?? exifIfd], ...(o.gps ? [[0x8825, 4, 1, gpsIfd]] : [])] as const;
-  w16(8, o.ifd0Count ?? ifd0.length);
-  ifd0.forEach(([t, ty, n, v], i) => entry(10 + i * 12, t, ty, n, v));
-  w16(10 + 8, o.orientation ?? 1); // the orientation's value sits inside its entry
-  const date = o.date === undefined ? '2024:12:25 17:30:05' : o.date;
-  const exif = [...(date !== null ? [[0x9003, o.dateType ?? 2, o.dateCount ?? 20, o.dateOffset ?? dateAt]] : []), ...(o.offset !== undefined ? [[0x9011, 2, 7, offsetAt]] : [])] as const;
-  w16(exifIfd, o.exifCount ?? exif.length);
-  exif.forEach(([t, ty, n, v], i) => entry(exifIfd + 2 + i * 12, t!, ty!, n!, v!));
-  if (date !== null) b.write(`${date}\0`, dateAt, 'latin1');
-  if (o.offset !== undefined) b.write(`${o.offset}\0`, offsetAt, 'latin1');
-  if (o.gps) {
-    w16(gpsIfd, 4);
-    entry(gpsIfd + 2, 0x0001, 2, 2, 0); b.write('N\0', gpsIfd + 2 + 8, 'latin1');
-    entry(gpsIfd + 14, 0x0002, 5, 3, latAt);
-    entry(gpsIfd + 26, 0x0003, 2, 2, 0); b.write('E\0', gpsIfd + 26 + 8, 'latin1');
-    entry(gpsIfd + 38, 0x0004, 5, 3, lonAt);
-    [[32, 1], [5, 1], [711, 100]].forEach(([n, d], i) => { w32(latAt + i * 8, n!); w32(latAt + i * 8 + 4, d!); });
-    [[34, 1], [46, 1], [5445, 100]].forEach(([n, d], i) => { w32(lonAt + i * 8, n!); w32(lonAt + i * 8 + 4, d!); });
-  }
-  return b.subarray(0, 304);
-}
-const segment = (marker: number, data: Buffer) => Buffer.concat([Buffer.from([0xff, marker, ((data.length + 2) >> 8) & 255, (data.length + 2) & 255]), data]);
-const app1 = (t: Buffer) => segment(0xe1, Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), t]));
-const SOI = Buffer.from([0xff, 0xd8]);
-/** The start of a JPEG with this EXIF segment (enough for the reader; not a picture). */
-const jpegHead = (o: ExifOptions = {}, before: Buffer[] = []) => Buffer.concat([SOI, ...before, app1(tiff(o)), Buffer.from([0xff, 0xda, 0, 2])]);
-/** A real picture file with the EXIF segment put in right after the start. */
-const withExif = (jpeg: Buffer, o: ExifOptions) => Buffer.concat([jpeg.subarray(0, 2), app1(tiff(o)), jpeg.subarray(2)]);
+const tiff = exifTiff, segment = jpegSegment, app1 = exifSegment;
 const exif = (at: string, utcOffsetMinutes: number | null = null): Capture => ({ at, utcOffsetMinutes, source: 'exif' });
 
 describe('wallInZone: the one time-zone conversion of the life line (import only)', () => {
