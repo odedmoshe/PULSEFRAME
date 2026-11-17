@@ -6,6 +6,7 @@ import { sourceAt, sourceEnd, timelineAt, CAPTION_LOOKS, CAPTION_PRESETS, FONT_C
 import type { Key } from '@pulseframe/i18n';
 import { api, type SilenceResult, type SpeechStatus } from '../api.ts';
 import { useEditorState, type Editor } from './store.ts';
+import { openItems, readingLimitFor, readReadingLimits, reviewRows, writeReadingLimit, type ReviewRow } from './aiTools.recheck.ts';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
 type Transcript = ProjectDocument['transcripts'][string];
@@ -119,6 +120,7 @@ export function TranscriptPanel() {
   if (!transcript) {
     return (
       <div className="transcript" data-testid="transcript-panel" data-state="empty">
+        <TranslationReview />
         <p className="muted" data-testid="transcript-empty">{t('transcript.empty')}</p>
         <div className="fields">
           <label>{t('transcript.language')}
@@ -166,6 +168,7 @@ export function TranscriptPanel() {
 
   return (
     <div className="transcript" data-testid="transcript-panel" data-state="ready" data-asset-id={assetId ?? undefined}>
+      <TranslationReview />
       <div className="row">
         <button className="ghost danger" disabled={lo < 0} onClick={() => void cut(false)} data-testid="transcript-delete">{t('transcript.delete')}</button>
         {failure?.approx && <button className="ghost" onClick={() => void cut(true)} data-testid="transcript-cut-anyway">{t('transcript.cutAnyway')}</button>}
@@ -232,6 +235,138 @@ function Phrase({ seg, editing, onEdit, onSave, renderWord, formatName, formatTe
         </>
       )}
     </li>
+  );
+}
+
+/** Reading direction of a language tag (the scripts this editor meets that are written right to left). */
+const langDir = (tag: string) => (/^(he|iw|ar|fa|ur|yi)(-|$)/i.test(tag) ? 'rtl' : 'ltr');
+/**
+ * Review of a machine translation (ADR-0017): the master and the translation side by side, each in its own direction, with the
+ * phrases whose master changed after translating (stale) and those above the reading-speed limit of the language flagged; wording is
+ * edited in place (set_variant_phrase_text, or the cue's text override); «סמן כנבדק» is offered to the owner only, and the server
+ * refuses it for anyone else. A preflight-style list says what is still open before exporting this language.
+ */
+function TranslationReview() {
+  const { editor, state, t } = useEditorState();
+  const { doc } = state;
+  const [picked, setPicked] = useState<string | null>(null);
+  const [limits, setLimits] = useState<Record<string, number>>(readReadingLimits);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const variants = doc ? Object.values(doc.variants).filter((v) => !!v.translation) : [];
+  const viewed = state.viewVariantId && doc?.variants[state.viewVariantId]?.translation ? state.viewVariantId : null;
+  const v = variants.find((x) => x.id === (viewed ?? picked)) ?? variants[0];
+  useEffect(() => { setEditing(null); setNote(null); }, [v?.id]);
+  if (!doc || !v?.translation) return null;
+  const tl = v.translation;
+  const to = v.language ?? tl.to, from = tl.from;
+  const limit = readingLimitFor(limits, to);
+  const rows = reviewRows(doc, v.id, { [to]: limit });
+  const open = openItems(doc, v.id, rows);
+  const short = (s: string) => (s.length > 40 ? `${s.slice(0, 40)}…` : s);
+  const mark = async () => {
+    const next = tl.review === 'reviewed' ? 'needed' : 'reviewed';
+    const ok = await editor.reviewTranslation(v.id, next);
+    setNote(ok ? { ok: true, text: t(next === 'reviewed' ? 'ai.review.marked' : 'ai.review.unmarked') } : { ok: false, text: `${t('ai.review.markFailed')}: ${editor.getState().error ?? ''}` });
+  };
+  const save = async (r: ReviewRow, text: string) => {
+    const ops = r.kind === 'phrase'
+      ? [{ op: 'set_variant_phrase_text', args: { variantId: v.id, assetId: r.assetId!, segmentId: r.id, text } }]
+      : [{ op: 'set_variant_override', args: { variantId: v.id, clipId: r.id, text } }];
+    const res = await editor.commit(ops, 'Translation wording');
+    if (res) setEditing(null);
+  };
+  const goTo = (id: string) => {
+    const el = document.querySelector<HTMLElement>(`[data-testid=translation-row][data-id="${CSS.escape(id)}"] [data-testid=translation-edit]`);
+    el?.scrollIntoView({ block: 'nearest' });
+    el?.focus();
+  };
+  const reviewedAt = tl.reviewedAt ? new Date(tl.reviewedAt).toLocaleString(state.lang === 'he' ? 'he-IL' : 'en-GB') : '';
+  return (
+    <section className="translation-review" data-testid="translation-review" data-variant={v.id} data-review={tl.review} aria-labelledby={`tr-review-${v.id}`}>
+      <h3 id={`tr-review-${v.id}`}>{t('ai.review.title')}: <bdi>{v.name}</bdi></h3>
+      {variants.length > 1 && (
+        <label>{t('ai.review.variant')}
+          <select value={v.id} onChange={(e) => { setPicked(e.target.value); if (viewed) editor.set({ viewVariantId: e.target.value }); }} data-testid="translation-variant">
+            {variants.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+        </label>
+      )}
+      <p data-testid="translation-status">
+        {tl.review === 'reviewed'
+          ? <span className="badge" data-testid="translation-reviewed">{t('ai.review.reviewed')} · {t('ai.review.reviewedBy')} <bdi>{tl.reviewedBy}</bdi>{reviewedAt ? <> · <bdi>{reviewedAt}</bdi></> : null}</span>
+          : <span className="badge warn" data-testid="translation-unreviewed">{t('ai.review.machine')}</span>}
+        {' '}<span className="muted">{t('ai.review.engine')} <bdi dir="ltr">{tl.engine} · {tl.model}</bdi></span>
+      </p>
+      {editor.isOwner
+        ? <button type="button" className={tl.review === 'reviewed' ? 'ghost' : 'primary'} onClick={() => void mark()} data-testid="translation-mark">{t(tl.review === 'reviewed' ? 'ai.review.unmark' : 'ai.review.mark')}</button>
+        : <p className="muted" data-testid="translation-owner-only">{t('ai.review.ownerOnly')}</p>}
+      {note && <p className={note.ok ? 'muted' : 'danger'} role={note.ok ? 'status' : 'alert'} data-testid="translation-mark-note">{note.text}</p>}
+      <label className="translation-limit">{t('ai.review.limit')} (<bdi>{to}</bdi>)
+        <input type="number" min={5} max={60} step={1} value={limit} onChange={(e) => { const n = Number(e.target.value); if (n >= 5 && n <= 60) { writeReadingLimit(to, n); setLimits(readReadingLimits()); } }} data-testid="translation-limit" />
+      </label>
+      <p className="muted small-text">{t('ai.review.limitHint')}</p>
+      <table className="translation-table" data-testid="translation-table">
+        <thead>
+          <tr>
+            <th scope="col">{t('ai.review.source')} (<bdi>{from}</bdi>)</th>
+            <th scope="col">{t('ai.review.translation')} (<bdi>{to}</bdi>)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} data-testid="translation-row" data-id={r.id} data-kind={r.kind} data-stale={r.stale ? 'true' : undefined} data-fast={r.cps !== null ? 'true' : undefined}>
+              <td lang={from} dir={langDir(from)} data-testid="translation-master">{r.master}</td>
+              <td lang={to} dir={langDir(to)}>
+                {editing === r.id
+                  ? <TranslationEditor initial={r.translated ?? ''} dir={langDir(to)} lang={to} onSave={(text) => void save(r, text)} onCancel={() => setEditing(null)} />
+                  : (
+                    <>
+                      <span data-testid="translation-text">{r.translated ?? t('ai.review.missing')}</span>{' '}
+                      <button type="button" className="ghost small" onClick={() => setEditing(r.id)} data-testid="translation-edit" aria-label={`${t('ai.review.edit')}: ${short(r.translated ?? r.master)}`}>✎</button>
+                    </>
+                  )}
+                <span className="translation-flags">
+                  {r.stale && <span className="badge warn" data-testid="translation-stale">{t('ai.review.stale')}</span>}
+                  {r.cps !== null && <span className="badge warn" data-testid="translation-fast">{t('ai.review.fast')} · <bdi>{r.cps}</bdi> {t('ai.review.cps')}</span>}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small-text">{t('ai.review.editNote')}</p>
+      <section className="translation-open" data-testid="translation-open" data-count={open.length} aria-label={t('ai.review.before')}>
+        <h4>{t('ai.review.before')}</h4>
+        {open.length === 0 ? <p className="muted">{t('ai.review.beforeNone')}</p> : (
+          <ul>
+            {open.map((o, i) => {
+              const r = o.id ? rows.find((x) => x.id === o.id) : undefined;
+              const what = o.kind === 'unreviewed' ? t('ai.review.unreviewed') : o.kind === 'stale' ? t('ai.review.stale') : o.kind === 'fast' ? t('ai.review.fast') : t('ai.review.missing');
+              return (
+                <li key={`${o.kind}:${o.id ?? i}`} data-kind={o.kind}>
+                  {what}{r ? <>: <bdi lang={from} dir={langDir(from)}>{short(r.master)}</bdi>{o.kind === 'fast' && r.cps !== null ? <> (<bdi>{r.cps}</bdi> {t('ai.review.cps')})</> : null}</> : null}
+                  {r && <> <button type="button" className="ghost small" onClick={() => goTo(r.id)} data-testid="translation-goto">{t('ai.review.show')}</button></>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </section>
+  );
+}
+function TranslationEditor({ initial, dir, lang, onSave, onCancel }: { initial: string; dir: 'rtl' | 'ltr'; lang: string; onSave: (text: string) => void; onCancel: () => void }) {
+  const { t } = useEditorState();
+  const [text, setText] = useState(initial);
+  return (
+    <div className="fields">
+      <textarea dir={dir} lang={lang} rows={2} value={text} autoFocus aria-label={t('ai.review.edit')} data-testid="translation-textarea" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }} />
+      <div className="row">
+        <button type="button" className="primary" disabled={!text.trim() || text === initial} onClick={() => onSave(text.trim())} data-testid="translation-save">{t('ai.review.save')}</button>
+        <button type="button" className="ghost" onClick={onCancel}>{t('ai.review.cancel')}</button>
+      </div>
+    </div>
   );
 }
 

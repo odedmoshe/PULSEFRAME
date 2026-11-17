@@ -15,6 +15,7 @@ import { MediaPool } from '../media.ts';
 import { Player } from '../player.ts';
 import { timelineDerivatives } from '../clipVisuals.cache.ts';
 import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
+import { aiApi, type ApplyMode, type RunSource } from './api.ts';
 import { addAssetArgs, dropAssetArgs } from './placement.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
@@ -69,6 +70,8 @@ export interface EditorState {
   clipboard: string[];
   /** Clips marked by Cut; they move on the next Paste (nothing is committed until then). */
   cutPending: string[];
+  /** Who this browser session is, as the server says (GET /session): the owner's session is `user:…`. null until known. */
+  actor: string | null;
 }
 
 const SAFE_KEY = 'pf.safearea.v1';
@@ -89,7 +92,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
-    provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [],
+    provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [], actor: null,
   };
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
@@ -188,7 +191,7 @@ export class Editor {
   /** Boot: session → project → fonts → player → live revision stream. */
   async boot(canvas: HTMLCanvasElement) {
     this.setLang(this.state.lang);
-    try { await api.session(); } catch (e) { throw e instanceof ApiFailure && e.code === 'owner_key_required' ? new Error(this.t('boot.ownerKey')) : e; }
+    try { const who = await api.session(); this.set({ actor: typeof who?.actor === 'string' ? who.actor : null }); } catch (e) { throw e instanceof ApiFailure && e.code === 'owner_key_required' ? new Error(this.t('boot.ownerKey')) : e; }
     await ensureFonts();
     void initGpu().then((g) => { this.set({ gpu: g }); if (this.player && !this.player.playing) this.player.seek(this.player.frame); }); // not awaited: the editor works without it; GPU effects appear once it is ready
     let id = new URLSearchParams(location.search).get('project');
@@ -436,15 +439,30 @@ export class Editor {
    * Starts a capability run and returns its job id. The job is recorded as queued unless its first event has already come in
    * (the event stream can be quicker than the answer to the request). A refusal is thrown to the caller, who says it in place.
    */
-  async runCapability(capabilityId: string, params: Record<string, unknown> = {}): Promise<string | null> {
+  async runCapability(capabilityId: string, params: Record<string, unknown> = {}, how: { source?: RunSource; apply?: ApplyMode; confirmLongRun?: boolean } = {}): Promise<string | null> {
     const { doc } = this.state;
     if (!doc) return null;
-    const { jobId } = await api.runCapability(doc.id, capabilityId, params);
+    // ADR-0017: what the tool reads (source), where the result goes (apply) and the long-run confirmation go with the run, as over REST and MCP.
+    const { jobId } = how.source || how.apply || how.confirmLongRun ? await aiApi.run(doc.id, capabilityId, { params, ...how }) : await api.runCapability(doc.id, capabilityId, params);
     if (!this.state.capJobs[jobId]) {
       const queued: JobEvent = { id: jobId, type: 'capability', status: 'queued', stage: null, output: null, error: null };
       this.set({ capJob: queued, capJobs: rememberJob(this.state.capJobs, queued) });
     }
     return jobId;
+  }
+
+  /** Read the capabilities and their setup states again (a card's «בדוק שוב»). A failed read keeps what is shown and is rethrown. */
+  async refreshCapabilities(): Promise<void> {
+    const provider = await api.capabilities();
+    this.set({ provider, providerError: null });
+  }
+  /** True when this browser is the owner's session (only the owner marks a translation reviewed; the server checks it again). */
+  get isOwner(): boolean { return !!this.state.actor?.startsWith('user:'); }
+  /** The owner's review mark on a machine translation (ADR-0017). The server refuses it for anyone but the owner's session. */
+  async reviewTranslation(variantId: string, review: 'reviewed' | 'needed'): Promise<boolean> {
+    const d = this.state.doc;
+    if (!d) return false;
+    try { await aiApi.reviewTranslation(d.id, variantId, review); await this.load(d.id); return true; } catch (e) { this.fail(e); return false; }
   }
 
   // ---------- editing helpers used by commands and panels ----------
