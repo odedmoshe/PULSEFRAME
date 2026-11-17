@@ -394,7 +394,9 @@ async function work(store: Store, jobId: string, deps: TrackingDeps, signal: Abo
   for (let f = lo; f < hi; f++) {
     const a = anchors.get(f);
     let r: Rec | null;
-    if (a) r = { cx: a.cx, cy: a.cy, sPm: a.sPm, q: 100, st: ST.manual };
+    // an anchor frame goes out as a machine sample at the anchor: attach_motion_track refuses samples marked manual and keeps
+    // the track's hand-placed sample there (the track is unchanged since the job read it, checked below)
+    if (a) r = { cx: a.cx, cy: a.cy, sPm: a.sPm, q: 100, st: ST.tracked };
     else {
       const fa = fwd[f - from] ?? null, ba = bwd[f - from] ?? null;
       if (fa && ba) {

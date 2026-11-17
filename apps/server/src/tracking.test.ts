@@ -37,7 +37,7 @@ vi.mock('@pulseframe/core', async (importOriginal) => {
   return { ...real, trackSummary };
 });
 
-import { defineOp, getOp, ST, TRACKER_METHOD, TrackOpArgs, TrackRunBody, type MotionTrack } from '@pulseframe/core';
+import { defineOp, getOp, OpError, ST, TRACKER_METHOD, TrackOpArgs, TrackRunBody, type MotionTrack } from '@pulseframe/core';
 import { generateBarcodeFixture, readBarcodeChannel } from '../../../packages/fixtures/src/index.ts';
 import { heavy } from './analysis.ts';
 import { Auth } from './auth.ts';
@@ -58,12 +58,14 @@ import type { FrameSource, GreyFrame, ReadFrames } from './vision/types.ts';
 /**
  * LABELLED TEST DOUBLE until W1 merges (tracking wave): the internal op attach_motion_track as its contract
  * (TrackOpArgs.attach_motion_track) describes it — replaces samples [from, from+n) except hand-placed ones, extends the range
- * and fills gaps with unknown at the nearest known position, records the origin. Registered only while the real op is absent.
+ * and fills gaps with unknown at the nearest known position, records the origin — and, as W1's op does, refuses measured
+ * samples marked manual (invalid_args). Registered only while the real op is absent.
  */
 if (!getOp('attach_motion_track'))
   defineOp({
     name: 'attach_motion_track', version: 1, internal: true, description: 'TEST DOUBLE (tracking.test.ts) of the internal op attach_motion_track', args: TrackOpArgs.attach_motion_track,
     apply(d, a, ctx) {
+      if (a.st.includes(ST.manual)) throw new OpError('invalid_args', 'measured samples cannot be marked manual', {});
       const t = d.motionTracks[a.motionTrackId]!;
       const lo = Math.min(t.from, a.from), hi = Math.max(t.from + t.x.length, a.from + a.x.length);
       const out = { x: [] as number[], y: [] as number[], s: [] as number[], q: [] as number[], st: [] as number[] };
