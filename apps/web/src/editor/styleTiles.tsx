@@ -30,6 +30,7 @@ function useDimFrame(tw: number, th: number): Snap | null | undefined {
   useEffect(() => {
     let dead = false;
     let made: ImageBitmap[] = [];
+    let published = false;
     const timer = window.setTimeout(() => void (async () => {
       let preview = document.querySelector<HTMLCanvasElement>('canvas[data-testid=preview]');
       // The preview may not have drawn its first picture yet (the editor is still starting): look again a few times, and take the
@@ -57,11 +58,14 @@ function useDimFrame(tw: number, th: number): Snap | null | undefined {
         const dim = await createImageBitmap(c);
         made = [bitmap, dim];
         if (dead) { made.forEach((b) => b.close()); return; }
+        published = true;
         setSnap({ bitmap, dim, key: `${state.doc?.id}:${state.revision}:${frame}:${tw}x${th}` });
       } catch { if (!dead) setSnap(null); }
     })(), editor.player?.playing ? 1500 : 250); // a moving picture is not re-taken at every frame
-    return () => { dead = true; window.clearTimeout(timer); made.forEach((b) => b.close()); };
+    // a snapshot already on show is closed by the effect below once the next one replaces it, never while the tiles may draw it
+    return () => { dead = true; window.clearTimeout(timer); if (!published) made.forEach((b) => b.close()); };
   }, [tw, th, state.revision, frame]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (snap) { snap.bitmap.close(); snap.dim.close(); } }, [snap]);
   return snap;
 }
 
@@ -120,7 +124,7 @@ export function StyleTiles({ items, value, onPick, label, testId, disabledReason
           if (r.missing.length || r.unavailableEffects.length) { poster(c); continue; }
           done.add(it.id); setDrawn(new Set(done));
           void createImageBitmap(c).then((bm) => put(ck, bm)).catch(() => undefined);
-        } catch { poster(c); /* this tile keeps its poster */ }
+        } catch { if (stop) return; /* a replaced snapshot may be closed under a draw in flight */ poster(c); /* this tile keeps its poster */ }
         await new Promise((r) => setTimeout(r));
       }
     })();
