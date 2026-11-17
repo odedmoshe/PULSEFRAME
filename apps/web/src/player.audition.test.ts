@@ -17,7 +17,7 @@ vi.mock('@pulseframe/engine', async (importOriginal) => {
   const sr = fake.SR;
   const clip = (clipId: string): PlannedAudioClip => ({
     clipId, trackId: 't', assetId: 'a', at: 0, length: 10 * sr, source: 0, speed: 1, gain: 1, pan: 0, fade: [{ s: 0, g: 1 }], duck: [{ s: 0, g: 1 }],
-    voice: { chain: [{ id: 'x', type: 'voice.telephone', version: 1, stage: 3, params: {}, seed: 1 }] as unknown as NonNullable<PlannedAudioClip['voice']>['chain'], sourceIn: { value: '0', timescale: 1 }, sourceEnd: { value: '10', timescale: 1 }, speed: { num: 1, den: 1 }, reverse: false, sourceRate: sr, warmWindow: 0, warmRing: 0, tail: 0 },
+    voice: { chain: [{ id: 'x', type: 'voice.telephone', version: 1, stage: 3, params: {}, seed: 1 }] as unknown as NonNullable<PlannedAudioClip['voice']>['chain'], sourceIn: { value: '0', timescale: 1 }, sourceEnd: { value: '10', timescale: 1 }, speed: { num: 1, den: 1 }, reverse: false, sourceRate: sr, warmWindow: 0, warmRing: 0, aheadWindow: 0, tail: 0 },
   });
   const plan: AudioPlan = { sampleRate: sr, totalSamples: 10 * sr, clips: [clip('c1'), clip('c2')], loudness: null, cutTails: [], missingFx: [] };
   return {

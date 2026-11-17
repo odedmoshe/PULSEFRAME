@@ -38,6 +38,10 @@ describe('Hebrew wording of common refusals', () => {
     const blurId = blurred.results[0]!.output!.effectId as string;
     const stamped = tx(d, [{ op: 'add_effect', args: { clipId: a, type: 'stylize.date-stamp' } }]);
     const stampId = stamped.results[0]!.output!.effectId as string;
+    // a colour grade whose exposure is animated (colour match writes fixed values, ADR-0014)
+    const graded = tx(d, [{ op: 'set_colour_grade', args: { clipId: a, params: { exposure: 0.2 } } }]);
+    const gradeId = graded.results[0]!.output!.effectId as string;
+    const animatedGrade = tx(graded.doc, [{ op: 'set_effect_keyframe', args: { clipId: a, effectId: gradeId, param: 'exposure', time: f(0), value: 0 } }]).doc;
     const cases: [string, ProjectDocument, OpCall[]][] = [
       ['a move onto another clip', d, [{ op: 'move_clip', args: { clipId: a, start: f(30), includeLinked: false } }]],
       ['an edit on a locked track', locked, [{ op: 'delete_clip', args: { clipId: a } }]],
@@ -68,6 +72,7 @@ describe('Hebrew wording of common refusals', () => {
       ['a date stamp added with letters in its text', d, [{ op: 'add_effect', args: { clipId: a, type: 'stylize.date-stamp', params: { text: 'MAY 5' } } }]],
       ['a date stamp text changed to letters', stamped.doc, [{ op: 'update_effect', args: { clipId: a, effectId: stampId, params: { text: 'abc' } } }]],
       ['an effect value outside its range', d, [{ op: 'add_effect', args: { clipId: a, type: 'blur.gaussian', params: { radius: 5 } } }]],
+      ['a fixed colour value over an animated one', animatedGrade, [{ op: 'set_colour_grade', args: { clipId: a, params: { exposure: 0.5 } } }]],
     ];
     void bSound;
     const matched = new Set<number>();

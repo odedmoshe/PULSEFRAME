@@ -1,11 +1,14 @@
 /**
- * Registers every wave-1 sound-effect kernel (ADR-0010) and holds the fixed test harness that the golden hashes, the browser
+ * Registers every sound-effect kernel (ADR-0010; the cleanup kernels, ADR-0013) and holds the fixed test harness that the golden hashes, the browser
  * self-test (window.__pfFxRun) and the preview proof share, so Node and Chromium run exactly the same input through the same code.
  */
 import { findAudioEffect, type AudioFxParams } from '@pulseframe/core';
 import { kernelFor, registerKernel } from '../registry.ts';
 import { hash32, uniform } from '../noise.ts';
 import type { BoundedKernel } from '../design.ts';
+import { dehum } from './dehum.ts';
+import { denoise } from './denoise.ts';
+import { speech } from './speech.ts';
 import { bassboost } from './bassboost.ts';
 import { telephone } from './telephone.ts';
 import { megaphone } from './megaphone.ts';
@@ -16,8 +19,8 @@ import { echo } from './echo.ts';
 import { reverb } from './reverb.ts';
 import { width } from './width.ts';
 
-/** The nine wave-1 kernels, in registry order. */
-export const FX_KERNELS: readonly BoundedKernel[] = [bassboost, telephone, megaphone, radio, robot, bitcrush, echo, reverb, width];
+/** Every kernel, in registry order: the three cleanup kernels (ADR-0013) first, then the nine wave-1 effects (ADR-0010). */
+export const FX_KERNELS: readonly BoundedKernel[] = [dehum, denoise, speech, bassboost, telephone, megaphone, radio, robot, bitcrush, echo, reverb, width];
 for (const k of FX_KERNELS) registerKernel(k);
 
 export const FX_FIXTURE_SECONDS = 3;
@@ -49,21 +52,37 @@ export function fxFixture(sampleRate = 48000): Float32Array {
   return out;
 }
 
-export interface RenderFxOptions { sampleRate?: number; /** timeline sample of the first frame */ at?: number; seed?: number; /** frames per process() call */ block?: number | ((i: number) => number); /** clip-local index of the first frame */ n0?: number }
+export interface RenderFxOptions {
+  sampleRate?: number;
+  /** timeline sample of clip-local 0 (FxContext.at) */
+  at?: number;
+  seed?: number;
+  /** frames per process() call */
+  block?: number | ((i: number) => number);
+  /** clip-local index of the first frame */
+  n0?: number;
+  /** FxContext.speed; default 1 */
+  speed?: number;
+  /** Default true: output aligned to the input. reach(p, sr, speed).ahead frames of silence are appended and the first `ahead`
+   *  output frames dropped (ADR-0013). false: the raw in-place output, delayed by `ahead`. */
+  align?: boolean;
+}
 /** Run one kernel (registry version) over a copy of `input` in blocks, as a voice would; returns the processed copy. */
 export function renderFx(type: string, params: AudioFxParams, input: Float32Array, opts: RenderFxOptions = {}): Float32Array {
   const def = findAudioEffect(type);
   if (!def) throw new Error(`unknown audio effect ${type}`);
   const k = kernelFor(type, def.version);
   if (!k) throw new Error(`no kernel for ${type}@${def.version}`);
-  const sampleRate = opts.sampleRate ?? 48000, frames = input.length >> 1, n0 = opts.n0 ?? 0;
-  const proc = k.create(params, { sampleRate, at: opts.at ?? 0, length: frames, seed: opts.seed ?? FX_FIXTURE_SEED });
-  const buf = input.slice();
-  const block = opts.block ?? 1024;
-  for (let i = 0, b = 0; i < frames; b++) {
-    const n = Math.max(1, Math.min(frames - i, typeof block === 'number' ? block : block(b)));
+  const sampleRate = opts.sampleRate ?? 48000, frames = input.length >> 1, n0 = opts.n0 ?? 0, speed = opts.speed ?? 1;
+  const ahead = opts.align === false ? 0 : (k.reach(params, sampleRate, speed).ahead ?? 0);
+  const proc = k.create(params, { sampleRate, at: opts.at ?? 0, length: frames, seed: opts.seed ?? FX_FIXTURE_SEED, speed });
+  let buf: Float32Array;
+  if (ahead > 0) { buf = new Float32Array((frames + ahead) * 2); buf.set(input); } else buf = input.slice();
+  const total = frames + ahead, block = opts.block ?? 1024;
+  for (let i = 0, b = 0; i < total; b++) {
+    const n = Math.max(1, Math.min(total - i, typeof block === 'number' ? block : block(b)));
     proc.process(buf.subarray(i * 2, (i + n) * 2), n, n0 + i);
     i += n;
   }
-  return buf;
+  return ahead > 0 ? buf.slice(ahead * 2) : buf;
 }

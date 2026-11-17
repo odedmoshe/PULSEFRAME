@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, OpError, type Asset, type OpCall } from '@pulseframe/core';
+import { applyTransaction, findClip, OpError, type Asset, type OpCall } from '@pulseframe/core';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
@@ -32,6 +32,8 @@ import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import type { Presence } from './presence.ts';
 import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
+import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
+import { ColourMatchBody, matchColour } from './colourMatch.ts';
 
 const TxBody = z
   .object({
@@ -66,6 +68,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech) {
+  setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
   const speech = speechService ?? new Speech(store, cfg);
   const app = new Hono<Env>();
@@ -241,6 +244,19 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // background=true: a durable job (poll get job); the result is the same object, as the job's output. Use it for long recordings.
     if (background) { const j = startMeasurementJob(store, p, c.req.param('id'), 'silences', b); return c.json({ jobId: j.id, status: j.status }, 202); }
     return c.json(await findSilences(store, c.req.param('id'), b));
+  });
+  // voice cleanup (ADR-0013) and colour match (ADR-0014): read-only measurements that return candidate ops, in the pattern above
+  app.post('/api/v1/projects/:id/analysis/voice', async (c) => {
+    const p = need(c, 'observe');
+    const { background, ...b } = await body(c, VoiceMeasureBody.extend({ background: z.boolean().optional() }).strict());
+    if (background) { const j = startMeasurementJob(store, p, c.req.param('id'), 'voice', b); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await measureVoiceCheck(store, c.req.param('id'), b));
+  });
+  app.post('/api/v1/projects/:id/analysis/colour-match', async (c) => {
+    const p = need(c, 'observe');
+    const { background, ...b } = await body(c, ColourMatchBody.extend({ background: z.boolean().optional() }).strict());
+    if (background) { const j = startMeasurementJob(store, p, c.req.param('id'), 'colour', b); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await matchColour(store, exporter, c.req.param('id'), b));
   });
   app.post('/api/v1/projects/:id/assets/:assetId/analyze', async (c) => {
     const p = need(c, 'edit');
@@ -839,10 +855,19 @@ export function startAnalysisJob(store: Store, gov: Governance, principal: Princ
   void runAnalysisJob(store, job.id);
   return store.getJob(job.id);
 }
-/** Start a silence or loudness measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
-export function startMeasurementJob(store: Store, principal: Principal, projectId: string, kind: 'silences' | 'loudness', options: unknown): JobRow {
+/** The exporter colour-match measurements render their stills with (set by createApp, so recovered jobs have it too). */
+let measurementExporter: Exporter | null = null;
+export function setMeasurementExporter(exporter: Exporter): void { measurementExporter = exporter; }
+const exporterForMeasurement = (): Exporter => {
+  if (!measurementExporter) throw new ApiError(503, 'unavailable', 'colour match needs the renderer, which is not running in this process');
+  return measurementExporter;
+};
+export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour';
+/** Start a silence, loudness, voice (ADR-0013) or colour-match (ADR-0014) measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
+export function startMeasurementJob(store: Store, principal: Principal, projectId: string, kind: MeasurementKind, options: unknown): JobRow {
   const p = store.getProject(projectId); // 404 before any job exists
   if (kind === 'silences' && !p.doc.assets[(options as { assetId: string }).assetId]) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
+  if (kind === 'voice' && !findClip(p.doc, (options as { clipId: string }).clipId)) throw new ApiError(404, 'not_found', 'clip not found in this project', { clipId: (options as { clipId: string }).clipId });
   const job = store.createJob(projectId, 'analysis', principal.actor, { kind, options, projectRevision: p.revision });
   void runAnalysisJob(store, job.id);
   return store.getJob(job.id);
@@ -852,9 +877,13 @@ async function runAnalysisJob(store: Store, jobId: string) {
   store.updateJob(jobId, { status: 'running', stage: 'measuring' });
   const j = store.getJob(jobId);
   try {
-    // Measurements that attach nothing to the project (silence candidates, programme loudness): the result is the job's output.
-    if (j.input.kind === 'silences' || j.input.kind === 'loudness') {
-      const result = j.input.kind === 'silences' ? await findSilences(store, j.projectId, j.input.options) : await programmeLoudness(store, j.projectId);
+    // Measurements that attach nothing to the project (silence candidates, programme loudness, voice and colour checks): the result is the job's output.
+    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour') {
+      const kind = j.input.kind as MeasurementKind;
+      const result = kind === 'silences' ? await findSilences(store, j.projectId, j.input.options)
+        : kind === 'loudness' ? await programmeLoudness(store, j.projectId)
+        : kind === 'voice' ? await measureVoiceCheck(store, j.projectId, VoiceMeasureBody.parse(j.input.options))
+        : await matchColour(store, exporterForMeasurement(), j.projectId, ColourMatchBody.parse(j.input.options));
       if (store.getJob(jobId).status === 'cancel-requested') { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled while measuring; the result was discarded' } }); return; }
       store.updateJob(jobId, { status: 'succeeded', stage: null, output: { kind: j.input.kind, result } });
       return;

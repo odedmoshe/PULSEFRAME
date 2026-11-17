@@ -1,7 +1,9 @@
 /**
  * The voice runtime (ADR-0010 D3) with TEST kernels registered here (labelled `test.*`; the real kernels are tested in kernels.test.ts).
  * The test kernels cover the shapes that matter for seeking: a decaying IIR window stage, a finite-memory sample-and-hold anchored
- * to the timeline with seeded noise, a decaying feedback comb as the ring stage, and a stateless stereo stage.
+ * to the timeline with seeded noise, a decaying feedback comb as the ring stage, and a stateless stereo stage; and, for the
+ * look-ahead of ADR-0013, centred moving averages that read ahead (test.ahead*) and a pure delay whose look-ahead follows the
+ * clip speed (test.speedahead).
  */
 import { describe, expect, it } from 'vitest';
 import { mixClip, type PlannedAudioClip, type PlannedFx } from '../audio.ts';
@@ -34,9 +36,42 @@ const comb: FxKernel = { type: 'test.comb', version: 1, stage: 4, reach: () => (
 const width: FxKernel = { type: 'test.width', version: 1, stage: 6, reach: () => ({ warm: 0, tail: 0 }), create: () => ({ process(buf, frames) { for (let f = 0; f < frames; f++) { const m = (buf[f * 2]! + buf[f * 2 + 1]!) / 2, s = (0.5 * (buf[f * 2]! - buf[f * 2 + 1]!)) / 2; buf[f * 2] = m + s; buf[f * 2 + 1] = m - s; } } }) };
 /** test.unity: a ring stage that changes nothing. */
 const unity: FxKernel = { type: 'test.unity', version: 1, stage: 4, reach: () => ({ warm: 0, tail: 0 }), create: () => ({ process() {} }) };
-for (const k of [lp, hold, comb, width, unity]) registerKernel(k);
+/**
+ * test.ahead<a>: centred moving average over [n − a, n + a] (finite memory: warm a, look-ahead a). It receives the input of
+ * [n0, n0 + frames) and writes the output of [n0 − a, n0 + frames − a) in place; the sum runs oldest to newest, so its bits do not
+ * depend on where the stream started.
+ */
+const aheadKernel = (a: number): FxKernel => ({ type: `test.ahead${a}`, version: 1, stage: 3, reach: () => ({ warm: a, tail: 0, ahead: a }), create: () => {
+  const L = 2 * a + 1, ring = new Float64Array(L * 2);
+  let pos = 0;
+  return { process(buf, frames) {
+    for (let f = 0; f < frames; f++) {
+      ring[pos * 2] = buf[f * 2]!; ring[pos * 2 + 1] = buf[f * 2 + 1]!; pos = (pos + 1) % L;
+      let l = 0, r = 0;
+      for (let k = 0; k < L; k++) { const j = ((pos + k) % L) * 2; l += ring[j]!; r += ring[j + 1]!; }
+      buf[f * 2] = l / L; buf[f * 2 + 1] = r / L;
+    }
+  } };
+} });
+const ahead37 = aheadKernel(37), ahead5 = aheadKernel(5);
+/** test.speedahead: a pure delay of round(4·speed) samples declared as look-ahead, so the voice must hand back the input unchanged; records the speed it was created with. */
+const speedSeen: number[] = [];
+const speedAhead: FxKernel = { type: 'test.speedahead', version: 1, stage: 2, reach: (_p, _sr, speed = 1) => ({ warm: 0, tail: 0, ahead: Math.round(4 * speed) }), create: (_p, ctx) => {
+  speedSeen.push(ctx.speed);
+  const d = Math.round(4 * ctx.speed), line = new Float64Array(Math.max(1, d) * 2);
+  let pos = 0;
+  return { process(buf, frames) {
+    if (d === 0) return;
+    for (let f = 0; f < frames; f++) { const l = line[pos * 2]!, r = line[pos * 2 + 1]!; line[pos * 2] = buf[f * 2]!; line[pos * 2 + 1] = buf[f * 2 + 1]!; pos = (pos + 1) % d; buf[f * 2] = l; buf[f * 2 + 1] = r; }
+  } };
+} };
+/** test.ringahead: a ring stage that (wrongly) declares look-ahead. */
+const ringAhead: FxKernel = { type: 'test.ringahead', version: 1, stage: 4, reach: () => ({ warm: 0, tail: 0, ahead: 3 }), create: () => ({ process() {} }) };
+for (const k of [lp, hold, comb, width, unity, ahead37, ahead5, speedAhead, ringAhead]) registerKernel(k);
 const fx = (k: FxKernel, seed = 0): PlannedFx => ({ id: `fx_${k.type}`, type: k.type, version: k.version, stage: k.stage, params: {}, seed });
 const FULL = [fx(lp), fx(hold, 77), fx(comb), fx(width)];
+/** FULL with two look-ahead stages among the window stages (one before the timeline-anchored hold, one after it). */
+const AHEAD = [fx(ahead37), fx(lp), fx(hold, 77), fx(ahead5), fx(comb), fx(width)];
 
 const SR = 48000, FILE = 48000 * 3; // the source file: 3 s, silence outside
 /** A rich native signal: two tones, a click every 997 samples and a little seeded noise; L and R differ. */
@@ -46,8 +81,8 @@ const rt = (value: number, timescale: number) => ({ value: String(value), timesc
 interface Cfg { at: number; length: number; sourceIn: [number, number]; sourceRate?: number; speed?: [number, number]; reverse?: boolean; chain?: PlannedFx[]; fadeIn?: number; fadeOut?: number; tail?: number; cutFrom?: number }
 function clipOf(c: Cfg): PlannedAudioClip {
   const chain = c.chain ?? FULL;
-  const reach = chainReach(chain, SR);
   const speed = c.speed ?? [1, 1];
+  const reach = chainReach(chain, SR, speed[0] / speed[1]);
   const tail = c.tail ?? reach.tail;
   const srcEnd = (c.sourceIn[0] * speed[1] * SR + c.length * speed[0] * c.sourceIn[1]) ; // sourceIn + length·speed/SR, over sourceIn[1]·speed[1]·SR
   const fin = c.fadeIn ?? 300, fout = c.fadeOut ?? 400;
@@ -56,7 +91,7 @@ function clipOf(c: Cfg): PlannedAudioClip {
     fade: [{ s: 0, g: fin ? 0 : 1 }, ...(fin ? [{ s: fin, g: 1 }] : []), ...(fout ? [{ s: c.length - fout, g: 1 }] : []), { s: c.length, g: fout ? 0 : 1 }],
     vol: [{ s: 0, g: 1 }, { s: Math.round(c.length / 3), g: 0.5 }, { s: c.length, g: 0.75 }],
     duck: [{ s: 0, g: 1 }, { s: 2000, g: 1 }, { s: 2600, g: 0.3 }, { s: c.length + 500, g: 0.3 }, { s: c.length + tail, g: 0.9 }],
-    voice: { chain, sourceIn: rt(c.sourceIn[0], c.sourceIn[1]), sourceEnd: rt(srcEnd, c.sourceIn[1] * speed[1] * SR), speed: { num: speed[0], den: speed[1] }, reverse: !!c.reverse, sourceRate: c.sourceRate ?? SR, warmWindow: reach.warmWindow, warmRing: reach.warmRing, tail, ...(c.cutFrom !== undefined ? { cutFrom: c.cutFrom } : {}) },
+    voice: { chain, sourceIn: rt(c.sourceIn[0], c.sourceIn[1]), sourceEnd: rt(srcEnd, c.sourceIn[1] * speed[1] * SR), speed: { num: speed[0], den: speed[1] }, reverse: !!c.reverse, sourceRate: c.sourceRate ?? SR, warmWindow: reach.warmWindow, warmRing: reach.warmRing, aheadWindow: reach.aheadWindow, tail, ...(c.cutFrom !== undefined ? { cutFrom: c.cutFrom } : {}) },
   };
 }
 /** The playing-order source P[first, last) of a voice, from the native signal (sample j of the file at its own rate). */
@@ -87,6 +122,9 @@ const CONFIGS: Record<string, Cfg> = {
   '44.1 kHz source': { at: 4800, length: 30000, sourceIn: [12, 10], sourceRate: 44100 },
   'speed 3/2, reversed': { at: 4800, length: 30000, sourceIn: [11, 10], speed: [3, 2], reverse: true },
   'fractional start, speed 1': { at: 4799, length: 30000, sourceIn: [1001, 900] },
+  'look-ahead (ADR-0013), same rate': { at: 4800, length: 30000, sourceIn: [12, 10], chain: AHEAD },
+  'look-ahead, 44.1 kHz source': { at: 4800, length: 30000, sourceIn: [12, 10], sourceRate: 44100, chain: AHEAD },
+  'look-ahead, speed 3/2, reversed': { at: 4800, length: 30000, sourceIn: [11, 10], speed: [3, 2], reverse: true, chain: AHEAD },
 };
 
 describe('clip voice runtime (ADR-0010 D3)', () => {
@@ -139,13 +177,13 @@ describe('clip voice runtime (ADR-0010 D3)', () => {
     });
   }
 
-  it('a cut clip: the two parts (each with its own warm-up and tail) sum to the whole within 2^-17 of the peak', () => {
+  it('a cut clip: the two parts (each with its own warm-up and tail) sum to the whole within 2^-17 of the peak, also with look-ahead stages', () => {
     const L = 30000, c = 13001, at = 4800;
-    for (const sourceRate of [SR, 44100]) {
-      const whole = clipOf({ at, length: L, sourceIn: [12, 10], sourceRate });
+    for (const [sourceRate, chain] of [[SR, FULL], [44100, FULL], [SR, AHEAD], [44100, AHEAD]] as const) {
+      const whole = clipOf({ at, length: L, sourceIn: [12, 10], sourceRate, chain });
       // the parts: fades on the outer edges only, volume keys and ducking sliced, source of the second part starts c samples later
-      const a = clipOf({ at, length: c, sourceIn: [12, 10], sourceRate, fadeOut: 0 });
-      const b = clipOf({ at: at + c, length: L - c, sourceIn: [12 * SR + 10 * c, 10 * SR], sourceRate, fadeIn: 0 });
+      const a = clipOf({ at, length: c, sourceIn: [12, 10], sourceRate, fadeOut: 0, chain });
+      const b = clipOf({ at: at + c, length: L - c, sourceIn: [12 * SR + 10 * c, 10 * SR], sourceRate, fadeIn: 0, chain });
       a.fade = [{ s: 0, g: 0 }, { s: 300, g: 1 }, { s: c, g: 1 }];
       b.fade = [{ s: 0, g: 1 }, { s: L - c - 400, g: 1 }, { s: L - c, g: 0 }];
       const slice = (env: { s: number; g: number }[], from: number, len: number) => { const g = (s: number) => { for (let i = 1; i < env.length; i++) if (s <= env[i]!.s) { const p = env[i - 1]!, q = env[i]!; return q.s === p.s ? q.g : p.g + ((q.g - p.g) * (s - p.s)) / (q.s - p.s); } return env.at(-1)!.g; }; return [{ s: 0, g: g(from) }, ...env.filter((p) => p.s > from && p.s < from + len).map((p) => ({ s: p.s - from, g: p.g })), { s: len, g: g(from + len) }]; };
@@ -158,7 +196,7 @@ describe('clip voice runtime (ADR-0010 D3)', () => {
       const peak = peakOf(w);
       let worst = 0;
       for (let i = 0; i < w.length; i++) worst = Math.max(worst, Math.abs(sum[i]! - w[i]!));
-      expect(worst, `source rate ${sourceRate}`).toBeLessThanOrEqual(2 ** -17 * peak);
+      expect(worst, `source rate ${sourceRate}, ${chain.length} effects`).toBeLessThanOrEqual(2 ** -17 * peak);
       expect(pa.length).toBe((c + a.voice!.tail) * 2); // the first part rings on past the cut
     }
   });
@@ -186,6 +224,52 @@ describe('clip voice runtime (ADR-0010 D3)', () => {
     for (let i = 0; i < clip.length * 2; i++) worst = Math.max(worst, Math.abs(y[i]! - ref[clip.at * 2 + i]!));
     expect(worst).toBeLessThan(1e-6);
     expect(peakOf(y)).toBeGreaterThan(0.1);
+  });
+
+  it('look-ahead (ADR-0013): chainReach counts it in warmWindow and aheadWindow, and refuses it in a ring stage', () => {
+    const r = chainReach(AHEAD, SR);
+    expect(r.aheadWindow).toBe(42);
+    expect(r.warmWindow).toBe(37 + 37 + ceilLog(0.95) + 4 + 5 + 5);
+    expect(chainReach(FULL, SR).aheadWindow).toBe(0);
+    expect(() => chainReach([fx(lp), fx(ringAhead)], SR)).toThrow(/stages 1–3 only/);
+  });
+
+  it('look-ahead: the voice reads A samples more source (up to A past the clip end) and its output has no latency (centred average = direct computation)', () => {
+    const a = 37, clip = clipOf({ at: 4800, length: 30000, sourceIn: [12, 10], chain: [fx(ahead37)] });
+    clip.duck = [{ s: 0, g: 1 }, { s: 2000, g: 1 }, { s: 2600, g: 0.3 }, { s: clip.length, g: 0.3 }];
+    const whole = render(clip, 0, Infinity);
+    expect(whole.v.input).toEqual({ origin: timeMapOrigin({ ...clip.voice!, sourceRate: SR, planRate: SR }).origin, first: -a, last: clip.length + a, reverse: false });
+    // the window output a centred average of the real source around each sample (the source continues past the clip end)
+    const S = Math.round(1.2 * SR), L = 2 * a + 1;
+    const pcm = new Float32Array(clip.length * 2);
+    for (let i = 0; i < clip.length; i++) for (const ch of [0, 1]) { let sum = 0; for (let j = i - a; j <= i + a; j++) sum += Math.fround(native(S + j, ch)); pcm[i * 2 + ch] = sum / L; }
+    const ref = new Float32Array((clip.at + clip.length) * 2);
+    mixClip(ref, 0, clip, pcm, 0);
+    let worst = 0;
+    for (let i = 0; i < clip.length * 2; i++) worst = Math.max(worst, Math.abs(whole.out[i]! - ref[clip.at * 2 + i]!));
+    expect(worst).toBeLessThan(1e-6);
+    expect(peakOf(whole.out)).toBeGreaterThan(0.1);
+  });
+
+  it('speed reaches the kernels (FxContext.speed, reach(p, sr, speed)): a delay declared as look-ahead of round(4·speed) gives the identity mix at speeds 1 and 3/2', () => {
+    for (const speed of [[1, 1], [3, 2]] as [number, number][]) {
+      speedSeen.length = 0;
+      const plain = clipOf({ at: 4800, length: 20000, sourceIn: [12, 10], speed, chain: [fx(unity)] });
+      const delayed = clipOf({ at: 4800, length: 20000, sourceIn: [12, 10], speed, chain: [fx(speedAhead), fx(unity)] });
+      expect(delayed.voice!.aheadWindow).toBe(Math.round((4 * speed[0]) / speed[1]));
+      const a = render(plain, 0, Infinity).out, b = render(delayed, 0, Infinity).out;
+      expect(speedSeen).toEqual([speed[0] / speed[1]]);
+      expect(b.length).toBe(a.length);
+      let same = true;
+      for (let i = 0; i < a.length; i++) if (!Object.is(a[i], b[i])) { same = false; break; }
+      expect(same, `speed ${speed.join('/')}`).toBe(true);
+    }
+  });
+
+  it('look-ahead: a voice whose plan disagrees with its kernels about the look-ahead is refused, never misaligned', () => {
+    const clip = clipOf({ at: 4800, length: 20000, sourceIn: [12, 10], chain: [fx(ahead5)] });
+    clip.voice!.aheadWindow = 0;
+    expect(() => openClipVoice(clip, SR, SR, 0, Infinity)).toThrow(/look-ahead/);
   });
 
   it('fillPlayingOrder places decoded pieces of any size, forwards and reversed', () => {

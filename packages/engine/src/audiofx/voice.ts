@@ -10,6 +10,11 @@
  * Seek rule (ADR-0010 D3): ringStart = max(0, from − warmRing), windowStart = ringStart − warmWindow. Window stages read real
  * source before the clip start (silence outside the file). Work is done in blocks of BLOCK frames laid out from the first frame
  * computed, and a block is computed only once all of its input is there, so the output never depends on how the input is pushed.
+ *
+ * Look-ahead (ADR-0010 D4, ADR-0013): A = aheadWindow, the summed look-ahead of the window stages. The time map runs A samples
+ * ahead of the block (block slot f holds x[bs + f + A]); window kernel j is called with n0 = bs + S_j, S_j = its own look-ahead
+ * plus that of every later window kernel, so the last one hands back w[bs .. bs + w). A block waits for the input of x up to
+ * wHi − 1 + A, and the source is read up to A samples past the clip end. Net latency 0; with A = 0 nothing changes.
  */
 import type { PlannedAudioClip, EnvPoint } from '../audio.ts';
 import type { FxProcessor } from './kernel.ts';
@@ -102,18 +107,26 @@ export function openClipVoice(clip: PlannedAudioClip, planRate: number, sourceRa
   const needWindow = ringStart < windowEnd;
   const procStart = needWindow ? windowStart : ringStart;
 
-  const map = new SourceTimeMap(timeMapOrigin({ sourceIn: v.sourceIn, sourceEnd: v.sourceEnd, speed: v.speed, reverse: v.reverse, sourceRate, planRate }), procStart);
+  const A = v.aheadWindow, speed = v.speed.num / v.speed.den;
+  const map = new SourceTimeMap(timeMapOrigin({ sourceIn: v.sourceIn, sourceEnd: v.sourceEnd, speed: v.speed, reverse: v.reverse, sourceRate, planRate }), procStart + A);
   const origin = map.map.origin;
-  const first = needWindow ? map.firstInput(windowStart) : 0;
-  const last = needWindow ? map.endInput(windowEnd - 1) : first;
+  const first = needWindow ? map.firstInput(windowStart + A) : 0;
+  const last = needWindow ? map.endInput(windowEnd - 1 + A) : first;
   const input: VoiceInput = { origin, first, last, reverse: v.reverse };
 
-  const make = (stageWindow: boolean): FxProcessor[] => v.chain.filter((fx) => (fx.stage <= 3) === stageWindow).map((fx) => {
+  const kernelOf = (fx: (typeof v.chain)[number]) => {
     const k = kernelFor(fx.type, fx.version);
     if (!k) throw new Error(`openClipVoice: no kernel for ${fx.type}@${fx.version}`);
-    return k.create(fx.params, { sampleRate: planRate, at: clip.at, length, seed: fx.seed });
-  });
+    return k;
+  };
+  const make = (stageWindow: boolean): FxProcessor[] => v.chain.filter((fx) => (fx.stage <= 3) === stageWindow).map((fx) =>
+    kernelOf(fx).create(fx.params, { sampleRate: planRate, at: clip.at, length, seed: fx.seed, speed }));
   const windowFx = make(true), ringFx = make(false);
+  // n0 offset of window kernel j: its own look-ahead plus that of every later window kernel (S_j); S_0 must equal A
+  const wchain = v.chain.filter((fx) => fx.stage <= 3);
+  const aheads = wchain.map((fx) => kernelOf(fx).reach(fx.params, planRate, speed).ahead ?? 0);
+  const offs = aheads.map((_, j) => aheads.slice(j).reduce((sum, a) => sum + a, 0));
+  if ((offs[0] ?? 0) !== A) throw new Error(`openClipVoice: clip ${clip.clipId} was planned with ${A} samples of look-ahead, its kernels at ${planRate} Hz declare ${offs[0] ?? 0} (plan and voice rates differ?)`);
   const vol = clip.vol ? new EnvCursor(clip.vol) : null, fade = new EnvCursor(clip.fade), duck = new EnvCursor(clip.duck);
   const [gl, gr] = [Math.min(1, 1 - clip.pan), Math.min(1, 1 + clip.pan)]; // panGains (audio.ts)
   const gain = clip.gain;
@@ -131,7 +144,7 @@ export function openClipVoice(clip: PlannedAudioClip, planRate: number, sourceRa
       const bs = next, be = Math.min(bs + VOICE_BLOCK, end);
       const wHi = needWindow ? Math.min(be, windowEnd) : bs;
       if (wHi > bs) {
-        const need = map.endInput(wHi - 1);
+        const need = map.endInput(wHi - 1 + A);
         if (inWin.end < need) { if (!all) break; inWin.zeroUntil(need); }
       } else if (!all) break; // a block of pure tail needs no input: it is made by finish()
       const n = be - bs;
@@ -139,7 +152,7 @@ export function openClipVoice(clip: PlannedAudioClip, planRate: number, sourceRa
       if (wHi > bs) {
         const w = wHi - bs;
         map.render(inWin.buf, inWin.srcFirst, blk, w);
-        for (const p of windowFx) p.process(blk, w, bs);
+        for (let j = 0; j < windowFx.length; j++) windowFx[j]!.process(blk, w, bs + offs[j]!);
         // × volume keys × fades: zero outside [0, length)
         for (let f = 0, i = bs; f < w; f++, i++) {
           if (i < 0 || i >= length) { blk[f * 2] = 0; blk[f * 2 + 1] = 0; continue; }
@@ -147,7 +160,7 @@ export function openClipVoice(clip: PlannedAudioClip, planRate: number, sourceRa
           blk[f * 2] = blk[f * 2]! * g;
           blk[f * 2 + 1] = blk[f * 2 + 1]! * g;
         }
-        inWin.dropBefore(wHi < windowEnd ? map.firstInput(wHi) : inWin.end);
+        inWin.dropBefore(wHi < windowEnd ? map.firstInput(wHi + A) : inWin.end);
       }
       const rs = Math.max(bs, ringStart);
       if (be > rs && ringFx.length) {
