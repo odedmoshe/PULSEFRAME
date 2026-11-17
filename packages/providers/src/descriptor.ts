@@ -164,7 +164,7 @@ export const LocalToolDescriptorSchema = z
     task: z.enum(['translate', 'voice-clean', 'vocals-classic']),
     /** Repo-relative reviewed code files (e.g. apps/server/tools/pf_tools.py). */
     codeFiles: z.array(z.string()).min(1),
-    /** sha256 over the codeFiles' bytes, concatenated in listed order. */
+    /** sha256 over the codeFiles' bytes, concatenated in listed order, with CRLF line endings read as LF (a Windows checkout has the same digest). */
     codeDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
   })
   .strict();
