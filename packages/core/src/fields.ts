@@ -506,7 +506,9 @@ export function freezeOps(doc: ProjectDocument, sequenceId: string, clipId: stri
   const ops: OpCall[] = [], missing: { variantId: string | null; token: string; reason: MissingReason }[] = [], tooLong: (string | null)[] = [];
   const people = opts?.people;
   const master = resolveFields(doc, sequenceId, clip, when, opts);
-  let varies = fieldSpans(doc, sequenceId, clip, opts).length > 1;
+  /** More than one text over the title (two pictures that give the same words are one value). */
+  const changes = (spans: { resolved: ResolvedFields }[]): boolean => new Set(spans.map((s) => s.resolved.text)).size > 1;
+  let varies = changes(fieldSpans(doc, sequenceId, clip, opts));
   const note = (variantId: string | null, r: ResolvedFields): string => {
     for (const m of r.missing) missing.push({ variantId, ...m });
     const stored = escapeFieldText(r.text);
@@ -526,7 +528,7 @@ export function freezeOps(doc: ProjectDocument, sequenceId: string, clipId: stri
     if (!shown) continue;
     const r = resolveFields(projected, sequenceId, shown, when, people ? { people } : undefined);
     if (!ownWording && r.text === master.text && r.missing.length === 0) continue;
-    varies = fieldSpans(projected, sequenceId, shown, people ? { people } : undefined).length > 1 || varies;
+    varies = changes(fieldSpans(projected, sequenceId, shown, people ? { people } : undefined)) || varies;
     ops.push({ op: 'set_variant_override', args: { variantId, clipId, text: note(variantId, r) } });
   }
   ops.push({ op: 'set_text_fields', args: { clipId, enabled: false } });

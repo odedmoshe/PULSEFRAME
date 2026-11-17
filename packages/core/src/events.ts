@@ -67,7 +67,10 @@ export function clusterCaptures(items: readonly DatedAsset[], gapMinutes: number
     }
   }
   for (const c of clusters) c.sort(order);
-  clusters.sort((a, b) => order(a[0]!, b[0]!));
+  // clusters by when their timed files begin (a cluster of day-only files: by its day), so a day-only file that joined an
+  // evening does not pull that evening before the morning
+  const begins = (c: Member[]): Member => c.find((m) => m.timed) ?? c[0]!;
+  clusters.sort((a, b) => order(begins(a), begins(b)));
   // an event holds at most MAX_EVENT_FILES: a longer run is cut, in member order, into consecutive clusters
   const out: string[][] = [];
   for (const c of clusters) for (let i = 0; i < c.length; i += MAX_EVENT_FILES) out.push(c.slice(i, i + MAX_EVENT_FILES).map((m) => m.id));
