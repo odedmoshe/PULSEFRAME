@@ -189,6 +189,9 @@ describe('Hebrew wording of common refusals', () => {
       ['the same file from the same point', d, replace(a, assetId)],
       ['a linked sound on a locked track', lockedSound, replace(a, shortId)],
       ['a template step that names a later one', d, template([{ op: 'add_text', args: { text: 'x', start: f(0), duration: f(30), trackId: { $ref: 'later', out: 'trackId' } } }]), true],
+      // the op's own schema refuses a step's arguments: z.prettifyError writes it over more than one line
+      ['a template step whose arguments fail its operation', d, template([{ op: 'add_text', args: { text: 'x', start: f(0) } }]), true],
+      ['a template step given a list where one id is needed', d, template([{ op: 'add_adjustment', args: { span: 'edit', effects: [{ type: 'blur.gaussian' }] }, bind: 'l' }, { op: 'remove_effect', args: { clipId: { $ref: 'l', out: 'clipId' }, effectId: { $ref: 'l', out: 'effectIds' } } }]), true],
       ['a template step that is not a public operation', d, template([{ op: 'import_asset', args: { asset: still } }]), true],
       ['a template slot that names no clip', d, template([{ op: 'add_track', args: { kind: 'video' } }], { slots: [{ key: 's', kind: 'picture', clipId: 'clp_none' }] }), true],
       ['a template asset key given twice', d, template([{ op: 'add_track', args: { kind: 'video' } }], { assets: [{ key: 'p', asset: still }, { key: 'p', asset: still }] }), true],
@@ -209,6 +212,8 @@ describe('Hebrew wording of common refusals', () => {
     }
     expect(unrecognised).toEqual([]);
     expect(TEMPLATE_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
+    // a step refused by its operation's own schema (two lines from z.prettifyError) is worded as a fault of the template
+    expect(translateRefusal('he', 'template step 0 (add_text): ✖ Invalid input: expected object, received undefined\n  → at duration')).toBe('אחד השלבים של התבנית אינו תקין, ולכן היא לא הוחלה. זו תקלה בתבנית, לא בעריכה שלך');
     // the numbers and the reason are kept
     expect(translateRefusal('he', 'the transition into the next clip needs 15 spare source frames after this clip, and the file has only 5')).toBe('המעבר לקליפ הבא צריך 15 פריימים של חומר מקור אחרי הקליפ הזה, ובקובץ יש רק 5');
     expect(translateRefusal('he', "time.echo cannot go on an adjustment: a time effect needs a clip's own source; it cannot act on the picture below")).toBe('האפקט הזה אינו יכול לחול על שכבת התאמה: אפקט זמן צריך את המקור של הקליפ עצמו, ואינו יכול לפעול על התמונה שמתחת. אפשר לשים אותו על הקליפ עצמו');

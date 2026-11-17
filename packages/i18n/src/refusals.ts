@@ -112,7 +112,8 @@ const HE_TEMPLATES: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the clip already plays this file from this point$/, () => 'הקליפ כבר מנגן את הקובץ הזה מהנקודה הזו'],
   [/^linked clip \S+ is on locked track \S+$/, () => 'קליפ מקושר לקליפ הזה נמצא ברצועה נעולה'],
   // apply_template: a plan the server built is wrong
-  [/^template step \d+ \(\S+\): .+$/, () => `אחד השלבים של התבנית אינו תקין, ולכן היא לא הוחלה. ${TEMPLATE_FAULT_HE}`],
+  // [\s\S]: a step whose arguments fail its operation's schema is worded by z.prettifyError over more than one line
+  [/^template step \d+ \(\S+\): [\s\S]+$/, () => `אחד השלבים של התבנית אינו תקין, ולכן היא לא הוחלה. ${TEMPLATE_FAULT_HE}`],
   [/^template step \d+ uses ".*", which is not a public operation$/, () => `התבנית ביקשה פעולה שאינה מותרת לה, ולכן היא לא הוחלה. ${TEMPLATE_FAULT_HE}`],
   [/^slot \d+ \(\S+\) names no clip the template made$/, () => `משבצת בתבנית אינה מצביעה על קליפ שהתבנית יצרה. ${TEMPLATE_FAULT_HE}`],
   [/^asset key ".*" is given twice$/, () => `קובץ של התבנית מופיע פעמיים. ${TEMPLATE_FAULT_HE}`],
