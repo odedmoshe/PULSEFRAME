@@ -2,11 +2,16 @@
  * Pacing report: the rhythm of the cut along the main timeline, measured from what is already in the document
  * (clip boundaries, word-timed transcripts, caption cues). Pure; no audio or picture analysis, no model.
  * Window boundaries are exact multiples of the window length; counts use half-open `[start, end)` windows.
+ *
+ * Cost: the words of a transcript are put in order once per asset, each clip finds the first word of its source span by
+ * binary search and walks only the words it plays, and a word is placed by ordinary seconds arithmetic. Every decision that
+ * could fall either way (a word on a clip edge, a word on a window boundary, the same word played twice at one place, a
+ * pause right at the limit) is settled with exact rational time, so the result is the same as an all-exact count.
  */
 import * as T from '@pulseframe/time';
-import type { ProjectDocument } from './schema.ts';
+import type { MediaClip, ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
-import { sourceEnd, timelineOfSource } from './speed.ts';
+import { isRamped, sourceEnd, speedOf, timelineOfSource } from './speed.ts';
 
 export interface PacingOptions { windowSeconds?: number; staticSeconds?: number; maxCharsPerSecond?: number; maxWordsPerSecond?: number; maxCutsPerWindow?: number; silenceSeconds?: number }
 export interface PacingWindow { start: T.RationalTime; end: T.RationalTime; cuts: number; words: number; wordsPerSecond: number; captionChars: number; charsPerSecond: number }
@@ -16,6 +21,13 @@ export interface PacingReport { duration: T.RationalTime; windows: PacingWindow[
 const key = (t: T.RationalTime) => { const n = T.normalize(t); return `${n.value}/${n.timescale}`; };
 const chars = (s: string) => s.replace(/\s/gu, '').length;
 const ORDER: Record<PacingIssue['code'], number> = { static_picture: 0, rapid_cuts: 1, dense_speech: 2, fast_captions: 3, speech_gap: 4 };
+/**
+ * Seconds arithmetic on times of this size is off by far less than a nanosecond. Two results further apart than EPS are
+ * therefore in the order the numbers say; anything closer is compared exactly.
+ */
+const EPS = 1e-6;
+interface TimedWord { id: string; text: string; start: T.RationalTime; duration: T.RationalTime; sec: number; len: number }
+interface Span { start: T.RationalTime; end: T.RationalTime }
 
 export function pacingReport(doc: ProjectDocument, opts: PacingOptions = {}): PacingReport {
   const windowSeconds = opts.windowSeconds ?? 5, staticSeconds = opts.staticSeconds ?? 8, maxCps = opts.maxCharsPerSecond ?? 20;
@@ -50,42 +62,105 @@ export function pacingReport(doc: ProjectDocument, opts: PacingOptions = {}): Pa
 
   // Words: each word once per place it plays (a linked picture + sound pair plays it at one place).
   const hasTranscriptCaptions = seq.tracks.some((t) => t.kind === 'caption' && t.caption?.mode === 'transcript');
-  const placed = new Map<string, { at: T.RationalTime; chars: number }>();
+  // The word-timed words of an asset in order of their start, built once however many clips use the asset.
+  const byStart = (a: TimedWord, b: TimedWord) => a.sec - b.sec || T.cmp(a.start, b.start); // seconds never reverse the exact order; equal seconds are compared exactly
+  const index = new Map<string, TimedWord[] | null>();
+  const wordsOf = (assetId: string) => {
+    let list = index.get(assetId);
+    if (list !== undefined) return list;
+    const tx = doc.transcripts?.[assetId];
+    list = null;
+    if (tx) {
+      list = [];
+      for (const seg of tx.segments) if (seg.timing === 'word') for (const w of seg.words) list.push({ id: w.id, text: w.text, start: w.start, duration: w.duration, sec: T.toSeconds(w.start), len: T.toSeconds(w.duration) });
+      for (let i = 1; i < list.length; i++) if (byStart(list[i - 1]!, list[i]!) > 0) { list.sort(byStart); break; }
+    }
+    index.set(assetId, list);
+    return list;
+  };
+  interface Placed { clip: MediaClip; word: TimedWord; sec: number; at?: T.RationalTime }
+  const exactAt = (p: Placed) => (p.at ??= timelineOfSource(p.clip, p.word.start));
+  const placed = new Map<string, Placed[]>(); // by word id: the places that word plays
   const gaps = new Map<string, { start: T.RationalTime; end: T.RationalTime; clipIds: string[] }>();
+  const gapLimit = T.fromSeconds(silenceSeconds), gapSeconds = T.toSeconds(gapLimit);
+  // Clips that play the same stretch of the same asset at the same place in the same way (a picture and its linked sound)
+  // place the same words at the same times: the words are walked once, and the pauses found get every such clip's id.
+  const sameAs = new Map<string, { start: T.RationalTime; end: T.RationalTime; clipIds: string[] }[]>();
   for (const tr of seq.tracks) {
     if (tr.kind !== 'video' && tr.kind !== 'audio') continue;
     for (const c of tr.clips) {
       if (c.type !== 'media') continue;
-      const tx = doc.transcripts?.[c.assetId];
-      if (!tx) continue;
+      const list = wordsOf(c.assetId);
+      if (!list) continue;
+      const signature = JSON.stringify([c.assetId, key(c.start), key(c.duration), key(c.sourceIn), c.speed, c.speedEnd, c.speedCurve, c.rampWindow && [key(c.rampWindow.offset), key(c.rampWindow.total)], !!c.reverse, !!c.freeze]);
+      const seen = sameAs.get(signature);
+      if (seen) { for (const g of seen) g.clipIds.push(c.id); continue; }
+      const found: { start: T.RationalTime; end: T.RationalTime; clipIds: string[] }[] = [];
+      sameAs.set(signature, found);
       const srcEnd = sourceEnd(c), cEnd = clipEnd(c);
-      const spans: { start: T.RationalTime; end: T.RationalTime }[] = [];
-      for (const seg of tx.segments) {
-        if (seg.timing !== 'word') continue;
-        for (const w of seg.words) {
-          if (T.lt(w.start, c.sourceIn) || !T.lt(w.start, srcEnd)) continue;
-          const s = timelineOfSource(c, w.start);
-          placed.set(`${w.id}@${key(s)}`, { at: s, chars: chars(w.text) });
-          const e = timelineOfSource(c, T.add(w.start, w.duration));
-          const lo = T.min(s, e), hi = T.min(T.max(s, e), cEnd);
-          spans.push({ start: lo, end: T.max(lo, hi) });
+      const inSec = T.toSeconds(c.sourceIn), endSec = T.toSeconds(srcEnd), startSec = T.toSeconds(c.start), cEndSec = T.toSeconds(cEnd);
+      // Where a source time plays on the timeline, in seconds. One speed: plain arithmetic. A gradual speed change has no
+      // closed form here, so those clips keep the exact (slower) conversion for each of their words.
+      const ramped = isRamped(c), sp = speedOf(c), perSource = sp.den / sp.num;
+      const secOf = (src: number) => startSec + (c.reverse ? endSec - src : src - inSec) * perSource;
+      const exactSpan = (w: TimedWord): Span => {
+        const s = timelineOfSource(c, w.start), e = timelineOfSource(c, T.add(w.start, w.duration));
+        const lo = T.min(s, e), hi = T.min(T.max(s, e), cEnd);
+        return { start: lo, end: T.max(lo, hi) };
+      };
+      // first word that starts at or after the clip's source in-point
+      let lo = 0, hi = list.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid]!.sec < inSec) lo = mid + 1; else hi = mid; }
+      while (lo < list.length && list[lo]!.sec === inSec && T.lt(list[lo]!.start, c.sourceIn)) lo++;
+      const spans: { lo: number; hi: number; word: TimedWord; exact?: Span }[] = [];
+      for (let i = lo; i < list.length; i++) {
+        const w = list[i]!;
+        if (w.sec > endSec || (w.sec === endSec && !T.lt(w.start, srcEnd))) break; // starts at or after the end of the clip's source span
+        let p: Placed, from: number, to: number, exact: Span | undefined;
+        if (ramped) {
+          exact = exactSpan(w);
+          const at = timelineOfSource(c, w.start);
+          p = { clip: c, word: w, sec: T.toSeconds(at), at };
+          from = T.toSeconds(exact.start); to = T.toSeconds(exact.end);
+        } else {
+          const s = secOf(w.sec), e = secOf(w.sec + w.len);
+          p = { clip: c, word: w, sec: s };
+          from = Math.min(s, e); to = Math.max(from, Math.min(Math.max(s, e), cEndSec));
         }
+        // the same word at the same place through another clip counts once
+        const places = placed.get(w.id);
+        if (!places) placed.set(w.id, [p]);
+        else if (!places.some((q) => Math.abs(q.sec - p.sec) <= EPS && T.eq(exactAt(q), exactAt(p)))) places.push(p);
+        spans.push(exact ? { lo: from, hi: to, word: w, exact } : { lo: from, hi: to, word: w });
       }
-      spans.sort((a, b) => T.cmp(a.start, b.start));
+      // Pauses: from the end of one word to the start of the next, in the order they play. Only a pause that can reach the
+      // limit is worked out exactly.
+      const exactOf = (x: (typeof spans)[number]) => (x.exact ??= exactSpan(x.word));
+      const byPlay = (a: (typeof spans)[number], b: (typeof spans)[number]) => (Math.abs(a.lo - b.lo) > EPS ? a.lo - b.lo : T.cmp(exactOf(a).start, exactOf(b).start));
+      for (let i = 1; i < spans.length; i++) if (byPlay(spans[i - 1]!, spans[i]!) > 0) { spans.sort(byPlay); break; }
       for (let i = 1; i < spans.length; i++) {
-        const from = spans[i - 1]!.end, to = spans[i]!.start;
+        if (spans[i]!.lo - spans[i - 1]!.hi < gapSeconds - EPS) continue;
+        const from = exactOf(spans[i - 1]!).end, to = exactOf(spans[i]!).start;
         if (!T.lt(from, to)) continue;
-        const k = `${key(from)}-${key(to)}`, g = gaps.get(k);
-        if (g) g.clipIds.push(c.id); else gaps.set(k, { start: from, end: to, clipIds: [c.id] });
+        const k = `${key(from)}-${key(to)}`;
+        let g = gaps.get(k);
+        if (g) g.clipIds.push(c.id); else { g = { start: from, end: to, clipIds: [c.id] }; gaps.set(k, g); }
+        found.push(g);
       }
     }
   }
+  // Which window a word falls in: by seconds, except next to a window boundary or the end, where the exact time decides.
+  const windowSec = T.toSeconds(W), durationSec = T.toSeconds(duration);
   let totalWords = 0;
-  for (const p of placed.values()) {
-    const b = bucket(p.at);
-    if (b < 0) continue;
-    words[b]!++; totalWords++;
-    if (hasTranscriptCaptions) capChars[b]! += p.chars;
+  for (const places of placed.values()) {
+    for (const p of places) {
+      const x = p.sec / windowSec;
+      const b = Math.abs(p.sec - Math.round(x) * windowSec) <= EPS || Math.abs(p.sec - durationSec) <= EPS ? bucket(exactAt(p))
+        : p.sec < 0 || p.sec > durationSec ? -1 : Math.min(count - 1, Math.floor(x));
+      if (b < 0) continue;
+      words[b]!++; totalWords++;
+      if (hasTranscriptCaptions) capChars[b]! += chars(p.word.text);
+    }
   }
 
   // Manual caption cues.
@@ -110,14 +185,16 @@ export function pacingReport(doc: ProjectDocument, opts: PacingOptions = {}): Pa
   }
   windows.forEach((w) => {
     if (w.cuts > maxCuts) issues.push({ code: 'rapid_cuts', start: w.start, end: w.end, value: w.cuts, limit: maxCuts, clipIds: picture.filter((p) => T.lt(p.start, w.end) && T.lt(w.start, p.end)).map((p) => p.id) });
-    if (w.wordsPerSecond > maxWps) issues.push({ code: 'dense_speech', start: w.start, end: w.end, value: w.wordsPerSecond, limit: maxWps, clipIds: [] });
+    // The last window can be a short remainder, where a couple of words make a high rate out of a fraction of a second:
+    // a window shorter than half the window length is not judged for dense speech (its rate is still reported).
+    const len = T.sub(w.end, w.start);
+    if (w.wordsPerSecond > maxWps && T.lte(W, T.add(len, len))) issues.push({ code: 'dense_speech', start: w.start, end: w.end, value: w.wordsPerSecond, limit: maxWps, clipIds: [] });
   });
   for (const q of cues) {
     if (!T.lt(T.ZERO, q.duration)) continue;
     const cps = q.chars / T.toSeconds(q.duration);
     if (cps > maxCps) issues.push({ code: 'fast_captions', start: q.start, end: T.add(q.start, q.duration), value: cps, limit: maxCps, clipIds: [q.id] });
   }
-  const gapLimit = T.fromSeconds(silenceSeconds);
   for (const g of gaps.values()) {
     const len = T.sub(g.end, g.start);
     if (T.lte(gapLimit, len)) issues.push({ code: 'speech_gap', start: g.start, end: g.end, value: T.toSeconds(len), limit: silenceSeconds, clipIds: g.clipIds });

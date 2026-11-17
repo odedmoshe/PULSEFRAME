@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, pacingReport, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, createProject, pacingReport, sequenceDuration, sourceEnd, timelineOfSource, type OpCall, type ProjectDocument } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (frames: number) => T.frameTime(frames, R);
@@ -145,5 +145,107 @@ describe('pacingReport properties', () => {
       for (let i = 1; i < r.windows.length; i++) expect(T.eq(r.windows[i - 1]!.end, r.windows[i]!.start)).toBe(true);
       for (const w of r.windows) expect(T.lt(w.start, w.end)).toBe(true);
     }), { numRuns: 40 });
+  });
+});
+
+describe('pacingReport: the short last window', () => {
+  it('does not report dense speech on a remainder shorter than half a window; a longer remainder is still judged', () => {
+    // 10.4 s: two full windows and a 0.4 s remainder holding two words (5 words per second over 0.4 s)
+    const p = setup(); p.picture(0, 10.4); p.sound(0, 10.4);
+    p.words([1, 6, 10.05, 10.25], 0.1);
+    const r = pacingReport(p.doc);
+    expect(r.windows.map((w) => w.words)).toEqual([1, 1, 2]);
+    expect(r.windows[2]!.wordsPerSecond).toBeCloseTo(5, 6); // the rate is still reported for the strip
+    expect(r.issues.filter((i) => i.code === 'dense_speech')).toEqual([]);
+    // exactly half a window (2.5 s) with 12 words (4.8 words per second) is judged
+    const q = setup(); q.picture(0, 12.5); q.sound(0, 12.5);
+    q.words([1, 6, ...Array.from({ length: 12 }, (_, i) => 10 + i * 0.2)], 0.1);
+    const dense = pacingReport(q.doc).issues.filter((i) => i.code === 'dense_speech');
+    expect(dense).toHaveLength(1);
+    expect([T.toSeconds(dense[0]!.start), T.toSeconds(dense[0]!.end)]).toEqual([10, 12.5]);
+    // one frame less than half a window is not
+    const s2 = setup(); s2.picture(0, 12.5 - 1 / 30); s2.sound(0, 12.5 - 1 / 30);
+    s2.words([1, 6, ...Array.from({ length: 12 }, (_, i) => 10 + i * 0.2)], 0.1);
+    expect(pacingReport(s2.doc).issues.filter((i) => i.code === 'dense_speech')).toEqual([]);
+  });
+});
+
+describe('pacingReport: cost and agreement with a plain word-by-word count', () => {
+  const talk = { kind: 'video' as const, name: 'talk.mp4', contentHash: hash('d'), byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(3600, 1), video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: 108000 }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: prov };
+  /** A talk with `count` words `step` seconds apart, in phrases of ten. */
+  function withWords(count: number, step: number) {
+    let r = tx(createProject({ id: 'prj_big', name: 'Big' }), [{ op: 'import_asset', args: { asset: talk } }], true);
+    const assetId = r.results[0]!.output!.assetId as string;
+    const segments = [];
+    for (let i = 0; i < count; i += 10) {
+      const ws = Array.from({ length: Math.min(10, count - i) }, (_, k) => ({ text: `w${i + k}`, start: s((i + k) * step), duration: s(step * 0.6) }));
+      segments.push({ start: ws[0]!.start, duration: s(ws.length * step), text: ws.map((w) => w.text).join(' '), words: ws });
+    }
+    r = tx(r.doc, [{ op: 'set_transcript', args: { assetId, language: 'en', segments } }]);
+    return { doc: r.doc, assetId };
+  }
+  /** The plain count the report must agree with: every word of every clip, exact comparisons, one count per place a word plays. */
+  function plainCount(doc: ProjectDocument, windowSeconds = 5) {
+    const seq = doc.sequences[doc.mainSequenceId]!;
+    const end = sequenceDuration(doc);
+    const placed = new Map<string, T.RationalTime>();
+    for (const tr of seq.tracks) for (const c of tr.clips) {
+      if ((tr.kind !== 'video' && tr.kind !== 'audio') || c.type !== 'media') continue;
+      for (const seg of doc.transcripts[c.assetId]?.segments ?? []) for (const w of seg.words) {
+        if (seg.timing !== 'word' || T.lt(w.start, c.sourceIn) || !T.lt(w.start, sourceEnd(c))) continue;
+        const at = T.normalize(timelineOfSource(c, w.start));
+        placed.set(`${w.id}@${at.value}/${at.timescale}`, at);
+      }
+    }
+    const counts = new Array<number>(Math.ceil(T.toSeconds(end) / windowSeconds - 1e-9)).fill(0);
+    let total = 0;
+    for (const at of placed.values()) {
+      if (T.isNegative(at) || !T.lt(at, end)) continue;
+      let k = 0;
+      while (!T.lt(at, T.fromSeconds((k + 1) * windowSeconds))) k++;
+      counts[Math.min(k, counts.length - 1)]!++; total++;
+    }
+    return { counts, total };
+  }
+
+  it('5,000 words over 200 picture clips with their sound: well under a second, and every word counted once', () => {
+    const { doc, assetId } = withWords(5000, 0.36); // 30 minutes of speech
+    // 200 six-second clips back to back, each from nine seconds further into the source (a third of the talk is cut out)
+    const big = tx(doc, Array.from({ length: 200 }, (_, k) => ({ op: 'add_clip', args: { assetId, start: s(k * 6), sourceIn: s(k * 9), duration: s(6) } }))).doc;
+    const wire = JSON.parse(JSON.stringify(big)) as ProjectDocument; // as the editor receives it
+    let best = Infinity, report = pacingReport(wire);
+    for (let i = 0; i < 3; i++) { const t0 = performance.now(); report = pacingReport(wire); best = Math.min(best, performance.now() - t0); }
+    expect(report.windows).toHaveLength(240);
+    // words at 0.36 s steps whose start falls in [9k, 9k + 6): 100 words every 36 s of source, of which 6/9 are kept... counted exactly:
+    let expected = 0;
+    for (let i = 0; i < 5000; i++) { const frame = Math.round(i * 0.36 * 30); if (frame % 270 < 180 && frame < 200 * 270) expected++; }
+    expect(report.totals.words).toBe(expected);
+    expect(report.windows.reduce((a, w) => a + w.words, 0)).toBe(expected);
+    expect(best).toBeLessThan(250);
+  }, 30_000);
+
+  it('agrees with the plain count for cut, moved, sped-up, reversed, ramped and overlapping clips', () => {
+    const { doc, assetId } = withWords(400, 0.4);
+    fc.assert(fc.property(
+      fc.array(fc.record({ src: fc.integer({ min: 0, max: 1500 }), len: fc.integer({ min: 15, max: 400 }), gap: fc.integer({ min: 0, max: 40 }), speed: fc.constantFrom(1, 1, 1, 0.5, 2, 1.25), reverse: fc.boolean(), ramp: fc.boolean(), again: fc.boolean() }), { minLength: 1, maxLength: 8 }),
+      (clips) => {
+        let d = doc, at = 0;
+        const v1 = d.sequences[d.mainSequenceId]!.tracks.find((t) => t.kind === 'video')!.id;
+        for (const c of clips) {
+          const r = tx(d, [{ op: 'add_clip', args: { assetId, start: f(at), sourceIn: f(c.again ? 0 : c.src), duration: f(c.len), trackId: v1 } }]);
+          const clipId = r.results[0]!.output!.clipId as string;
+          d = r.doc;
+          try {
+            if (c.speed !== 1) d = tx(d, [{ op: 'set_clip_speed', args: { clipId, speed: c.speed } }]).doc;
+            if (c.ramp) d = tx(d, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 1, to: 2 } }]).doc;
+            else if (c.reverse) d = tx(d, [{ op: 'set_clip_reverse', args: { clipId, reverse: true } }]).doc;
+          } catch { /* an edit this clip cannot take: it stays as it is */ }
+          at += c.len * 2 + c.gap; // room for a slowed clip
+        }
+        const got = pacingReport(d), want = plainCount(d);
+        expect(got.totals.words).toBe(want.total);
+        expect(got.windows.map((w) => w.words)).toEqual(want.counts);
+      },
+    ), { numRuns: 60 });
   });
 });
