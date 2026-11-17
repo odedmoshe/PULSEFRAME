@@ -4,8 +4,8 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { previousAdjacent, sequenceDuration, velocityLimit, velocityNeeds, type MediaClip, type OpCall, type ProjectDocument, type Track, type Transition } from '@pulseframe/core';
-import { audioPlan, captionCues, decodeOverBudget, type DecodeStretch } from '@pulseframe/engine';
+import { previousAdjacent, sequenceDuration, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
+import { audioPlan, captionCues, decodeOverBudget, evaluate, type DecodeStretch, type Layer } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { variantDoc } from './export.ts';
 
@@ -179,10 +179,102 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
       if (fast.length) issues.push({ code: 'captions_too_fast', severity: 'warning', message: `${fast.length} caption(s) exceed ${limit} characters per second and may be hard to read (first: "${fast[0]!.text.slice(0, 30)}"). The limit is a setting, not a universal rule`, ids: [track.id], range: { startFrame: fi(fast[0]!.start), endFrame: fi(fast[0]!.end) } });
     }
   }
+  // 8. motion tracking (ADR-0015): followers whose track is not reliable there or whose target picture is not there, and
+  // privacy regions whose tracking is lost or uncertain. Warnings only: the owner decides (SPEC: privacy warnings never block).
+  issues.push(...trackingIssues(doc, rate));
+
   const count = (s: PreflightIssue['severity']) => issues.filter((i) => i.severity === s).length;
   return {
     revision, variantId: opts.variantId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: variant?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
+    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent). Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
   };
+}
+
+/** Stretches listed per clip and kind of problem; any more are counted in one further issue. */
+const MAX_TRACK_RUNS = 20;
+const LOSS_STATES: ReadonlySet<string> = new Set(['unknown', 'weak', 'lost', 'outside']);
+const frames = (a: number, b: number) => (b - a === 1 ? `frame ${a}` : `frames ${a}–${b - 1}`);
+
+/**
+ * Tracking problems found by running the evaluator (the same one preview and export use) over every frame of each clip that
+ * follows a motion track or carries a tracked privacy region, so speed, reverse, trims, time effects and transitions are
+ * mapped exactly as they render. Only the tracks those clips and their targets sit on are evaluated. A layer's follow state
+ * and a region's state are the evaluator's (FollowInfo, ResolvedRegion); a region is a problem where it is drawn as the
+ * whole-picture fallback or its state is weak, lost, unknown or outside the track.
+ */
+export function trackingIssues(doc: ProjectDocument, rate: { num: number; den: number }): PreflightIssue[] {
+  const seq = doc.sequences[doc.mainSequenceId]!;
+  const fi = (t: T.RationalTime) => T.frameIndexAt(t, rate);
+  const bound = new Map<string, { clip: Clip; trackId: string }>();
+  const keep = new Set<string>();
+  for (const track of seq.tracks)
+    for (const c of track.clips) {
+      const follow = c.type !== 'caption' ? c.follow : undefined;
+      const redacts = c.type === 'media' && !!c.redact?.some((r) => r.motionTrackId !== null);
+      if (!follow && !redacts) continue;
+      bound.set(c.id, { clip: c, trackId: track.id });
+      keep.add(track.id);
+      if (follow) keep.add(follow.targetTrackId);
+    }
+  if (!bound.size) return [];
+  const only = { ...doc, sequences: { ...doc.sequences, [doc.mainSequenceId]: { ...seq, tracks: seq.tracks.filter((t) => keep.has(t.id)) } } };
+  // the frames to look at: the union of the bound clips' spans, in order
+  const spans = [...bound.values()].map(({ clip }) => [fi(clip.start), fi(T.add(clip.start, clip.duration))] as [number, number]).sort((a, b) => a[0] - b[0]);
+  type Kind = 'follow_track_loss' | 'follow_target_missing' | 'redact_track_loss';
+  const runs = new Map<string, { kind: Kind; clipId: string; ids: Set<string>; states: Set<string>; whole: boolean; ranges: [number, number][] }>();
+  const mark = (kind: Kind, clipId: string, f: number, state: string, ids: string[], whole = false) => {
+    const key = `${kind}|${clipId}`;
+    let r = runs.get(key);
+    if (!r) runs.set(key, (r = { kind, clipId, ids: new Set(), states: new Set(), whole: false, ranges: [] }));
+    for (const id of ids) r.ids.add(id);
+    r.states.add(state);
+    if (whole) r.whole = true;
+    const last = r.ranges.at(-1);
+    if (last && last[1] === f) last[1] = f + 1;
+    else if (!last || last[1] < f) r.ranges.push([f, f + 1]);
+  };
+  const regionsOf = (l: Layer): ResolvedRegion[] => (l.kind !== 'video' ? [] : [...(l.regions ?? []), ...(l.time?.taps ?? []).flatMap((t) => (t.layer.kind === 'video' ? t.layer.regions ?? [] : []))]);
+  let cursor = -1;
+  for (const [a, b] of spans)
+    for (let f = Math.max(a, cursor); f < b; f++) {
+      cursor = f + 1;
+      const g = evaluate(only, T.frameTime(f, rate));
+      for (const l of g.layers) {
+        if (l.kind === 'caption') continue;
+        const b0 = bound.get(l.clipId);
+        if (!b0) continue;
+        const c = b0.clip;
+        const fo = l.follow;
+        if (fo && c.type !== 'caption' && c.follow) {
+          const st: FollowStateName = fo.state;
+          if (st === 'target-missing' || st === 'target-absent') mark('follow_target_missing', c.id, f, st, [c.id, fo.motionTrackId, c.follow.targetTrackId]);
+          else if (LOSS_STATES.has(st)) mark('follow_track_loss', c.id, f, st, [c.id, fo.motionTrackId]);
+        }
+        if (c.type === 'media' && c.redact)
+          for (const r of regionsOf(l)) {
+            if (r.state === 'fixed') continue;
+            if (r.whole || LOSS_STATES.has(r.state)) mark('redact_track_loss', c.id, f, r.state, [c.id, ...c.redact.filter((x) => x.id === r.id && x.motionTrackId).map((x) => x.motionTrackId!)], r.whole);
+          }
+      }
+    }
+  const name = (c: Clip) => (c.type === 'text' ? `the title "${c.text.slice(0, 30)}"` : c.type === 'media' ? `"${doc.assets[c.assetId]?.name ?? c.id}"` : c.id);
+  const trackName = (ids: Set<string>) => [...ids].map((id) => doc.motionTracks?.[id]?.name).filter(Boolean).map((n) => `"${n}"`).join(', ') || 'its motion track';
+  const out: PreflightIssue[] = [];
+  for (const r of runs.values()) {
+    const c = bound.get(r.clipId)!.clip;
+    const states = [...r.states].filter((x) => x !== 'tracked').sort().join(', ');
+    for (const [a, b] of r.ranges.slice(0, MAX_TRACK_RUNS)) {
+      const message =
+        r.kind === 'follow_track_loss' ? `on ${frames(a, b)} ${name(c)} follows ${trackName(r.ids)} where the tracking is ${states}: it is not reliable there and holds the last usable position. Check these frames, or correct the track (edit_motion_track)`
+        : r.kind === 'follow_target_missing' ? `on ${frames(a, b)} the picture ${name(c)} follows is not on its target track at that time (${states}): it stays where the nearest clip of that picture leaves it. Move the clip, or follow another track`
+        : `on ${frames(a, b)} the tracking of the privacy region on ${name(c)} (${trackName(r.ids)}) is ${states || 'lost'}${r.whole ? '; the whole picture is blurred there instead' : '; the region holds its last usable position'}; automatic tracking is not guaranteed redaction, so check these frames before publishing and correct the track where it is wrong`;
+      out.push({ code: r.kind, severity: 'warning', message, ids: [...r.ids], range: { startFrame: a, endFrame: b } });
+    }
+    if (r.ranges.length > MAX_TRACK_RUNS) {
+      const more = r.ranges.slice(MAX_TRACK_RUNS);
+      out.push({ code: r.kind, severity: 'warning', message: `${more.length} more stretch(es) of the same problem on ${name(c)}, ${more.reduce((n, [a, b]) => n + b - a, 0)} frame(s) in all, from frame ${more[0]![0]} to frame ${more.at(-1)![1] - 1}${r.kind === 'redact_track_loss' ? '; automatic tracking is not guaranteed redaction' : ''}`, ids: [...r.ids] });
+    }
+  }
+  return out;
 }

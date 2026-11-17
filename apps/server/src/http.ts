@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -30,6 +30,7 @@ import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { variantDoc } from './export.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
+import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import type { Presence } from './presence.ts';
 import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
@@ -304,6 +305,18 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const a = p.doc.analyses?.[c.req.param('assetId')];
     if (!a) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
     return c.json({ revision: p.revision, ...analysisView(a) });
+  });
+  // ----- motion tracking (ADR-0015): a durable job; its samples are attached by the internal op attach_motion_track -----
+  app.post('/api/v1/projects/:id/motion-tracks/:motionTrackId/track', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, TrackRunBody);
+    const j = startTrackingJob(store, gov, p, c.req.param('id'), c.req.param('motionTrackId'), b, { derivatives });
+    return c.json({ jobId: j.id, status: j.status }, 202);
+  });
+  app.get('/api/v1/projects/:id/motion-tracks/:motionTrackId', (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    return c.json(motionTrackView(p.doc, p.revision, c.req.param('motionTrackId')));
   });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params)); });
@@ -648,6 +661,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     assertMayCancel(gov, p, j);
     if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
+    if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
   });
