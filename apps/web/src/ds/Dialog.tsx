@@ -36,7 +36,17 @@ export function Dialog({ open, onClose, title, variant = 'dialog', size = 'md', 
     const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)];
     const first = initialFocus(items.map(infoOf));
     (items[first] ?? el).focus();
-    return () => { const o = opener.current; if (o && o.isConnected) o.focus(); };
+    // Everything else in the document is made inert while the modal is open, so no focus or click can reach the page behind it.
+    const made: HTMLElement[] = [];
+    for (const n of Array.from(document.body.children)) if (n instanceof HTMLElement && !n.contains(el) && !n.inert) { n.inert = true; made.push(n); }
+    // Safety net for focus that is already outside (e.g. the body after a scrim click): Tab comes back in.
+    const onDoc = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Tab' || el.contains(document.activeElement)) return;
+      const its = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      e.preventDefault(); (e.shiftKey ? its[its.length - 1] : its[0] ?? el)?.focus();
+    };
+    document.addEventListener('keydown', onDoc);
+    return () => { document.removeEventListener('keydown', onDoc); for (const n of made) n.inert = false; const o = opener.current; if (o && o.isConnected) o.focus(); };
   }, [open]);
   if (!open) return null;
   const key = (e: KeyboardEvent) => {
@@ -50,7 +60,7 @@ export function Dialog({ open, onClose, title, variant = 'dialog', size = 'md', 
     (to < 0 ? el : items[to]!).focus();
   };
   return createPortal(
-    <div className={cx(DS, 'pf-scrim', `is-${variant}`)} onMouseDown={(e) => { if (dismissOnBackdrop && e.target === e.currentTarget) onClose(); }}>
+    <div className={cx(DS, 'pf-scrim', `is-${variant}`)} onMouseDown={(e) => { if (e.target !== e.currentTarget) return; e.preventDefault(); if (dismissOnBackdrop) onClose(); }}>
       <div ref={root} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={cx('pf-dialog', `is-${variant}`, `is-${size}`, className)} data-testid={testId} onKeyDown={key}>
         <header className="pf-dialog-head">
           <h2 id={titleId} className="pf-dialog-title">{title}</h2>

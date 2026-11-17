@@ -33,3 +33,16 @@ export const SpinnerIcon = mk(Loader);
 export const SrOnly = ({ children }: { children: ReactNode }) => <span className="pf-sr">{children}</span>;
 
 export const FOCUSABLE = 'a[href],button,input,select,textarea,[tabindex],[contenteditable="true"]';
+
+/** Number-like runs: 1080×1920, 12:30, 3.5, 100%. Wrapped so they keep their order inside a right-to-left sentence (UX_REDESIGN §4.16). */
+export const NUMERIC_RUN = /\d+(?:[×x:.,/]\d+)*%?/g;
+/** Splits a string into text and isolated `.num` runs; the whole thing sits in a <bdi> so user text picks its own direction. */
+export function isolate(text: string): ReactNode {
+  const out: ReactNode[] = []; let last = 0, n = 0;
+  for (const m of text.matchAll(NUMERIC_RUN)) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(<bdi key={n++} className="num">{m[0]}</bdi>); last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return <bdi>{out}</bdi>;
+}

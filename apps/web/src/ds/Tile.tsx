@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { IconFlashShield, IconOnBeat } from '../editor/icons.tsx';
 import { tileFace, tileInteractive, type TileState } from './logic.ts';
-import { CheckIcon, DS, InfoIcon, StarIcon, cx } from './util.tsx';
+import { CheckIcon, DS, InfoIcon, StarIcon, cx, isolate } from './util.tsx';
 
 export interface TileProps {
   name: string;
@@ -42,7 +42,7 @@ export function Tile({ name, image, state = {}, progress, fitNote, beatLabel, he
           {state.applied && <span className="pf-tile-check"><CheckIcon size={14} strokeWidth={2.5} /></span>}
           {state.beat && <span className="pf-tile-beat"><IconOnBeat size={14} />{beatLabel && <span>{beatLabel}</span>}</span>}
         </span>
-        <span className="pf-tile-name">{name}</span>
+        <span className="pf-tile-name">{isolate(name)}</span>
         {(note || (face === 'held' && heldLabel) || (face === 'unavailable' && reason)) && (
           <span className={cx('pf-tile-note', state.shortens && 'is-warn', face === 'unavailable' && 'is-muted')}>
             {face === 'unavailable' ? <><InfoIcon size={13} />{reason}</> : face === 'held' ? heldLabel : note}

@@ -22,6 +22,7 @@
   --pf-k-video:#8EA3BF; --pf-k-overlay:#7FA8FF; --pf-k-text:#FF8FD0; --pf-k-caption:#FFC2E0;
   --pf-k-voice:#6EDC9A; --pf-k-music:#FFC54D; --pf-k-sfx:#67C7FF; --pf-k-adjust:#D8DCE3;
   --pf-plate:rgba(0,0,0,.62);
+  --pf-on-plate:#EDEFF3; --pf-on-plate-pulse:#FFC54D;   /* foregrounds on --pf-plate / over images: same in both themes, because the plate is black in both */
   --pf-v1-tint:#16302C;                     /* main-track lane tint */
   /* mode tints, equal OKLCH lightness ~0.84; used only on the active pill underline/icon and the playhead cap */
   --pf-m-edit:#45E6D0; --pf-m-look:#FFA88A; --pf-m-sound:#7EE08A; --pf-m-captions:#C9A8FF; --pf-m-deliver:#73C9FF;
@@ -96,4 +97,4 @@
 @media (forced-colors:active){/* rings become Highlight outlines; kind stripes keep icons; no information by colour alone */}
 .num,.tc{font-family:var(--pf-font-mono);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
 :lang(he){letter-spacing:0;text-transform:none}
-:lang(en){font-size:.97em}
+/* spec says `:lang(en){font-size:.97em}`; applied per element it compounds per nesting level and shrinks the legacy editor, so it is not applied. See ux-a report. */

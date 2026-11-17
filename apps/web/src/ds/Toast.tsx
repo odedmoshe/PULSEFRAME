@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { createPortal } from 'react-dom';
 import { Button } from './Button.tsx';
 import { DEFAULT_TTL, dismissToast, pushToast, type ToastItem, type ToastKind } from './logic.ts';
-import { CheckIcon, CloseIcon, DS, InfoIcon, WarnIcon, cx } from './util.tsx';
+import { CheckIcon, CloseIcon, DS, InfoIcon, WarnIcon, cx, isolate } from './util.tsx';
 
 export interface ToastInput { id?: string; kind: ToastKind; title: string; body?: string; action?: string; onAction?: () => void; ttl?: number }
 interface Entry extends ToastItem { onAction?: () => void }
@@ -53,7 +53,7 @@ export function ToastView({ t, onDismiss, closeLabel = 'Close', staticView }: { 
     <div role="status" className={cx('pf-toast', `is-${t.kind}`)} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
       <span className="pf-toast-ic" aria-hidden="true">{ICON[t.kind]}</span>
       <div className="pf-toast-body">
-        <b>{t.title}</b>{t.body && <p>{t.body}</p>}
+        <b>{isolate(t.title)}</b>{t.body && <p>{isolate(t.body)}</p>}
         {t.action && <div className="pf-toast-actions"><Button size="sm" variant={t.kind === 'fix' ? 'primary' : 'secondary'} onClick={() => { t.onAction?.(); onDismiss?.(); }}>{t.action}</Button></div>}
       </div>
       {onDismiss && <button type="button" className="pf-toast-x" aria-label={closeLabel} onClick={onDismiss}><CloseIcon size={14} /></button>}

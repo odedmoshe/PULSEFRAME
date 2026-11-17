@@ -57,10 +57,15 @@ export function ScrubField(props: ScrubFieldProps) {
     if (v === null) return;
     e.preventDefault(); onChange(v); onCommit?.(v);
   };
-  const finish = (accept: boolean) => {
+  const ended = useRef(false);
+  useEffect(() => { if (editing) ended.current = false; }, [editing]);
+  /** Ends editing. Focus returns to the field only when the person ended it with Enter or Escape; on blur (Tab, a click elsewhere) it stays where they sent it. */
+  const finish = (accept: boolean, refocus: boolean) => {
+    if (ended.current) return;
+    ended.current = true;
     setEditing(false);
     if (accept) { const v = parseTyped(text, spec); if (v !== null && v !== value) { onChange(v); onCommit?.(v); } }
-    requestAnimationFrame(() => root.current?.focus());
+    if (refocus) requestAnimationFrame(() => root.current?.focus());
   };
   const label2 = `${shown}${unit ? ` ${unit}` : ''}`;
   return (
@@ -68,8 +73,8 @@ export function ScrubField(props: ScrubFieldProps) {
       role="spinbutton" aria-label={label} aria-valuemin={spec.min} aria-valuemax={spec.max} aria-valuenow={value} aria-valuetext={label2} aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : 0} dir="ltr" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { drag.current = null; setDragging(false); }} onKeyDown={editing ? undefined : key}>
       {editing
-        ? <input ref={input} className="pf-scrub-input num" inputMode="decimal" aria-label={label} value={text} onChange={(e) => setText(e.target.value)} onBlur={() => finish(true)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } }} />
+        ? <input ref={input} className="pf-scrub-input num" inputMode="decimal" aria-label={label} value={text} onChange={(e) => setText(e.target.value)} onBlur={() => finish(true, false)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); finish(true, true); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false, true); } }} />
         : <span className="pf-scrub-val num">{shown}{unit && <u>{unit}</u>}</span>}
     </div>
   );

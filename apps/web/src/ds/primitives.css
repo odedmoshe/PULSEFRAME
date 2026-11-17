@@ -8,7 +8,7 @@
 .pf-ds *, .pf-ds *::before, .pf-ds *::after { box-sizing: border-box; }
 .pf-sr { position: absolute !important; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .pf-ico { flex: none; display: inline-block; vertical-align: middle; pointer-events: none; }
-:where(.pf-ds) :focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+:where(.pf-ds) :focus-visible, .pf-ds:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 :where(.pf-ds) button { font: inherit; color: inherit; }
 @keyframes pf-spin { to { transform: rotate(360deg); } }
 .pf-spin { animation: pf-spin 900ms linear infinite; }
@@ -179,13 +179,13 @@
 .pf-tile-note.is-muted { color: var(--pf-text-3); }
 .pf-tile.is-applied .pf-tile-main { box-shadow: var(--pf-glow-frame); }
 .pf-tile-check { position: absolute; inset-block-start: 6px; inset-inline-start: 6px; display: grid; place-items: center; inline-size: 20px; block-size: 20px; border-radius: var(--pf-r-sm); background: var(--pf-frame); color: var(--pf-frame-ink); }
-.pf-tile-beat { position: absolute; inset-block-end: 6px; inset-inline-start: 6px; display: inline-flex; align-items: center; gap: var(--pf-sp-2); padding: 2px 6px 2px 4px; border-radius: var(--pf-r-xs); background: var(--pf-plate); color: var(--pf-pulse); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); box-shadow: var(--pf-glow-pulse); }
+.pf-tile-beat { position: absolute; inset-block-end: 6px; inset-inline-start: 6px; display: inline-flex; align-items: center; gap: var(--pf-sp-2); padding: 2px 6px 2px 4px; border-radius: var(--pf-r-xs); background: var(--pf-plate); color: var(--pf-on-plate-pulse); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); box-shadow: var(--pf-glow-pulse); }
 .pf-tile-progress { position: absolute; inset-inline: 0; inset-block-end: 0; block-size: 3px; background: color-mix(in srgb, black 45%, transparent); }
 .pf-tile-progress i { display: block; block-size: 100%; background: var(--pf-frame); }
-.pf-tile-star { position: absolute; inset-block-start: 10px; inset-inline-end: 10px; display: grid; place-items: center; inline-size: 26px; block-size: 26px; padding: 0; border: 0; border-radius: var(--pf-r-sm); background: var(--pf-plate); color: var(--pf-text); cursor: pointer; opacity: 0; transition: opacity var(--pf-dur-fast); }
+.pf-tile-star { position: absolute; inset-block-start: 10px; inset-inline-end: 10px; display: grid; place-items: center; inline-size: 26px; block-size: 26px; padding: 0; border: 0; border-radius: var(--pf-r-sm); background: var(--pf-plate); color: var(--pf-on-plate); cursor: pointer; opacity: 0; transition: opacity var(--pf-dur-fast); }
 .pf-tile:hover .pf-tile-star, .pf-tile:focus-within .pf-tile-star, .pf-tile-star.is-on { opacity: 1; }
-.pf-tile-star.is-on { color: var(--pf-pulse); }
-.pf-tile-held { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--pf-stage) 55%, transparent); color: var(--pf-text); }
+.pf-tile-star.is-on { color: var(--pf-on-plate-pulse); }
+.pf-tile-held { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--pf-stage) 55%, transparent); color: var(--pf-on-plate); }
 .pf-tile-shimmer { position: absolute; inset: 0; background: linear-gradient(100deg, var(--pf-surface-3) 20%, var(--pf-surface-4) 40%, var(--pf-surface-3) 60%) 0 0 / 200% 100%; animation: pf-shimmer 1.4s linear infinite; }
 @keyframes pf-shimmer { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .pf-tile-shimmer { animation: none; } }
@@ -280,7 +280,7 @@
 
 /* ---------- forced colors: rings become Highlight outlines, selection keeps an outline, no information by colour alone ---------- */
 @media (forced-colors: active) {
-  :where(.pf-ds) :focus-visible { outline-color: Highlight; }
+  :where(.pf-ds) :focus-visible, .pf-ds:focus-visible { outline-color: Highlight; }
   .pf-seg-btn.is-on, .pf-tab.is-on, .pf-chip.is-on, .pf-tile.is-applied .pf-tile-main, .pf-scrub:focus-visible { outline: 2px solid Highlight; }
   .pf-switch[aria-checked='true'] { background: Highlight; }
   .pf-bar > i, .pf-ring-arc { background: Highlight; stroke: Highlight; }

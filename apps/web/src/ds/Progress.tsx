@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Button } from './Button.tsx';
 import { Badge } from './Chip.tsx';
 import { clampPercent, progressFillSide, ringDash } from './logic.ts';
-import { CheckIcon, DS, WarnIcon, cx, useDir } from './util.tsx';
+import { CheckIcon, DS, WarnIcon, cx, isolate, useDir } from './util.tsx';
 
 export interface ProgressBarProps { value: number | null; label: string; tone?: 'frame' | 'pulse' | 'ok'; className?: string }
 /** role=progressbar. Fills from the reading-direction start (the right in Hebrew). value=null is indeterminate (no aria-valuenow). */
@@ -59,7 +59,7 @@ export function JobRow({ title, detail, state, progress = null, stateLabel, canc
   return (
     <div className={cx(DS, 'pf-job', `is-${state}`, className)} role="group" aria-label={title}>
       {lead}
-      <div className="pf-job-text"><b>{title}</b>{detail && <span>{detail}</span>}</div>
+      <div className="pf-job-text"><b>{isolate(title)}</b>{detail && <span>{isolate(detail)}</span>}</div>
       <Badge tone={tone}>{stateLabel}</Badge>
       {action && <Button size="sm" variant="secondary" onClick={onAction}>{action}</Button>}
       {state === 'running' && onCancel && <Button size="sm" variant="ghost" onClick={onCancel}>{cancelLabel ?? 'Cancel'}</Button>}

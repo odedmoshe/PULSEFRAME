@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { IconKeyframeFull, IconKeyframeGold, IconKeyframeHalf, IconKeyframeHollow } from '../editor/icons.tsx';
 import { keyframeGlyph, type KeyframeState } from './logic.ts';
-import { DS, HelpIcon, ChevronIcon, cx } from './util.tsx';
+import { DS, HelpIcon, ChevronIcon, cx, isolate } from './util.tsx';
 
 const KF = { keyframeHollow: IconKeyframeHollow, keyframeHalf: IconKeyframeHalf, keyframeFull: IconKeyframeFull, keyframeGold: IconKeyframeGold } as const;
 
@@ -61,7 +61,7 @@ export function Section({ title, open: controlled, defaultOpen = true, onToggle,
       <header className="pf-section-head">
         <h3 className="pf-section-title">
           <button type="button" className="pf-section-toggle" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>
-            <ChevronIcon className="pf-section-chev" /><span>{title}</span>{!open && summary != null && <span className="pf-section-summary num">{summary}</span>}
+            <ChevronIcon className="pf-section-chev" /><span>{title}</span>{!open && summary != null && <span className="pf-section-summary">{typeof summary === 'string' ? isolate(summary) : <bdi>{summary}</bdi>}</span>}
           </button>
         </h3>
         {onReset && <button type="button" className="pf-section-act" onClick={onReset}>{resetLabel}</button>}

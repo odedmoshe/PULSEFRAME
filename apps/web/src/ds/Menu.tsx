@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Reac
 import { createPortal } from 'react-dom';
 import { Keys } from './Kbd.tsx';
 import { menuKey, orderMenu, type MenuItemSpec } from './logic.ts';
-import { DS, cx, useDir } from './util.tsx';
+import { DS, cx, isolate, useDir } from './util.tsx';
 
 export interface MenuItem extends MenuItemSpec { icon?: ReactNode; /** shortcut caps shown on the end side */ keys?: readonly string[] }
 export interface MenuProps {
@@ -34,14 +34,19 @@ export function Menu({ items, onSelect, label, trigger, className }: MenuProps) 
   }, [open, dir]);
   useEffect(() => { if (open && pos) list.current?.querySelectorAll<HTMLElement>('[role=menuitem]')[active]?.focus(); }, [open, active, pos]);
   const close = (restore = true) => { setOpen(false); setPos(null); if (restore) btn.current?.focus(); };
-  const openAt = (i: number) => { setActive(Math.max(0, disabled.findIndex((d) => !d) === -1 ? 0 : disabled.findIndex((d, j) => j >= i && !d))); setOpen(true); };
+  const openAt = (i: number) => {
+    const after = disabled.findIndex((d, j) => j >= i && !d);
+    const before = disabled.lastIndexOf(false, i);
+    setActive(after >= 0 ? after : Math.max(0, before));
+    setOpen(true);
+  };
   const onKey = (e: React.KeyboardEvent) => {
     const now = Date.now();
     if (now - typed.current.at > 700) typed.current.text = '';
     const a = menuKey(e.key, active, labels, dir, disabled, typed.current.text);
     if (!a) return;
     e.preventDefault(); e.stopPropagation();
-    if (a.type === 'close') close(e.key !== 'Tab');
+    if (a.type === 'close') close(true);
     else if (a.type === 'move') setActive(a.to);
     else if (a.type === 'type') { typed.current = { text: typed.current.text + e.key, at: now }; setActive(a.to); }
     else if (a.type === 'activate') { const it = ordered[active]!.item; if (!it.disabled) { close(); onSelect(it.id); } }
@@ -62,7 +67,7 @@ export function Menu({ items, onSelect, label, trigger, className }: MenuProps) 
                 {separatorBefore && <div role="separator" className="pf-menu-sep" />}
                 <button type="button" role="menuitem" tabIndex={i === active ? 0 : -1} aria-disabled={item.disabled || undefined} className={cx('pf-menu-item', item.danger && 'is-danger')}
                   onMouseEnter={() => !item.disabled && setActive(i)} onClick={() => { if (!item.disabled) { close(); onSelect(item.id); } }}>
-                  <span className="pf-menu-ic">{item.icon}</span><span className="pf-menu-label">{item.label}</span>{item.keys && <Keys keys={item.keys} />}
+                  <span className="pf-menu-ic">{item.icon}</span><span className="pf-menu-label">{isolate(item.label)}</span>{item.keys && <Keys keys={item.keys} />}
                 </button>
               </div>
             ))}
