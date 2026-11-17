@@ -568,11 +568,6 @@ export class Editor {
     }
     this.set({ proposals: (await api.proposals(d.id).catch(() => ({ proposals: this.state.proposals }))).proposals });
   }
-  cancelExport() { const j = this.state.exportJob; if (j) api.cancelJob(j.id).catch(this.fail); }
-  retryExport() {
-    const j = this.state.exportJob;
-    if (j) api.retryJob(j.id).then((n) => this.trackExport(n.jobId)).catch(this.fail);
-  }
   /**
    * Starts a capability run and returns its job id. The job is recorded as queued unless its first event has already come in
    * (the event stream can be quicker than the answer to the request). A refusal is thrown to the caller, who says it in place.

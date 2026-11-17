@@ -18,7 +18,7 @@ import { CHROME_STRINGS } from './chrome.strings.ts';
 import { onMenuKeyDown } from './menuKeys.ts';
 import { InlineRename } from './InlineRename.tsx';
 import { openExportSheet, useExportSheet } from './ExportSheet.tsx';
-import { isActiveJob, jobFraction, overallFraction } from './exportSheet.logic.ts';
+import { describeExport, isActiveJob, jobFraction, overallFraction } from './exportSheet.logic.ts';
 import { ProjectsDialog } from './ProjectsDialog.tsx';
 import { IconExport, IconRedo, IconUndo } from './icons.tsx';
 import { WORKSPACES, useEditorState, type Workspace } from './store.ts';
@@ -140,7 +140,9 @@ function ExportState() {
   const frac = mine ? overallFraction([...sheet.jobs]) : job ? jobFraction(job) ?? (typeof job.output?.progress === 'number' ? job.output.progress : null) : null;
   const pct = frac == null ? null : Math.round(frac * 100);
   const status = running ? 'running' : mine ? (sheet.jobs.some((j) => j.status === 'succeeded') ? 'succeeded' : sheet.jobs.every((j) => j.status === 'canceled') ? 'canceled' : 'failed') : job!.status;
-  const open = () => openExportSheet({ last: true });
+  // the chip opens the run it shows: the sheet's own, or the export it follows when the sheet did not start it (an agent's over
+  // MCP/REST, another tab's, one still running after a reload), so its cancel or its file and retry are in the sheet either way
+  const open = () => openExportSheet({ last: true, followed: job && state.doc ? { ...describeExport(state.doc, null, state.lang), id: job.id, status: job.status, stage: job.stage, output: job.output, error: job.error, pending: true } : null });
   if (running) {
     const label = `${S.exportRing}${pct != null ? ` · ${pct}%` : ''} · ${S.exportOpen}`;
     return (

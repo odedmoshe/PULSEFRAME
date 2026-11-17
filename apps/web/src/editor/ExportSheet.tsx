@@ -24,13 +24,14 @@ import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../a
 import { useEditorState, type Editor, type ExportRequest } from './store.ts';
 import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
 import {
-  alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
+  alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, describeExport, jobsOnOpen, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
 } from './exportSheet.logic.ts';
 import './exportSheet.css';
 
 // ---------------------------------------------------------------- the sheet's own small store (open state and the jobs it started)
-export interface SheetJob { id: string; label: string; variantId: string | null; status: string; stage: string | null; output: any; error: any; ext: string; w: number; h: number }
+/** `pending`: an export the sheet did not start (the chip's followed job), named from the project until its stored options are read. */
+export interface SheetJob { id: string; label: string; variantId: string | null; status: string; stage: string | null; output: any; error: any; ext: string; w: number; h: number; pending?: boolean }
 interface SheetState { open: boolean; jobs: SheetJob[]; starting: boolean; error: string | null; blockers: { code: string; message: string }[]; recent: SheetJob[] }
 let sheet: SheetState = { open: false, jobs: [], starting: false, error: null, blockers: [], recent: [] };
 const listeners = new Set<() => void>();
@@ -45,11 +46,12 @@ const subscribe = (l: () => void) => { listeners.add(l); return () => { listener
 const useSheet = () => useSyncExternalStore(subscribe, () => sheet);
 /**
  * Opens the export sheet. A finished or failed earlier run is cleared, so the sheet opens on its settings; a running one is
- * shown. `{ last: true }` (the top bar's export chip) shows the last run as it is, finished or not.
+ * shown. `{ last: true }` (the top bar's export chip) shows the last run as it is, finished or not, and `followed` is the
+ * export the chip follows: when the sheet did not start it (the agent, another tab, a reload), it is shown all the same, with
+ * its progress and cancel, or its file and retry (exportSheet.logic.ts jobsOnOpen).
  */
-export function openExportSheet(opts: { last?: boolean } = {}) {
-  const running = sheet.jobs.some((j) => isActiveJob(j.status));
-  setSheet({ open: true, error: null, blockers: [], ...(running || (opts.last && sheet.jobs.length) ? {} : { jobs: [] }) });
+export function openExportSheet(opts: { last?: boolean; followed?: SheetJob | null } = {}) {
+  setSheet({ open: true, error: null, blockers: [], jobs: jobsOnOpen(sheet.jobs, opts, opts.followed ?? null) });
 }
 /** The runs of the sheet's last export and whether the sheet is open (the top bar's export chip reads them). */
 export function useExportSheet(): { open: boolean; jobs: readonly SheetJob[]; starting: boolean } { const s = useSheet(); return { open: s.open, jobs: s.jobs, starting: s.starting }; }
@@ -92,6 +94,16 @@ export function ExportSheetHost() {
     tick();
     return () => window.clearInterval(h);
   }, [primary, active]);
+  // an export the sheet did not start is named from the options the server stored with it (its format, file type and size)
+  const pending = s.jobs.filter((j) => j.pending).map((j) => j.id).join(' ');
+  useEffect(() => {
+    const doc = state.doc;
+    if (!primary || !pending || !doc) return;
+    for (const id of pending.split(' ')) {
+      void api.job(id).then((v) => setSheet({ jobs: sheet.jobs.map((j) => (j.id === id ? { ...j, ...describeExport(doc, v.options, state.lang), status: isActiveJob(j.status) ? v.status : j.status, stage: isActiveJob(j.status) ? v.stage : j.stage, output: isActiveJob(j.status) ? v.output : j.output, error: isActiveJob(j.status) ? v.error : j.error, pending: false } : j)) }))
+        .catch(() => setSheet({ jobs: sheet.jobs.map((j) => (j.id === id ? { ...j, pending: false } : j)) }));
+    }
+  }, [primary, pending]); // eslint-disable-line react-hooks/exhaustive-deps
   // the editor hears the newest export through the event stream; that is fresher than the next poll, so the sheet takes it too
   const heard = state.exportJob;
   useEffect(() => {

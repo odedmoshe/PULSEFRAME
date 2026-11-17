@@ -142,7 +142,7 @@ export const api = {
   decideProposal: (id: string, proposalId: string, decision: 'accept' | 'reject') => call<{ proposal: Proposal }>(`/projects/${id}/proposals/${proposalId}/${decision}`, json({})),
   startExport: (id: string, options?: { variantId?: string }) => call<{ jobId: string }>(`/projects/${id}/exports`, options ? json(options) : { method: 'POST' }),
   exportBatch: (id: string, variantIds: string[]) => call<{ jobs: { jobId: string; variantId: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ variantIds })),
-  job: (jobId: string) => call<JobEvent & { status: string }>(`/jobs/${jobId}`),
+  job: (jobId: string) => call<JobEvent & { status: string; /** an export's stored options (POST /exports body) */ options?: { variantId?: string; format?: string; scale?: number; quality?: string; captions?: string } }>(`/jobs/${jobId}`),
   preflight: (id: string, variantId: string | null) => call<PreflightReport>(`/projects/${id}/preflight${variantId ? `?variant=${encodeURIComponent(variantId)}` : ''}`),
   planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
   applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),
