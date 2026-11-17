@@ -15,7 +15,7 @@ const STR = {
     title: 'אנימציית טקסט', by: 'מה זז כיחידה', in: 'כניסה', out: 'יציאה', loop: 'תנועה חוזרת', inFrames: 'אורך הכניסה (פריימים)', outFrames: 'אורך היציאה (פריימים)', none: 'בלי', remove: 'הסרת האנימציה',
     note: 'היחידות נכנסות אחת אחרי השנייה לפי סדר הקריאה, כך שעברית מתחילה מימין. כשאין תנועה, הכותרת נראית בדיוק כמו כותרת רגילה.',
     unit: { letter: 'אות', word: 'מילה', line: 'שורה' },
-    names: { fade: 'דהייה', typewriter: 'מכונת כתיבה', rise: 'עלייה מלמטה', drop: 'נפילה מלמעלה', pop: 'קפיצה', slide: 'החלקה מהצד', zoom: 'התכנסות', sink: 'שקיעה', lift: 'ריחוף למעלה', shrink: 'כיווץ', wave: 'גל', bounce: 'ניתור', pulse: 'פעימה', jitter: 'רעד' },
+    names: { fade: 'דהייה', typewriter: 'מכונת כתיבה', rise: 'עלייה מלמטה', drop: 'נפילה מלמעלה', pop: 'קפיצה', slide: 'החלקה מהצד', zoom: 'התכנסות', blur: 'טשטוש', write: 'כתיבה', sink: 'שקיעה', lift: 'ריחוף למעלה', shrink: 'כיווץ', wave: 'גל', bounce: 'ניתור', pulse: 'פעימה', jitter: 'רעד' },
     shortened: (total: number, i: number, o: number) => `הכותרת באורך ${total} פריימים, ולכן האורכים קוצרו למה שנכנס בה: ${[i ? `כניסה ${i}` : '', o ? `יציאה ${o}` : ''].filter(Boolean).join(', ')}.`,
     cap: (max: number) => `האורך המרבי של כניסה או יציאה הוא ${max} פריימים.`,
   },
@@ -23,7 +23,7 @@ const STR = {
     title: 'Text animation', by: 'What moves as one piece', in: 'Entrance', out: 'Exit', loop: 'Repeating movement', inFrames: 'Entrance length (frames)', outFrames: 'Exit length (frames)', none: 'None', remove: 'Remove animation',
     note: 'The pieces come in one after another in reading order, so Hebrew starts from the right. When nothing is moving the title looks exactly like a plain title.',
     unit: { letter: 'Letter', word: 'Word', line: 'Line' },
-    names: { fade: 'Fade', typewriter: 'Typewriter', rise: 'Rise from below', drop: 'Drop from above', pop: 'Pop', slide: 'Slide from the side', zoom: 'Settle from larger', sink: 'Sink', lift: 'Lift', shrink: 'Shrink', wave: 'Wave', bounce: 'Bounce', pulse: 'Pulse', jitter: 'Jitter' },
+    names: { fade: 'Fade', typewriter: 'Typewriter', rise: 'Rise from below', drop: 'Drop from above', pop: 'Pop', slide: 'Slide from the side', zoom: 'Settle from larger', blur: 'Blur in', 'out:blur': 'Blur out', write: 'Write-on', sink: 'Sink', lift: 'Lift', shrink: 'Shrink', wave: 'Wave', bounce: 'Bounce', pulse: 'Pulse', jitter: 'Jitter' },
     shortened: (total: number, i: number, o: number) => `The title is ${total} frames long, so the lengths were shortened to what fits: ${[i ? `entrance ${i}` : '', o ? `exit ${o}` : ''].filter(Boolean).join(', ')}.`,
     cap: (max: number) => `An entrance or exit can be at most ${max} frames long.`,
   },
@@ -58,12 +58,13 @@ export function TextAnimationField({ clip }: { clip: Text }) {
   };
   const set = (patch: Partial<TextAnimation>) => void change(patch);
   const storedFrames = (key: 'inFrames' | 'outFrames') => { const live = editor.doc ? findClip(editor.doc, clip.id)?.clip : undefined; return live?.type === 'text' ? live.animation?.[key] : undefined; };
-  const name = (k: string) => (S.names as Record<string, string>)[k] ?? k;
+  /** The option's name; an exit may have its own (`out:blur`, ADR-0012) where the entrance of the same name reads differently. */
+  const name = (k: string, key?: 'in' | 'out' | 'loop') => (S.names as Record<string, string>)[`${key}:${k}`] ?? (S.names as Record<string, string>)[k] ?? k;
   const pick = (label: string, testid: string, value: string | null, options: readonly string[], key: 'in' | 'out' | 'loop') => (
     <label>{label}
       <select value={value ?? ''} data-testid={testid} onChange={(e) => set({ [key]: e.target.value || null })}>
         <option value="">{S.none}</option>
-        {options.map((o) => <option key={o} value={o}>{name(o)}</option>)}
+        {options.map((o) => <option key={o} value={o}>{name(o, key)}</option>)}
       </select>
     </label>
   );

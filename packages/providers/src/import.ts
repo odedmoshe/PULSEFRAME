@@ -2,7 +2,7 @@
  * Reviewed workflow import (Amendment A1 FF-03). Pure parsing: no network, no execution, no installs,
  * no filesystem access. The result is always a DRAFT whose blockers explain why it is not publishable.
  */
-import { ComfyGraphSchema, graphDigest, publicationBlockers, type Blocker, type CapabilityDescriptor } from './descriptor.ts';
+import { ComfyGraphSchema, graphDigest, publicationBlockers, type Blocker, type ComfyDescriptor } from './descriptor.ts';
 
 /** Node classes shipped in ComfyUI core that the importer can attribute without a runtime. Extend only after review. */
 export const KNOWN_CORE_NODES = new Set(['EmptyImage', 'SaveImage', 'PreviewImage', 'LoadImage', 'ImageScale', 'ImageInvert', 'ImageBlur', 'ImageBatch', 'SolidMask', 'MaskToImage', 'ImageCompositeMasked', 'ImagePadForOutpaint', 'LoadBackgroundRemovalModel', 'RemoveBackground', 'JoinImageWithAlpha', 'InvertMask']);
@@ -18,7 +18,7 @@ export class ImportError extends Error {
     super(message);
   }
 }
-export interface ImportResult { draft: CapabilityDescriptor; blockers: Blocker[]; findings: string[] }
+export interface ImportResult { draft: ComfyDescriptor; blockers: Blocker[]; findings: string[] }
 
 export function importComfyWorkflow(json: unknown, meta: { id: string; title: string; sourceRepository?: string; sourceCommit?: string }): ImportResult {
   if (json && typeof json === 'object' && Array.isArray((json as any).nodes) && 'links' in (json as any))
@@ -28,10 +28,10 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
   const graph = parsed.data;
   if (Object.keys(graph).length > 2000) throw new ImportError('graph_too_large', 'graph has more than 2000 nodes');
   const findings: string[] = [];
-  const inputs: CapabilityDescriptor['inputs'] = [];
-  const outputs: CapabilityDescriptor['outputs'] = [];
-  const models: CapabilityDescriptor['models'] = [];
-  let egress: CapabilityDescriptor['egress'] = 'none';
+  const inputs: ComfyDescriptor['inputs'] = [];
+  const outputs: ComfyDescriptor['outputs'] = [];
+  const models: ComfyDescriptor['models'] = [];
+  let egress: ComfyDescriptor['egress'] = 'none';
   const used = new Set<string>();
   const name = (base: string) => { let n = base.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[^a-z]+/, '') || 'p'; n = n[0]!.toLowerCase() + n.slice(1); let k = n; for (let i = 2; used.has(k); i++) k = `${n}_${i}`; used.add(k); return k; };
 
@@ -43,7 +43,7 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
       }
       if (typeof value === 'string' && /^[a-z][a-z0-9+.-]*:\/\//i.test(value)) { egress = 'graph-defined'; findings.push(`node ${nodeId} (${node.class_type}) field "${field}" contains a URL; graph-defined endpoints are never contacted on import and block publication`); }
       if (typeof value === 'string' && (MODEL_FIELD.test(field) || MODEL_FILE.test(value))) {
-        models.push({ role: field, path: value, publisher: null, revision: null, sha256: null, bytes: null, license: null, licenseEvidence: null, commercialUse: 'unknown', gated: false, source: null });
+        models.push({ role: field, path: value, publisher: null, revision: null, sha256: null, bytes: null, license: null, licenseEvidence: null, commercialUse: 'unknown', gated: false, source: null, attribution: null });
         continue;
       }
       const media = MEDIA_LOADERS[node.class_type];
@@ -56,17 +56,17 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
       else findings.push(`node ${nodeId} field "${field}" has a structured literal that is kept fixed`);
     }
     const out = OUTPUT_NODES[node.class_type];
-    if (out) outputs.push({ name: name(`out_${nodeId}`), role: 'primary', mediaType: out, nodeId, encoding: 'display', expectSize: null, reviewed: false });
+    if (out) outputs.push({ name: name(`out_${nodeId}`), role: 'primary', mediaType: out, nodeId, encoding: 'display', expectSize: null, expectFrames: null, dataSchema: null, reviewed: false });
   }
   const classes = [...new Set(Object.values(graph).map((n) => n.class_type))].sort();
-  const draft: CapabilityDescriptor = {
+  const draft: ComfyDescriptor = {
     id: meta.id, version: '0.0.1', provider: 'comfyui', state: 'draft',
     cost: { cents: 0, basis: 'not declared; a reviewer must state the cost before publishing' },
     title: { he: meta.title, en: meta.title }, description: { he: '', en: '' },
     source: { repository: meta.sourceRepository ?? null, commit: meta.sourceCommit ?? null, notices: null },
     graph, graphDigest: graphDigest(graph), inputs, outputs,
     requiredNodes: classes.map((classType) => ({ classType, pack: KNOWN_CORE_NODES.has(classType) ? 'core' : null, packVersion: null })),
-    models, runtime: { comfyuiCommit: null, imageDigest: null }, limits: { maxFrames: null, maxPixels: null },
+    models, runtime: { comfyuiCommit: null, imageDigest: null }, frames: null, limits: { maxFrames: null, maxPixels: null },
     resources: { downloadBytes: 0, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
     egress, languages: [], limitations: ['Imported draft: not reviewed, not executed, not quality-checked.'],
     qualification: { schemaValid: { status: 'pass', evidence: 'parsed as ComfyUI API-format graph; all links resolve' }, dependencyReady: NA, licenseReviewed: NA, executed: NA, qualityReviewed: NA, hebrewQualified: NA, hardwareQualified: NA },

@@ -4,7 +4,7 @@
  * Sequential requests reuse the decode pipeline; random requests seek from the proper keyframe (Mediabunny handles
  * B-frame/presentation order).
  *
- * Decoders used while a frame is drawn are pinned (FrameProvider.begin): the budget never disposes them under that frame.
+ * Decoders used while a frame is drawn are pinned to that drawing (FrameProvider.begin/end): the budget never disposes them under it, whatever other drawings do.
  * A frame that needs more decoders than the budget gets null for the extra pictures, with the reason (`decode_budget`),
  * never a rejection: the compositor then leaves the time effect out and says why.
  */
@@ -122,14 +122,15 @@ let pools = 0;
 export class MediaPool {
   private local = new Map<string, Blob>();
   private blobs = new Map<string, Promise<Blob>>();
-  /** By `${clipId}:${quality}:${lane}`: the decoder, when it was last asked for, and in which drawing (begin) generation. */
-  private decoders = new Map<string, { assetId: string; dec: Promise<PoolDecoder>; used: number; generation: number }>();
+  /** By `${clipId}:${quality}:${lane}`: the decoder, when it was last asked for, and the drawings (begin tokens) that hold it. */
+  private decoders = new Map<string, { assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number> }>();
   /** URL sources shared by the lanes of one clip, by `${clipId}:${quality}\n${url}`, with how many decoders read each. */
   private urlSources = new Map<string, { source: UrlSource; users: number }>();
   /** Why the last request for a decoder key resolved null (the budget), by key. */
   private refusals = new Map<string, string>();
-  /** Advanced by every begin(): decoders used in the current generation are pinned. */
-  private generation = 0;
+  /** The drawing whose frames are being asked for now (frames are asked for synchronously right after begin), 0 for none. */
+  private drawing = 0;
+  private drawings = 0;
   private useClock = 0;
   private peak = 0;
   private refused = 0;
@@ -227,11 +228,35 @@ export class MediaPool {
   }
   private readonly name = `pool${++pools}`;
   /** Full quality: always the original media (export, agent stills, paused preview). */
-  readonly frames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'full'), { lut: (assetId: string) => this.lut(assetId), begin: () => this.begin(), refusal: (layer: PictureLayer) => this.refusal(layer, 'full') });
+  readonly frames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'full'), { lut: (assetId: string) => this.lut(assetId), begin: () => this.begin(), end: (t: unknown) => this.end(t), refusal: (layer: PictureLayer) => this.refusal(layer, 'full') });
   /** Draft quality: the frame-identical proxy when one exists (playback). A colour table has no proxy: both providers give the same one. */
-  readonly draftFrames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'draft'), { lut: (assetId: string) => this.lut(assetId), begin: () => this.begin(), refusal: (layer: PictureLayer) => this.refusal(layer, 'draft') });
-  /** A new drawing starts: decoders it uses are pinned until the next one (the previous drawing's are released). */
-  private begin() { this.generation++; }
+  readonly draftFrames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'draft'), { lut: (assetId: string) => this.lut(assetId), begin: () => this.begin(), end: (t: unknown) => this.end(t), refusal: (layer: PictureLayer) => this.refusal(layer, 'draft') });
+  /**
+   * A new drawing starts: the decoders it asks for are pinned to its token until it ends, whatever other drawings (another
+   * player on the same pool, such as the source viewer's) start and end meanwhile. Under a shared counter, a second
+   * drawing's begin released the first one's decoders while it was still drawing, and the budget could dispose one of them
+   * mid-frame ('VideoSample is closed').
+   */
+  private begin(): number { this.drawing = ++this.drawings; return this.drawing; }
+  private end(token: unknown) {
+    if (typeof token !== 'number') return;
+    for (const d of this.decoders.values()) d.pins.delete(token);
+    for (const d of [...this.retiring]) { d.pins.delete(token); if (d.pins.size === 0) { this.retiring.delete(d); void d.dec.then((x) => x.dispose()).catch(() => {}); } }
+    if (this.drawing === token) this.drawing = 0;
+  }
+  /** Decoders taken out of use while a drawing still held their picture: disposed when the last such drawing ends. */
+  private retiring = new Set<{ assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number> }>();
+  /**
+   * Take a decoder out of use (its asset was replaced, or a proxy became ready). One that a drawing in progress holds is
+   * closed only when that drawing ends: closing it at once released the picture that drawing was about to paint
+   * ('VideoSample is closed', seen in the editor when a proxy finished while a frame was being drawn).
+   */
+  private retire(key: string, v: { assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number> }) {
+    this.decoders.delete(key);
+    this.disposed++;
+    if (v.pins.size) this.retiring.add(v);
+    else void v.dec.then((x) => x.dispose()).catch(() => {});
+  }
   private keyOf(layer: PictureLayer, quality: 'draft' | 'full') { return `${layer.clipId}:${quality}:${layer.kind === 'video' ? layer.lane ?? 0 : 0}`; }
   private refusal(layer: PictureLayer, quality: 'draft' | 'full'): string | null { return layer.kind === 'image' ? null : this.refusals.get(this.keyOf(layer, quality)) ?? null; }
   /**
@@ -240,14 +265,14 @@ export class MediaPool {
    */
   private decoderFor(layer: Extract<PictureLayer, { kind: 'video' }>, quality: 'draft' | 'full', key: string): Promise<PoolDecoder> | null {
     let d = this.decoders.get(key);
-    if (d && d.assetId !== layer.assetId) { this.decoders.delete(key); this.disposed++; void d.dec.then((x) => x.dispose()).catch(() => {}); d = undefined; }
+    if (d && d.assetId !== layer.assetId) { this.retire(key, d); d = undefined; }
     if (!d) {
       if (!this.makeRoom()) return null;
       const lane = layer.lane ?? 0;
       const dec = this.videoSource(layer.assetId, quality).then((src) => this.opts.openDecoder
         ? this.opts.openDecoder(src, { assetId: layer.assetId, clipId: layer.clipId, quality, lane })
         : ClipDecoder.open(typeof src === 'string' ? this.urlSource(`${layer.clipId}:${quality}`, src) : src, 30));
-      const entry = { assetId: layer.assetId, dec, used: 0, generation: this.generation };
+      const entry = { assetId: layer.assetId, dec, used: 0, pins: new Set<number>() };
       d = entry;
       this.decoders.set(key, entry);
       this.opened++;
@@ -255,7 +280,7 @@ export class MediaPool {
       dec.catch(() => { if (this.decoders.get(key) === entry) this.decoders.delete(key); });
     }
     d.used = ++this.useClock;
-    d.generation = this.generation;
+    if (this.drawing) d.pins.add(this.drawing);
     return d.dec;
   }
   private frame(layer: PictureLayer, quality: 'draft' | 'full'): Promise<FrameImage | null> {
@@ -293,7 +318,7 @@ export class MediaPool {
   private makeRoom(): boolean {
     while (this.decoders.size >= this.maxDecoders) {
       let oldest: string | null = null, at = Infinity;
-      for (const [k, v] of this.decoders) if (v.generation !== this.generation && v.used < at) { at = v.used; oldest = k; }
+      for (const [k, v] of this.decoders) if (v.pins.size === 0 && v.used < at) { at = v.used; oldest = k; }
       if (oldest === null) return false;
       const v = this.decoders.get(oldest)!;
       this.decoders.delete(oldest);
@@ -318,13 +343,15 @@ export class MediaPool {
   }
   /** Drop decoders of one asset (e.g. its proxy just became ready, or the asset was replaced). */
   invalidate(assetId: string) {
-    for (const [k, v] of this.decoders) if (v.assetId === assetId) { this.decoders.delete(k); this.disposed++; void v.dec.then((d) => d.dispose()).catch(() => {}); }
+    for (const [k, v] of [...this.decoders]) if (v.assetId === assetId) this.retire(k, v);
   }
   stats(): MediaPoolStats {
     return { decoders: this.decoders.size, stills: this.stills.size, maxDecoders: this.maxDecoders, maxStills: this.maxStills, decoderByteCacheBytes: this.byteCache, sources: { ...this.sources }, sourcesUsed: structuredClone(this.used), opened: this.opened, disposed: this.disposed, peakDecoders: this.peak, refused: this.refused };
   }
   async dispose() {
     for (const v of this.decoders.values()) void v.dec.then((d) => d.dispose()).catch(() => {});
+    for (const v of this.retiring) void v.dec.then((d) => d.dispose()).catch(() => {});
+    this.retiring.clear();
     for (const v of this.stills.values()) void v.img.then((x) => x.bmp.close()).catch(() => {});
     this.decoders.clear();
     this.refusals.clear();

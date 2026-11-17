@@ -3,7 +3,7 @@ import { BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, graphDigest, imp
 
 const codes = (d: CapabilityDescriptor, profile: 'commercial' | 'research' = 'commercial') => publicationBlockers(d, profile).map((b) => b.code);
 const thrown = (fn: () => unknown) => { try { fn(); } catch (e: any) { return e.code as string; } return 'ok'; };
-const withFlags = (d: CapabilityDescriptor): CapabilityDescriptor => ({ ...d, qualification: Object.fromEntries(Object.keys(d.qualification).map((k) => [k, { status: 'pass' }])) as any });
+const withFlags = <D extends CapabilityDescriptor>(d: D): D => ({ ...d, qualification: Object.fromEntries(Object.keys(d.qualification).map((k) => [k, { status: 'pass' }])) as any });
 
 // A graph shaped like a typical model workflow, including a custom node and a URL.
 const modelGraph = {
@@ -22,8 +22,8 @@ describe('workflow import (FF-03)', () => {
     expect(draft.state).toBe('draft');
     expect(draft.models.map((m) => m.path)).toEqual(['some_model.safetensors', 'cameraman_v2.safetensors', 'https://example.com/weights.bin']);
     expect(draft.models.every((m) => m.sha256 === null && m.commercialUse === 'unknown')).toBe(true);
-    expect(draft.inputs.find((i) => i.binding.input === 'seed')?.type).toBe('seed');
-    expect(draft.inputs.find((i) => i.binding.nodeId === '8')?.type).toBe('image');
+    expect(draft.inputs.find((i) => i.binding?.input === 'seed')?.type).toBe('seed');
+    expect(draft.inputs.find((i) => i.binding?.nodeId === '8')?.type).toBe('image');
     expect(draft.outputs.map((o) => o.nodeId)).toEqual(['10']);
     expect(draft.egress).toBe('graph-defined');
     const c = new Set(blockers.map((b) => b.code));
@@ -53,12 +53,12 @@ describe('qualification and licensing (FF-04, §8 of the addendum)', () => {
     expect(codes(SMOKE_SOLID_IMAGE).sort()).toEqual(['not_executed', 'not_hardwareQualified']);
   });
   it('a research-only model excludes the workflow from the commercial profile even when everything else passes', () => {
-    const d = withFlags({ ...SMOKE_SOLID_IMAGE, id: 'test.camera-copy', models: [{ role: 'lora', path: 'cameraman_v2.safetensors', publisher: 'Cseti', revision: 'abc', sha256: 'a'.repeat(64), bytes: 1000, license: 'research-only', licenseEvidence: 'publisher model card', commercialUse: 'prohibited', gated: false, source: null }] });
+    const d = withFlags({ ...SMOKE_SOLID_IMAGE, id: 'test.camera-copy', models: [{ role: 'lora', path: 'cameraman_v2.safetensors', publisher: 'Cseti', revision: 'abc', sha256: 'a'.repeat(64), bytes: 1000, license: 'research-only', licenseEvidence: 'publisher model card', commercialUse: 'prohibited', gated: false, source: null, attribution: null }] });
     expect(codes(d, 'commercial')).toEqual(['model_not_commercially_eligible']);
     expect(codes(d, 'research')).toEqual([]);
   });
   it('a size or a file name is not integrity: a model without a digest stays unresolved', () => {
-    const d = withFlags({ ...SMOKE_SOLID_IMAGE, models: [{ role: 'ckpt', path: 'm.safetensors', publisher: 'p', revision: 'r', sha256: null, bytes: 123, license: 'x', licenseEvidence: 'y', commercialUse: 'allowed', gated: false, source: null }] });
+    const d = withFlags({ ...SMOKE_SOLID_IMAGE, models: [{ role: 'ckpt', path: 'm.safetensors', publisher: 'p', revision: 'r', sha256: null, bytes: 123, license: 'x', licenseEvidence: 'y', commercialUse: 'allowed', gated: false, source: null, attribution: null }] });
     expect(codes(d)).toEqual(['unresolved_model']);
   });
   it('editing a reviewed graph invalidates its digest', () => {

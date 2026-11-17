@@ -1,6 +1,6 @@
 /**
  * Decode lanes of the media pool (ADR-0011): one decoder per clip, quality and lane; the decoders a drawing uses are pinned
- * until the next one begins; a frame that needs more decoders than the budget gets null for the extra pictures with the
+ * until that drawing ends, whatever other drawings do; a frame that needs more decoders than the budget gets null for the extra pictures with the
  * reason `decode_budget`, never a rejection; the pool never holds more decoders than its budget.
  * The decoders are stubs (labelled as such: MediaPoolOptions.openDecoder is a test-only seam; no Mediabunny, no browser).
  */
@@ -34,11 +34,11 @@ const layer = (clipId: string, lane = 0, frame = 0, assetId = 'ast_v'): VideoLay
   kind: 'video', clipId, trackId: 'trk', assetId, sourceTime: T.frameTime(frame, { num: 30, den: 1 }), sourceFrameIndex: frame, sourceSeekSeconds: (frame + 0.5) / 30,
   sourceWidth: 640, sourceHeight: 360, transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }, ...(lane ? { lane } : {}),
 });
-/** One drawing as drawGraph makes it: begin, then every picture asked for at once. */
-const draw = (pool: MediaPool, layers: VideoLayer[], draft = false) => {
+/** One drawing as drawGraph makes it: begin, every picture asked for at once, and end when it is drawn. */
+const draw = async (pool: MediaPool, layers: VideoLayer[], draft = false) => {
   const frames = draft ? pool.draftFrames : pool.frames;
-  frames.begin!();
-  return Promise.all(layers.map((l) => frames(l)));
+  const token = frames.begin!();
+  try { return await Promise.all(layers.map((l) => frames(l))); } finally { frames.end!(token); }
 };
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
@@ -79,6 +79,48 @@ describe('decode lanes', () => {
     expect(opened).toEqual(['clp_a:full:0', 'clp_a:full:1', 'clp_a:full:2', 'clp_a:full:3']);
     expect(pool.frames.refusal!(four[3]!)).toBeNull(); // the reason is for the last request only
     expect(pool.stats().decoders).toBe(3);
+  });
+
+  it('reported (Phase 3, \'VideoSample is closed\'): a drawing that starts while another is still drawing (the source viewer\'s player on the editor\'s pool) never releases the other\'s decoders', async () => {
+    const { pool, disposed } = stubPool(3);
+    // the editor's player starts a frame and asks for its picture; it is still drawing (a GPU pass, say)
+    const a = pool.frames.begin!();
+    const mine = await pool.frames(layer('clp_main', 0, 10));
+    expect(mine).not.toBeNull();
+    // meanwhile the source viewer draws three frames of its own clip, each needing room for one more decoder
+    for (let i = 0; i < 3; i++) await draw(pool, [layer(`clp_src${i}`, 0, i)]);
+    await settle();
+    expect(disposed).not.toContain('clp_main:full:0'); // under a shared counter this was disposed mid-frame
+    expect(pool.stats().decoders).toBeLessThanOrEqual(3);
+    // once the player's frame is done, its decoder can make room like any other
+    pool.frames.end!(a);
+    await draw(pool, [layer('clp_src3', 0), layer('clp_src4', 0), layer('clp_src5', 0)]);
+    await settle();
+    expect(disposed).toContain('clp_main:full:0');
+  });
+
+  it('reported (Phase 3, second path): a decoder retired while a drawing holds it (a proxy became ready, or its clip now shows another file) is closed only when that drawing ends', async () => {
+    const { pool, disposed, opened } = stubPool(4);
+    const a = pool.frames.begin!();
+    await pool.frames(layer('clp_a', 0, 5));
+    pool.invalidate('ast_v'); // the proxy of the file became ready while the frame is still being drawn
+    await settle();
+    expect(disposed).toEqual([]); // closing it now would release the picture about to be painted
+    expect(pool.stats().decoders).toBe(0); // but it is out of use: the next request opens a new one
+    await draw(pool, [layer('clp_a', 0, 6)]);
+    expect(opened).toEqual(['clp_a:full:0', 'clp_a:full:0']);
+    pool.frames.end!(a);
+    await settle();
+    expect(disposed).toEqual(['clp_a:full:0']);
+    // the same when the clip now shows another file
+    const b = pool.frames.begin!();
+    await pool.frames(layer('clp_b', 0, 1, 'ast_one'));
+    await draw(pool, [layer('clp_b', 0, 1, 'ast_two')]);
+    await settle();
+    expect(disposed).toEqual(['clp_a:full:0']);
+    pool.frames.end!(b);
+    await settle();
+    expect(disposed).toEqual(['clp_a:full:0', 'clp_b:full:0']);
   });
 
   it('three overlapping clips with five lanes each do not fit a budget of 12: the layers\' own pictures come first and the refused ones are the extra lanes', async () => {

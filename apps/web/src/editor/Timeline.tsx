@@ -16,7 +16,7 @@ import { soundTailsFor } from './AudioFxBlock.tsx';
 
 const MAX_MARKERS = 3000;
 
-export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.text);
+export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.text);
 
 /** Shown while the playhead rests on a user marker: name, colour and removal, each an ordinary committed edit. */
 function MarkerBar({ marker }: { marker: Marker }) {

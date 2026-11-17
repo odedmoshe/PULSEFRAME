@@ -28,6 +28,7 @@ function run(seed: number) {
     // imports and set-up belong to another actor, so "undo everything" by the editing actor stops before them
     s.commit({ projectId: pid, actor: 'system', allowInternal: true, ops: fz.importOps });
     s.commit({ projectId: pid, actor: 'system', ops: fz.setup(s.getProject(pid).doc) });
+    s.commit({ projectId: pid, actor: 'system', allowInternal: true, ops: fz.aiSetup(s.getProject(pid).doc) }); // ADR-0017 fixtures (internal operations)
     const proj = () => creativeProjection(s.getProject(pid).doc);
     const states = [proj()];
     const applied: string[] = [];

@@ -251,3 +251,18 @@ export function kaiserSincTable(taps: number, phases: number, cutoff: number, be
   }
   return t;
 }
+
+// ---- cleanup (ADR-0013): shared section designs, written by the lead ------------------------------------------------------------
+/** RBJ notch at f0, quality q; unity gain away from f0 (exactly 1 at DC and at Nyquist), a zero on the unit circle at f0. */
+export function notch(f0: number, q: number, sampleRate: number): Biquad {
+  const w = (2 * Math.PI * f0) / sampleRate, c = Math.cos(w), alpha = Math.sin(w) / (2 * q);
+  return section(1, -2 * c, 1, 1 + alpha, -2 * c, 1 - alpha);
+}
+/** RBJ high shelf, slope 1: `db` above f0, 0 dB below, half of it at f0. */
+export function highShelf(f0: number, db: number, sampleRate: number): Biquad {
+  const A = Math.pow(10, db / 40), w = (2 * Math.PI * f0) / sampleRate, c = Math.cos(w);
+  const alpha = (Math.sin(w) / 2) * Math.SQRT2; // S = 1: sqrt((A + 1/A)(1/S - 1) + 2) = sqrt(2)
+  const sa = 2 * Math.sqrt(A) * alpha;
+  return section(A * (A + 1 + (A - 1) * c + sa), -2 * A * (A - 1 + (A + 1) * c), A * (A + 1 + (A - 1) * c - sa), A + 1 - (A - 1) * c + sa, 2 * (A - 1 - (A + 1) * c), A + 1 - (A - 1) * c - sa);
+}
+// W1 may APPEND its section "cleanup.denoise/dehum design" below this line; W2 never edits design.ts (it appends to tables.ts).

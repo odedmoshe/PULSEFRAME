@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T09:15:35.779Z",
+  "ranAt": "2026-11-17T10:34:52.846Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 0.992037,
-        "editor-en": 0.985811,
-        "palette-en": 0.989383
+        "editor-he": 1,
+        "editor-en": 1,
+        "palette-en": 1
       }
     },
     {
@@ -607,12 +607,12 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 30,
+        "differentSourceFrames": 29,
         "firstFrames": [
           {
-            "frame": 3,
+            "frame": 1,
             "quality": "draft",
-            "code": 3
+            "code": 1
           },
           {
             "frame": 8,
@@ -620,14 +620,14 @@
             "code": 8
           },
           {
-            "frame": 9,
-            "quality": "draft",
-            "code": 9
-          },
-          {
             "frame": 10,
             "quality": "draft",
             "code": 10
+          },
+          {
+            "frame": 15,
+            "quality": "draft",
+            "code": 15
           },
           {
             "frame": 18,
@@ -635,9 +635,9 @@
             "code": 18
           },
           {
-            "frame": 22,
+            "frame": 21,
             "quality": "draft",
-            "code": 22
+            "code": 21
           }
         ],
         "mismatches": []
@@ -768,7 +768,7 @@
       "ok": true,
       "detail": {
         "unexpected": [],
-        "leftOut": 0
+        "leftOut": 1
       }
     }
   ]

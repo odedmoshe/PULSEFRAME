@@ -46,6 +46,8 @@ const HE: [RegExp, (m: RegExpExecArray) => string][] = [
     const names = m[2] ? m[2].split(', ').map((p) => `"${effectParamLabel(p, 'he', m[1])}"`) : [];
     return names.length === 0 ? 'ערכי הפרמטרים של האפקט אינם תקינים' : names.length === 1 ? `הערך של ${names[0]} אינו תקין` : `הערכים של ${names.join(', ')} אינם תקינים`;
   }],
+  // set_colour_grade (colour match, ADR-0014): a fixed value would be ignored where the value is animated
+  [/^these colour values are animated with keyframes, so a fixed setting would be ignored$/, () => 'ערכי הצבע האלה מונפשים בנקודות מפתח, ולכן ערך קבוע לא ישפיע עליהם. אפשר להחליף את ההנפשה בערך הזה או לשנות את נקודות המפתח'],
   // from the render worker and the browser export (ADR-0011): a frame needs more video decoders at once than they open
   [/^decode_budget: this frame needs more than (\d+) video decoders$/, (m) => `הפריים הזה צריך יותר מ־${m[1]} מפענחי וידאו בבת אחת`],
 ];
@@ -70,13 +72,53 @@ const HE_AUDIO_FX: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^this picture clip is linked to more than one sound clip$/, () => 'קליפ התמונה מקושר ליותר מקליפ קול אחד; יש לבחור את קליפ הקול'],
   [/^give params and\/or enabled$/, () => 'לא צוין מה לשנות באפקט הקול'],
 ];
+/**
+ * Refusals of the AI-model wave's operations (ADR-0017): a derived copy in place of a clip's file, and machine-translated language
+ * formats. Their own list with their own test (packages/evals/src/ai-refusal-wording.test.ts provokes each).
+ */
+const HE_AI: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^only a picture or sound clip shows a file$/, () => 'רק לקליפ של תמונה או של קול יש קובץ'],
+  [/^a freeze frame cannot be given another file$/, () => 'אי אפשר להחליף את הקובץ של פריים קפוא. אפשר להחליף את הקובץ קודם, ואז ליצור את הפריים הקפוא'],
+  [/^a clip that plays backwards cannot be given another file$/, () => 'אי אפשר להחליף את הקובץ של קליפ שמתנגן לאחור. אפשר להחזיר אותו לניגון קדימה, להחליף את הקובץ ולהפוך אותו שוב'],
+  [/^the clip already shows this file$/, () => 'הקליפ כבר מציג את הקובץ הזה'],
+  [/^the new file was not made from the file this clip shows$/, () => 'הקובץ החדש לא נוצר מהקובץ שהקליפ מציג'],
+  [/^the new file has no picture$/, () => 'בקובץ החדש אין תמונה'],
+  [/^the new file has no sound$/, () => 'בקובץ החדש אין קול'],
+  [/^a still picture and a moving picture cannot stand in for each other$/, () => 'תמונה סטטית ווידאו אינם יכולים להחליף זה את זה'],
+  [/^the new file does not keep the timing of the file this clip shows$/, () => 'הקובץ החדש אינו שומר על התזמון של הקובץ שהקליפ מציג, ולכן הקליפ היה מציג רגעים אחרים. אפשר להניח אותו ברצועה משלו'],
+  [/^the new file covers (-?[\d.]+)s–(-?[\d.]+)s of the original; the clip needs (-?[\d.]+)s–(-?[\d.]+)s$/, (m) => `הקובץ החדש מכסה את השניות ${ltr(`${m[1]}–${m[2]}`)} של המקור, והקליפ צריך את השניות ${ltr(`${m[3]}–${m[4]}`)}`],
+  [/^this format is not a translation$/, () => 'הפורמט הזה אינו תרגום'],
+  [/^the translation is already marked as reviewed$/, () => 'התרגום כבר מסומן כנבדק'],
+  [/^the translation is already marked as needing review$/, () => 'התרגום כבר מסומן כממתין לבדיקה'],
+  [/^phrase \S+ not found in any transcript$/, () => 'המשפט שתורגם כבר לא נמצא בתמלול (ייתכן שנמחק בזמן התרגום)'],
+  [/^caption cue \S+ not found$/, () => 'הכתובית שתורגמה כבר לא נמצאת (ייתכן שנמחקה בזמן התרגום)'],
+  [/^only cues of a manual caption track are translated as cues$/, () => 'רק כתוביות של רצועת כתוביות ידנית מתורגמות ככתוביות'],
+];
+/**
+ * Refusals of the transition options (ADR-0012: set_transition_options, and set_transition when it keeps an option). Kept as
+ * their own list, provoked one by one in packages/evals/src/refusal-wording.test.ts, so the inventory of the list above stays as it is.
+ */
+const HE_TREND: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^the previous clip has only (\d+) unused source frames after its end; the transition at velocity ×(\d) needs (\d+)$/, (m) => `לקליפ הקודם נשארו רק ${m[1]} פריימים של חומר מקור אחרי סופו; מעבר עם רמפת מהירות ${ltr(`×${m[2]}`)} צריך ${m[3]}`],
+  [/^the clip has only (\d+) source frames before its start; the transition at velocity ×(\d) needs (\d+)$/, (m) => `לקליפ נשארו רק ${m[1]} פריימים של חומר מקור לפני תחילתו; מעבר עם רמפת מהירות ${ltr(`×${m[2]}`)} צריך ${m[3]}`],
+  [/^a velocity ramp cannot remap a clip that plays backwards or is a freeze frame$/, () => 'רמפת מהירות אינה אפשרית כשאחד הקליפים מתנגן לאחור או הוא פריים קפוא'],
+  [/^a velocity ramp cannot remap a clip whose first effect is a time effect$/, () => 'רמפת מהירות אינה אפשרית כשהאפקט הראשון של אחד הקליפים הוא אפקט זמן'],
+  [/^a velocity ramp needs a video on at least one side of the transition$/, () => 'רמפת מהירות צריכה וידאו לפחות בצד אחד של המעבר; בתמונה סטטית אין תנועה להאיץ'],
+  [/^a transition locked to the beat needs at least 3 frames; this one has (\d+)$/, (m) => `מעבר שננעל לפעימה צריך לפחות 3 פריימים; במעבר הזה יש ${m[1]}`],
+  [/^the \S+ transition has no (color|seed) option$/, (m) => (m[1] === 'color' ? 'לסוג המעבר הזה אין בחירת צבע' : 'לסוג המעבר הזה אין וריאציות')],
+  [/^clip \S+ has no transition$/, () => 'אין מעבר בתחילת הקליפ הזה; יש לבחור קודם סוג מעבר'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND]) { const m = re.exec(message); if (m) return say(m); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
 export const REFUSAL_PATTERNS: readonly RegExp[] = HE.map(([re]) => re);
 /** The sound-effect patterns, for their own test. */
 export const AUDIO_FX_REFUSAL_PATTERNS: readonly RegExp[] = HE_AUDIO_FX.map(([re]) => re);
+/** The AI-model wave patterns (ADR-0017), for their own test. */
+export const AI_REFUSAL_PATTERNS: readonly RegExp[] = HE_AI.map(([re]) => re);
+/** The transition-option patterns (ADR-0012), for their own test. */
+export const TREND_REFUSAL_PATTERNS: readonly RegExp[] = HE_TREND.map(([re]) => re);

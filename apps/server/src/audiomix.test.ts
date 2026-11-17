@@ -56,7 +56,7 @@ function voiceClip(o: { id: string; asset: 'stereo' | 'mono'; at: number; length
     fade: [{ s: 0, g: 0 }, { s: 480, g: 1 }, { s: o.length - 960, g: 1 }, { s: o.length, g: 0 }],
     duck: [{ s: 0, g: 1 }, { s: 5000, g: 1 }, { s: 6000, g: 0.5 }, { s: o.length + tail, g: 0.5 }],
     ...(o.reverse ? { reverse: true as const } : {}),
-    voice: { chain: CHAIN, sourceIn: rt(o.sourceIn[0], o.sourceIn[1]), sourceEnd: end, speed: { num: speed[0], den: speed[1] }, reverse: !!o.reverse, sourceRate: o.asset === 'mono' ? 44100 : SR, warmWindow: reach.warmWindow, warmRing: reach.warmRing, tail, ...(tail < reach.tail ? { cutFrom: Math.min(o.length + tail, Math.max(o.length, o.total - o.at - 480)) } : {}) },
+    voice: { chain: CHAIN, sourceIn: rt(o.sourceIn[0], o.sourceIn[1]), sourceEnd: end, speed: { num: speed[0], den: speed[1] }, reverse: !!o.reverse, sourceRate: o.asset === 'mono' ? 44100 : SR, warmWindow: reach.warmWindow, warmRing: reach.warmRing, aheadWindow: reach.aheadWindow, tail, ...(tail < reach.tail ? { cutFrom: Math.min(o.length + tail, Math.max(o.length, o.total - o.at - 480)) } : {}) },
   };
 }
 const TOTAL = SR * 4;

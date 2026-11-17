@@ -1,0 +1,68 @@
+{
+  "recorded": "2026-11-17",
+  "grant": "Owner authorisation of 2026-11-17: model downloads up to 30 GB, Real-ESRGAN named explicitly (docs/BLOCKERS.md B-4)",
+  "note": "Each file was downloaded from the original publisher's URL, its size compared with the publisher's HEAD Content-Length, and its digest compared with a published digest where one exists. Nothing was installed into ComfyUI for product users; these files are placed for this machine's trials only.",
+  "files": [
+    {
+      "model": "Real-ESRGAN RealESRGAN_x4plus.pth",
+      "publisher": "xinntao/Real-ESRGAN release v0.1.0",
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+      "bytes": 67040989,
+      "sha256": "4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1",
+      "check": "sha256 equals the digest already pinned from the Hugging Face mirror (packages/providers/src/builtin.ts): the publisher's file and the mirror's are byte-identical",
+      "licence": "BSD-3-Clause (publisher LICENSE; no separate weight terms). Residual risk: DIV2K training data is labelled academic-research-only",
+      "placedAt": ".artifacts/comfyui/models/upscale_models/RealESRGAN_x4plus.pth",
+      "ownerDecision": "2026-11-17: the owner accepted the DIV2K training-data residual risk"
+    },
+    {
+      "model": "Real-ESRGAN realesr-general-x4v3.pth",
+      "publisher": "xinntao/Real-ESRGAN release v0.2.5.0",
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth",
+      "bytes": 4885111,
+      "md5": "91a7644643c884ee00737db24e478156",
+      "sha256": "8dc7edb9ac80ccdc30c3a5dca6616509367f05fbc184ad95b731f05bece96292",
+      "check": "md5 equals the publisher's Content-MD5; sha256 recorded at this download",
+      "licence": "BSD-3-Clause (same publisher repository; no separate weight terms). Same training-data residual risk",
+      "placedAt": ".artifacts/comfyui/models/upscale_models/realesr-general-x4v3.pth",
+      "ownerDecision": "2026-11-17: the owner accepted the DIV2K training-data residual risk"
+    },
+    {
+      "model": "DeepFilterNet3 model DeepFilterNet3_onnx.tar.gz",
+      "publisher": "Rikorose/DeepFilterNet tag v0.5.6",
+      "url": "https://raw.githubusercontent.com/Rikorose/DeepFilterNet/v0.5.6/models/DeepFilterNet3_onnx.tar.gz",
+      "bytes": 7983136,
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616",
+      "check": "size equals the publisher's Content-Length; no published digest, sha256 recorded at this download",
+      "licence": "MIT OR Apache-2.0 (code and weights)",
+      "placedAt": ".artifacts/tools/models/denoise/DeepFilterNet3_onnx.tar.gz"
+    },
+    {
+      "model": "deep-filter 0.5.6 engine binary (Linux x86_64 musl)",
+      "publisher": "Rikorose/DeepFilterNet release v0.5.6",
+      "url": "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-x86_64-unknown-linux-musl",
+      "bytes": 36417296,
+      "sha256": "70775e251eee44c0f2451a1e833326cf8bcbbe304d3e7cd12851e6fce72ef7da",
+      "check": "size equals the publisher's Content-Length; sha256 recorded",
+      "licence": "MIT OR Apache-2.0",
+      "placedAt": ".artifacts/tools/bin/deep-filter (installed 2026-11-17 with the owner's approval; re-downloaded, sha256 equal to the one recorded at the first download, which had been deleted unexecuted). deep_filter --version prints 'deep_filter 0.5.6'.",
+      "firstMeasurement": {
+        "input": "docs/demo/narration-sample-he.m4a at 48 kHz mono, pink noise (amplitude 0.03) added",
+        "args": "-D -m DeepFilterNet3_onnx.tar.gz",
+        "noiseInPausesDbfs": {
+          "before": -44.9,
+          "after": -59.6
+        },
+        "speechLevelChangeDb": {
+          "median": -0.3,
+          "p10": -0.5,
+          "p90": -0.1
+        },
+        "delaySamples": 0,
+        "outputShorterBySamples": 1440,
+        "wallSeconds": 4.6,
+        "audioSeconds": 10.8,
+        "notes": "one synthetic-speech file; nobody has listened; a pure tone is removed as noise"
+      }
+    }
+  ]
+}

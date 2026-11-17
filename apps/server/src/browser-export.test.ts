@@ -75,6 +75,24 @@ describe('browser export lease', () => {
     expect(out.manifest.output.frames).toBe(30);
   });
 
+  it('the tab\'s photosensitivity check is recorded with the server\'s method text; a report that disagrees with the export is refused', async () => {
+    const t = setup();
+    const body = (jobId: string, photosensitivity: unknown) => ({ sessionId: 'session-aaaa', bytes: 10, sha256: 'a'.repeat(64), videoCodec: 'avc', audioCodec: 'opus', frames: 30, container: 'mp4', photosensitivity });
+    const s1 = (await t.start()).body;
+    const wrongFrames = await t.call(`/jobs/${s1.jobId}/complete`, body(s1.jobId, { verdict: 'pass', frames: 29, ranges: [] }));
+    expect(wrongFrames).toMatchObject({ status: 422, body: { error: { code: 'invalid_photosensitivity' } } });
+    const failWithoutRanges = await t.call(`/jobs/${s1.jobId}/complete`, body(s1.jobId, { verdict: 'fail', frames: 30, ranges: [] }));
+    expect(failWithoutRanges.body.error.code).toBe('invalid_photosensitivity');
+    const extraKey = await t.call(`/jobs/${s1.jobId}/complete`, body(s1.jobId, { verdict: 'pass', frames: 30, ranges: [], method: 'mine' }));
+    expect(extraKey.status).toBe(400); // the method text is the server's, never the tab's
+    const range = { from: T.frameTime(3, R), to: T.frameTime(20, R), kind: 'general', flashesPerSecond: 5, area: 0.5 };
+    const ok = await t.call(`/jobs/${s1.jobId}/complete`, body(s1.jobId, { verdict: 'fail', frames: 30, ranges: [range] }));
+    expect(ok.status).toBe(200);
+    const out = t.store.getJob(s1.jobId).output;
+    expect(out.photosensitivity).toMatchObject({ measuredBy: 'browser', verdict: 'fail', frames: 30, ranges: [range] });
+    expect(out.photosensitivity.method).toMatch(/WCAG 2\.3\.1/);
+  });
+
   it('only the owning session AND actor may heartbeat, complete or abandon', async () => {
     const t = setup();
     const { body } = await t.start();

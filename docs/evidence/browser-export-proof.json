@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-17T08:06:42.181Z",
+  "ranAt": "2026-11-17T12:52:45.038Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v553 x64",
@@ -59,14 +59,14 @@
     },
     "browserExport": {
       "frames": 105,
-      "wallSeconds": 0.78,
-      "realtimeFactor": 4.51,
+      "wallSeconds": 1.47,
+      "realtimeFactor": 2.386,
       "bytes": 283785,
-      "wallInPageMs": 747,
+      "wallInPageMs": 1431,
       "note": "headless Chromium, software (no GPU), 640x360 high quality; wall time includes asset fetch, audio mix, encode, SHA-256, base64 transfer"
     },
     "parity": {
-      "serverRouteWallSeconds": 3.555,
+      "serverRouteWallSeconds": 3.318,
       "serverBytes": 76665,
       "browserBytes": 283785,
       "ssimByFrame": {
@@ -79,8 +79,34 @@
       "threshold": 0.97,
       "note": "two different encoders (WebCodecs H.264 vs libx264 crf16), decoded frames compared as PNG"
     },
+    "photosensitivity": {
+      "browser": {
+        "verdict": "fail",
+        "ranges": [
+          {
+            "from": 0.6333333333333333,
+            "to": 4.3,
+            "kind": "general",
+            "perSecond": 5,
+            "area": 1
+          }
+        ]
+      },
+      "server": {
+        "verdict": "fail",
+        "ranges": [
+          {
+            "from": 0.6333333333333333,
+            "to": 4.3,
+            "kind": "general",
+            "perSecond": 5,
+            "area": 1
+          }
+        ]
+      }
+    },
     "leaseLoss": {
-      "closedTabToFailedSeconds": 11.88,
+      "closedTabToFailedSeconds": 11.94,
       "leaseSeconds": 15
     }
   },
@@ -206,6 +232,66 @@
       }
     },
     {
+      "name": "a timeline flashing 5 times a second for 3 s, exported in the browser: the tab reports one failing stretch over the whole frame, recorded on its job, and the export still succeeds",
+      "ok": true,
+      "detail": {
+        "browser": {
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0.6333333333333333,
+              "to": 4.3,
+              "kind": "general",
+              "perSecond": 5,
+              "area": 1
+            }
+          ]
+        },
+        "server": {
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0.6333333333333333,
+              "to": 4.3,
+              "kind": "general",
+              "perSecond": 5,
+              "area": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "the server export of the same timeline reports the same stretch (same analyser, same frames)",
+      "ok": true,
+      "detail": {
+        "browser": {
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0.6333333333333333,
+              "to": 4.3,
+              "kind": "general",
+              "perSecond": 5,
+              "area": 1
+            }
+          ]
+        },
+        "server": {
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0.6333333333333333,
+              "to": 4.3,
+              "kind": "general",
+              "perSecond": 5,
+              "area": 1
+            }
+          ]
+        }
+      }
+    },
+    {
       "name": "job row: succeeded, route browser, location client-download, frames correct",
       "ok": true,
       "detail": {
@@ -214,7 +300,7 @@
           "location": "client-download",
           "note": "the media bytes were produced and stay in the browser tab that held the lease; the server stores only this record",
           "bytes": 283785,
-          "sha256": "34551d1173bc3ed604d60f20aa3e0cd7a65537275e2e9c4c4ea2e6ff36b22282",
+          "sha256": "3009027bb85d9d009f7355b2a097df603b1e6101b825c09f5695de122db25ce0",
           "videoCodec": "avc",
           "audioCodec": "opus",
           "frames": 105,
@@ -226,16 +312,32 @@
             "captions": "burned",
             "quality": "high",
             "scale": 1
+          },
+          "photosensitivity": {
+            "method": "General and red flash thresholds of WCAG 2.3.1 (ITU-R BT.1702 family), approximated on 24 × 24 cells of the rendered frames: a stretch fails when more than a quarter of a 10-degree window (a third of the width and height) flashes more than three times in a second. A guide, not a certification.",
+            "measuredBy": "browser",
+            "verdict": "pass",
+            "frames": 105,
+            "ranges": []
           }
         }
+      }
+    },
+    {
+      "name": "job row: the tab checked every encoded frame for flashing (ADR-0009) and the server recorded it with its method text",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "frames": 105,
+        "ranges": 0
       }
     },
     {
       "name": "job row sha256 and bytes equal those of the file the proof received",
       "ok": true,
       "detail": {
-        "server": "34551d1173bc3ed604d60f20aa3e0cd7a65537275e2e9c4c4ea2e6ff36b22282",
-        "received": "34551d1173bc3ed604d60f20aa3e0cd7a65537275e2e9c4c4ea2e6ff36b22282"
+        "server": "3009027bb85d9d009f7355b2a097df603b1e6101b825c09f5695de122db25ce0",
+        "received": "3009027bb85d9d009f7355b2a097df603b1e6101b825c09f5695de122db25ce0"
       }
     },
     {
@@ -275,7 +377,7 @@
       "detail": {
         "status": "failed",
         "error": "lease_lost",
-        "afterSeconds": 11.88
+        "afterSeconds": 11.94
       }
     },
     {
@@ -290,8 +392,8 @@
       "name": "restart: a NEW job over a fresh snapshot succeeds; exactly one succeeded job carries its output; the lost job published nothing",
       "ok": true,
       "detail": {
-        "newJob": "job_gdUZUUd1aKM",
-        "lostJob": "job_9zJJ3TJeMrE"
+        "newJob": "job_uwcycLdjBt0",
+        "lostJob": "job_cQlyf3XPugE"
       }
     },
     {

@@ -72,10 +72,11 @@ function studio() {
   run('edit_analysis', { assetId, kind: 'scenes', replace: [T.rt(2, 1)] });
   run('edit_analysis', { assetId, kind: 'beats', replace: [T.rt(1, 1), T.rt(2, 1), T.rt(3, 1)] });
   const effectId = run('add_effect', { clipId, type: 'blur.gaussian' }).effectId as string;
+  const audioEffectId = (run('add_audio_effect', { clipId: audioClipId, type: 'tone.bassboost' }).effects as { effectId: string }[])[0]!.effectId;
   run('set_effect_keyframe', { clipId, effectId, param: 'radius', time: f(0), value: 0.02 });
   const runId = run('apply_recipe', { recipeId: 'fixture', params: {}, steps: ['add a title'], ops: [{ op: 'add_text', args: { text: 'From a recipe', start: f(150), duration: f(30) } }] }, true).runId as string;
   expect(validateProject(doc)).toEqual([]);
-  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, runId };
+  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, runId };
 }
 
 describe('own', () => {
@@ -282,7 +283,8 @@ describe('every registered op', () => {
     const about: Record<string, Record<string, unknown>> = {
       apply_text_preset: title, update_text: title, set_text_animation: title, add_text: { trackId: undefined }, update_cue: cue, merge_cues: cue,
       set_volume_keyframe: sound, draw_volume: sound, delete_volume_keyframe: sound, set_clip_fades: sound, set_audio_crossfade: sound, fit_music: sound,
-      set_track_audio: soundTrack, set_ducking: { ...soundTrack, sourceTrackIds: [s.trackId] }, set_caption_style: captions, apply_caption_look: captions, add_cue: captions,
+      set_track_audio: soundTrack, add_adjustment: { trackId: undefined },
+      add_audio_effect: sound, apply_audio_preset: sound, update_audio_effect: { ...sound, effectId: s.audioEffectId }, remove_audio_effect: { ...sound, effectId: s.audioEffectId }, set_ducking: { ...soundTrack, sourceTrackIds: [s.trackId] }, set_caption_style: captions, apply_caption_look: captions, add_cue: captions,
     };
     // Arguments the schema alone cannot make meaningful.
     const exact: Record<string, unknown> = {
@@ -295,6 +297,10 @@ describe('every registered op', () => {
       add_variant: { profileId: 'square-1x1', name: 'Square' },
       duplicate_clips: { clipIds: [s.clipId, s.audioClipId], offset: f(300), preferTrackIds: [s.trackId] },
       set_effect_keyframe: { clipId: s.clipId, effectId: s.effectId, param: 'radius', time: f(30), value: 0.05 },
+      add_audio_effect: { clipId: s.audioClipId, type: 'cleanup.dehum' },
+      update_audio_effect: { clipId: s.audioClipId, effectId: s.audioEffectId, enabled: false },
+      apply_audio_preset: { clipId: s.audioClipId, presetId: 'telephone' },
+      set_effect_modulator: { clipId: s.clipId, effectId: s.effectId, param: 'radius', modulator: { depth: 0.05 } },
       import_captions: { sequenceId: 'seq_main', trackId: s.captionTrackId, content: '1\n00:00:05,000 --> 00:00:06,000\nhello\n' },
       add_effect: { clipId: s.clipId, type: 'color.lut', params: { lut: s.lutId } },
       apply_lut: { clipId: s.clipId, assetId: s.lutId },
@@ -349,7 +355,7 @@ describe('every registered op', () => {
 });
 
 describe('a document that carries such an id', () => {
-  it('is refused by validation: no asset, sequence, track, clip, marker, format, phrase or word may be named that way', () => {
+  it('is refused by validation: no asset, sequence, track, clip, marker, motion track, format, phrase or word may be named that way', () => {
     const s = studio();
     expect(validateProject(s.doc)).toEqual([]);
     for (const id of [...HOSTILE, 'hasOwnProperty']) {
@@ -364,7 +370,14 @@ describe('a document that carries such an id', () => {
       const word = structuredClone(s.doc);
       word.transcripts[s.assetId]!.segments[0]!.words[0]!.id = id;
       expect(validateProject(word).map((i) => i.code)).toEqual(['reserved_id']);
+      // a motion track is kept by id like a marker (only its id is read here; the rest of its shape is the schema's business)
+      const tracked = structuredClone(s.doc);
+      Object.defineProperty((tracked.motionTracks ??= {}), id, { value: { id, assetId: s.assetId }, enumerable: true, writable: true, configurable: true });
+      expect(validateProject(tracked).map((i) => i.code)).toEqual(['reserved_id']);
     }
+    const mismatched = structuredClone(s.doc);
+    (mismatched.motionTracks ??= {}).mtk_a = { id: 'mtk_b', assetId: s.assetId } as never;
+    expect(validateProject(mismatched).map((i) => i.code)).toEqual(['key_mismatch']);
   });
 
   it('is not taken to refer to something: a clip of asset "__proto__", a main sequence "constructor", a marker in sequence "toString" are all dangling', () => {

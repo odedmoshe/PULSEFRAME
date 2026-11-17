@@ -1,9 +1,14 @@
 /** Bilingual UI strings (SPEC §3, §29). Hebrew is the default. Keys are stable ids. */
 import { VISUAL_WAVE_EN, VISUAL_WAVE_HE } from './visualWave.ts';
+import { TEMPLATES_EN, TEMPLATES_HE } from './templates.ts';
+import { TREND_PACK_EN, TREND_PACK_HE } from './trendPack.ts';
+import { CLEANUP_WAVE_EN, CLEANUP_WAVE_HE } from './cleanupWave.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
   'save.saved': 'נשמר', 'save.saving': 'שומר…', 'save.offline': 'לא מקוון', 'save.conflict': 'התנגשות — נטען מחדש',
+  // photosensitivity check of an export (ADR-0009)
+  'flash.pass': 'בדיקת הבהובים: לא נמצאו', 'flash.passTitle': 'הסרטון נבדק: אין בו קטע שמהבהב יותר משלוש פעמים בשנייה על שטח גדול', 'flash.fail': 'נמצאו הבהובים מסוכנים', 'flash.failIntro': 'בקטעים האלה התמונה מהבהבת יותר משלוש פעמים בשנייה על שטח גדול. זה עלול לגרום להתקפים אצל צופים רגישים. הייצוא לא שונה; אפשר לתקן ולייצא שוב.', 'flash.general': 'הבהוב', 'flash.red': 'הבהוב אדום', 'flash.perSecond': 'בשנייה', 'flash.area': 'מהמסך', 'flash.jump': 'מעבר לקטע', 'flash.method': 'הבדיקה מקורבת (WCAG 2.3.1) ואינה אישור רשמי.',
   'revision': 'גרסה', 'export': 'ייצוא', 'export.running': 'מייצא…', 'export.done': 'הורדת הסרטון שוב', 'export.finished': 'הייצוא הסתיים והקובץ נשמר בהורדות', 'export.failed': 'הייצוא נכשל',
   'media': 'מדיה', 'media.import': 'ייבוא קובץ', 'media.uploading': 'מעלה…', 'media.empty': 'אין עדיין מדיה. ייבאו קובץ וידאו או אודיו.', 'media.add': 'הוספה לציר הזמן', 'media.dragHint': 'אפשר גם לגרור את הקובץ אל ציר הזמן', 'media.unsupported': 'הקובץ אינו נתמך',
   'text': 'טקסט', 'text.add': 'הוספת טקסט', 'text.default': 'טקסט חדש', 'text.content': 'תוכן', 'text.size': 'גודל', 'text.y': 'מיקום אנכי',
@@ -107,6 +112,9 @@ export const he = {
   'marker.color.blue': 'כחול', 'marker.color.green': 'ירוק', 'marker.color.yellow': 'צהוב', 'marker.color.red': 'אדום', 'marker.color.purple': 'סגול',
   'op.add_marker': 'הוספת סמן', 'op.update_marker': 'עדכון סמן', 'op.remove_marker': 'הסרת סמן', 'marker.add': 'הוספת סמן', 'marker.next': 'הסמן הבא', 'marker.prev': 'הסמן הקודם', 'marker.label': 'שם הסמן', 'marker.color': 'צבע', 'marker.remove': 'הסרת הסמן', 'marker.unnamed': 'סמן', 'marker.edit': 'עריכת סמן', 'marker.close': 'סגירה',
   'op.add_variant': 'הוספת פורמט', 'op.update_variant': 'עדכון פורמט', 'op.remove_variant': 'הסרת פורמט', 'op.set_variant_override': 'התאמה לפורמט', 'op.set_variant_phrase_text': 'ניסוח משפט בפורמט',
+  // AI-model wave (ADR-0017): operations and their error codes
+  'op.replace_clip_asset': 'הקליפ מציג גרסה מעובדת של הקובץ שלו', 'op.attach_translation': 'תרגום מכונה של הכתוביות', 'op.review_translation': 'סימון בדיקה של תרגום',
+  'error.code.not_time_preserving': 'הקובץ החדש אינו שומר על התזמון של המקור', 'error.code.range_not_covered': 'הקובץ החדש אינו מכסה את כל הקטע שהקליפ משתמש בו',
   'inspector.tab.recipes': 'מתכונים', 'op.apply_recipe': 'הפעלת מתכון',
   'recipes.intro': 'מתכונים הם עריכות רב-שלביות לפי כללים, שנבנות ממידע שכבר נמצא בפרויקט. אין בהם מודל בינה מלאכותית. כל מתכון מופעל כצעד אחד שאפשר לבטל, וכל מה שנוצר נשאר ניתן לעריכה.',
   'recipes.needs': 'דרישות', 'recipes.plan': 'תצוגה מקדימה', 'recipes.planning': 'מתכנן…', 'recipes.apply': 'הפעלה', 'recipes.applying': 'מפעיל…',
@@ -153,10 +161,15 @@ export const he = {
   'sound.fx.seconds': 'שניות', 'timeline.fx': 'אפקטים', 'timeline.fx.tail': 'זנב',
   'op.add_audio_effect': 'הוספת אפקט קול', 'op.update_audio_effect': 'עדכון אפקט קול', 'op.remove_audio_effect': 'הסרת אפקט קול', 'op.apply_audio_preset': 'מתכון אפקטי קול', 'op.copy_audio_effects': 'העתקת אפקטי קול',
   ...VISUAL_WAVE_HE,
+  ...TEMPLATES_HE,
+  ...TREND_PACK_HE,
+  ...CLEANUP_WAVE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
   'save.saved': 'Saved', 'save.saving': 'Saving…', 'save.offline': 'Offline', 'save.conflict': 'Conflict — reloaded',
+  // photosensitivity check of an export (ADR-0009)
+  'flash.pass': 'Flash check: none found', 'flash.passTitle': 'The video was checked: no stretch flashes more than three times a second over a large area', 'flash.fail': 'Dangerous flashing found', 'flash.failIntro': 'In these stretches the picture flashes more than three times a second over a large area, which can trigger seizures in sensitive viewers. The export was not changed; you can fix them and export again.', 'flash.general': 'flashing', 'flash.red': 'red flashing', 'flash.perSecond': 'a second', 'flash.area': 'of the screen', 'flash.jump': 'Go to this stretch', 'flash.method': 'The check is an approximation (WCAG 2.3.1), not a certification.',
   'revision': 'Revision', 'export': 'Export', 'export.running': 'Exporting…', 'export.done': 'Download the video again', 'export.finished': 'Export finished; the file was saved to Downloads', 'export.failed': 'Export failed',
   'media': 'Media', 'media.import': 'Import file', 'media.uploading': 'Uploading…', 'media.empty': 'No media yet. Import a video or audio file.', 'media.add': 'Add to timeline', 'media.dragHint': 'You can also drag the file onto the timeline', 'media.unsupported': 'Unsupported file',
   'text': 'Text', 'text.add': 'Add text', 'text.default': 'New text', 'text.content': 'Content', 'text.size': 'Size', 'text.y': 'Vertical position',
@@ -260,6 +273,9 @@ export const en: Record<keyof typeof he, string> = {
   'marker.color.blue': 'Blue', 'marker.color.green': 'Green', 'marker.color.yellow': 'Yellow', 'marker.color.red': 'Red', 'marker.color.purple': 'Purple',
   'op.add_marker': 'Added marker', 'op.update_marker': 'Updated marker', 'op.remove_marker': 'Removed marker', 'marker.add': 'Add marker', 'marker.next': 'Next marker', 'marker.prev': 'Previous marker', 'marker.label': 'Marker name', 'marker.color': 'Colour', 'marker.remove': 'Remove marker', 'marker.unnamed': 'Marker', 'marker.edit': 'Edit marker', 'marker.close': 'Close',
   'op.add_variant': 'Added format', 'op.update_variant': 'Updated format', 'op.remove_variant': 'Removed format', 'op.set_variant_override': 'Format override', 'op.set_variant_phrase_text': 'Phrase wording in a format',
+  // AI-model wave (ADR-0017): operations and their error codes
+  'op.replace_clip_asset': 'Clip shows a processed copy of its file', 'op.attach_translation': 'Machine translation of the captions', 'op.review_translation': 'Translation review mark',
+  'error.code.not_time_preserving': 'The new file does not keep the timing of the original', 'error.code.range_not_covered': 'The new file does not cover the whole stretch the clip uses',
   'inspector.tab.recipes': 'Recipes', 'op.apply_recipe': 'Applied recipe',
   'recipes.intro': 'Recipes are rule-based, multi-step edits made from data already in the project. No AI model is involved. Each one applies as a single step you can undo, and everything it creates stays editable.',
   'recipes.needs': 'Needs', 'recipes.plan': 'Preview', 'recipes.planning': 'Planning…', 'recipes.apply': 'Apply', 'recipes.applying': 'Applying…',
@@ -306,6 +322,9 @@ export const en: Record<keyof typeof he, string> = {
   'sound.fx.seconds': 'seconds', 'timeline.fx': 'Effects', 'timeline.fx.tail': 'tail',
   'op.add_audio_effect': 'Added sound effect', 'op.update_audio_effect': 'Updated sound effect', 'op.remove_audio_effect': 'Removed sound effect', 'op.apply_audio_preset': 'Sound effect preset', 'op.copy_audio_effects': 'Copied sound effects',
   ...VISUAL_WAVE_EN,
+  ...TEMPLATES_EN,
+  ...TREND_PACK_EN,
+  ...CLEANUP_WAVE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -314,3 +333,6 @@ export const dirOf = (lang: Lang) => (lang === 'he' ? 'rtl' : 'ltr');
 export * from './refusals.ts';
 export * from './effectParams.ts';
 export * from './visualWave.ts';
+export * from './templates.ts';
+export * from './trendPack.ts';
+export * from './cleanupWave.ts';

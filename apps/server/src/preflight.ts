@@ -4,7 +4,7 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { handleAfterEnd, own, sequenceDuration, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { own, previousAdjacent, sequenceDuration, velocityLimit, velocityNeeds, type MediaClip, type OpCall, type ProjectDocument, type Track, type Transition } from '@pulseframe/core';
 import { audioPlan, captionCues, decodeOverBudget, type DecodeStretch } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { variantDoc } from './export.ts';
@@ -21,6 +21,70 @@ export interface PreflightIssue {
 export interface PreflightOptions { variantId?: string; maxCharsPerSecond?: number }
 /** Video decoders the render worker and browser export open at most (apps/web render.ts, browserExport.ts). */
 const RENDER_DECODERS = 12;
+
+/**
+ * Item 4 (ADR-0012). set_transition and set_transition_options check the source a transition reads, but a later trim, slip
+ * or speed change of either clip is not refused for it: validateProject gates every transaction, and a plain transition's
+ * handle has always been a warning here, not a refusal. The evaluator then clamps to the last or the first source frame,
+ * so the picture freezes. Two issues, at most one per transition:
+ * - transition_freeze: the previous clip has fewer spare frames after its end than the transition's `frames`. The fix
+ *   shortens it to those frames, keeping each option that still fits at that length (a velocity ramp reads more than
+ *   `frames`, so it is dropped; a beat lock needs 3 frames), or removes it when none are left.
+ * - velocity_source: `frames` fit, but the velocity ramp reads more (velocityNeeds) after the previous clip, before the
+ *   clip's start, or both. The fix lowers the ramp to the largest the source allows (velocityLimit) or removes it.
+ * Each fix is ops that the same check (ops.ts checkTransition) accepts; preflight.transitions.test.ts applies them.
+ */
+function transitionSourceIssue(doc: ProjectDocument, track: Track, c: MediaClip): PreflightIssue | null {
+  const tr = c.transition!, n = tr.frames, v = tr.velocity;
+  const { maxVelocity, haveOutFrames: haveOut, haveHeadFrames: haveHead } = velocityLimit(doc, c.id); // null: that side never runs out
+  const need = v ? velocityNeeds(n, v) : { outFrames: n, headFrames: 0 };
+  const shortOut = haveOut !== null && haveOut < need.outFrames;
+  const shortHead = !!v && haveHead !== null && haveHead < need.headFrames;
+  if (!shortOut && !shortHead) return null;
+  const prev = previousAdjacent(track, c);
+  if (haveOut !== null && haveOut < n) {
+    const ramp = v ? ` (${need.outFrames} with its ×${v} velocity ramp)` : '';
+    return {
+      code: 'transition_freeze', severity: 'warning',
+      message: `the ${tr.type} transition needs ${n} spare source frames after the previous clip${ramp} but only ${Math.max(0, haveOut)} exist; the outgoing picture will freeze`,
+      ids: [c.id, prev!.id],
+      fix: haveOut > 0 ? shortenTransition(c.id, tr, haveOut, haveOut, haveHead) : { label: 'Remove the transition', ops: [{ op: 'set_transition', args: { clipId: c.id, type: null } }] },
+    };
+  }
+  const sides = [
+    ...(shortOut ? [`${need.outFrames} spare source frames after the previous clip (${Math.max(0, haveOut!)} exist)`] : []),
+    ...(shortHead ? [`${need.headFrames} source frames before the clip's start (${Math.max(0, haveHead!)} exist)`] : []),
+  ];
+  return {
+    code: 'velocity_source', severity: 'warning',
+    message: `the ${tr.type} transition's ×${v} velocity ramp needs ${sides.join(' and ')}; the ${shortOut && shortHead ? 'outgoing and incoming pictures' : shortOut ? 'outgoing picture' : 'incoming picture'} will freeze`,
+    ids: [c.id, ...(shortOut && prev ? [prev.id] : [])],
+    fix: maxVelocity > 1
+      ? { label: `Lower the velocity ramp to ×${maxVelocity}`, ops: [{ op: 'set_transition_options', args: { clipId: c.id, velocity: maxVelocity } }] }
+      : { label: 'Remove the velocity ramp', ops: [{ op: 'set_transition_options', args: { clipId: c.id, velocity: null } }] },
+  };
+}
+const VELOCITIES = [4, 3, 2] as const;
+/** The fix that shortens a transition to m frames (m <= haveOut), keeping each option that still fits at that length. */
+function shortenTransition(clipId: string, tr: Transition, m: number, haveOut: number, haveHead: number | null): NonNullable<PreflightIssue['fix']> {
+  const fits = (vv: number) => { const nd = velocityNeeds(m, vv); return nd.outFrames <= haveOut && (haveHead === null || nd.headFrames <= haveHead); };
+  const velocity = tr.velocity ? VELOCITIES.find((vv) => vv <= tr.velocity! && fits(vv)) : undefined;
+  const sync = tr.sync && m >= 3 ? tr.sync : undefined;
+  const dropped = [...(tr.velocity && velocity !== tr.velocity ? [velocity ? `at velocity ×${velocity}` : 'without its velocity ramp'] : []), ...(tr.sync && !sync ? ['without the beat lock'] : [])];
+  const label = `Shorten the transition to ${m} frames${dropped.length ? `, ${dropped.join(' and ')}` : ''}`;
+  if (!dropped.length) return { label, ops: [{ op: 'set_transition', args: { clipId, type: tr.type, frames: m } }] };
+  // set_transition keeps the beat lock and the ramp, so on its own it is refused when one of them no longer fits: the
+  // transition is removed, put back at the new length, and given again the options that fit (one transaction, one undo)
+  const options = { ...(sync ? { sync } : {}), ...(velocity ? { velocity } : {}), ...(tr.color !== undefined ? { color: tr.color } : {}), ...(tr.seed !== undefined ? { seed: tr.seed } : {}) };
+  return {
+    label,
+    ops: [
+      { op: 'set_transition', args: { clipId, type: null } },
+      { op: 'set_transition', args: { clipId, type: tr.type, frames: m } },
+      ...(Object.keys(options).length ? [{ op: 'set_transition_options', args: { clipId, ...options } }] : []),
+    ],
+  };
+}
 
 export function preflight(exporter: Exporter, master: ProjectDocument, revision: number, opts: PreflightOptions = {}) {
   const issues: PreflightIssue[] = [];
@@ -72,15 +136,9 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
     for (const c of track.clips) {
       if (c.type === 'media' && track.kind === 'video' && !track.hidden) {
         const asset = doc.assets[c.assetId];
-        // 4. a transition whose outgoing clip has run out of source: the outgoing picture would freeze
-        if (c.transition) {
-          const prev = track.clips.find((p) => p.type === 'media' && p.id !== c.id && T.eq(T.add(p.start, p.duration), c.start));
-          const pa = prev && prev.type === 'media' ? doc.assets[prev.assetId] : undefined;
-          if (prev && prev.type === 'media' && pa && pa.kind !== 'image') {
-            const handle = fi(handleAfterEnd(prev, pa.duration));
-            if (handle < c.transition.frames) issues.push({ code: 'transition_freeze', severity: 'warning', message: `the ${c.transition.type} transition needs ${c.transition.frames} spare source frames after the previous clip but only ${Math.max(0, handle)} exist; the outgoing picture will freeze`, ids: [c.id, prev.id], fix: handle > 0 ? { label: `Shorten the transition to ${handle} frames`, ops: [{ op: 'set_transition', args: { clipId: c.id, type: c.transition.type, frames: handle } }] } : { label: 'Remove the transition', ops: [{ op: 'set_transition', args: { clipId: c.id, type: null } }] } });
-          }
-        }
+        // 4. a transition whose source has run out: the outgoing picture (the previous clip's spare frames after its end) or,
+        // with a velocity ramp, the incoming one (the clip's frames before its start) would freeze
+        if (c.transition) { const issue = transitionSourceIssue(doc, track, c); if (issue) issues.push(issue); }
         // 5. pictures enlarged well beyond their own pixels look soft
         const dims = asset?.video ?? asset?.image;
         if (dims) {
@@ -125,6 +183,6 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   return {
     revision, variantId: opts.variantId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: variant?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles, upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
+    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed. Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
   };
 }

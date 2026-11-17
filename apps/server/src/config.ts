@@ -45,7 +45,31 @@ export interface Config {
   speechKeepSeconds: number;
   /** Licence profile used to decide which capabilities may run. */
   distributionProfile: 'commercial' | 'research';
+  // ---- AI-model wave (ADR-0017): local tools, frame jobs and the compute lane ----
+  /** Python interpreter of an environment with torch, transformers and sentencepiece for the local tools (PF_TOOLS_PYTHON). Unset = those tools report engine_not_configured. */
+  toolsPython: string | null;
+  /** Where verified local-tool model files live (PF_TOOLS_MODELS_DIR, default <dataDir>/tool-models). */
+  toolsModelsDir: string;
+  /** How long an idle local-tool worker keeps its model loaded, in seconds (PF_TOOLS_KEEP_SECONDS, default 60; 0 = a new process for every job). */
+  toolsKeepSeconds: number;
+  /** Operator-installed deep-filter 0.5.6 binary (PF_DENOISE_BIN); verified by digest, never installed by the product. Unset = engine_not_configured. */
+  denoiseBin: string | null;
+  /** Scratch space one AI job may use for staged frames and chunks (PF_AI_SCRATCH_BYTES, default 2 GiB). */
+  aiScratchBytes: number;
+  /** Host memory a frame chunk may take in the provider, which holds frames as 32-bit floats (PF_AI_HOST_RAM_BUDGET, default 3 GiB). */
+  aiHostRamBudgetBytes: number;
+  /** A run estimated to take longer than this many minutes needs confirmLongRun, from agents too (PF_AI_CONFIRM_MINUTES, default 10). */
+  aiConfirmMinutes: number;
+  /** Frames allowed per run until a measured profile exists for this device (PF_AI_FIRST_RUN_FRAMES, default 60). */
+  aiFirstRunMaxFrames: number;
+  /** Frames one agent-started frame job may process (PF_AI_AGENT_MAX_FRAMES, default 300). */
+  agentMaxFramesPerJob: number;
+  /** AI jobs an agent may have queued or running at once (PF_AI_AGENT_MAX_QUEUED, default 2). */
+  agentMaxQueuedJobs: number;
 }
+/** Exact publisher hosts model files may come from by default (no wildcards beyond Hugging Face's CDN). Redirect targets must match too. */
+export const DEFAULT_MODEL_HOSTS = ['huggingface.co', '.hf.co', 'github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com', 'raw.githubusercontent.com'];
+const num = (v: string | undefined, fallback: number, min = 0) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Math.max(min, Number(v)) : fallback);
 export function loadConfig(env = process.env): Config {
   const host = env.PF_HOST ?? '127.0.0.1';
   const dataDir = path.resolve(env.PF_DATA_DIR ?? path.join(root, '.data'));
@@ -61,7 +85,7 @@ export function loadConfig(env = process.env): Config {
     comfyuiUrl: env.PF_COMFYUI_URL || null,
     comfyuiAllowRemote: env.PF_COMFYUI_ALLOW_REMOTE === '1',
     comfyuiModelsDir: env.PF_COMFYUI_MODELS_DIR ? path.resolve(env.PF_COMFYUI_MODELS_DIR) : null,
-    modelHosts: (env.PF_MODEL_HOSTS ?? 'huggingface.co,.hf.co').split(',').filter(Boolean),
+    modelHosts: env.PF_MODEL_HOSTS !== undefined ? env.PF_MODEL_HOSTS.split(',').filter(Boolean) : [...DEFAULT_MODEL_HOSTS],
     maxStorageBytes: Math.max(0, Number(env.PF_MAX_STORAGE_BYTES ?? 0)) || 0,
     agentRequestsPerMinute: Math.max(0, Number(env.PF_AGENT_RPM ?? 0)) || 0,
     secureCookie: env.PF_SECURE_COOKIE === '1',
@@ -75,5 +99,15 @@ export function loadConfig(env = process.env): Config {
     speechDevice: env.PF_SPEECH_DEVICE === 'cpu' || env.PF_SPEECH_DEVICE === 'cuda' ? env.PF_SPEECH_DEVICE : 'auto',
     speechKeepSeconds: env.PF_SPEECH_KEEP_SECONDS !== undefined && Number.isFinite(Number(env.PF_SPEECH_KEEP_SECONDS)) ? Math.max(0, Number(env.PF_SPEECH_KEEP_SECONDS)) : 120,
     distributionProfile: env.PF_PROFILE === 'research' ? 'research' : 'commercial',
+    toolsPython: env.PF_TOOLS_PYTHON ? path.resolve(root, env.PF_TOOLS_PYTHON) : null,
+    toolsModelsDir: env.PF_TOOLS_MODELS_DIR ? path.resolve(root, env.PF_TOOLS_MODELS_DIR) : path.join(dataDir, 'tool-models'),
+    toolsKeepSeconds: num(env.PF_TOOLS_KEEP_SECONDS, 60),
+    denoiseBin: env.PF_DENOISE_BIN ? path.resolve(root, env.PF_DENOISE_BIN) : null,
+    aiScratchBytes: num(env.PF_AI_SCRATCH_BYTES, 2 * 1024 ** 3, 1),
+    aiHostRamBudgetBytes: num(env.PF_AI_HOST_RAM_BUDGET, 3 * 1024 ** 3, 1),
+    aiConfirmMinutes: num(env.PF_AI_CONFIRM_MINUTES, 10),
+    aiFirstRunMaxFrames: Math.floor(num(env.PF_AI_FIRST_RUN_FRAMES, 60, 1)),
+    agentMaxFramesPerJob: Math.floor(num(env.PF_AI_AGENT_MAX_FRAMES, 300)),
+    agentMaxQueuedJobs: Math.floor(num(env.PF_AI_AGENT_MAX_QUEUED, 2)),
   };
 }

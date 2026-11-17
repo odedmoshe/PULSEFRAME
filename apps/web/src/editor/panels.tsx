@@ -85,6 +85,7 @@ export function Header() {
       <button className="ghost" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle"><IconLanguage />{t('lang.toggle')}</button>
       {job?.status === 'succeeded' && <span className="save" role="status" data-testid="export-finished">{t('export.finished')}</span>}
       {job?.status === 'succeeded' && <a className="ghost" href={`/api/v1/jobs/${job.id}/output`} download data-testid="export-download">{t('export.done')}</a>}
+      {job?.status === 'succeeded' && job.output?.photosensitivity && <FlashResult report={job.output.photosensitivity} />}
       {exporting && <button className="ghost danger" onClick={() => editor.cancelExport()} data-testid="export-cancel">{t('export.cancel')}</button>}
       {job?.status === 'canceled' && <span className="save warn" role="status" data-testid="export-canceled">{t('export.canceled')}</span>}
       {(job?.status === 'canceled' || job?.status === 'failed') && <button className="ghost" onClick={() => editor.retryExport()} data-testid="export-retry">{t('export.retry')}</button>}
@@ -92,6 +93,32 @@ export function Header() {
         <IconExport />{exporting ? <>{t('export.running')} <bdi>{jobStageLabel(job?.stage, lang)}</bdi></> : t('export')}
       </button>
     </header>
+  );
+}
+
+/** The photosensitivity result of the last export (ADR-0009): a quiet status when it passed; otherwise the stretches, with jump-to. */
+function FlashResult({ report }: { report: { verdict: 'pass' | 'fail'; ranges: { from: { value: string; timescale: number }; to: { value: string; timescale: number }; kind: 'general' | 'red'; flashesPerSecond: number; area: number }[] } }) {
+  const { editor, state, t } = useEditorState();
+  if (report.verdict === 'pass') return <span className="save" role="status" data-testid="flash-pass" title={t('flash.passTitle')}>{t('flash.pass')}</span>;
+  const rate = state.doc?.settings.frameRate;
+  const sec = (x: { value: string; timescale: number }) => Number(x.value) / x.timescale;
+  const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+  return (
+    <details className="flash-result" data-testid="flash-fail">
+      <summary className="save warn" role="status">{t('flash.fail')} ({report.ranges.length})</summary>
+      <div className="flash-result-body" role="group" aria-label={t('flash.fail')}>
+        <p>{t('flash.failIntro')}</p>
+        <ul>
+          {report.ranges.map((r, i) => (
+            <li key={i} data-testid="flash-range">
+              <bdi dir="ltr">{clock(sec(r.from))}–{clock(sec(r.to))}</bdi> · {t(r.kind === 'red' ? 'flash.red' : 'flash.general')} {r.flashesPerSecond} {t('flash.perSecond')} · {Math.round(r.area * 100)}% {t('flash.area')}
+              {rate && <button type="button" className="ghost" onClick={() => editor.seek(Math.floor((sec(r.from) * rate.num) / rate.den))} data-testid="flash-jump">{t('flash.jump')}</button>}
+            </li>
+          ))}
+        </ul>
+        <p className="muted">{t('flash.method')}</p>
+      </div>
+    </details>
   );
 }
 

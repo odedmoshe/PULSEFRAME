@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, sha256Hex, transitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -41,6 +41,23 @@ export function createFuzz(seed: number) {
       { op: 'edit_analysis', args: { assetId: vid, kind: 'scenes', add: [T.rt(2, 1), T.rt(4, 1), T.rt(13, 2)] } },
       { op: 'edit_analysis', args: { assetId: aud, kind: 'beats', add: Array.from({ length: 12 }, (_, i) => T.rt(1 + i, 2)), bpm: 120 } },
       { op: 'set_transcript', args: { assetId: vid, language: 'he', segments: [0, 1, 2, 3].map((k) => ({ start: T.rt(k * 2, 1), duration: T.rt(2, 1), text: `מילה ${k} word`, words: [{ start: T.rt(k * 2, 1), duration: T.rt(1, 1), text: 'מילה' }, { start: T.rt(k * 2 + 1, 1), duration: T.rt(1, 1), text: `word${k}` }] })) } },
+    ];
+  };
+  /**
+   * Call after setup (it needs the transcript); internal operations, so they need allowInternal (ADR-0017). Imports derived copies
+   * standing in for provider results (labelled fixtures: no provider ran): a whole-file enhanced copy of the video and a partial one,
+   * and a processed copy of the music, so that replace_clip_asset is accepted and refused in a run; and a machine translation of the
+   * transcript as a language format, so the format operations meet one.
+   */
+  const aiSetup = (doc: ProjectDocument): OpCall[] => {
+    const derived = (src: string, extra: Record<string, unknown>) => ({ origin: 'derived' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'fuzz', derived: { jobId: 'job_fuzz', capabilityId: 'fuzz.fixture', capabilityVersion: '0.0.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: [src], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' }, ...extra } });
+    const [v, m] = ASSETS as unknown as [typeof ASSETS[0], typeof ASSETS[1]];
+    const segs = doc.transcripts?.[vid]?.segments ?? [];
+    return [
+      { op: 'import_asset', args: { asset: { ...v, name: 'v-enhanced.mp4', contentHash: `sha256:${'5'.repeat(64)}`, video: { ...v.video, width: 1280, height: 720 }, provenance: derived(vid, { sourceRangeStart: T.ZERO, audio: 'source-copied', frames: { sourceStartFrame: 0, sourceFrameCount: 240, sourceRate: SRC, outputRate: SRC, mapping: 'identity', heldFrames: [] } }) } } },
+      { op: 'import_asset', args: { asset: { ...v, name: 'v-part.mp4', contentHash: `sha256:${'6'.repeat(64)}`, duration: T.rt(2, 1), video: { ...v.video, frameCount: 60 }, provenance: derived(vid, { sourceRangeStart: T.rt(2, 1), audio: 'source-copied' }) } } },
+      { op: 'import_asset', args: { asset: { ...m, name: 'm-clean.wav', contentHash: `sha256:${'7'.repeat(64)}`, provenance: derived(aud, { sourceRangeStart: T.ZERO, audio: 'processed' }) } } },
+      ...(segs.length ? [{ op: 'attach_translation', args: { baseVariantId: null, name: 'EN', language: 'en', translation: { from: 'he', to: 'en', engine: 'fixture', model: 'fixture', createdAt: '2026-11-17T00:00:00Z', createdBy: 'fuzz', sources: Object.fromEntries(segs.map((sg) => [sg.id, sha256Hex(sg.text)])) }, phraseText: Object.fromEntries(segs.map((sg, i) => [sg.id, `phrase ${i}`])), cueText: {} } }] : []),
     ];
   };
   const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.adjust', 'light.vignette', 'time.echo', 'overlay.snow'];
@@ -88,7 +105,15 @@ export function createFuzz(seed: number) {
     const soundTarget = () => (rnd() < 0.67 ? audioId() : rnd() < 0.7 ? videoId() : any());
     const wordList = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((sg) => (sg.words ?? []).map((w) => w.id)));
     const words = Object.values(doc.transcripts ?? {}).flatMap((t) => t.segments.flatMap((s) => (s.words ?? []).map((w) => w.id)));
+    const derivedAssets = Object.values(doc.assets).filter((x) => x.provenance.derived);
     const menu: (() => OpCall)[] = [
+      // ADR-0017: a derived copy in place of a clip's file; mostly a copy made from the clip's own file, sometimes any copy or file (refused)
+      () => {
+        const x = media.length ? pick(media).c : null;
+        const made = x?.type === 'media' ? derivedAssets.filter((a) => a.provenance.derived!.sourceAssetIds.includes(x.assetId)) : [];
+        const assetId = made.length && rnd() < 0.85 ? pick(made).id : derivedAssets.length && rnd() < 0.8 ? pick(derivedAssets).id : pick(assetIds);
+        return { op: 'replace_clip_asset', args: { clipId: x?.id ?? any(), assetId } };
+      },
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), ...(rnd() < 0.5 ? { duration: dur() } : {}), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(120), SRC) } : {}) } }),
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), trackId: trackId() } }),
       () => { const x = media.length ? pick(media) : null; return { op: 'add_clip', args: { assetId: x && x.c.type === 'media' ? x.c.assetId : pick(assetIds), start: x ? T.add(x.c.start, x.c.duration) : fr(), ...(x ? { trackId: x.t.id } : {}), duration: f(10 + int(60)), sourceIn: T.frameTime(int(60), SRC) } }; },
@@ -129,6 +154,23 @@ export function createFuzz(seed: number) {
       () => ({ op: 'set_clip_blend', args: { clipId: any(), mode: pick(['normal', 'multiply', 'screen', 'overlay', 'soft-light'] as const) } }),
       () => ({ op: 'set_clip_mask', args: { clipId: mediaId(), mask: rnd() < 0.3 ? null : { shape: pick(['rect', 'ellipse'] as const), x: 0, y: 0, width: 0.6, height: 0.5, feather: 0.05, invert: rnd() < 0.3 } } }),
       () => ({ op: 'set_transition', args: { clipId: touchingVideo.length && rnd() < 0.85 ? pick(touchingVideo).c.id : videoId(), type: rnd() < 0.2 ? null : pick(['cross-dissolve', 'dip-to-black', 'wipe-left', 'slide-left']), frames: 1 + int(30) } }),
+      // transition options (ADR-0012): real types with and without colour and seed, then options on clips that carry a transition
+      () => ({ op: 'set_transition', args: { clipId: touchingVideo.length && rnd() < 0.85 ? pick(touchingVideo).c.id : videoId(), type: pick(['dissolve', 'slices-h', 'shape-heart', 'film-burn', 'punch-in']), frames: 1 + int(20) } }),
+      () => {
+        // aim at what the transition allows (ADR-0012): beat lock on 3+ frames, colour and seed only where the type declares them;
+        // velocity needs source handles, so it is often refused, and that refusal is exercised too
+        const withTr = videoClips.filter((x) => x.c.type === 'media' && !!x.c.transition);
+        const target = withTr.length && rnd() < 0.9 ? pick(withTr).c : null;
+        const tr = target && target.type === 'media' ? target.transition : undefined;
+        const options: readonly string[] = (tr && transitionDef(tr.type)?.options) || [];
+        const r = rnd();
+        const args: Record<string, unknown> = { clipId: target ? target.id : videoId() };
+        if (r < 0.35) args.sync = tr && tr.frames < 3 && rnd() < 0.8 ? null : rnd() < 0.85 ? 'beat' : null;
+        else if (r < 0.6) args.velocity = rnd() < 0.3 ? null : pick([2, 3, 4] as const);
+        else if (r < 0.8) args.color = options.includes('color') || rnd() < 0.15 ? (rnd() < 0.2 ? null : '#3DE0C8') : null;
+        else args.seed = options.includes('seed') || rnd() < 0.15 ? (rnd() < 0.2 ? null : int(10000)) : null;
+        return { op: 'set_transition_options', args };
+      },
       () => ({ op: 'add_marker', args: { time: at(), label: pick(['', 'note', 'סמן']) } }),
       () => ({ op: 'update_marker', args: { markerId: markers.length ? pick(markers) : 'mrk_none', time: fr(), color: pick(['blue', 'green', 'yellow', 'red', 'purple'] as const) } }),
       () => { const t = tracks.length ? pick(tracks) : { id: 'trk_none', kind: 'video' as const }; return { op: 'update_track', args: { trackId: t.id, ...(rnd() < 0.4 ? { locked: rnd() < 0.25 } : rnd() < 0.5 ? (t.kind === 'audio' || rnd() < 0.1 ? { muted: rnd() < 0.4 } : { hidden: rnd() < 0.4 }) : { name: pick(['A', 'רצועה', 'B-roll']) }) } }; },
@@ -139,7 +181,11 @@ export function createFuzz(seed: number) {
       () => ({ op: 'move_track', args: { trackId: trackId(), toIndex: int(tracks.length + 1) } }),
       () => ({ op: 'remove_track', args: { trackId: trackId() } }),
       () => ({ op: 'speed_ramp', args: { clipId: any(), from: pick([0.5, 1, 2]), to: pick([0.25, 1, 3]), steps: 2 + int(5) } }),
-      () => ({ op: 'fit_music', args: { clipId: any(), ...(rnd() < 0.3 ? { to: fr() } : {}) } }),
+      () => {
+        // prefer an unlinked sound clip on a sound track (the only kind fit_music accepts); otherwise any clip, to exercise the refusals
+        const sounds = tracks.filter((t) => t.kind === 'audio').flatMap((t) => t.clips.filter((c) => c.type === 'media' && !c.linkGroupId && !c.reverse));
+        return { op: 'fit_music', args: { clipId: sounds.length && rnd() < 0.8 ? pick(sounds).id : any(), ...(rnd() < 0.3 ? { to: fr() } : {}) } };
+      },
       () => {
         // prefer a pair that can really be linked (a detached picture and sound that still cover the same stretch); otherwise any two clips
         const all = tracks.flatMap((t) => t.clips.filter((c) => c.type === 'media' && !c.linkGroupId).map((c) => ({ c, t: t.id })));
@@ -191,8 +237,12 @@ export function createFuzz(seed: number) {
         const to = () => (others.length && rnd() < 0.8 ? pick(others).c.id : soundTarget()); // mostly another sound clip; sometimes a picture, the source itself or a clip without sound (refused)
         return { op: 'copy_audio_effects', args: { fromClipId: clipId, toClipIds: [to(), ...(rnd() < 0.3 ? [to()] : [])], ...(rnd() < 0.5 ? { replace: rnd() < 0.7 } : {}) } };
       },
+      // voice cleanup (ADR-0013): one strength sets the three cleanup effects; strength 0 removes them; a bad profile or strength is refused
+      () => ({ op: 'clean_voice', args: { clipId: soundTarget(), strength: pick([0, 0.25, 0.6, 0.6, 1, 1.5]), ...(rnd() < 0.5 ? { mainsHz: pick(['50', '60', null] as const) } : {}), ...(rnd() < 0.4 ? { profile: rnd() < 0.1 ? 'not-a-profile' : rnd() < 0.5 ? GENERIC_NOISE_PROFILE : encodeNoiseProfile(Array.from({ length: 24 }, () => -40 - int(40))), source: pick(assetIds) } : {}), ...(rnd() < 0.15 ? { denoise: false } : {}), ...(rnd() < 0.15 ? { speech: false } : {}), ...(rnd() < 0.1 ? { includeLinked: false } : {}) } }),
+      // colour match writes its grade with set_colour_grade (ADR-0014): replace or merge, out-of-range values refused, animated values refused unless dropped
+      () => ({ op: 'set_colour_grade', args: { clipId: rnd() < 0.8 ? videoId() : any(), params: { exposure: Number((rnd() * 2 - 1).toFixed(3)), temperature: Number((rnd() * 1.2 - 0.6).toFixed(3)), ...(rnd() < 0.5 ? { saturation: rnd() < 0.08 ? 3 : Number((0.5 + rnd()).toFixed(3)) } : {}) }, ...(rnd() < 0.4 ? { mode: pick(['replace', 'merge'] as const) } : {}), ...(rnd() < 0.2 ? { dropKeyframes: true } : {}) } }),
     ];
     return pick(menu)();
   };
-  return { rate, f, int, importOps, setup, gen };
+  return { rate, f, int, importOps, setup, aiSetup, gen };
 }

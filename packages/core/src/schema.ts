@@ -1,13 +1,14 @@
 /**
- * Canonical ProjectDocument (SPEC §5), schema version 1.
+ * Canonical ProjectDocument (SPEC §5), schema version 2 (v2 adds adjustment clips and tracks and template slot records, ADR-0016).
  * JSON-serializable; binary media stays outside and is referenced by asset id.
  * Transient state (selection, playhead, presence, panel layout) is NOT part of this document.
  */
 import { z } from 'zod';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
+import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const RationalTimeSchema = z
   .object({
@@ -20,6 +21,38 @@ export const RateSchema = z.object({ num: z.number().int().positive(), den: z.nu
 
 const Id = z.string().min(1).max(64);
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/).describe('#RRGGBB or #RRGGBBAA');
+
+/**
+ * How the frames of a derived video map to its source (ADR-0017 frame jobs). Present on provider outputs made frame by frame.
+ * identity: output frame i = source frame sourceStartFrame+i. interpolated: output frame i·m = source frame sourceStartFrame+i (time-identical at rate r·m).
+ */
+export const DerivedFramesSchema = z
+  .object({
+    sourceStartFrame: z.number().int().nonnegative(),
+    sourceFrameCount: z.number().int().positive(),
+    sourceRate: RateSchema,
+    outputRate: RateSchema,
+    /** identity: output frame i = source frame f0+i. interpolated: output frame i·m = source frame f0+i (time-identical at rate r·m). */
+    mapping: z.enum(['identity', 'interpolated']),
+    multiplier: z.number().int().min(2).max(8).optional(),
+    /** Output frame indices that repeat the previous frame (trailing holds, holds across scene cuts). */
+    heldFrames: z.array(z.number().int().nonnegative()).max(100000),
+  })
+  .strict();
+/**
+ * A machine translation stored on a language variant (ADR-0017). Phrase-timed only: the master's timing is kept and never mapped
+ * word by word (SPEC §16). Only the owner can mark it reviewed.
+ */
+export const VariantTranslationSchema = z
+  .object({
+    from: z.string().min(2).max(35), to: z.string().min(2).max(35),
+    engine: z.string().max(80), model: z.string().max(200),
+    createdAt: z.string(), createdBy: z.string(),
+    review: z.enum(['needed', 'reviewed']), reviewedBy: z.string().optional(), reviewedAt: z.string().optional(),
+    /** sha256 hex of each master phrase/cue text when translated (key = segment id or caption clip id). */
+    sources: z.record(Id, z.string().regex(/^[0-9a-f]{64}$/)),
+  })
+  .strict();
 
 export const AssetSchema = z
   .object({
@@ -89,7 +122,23 @@ export const AssetSchema = z
           .optional(),
         /** Present for provider outputs (SPEC §25, Amendment A1 FF-08): enough to recreate the recipe and trace lineage. */
         derived: z
-          .object({ jobId: z.string(), capabilityId: z.string(), capabilityVersion: z.string(), graphDigest: z.string(), params: z.record(z.string(), z.unknown()), sourceAssetIds: z.array(z.string()), outputName: z.string(), outputRole: z.string(), encoding: z.string(), provider: z.record(z.string(), z.unknown()) })
+          .object({
+            jobId: z.string(), capabilityId: z.string(), capabilityVersion: z.string(),
+            /** The reviewed graph's digest for a ComfyUI result. A local tool has no graph and writes its code digest here too (same as logicDigest). */
+            graphDigest: z.string(),
+            params: z.record(z.string(), z.unknown()), sourceAssetIds: z.array(z.string()), outputName: z.string(), outputRole: z.string(), encoding: z.string(), provider: z.record(z.string(), z.unknown()),
+            // ADR-0017 (all optional; older documents stay valid):
+            /** Frame mapping of a frame-job video output. */
+            frames: DerivedFramesSchema.optional(),
+            /** What happened to the source's sound: copied unchanged, processed by the tool, or absent. */
+            audio: z.enum(['source-copied', 'processed', 'none']).optional(),
+            /** Source-asset time (its own clock) of this asset's time zero. Present iff the derivative is time-preserving (replace_clip_asset and caption lineage need it). */
+            sourceRangeStart: RationalTimeSchema.optional(),
+            /** The verified model files the job ran with. */
+            models: z.array(z.object({ path: z.string(), sha256: z.string().regex(/^[0-9a-f]{64}$/) }).strict()).max(16).optional(),
+            /** sha256:<hex> logic digest (graphDigest or codeDigest) the job ran. graphDigest keeps its meaning for ComfyUI. */
+            logicDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
+          })
           .strict()
           .optional(),
       })
@@ -108,6 +157,7 @@ export const TransformSchema = z
   .strict();
 export const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 } as const;
 
+const Gradient = z.object({ colors: z.array(Color).min(2).max(3), angle: z.number().int().min(0).max(359) }).strict();
 export const TextStyleSchema = z
   .object({
     fontFamily: z.string().max(64),
@@ -120,8 +170,36 @@ export const TextStyleSchema = z
     background: Color.nullable(),
     stroke: Color.nullable(),
     strokeFrac: z.number().min(0).max(0.5).describe('Stroke width as a fraction of font size'),
+    // ---- look fields (ADR-0012): optional, absent and null both mean off; a title with none of them is drawn exactly as before ----
+    /** The letters' fill: 2–3 evenly spaced colours along an angle (0° = left to right, 90° = top to bottom; the angle turns with the title). Each letter keeps its colours while it moves. */
+    gradient: Gradient.nullable().optional(),
+    /** Extra space between letters, as a fraction of the font size; drawn as 0 on lines with Arabic script (joined letters). */
+    tracking: z.number().min(-0.05).max(0.5).nullable().optional(),
+    /** A second outline outside the first one (`stroke`), as a fraction of the font size. */
+    stroke2: z.object({ color: Color, widthFrac: z.number().min(0.01).max(0.5) }).strict().nullable().optional(),
+    /** A soft light around the letters: radius as a fraction of the font size, intensity 0.1–1. It does not change over time. */
+    glow: z.object({ color: Color, radiusFrac: z.number().min(0.05).max(1), intensity: z.number().min(0.1).max(1) }).strict().nullable().optional(),
+    /** Solid depth behind the letters toward `angle` (degrees, 0 = right, 90 = down), darkened by up to `shade` toward the back. */
+    extrude: z.object({ color: Color, depthFrac: z.number().min(0.02).max(0.6), angle: z.number().int().min(0).max(359), shade: z.number().min(0).max(0.8) }).strict().nullable().optional(),
+    /** A flat shadow of the letters stretched toward `angle` over `lengthFrac` font sizes. */
+    longShadow: z.object({ color: Color, lengthFrac: z.number().min(0.1).max(4), angle: z.number().int().min(0).max(359) }).strict().nullable().optional(),
   })
   .strict();
+/** The optional look fields of a title (ADR-0012). Text styles (textPresets.ts) own them: applying a style clears the ones it does not set. */
+export const TEXT_LOOK_FIELDS = ['gradient', 'tracking', 'stroke2', 'glow', 'extrude', 'longShadow'] as const;
+export type TextLookField = (typeof TEXT_LOOK_FIELDS)[number];
+/**
+ * A title's style with its look fields that mean "off" removed (null, and tracking 0), so a title without a look is stored
+ * exactly like one from before the look fields existed. Used on the master style; a format override keeps its nulls, where
+ * they mean "off in this format".
+ */
+export function normaliseTextStyle<S extends Partial<TextStyle>>(s: S): S {
+  const o: Record<string, unknown> = { ...s };
+  for (const k of TEXT_LOOK_FIELDS) if (o[k] === null || (k === 'tracking' && o[k] === 0)) delete o[k];
+  return o as S;
+}
+/** True when a style has at least one look field that is on (null and tracking 0 are off). */
+export const hasTextLook = (s: Partial<TextStyle>): boolean => TEXT_LOOK_FIELDS.some((k) => s[k] != null && !(k === 'tracking' && s[k] === 0));
 export const DEFAULT_TEXT_STYLE = {
   fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.06, color: '#FFFFFF', align: 'center', direction: 'auto', lineHeight: 1.2, background: null, stroke: '#000000', strokeFrac: 0.08,
 } as const satisfies z.infer<typeof TextStyleSchema>;
@@ -145,6 +223,8 @@ const ClipBase = {
   /** Applied in order after the layer is placed (with its transform and opacity), before its mask, transition and blend mode. A time effect (time.*) is always first (ops.ts effectSlot). */
   effects: z.array(EffectInstanceSchema).max(16).optional(),
   blend: z.enum(BLEND_MODES).optional(),
+  /** Follow a motion track (ADR-0015): a title, or a picture on a video track, moves with the tracked point; its own transform is then an offset from that point. */
+  follow: FollowSchema.optional(),
 };
 export const MediaClipSchema = z
   .object({
@@ -177,17 +257,20 @@ export const MediaClipSchema = z
     audioFx: z.array(AudioFxInstanceSchema).max(MAX_AUDIO_FX).optional(),
     fadeOut: RationalTimeSchema.optional(),
     mask: MaskSchema.optional(),
+    /** Privacy regions (ADR-0015): blurred, pixelated or covered parts of the picture, fixed or following a motion track of this clip's asset. Drawn on each picture of the clip before its effects. */
+    redact: z.array(RedactRegionSchema).min(1).max(MAX_REDACT_REGIONS).optional(),
     transition: TransitionSchema.optional(),
   })
   .strict();
 /**
  * How the letters, words or lines of a title come in, go out and move while it is shown. The units animate one after
  * another in reading order. Entrance: fade, typewriter (each unit simply appears), rise (from below), drop (from above),
- * pop (grows with a small overshoot), slide (from the side reading starts on), zoom (settles from larger).
- * Exit: fade, sink (down), lift (up), shrink, slide (toward the side reading ends on). Loop: wave, bounce, pulse, jitter.
+ * pop (grows with a small overshoot), slide (from the side reading starts on), zoom (settles from larger), blur (comes into
+ * focus), write (each unit is drawn on from its reading-start side, one after another; ADR-0012).
+ * Exit: fade, sink (down), lift (up), shrink, slide (toward the side reading ends on), blur (goes out of focus). Loop: wave, bounce, pulse, jitter.
  */
-export const TEXT_ANIM_IN = ['fade', 'typewriter', 'rise', 'drop', 'pop', 'slide', 'zoom'] as const;
-export const TEXT_ANIM_OUT = ['fade', 'sink', 'lift', 'shrink', 'slide'] as const;
+export const TEXT_ANIM_IN = ['fade', 'typewriter', 'rise', 'drop', 'pop', 'slide', 'zoom', 'blur', 'write'] as const;
+export const TEXT_ANIM_OUT = ['fade', 'sink', 'lift', 'shrink', 'slide', 'blur'] as const;
 export const TEXT_ANIM_LOOP = ['wave', 'bounce', 'pulse', 'jitter'] as const;
 export const TextAnimationSchema = z
   .object({
@@ -288,11 +371,30 @@ export const VariantSchema = z
     overrides: z.record(z.string(), VariantOverrideSchema),
     /** Transcript phrases (by segment id) worded differently in this format. Such a phrase is shown as phrase-timed text there: the word timing describes the master wording. */
     phraseText: z.record(Id, z.string().min(1).max(4000)).optional(),
+    /** BCP 47 tag of the captions in this format when they differ from the master's (a language variant, ADR-0017). */
+    language: z.string().min(2).max(35).optional(),
+    /** Present on a language variant made by machine translation: where its wording came from and whether the owner reviewed it. */
+    translation: VariantTranslationSchema.optional(),
   })
   .strict();
 
 
-export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), createdIds: z.array(Id).max(5000), /** Content fingerprint of each created clip as the recipe left it; a clip whose content differs was edited by hand. */ fingerprints: z.record(Id, z.string()).default({}), steps: z.array(z.string().max(400)).max(50) }).strict();
+/** What a template run placed, by role (ADR-0016). Kept on the run, never on clips: a deleted clip leaves an inert, detached slot. */
+export const TEMPLATE_SLOT_KINDS = ['picture', 'text', 'music', 'look', 'element', 'sound'] as const;
+export const SlotRecordSchema = z
+  .object({
+    key: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/),
+    kind: z.enum(TEMPLATE_SLOT_KINDS),
+    clipId: Id,
+    accept: z.enum(['video', 'image', 'any']).optional(),
+    beats: z.object({ from: z.number().int().min(0), count: z.number().int().min(1).max(64), unit: z.enum(['beat', 'bar']) }).strict().optional(),
+  })
+  .strict();
+export type SlotRecord = z.infer<typeof SlotRecordSchema>;
+
+export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), createdIds: z.array(Id).max(5000), /** Content fingerprint of each created clip as the recipe left it; a clip whose content differs was edited by hand. */ fingerprints: z.record(Id, z.string()).default({}), steps: z.array(z.string().max(400)).max(50),
+  /** Template runs only (recipeId `template:<templateId>`, ADR-0016): what each slot of the template holds. */
+  slots: z.array(SlotRecordSchema).max(400).optional() }).strict();
 export type RecipeRun = z.infer<typeof RecipeRunSchema>;
 
 // ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
@@ -307,11 +409,20 @@ export const AnalysisSchema = z
   })
   .strict();
 
-export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema]);
+/**
+ * Adjustment clip (ADR-0016). It has no picture of its own: its enabled effects, mask, opacity and blend act on everything
+ * already drawn below it in its sequence at that time. Captions are drawn last and are never affected.
+ * It lives only on tracks of kind 'adjustment'.
+ * Transform: only opacity is used; x=0, y=0, scale=1, rotation=0. Keyframes: opacity only.
+ * No transition, no time effect, no key.chroma, no stylize.shadow (validate.ts adjustmentRefusal).
+ * The mask is in frame space (the adjustment's box is the whole frame).
+ */
+export const AdjustmentClipSchema = z.object({ ...ClipBase, type: z.literal('adjustment'), label: z.string().max(80).optional(), mask: MaskSchema.optional() }).strict();
+export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema, AdjustmentClipSchema]);
 
 export const TrackSchema = z
   .object({
-    id: Id, kind: z.enum(['video', 'audio', 'text', 'caption']), name: z.string().max(128), locked: z.boolean(), muted: z.boolean(), hidden: z.boolean(), clips: z.array(ClipSchema),
+    id: Id, /** adjustment (ADR-0016): holds only adjustment clips, which act on the tracks below it. */ kind: z.enum(['video', 'audio', 'text', 'caption', 'adjustment']), name: z.string().max(128), locked: z.boolean(), muted: z.boolean(), hidden: z.boolean(), clips: z.array(ClipSchema),
     /** Caption tracks only. transcript mode shows the transcript of whatever is playing on the linked track; manual mode shows this track's own cues. */
     caption: z.object({ mode: z.enum(['manual', 'transcript']), linkedTrackId: Id.nullable(), style: CaptionStyleSchema }).strict().optional(),
     /** Audio tracks only. Absent = unity gain, centred, no ducking. */
@@ -358,6 +469,8 @@ export const ProjectSchema = z
     analyses: z.record(Id, AnalysisSchema).default({}),
     /** User markers by marker id. */
     markers: z.record(Id, MarkerSchema).default({}),
+    /** Motion tracks by track id (ADR-0015): positions of a point or box per source frame of a video asset. */
+    motionTracks: z.record(Id, MotionTrackSchema).default({}),
   })
   .strict();
 
@@ -370,10 +483,13 @@ export type TextStyle = z.infer<typeof TextStyleSchema>;
 export type MediaClip = z.infer<typeof MediaClipSchema>;
 export type TextClip = z.infer<typeof TextClipSchema>;
 export type CaptionClip = z.infer<typeof CaptionClipSchema>;
+export type AdjustmentClip = z.infer<typeof AdjustmentClipSchema>;
 export type CaptionStyle = z.infer<typeof CaptionStyleSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;
 export type Variant = z.infer<typeof VariantSchema>;
+export type VariantTranslation = z.infer<typeof VariantTranslationSchema>;
+export type DerivedFrames = z.infer<typeof DerivedFramesSchema>;
 export type SafeArea = z.infer<typeof SafeAreaSchema>;
 export type Segment = z.infer<typeof SegmentSchema>;
 export type Word = z.infer<typeof WordSchema>;
@@ -381,6 +497,7 @@ export type Clip = z.infer<typeof ClipSchema>;
 export type Track = z.infer<typeof TrackSchema>;
 export type Sequence = z.infer<typeof SequenceSchema>;
 export type ProjectDocument = z.infer<typeof ProjectSchema>;
+export type { MotionTrack, Follow, RedactRegion } from './tracking.ts';
 
 export interface NewProjectOptions { id: string; name: string; width?: number; height?: number; frameRate?: { num: number; den: number }; sampleRate?: number }
 export function createProject(o: NewProjectOptions): ProjectDocument {
@@ -407,11 +524,15 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
     variants: {},
     recipeRuns: {},
     markers: {},
+    motionTracks: {},
   };
 }
 
-/** Schema migrations: version N -> N+1. v1 is the first version, so the table is empty but the path is exercised by tests. */
-const MIGRATIONS: Record<number, (doc: any) => any> = {};
+/** Schema migrations: version N -> N+1. Older builds refuse newer documents ("newer than supported"). */
+const MIGRATIONS: Record<number, (doc: any) => any> = {
+  /** v1 -> v2 (ADR-0016): adjustment clips/tracks and template slot records are new and optional; nothing to rewrite. */
+  1: (doc) => ({ ...doc, schemaVersion: 2 }),
+};
 export function migrateProject(raw: unknown): ProjectDocument {
   let doc = raw as { schemaVersion?: number };
   if (typeof doc?.schemaVersion !== 'number') throw new Error('not a PULSEFRAME project: missing schemaVersion');

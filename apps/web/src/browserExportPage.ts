@@ -3,10 +3,10 @@
  * will call `runBrowserExport` directly). It obtains the owner cookie the same way the editor does.
  */
 import './strictPage.ts';
-import { BrowserExportError, probeCapabilities, probeSound, runBrowserExport, type BrowserCapabilities } from './browserExport.ts';
+import { BrowserExportError, probeCapabilities, probeSound, runBrowserExport, type BrowserCapabilities, type BrowserPhotosensitivity } from './browserExport.ts';
 import { ownerKeyHeader } from './api.ts';
 
-interface PageResult { jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number; base64: string }
+interface PageResult { jobId: string; videoCodec: string; audioCodec: string; container: string; frames: number; sha256: string; bytes: number; substitutions: string[]; capabilities: BrowserCapabilities; wallMs: number; base64: string; photosensitivity: BrowserPhotosensitivity }
 type Api = {
   ready: Promise<void>;
   /** Job id and session id of the most recent export, available as soon as its lease exists. */

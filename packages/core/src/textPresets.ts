@@ -4,9 +4,15 @@
  * Applying one keeps the text, its position, alignment and direction; every value stays editable afterwards.
  * Only the bundled fonts are used. The styles were written from descriptions; nobody has judged them on a video yet.
  */
+import type { TextLookField, TextStyle } from './schema.ts';
+
+/**
+ * A preset owns the look fields (ADR-0012, schema.ts TEXT_LOOK_FIELDS): apply_text_preset clears every look field of the
+ * title and then sets the ones the preset lists, so a look from an earlier preset never survives.
+ */
 export interface TextPreset {
   id: string; name: { he: string; en: string };
-  style: { fontFamily: string; fontWeight: number; sizeFrac: number; color: string; background: string | null; stroke: string | null; strokeFrac: number };
+  style: { fontFamily: string; fontWeight: number; sizeFrac: number; color: string; background: string | null; stroke: string | null; strokeFrac: number } & Partial<Pick<TextStyle, TextLookField>>;
   shadow: { color: string; opacity: number; blur: number; x: number; y: number } | null;
 }
 export const TEXT_PRESETS: readonly TextPreset[] = [

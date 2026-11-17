@@ -2,9 +2,11 @@
  * ComfyUI adapter over ComfyUI's own HTTP API (ADR-0007). The base URL is operator configuration,
  * never taken from a graph or a request. Local-only policy: non-loopback hosts must be explicitly allowed.
  */
-import { openAsBlob } from 'node:fs';
+import { createHash } from 'node:crypto';
+import fs, { openAsBlob } from 'node:fs';
+import path from 'node:path';
 import type { CancelOutcome, CollectedOutput, Estimate, ProviderAdapter, Readiness, RemoteState, Submission } from './contract.ts';
-import type { CapabilityDescriptor } from './descriptor.ts';
+import type { CapabilityDescriptor, ComfyDescriptor } from './descriptor.ts';
 
 export class ProviderError extends Error {
   constructor(public code: string, message: string, public ambiguous = false) {
@@ -36,7 +38,7 @@ export class ComfyUIAdapter implements ProviderAdapter {
     return r.json() as Promise<any>;
   }
 
-  async probe(d?: CapabilityDescriptor): Promise<Readiness> {
+  async probe(d?: ComfyDescriptor): Promise<Readiness> {
     const out: Readiness = { reachable: false, wokeWorker: false, runtimeVersion: null, device: null, hostRamBytes: null, missingNodeClasses: [], missingModels: [], problems: [] };
     try {
       const s = await this.json('/system_stats');
@@ -104,19 +106,33 @@ export class ComfyUIAdapter implements ProviderAdapter {
     if (s.state === 'running') { await this.call('/interrupt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt_id: id }) }); return 'interrupt-requested'; }
     return 'not-found';
   }
-  async collect(d: CapabilityDescriptor, id: string): Promise<CollectedOutput[]> {
+  /**
+   * L0 compile bridge (ADR-0017 contract): writes each declared output into `destDir` and hashes it. This version still reads each
+   * file into memory before writing it, with the fixed 15 s timeout; the frame-job work (W1) replaces it with the streamed,
+   * size-aware collect the contract describes.
+   */
+  async collect(d: ComfyDescriptor, id: string, destDir: string): Promise<CollectedOutput[]> {
     const h = (await this.json(`/history/${encodeURIComponent(id)}`))[id];
     if (!h) throw new ProviderError('output_missing', 'provider has no record of the finished job');
     const out: CollectedOutput[] = [];
+    fs.mkdirSync(destDir, { recursive: true });
     for (const o of d.outputs) {
+      if (o.nodeId === null || o.mediaType === 'data') throw new ProviderError('output_missing', `declared output "${o.name}" is not a ComfyUI node output`);
       const files: any[] = Object.values(h.outputs?.[o.nodeId] ?? {}).flat().filter((f: any) => f && typeof f.filename === 'string');
       if (files.length === 0) throw new ProviderError('output_missing', `declared output "${o.name}" (node ${o.nodeId}) produced no file`);
       for (const f of files) {
         const r = await this.call(`/view?${new URLSearchParams({ filename: f.filename, subfolder: f.subfolder ?? '', type: f.type ?? 'output' })}`);
         if (!r.ok) throw new ProviderError('output_missing', `could not download ${f.filename}: HTTP ${r.status}`);
-        out.push({ name: o.name, role: o.role, mediaType: o.mediaType, encoding: o.encoding, fileName: f.filename, bytes: new Uint8Array(await r.arrayBuffer()) });
+        const bytes = new Uint8Array(await r.arrayBuffer());
+        const file = path.join(destDir, `out_${out.length}_${String(f.filename).replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 80)}`);
+        fs.writeFileSync(file, bytes, { mode: 0o600 });
+        out.push({ name: o.name, role: o.role, mediaType: o.mediaType, encoding: o.encoding, fileName: f.filename, path: file, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
       }
     }
     return out;
+  }
+  /** Contract member for the compute lane's interrupt rule. Not implemented in L0 (the frame-job work, W1, adds it): it refuses rather than answer "nothing is running". */
+  async running(): Promise<{ promptId: string; clientRequestId: string | null }[]> {
+    throw new ProviderError('not_implemented', 'listing running prompts is not implemented yet');
   }
 }

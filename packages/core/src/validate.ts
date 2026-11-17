@@ -1,5 +1,5 @@
 import * as T from '@pulseframe/time';
-import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange } from './effects.ts';
+import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange, transitionDef } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
@@ -16,6 +16,17 @@ export function sequenceDuration(doc: ProjectDocument, sequenceId = doc.mainSequ
   let end = T.ZERO;
   for (const tr of own(doc.sequences, sequenceId)?.tracks ?? []) for (const c of tr.clips) end = T.max(end, clipEnd(c));
   return end;
+}
+
+/**
+ * Why an effect cannot go on an adjustment clip, or null when it can (ADR-0016). An adjustment has no picture of its own:
+ * it acts on the picture already drawn below it.
+ */
+export function adjustmentRefusal(type: string): string | null {
+  if (isTimeEffect(type)) return 'a time effect needs a clip\'s own source; it cannot act on the picture below';
+  if (type === 'key.chroma') return 'a chroma key over the whole picture below would cut holes through to the background';
+  if (type === 'stylize.shadow') return 'a drop shadow has no visible result on a full-frame picture';
+  return null;
 }
 
 /** The project's colour tables: library entries of kind 'lut' (imported .cube files). */
@@ -66,6 +77,14 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   for (const [key, a] of Object.entries(doc.assets)) {
     if (key !== a.id) issues.push({ code: 'key_mismatch', message: `asset key ${key} != id ${a.id}`, ids: [key] });
     uniq(a.id);
+    // ADR-0017: the frame mapping of a frame-job result
+    const fr = a.provenance.derived?.frames;
+    if (fr) {
+      if ((fr.mapping === 'interpolated') !== (fr.multiplier !== undefined)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: an interpolated result names its multiplier, and only it does`, ids: [a.id] });
+      if (fr.heldFrames.some((f, i) => i > 0 && f <= fr.heldFrames[i - 1]!)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: held frames must be strictly ascending`, ids: [a.id] });
+    }
+    const rangeStart = a.provenance.derived?.sourceRangeStart;
+    if (rangeStart && T.isNegative(rangeStart)) issues.push({ code: 'derived_range', message: `asset ${a.id}: its source range cannot start before 0`, ids: [a.id] });
   }
   for (const [key, seq] of Object.entries(doc.sequences)) {
     if (key !== seq.id) issues.push({ code: 'key_mismatch', message: `sequence key ${key} != id ${seq.id}`, ids: [key] });
@@ -133,6 +152,31 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         }
         if ((c.effects?.length || c.blend) && (tr.kind === 'audio' || tr.kind === 'caption')) issues.push({ code: 'incompatible_track', message: `clip ${c.id} on a ${tr.kind} track cannot carry picture effects`, ids: [c.id, tr.id] });
         if (c.type === 'media' && (c.mask || c.transition) && tr.kind !== 'video') issues.push({ code: 'incompatible_track', message: `clip ${c.id}: masks and transitions belong to picture clips`, ids: [c.id, tr.id] });
+        // Adjustment clips live only on adjustment tracks and use opacity alone (ADR-0016). This rule can only fire on
+        // documents that use them (schema v2), so an older project stays editable.
+        if (c.type === 'adjustment' || tr.kind === 'adjustment') {
+          if (c.type !== 'adjustment' || tr.kind !== 'adjustment')
+            issues.push({ code: 'incompatible_track', message: c.type === 'adjustment' ? `adjustment clip ${c.id} on ${tr.kind} track` : `${c.type} clip ${c.id} on adjustment track ${tr.id}`, ids: [c.id, tr.id] });
+          if (c.type === 'adjustment') {
+            const t = c.transform;
+            if (t.x !== 0 || t.y !== 0 || t.scale !== 1 || t.rotation !== 0 || (['x', 'y', 'scale', 'rotation'] as const).some((p) => c.keyframes?.[p]?.length))
+              issues.push({ code: 'adjustment_transform', message: `adjustment clip ${c.id}: only opacity can be set or animated`, ids: [c.id] });
+            for (const fx of c.effects ?? []) { const why = adjustmentRefusal(fx.type); if (why) issues.push({ code: 'adjustment_effect', message: `adjustment clip ${c.id}: ${fx.type}: ${why}`, ids: [c.id] }); }
+          }
+          continue;
+        }
+        if (c.type === 'media' && c.transition) {
+          // Transition options (ADR-0012): new optional fields, so these rules can only fire on documents that use them.
+          const t = c.transition, options = transitionDef(t.type)?.options ?? [];
+          for (const option of ['color', 'seed'] as const) if (t[option] !== undefined && !options.includes(option)) issues.push({ code: 'invalid_transition_option', message: `clip ${c.id}: the ${t.type} transition has no ${option} option`, ids: [c.id] });
+          if (t.sync && t.frames < 3) issues.push({ code: 'invalid_transition_sync', message: `clip ${c.id}: a transition locked to the beat needs at least 3 frames`, ids: [c.id] });
+          if (t.velocity) {
+            const prev = tr.clips.find((o) => o.type === 'media' && o.id !== c.id && T.eq(clipEnd(o), c.start));
+            const timeFirst = (x: Clip) => { const first = x.effects?.find((e) => e.enabled); return !!first && isTimeEffect(first.type); };
+            const bad = [c, ...(prev ? [prev] : [])].filter((x) => x.type === 'media' && (x.reverse || x.freeze || timeFirst(x)));
+            if (bad.length) issues.push({ code: 'incompatible_velocity', message: `clip ${c.id}: a velocity ramp cannot remap a clip that plays backwards, is a freeze frame or starts with a time effect`, ids: [c.id, ...bad.filter((x) => x.id !== c.id).map((x) => x.id)] });
+          }
+        }
         if (c.type === 'text' || c.type === 'caption') {
           if (tr.kind !== c.type) issues.push({ code: 'incompatible_track', message: `${c.type} clip ${c.id} on ${tr.kind} track`, ids: [c.id, tr.id] });
           continue;
@@ -183,9 +227,19 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     if (!own(doc.sequences, mk.sequenceId)) issues.push({ code: 'missing_sequence', message: `marker ${mk.id} refers to a missing sequence`, ids: [mk.id] });
     if (T.isNegative(mk.time) || !T.isFrameAligned(mk.time, doc.settings.frameRate)) issues.push({ code: 'marker_time', message: `marker ${mk.id} must sit on a non-negative whole frame`, ids: [mk.id] });
   }
+  // Motion tracks are kept by id like markers and formats: the key is the id, and the id is unique and not reserved.
+  for (const [key, mt] of Object.entries(doc.motionTracks ?? {})) {
+    if (key !== mt.id) issues.push({ code: 'key_mismatch', message: `motion track key ${key} != id ${mt.id}`, ids: [key] });
+    uniq(mt.id);
+  }
   for (const [key, va] of Object.entries(doc.variants ?? {})) {
     if (key !== va.id) issues.push({ code: 'key_mismatch', message: `variant key ${key} != id ${va.id}`, ids: [key] });
     uniq(va.id);
+    // ADR-0017: a language variant made by translation says which language it is in, and a reviewed one says who reviewed it
+    const tl = va.translation;
+    if (tl && va.language !== tl.to) issues.push({ code: 'variant_translation', message: `variant ${va.id}: its language must be the language it was translated to`, ids: [va.id] });
+    if (tl && tl.review === 'reviewed' && !tl.reviewedBy) issues.push({ code: 'variant_translation', message: `variant ${va.id}: a reviewed translation names its reviewer`, ids: [va.id] });
+    if (tl && tl.review === 'needed' && (tl.reviewedBy || tl.reviewedAt)) issues.push({ code: 'variant_translation', message: `variant ${va.id}: a translation that needs review names no reviewer`, ids: [va.id] });
   }
   for (const [key, an] of Object.entries(doc.analyses ?? {})) {
     if (key !== an.assetId || !own(doc.assets, an.assetId)) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });

@@ -22,6 +22,7 @@ import { limiter } from './analysis.ts';
 const stillLimit = limiter(2, 32);
 import { ffprobe } from './ingest.ts';
 import { assertStorageRoom } from './storage.ts';
+import { FrameFlashCheck, type PhotosensitivityReport } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 
 const exec = promisify(execFile);
@@ -78,6 +79,8 @@ export interface RenderSession {
   totalFrames: number;
   nextFrame: number;
   sink: ChildProcessWithoutNullStreams | null;
+  /** Photosensitivity check of the frames as they are encoded (ADR-0009 decision 4); absent for a still. */
+  flash?: FrameFlashCheck;
 }
 export interface Manifest {
   revision: number;
@@ -323,6 +326,7 @@ export class Exporter {
     const count = data.length / s.frameBytes;
     if (s.nextFrame + count > s.totalFrames) throw new ApiError(400, 'too_many_frames', 'more frames than the snapshot contains');
     s.nextFrame += count;
+    s.flash?.feed(data); // the frames the file will hold, checked for flashing as they pass (never changes or blocks the export)
     const sink = s.sink;
     // The encoder going away means the job was canceled or failed: a typed conflict, not a server error. It may already be
     // gone when the frames arrive (a write to a closed pipe reports nothing further), so that is checked first, and the
@@ -358,6 +362,7 @@ export class Exporter {
     const manifest: Manifest = job.input.manifest ?? this.plan(doc, job.input.revision, {}).manifest;
     const { options, output } = manifest;
     let token: string | undefined;
+    let flashReport: PhotosensitivityReport | null = null;
     const started = Date.now();
     const canceled = () => this.cancelRequested.has(jobId);
     this.running = { jobId };
@@ -403,6 +408,7 @@ export class Exporter {
           const opened = this.open(doc, job.input.revision, jobId, { width: output.width, height: output.height, firstFrame: output.firstFrame, frames: output.frames });
           token = opened.token;
           const s = opened.session;
+          if (output.frames > 1) s.flash = new FrameFlashCheck(output.width, output.height, frameRate);
           const mp4 = options.format === 'mp4-h264-aac';
           const crf = gif ? '' : String(CRF[options.format as 'mp4-h264-aac' | 'webm-vp9-opus'][options.quality]);
           const ff = spawn('ffmpeg', gif ? [
@@ -431,6 +437,7 @@ export class Exporter {
           const stats = await render;
           if (canceled()) throw new Error('canceled');
           if (s.nextFrame !== s.totalFrames) throw new Error(`renderer delivered ${s.nextFrame} of ${s.totalFrames} frames`);
+          flashReport = s.flash?.report(output.firstFrame) ?? null;
           renderStageMs = stats.stageMs;
           ff.stdin.end();
           this.store.updateJob(jobId, { stage: 'encoding' });
@@ -462,7 +469,7 @@ export class Exporter {
         status: 'succeeded', stage: null,
         output: {
           file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, bytes, revision: job.input.revision, route: 'server-software-canvas2d', options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
-          estimate: { ...manifest.estimate, actualBytes: bytes }, audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
+          estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });
     } catch (e: any) {

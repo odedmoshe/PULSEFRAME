@@ -6,14 +6,16 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
-  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS,
-  type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
+  normaliseTextStyle, TEXT_LOOK_FIELDS,
+  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
+  type AdjustmentClip, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { handleAfterEnd, isRamped, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, speedValue, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
+import { handleAfterEnd, handleBeforeStart, isFreeze, isRamped, isReverse, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, speedValue, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { AUDIO_EFFECTS, AUDIO_PRESETS, findAudioEffect, MAX_AUDIO_FX, sortAudioFx, type AudioFxInstance, type AudioFxParams } from './audioEffects.ts';
 import { soundTails } from './queries.ts';
+import { cleanVoiceEffects, isCleanupType, NOISE_PROFILE_PATTERN } from './voiceClean.ts';
 import { findSpeedCurve, segmentsFromPoints, SPEED_CURVE_IDS } from './speedCurves.ts';
 import { ANIMATE_CLIP_MOTIONS, animateClipKeys, defaultMotionFrames, MOTION_PRESETS, motionKeys, previousMotion, shortestSafeLoopFrames } from './motionPresets.ts';
 import { findLayout, layoutPlacements, LAYOUT_IDS, LAYOUTS } from './layouts.ts';
@@ -21,15 +23,18 @@ const MOTION_PRESET_IDS = MOTION_PRESETS.map((m) => m.id) as [string, ...string[
 import { lookParams } from './looks.ts';
 import { findTextPreset } from './textPresets.ts';
 import { CAPTION_LOOK_IDS, findCaptionLook } from './captionPresets.ts';
-import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, isTimeEffect, MaskSchema, modulatableParams, ModulatorSchema, paramRange, TRANSITION_IDS, type EffectInstance, type Modulator } from './effects.ts';
-import { clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
+import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, isTimeEffect, MaskSchema, modulatableParams, ModulatorSchema, paramRange, TRANSITION_IDS, TransitionColor, transitionDef, type EffectInstance, type Modulator, type Transition } from './effects.ts';
+import { velocityNeeds } from './transitionTiming.ts';
+import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 import { isInheritedName, own } from './own.ts';
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
-  | 'incompatible' | 'forbidden_op' | 'invalid_result';
+  | 'incompatible' | 'forbidden_op' | 'invalid_result'
+  // replace_clip_asset (ADR-0017): the new file does not keep the original's timing / does not cover what the clip shows
+  | 'not_time_preserving' | 'range_not_covered';
 export class OpError extends Error {
   constructor(public code: OpErrorCode, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
     super(message);
@@ -63,7 +68,11 @@ export interface OpDefinition<S extends z.ZodType = z.ZodType> {
 }
 
 const registry = new Map<string, OpDefinition>();
-function defineOp<S extends z.ZodType>(def: OpDefinition<S>) {
+/**
+ * Register an operation (once, at module load). Used by this file and by modules that keep an op family in a file of its own
+ * (templateOps.ts); every registered op still runs only through applyTransaction.
+ */
+export function defineOp<S extends z.ZodType>(def: OpDefinition<S>) {
   if (registry.has(def.name)) throw new Error(`duplicate op ${def.name}`);
   registry.set(def.name, def as unknown as OpDefinition);
 }
@@ -136,9 +145,13 @@ function assertAligned(d: ProjectDocument, t: T.RationalTime, what: string) {
 }
 function newTrack(seq: Sequence, kind: Track['kind'], ctx: OpContext, name?: string): Track {
   const count = seq.tracks.filter((t) => t.kind === kind).length + 1;
-  const track: Track = { id: ctx.newId('trk'), kind, name: name ?? `${kind === 'video' ? 'V' : kind === 'audio' ? 'A' : kind === 'caption' ? 'C' : 'T'}${count}`, locked: false, muted: false, hidden: false, clips: [] };
-  // Bottom-most first: picture tracks, then text tracks, then audio.
-  const at = kind === 'audio' ? -1 : kind === 'video' ? seq.tracks.findIndex((t) => t.kind !== 'video') : seq.tracks.findIndex((t) => t.kind === 'audio');
+  const prefix = kind === 'video' ? 'V' : kind === 'audio' ? 'A' : kind === 'caption' ? 'C' : kind === 'adjustment' ? 'FX' : 'T';
+  const track: Track = { id: ctx.newId('trk'), kind, name: name ?? `${prefix}${count}`, locked: false, muted: false, hidden: false, clips: [] };
+  // Bottom-most first: picture tracks, adjustment tracks (a look covers every picture, also ones added later; ADR-0016), titles, audio.
+  const at = kind === 'audio' ? -1
+    : kind === 'video' ? seq.tracks.findIndex((t) => t.kind !== 'video')
+    : kind === 'adjustment' ? seq.tracks.findIndex((t) => t.kind === 'text' || t.kind === 'caption' || t.kind === 'audio')
+    : seq.tracks.findIndex((t) => t.kind === 'audio');
   seq.tracks.splice(at < 0 ? seq.tracks.length : at, 0, track);
   return track;
 }
@@ -335,8 +348,8 @@ defineOp({
 defineOp({
   name: 'add_track',
   version: 1,
-  description: 'Add an empty track. Picture tracks stack bottom-to-top in list order; audio tracks mix.',
-  args: z.object({ sequenceId: z.string().optional(), kind: z.enum(['video', 'audio', 'text']), name: z.string().max(128).optional() }).strict(),
+  description: 'Add an empty track. Picture tracks stack bottom-to-top in list order; audio tracks mix. An adjustment track (default names FX1, FX2…) holds adjustment clips (add_adjustment); a new one goes above the picture tracks and below the title tracks.',
+  args: z.object({ sequenceId: z.string().optional(), kind: z.enum(['video', 'audio', 'text', 'adjustment']), name: z.string().max(128).optional() }).strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
     const t = newTrack(seq, a.kind, ctx, a.name);
@@ -479,7 +492,7 @@ defineOp({
     const track = a.trackId ? mustTrack(seq, a.trackId) : placeTrack(seq, 'text', a.start, end, ctx);
     if (track.kind !== 'text') throw new OpError('incompatible', `text cannot go on ${track.kind} track`, { trackId: track.id });
     assertFree(track, a.start, end);
-    const clip: Clip = { id: ctx.newId('clp'), type: 'text', text: a.text, start: a.start, duration: a.duration, style: { ...DEFAULT_TEXT_STYLE, ...a.style }, transform: { ...DEFAULT_TRANSFORM, ...a.transform } };
+    const clip: Clip = { id: ctx.newId('clp'), type: 'text', text: a.text, start: a.start, duration: a.duration, style: normaliseTextStyle({ ...DEFAULT_TEXT_STYLE, ...a.style }), transform: { ...DEFAULT_TRANSFORM, ...a.transform } };
     track.clips.push(clip);
     sortClips(track);
     return { affectedIds: [clip.id], summary: `Added text "${a.text.slice(0, 40)}" at ${fmt(a.start)}`, output: { clipId: clip.id, trackId: track.id } };
@@ -489,14 +502,17 @@ defineOp({
 defineOp({
   name: 'apply_text_preset',
   version: 1,
-  description: 'Give a text clip one of the named text styles (see list_catalog → textPresets): font, weight, size, colours, box, outline and an optional shadow or glow. The text itself, its position, alignment and direction are kept, and every value stays editable (update_text, update_effect).',
+  description: 'Give a text clip one of the named text styles (see list_catalog → textPresets): font, weight, size, colours, box, outline, an optional shadow or glow, and the look fields it lists (gradient, tracking, second outline, glow, extrude, long shadow; the ones it does not list are cleared). The text itself, its position, alignment and direction are kept, and every value stays editable (update_text, update_effect).',
   args: z.object({ clipId: z.string(), presetId: z.string() }).strict(),
   apply(d, a, ctx) {
     const { clip } = mustClip(d, a.clipId);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
     const preset = findTextPreset(a.presetId);
     if (!preset) throw new OpError('not_found', `text style "${a.presetId}" does not exist`, { presetId: a.presetId }, 'Call list_catalog for the text styles.');
-    clip.style = { ...clip.style, ...preset.style };
+    // The preset owns the look fields (ADR-0012): a look from an earlier preset or edit is cleared, then the preset's own are set.
+    const base: Record<string, unknown> = { ...clip.style };
+    for (const k of TEXT_LOOK_FIELDS) delete base[k];
+    clip.style = normaliseTextStyle({ ...(base as typeof clip.style), ...preset.style });
     // The preset owns the clip's drop shadow: replaced, added or removed. Other effects are left alone.
     const others = (clip.effects ?? []).filter((e) => e.type !== 'stylize.shadow');
     const list = preset.shadow ? [...others, { id: ctx.newId('fx'), type: 'stylize.shadow', enabled: true, params: parseEffect('stylize.shadow', preset.shadow) }] : others;
@@ -508,13 +524,13 @@ defineOp({
 defineOp({
   name: 'update_text',
   version: 1,
-  description: 'Change the content and/or style of a text clip. Unspecified fields are kept.',
+  description: 'Change the content and/or style of a text clip. Unspecified fields are kept. A look field (gradient, tracking, stroke2, glow, extrude, longShadow) set to null is removed.',
   args: z.object({ clipId: z.string(), text: z.string().min(1).max(2000).optional(), style: TextStyleSchema.partial().optional() }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
     if (a.text !== undefined) clip.text = a.text;
-    if (a.style) clip.style = { ...clip.style, ...a.style };
+    if (a.style) clip.style = normaliseTextStyle({ ...clip.style, ...a.style });
     return { affectedIds: [clip.id], summary: `Updated text "${clip.text.slice(0, 40)}"` };
   },
 });
@@ -1619,6 +1635,12 @@ defineOp({
     return { affectedIds: [m.id], summary: `Removed marker${m.label ? ` "${m.label}"` : ''}` };
   },
 });
+/** A reviewed machine translation whose wording is edited is no longer what the owner reviewed (ADR-0017): it needs review again. */
+function needsReviewAgain(v: Variant) {
+  if (v.translation?.review !== 'reviewed') return;
+  const { reviewedBy: _by, reviewedAt: _at, ...rest } = v.translation;
+  v.translation = { ...rest, review: 'needed' };
+}
 defineOp({
   name: 'set_variant_override',
   version: 1,
@@ -1637,6 +1659,7 @@ defineOp({
     if (a.hidden !== undefined) { if (a.hidden) next.hidden = true; else delete next.hidden; }
     if ((a.text != null && f.clip.type !== 'text' && f.clip.type !== 'caption') || (a.textStyle != null && f.clip.type !== 'text')) throw new OpError('incompatible', 'wording can be set per format on title and caption clips, text style on title clips', { clipId: a.clipId });
     if (a.text === null) delete next.text; else if (a.text !== undefined) next.text = a.text;
+    if (next.text !== cur.text) needsReviewAgain(v); // a reworded cue of a reviewed translation is no longer what was reviewed
     if (a.textStyle === null) delete next.textStyle; else if (a.textStyle) next.textStyle = { ...cur.textStyle, ...a.textStyle };
     if (next.textStyle && Object.keys(next.textStyle).length === 0) delete next.textStyle;
     if (next.transform && Object.keys(next.transform).length === 0) delete next.transform;
@@ -1656,10 +1679,122 @@ defineOp({
     const seg = own(d.transcripts, a.assetId)?.segments.find((s) => s.id === a.segmentId);
     if (!seg) throw new OpError('not_found', `phrase ${a.segmentId} not found in the transcript of ${a.assetId}`, { segmentId: a.segmentId });
     const next = { ...(v.phraseText ?? {}) };
+    const before = own(next, a.segmentId);
     if (a.text === null || a.text === seg.text) delete next[a.segmentId]; else next[a.segmentId] = a.text;
     if (Object.keys(next).length) v.phraseText = next; else delete v.phraseText;
     const worded = own(next, a.segmentId);
+    if (before !== worded) needsReviewAgain(v);
     return { affectedIds: [v.id], summary: `Format ${v.name}: phrase ${worded !== undefined ? 'reworded' : 'back to the master wording'}`, output: { text: worded ?? null } };
+  },
+});
+
+// ---------- AI-model wave (ADR-0017): derived copies in place of a clip's file, machine-translated language variants ----------
+/** The clip that starts exactly where `clip` ends on the same track, if any. */
+const nextAdjacent = (track: Track, clip: Clip): Clip | undefined => track.clips.find((c) => c.id !== clip.id && T.eq(c.start, clipEnd(clip)));
+defineOp({
+  name: 'replace_clip_asset',
+  version: 1,
+  description: 'Show a derived copy of a clip\'s file in the clip, for example an enhanced picture or a cleaned-up voice a tool made from it. The clip keeps its place, length, speed, effects and everything else; linked clips keep their own file. The new file must have been made from the file the clip shows now and keep its timing, and it must cover the whole stretch of source the clip uses (plus the frames a transition into the next clip needs), so the clip shows exactly the same moments. A still picture may take a still made from it. Refused for freeze frames, reversed clips and clips that change speed gradually.',
+  args: z.object({ clipId: z.string(), assetId: z.string() }).strict(),
+  apply(d, a) {
+    const { clip, track } = mustClip(d, a.clipId);
+    if (clip.type !== 'media') throw new OpError('incompatible', 'only a picture or sound clip shows a file', { clipId: a.clipId });
+    if (clip.freeze) throw new OpError('incompatible', 'a freeze frame cannot be given another file', { clipId: clip.id }, 'Give the clip the new file first, then make the freeze frame.');
+    refuseRamped(clip, 'given another file');
+    if (clip.reverse) throw new OpError('incompatible', 'a clip that plays backwards cannot be given another file', { clipId: clip.id }, 'Play it forwards (set_clip_reverse), give it the new file, then reverse it again.');
+    if (!Object.hasOwn(d.assets, a.assetId)) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+    const next = d.assets[a.assetId]!, cur = d.assets[clip.assetId];
+    if (next.id === clip.assetId) throw new OpError('incompatible', 'the clip already shows this file', { clipId: clip.id, assetId: next.id });
+    const der = next.provenance.derived;
+    if (!der?.sourceAssetIds.includes(clip.assetId)) throw new OpError('incompatible', 'the new file was not made from the file this clip shows', { clipId: clip.id, assetId: next.id, sourceAssetIds: der?.sourceAssetIds ?? [] }, 'Run the tool on this clip, or pick the file it made from this clip\'s file.');
+    if (track.kind === 'video' && !next.video && !(next.kind === 'image' && next.image)) throw new OpError('incompatible', 'the new file has no picture', { clipId: clip.id, assetId: next.id });
+    if (track.kind === 'audio' && !next.audio) throw new OpError('incompatible', 'the new file has no sound', { clipId: clip.id, assetId: next.id });
+    const previousAssetId = clip.assetId;
+    if (cur?.kind === 'image' || next.kind === 'image') {
+      // a still has no timing to keep; a still and a moving picture cannot stand in for each other
+      if (cur?.kind !== 'image' || next.kind !== 'image') throw new OpError('not_time_preserving', 'a still picture and a moving picture cannot stand in for each other', { clipId: clip.id, assetId: next.id });
+      clip.assetId = next.id;
+      return { affectedIds: [clip.id], summary: `Clip now shows "${next.name.slice(0, 60)}"`, output: { previousAssetId, sourceIn: clip.sourceIn } };
+    }
+    if (!der.sourceRangeStart || der.sourceAssetIds[0] !== clip.assetId || (der.frames && der.frames.mapping !== 'identity' && der.frames.mapping !== 'interpolated'))
+      throw new OpError('not_time_preserving', 'the new file does not keep the timing of the file this clip shows', { clipId: clip.id, assetId: next.id }, 'Place it on a track of its own instead (add_clip).');
+    let needEnd = sourceEnd(clip);
+    const after = track.kind === 'video' ? nextAdjacent(track, clip) : undefined;
+    if (after?.type === 'media' && after.transition) needEnd = T.add(needEnd, toSourceSpan(clip, T.frameTime(after.transition.frames, d.settings.frameRate)));
+    const from = der.sourceRangeStart, to = T.add(from, next.duration);
+    if (T.lt(clip.sourceIn, from) || T.lt(to, needEnd))
+      throw new OpError('range_not_covered', `the new file covers ${fmt(from)}–${fmt(to)} of the original; the clip needs ${fmt(clip.sourceIn)}–${fmt(needEnd)}`, { clipId: clip.id, assetId: next.id, covers: { start: from, end: to }, needs: { start: clip.sourceIn, end: needEnd } }, 'Run the tool on the whole stretch the clip uses, including the frames a transition after it plays.');
+    clip.assetId = next.id;
+    clip.sourceIn = T.sub(clip.sourceIn, from);
+    return { affectedIds: [clip.id], summary: `Clip now shows "${next.name.slice(0, 60)}"`, output: { previousAssetId, sourceIn: clip.sourceIn } };
+  },
+});
+const segmentExists = (d: ProjectDocument, id: string) => Object.values(d.transcripts ?? {}).some((t) => t.segments.some((s) => s.id === id));
+defineOp({
+  name: 'attach_translation',
+  version: 1,
+  internal: true,
+  description: 'Store a machine translation of the captions, produced by the trusted translation job, as a language variant: transcript phrases keep their master timing and get the translated wording (phrase-timed, never mapped word by word), manual cues get the translated text. With variantId an existing translation variant is updated (its frame settings are kept); otherwise a new variant takes the frame, fill, safe area and caption style of baseVariantId, or the master settings when it is null. The translation always needs review afterwards.',
+  args: z.object({
+    variantId: z.string().min(1).max(64).optional(),
+    baseVariantId: z.string().min(1).max(64).nullable(),
+    name: z.string().min(1).max(80),
+    language: z.string().min(2).max(35),
+    translation: VariantTranslationSchema.omit({ review: true, reviewedBy: true, reviewedAt: true }),
+    phraseText: z.record(z.string(), z.string().min(1).max(4000)),
+    cueText: z.record(z.string(), z.string().min(1).max(2000)),
+  }).strict(),
+  apply(d, a, ctx) {
+    const ids = [...Object.keys(a.phraseText), ...Object.keys(a.cueText)];
+    if (ids.length === 0) throw new OpError('invalid_args', 'a translation needs at least one phrase or cue');
+    if (a.language !== a.translation.to) throw new OpError('invalid_args', 'the language of the format must be the language translated to', { language: a.language, to: a.translation.to });
+    const recorded = Object.keys(a.translation.sources).sort(), translated = [...ids].sort();
+    if (recorded.length !== translated.length || recorded.some((k, i) => k !== translated[i])) throw new OpError('invalid_args', 'the translation must record the master text of every translated phrase and cue, and of nothing else', { translated, recorded });
+    for (const id of Object.keys(a.phraseText)) if (!segmentExists(d, id)) throw new OpError('not_found', `phrase ${id} not found in any transcript`, { segmentId: id });
+    for (const id of Object.keys(a.cueText)) {
+      const f = findClip(d, id);
+      if (!f || f.clip.type !== 'caption') throw new OpError('not_found', `caption cue ${id} not found`, { clipId: id });
+      if (f.track.caption?.mode !== 'manual') throw new OpError('incompatible', 'only cues of a manual caption track are translated as cues', { clipId: id });
+    }
+    let v: Variant;
+    if (a.variantId) {
+      v = mustVariant(d, a.variantId);
+      if (!v.translation) throw new OpError('incompatible', 'this format is not a translation', { variantId: v.id }, 'Omit variantId to make a new language format.');
+      v.name = a.name;
+    } else {
+      const base = a.baseVariantId === null ? null : mustVariant(d, a.baseVariantId);
+      v = {
+        id: ctx.newId('var'), name: a.name, width: base?.width ?? d.settings.width, height: base?.height ?? d.settings.height, fit: base?.fit ?? d.settings.fit ?? 'contain',
+        profileId: base?.profileId ?? null, safeArea: base?.safeArea ? { ...base.safeArea } : null, ...(base?.captionStyle ? { captionStyle: structuredClone(base.captionStyle) } : {}), overrides: {},
+      };
+      d.variants[v.id] = v;
+    }
+    v.language = a.language;
+    v.translation = { ...a.translation, sources: { ...a.translation.sources }, review: 'needed' };
+    if (Object.keys(a.phraseText).length) v.phraseText = { ...a.phraseText }; else delete v.phraseText;
+    // cue wording: exactly the translated cues carry a text override (other override fields stay)
+    for (const [id, ov] of Object.entries(v.overrides)) {
+      if (ov.text === undefined || Object.hasOwn(a.cueText, id)) continue;
+      const { text: _t, ...rest } = ov;
+      if (Object.keys(rest).length) v.overrides[id] = rest; else delete v.overrides[id];
+    }
+    for (const [id, text] of Object.entries(a.cueText)) v.overrides[id] = { ...v.overrides[id], text };
+    return { affectedIds: [v.id], summary: `Translation ${a.translation.from}→${a.translation.to}: ${Object.keys(a.phraseText).length} phrases, ${Object.keys(a.cueText).length} cues (needs review)`, output: { variantId: v.id } };
+  },
+});
+defineOp({
+  name: 'review_translation',
+  version: 1,
+  internal: true,
+  description: 'Mark a machine translation as reviewed by the person whose session made the request (the owner), or as needing review again. Reachable only through the owner\'s session; `at` is the time of the review as the server read it.',
+  args: z.object({ variantId: z.string(), review: z.enum(['needed', 'reviewed']), at: z.string().max(40).optional() }).strict(),
+  apply(d, a, ctx) {
+    const v = mustVariant(d, a.variantId);
+    if (!v.translation) throw new OpError('incompatible', 'this format is not a translation', { variantId: v.id });
+    if (v.translation.review === a.review) throw new OpError('incompatible', a.review === 'reviewed' ? 'the translation is already marked as reviewed' : 'the translation is already marked as needing review', { variantId: v.id });
+    const { reviewedBy: _by, reviewedAt: _at, ...rest } = v.translation;
+    v.translation = { ...rest, review: a.review, ...(a.review === 'reviewed' ? { reviewedBy: ctx.actor, ...(a.at ? { reviewedAt: a.at } : {}) } : {}) };
+    return { affectedIds: [v.id], summary: `Format ${v.name}: translation ${a.review === 'reviewed' ? 'marked as reviewed' : 'needs review again'}` };
   },
 });
 
@@ -1930,7 +2065,7 @@ const fxOut = (clip: MediaClip) => (clip.audioFx ?? []).map((x) => ({ clipId: cl
 defineOp({
   name: 'add_audio_effect',
   version: 1,
-  description: 'Add a sound effect to a sound clip: a character voice (voice.telephone, voice.megaphone, voice.radio, voice.robot), texture.8bit, space.echo, space.reverb (room, hall, cave, bathroom), tone.bassboost or utility.width. Give the sound clip, or a picture clip to put it on the sound linked to it (includeLinked=false keeps a sound clip\'s linked sound clips out). Unspecified parameters take the effect\'s defaults; amount 0 is the dry sound. Effects always run in a fixed order whatever order they were added in; a clip has each effect at most once and one character voice. An echo or reverb rings on past the end of the clip and is cut at the end of the video (the video is never lengthened). These are DSP effects, not voice conversion. Not yet for a sound that keeps its pitch at another speed or changes speed gradually. Discover effects and presets with list_catalog (audioEffects, audioPresets).',
+  description: 'Add a sound effect to a sound clip: a voice cleanup effect (cleanup.dehum, cleanup.denoise, cleanup.speech; usually set all at once from a measurement with clean_voice), a character voice (voice.telephone, voice.megaphone, voice.radio, voice.robot), texture.8bit, space.echo, space.reverb (room, hall, cave, bathroom), tone.bassboost or utility.width. Give the sound clip, or a picture clip to put it on the sound linked to it (includeLinked=false keeps a sound clip\'s linked sound clips out). Unspecified parameters take the effect\'s defaults; amount 0 is the dry sound. Effects always run in a fixed order whatever order they were added in; a clip has each effect at most once and one character voice. An echo or reverb rings on past the end of the clip and is cut at the end of the video (the video is never lengthened). These are DSP effects, not voice conversion. Not yet for a sound that keeps its pitch at another speed or changes speed gradually. Discover effects and presets with list_catalog (audioEffects, audioPresets).',
   args: z.object({ clipId: z.string(), type: z.string().min(1).max(48), params: z.record(z.string(), z.unknown()).optional(), enabled: z.boolean().optional(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const params = parseAudioFx(a.type, a.params);
@@ -2037,6 +2172,39 @@ defineOp({
   },
 });
 
+defineOp({
+  name: 'clean_voice',
+  version: 1,
+  description: 'Voice cleanup «ניקוי קול» in one step (ADR-0013): hum removal (cleanup.dehum) when mainsHz is given, noise reduction (cleanup.denoise) with the measured noise profile, and the speech enhancer (cleanup.speech: low cut, presence, phrase leveller, peak ceiling), all set from one strength 0..1. Get profile, source and mainsHz from measure_voice, which returns this op ready to send; without a profile a generic quiet floor is used. strength 0 removes the cleanup. Other sound effects are kept; existing cleanup effects are replaced in place with the same ids; fine-tune afterwards with update_audio_effect. Give the sound clip, or a picture clip to clean the sound linked to it. Steady noise only (hiss, fan, room tone), not other voices or music; no AI model; measured, not yet listened to. Not yet for a sound that keeps its pitch at another speed or changes speed gradually.',
+  args: z.object({
+    clipId: z.string(), includeLinked: z.boolean().optional(),
+    strength: z.number().min(0).max(1).default(0.6).describe('0 removes the cleanup, 1 is the strongest; measure_voice recommends one'),
+    profile: z.string().regex(NOISE_PROFILE_PATTERN).optional().describe('noise profile from measure_voice (48 characters); omitted = a generic quiet floor'),
+    source: z.string().max(64).optional().describe('asset id the profile was measured on'),
+    mainsHz: z.enum(['50', '60']).nullable().optional().describe('mains hum found by measure_voice; null or omitted = no hum removal'),
+    denoise: z.boolean().optional().describe('false leaves noise reduction out'),
+    speech: z.boolean().optional().describe('false leaves the speech enhancer out'),
+  }).strict(),
+  apply(d, a, ctx) {
+    const wanted = cleanVoiceEffects({ strength: a.strength, profile: a.profile, source: a.source, mainsHz: a.mainsHz, denoise: a.denoise, speech: a.speech });
+    const targets = unlockedTargets(soundTargets(d, a.clipId, a.includeLinked));
+    const effects: { clipId: string; effectId: string; type: string; params: AudioFxParams }[] = [];
+    const removed: { clipId: string; effectId: string; type: string }[] = [];
+    for (const { clip } of targets) {
+      const list = clip.audioFx ?? [];
+      const kept = list.filter((x) => !isCleanupType(x.type)), old = list.filter((x) => isCleanupType(x.type));
+      const next: AudioFxInstance[] = wanted.map((w) => ({ id: old.find((x) => x.type === w.type)?.id ?? ctx.newId('afx'), type: w.type, enabled: true, params: parseAudioFx(w.type, w.params) }));
+      if (kept.length + next.length > MAX_AUDIO_FX) throw new OpError('out_of_bounds', `a clip can carry at most ${MAX_AUDIO_FX} sound effects`, { clipId: clip.id });
+      for (const x of old) if (!next.some((y) => y.id === x.id)) removed.push({ clipId: clip.id, effectId: x.id, type: x.type });
+      setAudioFx(clip, [...kept, ...next]);
+      refuseFxTimeMap(clip, 'effects');
+      for (const y of next) effects.push({ clipId: clip.id, effectId: y.id, type: y.type, params: y.params });
+    }
+    const ids = targets.map((t) => t.clip.id);
+    return { affectedIds: ids, summary: wanted.length ? `Voice cleanup at strength ${a.strength}` : 'Removed the voice cleanup', output: { effects, removed, tailSeconds: tailSecondsOf(d, ids) } };
+  },
+});
+
 // ---------- effects, blend, mask, transitions (SPEC §8, §13) ----------
 const pictureClip = (d: ProjectDocument, clipId: string) => {
   const f = mustClip(d, clipId);
@@ -2095,6 +2263,41 @@ defineOp({
     }
     clip.effects = list;
     return { affectedIds: [clip.id], summary: `Applied colour look ${a.lookId}`, output: { effectId, params } };
+  },
+});
+const GRADE_KEYS = ['exposure', 'temperature', 'tint', 'contrast', 'saturation', 'shadows', 'highlights', 'fade'] as const;
+defineOp({
+  name: 'set_colour_grade',
+  version: 1,
+  description: 'Set the values of a picture or title clip\'s colour grade (color.grade) directly, where apply_look would put it: the clip\'s first colour grade is replaced in place (same id, turned on), or one is added first in its effect list (after a time effect). mode replace (default): values not given return to their defaults; merge: they are kept. Values out of range are refused. Used by colour match and auto balance (match_colour returns this op); every value stays editable with update_effect. A value animated with keyframes would ignore a fixed setting, so it is refused unless dropKeyframes=true, which removes those keyframes. Needs a graphics adapter (WebGPU) to be shown and exported.',
+  args: z.object({
+    clipId: z.string(),
+    params: z.object({ exposure: z.number(), temperature: z.number(), tint: z.number(), contrast: z.number(), saturation: z.number(), shadows: z.number(), highlights: z.number(), fade: z.number() }).partial().strict(),
+    mode: z.enum(['replace', 'merge']).default('replace').describe('replace: values not given return to their defaults; merge: they are kept'),
+    dropKeyframes: z.boolean().optional(),
+  }).strict(),
+  apply(d, a, ctx) {
+    const { clip } = pictureClip(d, a.clipId);
+    const list = [...(clip.effects ?? [])];
+    const at = list.findIndex((e) => e.type === 'color.grade');
+    const old = at >= 0 ? list[at]! : undefined;
+    const params = parseEffect('color.grade', { ...(a.mode === 'merge' && old ? old.params : {}), ...a.params });
+    const keyed = Object.keys(old?.keyframes ?? {}).filter((k) => (GRADE_KEYS as readonly string[]).includes(k));
+    const clash = a.mode === 'merge' ? keyed.filter((k) => k in a.params) : keyed;
+    if (clash.length && !a.dropKeyframes) throw new OpError('incompatible', 'these colour values are animated with keyframes, so a fixed setting would be ignored', { clipId: clip.id, params: clash }, 'Pass dropKeyframes=true to replace the animation with this setting, or change the keyframes with set_effect_keyframe.');
+    let effectId: string;
+    if (old) {
+      const { keyframes, ...rest } = old;
+      const kept = Object.entries(keyframes ?? {}).filter(([k]) => !clash.includes(k));
+      list[at] = { ...rest, enabled: true, params, ...(kept.length ? { keyframes: Object.fromEntries(kept) } : {}) };
+      effectId = old.id;
+    } else {
+      if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
+      effectId = ctx.newId('fx');
+      list.splice(effectSlot(list, 'color.grade', 0), 0, { id: effectId, type: 'color.grade', enabled: true, params });
+    }
+    clip.effects = list;
+    return { affectedIds: [clip.id], summary: 'Set colour grade', output: { effectId, params, droppedKeyframes: clash } };
   },
 });
 
@@ -2309,33 +2512,192 @@ export function previousAdjacent(track: Track, clip: Clip): MediaClip | null {
   for (const c of track.clips) if (c.type === 'media' && c.id !== clip.id && T.eq(clipEnd(c), clip.start)) return c;
   return null;
 }
+type Velocity = NonNullable<Transition['velocity']>;
+const VELOCITIES: readonly Velocity[] = [2, 3, 4];
+/**
+ * Source a transition at the start of `clip` has to play with (ADR-0012), in whole frames: after the previous clip's end
+ * (null when there is no previous picture clip, or it is a still image, which never runs out) and before the clip's own
+ * sourceIn (null when the clip is a still image).
+ */
+function transitionSource(d: ProjectDocument, track: Track, clip: MediaClip): { prev: MediaClip | null; haveOut: number | null; haveHead: number | null } {
+  const rate = d.settings.frameRate;
+  const prev = previousAdjacent(track, clip);
+  const prevAsset = prev ? d.assets[prev.assetId] : undefined;
+  const ownAsset = d.assets[clip.assetId];
+  const haveOut = prev && prevAsset && prevAsset.kind !== 'image' ? T.frameIndexAt(handleAfterEnd(prev, prevAsset.duration), rate) : null;
+  const haveHead = ownAsset && ownAsset.kind !== 'image' ? T.frameIndexAt(handleBeforeStart(clip), rate) : null;
+  return { prev, haveOut, haveHead };
+}
+/** The largest velocity the handles allow for a transition of n frames (1 = none): the velocityNeeds arithmetic, nothing else. */
+const maxVelocityFor = (n: number, haveOut: number | null, haveHead: number | null): 1 | Velocity => {
+  let best: 1 | Velocity = 1;
+  for (const v of VELOCITIES) { const need = velocityNeeds(n, v); if ((haveOut === null || need.outFrames <= haveOut) && (haveHead === null || need.headFrames <= haveHead)) best = v; }
+  return best;
+};
+/** True when the clip's first enabled effect is a time effect (its picture is already remapped in time). */
+const startsWithTimeEffect = (c: MediaClip) => { const first = c.effects?.find((e) => e.enabled); return !!first && isTimeEffect(first.type); };
+/**
+ * The one check of a transition at the start of a picture clip, shared by set_transition and set_transition_options
+ * (ADR-0012). Without options its codes and messages are exactly those set_transition always had.
+ */
+function checkTransition(d: ProjectDocument, track: Track, clip: MediaClip, tr: Transition): void {
+  const rate = d.settings.frameRate;
+  const n = tr.frames, v = tr.velocity;
+  const own = T.frameIndexAt(clip.duration, rate);
+  if (n > own) throw new OpError('out_of_bounds', `the transition (${n} frames) is longer than the clip (${own} frames)`, { maxFrames: own }, 'Use at most maxFrames.');
+  const { prev, haveOut, haveHead } = transitionSource(d, track, clip);
+  refuseRamped(clip, 'given a transition');
+  if (prev) refuseRamped(prev, 'followed by a transition');
+  if (v) {
+    // A velocity ramp remaps forward pictures only: the sides that are video, not reversed, not held, not already remapped in time.
+    for (const side of prev ? [prev, clip] : [clip]) {
+      if (isReverse(side) || isFreeze(side)) throw new OpError('incompatible', 'a velocity ramp cannot remap a clip that plays backwards or is a freeze frame', { clipId: side.id }, 'Remove the velocity (set_transition_options velocity=null), or make the clip play forwards first.');
+      if (startsWithTimeEffect(side)) throw new OpError('incompatible', 'a velocity ramp cannot remap a clip whose first effect is a time effect', { clipId: side.id }, 'Remove the velocity (set_transition_options velocity=null), or remove or turn off the time effect first.');
+    }
+    const video = (c: MediaClip) => d.assets[c.assetId]?.kind === 'video';
+    if (!video(clip) && !(prev && video(prev))) throw new OpError('incompatible', 'a velocity ramp needs a video on at least one side of the transition', { clipId: clip.id }, 'Still pictures have no motion to speed up.');
+  }
+  const maxVelocity = maxVelocityFor(n, haveOut, haveHead);
+  if (prev && haveOut !== null) {
+    const need = v ? velocityNeeds(n, v).outFrames : n;
+    if (haveOut < need) {
+      if (!v) throw new OpError('out_of_bounds', `the previous clip has only ${haveOut} unused source frames after its end; the transition needs ${n}`, { maxFrames: haveOut, previousClipId: prev.id, maxVelocity }, haveOut > 0 ? 'Use at most maxFrames, or trim the end of the previous clip to free more source.' : 'Trim the end of the previous clip to free source frames for the transition.');
+      let maxFrames = 0;
+      for (let m = 1; m <= Math.min(own, 150); m++) if (velocityNeeds(m, v).outFrames <= haveOut && (haveHead === null || velocityNeeds(m, v).headFrames <= haveHead)) maxFrames = m;
+      throw new OpError('out_of_bounds', `the previous clip has only ${haveOut} unused source frames after its end; the transition at velocity ×${v} needs ${need}`, { maxFrames, previousClipId: prev.id, maxVelocity, needOutFrames: need, haveOutFrames: haveOut }, maxVelocity > 1 ? 'Use at most maxVelocity, a shorter transition (maxFrames), or trim the end of the previous clip to free more source.' : 'Remove the velocity, or trim the end of the previous clip to free more source.');
+    }
+  }
+  if (v && haveHead !== null) {
+    const need = velocityNeeds(n, v);
+    if (haveHead < need.headFrames) throw new OpError('out_of_bounds', `the clip has only ${haveHead} source frames before its start; the transition at velocity ×${v} needs ${need.headFrames}`, { maxVelocity, needOutFrames: need.outFrames, needHeadFrames: need.headFrames, haveOutFrames: haveOut, haveHeadFrames: haveHead }, maxVelocity > 1 ? 'Use at most maxVelocity, or trim the start of the clip to free source before it.' : 'Remove the velocity, or trim the start of the clip to free source before it.');
+  }
+  if (tr.sync && n < 3) throw new OpError('out_of_bounds', `a transition locked to the beat needs at least 3 frames; this one has ${n}`, { minFrames: 3 }, 'Use 3 frames or more, or turn the beat lock off.');
+  const options = transitionDef(tr.type)?.options ?? [];
+  for (const option of ['color', 'seed'] as const) if (tr[option] !== undefined && !options.includes(option)) throw new OpError('incompatible', `the ${tr.type} transition has no ${option} option`, { option, type: tr.type, options: [...options] }, 'list_catalog → transitions[].options lists the options of each type.');
+}
+const transitionTarget = (d: ProjectDocument, clipId: string): { clip: MediaClip; track: Track } => {
+  const { clip, track } = pictureClip(d, clipId);
+  if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
+  return { clip, track };
+};
 defineOp({
   name: 'set_transition',
   version: 1,
-  description: 'Put a transition at the START of a picture clip (type=null removes it). It plays over the clip\'s first frames while the previous clip on the same track keeps playing underneath, which needs that many unused source frames after the previous clip\'s out point. With no previous clip the transition reveals the clip over the layers below. Sound is not crossfaded.',
+  description: 'Put a transition at the START of a picture clip (type=null removes it). It plays over the clip\'s first frames while the previous clip on the same track keeps playing underneath, which needs that many unused source frames after the previous clip\'s out point. With no previous clip the transition reveals the clip over the layers below. Sound is not crossfaded. Changing the type keeps the beat lock and the velocity (set_transition_options), and keeps the colour and seed only where the new type has them.',
   args: z.object({ clipId: z.string(), type: z.enum(TRANSITION_IDS).nullable(), frames: z.number().int().min(1).max(150).optional() }).strict(),
   apply(d, a) {
-    const { clip, track } = pictureClip(d, a.clipId);
-    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
+    const { clip, track } = transitionTarget(d, a.clipId);
     if (a.type === null) { delete clip.transition; return { affectedIds: [clip.id], summary: 'Removed transition' }; }
-    const rate = d.settings.frameRate;
     const frames = a.frames ?? 15;
-    const own = T.frameIndexAt(clip.duration, rate);
-    if (frames > own) throw new OpError('out_of_bounds', `the transition (${frames} frames) is longer than the clip (${own} frames)`, { maxFrames: own }, 'Use at most maxFrames.');
-    const prev = previousAdjacent(track, clip);
-    refuseRamped(clip, 'given a transition');
-    if (prev) refuseRamped(prev, 'followed by a transition');
-    if (prev) {
-      const asset = d.assets[prev.assetId]!;
-      if (asset.kind !== 'image') {
-        const handle = T.frameIndexAt(handleAfterEnd(prev, asset.duration), rate);
-        if (handle < frames) throw new OpError('out_of_bounds', `the previous clip has only ${handle} unused source frames after its end; the transition needs ${frames}`, { maxFrames: handle, previousClipId: prev.id }, handle > 0 ? 'Use at most maxFrames, or trim the end of the previous clip to free more source.' : 'Trim the end of the previous clip to free source frames for the transition.');
-      }
-    }
-    clip.transition = { type: a.type, frames };
-    return { affectedIds: [clip.id], summary: `Transition ${a.type} (${frames} frames)`, output: { previousClipId: prev?.id ?? null } };
+    const old = clip.transition, options = transitionDef(a.type)?.options ?? [];
+    const next: Transition = { type: a.type, frames };
+    if (old?.sync) next.sync = old.sync;
+    if (old?.velocity) next.velocity = old.velocity;
+    if (old?.color !== undefined && options.includes('color')) next.color = old.color;
+    if (old?.seed !== undefined && options.includes('seed')) next.seed = old.seed;
+    checkTransition(d, track, clip, next);
+    clip.transition = next;
+    return { affectedIds: [clip.id], summary: `Transition ${a.type} (${frames} frames)`, output: { previousClipId: previousAdjacent(track, clip)?.id ?? null } };
   },
 });
+defineOp({
+  name: 'set_transition_options',
+  version: 1,
+  description: 'Options of the transition at the start of a picture clip (null removes one). sync=beat: its decisive moment lands on the analysed beat nearest the middle of its window; with no beat there it plays as usual. velocity 2|3|4: the outgoing shot speeds up to about that many times into the cut and the incoming one slows back to normal; only the picture is remapped, sound stays a hard cut, and both sides need more source. color, seed: only for types that list them (list_catalog → transitions[].options).',
+  args: z.object({
+    clipId: z.string(),
+    sync: z.literal('beat').nullable().optional(),
+    velocity: z.union([z.literal(2), z.literal(3), z.literal(4)]).nullable().optional(),
+    color: TransitionColor.nullable().optional(),
+    seed: z.number().int().min(0).max(9999).nullable().optional(),
+  }).strict(),
+  apply(d, a) {
+    const { clip, track } = transitionTarget(d, a.clipId);
+    if (!clip.transition) throw new OpError('not_found', `clip ${clip.id} has no transition`, { clipId: clip.id }, 'Put one at the start of the clip first (set_transition).');
+    const next: Record<string, unknown> = { ...clip.transition };
+    for (const k of ['sync', 'velocity', 'color', 'seed'] as const) { const v = a[k]; if (v === null) delete next[k]; else if (v !== undefined) next[k] = v; }
+    checkTransition(d, track, clip, next as Transition);
+    clip.transition = next as Transition;
+    const said = (['sync', 'velocity', 'color', 'seed'] as const).filter((k) => a[k] !== undefined).map((k) => `${k} ${a[k] === null ? 'off' : String(a[k])}`);
+    return { affectedIds: [clip.id], summary: `Transition options: ${said.join(', ') || 'unchanged'}`, output: { transition: clip.transition } };
+  },
+});
+/**
+ * For the editor (ADR-0012): the largest velocity the transition at the start of `clipId` can take as it is now (1 = none),
+ * the source frames there are after the previous clip and before the clip (null where a side has no limit: no previous
+ * picture, or a still image), and why not even ×2 when that is the case. Pure; nothing is changed.
+ */
+export function velocityLimit(d: ProjectDocument, clipId: string): { maxVelocity: 1 | 2 | 3 | 4; haveOutFrames: number | null; haveHeadFrames: number | null; refusal: string | null } {
+  const f = findClip(d, clipId);
+  if (!f || f.clip.type !== 'media' || f.track.kind !== 'video') return { maxVelocity: 1, haveOutFrames: null, haveHeadFrames: null, refusal: `clip ${clipId} is not a picture clip on a video track` };
+  const clip = f.clip, track = f.track;
+  const { haveOut, haveHead } = transitionSource(d, track, clip);
+  if (!clip.transition) return { maxVelocity: 1, haveOutFrames: haveOut, haveHeadFrames: haveHead, refusal: `clip ${clip.id} has no transition` };
+  let maxVelocity: 1 | Velocity = 1, refusal: string | null = null;
+  for (const v of VELOCITIES) {
+    try { checkTransition(d, track, clip, { ...clip.transition, velocity: v }); maxVelocity = v; }
+    catch (e) { if (!(e instanceof OpError)) throw e; if (v === 2) refusal = e.message; }
+  }
+  return { maxVelocity, haveOutFrames: haveOut, haveHeadFrames: haveHead, refusal: maxVelocity > 1 ? null : refusal };
+}
+
+// ---------- adjustment clips (ADR-0016) ----------
+export const AddAdjustmentArgsSchema = z.object({
+  sequenceId: z.string().optional(),
+  span: z.union([z.literal('edit'), z.object({ start: RT, duration: RT }).strict()]).describe('"edit" = from 0 to the end of the last picture or title clip'),
+  trackId: z.string().optional(),
+  effects: z.array(z.object({ type: z.string(), params: z.record(z.string(), z.unknown()).optional() }).strict()).max(16).optional(),
+  opacity: z.number().min(0).max(1).optional(),
+  label: z.string().max(80).optional(),
+}).strict();
+defineOp({
+  name: 'add_adjustment',
+  version: 1,
+  checksOwnIds: ['lut'], // assertLutRef: Object.hasOwn, and the error lists the tables there are
+  description: 'Add an adjustment clip: it has no picture of its own; its effects, mask, opacity and blend apply to everything drawn below it (pictures and titles on lower tracks) for its time span. span "edit" covers 0 to the end of the last picture or title clip. It goes on an adjustment track (a new one above the picture tracks and below the title tracks when none is free). Time effects, chroma key and drop shadow are refused on adjustments. Captions are never affected.',
+  args: AddAdjustmentArgsSchema,
+  apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
+    let start: T.RationalTime = T.ZERO, duration: T.RationalTime;
+    if (a.span === 'edit') {
+      let end = T.ZERO;
+      for (const t of seq.tracks) if (t.kind === 'video' || t.kind === 'text') for (const c of t.clips) end = T.max(end, clipEnd(c));
+      if (!T.lt(T.ZERO, end)) throw new OpError('invalid_args', 'the edit has no picture or title to cover yet', {}, 'Add clips first, or give span {start, duration}.');
+      duration = end;
+    } else { start = a.span.start; duration = a.span.duration; }
+    assertAligned(d, start, 'start');
+    assertAligned(d, duration, 'duration');
+    if (T.isNegative(start) || !T.lt(T.ZERO, duration)) throw new OpError('invalid_args', 'start must be >= 0 and duration > 0', { start, duration });
+    const effects: EffectInstance[] = (a.effects ?? []).map((e) => {
+      const why = adjustmentRefusal(e.type);
+      if (why) throw new OpError('incompatible', `${e.type} cannot go on an adjustment: ${why}`, { type: e.type }, 'Put it on the clip itself.');
+      const fx = { id: ctx.newId('fx'), type: e.type, enabled: true, params: parseEffect(e.type, e.params) };
+      assertLutRef(d, fx.type, fx.params);
+      return fx;
+    });
+    const end = T.add(start, duration);
+    const explicit = a.trackId ? mustTrack(seq, a.trackId) : undefined;
+    if (explicit && explicit.kind !== 'adjustment') throw new OpError('incompatible', `an adjustment goes on an adjustment track, not on ${explicit.kind} track ${explicit.id}`, { trackId: explicit.id }, 'Omit trackId to use a free adjustment track (one is added when none is free).');
+    const track = explicit ?? placeTrack(seq, 'adjustment', start, end, ctx);
+    assertFree(track, start, end);
+    const clip: AdjustmentClip = { id: ctx.newId('clp'), type: 'adjustment', start, duration, transform: { ...DEFAULT_TRANSFORM, opacity: a.opacity ?? 1 }, ...(effects.length ? { effects } : {}), ...(a.label ? { label: a.label } : {}) };
+    track.clips.push(clip);
+    sortClips(track);
+    return { affectedIds: [clip.id], summary: `Added adjustment at ${fmt(start)} for ${fmt(duration)}`, output: { clipId: clip.id, trackId: track.id, effectIds: effects.map((e) => e.id) } };
+  },
+});
+
+// ---------- replace media (ADR-0016) ----------
+/**
+ * Arguments of the public op replace_clip_media (v1). Contract only: the op itself is implemented in this file by the
+ * templates track (W1). It keeps the clip id and everything on the clip; it changes assetId and sourceIn.
+ */
+export const ReplaceClipMediaArgsSchema = z.object({
+  clipId: z.string(),
+  assetId: z.string(),
+  sourceIn: RT.optional(),
+  linked: z.enum(['follow', 'detach']).optional().describe('default follow: a linked sound partner takes the new asset too (refused if it has no sound); detach: unlink it and leave it'),
+}).strict();
 
 // ---------- captions, transcripts and range cuts (SPEC §16) ----------
 function newCaptionTrack(seq: Sequence, ctx: OpContext, mode: 'manual' | 'transcript', linkedTrackId: string | null, style?: Partial<CaptionStyle>, name?: string): Track {

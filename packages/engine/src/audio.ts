@@ -7,7 +7,7 @@
  * envelopes in clip-local samples. Mixers must evaluate them per sample (or with exact linear ramps).
  */
 import * as T from '@pulseframe/time';
-import { findAudioEffect, isRamped, sortAudioFx, sourceEnd, speedEndValue, speedOf, speedValue, timelineAt, volumePoints, type AudioFxParams, type MediaClip, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
+import { findAudioEffect, isRamped, sortAudioFx, sourceEnd, speedEndValue, speedOf, speedValue, timelineAt, transcriptFor, volumePoints, type AudioFxParams, type MediaClip, type ProjectDocument, type Sequence, type Track } from '@pulseframe/core';
 import type { PlannedFx } from './audiofx/kernel.ts';
 import { chainReach, kernelFor } from './audiofx/registry.ts';
 import './audiofx/kernels/index.ts'; // every kernel of this build is registered before a plan is made
@@ -50,8 +50,11 @@ export interface PlannedVoice {
   reverse: boolean;
   /** asset.audio.sampleRate (the server decodes at this rate; browsers open the voice with the decoder's own rate). */
   sourceRate: number;
-  /** Samples at plan rate (chainReach). */
+  /** Samples at plan rate (chainReach). warmWindow includes the look-ahead of the window stages. */
   warmWindow: number; warmRing: number;
+  /** Σ look-ahead of the window stages, in samples at plan rate (ADR-0013). The voice reads that much more source after every block
+   *  and past the clip end, and compensates it: net latency 0. */
+  aheadWindow: number;
   /** Output after `length`, already cut at the programme end. */
   tail: number;
   /** Present when the tail was cut: linear fade to 0 over [cutFrom, length + tail). */
@@ -91,12 +94,14 @@ export function speechRanges(doc: ProjectDocument, seq: Sequence, sourceTrackIds
     if (!sourceTrackIds.includes(tr.id) || tr.kind !== 'audio' || tr.muted) continue;
     for (const c of tr.clips) {
       if (c.type !== 'media' || c.gain <= 0) continue;
-      const end = T.add(c.start, c.duration), srcEnd = sourceEnd(c);
-      const transcript = doc.transcripts?.[c.assetId];
-      if (!transcript || c.reverse) { out.push([T.nearestSampleIndex(c.start, sr), T.nearestSampleIndex(end, sr)]); continue; } // a reversed clip is treated as speech throughout: its phrases no longer sit where the transcript says
+      const end = T.add(c.start, c.duration);
+      const spoken = transcriptFor(doc, c.assetId); // a derived copy that keeps its source's timing speaks the source's transcript (ADR-0017)
+      if (!spoken || c.reverse) { out.push([T.nearestSampleIndex(c.start, sr), T.nearestSampleIndex(end, sr)]); continue; } // a reversed clip is treated as speech throughout: its phrases no longer sit where the transcript says
+      const { transcript, offset } = spoken;
+      const srcIn = T.add(c.sourceIn, offset), srcEnd = T.add(sourceEnd(c), offset);
       for (const seg of transcript.segments) {
-        const a = T.max(seg.start, c.sourceIn), b = T.min(T.add(seg.start, seg.duration), srcEnd);
-        if (T.lt(a, b)) out.push([T.nearestSampleIndex(timelineAt(c, a), sr), T.nearestSampleIndex(timelineAt(c, b), sr)]);
+        const a = T.max(seg.start, srcIn), b = T.min(T.add(seg.start, seg.duration), srcEnd);
+        if (T.lt(a, b)) out.push([T.nearestSampleIndex(timelineAt(c, T.sub(a, offset)), sr), T.nearestSampleIndex(timelineAt(c, T.sub(b, offset)), sr)]);
       }
     }
   }
@@ -181,12 +186,13 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId,
         for (const fx of chain) missingFx.push({ clipId: c.id, type: fx.type, version: fx.version });
       } else if (chain.length) {
         const asset = doc.assets[c.assetId]!;
-        const reach = chainReach(chain, sr);
+        const sp = speedOf(c);
+        const reach = chainReach(chain, sr, sp.num / sp.den);
         // Tails ring on past the clip but never past the programme end: there they are cut with a fade of at most 10 ms.
         const tail = Math.min(reach.tail, total - at - length);
         const voice: PlannedVoice = {
-          chain, sourceIn: T.normalize(c.sourceIn), sourceEnd: T.normalize(sourceEnd(c)), speed: { ...speedOf(c) }, reverse: !!c.reverse,
-          sourceRate: asset.audio!.sampleRate, warmWindow: reach.warmWindow, warmRing: reach.warmRing, tail,
+          chain, sourceIn: T.normalize(c.sourceIn), sourceEnd: T.normalize(sourceEnd(c)), speed: { ...sp }, reverse: !!c.reverse,
+          sourceRate: asset.audio!.sampleRate, warmWindow: reach.warmWindow, warmRing: reach.warmRing, aheadWindow: reach.aheadWindow, tail,
         };
         if (tail < reach.tail) {
           voice.cutFrom = Math.min(length + tail, Math.max(length, total - at - Math.round(0.01 * sr)));

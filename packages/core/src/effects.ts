@@ -185,70 +185,131 @@ export const MaskSchema = z
 export const DEFAULT_MASK = { shape: 'rect', x: 0, y: 0, width: 0.8, height: 0.8, radius: 0, feather: 0, invert: false } as const satisfies z.infer<typeof MaskSchema>;
 export type Mask = z.infer<typeof MaskSchema>;
 
+/** Groups of the transition picker and the gallery (ADR-0012). */
+export const TRANSITION_CATEGORIES = ['basic', 'wipe', 'slide', 'camera', 'blur', 'distort', 'glitch', 'light', 'mask', 'mg', 'paper'] as const;
+export type TransitionCategory = (typeof TRANSITION_CATEGORIES)[number];
+/** Options a transition type may declare (set_transition_options); `sync` and `velocity` are accepted by every type. */
+export const TRANSITION_OPTIONS = ['color', 'seed'] as const;
+export type TransitionOption = (typeof TRANSITION_OPTIONS)[number];
+/** Opaque #RRGGBB: a transition's colour has no alpha. */
+export const TransitionColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+export interface TransitionDef {
+  readonly id: string; readonly kernel: string; readonly gpu: boolean;
+  readonly name: { readonly he: string; readonly en: string }; readonly usesOutgoing: true;
+  readonly category: TransitionCategory;
+  /** Options set_transition_options accepts for this type; sync and velocity are accepted by every type. */
+  readonly options: readonly TransitionOption[];
+  /** Adds light over the picture: its light joins the timeline flash schedule (ADR-0012). */
+  readonly light?: true;
+  /** Passes through a full-frame third colour (dip, flash, colour blocks). */
+  readonly cover?: true;
+  /** No pixel's incoming share ever decreases. */
+  readonly singleCrossing?: true;
+  /** The picture depends on the frame's shape: the Lab tiles it in 16:9 and 9:16. */
+  readonly shapeDependent?: true;
+  readonly defaults?: { readonly color?: string; readonly seed?: number };
+}
 /**
  * `kernel` is the piece of code that draws a transition; several entries share one with different directions.
  * `gpu: true` entries are WebGPU passes over both pictures (ADR-0008) and exist only where an adapter has proved itself.
+ * The Canvas2D ones are drawn by the kernel of that name (engine canvasTransitions.ts CANVAS_KERNELS).
+ * `flash` is a `cover` transition but not a `light` one: it stays outside the flash schedule (ADR-0011:80).
  */
 export const TRANSITIONS = [
-  { id: 'dissolve', kernel: 'dissolve', gpu: false, name: { he: 'מעבר רך', en: 'Cross dissolve' }, usesOutgoing: true },
-  { id: 'dip-black', kernel: 'dip', gpu: false, name: { he: 'דרך שחור', en: 'Dip to black' }, usesOutgoing: true },
-  { id: 'dip-white', kernel: 'dip', gpu: false, name: { he: 'דרך לבן', en: 'Dip to white' }, usesOutgoing: true },
-  { id: 'wipe-left', kernel: 'wipe', gpu: false, name: { he: 'ניגוב שמאלה', en: 'Wipe left' }, usesOutgoing: true },
-  { id: 'wipe-right', kernel: 'wipe', gpu: false, name: { he: 'ניגוב ימינה', en: 'Wipe right' }, usesOutgoing: true },
-  { id: 'wipe-up', kernel: 'wipe', gpu: false, name: { he: 'ניגוב למעלה', en: 'Wipe up' }, usesOutgoing: true },
-  { id: 'wipe-down', kernel: 'wipe', gpu: false, name: { he: 'ניגוב למטה', en: 'Wipe down' }, usesOutgoing: true },
-  { id: 'push-left', kernel: 'push', gpu: false, name: { he: 'דחיפה שמאלה', en: 'Push left' }, usesOutgoing: true },
-  { id: 'push-right', kernel: 'push', gpu: false, name: { he: 'דחיפה ימינה', en: 'Push right' }, usesOutgoing: true },
-  { id: 'push-up', kernel: 'push', gpu: false, name: { he: 'דחיפה למעלה', en: 'Push up' }, usesOutgoing: true },
-  { id: 'push-down', kernel: 'push', gpu: false, name: { he: 'דחיפה למטה', en: 'Push down' }, usesOutgoing: true },
-  { id: 'zoom', kernel: 'zoom', gpu: false, name: { he: 'זום', en: 'Zoom in' }, usesOutgoing: true },
-  { id: 'cross-zoom-in', kernel: 'cross-zoom', gpu: true, name: { he: "זום מטושטש פנימה", en: 'Cross zoom in' }, usesOutgoing: true },
-  { id: 'cross-zoom-out', kernel: 'cross-zoom', gpu: true, name: { he: "זום מטושטש החוצה", en: 'Cross zoom out' }, usesOutgoing: true },
-  { id: 'swirl-cw', kernel: 'swirl', gpu: true, name: { he: "מערבולת עם השעון", en: 'Swirl clockwise' }, usesOutgoing: true },
-  { id: 'swirl-ccw', kernel: 'swirl', gpu: true, name: { he: "מערבולת נגד השעון", en: 'Swirl counter-clockwise' }, usesOutgoing: true },
-  { id: 'wave-h', kernel: 'wave', gpu: true, name: { he: "גל אופקי", en: 'Wave sideways' }, usesOutgoing: true },
-  { id: 'wave-v', kernel: 'wave', gpu: true, name: { he: "גל אנכי", en: 'Wave up and down' }, usesOutgoing: true },
-  { id: 'glitch-cut', kernel: 'glitch', gpu: true, name: { he: "גליץ'", en: 'Glitch' }, usesOutgoing: true },
-  { id: 'pixelate', kernel: 'pixelate', gpu: true, name: { he: "פיקסלים", en: 'Pixelate' }, usesOutgoing: true },
-  { id: 'clock-cw', kernel: 'clock', gpu: true, name: { he: "שעון", en: 'Clock wipe' }, usesOutgoing: true },
-  { id: 'clock-ccw', kernel: 'clock', gpu: true, name: { he: "שעון הפוך", en: 'Clock wipe, reversed' }, usesOutgoing: true },
-  { id: 'soft-wipe-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך ימינה", en: 'Soft wipe right' }, usesOutgoing: true },
-  { id: 'soft-wipe-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך שמאלה", en: 'Soft wipe left' }, usesOutgoing: true },
-  { id: 'soft-wipe-down', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך למטה", en: 'Soft wipe down' }, usesOutgoing: true },
-  { id: 'soft-wipe-up', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך למעלה", en: 'Soft wipe up' }, usesOutgoing: true },
-  { id: 'soft-wipe-down-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני ימינה־מטה", en: 'Soft wipe to the lower right' }, usesOutgoing: true },
-  { id: 'soft-wipe-down-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני שמאלה־מטה", en: 'Soft wipe to the lower left' }, usesOutgoing: true },
-  { id: 'soft-wipe-up-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני ימינה־מעלה", en: 'Soft wipe to the upper right' }, usesOutgoing: true },
-  { id: 'soft-wipe-up-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני שמאלה־מעלה", en: 'Soft wipe to the upper left' }, usesOutgoing: true },
-  { id: 'blinds-h', kernel: 'blinds', gpu: true, name: { he: "תריסים אופקיים", en: 'Horizontal blinds' }, usesOutgoing: true },
-  { id: 'blinds-v', kernel: 'blinds', gpu: true, name: { he: "תריסים אנכיים", en: 'Vertical blinds' }, usesOutgoing: true },
-  { id: 'iris-open', kernel: 'iris', gpu: true, name: { he: "עיגול נפתח", en: 'Iris open' }, usesOutgoing: true },
-  { id: 'iris-close', kernel: 'iris', gpu: true, name: { he: "עיגול נסגר", en: 'Iris close' }, usesOutgoing: true },
-  { id: 'diamond-open', kernel: 'diamond', gpu: true, name: { he: "מעוין נפתח", en: 'Diamond open' }, usesOutgoing: true },
-  { id: 'diamond-close', kernel: 'diamond', gpu: true, name: { he: "מעוין נסגר", en: 'Diamond close' }, usesOutgoing: true },
-  { id: 'flash', kernel: 'flash', gpu: true, name: { he: "הבזק", en: 'Flash' }, usesOutgoing: true },
-  { id: 'luma-bright', kernel: 'luma', gpu: true, name: { he: "התמוססות מהבהיר", en: 'Luma fade, bright first' }, usesOutgoing: true },
-  { id: 'luma-dark', kernel: 'luma', gpu: true, name: { he: "התמוססות מהכהה", en: 'Luma fade, dark first' }, usesOutgoing: true },
-  { id: 'squeeze-h', kernel: 'squeeze', gpu: true, name: { he: "כיווץ אופקי", en: 'Squeeze sideways' }, usesOutgoing: true },
-  { id: 'squeeze-v', kernel: 'squeeze', gpu: true, name: { he: "כיווץ אנכי", en: 'Squeeze vertically' }, usesOutgoing: true },
-  { id: 'checker', kernel: 'checker', gpu: true, name: { he: "לוח שחמט", en: 'Checkerboard' }, usesOutgoing: true },
-  { id: 'bars-h', kernel: 'bars', gpu: true, name: { he: "פסים אקראיים אופקיים", en: 'Random horizontal bars' }, usesOutgoing: true },
-  { id: 'bars-v', kernel: 'bars', gpu: true, name: { he: "פסים אקראיים אנכיים", en: 'Random vertical bars' }, usesOutgoing: true },
-  { id: 'ripple', kernel: 'ripple', gpu: true, name: { he: "אדווה", en: 'Ripple' }, usesOutgoing: true },
-  { id: 'whip-left', kernel: 'whip', gpu: true, name: { he: 'הצלפה שמאלה', en: 'Whip pan left' }, usesOutgoing: true },
-  { id: 'whip-right', kernel: 'whip', gpu: true, name: { he: 'הצלפה ימינה', en: 'Whip pan right' }, usesOutgoing: true },
-  { id: 'whip-up', kernel: 'whip', gpu: true, name: { he: 'הצלפה למעלה', en: 'Whip pan up' }, usesOutgoing: true },
-  { id: 'whip-down', kernel: 'whip', gpu: true, name: { he: 'הצלפה למטה', en: 'Whip pan down' }, usesOutgoing: true },
-  { id: 'spin-cw', kernel: 'spin', gpu: true, name: { he: 'סיבוב מהיר עם השעון', en: 'Spin clockwise' }, usesOutgoing: true },
-  { id: 'spin-ccw', kernel: 'spin', gpu: true, name: { he: 'סיבוב מהיר נגד השעון', en: 'Spin counter-clockwise' }, usesOutgoing: true },
-] as const;
+  { id: 'dissolve', kernel: 'dissolve', gpu: false, name: { he: 'מעבר רך', en: 'Cross dissolve' }, usesOutgoing: true, category: 'basic', options: [] },
+  { id: 'dip-black', kernel: 'dip', gpu: false, name: { he: 'דרך שחור', en: 'Dip to black' }, usesOutgoing: true, category: 'basic', options: [], cover: true },
+  { id: 'dip-white', kernel: 'dip', gpu: false, name: { he: 'דרך לבן', en: 'Dip to white' }, usesOutgoing: true, category: 'basic', options: [], cover: true },
+  { id: 'wipe-left', kernel: 'wipe', gpu: false, name: { he: 'ניגוב שמאלה', en: 'Wipe left' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'wipe-right', kernel: 'wipe', gpu: false, name: { he: 'ניגוב ימינה', en: 'Wipe right' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'wipe-up', kernel: 'wipe', gpu: false, name: { he: 'ניגוב למעלה', en: 'Wipe up' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'wipe-down', kernel: 'wipe', gpu: false, name: { he: 'ניגוב למטה', en: 'Wipe down' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'push-left', kernel: 'push', gpu: false, name: { he: 'דחיפה שמאלה', en: 'Push left' }, usesOutgoing: true, category: 'slide', options: [] },
+  { id: 'push-right', kernel: 'push', gpu: false, name: { he: 'דחיפה ימינה', en: 'Push right' }, usesOutgoing: true, category: 'slide', options: [] },
+  { id: 'push-up', kernel: 'push', gpu: false, name: { he: 'דחיפה למעלה', en: 'Push up' }, usesOutgoing: true, category: 'slide', options: [] },
+  { id: 'push-down', kernel: 'push', gpu: false, name: { he: 'דחיפה למטה', en: 'Push down' }, usesOutgoing: true, category: 'slide', options: [] },
+  { id: 'zoom', kernel: 'zoom', gpu: false, name: { he: 'זום', en: 'Zoom in' }, usesOutgoing: true, category: 'camera', options: [] },
+  { id: 'cross-zoom-in', kernel: 'cross-zoom', gpu: true, name: { he: "זום מטושטש פנימה", en: 'Cross zoom in' }, usesOutgoing: true, category: 'camera', options: [] },
+  { id: 'cross-zoom-out', kernel: 'cross-zoom', gpu: true, name: { he: "זום מטושטש החוצה", en: 'Cross zoom out' }, usesOutgoing: true, category: 'camera', options: [] },
+  { id: 'swirl-cw', kernel: 'swirl', gpu: true, name: { he: "מערבולת עם השעון", en: 'Swirl clockwise' }, usesOutgoing: true, category: 'distort', options: [] },
+  { id: 'swirl-ccw', kernel: 'swirl', gpu: true, name: { he: "מערבולת נגד השעון", en: 'Swirl counter-clockwise' }, usesOutgoing: true, category: 'distort', options: [] },
+  { id: 'wave-h', kernel: 'wave', gpu: true, name: { he: "גל אופקי", en: 'Wave sideways' }, usesOutgoing: true, category: 'distort', options: [] },
+  { id: 'wave-v', kernel: 'wave', gpu: true, name: { he: "גל אנכי", en: 'Wave up and down' }, usesOutgoing: true, category: 'distort', options: [] },
+  { id: 'glitch-cut', kernel: 'glitch', gpu: true, name: { he: "גליץ'", en: 'Glitch' }, usesOutgoing: true, category: 'glitch', options: [] },
+  { id: 'pixelate', kernel: 'pixelate', gpu: true, name: { he: "פיקסלים", en: 'Pixelate' }, usesOutgoing: true, category: 'glitch', options: [] },
+  { id: 'clock-cw', kernel: 'clock', gpu: true, name: { he: "שעון", en: 'Clock wipe' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'clock-ccw', kernel: 'clock', gpu: true, name: { he: "שעון הפוך", en: 'Clock wipe, reversed' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'soft-wipe-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך ימינה", en: 'Soft wipe right' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'soft-wipe-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך שמאלה", en: 'Soft wipe left' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'soft-wipe-down', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך למטה", en: 'Soft wipe down' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'soft-wipe-up', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך למעלה", en: 'Soft wipe up' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'soft-wipe-down-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני ימינה־מטה", en: 'Soft wipe to the lower right' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'soft-wipe-down-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני שמאלה־מטה", en: 'Soft wipe to the lower left' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'soft-wipe-up-right', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני ימינה־מעלה", en: 'Soft wipe to the upper right' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'soft-wipe-up-left', kernel: 'soft-wipe', gpu: true, name: { he: "ניגוב רך אלכסוני שמאלה־מעלה", en: 'Soft wipe to the upper left' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'blinds-h', kernel: 'blinds', gpu: true, name: { he: "תריסים אופקיים", en: 'Horizontal blinds' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'blinds-v', kernel: 'blinds', gpu: true, name: { he: "תריסים אנכיים", en: 'Vertical blinds' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'iris-open', kernel: 'iris', gpu: true, name: { he: "עיגול נפתח", en: 'Iris open' }, usesOutgoing: true, category: 'mask', options: [] },
+  { id: 'iris-close', kernel: 'iris', gpu: true, name: { he: "עיגול נסגר", en: 'Iris close' }, usesOutgoing: true, category: 'mask', options: [] },
+  { id: 'diamond-open', kernel: 'diamond', gpu: true, name: { he: "מעוין נפתח", en: 'Diamond open' }, usesOutgoing: true, category: 'mask', options: [] },
+  { id: 'diamond-close', kernel: 'diamond', gpu: true, name: { he: "מעוין נסגר", en: 'Diamond close' }, usesOutgoing: true, category: 'mask', options: [] },
+  { id: 'flash', kernel: 'flash', gpu: true, name: { he: "הבזק", en: 'Flash' }, usesOutgoing: true, category: 'light', options: [], cover: true },
+  { id: 'luma-bright', kernel: 'luma', gpu: true, name: { he: "התמוססות מהבהיר", en: 'Luma fade, bright first' }, usesOutgoing: true, category: 'mask', options: [] },
+  { id: 'luma-dark', kernel: 'luma', gpu: true, name: { he: "התמוססות מהכהה", en: 'Luma fade, dark first' }, usesOutgoing: true, category: 'mask', options: [] },
+  { id: 'squeeze-h', kernel: 'squeeze', gpu: true, name: { he: "כיווץ אופקי", en: 'Squeeze sideways' }, usesOutgoing: true, category: 'slide', options: [] },
+  { id: 'squeeze-v', kernel: 'squeeze', gpu: true, name: { he: "כיווץ אנכי", en: 'Squeeze vertically' }, usesOutgoing: true, category: 'slide', options: [] },
+  { id: 'checker', kernel: 'checker', gpu: true, name: { he: "לוח שחמט", en: 'Checkerboard' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'bars-h', kernel: 'bars', gpu: true, name: { he: "פסים אקראיים אופקיים", en: 'Random horizontal bars' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'bars-v', kernel: 'bars', gpu: true, name: { he: "פסים אקראיים אנכיים", en: 'Random vertical bars' }, usesOutgoing: true, category: 'wipe', options: [] },
+  { id: 'ripple', kernel: 'ripple', gpu: true, name: { he: "אדווה", en: 'Ripple' }, usesOutgoing: true, category: 'distort', options: [] },
+  { id: 'whip-left', kernel: 'whip', gpu: true, name: { he: 'הצלפה שמאלה', en: 'Whip pan left' }, usesOutgoing: true, category: 'camera', options: [], shapeDependent: true },
+  { id: 'whip-right', kernel: 'whip', gpu: true, name: { he: 'הצלפה ימינה', en: 'Whip pan right' }, usesOutgoing: true, category: 'camera', options: [], shapeDependent: true },
+  { id: 'whip-up', kernel: 'whip', gpu: true, name: { he: 'הצלפה למעלה', en: 'Whip pan up' }, usesOutgoing: true, category: 'camera', options: [], shapeDependent: true },
+  { id: 'whip-down', kernel: 'whip', gpu: true, name: { he: 'הצלפה למטה', en: 'Whip pan down' }, usesOutgoing: true, category: 'camera', options: [], shapeDependent: true },
+  { id: 'spin-cw', kernel: 'spin', gpu: true, name: { he: 'סיבוב מהיר עם השעון', en: 'Spin clockwise' }, usesOutgoing: true, category: 'camera', options: [], shapeDependent: true },
+  { id: 'spin-ccw', kernel: 'spin', gpu: true, name: { he: 'סיבוב מהיר נגד השעון', en: 'Spin counter-clockwise' }, usesOutgoing: true, category: 'camera', options: [], shapeDependent: true },
+  // ---- trend pack (ADR-0012): appended, so the order of the 51 rows above is unchanged ----
+  { id: 'punch-in', kernel: 'punch', gpu: false, name: { he: 'זום פאנץ׳ פנימה', en: 'Zoom punch in' }, usesOutgoing: true, category: 'camera', options: [] },
+  { id: 'punch-out', kernel: 'punch', gpu: false, name: { he: 'זום פאנץ׳ החוצה', en: 'Zoom punch out' }, usesOutgoing: true, category: 'camera', options: [] },
+  { id: 'blur-dissolve', kernel: 'blur', gpu: false, name: { he: 'מעבר מטושטש', en: 'Blur dissolve' }, usesOutgoing: true, category: 'blur', options: [] },
+  { id: 'split-open-h', kernel: 'split', gpu: false, name: { he: 'פתיחה מפוצלת לצדדים', en: 'Split open sideways' }, usesOutgoing: true, category: 'slide', options: [], singleCrossing: true },
+  { id: 'split-open-v', kernel: 'split', gpu: false, name: { he: 'פתיחה מפוצלת למעלה ולמטה', en: 'Split open up and down' }, usesOutgoing: true, category: 'slide', options: [], singleCrossing: true },
+  { id: 'shape-heart', kernel: 'shape', gpu: false, name: { he: 'לב נפתח', en: 'Heart reveal' }, usesOutgoing: true, category: 'mask', options: ['color'], singleCrossing: true, shapeDependent: true },
+  { id: 'shape-star', kernel: 'shape', gpu: false, name: { he: 'כוכב נפתח', en: 'Star reveal' }, usesOutgoing: true, category: 'mask', options: ['color'], singleCrossing: true, shapeDependent: true },
+  { id: 'block-left', kernel: 'block', gpu: false, name: { he: 'בלוקי צבע שמאלה', en: 'Colour blocks left' }, usesOutgoing: true, category: 'mg', options: ['color'], cover: true, defaults: { color: '#3DE0C8' } },
+  { id: 'block-right', kernel: 'block', gpu: false, name: { he: 'בלוקי צבע ימינה', en: 'Colour blocks right' }, usesOutgoing: true, category: 'mg', options: ['color'], cover: true, defaults: { color: '#3DE0C8' } },
+  { id: 'slices-h', kernel: 'slices', gpu: false, name: { he: 'פרוסות מהירות אופקיות', en: 'Velocity slices, horizontal' }, usesOutgoing: true, category: 'glitch', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
+  { id: 'slices-v', kernel: 'slices', gpu: false, name: { he: 'פרוסות מהירות אנכיות', en: 'Velocity slices, vertical' }, usesOutgoing: true, category: 'glitch', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
+  { id: 'film-burn', kernel: 'burn', gpu: true, name: { he: 'צריבת פילם', en: 'Film burn' }, usesOutgoing: true, category: 'light', options: ['color', 'seed'], light: true, defaults: { color: '#FF9A4A', seed: 0 } },
+  { id: 'light-leak', kernel: 'leak', gpu: true, name: { he: 'דליפת אור', en: 'Light leak' }, usesOutgoing: true, category: 'light', options: ['color', 'seed'], light: true, defaults: { color: '#FFB15C', seed: 0 } },
+  { id: 'ink-bleed', kernel: 'ink', gpu: true, name: { he: 'כתם דיו', en: 'Ink bleed' }, usesOutgoing: true, category: 'mask', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
+  { id: 'brush-left', kernel: 'brush', gpu: true, name: { he: 'משיכת מכחול שמאלה', en: 'Brush stroke left' }, usesOutgoing: true, category: 'mask', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
+  { id: 'brush-right', kernel: 'brush', gpu: true, name: { he: 'משיכת מכחול ימינה', en: 'Brush stroke right' }, usesOutgoing: true, category: 'mask', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
+  { id: 'page-turn-left', kernel: 'page', gpu: true, name: { he: 'דפדוף שמאלה', en: 'Page turn left' }, usesOutgoing: true, category: 'paper', options: [], singleCrossing: true, shapeDependent: true },
+  { id: 'page-turn-right', kernel: 'page', gpu: true, name: { he: 'דפדוף ימינה', en: 'Page turn right' }, usesOutgoing: true, category: 'paper', options: [], singleCrossing: true, shapeDependent: true },
+] as const satisfies readonly TransitionDef[];
 export const TRANSITION_IDS = TRANSITIONS.map((t) => t.id) as [TransitionType, ...TransitionType[]];
 /** Transitions that run as WebGPU passes (ADR-0008). */
 export const GPU_TRANSITION_IDS: readonly string[] = TRANSITIONS.filter((t) => t.gpu).map((t) => t.id);
 export type TransitionType = (typeof TRANSITIONS)[number]['id'];
-/** A transition plays over the FIRST `frames` of the clip that carries it; the previous clip on the track keeps playing underneath from its source handle. */
-export const TransitionSchema = z.object({ type: z.enum(TRANSITION_IDS), frames: z.number().int().min(1).max(150) }).strict();
+/**
+ * A transition plays over the FIRST `frames` of the clip that carries it; the previous clip on the track keeps playing underneath from its source handle.
+ * The options (ADR-0012) are optional fields under SCHEMA_VERSION 1 with no migration: a transition without them is drawn exactly as before.
+ */
+export const TransitionSchema = z.object({
+  type: z.enum(TRANSITION_IDS),
+  frames: z.number().int().min(1).max(150),
+  /** 'beat': progress 0.5 lands on the analysed beat nearest the window's middle (render-time; nothing computed is stored). */
+  sync: z.literal('beat').optional(),
+  /** Picture-only speed ramp: the outgoing shot reaches about ×velocity at the cut, the incoming one slows from it. Sound stays a hard cut. */
+  velocity: z.union([z.literal(2), z.literal(3), z.literal(4)]).optional(),
+  /** Only for types whose `options` list it. */
+  color: TransitionColor.optional(),
+  /** Only for types whose `options` list it. */
+  seed: z.number().int().min(0).max(9999).optional(),
+}).strict();
 export type Transition = z.infer<typeof TransitionSchema>;
+/** The registry row of a transition type. */
+export const transitionDef = (type: string): TransitionDef | undefined => (TRANSITIONS as readonly TransitionDef[]).find((t) => t.id === type);
 
 /** Same shape as a transform keyframe (schema.ts); repeated here because schema.ts imports this file. */
 const EffectKeySchema = z.object({ time: z.object({ value: z.string().regex(/^-?\d+$/), timescale: z.number().int().positive() }).strict(), value: z.number(), easing: z.enum(['linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out']) }).strict();
@@ -324,7 +385,12 @@ export function describeCatalog() {
       modulatable: modulatableParams(e.id),
       defaults: e.params.parse({}), paramsSchema: z.toJSONSchema(e.params),
     })),
-    transitions: TRANSITIONS.map((t) => ({ ...t, version: 1, implementation: t.gpu ? 'webgpu pass (needs a graphics adapter)' : 'canvas2d', audio: 'unchanged (hard cut)' })),
+    transitions: TRANSITIONS.map((t) => ({
+      ...t, version: 1,
+      implementation: t.gpu ? 'webgpu pass (needs a graphics adapter)' : 'canvas2d',
+      audio: 'unchanged (hard cut); velocity remaps the picture only',
+      accepts: { sync: ['beat'], velocity: [2, 3, 4], options: t.options },
+    })),
     blendModes: [...BLEND_MODES],
     mask: { shapes: ['rect', 'ellipse'], defaults: DEFAULT_MASK, paramsSchema: z.toJSONSchema(MaskSchema) },
   };

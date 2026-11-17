@@ -171,9 +171,33 @@ async function main() {
     check('range [30,60) at 0.5: 30 frames, 320x180, barcodes equal the evaluator for timeline frames 30..59', Number(v4.nb_read_packets) === 30 && v4.width === 320 && v4.height === 180 && JSON.stringify(codes4) === JSON.stringify(want4) && codes4[0] === 30 && codes4[29] === 59, { first: codes4[0], last: codes4[29], size: `${v4.width}x${v4.height}`, frames: v4.nb_read_packets });
     check('range audio: one beep at the start of the range (timeline 1.0 s), nothing else', on4.length === 1 && Math.abs(on4[0]!) < 1 / 30, { onsets: on4 });
 
+    console.log('\n# 4b. photosensitivity on the browser route (ADR-0009): the same answer as the server export');
+    {
+      // 1 s calm (black), then 30 clips of 3 frames alternating black and white (5 flashes a second over the whole picture), then 1 s calm
+      const fl: string = (await rest('/projects', { name: 'flashing', width: 320, height: 180 })).body.project.id;
+      const img = (name: string, colour: string) => { const file = path.join(art, `${name}.png`); ff(['-y', '-f', 'lavfi', '-i', `color=c=${colour}:s=320x180`, '-frames:v', '1', file]); return file; };
+      const upImg = async (file: string) => ((await (await fetch(`${base}/api/v1/projects/${fl}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(file) }, body: fs.readFileSync(file) })).json()) as any).assetId as string;
+      const black = await upImg(img('flash-black', 'black')), white = await upImg(img('flash-white', 'white'));
+      const ops: unknown[] = [{ op: 'add_clip', args: { assetId: black, start: f(0), duration: f(30) } }];
+      for (let k = 0; k < 30; k++) ops.push({ op: 'add_clip', args: { assetId: k % 2 ? black : white, start: f(30 + 3 * k), duration: f(3) } });
+      ops.push({ op: 'add_clip', args: { assetId: black, start: f(120), duration: f(30) } });
+      await rest(`/projects/${fl}/transactions`, { ops });
+      const rb = await runInPage(page, fl, { quality: 'draft' });
+      const sj = await waitJob((await rest(`/projects/${fl}/exports`, { quality: 'draft' })).body.jobId);
+      const bRep = rb.ok ? rb.result.photosensitivity : null, sRep = sj.output?.photosensitivity;
+      const bJob = rb.ok ? (await rest(`/jobs/${rb.result.jobId}`)).body.output?.photosensitivity : null;
+      const sec = (x: { value: string; timescale: number }) => Number(x.value) / x.timescale;
+      measurements.photosensitivity = { browser: bRep && { verdict: bRep.verdict, ranges: bRep.ranges.map((r: any) => ({ from: sec(r.from), to: sec(r.to), kind: r.kind, perSecond: r.flashesPerSecond, area: r.area })) }, server: sRep && { verdict: sRep.verdict, ranges: sRep.ranges.map((r: any) => ({ from: sec(r.from), to: sec(r.to), kind: r.kind, perSecond: r.flashesPerSecond, area: r.area })) } };
+      check('a timeline flashing 5 times a second for 3 s, exported in the browser: the tab reports one failing stretch over the whole frame, recorded on its job, and the export still succeeds',
+        !!bRep && bRep.verdict === 'fail' && bRep.ranges.length === 1 && bRep.ranges[0]!.kind === 'general' && bRep.ranges[0]!.area === 1 && sec(bRep.ranges[0]!.from) <= 1.2 && sec(bRep.ranges[0]!.to) >= 3.9 && bJob?.verdict === 'fail' && bJob?.measuredBy === 'browser', measurements.photosensitivity);
+      check('the server export of the same timeline reports the same stretch (same analyser, same frames)', !!sRep && !!bRep && JSON.stringify(sRep.ranges) === JSON.stringify(bRep.ranges), measurements.photosensitivity);
+    }
+
     console.log('\n# 5. server job record');
     const job1 = (await rest(`/jobs/${res.jobId}`)).body;
     check('job row: succeeded, route browser, location client-download, frames correct', job1.status === 'succeeded' && job1.output.route === 'browser' && job1.output.location === 'client-download' && job1.output.frames === TOTAL && job1.output.container === 'mp4' && job1.output.videoCodec === 'avc' && job1.output.audioCodec === wantAudio, { output: { ...job1.output, manifest: undefined } });
+    const ps1 = job1.output.photosensitivity;
+    check('job row: the tab checked every encoded frame for flashing (ADR-0009) and the server recorded it with its method text', !!ps1 && ps1.measuredBy === 'browser' && ps1.frames === TOTAL && /WCAG 2\.3\.1/.test(ps1.method) && (ps1.verdict === 'fail') === ps1.ranges.length > 0 && JSON.stringify(res.photosensitivity) === JSON.stringify({ verdict: ps1.verdict, frames: ps1.frames, ranges: ps1.ranges }), { verdict: ps1?.verdict, frames: ps1?.frames, ranges: ps1?.ranges?.length });
     check('job row sha256 and bytes equal those of the file the proof received', job1.output.sha256 === sha(bytes1) && job1.output.bytes === bytes1.length, { server: job1.output.sha256, received: sha(bytes1) });
     const again = await page.evaluate(([jobId, sid, frames]) => window.__pfBrowserExport.post(`/jobs/${jobId}/complete`, { sessionId: sid, bytes: 1, sha256: 'b'.repeat(64), videoCodec: 'avc', audioCodec: 'aac', frames, container: 'mp4' }), [res.jobId, session1, TOTAL] as const);
     check('a second complete is refused with 409 already_completed; the recorded output is unchanged', again.status === 409 && again.code === 'already_completed' && (await rest(`/jobs/${res.jobId}`)).body.output.sha256 === sha(bytes1), again.code);

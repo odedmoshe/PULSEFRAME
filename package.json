@@ -34,6 +34,8 @@
     "proof:reverse-sound": "tsx packages/evals/src/reverse-sound-proof.ts",
     "proof:pitch": "tsx packages/evals/src/pitch-proof.ts",
     "proof:voicefx": "tsx packages/evals/src/voicefx-proof.ts && tsx packages/evals/src/voicefx-preview-proof.ts && tsx packages/evals/src/voicefx-ui-proof.ts",
+    "proof:voiceclean": "tsx packages/evals/src/voiceclean-proof.ts",
+    "proof:colourmatch": "tsx packages/evals/src/colourmatch-proof.ts",
     "proof:speech": "tsx packages/evals/src/speech-proof.ts",
     "check:media": "tsx packages/evals/src/real-media-check.ts",
     "proof:voice": "tsx packages/evals/src/voice-proof.ts",
@@ -55,7 +57,18 @@
     "audit:a11y": "tsx packages/evals/src/a11y-audit.ts",
     "soak": "tsx packages/evals/src/soak.ts",
     "proof:editor-interactions": "tsx packages/evals/src/editor-interactions-proof.ts",
-    "proof:owner-ui": "tsx packages/evals/src/owner-ui-proof.ts"
+    "proof:owner-ui": "tsx packages/evals/src/owner-ui-proof.ts",
+    "proof:adjust": "tsx packages/evals/src/adjust-proof.ts",
+    "proof:templates": "tsx packages/evals/src/templates-proof.ts",
+    "proof:ai-frames": "tsx packages/evals/src/ai-frames-proof.ts",
+    "proof:ai-trials": "tsx packages/evals/src/ai-trials-proof.ts",
+    "proof:ai-local": "tsx packages/evals/src/ai-local-proof.ts",
+    "proof:ai-ui": "tsx packages/evals/src/ai-ui-proof.ts",
+    "proof:trend-baseline": "tsx packages/evals/src/trend-baseline.ts",
+    "proof:trend-transitions": "tsx packages/evals/src/trend-transitions-proof.ts",
+    "proof:trend-light": "tsx packages/evals/src/trend-light-proof.ts",
+    "proof:trend-text": "tsx packages/evals/src/trend-text-proof.ts",
+    "proof:trend": "pnpm proof:trend-transitions && pnpm proof:trend-light && pnpm proof:trend-text"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

@@ -15,7 +15,8 @@ import { flashSchedule, flashSince } from './strobeSchedule.ts';
 import { applyModulators } from './modulate.ts';
 import { OVERLAY_TYPES, heldOverlayParams } from './overlays.ts';
 import { pieceAt, runStart, stutterFrame, tapOffsets, tapWeights } from './taps.ts';
-import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, sourceFrameIndexAt, transformAt, type BlendMode, type Clip, type FollowInfo, type Mask, type ProjectDocument, type ResolvedRegion, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
+import { beatSwitchFrame, lightEnvelope, switchFrame, transitionDef, transitionProgress, velocityOffsets } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
 
 /**
@@ -36,14 +37,27 @@ export interface LayerLook {
   effects?: { type: string; params: Record<string, number | string | boolean> }[];
   blend?: BlendMode;
   mask?: Mask;
-  /** Present during a transition. `in` = the clip carrying the transition; `out` = the previous clip playing on from its handle. progress is 0..1, already eased. */
-  transition?: { type: TransitionType; progress: number; role: 'in' | 'out' };
+  /**
+   * Present during a transition. `in` = the clip carrying the transition; `out` = the previous clip playing on from its handle.
+   * progress is 0..1, already eased (core transitionProgress; with a beat lock, 0.5 falls on the beat).
+   */
+  transition?: {
+    type: TransitionType; progress: number; role: 'in' | 'out';
+    /** Light added on this frame, 0..1: lightEnvelope when the flash schedule kept this transition's start, else 0. Only on the 'in' layer (ADR-0012). */
+    light?: number;
+    /** Options with the registry defaults filled in. */
+    color?: string | null; seed?: number;
+    /** Render quantities: the transition's frame (0 … frames−1), its length and the timeline's frames per second. */
+    frame?: number; frames?: number; fps?: number;
+  };
   /** Present when the clip's first enabled effect is a time effect of kind 'taps'; `effects` then holds only the effects after it. */
   time?: { type: string; params: Record<string, number | string | boolean>; taps: TimeTap[] };
   /** Present when the clip's first enabled effect is a remap (time.stutter); already applied to this layer's picture; for describeMoment. */
   remap?: { type: string; shownFrame: number };
   /** Clip-local seconds of this frame (render quantity, never stored). */
   local?: number;
+  /** Present when the clip follows a motion track (ADR-0015); `transform` is then already the resolved one (post-pass). */
+  follow?: FollowInfo;
 }
 export interface VideoLayer extends LayerLook {
   kind: 'video';
@@ -61,10 +75,21 @@ export interface VideoLayer extends LayerLook {
   transform: Transform;
   /** Decode lane (TimeTap.lane); absent = 0. */
   lane?: number;
+  /** Privacy regions (ADR-0015) resolved at THIS picture's sourceFrameIndex (taps and the stutter picture carry their own); drawn right after placement, before effects. */
+  regions?: ResolvedRegion[];
 }
 /** A still picture. Same placement rules as video; one decoded image for the whole clip. */
 export interface ImageLayer extends LayerLook { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform }
 export interface TextLayer extends LayerLook { kind: 'text'; clipId: string; trackId: string; text: string; style: TextStyle; transform: Transform; /** Letter/word/line animation with where this frame is in the clip (seconds from its start, and the clip's length). */ animation?: TextAnimation & { local: number; total: number; fps: number } }
+/**
+ * Adjustment clip active at this time (ADR-0016). It never asks the FrameProvider for a picture: drawGraph copies the frame
+ * so far into scratch slot ADJUST_PASS_SLOT, runs `effects` with a whole-frame box, applies `mask` (frame space) and
+ * composites back with `opacity` and `blend`. Not yet a member of `Layer`: the templates track (W2) adds it there together
+ * with the evaluator branch and the drawGraph pass.
+ */
+export interface AdjustLayer extends Pick<LayerLook, 'effects' | 'blend' | 'mask' | 'local'> { kind: 'adjust'; clipId: string; trackId: string; opacity: number }
+/** Scratch canvas slot (look.ts `scratch`) reserved for the adjustment pass (wave-3 allocation: 14 = templates track). */
+export const ADJUST_PASS_SLOT = 14;
 export type Layer = VideoLayer | ImageLayer | TextLayer | CaptionLayer;
 export type PictureLayer = VideoLayer | ImageLayer;
 export interface ActiveAudio { clipId: string; trackId: string; assetId: string; sourceTime: T.RationalTime; gain: number }
@@ -95,7 +120,6 @@ const look = (clip: Clip, time: T.RationalTime, flash: (clipId: string, effectId
   });
   return { ...(fx?.length ? { effects: fx } : {}), ...(clip.blend ? { blend: clip.blend } : {}), ...(clip.type === 'media' && clip.mask ? { mask: clip.mask } : {}), local: T.toSeconds(local) };
 };
-const smooth = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
 
 /**
  * The picture of a media clip at `time` without any look: what a time tap reads (ADR-0011) and what a layer is placed from.
@@ -111,10 +135,9 @@ function barePicture(doc: ProjectDocument, track: Track, clip: Extract<Clip, { t
   if (!asset.video) return null;
   const rate = asset.video.frameRate;
   // Frames are counted from the first picture in the file. When that picture does not sit at time 0, it is shown that many
-  // frames later (and held until then), which keeps it in step with the sound.
-  let idx = Math.max(0, T.frameIndexAt(sourceTime, rate) - startOffsetFrames(asset.video));
-  const lastFrame = asset.video.frameCount !== null ? asset.video.frameCount - 1 : Math.max(0, T.frameIndexAt(asset.duration, rate) - 1);
-  idx = Math.min(idx, lastFrame);
+  // frames later (and held until then), which keeps it in step with the sound. The rule lives in core (speed.ts), where motion
+  // tracks and the editor number frames by it too.
+  const idx = sourceFrameIndexAt({ ...asset, video: asset.video }, clip, time, doc.settings.frameRate);
   return {
     kind: 'video', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime, sourceFrameIndex: idx,
     sourceSeekSeconds: ((idx + 0.5) * rate.den) / rate.num,
@@ -189,6 +212,15 @@ function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): Vid
   return { ...bare, ...after, time: { type: own!.type, params, taps } } as VideoLayer | ImageLayer | TextLayer;
 }
 
+/**
+ * A video layer showing the source picture of `from` (another moment of the same clip: a velocity ramp, ADR-0012), with its
+ * own placement and look. Image and title layers, and layers whose picture a time effect already chose, are left as they are.
+ */
+function withPictureOf<L extends VideoLayer | ImageLayer | TextLayer>(layer: L, from: Bare | null): L {
+  if (layer.kind !== 'video' || !from || from.kind !== 'video' || layer.time || layer.remap) return layer;
+  return { ...layer, sourceTime: from.sourceTime, sourceFrameIndex: from.sourceFrameIndex, sourceSeekSeconds: from.sourceSeekSeconds };
+}
+
 export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId = doc.mainSequenceId): RenderGraph {
   const seq = doc.sequences[sequenceId];
   if (!seq) throw new Error(`sequence ${sequenceId} not found`);
@@ -217,17 +249,26 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
         continue;
       }
       if (track.kind !== 'video' || track.hidden) continue;
-      const layer = clipLayer(cx, track, clip, time);
+      let layer = clipLayer(cx, track, clip, time);
       if (!layer) continue;
       const local = T.frameIndexAt(T.sub(time, clip.start), frameRate);
       if (clip.transition && local < clip.transition.frames) {
         // Neither end shows a pure side: frame 0 is already slightly in, the last transition frame is not yet complete.
-        const progress = smooth((local + 1) / (clip.transition.frames + 1));
+        const tr = clip.transition, n = tr.frames, def = transitionDef(tr.type), fps = frameRate.num / frameRate.den;
+        const k = tr.sync === 'beat' ? beatSwitchFrame(doc, clip, sequenceId) : null;
+        const progress = transitionProgress(local, n, k);
+        // velocity ramp (ADR-0012): whole frames of the pictures; transform, look and effects stay at the frame's own time
+        const sh = tr.velocity ? velocityOffsets(n, tr.velocity, local) : { out: 0, in: 0 };
+        const lp = def?.light ? flashSchedule(doc, sequenceId).lights.get(clip.id) : undefined;
+        const light = lp?.kept ? lightEnvelope(n, fps, switchFrame(n, k), local) : 0;
+        const base = { type: tr.type, progress, color: tr.color ?? def?.defaults?.color ?? null, seed: tr.seed ?? def?.defaults?.seed ?? 0, frame: local, frames: n, fps };
         const prev = track.clips.find((c) => c.type === 'media' && c.id !== clip.id && T.eq(T.add(c.start, c.duration), clip.start));
         // the outgoing side plays on from its handle with its own look, time effect included
-        const out = prev && prev.type === 'media' ? clipLayer(cx, track, prev, time) : null;
-        if (out) graph.layers.push({ ...out, transition: { type: clip.transition.type, progress, role: 'out' } });
-        layer.transition = { type: clip.transition.type, progress, role: 'in' };
+        let out = prev && prev.type === 'media' ? clipLayer(cx, track, prev, time) : null;
+        if (out && prev && sh.out) out = withPictureOf(out, bareLayer(doc, track, prev, T.add(time, T.frameTime(sh.out, frameRate))));
+        if (sh.in) layer = withPictureOf(layer, bareLayer(doc, track, clip, T.sub(time, T.frameTime(sh.in, frameRate))));
+        if (out) graph.layers.push({ ...out, transition: { ...base, role: 'out', light: 0 } });
+        layer.transition = { ...base, role: 'in', light };
       }
       graph.layers.push(layer);
     }

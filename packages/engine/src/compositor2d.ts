@@ -24,8 +24,14 @@ export interface FrameProvider {
   (layer: PictureLayer): Promise<FrameImage | null>;
   /** The strip of a colour table asset (core `lutStrip` of the file text, with a key unique per content), or null when there is none. May reject. */
   lut?(assetId: string): Promise<LutStrip | null>;
-  /** Called once at the start of every drawGraph, before any frame is asked for: decoders used from now on are pinned (never evicted) until the next begin. A pool serves one drawGraph at a time. */
-  begin?(): void;
+  /**
+   * Called once at the start of every drawGraph, before any frame is asked for. The frames this drawing asks for (all
+   * synchronously after begin) are pinned to the token it returns, and stay pinned until `end(token)`: several drawings may
+   * share a provider at once (the editor's player and the source viewer's), and one must never release another's pictures.
+   */
+  begin?(): unknown;
+  /** Called once when that drawGraph is done (also when it throws): releases what `begin` pinned. */
+  end?(token: unknown): void;
   /** Why the last request for this layer resolved null (e.g. `decode_budget: …`, see decodeBudgetReason), or null when unknown. Never throws. */
   refusal?(layer: PictureLayer): string | null;
 }
@@ -321,7 +327,14 @@ export function frameDecoders(g: RenderGraph): { count: number; clipIds: string[
 /** The frame that is waiting on a GPU pass, if any (see drawGraph). */
 let gpuFrame: Promise<void> | null = null;
 export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; /** For missing clips whose picture the view refused (FrameProvider.refusal, e.g. decode_budget): why, by clip id. */ missingReasons?: Record<string, string>; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
-  frames.begin?.();
+  const pin = frames.begin?.();
+  try {
+    return await drawPinned(ctx, g, frames);
+  } finally {
+    frames.end?.(pin);
+  }
+}
+async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; missingReasons?: Record<string, string>; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
   const missing: string[] = [];
   const missingReasons: Record<string, string> = {};
   // Colour tables named by effects of this frame are loaded here, with the source frames and before the GPU gate; a table that
@@ -421,7 +434,7 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
     if (layer.transition && isGpuTransition(layer.transition.type)) {
       // A GPU transition mixes both pictures in one pass; the result is then composited like any layer (blend mode, no transition).
       const mixed = scratch(6, g.width, g.height);
-      const ok = await gpuTransition(layer.transition.type, layer.transition.progress, outgoing ? (outgoing as Buf).canvas : null, buf.canvas, mixed.ctx, env);
+      const ok = await gpuTransition(layer.transition, outgoing ? (outgoing as Buf).canvas : null, buf.canvas, mixed.ctx, env);
       // Not available: the incoming picture alone (a cut), recorded as missing so a still or an export refuses.
       compositeLayer(ctx, ok ? mixed : buf, { ...layer, transition: undefined }, g.width, g.height, null);
     } else compositeLayer(ctx, buf, layer, g.width, g.height, layer.transition ? outgoing : null);
