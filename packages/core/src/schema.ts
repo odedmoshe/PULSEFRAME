@@ -63,6 +63,14 @@ export const WALL_DATE_TIME = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(T([0
 export const CAPTURE_MIN_YEAR = 1900;
 export const CAPTURE_MAX_YEAR = 2100;
 /**
+ * The most a file's clock can have been moved by in all (Capture.shiftedMinutes, either sign): the minutes of the 73,414 days
+ * from 1 January CAPTURE_MIN_YEAR to 31 December CAPTURE_MAX_YEAR. A date that started inside those years and is still inside
+ * them is never further than this from where it started, however many shifts took it there, so the total of a file whose date
+ * the operations kept in range always fits. (Only a document whose total does not match its date, such as an archive made by
+ * hand, can meet the bound; shift_asset_captures then refuses with shiftTooFar.)
+ */
+export const MAX_CAPTURE_SHIFT_MINUTES = 73414 * 1440;
+/**
  * True for a WALL_DATE or WALL_DATE_TIME string whose day exists (no 30 February) in a year from CAPTURE_MIN_YEAR to
  * CAPTURE_MAX_YEAR. Integers only: calendar data is never a float and never goes through Date or Intl (ADR-0021).
  */
@@ -90,13 +98,15 @@ export const CaptureSchema = z
     circa: z.literal(true).optional(),
     /** The file gave a UTC instant only; the wall clock was worked out for this IANA zone at import (server config homeZone). */
     assumedZone: z.string().min(1).max(64).optional(),
-    /** Minutes a person moved the file's own clock by (shift_asset_captures); `at` already includes them. */
-    shiftedMinutes: z.number().int().min(-5256000).max(5256000).optional(),
+    /** Minutes a person moved the file's own clock by, in all (shift_asset_captures adds each step); `at` already includes them. */
+    shiftedMinutes: z.number().int().min(-MAX_CAPTURE_SHIFT_MINUTES).max(MAX_CAPTURE_SHIFT_MINUTES).optional(),
   })
   .strict();
 export type Capture = z.infer<typeof CaptureSchema>;
 /** A project holds at most this many events. */
 export const MAX_LIFE_EVENTS = 2000;
+/** An event holds at most this many files (and at least one). */
+export const MAX_EVENT_FILES = 5000;
 /**
  * An event (ADR-0021): library files grouped by when they were taken. Only what a person typed or chose is stored: a holiday
  * name is derived when it is read (events.ts eventDisplayName), never written here, so a corrected holiday table never
@@ -110,7 +120,7 @@ export const LifeEventSchema = z
     /** Was it filmed after sunset? null = not decided; true = the Hebrew date of the next day; false = of the same day. Never guessed. */
     afterSunset: z.boolean().nullable(),
     /** Pictures and videos of the library; a file sits in at most one event (validate.ts). */
-    assetIds: z.array(Id).min(1).max(5000),
+    assetIds: z.array(Id).min(1).max(MAX_EVENT_FILES),
     /** How the grouping was made. No timestamps: operations are pure and replayable. `edited` = a person changed it, so cluster_events leaves it alone. */
     origin: z.object({ method: z.enum(['gap', 'manual']), gapMinutes: z.number().int().min(30).max(1440).nullable(), createdBy: z.string(), edited: z.boolean() }).strict(),
   })

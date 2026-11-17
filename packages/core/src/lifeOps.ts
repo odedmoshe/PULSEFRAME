@@ -15,12 +15,22 @@
  *   with Object.hasOwn (`eventId` and `assetId(s)` naming Object.prototype members are refused before apply by
  *   refuseInheritedIds). Read `d.events ?? {}`; write `(d.events ??= {})`.
  * - Ids: ctx.newId('evt'). createdBy: ctx.actor.
+ * - What an argument schema lets through and the stored format cannot hold is refused by name, never committed (the store
+ *   writes the document as it is, and a project the schema refuses does not open again; validateProject is only the net):
+ *   · shift_asset_captures adds `minutes` to the file's stored total (capture.shiftedMinutes ?? 0). One step is at most
+ *     MAX_SHIFT_STEP_MINUTES; the total may reach MAX_CAPTURE_SHIFT_MINUTES (schema.ts), which shifts that keep the date
+ *     inside the years cannot pass. Refuse shiftTooFar when a total would pass it all the same (a document whose total does
+ *     not match its date), after dateOutOfRange. set_asset_capture starts the total again: its result has no shiftedMinutes.
+ *   · update_event refuses eventTooManyFiles when the event would END with more than MAX_EVENT_FILES files (counted after
+ *     the call's own removals; a file it already holds is not counted twice). add_event cannot pass it: its list is capped.
+ *     cluster_events never refuses for size: clusterCaptures (events.ts) cuts a longer run into consecutive clusters of
+ *     at most MAX_EVENT_FILES.
  * - "Make it plain text" is NOT an operation: fields.ts freezeOps returns literal operations to commit.
  * - People (add_person, update_person, remove_person, {age}, {name}) are NOT part of this build: they wait for the owner.
  */
 import { z } from 'zod';
 import { defineOp, OpError, type OpErrorCode, type OpResult } from './ops.ts';
-import { CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, CaptureSchema, MAX_LIFE_EVENTS, WALL_DATE_TIME, type Capture } from './schema.ts';
+import { CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, CaptureSchema, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS, WALL_DATE_TIME, type Capture } from './schema.ts';
 
 /**
  * False while the apply bodies below are the lead's placeholders. W1 sets it to true in the commit that lands the bodies;
@@ -35,16 +45,18 @@ export const SetAssetCaptureArgs = z.object({
   assetId: z.string(),
   capture: z.object({ at: WallIn, utcOffsetMinutes: z.number().int().min(-840).max(840).nullable().optional().describe('minutes east of UTC, when known; default null'), circa: z.boolean().optional().describe('true = an estimate') }).strict().nullable().describe('null removes the date'),
 }).strict();
-export const ShiftAssetCapturesArgs = z.object({ assetIds: z.array(z.string()).min(1).max(500), minutes: z.number().int().min(-5256000).max(5256000).refine((m) => m !== 0, { message: 'minutes must not be 0' }).describe('how far to move the clock of these files; negative = earlier') }).strict();
+/** The most one shift_asset_captures call moves a clock by (ten years of 365 days). A file may be shifted again: its total is bounded by MAX_CAPTURE_SHIFT_MINUTES. */
+export const MAX_SHIFT_STEP_MINUTES = 5256000;
+export const ShiftAssetCapturesArgs = z.object({ assetIds: z.array(z.string()).min(1).max(500), minutes: z.number().int().min(-MAX_SHIFT_STEP_MINUTES).max(MAX_SHIFT_STEP_MINUTES).refine((m) => m !== 0, { message: 'minutes must not be 0' }).describe('how far to move the clock of these files; negative = earlier') }).strict();
 export const AttachAssetCaptureArgs = z.object({ assetId: z.string(), capture: CaptureSchema, overwrite: z.boolean().optional() }).strict();
 export const SetTextFieldsArgs = z.object({ clipId: z.string(), enabled: z.boolean() }).strict();
 export const DEFAULT_EVENT_GAP_MINUTES = 240;
 export const ClusterEventsArgs = z.object({ gapMinutes: z.number().int().min(30).max(1440).optional().describe(`a pause longer than this starts a new event; default ${DEFAULT_EVENT_GAP_MINUTES}`) }).strict();
-export const AddEventArgs = z.object({ assetIds: z.array(z.string()).min(1).max(5000), name: EventName.optional() }).strict();
+export const AddEventArgs = z.object({ assetIds: z.array(z.string()).min(1).max(MAX_EVENT_FILES), name: EventName.optional() }).strict();
 export const UpdateEventArgs = z.object({
   eventId: z.string(), name: EventName.optional(),
   afterSunset: z.boolean().nullable().optional().describe('true = filmed after sunset (the Hebrew date of the next day), false = before it, null = not decided'),
-  addAssetIds: z.array(z.string()).max(5000).optional(), removeAssetIds: z.array(z.string()).max(5000).optional(),
+  addAssetIds: z.array(z.string()).max(MAX_EVENT_FILES).optional(), removeAssetIds: z.array(z.string()).max(MAX_EVENT_FILES).optional(),
 }).strict();
 export const RemoveEventArgs = z.object({ eventId: z.string() }).strict();
 
@@ -78,6 +90,7 @@ export const LIFE_REFUSALS = {
   shiftNoDate: refusal('incompatible', (files: number) => `${files} of the listed file(s) have no capture date`, 'Set their date first (set_asset_capture), or leave them out.'),
   shiftDayOnly: refusal('incompatible', (files: number) => `${files} of the listed file(s) have a date without a time, which moves by whole days only`, 'Shift by a multiple of 1440 minutes, or give those files a time first (set_asset_capture).'),
   shiftInherited: refusal('incompatible', (files: number) => `${files} of the listed file(s) take their date from the file they were made from`, 'Shift the source file instead.'),
+  shiftTooFar: refusal('out_of_bounds', (files: number) => `${files} of the listed file(s) would have their clock moved by more than ${MAX_CAPTURE_SHIFT_MINUTES} minutes in all`, 'Set their date by hand instead (set_asset_capture).'),
   // set_text_fields
   notATitle: refusal('incompatible', () => 'only a title can hold live fields'),
   fieldsAlready: refusal('invalid_args', (on: boolean) => `live fields are already ${on ? 'on' : 'off'} for this title`),
@@ -89,6 +102,7 @@ export const LIFE_REFUSALS = {
   tooManyEvents: refusal('out_of_bounds', () => `a project holds at most ${MAX_LIFE_EVENTS} events`),
   eventFileKind: refusal('incompatible', () => 'an event holds pictures and videos only'),
   eventLastFile: refusal('incompatible', () => 'an event keeps at least one file', 'Remove the event instead (remove_event); its files stay in the library.'),
+  eventTooManyFiles: refusal('out_of_bounds', () => `an event holds at most ${MAX_EVENT_FILES} files`, 'Put the rest in another event (add_event).'),
   eventNothingToChange: refusal('invalid_args', () => 'nothing to change: give name, afterSunset, addAssetIds or removeAssetIds'),
   eventFileNotIn: refusal('invalid_args', () => 'a file to remove is not in this event'),
   eventAddAndRemove: refusal('invalid_args', () => 'a file is listed both to add and to remove'),
@@ -114,7 +128,7 @@ defineOp({
 defineOp({
   name: 'shift_asset_captures',
   version: 1,
-  description: 'Move the clock of several library files by the same number of minutes (a camera whose clock was wrong, or a trip to another time zone). All or nothing. Each file keeps where its date came from and remembers the total it was moved by. Refused when a listed file has no date of its own (or only takes one from the file it was made from), when a file with a day-only date is moved by anything but whole days (multiples of 1440), and when a date would leave 1900–2100.',
+  description: 'Move the clock of several library files by the same number of minutes (a camera whose clock was wrong, or a trip to another time zone). All or nothing. Each file keeps where its date came from and remembers the total it was moved by, so a clock that is further out than one call reaches can be moved again. Refused when a listed file has no date of its own (or only takes one from the file it was made from), when a file with a day-only date is moved by anything but whole days (multiples of 1440), when a date would leave 1900–2100, and when a file\'s total would pass the length of those years.',
   args: ShiftAssetCapturesArgs,
   apply: () => notBuilt('shift_asset_captures'),
 });
@@ -140,21 +154,21 @@ defineOp({
 defineOp({
   name: 'cluster_events',
   version: 1,
-  description: `Arrange the library's dated pictures and videos into events by time: a pause longer than gapMinutes (30–1440, default ${DEFAULT_EVENT_GAP_MINUTES}) starts a new event; files with only a day join that day's event. Events a person edited (renamed, files moved, the sunset question answered) are left exactly as they are, and their files are left out of the rebuilt ones; an untouched event whose files did not change keeps its id. No name is stored: an event is shown by a holiday name derived from its dates, or by its date. Files without a date are left out and counted.`,
+  description: `Arrange the library's dated pictures and videos into events by time: a pause longer than gapMinutes (30–1440, default ${DEFAULT_EVENT_GAP_MINUTES}) starts a new event; files with only a day join that day's event. Events a person edited (renamed, files moved, the sunset question answered) are left exactly as they are, and their files are left out of the rebuilt ones; an untouched event whose files did not change keeps its id. An event holds at most ${MAX_EVENT_FILES} files, so a longer run without such a pause is cut into consecutive events. No name is stored: an event is shown by a holiday name derived from its dates, or by its date. Files without a date are left out and counted.`,
   args: ClusterEventsArgs,
   apply: () => notBuilt('cluster_events'),
 });
 defineOp({
   name: 'add_event',
   version: 1,
-  description: 'Group library pictures and videos into a new event by hand, optionally with a name. A file that was in another event moves here (an event left without files is removed and listed in the output).',
+  description: `Group library pictures and videos (at most ${MAX_EVENT_FILES}) into a new event by hand, optionally with a name. A file that was in another event moves here (an event left without files is removed and listed in the output).`,
   args: AddEventArgs,
   apply: () => notBuilt('add_event'),
 });
 defineOp({
   name: 'update_event',
   version: 1,
-  description: 'Change an event: its name (\'\' = back to the derived name or the date), whether it was filmed after sunset (true = the Hebrew date of the next day; never guessed, null = not decided), and its files (added files leave the event they were in; an event left without files is removed and listed in the output). The event then counts as edited by hand, so cluster_events leaves it alone.',
+  description: `Change an event: its name ('' = back to the derived name or the date), whether it was filmed after sunset (true = the Hebrew date of the next day; never guessed, null = not decided), and its files (added files leave the event they were in; an event left without files is removed and listed in the output; refused when the event would end with more than ${MAX_EVENT_FILES} files). The event then counts as edited by hand, so cluster_events leaves it alone.`,
   args: UpdateEventArgs,
   apply: () => notBuilt('update_event'),
 });

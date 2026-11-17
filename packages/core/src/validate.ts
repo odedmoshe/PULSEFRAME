@@ -2,7 +2,7 @@ import * as T from '@pulseframe/time';
 import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange, transitionDef } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
-import { ANIMATABLE, MAX_LIFE_EVENTS, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 import { lifeIssues } from './fields.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 
@@ -297,10 +297,26 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       }
     }
   }
-  // life line (ADR-0021): the structure of the events; the grammar of live title fields is checked by lifeIssues (fields.ts)
+  // life line (ADR-0021): the structure of the events; the grammar of live title fields is checked by lifeIssues (fields.ts).
+  // A capture date and an event must also be ones the stored format holds (a real day inside the years, a total shift inside
+  // its bound, 1 to MAX_EVENT_FILES files, a one-line name): the store writes a committed document as it is and parses it
+  // only when it is read again, so anything the schema refuses here would be a project that no longer opens. An operation
+  // that would leave one is refused (invalid_result) instead; the operations' own refusals (lifeOps.ts) come first.
+  const storedAs = (schema: { safeParse(v: unknown): { success: true } | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } } }, value: unknown): string | null => {
+    const parsed = schema.safeParse(value);
+    if (parsed.success) return null;
+    const first = parsed.error.issues[0];
+    return first ? `${first.path.map(String).join('.') || 'value'}: ${first.message}` : 'not the stored shape';
+  };
+  for (const asset of Object.values(doc.assets)) {
+    const why = asset.capture === undefined ? null : storedAs(CaptureSchema, asset.capture);
+    if (why) issues.push({ code: 'life_capture', message: `file ${asset.id} has a capture date that cannot be stored (${why})`, ids: [asset.id] });
+  }
   const inEvent = new Map<string, string>();
   for (const [key, ev] of Object.entries(doc.events ?? {})) {
     if (key !== ev.id) issues.push({ code: 'key_mismatch', message: `event key ${key} != id ${ev.id}`, ids: [key] });
+    const why = storedAs(LifeEventSchema, ev);
+    if (why) issues.push({ code: 'life_event_shape', message: `event ${ev.id} cannot be stored (${why})`, ids: [ev.id] });
     uniq(ev.id); // an entity of its own (entities.ts): its id must not be another entity's
     for (const assetId of ev.assetIds) {
       const asset = Object.hasOwn(doc.assets, assetId) ? doc.assets[assetId] : undefined;

@@ -13,7 +13,9 @@
  *   of the event is unsure (capture.ts hebrewDayReadings gives two readings).
  * - clusterCaptures: timed files become minutes rd·1440 + ⌊seconds/60⌋, sorted by (minutes, id); a new cluster starts where
  *   the gap is strictly greater than gapMinutes. Day-only files join the cluster with the most files on that civil day (tie:
- *   the earliest), else form one cluster per day.
+ *   the earliest), else form one cluster per day. Last, a cluster of more than MAX_EVENT_FILES members (schema.ts: what an
+ *   event can hold) is cut, in member order, into consecutive clusters of MAX_EVENT_FILES and a remainder, so cluster_events
+ *   never makes an event the project cannot store and never has to refuse for size.
  * - No caches here: operations and validation call these on a draft that changes between the operations of one transaction.
  *   A cache belongs to the caller that only sees committed documents (fields.ts makeFieldIndex, kept by the engine).
  * - People (birthdays as event names, «יום הולדת 5 לנועה») are NOT part of this build: they wait for the owner's approval.
@@ -25,7 +27,7 @@ const notBuilt = (what: string): never => { throw new Error(`life line: ${what} 
 
 /** A file with its capture as it is shown: `wall` is a WALL_DATE or WALL_DATE_TIME string. */
 export interface DatedAsset { assetId: string; wall: string }
-/** Pure gap clustering. Clusters in time order; members in (time, id) order. Every input file is in exactly one cluster. */
+/** Pure gap clustering. Clusters in time order; members in (time, id) order. Every input file is in exactly one cluster, and no cluster holds more than MAX_EVENT_FILES. */
 export function clusterCaptures(_items: readonly DatedAsset[], _gapMinutes: number): string[][] { return notBuilt('clusterCaptures'); }
 /** The event a file is in, or null. Reads `doc.events ?? {}`. */
 export function eventOfAsset(_doc: ProjectDocument, _assetId: string): LifeEvent | null { return notBuilt('eventOfAsset'); }

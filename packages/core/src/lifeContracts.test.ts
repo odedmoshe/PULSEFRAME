@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, CaptureSchema, createProject, creativeProjection, describeOps, diffEntities, entityMap, getOp, isRealWallDate, LIFE_REFUSALS, lifeRefusal, LifeEventSchema, listOps, MAX_LIFE_EVENTS,
+  applyTransaction, CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, CaptureSchema, createProject, creativeProjection, describeOps, diffEntities, entityMap, getOp, isRealWallDate, LIFE_REFUSALS, lifeRefusal, LifeEventSchema, listOps,
+  MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS,
   OpError, ProjectSchema, restoreEntities, SCHEMA_VERSION, summarize, TextClipSchema, timeline, validateProject, WALL_DATE, WALL_DATE_TIME, effectParams, findEffect,
   type Capture, type LifeEvent, type OpCall, type ProjectDocument,
 } from './index.ts';
@@ -50,6 +51,25 @@ describe('life line: schema (optional fields, no version bump)', () => {
     expect(CaptureSchema.safeParse({ at: '2024-12-25', utcOffsetMinutes: 120, source: 'container', circa: true, assumedZone: 'Asia/Jerusalem', shiftedMinutes: -60 }).success).toBe(true);
     expect(CaptureSchema.safeParse({ at: '2024-12-25', utcOffsetMinutes: null, source: 'guess' }).success).toBe(false);
     expect(CaptureSchema.safeParse({ at: '2024-12-25', utcOffsetMinutes: null, source: 'manual', circa: false }).success).toBe(false);
+  });
+  it('the total a clock was moved by may be as large as the years a capture date can lie in, so shifts that keep the date inside them always fit', () => {
+    // counted here year by year, not taken from the constant
+    let days = 0;
+    for (let y = CAPTURE_MIN_YEAR; y <= CAPTURE_MAX_YEAR; y++) days += isRealWallDate(`${y}-02-29`) ? 366 : 365;
+    expect(days).toBe(73414);
+    expect(MAX_CAPTURE_SHIFT_MINUTES).toBe(days * 1440);
+    const moved = (shiftedMinutes: number) => CaptureSchema.safeParse({ at: '2014-12-28T17:30:00', utcOffsetMinutes: 120, source: 'container', shiftedMinutes }).success;
+    // two calls the operation accepts, on one file (a camera clock ten years and an hour out): the file remembers their sum
+    const args = getOp('shift_asset_captures')!.args;
+    for (const minutes of [-5256000, -60]) expect(args.safeParse({ assetIds: ['a'], minutes }).success, String(minutes)).toBe(true);
+    expect(moved(-5256000 - 60)).toBe(true);
+    // the furthest a date can travel inside the years: the first minute of 1900 to the last minute of 2100, or back
+    expect(moved(MAX_CAPTURE_SHIFT_MINUTES - 1)).toBe(true);
+    expect(moved(-MAX_CAPTURE_SHIFT_MINUTES)).toBe(true);
+    expect(moved(0)).toBe(true);
+    expect(moved(MAX_CAPTURE_SHIFT_MINUTES + 1)).toBe(false);
+    expect(moved(-MAX_CAPTURE_SHIFT_MINUTES - 1)).toBe(false);
+    expect(moved(0.5)).toBe(false);
   });
   it('an asset carries its capture through import_asset, and an asset without one is stored exactly as before', () => {
     const { doc, ids } = project();
@@ -135,6 +155,49 @@ describe('life line: events as entities, validation and exact undo', () => {
     const many = withEvents(doc, Array.from({ length: MAX_LIFE_EVENTS + 1 }, (_, i) => event(`evt_${i}`, [ids[0]!])));
     expect(codes(many)).toContain('life_event_limit');
   });
+  it('validation: a capture or an event the stored format cannot hold is an issue, so no operation can commit a project that would not open again', () => {
+    const { doc, ids } = project();
+    const codes = (d: ProjectDocument) => validateProject(d).map((i) => i.code);
+    const withCapture = (capture: Capture): ProjectDocument => { const d = structuredClone(doc); d.assets[ids[0]!]!.capture = capture; return d; };
+    /** The same project with `count` more pictures in its library. */
+    const withPictures = (count: number) => {
+      const d = structuredClone(doc);
+      const more = Array.from({ length: count }, (_, i) => `ast_p${i}`);
+      for (const id of more) d.assets[id] = { ...structuredClone(d.assets[ids[0]!]!), id };
+      return { d, more };
+    };
+    // the store writes a committed document as it is and parses it only when it is read again, so validation has to agree with the schema here
+    const cases: [string, ProjectDocument, string[]][] = [
+      ['a total within the bound', withCapture({ ...HANUKKAH, shiftedMinutes: -5256060 }), []],
+      ['the largest total', withCapture({ ...HANUKKAH, shiftedMinutes: MAX_CAPTURE_SHIFT_MINUTES }), []],
+      ['a total past the bound', withCapture({ ...HANUKKAH, shiftedMinutes: MAX_CAPTURE_SHIFT_MINUTES + 1 }), ['life_capture']],
+      ['a total that is not whole minutes', withCapture({ ...HANUKKAH, shiftedMinutes: 0.5 }), ['life_capture']],
+      ['a date moved out of the years', withCapture({ ...HANUKKAH, at: '2101-01-01T00:00:09' }), ['life_capture']],
+      ['a day that does not exist', withCapture({ ...HANUKKAH, at: '2024-02-30' }), ['life_capture']],
+      ['an offset no zone has', withCapture({ ...HANUKKAH, utcOffsetMinutes: 900 }), ['life_capture']],
+      ['an event without files', withEvents(doc, [event('evt_1', [])]), ['life_event_shape']],
+      ['an event with a name of two lines', withEvents(doc, [event('evt_1', [ids[0]!], { name: 'a\nb' })]), ['life_event_shape']],
+    ];
+    const full = withPictures(MAX_EVENT_FILES);
+    cases.push(['an event with as many files as it may hold', withEvents(full.d, [event('evt_1', full.more)]), []]);
+    cases.push(['an event with one file too many', withEvents(full.d, [event('evt_1', [...full.more, ids[0]!])]), ['life_event_shape']]);
+    for (const [what, d, expected] of cases) {
+      expect(codes(d), what).toEqual(expected);
+      expect(ProjectSchema.safeParse(d).success, what).toBe(expected.length === 0);
+    }
+    // the issue says which file or event, and what is wrong with it
+    const issue = validateProject(withCapture({ ...HANUKKAH, shiftedMinutes: MAX_CAPTURE_SHIFT_MINUTES + 1 }))[0]!;
+    expect(issue.ids).toEqual([ids[0]]);
+    expect(issue.message).toContain('shiftedMinutes');
+    expect(validateProject(withEvents(full.d, [event('evt_1', [...full.more, ids[0]!])]))[0]).toMatchObject({ ids: ['evt_1'], message: expect.stringContaining('assetIds') });
+    // through a transaction: whatever an operation leaves behind, a document like these is refused, typed, and nothing is committed
+    for (const bad of [withCapture({ ...HANUKKAH, shiftedMinutes: MAX_CAPTURE_SHIFT_MINUTES + 1 }), withEvents(doc, [event('evt_1', [])])]) {
+      let thrown: unknown;
+      try { tx(bad, [{ op: 'add_text', args: { text: 'T', start: f(0), duration: f(30) } }]); } catch (e) { thrown = e; }
+      expect(thrown).toBeInstanceOf(OpError);
+      expect((thrown as OpError).code).toBe('invalid_result');
+    }
+  });
   it('get_summary lists each file\'s capture and the events; get_timeline marks a title that holds fields', () => {
     const { doc, ids } = project();
     const s = summarize(withEvents(doc, [event('evt_1', [ids[0]!], { name: 'חנוכה', afterSunset: true })]));
@@ -182,6 +245,8 @@ describe('life line: operation registry and refusal table', () => {
     no('shift_asset_captures', { assetIds: [], minutes: 60 });
     no('shift_asset_captures', { assetIds: ['a'], minutes: 1.5 });
     no('shift_asset_captures', { assetIds: Array.from({ length: 501 }, (_, i) => `a${i}`), minutes: 60 });
+    ok('shift_asset_captures', { assetIds: ['a'], minutes: -5256000 });
+    no('shift_asset_captures', { assetIds: ['a'], minutes: 5256001 });
     ok('attach_asset_capture', { assetId: 'a', capture: HANUKKAH, overwrite: true });
     no('attach_asset_capture', { assetId: 'a', capture: { at: '2024-02-30', utcOffsetMinutes: null, source: 'exif' } });
     ok('set_text_fields', { clipId: 'c', enabled: true });
@@ -192,6 +257,11 @@ describe('life line: operation registry and refusal table', () => {
     no('cluster_events', { gapMinutes: 1441 });
     ok('add_event', { assetIds: ['a'] });
     ok('add_event', { assetIds: ['a'], name: 'חנוכה' });
+    const files = (count: number) => Array.from({ length: count }, (_, i) => `a${i}`);
+    ok('add_event', { assetIds: files(MAX_EVENT_FILES) });
+    no('add_event', { assetIds: files(MAX_EVENT_FILES + 1) });
+    ok('update_event', { eventId: 'e', addAssetIds: files(MAX_EVENT_FILES) }); // the shape passes; the body refuses what the event cannot hold (eventTooManyFiles)
+    no('update_event', { eventId: 'e', addAssetIds: files(MAX_EVENT_FILES + 1) });
     no('add_event', { assetIds: [] });
     no('add_event', { assetIds: ['a'], name: 'a\nb' });
     ok('update_event', { eventId: 'e', afterSunset: null });
@@ -208,12 +278,18 @@ describe('life line: operation registry and refusal table', () => {
     expect(e.toJSON()).toEqual({ code: 'incompatible', message: '2 of the listed file(s) have a date without a time, which moves by whole days only', details: { assetIds: ['a'] }, hint: 'Shift by a multiple of 1440 minutes, or give those files a time first (set_asset_capture).' });
     expect(lifeRefusal('eventNotFound', { eventId: 'evt_9' }, 'evt_9').message).toBe('event evt_9 not found');
     expect(lifeRefusal('tooManyEvents', {}).message).toBe(`a project holds at most ${MAX_LIFE_EVENTS} events`);
+    // what an argument schema lets through and the stored format cannot hold has a refusal of its own
+    expect(lifeRefusal('shiftTooFar', { assetIds: ['a'] }, 1).toJSON()).toMatchObject({ code: 'out_of_bounds', message: `1 of the listed file(s) would have their clock moved by more than ${MAX_CAPTURE_SHIFT_MINUTES} minutes in all` });
+    expect(lifeRefusal('eventTooManyFiles', { eventId: 'evt_1' }).toJSON()).toMatchObject({ code: 'out_of_bounds', message: `an event holds at most ${MAX_EVENT_FILES} files` });
+    expect(MAX_EVENT_FILES).toBe(5000);
   });
 
   // W1 (packages/core/src/lifeOps.test.ts and the files beside it) makes these pass:
   it.todo('every refusal of LIFE_REFUSALS is provoked through its operation, and nothing else is thrown');
   it.todo('undo then redo of each operation restores the creative projection exactly');
   it.todo('remove_asset takes the file out of its event (an emptied event goes) and hands its capture date down to its copies');
+  it.todo('shift_asset_captures refuses shiftTooFar for a file whose stored total plus the step passes MAX_CAPTURE_SHIFT_MINUTES, and set_asset_capture starts the total again');
+  it.todo('update_event refuses eventTooManyFiles when the event would end with more than MAX_EVENT_FILES files; clusterCaptures cuts a longer run into clusters of at most that many');
   it.todo('update_text + set_text_fields in one transaction gives the same document as two transactions (no cache on a draft)');
   it.todo('a title without `fields` and every earlier fixture resolve to their stored text unchanged');
 });

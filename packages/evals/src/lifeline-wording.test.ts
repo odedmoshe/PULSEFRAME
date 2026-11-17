@@ -13,10 +13,12 @@ const SAMPLES: Record<LifeRefusalKey, string> = {
   lutHasNoDate: LIFE_REFUSALS.lutHasNoDate.message(), noSuchDay: LIFE_REFUSALS.noSuchDay.message(), dateOutOfRange: LIFE_REFUSALS.dateOutOfRange.message(),
   captureUnchanged: LIFE_REFUSALS.captureUnchanged.message(), noCaptureToRemove: LIFE_REFUSALS.noCaptureToRemove.message(), listedTwice: LIFE_REFUSALS.listedTwice.message(),
   shiftNoDate: LIFE_REFUSALS.shiftNoDate.message(3), shiftDayOnly: LIFE_REFUSALS.shiftDayOnly.message(41), shiftInherited: LIFE_REFUSALS.shiftInherited.message(7),
+  shiftTooFar: LIFE_REFUSALS.shiftTooFar.message(2),
   notATitle: LIFE_REFUSALS.notATitle.message(), fieldsAlready: LIFE_REFUSALS.fieldsAlready.message(true),
   notFields: LIFE_REFUSALS.notFields.message('{weather}, {date:fancy}, {'), personFields: LIFE_REFUSALS.personFields.message('{age:per_1}, {name:per_1}'),
   fieldsStillThere: LIFE_REFUSALS.fieldsStillThere.message(),
   noDatedFiles: LIFE_REFUSALS.noDatedFiles.message(), tooManyEvents: LIFE_REFUSALS.tooManyEvents.message(), eventFileKind: LIFE_REFUSALS.eventFileKind.message(), eventLastFile: LIFE_REFUSALS.eventLastFile.message(),
+  eventTooManyFiles: LIFE_REFUSALS.eventTooManyFiles.message(),
   eventNothingToChange: LIFE_REFUSALS.eventNothingToChange.message(), eventFileNotIn: LIFE_REFUSALS.eventFileNotIn.message(), eventAddAndRemove: LIFE_REFUSALS.eventAddAndRemove.message(),
 };
 
@@ -37,6 +39,8 @@ describe('Hebrew wording of the life-line refusals (ADR-0021)', () => {
     expect(translateRefusal('he', SAMPLES.shiftDayOnly)).toContain('41');
     expect(translateRefusal('he', SAMPLES.dateOutOfRange)).toMatch(/1900.*2100/);
     expect(translateRefusal('he', SAMPLES.tooManyEvents)).toContain('2000');
+    expect(translateRefusal('he', SAMPLES.shiftTooFar)).toMatch(/2.*105716160/);
+    expect(translateRefusal('he', SAMPLES.eventTooManyFiles)).toContain('5000');
     expect(translateRefusal('he', SAMPLES.notFields)).toContain('{weather}, {date:fancy}, {');
     expect(translateRefusal('he', SAMPLES.personFields)).toContain('{age:per_1}, {name:per_1}');
     expect(translateRefusal('he', LIFE_REFUSALS.fieldsAlready.message(false))).not.toBe(translateRefusal('he', SAMPLES.fieldsAlready));
