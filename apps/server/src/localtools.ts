@@ -389,6 +389,7 @@ export class LocalTools implements LocalToolRunner {
     const notConfigured = (what: string, hint: string) => new ApiError(409, 'engine_not_configured', `${d.title.en} is not set up: ${what}`, { setup: { code: 'engine_not_configured', detail: what } }, hint);
     if (d.engine.kind === 'python-worker' && !this.cfg.toolsPython) throw notConfigured('PF_TOOLS_PYTHON is not set', 'Set PF_TOOLS_PYTHON to the Python of an environment with torch, transformers and sentencepiece (docs/INTEGRATIONS.md).');
     if (d.engine.kind === 'binary' && !this.cfg.denoiseBin) throw notConfigured('PF_DENOISE_BIN is not set', 'Install deep-filter 0.5.6 yourself and set PF_DENOISE_BIN to it; the product verifies it by SHA-256 and never installs it.');
+    if (req.attach) throw new ApiError(422, 'attach_not_supported', `${d.title.en} does not take a timeline placement; say where the result goes with apply`, {}, d.task === 'translate' ? 'A translation becomes a language format.' : 'Use apply "replace-clip" with a clip source, or "library".');
     const apply = req.apply ?? 'library';
     if (apply === 'new-track') throw new ApiError(422, 'apply_not_supported', `${d.title.en} does not place its result on a new track`, { apply }, d.task === 'translate' ? 'A translation becomes a language format; use apply "library" (the default).' : 'Use "replace-clip" to hear it in the clip, or "library" to keep it in the media library.');
     const { doc, revision } = this.store.getProject(req.projectId);
@@ -472,7 +473,8 @@ export class LocalTools implements LocalToolRunner {
     const endSample = T.eq(T.frameTime(e, { num: SAMPLE_RATE, den: 1 }), t1) ? e : e + 1;
     if (endSample <= startSample) throw new ApiError(422, 'empty_range', 'the source range is empty');
     if (endSample - startSample > MAX_AUDIO_SECONDS * SAMPLE_RATE) throw new ApiError(422, 'source_too_long', `at most ${MAX_AUDIO_SECONDS / 60} minutes of sound are processed in one run`, { seconds: Math.round((endSample - startSample) / SAMPLE_RATE) }, 'Run it on a shorter clip or range.');
-    const preconditions = clipId ? [{ entityId: clipId, version: this.store.entityVersion(req.projectId, clipId)?.revision ?? 0 }] : [];
+    // Stale-result protection (SPEC §20): the clip and anything else the caller says the placement depends on.
+    const preconditions = [...new Set([...(clipId ? [clipId] : []), ...(req.dependsOn ?? [])])].map((entityId) => ({ entityId, version: this.store.entityVersion(req.projectId, entityId)?.revision ?? 0 }));
     const input: LocalJobInput = { ...base, apply, preconditions, audio: { assetId: asset.id, clipId, startSample, endSample, sampleRate: SAMPLE_RATE, channels: d.task === 'voice-clean' ? 1 : 2 } };
     return { local: input };
   }

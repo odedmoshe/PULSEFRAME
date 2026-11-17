@@ -354,6 +354,22 @@ describe('voice cleanup (fake deep-filter)', () => {
     expect(assets(fx)).toBe(n);
     fx.store.close();
   }, 60_000);
+  it('a clip changed while the tool ran is not given the result: it stays in the library as a proposal, with the reason', async () => {
+    const fx = fixture();
+    const d = voiceTestCopy(fx);
+    const { assetId, clipId } = await voiceClip(fx);
+    const job = start(fx, d, { params: {}, source: { clipId }, apply: 'replace-clip' });
+    fx.store.commit({ projectId: fx.pid, actor: 'user:owner', ops: [{ op: 'set_clip_gain', args: { clipId, gain: 0.5 } }] });
+    await fx.tools.drive(job.id, d);
+    const j = fx.store.getJob(job.id);
+    expect(j.status, JSON.stringify(j.error)).toBe('succeeded');
+    expect(j.output.attachment).toMatchObject({ status: 'proposed', proposal: { op: 'replace_clip_asset', args: { clipId } }, conflicts: [{ entityId: clipId }] });
+    const doc = fx.store.getProject(fx.pid).doc;
+    expect(doc.assets[j.output.attachment.assetId]).toBeDefined();
+    const clip = doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.id === 'trk_audio')!.clips.find((c) => c.id === clipId)!;
+    expect(clip.type === 'media' && clip.assetId).toBe(assetId);
+    fx.store.close();
+  }, 60_000);
   it('an engine that exits with an error fails the job with its stderr tail', async () => {
     const fx = fixture();
     const d = voiceTestCopy(fx);
@@ -375,6 +391,7 @@ describe('voice cleanup (fake deep-filter)', () => {
     expect(refusal(() => fx.tools.prepare(d, req({ source: { assetId }, apply: 'replace-clip' })))).toBe('422:apply_not_supported');
     expect(refusal(() => fx.tools.prepare(d, req({ source: { assetId }, apply: 'new-track' })))).toBe('422:apply_not_supported');
     expect(refusal(() => fx.tools.prepare(d, req({})))).toBe('422:source_required');
+    expect(refusal(() => fx.tools.prepare(d, req({ source: { assetId }, attach: { start: T.ZERO } })))).toBe('422:attach_not_supported');
     const out = fx.tools.prepare(d, req({ source: { assetId, range: { firstFrame: 7, frameCount: 11 } } })) as { local: { audio: { startSample: number; endSample: number } } };
     // an audio-only asset is counted in project frames (30 fps here): 7/30 s .. 18/30 s
     expect(out.local.audio).toMatchObject({ startSample: 7 * 1600, endSample: 18 * 1600 });
