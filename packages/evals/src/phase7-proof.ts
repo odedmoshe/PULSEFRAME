@@ -2,7 +2,8 @@
  * Phase 7 gate, first batch (SPEC §8 effect contract, §12, §13): effects, blend modes, masks and transitions
  * on the shared Canvas2D compositor. Every entry is checked by what its pixels do (not by a screenshot alone),
  * random access is checked against itself, and export is compared with stills of the same frames.
- * Not covered: GPU shader families, keying, time effects, speed ramps, graph editor (not built).
+ * Not covered here: the GPU passes and keying (proof:gpu), time effects (proof:time), overlays and the date stamp against their
+ * model (proof:overlays), speed ramps (proof:speed), graph editor (not built). The Lab part covers every registered entry.
  *   pnpm build && pnpm proof:phase7
  */
 import { execFileSync } from 'node:child_process';
@@ -282,7 +283,7 @@ async function main() {
     const labErrors: string[] = [];
     lab.on('pageerror', (e) => labErrors.push(String(e)));
     await lab.goto(`${s.url}/lab.html`);
-    await lab.waitForFunction(() => document.body.dataset.ready === '1', undefined, { timeout: 120000 });
+    await lab.waitForFunction(() => document.body.dataset.ready === '1', undefined, { timeout: 300_000 }); // the visual wave added about 140 tiles
     const tiles: { kind: string; id: string; variant: string; aspect: string; hash: number; flat: boolean; unavailable: boolean }[] = await lab.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-testid=lab-tile]')].map((fig) => {
       const hashes: number[] = []; let flat = true;
       for (const c of fig.querySelectorAll('canvas')) {
@@ -301,6 +302,22 @@ async function main() {
     await lab.screenshot({ path: path.join(art, 'lab.png'), fullPage: true });
     measurements.lab = { gpuEffectTilesUnavailable: tiles.filter((t) => t.unavailable).length, tiles: tiles.length, effects: fxIds.size, blends: blIds.size, transitions: trIds.size, masks: byKind('mask').length };
     check('Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip or of the flash, which is meant to be a flat colour, the chroma key at full tolerance, which removes the whole picture, and the strobe at full amount at the instant of its flash, which is the flash colour), default and extreme variants differ (where the default is not already the maximum), no page errors', fxIds.size === EFFECTS.length && blIds.size === BLEND_MODES.length && trIds.size === TRANSITIONS.length && byKind('mask').length >= 4 && aspects.size === 2 && tiles.every((t) => !t.flat || t.id.startsWith('dip-') || t.id === 'flash' || (t.id === 'key.chroma' && t.variant === 'extreme') || (t.id === 'light.strobe' && t.variant === 'extreme')) && variantsDiffer && !lab.url().includes('error') && (await lab.evaluate(() => document.body.dataset.errors)) === undefined && labErrors.length === 0, { ...(measurements.lab as object), sameVariants: EFFECTS.filter((e) => new Set(byKind('effect').filter((t) => t.id === e.id && t.aspect === '16:9').map((t) => t.hash)).size < 2).map((e) => e.id), aspects: [...aspects], bodyErrors: await lab.evaluate(() => document.body.dataset.errors ?? null), flat: tiles.filter((t) => t.flat && !t.id.startsWith('dip-')).map((t) => `${t.kind}:${t.id}:${t.variant}`).slice(0, 6), labErrors: labErrors.slice(0, 2) });
+    // the entries of the visual wave (ADR-0011), named so the evidence says so: each effect in both frame shapes with default and
+    // extreme tiles that differ and are not flat; each transition in both frame shapes, five steps that are not flat and not all alike
+    const WAVE_EFFECTS = ['time.echo', 'time.split', 'time.shutter', 'time.stutter', 'overlay.snow', 'overlay.confetti', 'overlay.hearts', 'overlay.bokeh', 'overlay.speed-lines', 'stylize.date-stamp', 'stylize.digicam', 'stylize.crt'];
+    const WAVE_TRANSITIONS = ['whip-left', 'whip-right', 'whip-up', 'whip-down', 'spin-cw', 'spin-ccw'];
+    const waveReport = [...WAVE_EFFECTS.map((id) => {
+      const mine = byKind('effect').filter((t) => t.id === id), unavailable = mine.some((t) => t.unavailable);
+      const sixteen = mine.filter((t) => t.aspect === '16:9'), nine = mine.filter((t) => t.aspect === '9:16');
+      const ok = EFFECTS.some((e) => e.id === id) && sixteen.length >= 2 && nine.length >= 2 && mine.every((t) => !t.flat) && (unavailable || new Set(sixteen.map((t) => t.hash)).size >= 2);
+      return { id, ok, tiles: mine.length, unavailable };
+    }), ...WAVE_TRANSITIONS.map((id) => {
+      const mine = byKind('transition').filter((t) => t.id === id), unavailable = mine.some((t) => t.unavailable);
+      const ok = TRANSITIONS.some((x) => x.id === id) && mine.filter((t) => t.aspect === '16:9').length === 5 && mine.filter((t) => t.aspect === '9:16').length === 5 && mine.every((t) => !t.flat) && (unavailable || new Set(mine.filter((t) => t.aspect === '16:9').map((t) => t.hash)).size >= 2);
+      return { id, ok, tiles: mine.length, unavailable };
+    })];
+    measurements.labWave = waveReport;
+    check(`Lab, visual wave: the ${WAVE_EFFECTS.length} new effects and ${WAVE_TRANSITIONS.length} new transitions are tiled in 16:9 and 9:16, none flat; each effect's default and extreme differ and each transition's steps differ (a tile without a graphics adapter says so)`, waveReport.every((r) => r.ok), waveReport.filter((r) => !r.ok));
     await lab.close();
   } catch (e) {
     console.error(e);
@@ -309,7 +326,7 @@ async function main() {
     await browser.close();
     await s.close();
     const failed = checks.filter((x) => !x.ok);
-    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, gpu: 'none' }, scope: 'Canvas2D look system on one synthetic fixture. No GPU compositor; shader effect families, keying, time effects and speed ramps are not built.', measurements, passed: checks.length - failed.length, total: checks.length, checks };
+    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, gpu: 'none' }, scope: 'Canvas2D look system on one synthetic fixture, and the Lab page for every registered entry. GPU passes, time effects, overlays against their model and speed ramps have their own proofs (proof:gpu, proof:time, proof:overlays, proof:speed).', measurements, passed: checks.length - failed.length, total: checks.length, checks };
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     fs.writeFileSync(path.join(root, 'docs/evidence/phase7-proof.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(`\nPhase 7 proof ${report.result}: ${report.passed}/${report.total}`);

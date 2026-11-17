@@ -2,12 +2,14 @@
  * Visual browser for the selected clip's looks: effects, colour looks, transitions and text styles, each as a live thumbnail.
  * Thumbnails go through the same evaluate + drawGraph as the preview (ADR-0005), one tile at a time. Picking a tile is an ordinary
  * registered op through editor.commit; nothing here keeps project state.
+ * Tiles that move by themselves (motions, time effects, overlays, the strobe) animate while hovered or focused, never under
+ * prefers-reduced-motion; every animated frame passes one FlashGuard per dialog (ADR-0009 decision 2), like the player.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import * as T from '@pulseframe/time';
 import { applyTransaction, COLOR_LOOKS, createProject, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { drawGraph, evaluate, type FrameImage } from '@pulseframe/engine';
+import { drawGraph, evaluate, FlashGuard, type FrameImage } from '@pulseframe/engine';
 import type { Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
 import { useEditorState } from './store.ts';
@@ -21,15 +23,26 @@ type TabId = 'effects' | 'looks' | 'transitions' | 'text' | 'motion';
 const TAB_KIND: Record<TabId, Kind> = { effects: 'effect', looks: 'look', transitions: 'transition', text: 'text', motion: 'motion' };
 const MOTION_GROUPS = ['in', 'out', 'loop', 'move'] as const;
 const MOTION_FRAMES = 60;
-const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'distort', 'motion'] as const;
+const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'distort', 'motion', 'time', 'overlay'] as const;
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const LONG_SIDE = 180;
 const RATE = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, RATE);
 const FRAME_AT = 12; // 0.4 s at 30 fps, so time-driven effects show something
 const TRANSITION_FRAMES = 15;
+/** Length of an effect tile's clip, and of its animation loop while hovered. */
+const EFFECT_FRAMES = 150;
+/** A time effect shows only on movement (ADR-0011): its tile's picture is made smaller and swings, through the same ops as any clip. */
+const TIME_MOTION = 'motion.loop.pendulum';
+/**
+ * The frame an effect tile shows: the strobe one frame after its first flash (frame 0), while its light is still up (at frame 12
+ * it is 0.4 s after a flash and has faded away); the stutter on frame 13, which holds the picture of frame 12.
+ */
+const effectFrame = (id: string) => (id === 'light.strobe' ? 1 : id === 'time.stutter' ? 13 : FRAME_AT);
 
 interface Item { key: string; kind: Kind; id: string; he: string; en: string; gpu: boolean; category?: string; mkind?: (typeof MOTION_GROUPS)[number]; mframes?: number }
+/** Tiles whose picture moves by itself, so they animate while hovered or focused. */
+const animates = (it: Item) => it.kind === 'motion' || (it.kind === 'effect' && (it.category === 'time' || it.category === 'overlay' || it.id === 'light.strobe'));
 const ITEMS: Item[] = [
   ...EFFECTS.map((e) => ({ key: `effect:${e.id}`, kind: 'effect' as const, id: e.id, he: e.name.he, en: e.name.en, gpu: e.cost === 'gpu', category: e.category })),
   ...COLOR_LOOKS.map((l) => ({ key: `look:${l.id}`, kind: 'look' as const, id: l.id, he: l.name.he, en: l.name.en, gpu: true })),
@@ -88,10 +101,11 @@ function buildDoc(s: Scene, it: Item, isText = false): { doc: ProjectDocument; f
     const a = step(doc, [{ op: 'add_text', args: { text: GALLERY_STRINGS.he.sample, start: f(0), duration: f(150) } }]);
     return { doc: step(a.doc, [{ op: 'apply_text_preset', args: { clipId: a.out[0]!.clipId as string, presetId: it.id } }]).doc, frame: FRAME_AT };
   }
-  const a = step(s.base, [addPicture(s, s.a, 0, 150)]);
+  const a = step(s.base, [addPicture(s, s.a, 0, EFFECT_FRAMES)]);
   const clipId = a.out[0]!.clipId as string;
-  const op: OpCall = it.kind === 'look' ? { op: 'apply_look', args: { clipId, lookId: it.id } } : { op: 'add_effect', args: { clipId, type: it.id } };
-  return { doc: step(a.doc, [op]).doc, frame: FRAME_AT };
+  if (it.kind === 'look') return { doc: step(a.doc, [{ op: 'apply_look', args: { clipId, lookId: it.id } }]).doc, frame: FRAME_AT };
+  const moving: OpCall[] = it.category === 'time' ? [{ op: 'set_clip_transform', args: { clipId, transform: { scale: 0.6 } } }, { op: 'apply_motion_preset', args: { clipId, presetId: TIME_MOTION } }] : [];
+  return { doc: step(a.doc, [...moving, { op: 'add_effect', args: { clipId, type: it.id } }]).doc, frame: effectFrame(it.id) };
 }
 
 export function EffectGalleryButton({ clip, trackKind }: { clip: Clip; trackKind: string }) {
@@ -125,6 +139,10 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
   const done = useRef(new Set<string>());
   const running = useRef<Promise<void>>(Promise.resolve());
   const [hot, setHot] = useState<string | null>(null);
+  // One guard for every animated tile of this dialog: a strobe's light may rise on screen at most once in a third of a second
+  // of real time, whichever tile shows it and however the pointer moves between tiles (ADR-0009 decision 2).
+  const [guard] = useState(() => new FlashGuard());
+  const showHeld = () => dialogRef.current?.setAttribute('data-flashes-held', String(guard.leftOut));
   const motionDocs = useRef(new Map<string, { doc: ProjectDocument; frame: number }>());
   const motionDoc = (it: Item) => {
     let d = motionDocs.current.get(it.key);
@@ -207,17 +225,21 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, visibleKey, snap, gpuOk, tw, th]);
 
-  // Animate only the hot motion tile: one drawGraph at a time, about 30 fps, stopped on leave / blur / tab change / close.
+  // Animate only the hot tile (a motion, a time effect, an overlay or the strobe): one drawGraph at a time, about 30 fps, stopped
+  // on leave / blur / tab change / close. Every frame it draws, and the still frame it puts back, passes the dialog's flash guard
+  // with the real time of drawing, as the player does (apps/web/src/player.ts).
   useEffect(() => { setHot(null); }, [tab]);
   useEffect(() => {
-    if (!hot || tab !== 'motion') return;
+    if (!hot) return;
     if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const it = ITEMS.find((i) => i.key === hot);
     const canvas = canvases.current.get(hot);
-    if (!it || !canvas || (!isText && !snap)) return;
+    if (!it || !animates(it) || it.kind !== TAB_KIND[tab] || !canvas || ((it.kind !== 'motion' || !isText) && !snap) || (it.gpu && !gpuOk)) return;
     const { doc, frame } = motionDoc(it);
+    const loop = it.kind === 'motion' ? MOTION_FRAMES : EFFECT_FRAMES;
     const provider = async (): Promise<FrameImage | null> => (snap ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(snap.bitmap, dx, dy, dw, dh) } : null);
     const ctx = canvas.getContext('2d')!;
+    const draw = (n: number) => drawGraph(ctx, guard.apply(evaluate(doc, f(n)), performance.now() / 1000), provider).finally(showHeld);
     let stop = false;
     let busy: Promise<unknown> = Promise.resolve();
     let startAt = 0, last = -1, raf = 0;
@@ -225,11 +247,11 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
       if (stop) return;
       raf = requestAnimationFrame(tick);
       if (!startAt) startAt = now;
-      const n = Math.floor(((now - startAt) * 30) / 1000) % MOTION_FRAMES;
+      const n = Math.floor(((now - startAt) * 30) / 1000) % loop;
       if (n === last || inflight) return;
       last = n;
       inflight = true;
-      busy = drawGraph(ctx, evaluate(doc, f(n)), provider).catch(() => undefined).finally(() => { inflight = false; });
+      busy = draw(n).catch(() => undefined).finally(() => { inflight = false; });
     };
     let inflight = false;
     const prev = running.current;
@@ -237,10 +259,10 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
     return () => {
       stop = true;
       cancelAnimationFrame(raf);
-      void busy.then(() => { if (canvases.current.get(it.key) === canvas) return drawGraph(ctx, evaluate(doc, f(frame)), provider); }).catch(() => undefined);
+      void busy.then(() => { if (canvases.current.get(it.key) === canvas) return draw(frame); }).catch(() => undefined);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hot, tab, snap]);
+  }, [hot, tab, snap, gpuOk]);
 
   const commit = async (it: Item) => {
     if (flight.busy) return; // a pick is on its way: this activation (the second half of a double-click) is not a second edit
@@ -322,8 +344,8 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
       <button key={it.key} type="button" className="pf-gal-tile" data-testid="gallery-tile" data-kind={it.kind} data-id={it.id}
         data-rendered={rendered.has(it.key) ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
         disabled={unavailable} aria-pressed={isOn(clip, it)} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
-        onPointerEnter={it.kind === 'motion' ? () => setHot(it.key) : undefined} onPointerLeave={it.kind === 'motion' ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
-        onFocus={it.kind === 'motion' ? () => setHot(it.key) : undefined} onBlur={it.kind === 'motion' ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
+        onPointerEnter={animates(it) ? () => setHot(it.key) : undefined} onPointerLeave={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
+        onFocus={animates(it) ? () => setHot(it.key) : undefined} onBlur={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
         <canvas ref={(c) => { if (c) canvases.current.set(it.key, c); else canvases.current.delete(it.key); }} width={tw} height={th} aria-hidden="true" style={{ ['--pf-gal-aspect' as string]: `${tw} / ${th}` }} />
         <span className="pf-gal-name"><bdi>{name}</bdi></span>
         {unavailable && <span className="pf-gal-unavail">{G.needsGpu}</span>}
@@ -367,7 +389,7 @@ function EffectGallery({ clip, trackKind, onClose }: { clip: Clip; trackKind: st
 
   return createPortal(
     <div className="pf-gal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={dialogRef} className="pf-gal-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-gal-title" dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang} data-testid="effect-gallery" tabIndex={-1} onKeyDown={onKey}>
+      <div ref={dialogRef} className="pf-gal-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-gal-title" dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang} data-testid="effect-gallery" data-flashes-held={guard.leftOut} tabIndex={-1} onKeyDown={onKey}>
         <div className="pf-gal-head">
           <h2 className="pf-gal-title" id="pf-gal-title">{G.title}</h2>
           <input ref={searchRef} className="pf-gal-search" type="search" data-testid="gallery-search" aria-label={G.search} placeholder={G.searchPlaceholder} autoComplete="off" spellCheck={false} value={query} onChange={(e) => setQuery(e.target.value)} />
