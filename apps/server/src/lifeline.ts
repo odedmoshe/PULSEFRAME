@@ -12,7 +12,7 @@
  *   project's revision afterwards (unchanged when nothing was dated: no empty transaction).
  * - peopleSuggestions («העתקה מפרויקט אחר», ADR-0021 people section): the people already entered in the owner's other
  *   projects, so they are typed once. It reads birth dates across every project, which no grant covers: the owner's own
- *   session only (the route refuses first; the function refuses again). W2 fills it.
+ *   session only (the route refuses first; the function refuses again).
  *
  * What re-reading looks at: files a person brought in (provenance upload or fixture). A generated or derived file has no
  * capture of its own; it shows the date of the file it was made from (core captureOf), so its bytes are never read for one.
@@ -22,7 +22,7 @@
  * Known limit: the name the file was uploaded with is not kept, so the library name is what the file-name patterns and the
  * messaging-app rule see. A forwarded video that was renamed in the library gets its container time as a firm date.
  */
-import { onThisDay, type Asset, type Capture, type OnThisDayItem, type OpCall } from '@pulseframe/core';
+import { onThisDay, peopleOf, personNameKey, type Asset, type Capture, type OnThisDayItem, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { readCapture, type CaptureContext } from './captureMeta.ts';
 import { ApiError, type Store } from './store.ts';
@@ -55,12 +55,27 @@ export interface PersonSuggestion { name: string; birthDate: string | null; form
 export const MAX_PEOPLE_SUGGESTIONS = 200;
 /**
  * The people of the owner's projects, one per name (core personNameKey; the most recently changed project wins), by name,
- * at most MAX_PEOPLE_SUGGESTIONS. A project that cannot be opened is left out. W2 fills the body: read each project with
- * store.wholeProject (this is the owner's session). Until then it refuses.
+ * at most MAX_PEOPLE_SUGGESTIONS. A project that cannot be opened is left out. Each project is read with store.wholeProject
+ * (this is the owner's session, so birth dates and word choices are part of the answer). Every project is listed, the open
+ * one too: the people sheet leaves out the names its project already holds (it has the projectId to tell).
+ * Order: by personNameKey, then by the name as stored (code points; no locale, so the order does not depend on the machine).
  */
-export function peopleSuggestions(_store: Store, p: Principal): PersonSuggestion[] {
+export function peopleSuggestions(store: Store, p: Principal): PersonSuggestion[] {
+  // birth dates across every project, which no grant covers: the owner's own session only (the route refuses first; this is the second lock)
   if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
-  throw new ApiError(501, 'not_implemented', 'copying people from another project is not built yet');
+  const byName = new Map<string, PersonSuggestion>();
+  // listProjects is newest change first, so the first project that has a name is the one that wins
+  for (const row of store.listProjects()) {
+    let doc: ProjectDocument;
+    try { doc = store.wholeProject(row.id).doc; } catch { continue; } // a project that cannot be opened is left out, not a reason to show nothing
+    for (const person of Object.values(peopleOf(doc))) {
+      const key = personNameKey(person.name);
+      if (byName.has(key)) continue;
+      byName.set(key, { name: person.name, birthDate: person.birthDate, ...(person.form ? { form: person.form } : {}), projectId: row.id, projectName: row.name });
+    }
+  }
+  const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...byName.entries()].sort(([ka, a], [kb, b]) => cmp(ka, kb) || cmp(a.name, b.name)).slice(0, MAX_PEOPLE_SUGGESTIONS).map(([, s]) => s);
 }
 
 /** A file whose own bytes can carry a capture date and that has none yet: a picture, video or sound a person brought in. */
