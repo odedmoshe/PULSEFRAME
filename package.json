@@ -34,6 +34,8 @@
     "proof:reverse-sound": "tsx packages/evals/src/reverse-sound-proof.ts",
     "proof:pitch": "tsx packages/evals/src/pitch-proof.ts",
     "proof:voicefx": "tsx packages/evals/src/voicefx-proof.ts && tsx packages/evals/src/voicefx-preview-proof.ts && tsx packages/evals/src/voicefx-ui-proof.ts",
+    "proof:voiceclean": "tsx packages/evals/src/voiceclean-proof.ts",
+    "proof:colourmatch": "tsx packages/evals/src/colourmatch-proof.ts",
     "proof:speech": "tsx packages/evals/src/speech-proof.ts",
     "check:media": "tsx packages/evals/src/real-media-check.ts",
     "proof:voice": "tsx packages/evals/src/voice-proof.ts",

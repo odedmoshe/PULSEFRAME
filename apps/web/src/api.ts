@@ -1,4 +1,6 @@
 import type { Asset, OpCall, ProjectDocument } from '@pulseframe/core';
+import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
+import type { RationalTime } from '@pulseframe/time';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -32,6 +34,13 @@ export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' 
 export interface PreflightReport { revision: number; ok: boolean; blockers: number; warnings: number; notes: number; issues: PreflightIssue[]; output: unknown; scope: string }
 export interface CommitResult { revision: number; committed: boolean; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
 export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string }
+/** measure_voice (ADR-0013; apps/server/src/voiceClean.ts): the same shapes as the server's VoiceMeasureBody and VoiceCheck. */
+export interface VoiceMeasureRequest { clipId: string; strength?: number; /** SOURCE-time stretches that hold only noise */ noiseRanges?: { start: RationalTime; end: RationalTime }[]; scope?: 'clip' | 'asset' }
+export interface VoiceCheck { revision: number; assetId: string; clipIds: string[]; method: string; /** ranges in source seconds */ report: VoiceMeasurement; recommendedStrength: number; /** clean_voice candidates: send as ONE transaction */ ops: OpCall[]; note: string }
+/** match_colour (ADR-0014; apps/server/src/colourMatch.ts): the same shapes as the server's ColourMatchBody and ColourMatch. */
+export interface ColourMatchRequest { method?: 'match' | 'balance'; referenceClipId?: string; targetClipIds: string[] | 'all'; amount?: number; samples?: 1 | 3 }
+export interface ColourMatchTarget { clipId: string; params: GradeParams; residual: { model: number; verified: number | null }; verdict: GradeFit['verdict']; limitedBy: (keyof GradeParams)[]; warnings: ('changes_within_clip' | 'not_verified' | 'replaces_grade' | 'animated_grade')[]; statsBefore: PictureStats; statsAfter: PictureStats | null }
+export interface ColourMatch { revision: number; method: 'match' | 'balance'; reference: { clipId: string; stats: PictureStats } | null; targets: ColourMatchTarget[]; /** set_colour_grade candidates: send as ONE transaction */ ops: OpCall[]; unavailable: string | null; note: string }
 export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; target: number | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string }
 
 export type RecipeParams = Record<string, unknown>;
@@ -106,6 +115,12 @@ export const api = {
     call<SilenceResult>(`/projects/${id}/analysis/silences`, json(body)),
   findFillers: (id: string, body: { assetId: string; words?: string[] }) => call<SilenceResult & { words: { kind: 'hesitation' | 'repeat' | 'listed'; text: string; sourceStartSeconds: number; onTimeline: { startSeconds: number }[] }[] }>(`/projects/${id}/analysis/fillers`, json(body)),
   measureLoudness: (id: string) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json({})),
+  measureVoice: (id: string, body: VoiceMeasureRequest) => call<VoiceCheck>(`/projects/${id}/analysis/voice`, json(body)),
+  /** The same measurement as a durable job (its output is { kind: 'voice', result: VoiceCheck }). */
+  startVoiceMeasureJob: (id: string, body: VoiceMeasureRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/voice`, json({ ...body, background: true })),
+  matchColour: (id: string, body: ColourMatchRequest) => call<ColourMatch>(`/projects/${id}/analysis/colour-match`, json(body)),
+  /** The same match as a durable job (its output is { kind: 'colour', result: ColourMatch }). */
+  startColourMatchJob: (id: string, body: ColourMatchRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/colour-match`, json({ ...body, background: true })),
   capabilities: () => call<{ provider: { configured: boolean; reason: string | null; readiness: { reachable: boolean; runtimeVersion: string | null; device: { name: string; type: string } | null } | null }; capabilities: { id: string; runnable: boolean; title: { he: string; en: string } }[] }>('/capabilities'),
   runCapability: (id: string, capabilityId: string, params: Record<string, unknown>) => call<{ jobId: string }>(`/projects/${id}/capabilities/${capabilityId}/runs`, json({ params, idempotencyKey: crypto.randomUUID() })),
   derivatives: (id: string, assetId: string) => call<{ derivatives: { kind: string; status: string; meta: any }[] }>(`/projects/${id}/assets/${assetId}/derivatives`),
