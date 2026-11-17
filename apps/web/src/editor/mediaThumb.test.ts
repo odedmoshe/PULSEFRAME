@@ -66,6 +66,7 @@ describe('DerivativeLoader: a media card loads its filmstrip once (finding 17)',
     for (let e = 0; e < 90; e++) { for (const c of cards) c.loader.poke(); await settle(); }
     expect(w.count).toMatchObject({ list: 30, blob: 30, decoded: 30, closed: 0 }); // before the fix: 2730 of each
     expect(cards.every((c) => c.changes === 1)).toBe(true);
+    expect(cards.map((c) => c.loader.loads)).toEqual(cards.map(() => 1)); // what each card shows as data-loads
     for (const c of cards) w.leave(c);
     expect(w.count).toMatchObject({ decoded: 30, closed: 30, closedWhileShown: 0, withoutSignal: 0 }); // every picture created is closed when its card goes away
   });
@@ -182,6 +183,36 @@ describe('DerivativeLoader: a media card loads its filmstrip once (finding 17)',
     expect(c.shown?.kind === 'thumbnails' && c.shown.bitmap.closed).toBe(false);
     c.loader.show(null);
     expect(c.shown).toBeNull();
+    expect(w.count).toMatchObject({ decoded: 2, closed: 2, closedWhileShown: 0 });
+  });
+
+  it('loads counts the derivatives handed to the card (shown as data-loads): 0 while waiting, 1 once loaded whatever events follow, one more only for other content', async () => {
+    const w = world();
+    w.set('v', 'queued');
+    const c = w.card();
+    c.loader.show(w.id('v'));
+    await settle();
+    for (let e = 0; e < 5; e++) { c.loader.poke(); await settle(); }
+    expect(c.loader.loads).toBe(0); // looked six times, was handed nothing
+    w.set('v', 'ready'); c.loader.poke(); await settle();
+    expect(c.loader.loads).toBe(1);
+    for (let e = 0; e < 90; e++) { c.loader.poke(); await settle(); }
+    c.loader.show(w.id('v')); // a re-render with the same asset
+    await settle();
+    expect(c.loader.loads).toBe(1);
+    c.loader.show(w.id('v', 'thumbnails', 'sha256:replaced')); // the picture is taken away (not a load) ...
+    expect(c.loader.loads).toBe(1);
+    await settle(); // ... and the new content is loaded
+    expect(c.loader.loads).toBe(2);
+    expect(c.changes).toBe(3); // loaded, taken away, loaded
+    const wave = w.card();
+    w.set('m', 'ready', 'waveform');
+    wave.loader.show(w.id('m', 'waveform'));
+    await settle();
+    for (let e = 0; e < 9; e++) { wave.loader.poke(); await settle(); }
+    expect(wave.loader.loads).toBe(1); // a sound card counts the same way
+    w.leave(c); w.leave(wave);
+    expect(c.loader.loads).toBe(2); // going away is not a load
     expect(w.count).toMatchObject({ decoded: 2, closed: 2, closedWhileShown: 0 });
   });
 

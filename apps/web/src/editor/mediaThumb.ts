@@ -53,6 +53,7 @@ const sameIdentity = (a: DerivativeIdentity | null, b: DerivativeIdentity | null
 export class DerivativeLoader<P extends { close(): void }> {
   private id: DerivativeIdentity | null = null;
   private held: LoadedDerivative<P> | null = null;
+  private delivered = 0;
   /** Nothing more to ask the server for this identity: the derivative is held, or it does not apply. */
   private settled = false;
   /** Bumped whenever the work in flight stops being wanted (another file, or the card went away). */
@@ -69,6 +70,11 @@ export class DerivativeLoader<P extends { close(): void }> {
 
   /** What the card shows now. */
   get current(): LoadedDerivative<P> | null { return this.held; }
+  /**
+   * How many times this card was handed a downloaded derivative: 1 for a card that loaded once, whatever events arrived since.
+   * The card shows it as `data-loads`, so a reload can be seen on the card itself (the timeline asks the same addresses).
+   */
+  get loads(): number { return this.delivered; }
 
   /** The derivative this card should show (null: none). The same identity again changes nothing and asks nothing. */
   show(id: DerivativeIdentity | null): void {
@@ -115,6 +121,7 @@ export class DerivativeLoader<P extends { close(): void }> {
     const old = this.held;
     if (old === next) return;
     this.held = next;
+    if (next) this.delivered++;
     this.deps.onChange(next);
     if (old?.kind === 'thumbnails') old.bitmap.close();
   }

@@ -20,30 +20,31 @@ const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-r
  * derivative event of ANY asset) only makes a card that is still waiting look at the state of its own asset, with a bounded
  * number of retries while it is being made. The decoded filmstrip is closed when it is replaced and when the card goes away
  * (rules and tests: mediaThumb.ts). `loaded` says what to render; `live` is what may be drawn right now: it never holds a
- * closed picture, also between a replacement and the next render.
+ * closed picture, also between a replacement and the next render. `loads` counts the derivatives this card was handed.
  */
-function useDerivative(projectId: string, a: Asset, refreshKey: number): { loaded: Loaded; live: { readonly current: Loaded } } {
+function useDerivative(projectId: string, a: Asset, refreshKey: number): { loaded: Loaded; live: { readonly current: Loaded }; loads: { readonly current: number } } {
   const want = a.kind === 'video' && a.video ? 'thumbnails' : a.kind !== 'image' && a.audio ? 'waveform' : null;
   const [loaded, setLoaded] = useState<Loaded>(null);
   const live = useRef<Loaded>(null);
+  const loads = useRef(0);
   const loader = useRef<DerivativeLoader<ImageBitmap> | null>(null);
   const seen = useRef(refreshKey);
   useEffect(() => {
     const l = new DerivativeLoader<ImageBitmap>({
       fetch: (url, signal) => fetch(url, { credentials: 'same-origin', signal }),
       decode: (blob) => createImageBitmap(blob),
-      onChange: (v) => { live.current = v; setLoaded(v); },
+      onChange: (v) => { live.current = v; loads.current = l.loads; setLoaded(v); },
     });
     loader.current = l;
     return () => { loader.current = null; live.current = null; setLoaded(null); l.dispose(); };
   }, []);
   useEffect(() => { loader.current?.show(want ? { projectId, assetId: a.id, contentHash: a.contentHash, kind: want } : null); }, [projectId, a.id, a.contentHash, want]);
   useEffect(() => { if (seen.current !== refreshKey) { seen.current = refreshKey; loader.current?.poke(); } }, [refreshKey]);
-  return { loaded, live };
+  return { loaded, live, loads };
 }
 
 function Thumb({ projectId, a, refreshKey }: { projectId: string; a: Asset; refreshKey: number }) {
-  const { loaded, live } = useDerivative(projectId, a, refreshKey);
+  const { loaded, live, loads } = useDerivative(projectId, a, refreshKey);
   const canvas = useRef<HTMLCanvasElement>(null);
   const draw = (frac: number) => {
     const c = canvas.current, cur = live.current;
@@ -66,6 +67,7 @@ function Thumb({ projectId, a, refreshKey }: { projectId: string; a: Asset; refr
       for (let x = 0; x < W; x++) { const top = Math.max(0, H / 2 - peaks[x * 2 + 1]! * k), bot = Math.min(H, H / 2 - peaks[x * 2]! * k); ctx.fillRect(x, top, 1, Math.max(1, bot - top)); }
     }
     c.setAttribute('data-drawn', '1');
+    c.setAttribute('data-loads', String(loads.current)); // stays "1" while the card keeps the derivative it loaded; a reload would raise it
   };
   useEffect(() => { draw(0); }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   if (a.kind === 'lut') return <Palette size={24} aria-hidden="true" />;

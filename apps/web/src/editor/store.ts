@@ -436,7 +436,9 @@ export class Editor {
   /**
    * A library file dropped on the timeline: placed at that frame, on the track it was dropped on when the track suits it
    * (a picture file on a picture track, a sound-only file on a sound track), otherwise on the first free track.
-   * The linked sound of a picture file goes to the sound target track, if one is chosen.
+   * The linked sound of a picture file goes to the sound target track, if one is chosen and free over the new clip; when the
+   * target is occupied there it is not named, and the sound lands on a free sound track instead of on top of what is there.
+   * A sound-only file dropped on a sound track stays on that track: the user named it by dropping there.
    */
   dropAsset(assetId: string, frame: number, trackId: string | null) {
     const a = this.state.doc?.assets[assetId];

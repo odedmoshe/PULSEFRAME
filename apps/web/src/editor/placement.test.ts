@@ -178,6 +178,39 @@ describe('dropAssetArgs: a library file dropped on the timeline', () => {
     expect(dropAssetArgs(doc, musicId, { start: f(0), trackId: v1, audioTarget: a1 })).toEqual({ assetId: musicId, start: f(0) });
     expect(sound(drop(doc, musicId, 0, null, a1).doc)).toEqual(['A1: a.mp4[0..900)', 'A2: music.mp3[0..900)']);
   });
+  it('differs from the rule before the fix in exactly one case: a picture file with sound whose sound target is occupied there, where the target is no longer named', () => {
+    const { doc, videoId, musicId, v1, a1 } = project();
+    // V1 + A1 hold a.mp4 0..900; V2 and A2 are empty; A3 is locked
+    const more = tx(doc, [{ op: 'add_track', args: { kind: 'video' } }, { op: 'add_track', args: { kind: 'audio' } }, { op: 'add_track', args: { kind: 'audio' } }]);
+    const [v2, a2, a3] = more.results.map((r) => r.output!.trackId as string) as [string, string, string];
+    const d = tx(more.doc, [{ op: 'update_track', args: { trackId: a3, locked: true } }]).doc;
+    /** The arguments `dropAsset` built before the fix (9c87eb6), kept here as the reference: the linked sound always went to the sound target. */
+    const before = (assetId: string, frame: number, trackId: string | null, audioTarget: string | null) => {
+      const a = d.assets[assetId]!;
+      const picture = !!a.video || a.kind === 'image';
+      const tr = trackId ? d.sequences[d.mainSequenceId]!.tracks.find((t) => t.id === trackId) : undefined;
+      const fits = !!tr && !tr.locked && tr.kind === (picture ? 'video' : 'audio');
+      return { assetId, start: f(frame), ...(fits ? { trackId: tr!.id } : {}), ...(picture && a.audio && audioTarget ? { audioTrackId: audioTarget } : {}) };
+    };
+    const apply = (args: Record<string, unknown>) => { try { return tx(d, [{ op: 'add_clip', args }]).doc; } catch { return null; } }; // null: refused (a picture on an occupied picture track)
+    const changed: string[] = [];
+    let same = 0, unstacked = 0;
+    for (const assetId of [videoId, musicId]) for (const frame of [0, 300, 899, 900, 1500]) for (const trackId of [null, v1, v2, a1, a2, a3, 'trk_gone']) for (const audioTarget of [null, a1, a2]) { // the editor never hands over a locked or missing target
+      const old = before(assetId, frame, trackId, audioTarget), now = dropAssetArgs(d, assetId, { start: f(frame), trackId, audioTarget });
+      if (JSON.stringify(now) === JSON.stringify(old)) { same++; continue; }
+      changed.push(`${d.assets[assetId]!.name}@${frame} target ${audioTarget === a1 ? 'A1' : 'other'}`);
+      const { audioTrackId, ...rest } = old as Record<string, unknown>;
+      expect(audioTrackId).toBe(a1); // only the occupied target ...
+      expect(now).toEqual(rest); // ... is left out; the frame and the picture track are as before
+      const was = apply(old), is = apply(now!);
+      expect(was === null).toBe(is === null); // what was refused is still refused
+      if (was && is) { expect(stacked(was).length).toBeGreaterThan(0); expect(stacked(is)).toEqual([]); unstacked++; }
+    }
+    // the video over 0..900 of A1 (frames 0, 300, 899), on each of the 7 drop places, with A1 as target: 21 of 210 cases
+    expect([...new Set(changed)]).toEqual(['a.mp4@0 target A1', 'a.mp4@300 target A1', 'a.mp4@899 target A1']);
+    expect([changed.length, same]).toEqual([21, 189]);
+    expect(unstacked).toBe(18); // the other 3 are drops on the occupied V1, refused before and now
+  });
   it('a locked track is not named; an unknown file places nothing', () => {
     const { doc, musicId, a1 } = project();
     const locked = tx(doc, [{ op: 'update_track', args: { trackId: a1, locked: true } }]).doc;
