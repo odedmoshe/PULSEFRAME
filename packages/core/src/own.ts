@@ -15,5 +15,6 @@ export function own<V>(record: { readonly [key: string]: V } | null | undefined,
   return record != null && key != null && Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
+const INHERITED_NAMES: ReadonlySet<string> = new Set(Object.getOwnPropertyNames(Object.prototype));
 /** True for an id that names something every plain object inherits ("__proto__", "constructor", "toString", …). No entity may carry one. */
-export const isInheritedName = (id: string): boolean => id in Object.prototype;
+export const isInheritedName = (id: string): boolean => INHERITED_NAMES.has(id);

@@ -3,16 +3,18 @@
  * Everything here goes through the functions the renderer calls: `evaluate` (beat position, effect parameters at the
  * frame) and the strobe's own `params` in gpu.ts, whose fourth number is the strength of the flash mixed into the picture.
  *
- * What is established is the rule for ONE strobe setting at a time: one strobe on one clip, and copies of it (the pieces
- * of a cut clip). Several strobes with different settings on screen together or right after one another are not limited
- * as a whole (see the last test, which is a to-do).
+ * The rule is kept for the timeline as a whole: every flash start of every strobe comes from one schedule
+ * (strobeSchedule.ts) in which two starts are never fewer than `flashGapFrames` frames apart, whichever strobes they
+ * belong to. The tests below sample what the renderer receives and count flash starts in every one-second period.
  */
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, effectParamsAt, findClip, OpError, validateProject, animatableParams, SPEED_CURVE_IDS, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { evaluate, GPU_EFFECTS } from './index.ts';
-import { STROBE_MAX_RATE, STROBE_MIN_GAP } from './gpu.ts';
+import { flashGapFrames, flashSchedule } from './strobeSchedule.ts';
+/** The most flashes a second a steady strobe can show at a frame rate: one every `flashGapFrames` frames. */
+const maxRate = (rate: Rate) => rate.num / rate.den / flashGapFrames(rate.num / rate.den);
 
 type Rate = { num: number; den: number };
 const R: Rate = { num: 30, den: 1 };
@@ -139,39 +141,43 @@ describe('strobe: at most three flashes in any one second', () => {
     expect(effectParamsAt(fx, f(60))).toEqual(fx.params);
     const at = onsets(doc, 4, 240, 210);
     expect(at.map((i) => i / 240)).toEqual([0, 1, 2, 3]); // one flash a second, at seconds 7, 8, 9 and 10, as without the keys
-    expect(validateProject(doc).map((i) => i.code)).toEqual(['effect_keyframes', 'effect_keyframes']); // and the document is reported as invalid
+    // such a document stays valid, so it can still be edited (the keys are inert; no op adds new ones) …
+    expect(validateProject(doc)).toEqual([]);
+    const edited = tx(doc, [{ op: 'update_effect', args: { clipId: made.titleId, effectId: made.effectId, params: { color: '#FF0000' } } }]).doc;
+    expect(onsets(edited, 4, 240, 210).map((i) => i / 240)).toEqual([0, 1, 2, 3]);
+    // … while keys on a parameter that never existed are still refused
+    const bad = structuredClone(doc);
+    findClip(bad, made.titleId)!.clip.effects![0]!.keyframes = { nothing: [{ time: f(0), value: 1, easing: 'linear' }] };
+    expect(validateProject(bad).map((i) => i.code)).toEqual(['effect_keyframes']);
   });
 
-  it('reported: a clip that begins just after a flash time shows the rest of that flash on its first frame, and that counts as a flash start', () => {
+  it('reported: a clip that begins just after a flash time does not show the rest of that flash; flashes start inside the clip only', () => {
     const R60: Rate = { num: 60, den: 1 };
-    // steady, 60 frames a second, the fastest rate the schema allows: the title begins one frame after a flash time
-    for (const rate of [3, 2.99, STROBE_MAX_RATE]) {
-      const effective = Math.min(rate, STROBE_MAX_RATE);
+    // steady, 60 frames a second, the fastest rate the schema allows: the title begins one or two frames after a flash time of the steady grid
+    for (const rate of [3, 2.99, 2.5]) {
+      const effective = Math.min(rate, maxRate(R60));
       let found = 0;
       for (let start = 1; start < 4000 && found < 3; start++) {
-        const sinceFlash = ((start / 60) * effective) % 1 / effective; // seconds from the last flash time to the title's first frame
-        if (sinceFlash < 1e-6 || sinceFlash > Math.LN2 / (10 * effective)) continue; // the first frame is at least half as bright as a flash
+        const sinceFlash = ((start / 60) * effective) % 1 / effective; // seconds from the last time of the steady grid to the title's first frame
+        if (sinceFlash < 1e-6 || sinceFlash > 2.5 / 60) continue;
         found++;
         const made = withStrobe(createProject({ id: 'prj_f', name: 'F', frameRate: R60 }), { rate }, 240, start);
         const frames = frameStrengths(made.doc, 4, start);
-        expect(frames[0], `rate ${rate} from frame ${start}`).toBeGreaterThanOrEqual(0.5);
-        const at = onsetsOf(frames);
-        expect(at[0]).toBe(0);
-        expect(mostInOneSecond(at, 60), `rate ${rate} from frame ${start}`).toBeLessThanOrEqual(3); // it used to be four: frames 0, 19, 39 and 59
+        expect(frames[0], `rate ${rate} from frame ${start}`).toBe(0); // it used to be the bright rest of a flash from before the clip
+        expect(mostInOneSecond(onsetsOf(frames), 60), `rate ${rate} from frame ${start}`).toBeLessThanOrEqual(3);
       }
       expect(found).toBe(3);
     }
-    // following music with beats 0.338 s apart, the title begins two frames after a beat (first frame 0.51 of full strength)
+    // following music with beats 0.338 s apart, the title begins two frames after a beat: nothing on its first frame, and never more than three a second
     const { doc, assetId } = withMusic(every(338, 200, 1000), 0, 600, R60);
     const music = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(0, R60) } }]).doc;
     const frames = frameStrengths(withStrobe(music, { follow: 'music' }, 240, 62).doc, 4, 62);
-    expect(frames[0]).toBeGreaterThan(0.5);
+    expect(frames[0]).toBe(0);
     expect(mostInOneSecond(onsetsOf(frames), 60)).toBeLessThanOrEqual(3);
-    // what makes it hold: flash times are further apart than a third of a second by a third of the time a flash stays above half
-    expect(3 * STROBE_MIN_GAP - Math.LN2 / 20).toBeGreaterThanOrEqual(1);
-    expect(3 / STROBE_MAX_RATE - Math.LN2 / (10 * STROBE_MAX_RATE)).toBeGreaterThanOrEqual(1);
-    // a steady strobe set to 3 a second flashes STROBE_MAX_RATE times a second
-    expect(onsets(withStrobe(createProject({ id: 'prj_g', name: 'G' }), { rate: 3 }).doc, 20).length).toBe(Math.floor(20 * STROBE_MAX_RATE) + 1);
+    // what makes it hold: flash starts are a third of a second, rounded up to whole frames, plus one frame apart
+    for (const fps of [10, 12, 23.976, 24, 25, 29.97, 30, 50, 59.94, 60, 120]) expect(flashGapFrames(fps) / fps).toBeGreaterThan(1 / 3);
+    // a steady strobe set to 3 a second flashes once every 11 frames at 30 frames a second
+    expect(onsets(withStrobe(createProject({ id: 'prj_g', name: 'G' }), { rate: 3 }).doc, 20).length).toBe(Math.floor((20 * 30 - 1) / 11) + 1);
   });
 
   it('reported: music in several pieces (cuts, a speed change in steps, a speed curve) keeps its flashes; the pieces of a cut clip flash exactly like the clip', () => {
@@ -306,7 +312,7 @@ describe('strobe: the three-a-second limit as a property', () => {
       if (musicUnder) { const m = withMusic(every(137, 2000), 4, 600, frameRate); doc = tx(m.doc, [{ op: 'add_clip', args: { assetId: m.assetId, start: f(0, frameRate) } }]).doc; }
       const made = withStrobe(doc, { rate: rateValue, amount: amountPct / 100, every: everyN }, Math.ceil((13 * frameRate.num) / frameRate.den), start);
       const count = expectSafe(cutTitle(made.doc, cuts.map((c) => start + c)), start, 12, amountPct / 100);
-      const flashesPerSecond = Math.min(rateValue, STROBE_MAX_RATE);
+      const flashesPerSecond = Math.min(rateValue, maxRate(frameRate));
       expect(count).toBeLessThanOrEqual(Math.floor(12 * flashesPerSecond) + 2); // one more for a first frame that is still bright
       if (rateValue >= 0.5) expect(count).toBeGreaterThanOrEqual(Math.floor(12 * flashesPerSecond) - 1); // and it does flash at its rate
     }), { numRuns: RUNS, endOnFailure: true });
@@ -330,9 +336,52 @@ describe('strobe: the three-a-second limit as a property', () => {
     expect(onsets(withStrobe(cutLate, { follow: 'music' }, 600).doc, 10).map((i) => i / 240)).toEqual([2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5]);
   });
 
-  // Not established, and known not to hold (reported): each strobe keeps to the limit on its own, but nothing limits what
-  // several add up to. Two steady strobes at 3 and 2.5 a second on one title start six flashes in one second; a title cut
-  // in two with rates 3 and 2.9 starts two flashes two frames apart at the cut. The strobe's parameter function sees only
-  // its own effect; a limit over all of them needs the flash times of every strobe of the sequence at the frame.
-  it.todo('several strobes with different settings, on one clip or on clips that overlap or follow one another, start at most three flashes a second between them');
+  it('reported: two steady strobes at 3 and 2.5 a second on one title, and a title cut in two with rates 3 and 2.9, used to start six flashes in a second', () => {
+    let two = withStrobe(createProject({ id: 'prj_m', name: 'M' }), { rate: 3 }, 300);
+    two = { ...two, doc: tx(two.doc, [{ op: 'add_effect', args: { clipId: two.titleId, type: 'light.strobe', params: { amount: 1, rate: 2.5 } } }]).doc };
+    expect(mostInOneSecond(onsetsOf(frameStrengths(two.doc, 10)), 30)).toBeLessThanOrEqual(3);
+    const cut = withStrobe(createProject({ id: 'prj_n', name: 'N' }), { rate: 3 }, 300);
+    let d = tx(cut.doc, [{ op: 'split_clip', args: { clipId: cut.titleId, at: f(151) } }]).doc;
+    const second = Object.values(d.sequences).flatMap((q) => q.tracks).flatMap((t) => t.clips).find((c) => c.type === 'text' && c.id !== cut.titleId)!;
+    d = tx(d, [{ op: 'update_effect', args: { clipId: second.id, effectId: (second as { effects: { id: string }[] }).effects[0]!.id, params: { rate: 2.9 } } }]).doc;
+    expect(mostInOneSecond(onsetsOf(frameStrengths(d, 10)), 30)).toBeLessThanOrEqual(3);
+  });
+
+  it('several strobes with different settings, on one clip, on clips that overlap on several tracks, on clips that follow one another and on cut clips, start at most three flashes a second between them', () => {
+    const strobe = fc.oneof(
+      fc.record({ rate: fc.oneof(fc.integer({ min: 0, max: 3000 }).map((x) => x / 1000), fc.constantFrom(3, 2.999, 2.9, 2.5, 1.7)) }),
+      fc.record({ follow: fc.constant('music'), every: fc.integer({ min: 1, max: 6 }) }),
+    );
+    const title = fc.record({ start: fc.integer({ min: 0, max: 400 }), frames: fc.integer({ min: 2, max: 500 }), strobes: fc.array(strobe, { minLength: 1, maxLength: 3 }), cuts: fc.array(fc.integer({ min: 1, max: 499 }), { maxLength: 3 }), disableFirst: fc.boolean() });
+    fc.assert(fc.property(fps, fc.array(title, { minLength: 1, maxLength: 5 }), fc.option(fc.record({ step: fc.integer({ min: 60, max: 900 }), meter: fc.constantFrom(0, 3, 4), speed: fc.constantFrom(1, 1, 0.5, 2, 3.7) })), (frameRate, titles, music) => {
+      let doc = createProject({ id: 'prj_v', name: 'V', frameRate });
+      if (music) {
+        const m = withMusic(every(music.step, 600), music.meter, 900, frameRate);
+        const added = tx(m.doc, [{ op: 'add_clip', args: { assetId: m.assetId, start: f(0, frameRate) } }]);
+        doc = music.speed === 1 ? added.doc : attempt(added.doc, [{ op: 'set_clip_speed', args: { clipId: added.results[0]!.output!.clipId as string, speed: music.speed } }]);
+      }
+      for (const t of titles) {
+        // a title on any free text track (titles may overlap in time on different tracks, or lie back to back on one)
+        const r = tx(doc, [{ op: 'add_text', args: { text: 'X', start: f(t.start, frameRate), duration: f(t.frames, frameRate) } }]);
+        doc = r.doc;
+        const id = r.results[0]!.output!.clipId as string;
+        let firstFx: string | null = null;
+        for (const p of t.strobes) { const a = tx(doc, [{ op: 'add_effect', args: { clipId: id, type: 'light.strobe', params: { amount: 1, ...p } } }]); doc = a.doc; firstFx ??= a.results[0]!.output!.effectId as string; }
+        if (t.disableFirst && t.strobes.length > 1) doc = tx(doc, [{ op: 'update_effect', args: { clipId: id, effectId: firstFx!, enabled: false } }]).doc;
+        doc = cutTitle(doc, t.cuts.map((c) => t.start + c).filter((c) => c < t.start + t.frames));
+      }
+      const perSecond = frameRate.num / frameRate.den, seconds = 20;
+      // what the renderer receives on every frame: the strongest flash on screen
+      const frames = frameStrengths(doc, seconds, 0);
+      const starts = onsetsOf(frames);
+      expect(mostInOneSecond(starts, perSecond)).toBeLessThanOrEqual(3);
+      // between flash starts the brightness only falls, or the layer that carried it is gone
+      const isStart = new Set(starts);
+      for (let i = 1; i < frames.length; i++) if (frames[i]! > frames[i - 1]! + 1e-9 && !isStart.has(i)) expect.fail(`the strength rises from ${frames[i - 1]} to ${frames[i]} on frame ${i} without a flash start`);
+      // and the schedule itself: every flash start of every strobe, together, is at least the gap from the one before
+      const s = flashSchedule(doc);
+      const all = [...new Set([...s.shown.values()].flatMap((x) => [...x]))].sort((a, b) => a - b);
+      for (let i = 1; i < all.length; i++) expect(all[i]! - all[i - 1]!).toBeGreaterThanOrEqual(s.gapFrames);
+    }), { numRuns: RUNS, endOnFailure: true });
+  }, 60_000 + RUNS * 3000);
 });

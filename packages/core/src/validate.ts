@@ -1,5 +1,5 @@
 import * as T from '@pulseframe/time';
-import { animatableParams, findEffect } from './effects.ts';
+import { animatableParams, findEffect, NOT_ANIMATABLE } from './effects.ts';
 import { sourceEnd } from './speed.ts';
 import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 import { isInheritedName, own } from './own.ts';
@@ -88,6 +88,10 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           const table = lutRef(fx);
           if (table && own(doc.assets, table)?.kind !== 'lut') issues.push({ code: 'missing_lut', message: `clip ${c.id} effect color.lut names colour table ${table}, which is not a colour table in this project's library`, ids: [c.id, table] });
           for (const [param, keys] of Object.entries(fx.keyframes ?? {})) {
+            // Keys on a parameter that may no longer be animated (effects.ts NOT_ANIMATABLE) are tolerated in a document
+            // that already holds them: they are inert (animation.ts effectParamsAt ignores them) and no op adds new ones.
+            // Refusing them here would make an older project impossible to edit at all.
+            if (d && NOT_ANIMATABLE[fx.type]?.includes(param)) continue;
             const ok = !!d && animatableParams(fx.type).includes(param) && keys.every((k, i) => (i === 0 || T.lt(keys[i - 1]!.time, k.time)) && T.isFrameAligned(k.time, rate) && d.params.safeParse({ ...fx.params, [param]: k.value }).success);
             if (!ok) issues.push({ code: 'effect_keyframes', message: `clip ${c.id} effect ${fx.type}: keyframes of "${param}" are not animatable, out of range, unsorted or off the frame grid`, ids: [c.id] });
           }

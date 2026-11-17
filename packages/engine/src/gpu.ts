@@ -107,6 +107,24 @@ export function musicHit(p: Record<string, unknown>, beat: BeatPosition | null |
   const period = last >= 0 && next >= 0 ? base[next]!.t - base[last]!.t : Math.max(gap, beat.period * every * factorAt(now));
   return { phase: Math.min(1, since / period), period, since };
 }
+/**
+ * The beats a strobe that follows the music may flash on, before the timeline-wide limit is applied (strobeSchedule.ts):
+ * the beats whose running number is a multiple of `every`, thinned regularly (rule 1 of musicHit) so that music played
+ * fast keeps an even flash on every second, third… hit instead of an irregular one. Times in seconds, in order.
+ */
+export function thinnedHits(hits: readonly { t: number; index: number }[], every: number, gap: number): number[] {
+  const step = Math.max(1, Math.round(every));
+  const base = hits.filter((h) => mod(h.index, step) === 0); // in time order
+  const firstAtOrAfter = (t: number) => { let lo = 0, hi = base.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (base[mid]!.t < t) lo = mid + 1; else hi = mid; } return lo; };
+  const factors = new Map<number, number>();
+  const factorAt = (t: number): number => {
+    const block = Math.floor(t / THIN_BLOCK);
+    let k = factors.get(block);
+    if (k === undefined) factors.set(block, (k = thinning(base.slice(firstAtOrAfter((block - 1) * THIN_BLOCK), firstAtOrAfter((block + 2) * THIN_BLOCK)), step, gap)));
+    return k;
+  };
+  return base.filter((h) => mod(h.index, step * factorAt(h.t)) === 0).map((h) => h.t);
+}
 const mod = (a: number, m: number) => ((a % m) + m) % m;
 /** Thinning is judged per half second of timeline (see musicHit). */
 const THIN_BLOCK = 0.5;
@@ -123,21 +141,10 @@ function thinning(hits: { t: number; index: number }[], every: number, gap: numb
   }
   return hits.length + 1;
 }
-/** How fast a flash that follows the music fades, per second (the same as a steady strobe at two flashes a second). */
-const STROBE_FADE = 20;
-/**
- * Two flash times of a strobe are never closer together than this many seconds: a third of a second and a little more.
- * The little more is a third of the time a flash stays above half its strength (ln 2 / STROBE_FADE seconds). A flash
- * start can be seen that much later than its flash time (a clip that begins while the flash is still bright, or a
- * frame that falls a little after the flash time), so four flash starts in a row are seen at least 3 gaps minus that
- * time apart, which is one second: no second holds more than three.
- */
-export const STROBE_MIN_GAP = (1 + Math.LN2 / STROBE_FADE) / 3 + 1e-6;
-/**
- * The fastest steady strobe, in flashes a second, by the same sum: a steady flash at rate r stays above half its strength
- * for ln 2 / (10 r) seconds, and 3 / r less that time is a second or more only up to r = 3 - ln 2 / 10 = 2.9307.
- */
-export const STROBE_MAX_RATE = 2.93;
+/** How fast a flash fades, per second. */
+export const STROBE_FADE = 20;
+/** The computed parameter through which the evaluator tells a strobe how long ago its last flash started (seconds; absent = never). Not stored in documents. */
+export const FLASH_SINCE = '__flashSince';
 export function motionAt(type: string, p: Record<string, unknown>, seconds: number, beat?: BeatPosition | null): { scale: number; rotation: number; dx: number; dy: number } {
   const amount = n(p.amount, 0), speed = n(p.speed, 1), seed = Math.round(n(p.seed, 1));
   const hit = musicHit(p, beat);
@@ -447,23 +454,16 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       let c = s.rgb / max(s.a, 0.0001);
       return vec4f((vec3f(1.0) - (vec3f(1.0) - c) * (vec3f(1.0) - leak)) * s.a, s.a);`,
   },
-  // Brief flashes of light. One strobe on one clip never starts more than three flashes in any one second (flashing
-  // faster than that is a seizure risk): the strength is highest at a flash time and only falls until the next one, and
-  // two flash times are at least STROBE_MIN_GAP apart, which leaves room for a flash that is first seen a little late
-  // (see STROBE_MIN_GAP: the first frame of a clip that begins just after a flash time; a frame just after it).
-  //  - steady: the flash times are k / rate on the timeline, rate at most STROBE_MAX_RATE; no parameter of the strobe
-  //    can be animated (core effects.ts NOT_ANIMATABLE), so neither the rate nor the brightness changes during the clip.
-  //  - following the music: the flash times are the hits that count (musicHit with STROBE_MIN_GAP), and the strength
-  //    depends only on the time since the last of them. With no analysed music at the moment there is no flash: a
-  //    fallback to the steady rate could put a steady flash right next to a music hit where the music starts or stops.
-  // Not limited here: what several strobes add up to (two on one clip, or on clips that overlap or follow one another,
-  // with different settings). Each of them keeps to the limit; this function sees only its own effect.
+  // Brief flashes of light. SAFETY: all strobes of a timeline together never start more than three flashes in any one
+  // second (faster flashing is a seizure risk for some viewers). See strobeSchedule.ts.
   'light.strobe': {
-    params: (p, env) => {
-      let strength: number;
-      if (p.follow === 'music') strength = Math.exp(-(musicHit(p, env.beat, STROBE_MIN_GAP)?.since ?? Infinity) * STROBE_FADE);
-      else { const ph = (env.seconds ?? 0) * Math.min(STROBE_MAX_RATE, Math.max(0, n(p.rate, 2))); strength = Math.exp(-(ph - Math.floor(ph + 1e-9)) * 10); }
-      return [...rgb(p.color, '#FFFFFF'), n(p.amount, 0.6) * strength];
+    // The strobe does not decide when it flashes. The evaluator gives every strobe the seconds since its last flash start
+    // from ONE schedule for the whole timeline (strobeSchedule.ts), in which the flash starts of all strobes together are
+    // never closer than a third of a second plus a frame. Without that number (the effect drawn outside the evaluator)
+    // there is no flash at all.
+    params: (p) => {
+      const since = typeof p[FLASH_SINCE] === 'number' ? Math.max(0, p[FLASH_SINCE] as number) : Infinity;
+      return [...rgb(p.color, '#FFFFFF'), since * STROBE_FADE > 12 ? 0 : n(p.amount, 0.6) * Math.exp(-since * STROBE_FADE)]; // after 0.6 s a flash is below one part in 150,000: exactly nothing
     },
     wgsl: `
       let s = textureSampleLevel(src, smp, uv, 0.0);

@@ -23,7 +23,7 @@ import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, fin
 import { clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
-import { own } from './own.ts';
+import { isInheritedName, own } from './own.ts';
 
 export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
@@ -51,6 +51,11 @@ export interface OpDefinition<S extends z.ZodType = z.ZodType> {
   args: S;
   /** Internal ops attach results of trusted server jobs (e.g. ingest) and are not callable by API clients. */
   internal?: boolean;
+  /**
+   * Argument keys whose ids this op looks up itself with an own-property test (Object.hasOwn) and refuses with a more
+   * helpful error than the generic guard would (refuseInheritedIds). The guard leaves only these keys to the op.
+   */
+  checksOwnIds?: readonly string[];
   /** Mutates the draft (a private deep copy). Throw OpError to reject the whole transaction. */
   apply(draft: ProjectDocument, args: z.infer<S>, ctx: OpContext): OpResult;
 }
@@ -61,6 +66,21 @@ function defineOp<S extends z.ZodType>(def: OpDefinition<S>) {
   registry.set(def.name, def as unknown as OpDefinition);
 }
 export const listOps = () => [...registry.values()];
+
+/**
+ * Names that every plain object answers to through its prototype (`__proto__`, `constructor`, `toString`, …). Library
+ * files, sequences, analyses and variants are kept in plain objects keyed by id, so an id equal to one of these names
+ * would find something that is not an entry (`d.assets.__proto__` is Object.prototype), and writing to it would change
+ * every object in the process. No id this product makes can be such a name (ids are `prefix_…`), so an argument that
+ * names one is refused before any op sees it.
+ */
+const isIdKey = (key: string) => key === 'id' || key === 'lut' || /Ids?$/.test(key);
+/** Throws `not_found` when an id-like argument (a key named `id`, `…Id` or `…Ids`, at any depth) is one of those names. */
+export function refuseInheritedIds(args: unknown, where: string, key = '', leave: readonly string[] = []): void {
+  if (typeof args === 'string') { if (isIdKey(key) && !leave.includes(key) && isInheritedName(args)) throw new OpError('not_found', `${where}: no ${key} "${args}"`, { [key]: args }); return; }
+  if (Array.isArray(args)) { for (const v of args) refuseInheritedIds(v, where, key, leave); return; }
+  if (args && typeof args === 'object') for (const [k, v] of Object.entries(args)) refuseInheritedIds(v, where, isIdKey(k) ? k : k === 'params' || k === 'args' ? '' : isIdKey(key) ? key : k, leave);
+}
 export const getOp = (name: string) => registry.get(name);
 export function describeOps(opts: { includeInternal?: boolean } = {}) {
   return listOps()
@@ -1411,6 +1431,7 @@ defineOp({
       if (!def || def.internal) throw new OpError('forbidden_op', `recipe step ${i} uses "${call.op}", which is not a public operation`, { index: i });
       const parsed = def.args.safeParse(call.args);
       if (!parsed.success) throw new OpError('invalid_args', `recipe step ${i} (${call.op}): ${z.prettifyError(parsed.error)}`, { index: i });
+      refuseInheritedIds(parsed.data, `recipe step ${i} (${call.op})`, '', def.checksOwnIds);
       const r = def.apply(d, parsed.data, ctx);
       for (const id of r.affectedIds) affected.add(id);
       const out = r.output ?? {};
@@ -1828,6 +1849,7 @@ defineOp({
 defineOp({
   name: 'apply_lut',
   version: 1,
+  checksOwnIds: ['assetId'], // assertLutRef: Object.hasOwn, and the error lists the tables there are
   description: 'Give a picture or title clip a colour table (a 3D LUT imported from a .cube file into the project library; get_summary lists them as assets of kind lut). Sets the clip\'s single color.lut effect: an existing one is replaced (and re-enabled), otherwise one is added at the end of its effect list. intensity 0..1 mixes the table with the original picture (default 1; when replacing, the current value is kept unless given). Needs a graphics adapter (WebGPU) to be shown and exported.',
   args: z.object({ clipId: z.string(), assetId: z.string().min(1).max(64), intensity: z.number().min(0).max(1).optional() }).strict(),
   apply(d, a, ctx) {
@@ -1855,6 +1877,7 @@ defineOp({
 defineOp({
   name: 'add_effect',
   version: 1,
+  checksOwnIds: ['lut'], // assertLutRef: Object.hasOwn, and the error lists the tables there are
   description: 'Add an effect to a picture or title clip. Effects run in list order on the clip, before its mask, blend mode and opacity. Unspecified parameters take the effect\'s defaults. Discover effects with list_catalog.',
   args: z.object({ clipId: z.string(), type: z.string(), params: z.record(z.string(), z.unknown()).optional(), index: z.number().int().min(0).optional() }).strict(),
   apply(d, a, ctx) {
@@ -1876,6 +1899,7 @@ const mustEffect = (clip: Clip, effectId: string) => {
 defineOp({
   name: 'update_effect',
   version: 1,
+  checksOwnIds: ['lut'], // assertLutRef: Object.hasOwn, and the error lists the tables there are
   description: 'Change parameters of an effect on a clip (unspecified ones are kept), bypass or re-enable it, or move it to another position in the clip\'s effect order.',
   args: z.object({ clipId: z.string(), effectId: z.string(), params: z.record(z.string(), z.unknown()).optional(), enabled: z.boolean().optional(), index: z.number().int().min(0).optional() }).strict(),
   apply(d, a) {
@@ -2528,6 +2552,7 @@ export function applyTransaction(doc: ProjectDocument, ops: OpCall[], opts: { id
     const parsed = def.args.safeParse(call.args);
     if (!parsed.success) throw new OpError('invalid_args', `invalid arguments for ${call.op}: ${z.prettifyError(parsed.error)}`, { index, issues: parsed.error.issues });
     try {
+      refuseInheritedIds(parsed.data, call.op, '', def.checksOwnIds);
       results.push({ op: call.op, ...def.apply(draft, parsed.data, ctx) });
     } catch (e) {
       if (e instanceof OpError) e.details = { index, op: call.op, ...e.details };

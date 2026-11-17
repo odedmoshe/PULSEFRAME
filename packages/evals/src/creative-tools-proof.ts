@@ -303,14 +303,24 @@ async function main() {
       const tilesShown = await page.getByTestId('layout-tile').count();
       await page.locator('[data-testid=layout-tile][data-id="layout.side-by-side"]').click();
       const arranged = await until(lp, (x) => clipsOf(x, 'video').every((c: any) => !!c.mask));
-      const png = (await call(`/projects/${lp}/frame?index=10`)).body as Buffer;
-      const pngFile = path.join(art, 'layout.png');
-      fs.writeFileSync(pngFile, png);
-      const rgb = ff(['-i', pngFile, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
-      const at = (x: number, y: number) => [rgb[(y * 1280 + x) * 3]!, rgb[(y * 1280 + x) * 3 + 1]!, rgb[(y * 1280 + x) * 3 + 2]!];
-      const left = at(320, 360), right = at(960, 360), topLeft = at(20, 20), bottomRight = at(1260, 700);
+      const still = async (name: string) => {
+        const pngFile = path.join(art, name);
+        fs.writeFileSync(pngFile, (await call(`/projects/${lp}/frame?index=10`)).body as Buffer);
+        const rgb = ff(['-i', pngFile, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+        return (x: number, y: number) => [rgb[(y * 1280 + x) * 3]!, rgb[(y * 1280 + x) * 3 + 1]!, rgb[(y * 1280 + x) * 3 + 2]!];
+      };
+      const at = await still('layout.png');
+      // The upper (blue) picture is scaled to cover its cell: 640x480 fitted to the frame is 960x720, centred on the right
+      // cell, so without its mask it reaches 160 px into the left half (x 480…640). x = 560 and 620 are inside that overlap.
+      const left = at(320, 360), right = at(960, 360), topLeft = at(20, 20), bottomRight = at(1260, 700), nearSeamLeft = at(560, 360), seamLeft = at(620, 360);
       const isRed = (c: number[]) => c[0]! > 200 && c[2]! < 60, isBlue = (c: number[]) => c[2]! > 200 && c[0]! < 60;
-      check('a layout for the wrong number of pictures is refused with the layouts that do fit; with two picture clips selected the editor offers the two-picture layouts, and "side by side" fills the left half with the lower track\'s picture and the right half with the upper one, each cropped to its cell, on a rendered still', wrong.status !== 200 && tilesShown >= 4 && !!arranged && isRed(left) && isBlue(right) && isRed(topLeft) && isBlue(bottomRight), { refusedStatus: wrong.status, tilesShown, left, right, topLeft, bottomRight });
+      // the same still with the masks taken away: the check must then fail (blue over the left half), or it proves nothing about masks
+      await txs(lp, clipsOf(await doc(lp), 'video').map((c: any) => ({ op: 'set_clip_mask', args: { clipId: c.id, mask: null } })));
+      const bare = await still('layout-no-masks.png');
+      const unmaskedOverflows = isBlue(bare(560, 360)) && isBlue(bare(620, 360));
+      await call(`/projects/${lp}/undo`, {});
+      const restored = isRed((await still('layout.png'))(560, 360));
+      check('a layout for the wrong number of pictures is refused with the layouts that do fit; with two picture clips selected the editor offers the two-picture layouts, and "side by side" fills the left half with the lower track\'s picture and the right half with the upper one, each cropped to its cell by its mask, on a rendered still (without the masks the upper picture covers part of the left half, so this check depends on them)', wrong.status !== 200 && tilesShown >= 4 && !!arranged && isRed(left) && isBlue(right) && isRed(topLeft) && isBlue(bottomRight) && isRed(nearSeamLeft) && isRed(seamLeft) && unmaskedOverflows && restored, { refusedStatus: wrong.status, tilesShown, left, right, topLeft, bottomRight, nearSeamLeft, seamLeft, withoutMasks: [bare(560, 360), bare(620, 360)], restored });
       await page.screenshot({ path: path.join(art, 'layout-editor.png') });
     }
 
@@ -338,7 +348,15 @@ async function main() {
       check('typewriter by letter on an English title: one letter at the first frame, on the left; more ink at every later sample; from the end of the entrance on, the frame is byte-identical to the same title without animation', growing && leftFirst && restSame, { ink: steps.map((x) => `${x.k}:${x.count}`), restInk: rest.count, firstLetterSpan: [steps[0]!.minX, steps[0]!.maxX], titleSpan: [rest.minX, rest.maxX] });
       await txs(tp, [{ op: 'set_text_animation', args: { clipId: en, animation: { in: null, out: 'fade', outFrames: 20, by: 'word' } } }]);
       const outMid = await ink(80), outEnd = await ink(89), before = await ink(60);
-      check('fade out by word: unchanged before the exit begins, less ink during it, almost none on the last frame', before.bytes.equals(rest.bytes) && outMid.count < rest.count && outEnd.count < rest.count / 10, { rest: rest.count, during: outMid.count, last: outEnd.count });
+      // word by word, not the whole title at once: during the exit there is a frame on which the first word and the last
+      // word have different shares of their ink left (a whole-title fade keeps them equal on every frame)
+      const third = Math.floor((rest.maxX - rest.minX) / 3);
+      const inkIn = (bytes: Buffer, x0: number, x1: number) => { let c = 0; for (let y = 0; y < 360; y++) for (let x = x0; x < x1; x++) if (bytes[(y * 640 + x) * 3]! > 128) c++; return c; };
+      const firstRest = inkIn(rest.bytes, rest.minX, rest.minX + third), lastRest = inkIn(rest.bytes, rest.maxX - third, rest.maxX + 1);
+      const shares: { k: number; first: number; last: number }[] = [];
+      for (const k of [72, 75, 78, 81, 84, 87]) { const b = (await ink(k)).bytes; shares.push({ k, first: Number((inkIn(b, rest.minX, rest.minX + third) / firstRest).toFixed(2)), last: Number((inkIn(b, rest.maxX - third, rest.maxX + 1) / lastRest).toFixed(2)) }); }
+      const staggered = shares.some((x) => Math.abs(x.first - x.last) > 0.3);
+      check('fade out by word: unchanged before the exit begins, less ink during it, almost none on the last frame, and the words leave one after another (the first and last word differ in what is left of them during the exit)', before.bytes.equals(rest.bytes) && outMid.count < rest.count && outEnd.count < rest.count / 10 && staggered, { rest: rest.count, during: outMid.count, last: outEnd.count, shares });
       await txs(tp, [{ op: 'set_text_animation', args: { clipId: en, animation: { out: null, loop: 'wave', by: 'letter' } } }]);
       const w1 = await ink(30), w1again = await ink(30), w2 = await ink(37);
       check('a wave loop moves the letters: the same frame is identical when rendered again, differs from another frame and from the title at rest, and keeps about the same amount of ink', w1.bytes.equals(w1again.bytes) && !w1.bytes.equals(w2.bytes) && !w1.bytes.equals(rest.bytes) && Math.abs(w1.count - rest.count) < rest.count * 0.1, { rest: rest.count, wave: w1.count });
@@ -361,10 +379,21 @@ async function main() {
       await page.getByTestId('tl-zoom-in').click();
       await sleep(200);
       const wIn = await widthOf();
+      await page.getByTestId('tl-zoom-out').click();
+      await page.getByTestId('tl-zoom-out').click();
+      await sleep(200);
+      const wOut = await widthOf();
+      // zoom far in first, so that "fit" has to shrink the view, then fit: the whole timeline (the title is all of it) is in view and fills most of it
+      for (let i = 0; i < 6; i++) await page.getByTestId('tl-zoom-in').click();
+      await sleep(200);
+      const wFar = await widthOf();
       await page.getByTestId('tl-zoom-fit').click();
       await sleep(200);
-      const fit = await page.evaluate((id) => { const c = document.querySelector(`.clip[data-clip-id="${id}"]`)!.getBoundingClientRect(), sc = document.querySelector('.tl-scroll')!.getBoundingClientRect(); return { right: c.right, scrollRight: sc.right, left: c.left, scrollLeft: sc.left }; }, he);
-      check('the title panel sets a text animation through the same operation; the timeline zoom buttons change the clip\'s width on screen and "fit" brings the whole timeline into view', !!viaUi && wIn > w0 * 1.2 && fit.right <= fit.scrollRight + 1 && fit.left >= fit.scrollLeft - 1, { widthBefore: Math.round(w0), widthAfterZoomIn: Math.round(wIn), fit });
+      const fit = await page.evaluate((id) => {
+        const c = document.querySelector(`.clip[data-clip-id="${id}"]`)!.getBoundingClientRect(), el = document.querySelector('.tl-scroll')! as HTMLElement, sc = el.getBoundingClientRect();
+        return { right: c.right, scrollRight: sc.right, left: c.left, scrollLeft: sc.left, width: c.width, viewWidth: el.clientWidth, scrolledBy: el.scrollLeft, canScroll: el.scrollWidth > el.clientWidth + 1 };
+      }, he);
+      check('the title panel sets a text animation through the same operation; the timeline zoom buttons change the clip\'s width on screen both ways; after zooming far in, "fit" brings the whole timeline into view and lets it fill at least half of the view', !!viaUi && wIn > w0 * 1.2 && wOut < wIn / 1.2 && wFar > wOut * 2 && fit.right <= fit.scrollRight + 1 && fit.left >= fit.scrollLeft - 1 && fit.width >= fit.viewWidth / 2 && fit.width < wFar, { widthBefore: Math.round(w0), widthAfterZoomIn: Math.round(wIn), widthAfterZoomOut: Math.round(wOut), widthFarIn: Math.round(wFar), fit });
     }
 
     console.log('\n# graphic elements');

@@ -10,6 +10,8 @@
  */
 import * as T from '@pulseframe/time';
 import { captionAt, type CaptionLayer } from './captions.ts';
+import { FLASH_SINCE } from './gpu.ts';
+import { flashSchedule, flashSince } from './strobeSchedule.ts';
 import { beatPositionAt, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, sourceAt, startOffsetFrames, transformAt, type BlendMode, type Clip, type Mask, type ProjectDocument, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 
 /** Look applied by the compositor after the layer is placed: effects in order, then mask, then blend/opacity. */
@@ -55,20 +57,21 @@ export interface RenderGraph {
   audio: ActiveAudio[];
 }
 
-const look = (clip: Clip, time: T.RationalTime): LayerLook => {
+/** `flash` gives a strobe the seconds since its last flash start on this frame (strobeSchedule.ts); the strobe has no other clock. */
+const look = (clip: Clip, time: T.RationalTime, flash: (clipId: string, effectId: string) => number): LayerLook => {
   const local = T.sub(time, clip.start);
-  const fx = clip.effects?.filter((e) => e.enabled).map((e) => ({ type: e.type, params: effectParamsAt(e, local) }));
+  const fx = clip.effects?.filter((e) => e.enabled).map((e) => ({ type: e.type, params: e.type === 'light.strobe' ? { ...effectParamsAt(e, local), [FLASH_SINCE]: flash(clip.id, e.id) } : effectParamsAt(e, local) }));
   return { ...(fx?.length ? { effects: fx } : {}), ...(clip.blend ? { blend: clip.blend } : {}), ...(clip.type === 'media' && clip.mask ? { mask: clip.mask } : {}) };
 };
 const smooth = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
 
 /** Picture layer of a media clip at `time`. The source position is clamped to the last frame, so a clip asked to play past its source (a transition handle that no longer exists) freezes instead of failing. */
-function pictureLayer(doc: ProjectDocument, track: Track, clip: Extract<Clip, { type: 'media' }>, time: T.RationalTime): VideoLayer | ImageLayer | null {
+function pictureLayer(doc: ProjectDocument, track: Track, clip: Extract<Clip, { type: 'media' }>, time: T.RationalTime, flash: (clipId: string, effectId: string) => number): VideoLayer | ImageLayer | null {
   const asset = doc.assets[clip.assetId];
   if (!asset) return null;
   const sourceTime = pictureSourceAt(clip, time, T.frameTime(1, doc.settings.frameRate)); // a reversed clip mirrors the frame order here, for preview, stills and export alike
   if (asset.kind === 'image' && asset.image)
-    return { kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time), ...look(clip, time) };
+    return { kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time), ...look(clip, time, flash) };
   if (!asset.video) return null;
   const rate = asset.video.frameRate;
   // Frames are counted from the first picture in the file. When that picture does not sit at time 0, it is shown that many
@@ -80,7 +83,7 @@ function pictureLayer(doc: ProjectDocument, track: Track, clip: Extract<Clip, { 
     kind: 'video', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceTime, sourceFrameIndex: idx,
     sourceSeekSeconds: ((idx + 0.5) * rate.den) / rate.num,
     ...(asset.video.untaggedColour && asset.video.readColourAs === 'bt601' && !asset.conform ? { colourFix: 'bt709-as-bt601' as const } : {}),
-    sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: transformAt(clip, time), ...look(clip, time),
+    sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: transformAt(clip, time), ...look(clip, time, flash),
   };
 }
 
@@ -91,6 +94,8 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
   const graph: RenderGraph = { time, frameIndex: T.frameIndexAt(time, frameRate), width, height, background, fit: doc.settings.fit ?? 'contain', layers: [], audio: [] };
   const beat = beatPositionAt(doc, time, sequenceId);
   if (beat) graph.beat = beat;
+  // the flash schedule of the timeline is worked out the first time a strobe is met (once per document, then reused)
+  const flash = (clipId: string, effectId: string) => flashSince(flashSchedule(doc, sequenceId), clipId, effectId, graph.frameIndex);
   const captions: CaptionLayer[] = [];
   for (const track of seq.tracks) {
     if (track.kind === 'caption') { const c = captionAt(doc, seq, track, time); if (c) captions.push(c); continue; }
@@ -98,7 +103,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
       // half-open [start, start+duration)
       if (T.lt(time, clip.start) || !T.lt(time, T.add(clip.start, clip.duration))) continue;
       if (clip.type === 'text') {
-        if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time), ...look(clip, time),
+        if (!track.hidden) graph.layers.push({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time), ...look(clip, time, flash),
           ...(clip.animation ? { animation: { ...clip.animation, local: T.toSeconds(T.sub(time, clip.start)), total: T.toSeconds(clip.duration), fps: frameRate.num / frameRate.den } } : {}) });
         continue;
       }
@@ -110,14 +115,14 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
         continue;
       }
       if (track.kind !== 'video' || track.hidden) continue;
-      const layer = pictureLayer(doc, track, clip, time);
+      const layer = pictureLayer(doc, track, clip, time, flash);
       if (!layer) continue;
       const local = T.frameIndexAt(T.sub(time, clip.start), frameRate);
       if (clip.transition && local < clip.transition.frames) {
         // Neither end shows a pure side: frame 0 is already slightly in, the last transition frame is not yet complete.
         const progress = smooth((local + 1) / (clip.transition.frames + 1));
         const prev = track.clips.find((c) => c.type === 'media' && c.id !== clip.id && T.eq(T.add(c.start, c.duration), clip.start));
-        const out = prev && prev.type === 'media' ? pictureLayer(doc, track, prev, time) : null;
+        const out = prev && prev.type === 'media' ? pictureLayer(doc, track, prev, time, flash) : null;
         if (out) graph.layers.push({ ...out, transition: { type: clip.transition.type, progress, role: 'out' } });
         layer.transition = { type: clip.transition.type, progress, role: 'in' };
       }

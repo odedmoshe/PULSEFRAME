@@ -31,6 +31,10 @@ Status: accepted (Phase 0); extended in Phase 1 (see "Phase 1 additions")
   `keyframes`) are plain objects. `record[key]` therefore also finds what every object inherits: `"__proto__"` answers `Object.prototype` itself,
   `"constructor"` and `"toString"` answer functions. Before this rule `rename_asset` with `assetId: "__proto__"` renamed `Object.prototype` for the whole
   process, including from a dry run or a proposal.
+- **Guard.** `applyTransaction` and recipe steps refuse an id-like argument (`id`, `…Id`, `…Ids`, an effect's `lut`) that is such a name with `not_found`
+  before the op runs (`refuseInheritedIds` in `ops.ts`). An op that checks such a key itself with a better error lists it in `checksOwnIds`. The guard
+  decides by argument name, so the rules below still hold for every lookup: they cover keys with other names (an effect parameter, a segment), the
+  server's routes, the read helpers, and ids inside a stored document.
 - **Rule 1.** A key that did not come out of the validated document (an op argument, a route parameter, a tool input, a stored job input) is looked up with
   `own(record, key)` (`packages/core/src/own.ts`), never with `record[key]`. Anything the record does not itself hold is "not found", with the error codes the
   callers already had.
@@ -40,7 +44,8 @@ Status: accepted (Phase 0); extended in Phase 1 (see "Phase 1 additions")
 - **Writes.** An entry is written under a generated id or under the id of an entity that was just found. `apply_recipe` with a `runId` therefore requires that
   run to exist (`not_found` otherwise); `restore_entities` refuses a reserved id instead of assigning under it.
 - `packages/core/src/own.test.ts` applies every registered op with such a name in each string argument and fails on anything but a typed refusal or an ordinary
-  result. A new op is covered by it without being listed.
+  result; `inheritedIds.test.ts` does the same for every id argument with every inherited name. A new op is covered by both without being listed. One
+  definition of the names: `isInheritedName` in `own.ts`.
 
 ## Still deferred
 Proposals/branches and checkpoints (Phase 5/§23), per-op authorization metadata, dependency-aware visual diffs, property-level merge.

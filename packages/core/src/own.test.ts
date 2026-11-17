@@ -2,12 +2,16 @@
  * Ids that name something every object inherits ("__proto__", "constructor", "toString") name nothing in a project.
  * Before own.ts, `rename_asset` with assetId "__proto__" found Object.prototype in the asset record and renamed it for
  * the whole process; other ops with the same lookup crashed instead of answering not_found.
+ *
+ * Two layers stop it: the guard in applyTransaction (refuseInheritedIds, inheritedIds.test.ts) refuses an id-like
+ * argument before the op runs, and every lookup of a caller-supplied key reads only the record's own entries (own.ts).
+ * The tests here hold through a transaction whichever layer answers; where a layer is tested on its own it says so.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
   applyTransaction, COLOR_LOOKS, createProject, describeOps, findClip, isInheritedName, OpError, own, planRecipe, projectVariant, RecipeError,
-  sequenceDuration, TEXT_PRESETS, timeline, transcriptView, validateProject, type OpCall, type ProjectDocument,
+  restoreEntities, sequenceDuration, TEXT_PRESETS, timeline, transcriptView, validateProject, type EntityState, type OpCall, type ProjectDocument,
 } from './index.ts';
 
 const HOSTILE = ['__proto__', 'constructor', 'toString'] as const;
@@ -103,7 +107,8 @@ describe('ops given an id that names an inherited member', () => {
   it('the reported case: rename_asset with "__proto__" is refused with not_found and ({}).name stays undefined', () => {
     const doc = createProject({ id: 'prj_x', name: 'X' });
     const e = failure(() => applyTransaction(doc, [{ op: 'rename_asset', args: { assetId: '__proto__', name: 'polluted' } }], { idSeed: 'a_', actor: 'agent:test' }));
-    expect([e.code, e.message]).toEqual(['not_found', 'asset __proto__ not found']);
+    expect(e.code).toBe('not_found');
+    expect(e.message).toContain('__proto__');
     expect(({} as { name?: string }).name).toBeUndefined();
     expect(protoDamage()).toEqual([]);
   });
@@ -207,7 +212,7 @@ describe('ops given an id that names an inherited member', () => {
     }
   });
 
-  it('undo data that names such an id is refused on the way in, and never becomes the prototype of a record', () => {
+  it('undo data that names such an id is refused, through a transaction and by restoreEntities itself, and never becomes the prototype of a record', () => {
     const s = studio();
     const states: [string, unknown][] = [
       ['asset', { kind: 'asset', asset: { ...video, id: '__proto__' } }],
@@ -218,9 +223,13 @@ describe('ops given an id that names an inherited member', () => {
       ['recipeRun', { kind: 'recipeRun', run: { ...s.doc.recipeRuns[s.runId]!, id: '__proto__' } }],
     ];
     for (const [kind, state] of states) {
+      // through a transaction (the guard answers first: the id is an argument named `id` or `assetId`)
       const e = failure(() => tx(s.doc, [{ op: 'restore_entities', args: { targets: [{ id: '__proto__', state }] } }], true));
-      expect([kind, e.code]).toEqual([kind, 'invalid_result']);
-      expect(e.message).toMatch(/reserved/);
+      expect([kind, e.code]).toEqual([kind, 'not_found']);
+      // the write side on its own: restoreEntities refuses to assign under the id instead of replacing a record's prototype
+      const draft = structuredClone(s.doc);
+      expect(() => restoreEntities(draft, [{ id: '__proto__', state: state as EntityState }]), kind).toThrow(/reserved/);
+      expect(oddPrototypes(draft), kind).toEqual([]);
     }
     expect(protoDamage()).toEqual([]);
   });
