@@ -156,11 +156,11 @@
 .timeline.pf-ds .track.audio { --k: var(--pf-k-sfx); }
 .timeline.pf-ds .track.audio:has(> .track-head[data-flavour='voice']) { --k: var(--pf-k-voice); }
 .timeline.pf-ds .track.audio:has(> .track-head[data-flavour='music']) { --k: var(--pf-k-music); }
-.timeline.pf-ds .track-lane { position: relative; z-index: 1; flex: 1 1 0; min-inline-size: 0; }
+.timeline.pf-ds .track-lane { --tl-grid: repeating-linear-gradient(to right, var(--pf-line) 0 1px, transparent 1px var(--tl-step)); position: relative; z-index: 1; flex: 1 1 0; min-inline-size: 0; background-image: var(--tl-grid); }
 /* the main track: the tallest lane, tinted, where the story is */
-.timeline.pf-ds .track.lane-v1 .track-lane { background: var(--pf-v1-tint); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--pf-frame) 22%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--pf-frame) 22%, transparent); }
+.timeline.pf-ds .track.lane-v1 .track-lane { background-color: var(--pf-v1-tint); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--pf-frame) 22%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--pf-frame) 22%, transparent); }
 .timeline.pf-ds .track.adjustment { background: none; }
-.timeline.pf-ds .track.adjustment .track-lane { background: repeating-linear-gradient(135deg, var(--pf-line) 0 6px, transparent 6px 12px); }
+.timeline.pf-ds .track.adjustment .track-lane { background-image: var(--tl-grid), repeating-linear-gradient(135deg, var(--pf-line) 0 6px, transparent 6px 12px); }
 
 /* track header: stays at the time origin. Colour bar, kind icon, short id, name; the controls appear on hover or focus. */
 .timeline.pf-ds .track-head { position: sticky; left: 0; top: auto; z-index: 5; flex: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--pf-sp-3); inline-size: var(--tl-head); block-size: auto; padding-inline: 11px var(--pf-sp-4);
@@ -250,7 +250,7 @@
 .timeline.pf-ds .cue-auto svg { flex: none; color: var(--pf-k-caption); }
 .timeline.pf-ds .cue-auto span { overflow: hidden; text-overflow: ellipsis; }
 /* the tail a sound rings on for after its clip (echo, reverb) */
-.timeline.pf-ds .clip-tail { position: absolute; pointer-events: none; border: 1px dashed var(--pf-line-control); border-left: 0; border-radius: 0 var(--pf-r-sm) var(--pf-r-sm) 0; background: none; }
+.timeline.pf-ds .clip-tail { position: absolute; pointer-events: none; border: 1px dashed var(--pf-line-control); border-left: 0; border-radius: 0 var(--pf-r-sm) var(--pf-r-sm) 0; background: repeating-linear-gradient(135deg, var(--pf-line-strong) 0 3px, transparent 3px 6px); animation: none; }
 .timeline.pf-ds .clip-tail[data-cut='true'] { border-right: 1px solid var(--pf-attention); }
 
 /* volume line over a sound clip (the clip's own keys), and the level a ducked track is lowered to under the voice */
@@ -276,14 +276,14 @@
 .timeline.pf-ds .cut-band { position: absolute; inset-block: 3px; left: 0; border-radius: 3px; pointer-events: none; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pf-text) 42%, transparent) 0 2px, transparent 2px 6px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-text) 30%, transparent); }
 .timeline.pf-ds .cut-band.beat { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pf-pulse) 70%, transparent) 0 2px, transparent 2px 6px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-pulse) 55%, transparent); }
 .timeline.pf-ds .cut-band.short { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pf-attention) 70%, transparent) 0 2px, transparent 2px 6px); box-shadow: inset 0 0 0 1px var(--pf-attention); }
-.timeline.pf-ds button.cut-chip { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-inline-size: 24px; block-size: 22px; padding: 0 5px; border-radius: var(--pf-r-sm); background: var(--pf-surface-1); color: var(--pf-text); box-shadow: 0 0 0 1px var(--pf-line-control), 0 2px 6px -2px var(--pf-canvas); cursor: pointer; }
+.timeline.pf-ds button.cut-chip { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-inline-size: 24px; block-size: 24px; padding: 0 5px; border-radius: var(--pf-r-sm); background: var(--pf-surface-1); color: var(--pf-text); box-shadow: 0 0 0 1px var(--pf-line-control), 0 2px 6px -2px var(--pf-canvas); cursor: pointer; }
 .timeline.pf-ds button.cut-chip:hover { background: var(--pf-surface-4); }
 .timeline.pf-ds button.cut-chip.beat { color: var(--pf-pulse); box-shadow: 0 0 0 1.5px var(--pf-pulse), var(--pf-glow-pulse); border: 0; background: var(--pf-surface-1); }
 .timeline.pf-ds button.cut-chip.held { color: var(--pf-text-2); }
 .timeline.pf-ds button.cut-chip.short { color: var(--pf-attention); box-shadow: 0 0 0 1.5px var(--pf-attention); }
 .timeline.pf-ds button.cut-chip[aria-pressed='true'], .timeline.pf-ds .cut.selected button.cut-chip { background: var(--pf-surface-1); color: var(--pf-frame); border: 0; box-shadow: var(--pf-glow-frame); }
 .timeline.pf-ds .cut.dropping button.cut-chip, .timeline.pf-ds .cut.dropping button.cut-add { opacity: 1; color: var(--pf-frame-ink); background: var(--pf-frame); box-shadow: var(--pf-glow-frame); transform: scale(1.25); }
-.timeline.pf-ds button.cut-add { display: inline-grid; place-items: center; inline-size: 22px; block-size: 22px; border-radius: 50%; background: var(--pf-surface-1); color: var(--pf-frame); box-shadow: 0 0 0 1.5px var(--pf-frame); cursor: pointer; opacity: 0; transition: opacity var(--pf-dur-fast) var(--pf-ease-out), transform var(--pf-dur-fast) var(--pf-ease-snap); }
+.timeline.pf-ds button.cut-add { display: inline-grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 50%; background: var(--pf-surface-1); color: var(--pf-frame); box-shadow: 0 0 0 1.5px var(--pf-frame); cursor: pointer; opacity: 0; transition: opacity var(--pf-dur-fast) var(--pf-ease-out), transform var(--pf-dur-fast) var(--pf-ease-snap); }
 .timeline.pf-ds .track-lane:hover button.cut-add, .timeline.pf-ds button.cut-add:focus-visible { opacity: 1; }
 .timeline.pf-ds button.cut-add:hover { background: var(--pf-frame); color: var(--pf-frame-ink); transform: scale(1.1); }
 .timeline.pf-ds button.cut-add[aria-disabled='true'] { color: var(--pf-attention); box-shadow: 0 0 0 1.5px var(--pf-attention); cursor: not-allowed; }
@@ -347,6 +347,11 @@
 .clip-menu.pf-ds button.danger:not(:disabled) .pf-ico { color: inherit; }
 .clip-menu.pf-ds kbd { margin-inline-start: auto; padding: 1px 6px; border: 0; border-radius: 5px; background: var(--pf-surface-1); color: var(--pf-text-2); font-size: var(--pf-fs-digits); opacity: 1; }
 
+/* the ride bar's menus (ds Menu, rendered at the end of the page): an opaque surface of their own, so they read over the lanes
+   whatever the legacy sheet makes of the middle surface tokens */
+.pf-menu.tl-menu { background: var(--pf-surface-4); }
+.pf-menu.tl-menu .pf-menu-item:hover, .pf-menu.tl-menu .pf-menu-item:focus-visible { background: var(--pf-line-strong); }
+
 /* ---------- the splitter between the viewer and the timeline ---------- */
 .tl-splitter.pf-ds { display: grid; place-items: center; }
 .tl-splitter.pf-ds .pf-tip-anchor { display: grid; inline-size: 100%; block-size: 100%; }
@@ -355,6 +360,11 @@
 .tl-splitter.pf-ds .tl-splitter-grip:hover i, .tl-splitter.pf-ds .tl-splitter-grip:active i { background: var(--pf-frame); inline-size: 56px; }
 .tl-splitter.pf-ds .tl-splitter-grip:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: -2px; border-radius: var(--pf-r-xs); }
 .tl-splitter.pf-ds .tl-splitter-grip:focus-visible i { background: var(--pf-focus); inline-size: 56px; }
+
+/* Light theme: a plate stays dark (it sits over pictures), so what is written on it stays light. --pf-on-plate is the token
+   asked for; until it exists, the one token that is white in both themes stands in. */
+:root[data-theme='light'] .timeline.pf-ds .track .clip:not(.k-text, .k-caption, .k-adjust) :is(.clip-plate, .clip-kind, .clip-fx-badge),
+:root[data-theme='light'] .timeline.pf-ds :is(.clip-badge, .clip-badge.is-ai, .word-chip, .duck-label) { color: var(--pf-on-plate, var(--pf-on-danger)); }
 
 @media (prefers-reduced-motion: reduce) {
   .timeline.pf-ds .pulse-now.playing { animation: none; }

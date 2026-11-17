@@ -140,7 +140,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     chip = <span className="ride-chip is-cut" data-testid="ride-length"><Scissors size={13} strokeWidth={1.75} aria-hidden="true" /><span>{s.cut}</span><bdi className="num">{signedTimecode(T.frameIndexAt(clip.start, rate), rate).slice(1)}</bdi></span>;
     body = (
       <>
-        <Menu label={s.rTransition} items={items} onSelect={(id) => (id === '#gallery' ? openPanel('transitions-gallery', clip.id) : setType(id))}
+        <Menu className="tl-menu" label={s.rTransition} items={items} onSelect={(id) => (id === '#gallery' ? openPanel('transitions-gallery', clip.id) : setType(id))}
           trigger={(p) => <Act {...p} testId="ride-transition" label={tr ? transitionDef(tr.type)?.name[state.lang] ?? s.rTransition : s.rTransition} icon={ico(Blend)} reason={locked ? s.locked : undefined} className="keeps-label" />} />
         <Act testId="ride-beat-lock" className="ride-beat" label={s.cutBeatLock} icon={<IconBeatLock size={15} />} pressed={tr?.sync === 'beat'} reason={!tr ? s.cutAdd : !grid ? s.rulerBarsNeed : locked ? s.locked : undefined}
           onClick={() => void editor.commit([{ op: 'set_transition_options', args: { clipId: clip.id, sync: tr?.sync === 'beat' ? null : 'beat' } }], 'Beat lock')} />
@@ -197,7 +197,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
         )}
         <Act testId={barId('edit.duplicate')} label={s.rDuplicate} keys={key('edit.duplicate')} reason={why('edit.duplicate', s.needClip)} icon={ico(CopyPlus)} onClick={run('edit.duplicate')} />
         <Act testId={barId('edit.delete')} danger label={s.rDelete} keys={key('edit.delete')} reason={why('edit.delete', s.needClip)} icon={ico(Trash2)} onClick={run('edit.delete')} />
-        <Menu label={s.rMore} items={more} onSelect={(id) => { if (id === '#unlink') void editor.commit([{ op: 'unlink_clip', args: { clipId: clip!.id } }], 'Unlink'); else void cmd(id).run(editor); }}
+        <Menu className="tl-menu" label={s.rMore} items={more} onSelect={(id) => { if (id === '#unlink') void editor.commit([{ op: 'unlink_clip', args: { clipId: clip!.id } }], 'Unlink'); else void cmd(id).run(editor); }}
           trigger={(p) => <Act {...p} iconOnly testId="ride-more" label={s.rMore} icon={ico(Ellipsis)} />} />
       </>
     );

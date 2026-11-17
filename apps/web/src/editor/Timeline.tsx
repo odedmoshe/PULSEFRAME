@@ -695,12 +695,12 @@ export function Timeline() {
         <div className="tl-view">
           <Seg label={s.rulerMode} size="sm" value={rulerMode} onChange={(v) => { setRuler(v); try { localStorage.setItem(RULER_KEY, v); } catch { /* the choice lasts for this visit */ } }} className="tl-ruler-mode"
             options={[{ value: 'time', label: s.rulerTime, testId: 'tl-ruler-time' }, { value: 'bars', label: s.rulerBars, disabled: !hasBeats, testId: 'tl-ruler-bars' }]} />
-          <TimelineZoom />
+          <TimelineZoom pps={pps} lang={lang} />
         </div>
       </div>
       {menu && <ClipMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
       <div className="tl-scroll" ref={setScroller} {...containerProps} onPointerDownCapture={() => { kbdNav.current = false; }} onFocusCapture={(e) => { if ((e.target as HTMLElement).classList?.contains('clip') && (e.target as HTMLElement).matches(':focus-visible')) kbdNav.current = true; }}>
-        <div className="tl-inner" style={{ width: innerWidth, '--tl-head': `${head}px` } as React.CSSProperties} {...marqueeProps} onKeyDown={onLanesKey}
+        <div className="tl-inner" style={{ width: innerWidth, '--tl-head': `${head}px`, '--tl-step': `${step * pps}px` } as React.CSSProperties} {...marqueeProps} onKeyDown={onLanesKey}
           onDragOver={onDragOver} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(null); }} onDrop={onDrop}>
           <div className="tl-top">
             <div className="tl-corner">
@@ -715,7 +715,7 @@ export function Timeline() {
             </div>
             <div className="tl-top-lanes">
               <PulseStrip model={pulse.model} pps={pps} lang={lang} onSeekFrame={(f) => editor.seek(f)} truncatedTitle={t('timeline.markers.truncated')} />
-              <div className="ruler" data-testid="ruler" data-mode={rulerMode} style={{ '--tl-step': `${step * pps}px` } as React.CSSProperties} onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.max(0, Math.round(((x / pps) * rate.num) / rate.den))); }}>
+              <div className="ruler" data-testid="ruler" data-mode={rulerMode} onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.max(0, Math.round(((x / pps) * rate.num) / rate.den))); }}>
                 {rulerMode === 'time'
                   ? Array.from({ length: Math.floor(Math.max(totalSeconds + 80 / pps, (view.width - head) / pps) / step) + 1 }, (_, i) => <span key={i} className="num" style={{ left: i * step * pps }}>{rulerLabel(i * step, step)}</span>)
                   : pulse.model.beats.filter((b) => b.n !== null && (b.n - 1) % labelsEvery === 0).map((b) => <span key={b.frame} className="num" style={{ left: b.s * pps }}>{b.n}</span>)}

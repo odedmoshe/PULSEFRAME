@@ -34,8 +34,15 @@ export function Splitter() {
 
   const limits = () => ({ min: MIN_H, available: window.innerHeight, keepAbove: KEEP_ABOVE });
   const timelineEl = () => root.current?.parentElement?.querySelector<HTMLElement>(':scope > .timeline') ?? null;
+  /** The height of the timeline's row in the shell: the timeline with its own margins. */
+  const rowHeight = (): number => {
+    const tl = timelineEl();
+    if (!tl) return 0;
+    const cs = getComputedStyle(tl);
+    return Math.round(tl.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0));
+  };
   const measure = useCallback(() => {
-    const h = timelineEl()?.offsetHeight ?? 0, max = Math.max(MIN_H, window.innerHeight - KEEP_ABOVE);
+    const h = rowHeight(), max = Math.max(MIN_H, window.innerHeight - KEEP_ABOVE);
     setNow((was) => (was.height === h && was.max === max ? was : { height: h, max }));
   }, []);
 
@@ -70,7 +77,7 @@ export function Splitter() {
     if (e.button !== 0) return;
     e.preventDefault();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-    drag.current = { pointerId: e.pointerId, y0: e.clientY, h0: timelineEl()?.offsetHeight ?? now.height };
+    drag.current = { pointerId: e.pointerId, y0: e.clientY, h0: rowHeight() || now.height };
   };
   const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
@@ -79,7 +86,7 @@ export function Splitter() {
   };
   const onUp = (e: ReactPointerEvent<HTMLDivElement>) => { if (drag.current?.pointerId === e.pointerId) drag.current = null; };
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const h = timelineEl()?.offsetHeight ?? now.height, step = e.shiftKey ? 48 : 16;
+    const h = rowHeight() || now.height, step = e.shiftKey ? 48 : 16;
     const next = e.key === 'ArrowUp' ? h + step : e.key === 'ArrowDown' ? h - step : e.key === 'End' ? window.innerHeight : e.key === 'PageUp' ? h + 96 : e.key === 'PageDown' ? h - 96 : null;
     if (next === null && e.key !== 'Home' && e.key !== 'Enter') return;
     e.preventDefault(); e.stopPropagation(); // the arrows resize here, they do not step the playhead

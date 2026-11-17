@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import * as T from '@pulseframe/time';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { IconButton } from '../ds/index.ts';
+import type { Lang } from '@pulseframe/i18n';
 import type { Editor } from './store.ts';
-import { useEditorState } from './store.ts';
+import { useEditor } from './store.ts';
 import { TL_STRINGS } from './timeline.strings.ts';
 import { clampPps, fitPps, ppsToSlider, scrollLeftAfterZoom, SLIDER_MAX, sliderToPps, wheelFactor, ZOOM_STEP, zoomAnchorX } from './zoom.math.ts';
 import './timelineZoom.css';
@@ -36,7 +37,7 @@ function zoomTo(editor: Editor, el: HTMLElement | null, next: number, anchorX?: 
 
 /** Callback ref for the scrolling element: Ctrl/⌘+wheel (and trackpad pinch) zooms around the pointer; a plain wheel scrolls as before. */
 export function useWheelZoom() {
-  const { editor } = useEditorState();
+  const editor = useEditor();
   const off = useRef<(() => void) | null>(null);
   return useCallback((el: HTMLElement | null) => {
     off.current?.(); off.current = null;
@@ -52,11 +53,13 @@ export function useWheelZoom() {
   }, [editor]);
 }
 
-/** Zoom out, the zoom slider, zoom in, and "the whole edit" (Shift+Z): the end of the timeline's toolbar. */
-export function TimelineZoom() {
-  const { editor, state } = useEditorState();
-  const s = TL_STRINGS[state.lang];
-  const pps = state.pxPerSecond;
+/**
+ * "The whole edit" (Shift+Z), zoom out, the zoom slider and zoom in: the end of the timeline's toolbar.
+ * It takes the zoom and the language from the timeline and does not listen to the player, so playback does not redraw it.
+ */
+export const TimelineZoom = memo(function TimelineZoom({ pps, lang }: { pps: number; lang: Lang }) {
+  const editor = useEditor();
+  const s = TL_STRINGS[lang];
   const root = useRef<HTMLSpanElement>(null);
   const el = () => scroller(root.current);
   defaultPps(editor);
@@ -89,4 +92,4 @@ export function TimelineZoom() {
       <IconButton size="sm" className="tl-zoom-btn" data-testid="tl-zoom-in" label={s.zoomIn} keys={['=']} icon={<ZoomIn size={15} strokeWidth={1.75} aria-hidden="true" />} onClick={() => zoomTo(editor, el(), pps * ZOOM_STEP)} />
     </span>
   );
-}
+});
