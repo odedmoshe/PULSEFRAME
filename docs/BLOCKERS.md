@@ -26,6 +26,8 @@ Each entry: what is blocked, how to reproduce, impact, proposed way forward. Wor
 
 - **Update 2026-11-16:** a second descriptor exists (`comfy.image.upscale-4x`, Real-ESRGAN, 67 MB) and has never been run. Two things are the owner's: (1) permission to download that file here for one CPU functional trial (the earlier 1 GB trial grant was for BiRefNet and is spent; the speech and voice grants do not cover it); (2) confirmation of its licence against the original publisher (the mirror says BSD-3-Clause; the publisher's repository could not be read from this environment). Depth (for parallax) and frame interpolation need custom node packs, which the product never installs by itself; nothing was built for them.
 
+- **Update 2026-11-17 (owner, in the session):** "מאשר לך להוריד כל מה שנחוץ לך (מודלים וכו') עד ל-30gb, מאשר גם Real-ESRGAN" — downloads of whatever models are needed, up to 30 GB in total, Real-ESRGAN included. Conditions kept: each model's licence is checked against its original publisher before download (non-commercial weights are not used in the default profile); downloads are recorded with size and digest; nothing is installed into ComfyUI automatically for users of the product. Practical limit here: this container's writable disk has about 8 GB free (speech and ComfyUI use about 20 GB), so the downloads made here stay well under 30 GB.
+
 ## B-5 — Preconditions inside the project (not external)
 Stale-result protection (FFG-09) needs entity versions (Phase 1). Timeline attachment needs image/derived assets (Phase 2). Worker lease and budgets need Phase 5/10 work.
 
