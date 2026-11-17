@@ -78,10 +78,12 @@ export function CutLoupe() {
     const frame = which === 'out' ? cut.frame - 1 : cut.frame + after;
     const clip = which === 'out' ? cut.prev : cut.next;
     const handle = which === 'out' ? cut.handleAfter : cut.handleBefore;
-    const title = `${which === 'out' ? S.lastFrame : after ? S.firstAfter : S.firstFrame} · ${name(clip.assetId)}`;
+    const what = which === 'out' ? S.lastFrame : after ? S.firstAfter : S.firstFrame;
+    const title = `${what} · ${name(clip.assetId)}`;
     return (
       <figure className={`loupe-side is-${which}`} data-testid={`cut-loupe-${which}`} data-frame={frame}>
-        <figcaption><bdi className="loupe-name" dir="auto">{title}</bdi><span className="tc">{tc(frame)}</span></figcaption>
+        {/* what the frame is, then the file's name, which is the part that gives way (its end, never its start) */}
+        <figcaption title={title}><span className="loupe-what" dir={state.lang === 'he' ? 'rtl' : 'ltr'}>{what}</span><bdi className="loupe-name" dir="ltr">{name(clip.assetId)}</bdi><span className="tc">{tc(frame)}</span></figcaption>
         <Still src={url(frame)} alt={title} />
         <div className={`loupe-handle${handle !== null && handle / fps < 0.5 ? ' is-short' : ''}`}>
           <span dir="auto">{which === 'out' ? S.spareEnd : S.spareStart}</span><span className="num">{spare(handle)}</span>

@@ -57,7 +57,7 @@ const he = {
   loudUnknown: 'עוד לא נמדד', loudTarget: 'יעד', loudAlign: 'יישור ל־‎−14 LUFS',
   narrationNotInstalled: 'קריינות מטקסט עוד לא מותקנת במחשב הזה. אפשר להתקין אותה מתוך מרכז המצב.',
   secClean: 'ניקוי קול', secSoundFx: 'אפקטי קול', secBeat: 'קצב ופעימות',
-  bpmMeasured: (bpm: string, beats: number) => `קצב ${bpm} BPM · ${beats} פעימות`, bpmNone: 'הקצב עוד לא נותח',
+  tempo: 'קצב', beatsN: (n: number) => `${n} פעימות`, bpmNone: 'הקצב עוד לא נותח',
   // text
   secWords: 'הטקסט', secFont: 'גופן', secStyle: 'סגנון מוכן', secTextFx: 'קו מתאר, צל וזוהר', secTextAnim: 'אנימציית טקסט',
   chars: 'תווים', fontFamily: 'משפחה', fontSize: 'גודל',
@@ -74,7 +74,7 @@ const he = {
   // footer
   delete: 'מחיקה', duplicate: 'שכפול',
   // cut inspector
-  cutTitle: (tc: string) => `חיתוך · ${tc}`, cutFromTo: (a: string, b: string) => `${a} ← ${b}`,
+  cutTitle: (tc: string) => `חיתוך · ${tc}`, cutArrow: '←',
   secRoll: 'גלגול החיתוך', rollEarlier: 'פריים אחד אחורה', rollLater: 'פריים אחד קדימה', rollBeat: 'לפעימה הקרובה', rollBeatNone: 'אין פעימה קרובה',
   rollNote: 'הקליפ הקודם מתארך או מתקצר, והקליפ הבא מתחיל בהתאם. האורך הכולל לא משתנה.',
   rollRefused: 'אין מספיק חומר בצד הזה כדי להזיז את החיתוך.',
@@ -128,7 +128,7 @@ const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => st
   loudUnknown: 'Not measured yet', loudTarget: 'target', loudAlign: 'Align to −14 LUFS',
   narrationNotInstalled: 'Narration from text is not installed on this computer yet. It can be installed from the status centre.',
   secClean: 'Voice cleanup', secSoundFx: 'Sound effects', secBeat: 'Tempo and beats',
-  bpmMeasured: (bpm, beats) => `Tempo ${bpm} BPM · ${beats} beats`, bpmNone: 'The tempo is not analysed yet',
+  tempo: 'Tempo', beatsN: (n) => `${n} beats`, bpmNone: 'The tempo is not analysed yet',
   secWords: 'The text', secFont: 'Font', secStyle: 'Ready style', secTextFx: 'Outline, shadow and glow', secTextAnim: 'Text animation',
   chars: 'characters', fontFamily: 'Family', fontSize: 'Size',
   captionLooksLink: 'The look of captions is set for the whole track, in Captions mode.',
@@ -139,7 +139,7 @@ const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => st
   formats: 'More formats', none: 'None',
   nothingHint: 'Select a clip, a title or a cut on the timeline to see its properties.',
   delete: 'Delete', duplicate: 'Duplicate',
-  cutTitle: (tc) => `Cut · ${tc}`, cutFromTo: (a, b) => `${a} → ${b}`,
+  cutTitle: (tc) => `Cut · ${tc}`, cutArrow: '→',
   secRoll: 'Roll the cut', rollEarlier: 'One frame earlier', rollLater: 'One frame later', rollBeat: 'To the nearest beat', rollBeatNone: 'No beat nearby',
   rollNote: 'The clip before gets longer or shorter and the clip after starts to match. The total length does not change.',
   rollRefused: 'There is not enough material on that side to move the cut.',

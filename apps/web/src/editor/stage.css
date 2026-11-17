@@ -115,9 +115,10 @@
 .loupe-keys { flex: 1; min-inline-size: 0; display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--pf-sp-2); color: var(--pf-text-2); font-size: var(--pf-fs-xs); white-space: nowrap; overflow: hidden; }
 .loupe-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--pf-sp-5); min-block-size: 0; align-items: stretch; }
 .loupe-side { margin: 0; min-inline-size: 0; min-block-size: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--pf-sp-3); }
-.loupe-side figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: var(--pf-sp-4); font-size: var(--pf-fs-xs); min-inline-size: 0; }
-.loupe-name { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--pf-fw-semibold); color: var(--pf-text); }
-.loupe-side figcaption .tc { color: var(--pf-text-2); font-size: var(--pf-fs-digits); }
+.loupe-side figcaption { display: flex; align-items: baseline; gap: var(--pf-sp-3); font-size: var(--pf-fs-xs); min-inline-size: 0; }
+.loupe-what { flex: none; color: var(--pf-text-2); white-space: nowrap; }
+.loupe-name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--pf-fw-semibold); color: var(--pf-text); }
+.loupe-side figcaption .tc { flex: none; margin-inline-start: auto; color: var(--pf-text-2); font-size: var(--pf-fs-digits); }
 .loupe-still { position: relative; min-block-size: 0; display: grid; place-items: center; border-radius: var(--pf-r-sm); background: var(--pf-canvas); box-shadow: 0 0 0 1px var(--pf-line-strong); overflow: hidden; }
 .loupe-side.is-in .loupe-still { box-shadow: 0 0 0 1px var(--pf-line-strong); }
 .loupe-still img { display: block; max-inline-size: 100%; max-block-size: 100%; inline-size: 100%; block-size: 100%; object-fit: contain; }

@@ -4,17 +4,18 @@
  * their values, explanations behind "?". Every control commits a registered operation through the store, as before; the
  * controls that proofs drive keep their test ids on the same native elements.
  */
-import { useContext, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Activity, Blend as BlendIcon, Captions, ChevronRight, Contrast, Droplet, Ellipsis, Film, Gauge, Layers, Maximize2, Minimize2, Move, Music,
   Scissors, SlidersHorizontal, Sparkles, Spline, SquareDashed, Timer, Trash2, Type, Volume2, type LucideProps,
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
-import type { Clip, OpCall, ProjectDocument } from '@pulseframe/core';
+import type { Asset, Clip, OpCall, ProjectDocument } from '@pulseframe/core';
 import { beatPositionAt, clipEnd, findClip, findEffect, fitScale, FONT_CATALOG, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, coverEditOps, keyframeProps, type Keymap } from './commands.ts';
 import { ADJUST_STRINGS } from './adjust.strings.ts';
+import { DerivativeLoader, thumbTileAt, type LoadedDerivative } from './mediaThumb.ts';
 import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
 import { repeatClick, singleFlight } from './oneAtATime.ts';
 import { useEditorState, type Editor, type ResolvedNow } from './store.ts';
@@ -78,18 +79,19 @@ export function ObjectHeader({ kind, keymap }: { kind: ObjectKind; keymap: Keyma
       const cut = cutBefore(doc, c.id)!;
       const names = [doc.assets[cut.prev.assetId]?.name ?? '', doc.assets[cut.next.assetId]?.name ?? ''].map((n) => n.replace(/\.[a-z0-9]{2,5}$/i, ''));
       name = S.cutTitle(shortTimecode(cut.frame, fps)); tile = ico(Scissors, 20); tone = 'cut';
-      meta = <bdi dir="auto">{S.cutFromTo(names[0]!, names[1]!)}</bdi>;
-    } else if (c.type === 'text') { name = c.text.split('\n')[0] || S.kindText; tile = <span className="oh-abc" aria-hidden="true">אבג</span>; tone = 'text'; meta = <>{S.kindText} · {sec(c.duration)} · {trackName}</>; }
+      // the earlier clip first in reading order, the arrow pointing the way the edit runs (← in Hebrew, → in English)
+      meta = <span dir={state.lang === 'he' ? 'rtl' : 'ltr'}><bdi dir="ltr">{names[0]}</bdi> {S.cutArrow} <bdi dir="ltr">{names[1]}</bdi></span>;
+    } else if (c.type === 'text') { name = c.text.split('\n')[0] || S.kindText; tile = <span className="oh-abc" aria-hidden="true">אבג</span>; tone = 'text'; meta = <><span className="oh-part">{S.kindText} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
     else if (c.type === 'caption') { name = c.text || S.kindCaption; tile = ico(Captions, 20); tone = 'caption'; meta = <>{S.kindCaption} · {sec(c.duration)}</>; }
     else if (c.type === 'adjustment') { name = c.label || S.kindAdjust; tile = ico(Layers, 20); tone = 'adjust'; meta = <>{S.kindAdjust} · {sec(c.duration)}</>; }
     else {
       const a = doc.assets[c.assetId];
       name = (a?.name ?? '').replace(/\.[a-z0-9]{2,5}$/i, '') || S.missing;
-      if (sel.track.kind === 'audio') { tile = ico(Music, 20); tone = 'music'; meta = <>{S.kindSound} · {sec(c.duration)} · {trackName}</>; }
+      if (sel.track.kind === 'audio') { tile = ico(Music, 20); tone = 'music'; meta = <><span className="oh-part">{S.kindSound} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
       else if (a?.kind === 'image') {
         tile = <img src={`/api/v1/projects/${encodeURIComponent(doc.id)}/assets/${encodeURIComponent(a.id)}/content`} alt="" loading="lazy" draggable={false} />; tone = 'video';
-        meta = <>{S.kindImage} · {sec(c.duration)} · {trackName}</>;
-      } else { tile = ico(Film, 20); tone = 'video'; meta = <>{S.kindVideo} · {sec(c.duration)} · {trackName}</>; }
+        meta = <><span className="oh-part">{S.kindImage} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>;
+      } else { tile = a?.video ? <ClipThumb projectId={doc.id} asset={a} frac={sourceFrac(c, a)} refreshKey={state.derivativeTick} /> : ico(Film, 20); tone = 'video'; meta = <><span className="oh-part">{S.kindVideo} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
       if (!a) tone = 'missing';
     }
   }
@@ -113,6 +115,39 @@ export function ObjectHeader({ kind, keymap }: { kind: ObjectKind; keymap: Keyma
       )}
     </div>
   );
+}
+
+/** Where the middle of the clip lies in its file, 0..1: the frame the header's picture shows. */
+function sourceFrac(c: Media, a: Asset): number {
+  const total = T.toSeconds(a.duration);
+  if (!(total > 0)) return 0;
+  const mid = T.toSeconds(c.sourceIn) + (T.toSeconds(c.duration) * speedValue(c)) / 2;
+  return Math.max(0, Math.min(0.999, mid / total));
+}
+/**
+ * The header's picture of a video clip: a tile of the file's filmstrip (the ingest derivative the library cards use), at the
+ * middle of the clip. Until the filmstrip is there (or for a file that has none) the film icon stays.
+ */
+function ClipThumb({ projectId, asset, frac, refreshKey }: { projectId: string; asset: Asset; frac: number; refreshKey: number }) {
+  const [loaded, setLoaded] = useState<LoadedDerivative<ImageBitmap> | null>(null);
+  const loader = useRef<DerivativeLoader<ImageBitmap> | null>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const l = new DerivativeLoader<ImageBitmap>({ fetch: (url, signal) => fetch(url, { credentials: 'same-origin', signal }), decode: (b) => createImageBitmap(b), onChange: (v) => setLoaded(v) });
+    loader.current = l;
+    return () => { loader.current = null; l.dispose(); };
+  }, []);
+  useEffect(() => { loader.current?.show({ projectId, assetId: asset.id, contentHash: asset.contentHash, kind: 'thumbnails' }); }, [projectId, asset.id, asset.contentHash]);
+  useEffect(() => { loader.current?.poke(); }, [refreshKey]);
+  useEffect(() => {
+    const c = canvas.current, cur = loader.current?.current;
+    if (!c || !cur || cur.kind !== 'thumbnails') return;
+    const tile = thumbTileAt(cur.meta, frac);
+    c.width = tile.width; c.height = tile.height;
+    c.getContext('2d')?.drawImage(cur.bitmap, tile.sx, tile.sy, tile.width, tile.height, 0, 0, tile.width, tile.height);
+  }, [loaded, frac]);
+  if (!loaded || loaded.kind !== 'thumbnails') return ico(Film, 20);
+  return <canvas ref={canvas} className="oh-thumb" aria-hidden="true" data-testid="insp-header-thumb" />;
 }
 
 /* ------------------------------------------------------------------ rows ------------------------------------------------------------------ */
@@ -904,7 +939,8 @@ function BeatTab({ clip, keymap }: PanelProps) {
     <>
       <div className={`pf-card${beats ? ' is-pulse' : ''} beat-card`} data-testid="insp-beat" data-beats={beats ? beats.beats.length : 0}>
         <IconOnBeat size={18} />
-        <span>{beats ? isolate(S.bpmMeasured(bpm === null ? '—' : String(Math.round(bpm)), beats.beats.length)) : S.bpmNone}</span>
+        {/* "120 BPM" is one left-to-right run, in every language */}
+        <span>{beats ? <>{S.tempo} <bdi dir="ltr" className="num">{bpm === null ? '—' : Math.round(bpm)} BPM</bdi> · {isolate(S.beatsN(beats.beats.length))}</> : S.bpmNone}</span>
       </div>
       <Section id="analysis" title={S.secBeat} help><AnalysisPanel key={`analysis:${clip.id}`} /></Section>
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>
