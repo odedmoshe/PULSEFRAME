@@ -9,10 +9,14 @@
  *   holiday table never changes what an old operation log replays to. Never a derived name while the Hebrew day of any file
  *   of the event is unsure (capture.ts hebrewDayReadings gives two readings).
  * - clusterCaptures: timed files become minutes rd·1440 + ⌊seconds/60⌋, sorted by (minutes, id); a new cluster starts where
- *   the gap is strictly greater than gapMinutes. Day-only files join the cluster with the most files on that civil day (tie:
- *   the earliest), else form one cluster per day. Last, a cluster of more than MAX_EVENT_FILES members (schema.ts: what an
- *   event can hold) is cut, in member order, into consecutive clusters of MAX_EVENT_FILES and a remainder, so cluster_events
- *   never makes an event the project cannot store and never has to refuse for size.
+ *   the gap is strictly greater than gapMinutes. Day-only files join the cluster with the most timed files on that civil day
+ *   (tie: the earliest), else form one cluster per day. Inside a cluster a day-only file sits at the midnight of its day;
+ *   the clusters themselves are listed by when their timed files begin (a cluster of day-only files: by its day), so a
+ *   day-only file that joined an evening does not pull that evening before the morning. Last, a cluster of more than
+ *   MAX_EVENT_FILES members (schema.ts: what an event can hold) is cut, in member order, into consecutive clusters of
+ *   MAX_EVENT_FILES and a remainder, so cluster_events never makes an event the project cannot store and never has to
+ *   refuse for size.
+ * - A derived name looks at the dated files of the event only: a file without a date says nothing about the day.
  * - No caches here: operations and validation call these on a draft that changes between the operations of one transaction.
  *   A cache belongs to the caller that only sees committed documents (fields.ts makeFieldIndex, kept by the engine).
  * - People (birthdays as event names, «יום הולדת 5 לנועה») are NOT part of this build: they wait for the owner's approval.
