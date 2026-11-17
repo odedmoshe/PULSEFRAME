@@ -2383,10 +2383,14 @@ export function motionTrackUsers(d: ProjectDocument, motionTrackIds: ReadonlySet
       }
   return { follow, redact };
 }
+/** Refuse a track of n samples, past the per-track cap. Edits that grow a track call it with the final span BEFORE growing the columns, so a far-away frame is refused without building millions of samples first. */
+function assertTrackLength(motionTrackId: string, n: number) {
+  if (n > MAX_TRACK_SAMPLES) throw new OpError('out_of_bounds', `a motion track can hold at most ${MAX_TRACK_SAMPLES} samples; this edit would make ${n}`, { motionTrackId, samples: n, max: MAX_TRACK_SAMPLES }, 'Track a shorter stretch of the video.');
+}
 /** Refuse a track that would hold too many samples, alone or with the project's other tracks (tracking.ts caps). */
 function assertTrackCaps(d: ProjectDocument, t: MotionTrack) {
   const n = t.x.length;
-  if (n > MAX_TRACK_SAMPLES) throw new OpError('out_of_bounds', `a motion track can hold at most ${MAX_TRACK_SAMPLES} samples; this edit would make ${n}`, { motionTrackId: t.id, samples: n, max: MAX_TRACK_SAMPLES }, 'Track a shorter stretch of the video.');
+  assertTrackLength(t.id, n);
   const total = Object.values(d.motionTracks ?? {}).reduce((sum, x) => sum + (x.id === t.id ? 0 : x.x.length), n);
   if (total > MAX_PROJECT_TRACK_SAMPLES) throw new OpError('out_of_bounds', `the motion tracks of a project can hold at most ${MAX_PROJECT_TRACK_SAMPLES} samples in all; this edit would make ${total}`, { samples: total, max: MAX_PROJECT_TRACK_SAMPLES }, 'Delete a motion track that is no longer needed (remove_motion_track), or track a shorter stretch.');
 }
@@ -2397,8 +2401,9 @@ const columnsOf = (t: MotionTrack): Columns => ({ from: t.from, x: [...t.x], y: 
 function extendColumns(c: Columns, lo: number, hi: number) {
   if (lo < c.from) {
     const k = c.from - lo;
-    const gap = <X,>(v: X) => Array.from({ length: k }, () => v);
-    c.x.unshift(...gap(0)); c.y.unshift(...gap(0)); c.s?.unshift(...gap(SIZE_UNIT)); c.q.unshift(...gap(0)); c.st.unshift(...gap<number>(ST.unknown)); c.filled.unshift(...gap(true));
+    // concat, never unshift(...spread): a spread passes one argument per frame and overflows the call stack past ~125,000 frames
+    const gap = <X,>(v: X): X[] => new Array<X>(k).fill(v);
+    c.x = gap(0).concat(c.x); c.y = gap(0).concat(c.y); if (c.s) c.s = gap(SIZE_UNIT).concat(c.s); c.q = gap(0).concat(c.q); c.st = gap<number>(ST.unknown).concat(c.st); c.filled = gap(true).concat(c.filled);
     c.from = lo;
   }
   const end = c.from + c.x.length;
@@ -2472,6 +2477,7 @@ defineOp({
     const last = lastSourceFrame(asset);
     if (a.from + n - 1 > last) throw new OpError('out_of_bounds', `the samples reach past the last frame of the video (${last})`, { from: a.from, samples: n, lastFrame: last });
     const oldEnd = t.from + t.x.length, newEnd = a.from + n;
+    assertTrackLength(t.id, Math.max(oldEnd, newEnd) - Math.min(t.from, a.from)); // before the columns are built
     const c: Columns = { from: Math.min(t.from, a.from), x: [], y: [], s: t.s ? [] : null, q: [], st: [], filled: [] };
     for (let f = c.from, hi = Math.max(oldEnd, newEnd); f < hi; f++) {
       const o = f >= t.from && f < oldEnd ? f - t.from : -1, k = f >= a.from && f < newEnd ? f - a.from : -1;
@@ -2511,6 +2517,10 @@ defineOp({
           if (p.frame > last) throw new OpError('out_of_bounds', `frame ${p.frame} is past the last frame of the video (${last})`, { frame: p.frame, lastFrame: last });
           if (p.s !== undefined && t.kind !== 'region') throw new OpError('invalid_args', 'a point track has no sizes (s)', { kind: t.kind });
         }
+        // the span the track would cover, checked before any column grows
+        let lo = c.from, hi = c.from + c.x.length;
+        for (const p of a.set) { lo = Math.min(lo, p.frame); hi = Math.max(hi, p.frame + 1); }
+        assertTrackLength(t.id, hi - lo);
         for (const p of [...a.set].sort((x, y) => x.frame - y.frame)) {
           const s = p.s ?? trackSampleAt(t, p.frame).s; // a region sample without a size keeps the size the track has there (or at its nearest end)
           extendColumns(c, Math.min(c.from, p.frame), Math.max(c.from + c.x.length, p.frame + 1));

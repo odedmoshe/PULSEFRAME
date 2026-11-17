@@ -47,6 +47,30 @@ describe('motion tracks: caps', () => {
     const fifth = refusal(() => create(d, { assetId, kind: 'point', frame: 0, x: 1, y: 1 }));
     expect([fifth.code, fifth.message]).toEqual(['out_of_bounds', `the motion tracks of a project can hold at most ${MAX_PROJECT_TRACK_SAMPLES} samples in all; this edit would make ${MAX_PROJECT_TRACK_SAMPLES + 1}`]);
   });
+
+  it('a hand sample far before or after a track in a long video is refused with the typed cap refusal, before the track grows', () => {
+    // a track seeded deep in a 3,000,000-frame recording (about 28 hours at 30 fps); growing it back to frame 0 once overflowed the call stack
+    const { doc, assetId } = project(3_000_000);
+    for (const seed of [130_000, 2_000_000]) {
+      const t = create(doc, { assetId, kind: 'region', frame: seed, x: 5000, y: 5000, w: 1000, h: 1000 });
+      for (const [set, span] of [[[{ frame: 0, x: 1, y: 1 }], seed + 1], [[{ frame: 0, x: 1, y: 1 }, { frame: 2_999_999, x: 2, y: 2 }], 3_000_000], [[{ frame: 2_999_999, x: 2, y: 2 }], 3_000_000 - seed]] as const) {
+        const e = refusal(() => tx(t.doc, [{ op: 'edit_motion_track', args: { motionTrackId: t.id, set } }]));
+        expect([e.code, e.message, e.hint]).toEqual(['out_of_bounds', `a motion track can hold at most ${MAX_TRACK_SAMPLES} samples; this edit would make ${span}`, 'Track a shorter stretch of the video.']);
+        expect(e.details).toMatchObject({ motionTrackId: t.id, samples: span, max: MAX_TRACK_SAMPLES });
+      }
+    }
+    // the tracking job's attach is refused the same way, from the span alone
+    const far = create(doc, { assetId, kind: 'point', frame: 2_000_000, x: 5000, y: 5000 });
+    const one = { x: [1], y: [1], q: [90], st: [ST.tracked] };
+    for (const [from, span] of [[0, 2_000_001], [2_999_999, 1_000_000]] as const) {
+      const e = refusal(() => attach(far.doc, far.id, from, one));
+      expect([e.code, e.message]).toEqual(['out_of_bounds', `a motion track can hold at most ${MAX_TRACK_SAMPLES} samples; this edit would make ${span}`]);
+    }
+    // just inside the cap, a sample before the track still extends it backwards (gap samples unknown, placed at the nearest known sample)
+    const t = create(doc, { assetId, kind: 'point', frame: 100_000 + MAX_TRACK_SAMPLES - 1, x: 5000, y: 5000 });
+    const grown = tx(t.doc, [{ op: 'edit_motion_track', args: { motionTrackId: t.id, set: [{ frame: 100_000, x: 1, y: 2 }] } }]).doc.motionTracks[t.id]!;
+    expect([grown.from, grown.x.length, grown.x[0], grown.x[1], grown.x.at(-1), grown.st[1], grown.st.at(-1)]).toEqual([100_000, MAX_TRACK_SAMPLES, 1, 1, 5000, ST.unknown, ST.manual]);
+  });
 });
 
 describe('motion tracks: sampling', () => {
