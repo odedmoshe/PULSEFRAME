@@ -62,12 +62,21 @@ const TidySpeech = z.object({
 }).strict();
 
 export const RECIPES = [
-  { id: 'beat-montage', name: { he: 'מונטאז׳ לפי קצב', en: 'Beat montage' }, description: 'Cut between the chosen pictures on the beats of a music clip.', params: Montage, needs: 'beat analysis of the music asset', regenerable: true },
-  { id: 'social-pack', name: { he: 'חבילת רשתות', en: 'Social pack' }, description: 'Add the usual output formats, captions from the transcript, and a loudness target. Skips whatever already exists.', params: SocialPack, needs: 'nothing; captions need a transcript', regenerable: false },
-  { id: 'tidy-speech', name: { he: 'הידוק דיבור', en: 'Tidy speech' }, description: 'Remove measured silences from a speech recording on every track, set a loudness target and show its transcript as captions.', params: TidySpeech, needs: 'silence measurement (done by the server when the recipe is planned)', regenerable: false },
-  { id: 'portrait-blur', name: { he: 'טשטוש רקע לתמונה', en: 'Portrait blur' }, description: 'Blur the background of a still picture behind its subject: the clip shows the cut-out of the subject, and a blurred copy of the picture goes on a new picture track directly below it, with the same timing, position and keyframes. The blur radius stays editable.', params: PortraitBlur, needs: 'a cut-out of the picture, made by the background-removal tool (AI tools)', regenerable: false },
+  { id: 'beat-montage', name: { he: 'מונטאז׳ לפי קצב', en: 'Beat montage' }, description: 'Cut between the chosen pictures on the beats of a music clip.', params: Montage, needs: 'beat analysis of the music asset', regenerable: true, aiInput: null },
+  { id: 'social-pack', name: { he: 'חבילת רשתות', en: 'Social pack' }, description: 'Add the usual output formats, captions from the transcript, and a loudness target. Skips whatever already exists.', params: SocialPack, needs: 'nothing; captions need a transcript', regenerable: false, aiInput: null },
+  { id: 'tidy-speech', name: { he: 'הידוק דיבור', en: 'Tidy speech' }, description: 'Remove measured silences from a speech recording on every track, set a loudness target and show its transcript as captions.', params: TidySpeech, needs: 'silence measurement (done by the server when the recipe is planned)', regenerable: false, aiInput: null },
+  { id: 'portrait-blur', name: { he: 'טשטוש רקע לתמונה', en: 'Portrait blur' }, description: 'Blur the background of a still picture behind its subject: the clip shows the cut-out of the subject, and a blurred copy of the picture goes on a new picture track directly below it, with the same timing, position and keyframes. The blur radius stays editable.', params: PortraitBlur, needs: 'a cut-out of the picture, made by the background-removal tool (AI tools)', regenerable: false,
+    aiInput: 'the cut-out: made earlier by the background-removal tool (BiRefNet, an AI model), which is run on its own (run_capability) and whose result is validated before it enters the project' },
 ] as const;
-export const describeRecipes = () => RECIPES.map((r) => ({ id: r.id, name: r.name, description: r.description, needs: r.needs, regenerable: r.regenerable, paramsSchema: z.toJSONSchema(r.params), method: 'rule-based plan from project data; no language model' }));
+/**
+ * method: how the plan is made. No recipe runs a model when it is planned or applied; aiInput names the project data a recipe
+ * rests on that an AI model made earlier (null: none), so "no language model" is never read as "nothing here came from AI".
+ */
+export const describeRecipes = () => RECIPES.map((r) => ({
+  id: r.id, name: r.name, description: r.description, needs: r.needs, regenerable: r.regenerable, paramsSchema: z.toJSONSchema(r.params),
+  method: `rule-based plan from project data; no language model${r.aiInput ? '; no AI model runs when it is planned or applied, but it uses a result an AI model made earlier (aiInput)' : ''}`,
+  aiInput: r.aiInput as string | null,
+}));
 
 const mulberry = (a: number) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const parse = <S extends z.ZodType>(schema: S, raw: unknown): z.infer<S> => {

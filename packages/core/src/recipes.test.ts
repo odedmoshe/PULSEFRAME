@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, cutoutsOf, diffEntities, findClip, OpError, planRecipe, RecipeError, restoreEntities, validateProject, type MediaClip, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, createProject, creativeProjection, cutoutsOf, describeRecipes, diffEntities, findClip, OpError, planRecipe, RecipeError, restoreEntities, validateProject, type MediaClip, type OpCall, type ProjectDocument } from './index.ts';
 import { dictionaries, translateRefusal, PORTRAIT_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
 
 const R = { num: 30, den: 1 };
@@ -212,5 +212,26 @@ describe('portrait blur recipe (ADR-0017): a still picture over a blurred copy o
     }
     expect([...matched].sort()).toEqual(PORTRAIT_REFUSAL_PATTERNS.map((_, i) => i));
     for (const lang of ['he', 'en'] as const) expect((dictionaries[lang] as Record<string, string>)['op.portrait_blur']?.trim()).toBeTruthy();
+  });
+});
+
+describe('the recipe catalog (GET /catalog → recipes, list_catalog)', () => {
+  it('lists every recipe with its parameter schema and its method, and says which one rests on a result an AI model made earlier', () => {
+    const cat = describeRecipes();
+    expect(cat.map((r) => r.id)).toEqual(['beat-montage', 'social-pack', 'tidy-speech', 'portrait-blur']);
+    for (const r of cat) {
+      expect((r.paramsSchema as { type?: string }).type, r.id).toBe('object');
+      expect(r.method, r.id).toMatch(/^rule-based plan from project data; no language model/);
+      expect(r.name.he.trim() && r.name.en.trim(), r.id).toBeTruthy();
+    }
+    // planning and applying run no model, but portrait blur needs a cut-out that an AI model (BiRefNet) made: the catalog says so
+    expect(cat.filter((r) => r.aiInput !== null).map((r) => r.id)).toEqual(['portrait-blur']);
+    const pb = cat.find((r) => r.id === 'portrait-blur')!;
+    expect(pb.aiInput).toMatch(/BiRefNet/);
+    expect(pb.method).toMatch(/AI model/);
+    // and so does the panel's introduction, in both languages (it used to say flatly that no AI model is involved)
+    expect(dictionaries.en['recipes.intro']).not.toMatch(/No AI model is involved/);
+    expect(dictionaries.en['recipes.intro']).toMatch(/portrait blur uses a cut-out/i);
+    expect(dictionaries.he['recipes.intro']).toMatch(/טשטוש רקע לתמונה משתמש בחיתוך/);
   });
 });
