@@ -129,19 +129,19 @@ export function followOffsetAt(doc: ProjectDocument, clipId: string, follow: Fol
 export interface TrackingProgress { phase: 'reading' | 'forward' | 'backward' | 'saving' | null; done: number; total: number; percent: number | null }
 /**
  * Progress of a tracking job read from its stage text ('reading frames', 'tracking forward 12/240', 'tracking backward 3/90',
- * 'saving track'). The forward pass counts as the first half and the backward one as the second when both run; percent is
- * null while nothing is counted yet (an indeterminate progress bar).
+ * 'saving track'): the share of the pass that is running. The job tracks forward from the first hand-placed sample and then
+ * backward from the last one, and how long the backward pass will be is not known while the forward one runs, so each pass
+ * is counted on its own and the stage text (the bar's value text) names the pass. percent is null while nothing is counted
+ * yet (an indeterminate bar).
  */
-export function trackingProgress(stage: string | null | undefined, direction: 'both' | 'forward' | 'backward' = 'both'): TrackingProgress {
+export function trackingProgress(stage: string | null | undefined): TrackingProgress {
   if (!stage) return { phase: null, done: 0, total: 0, percent: null };
   if (stage === 'reading frames') return { phase: 'reading', done: 0, total: 0, percent: null };
   if (stage === 'saving track') return { phase: 'saving', done: 0, total: 0, percent: 100 };
   const m = /^tracking (forward|backward) (\d+)\/(\d+)$/.exec(stage);
   if (!m) return { phase: null, done: 0, total: 0, percent: null };
   const phase = m[1] as 'forward' | 'backward', done = Number(m[2]), total = Number(m[3]);
-  const part = total > 0 ? Math.min(1, done / total) : 0;
-  const share = direction === 'both' ? (phase === 'forward' ? part / 2 : 0.5 + part / 2) : part;
-  return { phase, done, total, percent: Math.round(share * 100) };
+  return { phase, done, total, percent: Math.round((total > 0 ? Math.min(1, done / total) : 0) * 100) };
 }
 
 // ---- source frames on the timeline ----

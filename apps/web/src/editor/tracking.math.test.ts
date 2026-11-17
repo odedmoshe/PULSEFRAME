@@ -137,12 +137,12 @@ describe('attaching a follow without a jump', () => {
 });
 
 describe('tracking progress from the stage', () => {
-  it('reads the counted passes; reading is indeterminate; saving is complete', () => {
+  it('reads the share of the running pass; reading is indeterminate; saving is complete', () => {
     expect(trackingProgress(null)).toEqual({ phase: null, done: 0, total: 0, percent: null });
     expect(trackingProgress('reading frames').percent).toBeNull();
-    expect(trackingProgress('tracking forward 60/240')).toEqual({ phase: 'forward', done: 60, total: 240, percent: 13 });
-    expect(trackingProgress('tracking backward 30/60').percent).toBe(75);
-    expect(trackingProgress('tracking forward 30/60', 'forward').percent).toBe(50);
+    expect(trackingProgress('tracking forward 60/240')).toEqual({ phase: 'forward', done: 60, total: 240, percent: 25 });
+    expect(trackingProgress('tracking backward 30/60')).toEqual({ phase: 'backward', done: 30, total: 60, percent: 50 }); // each pass on its own
+    expect(trackingProgress('tracking forward 300/240').percent).toBe(100);
     expect(trackingProgress('tracking forward 0/0').percent).toBe(0);
     expect(trackingProgress('saving track').percent).toBe(100);
     expect(trackingProgress('preparing').phase).toBeNull();
