@@ -15,7 +15,7 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
-import { audioPlan, captionCues } from '@pulseframe/engine';
+import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
 import { limiter } from './analysis.ts';
 
@@ -64,7 +64,8 @@ export function variantDoc(doc: ProjectDocument, variantId?: string): ProjectDoc
 const CRF = { 'mp4-h264-aac': { draft: 28, standard: 21, high: 16 }, 'webm-vp9-opus': { draft: 40, standard: 32, high: 24 } } as const;
 /** Rough bits per pixel per frame, used ONLY for the labelled size estimate. */
 const BPP = { draft: 0.03, standard: 0.07, high: 0.14 } as const;
-export const ENGINE = { compositor: 'canvas2d/1', evaluator: 'evaluate/1', fontFamilies: FONT_CATALOG.map((f) => f.family) } as const;
+/** `audio`: the audio plan version and the sound-effect runtime (ADR-0010) every route mixes with. */
+export const ENGINE = { compositor: 'canvas2d/1', evaluator: 'evaluate/1', audio: `plan/2 ${AUDIO_FX_ENGINE}`, fontFamilies: FONT_CATALOG.map((f) => f.family) } as const;
 
 export interface RenderSession {
   doc: ProjectDocument;
@@ -88,6 +89,8 @@ export interface Manifest {
   /** Effect and transition implementations the render depends on, with their versions. */
   effects: { type: string; version: number; clips: number }[];
   transitions: { type: string; clips: number }[];
+  /** Sound effects (ADR-0010) of the clips heard in the exported range (a clip is heard from its start until the end of its tail), with their versions. Empty for formats without sound. */
+  audioEffects: { type: string; version: number; clips: number }[];
   /** Labelled estimate, never a promise. */
   estimate: { bytes: number | null; basis: string };
 }
@@ -177,15 +180,44 @@ export class Exporter {
     const effects = [...fxUsed].map(([type, clips]) => ({ type, version: findEffect(type)?.version ?? 0, clips }));
     for (const fx of effects) if (fx.version === 0) blockers.push({ code: 'unknown_effect', message: `effect "${fx.type}" is not available in this renderer; exporting would silently drop it`, ids: [] });
     const transitions = [...trUsed].map(([type, clips]) => ({ type, clips }));
+    const audioEffects = options.format === 'gif' || options.format === 'png' ? [] : this.planSound(doc, first, Math.max(0, frames), first + Math.max(0, frames) >= total, blockers, warnings);
     const seconds = (frames * frameRate.den) / frameRate.num;
     const video = options.format === 'mp4-h264-aac' || options.format === 'webm-vp9-opus';
     const estimate = video
       ? { bytes: Math.round((outWidth * outHeight * frames * BPP[options.quality]) / 8 + seconds * 24_000), basis: 'heuristic bits-per-pixel for the chosen quality; real size depends on content' }
       : options.format === 'wav' ? { bytes: Math.round(seconds * sampleRate * 4 + 44), basis: 'exact for 16-bit stereo PCM' } : { bytes: null, basis: 'not estimated for stills' };
     return {
-      manifest: { revision, engine: { ...ENGINE, schemaVersion: doc.schemaVersion }, options, output: { width: outWidth, height: outHeight, firstFrame: first, frames: Math.max(0, frames), frameRate, sampleRate }, assets, fonts, effects, transitions, estimate },
+      manifest: { revision, engine: { ...ENGINE, schemaVersion: doc.schemaVersion }, options, output: { width: outWidth, height: outHeight, firstFrame: first, frames: Math.max(0, frames), frameRate, sampleRate }, assets, fonts, effects, transitions, audioEffects, estimate },
       blockers, warnings,
     };
+  }
+  /**
+   * Sound effects of the exported range (ADR-0010): which effect implementations the mix depends on, a blocker for any effect this
+   * build cannot run (it would otherwise be dropped silently) and a warning for each echo or reverb cut at the end of the video.
+   */
+  private planSound(doc: ProjectDocument, firstFrame: number, frames: number, reachesEnd: boolean, blockers: Blocker[], warnings: Blocker[]): Manifest['audioEffects'] {
+    const { frameRate, sampleRate } = doc.settings;
+    const ap = audioPlan(doc);
+    const a = T.nearestSampleIndex(T.frameTime(firstFrame, frameRate), sampleRate), b = T.nearestSampleIndex(T.frameTime(firstFrame + frames, frameRate), sampleRate);
+    const used = new Map<string, { type: string; version: number; clips: number }>();
+    for (const c of ap.clips) {
+      if (!c.voice || c.at >= b || soundEnd(c) <= a) continue;
+      for (const fx of c.voice.chain) {
+        const key = `${fx.type}@${fx.version}`;
+        const u = used.get(key) ?? { type: fx.type, version: fx.version, clips: 0 };
+        u.clips++;
+        used.set(key, u);
+      }
+    }
+    // An effect that cannot run may have any tail, so it blocks whenever its clip starts before the end of the range.
+    const at = new Map(ap.clips.map((c) => [c.clipId, c.at]));
+    for (const m of ap.missingFx) {
+      const start = at.get(m.clipId);
+      if (start !== undefined && start >= b) continue;
+      blockers.push({ code: 'unknown_audio_effect', message: `sound effect "${m.type}"${m.version ? ` (version ${m.version})` : ''} on clip ${m.clipId} is not available in this build${m.version ? ' for this clip' : ''}; exporting would silently drop it`, ids: [m.clipId] });
+    }
+    if (reachesEnd) for (const t of ap.cutTails) warnings.push({ code: 'audio_tail_cut', message: `the echo or reverb of clip ${t.clipId} would ring on ${t.seconds} s past the end of the video; it is cut there with a short fade (the video is not made longer)`, ids: [t.clipId] });
+    return [...used.values()].sort((x, y) => (x.type < y.type ? -1 : x.type > y.type ? 1 : x.version - y.version));
   }
   private fontCache = new Map<string, { name: string; sha256: string }[]>();
   private fontFiles(family: string) {
@@ -417,7 +449,7 @@ export class Exporter {
       this.store.updateJob(jobId, {
         status: 'succeeded', stage: null,
         output: {
-          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, bytes, revision: job.input.revision, route: 'server-software-canvas2d', options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output },
+          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, bytes, revision: job.input.revision, route: 'server-software-canvas2d', options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
           estimate: { ...manifest.estimate, actualBytes: bytes }, audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });
