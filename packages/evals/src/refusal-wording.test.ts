@@ -85,6 +85,7 @@ describe('Hebrew wording of common refusals', () => {
     const notProvoked = REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source);
     expect(notProvoked.sort()).toEqual([
       '^a freeze frame has no speed$',
+      '^decode_budget: this frame needs more than (\\d+) video decoders$',
       '^remove the transition at this clip first$',
       '^the clip is too short for this change of speed at the end of its source$',
       '^the file could not be read as video, sound or a picture$',

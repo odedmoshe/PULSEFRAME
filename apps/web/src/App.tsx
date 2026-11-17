@@ -8,6 +8,7 @@ import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
 import { findClip, findEffect } from '@pulseframe/core';
+import { isDecodeBudgetReason } from '@pulseframe/engine';
 import { clipLabel } from './editor/Timeline.tsx';
 
 export function App() {
@@ -45,8 +46,10 @@ export function App() {
 }
 
 const NOTICE_STRINGS = {
-  he: { without: 'התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.' },
-  en: { without: 'The picture is shown without this effect for now, because its material could not be loaded. Loading is tried again automatically; stills and exports are refused until it loads.' },
+  he: { without: 'התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.',
+    budget: 'בפריים הזה יש יותר תמונות וידאו לפענוח בבת אחת ממה שהעורך פותח, ולכן הוא מוצג בלי אפקט הזמן. ניסיון חוזר לא יעזור: אפשר להקטין את מספר ההדים, להסיר אפקט זמן או להרחיק זה מזה את הקליפים החופפים. בדיקה לפני ייצוא מראה אילו פריימים יסורבו בייצוא.' },
+  en: { without: 'The picture is shown without this effect for now, because its material could not be loaded. Loading is tried again automatically; stills and exports are refused until it loads.',
+    budget: 'This frame needs more video pictures decoded at once than the editor opens, so it is shown without its time effect. Trying again will not help: lower the count of a time effect, remove one, or move the overlapping clips apart. Preflight lists the frames an export would refuse.' },
 } as const;
 /**
  * The frame on screen had to be drawn without an effect whose own material could not be loaded (a colour table whose file
@@ -56,14 +59,20 @@ const NOTICE_STRINGS = {
 function PreviewNotice() {
   const { editor, state, t } = useEditorState(); // the player ticks the state after every painted frame
   const reasons = editor.player?.unavailableReasons ?? {};
-  const ids = Object.keys(reasons);
+  // A frame over the decoder budget (ADR-0011) is a different state from material that failed to load: no retry helps it.
+  const budget = Object.keys(reasons).filter((id) => isDecodeBudgetReason(reasons[id]));
+  const ids = Object.keys(reasons).filter((id) => !isDecodeBudgetReason(reasons[id]));
   // Sound clips whose effects cannot run in this browser play without them (ADR-0010 D7): said here too, never silently.
   const sound = editor.player?.unavailableAudioFx ?? {};
   const soundIds = Object.keys(sound);
-  if (ids.length === 0 && soundIds.length === 0) return null;
+  if (ids.length === 0 && budget.length === 0 && soundIds.length === 0) return null;
   const nameOf = (clipId: string) => { const f = state.doc ? findClip(state.doc, clipId) : undefined; return f && state.doc ? clipLabel(state.doc, f.clip) : clipId; };
   return (
     <div className="preview-notice" role="status" data-testid="effect-unavailable">
+      {budget.length > 0 && <div data-testid="decode-budget-notice">
+        <p>{NOTICE_STRINGS[state.lang].budget}</p>
+        <ul>{budget.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong></li>)}</ul>
+      </div>}
       {ids.length > 0 && <>
         <p>{NOTICE_STRINGS[state.lang].without}</p>
         <ul>{ids.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong> — <bdi dir="ltr">{reasons[id]}</bdi></li>)}</ul>

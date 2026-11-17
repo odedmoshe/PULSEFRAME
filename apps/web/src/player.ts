@@ -9,7 +9,7 @@
  */
 import * as T from '@pulseframe/time';
 import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, drawGraph, evaluate, fillPlayingOrder, FlashGuard, openClipVoice, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf, soundEnd, type PlannedAudioClip } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, fillPlayingOrder, FlashGuard, isDecodeBudgetReason, openClipVoice, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf, soundEnd, type PlannedAudioClip } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
@@ -267,6 +267,7 @@ export class Player {
   private retryLater(doc: ProjectDocument, frame: number) {
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     if (Object.keys(this.unavailableReasons).length === 0) { this.retries = 0; return; }
+    if (Object.values(this.unavailableReasons).every(isDecodeBudgetReason)) return; // over the decoder budget: waiting changes nothing (an edit or a seek redraws anyway)
     if (this.playing) return; // the playback loop draws; the frame it stops on is painted again on pause and comes back through here
     // The wait grows only with tries made from here, not with frames the user asks for meanwhile.
     const wait = Math.min(Player.RETRY_MAX_MS, Player.RETRY_FIRST_MS * 2 ** this.retries);
