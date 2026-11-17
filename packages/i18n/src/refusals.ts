@@ -224,6 +224,7 @@ const HE_TIMELINE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^nothing to change: give mainMagnet or rippleDelete$/, () => 'לא צוין מה לשנות בהתנהגות ציר הזמן'],
   [/^clip \S+ not found$/, () => 'הקליפ לא נמצא; ייתכן שכבר נמחק'],
   [/^linked clips \S+ and \S+ would move by different amounts$/, () => 'שני קליפים מקושרים היו צריכים לזוז בכמות שונה, ולכן הרווח לא נסגר. אפשר למחוק קליפים מרצועה אחת בכל פעם, או לנתק את הקישור ביניהם'],
+  [/^closing the gap would place clip \S+ before 0$/, () => `סגירת הרווח הייתה מזיזה קליפ מקושר אל לפני תחילת ציר הזמן (צליל שמתחיל לפני התמונה שלו). אפשר למחוק ולהשאיר את הרווח (${ltr('Shift+Delete')}), או לקצר קודם את תחילת הצליל הזה`],
   [/^closing the gap would put clip \S+ over clip \S+ on track \S+$/, () => `סגירת הרווח הייתה מניחה קליפ על קליפ אחר שנשאר במקומו. אפשר למחוק ולהשאיר את הרווח (${ltr('Shift+Delete')}), או להזיז קודם את הקליפ שמפריע`],
   [/^clip \S+ on locked track \S+ is linked to a clip this edit removes or divides, and would be left linked to nothing$/, () => 'קליפ ברצועה נעולה מקושר לקליפ שהפעולה מוחקת או מחלקת, והקישור שלו היה נשאר בלי בן זוג. יש לבטל קודם את נעילת הרצועה'],
 ];

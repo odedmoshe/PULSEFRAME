@@ -170,6 +170,54 @@ describe('ripple_delete_clips: delete and close the gap', () => {
     expect(JSON.stringify(doc)).toBe(json);
   });
 
+  it('a sound that starts before its picture (a J-cut) moves with it and keeps its offset; one that would go before 0 is refused, not left to the final check', () => {
+    const { doc, ids, a1 } = edit();
+    // J-cut into B: A's sound ends at 50, B's sound starts at 50, ten frames before its picture (still linked)
+    const j = tx(doc, [{ op: 'trim_clip', args: { clipId: ids.a, edge: 'end', to: f(50), includeLinked: false } }, { op: 'trim_clip', args: { clipId: ids.b, edge: 'start', to: f(50), includeLinked: false } }]).doc;
+    expect(validateProject(j)).toEqual([]);
+    expect((findClip(j, ids.B)!.clip as MediaClip).linkGroupId).toBe((findClip(j, ids.b)!.clip as MediaClip).linkGroupId);
+    const json = JSON.stringify(j);
+    // deleting A would move B by 60 and its sound to -10
+    const e = refusal(() => tx(j, [{ op: 'ripple_delete_clips', args: { clipIds: [ids.A] } }]));
+    expect([e.code, e.message]).toEqual(['out_of_bounds', `closing the gap would place clip ${ids.b} before 0`]);
+    expect(e.details).toMatchObject({ clipId: ids.b, trackId: a1 });
+    expect(JSON.stringify(j)).toBe(json);
+    // the same J-cut one clip later: deleting A moves C and its sound together and keeps the ten frames
+    const j2 = tx(doc, [{ op: 'trim_clip', args: { clipId: ids.b, edge: 'end', to: f(110), includeLinked: false } }, { op: 'trim_clip', args: { clipId: ids.c, edge: 'start', to: f(110), includeLinked: false } }]).doc;
+    const d = tx(j2, [{ op: 'ripple_delete_clips', args: { clipIds: [ids.A] } }]).doc;
+    expect(validateProject(d)).toEqual([]);
+    expect([at(d, ids.C), at(d, ids.c)]).toEqual([[60, 120], [50, 120]]);
+    expect(creativeProjection(undo(j2, d))).toBe(creativeProjection(j2));
+    // and deleting A and B would put C's sound at -10: refused the same way
+    expect(refusal(() => tx(j2, [{ op: 'ripple_delete_clips', args: { clipIds: [ids.A, ids.B] } }])).message).toBe(`closing the gap would place clip ${ids.c} before 0`);
+  });
+
+  it('property: with a sound that starts before its picture, every ripple delete keeps each picture with its sound at the same offset, or is refused with the reason', () => {
+    for (let seed = 1; seed < 16; seed++) {
+      const { doc, ids, a1 } = edit();
+      // C's sound starts at 110, ten frames before C; B's sound ends there
+      const j = tx(doc, [{ op: 'trim_clip', args: { clipId: ids.b, edge: 'end', to: f(110), includeLinked: false } }, { op: 'trim_clip', args: { clipId: ids.c, edge: 'start', to: f(110), includeLinked: false } }]).doc;
+      const pics = [ids.A, ids.B, ids.C, ids.D], snds = [ids.a, ids.b, ids.c, ids.d];
+      const pick = pics.filter((_, i) => (seed >> i) & 1);
+      const has = (id: string) => pick.includes(id);
+      // what is expected: C's sound would go to -10 when A and B both go; it would land on A's sound (0..60) when only B goes before it
+      const expected = has(ids.C) || !has(ids.B) ? null : has(ids.A) ? ['out_of_bounds', `closing the gap would place clip ${ids.c} before 0`] : ['overlap', `closing the gap would put clip ${ids.c} over clip ${ids.a} on track ${a1}`];
+      let d: ProjectDocument;
+      try { d = tx(j, [{ op: 'ripple_delete_clips', args: { clipIds: pick } }]).doc; } catch (e) {
+        expect(e).toBeInstanceOf(OpError);
+        expect([(e as OpError).code, (e as OpError).message]).toEqual(expected);
+        continue;
+      }
+      expect(expected).toBeNull();
+      expect(validateProject(d)).toEqual([]);
+      for (const [i, p] of pics.entries()) {
+        if (has(p)) continue;
+        expect(at(d, snds[i]!)![0]! - at(d, p)![0]!).toBe(at(j, snds[i]!)![0]! - at(j, p)![0]!);
+      }
+      expect(creativeProjection(undo(j, d))).toBe(creativeProjection(j));
+    }
+  });
+
   it('property: any ripple delete of any set of main-track clips leaves no gap where they were and keeps every picture with its sound', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const { doc, ids } = edit();

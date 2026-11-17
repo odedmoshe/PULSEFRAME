@@ -1424,7 +1424,7 @@ function coveredBefore(spans: readonly { s: T.RationalTime; e: T.RationalTime }[
 defineOp({
   name: 'ripple_delete_clips',
   version: 1,
-  description: 'Delete clips and close the gap they leave, in one step (ripple delete; the editor sends it for Delete on the main track when the project has rippleDelete on, see set_timeline_behaviour). The clips go, with their linked clips unless includeLinked=false. On each track one of the named clips was on, every later clip moves earlier by the length deleted before it on that track, so nothing is left where they were. A clip linked to a clip that moves moves with it by the same amount (a picture\'s sound follows its picture, wherever it is). Everything else stays where it is: other tracks such as music, titles, captions and overlays, gaps that were already there (close_gaps removes empty time on every track) and markers. All or nothing: refused when a clip that would move is on a locked track, when two linked clips would have to move by different amounts, or when a clip that moves would land on a clip that does not move with it (also on a sound track: a sound is never slid over another). delete_clip deletes and keeps the gap.',
+  description: 'Delete clips and close the gap they leave, in one step (ripple delete; the editor sends it for Delete on the main track when the project has rippleDelete on, see set_timeline_behaviour). The clips go, with their linked clips unless includeLinked=false. On each track one of the named clips was on, every later clip moves earlier by the length deleted before it on that track, so nothing is left where they were. A clip linked to a clip that moves moves with it by the same amount (a picture\'s sound follows its picture, wherever it is). Everything else stays where it is: other tracks such as music, titles, captions and overlays, gaps that were already there (close_gaps removes empty time on every track) and markers. All or nothing: refused when a clip that would move is on a locked track, when two linked clips would have to move by different amounts, when a clip that moves would land on a clip that does not move with it (also on a sound track: a sound is never slid over another), or when a linked clip that starts before its partner (a sound that starts before its picture, a J-cut) would move before 0. delete_clip deletes and keeps the gap.',
   args: z.object({ clipIds: z.array(z.string()).min(1).max(500), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     // what goes: the named clips, and their linked clips unless includeLinked=false; the tracks of the named clips close up
@@ -1452,6 +1452,9 @@ defineOp({
       }
     }
     const moved = [...shift.values()].filter((m) => !T.isZero(m.by));
+    // A clip on a closing track never goes before 0 (it moves by at most the time before it), but a linked clip that starts
+    // earlier than its partner does (a sound that starts before its picture: a J-cut) can; it keeps its offset, so refuse.
+    for (const m of moved) if (T.lt(m.clip.start, m.by)) throw new OpError('out_of_bounds', `closing the gap would place clip ${m.clip.id} before 0`, { clipId: m.clip.id, trackId: m.track.id, start: m.clip.start, by: m.by }, 'Delete with delete_clip to keep the gap, or trim the start of that clip (it starts before the clip it is linked to) first.');
     for (const m of moved) m.clip.start = T.sub(m.clip.start, m.by);
     // A clip that moved may not land on one that did not move with it, on any track: sounds that already overlapped
     // (a crossfade) and moved together keep their overlap, but a sound is never slid over another one that stays.

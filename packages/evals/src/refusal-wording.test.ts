@@ -432,12 +432,17 @@ describe('Hebrew wording of common refusals', () => {
     const loose = tx(d, [{ op: 'add_clip', args: { assetId: soundId, start: f(125), duration: f(10), trackId: soundTrack } }]);
     const looseId = (loose.results[0]!.output as any).clipId as string;
     const lockedSound = tx(d, [{ op: 'update_track', args: { trackId: soundTrack, locked: true } }]).doc;
+    // a J-cut into the second clip: the first clip's sound ends at 50 and the second clip's sound starts there, before its picture;
+    // deleting the first clip would move that sound to -10
+    const first = (r.results[0]!.output as any).clipId as string, firstSound = (r.results[0]!.output as any).audioClipId as string;
+    const jcut = tx(d, [{ op: 'trim_clip', args: { clipId: firstSound, edge: 'end', to: f(50), includeLinked: false } }, { op: 'trim_clip', args: { clipId: bSound, edge: 'start', to: f(50), includeLinked: false } }]).doc;
     const cases: [string, ProjectDocument, OpCall[]][] = [
       ['a behaviour change that changes nothing', d, [{ op: 'set_timeline_behaviour', args: {} }]],
       ['a ripple delete of a clip that is gone', d, [{ op: 'ripple_delete_clips', args: { clipIds: ['clp_gone'] } }]],
       ['linked clips that would move by different amounts', loose.doc, [{ op: 'ripple_delete_clips', args: { clipIds: [b, looseId] } }]],
       ['a sound slid over a sound that stays', d, [{ op: 'ripple_delete_clips', args: { clipIds: [b], includeLinked: false } }]],
       ['a picture deleted alone while its sound is on a locked track', lockedSound, [{ op: 'ripple_delete_clips', args: { clipIds: [b], includeLinked: false } }]],
+      ['a sound that starts before its picture moved before 0', jcut, [{ op: 'ripple_delete_clips', args: { clipIds: [first] } }]],
     ];
     const matched = new Set<number>();
     const unrecognised: string[] = [];
