@@ -74,6 +74,13 @@ describe('Hebrew wording of common refusals', () => {
       ['an effect value outside its range', d, [{ op: 'add_effect', args: { clipId: a, type: 'blur.gaussian', params: { radius: 5 } } }]],
       ['a fixed colour value over an animated one', animatedGrade, [{ op: 'set_colour_grade', args: { clipId: a, params: { exposure: 0.5 } } }]],
     ];
+    // a title with live fields (ADR-0021) left holding a brace group that is not a field, in its text and in a format's wording
+    const titled = tx(d, [{ op: 'add_text', args: { text: '{date}', start: f(0), duration: f(60) } }]);
+    const titleId = titled.results[0]!.output!.clipId as string;
+    const fielded = tx(titled.doc, [{ op: 'set_text_fields', args: { clipId: titleId, enabled: true } }, { op: 'add_variant', args: { profileId: 'square-1x1' } }]);
+    const fieldVariant = fielded.results[1]!.output!.variantId as string;
+    cases.push(['a brace group that is not a field in a title with fields', fielded.doc, [{ op: 'update_text', args: { clipId: titleId, text: '{date} {weather}' } }]]);
+    cases.push(['a brace group that is not a field in a format\'s wording of a title with fields', fielded.doc, [{ op: 'set_variant_override', args: { variantId: fieldVariant, clipId: titleId, text: 'a } b' } }]]);
     void bSound;
     const matched = new Set<number>();
     const unrecognised: string[] = [];

@@ -11,6 +11,8 @@ import { HE_LIFE } from './lifeline.ts';
 /** A left-to-right run (a signed number, a row of symbols) isolated inside the Hebrew sentence, so that its minus sign and order survive. */
 const ltr = (s: string) => `⁦${s}⁩`;
 const HE: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^transaction would produce an invalid project: title \S+ has live fields, and these brace groups in it are not fields: (.+)$/, (m) => `בכותרת עם שדות חיים יש סוגריים מסולסלים שאינם שדה: ${m[1]}. אפשר לבחור שדה מהתפריט, או להכפיל את הסוגריים כדי שיופיעו כטקסט`],
+  [/^transaction would produce an invalid project: title \S+ has live fields, and these brace groups in its wording for format \S+ are not fields: (.+)$/, (m) => `בנוסח של הכותרת לפורמט הזה יש סוגריים מסולסלים שאינם שדה: ${m[1]}. אפשר לבחור שדה מהתפריט, או להכפיל את הסוגריים כדי שיופיעו כטקסט`],
   [/^range overlaps clip \S+ on track \S+$/, () => 'הטווח תפוס על ידי קליפ אחר באותה רצועה'],
   [/^track \S+ is locked$/, () => 'הרצועה נעולה; יש לבטל את הנעילה כדי לערוך בה'],
   [/^trim would leave an empty clip( or start before 0)?$/, () => 'הקיצור היה משאיר קליפ ריק'],
