@@ -254,7 +254,7 @@ export function AudioFxBlock({ clip, heading = 'h3' }: { clip: SoundClip; headin
     <section className="afx" aria-labelledby={`afx-h-${clip.id}`} data-testid="afx-block" data-clip-id={clip.id} onKeyDown={keepButtonKeys}>
       <H id={`afx-h-${clip.id}`}>{t('sound.fx')}</H>
       <VoiceCleanBlock clip={clip} locked={locked} blocked={blocked} />
-      <p className="muted afx-note">{t('sound.fx.dsp')}</p>
+      <p className="muted afx-note pf-help">{t('sound.fx.dsp')}</p>
       {blocked && <p className="muted afx-note" role="note" data-testid="afx-blocked">{t('sound.fx.blocked')}</p>}
       {!blocked && locked && <p className="muted afx-note" data-testid="afx-locked">{t('sound.fx.locked')}</p>}
       {unavailable && <p className="afx-note" role="status" data-testid="afx-unavailable">{t('sound.fx.unavailable')} <bdi dir="ltr">{unavailable}</bdi></p>}
@@ -277,7 +277,7 @@ export function AudioFxBlock({ clip, heading = 'h3' }: { clip: SoundClip; headin
             <ol className="afx-list" aria-labelledby={`afx-list-${clip.id}`} data-testid="afx-list">
               {list.map((fx) => <FxRow key={fx.id} clip={clip} fx={fx} lang={lang} locked={locked} blocked={blocked} mono={mono} />)}
             </ol>
-            <p className="muted afx-note">{t('sound.fx.order')}</p>
+            <p className="muted afx-note pf-help">{t('sound.fx.order')}</p>
           </>
         )}
       </div>
@@ -293,14 +293,14 @@ export function AudioFxBlock({ clip, heading = 'h3' }: { clip: SoundClip; headin
           {list.length > 0 && <option value={NONE}>{t('sound.fx.presets.clear')}</option>}
         </select>
       </label>
-      <p className="muted afx-note">{t('sound.fx.presets.hint')}</p>
+      <p className="muted afx-note pf-help">{t('sound.fx.presets.hint')}</p>
       <div className="row">
         <button type="button" aria-pressed={bypass} data-testid="afx-bypass" title={t('sound.fx.bypass.hint')} disabled={!editor.player}
           onClick={() => { editor.player?.setBypassAudioFx(!bypass); rerender((n) => n + 1); }}>{t('sound.fx.bypass')}</button>
         <button type="button" disabled={disabled || !list.length || !others.length} data-testid="afx-apply-track" title={t('sound.fx.applyTrack.hint')}
           onClick={() => commit([{ op: 'copy_audio_effects', args: { fromClipId: clip.id, toClipIds: others, replace: true } }], 'Copy sound effects')}>{t('sound.fx.applyTrack')}</button>
       </div>
-      <p className="muted afx-note">{t('sound.fx.bypass.hint')}</p>
+      <p className="muted afx-note pf-help">{t('sound.fx.bypass.hint')}</p>
     </section>
   );
 }

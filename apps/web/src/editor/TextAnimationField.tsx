@@ -83,7 +83,7 @@ export function TextAnimationField({ clip }: { clip: Text }) {
   );
   return (
     <fieldset className="ramp" data-testid="text-animation">
-      <legend>{S.title}</legend>
+      <legend className="sr-only">{S.title}</legend>
       <div className="fields">
         <label>{S.by}
           <select value={a.by} data-testid="text-anim-by" onChange={(e) => set({ by: e.target.value as TextAnimation['by'] })} disabled={!clip.animation}>
@@ -97,7 +97,7 @@ export function TextAnimationField({ clip }: { clip: Text }) {
         {a.out && frames(S.outFrames, 'text-anim-out-frames', a.outFrames, 'outFrames')}
         {note && <p className="muted" data-testid="text-anim-status">{note}</p>}
         <span className="sr-only" role="status">{note ?? ''}</span>
-        <p className="muted">{S.note}</p>
+        <p className="muted pf-help">{S.note}</p>
         {clip.animation && <div className="row"><button type="button" className="ghost" data-testid="text-anim-remove" onClick={() => void editor.commit([{ op: 'set_text_animation', args: { clipId: clip.id, animation: null } }], 'Remove text animation')}>{S.remove}</button></div>}
       </div>
     </fieldset>
