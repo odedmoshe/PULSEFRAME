@@ -197,11 +197,14 @@ describe('speed curves: links and crossfades', () => {
   const song = { kind: 'audio' as const, name: 'song.wav', contentHash: `sha256:${'f'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(60, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: asset.provenance };
 
   it('a clip curved on its own leaves no part linked to another part: each part can be deleted, split and trimmed alone', () => {
-    // (a) the sound was deleted on its own before, so the picture still carries its old link id
+    // (a) a project saved when deleting the sound on its own still left the picture with its old link id (edits no longer
+    //     do that, so the document is made by hand)
     const a = project();
     const soundId = all(a.doc).find((c) => c.id !== a.clipId)!.id;
-    const lone = tx(a.doc, [{ op: 'delete_clip', args: { clipId: soundId, includeLinked: false } }]).doc;
+    const lone = structuredClone(a.doc);
+    for (const t of tracksOf(lone)) t.clips = t.clips.filter((c) => c.id !== soundId);
     expect(media(lone, a.clipId).linkGroupId).toBeTruthy(); // the precondition: a link id that points at nothing
+    expect(validateProject(lone)).toEqual([]);
     // (b) the picture is curved without its sound
     const b = project();
     for (const [name, doc, clipId, extra] of [['lone', lone, a.clipId, {}], ['includeLinked=false', b.doc, b.clipId, { includeLinked: false }]] as const) {
