@@ -292,9 +292,10 @@ const pictureKey = (l: PictureLayer) => (l.kind === 'video' ? `v\n${l.assetId}\n
  */
 /** The frame that is waiting on a GPU pass, if any (see drawGraph). */
 let gpuFrame: Promise<void> | null = null;
-export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
+export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; /** For missing clips whose picture the view refused (FrameProvider.refusal, e.g. decode_budget): why, by clip id. */ missingReasons?: Record<string, string>; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
   frames.begin?.();
   const missing: string[] = [];
+  const missingReasons: Record<string, string> = {};
   // Colour tables named by effects of this frame are loaded here, with the source frames and before the GPU gate; a table that
   // cannot be had becomes null with its reason, and the effect that needs it is then reported as unavailable, never thrown.
   const luts = new Map<string, LutStrip | null>();
@@ -349,7 +350,7 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
   for (const [i, layer] of g.layers.entries()) {
     if (layer.kind === 'caption') { drawCaption(ctx, g, layer); continue; }
     const img = layer.kind === 'text' ? null : images[i];
-    if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); continue; }
+    if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); const why = frames.refusal?.(layer); if (why) missingReasons[layer.clipId] = why; continue; }
     const { w, h } = placedSize(g, layer);
     const colourFix = layer.kind === 'video' ? layer.colourFix : undefined;
     const hasLook = !!(colourFix || layer.time || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
@@ -401,6 +402,6 @@ export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvide
   ctx.restore();
   const unavailable = takeUnavailable();
   for (const [id, why] of timeLeftOut) { if (!unavailable.effects.includes(id)) unavailable.effects.push(id); unavailable.reasons[id] = why; }
-  return { missing, unavailableEffects: unavailable.effects, ...(Object.keys(unavailable.reasons).length ? { unavailableReasons: unavailable.reasons } : {}) };
+  return { missing, ...(Object.keys(missingReasons).length ? { missingReasons } : {}), unavailableEffects: unavailable.effects, ...(Object.keys(unavailable.reasons).length ? { unavailableReasons: unavailable.reasons } : {}) };
   } finally { release?.(); }
 }
