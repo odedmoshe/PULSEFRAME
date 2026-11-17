@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  ALL_CAPABILITIES, BUILTIN_CAPABILITIES, DescriptorSchema, graphDigest, IMAGE_SOFT_BLUR, LOCAL_TOOLS, logicDigest, publicationBlockers, resolveGraph, resolveParams,
+  AI_WAVE_PINS, ALL_CAPABILITIES, BUILTIN_CAPABILITIES, DescriptorSchema, IMAGE_UPSCALE_4X, graphDigest, IMAGE_SOFT_BLUR, LOCAL_TOOLS, logicDigest, publicationBlockers, resolveGraph, resolveParams,
   type CapabilityDescriptor, type ComfyDescriptor, type LocalToolDescriptor,
 } from './index.ts';
 
@@ -112,5 +112,18 @@ describe('ComfyUI contracts: size by a reviewed scale, frame plans, data outputs
     expect(codes({ ...base, frames: null })).toEqual(['frames_input_missing']); // the output's frame-count contract has no plan
     expect(codes({ ...base, frames: { ...base.frames!, input: 'nope' } })).toEqual(['frames_input_missing']);
     expect(codes({ ...base, frames: { ...base.frames!, multiplierParam: undefined } })).toEqual(['frames_input_missing']);
+  });
+});
+
+describe('AI-wave pin table', () => {
+  it('every pin has an exact size, a sha256 and an https publisher URL; x4plus matches the digest already pinned from the mirror', () => {
+    for (const [k, p] of Object.entries(AI_WAVE_PINS)) {
+      expect(p.sha256, k).toMatch(/^[0-9a-f]{64}$/);
+      expect(Number.isInteger(p.bytes) && p.bytes > 0, k).toBe(true);
+      expect(new URL(p.url).protocol, k).toBe('https:');
+      expect(new URL(p.url).hostname, k).toMatch(/^(github\.com|raw\.githubusercontent\.com|huggingface\.co)$/);
+    }
+    expect(AI_WAVE_PINS.realesrganX4plus.sha256).toBe(IMAGE_UPSCALE_4X.models[0]!.sha256);
+    expect(AI_WAVE_PINS.realesrganX4plus.bytes).toBe(IMAGE_UPSCALE_4X.models[0]!.bytes);
   });
 });
