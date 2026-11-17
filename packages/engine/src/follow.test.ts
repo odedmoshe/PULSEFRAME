@@ -189,7 +189,7 @@ describe('follow: the key property over 200 seeded random documents', () => {
       // any order of evaluation gives the same frames (pure; the loss filter is cached per track object)
       const order = Array.from({ length: count }, (_, j) => j), shuffle = mulberry32(seed);
       for (let j = order.length - 1; j > 0; j--) { const q = Math.floor(shuffle() * (j + 1)); [order[j], order[q]] = [order[q]!, order[j]!]; }
-      for (const j of order.filter((_, q) => q % 3 === 0)) expect(evaluate(doc, f(first + j)), `seed ${seed} frame ${first + j} out of order`).toEqual(sequential[j]);
+      for (const j of order) expect(evaluate(doc, f(first + j)), `seed ${seed} frame ${first + j} out of order`).toEqual(sequential[j]);
     }
     // every edit was seen in every format, and the special cases happened
     expect(seen.size).toBe(EDITS.length * FORMATS.length);
@@ -233,6 +233,17 @@ describe('follow: targets that are hidden, missing or gone', () => {
     const dangling = structuredClone(s.doc);
     findClip(dangling, s.title)!.clip.follow!.targetTrackId = 'trk_gone';
     expect(titleAt(dangling, 10).follow!.state).toBe('target-missing');
+  });
+  it('a still picture on a video track above follows the same point as a title with the same offset', () => {
+    const s = setup();
+    const still = { kind: 'image' as const, name: 'sticker.png', contentHash: `sha256:${'9'.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 200, height: 200, codec: 'png', hasAlpha: true }, provenance: prov };
+    let r = tx(s.doc, [{ op: 'import_asset', args: { asset: still } }], true);
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: r.results[0]!.output!.assetId as string, start: f(0), duration: f(60) } }]);
+    const sticker = r.results[0]!.output!.clipId as string;
+    const d = tx(r.doc, [{ op: 'set_clip_follow', args: { clipId: sticker, follow: { motionTrackId: s.mtk, targetTrackId: s.V1, scale: false, smooth: 0 }, offset: { x: 0, y: -0.05 } } }]).doc;
+    const g = evaluate(d, f(0));
+    const img = g.layers.find((l) => l.kind === 'image')!, text = g.layers.find((l) => l.kind === 'text')!;
+    expect([img.transform.x, img.transform.y, img.follow?.state]).toEqual([text.transform.x, text.transform.y, 'manual']);
   });
   it('describe_moment reports the follow and the privacy regions', () => {
     const s = setup();
