@@ -52,6 +52,13 @@ describe('ids that are names of Object.prototype members', () => {
       add_effect: (id) => ({ clipId: id, type: 'color.invert' }),
       attach_analysis: (id) => ({ assetId: id, kind: 'beats', method: 'test', params: {}, createdAt: '2026-01-01T00:00:00Z', times: [f(0), f(15)] }),
       update_variant: (id) => ({ variantId: id, name: 'x' }),
+      // life line (ADR-0021): events are a plain object keyed by id too; the guard refuses these names before any body runs
+      set_asset_capture: (id) => ({ assetId: id, capture: null }),
+      shift_asset_captures: (id) => ({ assetIds: [id], minutes: 60 }),
+      add_event: (id) => ({ assetIds: [id] }),
+      update_event: (id) => ({ eventId: id, name: 'x' }),
+      remove_event: (id) => ({ eventId: id }),
+      set_text_fields: (id) => ({ clipId: id, enabled: true }),
     };
     let reached = 0;
     for (const def of listOps()) {
@@ -67,7 +74,7 @@ describe('ids that are names of Object.prototype members', () => {
       }
     }
     expect(reached).toBe(Object.keys(known).length * INHERITED.length);
-    for (const c of [doc.assets, doc.sequences, doc.analyses ?? {}, doc.variants ?? {}]) expect(Object.getPrototypeOf(c)).toBe(Object.prototype);
+    for (const c of [doc.assets, doc.sequences, doc.analyses ?? {}, doc.variants ?? {}, doc.events ?? {}]) expect(Object.getPrototypeOf(c)).toBe(Object.prototype);
     expect(Object.keys(doc.assets)).toEqual([assetId]);
   });
 

@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, sha256Hex, transitionDef, type OpCall, type ProjectDocument, fingerprint } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, LIFE_OPS_BUILT, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -22,11 +22,28 @@ const ASSETS = [
 ];
 
 /**
+ * Capture dates of the fuzz files, by position in ASSETS (life line, ADR-0021): a video from a Hanukkah evening with its offset
+ * (inside the sunset window), a sound file with a day only taken from its name, a picture with a clock time and an assumed
+ * zone, and a video without a date. Given to the
+ * imported files once the life-line operations are built (LIFE_OPS_BUILT); until then the fuzz runs exactly as before.
+ */
+const LIFE_CAPTURES: (Capture | undefined)[] = [
+  { at: '2024-12-25T17:30:00', utcOffsetMinutes: 120, source: 'container' },
+  { at: '2024-12-25', utcOffsetMinutes: null, source: 'filename', circa: true },
+  { at: '2024-03-24T11:05:09', utcOffsetMinutes: null, source: 'exif', assumedZone: 'Asia/Jerusalem' },
+  undefined,
+];
+/** The operations of the life line that the fuzz draws (the public ones; attach_asset_capture is internal). */
+export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_text_fields', 'cluster_events', 'add_event', 'update_event', 'remove_event'] as const;
+
+/**
  * `setup(doc)` returns the operations that add analysis data, a transcript and a motion track; `gen(doc)` returns the next random
  * call. `setupInternal(doc)` returns the internal operation (needs allowInternal) that attaches measured samples to that motion
  * track, as the tracking job does (ADR-0015); a driver that commits it after `setup` exercises attach_motion_track as well.
  * `genInternal(doc)` returns a random apply_template call (internal: a driver commits it with allowInternal, as the server
  * does; ADR-0016): a small plan with bindings, sometimes malformed, sometimes the regeneration of an earlier template run.
+ * `genLife(doc)` returns a random call of the life line (ADR-0021): its seven public operations and the text edits that give titles
+ * brace groups. `gen` draws from these rows too once the operations are built (LIFE_OPS_BUILT).
  */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
@@ -38,7 +55,7 @@ export function createFuzz(seed: number) {
   const dur = () => f(1 + int(120));
   let assetIds: string[] = [], vid = '', aud = '';
   /** Operations that import the fuzz assets (internal op: needs allowInternal). */
-  const importOps: OpCall[] = ASSETS.map((asset) => ({ op: 'import_asset', args: { asset } }));
+  const importOps: OpCall[] = ASSETS.map((asset, i) => ({ op: 'import_asset', args: { asset: LIFE_OPS_BUILT && LIFE_CAPTURES[i] ? { ...asset, capture: LIFE_CAPTURES[i] } : asset } }));
   /** Call once the assets exist: remembers their ids and returns the analysis/transcript set-up operations. */
   const setup = (doc: ProjectDocument): OpCall[] => {
     assetIds = Object.keys(doc.assets);
@@ -80,6 +97,39 @@ export function createFuzz(seed: number) {
   const ADJUST_EFFECTS = ['color.grayscale', 'color.adjust', 'blur.gaussian', 'light.vignette', 'stylize.grain', 'overlay.confetti', 'color.sepia', 'time.echo', 'key.chroma', 'stylize.shadow'];
   const SOUND_FX = AUDIO_EFFECTS.map((e) => e.id);
   /** A small change of a sound effect's main control (its wet amount, or the width), in range most of the time and out of it sometimes. */
+  /**
+   * The rows of the life line (ADR-0021). Every call has arguments its operation's schema accepts (lifeline-fuzz.test.ts
+   * checks that); what is refused is refused by the operation: a day that does not exist, a year out of range, a sound file in
+   * an event, the last file of an event, a brace group that is not a field, a day-only date moved by an hour.
+   */
+  const lifeMenu = (doc: ProjectDocument): (() => OpCall)[] => {
+    const lib = Object.values(doc.assets);
+    const anyAsset = () => (lib.length && rnd() < 0.95 ? pick(lib).id : 'ast_none');
+    const pictures = lib.filter((a) => a.kind === 'video' || a.kind === 'image');
+    const picture = () => (pictures.length && rnd() < 0.9 ? pick(pictures).id : anyAsset());
+    const dated = lib.filter((a) => a.capture);
+    const events = Object.values(doc.events ?? {});
+    const eventId = () => (events.length && rnd() < 0.9 ? pick(events).id : 'evt_none');
+    const titles = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'text');
+    const titleId = () => (titles.length && rnd() < 0.9 ? pick(titles).id : 'clp_none');
+    const some = (from: () => string, most: number) => [...new Set(Array.from({ length: 1 + int(most) }, from))];
+    return [
+      () => ({ op: 'set_asset_capture', args: { assetId: anyAsset(), capture: rnd() < 0.15 ? null : { at: pick(['2024-12-25T17:30:00', '2024-12-25T21:40:00', '2024-12-26T09:00:00', '2024-12-26', '2023-04-05T19:00:00', '2021-06-01', '2024-02-29T12:00:00', '2024-02-30', '1850-06-01', '2100-12-31T23:59:59']), ...(rnd() < 0.5 ? { utcOffsetMinutes: pick([120, 180, 60, null]) } : {}), ...(rnd() < 0.2 ? { circa: rnd() < 0.8 } : {}) } } }),
+      () => ({ op: 'shift_asset_captures', args: { assetIds: some(() => (dated.length && rnd() < 0.85 ? pick(dated).id : anyAsset()), 3), minutes: pick([60, -60, 1440, -2880, 90, 525600, -5256000]) } }),
+      // titles with brace groups: fields, escaped braces, a group that is not a field, a brace without its pair
+      () => ({ op: 'update_text', args: { clipId: titleId(), text: pick(['{date}', 'צולם ב־{date:numeric}', '{hebrewDate} · {event}', '{hebrewDate:noYear} {hebrewYear}', '{{כך}} {year}', '{date:monthYear-en} {date:long-en}', 'שלום', '{weather}', '{date:fancy}', 'a { b', '{age:per_1}']) } }),
+      () => ({ op: 'set_text_fields', args: { clipId: titleId(), enabled: rnd() < 0.7 } }),
+      () => ({ op: 'cluster_events', args: rnd() < 0.5 ? {} : { gapMinutes: pick([30, 240, 1440]) } }),
+      () => ({ op: 'add_event', args: { assetIds: some(picture, 3), ...(rnd() < 0.5 ? { name: pick(['חנוכה אצל סבתא', 'Trip', '']) } : {}) } }),
+      () => {
+        const ev = events.length && rnd() < 0.9 ? pick(events) : null;
+        const r = rnd();
+        return { op: 'update_event', args: { eventId: ev?.id ?? 'evt_none', ...(r < 0.3 ? { name: pick(['יום הולדת', 'Party', '']) } : r < 0.55 ? { afterSunset: pick([true, false, null]) } : r < 0.75 ? { addAssetIds: some(picture, 2) } : r < 0.95 ? { removeAssetIds: ev && rnd() < 0.85 ? [pick(ev.assetIds)] : [anyAsset()] } : {}) } };
+      },
+      () => ({ op: 'remove_event', args: { eventId: eventId() } }),
+    ];
+  };
+  const genLife = (doc: ProjectDocument): OpCall => pick(lifeMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
 
   const gen = (doc: ProjectDocument): OpCall => {
@@ -304,6 +354,8 @@ export function createFuzz(seed: number) {
       // replace media (ADR-0016): another of the files for a clip, its linked sound following or detached; refused for a file
       // without what the clip plays, too short, or a still in place of a clip at another speed
       () => ({ op: 'replace_clip_media', args: { clipId: media.length && rnd() < 0.9 ? pick(media).c.id : any(), assetId: pick(assetIds), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(150), SRC) } : {}), ...(rnd() < 0.4 ? { linked: pick(['follow', 'detach'] as const) } : {}) } }),
+      // life line (ADR-0021): capture dates, events and title fields, once their operations are built
+      ...(LIFE_OPS_BUILT ? lifeMenu(doc) : []),
     ];
     return pick(menu)();
   };
@@ -354,5 +406,5 @@ export function createFuzz(seed: number) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife };
 }

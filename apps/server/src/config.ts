@@ -66,6 +66,21 @@ export interface Config {
   agentMaxFramesPerJob: number;
   /** AI jobs an agent may have queued or running at once (PF_AI_AGENT_MAX_QUEUED, default 2). */
   agentMaxQueuedJobs: number;
+  // ---- life line (ADR-0021) ----
+  /**
+   * IANA time zone of the home (PF_HOME_TZ, default Asia/Jerusalem). A file that gives its capture time only as a UTC instant gets
+   * the wall clock of this zone, once, at import, and the capture records the zone as assumed. One zone for the whole server:
+   * material filmed elsewhere is corrected with the clock shift (shift_asset_captures).
+   */
+  homeZone: string;
+}
+/** The home zone when PF_HOME_TZ is not set. */
+export const DEFAULT_HOME_ZONE = 'Asia/Jerusalem';
+/** The zone as given when this machine's Intl knows it; refuses to start otherwise (a wrong zone would silently date every import wrongly). */
+function homeZoneOf(value: string | undefined): string {
+  const zone = value || DEFAULT_HOME_ZONE;
+  try { new Intl.DateTimeFormat('en', { timeZone: zone }); } catch { throw new Error(`PF_HOME_TZ=${zone} refused: not a time zone this machine knows (use an IANA name such as Asia/Jerusalem or Europe/London)`); }
+  return zone;
 }
 /** Exact publisher hosts model files may come from by default (no wildcards beyond Hugging Face's CDN). Redirect targets must match too. */
 export const DEFAULT_MODEL_HOSTS = ['huggingface.co', '.hf.co', 'github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com', 'raw.githubusercontent.com'];
@@ -109,5 +124,6 @@ export function loadConfig(env = process.env): Config {
     aiFirstRunMaxFrames: Math.floor(num(env.PF_AI_FIRST_RUN_FRAMES, 60, 1)),
     agentMaxFramesPerJob: Math.floor(num(env.PF_AI_AGENT_MAX_FRAMES, 300)),
     agentMaxQueuedJobs: Math.floor(num(env.PF_AI_AGENT_MAX_QUEUED, 2)),
+    homeZone: homeZoneOf(env.PF_HOME_TZ),
   };
 }

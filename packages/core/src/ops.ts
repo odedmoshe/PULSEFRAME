@@ -28,6 +28,8 @@ import { velocityNeeds } from './transitionTiming.ts';
 import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
+import { detachAssetFromEvents } from './events.ts';
+import { handDownCapture } from './capture.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
@@ -114,7 +116,8 @@ export function findClip(d: ProjectDocument, clipId: string): { seq: Sequence; t
     }
   return undefined;
 }
-const mustClip = (d: ProjectDocument, clipId: string) => {
+/** The clip, refused when it does not exist or its track is locked. Exported for op families kept in their own file (lifeOps.ts). */
+export const mustClip = (d: ProjectDocument, clipId: string) => {
   const f = findClip(d, clipId);
   if (!f) throw new OpError('not_found', `clip ${clipId} not found`, { clipId }, 'Call get_timeline to list current clip ids.');
   if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId });
@@ -358,7 +361,7 @@ defineOp({
 defineOp({
   name: 'remove_asset',
   version: 1,
-  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks; it also leaves the event it was in (an event left without files is removed), and a copy made from it that took its capture date from it keeps that date. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
     const asset = d.assets[a.assetId];
@@ -376,8 +379,10 @@ defineOp({
     for (const id of tracks) { delete d.motionTracks[id]; affected.push(id); }
     if (d.transcripts?.[asset.id]) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
     if (d.analyses?.[asset.id]) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
+    // life line (ADR-0021): a copy that took its capture date from this file keeps it, and the file leaves its event
+    affected.push(...handDownCapture(d, asset.id), ...detachAssetFromEvents(d, asset.id));
     delete d.assets[asset.id];
-    return { affectedIds: affected, summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
+    return { affectedIds: [...new Set(affected)], summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
   },
 });
 

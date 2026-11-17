@@ -8,6 +8,7 @@ import { previousAdjacent, sequenceDuration, velocityLimit, velocityNeeds, type 
 import { audioPlan, captionCues, decodeOverBudget, evaluate, type DecodeStretch, type Layer } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { variantDoc } from './export.ts';
+import { fieldIssues, fieldTextExtent, isFieldIssueCode } from './preflight.fields.ts';
 
 export interface PreflightIssue {
   code: string;
@@ -97,9 +98,10 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
 
   // 1. what would stop the render
   const plan = exporter.plan(master, revision, opts.variantId ? { variantId: opts.variantId } : {});
-  for (const b of plan.blockers) issues.push({ code: b.code, severity: 'blocker', message: b.message, ids: b.ids });
+  // the life line's issues (ADR-0021) are listed once, below, with their frame ranges; the plan carries them without
+  for (const b of plan.blockers) if (!isFieldIssueCode(b.code)) issues.push({ code: b.code, severity: 'blocker', message: b.message, ids: b.ids });
   // A sound-effect tail cut at the end of the video is how effects are designed to behave (ADR-0010), so it is a note here.
-  for (const w of plan.warnings) issues.push({ code: w.code, severity: w.code === 'audio_tail_cut' ? 'note' : 'warning', message: w.message, ids: w.ids });
+  for (const w of plan.warnings) if (!isFieldIssueCode(w.code)) issues.push({ code: w.code, severity: w.code === 'audio_tail_cut' ? 'note' : 'warning', message: w.message, ids: w.ids });
 
   // 2. stretches with no picture at all (the background colour would show)
   const covered = seq.tracks.filter((t) => (t.kind === 'video' || t.kind === 'text') && !t.hidden).flatMap((t) => t.clips.map((c) => [fi(c.start), fi(T.add(c.start, c.duration))] as [number, number])).sort((a, b) => a[0] - b[0]);
@@ -150,7 +152,7 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
       // 6. titles against the safe area (estimated extent)
       if (c.type === 'text' && variant?.safeArea && !track.hidden) {
         const sa = variant.safeArea;
-        const lines = c.text.split('\n');
+        const lines = (c.fields ? fieldTextExtent(doc, seq.id, c) : c.text).split('\n'); // a title with live fields: the longest text it resolves to (ADR-0021)
         const hFrac = lines.length * c.style.sizeFrac * c.style.lineHeight * c.transform.scale;
         const wFrac = Math.min(0.9, Math.max(...lines.map((l) => l.length)) * c.style.sizeFrac * 0.55 * (H / W)) * c.transform.scale;
         const cx = 0.5 + c.transform.x, cy = 0.5 + c.transform.y;
@@ -182,12 +184,15 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   // 8. motion tracking (ADR-0015): followers whose track is not reliable there or whose target picture is not there, and
   // privacy regions whose tracking is lost or uncertain. Warnings only: the owner decides (SPEC: privacy warnings never block).
   issues.push(...trackingIssues(doc, rate));
+  // 9. life line (ADR-0021): a title field without data or with an undecided sunset answer (blockers: the film would lack words the
+  // author placed), a date taken from a file-name estimate (note), a capture-sourced date stamp that draws nothing (warning)
+  issues.push(...fieldIssues(doc));
 
   const count = (s: PreflightIssue['severity']) => issues.filter((i) => i.severity === s).length;
   return {
     revision, variantId: opts.variantId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: variant?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent). Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
+    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent). Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
   };
 }
 

@@ -16,7 +16,7 @@ import { applyModulators } from './modulate.ts';
 import { OVERLAY_TYPES, heldOverlayParams } from './overlays.ts';
 import { pieceAt, runStart, stutterFrame, tapOffsets, tapWeights } from './taps.ts';
 import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, sourceFrameIndexAt, transformAt, type BlendMode, type Clip, type FollowInfo, type Mask, type ProjectDocument, type ResolvedRegion, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
-import { beatSwitchFrame, lightEnvelope, switchFrame, transitionDef, transitionProgress, velocityOffsets } from '@pulseframe/core';
+import { beatSwitchFrame, lightEnvelope, makeFieldIndex, resolveFields, stampText, switchFrame, transitionDef, transitionProgress, velocityOffsets, type FieldIndex } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
 import { resolveFollows, resolveRegions, type Follower } from './follow.ts';
 
@@ -113,12 +113,15 @@ export interface RenderGraph {
  * `flash` gives a strobe the seconds since its last flash start on this frame (strobeSchedule.ts); the strobe has no other clock.
  * `beat` drives the beat modulators of the clip's effects (modulate.ts); without it they keep their base values.
  */
-const look = (clip: Clip, time: T.RationalTime, flash: (clipId: string, effectId: string) => number, beat: BeatPosition | undefined): LayerLook => {
+const look = (cx: Ctx, clip: Clip, time: T.RationalTime): LayerLook => {
   const local = T.sub(time, clip.start);
   const fx = clip.effects?.filter((e) => e.enabled).map((e) => {
     const base = effectParamsAt(e, local);
-    const params = e.modulate ? applyModulators(e, base, beat) : base;
-    return { type: e.type, params: e.type === 'light.strobe' ? { ...params, [FLASH_SINCE]: flash(clip.id, e.id) } : params };
+    const params = e.modulate ? applyModulators(e, base, cx.beat) : base;
+    // life line (ADR-0021): a date stamp that takes its text from the capture date of the picture (core fields.ts stampText);
+    // no date gives '' and nothing is drawn. A stamp without source, or with source 'text', is passed on exactly as before.
+    if (e.type === 'stylize.date-stamp' && params.source === 'capture') return { type: e.type, params: { ...params, text: stampText(cx.doc, cx.sequenceId, clip, time, { clock: params.clock === true, dateOrder: params.dateOrder === 'dmy' ? 'dmy' : 'ymd' }, { index: fieldIndexOf(cx.doc) }) } };
+    return { type: e.type, params: e.type === 'light.strobe' ? { ...params, [FLASH_SINCE]: cx.flash(clip.id, e.id) } : params };
   });
   // a mask lives on media clips (layer space) and on adjustment clips (frame space: the adjustment's box is the whole frame, ADR-0016)
   return { ...(fx?.length ? { effects: fx } : {}), ...(clip.blend ? { blend: clip.blend } : {}), ...((clip.type === 'media' || clip.type === 'adjustment') && clip.mask ? { mask: clip.mask } : {}), local: T.toSeconds(local) };
@@ -153,11 +156,19 @@ function barePicture(doc: ProjectDocument, track: Track, clip: Extract<Clip, { t
 /** A title at `time` without any look; its letter animation is placed at `time` too. */
 const textAnimationAt = (clip: Extract<Clip, { type: 'text' }>, time: T.RationalTime, rate: T.Rate): Pick<TextLayer, 'animation'> =>
   clip.animation ? { animation: { ...clip.animation, local: T.toSeconds(T.sub(time, clip.start)), total: T.toSeconds(clip.duration), fps: rate.num / rate.den } } : {};
-const bareText = (doc: ProjectDocument, track: Track, clip: Extract<Clip, { type: 'text' }>, time: T.RationalTime): TextLayer =>
-  ({ kind: 'text', clipId: clip.id, trackId: track.id, text: clip.text, style: clip.style, transform: transformAt(clip, time), ...textAnimationAt(clip, time, doc.settings.frameRate) });
+/**
+ * The words of a title at `time`: its text, or for a title with live fields (life line, ADR-0021) the text with each field
+ * resolved from the capture date of the picture under it (core fields.ts resolveFields). This is the one place a title's
+ * words are chosen, upstream of the split into letters, words and lines, so preview, stills and export cannot disagree.
+ */
+const titleText = (cx: Scope, clip: Extract<Clip, { type: 'text' }>, time: T.RationalTime): string =>
+  clip.fields ? resolveFields(cx.doc, cx.sequenceId, clip, time, { index: fieldIndexOf(cx.doc) }).text : clip.text;
+const bareText = (cx: Scope, track: Track, clip: Extract<Clip, { type: 'text' }>, time: T.RationalTime): TextLayer =>
+  ({ kind: 'text', clipId: clip.id, trackId: track.id, text: titleText(cx, clip, time), style: clip.style, transform: transformAt(clip, time), ...textAnimationAt(clip, time, cx.doc.settings.frameRate) });
 type Bare = VideoLayer | ImageLayer | TextLayer;
-const bareLayer = (doc: ProjectDocument, track: Track, clip: Clip, time: T.RationalTime): Bare | null =>
-  clip.type === 'media' ? barePicture(doc, track, clip, time) : clip.type === 'text' ? bareText(doc, track, clip, time) : null;
+/** A clip's layer at `time` without any look. A time tap or a stutter calls this at the time it SHOWS, so a title's fields resolve at the picture shown then. */
+const bareLayer = (cx: Scope, track: Track, clip: Clip, time: T.RationalTime): Bare | null =>
+  clip.type === 'media' ? barePicture(cx.doc, track, clip, time) : clip.type === 'text' ? bareText(cx, track, clip, time) : null;
 
 /**
  * The adjustment pass of an adjustment clip at `time` (ADR-0016), or null when it would change nothing: at opacity 0, and
@@ -168,14 +179,19 @@ const bareLayer = (doc: ProjectDocument, track: Track, clip: Clip, time: T.Ratio
 function adjustLayer(cx: Ctx, track: Track, clip: Extract<Clip, { type: 'adjustment' }>, time: T.RationalTime): AdjustLayer | null {
   const opacity = transformAt(clip, time).opacity;
   if (!(opacity > 0)) return null;
-  const lk = look(clip, time, cx.flash, cx.beat);
+  const lk = look(cx, clip, time);
   const effects = lk.effects?.filter((e) => !isTimeEffect(e.type));
   if (!effects?.length && !lk.mask && (!lk.blend || lk.blend === 'normal')) return null;
   return { kind: 'adjust', clipId: clip.id, trackId: track.id, opacity, ...(effects?.length ? { effects } : {}), ...(lk.blend ? { blend: lk.blend } : {}), ...(lk.mask ? { mask: lk.mask } : {}), ...(lk.local !== undefined ? { local: lk.local } : {}) };
 }
 
+/** The document and sequence one evaluation reads. */
+interface Scope { doc: ProjectDocument; sequenceId: string }
 /** What one evaluation shares between its layers. */
-interface Ctx { doc: ProjectDocument; sequenceId: string; flash: (clipId: string, effectId: string) => number; beat: BeatPosition | undefined }
+interface Ctx extends Scope { flash: (clipId: string, effectId: string) => number; beat: BeatPosition | undefined }
+/** The field index of a committed document, worked out once (documents are not changed after commit; edits make new ones). */
+const fieldIndexes = new WeakMap<ProjectDocument, FieldIndex>();
+const fieldIndexOf = (doc: ProjectDocument): FieldIndex => { let i = fieldIndexes.get(doc); if (!i) { i = makeFieldIndex(doc); fieldIndexes.set(doc, i); } return i; };
 
 /**
  * A clip's layer at `time` with its look, and with its time effect applied (ADR-0011): when the clip's first enabled effect
@@ -184,9 +200,9 @@ interface Ctx { doc: ProjectDocument; sequenceId: string; flash: (clipId: string
  */
 function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): VideoLayer | ImageLayer | TextLayer | null {
   if (clip.type === 'caption') return null;
-  const bare = bareLayer(cx.doc, track, clip, time);
+  const bare = bareLayer(cx, track, clip, time);
   if (!bare) return null;
-  const lk = look(clip, time, cx.flash, cx.beat);
+  const lk = look(cx, clip, time);
   const first = clip.effects?.find((e) => e.enabled);
   const temporal = first && isTimeEffect(first.type) ? temporalOf(first.type) : false;
   if (!first || !temporal) {
@@ -204,7 +220,7 @@ function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): Vid
     const shownFrame = stutterFrame(cx.doc, cx.sequenceId, track, clip, first.id, own!.params, frame);
     const shownAt = shownFrame === frame ? time : T.sub(time, T.frameTime(frame - shownFrame, rate)); // whole frames earlier, at the same place inside the frame
     const piece = pieceAt(track, clip, first.id, shownAt) ?? clip;
-    const pic = bareLayer(cx.doc, track, piece, shownAt) ?? bare;
+    const pic = bareLayer(cx, track, piece, shownAt) ?? bare;
     // motion=live: keyframed movement (and a title's letter animation) goes on at the frame's own time; only the picture is held
     const live = own!.params.motion === 'live';
     const moved = live ? { ...pic, transform: bare.transform, ...(pic.kind === 'text' ? { animation: bare.kind === 'text' ? bare.animation : undefined } : {}) } : pic;
@@ -223,7 +239,7 @@ function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): Vid
     if (shutter && bare.kind !== 'text') {
       // the source frame of the frame time, moved as the clip moves at the sub-frame time: no extra decode
       layer = { ...bare, transform: transformAt(piece, at) };
-    } else layer = bareLayer(cx.doc, track, piece, at) ?? bareLayer(cx.doc, track, clip, T.max(at, clip.start)) ?? bare;
+    } else layer = bareLayer(cx, track, piece, at) ?? bareLayer(cx, track, clip, T.max(at, clip.start)) ?? bare;
     const lane = shutter ? 0 : k;
     // a tap is drawn for the carrier: its decoder is the carrier's own, lane k (a cut does not change the decoder of a lane)
     layer = layer.kind === 'video' ? { ...layer, clipId: clip.id, trackId: track.id, ...(lane ? { lane } : {}) } : { ...layer, clipId: clip.id, trackId: track.id };
@@ -296,8 +312,8 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
         const prev = track.clips.find((c) => c.type === 'media' && c.id !== clip.id && T.eq(T.add(c.start, c.duration), clip.start));
         // the outgoing side plays on from its handle with its own look, time effect included
         let out = prev && prev.type === 'media' ? clipLayer(cx, track, prev, time) : null;
-        if (out && prev && sh.out) out = withPictureOf(out, bareLayer(doc, track, prev, T.add(time, T.frameTime(sh.out, frameRate))));
-        if (sh.in) layer = withPictureOf(layer, bareLayer(doc, track, clip, T.sub(time, T.frameTime(sh.in, frameRate))));
+        if (out && prev && sh.out) out = withPictureOf(out, bareLayer(cx, track, prev, T.add(time, T.frameTime(sh.out, frameRate))));
+        if (sh.in) layer = withPictureOf(layer, bareLayer(cx, track, clip, T.sub(time, T.frameTime(sh.in, frameRate))));
         if (out) { const o = { ...out, transition: { ...base, role: 'out' as const, light: 0 } }; graph.layers.push(o); follows(o, prev!); }
         layer.transition = { ...base, role: 'in', light };
       }
