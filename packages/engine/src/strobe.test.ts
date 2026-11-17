@@ -10,9 +10,10 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, effectParamsAt, findClip, OpError, validateProject, animatableParams, SPEED_CURVE_IDS, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, effectParamsAt, findClip, OpError, validateProject, animatableParams, SPEED_CURVE_IDS, beatSwitchFrame, followedBeats, lightStartFrame, switchFrame, transitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { evaluate, GPU_EFFECTS } from './index.ts';
-import { flashGapFrames, flashSchedule } from './strobeSchedule.ts';
+import { FLASH_SINCE, thinnedHits } from './gpu.ts';
+import { flashGapFrames, flashSchedule, type FlashSchedule } from './strobeSchedule.ts';
 /** The most flashes a second a steady strobe can show at a frame rate: one every `flashGapFrames` frames. */
 const maxRate = (rate: Rate) => rate.num / rate.den / flashGapFrames(rate.num / rate.den);
 
@@ -399,3 +400,197 @@ describe('strobe: the three-a-second limit as a property', () => {
     }), { numRuns: RUNS, endOnFailure: true });
   }, 60_000 + RUNS * 3000);
 });
+
+describe('light transitions in the one flash schedule (ADR-0012, amending ADR-0009 decision 1)', () => {
+  const provenance = { origin: 'fixture' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'test' };
+  const picture = (k: number) => ({ kind: 'image' as const, name: `p${k}.png`, contentHash: `sha256:${String(k % 10).repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 64, height: 64, codec: 'png', hasAlpha: false }, provenance });
+  /**
+   * The walk as it was before ADR-0012 (strobeSchedule.ts at c09eed4), strobes only, kept here unchanged as the oracle for
+   * documents with no light transition: their schedules must be exactly what they were.
+   */
+  function scheduleBeforeLights(doc: ProjectDocument): Pick<FlashSchedule, 'shown' | 'runOf'> {
+    const keyOf = (clipId: string, effectId: string) => `${clipId}\n${effectId}`;
+    const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+    const firstFrameAt = (t: T.RationalTime, rate: T.Rate) => { const i = T.frameIndexAt(t, rate); return T.isFrameAligned(t, rate) ? i : i + 1; };
+    const rate = doc.settings.frameRate, fps = rate.num / rate.den, gapFrames = flashGapFrames(fps), sequenceId = doc.mainSequenceId;
+    const schedule = { shown: new Map<string, Float64Array>(), runOf: new Map<string, string>() };
+    const seq = doc.sequences[sequenceId]!;
+    const wanted: { frame: number; key: string }[] = [];
+    let beats: { t: number; index: number }[] | null = null;
+    const thinned = new Map<number, number[]>();
+    for (const track of seq.tracks) {
+      if (track.hidden || track.kind === 'audio' || track.kind === 'caption') continue;
+      const open = new Map<string, { key: string; end: number; settings: string }>();
+      for (const clip of [...track.clips].sort((a, b) => T.cmp(a.start, b.start))) {
+        for (const fx of clip.type === 'caption' ? [] : clip.effects ?? []) {
+          if (fx.type !== 'light.strobe' || !fx.enabled) continue;
+          const first = firstFrameAt(clip.start, rate), end = firstFrameAt(T.add(clip.start, clip.duration), rate);
+          const from = T.toSeconds(clip.start), to = T.toSeconds(T.add(clip.start, clip.duration));
+          let times: number[];
+          if (fx.params.follow === 'music') {
+            if (!beats) { let last = 0; for (const tr of seq.tracks) for (const c of tr.clips) last = Math.max(last, T.toSeconds(T.add(c.start, c.duration))); beats = followedBeats(doc, 0, last, sequenceId); }
+            const step = Math.max(1, Math.round(num(fx.params.every, 1)));
+            let all = thinned.get(step);
+            if (!all) thinned.set(step, (all = thinnedHits(beats, step, gapFrames / fps)));
+            times = all.filter((t) => t >= from && t < to);
+          } else {
+            const r = Math.min(fps / gapFrames, Math.max(0, num(fx.params.rate, 2)));
+            times = [];
+            if (r > 0) for (let k = Math.ceil(from * r - 1e-9); k / r < to; k++) if (k / r > from - 1e-6) times.push(k / r);
+          }
+          const settings = JSON.stringify([fx.params.amount, fx.params.color, fx.params.rate, fx.params.follow, fx.params.every]);
+          const run = open.get(fx.id);
+          const key = run && run.end === first && run.settings === settings ? run.key : keyOf(clip.id, fx.id);
+          open.set(fx.id, { key, end, settings });
+          schedule.runOf.set(keyOf(clip.id, fx.id), key);
+          for (const t of times) { const frame = Math.max(first, Math.ceil(t * fps - 1e-6)); if (frame < end) wanted.push({ frame, key }); }
+        }
+      }
+    }
+    wanted.sort((a, b) => a.frame - b.frame);
+    const kept = new Map<string, number[]>();
+    let last = -Infinity;
+    for (let i = 0; i < wanted.length; ) {
+      const frame = wanted[i]!.frame;
+      const keep = frame - last >= gapFrames;
+      for (; i < wanted.length && wanted[i]!.frame === frame; i++) if (keep) { const k = wanted[i]!.key; let list = kept.get(k); if (!list) kept.set(k, (list = [])); if (list[list.length - 1] !== frame) list.push(frame); }
+      if (keep) last = frame;
+    }
+    for (const [k, frames] of kept) schedule.shown.set(k, Float64Array.from(frames));
+    return schedule;
+  }
+
+  type Built = { doc: ProjectDocument; lightClips: string[]; seconds: number };
+  const transition = fc.record({ type: fc.constantFrom('film-burn', 'light-leak', 'film-burn', 'light-leak', 'dissolve', 'flash', 'ink-bleed', 'wipe-left'), frames: fc.integer({ min: 1, max: 30 }), sync: fc.boolean() });
+  const clip = fc.record({ gap: fc.oneof({ weight: 4, arbitrary: fc.constant(0) }, { weight: 1, arbitrary: fc.integer({ min: 1, max: 20 }) }), frames: fc.integer({ min: 2, max: 40 }), transition: fc.option(transition, { freq: 4 }) });
+  const track = fc.record({ hidden: fc.oneof({ weight: 5, arbitrary: fc.constant(false) }, { weight: 1, arbitrary: fc.constant(true) }), clips: fc.array(clip, { minLength: 1, maxLength: 14 }) });
+  const strobe = fc.record({ start: fc.integer({ min: 0, max: 400 }), frames: fc.integer({ min: 2, max: 400 }), params: fc.oneof(fc.record({ rate: fc.constantFrom(3, 2.9, 2.5, 1.7, 1, 0.4) }), fc.record({ follow: fc.constant('music'), every: fc.integer({ min: 1, max: 4 }) })) });
+  const LIGHT_DOC = fc.record({
+    fps: fc.constantFrom<Rate>({ num: 24, den: 1 }, { num: 25, den: 1 }, { num: 30, den: 1 }, { num: 50, den: 1 }, { num: 60, den: 1 }),
+    tracks: fc.array(track, { minLength: 1, maxLength: 3 }),
+    strobes: fc.array(strobe, { maxLength: 3 }),
+    beatMs: fc.option(fc.integer({ min: 120, max: 900 })),
+  });
+  type LightDoc = typeof LIGHT_DOC extends fc.Arbitrary<infer X> ? X : never;
+  /** Picture clips (stills) on 1–3 video tracks, with transitions among them light ones, strobes on titles, and music with beats for the beat lock. */
+  function build(m: LightDoc, lights = true): Built {
+    let doc = createProject({ id: 'prj_l', name: 'L', frameRate: m.fps });
+    let r = tx(doc, [{ op: 'import_asset', args: { asset: picture(1) } }, { op: 'import_asset', args: { asset: picture(2) } }], true);
+    const pics = [r.results[0]!.output!.assetId as string, r.results[1]!.output!.assetId as string];
+    doc = r.doc;
+    if (m.beatMs) {
+      const s = tx(doc, [{ op: 'import_asset', args: { asset: song('song.wav', 300) } }], true);
+      const assetId = s.results[0]!.output!.assetId as string, times = every(m.beatMs, 200).map(ms);
+      doc = s.doc;
+      doc = tx(doc, [{ op: 'attach_analysis', args: { assetId, kind: 'beats', method: 'test', params: {}, createdAt: '2026-11-16T00:00:00Z', times, bpm: null } }], true).doc;
+      doc = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(0, m.fps) } }]).doc;
+    }
+    const lightClips: string[] = [];
+    let end = 0;
+    m.tracks.forEach((t, ti) => {
+      let trackId = 'trk_video';
+      if (ti > 0) { const a = tx(doc, [{ op: 'add_track', args: { kind: 'video' } }]); doc = a.doc; trackId = a.results[0]!.output!.trackId as string; }
+      let at = 0;
+      t.clips.forEach((c, ci) => {
+        at += c.gap;
+        const a = tx(doc, [{ op: 'add_clip', args: { assetId: pics[ci % 2]!, trackId, start: f(at, m.fps), duration: f(c.frames, m.fps) } }]);
+        doc = a.doc;
+        const clipId = a.results[0]!.output!.clipId as string;
+        at += c.frames;
+        if (c.transition) {
+          const type = lights ? c.transition.type : transitionDef(c.transition.type)!.light ? 'dissolve' : c.transition.type;
+          const n = Math.min(c.transition.frames, c.frames);
+          doc = tx(doc, [{ op: 'set_transition', args: { clipId, type, frames: n } }, ...(c.transition.sync && n >= 3 ? [{ op: 'set_transition_options', args: { clipId, sync: 'beat' } }] : [])]).doc;
+          if (transitionDef(type)!.light && !t.hidden) lightClips.push(clipId);
+        }
+      });
+      if (t.hidden) doc = tx(doc, [{ op: 'update_track', args: { trackId, hidden: true } }]).doc;
+      end = Math.max(end, at);
+    });
+    for (const s of m.strobes) {
+      const a = tx(doc, [{ op: 'add_text', args: { text: 'X', start: f(s.start, m.fps), duration: f(s.frames, m.fps) } }]);
+      doc = tx(a.doc, [{ op: 'add_effect', args: { clipId: a.results[0]!.output!.clipId as string, type: 'light.strobe', params: { amount: 1, ...s.params } } }]).doc;
+      end = Math.max(end, s.start + s.frames);
+    }
+    expect(validateProject(doc)).toEqual([]);
+    return { doc, lightClips, seconds: Math.ceil(end / (m.fps.num / m.fps.den)) };
+  }
+  /** Every kept start of the schedule (strobes and light transitions), distinct and in order. */
+  const keptStarts = (s: FlashSchedule) => [...new Set([...[...s.shown.values()].flatMap((x) => [...x]), ...[...s.lights.values()].filter((l) => l.kept).map((l) => l.frame)])].sort((a, b) => a - b);
+
+  it('any mix of strobes and light transitions on several tracks at 24, 25, 30, 50 and 60 fps: kept starts are a gap apart, at most three in any second, each light kept or held by the rule, and what is drawn follows it (property)', () => {
+    let lights = 0, held = 0;
+    fc.assert(fc.property(LIGHT_DOC, (m) => {
+      const { doc, lightClips, seconds } = build(m);
+      const s = flashSchedule(doc), perSecond = s.fps, gap = s.gapFrames;
+      expect(gap).toBe(flashGapFrames(perSecond));
+      const starts = keptStarts(s);
+      for (let i = 1; i < starts.length; i++) expect(starts[i]! - starts[i - 1]!, `kept starts ${starts[i - 1]} and ${starts[i]}`).toBeGreaterThanOrEqual(gap);
+      for (let i = 0, j = 0; i < starts.length; i++) { while (starts[i]! - starts[j]! >= perSecond) j++; expect(i - j + 1, `kept starts in the second before frame ${starts[i]}`).toBeLessThanOrEqual(3); }
+      // every visible light transition is planned where it starts to light, and kept exactly when no kept start lies less than the gap before it
+      expect([...s.lights.keys()].sort()).toEqual([...lightClips].sort());
+      for (const id of lightClips) {
+        const c = findClip(doc, id)!.clip as Extract<ProjectDocument['sequences'][string]['tracks'][number]['clips'][number], { type: 'media' }>;
+        const n = c.transition!.frames, plan = s.lights.get(id)!;
+        expect(plan.frame).toBe(T.frameIndexAt(c.start, doc.settings.frameRate) + lightStartFrame(n, perSecond, switchFrame(n, beatSwitchFrame(doc, c)))!);
+        const before = starts.filter((x) => x < plan.frame);
+        const since = before.length ? plan.frame - before[before.length - 1]! : Infinity;
+        expect(plan.kept, `light of ${id} at ${plan.frame}, ${since} frames after a kept start`).toBe(since >= gap);
+        expect(plan.since).toBe(plan.kept ? null : since);
+        lights++; if (!plan.kept) held++;
+      }
+      // the drawn frames: a light rises from nothing only on a kept start, and a strobe flash starts only on one
+      const kept = new Set(starts);
+      const was = new Map<string, number>();
+      for (let F = 0; F < seconds * perSecond; F++) {
+        const g = evaluate(doc, f(F, doc.settings.frameRate));
+        for (const l of g.layers) {
+          for (const fx of ('effects' in l ? l.effects ?? [] : [])) if (fx.type === 'light.strobe' && fx.params[FLASH_SINCE] === 0) expect(kept.has(F), `strobe flash on frame ${F}`).toBe(true);
+          if ('transition' in l && l.transition?.role === 'in') {
+            const light = l.transition.light ?? 0, prev = was.get(l.clipId) ?? 0;
+            if (light > 0 && prev === 0) expect(kept.has(F), `transition light of ${l.clipId} rises on frame ${F}`).toBe(true);
+            if (light > 0) expect(s.lights.get(l.clipId)?.kept).toBe(true);
+            was.set(l.clipId, light);
+          }
+        }
+      }
+    }), { numRuns: RUNS, endOnFailure: true });
+    // the property is not met by never lighting or never holding: over the runs both happen often
+    expect(lights).toBeGreaterThan(RUNS);
+    expect(held).toBeGreaterThan(RUNS / 4);
+  }, 120_000 + RUNS * 4000);
+
+  it('documents with no light transition get exactly the schedule they had before light transitions joined it (property)', () => {
+    fc.assert(fc.property(LIGHT_DOC, (m) => {
+      const { doc } = build(m, false);
+      const now = flashSchedule(doc), before = scheduleBeforeLights(doc);
+      expect(now.lights.size).toBe(0);
+      expect(now.shown).toEqual(before.shown);
+      expect(now.runOf).toEqual(before.runOf);
+    }), { numRuns: RUNS, endOnFailure: true });
+  }, 60_000 + RUNS * 2000);
+
+  it('a light transition 4 frames after a kept strobe flash is held with since 4 (and draws no light); 12 frames later it is kept', () => {
+    // 30 fps: the gap is 11 frames. A steady strobe flashes at 1/rate s; film-burn of 29 frames lights from its frame 9.
+    const R30 = { num: 30, den: 1 };
+    let doc = createProject({ id: 'prj_h', name: 'H', frameRate: R30 });
+    let r = tx(doc, [{ op: 'import_asset', args: { asset: picture(1) } }, { op: 'import_asset', args: { asset: picture(2) } }], true);
+    const [a, b] = [r.results[0]!.output!.assetId as string, r.results[1]!.output!.assetId as string];
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: a, start: f(0), duration: f(60) } }, { op: 'add_clip', args: { assetId: b, start: f(60), duration: f(60) } }]);
+    const inClip = r.results[1]!.output!.clipId as string;
+    r = tx(r.doc, [{ op: 'set_transition', args: { clipId: inClip, type: 'film-burn', frames: 29 } }]);
+    const lightFrame = 60 + lightStartFrame(29, 30, switchFrame(29, null))!;
+    expect(lightFrame).toBe(69);
+    expect(flashSchedule(r.doc).lights.get(inClip)).toEqual({ frame: 69, kept: true, since: null }); // alone, it is kept
+    const withStrobeAt = (frame: number) => { const t = tx(r.doc, [{ op: 'add_text', args: { text: '.', start: f(frame), duration: f(5) } }]); return tx(t.doc, [{ op: 'add_effect', args: { clipId: t.results[0]!.output!.clipId as string, type: 'light.strobe', params: { amount: 1, rate: 30 / frame } } }]).doc; };
+    doc = withStrobeAt(65);
+    expect([...flashSchedule(doc).shown.values()].flatMap((x) => [...x])).toEqual([65]);
+    expect(flashSchedule(doc).lights.get(inClip)).toEqual({ frame: 69, kept: false, since: 4 });
+    for (let l = 0; l < 29; l++) expect((evaluate(doc, f(60 + l)).layers.find((x) => 'transition' in x && x.transition?.role === 'in') as { transition: { light: number } }).transition.light).toBe(0);
+    // the same transition 12 frames later (both clips moved): 16 frames after the flash, kept
+    const later = tx(doc, [{ op: 'move_clip', args: { clipId: inClip, start: f(72) } }]).doc;
+    const plan = flashSchedule(later).lights.get(inClip)!;
+    expect(plan).toEqual({ frame: 81, kept: true, since: null });
+  });
+});
+
