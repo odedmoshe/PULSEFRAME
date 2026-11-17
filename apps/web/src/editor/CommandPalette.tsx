@@ -5,7 +5,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { dictionaries, type Key, type Lang } from '@pulseframe/i18n';
 import { COMMANDS, chordLabel, chordOf, type Command, type Keymap } from './commands.ts';
-import { rankCommands } from './palette.search.ts';
+import { COLOR_LOOKS, EFFECTS, TRANSITIONS } from '@pulseframe/core';
+import { Bot, Film, Search, Sparkles } from 'lucide-react';
+import { CHROME_STRINGS } from './chrome.strings.ts';
+import { getChrome, setPaletteView } from './chromeState.ts';
+import { pickCall, type PickKind } from './gallery.pick.ts';
+import { normalize, rankCommands, rankWithRescue } from './palette.search.ts';
 import { useEditorState } from './store.ts';
 import './command-palette.css';
 
@@ -15,6 +20,15 @@ const SEARCH_ITEMS = COMMANDS.map((c) => ({ id: c.id, he: dictionaries.he[c.labe
 const GROUP_ORDER = [...new Set(COMMANDS.map((c) => c.group))];
 const byId = new Map(COMMANDS.map((c) => [c.id, c]));
 const otherLang = (l: Lang): Lang => (l === 'he' ? 'en' : 'he');
+type Scope = 'all' | 'commands' | 'catalogue' | 'media' | 'assistant';
+interface CatItem { key: string; kind: PickKind; id: string; he: string; en: string }
+const CATALOGUE: CatItem[] = [
+  ...EFFECTS.map((e) => ({ key: `effect:${e.id}`, kind: 'effect' as const, id: e.id, he: e.name.he, en: e.name.en })),
+  ...TRANSITIONS.map((x) => ({ key: `transition:${x.id}`, kind: 'transition' as const, id: x.id, he: x.name.he, en: x.name.en })),
+  ...COLOR_LOOKS.map((l) => ({ key: `look:${l.id}`, kind: 'look' as const, id: l.id, he: l.name.he, en: l.name.en })),
+];
+const catById = new Map(CATALOGUE.map((c) => [c.key, c]));
+const CAT_SEARCH = CATALOGUE.map((c) => ({ id: c.key, he: c.he, en: c.en }));
 
 export function CommandPalette({ keymap }: { keymap: Keymap }) {
   const { state } = useEditorState();
@@ -25,7 +39,10 @@ export function CommandPalette({ keymap }: { keymap: Keymap }) {
 function PaletteDialog({ keymap }: { keymap: Keymap }) {
   const { editor, state, t } = useEditorState();
   const lang = state.lang;
-  const [view, setView] = useState<'palette' | 'shortcuts'>('palette');
+  const C = CHROME_STRINGS[lang];
+  const [view, setView] = useState<'palette' | 'shortcuts'>(getChrome().paletteView);
+  const [scope, setScope] = useState<Scope>('all');
+  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [capturing, setCapturing] = useState<string | null>(null);
@@ -36,6 +53,14 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   const backRef = useRef<HTMLButtonElement>(null);
   const listId = 'pf-palette-list';
 
+  // Under the command bar (§4.10): placed from its position, clamped to the window. The intent to start on the shortcuts page is used once.
+  useEffect(() => {
+    setPaletteView('palette');
+    const r = document.querySelector<HTMLElement>('[data-testid=open-palette]')?.getBoundingClientRect();
+    if (!r) return;
+    const width = Math.min(Math.max(r.width, 600), window.innerWidth - 24);
+    setAnchor({ top: r.bottom + 8, width, left: Math.max(12, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - 12)) });
+  }, []);
   // Focus the search input on open; restore the previous focus on close.
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -52,19 +77,42 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   const enabled = (c: Command) => !c.enabled || c.enabled(editor);
   const chords = (c: Command) => keymap.keysFor(c.id);
 
-  // Display order: grouped (registry order) when the query is empty, otherwise a ranked flat list.
-  const ranked = useMemo(() => rankCommands(query, SEARCH_ITEMS).map((id) => byId.get(id)!), [query]);
+  // Display order: grouped commands (registry order) when the query is empty; otherwise ranked commands, then the catalogue
+  // (effects, transitions, looks), then the project's media. Typing on the other keyboard layout is rescued (palette.search.ts).
+  const searching = !!normalize(query);
+  const cmdRank = useMemo(() => rankWithRescue(query, SEARCH_ITEMS), [query]);
+  const ranked = useMemo(() => cmdRank.ids.map((id) => byId.get(id)!), [cmdRank]);
+  const rescued = cmdRank.rescued;
+  const needle = rescued ?? query;
+  const catRows = useMemo(() => (searching ? rankCommands(needle, CAT_SEARCH).map((k) => catById.get(k)!) : []), [needle, searching]);
+  const doc = state.doc;
+  const mediaRows = useMemo(() => {
+    if (!searching || !doc) return [];
+    const items = Object.values(doc.assets).filter((a) => a.kind !== 'lut').map((a) => ({ id: a.id, he: a.name, en: a.name }));
+    return rankCommands(needle, items).map((id) => doc.assets[id]!);
+  }, [needle, searching, doc]);
+  const showCmd = scope === 'all' || scope === 'commands';
+  const showCat = searching && (scope === 'all' || scope === 'catalogue');
+  const showMedia = searching && (scope === 'all' || scope === 'media');
+  const cmdShown = !showCmd ? [] : scope === 'all' && searching ? ranked.slice(0, 8) : ranked;
+  const catShown = !showCat ? [] : scope === 'all' ? catRows.slice(0, 6) : catRows.slice(0, 40);
+  const mediaShown = !showMedia ? [] : scope === 'all' ? mediaRows.slice(0, 4) : mediaRows;
   const groups = useMemo(
-    () => (query.trim() ? [{ group: null as Command['group'] | null, items: ranked }] : GROUP_ORDER.map((g) => ({ group: g as Command['group'] | null, items: ranked.filter((c) => c.group === g) }))).filter((g) => g.items.length),
-    [query, ranked],
+    () => (searching ? [{ group: null as Command['group'] | null, items: cmdShown }] : GROUP_ORDER.map((g) => ({ group: g as Command['group'] | null, items: cmdShown.filter((c) => c.group === g) }))).filter((g) => g.items.length),
+    [searching, cmdShown],
   );
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
-  const active = flat.find((c) => c.id === activeId) ?? flat[0];
+  const clip = editor.selected?.clip;
+  // One cursor over every selectable row: commands, catalogue entries, media. The assistant row is shown but cannot be chosen.
+  const keys = useMemo(() => [...flat.map((c) => c.id), ...catShown.map((c) => c.key), ...mediaShown.map((a) => `media:${a.id}`)], [flat, catShown, mediaShown]);
+  const active = flat.find((c) => c.id === activeId) ?? (activeId ? undefined : flat[0]);
+  const activeKey = activeId && keys.includes(activeId) ? activeId : keys[0] ?? null;
+  const counts = { catalogue: catRows.length, media: mediaRows.length };
   const optionDomId = (id: string) => `pf-palette-opt-${id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
 
   useEffect(() => {
-    if (active) document.getElementById(optionDomId(active.id))?.scrollIntoView?.({ block: 'nearest' });
-  }, [active?.id]);
+    if (activeKey) document.getElementById(optionDomId(activeKey))?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeKey]);
 
   const run = (c: Command | undefined) => {
     if (!c || !enabled(c)) return;
@@ -72,16 +120,29 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
     // Let the dialog unmount and focus return first, so commands that need focus elsewhere work.
     setTimeout(() => void c.run(editor), 0);
   };
-  const move = (to: number) => flat.length && setActiveId(flat[(to + flat.length) % flat.length]!.id);
+  const runKey = (key: string | null) => {
+    if (!key) return;
+    if (key.startsWith('media:')) { close(); const id = key.slice(6); setTimeout(() => void editor.addAsset(id), 0); return; }
+    const cat = catById.get(key);
+    if (cat) {
+      if (!clip) return;
+      const call = pickCall(clip, { kind: cat.kind, id: cat.id });
+      close();
+      if (call) setTimeout(() => void editor.commit([call], `Palette: ${cat.id}`), 0);
+      return;
+    }
+    run(byId.get(key));
+  };
+  const move = (to: number) => keys.length && setActiveId(keys[(to + keys.length) % keys.length]!);
 
   const onInputKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing) return;
-    const i = active ? flat.indexOf(active) : 0;
+    const i = activeKey ? keys.indexOf(activeKey) : 0;
     if (e.key === 'ArrowDown') { e.preventDefault(); move(i + 1); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); move(i - 1); }
     else if (e.key === 'Home') { e.preventDefault(); move(0); }
-    else if (e.key === 'End') { e.preventDefault(); move(flat.length - 1); }
-    else if (e.key === 'Enter') { e.preventDefault(); run(active); }
+    else if (e.key === 'End') { e.preventDefault(); move(keys.length - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); runKey(activeKey); }
   };
 
   const onDialogKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -118,31 +179,41 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   const other = otherLang(lang);
 
   return (
-    <div className="pf-pal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div ref={dialogRef} className="pf-pal-dialog" role="dialog" aria-modal="true" aria-label={t('cmd.palette')} data-testid="palette-dialog" onKeyDown={onDialogKey}>
+    <div className="pf-pal-backdrop pf-ds" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+      <div ref={dialogRef} className="pf-pal-dialog" style={anchor ? { position: 'fixed', top: anchor.top, left: anchor.left, width: anchor.width } : undefined} role="dialog" aria-modal="true" aria-label={t('cmd.palette')} data-testid="palette-dialog" onKeyDown={onDialogKey}>
         {view === 'palette' ? (
           <>
-            <input
-              ref={inputRef}
-              className="pf-pal-input"
-              data-testid="palette-input"
-              role="combobox"
-              aria-expanded="true"
-              aria-autocomplete="list"
-              aria-controls={listId}
-              aria-activedescendant={active ? optionDomId(active.id) : undefined}
-              aria-label={t('cmd.palette')}
-              placeholder={t('palette.placeholder')}
-              value={query}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => { setQuery(e.target.value); setActiveId(null); }}
-              onKeyDown={onInputKey}
-            />
+            <div className="pf-pal-top">
+              <Search size={18} strokeWidth={1.75} aria-hidden="true" />
+              <input
+                ref={inputRef}
+                className="pf-pal-input"
+                data-testid="palette-input"
+                role="combobox"
+                aria-expanded="true"
+                aria-autocomplete="list"
+                aria-controls={listId}
+                aria-activedescendant={activeKey ? optionDomId(activeKey) : undefined}
+                aria-label={t('cmd.palette')}
+                placeholder={C.cmdPlaceholder}
+                value={query}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => { setQuery(e.target.value); setActiveId(null); }}
+                onKeyDown={onInputKey}
+              />
+              <kbd className="pf-pal-esc" dir="ltr">Esc</kbd>
+            </div>
+            <div className="pf-pal-scopes" role="group" aria-label={C.palScopes}>
+              {([['all', C.scopeAll, null], ['commands', C.scopeCommands, null], ['catalogue', C.scopeCatalogue, searching ? counts.catalogue : null], ['media', C.scopeMedia, searching ? counts.media : null], ['assistant', C.scopeAssistant, null]] as [Scope, string, number | null][]).map(([id, label, n]) => (
+                <button key={id} type="button" className="pf-pal-scope" aria-pressed={scope === id} data-testid={`palette-scope-${id}`} onClick={() => { setScope(id); setActiveId(null); inputRef.current?.focus(); }}>{label}{n != null && <span className="pf-pal-n num">{n}</span>}</button>
+              ))}
+            </div>
+            {rescued && <p className="pf-pal-note" role="status" data-testid="palette-rescued">{C.palRescued(rescued)}</p>}
             <div id={listId} className="pf-pal-list" role="listbox" aria-label={t('cmd.palette')}>
-              {groups.map((g) => (
-                <div key={g.group ?? 'results'} role="group" aria-label={g.group ? t(`group.${g.group}` as Key) : undefined}>
-                  {g.group && <div className="pf-pal-heading" aria-hidden="true">{t(`group.${g.group}` as Key)}</div>}
+              {scope !== 'assistant' && groups.map((g) => (
+                <div key={g.group ?? 'results'} role="group" aria-label={g.group ? t(`group.${g.group}` as Key) : scope === 'all' ? C.scopeCommands : undefined}>
+                  {(g.group || (searching && scope === 'all')) && <div className="pf-pal-heading" aria-hidden="true">{g.group ? t(`group.${g.group}` as Key) : C.scopeCommands}</div>}
                   {g.items.map((c) => {
                     const ok = enabled(c);
                     return (
@@ -152,11 +223,11 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                         role="option"
                         data-testid="palette-option"
                         data-command-id={c.id}
-                        aria-selected={c.id === active?.id}
+                        aria-selected={c.id === activeKey}
                         aria-disabled={ok ? undefined : 'true'}
                         className="pf-pal-option"
-                        data-active={c.id === active?.id || undefined}
-                        onMouseMove={() => c.id !== active?.id && setActiveId(c.id)}
+                        data-active={c.id === activeKey || undefined}
+                        onMouseMove={() => c.id !== activeKey && setActiveId(c.id)}
                         onClick={() => run(c)}
                       >
                         <span className="pf-pal-names">
@@ -170,9 +241,48 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                   })}
                 </div>
               ))}
-              {!flat.length && <div className="pf-pal-empty" role="status">{t('palette.empty')}</div>}
+              {scope !== 'assistant' && catShown.length > 0 && (
+                <div role="group" aria-label={C.palCatalogue}>
+                  <div className="pf-pal-heading" aria-hidden="true">{C.palCatalogue}</div>
+                  {catShown.map((c) => (
+                    <div key={c.key} id={optionDomId(c.key)} role="option" data-testid="palette-catalogue" data-kind={c.kind} data-id={c.id} aria-selected={c.key === activeKey} aria-disabled={clip ? undefined : 'true'} className="pf-pal-option"
+                      data-active={c.key === activeKey || undefined} onMouseMove={() => c.key !== activeKey && setActiveId(c.key)} onClick={() => runKey(c.key)}>
+                      <span className="pf-pal-names">
+                        <Sparkles size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic" />
+                        <span className="pf-pal-label" lang={lang}>{c[lang]}</span>
+                        {c[other] !== c[lang] && <span className="pf-pal-alt" lang={other}>{c[other]}</span>}
+                        {!clip && <span className="pf-pal-unavail">{C.palSelectClip}</span>}
+                      </span>
+                      <span className="pf-pal-kind">{c.kind === 'effect' ? C.palEffect : c.kind === 'transition' ? C.palTransition : C.palLook}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {scope !== 'assistant' && mediaShown.length > 0 && (
+                <div role="group" aria-label={C.palMedia}>
+                  <div className="pf-pal-heading" aria-hidden="true">{C.palMedia}</div>
+                  {mediaShown.map((a) => (
+                    <div key={a.id} id={optionDomId(`media:${a.id}`)} role="option" data-testid="palette-media" data-asset-id={a.id} aria-selected={`media:${a.id}` === activeKey} className="pf-pal-option"
+                      data-active={`media:${a.id}` === activeKey || undefined} onMouseMove={() => setActiveId(`media:${a.id}`)} onClick={() => runKey(`media:${a.id}`)}>
+                      <span className="pf-pal-names"><Film size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic" /><span className="pf-pal-label" dir="auto">{a.name}</span></span>
+                      <span className="pf-pal-kind">{C.palAddMedia}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {scope !== 'assistant' && keys.length === 0 && <div className="pf-pal-empty" role="status">{searching ? C.palEmpty : t('palette.empty')}</div>}
+              {/* The assistant: honest about not being connected. It never pretends to understand free language. */}
+              {(scope === 'all' || scope === 'assistant') && searching && (
+                <div role="group" aria-label={C.scopeAssistant}>
+                  <div className="pf-pal-option is-assistant" role="option" aria-selected="false" aria-disabled="true" id={optionDomId('assistant')} data-testid="palette-assistant">
+                    <span className="pf-pal-names"><Bot size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic is-agent" /><span className="pf-pal-label">{C.palAssistantRow(query.trim())}</span><span className="pf-pal-unavail">{C.palNoModel.split(' · ')[0]}</span></span>
+                  </div>
+                </div>
+              )}
+              {scope === 'assistant' && <p className="pf-pal-note is-block" role="status" data-testid="palette-assistant-note">{C.palAssistantOff}</p>}
             </div>
             <div className="pf-pal-footer">
+              <span className="pf-pal-hints" aria-hidden="true"><span><kbd>↑↓</kbd> {C.palFooter.nav}</span><span><kbd>Enter</kbd> {C.palFooter.apply}</span><span><kbd>Esc</kbd> {C.palFooter.close}</span></span>
               <button type="button" className="pf-pal-btn" data-testid="palette-shortcuts" onClick={() => setView('shortcuts')}>{t('shortcuts')}</button>
               <button type="button" className="pf-pal-btn" onClick={close}>{t('close')}</button>
             </div>

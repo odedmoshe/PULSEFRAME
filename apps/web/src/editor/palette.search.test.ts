@@ -55,3 +55,19 @@ describe('rankCommands', () => {
     expect(rankCommands('zoom', list)).toEqual(['one', 'two', 'three']);
   });
 });
+
+import { otherLayout, rankWithRescue } from './palette.search.ts';
+describe('typing on the wrong layout', () => {
+  it('maps Hebrew letters to the keys they sit on, and back', () => {
+    expect(otherLayout('דפךןא')).toBe('split');
+    expect(otherLayout('split')).toBe('דפךןא');
+    expect(otherLayout('abc ש')).toBeNull(); // mixed scripts are left alone
+    expect(otherLayout('   ')).toBeNull();
+  });
+  it('finds the command through the other layout only when the text itself matches nothing', () => {
+    const items = [{ id: 'edit.split', he: 'פיצול', en: 'split' }, { id: 'edit.delete', he: 'מחיקה', en: 'delete' }];
+    expect(rankWithRescue('דפךןא', items)).toEqual({ ids: ['edit.split'], rescued: 'split' });
+    expect(rankWithRescue('split', items)).toEqual({ ids: ['edit.split'], rescued: null });
+    expect(rankWithRescue('zzzz', items)).toEqual({ ids: [], rescued: null });
+  });
+});

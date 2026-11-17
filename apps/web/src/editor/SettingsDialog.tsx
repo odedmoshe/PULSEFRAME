@@ -1,0 +1,43 @@
+/** Settings (rail, bottom) and the status centre (status-bar pips): language, theme, and what still needs setting up, said plainly. */
+import { useState } from 'react';
+import { Dialog, Seg } from '../ds/index.ts';
+import { CHROME_STRINGS } from './chrome.strings.ts';
+import { setSettingsOpen, useChrome } from './chromeState.ts';
+import { useEditorState } from './store.ts';
+
+const THEME_KEY = 'pf.theme';
+export const readTheme = (): 'dark' | 'light' => { try { return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch { return 'dark'; } };
+/** Applies the saved theme at start-up (dark by default, whatever the OS says). */
+export function applyTheme(theme: 'dark' | 'light') {
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem(THEME_KEY, theme); } catch { /* not remembered in a private window */ }
+}
+
+export function SettingsDialog() {
+  const { editor, state } = useEditorState();
+  const { settingsOpen } = useChrome();
+  const S = CHROME_STRINGS[state.lang];
+  const [theme, setTheme] = useState<'dark' | 'light'>(readTheme);
+  const { gpu, provider } = state;
+  const rows: { id: string; name: string; word: string; tone: 'ok' | 'need' | 'off'; why?: string }[] = [
+    { id: 'gpu', name: S.gpu, word: gpu ? (gpu.available ? S.capReady : S.capSetup) : '…', tone: gpu ? (gpu.available ? 'ok' : 'need') : 'off', why: gpu && !gpu.available ? gpu.reason : undefined },
+    { id: 'ai', name: S.ai, word: provider ? (provider.provider.configured ? S.capReady : S.capSetup) : '…', tone: provider ? (provider.provider.configured ? 'ok' : 'need') : 'off', why: provider && !provider.provider.configured ? provider.provider.reason ?? undefined : undefined },
+    { id: 'assistant', name: S.assistant, word: S.assistantOff, tone: 'off' },
+  ];
+  return (
+    <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} title={S.settingsTitle} closeLabel={S.settingsClose} size="md" testId="settings-dialog">
+      <div className="pf-set">
+        <div className="pf-set-row"><span>{S.interfaceLang}</span>
+          <Seg size="sm" label={S.interfaceLang} value={state.lang} onChange={(v) => editor.setLang(v)} options={[{ value: 'he', label: 'עברית' }, { value: 'en', label: 'English' }]} /></div>
+        <div className="pf-set-row"><span>{S.theme}</span>
+          <Seg size="sm" label={S.theme} value={theme} onChange={(v) => { setTheme(v); applyTheme(v); }} options={[{ value: 'dark', label: S.themeDark }, { value: 'light', label: S.themeLight }]} /></div>
+        <h3 className="pf-set-h">{S.capabilities}</h3>
+        <ul className="pf-set-caps">
+          {rows.map((r) => (
+            <li key={r.id} data-tone={r.tone}><span className="pf-set-dot" aria-hidden="true" /><span className="pf-set-name">{r.name}</span><span className="pf-set-word">{r.word}</span>{r.why && <span className="pf-set-why" dir="auto">{r.why}</span>}</li>
+          ))}
+        </ul>
+      </div>
+    </Dialog>
+  );
+}
