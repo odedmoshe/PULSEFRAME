@@ -113,7 +113,7 @@ const cake: TemplateDef = {
     { key: 'burst', role: { he: 'ההתפוצצות', en: 'The burst' }, accept: 'any', span: { bars: 1 }, tag: 'party', motion: { presetId: 'motion.move.ken-burns-out', amount: 0.6 }, transitionIn: { type: 'zoom', seconds: 0.3, dir: 'fixed' } },
     { key: 'after', role: { he: 'אחרי', en: 'Afterwards' }, accept: 'any', span: { bars: 1 }, motion: { presetId: 'motion.move.pan-right', amount: 0.5 }, transitionIn: dissolve(0.4) },
   ],
-  slotUse: { mode: 'media', min: 3 },
+  slotUse: { mode: 'media', min: 4 },
   texts: [
     { key: 'time', role: { he: 'לפני העוגה', en: 'Before the cake' }, default: { he: 'הגיע זמן העוגה!', en: 'Cake time!' }, maxChars: 30, presetId: 'birthday-pink-box',
       anim: A('word', 'slide', 'fade', 0.4), at: { slot: 'before' }, place: { x: 0, y: 0.28, sizeFrac: 0.055 } },

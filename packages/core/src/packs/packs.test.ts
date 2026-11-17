@@ -15,6 +15,8 @@ import { NEVER_IN_A_PACK, packIssues } from './check.ts';
 import { PACKS, findPack } from './index.ts';
 import { PACK_ELEMENTS } from './elements.ts';
 import { summarizePack } from './use.ts';
+import { createProject, planTemplate, type Asset } from '../index.ts';
+import * as T from '@pulseframe/time';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const hanukkah = findPack('pack.hanukkah')!, birthday = findPack('pack.birthday')!;
@@ -176,5 +178,29 @@ describe('the snapshot of the pack data', () => {
     const now = { hash, packs: PACKS.map((p) => ({ id: p.id, version: p.version, templates: p.templates.length, elements: p.elementIds.length, looks: p.looks.length, captionLooks: p.captionLooks.length, textPresets: p.textPresets.length, titles: p.titles.length })) };
     if (process.env.PF_UPDATE_SNAPSHOT === '1') fs.writeFileSync(file, JSON.stringify(now, null, 1) + '\n');
     expect(JSON.parse(fs.readFileSync(file, 'utf8')), 'pack data changed: if on purpose, give changed values NEW ids and renew with PF_UPDATE_SNAPSHOT=1').toEqual(now);
+  });
+});
+
+describe('pack templates keep every graphic element at ordinary media counts', () => {
+  const rate = { num: 30, den: 1 };
+  const pictures = (n: number) => {
+    const doc = createProject({ id: 'prj_pk', name: 'pk', width: 540, height: 960, frameRate: rate });
+    for (let i = 0; i < n; i++) {
+      const id = `img_${i}`;
+      doc.assets[id] = { id, kind: 'image', name: `${id}.png`, contentHash: `sha256:${(i + 1).toString(16).padStart(64, '0')}`, byteSize: 100, container: 'png', mimeType: 'image/png', duration: T.ZERO,
+        image: { width: 1080, height: 1080, codec: 'png', hasAlpha: false }, provenance: { origin: 'fixture', importedAt: '2026-11-17T00:00:00.000Z', importedBy: 'test' } } as Asset;
+    }
+    return doc;
+  };
+  it('planning every pack template with min..slots+4 media at every tempo drops no element', () => {
+    for (const p of PACKS) for (const t of p.templates) {
+      const from = t.slotUse.min, to = t.slots.length + 4;
+      for (let n = from; n <= to; n++) for (const tempo of ['half', 'normal', 'double'] as const) {
+        const doc = pictures(n);
+        const plan = planTemplate(doc, t, { media: Object.keys(doc.assets), tempo });
+        const dropped = plan.notices.filter((x) => x.code === 'element_dropped');
+        expect(dropped, `${t.id} with ${n} media, ${tempo}`).toEqual([]);
+      }
+    }
   });
 });

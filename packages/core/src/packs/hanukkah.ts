@@ -144,10 +144,10 @@ const party: TemplateDef = {
       anim: A('word', 'pop', 'fade', 0.4), at: { slot: 'beat5' }, place: { x: 0, y: 0.28, sizeFrac: 0.06 } },
   ],
   elements: [
-    { key: 'sufgan', elementId: el('sufganiya'), at: { slot: 'beat1', spanSlots: 2 }, place: { x: 0.28, y: 0.3, scale: 0.4 }, motion: { presetId: 'motion.in.pop' } },
-    { key: 'dreidel', elementId: el('dreidel-two-colour'), at: { slot: 'beat3', spanSlots: 2 }, place: { x: -0.28, y: 0.3, scale: 0.4 }, motion: { presetId: 'motion.loop.wobble' } },
-    { key: 'spin', elementId: el('dreidel-spinning'), at: { slot: 'beat5', spanSlots: 2 }, place: { x: 0.28, y: -0.3, scale: 0.4 }, motion: { presetId: 'motion.in.pop' } },
-    { key: 'gelt', elementId: el('gelt-coin'), at: { slot: 'beat7', spanSlots: 2 }, place: { x: -0.28, y: -0.3, scale: 0.35 }, motion: { presetId: 'motion.in.pop' } },
+    { key: 'sufgan', elementId: el('sufganiya'), at: { slot: 'beat1' }, place: { x: 0.28, y: 0.3, scale: 0.4 }, motion: { presetId: 'motion.in.pop' } },
+    { key: 'dreidel', elementId: el('dreidel-two-colour'), at: { slot: 'beat2' }, place: { x: -0.28, y: 0.3, scale: 0.4 }, motion: { presetId: 'motion.loop.wobble' } },
+    { key: 'spin', elementId: el('dreidel-spinning'), at: { slot: 'beat3' }, place: { x: 0.28, y: -0.3, scale: 0.4 }, motion: { presetId: 'motion.in.pop' } },
+    { key: 'gelt', elementId: el('gelt-coin'), at: { slot: 'beat5' }, place: { x: -0.28, y: -0.3, scale: 0.35 }, motion: { presetId: 'motion.in.pop' } },
   ],
   sfx: [{ key: 'pop', sfxId: 'sfx.pop', at: 'boundaries', everyN: 2, gain: 0.5 }, { key: 'win', sfxId: 'sfx.success', at: 'first', gain: 0.6 }],
   adjust: [
