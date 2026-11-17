@@ -1723,8 +1723,9 @@ const parseEffect = (type: string, params: unknown) => {
 /** A color.lut effect that names a table must name a colour table (asset of kind 'lut') of this project. */
 const assertLutRef = (d: ProjectDocument, type: string, params: Record<string, unknown>) => {
   if (type !== 'color.lut' || typeof params.lut !== 'string' || params.lut === '') return;
-  if (d.assets[params.lut]?.kind === 'lut') return;
-  const known = d.assets[params.lut];
+  // An own entry of the library only: an id such as "__proto__" or "constructor" names nothing, it must not find Object's own members.
+  const known = Object.hasOwn(d.assets, params.lut) ? d.assets[params.lut] : undefined;
+  if (known?.kind === 'lut') return;
   throw new OpError('not_found', known ? `"${known.name.slice(0, 60)}" is a ${known.kind} file, not a colour table (LUT)` : `colour table ${params.lut} is not in this project's library`, { lut: params.lut, available: lutAssets(d).slice(0, 100).map((x) => ({ id: x.id, name: x.name })) }, 'Upload a .cube file to the project library first; get_summary lists the colour tables (assets of kind lut) with their ids.');
 };
 defineOp({

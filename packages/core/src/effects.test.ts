@@ -195,6 +195,28 @@ describe('colour tables (LUT assets) and the color.lut effect', () => {
     expect(validateProject(gone)).toEqual([]);
   });
 
+  it('an id that is a member of every object ("__proto__", "constructor", "toString") names no table: not_found with the list, by every path, never a crash', () => {
+    const { doc, clipId, lutId } = withLut();
+    const fxId = tx(doc, [{ op: 'apply_lut', args: { clipId, assetId: lutId } }]);
+    const effectId = fxId.results[0]!.output!.effectId as string;
+    for (const id of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+      for (const call of [
+        { op: 'add_effect', args: { clipId, type: 'color.lut', params: { lut: id } } },
+        { op: 'apply_lut', args: { clipId, assetId: id } },
+      ]) {
+        const e = failure(() => tx(doc, [call]));
+        expect(e).toBeInstanceOf(OpError);
+        expect(e.code).toBe('not_found');
+        expect(e.message).toBe(`colour table ${id} is not in this project's library`);
+        expect(e.details).toMatchObject({ lut: id, available: [{ id: lutId, name: 'film.cube' }] });
+      }
+      const e = failure(() => tx(fxId.doc, [{ op: 'update_effect', args: { clipId, effectId, params: { lut: id } } }]));
+      expect([e.code, e.message]).toEqual(['not_found', `colour table ${id} is not in this project's library`]);
+      expect(lutUsers(doc, id)).toEqual([]);
+    }
+    expect(({} as any).name).toBeUndefined(); // nothing was written to the prototype either
+  });
+
   it('apply_lut sets the single color.lut effect of the clip: adds it, then replaces it instead of stacking, and re-enables it', () => {
     const { doc, clipId, assetId, audioId, lutId } = withLut();
     const second = tx(doc, [{ op: 'import_asset', args: { asset: lutAsset('b', 'other.cube') } }], true);

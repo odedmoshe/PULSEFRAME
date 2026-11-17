@@ -469,7 +469,9 @@ async function main() {
 
     // ---------- color.lut: an imported .cube colour table, against core's model of the pass ----------
     // Fixture: like the ramp (red = column, green = row), but blue varies too: it climbs four times across the width, so the
-    // grid below meets many combinations of the three channels and every blue slice of the table.
+    // grid below meets many combinations of the three channels and the blue slices 0..15 of the table's 17 (blue is at most
+    // 227 of 255 on the grid, and every pixel is opaque). The top of each channel, the last slice as the lower tap and pixels
+    // that are not opaque are checked further down on a second fixture (ramp4).
     const ramp3File = path.join(art, 'ramp3.png');
     const ramp3Raw = Buffer.alloc(W * H * 3);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 3; ramp3Raw[i] = Math.round((255 * x) / (W - 1)); ramp3Raw[i + 1] = Math.round((255 * y) / (H - 1)); ramp3Raw[i + 2] = Math.round((255 * ((x * 4) % W)) / (W - 1)); }
@@ -477,7 +479,7 @@ async function main() {
     const lutPid = (await call('/projects', { name: 'lut', width: W, height: H })).body.project.id as string;
     const lutClip = (await tx(lutPid, [{ op: 'add_clip', args: { assetId: await upload(lutPid, ramp3File), start: T.rt(0, 1), duration: T.rt(1, 1) } }])).results[0].output.clipId as string;
     const plainLut = await still(lutPid);
-    const uploadRaw = async (name: string, bytes: Uint8Array<ArrayBuffer>) => { const r = await fetch(`${s.url}/api/v1/projects/${lutPid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': encodeURIComponent(name) }, body: bytes }); return { status: r.status, body: (await r.json()) as any }; };
+    const uploadRaw = async (name: string, bytes: Uint8Array<ArrayBuffer>, pid = lutPid) => { const r = await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': encodeURIComponent(name) }, body: bytes }); return { status: r.status, body: (await r.json()) as any }; };
     /** A table of the given size and input domain from a function of the (domain-normalised) input colour. */
     const tableOf = (size: number, fn: (r: number, g: number, b: number) => [number, number, number], lo = 0, hi = 1, title = 'proof'): Lut3D => {
       const t = identityLut(size);
@@ -543,8 +545,19 @@ async function main() {
       const blob = path.join(art, 'data', 'blobs', String(up.body.asset.contentHash).replace('sha256:', ''));
       const original = fs.readFileSync(blob);
       let unreadable: any, gone: any, back: Img | null = null;
+      // an editor opened meanwhile (its own browser profile, so nothing of the table is cached there)
+      const ed = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+      const edErrors: string[] = [];
+      ed.on('pageerror', (e) => edErrors.push(String(e)));
+      let notice: string | null = null, shown: Img | null = null;
       try {
         fs.writeFileSync(blob, Buffer.alloc(original.length, 0x23)); // same length, not a table: the worker receives it and cannot read it
+        await ed.goto(`${s.ownerUrl}&project=${lutPid}`);
+        await ed.locator('.clip').first().waitFor();
+        await ed.getByTestId('effect-unavailable').waitFor({ timeout: 20_000 }).catch(() => {});
+        notice = await ed.getByTestId('effect-unavailable').textContent().catch(() => null);
+        shown = await previewRgb(ed);
+        for (let i = 0; i < 100 && meanDiff(shown, plainLut) >= 0.5; i++) { await sleep(100); shown = await previewRgb(ed); }
         unreadable = await call(`/projects/${lutPid}/frame?index=0`);
         fs.rmSync(blob); // not there at all: known before any worker starts
         gone = await call(`/projects/${lutPid}/frame?index=0`);
@@ -552,6 +565,14 @@ async function main() {
       back = await still(lutPid);
       const said = JSON.stringify(unreadable.body?.error ?? '');
       check('A table that cannot be read is not rendered around: the still is refused and the reason names the colour table, not a missing graphics adapter; a table whose bytes are gone blocks the render up front; with the bytes back the still is as before', unreadable.status >= 400 && /colour table/.test(said) && !/graphics adapter/.test(said) && gone.status === 422 && gone.body.error?.details?.blockers?.[0]?.code === 'missing_media' && maxDiff(back, graded) === 0, { unreadable: unreadable.status, reason: said.slice(0, 260), gone: gone.status, blocker: gone.body.error?.details?.blockers?.[0]?.code });
+      check('Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter', !!notice && /colour table/.test(notice) && !/graphics adapter/.test(notice) && (await ed.getByTestId('gpu-unavailable').count()) === 0 && !!shown && meanDiff(shown, plainLut) < 0.5, { notice: notice?.slice(0, 300) ?? null, previewVsPlain: shown ? meanDiff(shown, plainLut) : null });
+      // the bytes are back: the paused preview draws the table by itself (no seek, no edit, no reload), although the browser had cached the unreadable bytes
+      const t0 = Date.now();
+      let healed: Img = await previewRgb(ed);
+      for (let i = 0; i < 450 && (meanDiff(healed, graded) >= 0.5 || (await ed.getByTestId('effect-unavailable').count()) > 0); i++) { await sleep(100); healed = await previewRgb(ed); }
+      measurements.lutPreviewRecovery = { seconds: Number(((Date.now() - t0) / 1000).toFixed(1)), meanDifferenceFromStill: meanDiff(healed, graded) };
+      check('Editor after the table\'s bytes are back: without any action the paused preview becomes the graded picture and the notice goes away', meanDiff(healed, graded) < 0.5 && (await ed.getByTestId('effect-unavailable').count()) === 0 && edErrors.length === 0, { ...(measurements.lutPreviewRecovery as object), errors: edErrors });
+      await ed.close();
     }
 
     // the editor preview draws it through the same path; the panel and the library show the table
@@ -592,6 +613,81 @@ async function main() {
     for (const [x, y] of lutGrid) { const src = px(plainLut, x, y), got = px(wideStill, x, y), o = sampleLut(wide, [src[0]! / 255, src[1]! / 255, src[2]! / 255]); for (let c = 0; c < 3; c++) wRef = Math.max(wRef, Math.abs(got[c]! - o[c]! * 255)); }
     const wWide = worstFromModel(wideStill, wideText, 1);
     check('color.lut with a table declared over the domain 0..2: the still follows the strip model (within 3 of 255) and the file\'s own definition, core sampleLut (within 4 of 255)', wideUp.status === 201 && wWide <= 3 && wRef <= 4, { worstFromModel: wWide, worstFromDefinition: Number(wRef.toFixed(2)) });
+
+    // input domains that do not line up with the file's grid: 0..1.5 at size 17 is resampled without loss onto 33 entries per
+    // axis; 0.0625..0.9375 (video range) fits no grid up to 65 and is approximated on 65. Both against the file's own definition.
+    {
+      const out: Record<string, unknown> = {};
+      let ok = true;
+      for (const [name, lo, hi, grid, limit] of [['range.cube', 0, 1.5, 33, 3], ['video.cube', 0.0625, 0.9375, 65, 4]] as const) {
+        const table = tableOf(17, rotated, lo, hi, name);
+        const text = serializeCube(table);
+        const u = await uploadRaw(name, Buffer.from(text, 'utf8'));
+        await tx(lutPid, [{ op: 'apply_lut', args: { clipId: lutClip, assetId: u.body.assetId } }]);
+        const img = await still(lutPid);
+        let def = 0;
+        for (const [x, y] of lutGrid) { const src = px(plainLut, x, y), got = px(img, x, y), o = sampleLut(table, [src[0]! / 255, src[1]! / 255, src[2]! / 255]); for (let c = 0; c < 3; c++) def = Math.max(def, Math.abs(got[c]! - o[c]! * 255)); }
+        const model = worstFromModel(img, text, 1);
+        out[`${lo}..${hi}`] = { fileSize: u.body.asset?.lut?.size, stripSize: lutStrip(text).size, worstFromModel: model, worstFromDefinition: Number(def.toFixed(2)), limit };
+        ok &&= u.status === 201 && u.body.asset?.lut?.size === 17 && lutStrip(text).size === grid && model <= 3 && def <= limit;
+      }
+      measurements.lutUnalignedDomains = out;
+      check('color.lut with input domains that do not line up with the table\'s grid (0..1.5, and video range 0.0625..0.9375): the still follows the file\'s own definition, core sampleLut, within 3 of 255 where a finer grid holds every entry and within 4 where none up to 65 does', ok, out);
+    }
+
+    // ---------- color.lut on pixels that are not opaque, and at the top of every channel ----------
+    // Fixture ramp4: red, green and blue each reach 255 on grid points (blue on a plateau, three times across the width, so the
+    // last blue slice is met as the lower tap, with red = green = blue = 255 in one corner), and the lower half is translucent
+    // (alpha 230, 153 and 77 of 255 in three bands) over the black project background. There the pass must take the colour out
+    // of its premultiplied form before the lookup and put it back after: looking up the premultiplied colour gives another picture.
+    {
+      const src4 = (x: number, y: number) => [Math.min(255, Math.round((255 * x) / 340)), Math.min(255, Math.round((255 * y) / 600)), Math.min(255, Math.round((255 * (x % 120)) / 100)), y < H / 2 ? 255 : [230, 153, 77][Math.floor(x / 120)]!] as const;
+      const ramp4File = path.join(art, 'ramp4.png');
+      const ramp4Raw = Buffer.alloc(W * H * 4);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) ramp4Raw.set(src4(x, y), (y * W + x) * 4);
+      ff(['-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-pix_fmt', 'rgba', '-y', ramp4File], ramp4Raw);
+      const aPid = (await call('/projects', { name: 'lut-alpha', width: W, height: H })).body.project.id as string;
+      const aClip = (await tx(aPid, [{ op: 'add_clip', args: { assetId: await upload(aPid, ramp4File), start: T.rt(0, 1), duration: T.rt(1, 1) } }])).results[0].output.clipId as string;
+      const plainA = await still(aPid);
+      // as imported: over black, each pixel is its colour times its alpha
+      let asImported = 0;
+      const seen = { points: lutGrid.length, translucent: 0, blueTop: 0, allTop: 0, translucentBlueTop: 0 };
+      for (const [x, y] of lutGrid) {
+        const c = src4(x, y), got = px(plainA, x, y);
+        for (let k = 0; k < 3; k++) asImported = Math.max(asImported, Math.abs(got[k]! - (c[k]! * c[3]) / 255));
+        if (c[3] < 255) seen.translucent++;
+        if (c[2] === 255) seen.blueTop++;
+        if (c[2] === 255 && c[3] < 255) seen.translucentBlueTop++;
+        if (c[0] === 255 && c[1] === 255 && c[2] === 255) seen.allTop++;
+      }
+      check('Fixture with translucent pixels, as imported: over the black background every grid pixel is its colour times its alpha (within 1 of 255); the grid has translucent pixels, pixels with blue = 255 (also translucent ones) and the corner where all three channels are 255', asImported <= 1 && seen.translucent >= 100 && seen.blueTop >= 40 && seen.translucentBlueTop >= 20 && seen.allTop >= 1, { worst: Number(asImported.toFixed(2)), ...seen });
+      const aTable = (await uploadRaw('test.cube', Buffer.from(cubeText, 'utf8'), aPid)).body.assetId as string;
+      const aFx = (await tx(aPid, [{ op: 'apply_lut', args: { clipId: aClip, assetId: aTable } }])).results[0].output.effectId as string;
+      const gradedA = await still(aPid);
+      const strip = lutStrip(cubeText);
+      // The pass sees the premultiplied pixel the plain still shows (the background is black) and the fixture's alpha.
+      const worst = { opaque: 0, translucent: 0, blueTop: 0, withoutUnpremultiply: 0 };
+      let wrongKept = 0, wrongScaled = 0; // the two ways a pass could leave the step out: alpha kept as it is, or multiplied in again
+      for (const [x, y] of lutGrid) {
+        const c = src4(x, y), a = c[3] / 255, pre = px(plainA, x, y), got = px(gradedA, x, y);
+        const straight = pre.map((v) => Math.min(1, v / 255 / a)) as [number, number, number];
+        const o = sampleStrip(strip, strip.size, straight);
+        const wrong = sampleStrip(strip, strip.size, [pre[0]! / 255, pre[1]! / 255, pre[2]! / 255]); // a pass that looks up the premultiplied colour
+        for (let k = 0; k < 3; k++) {
+          const d = Math.abs(got[k]! - o[k]! * a * 255);
+          if (a < 1) worst.translucent = Math.max(worst.translucent, d); else worst.opaque = Math.max(worst.opaque, d);
+          if (c[2] === 255) worst.blueTop = Math.max(worst.blueTop, d);
+          if (a < 1) { wrongKept = Math.max(wrongKept, Math.abs(got[k]! - wrong[k]! * 255)); wrongScaled = Math.max(wrongScaled, Math.abs(got[k]! - wrong[k]! * a * 255)); }
+        }
+      }
+      worst.withoutUnpremultiply = Math.min(wrongKept, wrongScaled);
+      for (const k of Object.keys(worst) as (keyof typeof worst)[]) worst[k] = Number(worst[k].toFixed(2));
+      measurements.lutAlpha = { grid: seen, worstOf255: worst };
+      check('color.lut on translucent pixels and at the top of every channel: every grid pixel is the table\'s answer for the straight colour, times the pixel\'s alpha (within 3 of 255), also where blue is 255 (the last slice of the table); a lookup of the premultiplied colour would be far off', worst.opaque <= 3 && worst.translucent <= 3 && worst.blueTop <= 3 && worst.withoutUnpremultiply > 20, measurements.lutAlpha);
+      await tx(aPid, [{ op: 'update_effect', args: { clipId: aClip, effectId: aFx, params: { intensity: 0 } } }]);
+      const zeroA = await still(aPid);
+      check('color.lut, intensity 0, on translucent pixels: the plain picture (largest difference 1 of 255), so taking the colour out of its premultiplied form and putting it back loses nothing', maxDiff(zeroA, plainA) <= 1, { maxDifference: maxDiff(zeroA, plainA) });
+    }
 
     // export: the worker draws the table too
     await tx(lutPid, [{ op: 'apply_lut', args: { clipId: lutClip, assetId: tableId } }]);

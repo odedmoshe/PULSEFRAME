@@ -10,7 +10,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { migrateProject, validateProject, type ProjectDocument } from '@pulseframe/core';
+import { LUT_MAX_TEXT_LENGTH, LutError, migrateProject, parseCube, validateProject, type ProjectDocument } from '@pulseframe/core';
 import { ApiError, type Store } from './store.ts';
 
 export const ARCHIVE_FORMAT = 'pulseframe-archive/1';
@@ -120,6 +120,21 @@ export function importArchive(store: Store, file: string): { doc: ProjectDocumen
       const s = have.get(hash);
       if (!s) throw bad(`media ${hash.slice(7, 19)}… used by the project is not in the archive`, { hash });
       if (listed.get(hash) !== s.size) throw bad(`media ${hash.slice(7, 19)}… does not match the manifest`, { hash });
+    }
+    // A colour table (asset of kind 'lut') is text that every render context reads whole and parses. An upload is only accepted
+    // as one after it parsed and within the parser's size limit (ingestUpload); the same holds for one that arrives in an archive,
+    // checked here on the archive's own bytes, so no file can become a colour table without having been read as one.
+    for (const a of Object.values(doc.assets)) {
+      if (a.kind !== 'lut') continue;
+      const label = `colour table "${a.name.slice(0, 60)}"`;
+      const s = have.get(a.contentHash)!;
+      if (s.size > LUT_MAX_TEXT_LENGTH) throw bad(`${label} is larger than a .cube file may be (${LUT_MAX_TEXT_LENGTH} bytes)`, { assetId: a.id, byteSize: s.size, maxBytes: LUT_MAX_TEXT_LENGTH });
+      let table;
+      try { table = parseCube(fs.readFileSync(s.tmp, 'utf8')); } catch (e) {
+        if (!(e instanceof LutError)) throw e;
+        throw bad(`${label} is not a readable 3D .cube table${e.line ? ` (line ${e.line})` : ''}: ${e.message.slice(0, 200)}`, { assetId: a.id, lut: { code: e.code, line: e.line } });
+      }
+      if (a.lut?.size !== table.size || a.byteSize !== s.size || a.mimeType !== 'text/plain' || a.container !== 'cube') throw bad(`${label} does not match its description in the project document`, { assetId: a.id, declared: { size: a.lut?.size ?? null, byteSize: a.byteSize, mimeType: a.mimeType.slice(0, 80), container: a.container.slice(0, 40) }, found: { size: table.size, byteSize: s.size, mimeType: 'text/plain', container: 'cube' } });
     }
     // All checks passed: add blobs (content-addressed, so existing ones are simply reused) and create the project.
     let added = 0, present = 0;

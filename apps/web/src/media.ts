@@ -4,7 +4,7 @@
  * pipeline; random requests seek from the proper keyframe (Mediabunny handles B-frame/presentation order).
  */
 import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type VideoSample } from 'mediabunny';
-import { lutStrip } from '@pulseframe/core';
+import { LUT_MAX_TEXT_LENGTH, LutError, lutStrip } from '@pulseframe/core';
 import type { FrameImage, FrameProvider, LutStrip, PictureLayer } from '@pulseframe/engine';
 
 class ClipDecoder {
@@ -86,6 +86,8 @@ export class MediaPool {
   private decoders = new Map<string, { assetId: string; dec: Promise<ClipDecoder> }>();
   private stills = new Map<string, { used: number; img: Promise<{ bmp: ImageBitmap; image: FrameImage }> }>();
   private luts = new Map<string, Promise<LutStrip>>();
+  /** Colour tables that could not be loaded: the error, how many times in a row, and until when it is given again without another try. */
+  private lutFailures = new Map<string, { error: unknown; tries: number; until: number }>();
   private sources: Record<string, 'local' | 'proxy' | 'original'> = {};
   /** Every kind of source a decoder was opened on, per asset (for diagnostics and tests). */
   private used: Record<string, string[]> = {};
@@ -105,13 +107,13 @@ export class MediaPool {
   provideLocal(assetId: string, blob: Blob) {
     this.local.set(assetId, blob);
   }
-  /** Whole-asset bytes. Only for small things (stills, and audio until the streaming audio path lands). */
-  blob(assetId: string): Promise<Blob> {
+  /** Whole-asset bytes. Only for small things (stills, and audio until the streaming audio path lands). `fresh`: ask the server again, past the browser's own cache. */
+  blob(assetId: string, fresh = false): Promise<Blob> {
     const l = this.local.get(assetId);
     if (l) return Promise.resolve(l);
     let b = this.blobs.get(assetId);
     if (!b) {
-      b = fetch(this.opts.assetUrl(assetId), { credentials: 'same-origin' }).then((r) => { if (!r.ok) throw new Error(`asset ${assetId}: HTTP ${r.status}`); return r.blob(); });
+      b = fetch(this.opts.assetUrl(assetId), { credentials: 'same-origin', ...(fresh ? { cache: 'reload' as const } : {}) }).then((r) => { if (!r.ok) throw new Error(`asset ${assetId}: HTTP ${r.status}`); return r.blob(); });
       this.blobs.set(assetId, b);
       b.catch(() => this.blobs.delete(assetId));
     }
@@ -143,22 +145,35 @@ export class MediaPool {
   }
   /**
    * A colour table asset (.cube) as the strip a render pass samples: the file's bytes, read as text and turned into the strip
-   * by core's lutStrip, the one function every context uses. Parsed once per asset; a failed load is not remembered, so the
-   * next frame tries again. `key` is the content hash of the bytes, or, where the browser offers no digest (a page that is
-   * not a secure context), this pool's own name for the asset: an asset id never changes its content.
+   * by core's lutStrip, the one function every context uses. Parsed once per asset. `key` is the content hash of the bytes, or,
+   * where the browser offers no digest (a page that is not a secure context), this pool's own name for the asset: an asset id
+   * never changes its content.
+   * A failed load is not kept for good, but it is not repeated for every drawn frame either: the same error is given for a
+   * short while (one second, doubling with each failure in a row, at most thirty), and the next request after that starts from
+   * nothing, asking the server for the bytes again past the browser's cache, so a file that was put right is picked up
+   * without reloading the page. A file larger than a .cube may be is refused before it is read into memory.
    */
   lut(assetId: string): Promise<LutStrip> {
     let l = this.luts.get(assetId);
-    if (!l) {
-      l = this.blob(assetId).then(async (b) => {
-        const bytes = await b.arrayBuffer();
-        const strip = lutStrip(new TextDecoder('utf-8').decode(bytes));
-        const digest = globalThis.crypto?.subtle ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (v) => v.toString(16).padStart(2, '0')).join('') : null;
-        return { ...strip, key: digest ? `sha256:${digest}` : `${this.name}:${assetId}` };
-      });
-      this.luts.set(assetId, l);
-      l.catch(() => this.luts.delete(assetId));
-    }
+    if (l) return l;
+    const failed = this.lutFailures.get(assetId);
+    if (failed && performance.now() < failed.until) return Promise.reject(failed.error);
+    if (failed) this.blobs.delete(assetId);
+    l = this.blob(assetId, !!failed).then(async (b) => {
+      if (b.size > LUT_MAX_TEXT_LENGTH) throw new LutError('too_large', `the file is larger than a .cube file may be (${LUT_MAX_TEXT_LENGTH} bytes)`);
+      const bytes = await b.arrayBuffer();
+      const strip = lutStrip(new TextDecoder('utf-8').decode(bytes));
+      const digest = globalThis.crypto?.subtle ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (v) => v.toString(16).padStart(2, '0')).join('') : null;
+      return { ...strip, key: digest ? `sha256:${digest}` : `${this.name}:${assetId}` };
+    });
+    this.luts.set(assetId, l);
+    l.then(() => { this.lutFailures.delete(assetId); }, (error) => {
+      if (this.luts.get(assetId) !== l) return; // the pool was emptied meanwhile
+      this.luts.delete(assetId);
+      this.blobs.delete(assetId); // bytes that could not be read as a table are not kept either
+      const tries = (failed?.tries ?? 0) + 1;
+      this.lutFailures.set(assetId, { error, tries, until: performance.now() + Math.min(30_000, 1000 * 2 ** (tries - 1)) });
+    });
     return l;
   }
   private readonly name = `pool${++pools}`;
@@ -219,6 +234,7 @@ export class MediaPool {
     this.decoders.clear();
     this.stills.clear();
     this.luts.clear();
+    this.lutFailures.clear();
     this.blobs.clear();
   }
 }

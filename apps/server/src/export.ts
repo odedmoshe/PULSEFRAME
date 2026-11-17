@@ -138,7 +138,12 @@ export class Exporter {
     const fxUsed = new Map<string, number>(), trUsed = new Map<string, number>();
     for (const tr of seq.tracks)
       for (const c of tr.clips) {
-        if (!T.lt(c.start, to) || !T.lt(from, T.add(c.start, c.duration))) continue; // outside the exported range
+        // A clip is drawn until its end, and beyond it while the clip that follows on its track comes in over it with a transition:
+        // `evaluate` draws it as the outgoing picture of those frames, with its own effects (and their colour tables).
+        let end = T.add(c.start, c.duration);
+        const next = c.type === 'media' ? tr.clips.find((n) => n.type === 'media' && n.id !== c.id && !!n.transition && T.eq(n.start, end)) : undefined;
+        if (next?.type === 'media' && next.transition) end = T.add(end, T.frameTime(next.transition.frames, frameRate));
+        if (!T.lt(c.start, to) || !T.lt(from, end)) continue; // outside the exported range
         if (c.type === 'media') used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
         for (const fx of c.effects ?? []) if (fx.enabled) {
           fxUsed.set(fx.type, (fxUsed.get(fx.type) ?? 0) + 1);
@@ -151,7 +156,7 @@ export class Exporter {
         if (tr.caption) families.add(tr.caption.style.fontFamily);
       }
     const assets = [...used].flatMap(([id, clips]) => {
-      const a = doc.assets[id];
+      const a = Object.hasOwn(doc.assets, id) ? doc.assets[id] : undefined;
       if (!a) { blockers.push({ code: 'missing_media', message: `colour table ${id} named by an effect is not in the project library`, ids: [id] }); return []; }
       let present = false;
       try { present = fs.statSync(this.store.blobPath(a.contentHash)).size === a.byteSize; } catch { /* missing */ }

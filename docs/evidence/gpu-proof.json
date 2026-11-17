@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T00:02:49.312Z",
+  "ranAt": "2026-11-17T00:59:20.014Z",
   "result": "PASSED",
-  "passed": 70,
-  "total": 70,
+  "passed": 76,
+  "total": 76,
   "machine": {
     "platform": "Linux 6.18.44-fc-v509 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -19,9 +19,44 @@
       "worstFromModel": 0.5,
       "meanChange": 77.563
     },
+    "lutPreviewRecovery": {
+      "seconds": 1.3,
+      "meanDifferenceFromStill": 0
+    },
     "lutPreviewVsStill": {
       "meanDifference": 0,
       "maxDifference": 0
+    },
+    "lutUnalignedDomains": {
+      "0..1.5": {
+        "fileSize": 17,
+        "stripSize": 33,
+        "worstFromModel": 0.5,
+        "worstFromDefinition": 0.8,
+        "limit": 3
+      },
+      "0.0625..0.9375": {
+        "fileSize": 17,
+        "stripSize": 65,
+        "worstFromModel": 0.5,
+        "worstFromDefinition": 0.84,
+        "limit": 4
+      }
+    },
+    "lutAlpha": {
+      "grid": {
+        "points": 288,
+        "translucent": 144,
+        "blueTop": 48,
+        "allTop": 1,
+        "translucentBlueTop": 24
+      },
+      "worstOf255": {
+        "opaque": 0.49,
+        "translucent": 0.78,
+        "blueTop": 0.65,
+        "withoutUnpremultiply": 54.3
+      }
     },
     "lutExportVsStill": {
       "meanDifferenceFromStill": 1.385,
@@ -737,9 +772,26 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_32354c98af0 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_e5943c86c60 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
+      }
+    },
+    {
+      "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
+      "ok": true,
+      "detail": {
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_e5943c86c60 could not be loaded: Missing LUT_3D_SIZE",
+        "previewVsPlain": 0
+      }
+    },
+    {
+      "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
+      "ok": true,
+      "detail": {
+        "seconds": 1.3,
+        "meanDifferenceFromStill": 0,
+        "errors": []
       }
     },
     {
@@ -754,10 +806,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_32354c98af0",
+        "value": "ast_e5943c86c60",
         "options": [
           "",
-          "ast_32354c98af0"
+          "ast_e5943c86c60"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -770,7 +822,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_3e2fbdf25a0",
+        "selected": "ast_8fa873cc6c0",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47
@@ -790,6 +842,64 @@
       "detail": {
         "worstFromModel": 0.5,
         "worstFromDefinition": 0.88
+      }
+    },
+    {
+      "name": "color.lut with input domains that do not line up with the table's grid (0..1.5, and video range 0.0625..0.9375): the still follows the file's own definition, core sampleLut, within 3 of 255 where a finer grid holds every entry and within 4 where none up to 65 does",
+      "ok": true,
+      "detail": {
+        "0..1.5": {
+          "fileSize": 17,
+          "stripSize": 33,
+          "worstFromModel": 0.5,
+          "worstFromDefinition": 0.8,
+          "limit": 3
+        },
+        "0.0625..0.9375": {
+          "fileSize": 17,
+          "stripSize": 65,
+          "worstFromModel": 0.5,
+          "worstFromDefinition": 0.84,
+          "limit": 4
+        }
+      }
+    },
+    {
+      "name": "Fixture with translucent pixels, as imported: over the black background every grid pixel is its colour times its alpha (within 1 of 255); the grid has translucent pixels, pixels with blue = 255 (also translucent ones) and the corner where all three channels are 255",
+      "ok": true,
+      "detail": {
+        "worst": 0.45,
+        "points": 288,
+        "translucent": 144,
+        "blueTop": 48,
+        "allTop": 1,
+        "translucentBlueTop": 24
+      }
+    },
+    {
+      "name": "color.lut on translucent pixels and at the top of every channel: every grid pixel is the table's answer for the straight colour, times the pixel's alpha (within 3 of 255), also where blue is 255 (the last slice of the table); a lookup of the premultiplied colour would be far off",
+      "ok": true,
+      "detail": {
+        "grid": {
+          "points": 288,
+          "translucent": 144,
+          "blueTop": 48,
+          "allTop": 1,
+          "translucentBlueTop": 24
+        },
+        "worstOf255": {
+          "opaque": 0.49,
+          "translucent": 0.78,
+          "blueTop": 0.65,
+          "withoutUnpremultiply": 54.3
+        }
+      }
+    },
+    {
+      "name": "color.lut, intensity 0, on translucent pixels: the plain picture (largest difference 1 of 255), so taking the colour out of its premultiplied form and putting it back loses nothing",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
       }
     },
     {

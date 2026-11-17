@@ -12,6 +12,16 @@ import type { MediaPool } from './media.ts';
 export class Player {
   /** See drawFrame: effect ids the last painted frame had to leave out. */
   unavailableEffects: string[] = [];
+  /**
+   * For those of them whose cause is not the graphics adapter but their own material (a colour table that could not be loaded):
+   * why, by effect id. The editor shows it over the preview, so a picture drawn without its table is never shown silently.
+   */
+  unavailableReasons: Record<string, string> = {};
+  /** While paused, a frame that was drawn without such an effect is drawn again a little later: the table may be loadable by then. */
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retries = 0;
+  static readonly RETRY_FIRST_MS = 2000;
+  static readonly RETRY_MAX_MS = 30_000;
   doc: ProjectDocument | null = null;
   frame = 0;
   playing = false;
@@ -94,6 +104,8 @@ export class Player {
         const drawn = await drawGraph(this.canvas.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames);
         /** GPU effects of the frame on screen that could not run in this browser (shown without them; the editor says so). */
         this.unavailableEffects = drawn.unavailableEffects;
+        this.unavailableReasons = drawn.unavailableReasons ?? {};
+        this.retryLater(doc, frame);
         this.painted = frame;
         if (this.playing) {
           const { num, den } = frameRate;
@@ -110,6 +122,25 @@ export class Player {
     } finally {
       this.busy = false;
     }
+  }
+
+  /**
+   * After a frame was painted: if it had to leave out an effect whose material could not be loaded, ask for the same frame again
+   * after a wait (2 s, doubling, at most 30 s), as long as it is still the frame on screen. Playback draws anyway, so only a
+   * paused preview needs this; without it the picture would stay ungraded until the next seek or edit.
+   */
+  private retryLater(doc: ProjectDocument, frame: number) {
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+    if (Object.keys(this.unavailableReasons).length === 0) { this.retries = 0; return; }
+    if (this.playing) return; // the playback loop draws; the frame it stops on is painted again on pause and comes back through here
+    // The wait grows only with tries made from here, not with frames the user asks for meanwhile.
+    const wait = Math.min(Player.RETRY_MAX_MS, Player.RETRY_FIRST_MS * 2 ** this.retries);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (this.playing || this.doc !== doc || this.frame !== frame) return;
+      this.retries++;
+      this.request(frame);
+    }, wait);
   }
 
   async play() {
@@ -383,6 +414,7 @@ export class Player {
   }
   dispose() {
     this.pause();
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     void this.actx?.close();
   }
 }

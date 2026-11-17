@@ -166,10 +166,12 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
   const tmp = path.join(store.tmpDir, `up_${randomBytes(8).toString('hex')}`);
   const hash = createHash('sha256');
   let size = 0;
-  const assetName = path.basename(name).slice(0, 256) || 'untitled';
   // A file named .cube is a colour table (3D LUT): text, read whole and parsed strictly, so it gets the parser's own size limit
-  // while streaming. The name only chooses the reader; acceptance comes from the content.
-  const isCube = /\.cube$/i.test(assetName);
+  // while streaming. The name only chooses the reader; acceptance comes from the content. The extension is read from the whole
+  // name, before it is cut to what the document allows, and survives the cut: a long name must not send a table to the media reader.
+  const baseName = path.basename(name);
+  const isCube = /\.cube$/i.test(baseName);
+  const assetName = (isCube && baseName.length > 256 ? baseName.slice(0, 251) + baseName.slice(-5) : baseName.slice(0, 256)) || 'untitled';
   const meter = new Transform({
     transform(chunk, _enc, cb) {
       size += chunk.length;
@@ -191,7 +193,8 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
         table = parseCube(fs.readFileSync(tmp, 'utf8'));
       } catch (e) {
         if (!(e instanceof LutError)) throw e;
-        throw new ApiError(415, 'unsupported_media', `this .cube file could not be read as a 3D colour table${e.line ? ` (line ${e.line})` : ''}: ${e.message}`, { lut: { code: e.code, line: e.line } }, e.code === 'unsupported' ? 'Only 3D tables (LUT_3D_SIZE) are supported; export the look as a 3D .cube.' : e.code === 'too_large' ? 'Tables up to 65 entries per axis are supported.' : 'Export the table again as an Adobe/Resolve .cube file.');
+        // The parser's messages quote at most a few characters of the file; the cut here keeps that true whatever it says.
+        throw new ApiError(415, 'unsupported_media', `this .cube file could not be read as a 3D colour table${e.line ? ` (line ${e.line})` : ''}: ${e.message.slice(0, 200)}`, { lut: { code: e.code, line: e.line } }, e.code === 'unsupported' ? 'Only 3D tables (LUT_3D_SIZE) are supported; export the look as a 3D .cube.' : e.code === 'too_large' ? 'Tables up to 65 entries per axis are supported.' : 'Export the table again as an Adobe/Resolve .cube file.');
       }
       store.putBlob(originalHash, tmp, size, 'text/plain');
       return { kind: 'lut', container: 'cube', mimeType: 'text/plain', duration: T.ZERO, lut: { size: table.size, title: table.title === null ? null : table.title.slice(0, 256) }, name: assetName, contentHash: originalHash, byteSize: size, provenance };
