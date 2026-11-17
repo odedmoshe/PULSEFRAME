@@ -28,6 +28,9 @@
  *  4. The archive of a project carries its people. The owner may take one «בלי פרטי משפחה» (family: 'omit', withoutFamily);
  *     a 'names' credential always gets the archive of the document as it may read it (names, no birth dates).
  *
+ * EVERY SURFACE an agent credential can reach, with the helper of this module that guards it, is listed in
+ * peopleSurfaces.ts; peopleSurfaces.test.ts keeps that list complete and walks it with a planted birth date.
+ *
  * WHY AN AMBIENT READER: the routes, tools and jobs that read a project are many and grow with every track. The reader is
  * therefore set once where the credential is established (the REST middleware, the MCP entry) and the store applies it,
  * so a new route cannot forget. Writes never go through it: Store.commit and Store.undo read the whole document
@@ -155,9 +158,9 @@ export function assertMayTakeRendered(p: Principal, doc: ProjectDocument, what: 
  * What an answer made for a 'names' credential says when the document holds an age field, so that an empty age is not read
  * as a mistake: spread into the answer (`...peopleNote(p, doc)`). Nothing for 'full', and nothing when no age field exists.
  */
-export function peopleNote(p: Principal, doc: ProjectDocument): { people?: { access: 'names'; note: string } } {
+export function peopleNote(p: Principal, doc: ProjectDocument): { peopleAccess?: { access: 'names'; note: string } } {
   if (peopleAccess(p) === 'full' || !holdsAgeFields(doc)) return {};
-  return { people: { access: 'names', note: 'Birth dates are not available to this credential, so age fields have no words here: they are drawn empty and reported as without data, whether or not a birth date is recorded. Exports that would show them are refused.' } };
+  return { peopleAccess: { access: 'names', note: 'Birth dates are not available to this credential, so age fields have no words here: they are drawn empty and reported as without data, whether or not a birth date is recorded. Exports that would show them are refused.' } };
 }
 
 // ---------- the archive «בלי פרטי משפחה» ----------

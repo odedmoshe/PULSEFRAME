@@ -623,7 +623,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // ?variant= renders the frame as that linked format would export it.
     // `p.doc` is what this credential may read: for one without the people scope the frame is drawn without ages, and says so.
     const png = await exporter.renderStill(variantDoc(p.doc, c.req.query('variant')), p.revision, index);
-    return c.body(new Uint8Array(png), 200, { 'Content-Type': 'image/png', 'X-PF-Revision': String(p.revision), 'X-PF-Frame-Index': String(index), ...(peopleNote(c.var.principal, p.doc).people ? { 'X-PF-People': 'names; age fields are drawn empty' } : {}) });
+    return c.body(new Uint8Array(png), 200, { 'Content-Type': 'image/png', 'X-PF-Revision': String(p.revision), 'X-PF-Frame-Index': String(index), ...(peopleNote(c.var.principal, p.doc).peopleAccess ? { 'X-PF-People': 'names; age fields are drawn empty' } : {}) });
   });
 
   // ----- jobs / export -----
