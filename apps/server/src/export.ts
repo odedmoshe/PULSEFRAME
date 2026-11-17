@@ -25,6 +25,7 @@ import { assertStorageRoom } from './storage.ts';
 import { FrameFlashCheck, type PhotosensitivityReport } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import type { ComputeLane } from './aiContracts.ts';
+import { fieldIssues } from './preflight.fields.ts';
 
 const exec = promisify(execFile);
 
@@ -149,6 +150,14 @@ export class Exporter {
       if (frames <= 0) blockers.push({ code: 'empty_range', message: `range [${options.range.startFrame}, ${options.range.endFrame}) contains no frames (sequence has ${total})`, ids: [] });
     }
     if (total === 0) blockers.push({ code: 'empty_sequence', message: 'the sequence has no clips to export', ids: [] });
+    // life line (ADR-0021): a title field without data would silently leave out words the author placed, so it stops an export of
+    // moving picture, like a missing font. A still is never stopped (the editor's own frames must draw, with the field empty),
+    // and sound alone has no titles. The preflight report lists the same issues with their frame ranges (preflight.ts).
+    if (options.format !== 'png' && options.format !== 'wav')
+      for (const i of fieldIssues(doc, { startFrame: first, endFrame: first + Math.max(0, frames) })) {
+        if (i.severity === 'blocker') blockers.push({ code: i.code, message: i.message, ids: i.ids });
+        else if (i.severity === 'warning') warnings.push({ code: i.code, message: i.message, ids: i.ids });
+      }
     const seq = doc.sequences[doc.mainSequenceId]!;
     const used = new Map<string, number>();
     const families = new Set<string>();

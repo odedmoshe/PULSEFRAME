@@ -21,7 +21,8 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, findClip, OpError, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
+import { applyTransaction, findClip, isRealWallDate, OpError, WALL_DATE, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
+import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
 import { importArchive, planArchive, writeArchive } from './archive.ts';
@@ -500,13 +501,31 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const name = decodeURIComponent(c.req.header('x-filename') ?? 'upload');
     // Storage ceiling: refuse up front when the declared size cannot fit, and cut a stream of unknown size off at the room left.
     const room = assertStorageRoom(store, Number(c.req.header('content-length') ?? 0) || 1, 'store this upload');
-    const asset = await ingestUpload(store, c.req.raw.body, name, p.actor, Math.min(cfg.maxUploadBytes, room));
+    const asset = await ingestUpload(store, c.req.raw.body, name, p.actor, Math.min(cfg.maxUploadBytes, room), { homeZone: cfg.homeZone, now: new Date() });
     // The ingest job attaches its result through a normal (internal) operation.
     const r = store.commit({ projectId, actor: p.actor, label: `Import ${asset.name}`, allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] });
     const assetId = r.results[0]!.output!.assetId as string;
     // Thumbnails, waveform peaks and a proxy are produced progressively in the background; editing does not wait for them.
     derivatives.ensure(store.getProject(projectId).doc.assets[assetId]!);
     return c.json({ assetId, revision: r.revision, deduplicated: r.results[0]!.output!.deduplicated, asset: store.getProject(projectId).doc.assets[assetId] }, 201);
+  });
+  // ----- life line (ADR-0021): capture dates and "on this day" -----
+  // Re-read capture dates from the stored originals of files that have none; one transaction of internal attach operations.
+  app.post('/api/v1/projects/:id/captures/read', async (c) => {
+    const p = need(c, 'edit');
+    const projectId = c.req.param('id');
+    store.getProject(projectId);
+    gov.assertMayAct(p, projectId, 'edit');
+    gov.assertUnrestricted(p, 'read capture dates into the library');
+    return c.json(await readMissingCaptures(store, p, projectId, { homeZone: cfg.homeZone, now: new Date() }));
+  });
+  // Across every project, so it answers the owner's own session only. The browser gives its local day; the server's clock is not used.
+  app.get('/api/v1/on-this-day', (c) => {
+    const p = need(c, 'observe');
+    if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+    const date = c.req.query('date') ?? '';
+    if (!WALL_DATE.test(date) || !isRealWallDate(date)) throw new ApiError(400, 'invalid_request', 'date must be a real day written YYYY-MM-DD (the day on the viewer\'s own clock)', { date: date.slice(0, 32) });
+    return c.json({ items: onThisDayFor(store, p, date) });
   });
   app.post('/api/v1/projects/:id/sfx', async (c) => {
     const p = need(c, 'edit');
