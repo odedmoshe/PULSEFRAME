@@ -1,0 +1,27 @@
+/* Copilot (UX_REDESIGN §4.11): the inspector-column surface of the assistant. ds tokens only. */
+.pf-cop { display: flex; flex-direction: column; gap: var(--pf-sp-5); block-size: 100%; min-block-size: 0; padding: var(--pf-sp-6); background: var(--pf-surface-1); border-radius: var(--pf-r-lg); box-shadow: var(--pf-e1); color: var(--pf-text); font-family: var(--pf-font); }
+.pf-cop-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); }
+.pf-cop-ico { display: grid; place-items: center; inline-size: 36px; block-size: 36px; border-radius: 50%; border: 1px solid var(--pf-agent); color: var(--pf-agent); background: var(--pf-agent-soft); }
+.pf-cop-titles { flex: 1; display: flex; flex-direction: column; min-inline-size: 90px; }
+.pf-cop .pf-cop-titles h2 { margin: 0; font-size: var(--pf-fs-lg); line-height: var(--pf-lh-lg); font-weight: var(--pf-fw-semibold); letter-spacing: 0; font-family: var(--pf-font); color: var(--pf-text); }
+.pf-cop-titles span { font-size: var(--pf-fs-xs); color: var(--pf-text-3); }
+.pf-cop-body { display: flex; flex-direction: column; gap: var(--pf-sp-5); flex: 1; min-block-size: 0; overflow: auto; }
+.pf-cop-off { padding: var(--pf-sp-5); border: 1px dashed var(--pf-agent); border-radius: var(--pf-r-md); background: var(--pf-agent-soft); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-cop-off b { color: var(--pf-agent); font-size: var(--pf-fs-sm); }
+.pf-cop-off p { margin: var(--pf-sp-3) 0; color: var(--pf-text-2); }
+.pf-cop-how summary { cursor: pointer; color: var(--pf-info); min-block-size: 24px; display: flex; align-items: center; }
+.pf-cop-how ol { margin: var(--pf-sp-3) 0 0; padding-inline-start: var(--pf-sp-7); display: grid; gap: var(--pf-sp-3); color: var(--pf-text-2); }
+.pf-cop-plan { padding: var(--pf-sp-5); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); }
+.pf-cop .pf-cop-plan h3 { margin: 0 0 var(--pf-sp-3); font-size: var(--pf-fs-sm); font-weight: var(--pf-fw-semibold); color: var(--pf-text); letter-spacing: 0; }
+.pf-cop-plan p, .pf-cop-empty { margin: 0; font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); color: var(--pf-text-3); }
+.pf-cop-composer { display: flex; gap: var(--pf-sp-3); margin-block-start: auto; }
+.pf-cop-composer input { flex: 1; min-inline-size: 0; min-block-size: var(--pf-h-lg); padding: 0 var(--pf-sp-5); font: inherit; font-size: var(--pf-fs-sm); color: var(--pf-text); background: var(--pf-surface-2); border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-md); }
+.pf-cop-composer input:disabled { color: var(--pf-text-disabled); }
+.pf-cop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-sp-4); }
+.pf-cop-receipt { display: flex; flex-direction: column; gap: var(--pf-sp-3); padding: var(--pf-sp-5); border: 1px solid var(--pf-line-strong); border-inline-start: 3px solid var(--pf-agent); border-radius: var(--pf-r-md); background: var(--pf-surface-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-cop-receipt > b { font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.pf-cop-meta { color: var(--pf-text-3); }
+.pf-cop-chips { display: flex; align-items: center; gap: var(--pf-sp-3); }
+.pf-cop-chip { min-block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-4); border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-pill); background: var(--pf-surface-3); color: var(--pf-text); font-size: var(--pf-fs-digits); cursor: pointer; }
+.pf-cop-chip:hover { border-color: var(--pf-agent); }
+.pf-cop button:focus-visible, .pf-cop summary:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }

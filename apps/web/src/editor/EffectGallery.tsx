@@ -14,7 +14,10 @@ import { drawGraph, evaluate, FlashGuard, type FrameImage } from '@pulseframe/en
 import { fillIn, type Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
 import { useEditorState } from './store.ts';
-import { GALLERY_STRINGS } from './gallery.strings.ts';
+import { GALLERY_STRINGS, SPREAD_STRINGS } from './gallery.strings.ts';
+import { ArrowLeft, ArrowRight, Star, X } from 'lucide-react';
+import { Button, Tabs } from '../ds/index.ts';
+import { CheckIcon } from '../ds/util.tsx';
 import { DEFAULT_TRANSITION_FRAMES, isOn, pickCall, pickRefusal, thumbSize, transitionLength, transitionRoom } from './gallery.pick.ts';
 import { singleFlight } from './oneAtATime.ts';
 import { ADJUST_STRINGS } from './adjust.strings.ts';
@@ -48,7 +51,7 @@ const CATEGORIES = ['color', 'blur', 'light', 'stylize', 'digital', 'key', 'dist
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const LONG_SIDE = 180;
 const RATE = { num: 30, den: 1 };
-const f = (n: number) => T.frameTime(n, RATE);
+export const f = (n: number) => T.frameTime(n, RATE);
 const FRAME_AT = 12; // 0.4 s at 30 fps, so time-driven effects show something
 const TRANSITION_FRAMES = 15;
 /** A transition tile's scene: the outgoing clip at frames 0–60, the incoming one from 60 with the transition over 60–74. */
@@ -61,7 +64,8 @@ const TRANSITION_LOOP = { from: 56, to: 78 } as const;
  */
 function transitionStill(kernel: string | undefined): number {
   const sw = switchFrame(TRANSITION_FRAMES, null);
-  return TRANSITION_START + (kernel === 'punch' ? sw : kernel === 'block' ? sw - 2 : Math.floor(TRANSITION_FRAMES / 2));
+  // a dip or a flash is all one colour at its middle: its tile shows the frame before, where the picture is still there (no tile is black)
+  return TRANSITION_START + (kernel === 'punch' ? sw : kernel === 'block' ? sw - 2 : kernel === 'dip' || kernel === 'flash' ? 4 : Math.floor(TRANSITION_FRAMES / 2));
 }
 /** Length of an effect tile's clip, and of its animation loop while hovered. */
 const EFFECT_FRAMES = 150;
@@ -86,12 +90,12 @@ const ITEMS: Item[] = [
 
 // ---- thumbnail documents (same approach as the Look Lab: a small in-memory project through the real ops) ----
 let seq = 0;
-const step = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => {
+export const step = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => {
   const r = applyTransaction(doc, ops, { idSeed: `gal${seq++}_`, actor: 'gallery', allowInternal });
   return { doc: r.doc, out: r.results.map((x) => x.output ?? {}) as Record<string, any>[] };
 };
-interface Scene { w: number; h: number; base: ProjectDocument; a: string; b: string; v1: string }
-function makeScene(w: number, h: number): Scene {
+export interface Scene { w: number; h: number; base: ProjectDocument; a: string; b: string; v1: string }
+export function makeScene(w: number, h: number): Scene {
   const asset = (name: string, c: string) => ({
     kind: 'image' as const, name, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.rt(5, 1),
     image: { width: w, height: h, codec: 'png', hasAlpha: false },
@@ -104,7 +108,7 @@ function makeScene(w: number, h: number): Scene {
   const v1 = s.doc.sequences[s.doc.mainSequenceId]!.tracks.find((t) => t.kind === 'video')!.id;
   return { w, h, base: s.doc, a: s.out[0]!.assetId as string, b: s.out[1]!.assetId as string, v1 };
 }
-const addPicture = (s: Scene, assetId: string, start: number, dur: number): OpCall => ({ op: 'add_clip', args: { assetId, trackId: s.v1, start: f(start), duration: f(dur), withLinkedAudio: false } });
+export const addPicture = (s: Scene, assetId: string, start: number, dur: number): OpCall => ({ op: 'add_clip', args: { assetId, trackId: s.v1, start: f(start), duration: f(dur), withLinkedAudio: false } });
 /** A frame where the motion is visible: a third into an entrance, two thirds into an exit, a quarter period of a loop, the end of a move. */
 function motionStaticFrame(it: Item): number {
   const n = it.mframes || 0;
@@ -141,6 +145,26 @@ function buildDoc(s: Scene, it: Item, isText = false): { doc: ProjectDocument; f
   return { doc: step(a.doc, [...moving, { op: 'add_effect', args: { clipId, type: it.id } }]).doc, frame: effectFrame(it.id) };
 }
 
+
+// ---- favourites, recents and a tile cache: per-viewer conveniences, never project state ----
+const FAV_KEY = 'pf.gallery.fav.v1', RECENT_KEY = 'pf.gallery.recent.v1';
+const readList = (k: string): string[] => { try { const v = JSON.parse(localStorage.getItem(k) ?? '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []; } catch { return []; } };
+const writeList = (k: string, v: string[]) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable: the lists last for this session */ } };
+/**
+ * A drawn tile, kept so that opening the gallery again on the same picture does not draw it again. The key names the picture it
+ * was drawn over (project, revision, frame, size), so a changed picture never shows a stale tile. Oldest are dropped past the cap.
+ */
+const TILE_CACHE_CAP = 360;
+const tileCache = new Map<string, ImageBitmap>();
+function cachePut(key: string, bm: ImageBitmap) {
+  const old = tileCache.get(key);
+  if (old) { old.close(); tileCache.delete(key); }
+  tileCache.set(key, bm);
+  while (tileCache.size > TILE_CACHE_CAP) { const k = tileCache.keys().next().value as string; tileCache.get(k)?.close(); tileCache.delete(k); }
+}
+const clockOf = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(0).padStart(2, '0')}`;
+const stripExt = (n: string) => n.replace(/\.[A-Za-z0-9]{2,4}$/, '');
+
 export function EffectGalleryButton({ clip, trackKind, applyTo = 'clip', onApplyTo }: { clip: Clip; trackKind: string; applyTo?: ApplyTo; onApplyTo?: (v: ApplyTo) => void }) {
   const { state } = useEditorState();
   const [open, setOpen] = useState(false);
@@ -170,7 +194,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
   const tabs = useMemo<TabId[]>(() => [...(isText || media || adjustment ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media ? (['motion'] as TabId[]) : [])], [isText, media, adjustment]);
   const [tab, setTab] = useState<TabId>(tabs[0] ?? 'effects');
   const [query, setQuery] = useState('');
-  const [snap, setSnap] = useState<{ bitmap: ImageBitmap; dim: ImageBitmap; w: number; h: number } | null | undefined>(undefined);
+  const [snap, setSnap] = useState<{ bitmap: ImageBitmap; dim: ImageBitmap; w: number; h: number; key: string } | null | undefined>(undefined);
   const [rendered, setRendered] = useState<ReadonlySet<string>>(new Set());
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -178,6 +202,19 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
   const done = useRef(new Set<string>());
   const running = useRef<Promise<void>>(Promise.resolve());
   const [hot, setHot] = useState<string | null>(null);
+  const SP = SPREAD_STRINGS[lang];
+  const [favs, setFavs] = useState<ReadonlySet<string>>(() => new Set(readList(FAV_KEY)));
+  const [recents, setRecents] = useState<string[]>(() => readList(RECENT_KEY));
+  const [cat, setCat] = useState<string>('all');
+  const [picked, setPicked] = useState<string | null>(null);
+  /** A tile is also drawn in the sections above the full list ("fits this cut", "used recently"): those canvases are copies of the main one. */
+  const mirrors = useRef(new Map<string, Set<HTMLCanvasElement>>());
+  const mirror = (key: string) => {
+    const src = canvases.current.get(key);
+    if (!src) return;
+    for (const c of mirrors.current.get(key) ?? []) { const g = c.getContext('2d'); if (g && c.width && c.height) { g.clearRect(0, 0, c.width, c.height); g.drawImage(src, 0, 0, c.width, c.height); } }
+  };
+  const toggleFav = (key: string) => setFavs((cur) => { const n = new Set(cur); if (n.has(key)) n.delete(key); else n.add(key); writeList(FAV_KEY, [...n]); return n; });
   // One guard for every animated tile of this dialog: a strobe's light may rise on screen at most once in a third of a second
   // of real time, whichever tile shows it and however the pointer moves between tiles (ADR-0009 decision 2).
   const [guard] = useState(() => new FlashGuard());
@@ -215,16 +252,30 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
         const dim = await createImageBitmap(c);
         made = [bitmap, dim];
         if (dead) { made.forEach((b) => b.close()); return; }
-        setSnap({ bitmap, dim, w: tw, h: th });
+        setSnap({ bitmap, dim, w: tw, h: th, key: `${editor.doc?.id}:${editor.getState().revision}:${editor.viewDoc === editor.doc ? 'm' : editor.getState().viewVariantId}:${editor.frame}:${tw}x${th}` });
       } catch { if (!dead) setSnap(null); }
     })();
     return () => { dead = true; made.forEach((b) => b.close()); };
   }, [tw, th]);
 
+  useEffect(() => setCat('all'), [tab]);
   const tabItems = useMemo(() => ITEMS.filter((i) => i.kind === TAB_KIND[tab]), [tab]);
   const q = query.trim().toLowerCase();
-  const matches = (i: Item) => !q || i.he.toLowerCase().includes(q) || i.en.toLowerCase().includes(q);
+  const catMatch = (i: Item) => cat === 'all' || (cat === 'fav' ? favs.has(i.key) : (i.kind === 'motion' ? i.mkind : i.category) === cat);
+  const matches = (i: Item) => catMatch(i) && (!q || i.he.toLowerCase().includes(q) || i.en.toLowerCase().includes(q));
   const visibleKey = tabItems.filter(matches).map((i) => i.key).join('|');
+
+  // Never black: until a tile is drawn it shows the frozen frame (dimmed, from the same snapshot) or the surface colour.
+  useEffect(() => {
+    for (const [key, c] of canvases.current) {
+      if (done.current.has(key)) continue;
+      const g = c.getContext('2d');
+      if (!g) continue;
+      g.clearRect(0, 0, c.width, c.height);
+      if (snap) g.drawImage(snap.dim, 0, 0, c.width, c.height);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap, tab, query, cat, rendered.size]);
 
   // Draw tiles of the visible tab one after another; stop when the tab, the filter or the dialog changes.
   useEffect(() => {
@@ -240,11 +291,20 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
       const scene = makeScene(tw, th);
       const bitmaps = new Map<string, ImageBitmap>();
       if (snap) { bitmaps.set(scene.a, tab === 'transitions' ? snap.dim : snap.bitmap); bitmaps.set(scene.b, snap.bitmap); }
+      const repaint = (c: HTMLCanvasElement) => { const g = c.getContext('2d'); if (!g) return; g.clearRect(0, 0, c.width, c.height); if (snap) g.drawImage(snap.dim, 0, 0, c.width, c.height); };
       for (const it of tabItems.filter(matches)) {
         if (cancelled) return;
         if (done.current.has(it.key) || (it.gpu && !gpuOk)) continue;
         const canvas = canvases.current.get(it.key);
         if (!canvas) continue;
+        const ck = `${snap?.key ?? 'text'}|${isText ? 'T' : 'M'}|${it.key}`;
+        const hit = tileCache.get(ck);
+        if (hit) {
+          const g = canvas.getContext('2d')!;
+          g.clearRect(0, 0, canvas.width, canvas.height); g.drawImage(hit, 0, 0, canvas.width, canvas.height);
+          done.current.add(it.key); mirror(it.key); setRendered(new Set(done.current));
+          continue;
+        }
         try {
           const { doc, frame } = buildDoc(scene, it, isText);
           const provider = async (l: { assetId: string }): Promise<FrameImage | null> => {
@@ -253,10 +313,13 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
           };
           const r = await drawGraph(canvas.getContext('2d')!, evaluate(doc, f(frame)), provider);
           if (cancelled) return;
-          if (r.missing.length || r.unavailableEffects.length) continue;
+          // a tile that could not be drawn goes back to its poster (the dimmed frame): a half-drawn canvas would show black
+          if (r.missing.length || r.unavailableEffects.length) { repaint(canvas); continue; }
           done.current.add(it.key);
+          mirror(it.key);
+          void createImageBitmap(canvas).then((bm) => cachePut(ck, bm)).catch(() => undefined);
           setRendered(new Set(done.current));
-        } catch { /* this tile stays blank and unmarked */ }
+        } catch { repaint(canvas); /* this tile keeps its poster and stays unmarked */ }
         await new Promise((r) => setTimeout(r));
       }
     })();
@@ -283,7 +346,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
       return bm ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(bm, dx, dy, dw, dh) } : null;
     };
     const ctx = canvas.getContext('2d')!;
-    const draw = (n: number) => drawGraph(ctx, guard.apply(evaluate(doc, f(n)), performance.now() / 1000), provider).finally(showHeld);
+    const draw = (n: number) => drawGraph(ctx, guard.apply(evaluate(doc, f(n)), performance.now() / 1000), provider).finally(() => { showHeld(); mirror(it.key); });
     let stop = false;
     let busy: Promise<unknown> = Promise.resolve();
     let startAt = 0, last = -1, raf = 0;
@@ -307,6 +370,44 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hot, tab, snap, gpuOk]);
+
+  /** The tile just applied goes to the front of "used recently" (per viewer, six kept). */
+  const remember = (it: Item) => {
+    setRecents((cur) => { const n = [it.key, ...cur.filter((k) => k !== it.key)].slice(0, 6); writeList(RECENT_KEY, n); return n; });
+    if (it.kind === 'transition') setPicked(it.id);
+  };
+  /** Every cut after the first clip of this clip's track that has room for a transition: the clips a transition may go on. */
+  const cuts = (): { id: string; room: NonNullable<ReturnType<typeof transitionRoom>> }[] => {
+    const d = editor.doc;
+    if (!d) return [];
+    const f = findClip(d, clip.id);
+    if (!f) return [];
+    return f.track.clips.flatMap((c) => { const room = c.type === 'media' ? transitionRoom(d, c.id) : null; return room && room.maxFrames >= 1 ? [{ id: c.id, room }] : []; });
+  };
+  const applyAll = async (type: string, shuffle: boolean) => {
+    if (flight.busy || !editor.doc) return;
+    const list = cuts();
+    if (!list.length) return;
+    const pool = ITEMS.filter((i) => i.kind === 'transition' && (!i.gpu || gpuOk));
+    const calls: OpCall[] = list.map((c) => {
+      const id = shuffle ? pool[Math.floor(Math.random() * pool.length)]!.id : type;
+      const wanted = DEFAULT_TRANSITION_FRAMES;
+      return { op: 'set_transition', args: { clipId: c.id, type: id, frames: transitionLength(c.room, wanted) || c.room.maxFrames } };
+    });
+    setBusyKey('all');
+    try {
+      const done = await flight.run(() => editor.commit(calls, shuffle ? 'Gallery: shuffle transitions' : `Gallery: ${type} on all cuts`));
+      if (done.dropped) return;
+      if (done.value) {
+        const skipped = (editor.doc ? (findClip(editor.doc, clip.id)?.track.clips.filter((c) => c.type === 'media').length ?? 0) - 1 : 0) - list.length;
+        const nm = ITEMS.find((i) => i.kind === 'transition' && i.id === type);
+        setStatus({ kind: 'info', text: (shuffle ? SP.shuffled(list.length) : SP.appliedAll(nm ? (lang === 'he' ? nm.he : nm.en) : type, list.length)) + (skipped > 0 ? SP.skippedNoRoom(skipped) : '') });
+      } else {
+        const why = pickRefusal(editor.getState());
+        setStatus({ kind: 'error', text: G.refused(shuffle ? SP.shuffle : type), reason: why.reason ?? (why.conflict ? G.conflict : G.noReason) });
+      }
+    } finally { setBusyKey(null); }
+  };
 
   const commit = async (it: Item) => {
     if (flight.busy) return; // a pick is on its way: this activation (the second half of a double-click) is not a second edit
@@ -340,6 +441,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
         : editor.commit([call], `Gallery: ${it.id}`)));
       if (done.dropped) return;
       if (done.value) {
+        remember(it);
         if (!short) setStatus({ kind: 'info', text: G.applied(name) });
         else if (!short.velocity) setStatus({ kind: 'info', text: G.appliedShort(name, short.frames, short.limit === 'previous') });
         else {
@@ -402,82 +504,131 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
     document.getElementById(`pf-gal-tab-${next}`)?.focus();
   };
 
-  const tileOf = (it: Item) => {
+  const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wanted = clip.type === 'media' && clip.transition ? clip.transition.frames : DEFAULT_TRANSITION_FRAMES;
+  const fps = editor.rate.num / editor.rate.den;
+  /**
+   * What this cut allows. The room depends on the two clips and the current length only, not on which transition is picked, so it is
+   * said ONCE for the cut (never per tile, and never as a selection of "fitting" tiles: every tile would read the same).
+   */
+  const cutFit = ((): { kind: 'shortens'; secs: string } | null => {
+    if (!room || room.maxFrames < 1) return null;
+    const n = transitionLength(room, wanted);
+    return n > 0 && n < wanted ? { kind: 'shortens', secs: ((wanted - n) / fps).toFixed(1) } : null;
+  })();
+
+  const tileOf = (it: Item, section?: 'recent') => {
     // an adjustment (this clip, or the layer over the whole edit) refuses time effects, the chroma key and the shadow
     const refused = it.kind === 'effect' && (adjustment || wholeEdit) && !!adjustmentRefusal(it.id);
     const unavailable = (it.gpu && !gpuOk) || refused;
     const name = lang === 'he' ? it.he : it.en;
+    const main = !section;
+    const pressed = pressedOn ? isOn(pressedOn, it) : false;
+    const fav = favs.has(it.key);
+    const isRendered = rendered.has(it.key);
     return (
-      <button key={it.key} type="button" className="pf-gal-tile" data-testid="gallery-tile" data-kind={it.kind} data-id={it.id}
-        data-rendered={rendered.has(it.key) ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
-        disabled={unavailable} aria-pressed={pressedOn ? isOn(pressedOn, it) : false} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
-        onPointerEnter={animates(it) ? () => setHot(it.key) : undefined} onPointerLeave={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
-        onFocus={animates(it) ? () => setHot(it.key) : undefined} onBlur={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
-        <canvas ref={(c) => { if (c) canvases.current.set(it.key, c); else canvases.current.delete(it.key); }} width={tw} height={th} aria-hidden="true" style={{ ['--pf-gal-aspect' as string]: `${tw} / ${th}` }} />
-        <span className="pf-gal-name"><bdi>{name}</bdi></span>
-        {unavailable && <span className="pf-gal-unavail">{refused ? A.notOnAdjustment : G.needsGpu}</span>}
-      </button>
-    );
-  };
-
-  const panel = (id: TabId) => {
-    const items = ITEMS.filter((i) => i.kind === TAB_KIND[id]);
-    const shown = id === tab ? items.filter(matches).length : 0;
-    return (
-      <div key={id} id={`pf-gal-panel-${id}`} role="tabpanel" aria-labelledby={`pf-gal-tab-${id}`} hidden={id !== tab} data-testid={`gallery-panel-${id}`}>
-        {id === 'transitions' && noTransitionRoom && <p className="pf-gal-note pf-gal-room" role="note" data-testid="gallery-transition-room">{G.noHandle}</p>}
-        {id === 'effects'
-          ? CATEGORIES.map((c) => {
-            const group = items.filter((i) => i.category === c);
-            if (!group.some(matches)) return null;
-            return (
-              <section key={c} aria-labelledby={`pf-gal-cat-${c}`}>
-                <h3 className="pf-gal-heading" id={`pf-gal-cat-${c}`}>{t(`look.cat.${c}` as Key)}</h3>
-                <div className="pf-gal-grid">{group.map(tileOf)}</div>
-              </section>
-            );
-          })
-          : id === 'motion'
-            ? MOTION_GROUPS.map((g) => {
-              const group = items.filter((i) => i.mkind === g);
-              if (!group.some(matches)) return null;
-              return (
-                <section key={g} aria-labelledby={`pf-gal-mot-${g}`}>
-                  <h3 className="pf-gal-heading" id={`pf-gal-mot-${g}`} data-testid={`gallery-motion-group-${g}`}>{G.motionGroups[g]}</h3>
-                  <div className="pf-gal-grid">{group.map(tileOf)}</div>
-                </section>
-              );
-            })
-            : id === 'transitions'
-              ? TRANSITION_CATEGORIES.map((c) => {
-                const group = items.filter((i) => i.category === c);
-                if (!group.some(matches)) return null;
-                return (
-                  <section key={c} aria-labelledby={`pf-gal-trcat-${c}`} data-testid={`gallery-transition-group-${c}`}>
-                    <h3 className="pf-gal-heading" id={`pf-gal-trcat-${c}`}>{t(`look.trcat.${c}` as Key)}</h3>
-                    <div className="pf-gal-grid">{group.map(tileOf)}</div>
-                  </section>
-                );
-              })
-              : <div className="pf-gal-grid">{items.map(tileOf)}</div>}
-        {id === tab && shown === 0 && <div className="pf-gal-empty" role="status">{G.empty}</div>}
+      <div key={`${section ?? 'all'}:${it.key}`} className={`pf-gal-cell${pressed ? ' is-applied' : ''}${unavailable ? ' is-off' : ''}`} hidden={!matches(it)}>
+        <button type="button" className="pf-gal-tile" data-testid="gallery-tile" {...(main ? {} : { 'data-testid': 'gallery-pick' })} data-kind={it.kind} data-id={it.id} data-value={it.id}
+          data-rendered={main && isRendered ? '1' : undefined} data-unavailable={unavailable ? '1' : undefined}
+          disabled={unavailable} aria-pressed={pressed} aria-busy={busyKey === it.key || undefined} hidden={!matches(it)} onClick={() => void commit(it)}
+          onPointerEnter={animates(it) ? () => setHot(it.key) : undefined} onPointerLeave={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}
+          onFocus={animates(it) ? () => setHot(it.key) : undefined} onBlur={animates(it) ? () => setHot((h) => (h === it.key ? null : h)) : undefined}>
+          <span className="pf-gal-img" aria-hidden="true">
+            <canvas width={tw} height={th} style={{ ['--pf-gal-aspect' as string]: `${tw} / ${th}` }}
+              ref={(c) => {
+                if (!c) { if (main) canvases.current.delete(it.key); return; }
+                if (main) { canvases.current.set(it.key, c); return; }
+                let set = mirrors.current.get(it.key);
+                if (!set) mirrors.current.set(it.key, (set = new Set()));
+                for (const x of [...set]) if (!x.isConnected && x !== c) set.delete(x);
+                set.add(c);
+                if (done.current.has(it.key)) queueMicrotask(() => mirror(it.key));
+                else if (snap) { const g = c.getContext('2d'); g?.drawImage(snap.dim, 0, 0, c.width, c.height); }
+              }} />
+            {!isRendered && !unavailable && <i className="pf-gal-shimmer" />}
+            {hot === it.key && !reduced && <span className="pf-gal-unsaved">{SP.notSaved}</span>}
+            {pressed && <span className="pf-gal-check"><CheckIcon size={14} strokeWidth={2.5} /></span>}
+            {unavailable && <span className="pf-gal-off"><span>{refused ? A.notOnAdjustment : SP.needsGpuTile}</span><small>{refused ? '' : SP.gpuWhy}</small></span>}
+          </span>
+          <span className="pf-gal-name"><bdi>{name}</bdi></span>
+          {pressed && <span className="pf-sr">{SP.checkMark}</span>}
+        </button>
+        {!unavailable && <button type="button" className={`pf-gal-star${fav ? ' is-on' : ''}`} aria-pressed={fav} aria-label={`${fav ? SP.unfavourite : SP.favourite}: ${name}`} onClick={() => toggleFav(it.key)}><Star size={14} strokeWidth={1.75} fill={fav ? 'currentColor' : 'none'} aria-hidden="true" /></button>}
       </div>
     );
   };
 
+  const catOf = (i: Item) => (i.kind === 'motion' ? i.mkind : i.category);
+  const catName = (c: string): string => (tab === 'motion' ? G.motionGroups[c as (typeof MOTION_GROUPS)[number]] : tab === 'transitions' ? t(`look.trcat.${c}` as Key) : t(`look.cat.${c}` as Key));
+  const cats: readonly string[] = tab === 'effects' ? CATEGORIES : tab === 'transitions' ? TRANSITION_CATEGORIES : tab === 'motion' ? MOTION_GROUPS : [];
+  const tabAll = ITEMS.filter((i) => i.kind === TAB_KIND[tab]);
+  const catCount = (c: string) => tabAll.filter((i) => catOf(i) === c).length;
+  const filtered = cat !== 'all' || q !== '';
+  const recentItems = filtered ? [] : recents.map((k) => tabAll.find((i) => i.key === k)).filter((i): i is Item => !!i && (!i.gpu || gpuOk));
+
+  const panel = (id: TabId) => {
+    const items = ITEMS.filter((i) => i.kind === TAB_KIND[id]);
+    const shown = id === tab ? items.filter(matches).length : 0;
+    const active = id === tab;
+    return (
+      <div key={id} id={`pf-gal-panel-${id}`} role="tabpanel" aria-labelledby={`pf-gal-panel-tab-${id}`} hidden={!active} data-testid={`gallery-panel-${id}`}>
+        {id === 'transitions' && noTransitionRoom && <p className="pf-gal-note pf-gal-room" role="note" data-testid="gallery-transition-room">{G.noHandle}</p>}
+        {id === 'transitions' && cutFit && <p className="pf-gal-note pf-gal-fitnote" role="note" data-testid="gallery-cut-fit">{SP.cutShortens(cutFit.secs)}</p>}
+        {active && recentItems.length > 0 && (
+          <section aria-labelledby="pf-gal-rec-h" className="pf-gal-sec">
+            <h3 className="pf-gal-heading" id="pf-gal-rec-h">{SP.recent}</h3>
+            <div className="pf-gal-grid">{recentItems.map((i) => tileOf(i, 'recent'))}</div>
+          </section>
+        )}
+        {active && recentItems.length > 0 && <h3 className="pf-gal-heading pf-gal-all">{SP.all(SP.allWord[id], items.length)}</h3>}
+        {id === 'effects' || id === 'transitions' || id === 'motion'
+          ? (id === 'effects' ? CATEGORIES : id === 'transitions' ? TRANSITION_CATEGORIES : MOTION_GROUPS).map((c) => {
+            const group = items.filter((i) => (id === 'motion' ? i.mkind : i.category) === c);
+            if (!group.some(matches)) return null;
+            const label = id === 'motion' ? G.motionGroups[c as (typeof MOTION_GROUPS)[number]] : id === 'transitions' ? t(`look.trcat.${c}` as Key) : t(`look.cat.${c}` as Key);
+            return (
+              <section key={c} aria-labelledby={`pf-gal-${id}-${c}`} data-testid={id === 'transitions' ? `gallery-transition-group-${c}` : undefined}>
+                <h3 className="pf-gal-heading" id={`pf-gal-${id}-${c}`} data-testid={id === 'motion' ? `gallery-motion-group-${c}` : undefined}>{label}</h3>
+                <div className="pf-gal-grid">{group.map((i) => tileOf(i))}</div>
+              </section>
+            );
+          })
+          : <div className="pf-gal-grid">{items.map((i) => tileOf(i))}</div>}
+        {active && shown === 0 && <div className="pf-gal-empty" role="status">{cat === 'fav' ? SP.favEmpty : G.empty}</div>}
+      </div>
+    );
+  };
+
+  // the cut the transition tiles are drawn on: "A ← B 0:08"
+  const prevClip = (() => { const d = editor.doc; const f = d ? findClip(d, clip.id) : undefined; if (!d || !f || clip.type !== 'media') return null; const i = f.track.clips.findIndex((c) => c.id === clip.id); const p = i > 0 ? f.track.clips[i - 1] : null; return p && p.type === 'media' ? p : null; })();
+  const nameOfClip = (c: Clip) => (c.type === 'media' ? stripExt(editor.doc?.assets[c.assetId]?.name ?? c.id) : c.type === 'text' ? c.text.slice(0, 24) : c.id);
+  /** "previewed on the cut: A -> B 0:05": the arrow follows the reading direction (previous clip first), so it points at the clip that comes next */
+  const Next = lang === 'he' ? ArrowLeft : ArrowRight;
+  const chipBody = tab === 'transitions' && prevClip
+    ? <>{SP.cutLead} <bdi>{nameOfClip(prevClip)}</bdi> <Next size={12} strokeWidth={2} aria-hidden="true" className="pf-gal-chip-arrow" /> <bdi>{nameOfClip(clip)}</bdi> <bdi className="num">{clockOf(T.toSeconds(clip.start))}</bdi></>
+    : <bdi>{SP.clipChip(nameOfClip(clip))}</bdi>;
+  const total = tabAll.length;
+  const cutList = tab === 'transitions' ? cuts() : [];
+  const pickedId = picked ?? (clip.type === 'media' ? clip.transition?.type ?? null : null);
+  const applyReason = cutList.length === 0 ? SP.applyAllNone : !pickedId ? SP.applyAllNeedsPick : undefined;
+
   return createPortal(
-    <div className="pf-gal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={dialogRef} className="pf-gal-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-gal-title" dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang} data-testid="effect-gallery" data-flashes-held={guard.leftOut} tabIndex={-1} onKeyDown={onKey}>
+    <div className="pf-ds pf-gal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={dialogRef} className="pf-gal-dialog pf-gal-spread" role="dialog" aria-modal="true" aria-labelledby="pf-gal-title" dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang} data-testid="effect-gallery" data-flashes-held={guard.leftOut} tabIndex={-1} onKeyDown={onKey}>
         <div className="pf-gal-head">
-          <h2 className="pf-gal-title" id="pf-gal-title">{G.title}</h2>
+          <h2 className="pf-gal-title" id="pf-gal-title">{G[tab]} <span className="num pf-gal-total">{total}</span></h2>
+          <span className="pf-gal-chip" data-testid="gallery-cut-chip">{chipBody}</span>
           <input ref={searchRef} className="pf-gal-search" type="search" data-testid="gallery-search" aria-label={G.search} placeholder={G.searchPlaceholder} autoComplete="off" spellCheck={false} value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button type="button" data-testid="gallery-close" onClick={onClose}>{G.close}</button>
+          <button type="button" className="pf-gal-close" data-testid="gallery-close" aria-label={G.close} title={G.close} onClick={onClose}><X size={18} strokeWidth={1.75} aria-hidden="true" /></button>
         </div>
-        <div className="pf-gal-tabs" role="tablist" aria-label={G.tabs}>
-          {tabs.map((id) => (
-            <button key={id} type="button" role="tab" id={`pf-gal-tab-${id}`} className="pf-gal-tab" data-testid={`gallery-tab-${id}`} aria-selected={id === tab} aria-controls={`pf-gal-panel-${id}`} tabIndex={id === tab ? 0 : -1} onKeyDown={onTabKey} onClick={() => setTab(id)}>{G[id]}</button>
-          ))}
-        </div>
+        <Tabs label={G.tabs} value={tab} onChange={(id) => setTab(id as TabId)} panelPrefix="pf-gal-panel" tabs={tabs.map((id) => ({ id, label: G[id], testId: `gallery-tab-${id}` }))} />
+        {(cats.length > 0 || true) && (
+          <div className="pf-gal-filters" role="group" aria-label={G.tabs}>
+            <button type="button" className="pf-gal-fchip" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>{SP.filterAll} <span className="num">{total}</span></button>
+            <button type="button" className="pf-gal-fchip" aria-pressed={cat === 'fav'} onClick={() => setCat('fav')}>{SP.filterFav} <span className="num">{tabAll.filter((i) => favs.has(i.key)).length}</span></button>
+            {cats.map((c) => <button key={c} type="button" className="pf-gal-fchip" aria-pressed={cat === c} onClick={() => setCat(c)}>{catName(c)} <span className="num">{catCount(c)}</span></button>)}
+          </div>
+        )}
         <div className="pf-gal-body">
           {!adjustment && (tab === 'effects' || tab === 'looks') && <ApplyToGroup value={applyTo} onChange={setApplyTo} />}
           <p className="pf-gal-note" role="status">{tab !== 'text' && snap === null ? G.noFrame : G.thumbNote}</p>
@@ -488,6 +639,15 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
         <p className="pf-gal-status" role="status" data-testid="gallery-status" data-kind={status?.kind}>
           {status && <>{status.text}{status.reason && <> <bdi dir="auto" data-testid="gallery-status-reason">{status.reason}</bdi></>}</>}
         </p>
+        <div className="pf-gal-foot">
+          <span className="pf-gal-hint">{SP.hint}</span>
+          {tab === 'transitions' && (
+            <>
+              <Button variant="ghost" size="md" disabledReason={cutList.length === 0 ? SP.shuffleWhy : undefined} onClick={() => void applyAll('', true)} data-testid="gallery-shuffle">{SP.shuffle}</Button>
+              <Button variant="primary" size="md" disabledReason={applyReason} onClick={() => pickedId && void applyAll(pickedId, false)} data-testid="gallery-apply-all">{SP.applyAll(cutList.length)}</Button>
+            </>
+          )}
+        </div>
       </div>
     </div>,
     document.body,
