@@ -38,7 +38,7 @@ describe('voice-cleanup fixtures', () => {
     let y = rec.pcm;
     for (const e of cleanVoiceEffects({ strength: 0.6, profile: m.noise.profile, mainsHz: '50', speech: false })) y = renderFx(e.type, e.params, y, { sampleRate: VC_SR });
     const speech = between(rec.pauses, rec.seconds);
-    const noise = rmsDbOver(band(rec.pcm, 0, 250, null), rec.pauses) - rmsDbOver(band(y, 0, 250, null), rec.pauses);
+    const noise = rmsDbOver(band(rec.pcm, 0, 400, null), rec.pauses) - rmsDbOver(band(y, 0, 400, null), rec.pauses);
     const hum = [50, 100, 150, 200].map((hz) => db(lineOver(rec.pcm, 0, hz, rec.pauses)) - db(lineOver(y, 0, hz, rec.pauses)));
     const vowel = rmsDbOver(band(y, 0, 300, 3400), speech) - rmsDbOver(band(rec.pcm, 0, 300, 3400), speech);
     console.log(`C2 dry run: noise in pauses −${noise.toFixed(2)} dB; hum lines −${hum.map((v) => v.toFixed(1)).join(', ')} dB; vowel band ${vowel.toFixed(2)} dB`);

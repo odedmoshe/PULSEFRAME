@@ -26,7 +26,7 @@ import path from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import * as T from '@pulseframe/time';
-import { audioEffectParams, CLEANUP_TYPES, encodeNoiseProfile, timeOriginSeconds, type AudioFxParams, type ProjectDocument } from '@pulseframe/core';
+import { audioEffectParams, cleanVoiceEffects, CLEANUP_TYPES, encodeNoiseProfile, timeOriginSeconds, type AudioFxParams, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, fillPlayingOrder, openClipVoice, soundEnd } from '@pulseframe/engine';
 import { denoiseFraming } from '@pulseframe/engine/audiofx/design.ts';
 import { fxFixture, renderFx } from '@pulseframe/engine/audiofx/kernels/index.ts';
@@ -159,10 +159,15 @@ async function main() {
       const applied = await tx(A.pid, restCheck.ops, { expectedRevision: restCheck.revision });
       const wet = await floatMix(A.pid);
       const effects = (wet.doc.sequences[wet.doc.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.id === A.clipId) as any)?.audioFx?.map((x: any) => x.type) ?? [];
-      // noise in the pauses above 250 Hz (the hum lines are below), hum lines in the pauses, the vowel band in the phrases
-      const noiseDry = rmsDbOver(band(dry.pcm, 0, 250, null), rec.pauses), noiseWet = rmsDbOver(band(wet.pcm, 0, 250, null), rec.pauses);
+      // noise in the pauses above 400 Hz (the hum lines, at most 200 Hz, are 24 dB down there), hum lines in the pauses, the vowel band in the phrases
+      const noiseDry = rmsDbOver(band(dry.pcm, 0, 400, null), rec.pauses), noiseWet = rmsDbOver(band(wet.pcm, 0, 400, null), rec.pauses);
       const humDrop = [50, 100, 150, 200].map((hz) => r2(db(lineOver(dry.pcm, 0, hz, rec.pauses)) - db(lineOver(wet.pcm, 0, hz, rec.pauses))));
       const vowelDry = rmsDbOver(band(dry.pcm, 0, 300, 3400), speechSpans), vowelWet = rmsDbOver(band(wet.pcm, 0, 300, 3400), speechSpans);
+      // report only: the same measurements with dehum + denoise alone (the engine in this process, no speech enhancer), to tell the stages apart
+      let alone: Float32Array = dry.pcm;
+      const a0 = restCheck.ops[0].args;
+      for (const e of cleanVoiceEffects({ strength: a0.strength, profile: a0.profile, source: a0.source, mainsHz: a0.mainsHz ?? null, speech: false })) alone = renderFx(e.type, e.params, alone, { sampleRate: SR });
+      const withoutSpeechEnhancer = { noiseReductionDb: r2(noiseDry - rmsDbOver(band(alone, 0, 400, null), rec.pauses)), humLineReductionDb: [50, 100, 150, 200].map((hz) => r2(db(lineOver(dry.pcm, 0, hz, rec.pauses)) - db(lineOver(alone, 0, hz, rec.pauses)))), vowelBandChangeDb: r2(rmsDbOver(band(alone, 0, 300, 3400), speechSpans) - vowelDry) };
       const undo = await call(`/projects/${A.pid}/undo`, {});
       const back = await docOf(A.pid);
       // the same through MCP: apply the MCP candidate ops in one apply_transaction, the same mix, one MCP undo
@@ -173,11 +178,11 @@ async function main() {
       measurements.C2 = {
         strength: restCheck.ops[0]?.args?.strength, effects, revisions: { applied: applied.revision, undone: back.revision },
         noiseInPausesDbfs: { dry: r2(noiseDry), cleaned: r2(noiseWet), reductionDb: r2(noiseDry - noiseWet) },
-        humLineReductionDb: humDrop, vowelBandDbfs: { dry: r2(vowelDry), cleaned: r2(vowelWet), changeDb: r2(vowelWet - vowelDry) },
+        humLineReductionDb: humDrop, vowelBandDbfs: { dry: r2(vowelDry), cleaned: r2(vowelWet), changeDb: r2(vowelWet - vowelDry) }, withoutSpeechEnhancer,
         oneOpSet: restCheck.ops.length === 1 && restCheck.ops[0].op === 'clean_voice', undoRestores: undo.status === 200 && docKey(back.doc) === docKey(dryDoc.doc),
         mcp: { applied: !mApply.isError, sameMixAsRest: !mApply.isError && maxDiff(mixMcp.pcm, 0, wet.pcm, 0, wet.pcm.length / 2) === 0, undo: !mUndo.isError, undoRestores: docKey(back2.doc) === docKey(dryDoc.doc) },
       };
-      check('C2 clean_voice at strength 0.6, applied as the ONE candidate op in one transaction with expectedRevision: noise in the pauses at least 10 dB lower; each hum line at least 30 dB lower; the vowel band (300–3400 Hz) of the phrases within 1.5 dB; one undo restores the document; MCP applies the same op to the same mix and its undo restores it too',
+      check('C2 clean_voice at strength 0.6, applied as the ONE candidate op in one transaction with expectedRevision: noise in the pauses (above 400 Hz) at least 10 dB lower; each hum line at least 30 dB lower; the vowel band (300–3400 Hz) of the phrases within 1.5 dB; one undo restores the document; MCP applies the same op to the same mix and its undo restores it too',
         (measurements.C2 as any).oneOpSet && restCheck.ops[0].args.strength === 0.6 && noiseDry - noiseWet >= 10 && humDrop.every((d) => d >= 30) && Math.abs(vowelWet - vowelDry) <= 1.5 && (measurements.C2 as any).undoRestores && Object.values((measurements.C2 as any).mcp).every(Boolean), measurements.C2);
       // leave the project cleaned for C3
       await tx(A.pid, restCheck.ops);
