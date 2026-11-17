@@ -66,7 +66,7 @@ describe('sound effects in the agent senses (ADR-0010)', () => {
   /** A planned clip of 1 s at 2 s with a 1.5 s tail, as the plan gives it to every route. */
   const planned = (clipId: string, at: number, length: number, tail: number, cutFrom?: number): PlannedAudioClip => ({
     clipId, trackId: 'trk_a', assetId: 'ast_a', at, length, source: 0, speed: 1, gain: 1, pan: 0, fade: [{ s: 0, g: 1 }, { s: length, g: 1 }], duck: [{ s: 0, g: 1 }, { s: length + tail, g: 1 }],
-    voice: { chain: [{ id: 'afx_1', type: 'voice.robot', version: 1, stage: 3, params: {}, seed: 0 }, { id: 'afx_2', type: 'space.echo', version: 1, stage: 4, params: {}, seed: 0 }], sourceIn: { value: '0', timescale: 1 }, sourceEnd: { value: '1', timescale: 1 }, speed: { num: 1, den: 1 }, reverse: false, sourceRate: SR, warmWindow: 0, warmRing: 0, tail, ...(cutFrom !== undefined ? { cutFrom } : {}) },
+    voice: { chain: [{ id: 'afx_1', type: 'voice.robot', version: 1, stage: 3, params: {}, seed: 0 }, { id: 'afx_2', type: 'space.echo', version: 1, stage: 4, params: {}, seed: 0 }], sourceIn: { value: '0', timescale: 1 }, sourceEnd: { value: '1', timescale: 1 }, speed: { num: 1, den: 1 }, reverse: false, sourceRate: SR, warmWindow: 0, warmRing: 0, aheadWindow: 0, tail, ...(cutFrom !== undefined ? { cutFrom } : {}) },
   });
   const plan = (clips: PlannedAudioClip[]): AudioPlan => ({ sampleRate: SR, totalSamples: 10 * SR, clips, loudness: null, cutTails: [], missingFx: [] });
   it('lists the effects of each planned clip and the clips heard only through their tail, with the seconds since their end', () => {

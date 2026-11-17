@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { AUDIO_EFFECTS, audioEffectParams, describeAudioCatalog, findAudioEffect, type AudioFxParams } from '@pulseframe/core';
+import { AUDIO_EFFECTS, audioEffectParams, describeAudioCatalog, encodeNoiseProfile, findAudioEffect, type AudioFxParams } from '@pulseframe/core';
 import { kernelFor, WARM_EPS } from './index.ts';
 import { FX_FIXTURE_SEED, FX_KERNELS, fxFixture, renderFx } from './kernels/index.ts';
 import { highpass, msToSamples } from './design.ts';
@@ -27,6 +27,14 @@ const P = (type: string, over: AudioFxParams = {}) => audioEffectParams(type, ov
 const quiet = (type: string, over: AudioFxParams = {}) => P(type, { ...(type === 'voice.telephone' ? { hiss: 0 } : type === 'voice.radio' ? { noise: 0 } : {}), ...over });
 const kernel = (type: string) => kernelFor(type, findAudioEffect(type)!.version)!;
 const reachOf = (type: string, p: AudioFxParams, sr = SR) => kernel(type).reach(p, sr);
+/**
+ * Kernels that are still placeholders in this tree (ADR-0013 contracts pass: create() throws 'not implemented: Wn'). Their contract
+ * tests are reported as todo until the worker's kernel replaces the placeholder; then they run here unchanged.
+ */
+const PLACEHOLDER = new Set(TYPES.filter((type) => {
+  try { kernel(type).create(P(type), { sampleRate: SR, at: 0, length: 1, seed: 1, speed: 1 }); return false; }
+  catch (e) { if (/not implemented/.test(String(e))) return true; throw e; }
+}));
 const bytes = (x: Float32Array) => Buffer.from(x.buffer, x.byteOffset, x.byteLength);
 const sameBytes = (a: Float32Array, b: Float32Array) => a.length === b.length && bytes(a).equals(bytes(b));
 
@@ -89,12 +97,12 @@ function t30(h: Float64Array | Float32Array, sr: number): number {
   for (let i = a; i <= b; i++) { const t = i / sr, y = level(i); sx += t; sy += y; sxx += t * t; sxy += t * y; n++; }
   return -60 / ((n * sxy - sx * sy) / (n * sxx - sx * sx));
 }
-/** Every combination of the extremes of a type's parameters (numbers: min and max; enums: every value; booleans: both). */
+/** Every combination of the extremes of a type's parameters (numbers: min and max; enums: every value; booleans: both; free strings such as a noise profile: their default only). */
 function corners(type: string): AudioFxParams[] {
-  const schema = describeAudioCatalog().audioEffects.find((e) => e.id === type)!.paramsSchema as unknown as { properties: Record<string, { type?: string; minimum?: number; maximum?: number; enum?: string[] }> };
+  const schema = describeAudioCatalog().audioEffects.find((e) => e.id === type)!.paramsSchema as unknown as { properties: Record<string, { type?: string; minimum?: number; maximum?: number; enum?: string[]; default?: string }> };
   let out: AudioFxParams[] = [{}];
   for (const [key, s] of Object.entries(schema.properties)) {
-    const values: (number | string | boolean)[] = s.enum ?? (s.type === 'boolean' ? [false, true] : [s.minimum!, s.maximum!]);
+    const values: (number | string | boolean)[] = s.enum ?? (s.type === 'boolean' ? [false, true] : s.type === 'string' ? [s.default!] : [s.minimum!, s.maximum!]);
     out = out.flatMap((p) => values.map((v) => ({ ...p, [key]: v })));
   }
   return out.map((p) => P(type, p));
@@ -109,12 +117,14 @@ describe('registry and kernels agree', () => {
     }
     expect(FX_KERNELS.map((k) => k.type).sort()).toEqual([...TYPES].sort());
   });
-  it.each(RATES)('reach is integral and non-negative, window stages have no tail, and no tail exceeds the registry maximum at any corner of the parameters (%i Hz)', (sr) => {
+  it.each(RATES)('reach is integral and non-negative, window stages have no tail, look-ahead is a whole number of samples within the registry aheadMs and only in window stages, and no tail exceeds the registry maximum at any corner of the parameters (%i Hz)', (sr) => {
     for (const type of TYPES) for (const p of corners(type)) {
-      const r = reachOf(type, p, sr);
+      const def = findAudioEffect(type)!, r = reachOf(type, p, sr), ahead = r.ahead ?? 0;
       expect(Number.isInteger(r.warm) && Number.isInteger(r.tail) && r.warm >= 0 && r.tail >= 0, type).toBe(true);
-      if (findAudioEffect(type)!.stage <= 3) expect(r.tail, type).toBe(0);
-      expect(r.tail / sr, `${type} ${JSON.stringify(p)}`).toBeLessThanOrEqual(findAudioEffect(type)!.maxTailSeconds);
+      expect(Number.isInteger(ahead) && ahead >= 0, `${type} ahead`).toBe(true);
+      if (def.stage <= 3) expect(r.tail, type).toBe(0); else expect(ahead, `${type}: look-ahead in a ring stage`).toBe(0);
+      expect((ahead * 1000) / sr, `${type} ${JSON.stringify(p)} ahead`).toBeLessThanOrEqual(def.aheadMs ?? 0);
+      expect(r.tail / sr, `${type} ${JSON.stringify(p)}`).toBeLessThanOrEqual(def.maxTailSeconds);
     }
   });
 });
@@ -122,6 +132,10 @@ describe('registry and kernels agree', () => {
 describe.each(TYPES)('kernel contract: %s', (type) => {
   const def = findAudioEffect(type)!;
   const defaults = P(type);
+  if (PLACEHOLDER.has(type)) {
+    for (const name of ['block sizes 1, 7, 128, 1024 and random give identical output', 'two random histories that agree on the last `warm` samples give outputs within 2^-22', 'an impulse has died away (below 2^-24) after the declared reach: warm for window stages, tail for ring stages', 'declared look-ahead: the raw output changes nothing before a click, the aligned output nothing before at − ahead, and the output by more than 1e-3 at the click', 'identity parameters give output identical to the input', 'silence gives exact zeros (with the noise generators off; with them on, telephone and radio hiss)', 'extreme parameters give finite output within the declared maximum gain']) it.todo(`${name} (placeholder kernel: not implemented yet)`);
+    return;
+  }
   it('block sizes 1, 7, 128, 1024 and random give identical output', () => {
     const x = fxFixture(SR);
     const ref = renderFx(type, defaults, x, { block: 1024 });
@@ -152,13 +166,18 @@ describe.each(TYPES)('kernel contract: %s', (type) => {
     for (let i = reach + 1; i < frames; i++) worst = Math.max(worst, Math.abs(y[i * 2]!), Math.abs(y[i * 2 + 1]!));
     expect(worst).toBeLessThanOrEqual(2 ** -24);
   });
-  it('zero latency: a click changes nothing before it and the output by more than 1e-3 at its sample', () => {
+  it('declared look-ahead: the raw output changes nothing before a click, the aligned output nothing before at − ahead, and the output by more than 1e-3 at the click', () => {
     const at = type === 'texture.8bit' ? 4800 : 4801; // the 8-bit hold takes a new sample on its grid only
+    const ahead = reachOf(type, defaults).ahead ?? 0;
     const base = fxFixture(SR).subarray(0, 9600 * 2).map((v) => v * 0.1);
     const clicked = base.slice();
     clicked[at * 2] = clicked[at * 2]! + 1; clicked[at * 2 + 1] = clicked[at * 2 + 1]! + 1;
+    // raw in-place output (delayed by `ahead`): causal in the buffer, so nothing changes before the click's own frame
+    const r0 = renderFx(type, defaults, base, { align: false }), r1 = renderFx(type, defaults, clicked, { align: false });
+    for (let i = 0; i < at * 2; i++) if (r0[i] !== r1[i]) throw new Error(`raw output changed at frame ${i >> 1}, before the click at ${at}`);
+    // aligned output: the look-ahead may see the click `ahead` samples early, never earlier
     const y0 = renderFx(type, defaults, base), y1 = renderFx(type, defaults, clicked);
-    for (let i = 0; i < at * 2; i++) if (y0[i] !== y1[i]) throw new Error(`output changed at frame ${i >> 1}, before the click at ${at}`);
+    for (let i = 0; i < (at - ahead) * 2; i++) if (y0[i] !== y1[i]) throw new Error(`output changed at frame ${i >> 1}, before at − ahead = ${at - ahead}`);
     expect(Math.max(Math.abs(y1[at * 2]! - y0[at * 2]!), Math.abs(y1[at * 2 + 1]! - y0[at * 2 + 1]!))).toBeGreaterThan(1e-3);
   });
   it('identity parameters give output identical to the input', () => {
@@ -429,6 +448,9 @@ describe('DSP measurements (plan section 4)', () => {
 
 describe('golden hashes (type@version on the fixed fixture)', () => {
   const VARIANTS: Record<string, AudioFxParams> = {
+    'cleanup.dehum': { mainsHz: '60', harmonics: 8, width: 1 },
+    'cleanup.denoise': { reductionDb: 30, sensitivityDb: 10, profile: encodeNoiseProfile(Array(24).fill(-40)) },
+    'cleanup.speech': { lowCutHz: 150, presence: 1, levelDb: 15, targetDb: -12, ceilingDb: -6 },
     'tone.bassboost': { gainDb: 15, freqHz: 150 },
     'voice.telephone': { grit: 1, hiss: 1 },
     'voice.megaphone': { drive: 1, amount: 0.7 },
@@ -440,9 +462,11 @@ describe('golden hashes (type@version on the fixed fixture)', () => {
     'utility.width': { stereoWidth: 0 },
   };
   const file = path.join(import.meta.dirname, 'golden.json');
+  for (const type of PLACEHOLDER) it.todo(`${type}: golden hash (placeholder kernel: recorded once implemented)`);
   it('every kernel output matches its recorded hash; a changed output needs a version bump', () => {
     const x = fxFixture(SR), got: Record<string, string> = {};
     for (const e of AUDIO_EFFECTS) {
+      if (PLACEHOLDER.has(e.id)) continue; // recorded by the lead once the worker's kernel lands (ADR-0013)
       const h = createHash('sha256');
       h.update(bytes(renderFx(e.id, P(e.id), x)));
       h.update(bytes(renderFx(e.id, P(e.id, VARIANTS[e.id] ?? {}), x)));

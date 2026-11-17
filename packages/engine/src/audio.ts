@@ -50,8 +50,11 @@ export interface PlannedVoice {
   reverse: boolean;
   /** asset.audio.sampleRate (the server decodes at this rate; browsers open the voice with the decoder's own rate). */
   sourceRate: number;
-  /** Samples at plan rate (chainReach). */
+  /** Samples at plan rate (chainReach). warmWindow includes the look-ahead of the window stages. */
   warmWindow: number; warmRing: number;
+  /** Σ look-ahead of the window stages, in samples at plan rate (ADR-0013). The voice reads that much more source after every block
+   *  and past the clip end, and compensates it: net latency 0. */
+  aheadWindow: number;
   /** Output after `length`, already cut at the programme end. */
   tail: number;
   /** Present when the tail was cut: linear fade to 0 over [cutFrom, length + tail). */
@@ -181,12 +184,13 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId,
         for (const fx of chain) missingFx.push({ clipId: c.id, type: fx.type, version: fx.version });
       } else if (chain.length) {
         const asset = doc.assets[c.assetId]!;
-        const reach = chainReach(chain, sr);
+        const sp = speedOf(c);
+        const reach = chainReach(chain, sr, sp.num / sp.den);
         // Tails ring on past the clip but never past the programme end: there they are cut with a fade of at most 10 ms.
         const tail = Math.min(reach.tail, total - at - length);
         const voice: PlannedVoice = {
-          chain, sourceIn: T.normalize(c.sourceIn), sourceEnd: T.normalize(sourceEnd(c)), speed: { ...speedOf(c) }, reverse: !!c.reverse,
-          sourceRate: asset.audio!.sampleRate, warmWindow: reach.warmWindow, warmRing: reach.warmRing, tail,
+          chain, sourceIn: T.normalize(c.sourceIn), sourceEnd: T.normalize(sourceEnd(c)), speed: { ...sp }, reverse: !!c.reverse,
+          sourceRate: asset.audio!.sampleRate, warmWindow: reach.warmWindow, warmRing: reach.warmRing, aheadWindow: reach.aheadWindow, tail,
         };
         if (tail < reach.tail) {
           voice.cutFrom = Math.min(length + tail, Math.max(length, total - at - Math.round(0.01 * sr)));

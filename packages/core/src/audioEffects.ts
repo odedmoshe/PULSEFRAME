@@ -3,6 +3,7 @@
  * The one implementation of every effect is packages/engine/src/audiofx, shared by preview, browser export and server export.
  */
 import { z } from 'zod';
+import { GENERIC_NOISE_PROFILE, NOISE_PROFILE_PATTERN } from './voiceClean.ts';
 
 export type AudioFxParamValue = number | string | boolean;
 export type AudioFxParams = Record<string, AudioFxParamValue>;
@@ -15,7 +16,7 @@ export interface AudioFxDef<S extends z.ZodObject = z.ZodObject> {
   /** Bump whenever output changes (golden-hash test). */
   version: number;
   stage: AudioFxStage;
-  category: 'voice' | 'space' | 'tone' | 'texture' | 'utility';
+  category: 'cleanup' | 'voice' | 'space' | 'tone' | 'texture' | 'utility';
   name: { he: string; en: string };
   description: string;
   limits: string;
@@ -27,6 +28,8 @@ export interface AudioFxDef<S extends z.ZodObject = z.ZodObject> {
   maxTailSeconds: number;
   /** Params at which the output is exactly the dry sound; such an instance is left out of the plan. */
   isIdentity: (p: AudioFxParams) => boolean;
+  /** Upper bound in ms of the source read ahead and compensated (any params in range, 44.1–96 kHz, speed 0.25–4); absent = 0 (ADR-0013). */
+  aheadMs?: number;
 }
 
 export const AudioFxInstanceSchema = z.object({
@@ -43,8 +46,20 @@ const seed = z.number().int().min(0).max(1_000_000).default(1).describe('noise p
 const dry = (p: AudioFxParams) => p.amount === 0;
 const def = <S extends z.ZodObject>(d: AudioFxDef<S>): AudioFxDef => d as unknown as AudioFxDef;
 
-/** Registry order is the processing order inside a stage. */
+/** Registry order is the processing order inside a stage. The cleanup effects (ADR-0013) come first: they repair the sound before anything shapes it. */
 export const AUDIO_EFFECTS: readonly AudioFxDef[] = [
+  def({ id: 'cleanup.dehum', version: 1, stage: 2, category: 'cleanup', name: { he: 'הסרת זמזום', en: 'Hum removal' }, seeded: false, maxTailSeconds: 0, isIdentity: dry, aheadMs: 0,
+    description: 'Removes mains hum (50 or 60 Hz) and its first harmonics with narrow notches; sound between the notches is untouched. Follows the clip speed.',
+    limits: 'Steady mains hum only; not other buzz or whine. Measured on synthetic hum; not yet listened to by the owner.',
+    params: z.object({ amount: amount(1), mainsHz: z.enum(['50', '60']).default('50').describe('mains frequency where the recording was made'), harmonics: z.number().int().min(1).max(8).default(4).describe('multiples of the mains frequency removed'), width: z.number().min(0).max(1).default(0.5).describe('0 = narrowest notches, 1 = widest') }).strict() }),
+  def({ id: 'cleanup.denoise', version: 1, stage: 2, category: 'cleanup', name: { he: 'הפחתת רעש', en: 'Noise reduction' }, seeded: false, maxTailSeconds: 0, isIdentity: dry, aheadMs: 50,
+    description: 'Lowers steady background noise (hiss, fan, room tone) with a spectral gate driven by the recording\'s measured noise profile (measure_voice). No AI model.',
+    limits: 'Steady noise only: not voices, music, barks or doors. Moving the clip by a fraction of a frame changes the result very slightly. Measured on synthetic speech; not yet listened to by the owner.',
+    params: z.object({ amount: amount(1), reductionDb: z.number().min(3).max(30).default(12).describe('largest reduction of the noise, dB'), sensitivityDb: z.number().min(-10).max(10).default(0).describe('positive treats more of the sound as noise'), profile: z.string().regex(NOISE_PROFILE_PATTERN).default(GENERIC_NOISE_PROFILE).describe('noise level in 24 bands, encoded; from measure_voice. The default is a generic quiet floor'), source: z.string().max(64).default('').describe('asset the profile was measured on; empty = generic') }).strict() }),
+  def({ id: 'cleanup.speech', version: 1, stage: 2, category: 'cleanup', name: { he: 'שיפור דיבור', en: 'Speech enhancer' }, seeded: false, maxTailSeconds: 0, isIdentity: dry, aheadMs: 250,
+    description: 'Clearer, even speech: removes rumble, adds presence, evens out phrase levels toward a target and keeps peaks under a ceiling.',
+    limits: 'The ceiling applies to this clip before clip gain and volume keys; it is not a master limiter. Pauses are never raised. Not yet listened to by the owner.',
+    params: z.object({ amount: amount(1), lowCutHz: z.number().int().min(20).max(150).default(80).describe('rumble below this is removed'), presence: z.number().min(0).max(1).default(0.5).describe('less mud, more presence and air'), levelDb: z.number().min(0).max(15).default(8).describe('largest change the leveller makes, dB'), targetDb: z.number().min(-30).max(-12).default(-20).describe('speech level the leveller aims for, dBFS RMS'), ceilingDb: z.number().min(-6).max(0).default(-1).describe('the clip never peaks above this, dBFS sample peak') }).strict() }),
   def({ id: 'tone.bassboost', version: 1, stage: 2, category: 'tone', name: { he: 'הגברת באס', en: 'Bass boost' }, seeded: false, maxTailSeconds: 0, isIdentity: dry,
     description: 'Fuller, heavier low end: a low shelf with automatic make-up gain (-gain/3 dB) and a soft limit above -1 dBFS.',
     limits: 'Can raise the mix level; with a loudness target the export normalises it.',
@@ -112,7 +127,8 @@ export function sortAudioFx(list: readonly AudioFxInstance[]): AudioFxInstance[]
 }
 export function describeAudioCatalog() {
   return {
-    audioEffects: AUDIO_EFFECTS.map((e) => ({ id: e.id, version: e.version, stage: e.stage, category: e.category, name: e.name, description: e.description, limits: e.limits, exclusive: e.exclusive ?? null, seeded: e.seeded, maxTailSeconds: e.maxTailSeconds, latency: 'none (0 samples)', implementation: 'shared TypeScript DSP (packages/engine/src/audiofx): the same code in preview, browser export and server export; only decoding differs', defaults: e.params.parse({}), paramsSchema: z.toJSONSchema(e.params) })),
+    audioEffects: AUDIO_EFFECTS.map((e) => ({ id: e.id, version: e.version, stage: e.stage, category: e.category, name: e.name, description: e.description, limits: e.limits, exclusive: e.exclusive ?? null, seeded: e.seeded, maxTailSeconds: e.maxTailSeconds,
+      latency: e.aheadMs ? `none: reads up to ${e.aheadMs} ms ahead and compensates it, so the sound is not delayed (ADR-0010 D4)` : 'none (0 samples)', aheadMs: e.aheadMs ?? 0, implementation: 'shared TypeScript DSP (packages/engine/src/audiofx): the same code in preview, browser export and server export; only decoding differs', defaults: e.params.parse({}), paramsSchema: z.toJSONSchema(e.params) })),
     audioPresets: AUDIO_PRESETS.map((p) => ({ id: p.id, name: p.name, effects: p.effects.map((f) => ({ type: f.type, params: audioEffectParams(f.type, f.params ?? {}) })) })),
   };
 }

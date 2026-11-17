@@ -277,7 +277,7 @@ describe('audio plan with sound effects (ADR-0010)', () => {
     const clip = findClip(d, p.mc)!.clip as any;
     expect([v.sourceIn, v.sourceEnd, v.speed, v.reverse, v.sourceRate]).toEqual([T.normalize(clip.sourceIn), T.normalize(sourceEnd(clip)), { num: 1, den: 1 }, false, 48000]);
     const reach = chainReach(v.chain, 48000);
-    expect([v.warmWindow, v.warmRing]).toEqual([reach.warmWindow, reach.warmRing]);
+    expect([v.warmWindow, v.warmRing, v.aheadWindow]).toEqual([reach.warmWindow, reach.warmRing, reach.aheadWindow]);
     // the music clip ends at the programme end: its whole tail is cut there (none of it is kept)
     expect(m.at + m.length).toBe(plan.totalSamples);
     expect(v.tail).toBe(0);
