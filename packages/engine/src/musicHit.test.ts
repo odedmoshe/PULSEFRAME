@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BeatPosition } from '@pulseframe/core';
-import { motionAt, musicHit, STROBE_MIN_GAP } from './gpu.ts';
+import { motionAt, musicHit } from './gpu.ts';
+/** A least gap between hits that count, as an effect may ask for: a little over a third of a second. */
+const STROBE_MIN_GAP = (1 + Math.LN2 / 20) / 3 + 1e-6;
 
 /**
  * A moment `position` beats into music whose beats are `period` seconds apart from timeline second 0, with the beats

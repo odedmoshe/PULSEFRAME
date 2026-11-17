@@ -98,6 +98,35 @@ const gridOf = (analysis: { beats: readonly T.RationalTime[]; downbeats?: readon
   return grid;
 };
 
+/**
+ * The analysed beats that are followed between two moments of a timeline (seconds), in time order, placed exactly as
+ * `BeatPosition.hits` places them: every beat of every music clip that falls on a moment at which that clip is the music.
+ * A pure function of the document, used to plan things for a whole timeline at once (the flash schedule of the strobes).
+ */
+export function followedBeats(doc: ProjectDocument, from: number, to: number, sequenceId = doc.mainSequenceId): { t: number; index: number }[] {
+  const seq = doc.sequences[sequenceId];
+  if (!seq) return [];
+  const near: { clip: MediaClip; start: number; end: number }[] = [];
+  for (const track of seq.tracks) {
+    if (track.kind !== 'audio' || track.muted) continue;
+    for (const clip of track.clips) {
+      if (!followable(doc, clip)) continue;
+      const start = T.toSeconds(clip.start), end = T.toSeconds(T.add(clip.start, clip.duration));
+      if (end <= from || start > to) continue;
+      near.push({ clip, start, end });
+    }
+  }
+  const hits: { t: number; index: number }[] = [];
+  near.forEach((c, order) => {
+    const a = doc.analyses![c.clip.assetId]!.beats!, g = gridOf(a), p = placedBeats(c.clip, a.beats, g);
+    for (let k = firstAtOrAfter(p.t, from); k < p.t.length && p.t[k]! <= to; k++) {
+      const t = p.t[k]!;
+      if (t < c.end && !near.some((o, at) => at < order && o.start <= t && t < o.end)) hits.push({ t, index: p.from + k - g.anchor });
+    }
+  });
+  return hits.sort((x, y) => x.t - y.t);
+}
+
 export function beatPositionAt(doc: ProjectDocument, time: T.RationalTime, sequenceId = doc.mainSequenceId): BeatPosition | null {
   const seq = doc.sequences[sequenceId];
   if (!seq) return null;
