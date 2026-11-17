@@ -5,9 +5,10 @@
  * Wired by the lead: POST /api/v1/projects/:id/analysis/colour-match (job kind 'colour') and the MCP tool match_colour.
  *
  * What is measured (never the proxy, the thumbnails or the Scopes canvas):
- * - each clip alone in a scratch document (never committed): the other picture, title, caption and adjustment tracks are left out
- *   (sound tracks stay, so beat-driven effects see the same music), the clip fills the frame (cover) at its own place in time,
- *   with opacity 1, no keyframed transform, no mask, normal blend, no transition and no follow;
+ * - each clip alone in a scratch document (engine isolateClip, never committed; the panel's tiles use the same one): the other
+ *   picture, title, caption and adjustment tracks are left out (sound tracks stay, so beat-driven effects see the same music), the
+ *   clip fills the frame (cover) at its own place in time, with opacity 1, no keyframed transform, no mask, normal blend, no
+ *   transition and no follow;
  * - the reference as it is shown (its grade and every other effect on);
  * - a target as its new grade will see it: its grade and the effects after it are off (set_colour_grade puts the grade where the
  *   old one was, or first after a time effect);
