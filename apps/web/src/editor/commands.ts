@@ -172,7 +172,7 @@ export const rippleDeleteOn = (doc: ProjectDocument): boolean => !!getOp(BEHAVIO
  * (move_clips, their linked sound along with them), the earliest group first so each lands where the space is already free;
  * the other tracks keep their gaps. `moved` counts the V1 clips that move. Null when nothing is selected.
  */
-export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: boolean): { ops: OpCall[]; moved: number; deleted: number } | null {
+export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: boolean): { ops: OpCall[]; moved: number; deleted: number; first: string } | null {
   const seen = new Set<string>();
   const clips = ids.map((id) => findClip(doc, id)).filter((f): f is NonNullable<typeof f> => !!f)
     .filter(({ clip: c }) => { const g = c.type === 'media' ? c.linkGroupId : null; if (!g) return true; if (seen.has(g)) return false; seen.add(g); return true; });
@@ -180,7 +180,7 @@ export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: 
   const ops: OpCall[] = clips.map(({ clip }) => ({ op: 'delete_clip', args: { clipId: clip.id } }));
   const main = mainTrackId(doc);
   const track = main ? doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.id === main) : undefined;
-  if (!ripple || !track || track.locked) return { ops, moved: 0, deleted: clips.length };
+  if (!ripple || !track || track.locked) return { ops, moved: 0, deleted: clips.length, first: clips[0]!.clip.id };
   // every clip that goes from V1: the selected ones, and the V1 partners of selected clips elsewhere (a delete takes the link along)
   const gone = new Set<string>();
   for (const { clip } of clips) {
@@ -189,7 +189,7 @@ export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: 
     if (g) for (const c of track.clips) if (c.type === 'media' && c.linkGroupId === g) gone.add(c.id);
   }
   const removed = track.clips.filter((c) => gone.has(c.id));
-  if (!removed.length) return { ops, moved: 0, deleted: clips.length };
+  if (!removed.length) return { ops, moved: 0, deleted: clips.length, first: clips[0]!.clip.id };
   let moved = 0;
   for (const c of [...track.clips].sort((a, b) => T.cmp(a.start, b.start))) {
     if (gone.has(c.id)) continue;
@@ -200,7 +200,7 @@ export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: 
   const mainIds = removed.map((c) => c.id);
   const elsewhere = clips.filter(({ clip }) => !gone.has(clip.id) && !(clip.type === 'media' && clip.linkGroupId && removed.some((r) => r.type === 'media' && r.linkGroupId === clip.linkGroupId)));
   const rippled: OpCall[] = [...elsewhere.map(({ clip }) => ({ op: 'delete_clip', args: { clipId: clip.id } })), { op: 'ripple_delete_clips', args: { clipIds: mainIds } }];
-  return { ops: rippled, moved, deleted: clips.length };
+  return { ops: rippled, moved, deleted: clips.length, first: clips[0]!.clip.id };
 }
 /**
  * Delete the selection in one transaction (one undo), with an undo toast. `keepGap` (Shift+Delete) never ripples; Delete
@@ -215,7 +215,7 @@ const deleteSelected = (keepGap: boolean) => async (e: Editor) => {
     if (!doc) return null;
     const ripple = !keepGap && rippleDeleteOn(doc);
     const plan = deleteOps(doc, ids, ripple);
-    said = plan ? { moved: plan.moved, deleted: plan.deleted, ripple: ripple && plan.ops.length > plan.deleted, name: plan.deleted === 1 ? deletedName(doc, (plan.ops[0]!.args as { clipId: string }).clipId) : null } : null;
+    said = plan ? { moved: plan.moved, deleted: plan.deleted, ripple: ripple && plan.ops.length > plan.deleted, name: plan.deleted === 1 ? deletedName(doc, plan.first) : null } : null;
     return plan?.ops ?? null;
   }, keepGap ? 'Delete, keep the gap' : 'Delete');
   const s = said as { moved: number; deleted: number; ripple: boolean; name: string | null } | null;

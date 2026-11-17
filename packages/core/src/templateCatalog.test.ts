@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
   adjustmentRefusal, applyTransaction, createProject, ELEMENTS, findEffect, findTemplate, findTextPreset, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, MODEL_GATED_TEMPLATES, MOTION_PRESETS,
-  TemplateDefSchema, TEMPLATES, TRANSITION_IDS, validateProject, type OpCall, type ProjectDocument,
+  TemplateDefSchema, BUILTIN_TEMPLATES, TEMPLATES, TRANSITION_IDS, validateProject, type OpCall, type ProjectDocument,
 } from './index.ts';
 
 const IDS = ['tpl.travel-montage', 'tpl.photo-dump', 'tpl.birthday', 'tpl.quote-card', 'tpl.countdown-list', 'tpl.home-video'];
@@ -17,7 +17,8 @@ const HEBREW = /[֐-׿]/;
 
 describe('built-in templates', () => {
   it('the six built-ins, version 1 each, parse with TemplateDefSchema and are found by id', () => {
-    expect(TEMPLATES.map((t) => t.id)).toEqual(IDS);
+    expect(BUILTIN_TEMPLATES.map((t) => t.id)).toEqual(IDS);
+    expect(TEMPLATES.slice(0, IDS.length)).toEqual(BUILTIN_TEMPLATES); // the content packs' templates come after the six
     for (const t of TEMPLATES) {
       const parsed = TemplateDefSchema.safeParse(t);
       expect(parsed.success, `${t.id}: ${parsed.success ? '' : JSON.stringify(parsed.error.issues.slice(0, 3))}`).toBe(true);
