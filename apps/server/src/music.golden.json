@@ -1,0 +1,14 @@
+{
+ "note": "SHA-256 of the WAV of each built-in style at 8 bars, seed 1 (music.determinism.test.ts M2). Rewrite only together with a raise of MUSIC_SYNTH_VERSION.",
+ "synth": 1,
+ "bars": 8,
+ "seed": 1,
+ "sha256": {
+  "music.festive": "f8e764445fbc709f7a37264f90969b69a4838f3b9c8d43cc0c8b5b82b89569e2",
+  "music.birthday": "e8d657151b3d2aaca05153c9f59c75e32cc2515c8a92cce74a1d11306527d514",
+  "music.calm": "d77401cadb056ddd0a7d1820b4594867e791bb029dd6d80ddcef136c2d686106",
+  "music.pop": "e5f276f30e63f5b34928da30a591a819597d6d723b2955ed5aaae3ef7e01522d",
+  "music.lofi": "5b964c41cab7bb10fa52cc639d1baca0cf1670f1984b44cc1cb7a64e5220e66f",
+  "music.cinematic": "16d290d2767a7b2bb3a98fa9e2be6c082fafd43831f43770faab6022870d66ba"
+ }
+}
