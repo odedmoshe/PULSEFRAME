@@ -241,6 +241,38 @@ function refuseFxTimeMap(clip: MediaClip, editing: 'effects' | 'speed') {
 const refuseRamped = (clip: Clip, action: string) => {
   if (isRamped(clip)) throw new OpError('incompatible', `this clip changes speed gradually over its length, so it cannot be ${action}`, { clipId: clip.id }, 'Give it one speed first (set_clip_speed), make the edit, then apply the gradual change again.');
 };
+// ---------- adjustment clips (ADR-0016): what they cannot take, said plainly ----------
+const ADJUSTMENT_HINT = 'Make this edit on the clips below the adjustment. An adjustment takes effects, a mask, a blend mode and opacity.';
+/**
+ * An adjustment clip has no source and no picture of its own: it acts on what is drawn below it. Edits that need a source
+ * or a picture of the clip's own (speed, reverse, slip, freeze, link, scenes, transitions, layouts) refuse it in these words
+ * instead of a generic refusal.
+ */
+function refuseAdjustment(clip: Clip, action: string, hint = ADJUSTMENT_HINT) {
+  if (clip.type === 'adjustment') throw new OpError('incompatible', `an adjustment clip has no source or picture of its own, so it cannot be ${action}`, { clipId: clip.id }, hint);
+}
+/** The effect types an adjustment clip refuses (validate.ts adjustmentRefusal), in the words add_adjustment uses. */
+function refuseAdjustmentEffect(clip: Clip, type: string) {
+  if (clip.type !== 'adjustment') return;
+  const why = adjustmentRefusal(type);
+  if (why) throw new OpError('incompatible', `${type} cannot go on an adjustment: ${why}`, { clipId: clip.id, type }, 'Put it on the clip itself.');
+}
+const ADJUSTMENT_FIXED = ['x', 'y', 'scale', 'rotation'] as const;
+/**
+ * An adjustment clip's transform is the identity apart from its opacity (its box is the whole frame). A position, size or
+ * turn other than the identity is refused here, with a way to limit the look to part of the frame.
+ */
+function refuseAdjustmentTransform(clip: Clip, transform: Partial<Record<(typeof ADJUSTMENT_FIXED)[number], number>> | null | undefined, verb: 'set' | 'animated') {
+  if (clip.type !== 'adjustment' || !transform) return;
+  const moved = ADJUSTMENT_FIXED.filter((p) => transform[p] !== undefined && transform[p] !== DEFAULT_TRANSFORM[p]);
+  if (moved.length) throw new OpError('incompatible', `only the opacity of an adjustment clip can be ${verb}: it has no picture of its own to move, scale or turn`, { clipId: clip.id, properties: moved }, 'Set opacity only. To limit the look to part of the frame, give the adjustment a mask (set_clip_mask).');
+}
+/** A motion on an adjustment clip may change its opacity and nothing else. */
+function refuseAdjustmentMotion(clip: Clip, name: string, properties: readonly string[]) {
+  if (clip.type !== 'adjustment') return;
+  const others = properties.filter((p) => p !== 'opacity');
+  if (others.length) throw new OpError('incompatible', `an adjustment clip can only change its opacity; ${name} also changes ${others.join(', ')}`, { clipId: clip.id, properties: others }, 'Use a fade (motion.in.fade, motion.out.fade, animate_clip fade) or an opacity loop (motion.loop.fade-pulse).');
+}
 /**
  * Make `part` the piece of `whole` that starts `fromOffset` into it and is `length` long: its source start and, for a
  * ramped clip, its place in the ramp (so the piece shows exactly what the whole showed there). `part` may be `whole`
@@ -546,10 +578,11 @@ defineOp({
 defineOp({
   name: 'set_clip_transform',
   version: 1,
-  description: 'Set position/scale/rotation/opacity of a picture or text clip. Unspecified fields are kept.',
+  description: 'Set position/scale/rotation/opacity of a picture or text clip. Unspecified fields are kept. An adjustment clip has only its opacity (position, size and rotation stay at the identity).',
   args: z.object({ clipId: z.string(), transform: TransformSchema.partial() }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseAdjustmentTransform(clip, a.transform, 'set');
     clip.transform = { ...clip.transform, ...a.transform };
     return { affectedIds: [clip.id], summary: `Transformed clip ${clip.id}` };
   },
@@ -559,10 +592,11 @@ const KfTarget = { clipId: z.string(), property: z.enum(ANIMATABLE), time: RT.de
 defineOp({
   name: 'set_keyframe',
   version: 1,
-  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key.',
+  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key. An adjustment clip animates its opacity only.',
   args: z.object({ ...KfTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear') }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    if (a.property !== 'opacity') refuseAdjustmentTransform(clip, { [a.property]: NaN }, 'animated'); // any key on these properties, whatever its value
     assertAligned(d, a.time, 'time');
     if (!TransformSchema.shape[a.property].safeParse(a.value).success) throw new OpError('invalid_args', `value ${a.value} is out of range for ${a.property}`, { property: a.property });
     const keys = [...(clip.keyframes?.[a.property] ?? [])];
@@ -622,6 +656,7 @@ defineOp({
   args: z.object({ clipId: z.string(), speed: z.number().min(0.1).max(8), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have a speed', { clipId: a.clipId });
     if (f.clip.freeze) throw new OpError('incompatible', 'a freeze frame has no speed', { clipId: a.clipId }, 'Trim it to change how long the picture is held.');
     const rate = d.settings.frameRate;
@@ -651,6 +686,7 @@ defineOp({
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), curve: z.enum(['even', 'smooth']).optional().describe('even (default) = the speed changes at a steady pace; smooth = it eases out of the first speed and into the last'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const v0 = speedFromNumber(a.from), v1 = speedFromNumber(a.to);
@@ -694,6 +730,7 @@ defineOp({
   args: z.object({ clipId: z.string(), from: z.number().min(0.1).max(8), to: z.number().min(0.1).max(8), steps: z.number().int().min(2).max(24).optional().describe('Default 8'), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const steps = a.steps ?? 8;
@@ -765,6 +802,7 @@ defineOp({
     if (!segments) throw new OpError('invalid_args', 'points must start at 0, end at 1 and be in increasing order (positions are taken to a thousandth)', { points: a.points });
     const smooth = preset ? preset.smooth : a.smooth !== false;
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a speed');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have a speed', { clipId: a.clipId });
     const rate = d.settings.frameRate;
     const lead = f.clip as MediaClip;
@@ -956,6 +994,7 @@ defineOp({
   args: z.object({ clipId: z.string(), gain: z.number().min(0).max(8) }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseAdjustment(clip, 'given a sound level');
     if (clip.type !== 'media') throw new OpError('incompatible', 'gain applies to media clips', { clipId: a.clipId });
     clip.gain = a.gain;
     return { affectedIds: [clip.id], summary: `Set gain of ${clip.id} to ${a.gain}` };
@@ -976,6 +1015,9 @@ defineOp({
     let target = f.track;
     if (a.trackId && a.trackId !== f.track.id) {
       target = mustTrack(f.seq, a.trackId);
+      // Adjustment clips live only on adjustment tracks, and those hold nothing else (ADR-0016): said here rather than by validation afterwards.
+      if (f.clip.type === 'adjustment' && target.kind !== 'adjustment') throw new OpError('incompatible', `an adjustment goes on an adjustment track, not on ${target.kind} track ${target.id}`, { trackId: target.id }, 'Choose another adjustment track, or leave trackId out.');
+      if (f.clip.type !== 'adjustment' && target.kind === 'adjustment') throw new OpError('incompatible', `only adjustment clips go on adjustment track ${target.id}`, { trackId: target.id }, `Choose a ${f.track.kind} track.`);
       if (target.kind !== f.track.kind) throw new OpError('incompatible', `cannot move a ${f.track.kind} clip to a ${target.kind} track`, { trackId: target.id });
     }
     for (const m of [{ track: target, clip: f.clip }, ...others]) {
@@ -1060,6 +1102,7 @@ defineOp({
     if (T.eq(a.by, T.ZERO)) throw new OpError('invalid_args', 'by must not be zero');
     const targets = [{ track: f.track, clip: f.clip }, ...(a.includeLinked === false ? [] : linked(d, f.clip))];
     for (const { clip } of targets) {
+      refuseAdjustment(clip, 'slipped');
       if (clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be slipped', { clipId: clip.id });
       refuseRamped(clip, 'slipped');
       const asset = d.assets[clip.assetId]!;
@@ -1100,6 +1143,7 @@ defineOp({
     const found = a.clipIds.map((id) => mustClip(d, id));
     const first = found[0]!.clip;
     for (const f of found) {
+      refuseAdjustment(f.clip, 'linked');
       if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can be linked', { clipId: f.clip.id });
       // a link id that no other clip carries (left in a project saved before edits cleared such ids) links to nothing
       if (partnersOf(d, f.clip).length) throw new OpError('incompatible', 'this clip is already linked', { clipId: f.clip.id }, 'Use unlink_clip first.');
@@ -1122,6 +1166,7 @@ defineOp({
   args: z.object({ clipId: z.string(), keepPitch: z.boolean() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'given a pitch setting');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file have sound to stretch', { clipId: a.clipId });
     const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...linked(d, f.clip)].filter((t) => t.track.kind === 'audio' && !!d.assets[t.clip.assetId]?.audio);
     if (!targets.length) throw new OpError('incompatible', 'this clip has no sound clip', { clipId: a.clipId }, 'Give the sound clip, or a picture clip that is linked to one.');
@@ -1138,6 +1183,7 @@ defineOp({
   args: z.object({ clipId: z.string(), reverse: z.boolean(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'played backwards');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a source file can play backwards', { clipId: a.clipId });
     const others = linked(d, f.clip);
     const targets = [{ track: f.track, clip: f.clip as MediaClip }, ...(a.includeLinked === false ? [] : others)];
@@ -1220,6 +1266,7 @@ defineOp({
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
     const src = f.clip;
+    refuseAdjustment(src, 'held on a freeze frame');
     const asset = src.type === 'media' ? d.assets[src.assetId] : undefined;
     if (src.type !== 'media' || f.track.kind !== 'video' || !asset?.video) throw new OpError('incompatible', 'a freeze frame needs a video clip on a video track', { clipId: a.clipId });
     if (src.freeze) throw new OpError('incompatible', 'this clip is already a freeze frame', { clipId: a.clipId }, 'Trim it to make the hold longer or shorter.');
@@ -1398,6 +1445,7 @@ defineOp({
     for (const [kind, name, frames] of [['in', enter, nIn], ['out', exit, nOut]] as const) {
       if (name === 'none') continue;
       const made = animateClipKeys(kind, name, { totalFrames: total, rest: clip.transform, frames });
+      refuseAdjustmentMotion(clip, name, Object.keys(made));
       placeMotion(clip, rate, kind, made);
       for (const p of Object.keys(made)) props.add(p);
     }
@@ -1414,6 +1462,7 @@ defineOp({
     const { clip, track } = mustClip(d, a.clipId);
     if (clip.type === 'caption' || track.kind === 'audio') throw new OpError('incompatible', 'only text and picture clips can be animated', { clipId: clip.id });
     const preset = MOTION_PRESETS.find((m) => m.id === a.presetId)!;
+    refuseAdjustmentMotion(clip, preset.id, preset.properties);
     const rate = d.settings.frameRate;
     const total = T.frameIndexAt(clip.duration, rate);
     if (total < 2) throw new OpError('out_of_bounds', 'the clip is too short to animate', { clipFrames: total });
@@ -1633,6 +1682,7 @@ defineOp({
     if (f.track.kind === 'audio') throw new OpError('incompatible', 'format overrides apply to picture, title and caption clips', { clipId: a.clipId });
     // a caption cue can be reworded or hidden per format; where and how captions are drawn is the caption style (update_variant.captionStyle)
     if (f.clip.type === 'caption' && (a.transform != null || a.textStyle != null)) throw new OpError('incompatible', 'a caption cue can only be reworded or hidden per format; position and style come from the caption style of the format', { clipId: a.clipId }, 'Use update_variant with captionStyle.');
+    refuseAdjustmentTransform(f.clip, a.transform, 'set'); // per format too: an adjustment has only its opacity
     const cur = v.overrides[a.clipId] ?? {};
     const next = { ...cur };
     if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
@@ -1720,6 +1770,7 @@ defineOp({
   args: z.object({ clipId: z.string(), includeLinked: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const f = mustClip(d, a.clipId);
+    refuseAdjustment(f.clip, 'split at scene cuts');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have scenes', { clipId: a.clipId });
     const cuts = d.analyses[f.clip.assetId]?.scenes?.cuts;
     if (!cuts) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
@@ -2045,7 +2096,7 @@ defineOp({
 // ---------- effects, blend, mask, transitions (SPEC §8, §13) ----------
 const pictureClip = (d: ProjectDocument, clipId: string) => {
   const f = mustClip(d, clipId);
-  if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture and title clips', { clipId });
+  if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture, title and adjustment clips', { clipId });
   return f;
 };
 /**
@@ -2088,6 +2139,7 @@ defineOp({
   args: z.object({ clipId: z.string(), lookId: z.string() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, 'color.grade');
     const params = lookParams(a.lookId);
     if (!params) throw new OpError('not_found', `colour look "${a.lookId}" does not exist`, { lookId: a.lookId }, 'Call list_catalog for the looks.');
     const list = [...(clip.effects ?? [])];
@@ -2112,6 +2164,7 @@ defineOp({
   args: z.object({ clipId: z.string(), assetId: z.string().min(1).max(64), intensity: z.number().min(0).max(1).optional() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, 'color.lut');
     const list = [...(clip.effects ?? [])];
     const at = list.findIndex((e) => e.type === 'color.lut');
     const params = parseEffect('color.lut', { lut: a.assetId, intensity: a.intensity ?? (at >= 0 ? list[at]!.params.intensity : undefined) });
@@ -2140,6 +2193,7 @@ defineOp({
   args: z.object({ clipId: z.string(), type: z.string(), params: z.record(z.string(), z.unknown()).optional(), index: z.number().int().min(0).optional() }).strict(),
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseAdjustmentEffect(clip, a.type);
     const list = [...(clip.effects ?? [])];
     if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
     const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
@@ -2165,6 +2219,7 @@ defineOp({
     const i = mustEffect(clip, a.effectId);
     const list = [...clip.effects!];
     const fx = { ...list[i]! };
+    refuseAdjustmentEffect(clip, fx.type); // changed or moved, it is still an effect the adjustment may carry
     if (a.params) { fx.params = parseEffect(fx.type, { ...fx.params, ...a.params }); assertLutRef(d, fx.type, fx.params); }
     if (a.enabled !== undefined) fx.enabled = a.enabled;
     list.splice(i, 1);
@@ -2269,11 +2324,11 @@ defineOp({
 defineOp({
   name: 'set_clip_mask',
   version: 1,
-  description: 'Set, change or clear (mask=null) a rectangle/ellipse mask on a picture clip. Position and size are fractions of the clip\'s own picture, so the mask moves and scales with it. Unspecified fields keep their current value (or the default for a new mask).',
+  description: 'Set, change or clear (mask=null) a rectangle/ellipse mask on a picture clip or an adjustment clip. On a picture, position and size are fractions of the clip\'s own picture, so the mask moves and scales with it; on an adjustment they are fractions of the frame, and the look applies inside the mask only (outside it when inverted). Unspecified fields keep their current value (or the default for a new mask).',
   args: z.object({ clipId: z.string(), mask: MaskSchema.partial().nullable() }).strict(),
   apply(d, a) {
     const { clip, track } = pictureClip(d, a.clipId);
-    if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'masks apply to picture clips on video tracks', { clipId: clip.id });
+    if (!(clip.type === 'media' && track.kind === 'video') && !(clip.type === 'adjustment' && track.kind === 'adjustment')) throw new OpError('incompatible', 'masks apply to picture clips on video tracks and to adjustment clips', { clipId: clip.id });
     if (a.mask === null) { delete clip.mask; return { affectedIds: [clip.id], summary: 'Removed mask' }; }
     clip.mask = { ...(clip.mask ?? DEFAULT_MASK), ...a.mask };
     return { affectedIds: [clip.id], summary: `Mask ${clip.mask.shape}${clip.mask.invert ? ' (inverted)' : ''}`, output: { mask: clip.mask } };
@@ -2292,6 +2347,7 @@ defineOp({
     const order = new Map<Track, number>();
     for (const seq of Object.values(d.sequences)) seq.tracks.forEach((t, i) => order.set(t, i));
     const sorted = found.map((f) => {
+      refuseAdjustment(f.clip, 'arranged in a layout', 'A layout arranges picture clips. To limit a look to part of the frame, give the adjustment a mask (set_clip_mask).');
       if (f.clip.type !== 'media' || f.track.kind !== 'video') throw new OpError('incompatible', 'a layout arranges picture clips on video tracks', { clipId: f.clip.id });
       const asset = d.assets[f.clip.assetId]!;
       const size = asset.video ?? asset.image;
@@ -2322,6 +2378,7 @@ defineOp({
   args: z.object({ clipId: z.string(), type: z.enum(TRANSITION_IDS).nullable(), frames: z.number().int().min(1).max(150).optional() }).strict(),
   apply(d, a) {
     const { clip, track } = pictureClip(d, a.clipId);
+    refuseAdjustment(clip, 'given a transition', 'Fade the adjustment in or out with its opacity instead (apply_motion_preset motion.in.fade or motion.out.fade).');
     if (clip.type !== 'media' || track.kind !== 'video') throw new OpError('incompatible', 'transitions apply to picture clips on video tracks', { clipId: clip.id });
     if (a.type === null) { delete clip.transition; return { affectedIds: [clip.id], summary: 'Removed transition' }; }
     const rate = d.settings.frameRate;
