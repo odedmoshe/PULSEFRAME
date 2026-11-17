@@ -30,6 +30,7 @@ import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
 import { paramRange } from '@pulseframe/core';
 import { statsDistance, type GradeParams, type PictureStats } from '@pulseframe/engine';
+import { verdictOf } from '@pulseframe/engine/colourMatch.ts';
 import { startServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -150,7 +151,7 @@ async function main() {
       const m = await A.match(pid, { method: 'match', referenceClipId: ref, targetClipIds: [target] });
       const t = m.ok ? m.result.targets[0]! : null;
       measurements.m4 = { params: t?.params, limitedBy: t?.limitedBy, verdict: t?.verdict, model: r2(t?.residual.model), verified: r2(t?.residual.verified) };
-      check('M4 extreme cast (R/B about 2.3): limitedBy includes temperature, every value in range, the remaining difference and verdict are reported', !!t && t.limitedBy.includes('temperature') && inRange(t.params) && Number.isFinite(t.residual.model) && t.residual.verified !== null && ['close', 'noticeable', 'partial'].includes(t.verdict), measurements.m4);
+      check('M4 extreme cast (R/B about 2.3): limitedBy includes temperature, every value in range, the remaining difference and verdict are reported, the verdict from the verified render', !!t && t.limitedBy.includes('temperature') && inRange(t.params) && Number.isFinite(t.residual.model) && t.residual.verified !== null && t.verdict === verdictOf(t.residual.verified), measurements.m4);
     }
 
     // ---------- M5 match all (MCP), M7 flash ----------

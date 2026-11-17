@@ -20,7 +20,7 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { applyTransaction, findClip, OpError, type EffectInstance, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { balanceGrade, fitGrade, GRADE_DEFAULTS, mergeSamples, pictureStats, samplePicture, statsDistance, type GradeFit, type GradeParams, type PictureSample, type PictureStats } from '@pulseframe/engine';
-import { balanceGoal, colourSpread, isolateClip } from '@pulseframe/engine/colourMatch.ts';
+import { balanceGoal, colourSpread, isolateClip, verdictOf } from '@pulseframe/engine/colourMatch.ts';
 import type { Exporter } from './export.ts';
 import { ApiError, type Store } from './store.ts';
 
@@ -168,7 +168,9 @@ export async function matchColour(store: Store, exporter: Exporter, projectId: s
       }
     }
     if (verified === null) warnings.push('not_verified');
-    out.push({ clipId: clip.id, params: fit.params, residual: { model: fit.residual, verified }, verdict: fit.verdict, limitedBy: fit.limitedBy, warnings, statsBefore, statsAfter });
+    // the verdict says what was measured: the verify render when there is one (it sees the effects after the grade and the real
+    // pass, which the model does not), the model only when nothing was rendered
+    out.push({ clipId: clip.id, params: fit.params, residual: { model: fit.residual, verified }, verdict: verdictOf(verified ?? fit.residual), limitedBy: fit.limitedBy, warnings, statsBefore, statsAfter });
     if (!animated) ops.push(setGrade(clip.id, fit.params, false));
   }
   const left = [
@@ -179,7 +181,7 @@ export async function matchColour(store: Store, exporter: Exporter, projectId: s
     'Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it).',
     'Each op replaces the clip\'s colour grade (a look included); every value stays editable with update_effect.',
     method === 'match' ? 'Matched by picture statistics (lightness spread and the mean colour of the mid-tones), not by what the pictures show: a large area of one colour pulls the result toward it.' : 'Balanced toward neutral grey mid-tones and a fuller lightness range: a scene that should look warm, cool or dark is pulled toward neutral (lower `amount` to keep some of it).',
-    'The verdict and residual say how close it got; nobody has compared the result by eye on real footage yet.',
+    'The verdict and residual say how close it got (the verdict follows residual.verified when the result was rendered, residual.model only when it was not); nobody has compared the result by eye on real footage yet.',
     ...(left.length ? [`Left out of ops: ${left.join('; ')}.`] : []),
     ...(unavailable ? ['Not verified: see `unavailable`; the residual.model numbers come from the model of the grade only.'] : []),
   ].join(' ');

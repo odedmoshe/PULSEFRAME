@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, findClip, validateProject, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { GRADE_DEFAULTS, gradePixel, type GradeParams } from '@pulseframe/engine';
-import { isolateClip } from '@pulseframe/engine/colourMatch.ts';
+import { isolateClip, verdictOf } from '@pulseframe/engine/colourMatch.ts';
 import { decodePng, matchColour, MATCH_STILL_SCALE, type ColourMatch } from './colourMatch.ts';
 import type { Exporter } from './export.ts';
 import { ApiError, Store } from './store.ts';
@@ -28,8 +28,11 @@ const rawToPng = (rgba: Uint8Array, w: number, h: number) => ff(['-f', 'rawvideo
 let dir: string, store: Store;
 const PNG: Record<string, Buffer | ((frame: number) => Buffer)> = {};
 interface Call { doc: ProjectDocument; frame: number; scale: number; clipId: string; graded: boolean }
-/** STUB RENDERER (test only). `adapter: false` refuses any still with an enabled colour grade, as a worker without WebGPU does. */
-function stubExporter(opts: { adapter: boolean } = { adapter: true }) {
+/**
+ * STUB RENDERER (test only). `adapter: false` refuses any still with an enabled colour grade, as a worker without WebGPU does.
+ * `afterGrade` stands in for an enabled effect placed after the grade: the stub then adds that strong red shift after gradePixel.
+ */
+function stubExporter(opts: { adapter: boolean; afterGrade?: number } = { adapter: true }) {
   const calls: Call[] = [];
   const renderStill = async (doc: ProjectDocument, _rev: number, frame: number, scale: number): Promise<Buffer> => {
     const clips = doc.sequences[doc.mainSequenceId]!.tracks.filter((t) => t.kind === 'video').flatMap((t) => t.clips) as MediaClip[];
@@ -40,8 +43,10 @@ function stubExporter(opts: { adapter: boolean } = { adapter: true }) {
     if (!grade) return png;
     if (!opts.adapter) throw new ApiError(503, 'renderer_unavailable', `the render worker could not produce the frame: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; no adapter (stub)`);
     const { rgba, width, height } = await decodePng(png), p = { ...GRADE_DEFAULTS, ...grade.params } as GradeParams;
+    const effects = clip.effects ?? [], after = opts.afterGrade !== undefined && effects.slice(effects.indexOf(grade) + 1).some((e) => e.enabled);
     for (let i = 0; i < width * height; i++) {
       const g = gradePixel([rgba[i * 4]! / 255, rgba[i * 4 + 1]! / 255, rgba[i * 4 + 2]! / 255], p);
+      if (after) { g[0] = Math.min(1, g[0]! + opts.afterGrade!); g[2] = Math.max(0, g[2]! - opts.afterGrade!); }
       for (let c = 0; c < 3; c++) rgba[i * 4 + c] = Math.round(g[c]! * 255);
     }
     return rawToPng(rgba, width, height);
@@ -213,6 +218,26 @@ describe('match_colour (stub renderer, test only)', { timeout: 120_000 }, () => 
     // a reference that has a grade cannot even be measured there
     const s2 = scene();
     expect(await refusal(matchColour(store, stubExporter({ adapter: false }).exporter, s2.pid, { method: 'match', referenceClipId: s2.ref, targetClipIds: [s2.warm], amount: 1, samples: 1 }))).toMatchObject({ status: 503, code: 'renderer_unavailable' });
+  });
+
+  it('the verdict follows the verified residual when a render was made: an effect after the grade the model does not see', async () => {
+    const s = scene();
+    // the warm picture gets a look, then an effect after it: the target is measured without both, the verify render has both on
+    const look = store.commit({ projectId: s.pid, actor: 'u', ops: [{ op: 'apply_look', args: { clipId: s.warm, lookId: lookWithFade() } }, { op: 'add_effect', args: { clipId: s.warm, type: 'blur.gaussian' } }] });
+    expect(look.revision).toBeGreaterThan(0);
+    expect(clipOf(store.getProject(s.pid).doc, s.warm).effects!.map((e) => e.type)).toEqual(['color.grade', 'blur.gaussian']);
+    const m = await matchColour(store, stubExporter({ adapter: true, afterGrade: 0.35 }).exporter, s.pid, { method: 'match', referenceClipId: s.ref, targetClipIds: [s.same, s.warm], amount: 1, samples: 1 });
+    const same = m.targets[0]!, warm = m.targets[1]!;
+    // the model alone says close; the render says otherwise, and the verdict says what the render measured
+    expect(warm.residual.model).toBeLessThanOrEqual(2);
+    expect(warm.residual.verified).toBeGreaterThan(5);
+    expect(warm.verdict).toBe('partial');
+    expect(same.verdict).toBe('close'); // no effect after its grade: model and render agree
+    // without a render (no graphics adapter) the verdict is the model's
+    store.commit({ projectId: s.pid, actor: 'u', ops: [{ op: 'remove_effect', args: { clipId: s.ref, effectId: clipOf(store.getProject(s.pid).doc, s.ref).effects![0]!.id } }] });
+    const u = await matchColour(store, stubExporter({ adapter: false }).exporter, s.pid, { method: 'match', referenceClipId: s.ref, targetClipIds: [s.warm], amount: 1, samples: 1 });
+    expect(u.targets[0]!.residual.verified).toBeNull();
+    expect(u.targets[0]!.verdict).toBe(verdictOf(u.targets[0]!.residual.model));
   });
 
   it('amount 0 offers no change at all', async () => {
