@@ -80,6 +80,8 @@
 /* ---------- Switch ---------- */
 .pf-switch-row { display: inline-flex; align-items: center; gap: var(--pf-sp-5); cursor: pointer; color: var(--pf-text); font-size: var(--pf-fs-sm); }
 .pf-switch-row.is-disabled { color: var(--pf-text-disabled); cursor: not-allowed; }
+/* a visually hidden label is not dimmed: it is not seen, and the disabled state is the switch's own (aria via the button) */
+.pf-switch-row.is-disabled .pf-sr { color: var(--pf-text); }
 .pf-switch { position: relative; inline-size: 36px; block-size: 20px; padding: 0; border: 0; border-radius: var(--pf-r-pill); background: var(--pf-surface-4); box-shadow: inset 0 0 0 1px var(--pf-line-control); cursor: inherit; flex: none; transition: background-color var(--pf-dur-base) var(--pf-ease-out); }
 .pf-switch-thumb { position: absolute; inset-block-start: 3px; inset-inline-start: 3px; inline-size: 14px; block-size: 14px; border-radius: 50%; background: var(--pf-text-2); transition: inset-inline-start var(--pf-dur-base) var(--pf-ease-snap), background-color var(--pf-dur-base); }
 .pf-switch[aria-checked='true'] { background: var(--pf-frame); box-shadow: none; }
