@@ -40,7 +40,7 @@ export const ExportOptionsSchema = z
     frame: z.number().int().nonnegative().optional().describe('Frame index for format=png'),
     variantId: z.string().optional().describe('Export this linked format instead of the master frame size'),
     // segmented export and render cache (ADR-0024). Optional without a default, so the options of every job made before stay as they were.
-    mode: z.enum(EXPORT_MODES).optional().describe('single-pass (the default) = one encoder run over every frame; incremental = the fast export: only the 2-second segments whose picture changed since they were stored are rendered, and the segments are joined by stream copy (MP4 only)'),
+    mode: z.enum(EXPORT_MODES).optional().describe('single-pass (the default) = one encoder run over every frame; incremental = the fast export: only the segments (2 seconds each, never under 3 frames) whose picture changed since they were stored are rendered, and the segments are joined by stream copy (MP4 only)'),
     selfCheck: z.enum(SELF_CHECK_MODES).optional().describe('incremental only: before rendering, frames of reused segments are rendered again and compared with what was stored; auto (the default) = 3 frames of every reused segment until 20 clean fast exports with this build, then one frame of a sample of them. It proves the frames it checks, nothing more'),
   })
   .strict();
@@ -129,16 +129,17 @@ export interface IncrementalRoute {
   /** The last result of the one-time join self-test (exportSegments.incrementalAvailable); null while it has not finished. */
   join(): { ok: true } | { ok: false; reason: string } | null;
 }
-/** Blockers of a fast export (ADR-0024 plan §1), in the order they are checked. Empty for a single-pass export. */
+const unavailableBlocker = (reason: string): Blocker => ({ code: RENDER_CACHE_BLOCKERS.unavailable.code, message: RENDER_CACHE_BLOCKERS.unavailable.message(reason), ids: [], hint: RENDER_CACHE_BLOCKERS.unavailable.hint });
+/** Blockers of a fast export (ADR-0024 plan §1), in the order they are checked, each with its own hint. Empty for a single-pass export. */
 export function incrementalBlockers(options: Pick<ExportOptions, 'mode' | 'format'>, route: IncrementalRoute | null): Blocker[] {
   if (options.mode !== 'incremental') return [];
   const B = RENDER_CACHE_BLOCKERS;
-  if (options.format !== 'mp4-h264-aac') return [{ code: B.formatUnsupported.code, message: B.formatUnsupported.message(options.format), ids: [] }];
-  if (!route) return [{ code: B.unavailable.code, message: B.unavailable.message(INCREMENTAL_NOT_BUILT_REASON), ids: [] }];
-  if (route.status().capBytes <= 0) return [{ code: B.cacheDisabled.code, message: B.cacheDisabled.message(), ids: [] }];
+  if (options.format !== 'mp4-h264-aac') return [{ code: B.formatUnsupported.code, message: B.formatUnsupported.message(options.format), ids: [], hint: B.formatUnsupported.hint }];
+  if (!route) return [unavailableBlocker(INCREMENTAL_NOT_BUILT_REASON)];
+  if (route.status().capBytes <= 0) return [{ code: B.cacheDisabled.code, message: B.cacheDisabled.message(), ids: [], hint: B.cacheDisabled.hint }];
   const join = route.join();
-  if (!join) return [{ code: B.unavailable.code, message: B.unavailable.message('the check of the segment join has not finished yet; try again in a moment'), ids: [] }];
-  if (!join.ok) return [{ code: B.unavailable.code, message: B.unavailable.message(join.reason), ids: [] }];
+  if (!join) return [unavailableBlocker('the check of the segment join has not finished yet; try again in a moment')];
+  if (!join.ok) return [unavailableBlocker(join.reason)];
   return [];
 }
 export interface Manifest {
@@ -156,7 +157,10 @@ export interface Manifest {
   /** Labelled estimate, never a promise. */
   estimate: { bytes: number | null; basis: string };
 }
-export interface Blocker { code: string; message: string; ids: string[] }
+/** `hint`: the fix for this blocker when it has one of its own; the refusal then offers it instead of the generic advice. */
+export interface Blocker { code: string; message: string; ids: string[]; hint?: string }
+/** The refusal's hint when no blocker brings its own. */
+export const GENERIC_BLOCKER_HINT = 'Fix the listed blockers (relink media, change the font or the range) and try again.';
 
 /** True when any clip of the project carries an effect that runs as a WebGPU pass: such a render needs a worker browser with a graphics adapter (ADR-0008). */
 export const usesGpuEffects = (doc: ProjectDocument) => Object.values(doc.sequences).some((q) => q.tracks.some((t) => t.clips.some((c) => ('effects' in c && c.effects?.some((e) => GPU_EFFECT_IDS.includes(e.type))) || ('transition' in c && !!c.transition && GPU_TRANSITION_IDS.includes(c.transition.type)))));
@@ -329,7 +333,7 @@ export class Exporter {
     if (!opts.roomChecked) assertStorageRoom(this.store, 1, retryOf ? 'retry this export' : 'start an export');
     const p = retryOf ? { doc: retryOf.input.snapshot as ProjectDocument, revision: retryOf.input.revision as number } : this.store.getProject(projectId);
     const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
-    if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, 'Fix the listed blockers (relink media, change the font or the range) and try again.');
+    if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
     // A variant export snapshots the PROJECTED document, so the job renders exactly what was planned even if the variant changes later.
     // Snapshot what will be rendered. For a clean picture, caption tracks are hidden in the snapshot; a requested subtitle file
     // is fixed now from the same document, so later edits cannot change it.
@@ -467,7 +471,7 @@ export class Exporter {
 
       // The fast export runs only through the segmented route (ADR-0024), which is wired after its workers; until then a job asking
       // for it (planning refuses it, so only a hand-made job could) fails honestly instead of being exported another way.
-      if (options.mode === 'incremental') throw new ApiError(422, 'render_blocked', RENDER_CACHE_BLOCKERS.unavailable.message(INCREMENTAL_NOT_BUILT_REASON), { blockers: [{ code: RENDER_CACHE_BLOCKERS.unavailable.code, ids: [] }] });
+      if (options.mode === 'incremental') { const b = unavailableBlocker(INCREMENTAL_NOT_BUILT_REASON); throw new ApiError(422, 'render_blocked', b.message, { blockers: [b] }, b.hint); }
       if (options.format === 'png') {
         this.store.updateJob(jobId, { stage: 'rendering still' });
         fs.writeFileSync(partial, await this.renderStill(doc, job.input.revision, output.firstFrame, options.scale));

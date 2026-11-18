@@ -13,7 +13,7 @@ import * as T from '@pulseframe/time';
 import { INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, type ProjectDocument, type RenderCacheStatus } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { DEFAULT_RENDER_CACHE_BYTES, DEFAULT_RENDER_CACHE_MIN_FREE_BYTES, defaultSegmentThreads, loadConfig } from './config.ts';
-import { ExportOptionsSchema, Exporter, incrementalBlockers, renderDocFor, variantDoc, type IncrementalRoute, type SegmentSink } from './export.ts';
+import { ExportOptionsSchema, Exporter, GENERIC_BLOCKER_HINT, incrementalBlockers, renderDocFor, variantDoc, type IncrementalRoute, type SegmentSink } from './export.ts';
 import { bundleDigest, browserFingerprint, encoderIdOf, engineFingerprint } from './renderCacheEnv.ts';
 import { assertStorageRoom, deleteProject, setStorageHooks, storageReport, type StorageHooks } from './storage.ts';
 import { ApiError, Store } from './store.ts';
@@ -63,12 +63,21 @@ describe('blockers of the fast export (incrementalBlockers)', () => {
   });
   it('MP4 only; then the route must exist, the cap be above 0 and the join self-test have passed — in that order', () => {
     expect(incrementalBlockers(opts('webm-vp9-opus', 'incremental'), route({ ok: true })).map((b) => b.code)).toEqual(['incremental_format_unsupported']);
-    expect(incrementalBlockers(opts('mp4-h264-aac', 'incremental'), null)).toEqual([{ code: 'incremental_unavailable', message: RENDER_CACHE_BLOCKERS.unavailable.message(INCREMENTAL_NOT_BUILT_REASON), ids: [] }]);
+    expect(incrementalBlockers(opts('mp4-h264-aac', 'incremental'), null)).toEqual([{ code: 'incremental_unavailable', message: RENDER_CACHE_BLOCKERS.unavailable.message(INCREMENTAL_NOT_BUILT_REASON), ids: [], hint: RENDER_CACHE_BLOCKERS.unavailable.hint }]);
     expect(incrementalBlockers(opts('mp4-h264-aac', 'incremental'), route({ ok: true }, { capBytes: 0, enabled: false })).map((b) => b.code)).toEqual(['render_cache_disabled']);
     expect(incrementalBlockers(opts('mp4-h264-aac', 'incremental'), route(null)).map((b) => b.code)).toEqual(['incremental_unavailable']);
     const old = incrementalBlockers(opts('mp4-h264-aac', 'incremental'), route({ ok: false, reason: 'this ffmpeg has no setts filter' }));
-    expect(old).toEqual([{ code: 'incremental_unavailable', message: 'the fast export is not available on this machine: this ffmpeg has no setts filter', ids: [] }]);
+    expect(old).toEqual([{ code: 'incremental_unavailable', message: 'the fast export is not available on this machine: this ffmpeg has no setts filter', ids: [], hint: RENDER_CACHE_BLOCKERS.unavailable.hint }]);
     expect(incrementalBlockers(opts('mp4-h264-aac', 'incremental'), route({ ok: true }))).toEqual([]);
+  });
+  it('each blocker carries its own hint from core, never the generic "relink media" advice', () => {
+    const cases: [ReturnType<typeof incrementalBlockers>, string][] = [
+      [incrementalBlockers(opts('gif', 'incremental'), route({ ok: true })), RENDER_CACHE_BLOCKERS.formatUnsupported.hint],
+      [incrementalBlockers(opts('mp4-h264-aac', 'incremental'), route({ ok: true }, { capBytes: 0, enabled: false })), RENDER_CACHE_BLOCKERS.cacheDisabled.hint],
+      [incrementalBlockers(opts('mp4-h264-aac', 'incremental'), null), RENDER_CACHE_BLOCKERS.unavailable.hint],
+      [incrementalBlockers(opts('mp4-h264-aac', 'incremental'), route(null)), RENDER_CACHE_BLOCKERS.unavailable.hint],
+    ];
+    for (const [bs, hint] of cases) expect(bs.map((b) => b.hint)).toEqual([hint]);
   });
   it('a full cache is never a blocker: a segment without room is joined from the work directory (notStored)', () => {
     expect(incrementalBlockers(opts('mp4-h264-aac', 'incremental'), route({ ok: true }, { autoClear: false, usedBytes: 1 << 30 }))).toEqual([]);
@@ -95,10 +104,30 @@ describe('the exporter with the fast export not wired yet', () => {
     expect(plan.blockers.map((b) => b.code)).toContain('incremental_unavailable');
     expect(plan.blockers.find((b) => b.code === 'incremental_unavailable')!.message).toContain(INCREMENTAL_NOT_BUILT_REASON);
     expect(code(() => exporter.start(pid, 'user:local', { mode: 'incremental' }))).toBe('422:render_blocked');
+    // the refusal offers the first blocker's own hint; with the fast export the only blocker, that is the fast export's
+    store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'add_adjustment', args: { span: { start: T.frameTime(0, R), duration: T.frameTime(30, R) }, effects: [{ type: 'color.sepia' }] } }] });
+    const refusal = (raw: unknown) => { try { exporter.start(pid, 'user:local', raw); } catch (e) { if (e instanceof ApiError) return e; throw e; } throw new Error('not refused'); };
+    const r = refusal({ mode: 'incremental' });
+    expect((r.details.blockers as { code: string }[]).map((b) => b.code)).toEqual(['incremental_unavailable']);
+    expect(r.hint).toBe(RENDER_CACHE_BLOCKERS.unavailable.hint);
+    exporter.incremental = route({ ok: true }, { capBytes: 0, enabled: false });
+    try { expect(refusal({ mode: 'incremental' }).hint).toBe(RENDER_CACHE_BLOCKERS.cacheDisabled.hint); } finally { exporter.incremental = null; }
+    // a blocker without a hint of its own keeps the generic advice
+    expect(refusal({ range: { startFrame: 900, endFrame: 901 } }).hint).toBe(GENERIC_BLOCKER_HINT);
     // a single-pass plan carries no trace of the new options
     expect('mode' in exporter.plan(p.doc, p.revision, {}).manifest.options).toBe(false);
   });
 
+  it('a hand-made fast export job fails at run time with the honest refusal and the fast export\'s hint, never exported another way', async () => {
+    const p = store.getProject(pid);
+    const { manifest } = exporter.plan(p.doc, p.revision, {});
+    const job = store.createJob(pid, 'export', 'user:local', { revision: p.revision, snapshot: p.doc, sidecar: null, manifest: { ...manifest, options: { ...manifest.options, mode: 'incremental' } }, warnings: [], retryOf: null });
+    await (exporter as unknown as { run(id: string): Promise<void> }).run(job.id);
+    const failed = store.getJob(job.id);
+    expect(failed.status).toBe('failed');
+    expect(failed.error).toMatchObject({ code: 'render_blocked', message: RENDER_CACHE_BLOCKERS.unavailable.message(INCREMENTAL_NOT_BUILT_REASON), hint: RENDER_CACHE_BLOCKERS.unavailable.hint });
+    expect(failed.error.details.blockers).toEqual([{ code: 'incremental_unavailable', message: RENDER_CACHE_BLOCKERS.unavailable.message(INCREMENTAL_NOT_BUILT_REASON), ids: [], hint: RENDER_CACHE_BLOCKERS.unavailable.hint }]);
+  });
   it('renderDocFor is the projected variant with captions hidden for a clean picture, as the job snapshot always was', () => {
     const doc = store.getProject(pid).doc;
     const withCaptions: ProjectDocument = { ...doc, sequences: Object.fromEntries(Object.entries(doc.sequences).map(([id, s]) => [id, { ...s, tracks: [...s.tracks, { id: 'trk_cap', kind: 'caption', name: 'c', clips: [], locked: false, hidden: false, muted: false } as never] }])) };

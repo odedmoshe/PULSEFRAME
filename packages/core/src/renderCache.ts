@@ -127,7 +127,8 @@ export type SegmentedStage = (typeof SEGMENTED_STAGES)[number];
 /**
  * Export blockers of the incremental route (plan §1, 422 render_blocked with `{ code, message, ids }` like every blocker).
  * The English sentence is fixed here; packages/i18n renderCache.ts words each in Hebrew and
- * packages/evals/src/render-cache-wording.test.ts keeps the two in step. `hint` is the fix offered.
+ * packages/evals/src/render-cache-wording.test.ts keeps the two in step. `hint` is the fix offered: the blocker carries it, and the
+ * 422 refusal's own `hint` is the first blocker's (Exporter.start), never the generic "relink media" advice.
  * There is deliberately no "cache full" blocker (verifier B2/D): a segment that finds no room is joined from the job's work
  * directory and counted in `notStored`; only the joined file itself can meet 507 storage_quota_exceeded.
  */
@@ -141,16 +142,18 @@ export const RENDER_CACHE_BLOCKER_CODES = Object.values(RENDER_CACHE_BLOCKERS).m
 /** The reason `incremental_unavailable` gives until the segmented route is wired into Exporter.run (lead wiring after W2). */
 export const INCREMENTAL_NOT_BUILT_REASON = 'the segmented export route is not built yet';
 
-/** Failure of a running incremental export: the job's error code, its fixed sentence and that it may be retried. */
+/** Failure of a running incremental export: the job's error code, its fixed sentence, that it may be retried, and the fix offered (the job error's `hint`). */
 export const RENDER_CACHE_JOB_ERRORS = {
   selfCheckFailed: {
     code: 'render_cache_self_check_failed',
     message: (first: number, frames: number, frame: number, purged: number) => `the self-check found a stored segment (frames ${first}–${first + frames - 1}) that does not match the current render at frame ${frame}; the ${purged} stored segments this export reused were removed and nothing was published`,
     retryable: true,
+    hint: 'Try again: the removed segments are rendered afresh. If it fails again, turn the fast export off; the ordinary export is unchanged.',
   },
   joinMismatch: {
     code: 'segment_join_mismatch',
     message: (first: number) => `the segment starting at frame ${first} was encoded with a different packet timing from the others, so it cannot be joined exactly`,
     retryable: true,
+    hint: 'Try again; if it fails again, turn the fast export off: the ordinary export is unchanged.',
   },
 } as const;

@@ -27,6 +27,8 @@ export const RENDER_CACHE_HE = {
   'cache.stage.joining': 'חיבור המקטעים', 'cache.stage.validating': 'בדיקת הקובץ והבהובים',
   // the job failed its self-check (render_cache_self_check_failed)
   'cache.failed.selfCheck': 'הבדיקה העצמית מצאה מקטע שמור שאינו תואם לרינדור הנוכחי. המקטעים השמורים של הייצוא הזה נמחקו. «ניסיון חוזר» ירנדר הכול מחדש.',
+  // the job could not join a segment exactly (segment_join_mismatch); the way out, as core RENDER_CACHE_JOB_ERRORS.joinMismatch.hint
+  'cache.failed.join': 'מקטע לא התחבר בדיוק לשאר הסרטון, ולכן לא נשמר קובץ. אפשר לנסות שוב; אם זה חוזר, אפשר לכבות את הייצוא המהיר — הייצוא הרגיל לא השתנה.',
   // the timeline lane (one focusable summary; pattern plus tooltip, never colour alone)
   'cache.lane.label': 'מטמון רינדור', 'cache.lane.cached': 'שמור במטמון — לא ירונדר שוב', 'cache.lane.render': 'השתנה — ירונדר בייצוא הבא',
   'cache.lane.uncacheable': 'לא נשמר במטמון — ירונדר בכל ייצוא', 'cache.lane.jump': 'קפיצה', 'cache.lane.refresh': 'רענון', 'cache.lane.stale': 'קטעים שירונדרו בייצוא הבא',
@@ -57,6 +59,7 @@ export const RENDER_CACHE_EN: Record<keyof typeof RENDER_CACHE_HE, string> = {
   'cache.stage.keying': 'Checking what changed', 'cache.stage.selfCheck': 'Self-check of the cache', 'cache.stage.rendering': 'Rendering the changed segments',
   'cache.stage.joining': 'Joining the segments', 'cache.stage.validating': 'Checking the file and flashes',
   'cache.failed.selfCheck': 'The self-check found a stored segment that does not match the current render. The stored segments of this export were deleted. "Try again" renders everything again.',
+  'cache.failed.join': 'A segment did not join the rest of the video exactly, so no file was saved. Try again; if it happens again, turn the fast export off — the ordinary export is unchanged.',
   'cache.lane.label': 'Render cache', 'cache.lane.cached': 'Stored in the cache — will not be rendered again', 'cache.lane.render': 'Changed — will be rendered in the next export',
   'cache.lane.uncacheable': 'Not stored — rendered in every export', 'cache.lane.jump': 'Go', 'cache.lane.refresh': 'Refresh', 'cache.lane.stale': 'Stretches the next export renders',
   'cache.storage.label': 'Render cache', 'cache.storage.clear': 'Clear the render cache',

@@ -49,6 +49,16 @@ describe('fast export refusals in Hebrew (ADR-0024)', () => {
     expect(translateRefusal('he', only(incrementalBlockers({ format: 'mp4-h264-aac', mode: 'incremental' }, route({ ok: false, reason: 'no setts' }))))).toBe('ייצוא מהיר אינו זמין במחשב הזה: ⁦no setts⁩');
     expect(translateRefusal('he', only(incrementalBlockers({ format: 'webm-vp9-opus', mode: 'incremental' }, null)))).toBe('ייצוא מהיר זמין כרגע רק ל־MP4; ⁦WebM⁩ מיוצא במעבר אחד');
   });
+  it('the refusal the export sheet shows ("export cannot start: …" around the first blocker) is worded too, when its blocker is', () => {
+    const blocker = only(incrementalBlockers({ format: 'mp4-h264-aac', mode: 'incremental' }, route({ ok: true }, 0)));
+    expect(translateRefusal('he', `export cannot start: ${blocker}`)).toBe(`אי אפשר להתחיל את הייצוא: ${translateRefusal('he', blocker)}`);
+    // a blocker without Hebrew words keeps the server's whole sentence (undefined = show it as written), never half a translation
+    expect(translateRefusal('he', 'export cannot start: something no table knows')).toBeUndefined();
+  });
+  it('both job failures have a sentence in the interface that says what to do next', () => {
+    for (const lang of ['he', 'en'] as const) for (const k of ['cache.failed.selfCheck', 'cache.failed.join'] as const) expect(dictionaries[lang][k]?.length, `${lang} ${k}`).toBeGreaterThan(20);
+    expect(RENDER_CACHE_EN['cache.failed.join']).toContain(RENDER_CACHE_JOB_ERRORS.joinMismatch.hint.split(';')[0]!);
+  });
   it('every code of the track has a headline in both languages, and they differ', () => {
     const codes = [...Object.values(RENDER_CACHE_BLOCKERS).map((b) => b.code), ...Object.values(RENDER_CACHE_JOB_ERRORS).map((e) => e.code)];
     for (const lang of ['he', 'en'] as const) {

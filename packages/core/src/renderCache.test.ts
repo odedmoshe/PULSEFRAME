@@ -25,7 +25,9 @@ describe('render cache contracts (ADR-0024)', () => {
     for (const c of codes) expect(c).toMatch(/^[a-z]+(_[a-z]+)+$/);
     expect(RENDER_CACHE_BLOCKER_CODES).toEqual(['incremental_format_unsupported', 'render_cache_disabled', 'incremental_unavailable']);
     for (const b of Object.values(RENDER_CACHE_BLOCKERS)) expect(b.hint.length).toBeGreaterThan(10);
-    for (const e of Object.values(RENDER_CACHE_JOB_ERRORS)) expect(e.retryable).toBe(true);
+    for (const e of Object.values(RENDER_CACHE_JOB_ERRORS)) { expect(e.retryable).toBe(true); expect(e.hint.length).toBeGreaterThan(10); }
+    // every refusal and failure of the track names the way out that always exists: the ordinary export
+    for (const h of [...Object.values(RENDER_CACHE_BLOCKERS), ...Object.values(RENDER_CACHE_JOB_ERRORS)].map((x) => x.hint)) expect(h).toMatch(/turn the fast export off/i);
     expect(UNCACHEABLE_CODES).toContain('gpu_not_reproducible');
   });
 });

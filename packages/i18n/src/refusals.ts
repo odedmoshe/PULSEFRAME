@@ -234,6 +234,9 @@ export function translateRefusal(lang: 'he' | 'en', message: string): string | u
   if (lang !== 'he') return undefined;
   for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
+  // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
+  const start = /^export cannot start: ([\s\S]+)$/.exec(message);
+  if (start) { const inner = translateRefusal('he', start[1]!); if (inner) return `אי אפשר להתחיל את הייצוא: ${inner}`; }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
