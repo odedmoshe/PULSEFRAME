@@ -83,6 +83,14 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       if ((fr.mapping === 'interpolated') !== (fr.multiplier !== undefined)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: an interpolated result names its multiplier, and only it does`, ids: [a.id] });
       if (fr.heldFrames.some((f, i) => i > 0 && f <= fr.heldFrames[i - 1]!)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: held frames must be strictly ascending`, ids: [a.id] });
     }
+    // ADR-0023: how a file arrived through the import queue. Only uploads carry it; a phone file names its drop code (by id) and
+    // only a phone file does; only a folder file has a path inside the folder.
+    const up = a.provenance.upload;
+    if (up) {
+      if (a.provenance.origin !== 'upload') issues.push({ code: 'import_provenance', message: `asset ${a.id}: only an uploaded file records how it was uploaded`, ids: [a.id] });
+      if ((up.via === 'phone') !== (up.dropId !== undefined)) issues.push({ code: 'import_provenance', message: `asset ${a.id}: a file from a phone names its drop code, and only such a file does`, ids: [a.id] });
+      if (up.relativePath !== undefined && up.via !== 'folder') issues.push({ code: 'import_provenance', message: `asset ${a.id}: only a file from a dropped folder has a path inside it`, ids: [a.id] });
+    }
     const rangeStart = a.provenance.derived?.sourceRangeStart;
     if (rangeStart && T.isNegative(rangeStart)) issues.push({ code: 'derived_range', message: `asset ${a.id}: its source range cannot start before 0`, ids: [a.id] });
   }
