@@ -13,6 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
+import { EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SELF_CHECK_MODES, type RenderCacheStatus } from '@pulseframe/core';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
@@ -38,6 +39,9 @@ export const ExportOptionsSchema = z
     range: z.object({ startFrame: z.number().int().nonnegative(), endFrame: z.number().int().positive() }).strict().optional().describe('Half-open frame range [startFrame, endFrame); default is the whole sequence'),
     frame: z.number().int().nonnegative().optional().describe('Frame index for format=png'),
     variantId: z.string().optional().describe('Export this linked format instead of the master frame size'),
+    // segmented export and render cache (ADR-0024). Optional without a default, so the options of every job made before stay as they were.
+    mode: z.enum(EXPORT_MODES).optional().describe('single-pass (the default) = one encoder run over every frame; incremental = the fast export: only the segments (2 seconds each, never under 3 frames) whose picture changed since they were stored are rendered, and the segments are joined by stream copy (MP4 only)'),
+    selfCheck: z.enum(SELF_CHECK_MODES).optional().describe('incremental only: before rendering, frames of reused segments are rendered again and compared with what was stored; auto (the default) = 3 frames of every reused segment until 20 clean fast exports with this build, then one frame of a sample of them. It proves the frames it checks, nothing more'),
   })
   .strict();
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
@@ -58,6 +62,14 @@ function captionSidecar(doc: ProjectDocument, manifest: Manifest): { format: 'sr
   const format = want === 'sidecar-srt' ? 'srt' : 'vtt';
   return { format, text: format === 'srt' ? serializeSrt(cues) : serializeVtt(cues), cues: cues.length };
 }
+/**
+ * The document a job renders and a segment plan keys (ADR-0024, verifier: the plan route and the export must key the same document):
+ * the master or its projected linked format, with caption tracks hidden for a clean picture (sidecar or none).
+ */
+export function renderDocFor(doc: ProjectDocument, options: Pick<ExportOptions, 'variantId' | 'captions'>): ProjectDocument {
+  const resolved = variantDoc(doc, options.variantId);
+  return options.captions === 'burned' ? resolved : hideCaptions(resolved);
+}
 /** The document to render: the master, or the master projected into one of its linked formats. */
 export function variantDoc(doc: ProjectDocument, variantId?: string): ProjectDocument {
   if (!variantId) return doc;
@@ -77,6 +89,19 @@ const BPP = { draft: 0.03, standard: 0.07, high: 0.14 } as const;
 /** `audio`: the audio plan version and the sound-effect runtime (ADR-0010) every route mixes with. */
 export const ENGINE = { compositor: 'canvas2d/1', evaluator: 'evaluate/1', audio: `plan/2 ${AUDIO_FX_ENGINE}`, fontFamilies: FONT_CATALOG.map((f) => f.family) } as const;
 
+/** Frames of the exported range (relative to it), in the order the render page draws them: [first, first + count). */
+export interface FrameRun { first: number; count: number }
+/**
+ * Receives a segmented session's ordered frame stream (ADR-0024): first the self-check frames, then the frames of the segments
+ * to render, as the runs list them. `streamFirst` is the position in that stream, not a frame of the range. The sink owns the
+ * encoders, the per-frame hashes and flash cells and the job's stage text; a typed failure it raised is kept in `failure()` so
+ * the export reports it (render_cache_self_check_failed), not the page's plain upload error.
+ */
+export interface SegmentSink {
+  accept(streamFirst: number, data: Uint8Array): Promise<void>;
+  kill(): void;
+  failure(): ApiError | null;
+}
 export interface RenderSession {
   doc: ProjectDocument;
   revision: number;
@@ -88,8 +113,34 @@ export interface RenderSession {
   totalFrames: number;
   nextFrame: number;
   sink: ChildProcessWithoutNullStreams | null;
-  /** Photosensitivity check of the frames as they are encoded (ADR-0009 decision 4); absent for a still. */
+  /** Photosensitivity check of the frames as they are encoded (ADR-0009 decision 4); absent for a still and for a segmented session (its sink keeps the cells of every frame). */
   flash?: FrameFlashCheck;
+  /** A segmented session draws only these runs, in this order; `totalFrames` is the sum of their counts. Absent: every frame in order. */
+  runs?: FrameRun[];
+  /** The segmented export's sink (ADR-0024); a session has either `sink` or `segments`. */
+  segments?: SegmentSink | null;
+}
+/**
+ * What the plan needs to know about the incremental route on this machine, synchronously (ADR-0024). Set on the Exporter by the
+ * server once the render cache exists; null until then (the fast export is then refused as not available, honestly).
+ */
+export interface IncrementalRoute {
+  status(): RenderCacheStatus;
+  /** The last result of the one-time join self-test (exportSegments.incrementalAvailable); null while it has not finished. */
+  join(): { ok: true } | { ok: false; reason: string } | null;
+}
+const unavailableBlocker = (reason: string): Blocker => ({ code: RENDER_CACHE_BLOCKERS.unavailable.code, message: RENDER_CACHE_BLOCKERS.unavailable.message(reason), ids: [], hint: RENDER_CACHE_BLOCKERS.unavailable.hint });
+/** Blockers of a fast export (ADR-0024 plan §1), in the order they are checked, each with its own hint. Empty for a single-pass export. */
+export function incrementalBlockers(options: Pick<ExportOptions, 'mode' | 'format'>, route: IncrementalRoute | null): Blocker[] {
+  if (options.mode !== 'incremental') return [];
+  const B = RENDER_CACHE_BLOCKERS;
+  if (options.format !== 'mp4-h264-aac') return [{ code: B.formatUnsupported.code, message: B.formatUnsupported.message(options.format), ids: [], hint: B.formatUnsupported.hint }];
+  if (!route) return [unavailableBlocker(INCREMENTAL_NOT_BUILT_REASON)];
+  if (route.status().capBytes <= 0) return [{ code: B.cacheDisabled.code, message: B.cacheDisabled.message(), ids: [], hint: B.cacheDisabled.hint }];
+  const join = route.join();
+  if (!join) return [unavailableBlocker('the check of the segment join has not finished yet; try again in a moment')];
+  if (!join.ok) return [unavailableBlocker(join.reason)];
+  return [];
 }
 export interface Manifest {
   revision: number;
@@ -106,7 +157,10 @@ export interface Manifest {
   /** Labelled estimate, never a promise. */
   estimate: { bytes: number | null; basis: string };
 }
-export interface Blocker { code: string; message: string; ids: string[] }
+/** `hint`: the fix for this blocker when it has one of its own; the refusal then offers it instead of the generic advice. */
+export interface Blocker { code: string; message: string; ids: string[]; hint?: string }
+/** The refusal's hint when no blocker brings its own. */
+export const GENERIC_BLOCKER_HINT = 'Fix the listed blockers (relink media, change the font or the range) and try again.';
 
 /** True when any clip of the project carries an effect that runs as a WebGPU pass: such a render needs a worker browser with a graphics adapter (ADR-0008). */
 export const usesGpuEffects = (doc: ProjectDocument) => Object.values(doc.sequences).some((q) => q.tracks.some((t) => t.clips.some((c) => ('effects' in c && c.effects?.some((e) => GPU_EFFECT_IDS.includes(e.type))) || ('transition' in c && !!c.transition && GPU_TRANSITION_IDS.includes(c.transition.type)))));
@@ -127,6 +181,8 @@ export class Exporter {
   private running: { jobId: string; ff?: ChildProcessWithoutNullStreams; abort?: () => void } | null = null;
   /** The compute lane (ADR-0017), set by the server: while a server export runs, frame jobs dispatch no new chunk. */
   lane: Pick<ComputeLane, 'setExportActive'> | null = null;
+  /** The incremental route (ADR-0024), set by the server when the render cache is wired; null = the fast export is refused as not available. */
+  incremental: IncrementalRoute | null = null;
   constructor(private store: Store, private host: RenderHost, private renderPageUrl: () => string, private webDist: string) {}
 
   /**
@@ -212,6 +268,7 @@ export class Exporter {
       if (seq0.tracks.some((t) => t.kind === 'audio' && !t.muted && t.clips.length > 0)) warnings.push({ code: 'gif_has_no_sound', message: 'GIF cannot carry sound; the export will be silent', ids: [] });
       if (outWidth * outHeight * Math.max(0, frames) > 640 * 360 * 600) warnings.push({ code: 'gif_large', message: 'this GIF will be large and limited to 256 colours per frame; consider a shorter range or scale 0.5', ids: [] });
     }
+    blockers.push(...incrementalBlockers(options, this.incremental));
     if (options.captions.startsWith('sidecar') && !doc.sequences[doc.mainSequenceId]!.tracks.some((t) => t.kind === 'caption')) warnings.push({ code: 'no_captions', message: 'a caption file was requested but the project has no caption track; none will be written', ids: [] });
     if (options.format === 'webm-vp9-opus' && doc.settings.sampleRate !== 48000) warnings.push({ code: 'resampled_audio', message: 'Opus is encoded at 48 kHz; audio will be resampled', ids: [] });
     const effects = [...fxUsed].map(([type, clips]) => ({ type, version: findEffect(type)?.version ?? 0, clips }));
@@ -276,12 +333,12 @@ export class Exporter {
     if (!opts.roomChecked) assertStorageRoom(this.store, 1, retryOf ? 'retry this export' : 'start an export');
     const p = retryOf ? { doc: retryOf.input.snapshot as ProjectDocument, revision: retryOf.input.revision as number } : this.store.getProject(projectId);
     const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
-    if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, 'Fix the listed blockers (relink media, change the font or the range) and try again.');
+    if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
     // A variant export snapshots the PROJECTED document, so the job renders exactly what was planned even if the variant changes later.
     // Snapshot what will be rendered. For a clean picture, caption tracks are hidden in the snapshot; a requested subtitle file
     // is fixed now from the same document, so later edits cannot change it.
     const resolved = retryOf ? p.doc : variantDoc(p.doc, manifest.options.variantId);
-    const snapshot = retryOf || manifest.options.captions === 'burned' ? resolved : hideCaptions(resolved);
+    const snapshot = retryOf ? p.doc : renderDocFor(p.doc, manifest.options);
     const sidecar = retryOf ? retryOf.input.sidecar ?? null : captionSidecar(resolved, manifest);
     const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot, sidecar, manifest, warnings, retryOf: retryOf?.id ?? null });
     this.enqueue(job);
@@ -304,11 +361,17 @@ export class Exporter {
     return { jobId, status: 'cancel-requested', outcome: 'stopping' };
   }
 
-  private open(doc: ProjectDocument, revision: number, jobId: string | null, out: { width: number; height: number; firstFrame: number; frames: number }): { token: string; session: RenderSession; url: string } {
+  /**
+   * A render session. `runs` (segmented export, ADR-0024): the page draws only those frames of the range, in that order, and the
+   * session counts the sum of their counts; each run must lie inside the range.
+   */
+  open(doc: ProjectDocument, revision: number, jobId: string | null, out: { width: number; height: number; firstFrame: number; frames: number }, runs?: readonly FrameRun[]): { token: string; session: RenderSession; url: string } {
     if (!fs.existsSync(path.join(this.webDist, 'render.html')))
       throw new ApiError(503, 'renderer_unavailable', 'the web bundle containing the render page has not been built', {}, 'Run `pnpm build` and retry.');
+    if (runs) for (const r of runs) if (!Number.isInteger(r.first) || !Number.isInteger(r.count) || r.first < 0 || r.count < 1 || r.first + r.count > out.frames) throw new Error(`render run [${r.first}, ${r.first + r.count}) is outside the range of ${out.frames} frames`);
     const token = randomBytes(24).toString('base64url');
-    const session: RenderSession = { doc, revision, jobId, firstFrame: out.firstFrame, outWidth: out.width, outHeight: out.height, frameBytes: out.width * out.height * 4, totalFrames: out.frames, nextFrame: 0, sink: null };
+    const totalFrames = runs ? runs.reduce((n, r) => n + r.count, 0) : out.frames;
+    const session: RenderSession = { doc, revision, jobId, firstFrame: out.firstFrame, outWidth: out.width, outHeight: out.height, frameBytes: out.width * out.height * 4, totalFrames, nextFrame: 0, sink: null, ...(runs ? { runs: runs.map((r) => ({ first: r.first, count: r.count })), segments: null } : {}) };
     this.sessions.set(token, session);
     return { token, session, url: `${this.renderPageUrl()}#token=${token}` };
   }
@@ -339,14 +402,16 @@ export class Exporter {
   /** Frames posted by the render page. Enforces order, size and backpressure into the encoder. */
   async acceptFrames(token: string, first: number, data: Uint8Array): Promise<void> {
     const s = this.sessions.get(token);
-    if (!s || !s.sink) throw new ApiError(404, 'render_session_not_found', 'unknown render session');
+    // A segmented session has no encoder of its own: its sink takes the frames (ADR-0024).
+    if (!s || (!s.sink && !s.segments)) throw new ApiError(404, 'render_session_not_found', 'unknown render session');
     if (first !== s.nextFrame) throw new ApiError(409, 'frame_out_of_order', `expected frame ${s.nextFrame}, got ${first}`);
     if (data.length === 0 || data.length % s.frameBytes !== 0) throw new ApiError(400, 'bad_frame_size', 'payload is not a whole number of RGBA frames');
     const count = data.length / s.frameBytes;
     if (s.nextFrame + count > s.totalFrames) throw new ApiError(400, 'too_many_frames', 'more frames than the snapshot contains');
     s.nextFrame += count;
+    if (s.segments) { await s.segments.accept(first, data); return; } // the sink checks, encodes, hashes and words the stage
     s.flash?.feed(data); // the frames the file will hold, checked for flashing as they pass (never changes or blocks the export)
-    const sink = s.sink;
+    const sink = s.sink!;
     // The encoder going away means the job was canceled or failed: a typed conflict, not a server error. It may already be
     // gone when the frames arrive (a write to a closed pipe reports nothing further), so that is checked first, and the
     // encoder exiting while a write waits for room ends the wait.
@@ -404,6 +469,9 @@ export class Exporter {
       let renderStageMs: unknown = null;
       let validation: Record<string, unknown>;
 
+      // The fast export runs only through the segmented route (ADR-0024), which is wired after its workers; until then a job asking
+      // for it (planning refuses it, so only a hand-made job could) fails honestly instead of being exported another way.
+      if (options.mode === 'incremental') { const b = unavailableBlocker(INCREMENTAL_NOT_BUILT_REASON); throw new ApiError(422, 'render_blocked', b.message, { blockers: [b] }, b.hint); }
       if (options.format === 'png') {
         this.store.updateJob(jobId, { stage: 'rendering still' });
         fs.writeFileSync(partial, await this.renderStill(doc, job.input.revision, output.firstFrame, options.scale));

@@ -5,7 +5,7 @@
  * make a screen flash. It never changes or blocks the export: the owner decides.
  */
 import * as T from '@pulseframe/time';
-import { FlashAnalyser, flashCells, type FlashReport } from '@pulseframe/engine';
+import { FlashAnalyser, flashCells, type FlashCells, type FlashReport } from '@pulseframe/engine';
 
 export interface PhotosensitivityReport {
   /** What was applied, in words, so a reader of the manifest knows its limits. */
@@ -31,13 +31,27 @@ export class FrameFlashCheck {
   }
   /** The result, with frame numbers turned into timeline times: the export's frame 0 is timeline frame `firstFrame`. */
   report(firstFrame: number): PhotosensitivityReport {
-    const r: FlashReport = this.analyser.report();
-    const at = (k: number) => T.frameTime(firstFrame + k, this.rate);
-    return {
-      method: PHOTOSENSITIVITY_METHOD,
-      verdict: r.verdict,
-      frames: r.frames,
-      ranges: r.ranges.map((x) => ({ from: at(x.from), to: at(x.to + 1), kind: x.kind, flashesPerSecond: x.flashesPerSecond, area: x.area })),
-    };
+    return photosensitivityReport(this.analyser.report(), this.rate, firstFrame);
   }
+}
+/** The analyser's report in the manifest's words, shared by the single-pass check and reportFromCells. */
+function photosensitivityReport(r: FlashReport, rate: T.Rate, firstFrame: number): PhotosensitivityReport {
+  const at = (k: number) => T.frameTime(firstFrame + k, rate);
+  return {
+    method: PHOTOSENSITIVITY_METHOD,
+    verdict: r.verdict,
+    frames: r.frames,
+    ranges: r.ranges.map((x) => ({ from: at(x.from), to: at(x.to + 1), kind: x.kind, flashesPerSecond: x.flashesPerSecond, area: x.area })),
+  };
+}
+/**
+ * The same report from per-frame cells (ADR-0024): a segmented export stores each frame's cells with its segment and feeds the
+ * cells of ALL programme frames of the exported range, in order (stored ones for reused segments, fresh ones for rendered
+ * segments), through ONE analyser, so the one-second windows span the joins exactly as in a single pass and a flash sequence
+ * that straddles a join is counted whole. For the same frames it equals FrameFlashCheck's report (flashCheck.test.ts).
+ */
+export function reportFromCells(cells: Iterable<FlashCells>, rate: T.Rate, firstFrame: number): PhotosensitivityReport {
+  const analyser = new FlashAnalyser(rate.num / rate.den);
+  for (const c of cells) analyser.push(c);
+  return photosensitivityReport(analyser.report(), rate, firstFrame);
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { FrameFlashCheck } from './flashCheck.ts';
+import { flashCells } from '@pulseframe/engine';
+import { FrameFlashCheck, reportFromCells } from './flashCheck.ts';
 
 const W = 64, H = 36, R = { num: 30, den: 1 };
 const frame = (v: number) => new Uint8Array(W * H * 4).fill(v).map((x, i) => (i % 4 === 3 ? 255 : x));
@@ -31,5 +32,19 @@ describe('photosensitivity check of an export', () => {
     const a = new FrameFlashCheck(W, H, R);
     a.feed(batch(Array.from({ length: 150 }, (_, k) => frame(Math.floor(k / 15) % 2 ? 255 : 0)))); // one change every half second
     expect(a.report(0)).toMatchObject({ verdict: 'pass', ranges: [] });
+  });
+  it('reportFromCells (ADR-0024): cells of every frame in order give the single-pass report, also when a flash sequence straddles segment joins', () => {
+    const black = frame(0), white = frame(255), grey = frame(90);
+    // strobe from frame 50 to 130: across joins at 60 and 120 of a 60-frame grid
+    const frames = Array.from({ length: 180 }, (_, k) => (k >= 50 && k < 130 ? (Math.floor(k / 3) % 2 ? white : black) : grey));
+    const single = new FrameFlashCheck(W, H, R);
+    single.feed(batch(frames));
+    // the cells as a segmented export gathers them: per segment, stored or fresh, then all programme frames in order
+    const segments = [frames.slice(0, 60), frames.slice(60, 120), frames.slice(120)].map((seg) => seg.map((f) => flashCells(f, W, H)));
+    const fromCells = reportFromCells(segments.flat(), R, 300);
+    expect(fromCells).toEqual(single.report(300));
+    expect(fromCells.verdict).toBe('fail');
+    // per segment the strobe is shorter, but the whole-film verdict is not the sum of per-segment verdicts
+    expect(reportFromCells(segments[0]!, R, 300).frames).toBe(60);
   });
 });

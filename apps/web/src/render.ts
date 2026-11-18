@@ -19,6 +19,8 @@ let frameCount = 0;
 let firstFrame = 0;
 let outWidth = 0;
 let outHeight = 0;
+/** Segmented export (ADR-0024): only these [first, count] runs of the range are drawn, in this order; null = every frame in order. */
+let runs: [number, number][] | null = null;
 let ctx: CanvasRenderingContext2D;
 // Export always decodes the ORIGINAL bytes (never a proxy), read by HTTP range requests.
 // 12 decoders: two echo-5 clips under a transition, plus room (ADR-0005 budget, to be amended for ADR-0011 decode lanes).
@@ -44,7 +46,7 @@ const page = {
     if (!token) throw new Error('missing render token');
     const r = await fetch(`${base}/snapshot`);
     if (!r.ok) throw new Error(`snapshot: HTTP ${r.status}`);
-    ({ doc, frameCount, firstFrame, outWidth, outHeight } = await r.json());
+    ({ doc, frameCount, firstFrame, outWidth, outHeight, runs = null } = await r.json());
     await ensureFonts();
     // Only when the project uses a GPU effect: the adapter check costs time and a GPU device.
     if (JSON.stringify(doc.sequences).match(new RegExp([...GPU_EFFECT_IDS, ...GPU_TRANSITION_IDS].map((id) => `"${id.replace('.', '\\.')}"`).join('|')))) await initGpu();
@@ -84,7 +86,10 @@ const page = {
       n = 0;
       lap('upload');
     };
-    for (let i = 0; i < frameCount; i++) {
+    // The frames to draw, in stream order. `first` in the POST stays the position in this stream; the server maps it to the runs.
+    const order: number[] = runs ? runs.flatMap(([at, count]) => Array.from({ length: count }, (_, k) => at + k)) : Array.from({ length: frameCount }, (_, i) => i);
+    if (order.length !== frameCount) throw new Error(`render runs hold ${order.length} frames, the snapshot ${frameCount}`);
+    for (const i of order) {
       await draw(i);
       lap('draw');
       batch.set(ctx.getImageData(0, 0, width, height).data, n * frameBytes);

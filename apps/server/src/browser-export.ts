@@ -17,7 +17,7 @@ import type { Hono } from 'hono';
 import { z } from 'zod';
 import { RationalTimeSchema } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
-import type { Exporter, Manifest } from './export.ts';
+import { GENERIC_BLOCKER_HINT, type Exporter, type Manifest } from './export.ts';
 import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { assertMayTakeRendered } from './peoplePrivacy.ts';
@@ -148,7 +148,7 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     const { manifest, blockers, warnings } = exporter.plan(doc, revision, rawOptions);
     // Loudness normalisation needs the R128 measurement pass, which only the server route has. Refuse rather than export at a different level.
     if (doc.settings.loudness) throw new ApiError(409, 'unsupported_in_browser_export', 'this project has a loudness target; the browser export route cannot measure and normalise loudness', { loudness: doc.settings.loudness }, 'Use the server export, or clear the loudness target.');
-    if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, 'Fix the listed blockers (relink media, change the font or the range) and try again.');
+    if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
     if (!BROWSER_FORMATS.includes(manifest.options.format)) throw new ApiError(422, 'browser_route_unsupported_format', `the browser route exports ${BROWSER_FORMATS.join(' or ')}, not ${manifest.options.format}`, { supported: BROWSER_FORMATS });
     const expiresAt = clock() + leaseMs;
     const job = store.createJob(projectId, 'export', p.actor, { revision, snapshot: doc, manifest, warnings, retryOf: null, route: 'browser', lease: { sessionId: sid.data, expiresAt } });
