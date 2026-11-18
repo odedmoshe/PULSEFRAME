@@ -60,3 +60,5 @@ export * from './packs/check.ts';
 export * from './people.ts';
 export * from './ageWords.ts';
 export * from './peopleOps.ts';
+// segmented export and render cache (ADR-0024)
+export * from './renderCache.ts';

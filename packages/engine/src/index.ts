@@ -19,3 +19,6 @@ export { stampPolygons, STAMP_TEXT } from './stamp.ts';
 export { applyModulators } from './modulate.ts';
 export { VOICE_MEASURE_RATE, voiceMeter, recommendedStrength, type VoiceMeasureOptions, type VoiceMeasurement, type VoiceMeter } from './voiceMeasure.ts';
 export { GRADE_DEFAULTS, gradePixel, samplePicture, mergeSamples, pictureStats, statsDistance, fitGrade, balanceGrade, type GradeParams, type PictureSample, type PictureStats, type GradeFit } from './colourMatch.ts';
+// segmented export and render cache (ADR-0024): the frame key and the segment grid
+export * from './frameKey.ts';
+export * from './segmentGrid.ts';
