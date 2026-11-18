@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T03:17:49.957Z",
+  "ranAt": "2026-11-18T03:18:50.483Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
     "browser": "153.0.8010.12"
@@ -39,49 +39,8 @@
     "staticMissing": [],
     "inTheDomOfAState": 265,
     "onlyInItsOwnProofScenario": 243,
-    "lostSinceTheLastReport": [
-      {
-        "id": "text-font",
-        "state": "07-text-selected"
-      },
-      {
-        "id": "text-font",
-        "state": "08-tab-captions"
-      },
-      {
-        "id": "text-font",
-        "state": "09-tab-sound"
-      },
-      {
-        "id": "text-font",
-        "state": "10-tab-deliver"
-      },
-      {
-        "id": "text-font",
-        "state": "11-command-palette"
-      },
-      {
-        "id": "text-font",
-        "state": "12-english-main"
-      },
-      {
-        "id": "text-font",
-        "state": "14-projects-dialog"
-      },
-      {
-        "id": "text-font",
-        "state": "x-tab-speech"
-      },
-      {
-        "id": "text-font",
-        "state": "x-tab-review"
-      },
-      {
-        "id": "text-font",
-        "state": "x-tab-recipes"
-      }
-    ],
-    "acceptedWithLosses": true,
+    "lostSinceTheLastReport": [],
+    "acceptedWithLosses": false,
     "unreadableReferences": 24
   },
   "result": "PASS",
