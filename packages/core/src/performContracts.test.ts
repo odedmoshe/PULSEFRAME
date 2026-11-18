@@ -6,8 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, createProject, EFFECTS, effectChangesLight, flashClassOf, flashGapFrames, FLASH_NEUTRAL_EFFECTS, FLASH_TABLE_V1, getOp, lightChanges, lightRanges, liveFlashTable, MODULATABLE, OpError, TRANSITIONS,
-  PERFORM_RECIPE_ID, PERFORM_REFUSALS, TAKE_STEP_OPS, takeFlashBreach, validateProject, ApplyTakeArgsSchema, TakeRequestSchema, PadBankSchema, MoveSpecSchema, PAD_COUNT,
+  applyTransaction, createProject, EFFECTS, effectChangesLight, flashClassOf, flashGapFrames, FLASH_NEUTRAL_EFFECTS, FLASH_TABLE_V1, getOp, lightChanges, lightRanges, liveFlashTable, MODULATABLE, OpError,
+  PERFORM_RECIPE_ID, PERFORM_REFUSALS, TAKE_SEQUENCE_STEP_OPS, TAKE_STEP_OPS, takeFlashBreach, validateProject, ApplyTakeArgsSchema, TakeRequestSchema, PadBankSchema, MoveSpecSchema, PAD_COUNT,
   type ApplyTakeArgs, type OpCall, type ProjectDocument, type TemplateStep,
 } from './index.ts';
 
@@ -38,7 +38,6 @@ describe('what changes light (one source of truth: effects.ts modulatableParams)
     expect(Object.isFrozen(FLASH_TABLE_V1) && Object.isFrozen(FLASH_TABLE_V1.neutralEffects) && Object.isFrozen(FLASH_TABLE_V1.lightTransitions)).toBe(true);
     // when this fails, the catalogue reclassified an effect or transition: leave the v1 literal alone and ship apply_take version 2 with a new table
     expect(liveFlashTable(1)).toEqual(FLASH_TABLE_V1);
-    expect(TRANSITIONS.filter((t) => t.light).map((t) => t.id).sort()).toEqual([...FLASH_TABLE_V1.lightTransitions]);
     // three 2-frame blur hits 3 frames apart: neutral under v1, so kept; still kept when the live table changes under the op
     const steps = [adj(30, 2, 'blur.gaussian'), adj(33, 2, 'blur.gaussian'), adj(36, 2, 'blur.gaussian')];
     const before = applyTransaction(base(), [take(steps)], { idSeed: 'frz_', actor: 'u', allowInternal: true }).doc;
@@ -170,6 +169,76 @@ describe('the flash rule, re-checked by the op (not trusting the plan)', () => {
     expect(lightRanges(d).map((r) => [r.from, r.to, r.kind])).toEqual([[60, 120, 'strobe']]);
     expect(lightChanges(d, new Set()).map((c) => [c.frame, c.kind])).toEqual([[200, 'adjustment']]);
     expect(takeFlashBreach(d, d.mainSequenceId, [])).toBeNull();
+  });
+});
+
+describe('keys and transforms on light channels, and the sequence a step works on (the op re-checks these too)', () => {
+  const ownerTitle = (d: ProjectDocument) => d.sequences[d.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.type === 'text')!.id;
+  // 30 opacity keys two frames apart, alternating 1, 0, 1, 0 with hold: fifteen changes of light a second
+  const flicker = (clipId: unknown, n = 30): TemplateStep[] => Array.from({ length: n }, (_, i) => ({ op: 'set_keyframe', args: { clipId, property: 'opacity', time: f(2 * i), value: i % 2 ? 0 : 1, easing: 'hold' } }));
+  const ref = (bind: string) => ({ $ref: bind, out: 'clipId' });
+  const adjA = (start: number, frames: number, type = 'color.invert'): TemplateStep => ({ ...adj(start, frames, type), bind: 'a' });
+  it('alternating opacity keys on an adjustment the take made are changes of light: refused (gap)', () => {
+    const e = refusal(() => run(base(), [take([adjA(30, 60), ...flicker(ref('a'))])]));
+    expect(e.code).toBe('incompatible');
+    expect(e.details).toMatchObject({ reason: 'flash_limit', why: 'gap', since: 2, gapFrames: 11 });
+  });
+  it('the same keys on an effect parameter that changes light are refused too; on a neutral adjustment (blur) they are not judged', () => {
+    const keys: TemplateStep[] = Array.from({ length: 10 }, (_, i) => ({ op: 'set_effect_keyframe', args: { clipId: ref('a'), effectId: { $ref: 'a', out: 'effectIds', at: 0 }, param: 'amount', time: f(3 * i), value: i % 2 ? 0 : 1, easing: 'linear' } }));
+    const e = refusal(() => run(base(), [take([adjA(30, 60, 'color.invert'), ...keys])]));
+    expect(e.details).toMatchObject({ reason: 'flash_limit', why: 'gap' });
+    expect(() => run(base(), [take([adjA(30, 60, 'blur.gaussian'), ...flicker(ref('a'))])])).not.toThrow();
+  });
+  it('a take never writes the light of a clip it did not make (keys, a motion with opacity, or its opacity): refused (owned)', () => {
+    const d = base(), title = ownerTitle(d);
+    for (const steps of [flicker(title), flicker(title, 1), [{ op: 'apply_motion_preset', args: { clipId: title, presetId: 'motion.in.fade' } }], [{ op: 'set_clip_transform', args: { clipId: title, transform: { opacity: 0.5 } } }], [{ op: 'replace_clip_keyframes', args: { clipId: title, property: 'opacity', keys: null } }]] as TemplateStep[][]) {
+      const e = refusal(() => run(d, [take(steps)]));
+      expect(e.code, steps[0]!.op).toBe(PERFORM_REFUSALS.lightOwned.code);
+      expect(e.details, steps[0]!.op).toMatchObject({ reason: 'flash_limit', why: 'owned', clipId: title, step: 0, stepOp: steps[0]!.op });
+      expect(e.hint).toBe(PERFORM_REFUSALS.lightOwned.hint);
+    }
+    // its size and position are not light: the zoom punch writes scale keys on the owner's clip
+    expect(() => run(d, [take([{ op: 'set_keyframe', args: { clipId: title, property: 'scale', time: f(30), value: 1.2 } }, { op: 'set_keyframe', args: { clipId: title, property: 'scale', time: f(32), value: 1 } }])])).not.toThrow();
+  });
+  it('allowed: one fade-out ending at the clip end, a pop entrance from invisible, a release to the end', () => {
+    const fade: TemplateStep[] = [adjA(30, 60), { op: 'set_keyframe', args: { clipId: ref('a'), property: 'opacity', time: f(30), value: 1 } }, { op: 'set_keyframe', args: { clipId: ref('a'), property: 'opacity', time: f(60), value: 0 } }];
+    const r = run(base(), [take(fade)]);
+    expect(validateProject(r.doc)).toEqual([]);
+    const pop: TemplateStep[] = [{ op: 'add_text', args: { text: 'הופ', start: f(30), duration: f(30) }, bind: 't' }, { op: 'apply_motion_preset', args: { clipId: ref('t'), presetId: 'motion.in.pop' } }];
+    expect(() => run(base(), [take(pop)])).not.toThrow();
+  });
+  it('refused: a change inside a clip within the gap of its start (a fast decay) or of its end (a hold that pops on in the last frame)', () => {
+    const decay = refusal(() => run(base(), [take([adjA(30, 60), { op: 'set_keyframe', args: { clipId: ref('a'), property: 'opacity', time: T.ZERO, value: 1 } }, { op: 'set_keyframe', args: { clipId: ref('a'), property: 'opacity', time: f(3), value: 0 } }])]));
+    expect(decay.details).toMatchObject({ reason: 'flash_limit', why: 'gap', frame: 33, since: 3 });
+    const late = refusal(() => run(base(), [take([{ op: 'add_text', args: { text: 'הופ', start: f(30), duration: f(30) }, bind: 't' }, { op: 'set_keyframe', args: { clipId: ref('t'), property: 'opacity', time: T.ZERO, value: 0, easing: 'hold' } }, { op: 'set_keyframe', args: { clipId: ref('t'), property: 'opacity', time: f(29), value: 1 } }])]));
+    expect(late.details).toMatchObject({ reason: 'flash_limit', why: 'short', frame: 59, since: 1 });
+  });
+  it('lightChanges lists the key changes of the clips the take made', () => {
+    const d = run(base(), [take([adjA(30, 60), { op: 'set_keyframe', args: { clipId: ref('a'), property: 'opacity', time: f(20), value: 1 } }, { op: 'set_keyframe', args: { clipId: ref('a'), property: 'opacity', time: f(60), value: 0 } }])]).doc;
+    const id = d.sequences[d.mainSequenceId]!.tracks.find((t) => t.kind === 'adjustment')!.clips[0]!.id;
+    expect(lightChanges(d, new Set([id])).map((c) => [c.frame, c.kind])).toEqual([[30, 'adjustment'], [50, 'key']]);
+  });
+  it('every step works on the take\'s sequence: another sequenceId, or a clip in another sequence, is refused (otherSequence)', () => {
+    const d = applyTransaction(base(), [{ op: 'add_sequence', args: { name: 'short' } }], { idSeed: 'sq_', actor: 't' }).doc;
+    const other = Object.keys(d.sequences).find((id) => id !== d.mainSequenceId)!;
+    const e = refusal(() => run(d, [take([{ ...adj(30, 20), args: { ...(adj(30, 20).args as object), sequenceId: other } }])]));
+    expect(e.code).toBe(PERFORM_REFUSALS.otherSequence.code);
+    expect(e.details).toMatchObject({ index: 0, sequenceId: other, takeSequenceId: d.mainSequenceId });
+    expect(e.hint).toBe(PERFORM_REFUSALS.otherSequence.hint);
+    // a take performed on the short: a step that leaves out sequenceId means the main sequence, so it is refused as well
+    const onShort = refusal(() => run(d, [{ op: 'apply_take', args: { ...(take([adj(30, 20)]).args as object), sequenceId: other } }]));
+    expect(onShort.details).toMatchObject({ sequenceId: d.mainSequenceId, takeSequenceId: other });
+    expect(() => run(d, [{ op: 'apply_take', args: { ...(take([{ ...adj(30, 20), args: { ...(adj(30, 20).args as object), sequenceId: other } }]).args as object), sequenceId: other } }])).not.toThrow();
+    // a clip-targeted step on the owner's title (main) while the take is on the short
+    const title = ownerTitle(d);
+    const clipStep = refusal(() => run(d, [{ op: 'apply_take', args: { ...(take([{ op: 'set_keyframe', args: { clipId: title, property: 'scale', time: f(30), value: 1.2 } }]).args as object), sequenceId: other } }]));
+    expect(clipStep.details).toMatchObject({ index: 0, clipId: title, sequenceId: d.mainSequenceId, takeSequenceId: other });
+  });
+  it('every step op either names its sequence or targets a clip (so the sequence check covers it)', () => {
+    for (const op of TAKE_STEP_OPS) {
+      const shape = (getOp(op)!.args as unknown as { shape: Record<string, unknown> }).shape;
+      expect(TAKE_SEQUENCE_STEP_OPS.includes(op) ? 'sequenceId' in shape : 'clipId' in shape, op).toBe(true);
+    }
   });
 });
 

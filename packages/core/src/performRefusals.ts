@@ -5,7 +5,9 @@
  *
  * The op's codes are existing OpErrorCodes: a step outside TAKE_STEP_OPS → forbidden_op; a binding, a repeated bind name or an
  * $asset → invalid_args; more tracks than MAX_TAKE_TRACKS → out_of_bounds; the flash rule (performFlash.ts) → incompatible with
- * details.reason 'flash_limit' (and details.why gap | light | short, clipId, frame, since, gapFrames). A step's own refusal is
+ * details.reason 'flash_limit' (and details.why gap | light | short, clipId, frame, since, gapFrames; or why 'owned' when a step
+ * would change the light of a clip the take did not make, lightOwned); a step on another sequence than the take's → incompatible
+ * (otherSequence, details.sequenceId and takeSequenceId). A step's own refusal is
  * passed on in the step's own words, with details.step (index) and details.stepOp added.
  * The route's codes (ApiError): take_not_built 501 while the planner is not built (core PERFORM_PLANNER_BUILT false), take_empty
  * 409 when the planner kept no hit (details.chips), insufficient_scope 403 for propose-mode credentials.
@@ -24,6 +26,8 @@ export const PERFORM_REFUSALS = {
   tooManyTracks: refusal('out_of_bounds', (n: number) => `a take adds at most ${MAX_TAKE_TRACKS} tracks; this one adds ${n}`, 'Use fewer sound pads at the same time, or reuse the tracks earlier takes made.'),
   flashGap: refusal('incompatible', (frame: number, since: number, gap: number) => `the change of light this take makes at frame ${frame} comes ${since} frames after another; changes of light must be at least ${gap} frames apart (flash safety)`, 'Tap that pad less often, or leave a third of a second between pads that change light.'),
   flashLight: refusal('incompatible', (frame: number, gap: number) => `the change of light this take makes at frame ${frame} is within ${gap} frames of a strobe or a light transition (flash safety)`, 'Move the hit away from the strobe or the light transition, or remove one of them.'),
+  lightOwned: refusal('incompatible', (i: number, clipId: string) => `take step ${i} changes the light of clip ${clipId}, which the take did not make (flash safety)`, 'A take may move and size the clips already there, but changes light only on what it adds; change that clip\'s opacity or colour as an ordinary edit.'),
+  otherSequence: refusal('incompatible', (i: number, seq: string, take: string) => `take step ${i} works on sequence ${seq}, but the take was performed on sequence ${take}`, 'Every step of a take works on the sequence it was performed on; perform the take again on that sequence.'),
   flashShort: refusal('incompatible', (frame: number, frames: number, gap: number) => `the picture, title or change of light this take makes at frame ${frame} lasts ${frames} frames; it must last at least ${gap} (flash safety)`, 'Hold the pad a little longer, or give the pad a longer shortest length.'),
 } as const;
 export type PerformRefusalKey = keyof typeof PERFORM_REFUSALS;

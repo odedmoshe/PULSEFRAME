@@ -33,13 +33,15 @@ describe('Hebrew wording of the perform refusals (ADR-0025)', () => {
       ['flashGap', provoke([adj(0, 20), adj(4, 20, 'color.invert')])],
       ['flashLight', provoke([adj(60, 60, 'light.strobe'), adj(70, 20)])],
       ['flashShort', provoke([adj(30, 4)])],
+      ['lightOwned', provoke([{ op: 'set_keyframe', args: { clipId: doc().sequences[doc().mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.type === 'text')!.id, property: 'opacity', time: f(30), value: 0.5 } }])],
+      ['otherSequence', provoke([{ ...adj(30, 20), args: { ...(adj(30, 20).args as object), sequenceId: 'seq_elsewhere' } }])],
     ];
     for (const [key, e] of provoked) {
       const hits = PERFORM_REFUSAL_PATTERNS.filter((re) => re.test(e.message));
       expect(hits.length, `${key}: ${e.message}`).toBe(1);
       const he = translateRefusal('he', e.message)!;
       expect(he, key).toBe(HE_PERFORM.find(([re]) => re.test(e.message))![1](hits[0]!.exec(e.message)!));
-      for (const num of e.message.match(/\d+/g) ?? []) if (key !== 'forbiddenStep' && key !== 'bindTwice' && key !== 'assetBinding' && key !== 'parse') expect(he, `${key} keeps ${num}`).toContain(num);
+      for (const num of e.message.match(/\d+/g) ?? []) if (!['forbiddenStep', 'bindTwice', 'assetBinding', 'parse', 'lightOwned', 'otherSequence'].includes(key)) expect(he, `${key} keeps ${num}`).toContain(num);
       if (key in PERFORM_REFUSALS) expect(e.hint, key).toBe(PERFORM_REFUSALS[key as keyof typeof PERFORM_REFUSALS].hint);
     }
     // the route's refusals, from the table

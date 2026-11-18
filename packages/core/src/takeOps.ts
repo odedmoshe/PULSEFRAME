@@ -8,21 +8,47 @@
  * The op does not trust the plan:
  * - every step must be in TAKE_STEP_OPS (forbidden_op otherwise); $asset bindings are refused (a take carries no media);
  * - at most MAX_TAKE_STEPS steps (schema) and MAX_TAKE_TRACKS add_track steps;
- * - after the steps ran, the flash rule (performFlash.ts takeFlashBreach) is checked on the sequence; a breach refuses the
- *   whole take with incompatible, details.reason 'flash_limit'.
+ * - every step works on the take's sequence: a step that names another (sequenceId; left out = the main sequence) or targets a
+ *   clip in another is refused (otherSequence);
+ * - a step that would write the light of a clip the take did not make (opacity keys, its opacity, a motion that keys opacity,
+ *   keys on an effect that changes light) is refused (lightOwned, details.reason 'flash_limit', why 'owned');
+ * - after the steps ran, the flash rule (performFlash.ts takeFlashBreach, with the frozen version-1 table) is checked on the
+ *   sequence, key changes on the clips the take made included; a breach refuses the whole take with incompatible,
+ *   details.reason 'flash_limit'.
  * A step's own refusal is passed on in its own words, with details.step and details.stepOp. Undo is the store's ordinary undo of
  * one transaction (entity diffs), so the take undoes exactly.
  */
 import { z } from 'zod';
-import { collectCreated, defineOp, getOp, OpError, refuseInheritedIds, runFingerprints } from './ops.ts';
+import { collectCreated, defineOp, findClip, getOp, OpError, refuseInheritedIds, runFingerprints } from './ops.ts';
 import { resolveBindings } from './templateOps.ts';
 import type { ProjectDocument } from './schema.ts';
-import { ApplyTakeArgsSchema, MAX_TAKE_TRACKS, PERFORM_RECIPE_ID, PERFORM_TAKE_VERSION, TAKE_STEP_OPS, type ApplyTakeOutput, type PlannedTake, type TakeRequest } from './performContract.ts';
+import { ApplyTakeArgsSchema, MAX_TAKE_TRACKS, PERFORM_RECIPE_ID, PERFORM_TAKE_VERSION, TAKE_STEP_OPS, type ApplyTakeOutput, type PlannedTake, type TakeRequest, type TakeStepOp } from './performContract.ts';
 import { PERFORM_REFUSALS as R } from './performRefusals.ts';
-import { FLASH_TABLE_V1, takeFlashBreach } from './performFlash.ts';
+import { effectChangesLightIn, FLASH_TABLE_V1, opacityChangesLight, takeFlashBreach, type FlashTable } from './performFlash.ts';
+import { MOTION_PRESETS } from './motionPresets.ts';
 import { performGrid, planPerformance, quantiseTaps } from './moves.ts';
 
 const STEP_OPS: ReadonlySet<string> = new Set(TAKE_STEP_OPS);
+/** The step ops that name their sequence (sequenceId; left out = the main sequence). Every other step op targets a clip (clipId). */
+export const TAKE_SEQUENCE_STEP_OPS: readonly TakeStepOp[] = ['add_track', 'add_adjustment', 'add_clip', 'add_text'];
+const SEQUENCE_STEP_OPS: ReadonlySet<string> = new Set(TAKE_SEQUENCE_STEP_OPS);
+/**
+ * The clip whose light a step would write (opacity keys, its opacity, a motion that keys opacity, or keys on an effect that
+ * changes light; by the frozen table), or null. Read before the step runs, on the clip as it is.
+ */
+function lightTarget(d: ProjectDocument, op: string, args: Readonly<Record<string, unknown>>, table: FlashTable): string | null {
+  if (typeof args.clipId !== 'string') return null;
+  const clip = findClip(d, args.clipId)?.clip;
+  if (!clip) return null; // the step refuses in its own words
+  const opacity = opacityChangesLight(clip, table);
+  switch (op) {
+    case 'set_keyframe': case 'replace_clip_keyframes': return args.property === 'opacity' && opacity ? clip.id : null;
+    case 'set_clip_transform': { const t = args.transform; return opacity && typeof t === 'object' && t !== null && Object.hasOwn(t, 'opacity') ? clip.id : null; }
+    case 'apply_motion_preset': return opacity && !!MOTION_PRESETS.find((m) => m.id === args.presetId)?.properties.includes('opacity') ? clip.id : null;
+    case 'set_effect_keyframe': { const fx = (clip.effects ?? []).find((e) => e.id === args.effectId); return fx && effectChangesLightIn(table, fx.type) ? clip.id : null; }
+    default: return null;
+  }
+}
 const NO_ASSETS: ReadonlyMap<string, string> = new Map();
 const hasAssetBinding = (v: unknown, depth = 0): boolean => {
   if (depth > 64 || typeof v !== 'object' || v === null) return false;
@@ -44,6 +70,7 @@ defineOp({
     const affected = new Set<string>();
     const bound = new Map<string, Readonly<Record<string, unknown>>>();
     const created: string[] = [];
+    const made = new Set<string>();
     for (const [i, step] of a.steps.entries()) {
       const def = getOp(step.op);
       if (!STEP_OPS.has(step.op) || !def || def.internal) throw new OpError(R.forbiddenStep.code, R.forbiddenStep.message(i, step.op), { index: i, op: step.op, allowed: [...TAKE_STEP_OPS] }, R.forbiddenStep.hint);
@@ -54,6 +81,13 @@ defineOp({
       const parsed = def.args.safeParse(args);
       if (!parsed.success) throw new OpError('invalid_args', `${where}: ${z.prettifyError(parsed.error)}`, { index: i });
       refuseInheritedIds(parsed.data, where, '', def.checksOwnIds);
+      // every step works on the take's sequence (the flash rule reads that one only)
+      const pa = parsed.data as Readonly<Record<string, unknown>>;
+      const onSeq = SEQUENCE_STEP_OPS.has(step.op) ? (typeof pa.sequenceId === 'string' ? pa.sequenceId : d.mainSequenceId) : typeof pa.clipId === 'string' ? findClip(d, pa.clipId)?.seq.id : undefined;
+      if (onSeq !== undefined && onSeq !== sequenceId) throw new OpError(R.otherSequence.code, R.otherSequence.message(i, onSeq, sequenceId), { index: i, sequenceId: onSeq, takeSequenceId: sequenceId, ...(typeof pa.clipId === 'string' ? { clipId: pa.clipId } : {}) }, R.otherSequence.hint);
+      // a take changes light only on what it adds (its own clips are judged by the flash rule after the steps)
+      const lit = lightTarget(d, step.op, pa, FLASH_TABLE_V1);
+      if (lit !== null && !made.has(lit)) throw new OpError(R.lightOwned.code, R.lightOwned.message(i, lit), { reason: 'flash_limit', why: 'owned', clipId: lit, index: i, step: i, stepOp: step.op }, R.lightOwned.hint);
       let r;
       try { r = def.apply(d, parsed.data, ctx); } catch (e) {
         if (e instanceof OpError) throw new OpError(e.code, e.message, { ...e.details, step: i, stepOp: step.op }, e.hint);
@@ -61,7 +95,9 @@ defineOp({
       }
       for (const id of r.affectedIds) affected.add(id);
       const out = r.output ?? {};
+      const before = created.length;
       collectCreated(out, created);
+      for (const id of created.slice(before)) made.add(id);
       if (step.bind !== undefined) bound.set(step.bind, out);
     }
     // version 1 of this op judges with the version-1 table, frozen, so a stored take replays the same (performFlash.ts FlashTable)
