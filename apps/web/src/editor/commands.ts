@@ -360,6 +360,9 @@ export const COMMANDS: Command[] = [
   { id: 'history.undo', label: 'undo', group: 'history', keys: ['Mod+KeyZ'], run: (e) => e.history('undo') },
   { id: 'history.redo', label: 'redo', group: 'history', keys: ['Mod+Shift+KeyZ', 'Mod+KeyY'], run: (e) => e.history('redo') },
   // Export always opens the export sheet (owner decision): the sheet starts the export (ExportSheet.tsx).
+  // the import queue and the phone drop (ADR-0023): a folder (webkitdirectory, ImportHosts.tsx FolderPicker); the phone drop dialog (the owner's own session)
+  { id: 'file.importFolder', label: 'cmd.importFolder', group: 'file', keys: [], enabled: (e) => !!e.doc, run: () => document.querySelector<HTMLInputElement>('[data-testid=folder-input]')?.click() },
+  { id: 'file.phoneDrop', label: 'cmd.phoneDrop', group: 'file', keys: [], enabled: (e) => !!e.doc && e.getState().actor === 'user:local', run: (e) => e.openPhoneDrop() },
   { id: 'file.export', label: 'export', text: { he: COMMAND_STRINGS.he.exportOpen, en: COMMAND_STRINGS.en.exportOpen }, group: 'file', keys: ['Mod+KeyE'], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0, run: (e) => e.openExportSheet() },
   { id: 'view.palette', label: 'cmd.palette', group: 'view', keys: ['Mod+KeyK'], run: (e) => e.set({ paletteOpen: !e.getState().paletteOpen }) },
   { id: 'view.language', label: 'lang.label', group: 'view', keys: [], run: (e) => e.setLang(e.getState().lang === 'he' ? 'en' : 'he') },

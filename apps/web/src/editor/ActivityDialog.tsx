@@ -7,6 +7,7 @@ import { dictionaries, type Key } from '@pulseframe/i18n';
 import { api, type RevisionEvent } from '../api.ts';
 import { describeError } from './ProjectsDialog.tsx';
 import { useEditorState } from './store.ts';
+import { actorKind, actorWord } from './actorLabel.ts';
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 type Who = 'all' | 'user' | 'agent';
@@ -37,7 +38,7 @@ export function ActivityDialog({ onClose }: { onClose: () => void }) {
     if (e.shiftKey && (at === first || !dialogRef.current?.contains(at))) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && (at === last || !dialogRef.current?.contains(at))) { e.preventDefault(); first.focus(); }
   };
-  const isAgent = (e: RevisionEvent) => e.actor.startsWith('agent');
+  const isAgent = (e: RevisionEvent) => actorKind(e.actor) === 'agent';
   const shown = (events ?? []).filter((e) => who === 'all' || (who === 'agent') === isAgent(e));
   const what = (e: RevisionEvent) => `${e.kind === 'undo' ? `${t('undo')}: ` : e.kind === 'redo' ? `${t('redo')}: ` : ''}${e.ops?.length ? e.ops.map((o) => dictionaries[state.lang][`op.${o}` as Key] ?? o).join(' · ') : e.summary}`;
   return (
@@ -61,7 +62,7 @@ export function ActivityDialog({ onClose }: { onClose: () => void }) {
         <ol className="pf-dlg-list activity-full" data-testid="activity-full">
           {shown.map((e) => (
             <li key={e.revision} data-actor={e.actor} data-revision={e.revision}>
-              <span className={`actor ${isAgent(e) ? 'agent' : ''}`}>{isAgent(e) ? t('actor.agent') : t('actor.user')}</span>{' '}
+              <span className={`actor ${actorKind(e.actor)}`} data-actor-kind={actorKind(e.actor)}>{actorWord(t, e.actor)}</span>{' '}
               <span dir="auto" title={e.summary}>{what(e)}</span>{' '}
               <span className="muted"><bdi dir="ltr">#{e.revision} · {new Date(e.at).toLocaleString()}</bdi>{isAgent(e) ? <> · <bdi>{e.actor.replace(/^agent:/, '')}</bdi></> : null}</span>
             </li>

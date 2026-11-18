@@ -33,8 +33,12 @@ export interface Api {
   /** Downloads a succeeded job's output to `file`. */
   download(jobId: string, file: string): Promise<string>;
 }
-export function makeApi(url: string, token: string): Api {
-  const h = { authorization: `Bearer ${token}`, connection: 'close' };
+/**
+ * A REST client. `token` is an agent's bearer token; `{ cookie }` is the owner's own browser session (the owner's launch key only
+ * issues a session cookie: as a bearer token it is refused with 401, so owner-only routes need ownerApi below).
+ */
+export function makeApi(url: string, token: string | { cookie: string }): Api {
+  const h: Record<string, string> = typeof token === 'string' ? { authorization: `Bearer ${token}`, connection: 'close' } : { cookie: token.cookie, origin: url, connection: 'close' };
   const call: Api['call'] = async (p, body, method) => {
     const r = await fetch(`${url}/api/v1${p}`, { method: method ?? (body === undefined ? 'GET' : 'POST'), headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
     const json = r.headers.get('content-type')?.includes('json');
@@ -69,6 +73,14 @@ export function makeApi(url: string, token: string): Api {
       return file;
     },
   };
+}
+
+/** The owner's own session (the cookie GET /session issues for the launch key), as the editor holds it. */
+export async function ownerApi(url: string, ownerKey: string): Promise<Api> {
+  const r = await fetch(`${url}/api/v1/session`, { headers: { origin: url, 'x-pf-owner-key': ownerKey, connection: 'close' } });
+  const cookie = r.headers.get('set-cookie')?.split(';')[0];
+  if (!cookie) throw new Error(`no owner session (${r.status})`);
+  return makeApi(url, { cookie });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -154,7 +166,7 @@ export async function buildFixtureA(api: Api, art: string, o: { frames: 1801 | 1
   // one followed privacy region on the first piece: a region track with hand-placed samples at the ends, interpolated between them
   const mt = await api.tx(pid, [{ op: 'create_motion_track', args: { assetId, name: 'אזור מוסתר', kind: 'region', frame: 0, x: 5000, y: 4000, w: 2000, h: 2000 } }]);
   const motionTrackId = mt.results[0].output.motionTrackId as string;
-  await api.tx(pid, [{ op: 'edit_motion_track', args: { motionTrackId, set: [{ frame: L.p1.frames - 1, x: 6000, y: 4000 }], interpolate: { from: 0, to: L.p1.frames - 1 } } }]);
+  await api.tx(pid, [{ op: 'edit_motion_track', args: { motionTrackId, set: [{ frame: L.p1.frames - 1, x: 6000, y: 4000 }], interpolate: { from: 1, to: L.p1.frames - 1 } } }]); // [from, to): the stretch strictly between the two hand-placed samples (the op needs a usable sample on each side)
   const red = await api.tx(pid, [{ op: 'set_redact_region', args: { clipId: clips.p1, region: { motionTrackId, style: 'pixelate', strength: 0.8 } } }]);
   return {
     pid, assetId, file, frames: o.frames, segments: segmentCount(o.frames), clips: clips as FixtureA['clips'], audio: audio as FixtureA['audio'],

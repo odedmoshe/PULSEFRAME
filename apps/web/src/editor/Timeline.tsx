@@ -26,6 +26,7 @@ import { RideBar } from './RideBar.tsx';
 import { barGrid, capPlacement, catalogDragFrom, cutRoom, cutsOf, labelsUnder, laneOrder, lastAtOrBefore, pickSpoken, rulerLabel, rulerStep, signedTimecode, type SpokenChip, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
 import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
 import { assetDisplayName } from './assetLabel.ts';
+import { RenderCacheLane } from './RenderCacheLane.tsx';
 import './templates.css';
 import './timeline.css';
 
@@ -788,6 +789,8 @@ export function Timeline() {
               <div className="tl-flash" data-testid="flash-lane" role="img" aria-label={s.flashLane}>
                 {flashRanges.map((r, i) => <i key={i} data-testid="flash-risk" style={{ left: r.from * pps, width: Math.max(3, (r.to - r.from) * pps) }} title={s.flashRisk(rulerLabel(r.from, 1), rulerLabel(r.to, 1), String(r.perSecond))} />)}
               </div>
+              {/* the render cache's lane (ADR-0024): under the flash lane, only while the viewer's fast export is on */}
+              <RenderCacheLane plan={state.segmentPlan} pxPerSecond={pps} frameRate={rate} lang={lang} onSeek={(f) => editor.seek(f)} onRefresh={() => editor.refreshPlan()} />
               <PlayheadCap pps={pps} beatSeconds={pulse.beatSeconds} markerFrames={markerFrames} />
             </div>
           </div>

@@ -12,6 +12,7 @@ import { chordOf, Keymap } from './editor/commands.ts';
 import { ErrorBar } from './editor/ErrorBar.tsx';
 import { GalleryHost } from './editor/EffectGallery.tsx';
 import { ExportSheetHost } from './editor/ExportSheet.tsx';
+import { FolderPicker, PhoneDropHost } from './editor/ImportHosts.tsx';
 import { Header } from './editor/Header.tsx';
 import { Inspector } from './editor/Inspector.tsx';
 import { Library } from './editor/Library.tsx';
@@ -155,6 +156,8 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
       <CommandPalette keymap={keymap} />
       {/* one host each: the export sheet (the top bar's Export, the palette and the Deliver panel open it) and the effects gallery (the rail, the ride bar and the inspector open it) */}
       <ExportSheetHost />
+      <PhoneDropHost />
+      <FolderPicker />
       <GalleryHost />
     </div>
   );

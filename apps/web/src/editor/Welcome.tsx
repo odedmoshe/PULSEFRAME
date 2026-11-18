@@ -6,7 +6,7 @@
  * projects. Nothing here is made up: with no earlier project the list says so; with the server unreachable it says so.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpFromLine, ChevronLeft, FolderOpen, ImagePlus, Plus, RotateCw } from 'lucide-react';
+import { ArrowUpFromLine, ChevronLeft, FolderOpen, ImagePlus, Plus, RotateCw, Smartphone } from 'lucide-react';
 import type { TemplateSummary } from '@pulseframe/core';
 import { Button } from '../ds/index.ts';
 import { api, type ProjectListItem } from '../api.ts';
@@ -29,6 +29,8 @@ const FORMATS = [
   { id: 'wide', w: 1920, h: 1080, ratio: '16:9', key: 'fmtWide' },
 ] as const;
 
+/** «מהטלפון» in the start hub's drop zone (plan §7). */
+const PHONE_WORD = { he: 'מהטלפון', en: 'From a phone' } as const;
 /** Start hub over the stage of an empty project (no assets, no clips). */
 export function Welcome() {
   const { editor, state } = useEditorState();
@@ -50,7 +52,7 @@ export function Welcome() {
   if (!doc || !empty || hubSetAside) return null;
   const s = WELCOME_STRINGS[lang];
   const C = CHROME_STRINGS[lang];
-  const take = (files: File[]) => { if (files.length && !uploading) void editor.importFiles(files); };
+  const take = (files: File[]) => { if (files.length) void editor.importFiles(files); }; // the import queue takes files one after another (ADR-0023)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
   const others = (projects ?? []).filter((p) => p.id !== doc.id).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')).slice(0, 5);
   const setFormat = (w: number, h: number) => { if (doc.settings.width !== w || doc.settings.height !== h) void editor.commit([{ op: 'set_project_format', args: { width: w, height: h } }], 'Project format'); };
@@ -69,9 +71,15 @@ export function Welcome() {
           onDrop={(e) => { setOver(false); const fs = [...(e.dataTransfer.files ?? [])]; if (!fs.length) return; e.preventDefault(); e.stopPropagation(); take(fs); }}>
           <span className="pf-hub-dropIc" aria-hidden="true"><ImagePlus size={26} strokeWidth={1.5} /></span>
           <span className="pf-hub-dropText"><strong>{C.hubDrop}</strong><span>{C.hubDropSub}</span></span>
-          <button type="button" className="pf-btn pf-btn-primary pf-btn-lg" disabled={uploading} data-testid="welcome-import" onClick={() => inputRef.current?.click()}>
+          <button type="button" className="pf-btn pf-btn-primary pf-btn-lg" aria-busy={uploading || undefined} data-testid="welcome-import" onClick={() => inputRef.current?.click()}>
             <ArrowUpFromLine size={18} strokeWidth={1.75} aria-hidden="true" /><span className="pf-btn-label">{uploading ? C.hubUploading : C.hubPick}</span>
           </button>
+          {/* the phone drop (ADR-0023): the owner's own session only, since a code is the owner's to issue */}
+          {state.actor === 'user:local' && (
+            <button type="button" className="pf-btn pf-btn-secondary pf-btn-lg" data-testid="welcome-phone" onClick={() => editor.openPhoneDrop()}>
+              <Smartphone size={18} strokeWidth={1.75} aria-hidden="true" /><span className="pf-btn-label">{PHONE_WORD[lang]}</span>
+            </button>
+          )}
           <input ref={inputRef} type="file" multiple accept={ACCEPT} hidden tabIndex={-1} data-testid="welcome-input"
             onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; take(fs); }} />
         </div>

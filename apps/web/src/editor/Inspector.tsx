@@ -15,6 +15,7 @@ import { dictionaries, type Key } from '@pulseframe/i18n';
 import type { Keymap } from './commands.ts';
 import { Scopes } from './Scopes.tsx';
 import { useEditorState, type PanelTarget } from './store.ts';
+import { actorKind, actorWord } from './actorLabel.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
@@ -345,7 +346,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         {state.activity.length === 0 && <li className="muted">{t('activity.empty')}</li>}
         {state.activity.map((e) => (
           <li key={e.revision} data-actor={e.actor}>
-            <span className={`actor ${e.actor.startsWith('agent') ? 'agent' : ''}`}>{e.actor.startsWith('agent') ? t('actor.agent') : t('actor.user')}</span>
+            <span className={`actor ${actorKind(e.actor)}`} data-actor-kind={actorKind(e.actor)}>{actorWord(t, e.actor)}</span>
             {/* Described in the interface language from the operation names; the server's detailed English summary stays available as a tooltip. */}
             <span dir="auto" title={e.summary}>{e.kind === 'undo' ? `${t('undo')}: ` : e.kind === 'redo' ? `${t('redo')}: ` : ''}{e.ops?.length ? e.ops.map((o) => dictionaries[state.lang][`op.${o}` as Key] ?? o).join(' · ') : e.summary}</span>
           </li>

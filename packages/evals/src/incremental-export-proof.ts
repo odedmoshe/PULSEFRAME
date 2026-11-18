@@ -22,8 +22,8 @@
  * The proof plan: an incremental export is compared with a full export FRAME BY FRAME and SAMPLE BY SAMPLE after a set of edits.
  * Fixture A: 640×360, 30 fps, 1801 frames (a 1-frame tail; a second variant has 1802), barcode video with B-frames and a 1-second
  * GOP, titles at 20–24 s and 40–41 s, grain on one clip, one transition, an echo time effect crossing a segment boundary, a
- * caption track, one followed redaction, a strobe clip and a snow overlay (Infinity values stay cacheable). Fixture B: a strobe
- * across the joins at 4 s and 6 s.
+ * caption track, one followed redaction (no strobe and no snow: those are fixture C). Fixture B: a flashing stretch across the joins
+ * at 4 s and 6 s.
  * What the checks must be able to fail for:
  * - I1  clean segmented export: exact frame count, constant frame rate (sorted packet PTS deltas all equal frameTicks, first 0), reused 0;
  * - I2  against single pass at the same revision: every barcode frame source-exact; minimum PSNR reported (fail below 38 dB); size ratio reported (fail above 1.15);
@@ -68,12 +68,12 @@ import path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { isDeepStrictEqual } from 'node:util';
 import { chromium } from 'playwright';
-import { findEffect, type ProjectDocument, type SegmentPlanView } from '@pulseframe/core';
+import { findEffect, LANE_AUTO_REFRESH_MAX_KEYING_MS, type ProjectDocument, type SegmentPlanView } from '@pulseframe/core';
 import { frameKey, type FrameKeyContext } from '@pulseframe/engine';
 import { readBarcode } from '@pulseframe/fixtures';
 import { startServer, type Config } from '@pulseframe/server';
 import { SegmentStore } from '../../../apps/server/src/segmentStore.ts';
-import { A_LAYOUT, C_LAYOUT, SEG_FRAMES, buildFixtureA, buildFixtureB, buildFixtureC, buildLongProject, cellsOf, f, makeApi, segmentCount, sleep, type Api, type CallResult, type FixtureA } from './incremental-fixtures.ts';
+import { A_LAYOUT, C_LAYOUT, SEG_FRAMES, buildFixtureA, buildFixtureB, buildFixtureC, buildLongProject, cellsOf, f, makeApi, ownerApi, segmentCount, sleep, type Api, type CallResult, type FixtureA } from './incremental-fixtures.ts';
 import { runRenderCacheUiChecks } from './a11y-render-cache.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -87,6 +87,8 @@ const SINGLE = { format: 'mp4-h264-aac', mode: 'single-pass', quality: QUALITY }
 
 // ---- expected numbers, typed here from the plan and the layout, never computed by the code under test ----
 const W = 640, H = 360, FRAMES_A = 1801, SEGMENTS_A = 30;
+/** Fixture C: 240 frames at 30 fps, 4 segments of 60 (the strobe in the first two, the snow in the last two). */
+const C_SEGMENTS = 4;
 /** 30 fps: timescale 30·512 = 15360, a frame is 512 ticks (plan §3: k = 512 is the smallest power of two with 30k >= 10000). */
 const TIMESCALE_30 = 15360, FRAME_TICKS_30 = 512;
 const PSNR_FLOOR_DB = 38, SIZE_RATIO_CEILING = 1.15, LAG_CEILING_MS = 100;
@@ -107,7 +109,7 @@ const dataDir = path.join(art, 'data');
 async function boot(over: Partial<Config> = {}) {
   s = await startServer({ port: PORT, dataDir, ...over });
   api = makeApi(s.url, s.auth.tokens.agent);
-  own = makeApi(s.url, s.auth.tokens.owner);
+  own = await ownerApi(s.url, s.auth.tokens.owner); // the owner's session cookie: the launch key as a bearer token is refused (401)
 }
 async function halt() { await s.close(); }
 async function reboot(over: Partial<Config> = {}) { await halt(); await boot(over); }
@@ -165,6 +167,18 @@ function barcodes(file: string, want: (frame: number) => boolean): Promise<Map<n
 const sha256File = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 const pcmDiff = (a: Buffer, b: Buffer) => { let n = 0, first = -1, last = -1; const len = Math.min(a.length, b.length); for (let i = 0; i + 1 < len; i += 2) if (a.readInt16LE(i) !== b.readInt16LE(i)) { n++; if (first < 0) first = Math.floor(i / 4); last = Math.floor(i / 4); } return { lengthA: a.length, lengthB: b.length, differing: n + Math.abs(a.length - b.length) / 2, firstSample: first, lastSample: last }; };
+
+/** Decoded stereo PCM a against b in a window of sample frames: how many differ by more than one 16-bit step inside it, and the largest difference outside it. */
+function soundChange(a: Buffer, b: Buffer, w: { from: number; to: number }) {
+  let insideOverStep = 0, outsideMaxAbs = 0, outsideFirst = -1, outsideLast = -1;
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i + 1 < len; i += 2) {
+    const d = Math.abs(a.readInt16LE(i) - b.readInt16LE(i)), frame = Math.floor(i / 4);
+    if (frame >= w.from && frame < w.to) { if (d > 1) insideOverStep++; }
+    else if (d > 0) { outsideMaxAbs = Math.max(outsideMaxAbs, d); if (outsideFirst < 0) outsideFirst = frame; outsideLast = frame; }
+  }
+  return { insideOverStep, outsideMaxAbs, outsideFirst, outsideLast, lengthsEqual: a.length === b.length };
+}
 
 // ---- cache inspection (the server's own directory, read from the proof) ----
 const cacheDir = () => path.join(dataDir, 'render-cache');
@@ -269,8 +283,15 @@ async function main() {
 
   // The route must be wired on this build; otherwise this proof is blocked, and says so.
   const probePlan = await planOf(pid);
+  // Blocked only when the route is not there (404/405) or says it is not built; any other refusal of a wired route is a FAIL of I0.
   const notWired = probePlan.status === 404 || probePlan.status === 405 || /not built yet/.test(JSON.stringify(probePlan.error ?? probePlan.view ?? ''));
-  if (notWired || probePlan.status >= 300) {
+  if (!notWired && probePlan.status >= 300) {
+    check('I0', 'the plan route of a wired build answers fixture A', false, { status: probePlan.status, error: probePlan.error });
+    finish(evidence, true);
+    await halt();
+    process.exit(1);
+  }
+  if (notWired) {
     const why = `the plan route answered ${probePlan.status}: ${JSON.stringify(probePlan.error ?? probePlan.view).slice(0, 300)}`;
     blocked('I1', 'the segmented export route is wired', why);
     finish(evidence, true);
@@ -328,9 +349,17 @@ async function main() {
   // the gain clip sits on frames 300..449; 1600 samples a frame at 48 kHz (a stereo pair counts once). The sound is compared after AAC: its long blocks overlap by 1024 samples, so a gain step changes the block before it too; the window is the clip widened by two AAC frames (2 x 1024 samples) each side
   const AAC_SLACK = 2048;
   const gainWindow = { from: 300 * 1600 - AAC_SLACK, to: 450 * 1600 + AAC_SLACK };
-  check('I6', 'a sound gain change only: every segment reused and none rendered; the picture frames equal the earlier export; the sound differs where the clip is',
-    p6.status === 200 && p6.view.segments.cached === SEGMENTS_A && p6.view.framesToRender === 0 && i6.report?.reused === SEGMENTS_A && i6.report?.rendered === 0 && same(fr6, framesBefore) && gainDiff.differing > 0 && gainDiff.firstSample >= gainWindow.from && gainDiff.lastSample < gainWindow.to,
-    { plan: p6.view?.segments, report: i6.report && { reused: i6.report.reused, rendered: i6.report.rendered, selfCheck: i6.report.selfCheck, ms: i6.report.ms }, picturesEqual: same(fr6, framesBefore), soundDiff: gainDiff, seconds: i6.seconds });
+  // "The sound differs where the clip is" (corrected measure, lead run 2026-11-18): the AAC encoder carries its state across
+  // frames, so after the change it rounds the following frames by one 16-bit step differently (measured: |Δ| = 1 for about
+  // 3000 samples after the window, on a signal of amplitude 16436). The claim is that the SOUND differs only there: inside the
+  // window the gain step must show (|Δ| above one step), outside it nothing may differ by more than one step. Control: the same
+  // measure with the window put on the next clip (frames 450..599) must fail, so the measure can fail.
+  const soundOnly = (w: { from: number; to: number }) => soundChange(soundBefore, soundGain, w);
+  const inClip = soundOnly(gainWindow), control = soundOnly({ from: 450 * 1600 - AAC_SLACK, to: 600 * 1600 + AAC_SLACK });
+  const soundOk = inClip.insideOverStep > 0 && inClip.outsideMaxAbs <= 1, controlFails = !(control.insideOverStep > 0 && control.outsideMaxAbs <= 1);
+  check('I6', 'a sound gain change only: every segment reused and none rendered; the picture frames equal the earlier export; the sound differs where the clip is (beyond one 16-bit step only inside it; the measure fails with the window on the wrong clip)',
+    p6.status === 200 && p6.view.segments.cached === SEGMENTS_A && p6.view.framesToRender === 0 && i6.report?.reused === SEGMENTS_A && i6.report?.rendered === 0 && same(fr6, framesBefore) && gainDiff.differing > 0 && soundOk && controlFails,
+    { plan: p6.view?.segments, report: i6.report && { reused: i6.report.reused, rendered: i6.report.rendered, selfCheck: i6.report.selfCheck, ms: i6.report.ms }, picturesEqual: same(fr6, framesBefore), soundDiff: gainDiff, window: gainWindow, inClip, controlWindowOnNextClip: control, controlFails, seconds: i6.seconds });
   measurements.soundOnlyExportSeconds = +i6.seconds.toFixed(1);
   console.log('\n# I6b sound tail');
   const tailBefore = soundGain;
@@ -659,7 +688,9 @@ async function runCaps(pid: string) {
   const ceiling = D0 + Math.ceil(total.usedBytes * 0.5) + 24 * 2 ** 20; // room for the sound mix and the joined file and half the cache: the rest cannot be stored
   await reboot({ maxStorageBytes: ceiling });
   let maxSeen = 0;
-  const sampler = setInterval(() => { maxSeen = Math.max(maxSeen, dirBytes(dataDir)); }, 50);
+  const walBytes = () => ['pulseframe.sqlite-wal', 'render-cache/index.sqlite-wal'].reduce((n, f) => { try { return n + fs.statSync(path.join(dataDir, f)).size; } catch { return n; } }, 0);
+  let walAtMax = 0;
+  const sampler = setInterval(() => { const n = dirBytes(dataDir); if (n > maxSeen) { maxSeen = n; walAtMax = walBytes(); } }, 50);
   const outsBefore = outFiles();
   const tight = await exportRun(pid, INC, 'cap-ceiling');
   clearInterval(sampler);
@@ -673,13 +704,18 @@ async function runCaps(pid: string) {
   const impossible = await exportRun(pid, INC, 'cap-impossible');
   const impCode = impossible.job?.error?.code ?? impossible.post.body?.error?.code;
   check('I11d', 'a tight storage ceiling: the data directory never passes it at any 50 ms sample; the export succeeds, or stops with a typed 507 and nothing published; an impossible ceiling gives the typed 507 and nothing published',
-    maxSeen <= ceiling && okTight && impCode === 'storage_quota_exceeded' && same(outsBefore2, outFiles()), { ceiling, startBytes: D0, maxSampledBytes: maxSeen, tightOutcome: tight.job?.status ?? `refused ${tight.post.status}`, tightCode, impossibleOutcome: impossible.job?.status ?? `refused ${impossible.post.status}`, impossibleCode: impCode });
+    maxSeen <= ceiling && okTight && impCode === 'storage_quota_exceeded' && same(outsBefore2, outFiles()), { ceiling, startBytes: D0, maxSampledBytes: maxSeen, databaseLogBytesAtThatSample: walAtMax, tightOutcome: tight.job?.status ?? `refused ${tight.post.status}`, tightCode, impossibleOutcome: impossible.job?.status ?? `refused ${impossible.post.status}`, impossibleCode: impCode });
   // I11b: the cache is full and the data directory is at its ceiling: a small upload still succeeds because the reclaimer trims the cache
   await reboot();
   await clearCache();
   await exportRun(pid, INC, 'cap-fill-2');
-  const used = dirBytes(dataDir), cacheBefore = (await cacheStatus()).usedBytes;
-  await reboot({ maxStorageBytes: used + 100_000 });
+  const cacheBefore = (await cacheStatus()).usedBytes;
+  // measured with the server stopped (corrected, lead run 2026-11-18): a running server's database write-ahead logs are folded
+  // back and removed when it closes, so a size taken while it ran left megabytes of room under the "100 kB" ceiling and the
+  // upload fitted without the cache giving anything (the first run: cache bytes unchanged, upload accepted)
+  await halt();
+  const used = dirBytes(dataDir);
+  await boot({ maxStorageBytes: used + 100_000 });
   const noise = path.join(art, 'noise.png');
   ff(['-y', '-f', 'lavfi', '-i', 'color=c=black:s=640x360,format=gbrp,geq=r=random(1)*255:g=random(2)*255:b=random(3)*255', '-frames:v', '1', noise]);
   const noiseBytes = fs.statSync(noise).size;
@@ -728,9 +764,14 @@ async function runStrobeSnow() {
   const r2 = await exportRun(st.pid, INC, 'c-strobe-2');
   const codes = after.view.uncacheable.map((u) => u.code);
   const strobeCells = cellsOf(C_LAYOUT.strobe.start, C_LAYOUT.strobe.start + C_LAYOUT.strobe.frames);
-  measurements.strobe = { cachedAfterFirstExport: segmentsIn(after.view, 'cached'), uncacheable: after.view.uncacheable, strobeCellsReusedOnSecondExport: r2.report?.reused, browser: r1.report?.engine?.browser };
+  // what the strobe stretches actually did (measured, not typed): cached after the first export and reused by the second
+  // (cacheable on a software adapter), or listed as uncacheable for the GPU reason and rendered again; anything else fails
+  const cachedNow = segmentsIn(after.view, 'cached'), uncacheableNow = segmentsIn(after.view, 'uncacheable');
+  const strobeOutcome = strobeCells.every((c) => cachedNow.includes(c)) && r2.report?.reused === C_SEGMENTS && r2.report?.rendered === 0 ? 'cacheable'
+    : strobeCells.every((c) => uncacheableNow.includes(c)) && codes.includes('gpu_not_reproducible') && (r2.report?.uncacheable ?? 0) >= strobeCells.length ? 'uncacheable-gpu' : 'neither';
+  measurements.strobe = { outcome: strobeOutcome, cachedAfterFirstExport: segmentsIn(after.view, 'cached'), uncacheable: after.view.uncacheable, strobeCellsReusedOnSecondExport: r2.report?.reused, browser: r1.report?.engine?.browser };
   check('I19b', 'a GPU effect (a strobe: Infinity before its first flash): never unkeyable; either cacheable on the software adapter or uncacheable for the stated GPU reason; the snow stretches stay cached; engine.browser carries the launch mode; what the strobe did to reuse is recorded',
-    !codes.includes('unkeyable_value') && !codes.includes('unknown_layer_kind') && snowCells.every((c) => segmentsIn(after.view, 'cached').includes(c)) && /launch=/.test(String(r1.report?.engine?.browser)) && (codes.length === 0 || codes.every((c) => c === 'gpu_not_reproducible')) && strobeCells.length === 2 && first.status === 200,
+    !codes.includes('unkeyable_value') && !codes.includes('unknown_layer_kind') && snowCells.every((c) => segmentsIn(after.view, 'cached').includes(c)) && /launch=/.test(String(r1.report?.engine?.browser)) && (codes.length === 0 || codes.every((c) => c === 'gpu_not_reproducible')) && strobeOutcome !== 'neither' && first.status === 200,
     { cached: segmentsIn(after.view, 'cached'), uncacheable: after.view.uncacheable, browser: r1.report?.engine?.browser, secondExport: r2.report && { reused: r2.report.reused, rendered: r2.report.rendered, uncacheable: r2.report.uncacheable } });
 }
 
@@ -744,8 +785,8 @@ async function runKeying() {
   const wall = (Date.now() - t) / 1000;
   hist.disable();
   const lagMs = Math.max(0, hist.max / 1e6 - 10);
-  measurements.keyingTenMinutes = { wallSeconds: +wall.toFixed(2), keyingMs: pl.view?.keyingMs, maxEventLoopLagMs: +lagMs.toFixed(1), refreshOnDemand: (pl.view?.keyingMs ?? 0) >= 2000 };
-  check('I14', `keying a ten-minute project (18000 frames, 300 segments): seconds and the maximum event-loop lag are reported; the lag stays under ${LAG_CEILING_MS} ms (above 5 s the lane becomes refresh-on-demand)`,
+  measurements.keyingTenMinutes = { wallSeconds: +wall.toFixed(2), keyingMs: pl.view?.keyingMs, maxEventLoopLagMs: +lagMs.toFixed(1), refreshOnDemand: (pl.view?.keyingMs ?? 0) >= LANE_AUTO_REFRESH_MAX_KEYING_MS };
+  check('I14', `keying a ten-minute project (18000 frames, 300 segments): seconds and the maximum event-loop lag are reported; the lag stays under ${LAG_CEILING_MS} ms (from ${LANE_AUTO_REFRESH_MAX_KEYING_MS / 1000} s of keying the lane refreshes on demand only; recorded)`,
     pl.status === 200 && pl.view.segments.total === 300 && pl.view.frames === L.frames && lagMs <= LAG_CEILING_MS, { ...(measurements.keyingTenMinutes as object), segments: pl.view?.segments });
 }
 
@@ -774,9 +815,13 @@ function mutationCheck(A: FixtureA, control: { stale: boolean; differingFrames: 
 /** I18: the sheet line and the lane in the editor (they exist only once the lead has mounted them). */
 async function runUi(A: FixtureA) {
   await clearCache();
-  const fill = await exportRun(A.pid, INC, 'ui-fill');
+  // the editor plans with the export sheet's own first pick (the computer: high quality, every other option the default), and
+  // the quality is part of every segment key: the cache is filled and the plan asked with exactly that (run 4 filled it at
+  // standard quality, so the sheet truthfully showed a first export and the check compared two different plans)
+  const UI = { format: 'mp4-h264-aac', mode: 'incremental', selfCheck: 'every-segment' } as const;
+  const fill = await exportRun(A.pid, UI, 'ui-fill');
   await api.tx(A.pid, [{ op: 'update_text', args: { clipId: A.titles.t1, text: 'כותרת לבדיקת הממשק' } }]);
-  const pl = await planOf(A.pid);
+  const pl = await planOf(A.pid, UI);
   if (fill.job?.status !== 'succeeded') { blocked('I18', 'UI: the sheet line and the lane', `the export that fills the cache failed: ${JSON.stringify(fill.job?.error)}`); return; }
   const browser = await chromium.launch();
   try {

@@ -25,6 +25,9 @@ import { FontsSection, MusicTab, PacksSection } from './lifeline/PacksMount.tsx'
 import { PACKS_MOUNT_STRINGS } from './lifeline/packs.mount.strings.ts';
 import { setLifeView, useLifeUi } from './lifeline/lifeUi.ts';
 import { MUSIC_TESTIDS } from './packs.testids.ts';
+import { ImportCards } from './ImportCards.tsx';
+import { DropChip, ImportMenu } from './ImportHosts.tsx';
+import { collectDropped } from './imports.logic.ts';
 import '../ds/chrome.css';
 
 const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp,.cube';
@@ -43,7 +46,16 @@ export function Library() {
     <aside className="library pf-ds pf-browser" id="pf-browser" aria-label={S.rail[rail]} data-testid="library" data-category={rail}
       onDragOver={(e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setOver(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); }}
-      onDrop={(e) => { setOver(false); const fs = [...(e.dataTransfer.files ?? [])]; if (!fs.length) return; e.preventDefault(); if (!uploading && doc) void editor.importFiles(fs); }}>
+      onDrop={(e) => {
+        setOver(false);
+        if (!e.dataTransfer.files?.length || !doc) return;
+        e.preventDefault();
+        // A dropped folder is walked (webkitGetAsEntry, taken before the first await); plain files go to the queue as they are.
+        void collectDropped(e.dataTransfer.items).then((entries) => {
+          if (entries.some((x) => x.relativePath.includes('/'))) editor.importFolder(entries);
+          else void editor.importFiles(entries.map((x) => x.file));
+        });
+      }}>
       {over && <div className="pf-drop-veil" aria-hidden="true"><ImagePlus size={28} />{S.dropTitle}</div>}
       {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => (document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`) ?? document.querySelector<HTMLElement>(`[data-testid="more-${id}"]`))?.focus(), 0); }} />}
       <LifeHost />
@@ -80,16 +92,29 @@ function Pane({ title, count, action, children }: { title: string; count?: numbe
   );
 }
 
+/**
+ * The drawer's primary action «ייבוא» (file-input) and its menu of other ways in (a folder, the phone; ImportHosts.tsx). Uploads
+ * go to the import queue one after another: `uploading` changes the label only and never disables the picker (ADR-0023).
+ */
 function ImportButton() {
   const { editor, state, t } = useEditorState();
   const S = CHROME_STRINGS[state.lang];
   const { doc, uploading } = state;
   return (
-    <label className={`pf-btn pf-btn-primary pf-btn-sm pf-bw-import${uploading ? ' is-busy' : !doc ? ' is-disabled' : ''}`} aria-busy={uploading || undefined}>
-      <ArrowUpFromLine size={16} strokeWidth={1.75} aria-hidden="true" /><span className="pf-btn-label">{uploading ? t('media.uploading') : S.import}</span>
-      <input type="file" multiple accept={ACCEPT} disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
-    </label>
+    <span className="pf-bw-import-group">
+      <DropChip />
+      <label className={`pf-btn pf-btn-primary pf-btn-sm pf-bw-import${!doc ? ' is-disabled' : ''}`} aria-busy={uploading || undefined}>
+        <ArrowUpFromLine size={16} strokeWidth={1.75} aria-hidden="true" /><span className="pf-btn-label">{uploading ? t('media.uploading') : S.import}</span>
+        <input type="file" multiple accept={ACCEPT} disabled={!doc} data-testid="file-input" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
+      </label>
+      <ImportMenu />
+    </span>
   );
+}
+/** The import cards (ADR-0023): their own list above the grid, outside `ul.assets` (proofs wait on `.assets li` for a real asset). */
+function Imports() {
+  const { editor, state } = useEditorState();
+  return <ImportCards lang={state.lang} state={state.imports} onRetry={(id) => void editor.imports.retry(id).catch(editor.fail)} onCancel={(id) => void editor.imports.cancel(id).catch(editor.fail)} onDismiss={(id) => void editor.imports.dismiss(id).catch(editor.fail)} onCancelLocal={(id) => editor.imports.cancelLocal(id)} />;
 }
 
 function MediaDrawer({ onView }: { onView: (id: string) => void }) {
@@ -104,6 +129,7 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
   const { view } = useLifeUi(); // life line (ADR-0021): the library by date and by event; the chips and the search belong to the plain view
   return (
     <Pane title={S.rail.media} count={total || undefined} action={<ImportButton />}>
+      <Imports />
       {total === 0 ? <DropZone /> : (
         <>
           <label className="pf-bw-search">
@@ -130,7 +156,7 @@ function DropZone() {
     <div className="pf-bw-drop" data-testid="media-empty">
       <ImagePlus size={30} strokeWidth={1.5} aria-hidden="true" />
       <p>{S.dropTitle}</p>
-      <Button variant="secondary" size="md" disabled={!state.doc || state.uploading} onClick={() => input.current?.click()}>{state.uploading ? S.importing : S.dropPick}</Button>
+      <Button variant="secondary" size="md" disabled={!state.doc} onClick={() => input.current?.click()}>{state.uploading ? S.importing : S.dropPick}</Button>
       <input ref={input} type="file" multiple accept={ACCEPT} hidden tabIndex={-1} aria-hidden="true" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
     </div>
   );

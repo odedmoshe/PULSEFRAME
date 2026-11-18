@@ -4,7 +4,7 @@ import { Keys } from './Kbd.tsx';
 import { menuKey, orderMenu, type MenuItemSpec } from './logic.ts';
 import { DS, cx, isolate, useDir } from './util.tsx';
 
-export interface MenuItem extends MenuItemSpec { icon?: ReactNode; /** shortcut caps shown on the end side */ keys?: readonly string[] }
+export interface MenuItem extends MenuItemSpec { icon?: ReactNode; /** shortcut caps shown on the end side */ keys?: readonly string[]; /** data-testid of the item (a proof's entry point) */ testId?: string }
 export interface MenuProps {
   items: readonly MenuItem[];
   onSelect: (id: string) => void;
@@ -65,7 +65,7 @@ export function Menu({ items, onSelect, label, trigger, className }: MenuProps) 
             {ordered.map(({ item, separatorBefore }, i) => (
               <div key={item.id} role="none">
                 {separatorBefore && <div role="separator" className="pf-menu-sep" />}
-                <button type="button" role="menuitem" tabIndex={i === active ? 0 : -1} aria-disabled={item.disabled || undefined} className={cx('pf-menu-item', item.danger && 'is-danger')}
+                <button type="button" role="menuitem" tabIndex={i === active ? 0 : -1} aria-disabled={item.disabled || undefined} className={cx('pf-menu-item', item.danger && 'is-danger')} data-testid={item.testId}
                   onMouseEnter={() => !item.disabled && setActive(i)} onClick={() => { if (!item.disabled) { close(); onSelect(item.id); } }}>
                   <span className="pf-menu-ic">{item.icon}</span><span className="pf-menu-label">{isolate(item.label)}</span>{item.keys && <Keys keys={item.keys} />}
                 </button>

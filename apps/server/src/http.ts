@@ -40,6 +40,9 @@ import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
 import { ApplyModeSchema, RunSourceSchema, type RunRequest } from './aiContracts.ts';
 import { assertMayTakeRendered, forPrincipal, mayHoldPeople, peopleAccess, peopleNote, readingAs, scrubPeople, withoutFamily } from './peoplePrivacy.ts';
+import { assertMayHandleImportJob, decodeUploadHeader, IMPORT_JOB_TYPE, type DropDoor, type ImportQueue } from './importContracts.ts';
+import { declaredLength, registerImportRoutes } from './importRoutes.ts';
+import { registerRenderCacheRoutes, type RenderCacheService } from './renderCacheRoutes.ts';
 import { peopleSuggestions } from './lifeline.ts';
 
 const TxBody = z
@@ -107,7 +110,9 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 /** Policy of every non-page response (JSON, media, exports): nothing may load or run if it is ever opened as a document. */
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
-export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech) {
+/** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService }
+export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
   const speech = speechService ?? new Speech(store, cfg);
@@ -137,7 +142,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       c.header('Vary', 'Origin');
       if (c.req.method === 'OPTIONS') {
         c.header('Access-Control-Allow-Headers', 'content-type, authorization, x-filename, x-pf-via, x-pf-relative-path, x-pf-last-modified, x-pf-batch'); // x-pf-*: the import queue's upload headers (ADR-0023)
-        c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+        c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         return c.body(null, 204);
       }
     }
@@ -439,6 +444,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       for (const [k, fn] of govHandlers) store.events.on(k, fn);
       const onPresence = (p: any) => p.projectId === projectId && void stream.writeSSE({ event: 'presence', data: JSON.stringify(seen(p)) });
       presence.events.on('presence', onPresence);
+      // The phone drop's public view (no token, PIN or session: drop.ts), to the owner's own session only: it is the owner's dialog.
+      const onDrop = (d: { projectId: string }) => d.projectId === projectId && void stream.writeSSE({ event: 'drop', data: JSON.stringify(d) });
+      if (listener.kind === 'user') extras.door?.events.on('drop', onDrop);
       try {
         await stream.writeSSE({ event: 'hello', data: JSON.stringify({ revision: current }) });
         for (const e of store.eventsSince(projectId, since)) await send(e);
@@ -451,6 +459,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
         store.events.off('derivative', onDerivative);
         for (const [k, fn] of govHandlers) store.events.off(k, fn);
         presence.events.off('presence', onPresence);
+        extras.door?.events.off('drop', onDrop);
       }
     });
   });
@@ -532,7 +541,21 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(p, projectId, 'edit');
     gov.assertUnrestricted(p, 'add media to the library');
     if (!c.req.raw.body) throw new ApiError(400, 'empty_upload', 'request has no body');
-    const name = decodeURIComponent(c.req.header('x-filename') ?? 'upload');
+    const name = decodeUploadHeader(c.req.header('x-filename')) ?? 'upload';
+    // Media goes through the import queue (ADR-0023) and this route waits for its job, so it answers as it always did: 201 with the
+    // asset, or the import's own error. Its commit kind is 'edit', as before. A colour table (.cube) keeps the direct path.
+    if (extras.imports && !/\.cube$/i.test(name)) {
+      const job = await extras.imports.receive({ projectId, actor: p.actor, body: Readable.fromWeb(c.req.raw.body as any), name, via: 'browser', declaredBytes: declaredLength(c.req.header('content-length')), maxBytes: cfg.maxUploadBytes, commitKind: 'edit', signal: c.req.raw.signal });
+      const done = await extras.imports.wait(job.id);
+      const head = { 'X-PF-Import-Job': job.id };
+      if (done.status !== 'succeeded') {
+        const e = (done.error ?? {}) as { code?: string; message?: string; status?: number; details?: Record<string, unknown>; hint?: string };
+        const err = new ApiError(typeof e.status === 'number' && e.status >= 400 ? e.status : 500, e.code ?? 'internal_error', e.message ?? `the import ended ${done.status}`, e.details ?? {}, e.hint);
+        return c.json(err.toJSON(), err.status as any, head);
+      }
+      const out = done.output as { assetId: string; revision: number; deduplicated: boolean };
+      return c.json({ assetId: out.assetId, revision: out.revision, deduplicated: out.deduplicated, asset: store.getProject(projectId).doc.assets[out.assetId] }, 201, head);
+    }
     // Storage ceiling: refuse up front when the declared size cannot fit, and cut a stream of unknown size off at the room left.
     const room = assertStorageRoom(store, Number(c.req.header('content-length') ?? 0) || 1, 'store this upload');
     const asset = await ingestUpload(store, c.req.raw.body, name, p.actor, Math.min(cfg.maxUploadBytes, room), { homeZone: cfg.homeZone, now: new Date() });
@@ -669,7 +692,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return c.json({ ...exporter.plan(p.doc, p.revision, await c.req.json().catch(() => ({}))), ...peopleNote(who, p.doc) });
   });
   app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); gov.releaseUnknown(p, c.req.param('jobId')); return c.json({ jobId: c.req.param('jobId'), ledger: gov.ledgerFor(c.req.param('jobId')) }); });
-  app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId')); gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
+  app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId'));
+    if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => { need(c, 'observe'); return c.json(jobView(store.getJob(c.req.param('jobId')))); });
   app.get('/api/v1/jobs/:jobId/output', (c) => {
     const who = need(c, 'observe');
@@ -688,6 +712,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ----- browser export route: the tab renders and encodes; the server holds the durable job and a tab lease -----
   const browserExport = registerBrowserExportRoutes(app, store, exporter);
   (app as any).browserExport = browserExport;
+  // ----- import queue and phone drop (ADR-0023); render cache (ADR-0024) -----
+  if (extras.imports) registerImportRoutes(app, { cfg, store, gov, imports: extras.imports, door: extras.door ?? null, need });
+  if (extras.renderCache) registerRenderCacheRoutes(app, extras.renderCache, need);
 
   // ----- optional provider capabilities (Amendment A1). No route accepts a raw graph for execution. -----
   app.get('/api/v1/catalog', (c) => { need(c, 'observe'); return c.json(catalog()); });
@@ -753,6 +780,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
     const p = need(c, 'edit');
     const j = store.getJob(c.req.param('jobId'));
+    if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
     assertMayCancel(gov, p, j);
     if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));

@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-18T03:20:34.747Z",
+  "ranAt": "2026-11-18T10:37:28.174Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
@@ -268,9 +268,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.99,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
-        "back1": -1,
+        "back1": -0.99,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -286,7 +286,7 @@
         "keptPlaying": true,
         "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.97,
+        "shuttleSpeed": 1.96,
         "staysPaused": true
       }
     },
@@ -314,30 +314,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_9e072dfc210",
-          "clp_9e072dfc211"
+          "clp_226c374eac0",
+          "clp_226c374eac1"
         ],
         "afterAB": [
-          "clp_9e072dfc210",
-          "clp_9e072dfc211"
+          "clp_226c374eac0",
+          "clp_226c374eac1"
         ],
         "afterAdd": [
-          "clp_9e072dfc210",
-          "clp_9e072dfc211",
-          "clp_9e072dfc212"
+          "clp_226c374eac0",
+          "clp_226c374eac1",
+          "clp_226c374eac2"
         ],
         "midEscape": [
-          "clp_9e072dfc211"
+          "clp_226c374eac1"
         ],
         "afterEscape": [
-          "clp_9e072dfc210",
-          "clp_9e072dfc211",
-          "clp_9e072dfc212"
+          "clp_226c374eac0",
+          "clp_226c374eac1",
+          "clp_226c374eac2"
         ],
         "afterEscapeUp": [
-          "clp_9e072dfc210",
-          "clp_9e072dfc211",
-          "clp_9e072dfc212"
+          "clp_226c374eac0",
+          "clp_226c374eac1",
+          "clp_226c374eac2"
         ]
       }
     },
@@ -499,7 +499,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 27/1799",
+        "valueText": "עוקב קדימה 26/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -760,18 +760,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_86725d0b2d0",
-          "ast_9091408b0e0",
-          "ast_f621daf6b90",
-          "ast_f25e3845310",
-          "ast_d700e765ab0"
+          "ast_e4712d0d4c0",
+          "ast_079578c1430",
+          "ast_2462e66e6f0",
+          "ast_9ec52d22350",
+          "ast_cbb7bc1b6b0"
         ],
         "order1": [
-          "ast_86725d0b2d0",
-          "ast_f25e3845310",
-          "ast_9091408b0e0",
-          "ast_f621daf6b90",
-          "ast_d700e765ab0"
+          "ast_e4712d0d4c0",
+          "ast_9ec52d22350",
+          "ast_079578c1430",
+          "ast_2462e66e6f0",
+          "ast_cbb7bc1b6b0"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -795,7 +795,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T03:20:26.913Z",
+          "createdAt": "2026-11-18T10:37:20.222Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -869,7 +869,7 @@
         "statusText": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "want": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "statusRole": "status",
-        "describedBy": "_r_31_",
+        "describedBy": "_r_34_",
         "announced": 1,
         "onVelocity": "transition-velocity",
         "opt3": {

@@ -44,6 +44,10 @@ export const RENDER_CACHE_HE = {
   'error.code.incremental_format_unsupported': 'ייצוא מהיר זמין רק ל־MP4', 'error.code.render_cache_disabled': 'מטמון הרינדור כבוי',
   'error.code.incremental_unavailable': 'ייצוא מהיר אינו זמין', 'error.code.render_cache_self_check_failed': 'הבדיקה העצמית של המטמון מצאה מקטע שאינו תואם',
   'error.code.segment_join_mismatch': 'מקטע לא התחבר בדיוק לשאר הסרטון',
+  // a privacy region changed (or the project was deleted) while the export ran: render_cache_purged (apps/server/src/segmentStore.ts)
+  'error.code.render_cache_purged': 'הייצוא נעצר כי אזורי הפרטיות של הפרויקט השתנו',
+  'cache.failed.purged': 'אזורי הפרטיות של הפרויקט השתנו בזמן הייצוא, ולכן הוא נעצר ולא נשמר קובץ. ייצוא חדש יציג את הפרויקט עם ההסתרות הנוכחיות; ניסיון חוזר היה מציג שוב את התמונה הישנה.',
+  'cache.failed.newExport': 'ייצוא חדש',
 } as const;
 export const RENDER_CACHE_EN: Record<keyof typeof RENDER_CACHE_HE, string> = {
   'cache.fast.label': 'Fast export — renders only what changed',
@@ -71,6 +75,9 @@ export const RENDER_CACHE_EN: Record<keyof typeof RENDER_CACHE_HE, string> = {
   'error.code.incremental_format_unsupported': 'Fast export is for MP4 only', 'error.code.render_cache_disabled': 'The render cache is off',
   'error.code.incremental_unavailable': 'Fast export is not available', 'error.code.render_cache_self_check_failed': 'The cache self-check found a segment that does not match',
   'error.code.segment_join_mismatch': 'A segment did not join the rest of the video exactly',
+  'error.code.render_cache_purged': 'The export was stopped because the project\'s privacy regions changed',
+  'cache.failed.purged': 'The project\'s privacy regions changed while the export ran, so it was stopped and no file was saved. A new export shows the project with its current hiding; a retry would show the old picture again.',
+  'cache.failed.newExport': 'New export',
 };
 
 /** A left-to-right run (a format id, an English reason) isolated inside the Hebrew sentence. */
@@ -92,4 +99,16 @@ export const HE_RENDER_CACHE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the self-check found a stored segment \(frames (\d+)–(\d+)\) that does not match the current render at frame (\d+); the (\d+) stored segments this export reused were removed and nothing was published$/,
     (m) => `הבדיקה העצמית מצאה מקטע שמור (פריימים ${ltr(`${m[1]}–${m[2]}`)}) שאינו תואם לרינדור הנוכחי בפריים ${m[3]}. ${m[4]} המקטעים השמורים שהייצוא הזה השתמש בהם נמחקו, ולא נשמר קובץ`],
   [/^the segment starting at frame (\d+) was encoded with a different packet timing from the others, so it cannot be joined exactly$/, (m) => `המקטע שמתחיל בפריים ${m[1]} קודד בתזמון שונה משאר המקטעים, ולכן אי אפשר לחבר אותו בדיוק`],
+];
+
+/**
+ * Hebrew detail of the privacy purge's two sentences (apps/server/src/segmentStore.ts RENDER_CACHE_PURGED and the retry refusal of
+ * Exporter.retry): a sibling of HE_RENDER_CACHE, because core RENDER_CACHE_JOB_ERRORS (whose hints offer to turn the fast export
+ * off, which would not help here) does not hold this code. packages/evals/src/wave5-wording.test.ts provokes both.
+ */
+export const HE_RENDER_CACHE_PURGE: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^the render cache of project \S+ was cleared for privacy while this export ran \(a privacy region changed, or the project was deleted\); the export renders the project as it was before, so it was stopped, nothing was published and none of its segments were kept$/,
+    () => 'מטמון הרינדור של הפרויקט נוקה לשמירת הפרטיות בזמן שהייצוא רץ (אזור פרטיות השתנה, או שהפרויקט נמחק). הייצוא הציג את הפרויקט כפי שהיה לפני כן, ולכן נעצר: לא נשמר קובץ ואף מקטע שלו לא נשמר'],
+  [/^this export was stopped because the project's privacy regions changed while it ran; retrying it would render the old picture again$/,
+    () => 'הייצוא הזה נעצר כי אזורי הפרטיות של הפרויקט השתנו בזמן שרץ; ניסיון חוזר היה מציג שוב את התמונה הישנה. אפשר להתחיל ייצוא חדש'],
 ];
