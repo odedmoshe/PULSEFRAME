@@ -81,14 +81,16 @@ const rms = (a: Float32Array, a0: number, n: number) => { let e = 0; for (let i 
 /**
  * A window where both signals have sound: the lag is meaningless in a pause (every lag correlates to 0 and the search answers
  * its first candidate, −maxLag). From the planned timeline time, step forward a quarter second at a time (at most 4 s) to the
- * first window where both RMS are ≥ 0.005; null when there is none. `at` gives the reference sample for a timeline time.
+ * first window where both RMS are ≥ 0.02 (−34 dBFS); null when there is none. `at` gives the reference sample for a timeline
+ * time. (In a quieter window, after AAC, the plain correlation's broad low-pitch peak was seen to move: one window at RMS 0.012
+ * read lag 5 with a ½ s window and 0 with ⅛ s and ¼ s windows.)
  */
 function soundedWindow(a: Float32Array, b: Float32Array, t0: number, n: number, at: (t: number) => number | null): { a0: number; b0: number } | null {
   for (let k = 0; k <= 16; k++) {
     const t = t0 + k * 0.25, b0 = at(t);
     if (b0 === null) continue;
     const a0 = Math.round(t * SR);
-    if (rms(a, a0, n) >= 0.005 && rms(b, b0, n) >= 0.005) return { a0, b0 };
+    if (rms(a, a0, n) >= 0.02 && rms(b, b0, n) >= 0.02) return { a0, b0 };
   }
   return null;
 }
@@ -279,9 +281,13 @@ async function main() {
     await section('M5', async () => {
       const placed = (await tx(main.pid, [{ op: 'place_multicam', args: { groupId: main.groupId, newSequence: { name: '1000 cuts' }, at: T.ZERO, angleId: cam(1), fill: true } }])).results[0].output as { sequenceId: string; videoTrackId: string };
       const before = creativeProjection(await doc(main.pid));
-      const cuts = Array.from({ length: 1000 }, (_, k) => ({ at: f(4 * (k + 1)), angleId: cam(1 + (k % 3)) }));
+      // 1000 cuts spread over the program from 2 s (camera 2 has picture from 1.19 s) to 2 s before its end, so every cut lands
+      // where its camera has picture and each makes a segment
+      const d0 = await doc(main.pid);
+      const programEnd = Math.max(...d0.sequences[placed.sequenceId]!.tracks.find((t) => t.id === placed.videoTrackId)!.clips.map((c) => T.frameIndexAt(T.add(c.start, c.duration), R)));
+      const cuts = Array.from({ length: 1000 }, (_, k) => ({ at: f(60 + Math.floor((k * (programEnd - 120)) / 1000)), angleId: cam(1 + (k % 3)) }));
       const t0 = performance.now();
-      await tx(main.pid, [{ op: 'switch_angles', args: { groupId: main.groupId, sequenceId: placed.sequenceId, trackId: placed.videoTrackId, cuts, until: { at: f(4004) }, coverage: 'clip', heal: false } }]);
+      await tx(main.pid, [{ op: 'switch_angles', args: { groupId: main.groupId, sequenceId: placed.sequenceId, trackId: placed.videoTrackId, cuts, until: { at: f(programEnd - 60) }, coverage: 'clip', heal: false } }]);
       const switchMs = r2(performance.now() - t0);
       const d = await doc(main.pid);
       const segments = d.sequences[placed.sequenceId]!.tracks.find((t) => t.id === placed.videoTrackId)!.clips.length;

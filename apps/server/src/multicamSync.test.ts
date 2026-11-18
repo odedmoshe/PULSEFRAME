@@ -23,7 +23,7 @@ import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 import { addNoise, loopAt, pinkNoise, speechAt, speechBursts, wav } from './multicamSync.fixtures.ts';
-import { coarseMatch, fitSync, runMulticamSyncJob, verdictOf } from './multicamSync.ts';
+import { abutFiles, coarseMatch, fitSync, pausedInside, runMulticamSyncJob, verdictOf } from './multicamSync.ts';
 
 const SR = 48000;
 let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, capabilities: Capabilities, derivatives: Derivatives;
@@ -263,6 +263,45 @@ describe('the pure stages', () => {
     expect(verdictOf({ peakZ: 8, peakRatio: 2, fit, windows: 3, measured: 3, rejected: 0, oneMs: 48 })).toBe('check');
     expect(verdictOf({ peakZ: 20, peakRatio: 2, fit: { ...fit, residualSamples: 300 }, windows: 3, measured: 3, rejected: 0, oneMs: 48 })).toBe('inconsistent');
     expect(verdictOf({ peakZ: 20, peakRatio: 2, fit, windows: 4, measured: 4, rejected: 2, oneMs: 48 })).toBe('inconsistent');
+    // three windows, one rejected and two that agree exactly: not 'inconsistent' (a short file whose window fell in a pause)
+    expect(verdictOf({ peakZ: 60, peakRatio: 14, fit: { ...fit, kept: 2 }, windows: 3, measured: 3, rejected: 1, oneMs: 48 })).toBe('check');
+  });
+  it('a file that paused inside it is told from a repeated sound: blocks prefer one offset, then the other', () => {
+    let seed = 5;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const B = 12000, room = Float64Array.from({ length: B }, () => (rnd() < 0.3 ? rnd() : 0));
+    const bed = { start: 0, values: room, covered: new Uint8Array(B).fill(1) };
+    // paused: file frames 0..3999 are room 300.., then 2 s (200 frames) skipped: frames 4000.. are room 4500..
+    const paused = Float32Array.from({ length: 8000 }, (_, i) => room[i < 4000 ? 300 + i : 500 + i]!);
+    expect(pausedInside(paused, bed, [{ lagFrames: 500 }, { lagFrames: 300 }])).toBe(true);
+    // a loop: a 30 s pattern repeated, fitting at both offsets 30 s apart in every block
+    const loop = Float64Array.from({ length: B }, (_, i) => room[i % 3000]!);
+    const loopBed = { start: 0, values: loop, covered: new Uint8Array(B).fill(1) };
+    const file = Float32Array.from({ length: 6000 }, (_, i) => loop[1000 + i]!);
+    expect(pausedInside(file, loopBed, [{ lagFrames: 1000 }, { lagFrames: 4000 }])).toBe(false);
+    // one offset only (an ordinary file) never splits
+    const plain = Float32Array.from({ length: 6000 }, (_, i) => room[700 + i]!);
+    expect(pausedInside(plain, bed, [{ lagFrames: 700 }, { lagFrames: 2000 }])).toBe(false);
+  });
+  it('two files of one camera measured a sample into each other (a card change) are made to abut; a real overlap is left without anchors', () => {
+    const sr = 48000, at = (n: number) => T.rt(n, sr);
+    const asset = (id: string, seconds: number) => ({ id, kind: 'video', name: id, duration: T.rt(seconds, 1) });
+    const doc = { settings: { frameRate: { num: 30, den: 1 } }, assets: { a1: asset('a1', 10), a2: asset('a2', 10) } } as never;
+    const q = { verdict: 'confident', peakZ: 20, peakRatio: 3, anchorsUsed: 3, anchorsRejected: 0, residualSamples: 0, driftPpm: 0, overlapSeconds: 10, candidates: [], chainDepth: 0, jobId: null };
+    const group = { id: 'g', sampleRate: sr, angles: [{ id: 'cam', label: 'Cam', kind: 'picture', pieces: [{ assetId: 'a1', anchors: [], quality: q }, { assetId: 'a2', anchors: [], quality: q }] }] } as never;
+    const measured = (startSamples: number) => [
+      { angleId: 'cam', pieceIndex: 0, assetId: 'a1', verdict: 'confident', why: null, anchors: [{ group: at(sr), source: T.ZERO }], quality: q, offsetSamples: sr, captureOffsetSeconds: null, attach: true },
+      { angleId: 'cam', pieceIndex: 1, assetId: 'a2', verdict: 'confident', why: null, anchors: [{ group: at(startSamples), source: T.ZERO }], quality: q, offsetSamples: startSamples, captureOffsetSeconds: null, attach: true },
+    ];
+    // file 1 ends at 11 s (528000 samples); file 2 measured to start 2 samples earlier → moved to start exactly there
+    const near = measured(11 * sr - 2) as never as { anchors: { group: T.RationalTime }[]; verdict: string }[];
+    abutFiles(doc, group, near as never);
+    expect(T.toSeconds(near[1]!.anchors[0]!.group)).toBe(11);
+    expect(near[1]!.verdict).toBe('confident');
+    // 0.5 s into each other: not one recording at that offset; no anchors, 'inconsistent' (and nothing else is refused)
+    const far = measured(11 * sr - sr / 2) as never as { anchors: unknown[]; verdict: string }[];
+    abutFiles(doc, group, far as never);
+    expect([far[1]!.anchors, far[1]!.verdict, far[0]!.verdict]).toEqual([[], 'inconsistent', 'confident']);
   });
   it('coarse: needs the minimum overlap', () => {
     const f = Float32Array.from({ length: 1000 }, (_, i) => ((i * 7919) % 13) / 13);
