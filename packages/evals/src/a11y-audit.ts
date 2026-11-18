@@ -309,6 +309,7 @@ async function main() {
       // full history dialog
       const ad = await dialogBehaviour('activity-dialog', async () => { await page.getByTestId('activity-open').click(); }, '[data-testid=activity-open]');
       await auditState('activity-dialog', { startsInside: ad.startsInside, tabStepsThatLeftTheDialog: ad.tabStepsThatLeftTheDialog }, true);
+      Object.assign(states.at(-1), await ad.close());
       // the phone drop dialog (ADR-0023) with a live code: QR, typed address and PIN, status; Esc hides it and leaves the chip
       if (!/\bis-on\b/.test((await page.getByTestId('rail-media').getAttribute('class')) ?? '')) { await page.getByTestId('rail-media').click(); await page.waitForTimeout(300); }
       const pdd = await dialogBehaviour('phone-drop-dialog', async () => { await page.getByTestId('import-more').click(); await page.getByTestId('phone-drop-open').click(); await page.getByTestId('phone-drop-dialog').waitFor({ timeout: 8000 }); await page.getByTestId('phone-drop-address').waitFor({ timeout: 8000 }).catch(() => {}); if (await page.getByTestId('phone-drop-start').count()) await page.getByTestId('phone-drop-start').click(); await page.getByTestId('phone-drop-qr').waitFor({ timeout: 8000 }).catch(() => {}); }, '[data-testid=import-more]');
@@ -318,7 +319,6 @@ async function main() {
       await auditState('phone-drop-chip', { shown: (await page.getByTestId('phone-drop-chip').count()) === 1 && (await page.getByTestId('phone-drop-chip-close').count()) === 1 });
       if (await page.getByTestId('phone-drop-chip-close').count()) await page.getByTestId('phone-drop-chip-close').click();
       await page.getByTestId('phone-drop-chip').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
-      Object.assign(states.at(-1), await ad.close());
       // command palette
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
       await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);
@@ -539,7 +539,12 @@ async function main() {
       await railOn('text');
       await page.locator('[data-testid=font-option]').first().waitFor({ timeout: 8000 }).catch(() => {});
       await auditState('text-drawer-fonts', { shown: (await page.locator('[data-testid=font-option]').count()) >= 1 });
-      // the fast export and the render cache (ADR-0024): the sheet line in its states and the timeline lane with its popover
+      // the fast export and the render cache (ADR-0024): the sheet line in its states and the timeline lane with its popover, on
+      // the project the scenarios export and edit (the life-line states above left the page on another project)
+      await page.goto(`${s.ownerUrl}&project=${pid}`);
+      await page.getByTestId('timecode').waitFor();
+      if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      await page.waitForFunction(() => (document.querySelector('[data-testid=file-input]') as HTMLInputElement | null)?.disabled === false, undefined, { timeout: 30000 }).catch(() => {});
       await railOn('media');
       const rcCtx = makeRenderCacheCtx({ page, lang, api: makeApi(s.url, s.auth.tokens.agent), owner: await ownerApi(s.url, s.auth.tokens.owner), pid, titleClipId });
       for (const sc of renderCacheA11yScenarios) {

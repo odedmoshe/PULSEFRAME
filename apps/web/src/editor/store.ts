@@ -395,6 +395,8 @@ export class Editor {
     es.addEventListener('job', (m) => {
       const j: JobEvent = JSON.parse((m as MessageEvent).data);
       if (j.type === 'import') { this.imports.onJobEvent(j as ImportJobEvent); return; }
+      // a fast export that stored segments changes what the next one reuses: the lane and the sheet line ask again
+      if (j.type === 'export' && j.status === 'succeeded' && this.state.fastExport && (j.output as { segments?: unknown } | null)?.segments) void this.planPolicy.now(this.state.revision);
       this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : j.type === TRACKING_JOB_TYPE ? { trackJobs: rememberJob(this.state.trackJobs, j) } : {});
       // An export this tab started saves its file as soon as it is ready, once; the link in the header stays for another copy.
       if (j.type === 'export' && j.status === 'succeeded' && this.myExports.delete(j.id)) {

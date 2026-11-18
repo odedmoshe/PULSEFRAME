@@ -270,7 +270,7 @@ async function main() {
     const typed = (await page.getByTestId(PHONE_DROP_TESTIDS.typedAddress).textContent())?.trim();
     const pinText = (await page.getByTestId(PHONE_DROP_TESTIDS.pin).textContent())?.replace(/\s/g, '');
     const dialogName = await page.getByTestId(PHONE_DROP_TESTIDS.dialog).evaluate((el) => { const d = el.closest('[role=dialog]') ?? el; const id = d.getAttribute('aria-labelledby'); return (d.getAttribute('role') ?? '') + '|' + (id ? document.getElementById(id)?.textContent ?? '' : d.getAttribute('aria-label') ?? ''); });
-    const focusInside = await page.evaluate((id) => !!document.querySelector(`[data-testid=${id}]`)?.closest('[role=dialog]')?.contains(document.activeElement), PHONE_DROP_TESTIDS.dialog);
+    const focusInside = await page.evaluate(() => !!document.querySelector('[data-testid=phone-drop-dialog]')?.closest('[role=dialog]')?.contains(document.activeElement));
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     await page.screenshot({ path: path.join(art, 'p4-dialog-he.png') });
     check('P4', 'the dialog (1440×900, Hebrew): the QR drawn is the encoding of exactly the issued URL (same modules), the typed address and the PIN match the code, the dialog is named and holds the focus', d === expected && typed === `${DOOR}:${DROP_PORT}` && pinText === code.pin && dialogName.startsWith('dialog|') && dialogName.length > 7 && focusInside, { qrPathEqual: d === expected, typed, pinMatches: pinText === code.pin, dialogName, focusInside });
