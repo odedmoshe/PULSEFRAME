@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T02:02:25.431Z",
+  "ranAt": "2026-11-18T02:14:51.130Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
     "browser": "153.0.8010.12"
@@ -10,13 +10,13 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 559,
+      "controls": 568,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
       "uiLanguage": "he",
       "focus": {
-        "reached": 48,
+        "reached": 49,
         "missing": []
       },
       "plantedDefectsDetected": {
@@ -27,7 +27,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 559,
+          "controls": 568,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -36,7 +36,7 @@
         },
         {
           "state": "format-view",
-          "controls": 476,
+          "controls": 479,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -46,7 +46,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 569,
+          "controls": 578,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -60,7 +60,7 @@
         },
         {
           "state": "project-delete-confirmation",
-          "controls": 573,
+          "controls": 582,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -70,7 +70,7 @@
         },
         {
           "state": "locked-track",
-          "controls": 559,
+          "controls": 568,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -80,7 +80,7 @@
         },
         {
           "state": "upload-busy",
-          "controls": 559,
+          "controls": 568,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -89,7 +89,7 @@
         },
         {
           "state": "error-bar",
-          "controls": 560,
+          "controls": 569,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -100,7 +100,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 586,
+          "controls": 595,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -115,7 +115,7 @@
         },
         {
           "state": "export-busy",
-          "controls": 563,
+          "controls": 572,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -126,7 +126,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 573,
+          "controls": 582,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -135,12 +135,12 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_48f08aa08d0]",
+          "focusAfterClose": "button[data-testid=more-ast_ded2563e9d0]",
           "focusReturned": true
         },
         {
           "state": "activity-dialog",
-          "controls": 562,
+          "controls": 571,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -154,7 +154,7 @@
         },
         {
           "state": "command-palette",
-          "controls": 568,
+          "controls": 577,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -168,7 +168,7 @@
         },
         {
           "state": "agent-menu",
-          "controls": 562,
+          "controls": 571,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -180,7 +180,7 @@
         },
         {
           "state": "media-card-menu",
-          "controls": 409,
+          "controls": 419,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -192,7 +192,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 412,
+          "controls": 421,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -206,7 +206,7 @@
         },
         {
           "state": "effect-gallery",
-          "controls": 655,
+          "controls": 664,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -220,7 +220,7 @@
         },
         {
           "state": "look-visual-wave",
-          "controls": 597,
+          "controls": 606,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -253,7 +253,7 @@
         },
         {
           "state": "translation-review",
-          "controls": 524,
+          "controls": 533,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -262,7 +262,7 @@
         },
         {
           "state": "tracking-video-clip",
-          "controls": 579,
+          "controls": 588,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -277,7 +277,7 @@
         },
         {
           "state": 1,
-          "controls": 534,
+          "controls": 564,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -289,7 +289,7 @@
         },
         {
           "state": "track-picker",
-          "controls": 578,
+          "controls": 587,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -302,7 +302,7 @@
         },
         {
           "state": "text-effects",
-          "controls": 565,
+          "controls": 595,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -316,7 +316,7 @@
         },
         {
           "state": "transition-options",
-          "controls": 559,
+          "controls": 568,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -332,7 +332,7 @@
         },
         {
           "state": "adjustment-inspector",
-          "controls": 377,
+          "controls": 380,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -341,7 +341,7 @@
         },
         {
           "state": "apply-to-whole-edit",
-          "controls": 440,
+          "controls": 443,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -350,13 +350,13 @@
         },
         {
           "state": "templates-drawer",
-          "controls": 438,
+          "controls": 449,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "cards": 8,
+          "cards": 15,
           "firstCardAtInlineStart": true,
           "edge": {
             "gapAtInlineStart": 0,
@@ -366,7 +366,7 @@
         },
         {
           "state": "template-dialog",
-          "controls": 458,
+          "controls": 469,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -380,7 +380,7 @@
         },
         {
           "state": "template-dialog-plan",
-          "controls": 451,
+          "controls": 462,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -390,7 +390,7 @@
         },
         {
           "state": "template-applied",
-          "controls": 452,
+          "controls": 463,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -400,7 +400,7 @@
         },
         {
           "state": "start-hub",
-          "controls": 339,
+          "controls": 350,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -413,7 +413,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 563,
+      "controls": 572,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -430,7 +430,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 563,
+          "controls": 572,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -439,7 +439,7 @@
         },
         {
           "state": "format-view",
-          "controls": 480,
+          "controls": 483,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -449,7 +449,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 573,
+          "controls": 582,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -463,7 +463,7 @@
         },
         {
           "state": "project-delete-confirmation",
-          "controls": 577,
+          "controls": 586,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -473,7 +473,7 @@
         },
         {
           "state": "locked-track",
-          "controls": 563,
+          "controls": 572,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -483,7 +483,7 @@
         },
         {
           "state": "upload-busy",
-          "controls": 563,
+          "controls": 572,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -492,7 +492,7 @@
         },
         {
           "state": "error-bar",
-          "controls": 564,
+          "controls": 573,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -503,7 +503,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 590,
+          "controls": 599,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -518,7 +518,7 @@
         },
         {
           "state": "export-busy",
-          "controls": 567,
+          "controls": 576,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -529,7 +529,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 577,
+          "controls": 586,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -538,12 +538,12 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_48f08aa08d0]",
+          "focusAfterClose": "button[data-testid=more-ast_ded2563e9d0]",
           "focusReturned": true
         },
         {
           "state": "activity-dialog",
-          "controls": 566,
+          "controls": 575,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -557,7 +557,7 @@
         },
         {
           "state": "command-palette",
-          "controls": 572,
+          "controls": 581,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -571,7 +571,7 @@
         },
         {
           "state": "agent-menu",
-          "controls": 566,
+          "controls": 575,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -583,7 +583,7 @@
         },
         {
           "state": "media-card-menu",
-          "controls": 413,
+          "controls": 423,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -595,7 +595,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 416,
+          "controls": 425,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -609,7 +609,7 @@
         },
         {
           "state": "effect-gallery",
-          "controls": 659,
+          "controls": 668,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -623,7 +623,7 @@
         },
         {
           "state": "look-visual-wave",
-          "controls": 601,
+          "controls": 610,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -656,7 +656,7 @@
         },
         {
           "state": "translation-review",
-          "controls": 524,
+          "controls": 533,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -665,7 +665,7 @@
         },
         {
           "state": "tracking-video-clip",
-          "controls": 579,
+          "controls": 588,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -680,7 +680,7 @@
         },
         {
           "state": 1,
-          "controls": 534,
+          "controls": 564,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -692,7 +692,7 @@
         },
         {
           "state": "track-picker",
-          "controls": 578,
+          "controls": 587,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -705,7 +705,7 @@
         },
         {
           "state": "text-effects",
-          "controls": 565,
+          "controls": 595,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -719,7 +719,7 @@
         },
         {
           "state": "transition-options",
-          "controls": 559,
+          "controls": 568,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -735,7 +735,7 @@
         },
         {
           "state": "adjustment-inspector",
-          "controls": 377,
+          "controls": 380,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -744,7 +744,7 @@
         },
         {
           "state": "apply-to-whole-edit",
-          "controls": 440,
+          "controls": 443,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -753,13 +753,13 @@
         },
         {
           "state": "templates-drawer",
-          "controls": 438,
+          "controls": 449,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "cards": 8,
+          "cards": 15,
           "firstCardAtInlineStart": true,
           "edge": {
             "gapAtInlineStart": 0,
@@ -769,7 +769,7 @@
         },
         {
           "state": "template-dialog",
-          "controls": 458,
+          "controls": 469,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -783,7 +783,7 @@
         },
         {
           "state": "template-dialog-plan",
-          "controls": 451,
+          "controls": 462,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -793,7 +793,7 @@
         },
         {
           "state": "template-applied",
-          "controls": 452,
+          "controls": 463,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -803,7 +803,7 @@
         },
         {
           "state": "start-hub",
-          "controls": 339,
+          "controls": 350,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],

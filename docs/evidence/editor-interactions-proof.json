@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-18T02:02:15.919Z",
-  "result": "PASSED",
+  "ranAt": "2026-11-18T02:14:48.923Z",
+  "result": "FAILED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -8,7 +8,7 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 49,
+  "passed": 48,
   "total": 49,
   "checks": [
     {
@@ -268,9 +268,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.99,
+        "fwd2": 1.94,
         "sh2": "◀◀ ×1",
-        "back1": -1.03,
+        "back1": -1,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -286,7 +286,7 @@
         "keptPlaying": true,
         "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.01,
+        "shuttleSpeed": 1.99,
         "staysPaused": true
       }
     },
@@ -314,30 +314,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1"
+          "clp_ec4d2e8b3a0",
+          "clp_ec4d2e8b3a1"
         ],
         "afterAB": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1"
+          "clp_ec4d2e8b3a0",
+          "clp_ec4d2e8b3a1"
         ],
         "afterAdd": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1",
-          "clp_a0346c343c2"
+          "clp_ec4d2e8b3a0",
+          "clp_ec4d2e8b3a1",
+          "clp_ec4d2e8b3a2"
         ],
         "midEscape": [
-          "clp_a0346c343c1"
+          "clp_ec4d2e8b3a1"
         ],
         "afterEscape": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1",
-          "clp_a0346c343c2"
+          "clp_ec4d2e8b3a0",
+          "clp_ec4d2e8b3a1",
+          "clp_ec4d2e8b3a2"
         ],
         "afterEscapeUp": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1",
-          "clp_a0346c343c2"
+          "clp_ec4d2e8b3a0",
+          "clp_ec4d2e8b3a1",
+          "clp_ec4d2e8b3a2"
         ]
       }
     },
@@ -499,7 +499,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 24/1799",
+        "valueText": "עוקב קדימה 18/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -632,7 +632,7 @@
     },
     {
       "name": "the Templates drawer lists 8 cards: the 6 built-ins, available, then Text-Behind-Subject and 3D-Zoom, unavailable with their Hebrew reason (template.unavailable.<model>)",
-      "ok": true,
+      "ok": false,
       "detail": {
         "cards": [
           {
@@ -666,6 +666,41 @@
             "reason": null
           },
           {
+            "id": "tpl.hanukkah-candles",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-eight-nights",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-party",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-greeting",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-age",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-cake",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-invite",
+            "available": true,
+            "reason": null
+          },
+          {
             "id": "tpl.text-behind-subject",
             "available": false,
             "reason": "דורשת מודל שמפריד את הדמות מהרקע בכל פריים, והוא אינו מותקן במחשב הזה. תבנית לעולם אינה מורידה מודלים."
@@ -684,7 +719,7 @@
       "detail": {
         "genre": "montage",
         "filtered": 2,
-        "unfiltered": 8
+        "unfiltered": 15
       }
     },
     {
@@ -693,18 +728,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_ab251da8350",
-          "ast_f89e19aca80",
-          "ast_58e215fad10",
-          "ast_a4da00bd910",
-          "ast_d30e7d6ff40"
+          "ast_79e98407a70",
+          "ast_2ce9c96b2e0",
+          "ast_b0790c39b10",
+          "ast_cb4ec5bbd40",
+          "ast_58c61937580"
         ],
         "order1": [
-          "ast_ab251da8350",
-          "ast_a4da00bd910",
-          "ast_f89e19aca80",
-          "ast_58e215fad10",
-          "ast_d30e7d6ff40"
+          "ast_79e98407a70",
+          "ast_cb4ec5bbd40",
+          "ast_2ce9c96b2e0",
+          "ast_b0790c39b10",
+          "ast_58c61937580"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -728,7 +763,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T02:02:08.676Z",
+          "createdAt": "2026-11-18T02:14:40.940Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -802,7 +837,7 @@
         "statusText": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "want": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "statusRole": "status",
-        "describedBy": "_r_30_",
+        "describedBy": "_r_31_",
         "announced": 1,
         "onVelocity": "transition-velocity",
         "opt3": {

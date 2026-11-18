@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T01:05:10.280Z",
+  "ranAt": "2026-11-18T02:36:44.824Z",
   "result": "PASSED",
   "passed": 92,
   "total": 92,
@@ -66,7 +66,7 @@
       "meanChange": 77.563
     },
     "lutPreviewRecovery": {
-      "seconds": 0.9,
+      "seconds": 1.3,
       "meanDifferenceFromStill": 0
     },
     "lutPreviewVsStill": {
@@ -910,10 +910,10 @@
       "ok": true,
       "detail": {
         "shuttle": "▶▶ ×8",
-        "samples": 172,
-        "flashesOnScreen": 6,
+        "samples": 167,
+        "flashesOnScreen": 7,
         "mostInOneSecond": 3,
-        "framesHeldBack": 10
+        "framesHeldBack": 6
       }
     },
     {
@@ -1181,7 +1181,7 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_7f02c8d9790 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_0f5b846f660 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
       }
@@ -1190,7 +1190,7 @@
       "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
       "ok": true,
       "detail": {
-        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_7f02c8d9790 could not be loaded: Missing LUT_3D_SIZE",
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_0f5b846f660 could not be loaded: Missing LUT_3D_SIZE",
         "previewVsPlain": 0
       }
     },
@@ -1198,7 +1198,7 @@
       "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
       "ok": true,
       "detail": {
-        "seconds": 0.9,
+        "seconds": 1.3,
         "meanDifferenceFromStill": 0,
         "errors": []
       }
@@ -1215,10 +1215,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_7f02c8d9790",
+        "value": "ast_0f5b846f660",
         "options": [
           "",
-          "ast_7f02c8d9790"
+          "ast_0f5b846f660"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -1231,7 +1231,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_f80fc7d4c40",
+        "selected": "ast_fb97d69d600",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T01:30:40.310Z",
+  "ranAt": "2026-11-18T02:41:32.293Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
@@ -8,8 +8,8 @@
     "gpu": "none (Canvas2D software rendering)"
   },
   "scope": "The built-in templates (ADR-0016) at 540×960, 30 fps on in-house fixtures: barcode videos (pixel truth), ffmpeg test videos and pictures (mandelbrot, testsrc2, smptebars) and a synthetic 120 BPM drum loop analysed by the product. Rule-based; no model. Not judged by a person: nobody has watched these edits for taste.",
-  "passed": 70,
-  "total": 70,
+  "passed": 147,
+  "total": 147,
   "measurements": {
     "mcp": {
       "template": "tpl.travel-montage",
@@ -19,13 +19,13 @@
         6,
         7
       ],
-      "runId": "run_d7e6ecce11m"
+      "runId": "run_22c2dd2cfem"
     },
     "planMs": {
-      "runs": 120,
-      "median": 2.46,
-      "p95": 4.61,
-      "max": 17
+      "runs": 260,
+      "median": 2.45,
+      "p95": 4.53,
+      "max": 20.62
     },
     "perTemplate": {
       "tpl.travel-montage": {
@@ -36,11 +36,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 3.02,
-          "p95": 6.02,
-          "max": 17
+          "median": 4.53,
+          "p95": 8.11,
+          "max": 20.62
         },
-        "exportSeconds": 6.218,
+        "exportSeconds": 5.728,
         "shuffle": {
           "replaced": 13,
           "protected": 1,
@@ -59,7 +59,7 @@
           "kept": [
             {
               "key": "shot2",
-              "clipId": "clp_bb030311ab3",
+              "clipId": "clp_12cb239a0d3",
               "startFrame": 30,
               "frames": 30,
               "plannedStartFrame": 60,
@@ -67,7 +67,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 4.398
+        "barcodeExportSeconds": 4.018
       },
       "tpl.photo-dump": {
         "music": {
@@ -77,11 +77,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 3.25,
-          "p95": 4.1,
-          "max": 4.5
+          "median": 3.56,
+          "p95": 4.81,
+          "max": 4.88
         },
-        "exportSeconds": 4.353,
+        "exportSeconds": 4.194,
         "shuffle": {
           "replaced": 11,
           "protected": 1,
@@ -98,7 +98,7 @@
           "kept": [
             {
               "key": "photo2",
-              "clipId": "clp_7e0f9650f02",
+              "clipId": "clp_51eb970d342",
               "startFrame": 15,
               "frames": 15,
               "plannedStartFrame": 30,
@@ -106,7 +106,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 2.186
+        "barcodeExportSeconds": 2.304
       },
       "tpl.birthday": {
         "music": {
@@ -116,11 +116,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.45,
-          "p95": 3.12,
-          "max": 4.78
+          "median": 2.63,
+          "p95": 3.8,
+          "max": 5.05
         },
-        "exportSeconds": 11.914,
+        "exportSeconds": 11.364,
         "shuffle": {
           "replaced": 14,
           "protected": 1,
@@ -139,7 +139,7 @@
           "kept": [
             {
               "key": "moment2",
-              "clipId": "clp_6898d9ad455",
+              "clipId": "clp_1a02e06aaf5",
               "startFrame": 60,
               "frames": 60,
               "plannedStartFrame": 120,
@@ -147,7 +147,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 6.985
+        "barcodeExportSeconds": 6.872
       },
       "tpl.quote-card": {
         "music": {
@@ -157,11 +157,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.26,
-          "p95": 3.33,
-          "max": 3.45
+          "median": 2.48,
+          "p95": 3.48,
+          "max": 3.89
         },
-        "exportSeconds": 6.905,
+        "exportSeconds": 6.641,
         "shuffle": {
           "replaced": 5,
           "protected": 1,
@@ -180,7 +180,7 @@
           "kept": [
             {
               "key": "backdrop",
-              "clipId": "clp_e85d90981a1",
+              "clipId": "clp_9a381522821",
               "startFrame": 0,
               "frames": 180,
               "plannedStartFrame": 0,
@@ -188,7 +188,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 4.646
+        "barcodeExportSeconds": 3.641
       },
       "tpl.countdown-list": {
         "music": {
@@ -198,11 +198,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.38,
-          "p95": 3.27,
-          "max": 3.37
+          "median": 2.37,
+          "p95": 3.61,
+          "max": 4.31
         },
-        "exportSeconds": 9.376,
+        "exportSeconds": 8.946,
         "shuffle": {
           "replaced": 22,
           "protected": 1,
@@ -221,7 +221,7 @@
           "kept": [
             {
               "key": "item2",
-              "clipId": "clp_fdd4b4b5e74",
+              "clipId": "clp_500e72d8354",
               "startFrame": 60,
               "frames": 60,
               "plannedStartFrame": 120,
@@ -229,7 +229,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 7.873
+        "barcodeExportSeconds": 5.849
       },
       "tpl.home-video": {
         "music": {
@@ -239,11 +239,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.31,
-          "p95": 3.63,
-          "max": 4.68
+          "median": 2.34,
+          "p95": 3.07,
+          "max": 3.64
         },
-        "exportSeconds": 27.459,
+        "exportSeconds": 18.206,
         "shuffle": {
           "replaced": 9,
           "protected": 1,
@@ -260,7 +260,7 @@
           "kept": [
             {
               "key": "clip2",
-              "clipId": "clp_79bfad2e932",
+              "clipId": "clp_4fc767feeb2",
               "startFrame": 90,
               "frames": 90,
               "plannedStartFrame": 180,
@@ -268,7 +268,290 @@
             }
           ]
         },
-        "barcodeExportSeconds": 13.629
+        "barcodeExportSeconds": 9.489
+      },
+      "tpl.hanukkah-candles": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.35,
+          "p95": 3.29,
+          "max": 3.76
+        },
+        "exportSeconds": 15.248,
+        "shuffle": {
+          "replaced": 9,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 3,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "family",
+              "clipId": "clp_745fdc37693",
+              "startFrame": 120,
+              "frames": 120,
+              "plannedStartFrame": 240,
+              "plannedFrames": 240
+            }
+          ]
+        },
+        "barcodeExportSeconds": 6.565
+      },
+      "tpl.hanukkah-eight-nights": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.54,
+          "p95": 3.35,
+          "max": 3.41
+        },
+        "exportSeconds": 21.833,
+        "shuffle": {
+          "replaced": 34,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 8,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "lit--2"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "night2",
+              "clipId": "clp_df4bef0fe0b",
+              "startFrame": 60,
+              "frames": 60,
+              "plannedStartFrame": 120,
+              "plannedFrames": 120
+            }
+          ]
+        },
+        "barcodeExportSeconds": 9.265
+      },
+      "tpl.hanukkah-party": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.46,
+          "p95": 3.39,
+          "max": 3.56
+        },
+        "exportSeconds": 10.685,
+        "shuffle": {
+          "replaced": 18,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 6,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "dreidel"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "beat2",
+              "clipId": "clp_1677cb6df37",
+              "startFrame": 60,
+              "frames": 60,
+              "plannedStartFrame": 120,
+              "plannedFrames": 120
+            }
+          ]
+        },
+        "barcodeExportSeconds": 6.649
+      },
+      "tpl.hanukkah-greeting": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.26,
+          "p95": 3.23,
+          "max": 3.42
+        },
+        "exportSeconds": 11.976,
+        "shuffle": {
+          "replaced": 7,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 1,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "menorah"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "card",
+              "clipId": "clp_8e1ec2eaf72",
+              "startFrame": 0,
+              "frames": 180,
+              "plannedStartFrame": 0,
+              "plannedFrames": 360
+            }
+          ]
+        },
+        "barcodeExportSeconds": 3.639
+      },
+      "tpl.birthday-age": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.37,
+          "p95": 3.14,
+          "max": 3.29
+        },
+        "exportSeconds": 12.111,
+        "shuffle": {
+          "replaced": 14,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 6,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "crown"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "moment2",
+              "clipId": "clp_b1c1c5a6575",
+              "startFrame": 60,
+              "frames": 60,
+              "plannedStartFrame": 120,
+              "plannedFrames": 120
+            }
+          ]
+        },
+        "barcodeExportSeconds": 6.668
+      },
+      "tpl.birthday-cake": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.26,
+          "p95": 2.99,
+          "max": 3.55
+        },
+        "exportSeconds": 9.299,
+        "shuffle": {
+          "replaced": 14,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 4,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "cake",
+              "clipId": "clp_c4d37fd4156",
+              "startFrame": 60,
+              "frames": 120,
+              "plannedStartFrame": 120,
+              "plannedFrames": 240
+            }
+          ]
+        },
+        "barcodeExportSeconds": 5.73
+      },
+      "tpl.birthday-invite": {
+        "music": {
+          "bpm": 120.19,
+          "beats": 79,
+          "bars": "measured"
+        },
+        "planMs": {
+          "runs": 20,
+          "median": 2.24,
+          "p95": 3.39,
+          "max": 4.15
+        },
+        "exportSeconds": 11.267,
+        "shuffle": {
+          "replaced": 8,
+          "protected": 1,
+          "linked": 0,
+          "slotsAfter": 1,
+          "holes": 0,
+          "covered": false,
+          "elementsOver": [
+            "bunting"
+          ],
+          "elementsOverSame": true
+        },
+        "otherTempo": {
+          "status": 409,
+          "code": "template_blocked",
+          "kept": [
+            {
+              "key": "card",
+              "clipId": "clp_1f66ade1e62",
+              "startFrame": 0,
+              "frames": 210,
+              "plannedStartFrame": 0,
+              "plannedFrames": 420
+            }
+          ]
+        },
+        "barcodeExportSeconds": 4.185
       }
     }
   },
@@ -283,7 +566,14 @@
           "tpl.birthday",
           "tpl.quote-card",
           "tpl.countdown-list",
-          "tpl.home-video"
+          "tpl.home-video",
+          "tpl.hanukkah-candles",
+          "tpl.hanukkah-eight-nights",
+          "tpl.hanukkah-party",
+          "tpl.hanukkah-greeting",
+          "tpl.birthday-age",
+          "tpl.birthday-cake",
+          "tpl.birthday-invite"
         ],
         "gated": [
           "tpl.text-behind-subject",
@@ -310,18 +600,18 @@
       "name": "tpl.travel-montage: plan answers with steps and no blocking item, at the current revision, and changes nothing",
       "ok": true,
       "detail": {
-        "steps": 8,
+        "steps": 9,
         "warnings": [
           "media_reused"
         ],
-        "operations": 37
+        "operations": 38
       }
     },
     {
       "name": "tpl.travel-montage: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_bb030311abm",
+        "runId": "run_12cb239a0dm",
         "created": 21
       }
     },
@@ -401,7 +691,7 @@
         "kept": [
           {
             "key": "shot2",
-            "clipId": "clp_bb030311ab3",
+            "clipId": "clp_12cb239a0d3",
             "startFrame": 30,
             "frames": 30,
             "plannedStartFrame": 60,
@@ -418,8 +708,8 @@
         "errors": 0,
         "first": [],
         "hidden": [
-          "video",
           "adjustment",
+          "video",
           "text",
           "text"
         ]
@@ -440,7 +730,7 @@
       "name": "tpl.photo-dump: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_7e0f9650f0h",
+        "runId": "run_51eb970d34h",
         "created": 17
       }
     },
@@ -518,7 +808,7 @@
         "kept": [
           {
             "key": "photo2",
-            "clipId": "clp_7e0f9650f02",
+            "clipId": "clp_51eb970d342",
             "startFrame": 15,
             "frames": 15,
             "plannedStartFrame": 30,
@@ -544,18 +834,18 @@
       "name": "tpl.birthday: plan answers with steps and no blocking item, at the current revision, and changes nothing",
       "ok": true,
       "detail": {
-        "steps": 8,
+        "steps": 9,
         "warnings": [
           "media_reused"
         ],
-        "operations": 43
+        "operations": 44
       }
     },
     {
       "name": "tpl.birthday: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_6898d9ad45q",
+        "runId": "run_1a02e06aafq",
         "created": 22
       }
     },
@@ -635,7 +925,7 @@
         "kept": [
           {
             "key": "moment2",
-            "clipId": "clp_6898d9ad455",
+            "clipId": "clp_1a02e06aaf5",
             "startFrame": 60,
             "frames": 60,
             "plannedStartFrame": 120,
@@ -652,9 +942,9 @@
         "errors": 0,
         "first": [],
         "hidden": [
+          "adjustment",
+          "adjustment",
           "video",
-          "adjustment",
-          "adjustment",
           "text"
         ]
       }
@@ -663,19 +953,19 @@
       "name": "tpl.quote-card: plan answers with steps and no blocking item, at the current revision, and changes nothing",
       "ok": true,
       "detail": {
-        "steps": 6,
+        "steps": 7,
         "warnings": [
           "media_unused",
           "designed_for_other_shape"
         ],
-        "operations": 21
+        "operations": 22
       }
     },
     {
       "name": "tpl.quote-card: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_e85d90981ad",
+        "runId": "run_9a38152282d",
         "created": 12
       }
     },
@@ -750,7 +1040,7 @@
         "kept": [
           {
             "key": "backdrop",
-            "clipId": "clp_e85d90981a1",
+            "clipId": "clp_9a381522821",
             "startFrame": 0,
             "frames": 180,
             "plannedStartFrame": 0,
@@ -767,8 +1057,8 @@
         "errors": 0,
         "first": [],
         "hidden": [
-          "video",
           "adjustment",
+          "video",
           "text",
           "text"
         ]
@@ -778,19 +1068,19 @@
       "name": "tpl.countdown-list: plan answers with steps and no blocking item, at the current revision, and changes nothing",
       "ok": true,
       "detail": {
-        "steps": 8,
+        "steps": 9,
         "warnings": [
           "media_unused",
           "media_reused"
         ],
-        "operations": 67
+        "operations": 68
       }
     },
     {
       "name": "tpl.countdown-list: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_fdd4b4b5e7w",
+        "runId": "run_500e72d835w",
         "created": 31
       }
     },
@@ -869,7 +1159,7 @@
         "kept": [
           {
             "key": "item2",
-            "clipId": "clp_fdd4b4b5e74",
+            "clipId": "clp_500e72d8354",
             "startFrame": 60,
             "frames": 60,
             "plannedStartFrame": 120,
@@ -886,8 +1176,8 @@
         "errors": 0,
         "first": [],
         "hidden": [
-          "video",
           "adjustment",
+          "video",
           "text",
           "text"
         ]
@@ -909,7 +1199,7 @@
       "name": "tpl.home-video: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_79bfad2e93i",
+        "runId": "run_4fc767feebi",
         "created": 15
       }
     },
@@ -987,7 +1277,7 @@
         "kept": [
           {
             "key": "clip2",
-            "clipId": "clp_79bfad2e932",
+            "clipId": "clp_4fc767feeb2",
             "startFrame": 90,
             "frames": 90,
             "plannedStartFrame": 180,
@@ -1010,6 +1300,827 @@
       }
     },
     {
+      "name": "tpl.hanukkah-candles: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 9,
+        "warnings": [
+          "media_unused"
+        ],
+        "operations": 34
+      }
+    },
+    {
+      "name": "tpl.hanukkah-candles: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_745fdc3769k",
+        "created": 16
+      }
+    },
+    {
+      "name": "tpl.hanukkah-candles: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          120,
+          240,
+          360
+        ],
+        "boundaryErrors": 0,
+        "minGap": 120,
+        "slots": 3
+      }
+    },
+    {
+      "name": "tpl.hanukkah-candles: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 2,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.hanukkah-candles: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 360,
+        "predicted": 360
+      }
+    },
+    {
+      "name": "tpl.hanukkah-candles: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 360
+      }
+    },
+    {
+      "name": "tpl.hanukkah-candles: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.hanukkah-candles: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.hanukkah-candles: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 9,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 3,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.hanukkah-candles: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "family",
+            "clipId": "clp_745fdc37693",
+            "startFrame": 120,
+            "frames": 120,
+            "plannedStartFrame": 240,
+            "plannedFrames": 240
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.hanukkah-candles: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 222,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "video",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 9,
+        "warnings": [
+          "media_reused"
+        ],
+        "operations": 96
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_df4bef0fe01q",
+        "created": 43
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          60,
+          120,
+          180,
+          240,
+          300,
+          360,
+          420,
+          480
+        ],
+        "boundaryErrors": 0,
+        "minGap": 60,
+        "slots": 8
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 6,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 480,
+        "predicted": 480
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 480
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 34,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 8,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "lit--2"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "night2",
+            "clipId": "clp_df4bef0fe0b",
+            "startFrame": 60,
+            "frames": 60,
+            "plannedStartFrame": 120,
+            "plannedFrames": 120
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.hanukkah-eight-nights: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 300,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "video",
+          "text",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 9,
+        "warnings": [
+          "media_reused"
+        ],
+        "operations": 55
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_1677cb6df3v",
+        "created": 26
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          60,
+          120,
+          180,
+          240,
+          300,
+          360
+        ],
+        "boundaryErrors": 0,
+        "minGap": 60,
+        "slots": 6
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 360,
+        "predicted": 360
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 360
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.hanukkah-party: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.hanukkah-party: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 18,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 6,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "dreidel"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "beat2",
+            "clipId": "clp_1677cb6df37",
+            "startFrame": 60,
+            "frames": 60,
+            "plannedStartFrame": 120,
+            "plannedFrames": 120
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.hanukkah-party: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 216,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "adjustment",
+          "video",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 8,
+        "warnings": [
+          "media_unused",
+          "designed_for_other_shape"
+        ],
+        "operations": 28
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_8e1ec2eaf7l",
+        "created": 16
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          180
+        ],
+        "boundaryErrors": 0,
+        "minGap": 180,
+        "slots": 1
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 1,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 180,
+        "predicted": 180
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 180
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.hanukkah-greeting: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.hanukkah-greeting: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 7,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 1,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "menorah"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "card",
+            "clipId": "clp_8e1ec2eaf72",
+            "startFrame": 0,
+            "frames": 180,
+            "plannedStartFrame": 0,
+            "plannedFrames": 360
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.hanukkah-greeting: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 180,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "video",
+          "text",
+          "text",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.birthday-age: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 9,
+        "warnings": [
+          "media_reused"
+        ],
+        "operations": 45
+      }
+    },
+    {
+      "name": "tpl.birthday-age: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_b1c1c5a657q",
+        "created": 22
+      }
+    },
+    {
+      "name": "tpl.birthday-age: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          60,
+          120,
+          180,
+          240,
+          300,
+          360
+        ],
+        "boundaryErrors": 0,
+        "minGap": 60,
+        "slots": 6
+      }
+    },
+    {
+      "name": "tpl.birthday-age: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.birthday-age: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 360,
+        "predicted": 360
+      }
+    },
+    {
+      "name": "tpl.birthday-age: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 360
+      }
+    },
+    {
+      "name": "tpl.birthday-age: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.birthday-age: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.birthday-age: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 14,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 6,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "crown"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.birthday-age: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "moment2",
+            "clipId": "clp_b1c1c5a6575",
+            "startFrame": 60,
+            "frames": 60,
+            "plannedStartFrame": 120,
+            "plannedFrames": 120
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.birthday-age: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 204,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "adjustment",
+          "video",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 9,
+        "warnings": [
+          "media_unused",
+          "media_reused"
+        ],
+        "operations": 45
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_c4d37fd415r",
+        "created": 22
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          60,
+          180,
+          240,
+          300
+        ],
+        "boundaryErrors": 0,
+        "minGap": 60,
+        "slots": 4
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 3,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 300,
+        "predicted": 300
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 300
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.birthday-cake: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.birthday-cake: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 14,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 4,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "cake",
+            "clipId": "clp_c4d37fd4156",
+            "startFrame": 60,
+            "frames": 120,
+            "plannedStartFrame": 120,
+            "plannedFrames": 240
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.birthday-cake: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 216,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "adjustment",
+          "video",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: plan answers with steps and no blocking item, at the current revision, and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": 8,
+        "warnings": [
+          "media_unused",
+          "designed_for_other_shape"
+        ],
+        "operations": 32
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: apply adds exactly one revision",
+      "ok": true,
+      "detail": {
+        "runId": "run_1f66ade1e6m",
+        "created": 18
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: slot boundaries equal the expected beat frames of the placed music (0 errors) and are at least 11 frames apart",
+      "ok": true,
+      "detail": {
+        "boundaries": [
+          0,
+          210
+        ],
+        "boundaryErrors": 0,
+        "minGap": 210,
+        "slots": 1
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: describe_moment shows the planned source frame at the middle of every video slot (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 1,
+        "errors": 0
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: the exported file has exactly the predicted number of frames",
+      "ok": true,
+      "detail": {
+        "exported": 210,
+        "predicted": 210
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: the export's flash check reports no failing range",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "ranges": 0,
+        "frames": 210
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: replay of the history equals the live document",
+      "ok": true
+    },
+    {
+      "name": "tpl.birthday-invite: one undo gives an equal creativeProjection",
+      "ok": true
+    },
+    {
+      "name": "tpl.birthday-invite: shuffle keeps the hand-edited slot exactly (with what is linked to it) and replaces every untouched item, as one revision, with no frame left without a slot picture, no picture over the kept one, and the template's graphic elements over it where they were",
+      "ok": true,
+      "detail": {
+        "replaced": 8,
+        "protected": 1,
+        "linked": 0,
+        "slotsAfter": 1,
+        "holes": 0,
+        "covered": false,
+        "elementsOver": [
+          "bunting"
+        ],
+        "elementsOverSame": true
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: regenerating at another tempo with a slot kept by hand is refused (409 template_blocked naming the slot) and changes nothing",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "template_blocked",
+        "kept": [
+          {
+            "key": "card",
+            "clipId": "clp_1f66ade1e62",
+            "startFrame": 0,
+            "frames": 210,
+            "plannedStartFrame": 0,
+            "plannedFrames": 420
+          }
+        ]
+      }
+    },
+    {
+      "name": "tpl.birthday-invite: every exported frame of every video slot (outside its transition) shows the planned source frame by its barcode (0 errors)",
+      "ok": true,
+      "detail": {
+        "checked": 210,
+        "errors": 0,
+        "first": [],
+        "hidden": [
+          "adjustment",
+          "video",
+          "text",
+          "text",
+          "text",
+          "text"
+        ]
+      }
+    },
+    {
       "name": "MCP: plan_template changes nothing and apply_template adds exactly one revision",
       "ok": true,
       "detail": {
@@ -1020,7 +2131,7 @@
           6,
           7
         ],
-        "runId": "run_d7e6ecce11m"
+        "runId": "run_22c2dd2cfem"
       }
     }
   ]

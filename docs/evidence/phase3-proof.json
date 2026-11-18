@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T23:47:53.273Z",
+  "ranAt": "2026-11-18T02:17:34.104Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 1,
-        "editor-en": 1,
-        "palette-en": 1
+        "editor-he": 0.988114,
+        "editor-en": 0.988175,
+        "palette-en": 0.99116
       }
     },
     {
@@ -627,17 +627,17 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 29,
+        "differentSourceFrames": 28,
         "firstFrames": [
           {
-            "frame": 4,
+            "frame": 3,
             "quality": "draft",
-            "code": 4
+            "code": 3
           },
           {
-            "frame": 7,
+            "frame": 6,
             "quality": "draft",
-            "code": 7
+            "code": 6
           },
           {
             "frame": 9,
@@ -645,19 +645,19 @@
             "code": 9
           },
           {
-            "frame": 13,
+            "frame": 12,
             "quality": "draft",
-            "code": 13
+            "code": 12
           },
           {
-            "frame": 17,
+            "frame": 15,
             "quality": "draft",
-            "code": 17
+            "code": 15
           },
           {
-            "frame": 21,
+            "frame": 18,
             "quality": "draft",
-            "code": 21
+            "code": 18
           }
         ],
         "mismatches": []
@@ -818,7 +818,7 @@
       "ok": true,
       "detail": {
         "unexpected": [],
-        "leftOut": 1
+        "leftOut": 0
       }
     }
   ]
