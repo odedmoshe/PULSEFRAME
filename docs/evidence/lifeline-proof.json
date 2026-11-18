@@ -1,12 +1,12 @@
 {
   "proof": "lifeline",
   "adr": "ADR-0021",
-  "ranAt": "2026-11-17T20:44:36.409Z",
+  "ranAt": "2026-11-18T01:59:58.528Z",
   "result": "PASSED",
   "passed": 14,
   "total": 14,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "node": "v22.23.4",
@@ -1438,20 +1438,20 @@
       "evaluate": {
         "frames": 1000,
         "liveTitles": 20,
-        "medianMsPerFrameLive": 0.024,
-        "medianMsPerFrameTyped": 0.022,
-        "addedMsPerFrame": 0.002,
+        "medianMsPerFrameLive": 0.021,
+        "medianMsPerFrameTyped": 0.019,
+        "addedMsPerFrame": 0.003,
         "budgetMs": 0.2,
         "withinBudget": true,
-        "firstFrameAfterAnEditMs": 0.06
+        "firstFrameAfterAnEditMs": 0.056
       },
       "commit": {
         "datedFiles": 500,
         "events": 60,
         "created": 60,
         "commits": 30,
-        "medianMs": 28.269,
-        "maxMs": 40.063
+        "medianMs": 12.924,
+        "maxMs": 17.966
       }
     }
   },
@@ -1725,8 +1725,8 @@
             "severity": "blocker",
             "message": "the title \"צולם ב־{date}\" has a field without data, so those words would be missing from the film ({date}: there is no capture date to take it from (the picture under the title has none, or no dated picture is on the timeline))",
             "ids": [
-              "clp_30ab73b8e70",
-              "clp_d6a1a023970"
+              "clp_19418a92cb0",
+              "clp_f6f972b8c30"
             ],
             "range": {
               "startFrame": 0,
@@ -1750,8 +1750,8 @@
             "severity": "blocker",
             "message": "the title \"{hebrewDate}\" shows a Hebrew date ({hebrewDate}) for a picture taken around sunset: the Hebrew date depends on whether it was filmed before or after sunset, and that has not been answered. Answer it for the event (update_event afterSunset); it is never guessed",
             "ids": [
-              "clp_f9b97469920",
-              "evt_4d9f7f7a420"
+              "clp_fc864a8de70",
+              "evt_feb8fc4bd50"
             ],
             "range": {
               "startFrame": 0,
@@ -1793,20 +1793,20 @@
         "evaluate": {
           "frames": 1000,
           "liveTitles": 20,
-          "medianMsPerFrameLive": 0.024,
-          "medianMsPerFrameTyped": 0.022,
-          "addedMsPerFrame": 0.002,
+          "medianMsPerFrameLive": 0.021,
+          "medianMsPerFrameTyped": 0.019,
+          "addedMsPerFrame": 0.003,
           "budgetMs": 0.2,
           "withinBudget": true,
-          "firstFrameAfterAnEditMs": 0.06
+          "firstFrameAfterAnEditMs": 0.056
         },
         "commit": {
           "datedFiles": 500,
           "events": 60,
           "created": 60,
           "commits": 30,
-          "medianMs": 28.269,
-          "maxMs": 40.063
+          "medianMs": 12.924,
+          "maxMs": 17.966
         }
       }
     }
