@@ -87,8 +87,9 @@ let canvas: FakeCanvas, player: Player, samples: [number, number][];
 const pool = { frames: {}, draftFrames: {} } as unknown as MediaPool;
 const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms);
 /**
- * Start a shuttle on an animation frame, so that its first tick comes a whole frame later. (Started 4 ms before a frame,
- * its first tick would compute frame 0 from frame 0 and stop it as the start of the timeline: Player.shuttle's `f <= 0`.)
+ * Start a shuttle on an animation frame, so that its first tick comes a whole frame later. (This once worked around a shuttle
+ * that stopped on its first tick when started just before a frame; that is fixed and tested in player.shuttle.test.ts. Kept
+ * so the recorded timings of these tests stay the same.)
  */
 const shuttle = (speed: number) => requestAnimationFrame(() => player.shuttle(speed));
 beforeEach(() => {

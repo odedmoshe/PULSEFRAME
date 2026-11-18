@@ -738,7 +738,9 @@ export class Player {
     const tick = () => {
       if (!this.playing || this.shuttleRate !== r) return;
       const f = from + Math.trunc((((performance.now() - t0) / 1000) * r * fps.num) / fps.den); // from absolute elapsed time: no accumulated rounding
-      if (f <= 0 || f >= last) { this.frame = f <= 0 ? 0 : last; this.pause(); return; }
+      // Stop only at the end it moves towards: the first ticks can compute `from` itself (less than a frame of elapsed time),
+      // and `from` may be the other end (forwards from frame 0, backwards from the last frame); that is not the end of the shuttle.
+      if (r > 0 ? f >= last : f <= 0) { this.frame = r > 0 ? last : 0; this.pause(); return; }
       if (f !== this.frame) { this.frame = f; this.request(f); this.onTick(); }
       this.raf = requestAnimationFrame(tick);
     };
