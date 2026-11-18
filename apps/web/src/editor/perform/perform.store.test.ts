@@ -35,3 +35,22 @@ describe('perform mode shows the master only', () => {
     expect(ed.getState().viewVariantId).toBe(variant);
   });
 });
+
+describe('a take is committed on the sequence it was performed on', () => {
+  const two = applyTransaction(createProject({ id: 'prj_seq', name: 'S', width: 1920, height: 1080, frameRate: { num: 30, den: 1 } }), [{ op: 'add_sequence', args: { name: 'Short', tracks: 'empty' } }], { idSeed: 'sq_', actor: 't' }).doc;
+  const other = Object.keys(two.sequences).find((k) => k !== two.mainSequenceId)!;
+  const run = async (active: string) => {
+    const { api } = await import('../../api.ts');
+    const seen: unknown[] = [];
+    const spy = vi.spyOn(api, 'performTake').mockImplementation(async (_id: string, body: unknown) => { seen.push(body); throw new Error('stop'); });
+    const ed = new Editor();
+    ed.set({ doc: two, rawDoc: two, activeSequenceId: active, revision: 3, lang: 'en', workspace: 'perform' });
+    await ed.commitTake({ taps: [], bank: [], assets: [], settings: {}, gpu: false } as never);
+    spy.mockRestore();
+    return seen[0] as { sequenceId?: string; expectedRevision: number };
+  };
+  it('names the active sequence when it is not the main one, and leaves it out for the main sequence', async () => {
+    expect((await run(other)).sequenceId).toBe(other);
+    expect((await run(two.mainSequenceId)).sequenceId).toBeUndefined();
+  });
+});

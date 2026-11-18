@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import type { CameraGeometry, MediaClip } from '@pulseframe/core';
-import { centreFromPointer, clampCentre, localFrame, sourceFrameAt, stepZoom, windowFractions, ZOOM_STEP } from './CameraOverlay.tsx';
+import { applyTransaction, createProject, type Asset, type CameraGeometry, type MediaClip } from '@pulseframe/core';
+import { cameraSourceDocument, centreFromPointer, clampCentre, localFrame, sourceFrameAt, stepZoom, windowFractions, ZOOM_STEP } from './CameraOverlay.tsx';
 
 const R = { num: 30, den: 1 };
 const wide: CameraGeometry = { frameW: 1080, frameH: 1920, srcW: 1920, srcH: 1080, fit: 'contain' }; // a 16:9 source in a 9:16 frame
@@ -49,5 +49,33 @@ describe('camera geometry (display only; the plan is core planCamera)', () => {
     expect(sourceFrameAt(clip({ speed: { num: 2, den: 1 } }), 30, R)).toBe(12 * 30);
     expect(sourceFrameAt(clip({ reverse: true }), 30, R)).toBe(13 * 30);
     expect(sourceFrameAt(clip(), -500, R)).toBe(0);
+  });
+});
+
+describe('the whole-clip picture keeps the clip\'s privacy regions (ADR-0015)', () => {
+  const rate = { num: 30, den: 1 };
+  const build = () => {
+    const base = createProject({ id: 'prj_cam', name: 'C', width: 1920, height: 1080, frameRate: rate });
+    base.assets['ast_a'] = { id: 'ast_a', kind: 'video', name: 'a.mp4', contentHash: `sha256:${'a'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(10, 1), video: { width: 1920, height: 1080, frameRate: rate, codec: 'h264', rotation: 0, frameCount: 300 }, provenance: { origin: 'import', createdAt: '2026-01-01T00:00:00.000Z' } } as unknown as Asset;
+    const d = applyTransaction(base, [{ op: 'add_clip', args: { assetId: 'ast_a', start: T.rt(3, 1), sourceIn: T.rt(2, 1), duration: T.rt(4, 1) } }], { idSeed: 'c_', actor: 't' }).doc;
+    const track = d.sequences[d.mainSequenceId]!.tracks.find((t) => t.clips.length)!;
+    return { d, clip: track.clips[0] as MediaClip };
+  };
+  const shownClip = (o: ReturnType<typeof cameraSourceDocument>) => o.sequences[o.mainSequenceId]!.tracks.flatMap((t) => t.clips)[0] as MediaClip;
+  it('a clip with a region shows it, with the motion track it follows', () => {
+    const { d, clip } = build();
+    const region = { id: 'rg_1', shape: 'rect', x: 0.1, y: 0.1, width: 0.2, height: 0.2, style: 'blur', strength: 1, motionTrackId: 'mtk_1' };
+    const mt = { id: 'mtk_1', assetId: 'ast_a', kind: 'region', x: [], y: [] };
+    (clip as { redact?: unknown }).redact = [region];
+    d.motionTracks = { mtk_1: mt } as never;
+    const out = cameraSourceDocument(d, clip, d.assets['ast_a']!);
+    expect(shownClip(out).redact).toEqual([region]);
+    expect(out.motionTracks['mtk_1']).toEqual(mt);
+    expect(T.toSeconds(shownClip(out).sourceIn)).toBe(0);
+    expect(d.motionTracks['mtk_1']).toBe(mt); // the project's own track is untouched
+  });
+  it('a clip without regions shows the plain source document', () => {
+    const { d, clip } = build();
+    expect(shownClip(cameraSourceDocument(d, clip, d.assets['ast_a']!)).redact).toBeUndefined();
   });
 });

@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import * as T from '@pulseframe/time';
-import { applyTransaction, cameraLimits, DEFAULT_CAMERA, fitScale, planCamera, type CameraGeometry, type CameraPlan, type CameraRefusal, type CameraSample, type Fit, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, cameraLimits, DEFAULT_CAMERA, fitScale, planCamera, type Asset, type CameraGeometry, type CameraPlan, type CameraRefusal, type CameraSample, type Fit, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
 import { Player } from '../../player.ts';
 import { Button, Slider } from '../../ds/index.ts';
@@ -51,6 +51,26 @@ export function sourceFrameAt(clip: MediaClip, local: number, rate: T.Rate): num
   return Math.max(0, Math.round((s * rate.num) / rate.den));
 }
 
+/**
+ * The document of the whole-clip picture: the source viewer's one-clip document, with the selected clip's privacy regions (ADR-0015)
+ * and the motion tracks they follow carried over. Both are in source time and the overlay clip starts at source 0 at normal speed, so
+ * they map one to one. A local document, never saved; without this a blurred face would show unblurred for the whole take.
+ */
+export function cameraSourceDocument(doc: ProjectDocument, clip: MediaClip, asset: Asset): ProjectDocument {
+  const base = sourceDocument(doc, asset);
+  if (!clip.redact?.length) return base;
+  const out = structuredClone(base);
+  const mine = out.sequences[out.mainSequenceId]?.tracks.flatMap((t) => t.clips).find((c) => c.type === 'media');
+  if (!mine || mine.type !== 'media') return base;
+  mine.redact = structuredClone(clip.redact);
+  for (const r of clip.redact) {
+    const id = r.motionTrackId;
+    const track = id !== null && Object.hasOwn(doc.motionTracks ?? {}, id) ? doc.motionTracks[id] : undefined;
+    if (track) (out.motionTracks ??= {})[track.id] = structuredClone(track);
+  }
+  return out;
+}
+
 type Phase = 'idle' | 'filming' | 'review';
 export interface CameraOverlayProps { lang: Lang; camera: PerformPrefs['camera']; onCamera(c: PerformPrefs['camera']): void; say(text: string): void; onClose(): void }
 
@@ -74,6 +94,7 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
   const range = useRef({ from: 0, to: 0 });
   const poseRef = useRef(pose); poseRef.current = pose;
   const lastFrame = useRef(-1);
+  const lastPlanTo = useRef(0);
   const viewPlayer = useRef<Player | null>(null);
   const rate = doc?.settings.frameRate ?? { num: 30, den: 1 };
   const maxZoom = limits?.maxZoom ?? 1;
@@ -89,7 +110,7 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
     let p: Player | null = null;
     try {
       p = new Player(canvas, editor.pool, () => {}, () => {}, { draftOnly: { maxHeight: 360 } });
-      p.setDoc(sourceDocument(doc, asset));
+      p.setDoc(cameraSourceDocument(doc, clip, asset));
       viewPlayer.current = p;
     } catch { viewPlayer.current = null; }
     return () => { p?.dispose(); if (viewPlayer.current === p) viewPlayer.current = null; };
@@ -106,6 +127,7 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
     if (samples.current.length < 2 || to <= from) { setPhase('idle'); setMessage('pv.cam.tooShort'); say(S('pv.cam.tooShort')); return; }
     setBusy(true);
     try {
+      lastPlanTo.current = to;
       const r = planCamera(doc, { clipId: clip.id, from, to, samples: samples.current, settings: { ...DEFAULT_CAMERA, ...camera } });
       if ('refused' in r) { setRefusal(r.refused); setPlan(null); setPhase('idle'); say(S('pv.cam.refused', { why: t(`perform.camera.${r.refused}` as 'perform.camera.locked') })); return; }
       setRefusal(null); setPlan(r); setPhase('review');
@@ -114,6 +136,18 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
       setPhase('idle'); setMessage('pv.plannerMissing'); say(e instanceof Error && /not built/.test(e.message) ? S('pv.plannerMissing') : S('pv.planRefused', { why: e instanceof Error ? e.message : String(e) }));
     } finally { setBusy(false); }
   }, [doc, clip, editor, rate, camera, say, S, t]);
+
+  // the project changed under a take in review (a reload, a remote edit): plan the same samples again on the new document
+  useEffect(() => {
+    if (phase !== 'review' || !doc) return;
+    if (!clip || samples.current.length < 2) { editor.showGhost(null); setPlan(null); setPhase('idle'); return; }
+    try {
+      const r = planCamera(doc, { clipId: clip.id, from: range.current.from, to: lastPlanTo.current, samples: samples.current, settings: { ...DEFAULT_CAMERA, ...camera } });
+      if ('refused' in r) { editor.showGhost(null); setRefusal(r.refused); setPlan(null); setPhase('idle'); say(S('pv.cam.refused', { why: t(`perform.camera.${r.refused}` as 'perform.camera.locked') })); return; }
+      setPlan(r);
+      editor.showGhost(applyTransaction(doc, r.ops, { idSeed: 'perform_cam_', actor: 'perform-preview' }).doc);
+    } catch { editor.showGhost(null); setPlan(null); setPhase('idle'); }
+  }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = () => {
     if (!doc || !clip || !limits || phase === 'filming') return;

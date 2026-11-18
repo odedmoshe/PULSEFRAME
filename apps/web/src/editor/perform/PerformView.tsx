@@ -182,8 +182,8 @@ export function PerformView() {
     if (phase === 'recording' && !editor.player?.active) finalize();
   }, [state.tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // snap settings or the bank changed in review: the same taps, planned again
-  useEffect(() => { if (live.current.phase === 'review') planNow(cap.snapshot()); }, [prefs.settings, prefs.bank, prefs.bankId, hasBeats]); // eslint-disable-line react-hooks/exhaustive-deps
+  // snap settings, the bank or the document (a reload, a remote edit) changed in review: the same taps, planned again
+  useEffect(() => { if (live.current.phase === 'review') planNow(cap.snapshot()); }, [prefs.settings, prefs.bank, prefs.bankId, hasBeats, base]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- keys: pads (capture), R record, Enter accept, Escape discard; blur closes open hits
   useEffect(() => {
