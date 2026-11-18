@@ -150,6 +150,27 @@ async function main() {
     const tplPid = (await post('/projects', { name: 'a11y-templates', width: 640, height: 360 })).project.id as string;
     // an empty project: the start hub covers the stage, the inspector and the timeline (UX_REDESIGN §4.14)
     const emptyPid = (await post('/projects', { name: 'a11y-empty', width: 1920, height: 1080 })).project.id as string;
+    // multicam (ADR-0020): two barcode videos grouped by hand (the second synced by a hand offset, so no sound match is needed),
+    // the program placed on new tracks; the panel and the sync dialog are audited, and a keyboard-only path from the library
+    // selection to a placed program (state multicam-keyboard-path) on a second, still ungrouped project
+    const mcB = await generateBarcodeFixture({ out: path.join(art, 'fixture-b.mp4'), frames: 121 });
+    const mcMake = async (name: string, place: boolean) => {
+      const id = (await post('/projects', { name, width: 640, height: 360 })).project.id as string;
+      const ids: string[] = [];
+      for (const [file, label] of [[fixture.file, 'a.mp4'], [mcB.file, 'b.mp4']] as const) {
+        const r: any = await (await fetch(`${s.url}/api/v1/projects/${id}/assets`, { method: 'POST', headers: { ...h, 'x-filename': label }, body: fs.readFileSync(file) })).json();
+        ids.push(r.assetId as string);
+      }
+      if (!place) return { id, ids, trackId: null as string | null };
+      const made = await post(`/projects/${id}/transactions`, { ops: [{ op: 'create_multicam', args: { name: 'a11y', angles: ids.map((assetId) => ({ assetIds: [assetId] })) } }] });
+      const out = made.results?.[0]?.output as { groupId: string; angleIds: string[] } | undefined;
+      if (!out) return { id, ids, trackId: null as string | null, error: JSON.stringify(made).slice(0, 200) };
+      await post(`/projects/${id}/transactions`, { ops: [{ op: 'set_multicam_sync', args: { groupId: out.groupId, angleId: out.angleIds[1], pieceIndex: 0, offset: { value: '0', timescale: 1 } } }] });
+      const placed = await post(`/projects/${id}/transactions`, { ops: [{ op: 'place_multicam', args: { groupId: out.groupId, at: { value: '0', timescale: 1 }, angleId: out.angleIds[0] } }] });
+      return { id, ids, trackId: (placed.results?.[0]?.output?.videoTrackId ?? null) as string | null, error: placed.results?.[0]?.output ? undefined : JSON.stringify(placed).slice(0, 200) };
+    };
+    const mc = await mcMake('a11y-multicam', true);
+    const mcLib = await mcMake('a11y-multicam-library', false);
     for (const [i, c] of ['0x4a6f8c', '0x8c5a4a', '0x5a8c6a', '0x7a5a8c'].entries()) {
       const file = path.join(art, `still-${i}.png`);
       execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${c}:s=640x360,drawbox=x=${60 + i * 100}:y=90:w=120:h=180:color=0xc0b07a:t=fill`, '-frames:v', '1', file]);
@@ -625,6 +646,35 @@ async function main() {
         }
         await page.getByTestId('workspace-pro').click().catch(() => {});
       }
+      // multicam (ADR-0020): the docked panel, the sync dialog (modal), and a keyboard-only path from the library selection to a placed program
+      if (mc.trackId) {
+        await page.evaluate(([id, track]) => { try { localStorage.setItem(`pf.targets.v1.${id}`, JSON.stringify({ video: track, audio: null })); } catch { /* storage unavailable */ } }, [mc.id, mc.trackId]);
+        await page.goto(`${s.ownerUrl}&project=${mc.id}`);
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+        await page.getByTestId('multicam-panel').waitFor({ timeout: 10000 }).catch(() => {});
+        await auditState('multicam-panel', { shown: (await page.getByTestId('multicam-panel').count()) === 1, tiles: await page.locator('[data-testid=multicam-tile]').count(), tileOrder: await page.locator('[data-testid=multicam-tile]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tile)), dir: await page.evaluate(() => document.documentElement.dir) });
+        const md = await dialogBehaviour('multicam-sync-dialog', async () => { await page.getByTestId('multicam-sync-open').click(); }, '[data-testid=multicam-sync-open]');
+        await auditState('multicam-sync-dialog', { startsInside: md.startsInside, tabStepsThatLeftTheDialog: md.tabStepsThatLeftTheDialog, rows: await page.locator('[data-testid=multicam-sync-row]').count() }, true);
+        Object.assign(states.at(-1), await md.close());
+      }
+      {
+        await page.goto(`${s.ownerUrl}&project=${mcLib.id}`);
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+        const boxes = page.locator('[data-testid^=pick-]');
+        await boxes.first().waitFor({ timeout: 10000 }).catch(() => {});
+        // keyboard only: focus each checkbox and press Space, then the «סנכרון וחיתוך» button with Enter
+        let keyboardOk = false;
+        if ((await boxes.count()) >= 2) {
+          for (let i = 0; i < 2; i++) { await boxes.nth(i).focus(); await page.keyboard.press('Space'); }
+          await page.getByTestId('multicam-sync-and-cut').focus();
+          await page.keyboard.press('Enter');
+          await page.waitForFunction(() => !!document.querySelector('[data-testid=multicam-review-stop]') || document.querySelector('[data-testid=multicam-entry] [data-state=done]') || document.querySelector('[data-testid=multicam-entry] [data-state=failed]'), undefined, { timeout: 60000 }).catch(() => {});
+          const review = page.getByTestId('multicam-review-stop');
+          if (await review.count()) { await review.getByRole('button').nth(1).focus(); await page.keyboard.press('Enter'); await page.waitForSelector('[data-testid=multicam-entry] [data-state=done], [data-testid=multicam-entry] [data-state=failed]', { timeout: 60000 }).catch(() => {}); }
+          keyboardOk = (await page.locator('[data-testid=multicam-entry] [data-state=done]').count()) === 1;
+        }
+        await auditState('multicam-keyboard-path', { keyboardOk });
+      }
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);
       await page.getByTestId('welcome').waitFor({ timeout: 10000 }).catch(() => {});
@@ -640,7 +690,7 @@ async function main() {
     await s.close();
   }
   const stateFindings = (st: any) => st.unnamed.length + st.lowContrast.length + st.tabIssues.length + st.noFocusRing.length
-    + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0) + (st.firstCardAtInlineStart === false ? 1 : 0);
+    + (st.keyboardOk === false ? 1 : 0) + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0) + (st.firstCardAtInlineStart === false ? 1 : 0);
   const total = report.runs.reduce((n: number, r: any) => n + r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length + (r.states ?? []).reduce((m: number, st: any) => m + stateFindings(st), 0), 0);
   report.findings = total;
   report.result = total === 0 ? 'NO FINDINGS (heuristic)' : 'FINDINGS';

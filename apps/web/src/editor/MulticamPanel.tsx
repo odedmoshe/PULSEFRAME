@@ -240,7 +240,7 @@ export function MulticamPanel() {
     <aside className="stage-side pf-ds pf-insp pf-force-dark mc-panel" aria-label={D['multicam.title']} data-testid={ID.panel}>
       <div className="mc-head">
         <h2>{D['multicam.title']}</h2>
-        <Button size="sm" onClick={() => setSyncOpen(true)}>{S.syncOpen}</Button>
+        <Button size="sm" data-testid="multicam-sync-open" onClick={() => setSyncOpen(true)}>{S.syncOpen}</Button>
       </div>
       {groups.length > 1 && (
         <label className="mc-note">{S.group}{' '}
