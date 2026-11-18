@@ -68,11 +68,15 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // preferredAddress is left unset: the door runs the route probe itself (drop.ts). The door listens only while a code is live.
   const door = createDropDoor({ queue: imports, projectExists, page: loadDropPage, port: cfg.dropPort, limits: dropLimitsFrom(cfg), admitAddresses: cfg.dropAdmitAddresses });
   // ---- segmented export and render cache (ADR-0024) ----
-  const segments = new SegmentStore({
-    dir: path.join(cfg.dataDir, RENDER_CACHE_DIR), capBytes: cfg.renderCacheBytes, autoClear: cfg.renderCacheAutoClear, minFreeBytes: cfg.renderCacheMinFreeBytes,
+  const cacheDir = path.join(cfg.dataDir, RENDER_CACHE_DIR);
+  let segmentsOpen = false;
+  const segments: SegmentStore = new SegmentStore({
+    dir: cacheDir, capBytes: cfg.renderCacheBytes, autoClear: cfg.renderCacheAutoClear, minFreeBytes: cfg.renderCacheMinFreeBytes,
     // index.sqlite and its WAL count as other bytes (usedBytes counts the segment files only); no walk without a ceiling
-    quota: () => { const quotaBytes = store.maxStorageBytes; return { quotaBytes, otherBytes: quotaBytes ? Math.max(0, dataDirBytes(cfg.dataDir) - segments.status().usedBytes) : 0 }; },
+    // (while the store is being opened it trims, before `segments` exists: its directory is measured whole then)
+    quota: () => { const quotaBytes = store.maxStorageBytes; if (!quotaBytes) return { quotaBytes, otherBytes: 0 }; const cache = segmentsOpen ? segments.status().usedBytes : dataDirBytes(cacheDir); return { quotaBytes, otherBytes: Math.max(0, dataDirBytes(cfg.dataDir) - cache) }; },
   });
+  segmentsOpen = true;
   setStorageHooks(store, { reclaim: (n) => void segments.trim(n), purgeProject: (id) => void segments.purgeProject(id), status: () => segments.status() });
   // Privacy over speed (owner decision): a commit that changes a privacy region purges the project's segments in the same commit path.
   store.onPrivacyChange = (projectId, revision) => void segments.purgeProject(projectId, { revision });

@@ -192,7 +192,7 @@ async function main() {
   const clips = Array.from({ length: 20 }, (_, i) => { const f = path.join(art, 'fixtures', `clip-${String(i).padStart(2, '0')}.mp4`); ff(['-f', 'lavfi', '-i', `testsrc2=size=320x240:rate=30`, '-f', 'lavfi', '-i', `sine=frequency=${300 + i * 20}:sample_rate=48000`, '-t', '2', '-vf', `hue=h=${i * 17}`, ...X265, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', f]); return f; });
   // files nobody imported before (conform reuse would skip their conversion): one long rotated HEVC for the cards, six for the load
   const hevc = (name: string, seconds: number, size: string, hue: string) => { const f = path.join(art, 'fixtures', name); ff(['-f', 'lavfi', '-i', `testsrc2=size=${size}:rate=30`, '-t', String(seconds), '-vf', `hue=h=${hue}`, ...X265, '-pix_fmt', 'yuv420p', f.replace(/\.mp4$/, '-0.mp4')]); ff(['-display_rotation', '90', '-i', f.replace(/\.mp4$/, '-0.mp4'), '-c', 'copy', f]); fs.rmSync(f.replace(/\.mp4$/, '-0.mp4')); return f; };
-  const cardClip = hevc('card-hevc.mp4', 8, '1280x720', '200');
+  const cardClip = hevc('card-hevc.mp4', 8, '1280x720', '200'), cardClip2 = hevc('card2-hevc.mp4', 6, '1280x720', '100');
   const busyClips = Array.from({ length: 6 }, (_, i) => hevc(`busy-${i}.mp4`, 4, '960x540', String(20 + i * 40)));
   const junk = path.join(art, 'fixtures', 'junk.mp4');
   fs.writeFileSync(junk, randomBytes(512 * 1024));
@@ -203,8 +203,13 @@ async function main() {
   await startChild();
   const lan = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address ?? null;
   const lanRefused = lan ? await refused(lan, PORT) : null;
-  const spoof = await fetch(`${child!.url}/api/v1/session`, { headers: { host: `evil.example:${PORT}`, connection: 'close' } });
-  const spoofBody = (await spoof.json().catch(() => ({}))) as any;
+  // fetch cannot set Host (undici writes its own): a raw request carries the spoofed one
+  const spoof = await new Promise<{ status: number; body: any }>((resolve) => {
+    const rq = http.request({ host: '127.0.0.1', port: PORT, path: '/api/v1/whoami', headers: { host: `evil.example:${PORT}`, authorization: `Bearer ${child!.agent}`, connection: 'close' }, agent: false }, (res) => { let t = ''; res.on('data', (d) => (t += d)); res.on('end', () => { let b: any = null; try { b = JSON.parse(t); } catch { /* not JSON */ } resolve({ status: res.statusCode ?? 0, body: b }); }); });
+    rq.on('error', () => resolve({ status: 0, body: null }));
+    rq.end();
+  });
+  const spoofBody = spoof.body;
   let hostThrows = false;
   try { loadConfig({ ...process.env, PF_HOST: '0.0.0.0' }); } catch { hostThrows = true; }
   check('P1', 'the main server: its port on the machine\'s network address is refused, a spoofed Host gets 403 forbidden_host, PF_HOST=0.0.0.0 refuses to start', (lanRefused ?? true) && spoof.status === 403 && spoofBody?.error?.code === 'forbidden_host' && hostThrows, { lan, lanRefused, spoof: spoof.status, code: spoofBody?.error?.code, hostThrows });
@@ -351,22 +356,27 @@ async function main() {
     const cp = await cards.newPage();
     await cp.goto(`${child!.ownerUrl}&project=${p15}`);
     await cp.getByTestId('timecode').waitFor({ timeout: 60_000 });
-    const seen: string[] = [];
+    // the picker is enabled once the document is loaded (the timecode shows earlier); Playwright can set files on a disabled input
+    await cp.waitForFunction(() => (document.querySelector('[data-testid=file-input]') as HTMLInputElement | null)?.disabled === false, undefined, { timeout: 30_000 });
+    // two files that both need converting (one conversion at a time): the second one's card waits its turn, so «ממתין» is seen
+    // for certain (run 3: with one file the probe was faster than the card, which showed «ממיר» first; the claim is unchanged)
+    const seen = new Map<string, string[]>();
     let watching = true;
-    const watch = (async () => { while (watching) { const t = await cp.locator(`[data-testid^=import-card-] [data-testid=${IMPORT_TESTIDS.state}]`).first().textContent().catch(() => null); if (t && seen.at(-1) !== t) seen.push(t); await sleep(40); } })();
-    await cp.getByTestId('file-input').setInputFiles([cardClip]);
-    const assetCard = await cp.locator('.assets li').first().waitFor({ timeout: 300_000 }).then(() => true, () => false);
+    const watch = (async () => { while (watching) { const rows = await cp.locator('[data-testid^=import-card-]').evaluateAll((els) => els.map((e) => [e.querySelector('.pf-imp-name')?.textContent ?? '', e.querySelector('[data-testid=import-state]')?.textContent ?? ''])).catch(() => [] as string[][]); for (const [n, t] of rows) { const l = seen.get(n!) ?? []; if (t && l.at(-1) !== t) l.push(t); seen.set(n!, l); } await sleep(40); } })();
+    await cp.getByTestId('file-input').setInputFiles([cardClip, cardClip2]);
+    const assetCard = await waitFor('both asset cards', async () => (await cp.locator('.assets li').count()) === 2, 300_000, 200).catch(() => false);
     await sleep(300);
     watching = false; await watch;
-    const pct = seen.map((s) => /(\d+)%/.exec(s)?.[1]).filter(Boolean).map(Number);
-    const increasing = pct.length >= 2 && pct.some((v, i) => i > 0 && v > pct[i - 1]!);
-    const order = [HE.waiting, HE.converting, HE.ready].map((w) => seen.findIndex((s) => s.startsWith(w)));
-    check('P15', 'a converted file\'s card in the editor goes «ממתין» → «ממיר N%» (at least two increasing percentages) → «מוכן», then the asset card', assetCard && order.every((i) => i >= 0) && order[0]! < order[1]! && order[1]! < order[2]! && increasing, { states: seen, percentages: pct, assetCard });
+    const all = [...seen.values()];
+    const pctOf = (l: string[]) => l.map((x) => /(\d+)%/.exec(x)?.[1]).filter(Boolean).map(Number);
+    const ordered = (l: string[]) => { const o = [HE.waiting, HE.converting, HE.ready].map((w) => l.findIndex((x) => x.startsWith(w))); return o.every((i) => i >= 0) && o[0]! < o[1]! && o[1]! < o[2]!; };
+    const increasing = (l: string[]) => { const p = pctOf(l); return p.length >= 2 && p.some((v, i) => i > 0 && v > p[i - 1]!); };
+    check('P15', 'converted files\' cards in the editor: one goes «ממתין» → «ממיר N%» → «מוכן» in that order, a conversion shows at least two increasing percentages, and both end as asset cards', assetCard === true && all.some(ordered) && all.some(increasing), { states: Object.fromEntries(seen), assetCards: assetCard });
     await cp.getByTestId('file-input').setInputFiles([junk]);
     const failedCard = await cp.locator(`[data-testid^=import-card-]:has([data-testid=${IMPORT_TESTIDS.state}]:text("${HE.failed}"))`).first().waitFor({ timeout: 120_000 }).then(() => true, () => false);
     const reason = failedCard ? await cp.locator('.pf-imp-card[data-state=attention] .pf-imp-detail').first().textContent().catch(() => null) : null;
     if (failedCard) await cp.locator(`[data-testid^=import-card-] [data-testid=${IMPORT_TESTIDS.dismiss}]`).first().click();
-    const removed = await cp.locator(`[data-testid^=import-card-]:has([data-testid=${IMPORT_TESTIDS.state}]:text("${HE.failed}"))`).count().then((c) => c === 0);
+    const removed = await cp.locator(`[data-testid^=import-card-]:has([data-testid=${IMPORT_TESTIDS.state}]:text("${HE.failed}"))`).first().waitFor({ state: 'detached', timeout: 10_000 }).then(() => true, () => false);
     check('P15b', 'random bytes named .mp4 end as «נכשל» with a reason, and «הסרה» removes the card', failedCard && !!reason && removed, { failedCard, reason, removed });
     blocked('P15c', 'a retry after an injected disk_full succeeds', 'the running server has no seam to inject a full disk (freeBytes is fixed to statfs in index.ts); retry after disk_full is covered by importQueue.test.ts with an injected freeBytes');
     // P16: a folder of 25 files, 3 of them not media
@@ -412,7 +422,10 @@ async function main() {
     await startChild(['--max-storage', String(used + 40 * MiB), '--max-upload', String(64 * MiB)]);
     const c = await openCode(pid2);
     const s1 = (await hello(tokenOf(c.url))).json?.session as string;
-    const blobs0 = dirBytes(path.join(dataDir, 'blobs')), jobs0 = readJobs().length;
+    // the blobs directory also holds derivatives (thumbnails, proxies) the restarted server may still be making for earlier
+    // files: it is measured once it has held still for 3 s, so a refused upload is the only thing that could change it
+    const settle = async () => { let last = -1, still = 0; for (let i = 0; i < 240 && still < 12; i++) { const n = dirBytes(path.join(dataDir, 'blobs')); still = n === last ? still + 1 : 0; last = n; await sleep(250); } return last; };
+    const blobs0 = await settle(), jobs0 = readJobs().length;
     const over = await door('POST', '/upload', { headers: { authorization: `Bearer ${s1}`, 'x-filename': 'big.bin' }, body: 80 * MiB });
     const blobs1 = dirBytes(path.join(dataDir, 'blobs')), jobs1 = readJobs().length;
     // in a browser on the phone: the page knows the cap from /hello and refuses a 64 MiB file itself, in Hebrew; and the browser
@@ -432,17 +445,18 @@ async function main() {
       inBrowser = await ph.evaluate(async (bytes) => { const s = sessionStorage.getItem('pfdrop.s'); try { const r = await fetch('/upload', { method: 'POST', headers: { authorization: `Bearer ${s}`, 'x-filename': 'b.bin' }, body: new Blob([new Uint8Array(bytes)]) }); return { status: r.status, body: await r.text() }; } catch (e) { return { error: String(e) }; } }, 80 * MiB);
       await ctx.close();
     } finally { await browser2.close(); }
-    const blobs2 = dirBytes(path.join(dataDir, 'blobs'));
+    const blobs2 = await settle();
     check('P12', 'the per-file cap (64 MiB): an 80 MiB body is refused 413 upload_too_large before it is read, while the client is still sending (a JSON answer, not a reset); the phone page refuses the file itself in Hebrew; a browser still sending reads the door\'s refusal', over.status === 413 && over.json?.error?.code === 'upload_too_large' && pageText.includes(HE.tooLarge) && (inBrowser as any)?.status === 413, { wire: [over.status, over.json?.error?.code, over.error], pageText, inBrowser });
     check('P11', 'a refused upload stores nothing: the blobs directory and the job rows are as before, without running clean-up', blobs0 === blobs1 && blobs1 === blobs2 && jobs0 === jobs1, { blobs: [blobs0, blobs1, blobs2], jobs: [jobs0, jobs1] });
     // the storage ceiling (40 MiB of room): a 20 MiB file is accepted; a declared 50 MiB one (under the 64 MiB cap) is refused 507
     const f20 = path.join(art, 'fixtures', 'junk-20m.mp4'); fs.writeFileSync(f20, randomBytes(20 * MiB));
-    const first = await uploadVia(s1, f20, 'junk-20m.mp4');
-    const ceiling = await door('POST', '/upload', { headers: { authorization: `Bearer ${s1}`, 'x-filename': 'more.bin' }, body: 50 * MiB });
+    const s1b = (await hello(tokenOf(c.url))).json?.session as string; // the phone page above claimed again from this address: a new session
+    const first = await uploadVia(s1b, f20, 'junk-20m.mp4');
+    const ceiling = await door('POST', '/upload', { headers: { authorization: `Bearer ${s1b}`, 'x-filename': 'more.bin' }, body: 50 * MiB });
     check('P11b', 'the storage ceiling: with 40 MiB of room, a 20 MiB file is accepted and a declared 50 MiB file (under the per-file cap) is refused 507 storage_quota_exceeded while it is still being sent', first.status === 201 && ceiling.status === 507 && ceiling.json?.error?.code === 'storage_quota_exceeded', { first: first.status, second: [ceiling.status, ceiling.json?.error?.code, ceiling.error] });
     // junk bytes are refused as unsupported and their original goes at once: the blobs directory returns to its earlier size
     await waitFor('the junk import fails', async () => readJobs().some((j) => j.input.name === 'junk-20m.mp4' && j.status === 'failed'), 120_000).catch(() => false);
-    const blobs3 = dirBytes(path.join(dataDir, 'blobs'));
+    const blobs3 = await settle();
     check('P11c', 'a junk upload that was accepted and then refused as unsupported leaves the blobs directory at its earlier size, with no clean-up run', blobs3 === blobs0, { before: blobs0, after: blobs3, job: readJobs().find((j) => j.input.name === 'junk-20m.mp4')?.error?.code });
     await stopChild();
     // the code budget, on its own server in this process (PF_DROP_CODE_BYTES 10 MiB): a declared 12 MiB file is refused 413 code_budget
@@ -520,6 +534,7 @@ async function main() {
     try {
       for (const lang of ['he', 'en'] as const) {
         const ctx = await browser3.newContext({ viewport: { width: 390, height: 844 }, locale: lang === 'he' ? 'he-IL' : 'en-US' });
+        await ctx.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate
         const ph = await ctx.newPage();
         await ph.goto(c.url);
         await ph.getByTestId(DROP_PAGE_TESTIDS.pickMedia).waitFor({ state: 'attached', timeout: 15_000 });

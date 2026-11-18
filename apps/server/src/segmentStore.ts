@@ -155,6 +155,9 @@ export class SegmentStore {
       CREATE TABLE IF NOT EXISTS render_cache_meta (name TEXT PRIMARY KEY, value TEXT NOT NULL);
     `);
     this.reconcile();
+    // A cap (or a ceiling) lowered while the server was stopped holds from the moment the store opens: trimmed before anything
+    // is counted, so the cache is never above its limits, also at its high-water mark (lead run 2026-11-18, proof I11c).
+    this.trim(0);
     this.highWater = this.usedBytes();
   }
 

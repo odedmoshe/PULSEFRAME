@@ -73,7 +73,7 @@ export const renderCacheA11yScenarios: RenderCacheScenario[] = [
   },
   {
     id: 'cache-sheet-disabled', describe: 'the switch disabled with its visible reason (a format the fast export cannot make)',
-    async prepare(c) { await openSheet(c.page); const fmt = c.page.getByTestId('export-type-webm'); if (await fmt.count()) await fmt.click(); // the sheet's file type WebM (the export-format cards are the formats of the project, not file types) await c.page.getByTestId(TID.fastReason).waitFor({ timeout: 8000 }).catch(() => {}); return { shown: (await c.page.getByTestId(TID.fastReason).count()) === 1, detail: { reason: await c.page.getByTestId(TID.fastReason).textContent().catch(() => null) } }; },
+    async prepare(c) { await openSheet(c.page); const fmt = c.page.getByTestId('export-type-webm'); /* the sheet's file type WebM (the export-format cards are the formats of the project, not file types) */ if (await fmt.count()) await fmt.click(); await c.page.getByTestId(TID.fastReason).waitFor({ timeout: 8000 }).catch(() => {}); return { shown: (await c.page.getByTestId(TID.fastReason).count()) === 1, detail: { reason: await c.page.getByTestId(TID.fastReason).textContent().catch(() => null) } }; },
     leave: async (c) => { const mp4 = c.page.getByTestId('export-type-mp4'); if (await mp4.count()) await mp4.click(); await closeSheet(c.page); },
   },
   {
@@ -109,6 +109,7 @@ export async function runRenderCacheUiChecks(o: { browser: Browser; ownerUrl: st
   const S = renderCacheStrings(o.lang);
   const ctx = await o.browser.newContext({ viewport: { width: 1440, height: 900 } });
   await ctx.addInitScript(() => { try { localStorage.setItem('pf.fastExport', '1'); } catch { /* storage unavailable */ } });
+  await ctx.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate (as a11y-audit.ts does)
   const page = await ctx.newPage();
   try {
     await page.goto(`${o.ownerUrl}&project=${o.pid}`);

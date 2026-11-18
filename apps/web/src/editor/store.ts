@@ -333,6 +333,9 @@ export class Editor {
     }
     const projectId = id;
     if (this.disposed) return;
+    // The import cards follow the store from before the document is shown: a file picked as soon as the library appears is
+    // never dropped by a later reset (found by proof:phone-drop P15, lead run 2026-11-18).
+    this.imports.subscribe(() => this.set({ imports: this.imports.snapshot(), uploading: this.imports.uploading }));
     this.pool = new MediaPool({
       assetUrl: (assetId) => `/api/v1/projects/${projectId}/assets/${assetId}/content`,
       // Preview decodes the frame-identical proxy once it exists; export always uses the original.
@@ -343,8 +346,6 @@ export class Editor {
     (window as any).__pfSync = () => this.player?.syncStats();
     const p = await this.load(projectId);
     this.set({ activity: (await api.history(projectId)).events.reverse() });
-    this.imports.reset();
-    this.imports.subscribe(() => this.set({ imports: this.imports.snapshot(), uploading: this.imports.uploading }));
     void this.imports.refresh().catch(() => {}); // imports still open (or failed) from before this page was loaded
     void this.refreshDrop();
     if (this.state.fastExport) void this.planPolicy.now(p.revision);

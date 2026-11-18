@@ -688,7 +688,9 @@ async function runCaps(pid: string) {
   const ceiling = D0 + Math.ceil(total.usedBytes * 0.5) + 24 * 2 ** 20; // room for the sound mix and the joined file and half the cache: the rest cannot be stored
   await reboot({ maxStorageBytes: ceiling });
   let maxSeen = 0;
-  const sampler = setInterval(() => { maxSeen = Math.max(maxSeen, dirBytes(dataDir)); }, 50);
+  const walBytes = () => ['pulseframe.sqlite-wal', 'render-cache/index.sqlite-wal'].reduce((n, f) => { try { return n + fs.statSync(path.join(dataDir, f)).size; } catch { return n; } }, 0);
+  let walAtMax = 0;
+  const sampler = setInterval(() => { const n = dirBytes(dataDir); if (n > maxSeen) { maxSeen = n; walAtMax = walBytes(); } }, 50);
   const outsBefore = outFiles();
   const tight = await exportRun(pid, INC, 'cap-ceiling');
   clearInterval(sampler);
@@ -702,13 +704,18 @@ async function runCaps(pid: string) {
   const impossible = await exportRun(pid, INC, 'cap-impossible');
   const impCode = impossible.job?.error?.code ?? impossible.post.body?.error?.code;
   check('I11d', 'a tight storage ceiling: the data directory never passes it at any 50 ms sample; the export succeeds, or stops with a typed 507 and nothing published; an impossible ceiling gives the typed 507 and nothing published',
-    maxSeen <= ceiling && okTight && impCode === 'storage_quota_exceeded' && same(outsBefore2, outFiles()), { ceiling, startBytes: D0, maxSampledBytes: maxSeen, tightOutcome: tight.job?.status ?? `refused ${tight.post.status}`, tightCode, impossibleOutcome: impossible.job?.status ?? `refused ${impossible.post.status}`, impossibleCode: impCode });
+    maxSeen <= ceiling && okTight && impCode === 'storage_quota_exceeded' && same(outsBefore2, outFiles()), { ceiling, startBytes: D0, maxSampledBytes: maxSeen, databaseLogBytesAtThatSample: walAtMax, tightOutcome: tight.job?.status ?? `refused ${tight.post.status}`, tightCode, impossibleOutcome: impossible.job?.status ?? `refused ${impossible.post.status}`, impossibleCode: impCode });
   // I11b: the cache is full and the data directory is at its ceiling: a small upload still succeeds because the reclaimer trims the cache
   await reboot();
   await clearCache();
   await exportRun(pid, INC, 'cap-fill-2');
-  const used = dirBytes(dataDir), cacheBefore = (await cacheStatus()).usedBytes;
-  await reboot({ maxStorageBytes: used + 100_000 });
+  const cacheBefore = (await cacheStatus()).usedBytes;
+  // measured with the server stopped (corrected, lead run 2026-11-18): a running server's database write-ahead logs are folded
+  // back and removed when it closes, so a size taken while it ran left megabytes of room under the "100 kB" ceiling and the
+  // upload fitted without the cache giving anything (the first run: cache bytes unchanged, upload accepted)
+  await halt();
+  const used = dirBytes(dataDir);
+  await boot({ maxStorageBytes: used + 100_000 });
   const noise = path.join(art, 'noise.png');
   ff(['-y', '-f', 'lavfi', '-i', 'color=c=black:s=640x360,format=gbrp,geq=r=random(1)*255:g=random(2)*255:b=random(3)*255', '-frames:v', '1', noise]);
   const noiseBytes = fs.statSync(noise).size;
