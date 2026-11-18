@@ -13,8 +13,10 @@
  * - Normalisation per speaker: floor = 10th percentile; speech = 90th percentile of the frames above floor + 10 dB.
  *   n_i = dB_i − speech_i; a speaker is active when n_i ≥ −10 dB (mic bleed of another talker sits lower); with transcripts
  *   (useTranscripts) a segment of that speaker (Segment.speaker = transcriptSpeaker) on the mic's file counts as active too.
- * - dominance_k = n_k − max_{j≠k} n_j for the loudest k. A frame is "speaker k" when k is active and dominance ≥ marginDb;
- *   "both" when two or more are active otherwise; "silence" when none is; otherwise unsure (it holds the shot).
+ * - Two or more voices each at or above its own activity threshold (n ≥ −10 dB) make a frame "both", whatever the level
+ *   difference (lead decision 2026-11-18). Otherwise dominance_k = n_k − max_{j≠k} n_j for the loudest k: "speaker k" when k
+ *   is active and dominance ≥ marginDb; "both" when a transcript makes a second speaker active; "silence" when none is;
+ *   otherwise unsure (it holds the shot).
  * - Hysteresis: cut to speaker k's shot (shotAngleId, else the wide angle) once "speaker k" has held switchHold, landing
  *   preRoll before it started; to the wide angle after bothHold of "both" or silenceHold of "silence" (no wide angle: hold).
  *   No shot shorter than minShot (a cut waits; one that would leave less than minShot before the end is dropped); with
@@ -207,7 +209,11 @@ export function planMulticamAuto(doc: ProjectDocument, raw: unknown, ctx: PlanCo
     margin[i] = dom;
     // a transcript names exactly one speaker: that speaker, unless the levels clearly say another
     const saidBy = speakers.map((_, j) => j).filter((j) => said[j]![i] === 1);
-    if (active(k, i) && dom >= p.marginDb) cls[i] = k;
+    // two voices each above its own activity threshold are both talking, whatever the level difference (lead decision
+    // 2026-11-18): a voice wins an overlap only when the other is below its own threshold
+    const heard = speakers.reduce((n, _, j) => n + (norm[j]![i]! >= ACTIVE_DB ? 1 : 0), 0);
+    if (heard >= 2) cls[i] = BOTH;
+    else if (active(k, i) && dom >= p.marginDb) cls[i] = k;
     else if (saidBy.length === 1 && !(active(k, i) && k !== saidBy[0] && dom >= p.marginDb)) { cls[i] = saidBy[0]!; margin[i] = Math.max(dom, p.marginDb); }
     else if (nActive >= 2) cls[i] = BOTH;
     else if (nActive === 0) cls[i] = SILENCE;

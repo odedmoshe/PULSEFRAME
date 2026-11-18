@@ -8,7 +8,7 @@ import {
   frac, fracCmp, fracSub, fromGroupExact, groupTimeAt, isPlaced, lookOfClip, masterGroupTimeAt, multiviewDocument, pieceCoverage, planPicture, planSound, quantise, remapSource,
   segmentSyncOffset, syncGrid, taggedSegment, timelineAtGroupTime, toGroupExact, validateProject, type Frac, type MediaClip, type MulticamPiece, type SyncAnchor,
 } from './index.ts';
-import { NTSC, podcast, R30, samples, tx } from './multicam.testFixture.ts';
+import { camera, NTSC, podcast, project, R30, recorder, samples, tx } from './multicam.testFixture.ts';
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -192,6 +192,35 @@ describe('planPicture coverage and fill', () => {
     const noFill = planPicture(p.doc, g, { angleId: p.camB, at: T.ZERO, g0: T.ZERO, duration: T.rt(10, 1), fill: false, driftToleranceFrames: 0.5 });
     expect(noFill.segments.map((s) => s.angleId)).toEqual([p.camB]);
     expect(noFill.uncovered.map((u) => T.toSeconds(u.end))).toEqual([2.5]);
+  });
+});
+
+describe('planPicture at a card change', () => {
+  it('a second file that starts a fifth of a frame after the first ends shows from that frame: no one-frame hole, no flash of another angle', () => {
+    // two camera files of 10 s; the first plays from group 3.3 frames, so it ends off the 30 fps grid,
+    // off the 30 fps grid; the second from there + 0.2 frame. By the strict rule neither file covers all of program frame 303
+    const { doc, ids } = project([recorder('mic.wav', 30), camera('wide.mp4', 30), camera('c1.mp4', 10), camera('c2.mp4', 10)]);
+    const [mic, wide, c1, c2] = ids as [string, string, string, string];
+    let r = tx(doc, [{ op: 'create_multicam', args: { name: 'g', angles: [{ assetIds: [mic] }, { assetIds: [wide] }, { assetIds: [c1, c2] }] } }]);
+    const out = r.results[0]!.output as { groupId: string; angleIds: string[] };
+    const [, wideA, cam] = out.angleIds as [string, string, string];
+    const first = 3.3 * 1600, second = first + 10 * 48000 + 0.2 * 1600;
+    r = tx(r.doc, [
+      { op: 'set_multicam_sync', args: { groupId: out.groupId, angleId: wideA, pieceIndex: 0, offset: T.ZERO } },
+      { op: 'set_multicam_sync', args: { groupId: out.groupId, angleId: cam, pieceIndex: 0, offset: samples(first) } },
+      { op: 'set_multicam_sync', args: { groupId: out.groupId, angleId: cam, pieceIndex: 1, offset: samples(second) } },
+    ]);
+    const g = r.doc.multicam![out.groupId]!;
+    const plan = planPicture(r.doc, g, { angleId: cam, at: T.ZERO, g0: T.ZERO, duration: T.rt(20, 1), fill: true, driftToleranceFrames: 0.5 });
+    // frames 0–2 from the wide (the camera starts 3.3 frames in); frame 3 snaps to its first frame (0.3 frame); frame 303 to the second file's
+    expect(plan.segments.map((x) => [x.angleId === cam ? 'cam' : 'other', T.frameIndexAt(x.start, R30)])).toEqual([['other', 0], ['cam', 3], ['cam', 303]]);
+    expect(plan.segments[1]!.sourceIn).toEqual(T.ZERO);
+    expect(plan.uncovered).toEqual([]);
+    expect(T.frameIndexAt(T.add(plan.segments[1]!.start, plan.segments[1]!.duration), R30)).toBe(303);
+    // a second file that starts a whole frame later leaves an honest hole (filled from the wide)
+    const late = tx(r.doc, [{ op: 'set_multicam_sync', args: { groupId: out.groupId, angleId: cam, pieceIndex: 1, offset: samples(first + 10 * 48000 + 1.2 * 1600) } }]).doc;
+    const p2 = planPicture(late, late.multicam![out.groupId]!, { angleId: cam, at: T.ZERO, g0: T.ZERO, duration: T.rt(20, 1), fill: true, driftToleranceFrames: 0.5 });
+    expect(p2.segments.map((x) => (x.angleId === cam ? 'cam' : 'other'))).toEqual(['other', 'cam', 'other', 'cam']);
   });
 });
 

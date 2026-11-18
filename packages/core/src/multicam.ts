@@ -295,21 +295,28 @@ export function coverParts(doc: ProjectDocument, angle: MulticamAngle, o: CoverO
   const chunkCap = Number(floorDiv(BigInt(SOUND_CHUNK_MAX_SECONDS) * o.frame.d, o.frame.n));
   const threshold = red(BigInt(Math.round(SOUND_DRIFT_CHUNK_THRESHOLD_S * 1e6)), 1_000_000n);
   let k = o.from ?? 0, after: PartStart = 'start', chunking = false;
+  // picture: a file that starts less than the drift tolerance after this frame starts (the second file of a card change,
+  // measured a fraction of a frame later than the first one ends) shows from its first frame here, instead of leaving a
+  // one-frame hole that the fill would show as a flash of another angle; the error is within the through-edit tolerance
+  const startsWithin = (c: (typeof pcs)[number], k: number) => o.drift?.mode === 'picture' && !started(c, k) && fracCmp(fabs(frac(at(c, k))), o.drift.tolerance) <= 0;
   while (k < N) {
-    const x = pcs.find((c) => started(c, k) && !ended(c, k));
+    let x = pcs.find((c) => started(c, k) && !ended(c, k));
+    let snapped = false;
+    if (!x) { x = pcs.find((c) => startsWithin(c, k)); snapped = !!x; }
     if (!x) {
       let next = N;
       for (const c of pcs) {
         if (ended(c, k)) continue;
         let lo = k + 1, hi = N; // smallest k' in [k+1, N) with the file started, else N
         while (lo < hi) { const mid = Math.floor((lo + hi) / 2); if (started(c, mid)) hi = mid; else lo = mid + 1; }
+        if (lo > k + 1 && lo <= N && startsWithin(c, lo - 1)) lo--; // the frame before it shows it (startsWithin)
         if (lo < next && lo < N && !ended(c, lo)) next = lo;
       }
       uncovered.push({ k0: k, k1: next });
       k = next; after = 'gap'; chunking = false;
       continue;
     }
-    const s = at(x, k), sf = frac(s);
+    const s = snapped ? T.ZERO : at(x, k), sf = frac(s);
     let n = N - k;
     if (!freeze) { const room = fracSub(x.D, sf); n = Math.min(n, Number(floorDiv(room.n * o.span.d, room.d * o.span.n))); }
     let byDrift = false;

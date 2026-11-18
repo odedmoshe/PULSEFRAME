@@ -57,7 +57,7 @@ export const MULTICAM_AUTO_LABEL = 'Heuristic: the clearly loudest mic decides t
 export const MulticamAutoParams = z.object({
   groupId: z.string(), trackId: z.string().optional(), from: RationalTimeSchema.optional(), to: RationalTimeSchema.optional(),
   minShotSeconds: z.number().min(0.5).max(30).default(2), switchHoldMs: z.number().int().min(0).max(3000).default(300),
-  bothHoldMs: z.number().int().min(200).max(5000).default(1000), silenceHoldMs: z.number().int().min(200).max(10000).default(2000),
+  bothHoldMs: z.number().int().min(200).max(5000).default(500), silenceHoldMs: z.number().int().min(200).max(10000).default(2000),
   preRollMs: z.number().int().min(0).max(1000).default(200), marginDb: z.number().min(1).max(20).default(6),
   maxShotSeconds: z.number().min(2).max(120).nullable().default(null), useTranscripts: z.boolean().default(true),
 }).strict();
