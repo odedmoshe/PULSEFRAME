@@ -160,7 +160,12 @@ async function main() {
     const dated = (await tx(tp, [{ op: 'add_clip', args: { assetId: ph, start: f(0), duration: f(60) } }])).results[0].output.clipId as string;
     const text = (await tx(tp, [{ op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60), style: { fontFamily: 'Heebo', fontWeight: 700, fontSize: 64, color: '#ffffff' }, transform: { y: 0.2 } } }])).results[0].output.clipId as string;
     const plainStill = sha(await still(tp, 5));
-    await tx(tp, [{ op: 'add_person', args: { name: 'נועה', birthDate: '2023-03-10', form: 'f' } }]).catch(() => undefined);
+    // the built-in agent token reads and writes names only (peoplePrivacy.ts), so the person, with a birth date, is added by a grant that has people: 'full'
+    {
+      const full = s.governance.createGrant({ name: 'people-fixture', mode: 'edit', people: 'full' }, { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] }).token;
+      const r = await fetch(`${s.url}/api/v1/projects/${tp}/transactions`, { method: 'POST', headers: { authorization: `Bearer ${full}`, 'content-type': 'application/json', connection: 'close' }, body: JSON.stringify({ ops: [{ op: 'add_person', args: { name: 'נועה', birthDate: '2023-03-10', form: 'f' } }] }) });
+      if (r.status !== 200) throw new Error(`the people fixture was refused: ${r.status} ${(await r.text()).slice(0, 300)}`);
+    }
     {
       const page = await open(tp, 'he');
       await page.locator(`.clip[data-clip-id="${text}"]`).click();
@@ -170,7 +175,7 @@ async function main() {
       await until(async () => !!(await doc(tp)).sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === text)?.fields);
       const c1 = (await doc(tp)).sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === text);
       const live = ((await page.getByTestId(LIFE_TESTIDS.fieldLive).textContent()) ?? '').replace(/\s+/g, ' ');
-      const typed = await call(`/projects/${tp}/transactions`, { ops: [{ op: 'update_text', args: { clipId: text, text: 'שלום 2024' } }, { op: 'set_text_fields', args: { clipId: text, enabled: false } }] });
+      const typed = await call(`/projects/${tp}/transactions`, { ops: [{ op: 'update_text', args: { clipId: text, text: 'שלום2024' } }, { op: 'set_text_fields', args: { clipId: text, enabled: false } }] });
       const typedStill = sha(await still(tp, 5));
       await call(`/projects/${tp}/undo`, {});
       const withFieldStill = sha(await still(tp, 5));
@@ -196,7 +201,7 @@ async function main() {
       const gotDate = await until(async () => !!(await doc(tp)).assets[pn].capture);
       await until(async () => (await page.getByTestId(LIFE_TESTIDS.fieldLive).locator('.pf-anchored').count()) === 0);
       check('the fix dates the picture (one operation) and the anchored error goes away', gotDate && (await page.getByTestId(LIFE_TESTIDS.fieldLive).locator('.pf-anchored').count()) === 0);
-      await call(`/projects/${tp}/undo`, {}); // keep the next step on the dated title
+      // (no undo here: the server undoes per actor, and the fix was the owner's; the title now sits over the dated picture)
 
       // ---- freeze: the still is byte-identical, undo brings the fields back
       const before = sha(await still(tp, 5));
@@ -274,10 +279,20 @@ async function main() {
     // ---------------------------------------------------------------- the packs mount: the Hanukkah pack is two clicks from an open project
     {
       const page = await open(tp, 'he');
-      await page.getByTestId('rail-media').click();
-      const mount = page.getByTestId('packs-mount');
-      const clicks = await mount.count() ? 1 : 0;
-      check('the packs shelf is mounted in the browser drawer (the Hanukkah pack is reached from the shelf, which honestly says so when the server has no packs route)', clicks === 1 || (await page.getByTestId('rail-packs').count()) === 1);
+      await page.getByTestId('rail-templates').click(); // click 1: the Templates drawer holds the shelf
+      await page.getByTestId('packs-mount').waitFor({ timeout: 10000 });
+      const card = page.locator('[data-testid=pack-card][data-pack-id="pack.hanukkah"], [data-pack-id="pack.hanukkah"] [data-testid=pack-card]').first();
+      await card.click(); // click 2: the Hanukkah pack
+      const opened = await page.getByTestId('pack-page').waitFor({ timeout: 10000 }).then(() => true, () => false);
+      check('the Hanukkah pack is two clicks from an open project (the Templates rail, then its tile) and opens its page', opened && (await page.getByTestId('pack-page').getAttribute('data-pack-id')) === 'pack.hanukkah');
+      await page.screenshot({ path: path.join(art, 'pack-hanukkah-he.png') });
+      // the suggestion on the tile depends on the clock: when today is within the pack's lead window of Hanukkah 2026 (evening of 4 December), the page says so
+      const now = new Date();
+      if (now >= new Date('2026-11-13T00:00:00') && now <= new Date('2026-12-14T00:00:00')) {
+        await page.getByTestId('pack-back').click();
+        const reason = ((await page.getByTestId('pack-suggest').first().textContent()) ?? '');
+        check('the pack suggestion names the start of Hanukkah 2026, the evening of 4 December', /4/.test(reason) && /דצמבר/.test(reason), { reason });
+      } else console.log('  skip  the suggestion text for Hanukkah 2026 (today is outside the pack\'s lead window; the clock decides)');
       await page.context().close();
     }
 
