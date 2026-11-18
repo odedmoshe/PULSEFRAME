@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -42,6 +42,8 @@ export const PEOPLE_FUZZ_OPS = ['add_person', 'update_person', 'remove_person'] 
 export const SEQUENCE_FUZZ_OPS = SEQUENCE_OPS;
 /** The keyframe curve operations (ADR-0019) that the fuzz draws, once W1 has built them (KEYFRAME_OPS_BUILT); the rows also use the new curves on set_keyframe, set_effect_keyframe and replace_clip_keyframes. */
 export const KEYFRAME_FUZZ_OPS = [...KEYFRAME_OPS, 'set_keyframe', 'set_effect_keyframe', 'replace_clip_keyframes'] as const;
+/** The public multicam operations (ADR-0020) that the fuzz draws, once W1 has built the bodies (MULTICAM_OPS_BUILT). */
+export const MULTICAM_FUZZ_OPS = MULTICAM_OPS;
 export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_text_fields', 'cluster_events', 'add_event', 'update_event', 'remove_event'] as const;
 
 /**
@@ -63,6 +65,8 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * sometimes refused (handles without 'bezier', a turn-back curve on opacity or a colour parameter, a range turned round, a key
  * outside its range). `gen` draws from these rows too once W1 has built them (KEYFRAME_OPS_BUILT); until then the seeded fuzz
  * runs exactly as before.
+ * `genMulticam(doc)` returns a random call of the eight public multicam operations (ADR-0020). `gen` draws from these rows too
+ * once W1 has built them (MULTICAM_OPS_BUILT).
  */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
@@ -254,6 +258,43 @@ export function createFuzz(seed: number) {
     ];
   };
   const genKeyframes = (doc: ProjectDocument): OpCall => pick(keyframeMenu(doc))();
+  /**
+   * Multicam (ADR-0020): groups of the fuzz files (the two videos and the sound file), hand syncs (sample-aligned offsets,
+   * nudges by a frame or a millisecond, anchors with drift, clears; some refused: the reference, off-sample, too much drift),
+   * looks, programs laid on new tracks or a new sequence, switches at frames and group times (some at the same frame, some
+   * past the end), detach and removal. Ids that do not exist now and then.
+   */
+  const multicamMenu = (doc: ProjectDocument): (() => OpCall)[] => {
+    const groups = Object.values(doc.multicam ?? {});
+    const g = () => (groups.length && rnd() < 0.9 ? pick(groups) : null);
+    const groupId = () => g()?.id ?? 'mcg_none';
+    const angleOf = (x: ReturnType<typeof g>, kind?: 'picture' | 'sound') => { const as = (x?.angles ?? []).filter((a) => !kind || a.kind === kind); return as.length && rnd() < 0.9 ? pick(as).id : 'ang_none'; };
+    const sr = 48000;
+    const samples = (n: number) => T.rt(n, sr);
+    const tagged = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips.filter((c) => c.type === 'media' && c.multicam).map((c) => c.id)));
+    const late = assetIds[3] ?? vid;
+    return [
+      () => ({ op: 'create_multicam', args: { angles: rnd() < 0.1 ? [{ assetIds: [vid] }, { assetIds: [vid] }] : [{ assetIds: [aud] }, { assetIds: [vid] }, ...(rnd() < 0.6 ? [{ assetIds: [late], ...(rnd() < 0.3 ? { label: 'מצלמה צד' } : {}) }] : []), ...(rnd() < 0.05 ? [{ assetIds: [vid] }] : [])], ...(rnd() < 0.2 ? { referenceAngleIndex: int(3) } : {}), ...(rnd() < 0.3 ? { name: 'פודקאסט' } : {}) } }),
+      () => {
+        const x = g(); const pieceIndex = rnd() < 0.9 ? 0 : 1 + int(2);
+        const form = int(5);
+        const a = form === 0 ? { offset: samples(int(sr * 4) - sr) } : form === 1 ? { nudge: rnd() < 0.5 ? T.frameTime(rnd() < 0.5 ? 1 : -1, rate) : T.rt(rnd() < 0.5 ? 1 : -1, 1000) }
+          : form === 2 ? { anchors: [{ group: samples(int(sr)), source: T.ZERO }, { group: samples(sr * 6 + int(600) - 300), source: samples(sr * 6) }] } : form === 3 ? { clear: true as const } : { offset: T.rt(1, 96000) };
+        return { op: 'set_multicam_sync', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x), pieceIndex, ...a } };
+      },
+      () => { const x = g(); return { op: 'update_multicam', args: { groupId: x?.id ?? 'mcg_none', ...(rnd() < 0.4 ? { name: 'ראיון' } : {}), ...(rnd() < 0.4 ? { wideAngleId: rnd() < 0.2 ? null : angleOf(x, 'picture') } : {}), ...(rnd() < 0.4 ? { speakers: [{ label: 'דוברת', micAngleId: angleOf(x, 'sound'), channel: rnd() < 0.5 ? null : int(2), shotAngleId: rnd() < 0.3 ? null : angleOf(x, 'picture') }] } : {}) } }; },
+      () => { const x = g(); return { op: 'set_angle_look', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { clear: true as const } : { fromClipId: tagged.length && rnd() < 0.9 ? pick(tagged) : 'clp_none' }), ...(rnd() < 0.4 ? { apply: pick(['unedited', 'all', 'none'] as const) } : {}) } }; },
+      () => { const x = g(); return { op: 'place_multicam', args: { groupId: x?.id ?? 'mcg_none', at: T.frameTime(int(120), rate), angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { range: { from: samples(int(sr * 2)), to: samples(sr * 2 + int(sr * 4)) } } : {}), ...(rnd() < 0.2 ? { newSequence: { name: 'תוכנית' } } : {}), ...(rnd() < 0.2 ? { fill: rnd() < 0.5 } : {}) } }; },
+      () => {
+        const x = g(); const k = 1 + int(6);
+        const cuts = Array.from({ length: k }, () => (rnd() < 0.5 ? { at: T.frameTime(int(260), rate), angleId: angleOf(x, 'picture') } : { groupTime: samples(int(sr * 9)), angleId: angleOf(x, 'picture') }));
+        return { op: 'switch_angles', args: { groupId: x?.id ?? 'mcg_none', cuts, ...(rnd() < 0.3 ? { until: { at: T.frameTime(int(300), rate) } } : {}), ...(rnd() < 0.5 ? { coverage: pick(['refuse', 'clip'] as const) } : {}), ...(rnd() < 0.2 ? { heal: false } : {}) } };
+      },
+      () => ({ op: 'detach_from_multicam', args: { clipIds: tagged.length && rnd() < 0.9 ? [pick(tagged)] : ['clp_none'] } }),
+      () => ({ op: 'remove_multicam', args: { groupId: groupId(), ...(rnd() < 0.6 ? { detach: true } : {}) } }),
+    ];
+  };
+  const genMulticam = (doc: ProjectDocument): OpCall => pick(multicamMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
 
   const gen = (doc: ProjectDocument): OpCall => {
@@ -517,6 +558,8 @@ export function createFuzz(seed: number) {
       // the sequence lifecycle (ADR-0018 shorts): once W1 has built the bodies
       // keyframe curves (ADR-0019): once W1 has built them
       ...(KEYFRAME_OPS_BUILT ? keyframeMenu(doc) : []),
+      // multicam (ADR-0020): once W1 has built the bodies
+      ...(MULTICAM_OPS_BUILT ? multicamMenu(doc) : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
     ];
     return pick(menu)();
@@ -584,5 +627,5 @@ export function createFuzz(seed: number) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam };
 }

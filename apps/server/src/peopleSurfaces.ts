@@ -143,6 +143,10 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/shorts/candidates`]: ['reader-document'],
   [`POST ${P}/shorts/plan`]: ['reader-document'],
   [`POST ${P}/shorts`]: ['reader-document', 'write'],
+  // multicam (ADR-0020): sync measured from media (attaches maps, no people data), the group view from the reader's document, a media derivative
+  [`POST ${P}/multicam/:groupId/sync`]: ['reader-document', 'write'],
+  [`GET ${P}/multicam/:groupId`]: ['reader-document'],
+  [`POST ${P}/assets/:assetId/derivatives/envelope`]: ['no-document'],
   [`POST ${P}/sequences/:sequenceId/reframe-plan`]: ['reader-document'],
   // proposals and approvals
   [`GET ${P}/proposals`]: ['rows-scrubbed'],

@@ -11,6 +11,7 @@ import { RENDER_CACHE_EN, RENDER_CACHE_HE } from './renderCache.ts';
 import { FAMILY_FILM_EN, FAMILY_FILM_HE } from './familyFilm.ts';
 import { SHORTS_EN, SHORTS_HE } from './shorts.ts';
 import { KEYFRAMES_WAVE_EN, KEYFRAMES_WAVE_HE } from './keyframesWave.ts';
+import { MULTICAM_EN, MULTICAM_HE } from './multicam.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -210,6 +211,7 @@ export const he = {
   ...FAMILY_FILM_HE,
   ...SHORTS_HE,
   ...KEYFRAMES_WAVE_HE,
+  ...MULTICAM_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -409,6 +411,7 @@ export const en: Record<keyof typeof he, string> = {
   ...FAMILY_FILM_EN,
   ...SHORTS_EN,
   ...KEYFRAMES_WAVE_EN,
+  ...MULTICAM_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -427,3 +430,4 @@ export * from './people.ts';
 export * from './familyFilm.ts';
 export * from './shorts.ts';
 export * from './keyframesWave.ts';
+export * from './multicam.ts';

@@ -7,6 +7,7 @@ import { HE_IMPORT_QUEUE } from './phoneDrop.ts';
 import { HE_FAMILY_FILM } from './familyFilm.ts';
 import { HE_SHORTS } from './shorts.ts';
 import { HE_KEYFRAMES } from './keyframesWave.ts';
+import { HE_MULTICAM } from './multicam.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -236,7 +237,7 @@ const HE_TIMELINE: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -277,3 +278,5 @@ export const FAMILY_FILM_REFUSAL_PATTERNS: readonly RegExp[] = HE_FAMILY_FILM.ma
 export const SHORTS_REFUSAL_PATTERNS: readonly RegExp[] = HE_SHORTS.map(([re]) => re);
 /** The keyframe curve patterns (ADR-0019; the table is in keyframesWave.ts), for packages/evals/src/keyframes-wording.test.ts. */
 export const KEYFRAME_REFUSAL_PATTERNS: readonly RegExp[] = HE_KEYFRAMES.map(([re]) => re);
+/** The patterns of multicam (multicam.ts HE_MULTICAM, ADR-0020), for multicam-wording.test.ts. */
+export const MULTICAM_REFUSAL_PATTERNS: readonly RegExp[] = HE_MULTICAM.map(([re]) => re);
