@@ -16,7 +16,7 @@ import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
 import { Derivatives } from './derive.ts';
 import { Exporter } from './export.ts';
-import { filmContext, holdsAgeField } from './familyFilm.ts';
+import { filmContext, filmRegeneration, filmRunTracks, holdsAgeField, refuseAgesInPlan } from './familyFilm.ts';
 import { Governance, type Principal } from './governance.ts';
 import { createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
@@ -195,5 +195,86 @@ describe('the planner context from the life line (filmContext)', () => {
     expect(filmContext(doc, { assetIds: s.ids, openingText: 'שלום {hebrewDate}' }).title).toEqual({ text: 'שלום {hebrewDate}', live: true, resolved: null });
     expect(filmContext(doc, { assetIds: s.ids, openingText: 'שלום' }).title).toEqual({ text: 'שלום', live: false, resolved: null });
     expect(() => filmContext(doc, { assetIds: s.ids, openingText: 'שלום {nope}' })).toThrow(/brace groups that are not fields: \{nope\}/);
+  });
+  it('a title without a field is plain text added without fields: typed doubled braces are undone, an event name stays as it is', () => {
+    const s = seed('ctx3');
+    const doc = store.getProject(s.pid).doc;
+    // typed text is in the field grammar (the refusal says "double the braces"); without a field it is shown as plain text
+    expect(filmContext(doc, { assetIds: s.ids, openingText: 'שלום {{חברים}}' }).title).toEqual({ text: 'שלום {חברים}', live: false, resolved: null });
+    expect(filmContext(doc, { assetIds: s.ids, closingText: '{{age:p1}}' }).closing).toEqual({ text: '{age:p1}', live: false, resolved: null });
+    // a live title escapes the event name; a plain one keeps it as it is (it is never read as a field)
+    expect(filmContext(doc, { assetIds: s.ids, event: { name: '{age:p1}' } }).title).toEqual({ text: '{{age:p1}} · {hebrewDate}', live: true, resolved: null });
+    const undated = seed('ctx4', [undefined]);
+    expect(filmContext(store.getProject(undated.pid).doc, { assetIds: undated.ids, event: { name: '{age:p1}' } }).title).toEqual({ text: '{age:p1}', live: false, resolved: null });
+  });
+  it('the plan\'s own steps: an age field is refused only where the step turns live fields on, for a credential without the people scope', () => {
+    const agent: Principal = { actor: 'agent:a', kind: 'agent', scopes: ['observe', 'edit'] };
+    const at = { start: T.ZERO, duration: T.rt(2, 1) };
+    const refusedFor = (who: Principal, ops: { op: string; args: unknown; bind?: string }[]) => { try { refuseAgesInPlan(who, ops); return null; } catch (e) { return (e as { code?: string }).code ?? 'other'; } };
+    expect(refusedFor(agent, [{ op: 'add_text', args: { text: '{age:p1}', ...at, fields: true }, bind: 'title' }])).toBe('people_scope_required');
+    expect(refusedFor(agent, [{ op: 'add_text', args: { text: '{age:p1}', ...at }, bind: 'title' }])).toBeNull();
+    expect(refusedFor(agent, [{ op: 'add_text', args: { text: '{age:p1}', ...at }, bind: 'title' }, { op: 'set_text_fields', args: { clipId: { $ref: 'title' }, enabled: true } }])).toBe('people_scope_required');
+    expect(refusedFor(agent, [{ op: 'add_text', args: { text: 'x', ...at }, bind: 'title' }, { op: 'update_text', args: { clipId: { $ref: 'title' }, text: '{age:p1}' } }, { op: 'set_text_fields', args: { clipId: { $ref: 'title' }, enabled: true } }])).toBe('people_scope_required');
+    expect(refusedFor(agent, [{ op: 'add_text', args: { text: '{name:p1} {hebrewDate}', ...at, fields: true }, bind: 'title' }])).toBeNull();
+    expect(refusedFor(USER, [{ op: 'add_text', args: { text: '{age:p1}', ...at, fields: true }, bind: 'title' }])).toBeNull();
+  });
+});
+
+describe('regeneration reuses the film\'s own tracks by role and passes the previous mix', () => {
+  const music = (): Omit<Asset, 'id'> => ({ kind: 'audio', name: 'music.wav', contentHash: hash(), byteSize: 1000, container: 'wav', mimeType: 'audio/wav', duration: T.rt(60, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: prov } as Omit<Asset, 'id'>);
+  const filmOps = (v: string, m: string | null, tracks: { pictures?: string; own?: string; music?: string } = {}) => [
+    ...(tracks.pictures ? [] : [{ op: 'add_track', args: { kind: 'video', name: 'Film pictures' }, bind: 'pictures-track' }]),
+    ...(tracks.own ? [] : [{ op: 'add_track', args: { kind: 'audio', name: 'Film sound' }, bind: 'own-sound-track' }]),
+    ...(m && !tracks.music ? [{ op: 'add_track', args: { kind: 'audio', name: 'Film music' }, bind: 'music-track' }] : []),
+    { op: 'add_clip', args: { assetId: v, start: T.ZERO, duration: T.rt(4, 1), trackId: tracks.pictures ?? { $ref: 'pictures-track', out: 'trackId' }, audioTrackId: tracks.own ?? { $ref: 'own-sound-track', out: 'trackId' } }, bind: 'm000000000001' },
+    ...(m ? [{ op: 'add_clip', args: { assetId: m, start: T.ZERO, duration: T.rt(4, 1), trackId: tracks.music ?? { $ref: 'music-track', out: 'trackId' } }, bind: 'music' }] : []),
+  ];
+  const filmSlots = (m: boolean) => [{ key: 'm000000000001', kind: 'picture' as const, clipId: { $ref: 'm000000000001' } }, ...(m ? [{ key: 'music', kind: 'music' as const, clipId: { $ref: 'music' } }] : [])];
+  it('finds the pictures, own-sound and music tracks of a run, keeps them in the new run record, and says whether there was music', () => {
+    const s = seed('ff-tracks', ['2026-12-05T18:00:00']);
+    const m = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: music() } }] }).results[0]!.output!.assetId as string;
+    const params = { assetIds: s.ids, musicAssetId: m, ownSound: 'under', picked: [] };
+    const first = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: 1, params, steps: ['A film'], ops: filmOps(s.ids[0]!, m), slots: filmSlots(true) } }] });
+    const runId = first.results[0]!.output!.runId as string;
+    const doc0 = store.getProject(s.pid).doc;
+    const tracks = Object.values(doc0.sequences).flatMap((q) => q.tracks);
+    const byName = (n: string) => tracks.find((t) => t.name === n)!.id;
+    const roles = { pictures: byName('Film pictures'), ownSound: byName('Film sound'), musicTrack: byName('Film music') };
+    // a gain set by hand on the film's own-sound track (a track setting: no clip fingerprint changes)
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'set_track_audio', args: { trackId: roles.ownSound, gain: 0.6 } }] });
+    const doc = store.getProject(s.pid).doc;
+    const run = doc.recipeRuns[runId]!;
+    expect(filmRunTracks(doc, run)).toEqual(roles);
+    const g = filmRegeneration(doc, run, { ...params, targetSeconds: 30 });
+    expect(g.ctx.reuseTracks).toEqual(roles);
+    expect([g.ctx.previousOwnSound, g.ctx.previousMusic]).toEqual(['under', true]);
+    expect(g.protectedIds).toEqual([]);
+    expect(g.keepIds).toEqual(expect.arrayContaining(Object.values(roles)));
+    // the regenerated run (a plan that uses the tracks again) keeps them as its own, so the next regeneration finds them again
+    const n0 = tracks.length;
+    store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: { runId, templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: 1, params, steps: ['Again'], removeClipIds: g.removable, keepIds: g.keepIds, keepSlots: g.keepSlots, ops: filmOps(s.ids[0]!, m, { pictures: roles.pictures, own: roles.ownSound, music: roles.musicTrack }), slots: filmSlots(true) } }] });
+    const after = store.getProject(s.pid).doc;
+    expect(Object.values(after.sequences).flatMap((q) => q.tracks).length).toBe(n0);
+    expect(filmRunTracks(after, after.recipeRuns[runId]!)).toEqual(roles);
+    expect(Object.values(after.sequences).flatMap((q) => q.tracks).find((t) => t.id === roles.ownSound)!.audio?.gain).toBe(0.6);
+    // a run without music: no music role, previousMusic false
+    const plain = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: 1, params: { assetIds: s.ids, musicAssetId: null, picked: [] }, steps: ['Plain'], ops: filmOps(s.ids[0]!, null), slots: filmSlots(false) } }] });
+    const d2 = store.getProject(s.pid).doc, r2 = d2.recipeRuns[plain.results[0]!.output!.runId as string]!;
+    expect(Object.keys(filmRunTracks(d2, r2)).sort()).toEqual(['ownSound', 'pictures']);
+    expect(filmRegeneration(d2, r2, {}).ctx.previousMusic).toBe(false);
+  });
+  it('a track of the run whose clips were all deleted by hand takes the one role left; ids naming Object.prototype members find nothing', () => {
+    const s = seed('ff-tracks2', ['2026-12-05T18:00:00']);
+    const m = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: music() } }] }).results[0]!.output!.assetId as string;
+    const first = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: 1, params: { assetIds: s.ids, musicAssetId: m, picked: [] }, steps: ['A film'], ops: filmOps(s.ids[0]!, m), slots: filmSlots(true) } }] });
+    const runId = first.results[0]!.output!.runId as string;
+    const doc = store.getProject(s.pid).doc;
+    const run = doc.recipeRuns[runId]!;
+    const musicSlot = run.slots!.find((x) => x.kind === 'music')!;
+    const musicTrack = Object.values(doc.sequences).flatMap((q) => q.tracks).find((t) => t.clips.some((c) => c.id === musicSlot.clipId))!.id;
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: musicSlot.clipId } }] });
+    const d1 = store.getProject(s.pid).doc;
+    expect(filmRunTracks(d1, d1.recipeRuns[runId]!).musicTrack).toBe(musicTrack);
+    expect(filmRunTracks(d1, { ...d1.recipeRuns[runId]!, createdIds: ['__proto__', 'constructor'], slots: [{ key: 'music', kind: 'music', clipId: 'toString' }] })).toEqual({});
   });
 });

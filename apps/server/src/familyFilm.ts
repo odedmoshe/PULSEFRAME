@@ -13,6 +13,10 @@
  * - CHILDREN'S DATA: planning reads the document the credential may read (Store.getProject under readingAs: names only for an
  *   agent without the people scope). Such a credential is refused (403 people_scope_required) a film whose opening or closing
  *   text holds an {age:…} field, at plan, apply and regenerate, so an agent cannot produce a film with ages.
+ * - Regeneration passes the run's tracks by role (filmRunTracks) and the previous mix (ownSound and whether there was music),
+ *   and keeps the run's tracks in the new run record, so a regenerated film uses its own tracks again instead of adding more.
+ * - The age refusal is checked on the request's texts before planning AND on the plan's own title steps before committing
+ *   (refuseAgesInPlan): only a step that turns live fields on can show an age.
  * - While the planner is not built (core FAMILY_FILM_BUILT false) every call answers 501 film_not_built, after the permission
  *   checks; nothing is planned or changed.
  * Every refusal's English sentence is fixed here (FILM_API_ERRORS); the Hebrew wording is packages/i18n/src/familyFilm.ts.
@@ -21,7 +25,7 @@ import * as T from '@pulseframe/time';
 import {
   clipEnd, eventNeedsSunsetAnswer, eventOfAsset, escapeFieldText, FAMILY_FILM_BUILT, FAMILY_FILM_DRAFT_LABEL, FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, FilmError, filmRunParams,
   findClip, isPersonToken, parseFields, planFamilyFilm, shownCapture,
-  type FamilyFilmApplyResult, type FamilyFilmParams, type FamilyFilmPlan, type FamilyFilmPlanView, type FamilyFilmRegenerateResult, type FilmKeptClip, type FilmPicked, type FilmPlanContext, type FilmText, type ProjectDocument, type SlotRecord,
+  type FamilyFilmApplyResult, type RecipeRun, type TemplateStep, type Track, type FamilyFilmParams, type FamilyFilmPlan, type FamilyFilmPlanView, type FamilyFilmRegenerateResult, type FilmKeptClip, type FilmPicked, type FilmPlanContext, type FilmText, type ProjectDocument, type SlotRecord,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import type { Governance } from './governance.ts';
@@ -61,6 +65,23 @@ function refuseAges(principal: Principal, params: unknown) {
   if (peopleAccess(principal) === 'full' || !isObject(params)) return;
   if (holdsAgeField(params.openingText) || holdsAgeField(params.closingText)) throw FILM_API_ERRORS.ages();
 }
+/**
+ * The same refusal on what the plan would actually commit: a title step that turns live fields on (add_text fields: true, or
+ * set_text_fields enabled: true on a step bound earlier) over a text holding an {age:…} field. A text added without fields is
+ * shown as it is (an event name '{age:p1}' stays plain text), so it is not refused. Exported for its unit test.
+ */
+export function refuseAgesInPlan(principal: Principal, ops: readonly TemplateStep[]) {
+  if (peopleAccess(principal) === 'full') return;
+  const textOf = new Map<string, unknown>();
+  for (const step of ops) {
+    const a = isObject(step.args) ? step.args : {};
+    if (step.op === 'add_text' && step.bind !== undefined) textOf.set(step.bind, a.text);
+    const ref = isObject(a.clipId) && typeof a.clipId.$ref === 'string' ? a.clipId.$ref : undefined;
+    if (step.op === 'update_text' && ref !== undefined && typeof a.text === 'string') textOf.set(ref, a.text);
+    const on = (step.op === 'add_text' && a.fields === true && holdsAgeField(a.text)) || (step.op === 'set_text_fields' && a.enabled === true && ref !== undefined && holdsAgeField(textOf.get(ref)));
+    if (on) throw FILM_API_ERRORS.ages();
+  }
+}
 /** Checks before a film may change a project: the grant covers the project, edit rights (propose mode refused), no track/range limit. */
 function mayApply(gov: Governance, principal: Principal, projectId: string) {
   gov.assertMayAct(principal, projectId, 'observe');
@@ -78,7 +99,9 @@ function filmText(typed: string | undefined, fallback: () => { text: string; liv
   const parts = parseFields(typed);
   const bad = parts.flatMap((p) => ('bad' in p ? [p.bad] : []));
   if (bad.length) throw FILM_API_ERRORS.badTitle(bad.join(', '));
-  return { text: typed, live: parts.some((p) => 'token' in p), resolved: null };
+  // typed text is in the field grammar; without a field it is added without fields, so its doubled braces are undone here
+  if (!parts.some((p) => 'token' in p)) return { text: parts.map((p) => ('literal' in p ? p.literal : '')).join(''), live: false, resolved: null };
+  return { text: typed, live: true, resolved: null };
 }
 /**
  * The context the planner needs that is not in its parameters (FilmPlanContext), built from the document `doc` (the one the
@@ -87,7 +110,7 @@ function filmText(typed: string | undefined, fallback: () => { text: string; liv
  * file has a capture date and none of their events waits for its sunset answer; otherwise it is fixed text (the planner then
  * warns title_resolved_static).
  */
-export function filmContext(doc: ProjectDocument, params: unknown, extra: Pick<FilmPlanContext, 'kept' | 'keptKeys' | 'reuseTracks' | 'previousOwnSound'> = {}): FilmPlanContext {
+export function filmContext(doc: ProjectDocument, params: unknown, extra: Pick<FilmPlanContext, 'kept' | 'keptKeys' | 'reuseTracks' | 'previousOwnSound' | 'previousMusic'> = {}): FilmPlanContext {
   const p = isObject(params) ? params : {};
   const ids = strings(p.assetIds).filter((id) => Object.hasOwn(doc.assets, id));
   const capture: Record<string, string | null> = {};
@@ -131,6 +154,7 @@ export async function applyFamilyFilmFor(store: Store, gov: Governance, principa
   refuseNotBuilt();
   const p = store.getProject(projectId);
   const plan = wrap(() => planFamilyFilm(p.doc, params, filmContext(p.doc, params)));
+  refuseAgesInPlan(principal, plan.ops);
   refuseBlocked(plan);
   const r = gov.commitAs(principal, {
     projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Family film: ${plan.steps[0] ?? ''}`.slice(0, 120),
@@ -153,6 +177,56 @@ function keptClips(doc: ProjectDocument, protectedIds: readonly string[], slots:
 }
 
 /**
+ * The tracks a film run made, by role, as the planner reuses them (FilmPlanContext.reuseTracks), from the document as it is
+ * before the run's untouched clips are removed: the pictures track holds a picture slot's clip, the music track the music slot's
+ * clip, the own-sound track a sound clip linked to a picture slot's clip; a single track of the run left over (its clips were
+ * deleted by hand) takes the single role left that the previous run had. Only tracks still in the document are named; ids are
+ * compared, never used as plain-object keys.
+ */
+export function filmRunTracks(doc: ProjectDocument, run: Pick<RecipeRun, 'createdIds' | 'slots' | 'params'>): NonNullable<FilmPlanContext['reuseTracks']> {
+  const made = new Set(run.createdIds);
+  const tracks: Track[] = Object.values(doc.sequences).flatMap((q) => q.tracks.filter((t) => made.has(t.id)));
+  const holder = (clipId: string) => tracks.find((t) => t.clips.some((c) => c.id === clipId));
+  const slots = run.slots ?? [];
+  const pictureClips = slots.filter((x) => x.kind === 'picture').map((x) => x.clipId);
+  const groups = new Set(pictureClips.flatMap((id) => { const f = findClip(doc, id); return f && f.clip.type === 'media' && f.clip.linkGroupId ? [f.clip.linkGroupId] : []; }));
+  const out: NonNullable<FilmPlanContext['reuseTracks']> = {};
+  const pictures = pictureClips.map(holder).find((t) => t?.kind === 'video') ?? (tracks.filter((t) => t.kind === 'video').length === 1 ? tracks.find((t) => t.kind === 'video') : undefined);
+  if (pictures) out.pictures = pictures.id;
+  const music = slots.filter((x) => x.kind === 'music').map((x) => holder(x.clipId)).find((t) => t?.kind === 'audio');
+  if (music) out.musicTrack = music.id;
+  const own = tracks.find((t) => t.kind === 'audio' && t.id !== out.musicTrack && t.clips.some((c) => c.type === 'media' && !!c.linkGroupId && groups.has(c.linkGroupId)));
+  if (own) out.ownSound = own.id;
+  const left = tracks.filter((t) => t.kind === 'audio' && t.id !== out.musicTrack && t.id !== out.ownSound);
+  const hadMusic = typeof run.params.musicAssetId === 'string', hadOwn = run.params.ownSound !== 'mute';
+  const roles = [...(hadOwn && !out.ownSound ? ['ownSound' as const] : []), ...(hadMusic && !out.musicTrack ? ['musicTrack' as const] : [])];
+  if (left.length === 1 && roles.length === 1) out[roles[0]!] = left[0]!.id;
+  return out;
+}
+
+/**
+ * What a regeneration starts from (pure; exported for its unit test): the run's clips still in the document, those edited by
+ * hand (kept, with their link partners and slots), the document without the others, the planner's context (kept clips, kept
+ * keys, the run's tracks by role, the previous mix) and the ids the new run record keeps (kept clips and the run's tracks that
+ * still exist, so the tracks stay the film's own for the next regeneration whether or not this plan uses them again).
+ */
+export function filmRegeneration(doc: ProjectDocument, run: RecipeRun, params: Record<string, unknown>) {
+  const live = run.createdIds.filter((id) => !!findClip(doc, id));
+  const protectedIds = keptByHand(doc, live, run.fingerprints ?? {});
+  const removable = live.filter((id) => !protectedIds.includes(id));
+  const keepSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
+  const without = structuredClone(doc);
+  for (const id of removable) { const f = findClip(without, id); if (f) f.track.clips.splice(f.index, 1); }
+  const previousOwnSound = run.params.ownSound === 'lead' || run.params.ownSound === 'mute' || run.params.ownSound === 'under' ? run.params.ownSound : undefined;
+  const previousMusic = typeof run.params.musicAssetId === 'string';
+  const reuseTracks = filmRunTracks(doc, run);
+  const trackIds = new Set(Object.values(doc.sequences).flatMap((q) => q.tracks.map((t) => t.id)));
+  const keepIds = [...protectedIds, ...run.createdIds.filter((id) => trackIds.has(id))];
+  const ctx = filmContext(without, params, { kept: keptClips(doc, protectedIds, run.slots ?? []), keptKeys: keepSlots.map((s) => s.key), reuseTracks, previousOwnSound, previousMusic });
+  return { removable, protectedIds, keepSlots, keepIds, without, ctx };
+}
+
+/**
  * Regenerate a film run, optionally with changed parameters («רגעים אחרים», «אורך אחר»): clips the run made that nobody
  * changed are replaced; clips edited by hand since (and the clips linked to them) are kept exactly as they are, with their
  * slots — a moved kept clip too (the planner lays the new slots around it). Works from the document's run after a reload.
@@ -166,22 +240,16 @@ export async function regenerateFamilyFilmFor(store: Store, gov: Governance, pri
   const params: Partial<FamilyFilmParams> & Record<string, unknown> = { ...filmRunParams(run.params), ...(newParams as Record<string, unknown> | undefined) };
   refuseAges(principal, params);
   refuseNotBuilt();
-  const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
-  const protectedIds = keptByHand(p.doc, live, run.fingerprints ?? {});
-  const removable = live.filter((id) => !protectedIds.includes(id));
-  const keepSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
-  const without = structuredClone(p.doc);
-  for (const id of removable) { const f = findClip(without, id); if (f) f.track.clips.splice(f.index, 1); }
-  const previousOwnSound = run.params.ownSound === 'lead' || run.params.ownSound === 'mute' || run.params.ownSound === 'under' ? run.params.ownSound : undefined;
-  const ctx = filmContext(without, params, { kept: keptClips(p.doc, protectedIds, run.slots ?? []), keptKeys: keepSlots.map((s) => s.key), previousOwnSound });
+  const { removable, protectedIds, keepSlots, keepIds, without, ctx } = filmRegeneration(p.doc, run, params);
   const plan = wrap(() => planFamilyFilm(without, params, ctx));
+  refuseAgesInPlan(principal, plan.ops);
   // a new slot never takes a key a kept slot holds (apply_template drops a slot only when key AND clip match): a planner fault, not the request's
   const clash = plan.slots.find((s) => keepSlots.some((k) => k.key === s.key));
   if (clash) throw FILM_API_ERRORS.keyClash(clash.key);
   refuseBlocked(plan);
   const r = gov.commitAs(principal, {
     projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Regenerate family film: ${plan.steps[0] ?? ''}`.slice(0, 120),
-    ops: [{ op: 'apply_template', args: { runId, templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: { ...plan.params, picked: picked(plan) }, steps: plan.steps, removeClipIds: removable, keepIds: protectedIds, keepSlots, ops: plan.ops, slots: plan.slots } }],
+    ops: [{ op: 'apply_template', args: { runId, templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: { ...plan.params, picked: picked(plan) }, steps: plan.steps, removeClipIds: removable, keepIds, keepSlots, ops: plan.ops, slots: plan.slots } }],
   }) as CommitOut;
   const out = r.results?.[0]?.output ?? {};
   return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, picks: plan.picks, excluded: plan.excluded, replaced: removable.length, protected: protectedIds };
