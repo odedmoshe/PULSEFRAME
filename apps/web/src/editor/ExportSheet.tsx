@@ -241,8 +241,8 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
           <section aria-labelledby="xs-type">
             <h3 id="xs-type">{S.fileType}</h3>
             <div className="pf-xs-seg" role="radiogroup" aria-labelledby="xs-type">
-              <button type="button" role="radio" aria-checked={p.choices.format === 'mp4-h264-aac'} className={p.choices.format === 'mp4-h264-aac' ? 'is-on' : ''} onClick={() => setChoice({ format: 'mp4-h264-aac' })}><span className="num">MP4</span></button>
-              <button type="button" role="radio" aria-checked={p.choices.format === 'webm-vp9-opus'} className={p.choices.format === 'webm-vp9-opus' ? 'is-on' : ''} onClick={() => setChoice({ format: 'webm-vp9-opus' })}><span className="num">WebM</span></button>
+              <button type="button" role="radio" aria-checked={p.choices.format === 'mp4-h264-aac'} className={p.choices.format === 'mp4-h264-aac' ? 'is-on' : ''} data-testid="export-type-mp4" onClick={() => setChoice({ format: 'mp4-h264-aac' })}><span className="num">MP4</span></button>
+              <button type="button" role="radio" aria-checked={p.choices.format === 'webm-vp9-opus'} className={p.choices.format === 'webm-vp9-opus' ? 'is-on' : ''} data-testid="export-type-webm" onClick={() => setChoice({ format: 'webm-vp9-opus' })}><span className="num">WebM</span></button>
             </div>
           </section>
         </div>

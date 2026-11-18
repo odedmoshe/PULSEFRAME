@@ -27,6 +27,8 @@ import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
+import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
+import { makeApi, ownerApi } from './incremental-fixtures.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/a11y');
@@ -123,7 +125,8 @@ async function main() {
   fs.rmSync(art, { recursive: true, force: true });
   fs.mkdirSync(art, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4'), frames: 120 });
-  const s = await startServer({ port: 8803, dataDir: path.join(art, 'data') });
+  // the phone drop's dialog is audited with a live code: the door may bind loopback for this audit only (startServer's override)
+  const s = await startServer({ port: 8803, dataDir: path.join(art, 'data'), dropPort: 8804, dropAdmitAddresses: ['127.0.0.1'] });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const post = async (p: string, body: unknown) => (await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
   const browser = await chromium.launch();
@@ -133,6 +136,7 @@ async function main() {
     const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
     const tx = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: up.assetId, start: f(0) } }, { op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60) } }, { op: 'add_caption_track', args: { mode: 'manual' } }, { op: 'add_variant', args: { profileId: 'vertical-9x16' } }, { op: 'add_marker', args: { time: f(0), label: 'סמן פתיחה' } }] });
     const clipId = tx.results[0].output.clipId;
+    const titleClipId = tx.results[1].output.clipId as string;
     // ADR-0017: a stereo sound (two different channels, so the classic vocal remover accepts it) on its own clip, with a typed Hebrew
     // transcript and an English translation fixture (stored by the op the translation tool commits; no model runs here).
     const mix = path.join(art, 'mix.wav');
@@ -260,17 +264,26 @@ async function main() {
       await auditState('locked-track', { lockedTracksShown: await page.locator('.track[data-locked=true]').count(), pressedLockButtons: await page.locator('[data-testid=track-lock][aria-pressed=true]').count() });
       await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_track', args: { trackId: (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json() as any).project.sequences.seq_main.tracks.find((t: any) => t.locked).id, locked: false } }] });
       await page.waitForFunction(() => !document.querySelector('.track[data-locked=true]'), undefined, { timeout: 8000 }).catch(() => {});
-      // an upload in progress, then the error bar: a file that is not media is sent, the request is held while the busy state is audited, then the server refuses it
+      // an upload in progress (ADR-0023: media goes through the import queue; the picker is never disabled, the upload is a card
+      // «בהעלאה» with its cancel button), then the failed import card: a file that is not media is sent, the request is held
+      // while the busy state is audited, then the server stores it and the import fails as unsupported
       let release: () => void = () => {};
       const held = new Promise<void>((r) => { release = r; });
       const hold = async (route: any) => { if (route.request().method() === 'POST') await held; await route.continue(); };
-      await page.route('**/api/v1/projects/*/assets', hold);
+      await page.route('**/api/v1/projects/*/imports', hold);
       await page.getByTestId('file-input').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not a media file') });
-      await page.waitForFunction(() => (document.querySelector('[data-testid=file-input]') as HTMLInputElement | null)?.disabled === true, undefined, { timeout: 5000 }).catch(() => {});
-      await auditState('upload-busy', { shown: await page.getByTestId('file-input').isDisabled() });
+      await page.locator('[data-testid^=import-local-]').first().waitFor({ timeout: 5000 }).catch(() => {});
+      await auditState('upload-busy', { shown: (await page.locator('[data-testid^=import-local-] [data-testid=import-cancel]').count()) === 1 && !(await page.getByTestId('file-input').isDisabled()) });
       release();
+      const failedCard = page.locator('[data-testid^=import-card-][data-state=attention]').first();
+      await failedCard.waitFor({ timeout: 30000 }).catch(() => {});
+      await page.unroute('**/api/v1/projects/*/imports', hold);
+      await auditState('import-card-failed', { shown: (await failedCard.count()) === 1 && (await failedCard.getByTestId('import-dismiss').count()) === 1 && (await page.getByTestId('imports-summary').count()) === 1 });
+      if (await failedCard.count()) await failedCard.getByTestId('import-dismiss').click();
+      await page.locator('[data-testid^=import-card-]').first().waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+      // the error bar: a colour table (.cube) keeps the synchronous upload, and one that is not a colour table is refused there
+      await page.getByTestId('file-input').setInputFiles({ name: 'broken.cube', mimeType: 'text/plain', buffer: Buffer.from('this is not a colour table') });
       await page.locator('.error[role=alert]').waitFor({ timeout: 10000 }).catch(() => {});
-      await page.unroute('**/api/v1/projects/*/assets', hold);
       const errShown = (await page.locator('.error[role=alert]').count()) === 1;
       await auditState('error-bar', { shown: errShown, text: errShown ? ((await page.locator('.error[role=alert]').textContent()) ?? '').slice(0, 120) : '' });
       if (errShown) await page.locator('.error[role=alert] button').click();
@@ -296,6 +309,15 @@ async function main() {
       // full history dialog
       const ad = await dialogBehaviour('activity-dialog', async () => { await page.getByTestId('activity-open').click(); }, '[data-testid=activity-open]');
       await auditState('activity-dialog', { startsInside: ad.startsInside, tabStepsThatLeftTheDialog: ad.tabStepsThatLeftTheDialog }, true);
+      // the phone drop dialog (ADR-0023) with a live code: QR, typed address and PIN, status; Esc hides it and leaves the chip
+      if (!/\bis-on\b/.test((await page.getByTestId('rail-media').getAttribute('class')) ?? '')) { await page.getByTestId('rail-media').click(); await page.waitForTimeout(300); }
+      const pdd = await dialogBehaviour('phone-drop-dialog', async () => { await page.getByTestId('import-more').click(); await page.getByTestId('phone-drop-open').click(); await page.getByTestId('phone-drop-dialog').waitFor({ timeout: 8000 }); await page.getByTestId('phone-drop-address').waitFor({ timeout: 8000 }).catch(() => {}); if (await page.getByTestId('phone-drop-start').count()) await page.getByTestId('phone-drop-start').click(); await page.getByTestId('phone-drop-qr').waitFor({ timeout: 8000 }).catch(() => {}); }, '[data-testid=import-more]');
+      await auditState('phone-drop-dialog', { startsInside: pdd.startsInside, tabStepsThatLeftTheDialog: pdd.tabStepsThatLeftTheDialog, shown: (await page.getByTestId('phone-drop-qr').count()) === 1 && (await page.getByTestId('phone-drop-pin').count()) === 1 }, true);
+      Object.assign(states.at(-1), await pdd.close());
+      await page.getByTestId('phone-drop-chip').waitFor({ timeout: 5000 }).catch(() => {});
+      await auditState('phone-drop-chip', { shown: (await page.getByTestId('phone-drop-chip').count()) === 1 && (await page.getByTestId('phone-drop-chip-close').count()) === 1 });
+      if (await page.getByTestId('phone-drop-chip-close').count()) await page.getByTestId('phone-drop-chip-close').click();
+      await page.getByTestId('phone-drop-chip').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
       Object.assign(states.at(-1), await ad.close());
       // command palette
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
@@ -517,7 +539,23 @@ async function main() {
       await railOn('text');
       await page.locator('[data-testid=font-option]').first().waitFor({ timeout: 8000 }).catch(() => {});
       await auditState('text-drawer-fonts', { shown: (await page.locator('[data-testid=font-option]').count()) >= 1 });
+      // the fast export and the render cache (ADR-0024): the sheet line in its states and the timeline lane with its popover
       await railOn('media');
+      const rcCtx = makeRenderCacheCtx({ page, lang, api: makeApi(s.url, s.auth.tokens.agent), owner: await ownerApi(s.url, s.auth.tokens.owner), pid, titleClipId });
+      for (const sc of renderCacheA11yScenarios) {
+        const r = await sc.prepare(rcCtx);
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, sc.id.startsWith('cache-sheet'));
+        await sc.leave?.(rcCtx);
+      }
+      if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
+      if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();
+      if (await page.getByTestId('export-sheet').count()) { await page.keyboard.press('Escape'); await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); }
+      // the render cache's row in the status centre: its size and «ניקוי מטמון הרינדור» (the owner's own session)
+      await page.getByTestId('status-pips').click();
+      await page.getByTestId('cache-storage-row').waitFor({ timeout: 8000 }).catch(() => {});
+      await auditState('cache-storage-row', { shown: (await page.getByTestId('cache-storage-row').count()) === 1 && (await page.getByTestId('cache-clear').count()) === 1 }, true);
+      await page.keyboard.press('Escape');
+      await page.getByTestId('settings-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);
       await page.getByTestId('welcome').waitFor({ timeout: 10000 }).catch(() => {});

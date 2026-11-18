@@ -169,7 +169,7 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
             </ol>
             <label className="ghost file">
               {state.uploading ? S.importing : S.importMedia}
-              <input type="file" multiple accept="video/*,image/png,image/jpeg,image/webp" disabled={state.uploading} data-testid="template-media-import" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
+              <input type="file" multiple accept="video/*,image/png,image/jpeg,image/webp" data-testid="template-media-import" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
             </label>
           </section>
         )}
@@ -202,7 +202,7 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
             {summary.needs.music !== 'none' && (
               <label className="ghost file">
                 {state.uploading ? S.importing : S.importMusic}
-                <input type="file" accept="audio/*" disabled={state.uploading} data-testid="template-music-import" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
+                <input type="file" accept="audio/*" data-testid="template-music-import" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
               </label>
             )}
           </section>

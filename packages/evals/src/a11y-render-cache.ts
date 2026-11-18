@@ -73,8 +73,8 @@ export const renderCacheA11yScenarios: RenderCacheScenario[] = [
   },
   {
     id: 'cache-sheet-disabled', describe: 'the switch disabled with its visible reason (a format the fast export cannot make)',
-    async prepare(c) { await openSheet(c.page); const fmt = c.page.locator('[data-testid=export-format][data-key*=webm]').first(); if (await fmt.count()) await fmt.click(); await c.page.getByTestId(TID.fastReason).waitFor({ timeout: 8000 }).catch(() => {}); return { shown: (await c.page.getByTestId(TID.fastReason).count()) === 1, detail: { reason: await c.page.getByTestId(TID.fastReason).textContent().catch(() => null) } }; },
-    leave: (c) => closeSheet(c.page),
+    async prepare(c) { await openSheet(c.page); const fmt = c.page.getByTestId('export-type-webm'); if (await fmt.count()) await fmt.click(); // the sheet's file type WebM (the export-format cards are the formats of the project, not file types) await c.page.getByTestId(TID.fastReason).waitFor({ timeout: 8000 }).catch(() => {}); return { shown: (await c.page.getByTestId(TID.fastReason).count()) === 1, detail: { reason: await c.page.getByTestId(TID.fastReason).textContent().catch(() => null) } }; },
+    leave: async (c) => { const mp4 = c.page.getByTestId('export-type-mp4'); if (await mp4.count()) await mp4.click(); await closeSheet(c.page); },
   },
   {
     id: 'cache-lane-stale', describe: 'the timeline lane with a stale stretch (dashed amber) and the one focusable summary',
@@ -120,7 +120,9 @@ export async function runRenderCacheUiChecks(o: { browser: Browser; ownerUrl: st
     const sum = o.plan.segments;
     const stretch = page.locator(`[data-testid=${TID.stretch}][data-state=render]`);
     const staleRuns = o.plan.runs.filter((r) => r.state === 'render');
-    const laneOk = (await stretch.count()) === staleRuns.length && (await stretch.first().getAttribute('data-first-frame')) === String(o.plan.firstFrame + (staleRuns[0]?.firstFrame ?? -1)) && (await stretch.first().getAttribute('data-frames')) === String(staleRuns[0]?.frames);
+    // the stale stretch the proof typed (expectedStale: the segment numbers of the edited title), not only what the plan says
+    const typedOk = staleRuns.length === 1 && staleRuns[0]!.firstSegment === o.expectedStale[0] && staleRuns[0]!.segments === o.expectedStale.length;
+    const laneOk = typedOk && (await stretch.count()) === staleRuns.length && (await stretch.first().getAttribute('data-first-frame')) === String(o.plan.firstFrame + (staleRuns[0]?.firstFrame ?? -1)) && (await stretch.first().getAttribute('data-frames')) === String(staleRuns[0]?.frames);
     const label = await page.getByTestId(TID.summary).getAttribute('aria-label');
     const labelOk = label === S.laneSummary(sum.cached, sum.total);
     fs.mkdirSync(o.shotDir, { recursive: true });
@@ -146,7 +148,7 @@ export async function runRenderCacheUiChecks(o: { browser: Browser; ownerUrl: st
     await page.getByTestId('export-sheet').screenshot({ path: path.join(o.shotDir, `incremental-export-sheet-full-${o.lang}.png`) });
     const found = await page.evaluate(inspectInPage, { lane: TID.lane, summary: TID.summary, reuseLine: TID.reuseLine });
     const a11yOk = found.unnamed.length === 0 && found.tabStopsInLane === 1 && found.statusRole === 'status' && found.statusLive === 'polite' && found.laneDir === 'ltr';
-    return { lang: o.lang, mounted: true, ok: laneOk && labelOk && popoverOk && lineOk && a11yOk, laneOk, labelOk, label, popoverOk, staleItems: stale, lineOk, lineText: text, a11y: found, viewport: '1440x900', dir: await page.evaluate(() => document.documentElement.dir) };
+    return { lang: o.lang, mounted: true, ok: laneOk && labelOk && popoverOk && lineOk && a11yOk, laneOk, typedOk, staleRuns, labelOk, label, popoverOk, staleItems: stale, lineOk, lineText: text, a11y: found, viewport: '1440x900', dir: await page.evaluate(() => document.documentElement.dir) };
   } finally { await ctx.close(); }
 }
 
