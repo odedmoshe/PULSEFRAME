@@ -4,6 +4,7 @@ import { Dialog, Seg } from '../ds/index.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { setSettingsOpen, useChrome } from './chromeState.ts';
 import { useEditorState } from './store.ts';
+import { RenderCacheStorage } from './RenderCacheStorage.tsx';
 
 const THEME_KEY = 'pf.theme';
 export const readTheme = (): 'dark' | 'light' => { try { return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch { return 'dark'; } };
@@ -42,6 +43,8 @@ export function SettingsDialog() {
             <li key={r.id} data-tone={r.tone}><span className="pf-set-dot" aria-hidden="true" /><span className="pf-set-name">{r.name}</span><span className="pf-set-word">{r.word}</span>{r.why && <span className="pf-set-why" dir="auto">{r.why}</span>}</li>
           ))}
         </ul>
+        {/* the render cache of the fast export (ADR-0024): its size and «ניקוי» (the owner's own session) */}
+        {settingsOpen && <RenderCacheStorage />}
       </div>
     </Dialog>
   );

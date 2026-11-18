@@ -106,6 +106,9 @@ export class RefreshPolicy {
     try {
       const r = await this.run(ctl.signal, revision);
       if (!ctl.signal.aborted && r && typeof r.keyingMs === 'number') this.lastKeyingMs = r.keyingMs;
+    } catch (e) {
+      // A superseded request is aborted on purpose (a newer change, or dispose): its rejection is expected, not an error.
+      if (!ctl.signal.aborted) throw e;
     } finally { if (this.ctl === ctl) this.ctl = null; }
   }
   /** Drops a scheduled refresh and aborts a request in flight. */

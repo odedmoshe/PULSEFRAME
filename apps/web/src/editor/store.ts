@@ -20,6 +20,11 @@ import { addAssetArgs, dropAssetArgs } from './placement.ts';
 import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
 import { wholeEditOps, type WholeEditPick } from './commands.ts';
 import { cutBefore, type ObjectTab } from './inspector.model.ts';
+import { ImportsStore, type ImportJobEvent, type ImportsState } from './imports.ts';
+import { dropApi, importsApi } from './imports.api.ts';
+import type { PhoneDropProblem } from './phoneDrop.strings.ts';
+import { RefreshPolicy } from './renderCache.logic.ts';
+import type { DropCodeView, DropPublicView } from '@pulseframe/core';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -112,6 +117,20 @@ export interface EditorState {
   segmentPlan: SegmentPlanState;
   /** The viewer's «ייצוא מהיר» switch, kept in this browser (localStorage 'pf.fastExport'); never project state. */
   fastExport: boolean;
+  /** The options the lane and the sheet line plan with (the export sheet's choices; the encoder id holds the quality). */
+  planOptions: Record<string, unknown>;
+  /** The import cards (ADR-0023): this tab's uploads merged with the server's import jobs (ImportsStore.snapshot()). */
+  imports: ImportsState;
+  /** The phone drop dialog (ADR-0023) is shown; the code may live on while it is hidden (the chip in the drawer header). */
+  phoneDropOpen: boolean;
+  /** The live phone code as the owner sees it (url and PIN only while it waits), or null. */
+  drop: DropCodeView | null;
+  /** The newest public view of that code from the event stream (counts, state, close reason). */
+  dropLive: DropPublicView | null;
+  /** An honest state instead of a code (no home network, the port could not open, the server restarted). */
+  dropProblem: PhoneDropProblem | null;
+  /** Blocker codes of the last segment plan (422 render_blocked): the sheet's switch says why the fast export is unavailable. */
+  planBlockers: string[];
 }
 /** localStorage key of the «ייצוא מהיר» switch. */
 export const FAST_EXPORT_KEY = 'pf.fastExport';
@@ -181,8 +200,26 @@ export class Editor {
     trackJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
     templatesOpen: false, templatesFocus: 0, templateRun: null,
     cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
-    segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(),
+    segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: { quality: 'standard' },
+    imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [],
   };
+  /**
+   * The import queue's editor side (ADR-0023): uploads one at a time to POST …/imports, cards from the job events, placement of
+   * files dropped on the timeline through dropAsset (the owner's undo stack) once the document holding them is loaded.
+   */
+  readonly imports = new ImportsStore({
+    projectId: () => this.state.doc?.id ?? null,
+    upload: (projectId, file, meta, onProgress) => importsApi.upload(projectId, file, meta, onProgress),
+    list: (projectId) => importsApi.list(projectId),
+    retry: (jobId) => importsApi.retry(jobId),
+    cancel: (jobId) => importsApi.cancel(jobId),
+    dismiss: (jobId) => importsApi.dismiss(jobId),
+    place: (assetId, frame, trackId) => this.placeImported(assetId, frame, trackId),
+    provideLocal: (assetId, file) => this.pool?.provideLocal(assetId, file),
+    getJob: (id) => importsApi.job(id),
+  });
+  /** The lane's and the sheet's segment plan (ADR-0024): asked for 1.5 s after the last revision change, only while the switch is on. */
+  private planPolicy = new RefreshPolicy((signal, revision) => this.askPlan(signal, revision));
   /** Counter that makes each view request (tab, panel, gallery, notice) a new one. */
   private requests = 0;
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
@@ -306,6 +343,11 @@ export class Editor {
     (window as any).__pfSync = () => this.player?.syncStats();
     const p = await this.load(projectId);
     this.set({ activity: (await api.history(projectId)).events.reverse() });
+    this.imports.reset();
+    this.imports.subscribe(() => this.set({ imports: this.imports.snapshot(), uploading: this.imports.uploading }));
+    void this.imports.refresh().catch(() => {}); // imports still open (or failed) from before this page was loaded
+    void this.refreshDrop();
+    if (this.state.fastExport) void this.planPolicy.now(p.revision);
     if (this.disposed) return;
     const es = (this.es = api.events(projectId, p.revision));
     es.addEventListener('revision', (m) => {
@@ -313,6 +355,14 @@ export class Editor {
       if (!this.state.activity.some((x) => x.revision === e.revision)) this.set({ activity: [e, ...this.state.activity].slice(0, 50) });
       // Committed remote or local change: converge on the server document. Playhead and selection are local and stay put.
       if (e.revision > this.state.revision) void this.load(projectId).catch(this.fail);
+      if (this.state.fastExport) this.planPolicy.changed(e.revision);
+    });
+    // The phone drop's public view (owner sessions only, no secrets): counts, connected, closed.
+    es.addEventListener('drop', (m) => {
+      const d: DropPublicView = JSON.parse((m as MessageEvent).data);
+      const cur = this.state.drop;
+      if (!cur || cur.dropId !== d.dropId) { this.set({ dropLive: d }); return; }
+      this.set({ dropLive: d, drop: { ...cur, ...d, url: d.state === 'waiting' ? cur.url : null, pin: d.state === 'waiting' ? cur.pin : null } });
     });
     es.addEventListener('derivative', (m) => {
       const d: { assetId: string; kind: string; status: string } = JSON.parse((m as MessageEvent).data);
@@ -343,6 +393,7 @@ export class Editor {
     void api.controls(projectId).then((c) => this.set({ agentsPaused: c.agentsPaused })).catch(() => {});
     es.addEventListener('job', (m) => {
       const j: JobEvent = JSON.parse((m as MessageEvent).data);
+      if (j.type === 'import') { this.imports.onJobEvent(j as ImportJobEvent); return; }
       this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : j.type === TRACKING_JOB_TYPE ? { trackJobs: rememberJob(this.state.trackJobs, j) } : {});
       // An export this tab started saves its file as soon as it is ready, once; the link in the header stays for another copy.
       if (j.type === 'export' && j.status === 'succeeded' && this.myExports.delete(j.id)) {
@@ -365,6 +416,8 @@ export class Editor {
   }
   dispose() {
     this.disposed = true;
+    this.planPolicy.dispose();
+    this.imports.reset();
     this.es?.close();
     this.player?.dispose();
     void this.pool?.dispose();
@@ -453,21 +506,27 @@ export class Editor {
    * where it was dropped and each following one starts where the previous one ended, on the same track when it fits there.
    */
   async importFiles(files: File[], place?: { frame: number; trackId: string | null }) {
-    let at = place;
-    for (const file of [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
-      const before = new Set(Object.keys(this.state.doc?.assets ?? {}));
-      const imported = await this.importFile(file, at);
-      if (this.state.error) return; // stop at the first file that fails: the message names it
-      const doc = this.state.doc;
-      if (!at || !doc) continue;
-      if (imported && doc.assets[imported]?.kind === 'lut') continue; // a colour table is not placed, so the next file goes where this one would have
-      // where the clip of this file ended up: the next file follows it
-      const assetId = Object.keys(doc.assets).find((id) => !before.has(id));
-      const start = T.frameTime(Math.max(0, at.frame), this.rate);
-      const clip = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((t) => t.clips).filter((c) => c.type === 'media' && T.eq(c.start, start) && (!assetId || c.assetId === assetId)).at(-1);
-      if (clip) at = { frame: T.frameIndexAt(T.add(clip.start, clip.duration), this.rate), trackId: at.trackId };
-    }
+    // Media goes through the import queue (ADR-0023): the cards show each file; files dropped on the timeline are placed in order
+    // when their jobs succeed, through dropAsset (the owner's undo stack). A colour table keeps the synchronous route.
+    const cubes = files.filter((f) => /\.cube$/i.test(f.name));
+    const media = files.filter((f) => !/\.cube$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    if (media.length) this.imports.enqueueLocal(media, { via: 'browser', ...(place ? { place } : {}) });
+    for (const c of cubes) { await this.importFile(c); if (this.state.error) return; }
   }
+  /** A picked folder (webkitdirectory) or a dropped one (collectDropped): media only, natural order, at most 500; the rest is counted. */
+  importFolder(entries: { file: File; relativePath: string }[]) { if (entries.length) this.imports.enqueueFolder(entries); }
+  /** ImportsHost.place: the document holding the asset is loaded first (dropAsset places nothing for an asset it cannot see). */
+  private async placeImported(assetId: string, frame: number, trackId: string | null): Promise<number | null> {
+    const pid = this.state.doc?.id;
+    if (!pid) return null;
+    if (!this.state.doc?.assets[assetId]) await this.load(pid).catch(() => undefined);
+    if (!this.state.doc?.assets[assetId]) return null;
+    const r = await this.dropAsset(assetId, frame, trackId);
+    const clipId = r?.results[0]?.output?.clipId;
+    const placed = typeof clipId === 'string' && this.state.doc ? findClip(this.state.doc, clipId) : undefined;
+    return placed ? T.frameIndexAt(clipEnd(placed.clip), this.rate) : null;
+  }
+
   /** Choose (or, given the current one, clear) the target track of its kind. */
   toggleTarget(kind: 'video' | 'audio', trackId: string) {
     const targets = { ...this.state.targets, [kind]: this.state.targets[kind] === trackId ? null : trackId };
@@ -482,7 +541,64 @@ export class Editor {
     return tr && tr.kind === kind && !tr.locked ? tr.id : null;
   }
   /** The «ייצוא מהיר» switch (ADR-0024): a preference of this browser, never an edit of the project. */
-  setFastExport(on: boolean) { try { localStorage.setItem(FAST_EXPORT_KEY, on ? '1' : '0'); } catch { /* storage unavailable: the choice lasts for this visit */ } this.set({ fastExport: on }); }
+  setFastExport(on: boolean) {
+    try { localStorage.setItem(FAST_EXPORT_KEY, on ? '1' : '0'); } catch { /* storage unavailable: the choice lasts for this visit */ }
+    this.set({ fastExport: on });
+    if (on) void this.planPolicy.now(this.state.revision);
+    else { this.planPolicy.cancel(); this.set({ segmentPlan: { status: 'off', view: null, revision: null } }); }
+  }
+  /** The export sheet's choices changed: the lane and the line plan with them (the quality is part of every segment key). */
+  setPlanOptions(options: Record<string, unknown>) {
+    if (JSON.stringify(options) === JSON.stringify(this.state.planOptions)) return;
+    this.set({ planOptions: options });
+    if (this.state.fastExport) void this.planPolicy.now(this.state.revision);
+  }
+  /** The «רענון» button of the lane (a slow keying stops the lane from refreshing by itself). */
+  refreshPlan() { if (this.state.fastExport) void this.planPolicy.now(this.state.revision); }
+  /** One plan request (POST …/exports/segments/plan); its blocker codes reach the sheet's switch as `blockerCodes`. */
+  private async askPlan(signal: AbortSignal, revision: number): Promise<{ keyingMs: number } | void> {
+    const id = this.state.doc?.id;
+    if (!id) return;
+    this.set({ segmentPlan: { ...this.state.segmentPlan, status: 'updating' }, planBlockers: [] });
+    const r = await fetch(`/api/v1/projects/${encodeURIComponent(id)}/exports/segments/plan`, { method: 'POST', credentials: 'same-origin', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...this.state.planOptions, mode: 'incremental' }) });
+    const body = await r.json().catch(() => undefined);
+    if (signal.aborted) return;
+    if (r.ok && body?.mode === 'incremental') { this.set({ segmentPlan: { status: 'ready', view: body as SegmentPlanView, revision: (body as SegmentPlanView).revision ?? revision } }); return { keyingMs: (body as SegmentPlanView).keyingMs }; }
+    const blockers = Array.isArray(body?.error?.details?.blockers) ? (body.error.details.blockers as { code: string }[]).map((b) => b.code) : [];
+    this.set({ segmentPlan: { status: blockers.length ? 'off' : 'error', view: null, revision }, planBlockers: blockers });
+  }
+
+  // ---------- the phone drop (ADR-0023): the owner's dialog ----------
+  openPhoneDrop() { this.set({ phoneDropOpen: true }); }
+  hidePhoneDrop() { this.set({ phoneDropOpen: false }); }
+  /** The live code of this project, if any (after a reload; a code never survives a server restart: then it is gone, said so). */
+  async refreshDrop() {
+    const id = this.state.doc?.id;
+    if (!id || this.state.actor !== 'user:local') return;
+    try {
+      const had = this.state.drop;
+      const { drop } = await dropApi.current(id);
+      this.set({ drop, ...(had && had.state !== 'closed' && !drop ? { dropProblem: 'restarted' as const } : {}) });
+    } catch { /* not the owner, or the drop is not available: nothing to show */ }
+  }
+  /** The owner confirmed `address` in the dialog (the server never picks one alone). */
+  async openDropCode(address: string) {
+    const id = this.state.doc?.id;
+    if (!id) return;
+    try {
+      const { drop } = await dropApi.open(id, address);
+      this.set({ drop, dropLive: null, dropProblem: null });
+    } catch (e) {
+      const code = e instanceof ApiFailure ? e.code : '';
+      if (code === 'no_private_network' || code === 'drop_listen_failed') this.set({ dropProblem: code, drop: null });
+      else this.fail(e);
+    }
+  }
+  async closeDropCode(dropId: string) {
+    const id = this.state.doc?.id;
+    if (!id) return;
+    try { const { drop } = await dropApi.close(id, dropId); this.set({ drop, dropLive: null }); } catch (e) { if (e instanceof ApiFailure && e.code === 'drop_not_found') this.set({ drop: null }); else this.fail(e); }
+  }
   setWorkspace(workspace: Workspace) { try { localStorage.setItem(WS_KEY, workspace); } catch { /* ignore */ } this.set({ workspace }); }
   /** 'toggle' adds the clip to the selection or removes it (Shift/Ctrl/⌘-click); the default replaces the selection. */
   select(id: string | null, mode: 'replace' | 'toggle' = 'replace') {

@@ -69,7 +69,7 @@ const STAGE_KEYS: Record<string, Key> = {
 /** The label of a job stage text («keying», «self-check 3/12», «rendering 2/16» …) or null for a stage the ordinary sheet words itself. */
 export function stageLabel(stage: string, lang: 'he' | 'en'): string | null {
   const m = /^([a-z-]+)(?:\s+(\d+)\s*\/\s*(\d+))?$/.exec(stage.trim());
-  const key = m ? STAGE_KEYS[m[1]!] : undefined;
+  const key = m && Object.hasOwn(STAGE_KEYS, m[1]!) ? STAGE_KEYS[m[1]!] : undefined; // 'constructor' is not a stage
   if (!key) return null;
   return m![2] ? `${cacheText(lang, key)} ${m![2]}/${m![3]}` : cacheText(lang, key);
 }
@@ -78,6 +78,8 @@ export function stageLabel(stage: string, lang: 'he' | 'en'): string | null {
 export function failureText(code: string | undefined, lang: 'he' | 'en'): string | null {
   if (code === 'render_cache_self_check_failed') return cacheText(lang, 'cache.failed.selfCheck');
   if (code === 'segment_join_mismatch') return cacheText(lang, 'cache.failed.join');
+  // a privacy region changed while the export ran (ADR-0024): a new export is the way on, never a retry of the old snapshot
+  if (code === 'render_cache_purged') return cacheText(lang, 'cache.failed.purged');
   return null;
 }
 

@@ -29,6 +29,8 @@ import {
   fixLabel as fixLabelOf,
 } from './exportSheet.logic.ts';
 import './exportSheet.css';
+import { CacheDoneLine, CacheFailure, cacheStageLabel, ExportReuseLine } from './ExportReuseLine.tsx';
+import { cacheText } from './renderCache.strings.ts';
 
 // ---------------------------------------------------------------- the sheet's own small store (open state and the jobs it started)
 /** `pending`: an export the sheet did not start (the chip's followed job), named from the project until its stored options are read. */
@@ -171,6 +173,9 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
 
   const sec = doc.settings.frameRate ? T.toSeconds(editor.duration) : 0;
   const frames = editor.player?.frameCount ?? 0;
+  // the lane and the reuse line plan with what this export would send (the quality is part of every segment key)
+  const planWith = JSON.stringify(exportOptions(p.choices, lead.variantId));
+  useEffect(() => { editor.setPlanOptions(JSON.parse(planWith) as Record<string, unknown>); }, [planWith, editor]);
 
   return (
     <div className="pf-xs-settings">
@@ -241,6 +246,11 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
             </div>
           </section>
         </div>
+
+        {/* «ייצוא מהיר» (ADR-0024): the switch, the reuse line and the honest notes; off unless the viewer turns it on */}
+        <section aria-label={cacheText(lang, 'cache.fast.label')} data-testid="export-fast">
+          <ExportReuseLine plan={state.segmentPlan} fastExport={state.fastExport} onFastExport={(on) => editor.setFastExport(on)} format={p.choices.format} blockerCodes={state.planBlockers} lang={lang} frameRate={doc.settings.frameRate} />
+        </section>
 
         <section aria-labelledby="xs-name">
           <h3 id="xs-name">{S.fileName}</h3>
@@ -413,7 +423,8 @@ function SettingsFooter({ editor, S }: { editor: Editor; S: ExportStrings }) {
         const variantId = c.kind === 'master' ? null : c.kind === 'variant' ? c.variantId : made.get(c.key) ?? null;
         const out = scaledSize(c, p.choices.scale);
         // the editor registers the job: its file is saved by itself when ready, and the top bar's ring follows it (store.ts)
-        const jobId = await editor.startExport(exportOptions(p.choices, variantId) as ExportRequest);
+        const fast = state.fastExport && p.choices.format === 'mp4-h264-aac' && !state.planBlockers.length; // «ייצוא מהיר» (ADR-0024), off unless the viewer turned it on
+        const jobId = await editor.startExport({ ...exportOptions(p.choices, variantId), ...(fast ? { mode: 'incremental' as const } : {}) } as ExportRequest);
         if (!jobId) throw new Error(S.startFailed);
         const r = { jobId };
         // append to the list as it is now (a poll may have updated the earlier files meanwhile); `starting` stays on until the last is added
@@ -453,7 +464,10 @@ function Running({ S }: { S: ExportStrings }) {
       <div className="pf-xs-big">
         <div className="pf-xs-pct" aria-hidden="true"><span className="num">{pct == null ? '…' : `${pct}%`}</span></div>
         <div className="pf-xs-big-meta">
-          <b>{st.id ? S.stageNames[st.id] : S.starting}</b>
+          {/* the fast export's own stages (keying, self-check, joining …) are worded by the render cache's strings (ADR-0024) */}
+          {!st.id && cur.stage && cacheStageLabel(cur.stage, state.lang)
+            ? <b data-testid="cache-stage" data-stage={cur.stage.split(' ')[0]}>{cacheStageLabel(cur.stage, state.lang)}</b>
+            : <b>{st.id ? S.stageNames[st.id] : S.starting}</b>}
           {st.done != null && st.total != null && <span className="num">{S.framesOf(st.done, st.total)} {S.frameWord}</span>}
         </div>
       </div>
@@ -504,8 +518,12 @@ function Done({ editor, S }: { editor: Editor; S: ExportStrings }) {
             <div className="pf-xs-card-text">
               <b>{j.label} · {j.status === 'canceled' ? S.canceledTitle : S.failedTitle}</b>
               <span dir="auto">{j.status === 'canceled' ? S.canceledNote : `${j.error?.message ? (translateRefusal(state.lang, j.error.message) ?? j.error.message) + '. ' : ''}${S.failedFix}`}</span>
+              <CacheFailure code={j.error?.code} lang={state.lang} />
             </div>
-            <Button variant="secondary" size="sm" onClick={() => void retry(j)} data-testid="export-retry">{S.retry}</Button>
+            {/* a fast export stopped by a privacy change cannot be retried (its snapshot shows what is now hidden): a new export instead */}
+            {j.error?.code === 'render_cache_purged'
+              ? <Button variant="secondary" size="sm" onClick={() => setSheet({ jobs: [] })} data-testid="export-new">{cacheText(state.lang, 'cache.failed.newExport')}</Button>
+              : <Button variant="secondary" size="sm" onClick={() => void retry(j)} data-testid="export-retry">{S.retry}</Button>}
           </>
         );
         // the ids stay literal attributes (the test id inventory reads them from the source)
@@ -557,6 +575,7 @@ function FileCard({ j, S, editor }: { j: SheetJob; S: ExportStrings; editor: Edi
           <b dir="auto">{state.doc!.name} · {j.label}</b>
           <span><Badge tone="hollow" mono>{j.ext.toUpperCase()}</Badge> {bytes != null && <span className="num">{formatFileSize(bytes)}</span>} · <span className="num">{j.w}×{j.h}</span></span>
           <span className="pf-xs-ok"><Check size={14} aria-hidden="true" /> {S.checked}</span>
+          {j.output?.segments && <CacheDoneLine report={j.output.segments} lang={state.lang} />}
         </div>
         <a className="pf-btn pf-btn-secondary pf-btn-md pf-ds" href={url} download data-testid="export-download"><Download size={16} aria-hidden="true" /><span className="pf-btn-label">{S.download}</span></a>
       </div>

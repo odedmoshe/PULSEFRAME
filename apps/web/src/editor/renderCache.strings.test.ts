@@ -71,10 +71,14 @@ describe('stage labels, failure text and numbers', () => {
     expect(stageLabel('rendering 2/16', 'en')).toBe(`${cacheText('en', 'cache.stage.rendering')} 2/16`);
     expect(stageLabel('joining', 'he')).toBe('חיבור המקטעים');
     expect(stageLabel('preparing', 'he')).toBeNull();
+    // names of Object.prototype members are not stages (review item: 'constructor' used to give undefined, not null)
+    for (const name of ['constructor', 'tostring', 'hasownproperty']) expect(stageLabel(name, 'he')).toBeNull();
+    expect(stageLabel('constructor', 'en')).toBeNull();
   });
   it('the failure sentences are the fixed ones; other codes are not ours', () => {
     expect(failureText('render_cache_self_check_failed', 'he')).toBe(dictionaries.he['cache.failed.selfCheck']);
     expect(failureText('segment_join_mismatch', 'en')).toBe(dictionaries.en['cache.failed.join']);
+    expect(failureText('render_cache_purged', 'he')).toBe(dictionaries.he['cache.failed.purged']);
     expect(failureText('export_failed', 'he')).toBeNull();
     expect(failureText(undefined, 'he')).toBeNull();
   });
