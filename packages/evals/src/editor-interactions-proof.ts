@@ -23,7 +23,7 @@ import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
-import { creativeProjection, beatSwitchFrame, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 import { chooseFormat } from './editor-ui.ts';
 
@@ -907,10 +907,17 @@ async function main() {
       await tpage.getByTestId('rail-templates').click(); // the Templates drawer is mounted in the rail's Templates category (UX_REDESIGN §4.3)
       if ((await tpage.getByTestId('templates-toggle').getAttribute('aria-expanded')) !== 'true') await tpage.getByTestId('templates-toggle').click();
       await tpage.locator(`[data-testid=${TID.card}]`).first().waitFor({ timeout: 10000 }).catch(() => {});
-      const cards = await tpage.locator(`[data-testid=${TID.card}]`).evaluateAll((els) => els.map((e) => ({ id: e.getAttribute('data-template-id'), available: e.getAttribute('data-available') === 'true', reason: e.querySelector('[data-testid=template-unavailable-reason]')?.textContent ?? null })));
+      const cards = await tpage.locator(`[data-testid=${TID.card}]`).evaluateAll((els) => els.map((e) => ({ id: e.getAttribute('data-template-id'), genre: e.getAttribute('data-genre'), available: e.getAttribute('data-available') === 'true', reason: e.querySelector('[data-testid=template-unavailable-reason]')?.textContent ?? null })));
       const he = dictionaries.he as Record<string, string>;
       const gatedOk = cards.filter((c) => !c.available).every((c) => { const model = list?.find((t) => t.id === c.id)?.needs?.model; return !!model && c.reason === he[`template.unavailable.${model}`]; });
-      check('the Templates drawer lists 8 cards: the 6 built-ins, available, then Text-Behind-Subject and 3D-Zoom, unavailable with their Hebrew reason (template.unavailable.<model>)', cards.length === 8 && cards.filter((c) => c.available).length === 6 && cards.filter((c) => !c.available).map((c) => c.id).sort().join() === 'tpl.3d-zoom,tpl.text-behind-subject' && gatedOk, { cards });
+      // what the drawer should list (content-pack plan §UI: the drawer has the pack templates, with the genre chip «חג»): the built-ins, then each
+      // pack's own templates in pack order, then the two model-gated ones; ids and genres from core, not counted by hand
+      const packTpls = PACKS.flatMap((p) => p.templates.map((t) => ({ id: t.id, genre: t.genre, pack: p.id })));
+      const want = [...BUILTIN_TEMPLATES.map((t) => ({ id: t.id, genre: t.genre, available: true })), ...packTpls.map((t) => ({ id: t.id, genre: t.genre, available: true })), ...MODEL_GATED_TEMPLATES.map((t) => ({ id: t.id, genre: t.genre, available: false }))];
+      const drawerOk = BUILTIN_TEMPLATES.length === 6 && packTpls.length > 0 && MODEL_GATED_TEMPLATES.map((t) => t.id).sort().join() === 'tpl.3d-zoom,tpl.text-behind-subject'
+        && JSON.stringify(cards.map((c) => ({ id: c.id, genre: c.genre, available: c.available }))) === JSON.stringify(want)
+        && cards.filter((c) => c.available).every((c) => c.reason === null) && gatedOk;
+      check(`the Templates drawer lists ${want.length} cards in order: the 6 built-ins, available, then the content packs' ${packTpls.length} templates (${PACKS.map((p) => p.id).join(', ')}), available, each with its genre from core, then Text-Behind-Subject and 3D-Zoom, unavailable with their Hebrew reason (template.unavailable.<model>)`, drawerOk, { cards, want: want.map((w) => w.id) });
       const chip = tpage.locator(`[data-testid=${TID.genreChip}]`).first();
       const genre = await chip.getAttribute('data-genre');
       await chip.click();
