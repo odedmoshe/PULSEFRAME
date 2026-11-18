@@ -54,14 +54,38 @@ export function deleteProject(store: Store, by: Principal, projectId: string, co
   return { deleted: { id: projectId, name: doc.name }, exportsRemoved: outputs.length, note: 'Media files are kept until storage clean-up is run, because other projects may use the same files.' };
 }
 
+/**
+ * A failed or canceled import job (ADR-0023) stops pinning the file it received once it is dismissed or this old: a rejected
+ * upload must not hold disk space forever. A retry after the file was cleaned up is refused with original_gone.
+ */
+export const IMPORT_JOB_PIN_MS = 7 * 24 * 3600_000;
+/** Whether this job row still counts as a reference to the hashes it mentions. */
+function jobPins(r: { type: string; status: string; output: string | null; error: string | null; updated_at: string }, now: number): boolean {
+  if (r.type !== 'import' || (r.status !== 'failed' && r.status !== 'canceled')) return true;
+  const parse = (t: string | null) => { try { return JSON.parse(t ?? 'null'); } catch { return null; } };
+  if (parse(r.error)?.dismissed === true || parse(r.output)?.dismissed === true) return false;
+  const at = Date.parse(r.updated_at);
+  return !(Number.isFinite(at) && now - at >= IMPORT_JOB_PIN_MS);
+}
+/** Free bytes for this process on the volume that holds `dir` (statfs), or null when it cannot be measured here. */
+export function freeDiskBytes(dir: string): number | null {
+  try {
+    const s = fs.statfsSync(dir);
+    const n = Number(s.bavail) * Number(s.bsize);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Every 64-hex content hash mentioned by anything that still exists. */
-function referencedHashes(store: Store): Set<string> {
+function referencedHashes(store: Store, now = Date.now()): Set<string> {
   const out = new Set<string>();
   const scan = (text: string | null) => { if (text) for (const m of text.matchAll(/[0-9a-f]{64}/g)) out.add(m[0]); };
   const has = (table: string) => !!store.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
   for (const r of store.db.prepare('SELECT doc, initial_doc FROM projects').iterate() as Iterable<{ doc: string; initial_doc: string }>) { scan(r.doc); scan(r.initial_doc); }
   for (const r of store.db.prepare('SELECT ops FROM transactions').iterate() as Iterable<{ ops: string }>) scan(r.ops);
-  for (const r of store.db.prepare('SELECT input, output FROM jobs').iterate() as Iterable<{ input: string; output: string | null }>) { scan(r.input); scan(r.output); }
+  for (const r of store.db.prepare('SELECT type, status, input, output, error, updated_at FROM jobs').iterate() as Iterable<{ type: string; status: string; input: string; output: string | null; error: string | null; updated_at: string }>) if (jobPins(r, now)) { scan(r.input); scan(r.output); }
   if (has('proposals')) for (const r of store.db.prepare('SELECT ops, changes FROM proposals').iterate() as Iterable<{ ops: string; changes: string | null }>) { scan(r.ops); scan(r.changes); }
   // Derivatives (proxies, thumbnails, waveforms) live as long as the media they were made from.
   if (has('derivatives')) for (const r of store.db.prepare('SELECT asset_hash, blob_hash FROM derivatives').iterate() as Iterable<{ asset_hash: string; blob_hash: string | null }>) { const src = r.asset_hash.replace(/^sha256:/, ''); if (out.has(src) && r.blob_hash) out.add(r.blob_hash.replace(/^sha256:/, '')); }
@@ -99,7 +123,7 @@ export function assertStorageRoom(store: Store, neededBytes: number, what: strin
 }
 export function storageReport(store: Store, by: Principal, now = Date.now(), quotaBytes = store.maxStorageBytes) {
   ownerOnly(by, 'inspect storage');
-  const refs = referencedHashes(store);
+  const refs = referencedHashes(store, now);
   const blobDir = path.join(store.dataDir, 'blobs');
   let used = 0, usedBytes = 0;
   const collectable: { hash: string; bytes: number }[] = [];
@@ -121,7 +145,7 @@ export function storageReport(store: Store, by: Principal, now = Date.now(), quo
     quotaBytes: quotaBytes || null,
     ...(hooksOf.has(store) ? { renderCache: hooksOf.get(store)!.status() } : {}),
     unreferenced: { files: collectable.length, bytes: collectable.reduce((n, b) => n + b.bytes, 0), tooNewToJudge: tooNew, hashes: collectable.map((b) => b.hash) },
-    rule: 'A file is unreferenced only if no remaining project (including its history), job or proposal mentions its content hash, and it is older than ten minutes.',
+    rule: 'A file is unreferenced only if no remaining project (including its history), job or proposal mentions its content hash, and it is older than ten minutes. A failed or canceled import stops counting once it is dismissed or seven days old.',
   };
 }
 

@@ -29,6 +29,8 @@ export { cutUploadName };
 
 export const importsApi = {
   list: (projectId: string) => call<{ imports: ImportJobView[]; room: ImportRoom }>(`/projects/${p(projectId)}/imports`),
+  /** The server's record of one job (status, stage, output, error), the same fields an SSE job event carries. */
+  job: (jobId: string) => call<{ id: string; type: string; status: string; stage: string | null; output: unknown; error: unknown }>(`/jobs/${p(jobId)}`),
   cancel: (jobId: string) => call<{ jobId: string; status: string }>(`/jobs/${p(jobId)}/cancel`, post()),
   retry: (jobId: string) => call<{ jobId: string; status: string; retryOf?: string }>(`/jobs/${p(jobId)}/retry`, post()),
   dismiss: (jobId: string) => call<{ jobId: string }>(`/jobs/${p(jobId)}/dismiss`, post()),

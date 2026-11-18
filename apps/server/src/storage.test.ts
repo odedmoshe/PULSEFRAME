@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import type { Principal } from './auth.ts';
-import { collectGarbage, deleteProject, storageReport } from './storage.ts';
+import { collectGarbage, deleteProject, freeDiskBytes, IMPORT_JOB_PIN_MS, storageReport } from './storage.ts';
 import { ApiError, Store } from './store.ts';
 
 const dirs: string[] = [];
@@ -73,5 +73,40 @@ describe('project deletion and storage clean-up', () => {
     expect(storageReport(w.store, owner, LATER)).toMatchObject({ projects: 1, media: { files: 2 }, unreferenced: { files: 0 } });
     // running it again is harmless
     expect(collectGarbage(w.store, owner, true, LATER)).toMatchObject({ removed: { files: 0 } });
+  });
+});
+
+describe('import jobs and the clean-up (ADR-0023)', () => {
+  it('a failed or canceled import stops pinning its original once dismissed or seven days old; open and succeeded imports, and other job types, keep pinning', () => {
+    const w = world();
+    const pid = w.store.createProject({ name: 'p' }).doc.id;
+    const hashes = [1, 2, 3, 4, 5, 6, 7].map((n) => w.blob(10 + n));
+    const job = (type: string, status: string, h: string, error: unknown = null) => {
+      const j = w.store.createJob(pid, type, 'user:local', { originalHash: h, byteSize: 1, name: 'x.mp4', via: 'browser', receivedAt: 'x', commitKind: 'background' });
+      w.store.updateJob(j.id, { status, ...(error ? { error } : {}) });
+      return j;
+    };
+    job('import', 'failed', hashes[0]!, { code: 'unsupported_media', message: 'x', status: 415, retryable: false, dismissed: true });
+    job('import', 'canceled', hashes[1]!, { code: 'canceled', message: 'x', status: 409, retryable: true, dismissed: true });
+    const old = job('import', 'failed', hashes[2]!, { code: 'disk_full', message: 'x', status: 507, retryable: true });
+    job('import', 'failed', hashes[3]!, { code: 'disk_full', message: 'x', status: 507, retryable: true }); // recent, not dismissed: still a card
+    job('import', 'queued', hashes[4]!);
+    job('export', 'failed', hashes[5]!, { code: 'x', message: 'x', dismissed: true }); // not an import: the rule does not apply
+    job('import', 'succeeded', hashes[6]!);
+    const unref = (now: number) => new Set(storageReport(w.store, owner, now).unreferenced.hashes);
+    let u = unref(LATER);
+    expect([...hashes.map((h) => u.has(h.slice(7)))]).toEqual([true, true, false, false, false, false, false]);
+    // seven days after the last change of the undismissed failure, it stops pinning too
+    const updated = Date.parse(w.store.getJob(old.id).updatedAt);
+    u = unref(updated + IMPORT_JOB_PIN_MS + 1000);
+    expect([...hashes.map((h) => u.has(h.slice(7)))]).toEqual([true, true, true, true, false, false, false]);
+    expect(collectGarbage(w.store, owner, true, LATER)).toMatchObject({ removed: { files: 2 } });
+    expect([w.exists(hashes[0]!), w.exists(hashes[1]!), w.exists(hashes[2]!)]).toEqual([false, false, true]);
+  });
+  it('freeDiskBytes measures the volume of a directory, and is null where it cannot', () => {
+    const n = freeDiskBytes(os.tmpdir());
+    expect(typeof n).toBe('number');
+    expect(n!).toBeGreaterThan(0);
+    expect(freeDiskBytes(path.join(os.tmpdir(), 'pf-no-such-dir-' + Date.now()))).toBeNull();
   });
 });

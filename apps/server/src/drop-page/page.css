@@ -1,0 +1,35 @@
+:root{color-scheme:dark light;--bg:#0b0c0f;--s1:#16181d;--s2:#1f2229;--tx:#eef0f4;--t2:#b4bac5;--ln:#363a44;--ac:#45e6d0;--ai:#04211d;--ok:#62db98;--er:#ff8a9b}
+@media (prefers-color-scheme:light){:root{--bg:#eef0f3;--s1:#fff;--s2:#f3f4f7;--tx:#12151a;--t2:#4a5260;--ln:#c9ced6;--ac:#06705f;--ai:#fff;--ok:#126a3e;--er:#b3203d}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Hebrew","Arial Hebrew",Arial,sans-serif}
+main{max-width:480px;margin:0 auto;padding:16px 16px 40px;display:grid;gap:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-size:22px;line-height:1.25;margin:0}
+button,.pick{font:inherit;min-height:48px;min-width:44px;padding:10px 18px;border-radius:12px;border:1px solid var(--ln);background:var(--s2);color:var(--tx);cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center}
+button.ghost{min-height:44px;background:transparent}
+.primary{background:var(--ac);color:var(--ai);border-color:var(--ac);font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,.pick:focus-within{outline:3px solid var(--ac);outline-offset:2px}
+.pick{position:relative;min-height:56px;margin:0 0 10px;font-size:17px}
+.pick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+.status{margin:0;min-height:1.5em;font-weight:600}
+.status.err{color:var(--er)}
+.note{margin:0;color:var(--t2);font-size:14px}
+.keep{font-weight:600}
+section{display:grid;gap:8px}
+section[hidden]{display:none}
+label{font-weight:600}
+input[type=text]{font:inherit;font-size:22px;letter-spacing:.2em;text-align:center;min-height:56px;padding:8px 12px;border-radius:12px;border:1px solid var(--ln);background:var(--s1);color:var(--tx);width:100%}
+.total{margin:0;font-size:18px;font-weight:600}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+li{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;padding:12px 14px;background:var(--s1);border:1px solid var(--ln);border-radius:12px}
+li .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+li .sz{color:var(--t2);font-size:14px;direction:ltr;unicode-bidi:isolate}
+li .st{grid-column:1/-1;font-size:15px}
+li.saved .st{color:var(--ok)}
+li.failed .st{color:var(--er)}
+li progress{grid-column:1/-1;width:100%;height:10px;accent-color:var(--ac)}
+li button{grid-column:1/-1}
+.done{margin-top:8px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
