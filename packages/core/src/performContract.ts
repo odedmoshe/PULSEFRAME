@@ -195,6 +195,12 @@ export interface Chip {
   reason?: HeldReason;
   /** flash_limit: frames since the last kept change of light (or since the light began) */
   since?: number;
+  /**
+   * flash_limit only, optional and additive: 'shape' when the hit's start fit but its own envelope or fade put a change of light
+   * too close to its start, its end or another change (the planner holds it rather than stretching it into another shape).
+   * Absent on every other hold, including one whose start came too soon after another change of light.
+   */
+  why?: 'shape';
 }
 export interface PlannedTake {
   /** The op's arguments; null when nothing is kept (the route then answers 409 take_empty and changes nothing). */

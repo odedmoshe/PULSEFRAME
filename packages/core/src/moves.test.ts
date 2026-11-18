@@ -211,6 +211,29 @@ describe('envelopes and fades on light channels (lead: held flash_limit, never s
     // a fade-out of 3 frames on a light-changing adjustment: never widened to the gap
     const fade = one(custom({ fadeOutSeconds: 0.1 }));
     expect([fade.plan.chips[0]!.state, fade.plan.chips[0]!.reason, fade.plan.chips[0]!.since]).toEqual(['held', 'flash_limit', 3]);
+    // each of them is named a shape hold on its chip (the editor words it «pv.held.shape»)
+    for (const r of [decay, release, fade]) expect(r.plan.chips[0]!.why).toBe('shape');
+  });
+  it('names a shape hold (why: shape) and not a gap hold: a start too soon after another change, or a hit shorter than the gap', () => {
+    const { doc } = project();
+    const plain = custom({ minSeconds: 0.5 });
+    const shaped = custom({ minSeconds: 0.5 }, { shape: 'decay', seconds: 0.1 });
+    // tap 0: plain at 30 (kept); tap 1: shaped at 33 (its start 3 frames after tap 0); tap 2: shaped at 120 (its start fits, its decay does not)
+    // tap 3: plain at 200 clamped by the edit's end to fewer frames than the gap
+    const { doc: short } = project({ frames: 205 });
+    const plan = planPerformance(doc, input([hit(0, 0, 30, 15), hit(1, 1, 33, 15), hit(2, 1, 120, 15)], bankWith({ 0: plain, 1: shaped })));
+    const byTap = new Map(plan.chips.map((c) => [c.tap, c]));
+    expect(byTap.get(0)).toMatchObject({ state: 'kept' });
+    expect(byTap.get(0)!.why).toBeUndefined();
+    expect(byTap.get(1)).toMatchObject({ state: 'held', reason: 'flash_limit', since: 3 });
+    expect(byTap.get(1)!.why).toBeUndefined();
+    expect(byTap.get(2)).toMatchObject({ state: 'held', reason: 'flash_limit', since: 3, why: 'shape' });
+    const tooShort = planPerformance(short, input([hit(0, 0, 200, 15)], bankWith({ 0: plain }))).chips[0]!;
+    expect(tooShort).toMatchObject({ state: 'held', reason: 'flash_limit' });
+    expect(tooShort.since).toBeLessThan(gap);
+    expect(tooShort.why).toBeUndefined();
+    // the op's arguments carry no chip: the take it plans is unchanged by the field
+    expect(JSON.stringify(plan.args)).not.toContain('"why"');
   });
   it('the same shapes that keep the gap are kept exactly as designed (keys where the shape puts them), and the op agrees', () => {
     const decay = one(custom({}, { shape: 'decay', seconds: 0.5 })); // 15 frames: 15 after the start, 15 before the end

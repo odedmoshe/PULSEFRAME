@@ -13,7 +13,7 @@
  *   channels) keeps flashGapFrames from every other change of light, stays outside every strobe or light transition widened by
  *   the gap, and lasts at least the gap. An envelope or fade on a light channel whose inner key cannot keep the gap (from the
  *   hit's start, its end and every other change) is held flash_limit, never stretched into a different look (lead, after the
- *   build review); `since` says how close the inner key came.
+ *   build review); `since` says how close the inner key came, and the chip's `why: 'shape'` names it (the editor words it).
  * - The zoom punch is scale keys on the topmost visible picture clip at the hit (x and y too when they are not 0, so it zooms
  *   about the frame centre), clamped at the clip's end and where a picture on a higher visible track begins over it (the
  *   visible clip changes there; a tap on that picture is its own hit), written as one replace_clip_keyframes (range form) per
@@ -224,10 +224,10 @@ interface Entry {
   hit: Hit; spec: MoveSpec; cls: FlashClass; a: number; b: number; merged: Hit[];
   /** what the hit plays on: a punch, the clip it keys (null: no picture); rule 3 merges only within one */
   on: string | null;
-  held?: HeldReason; since?: number; steps?: TemplateStep[];
+  held?: HeldReason; since?: number; why?: 'shape'; steps?: TemplateStep[];
 }
 interface Lane { id: string | null; bind: string | null; busy: [number, number][] }
-type Planned = { steps: TemplateStep[]; changes: number[]; commit: () => void } | { held: HeldReason; since?: number };
+type Planned = { steps: TemplateStep[]; changes: number[]; commit: () => void } | { held: HeldReason; since?: number; why?: 'shape' };
 
 export const planPerformance: PlanPerformance = (doc, input) => {
   const seqId = input.sequenceId ?? doc.mainSequenceId;
@@ -307,8 +307,8 @@ export const planPerformance: PlanPerformance = (doc, input) => {
 
   // 1–3: cap, availability, range, merge and retrigger
   const chips = new Map<number, Chip>();
-  const chipOf = (h: Hit, spec: MoveSpec, state: Chip['state'], frame = h.frame, frames = h.frames, reason?: HeldReason, since?: number) =>
-    chips.set(h.tap, { tap: h.tap, pad: h.pad, moveId: spec.id, frame, frames, state, ...(reason ? { reason } : {}), ...(since !== undefined ? { since } : {}) });
+  const chipOf = (h: Hit, spec: MoveSpec, state: Chip['state'], frame = h.frame, frames = h.frames, reason?: HeldReason, since?: number, why?: 'shape') =>
+    chips.set(h.tap, { tap: h.tap, pad: h.pad, moveId: spec.id, frame, frames, state, ...(reason ? { reason } : {}), ...(since !== undefined ? { since } : {}), ...(why ? { why } : {}) });
   const entries: Entry[] = [];
   const lastByPad = new Map<number, Entry>();
   const problems = new Map<number, string | null>();
@@ -505,9 +505,9 @@ export const planPerformance: PlanPerformance = (doc, input) => {
     // the adjustment's opacity is light when its effects change light; an effect's keys are light when that effect changes light
     const light = e.cls === 'colour';
     // an inner key change on a light channel keeps the gap from the hit's start, its end and every other change; else the hit is
-    // held flash_limit (never stretched into another shape), `since` how close the inner key came
+    // held flash_limit (never stretched into another shape), `since` how close the inner key came, `why` 'shape' on its chip
     const inner = (f: number, lit: boolean) => !lit || (f - e.a >= gap && e.a + len - f >= gap && fits(f, mine));
-    const tooClose = (f: number): Planned => ({ held: 'flash_limit', since: f - e.a < gap ? f - e.a : e.a + len - f < gap ? e.a + len - f : breachAt(f, mine)?.since ?? Math.min(...mine.map((m) => Math.abs(m - f))) });
+    const tooClose = (f: number): Planned => ({ held: 'flash_limit', why: 'shape', since: f - e.a < gap ? f - e.a : e.a + len - f < gap ? e.a + len - f : breachAt(f, mine)?.since ?? Math.min(...mine.map((m) => Math.abs(m - f))) });
     const key = (k: number, param: string, f: number, value: number, easing: Easing) => out.push({ op: 'set_effect_keyframe', args: { clipId: { $ref: bind }, effectId: { $ref: bind, out: 'effectIds', at: k }, param, time: T.frameTime(f, rate), value: r6(value), easing } });
     if (e.cls !== 'light') for (const [k, fx] of spec.effects.entries()) {
       const env = fx.envelope;
@@ -556,8 +556,9 @@ export const planPerformance: PlanPerformance = (doc, input) => {
       if (br) { e.held = 'flash_limit'; e.since = br.since; return; }
     }
     const p = realise(e);
-    if ('held' in p) { e.held = p.held; if (p.since !== undefined) e.since = p.since; return; }
-    for (const f of p.changes) { const br = f === e.a ? null : breachAt(f, p.changes); if (br) { e.held = 'flash_limit'; e.since = br.since; return; } }
+    if ('held' in p) { e.held = p.held; if (p.since !== undefined) e.since = p.since; if (p.why) e.why = p.why; return; }
+    // the start was judged above, so a change past it is the hit's own envelope or fade: a shape hold
+    for (const f of p.changes) { const br = f === e.a ? null : breachAt(f, p.changes); if (br) { e.held = 'flash_limit'; e.since = br.since; e.why = 'shape'; return; } }
     if (steps + p.steps.length > MAX_TAKE_STEPS) { e.held = 'take_full'; return; }
     steps += p.steps.length;
     p.commit();
@@ -573,7 +574,7 @@ export const planPerformance: PlanPerformance = (doc, input) => {
   let kept = 0;
   for (const e of entries) {
     if (e.steps) { kept++; allSteps.push(...e.steps); chipOf(e.hit, e.spec, 'kept', e.a, e.b - e.a); for (const m of e.merged) chipOf(m, e.spec, 'merged', e.a, e.b - e.a); }
-    else { chipOf(e.hit, e.spec, 'held', e.a, e.b - e.a, e.held, e.since); for (const m of e.merged) chipOf(m, e.spec, 'held', e.a, e.b - e.a, e.held, e.since); }
+    else { chipOf(e.hit, e.spec, 'held', e.a, e.b - e.a, e.held, e.since, e.why); for (const m of e.merged) chipOf(m, e.spec, 'held', e.a, e.b - e.a, e.held, e.since, e.why); }
   }
   const chipList = [...chips.values()].sort((x, y) => x.frame - y.frame || x.pad - y.pad || x.tap - y.tap);
   const held = chipList.filter((c) => c.state === 'held').length;

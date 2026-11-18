@@ -14,7 +14,7 @@ import { api } from '../../api.ts';
 import { Button, Dialog, Seg, Slider, Switch, Tabs } from '../../ds/index.ts';
 import { useEditorState } from '../store.ts';
 import { analyseCalibration, heardPerfMs, outputLatencyMs, scheduleClicks, type CalibrationResult, type ClickContext } from './calibration.ts';
-import { liveDocument, padStatus, planTake, resolvePadAssets, TapCapture, type PadStatus, type PerformChip, type PlanFailure, type TakePlan } from './capture.ts';
+import { liveDocument, padStatus, planTake, resolvePadAssets, TapCapture, type PadStatus, type PlanFailure, type TakePlan } from './capture.ts';
 import { CameraOverlay } from './CameraOverlay.tsx';
 import { CALIBRATION, type PerformPrefs } from './contract.ts';
 import { PadEditor } from './PadEditor.tsx';
@@ -58,7 +58,7 @@ export function PerformView() {
   const [tab, setTab] = useState<'pads' | 'camera'>('pads');
   const [phase, setPhase] = useState<Phase>('idle');
   const [take, setTake] = useState<TakePlan | null>(null);
-  const [chips, setChips] = useState<PerformChip[]>([]);
+  const [chips, setChips] = useState<Chip[]>([]);
   const [failure, setFailure] = useState<PlanFailure | null>(null);
   const [held, setHeld] = useState<ReadonlySet<number>>(new Set());
   const [editing, setEditing] = useState<number | null>(null);
