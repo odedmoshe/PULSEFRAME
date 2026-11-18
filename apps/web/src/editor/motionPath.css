@@ -1,0 +1,19 @@
+/* The motion path on the stage (ADR-0019, MotionPath.tsx), inside CanvasHandles' .ch-root (dir=ltr, physical left/top on
+   purpose: the canvas is never mirrored). The root is pointer-transparent; only the vertices, bend grips and stand-ins take the
+   pointer. The line is a dark stroke under a light one so it reads on any picture. */
+.mp-root { position: absolute; inset: 0; pointer-events: none; direction: ltr; }
+.mp-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.mp-under { fill: none; stroke: rgb(0 0 0 / 0.65); stroke-width: 3.5; stroke-linejoin: round; stroke-linecap: round; }
+.mp-over { fill: none; stroke: var(--pf-frame); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.mp-dot { fill: var(--pf-text); stroke: rgb(0 0 0 / 0.65); stroke-width: 0.75; }
+.mp-vertex, .mp-bend { position: absolute; box-sizing: border-box; margin: 0; padding: 0; pointer-events: auto; touch-action: none; z-index: 1; }
+.mp-vertex { width: 12px; height: 12px; margin: -6px 0 0 -6px; border: 1.5px solid var(--pf-frame); background: var(--pf-text); transform: rotate(45deg); cursor: move; }
+.mp-vertex[aria-pressed='true'] { background: var(--pf-frame); border-color: var(--pf-text); }
+.mp-bend { width: 10px; height: 10px; margin: -5px 0 0 -5px; border: 1.5px solid var(--pf-frame); background: rgb(0 0 0 / 0.55); border-radius: 50%; cursor: grab; }
+.mp-vertex:focus-visible, .mp-bend:focus-visible { outline: 2px solid var(--pf-pulse); outline-offset: 2px; }
+.mp-readonly .mp-vertex, .mp-readonly .mp-bend { cursor: not-allowed; opacity: 0.7; }
+/* a stand-in at the viewer edge for a vertex outside it: the same grip, filled */
+.mp-edge { position: absolute; box-sizing: border-box; width: 10px; height: 10px; margin: -5px 0 0 -5px; border: 1px solid var(--pf-text); background: var(--pf-frame); transform: rotate(45deg); pointer-events: auto; touch-action: none; z-index: 1; cursor: move; }
+.mp-reason, .mp-note { position: absolute; left: 8px; bottom: 8px; margin: 0; max-width: calc(100% - 16px); padding: 2px 6px; border-radius: 4px; background: rgb(0 0 0 / 0.7); color: var(--pf-text); font-size: 12px; line-height: 1.4; pointer-events: none; unicode-bidi: plaintext; }
+.mp-note:empty { display: none; }
+.mp-reason + .mp-note { bottom: 32px; }

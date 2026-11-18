@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { findClip, type Clip } from '@pulseframe/core';
 import { boxToScreen, clampRotation, clampScale, clampX, edgeProxies, layerBox, rotationFromDrag, scaleFromDrag, SCALE_ANCHORS, screenDeltaToFrameFraction, type LayerHandle, type LayerTransform, type ScaleHandle } from './interactions.math.ts';
 import { useEditorState, type ResolvedNow } from './store.ts';
+import { MotionPath } from './MotionPath.tsx';
 import './interactions.css';
 
 type Handle = LayerHandle;
@@ -211,6 +212,9 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
         <span className="ch-stem" aria-hidden="true" />
         <button {...common('rotate')} className="ch-handle ch-rotate" />
       </div>
+      {/* ADR-0019: the motion path of the clip's own x/y keys (MotionPath.tsx decides whether it shows; read-only in a format view) */}
+      <MotionPath clip={clip} doc={doc} rect={rect} k={k} editable={!state.viewVariantId && !sel.track.locked}
+        view={rect.viewW > 0 && rect.viewH > 0 ? { left: -rect.left, top: -rect.top, right: rect.viewW - rect.left, bottom: rect.viewH - rect.top } : undefined} />
       {proxies.map((p) => (
         <span key={p.id} className={`ch-proxy${p.mirror ? ' ch-mirror' : ''}`} data-testid="canvas-handle-proxy" data-proxy={p.id} aria-hidden="true" title={label(p.id)}
           style={{ left: p.x, top: p.y }} onPointerDown={proxyDown(p.id)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={cancel} />
