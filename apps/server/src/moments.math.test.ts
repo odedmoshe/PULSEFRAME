@@ -96,7 +96,7 @@ describe('pictureSample', () => {
     expect(cases).toBeGreaterThan(200);
     expect(widenedOnly).toEqual([]);
     console.log(`[moments.math] large fast subjects: ${cases} cases, ${contractGated} gated by the contract rule itself (border or pan), none by the widened rule alone`);
-  });
+  }, 60_000); // 462 cases: about 5 s alone on this machine, past the 5 s default when the whole suite runs
   it('the widened rule counts only lines with detail: a pan under a flat band is still caught; a swept area under 90 % of the width is not', () => {
     // the film fixture's layout: a flat band over the top sixth (no detail, cannot change), the texture panning below it
     const band = (dx: number) => frameOf(W, H, (x, y) => (y < 32 ? 128 : tex(x - dx, y)));
@@ -246,6 +246,41 @@ describe('findMoments', () => {
     expect(w.basis).toEqual(['inner-motion', 'sound']);
     expect(w.peakFrame).toBeGreaterThanOrEqual(30 * S);
     expect(w.peakFrame).toBeLessThan(45 * S);
+  });
+  /**
+   * The family film proof's film-a (F9b), as the moments job measured it (its data file, proxy, 70 samples, 146 hops; picture
+   * 15 frames late): one 6 s activity, the disc over samples [20, 50) with 1 kHz bursts every 0.5 s from hop 45. The AAC
+   * encoder's pre-echo lifts hop 44 (0.1 s before the first burst) to -34.8 dBFS, 3.2 dB over the noise, so sample 19 (frame
+   * 114, still picture) has interest of its own (0.5 z(level) = 1.14 >= 0.35) and a smoothed interest of 1.60 from the activity
+   * next to it. The main peak is sample 40 (frame 240) and its +-4 s suppression ends at sample 20, so sample 19 was reported as
+   * a second moment 0.2 s before the activity, and a film slot placed on it ([66, 186)) opened with 1.8 s of calm. A second
+   * moment must be a distinct activity: the suppression covers the main peak's whole activity.
+   */
+  it('the shoulder of an activity is not a second moment (the fixture film-a as measured: a pre-echo hop 0.1 s before it)', () => {
+    const inner = [0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,30,43,34,29,31,44,43,44,45,33,29,31,43,43,44,45,33,28,32,43,44,44,44,33,28,32,43,42,44,44,28,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0];
+    const change = [0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,10,14,13,15,14,15,14,14,15,13,15,14,14,15,14,15,13,14,14,14,15,14,14,14,14,15,14,14,15,14,10,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0];
+    const sharp = [156,156,156,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160,195,200,199,197,200,200,197,195,202,200,197,200,201,196,195,200,199,196,200,199,197,196,201,200,195,199,200,197,196,201,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160,160];
+    const luma = [120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,122,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120];
+    const level = [-383,-379,-376,-375,-381,-379,-381,-379,-378,-376,-374,-378,-379,-380,-381,-381,-378,-380,-377,-378,-380,-379,-380,-378,-376,-383,-381,-379,-376,-379,-382,-380,-378,-381,-381,-382,-379,-376,-380,-377,-382,-378,-380,-380,-348,-59,-123,-380,-378,-324,-59,-120,-378,-376,-300,-59,-118,-379,-382,-380,-58,-120,-378,-380,-346,-59,-123,-381,-382,-326,-59,-120,-383,-379,-301,-59,-118,-381,-381,-384,-59,-121,-383,-382,-345,-59,-123,-382,-382,-326,-59,-120,-381,-381,-300,-59,-118,-380,-379,-377,-59,-120,-383,-381,-381,-381,-382,-383,-382,-378,-382,-381,-382,-383,-383,-381,-383,-383,-378,-381,-383,-382,-382,-385,-385,-382,-382,-385,-382,-384,-383,-382,-384,-381,-380,-382,-383,-379,-384,-381,-381,-380,-381,-382,-385,-602];
+    const zero = new Array<number>(70).fill(0);
+    const pic: PictureSeries = { source: 'proxy', step: S, count: 70, width: W, height: H, luma, sharp, inner, pan: zero, change, gated: zero, digest: 'x' };
+    const r = findMoments(pic, { source: 'waveform-peaks', hopMs: 100, count: level.length, level }, { frames: 420, rate: R30, startOffsetFrames: 15 });
+    expect(r.windows.map((w) => w.peakFrame)).toEqual([240]);
+    expect([r.windows[0]!.fromFrame, r.windows[0]!.toFrame]).toEqual([0, 420]);
+  });
+  /** Pictures with a moving disc over `runs` (samples) and 1 kHz-like bursts over the same samples on a -38 dBFS floor. */
+  const activity = (n: number, runs: [number, number][]) => {
+    const pic = seriesOf(Array.from({ length: n }, (_, k) => (runs.some(([a, b]) => k >= a && k < b) ? discAt(k) : still)));
+    const level = new Array(2 * n).fill(-380);
+    for (const [a, b] of runs) for (let h = 2 * a; h < 2 * b; h += 5) { level[h] = -59; level[h + 1] = -120; level[h - 1] = -348; }
+    return { pic, sound: { source: 'waveform-peaks', hopMs: 100, count: 2 * n, level } as SoundSeries };
+  };
+  it('control: two activities with calm between them are two moments, each peak inside its own activity', () => {
+    const { pic, sound } = activity(90, [[10, 30], [55, 80]]);
+    const peaks = findMoments(pic, sound, asset(90)).windows.map((w) => w.peakFrame / S).sort((a, b) => a - b);
+    expect(peaks.length).toBe(2);
+    expect(peaks[0]!).toBeGreaterThanOrEqual(10); expect(peaks[0]!).toBeLessThan(30);
+    expect(peaks[1]!).toBeGreaterThanOrEqual(55); expect(peaks[1]!).toBeLessThan(80);
   });
   it('is deterministic and returns integer frames inside the file', () => {
     const pic = seriesOf(discClip());

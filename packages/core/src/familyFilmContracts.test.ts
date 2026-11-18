@@ -59,10 +59,10 @@ describe('the one conversion from a source frame to source time', () => {
   });
   it('a cached data file is a hit, needs only its sound, or is measured again', () => {
     expect(momentsCacheState(null, true)).toBe('miss');
-    expect(momentsCacheState({ algo: 2 as never, picture: 'proxy', sound: true }, true)).toBe('miss');
-    expect(momentsCacheState({ algo: 1, picture: 'proxy', sound: true }, true)).toBe('hit');
-    expect(momentsCacheState({ algo: 1, picture: 'proxy', sound: false }, false)).toBe('hit');
-    expect(momentsCacheState({ algo: 1, picture: 'proxy', sound: false }, true)).toBe('add-sound');
+    expect(momentsCacheState({ algo: 1 as never, picture: 'proxy', sound: true }, true)).toBe('miss'); // measured by the rules before 2
+    expect(momentsCacheState({ algo: MOMENTS_ALGO, picture: 'proxy', sound: true }, true)).toBe('hit');
+    expect(momentsCacheState({ algo: MOMENTS_ALGO, picture: 'proxy', sound: false }, false)).toBe('hit');
+    expect(momentsCacheState({ algo: MOMENTS_ALGO, picture: 'proxy', sound: false }, true)).toBe('add-sound');
   });
 });
 
@@ -76,7 +76,7 @@ describe('attach_moments: one measurement is one revision and one undo', () => {
     expect(r.affectedIds.sort()).toEqual(['analysis:v1', 'analysis:v2']);
     const m = r.doc.analyses.v1!.moments!;
     expect(r.doc.analyses.v1!.scenes!.cuts).toHaveLength(1);
-    expect(m.origin).toEqual({ method: MOMENTS_METHOD, params: { algo: 1 }, createdAt: '2026-11-18T10:00:00Z', createdBy: 'server:moments', edited: false });
+    expect(m.origin).toEqual({ method: MOMENTS_METHOD, params: { algo: MOMENTS_ALGO }, createdAt: '2026-11-18T10:00:00Z', createdBy: 'server:moments', edited: false });
     expect(AnalysisSchema.safeParse(r.doc.analyses.v1).success).toBe(true);
     expect(validateProject(r.doc)).toEqual([]);
     // undo through entity states, as the store does

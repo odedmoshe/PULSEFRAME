@@ -32,7 +32,8 @@
  *   full scale), clipped to [0, zClip] — centred on the 20th percentile, so a clip lively for most of its length is not "flat";
  *   interest = g * (0.5 z(inner) + 0.5 z(level)) (weight 1 on the one signal present); mean over +-coreSeconds divided by the
  *   FULL window size (edges are not favoured); up to MOMENTS_MAX_WINDOWS peaks by argmax (earliest on ties) with
- *   +-separationSeconds suppression, stopping under minInterest; clean stretch: from the peak while g = 1 and no cut is crossed,
+ *   suppression of each peak's whole activity (the run of its clean stretch where the smoothed interest
+ *   stays >= minInterest) and at least +-separationSeconds, so each further window is a distinct activity, stopping under minInterest; clean stretch: from the peak while g = 1 and no cut is crossed,
  *   at most maxStretchSeconds each way. No peak = flat: true, windows: [].
  * - Stored: per window measured values only (motion, level above the file's median, sharpness ratio, luma, burstFrame); per file
  *   `file.motion` (median inner, permille) and `file.level` (median level, dBFS x 10). The per-sample series live in the data
@@ -42,11 +43,15 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import type { Asset } from './schema.ts';
 
-export const MOMENTS_ALGO = 1 as const;
+/**
+ * The measurement rules' version. A data file or record of another version is measured again (momentsCacheState, the job's
+ * isCurrent, the planner's needsMeasurement). 2: each peak's suppression covers its whole activity (family film proof F9b).
+ */
+export const MOMENTS_ALGO = 2 as const;
 export const MOMENTS_JOB_TYPE = 'moments' as const;
 export const MOMENTS_DERIVATIVE_KIND = 'moments' as const;
 /** Stored in the document (analyses[id].moments.origin.method): kept short, so a full record fits MOMENTS_RECORD_BUDGET_BYTES. */
-export const MOMENTS_METHOD = 'moments 1: measured motion, sharpness, brightness, sound level; heuristic; no model' as const;
+export const MOMENTS_METHOD = 'moments 2: measured motion, sharpness, brightness, sound level; heuristic; no model' as const;
 /** Stored in the data file and shown in the UI. */
 export const MOMENTS_METHOD_LONG = 'Picture: every S-th frame of the editing proxy (about 5 a second), grey, long side 320: brightness, sharpness (gradient energy, relative to the file), the change left after the best whole-picture shift within 12 box pixels (movement inside the picture) and that shift (camera movement); a faster camera move lies outside the search and is gated as a whip pan, not measured. Sound: waveform peaks per 100 ms (peak level relative to the file, not LUFS). Rules, no model; faces are not used; thresholds tuned on synthetic fixtures only.' as const;
 export const MOMENTS_LABEL = { he: 'היוריסטיקה: מדידות של תנועה, חדות, בהירות ועוצמת קול. בלי בינה מלאכותית', en: 'Heuristic: measured motion, sharpness, brightness and sound level. No AI model' } as const;
