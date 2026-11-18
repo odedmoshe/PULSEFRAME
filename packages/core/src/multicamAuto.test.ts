@@ -104,11 +104,21 @@ describe('multicam auto-switch planner', () => {
       }
     }
   });
-  it('at least 1 s of both talking gives the wide shot; less does not', () => {
+  it('at least 0.5 s of both talking gives the wide shot; less does not', () => {
     const { doc, MIC } = setup();
     const both = (d: number) => cutsOf(planMulticamAuto(doc, { groupId: 'mcg_a' }, { multicamLevels: { [MIC]: envelope(MIC, 120, [[0, 20, -20, -35], [20, 20 + d, -20, -20], [20 + d, 40, -20, -35], [40, 60, -35, -20]]) } }).ops);
     expect(both(1.2)).toEqual([[0, 'host'], [600, 'wide'], [660, 'host'], [1194, 'guest']]);
-    expect(both(0.6)).toEqual([[0, 'host'], [1194, 'guest']]);
+    expect(both(0.6)).toEqual([[0, 'host'], [600, 'wide'], [660, 'host'], [1194, 'guest']]);
+    expect(both(0.4)).toEqual([[0, 'host'], [1194, 'guest']]);
+  });
+  it('an overlap is wide whatever the level difference while both voices are above their own thresholds; a voice wins only over one below its threshold', () => {
+    const { doc, MIC } = setup();
+    // host speaks at −20 throughout 0–20 s; from 10 s for 1.5 s the guest also talks, 8 dB quieter but above its own threshold
+    // (its speech level is −20 from 12–30 s, so −28 is within 10 dB of it)
+    const plan = (guestDb: number) => cutsOf(planMulticamAuto(doc, { groupId: 'mcg_a' }, { multicamLevels: { [MIC]: envelope(MIC, 120, [[0, 10, -20, -80], [10, 11.5, -20, guestDb], [11.5, 12, -20, -80], [12, 30, -80, -20]]) } }).ops);
+    expect(plan(-28)).toContainEqual([300, 'wide']);
+    // −38 is below the guest's threshold (−30): the host keeps the shot through it
+    expect(plan(-38)).not.toContainEqual([300, 'wide']);
   });
   it('maxShot cuts a long shot to the wide angle and back', () => {
     const { doc, MIC } = setup();

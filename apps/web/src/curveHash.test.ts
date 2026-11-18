@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { CURVES_BUILT, EASINGS, pathPoints, transformAt } from '@pulseframe/core';
-import { CURVE_HASH_SAMPLES, curveHash, curveHashKeys, curveHashTime, pathPointsMs, pathTimingClip } from './curveHash.ts';
+import { CURVE_HASH_SAMPLES, curveHash, curveHashKeys, curveHashTime, curveSamples, pathPointsMs, pathTimingClip, ulpDistance } from './curveHash.ts';
 
 describe('curve hash', () => {
   it('covers every easing and the shutter taps of 8 and 16, with frames before the first key', () => {
@@ -17,6 +17,20 @@ describe('curve hash', () => {
     expect(curveHashTime(0)).toEqual(T.frameTime(-5, { num: 30, den: 1 }));
     expect(curveHashKeys('bezier').every((k) => k.bezier?.length === 4)).toBe(true);
     expect(curveHashKeys('linear').every((k) => k.bezier === undefined)).toBe(true);
+  });
+  it('ulpDistance counts representable doubles between two values, across zero too', () => {
+    expect(ulpDistance(1, 1)).toBe(0);
+    expect(ulpDistance(1, 1 + Number.EPSILON)).toBe(1);
+    expect(ulpDistance(0.1, 0.1 + 2 * 2 ** -56)).toBe(2);
+    expect(ulpDistance(0, -0)).toBe(1);
+    expect(ulpDistance(5e-324, -5e-324)).toBe(3);
+    expect(ulpDistance(-0.5, -0.5 - 2 ** -53)).toBe(1);
+  });
+  it('curveSamples are the samples the hash is taken of', async () => {
+    const xs = curveSamples(), buf = new ArrayBuffer(xs.length * 8), v = new DataView(buf);
+    xs.forEach((x, i) => v.setFloat64(i * 8, x, true));
+    const hex = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', buf)), (b) => b.toString(16).padStart(2, '0')).join('');
+    expect(hex).toBe((await curveHash()).sha256);
   });
   it.skipIf(!CURVES_BUILT)('is deterministic: two runs give the same SHA-256 of 100 000 samples', async () => {
     const a = await curveHash(), b = await curveHash();

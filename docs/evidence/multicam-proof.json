@@ -2,7 +2,7 @@
   "proof": "multicam",
   "adr": "ADR-0020",
   "status": "fail",
-  "generatedAt": "2026-11-18T22:25:09.520Z",
+  "generatedAt": "2026-11-18T22:51:41.101Z",
   "machine": {
     "platform": "linux",
     "cpus": 4,
@@ -188,9 +188,9 @@
       "name": "document bytes, commit p95, GET project p95 at 1000 segments (recorded)",
       "value": {
         "segments": 1001,
-        "documentBytes": 412628,
-        "commitP95Ms": 54.78,
-        "getProjectP95Ms": 16.5
+        "documentBytes": 412272,
+        "commitP95Ms": 40.91,
+        "getProjectP95Ms": 15.65
       },
       "budget": "recorded",
       "pass": true
@@ -199,8 +199,8 @@
       "id": "M5",
       "name": "undo of a 1000-cut switch gives an equal creativeProjection",
       "value": {
-        "switchMs": 103.54,
-        "undoMs": 81.4
+        "switchMs": 73.42,
+        "undoMs": 84.17
       },
       "budget": "equal",
       "pass": true
@@ -216,7 +216,7 @@
       "id": "M6",
       "name": "active speaker shown on single-speaker speech",
       "value": {
-        "share": 0.97,
+        "share": 0.93,
         "frames": 1505
       },
       "budget": "≥ 90 %",
@@ -226,7 +226,7 @@
       "id": "M6",
       "name": "wide shown on overlaps of ≥ 1 s",
       "value": {
-        "share": 0.21,
+        "share": 0.5,
         "frames": 185
       },
       "budget": "≥ 80 %",
@@ -245,7 +245,7 @@
       "id": "M6",
       "name": "planning time for a 60-minute program (recorded)",
       "value": {
-        "ms": 396.08,
+        "ms": 371.89,
         "ops": 1
       },
       "budget": "recorded",
@@ -255,11 +255,11 @@
       "id": "M3",
       "name": "envelope + sync of 3 × 10 min on this CPU (a miss is reported)",
       "value": {
-        "wallSeconds": 13.55,
+        "wallSeconds": 12.59,
         "timingsMs": {
-          "envelope": 7209,
-          "coarse": 476,
-          "fine": 5760
+          "envelope": 5404,
+          "coarse": 408,
+          "fine": 6700
         },
         "verdicts": [
           "reference",
@@ -314,12 +314,12 @@
         }
       ],
       "turns": 21,
-      "generateSeconds": 41.16
+      "generateSeconds": 40.48
     },
     "dryRunTimingsMs": {
-      "envelope": 3380,
-      "coarse": 313,
-      "fine": 5724
+      "envelope": 3204,
+      "coarse": 336,
+      "fine": 5491
     },
     "m4": {
       "segments": 81,
@@ -332,13 +332,13 @@
     },
     "m8": {
       "segments": 1001,
-      "documentBytes": 412628,
-      "commitP95Ms": 54.78,
-      "getProjectP95Ms": 16.5
+      "documentBytes": 412272,
+      "commitP95Ms": 40.91,
+      "getProjectP95Ms": 15.65
     },
     "m5": {
-      "switchMs": 103.54,
-      "undoMs": 81.4,
+      "switchMs": 73.42,
+      "undoMs": 84.17,
       "segments": 1001
     },
     "dialogueSync": [
@@ -366,19 +366,19 @@
     "m6": {
       "singleFrames": 1505,
       "bothFrames": 185,
-      "shots": 20,
+      "shots": 24,
       "shortestShot": 2,
-      "segments": 20,
-      "planning60minMs": 396.08,
+      "segments": 25,
+      "planning60minMs": 371.89,
       "planning60minOps": 1
     },
     "m3": {
       "threeTimesTenMinutes": {
-        "wallSeconds": 13.55,
+        "wallSeconds": 12.59,
         "timingsMs": {
-          "envelope": 7209,
-          "coarse": 476,
-          "fine": 5760
+          "envelope": 5404,
+          "coarse": 408,
+          "fine": 6700
         },
         "verdicts": [
           "reference",

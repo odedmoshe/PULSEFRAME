@@ -47,7 +47,10 @@
 /* library entry and inspector block */
 .mc-entry { display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-4); border-block-start: 1px solid var(--pf-line); }
 .mc-steps { margin: 0; padding-inline-start: 1.2em; font-size: var(--pf-fs-sm); }
-.mc-pick { position: absolute; inset-block-start: var(--pf-sp-2); inset-inline-start: var(--pf-sp-2); z-index: 2; inline-size: 20px; block-size: 20px; }
+/* The pick box sits top-left in both directions, like the card's own badges (physical left: the thumbnail is a picture, not
+   text), and the format badge moves to its right; top-right in RTL would cover the "used" tick (MediaLibrary.tsx, chrome.css). */
+.mc-pick { position: absolute; inset-block-start: 5px; left: 6px; z-index: 2; inline-size: 20px; block-size: 20px; margin: 0; }
+.pf-mc-thumb:has(> .mc-pick) .pf-mc-fmt { left: 32px; }
 .clip-badge.mc-clip-badge { font-family: var(--pf-font-mono); }
 .mc-block { display: grid; gap: var(--pf-sp-3); }
 .mc-block fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: var(--pf-sp-2); }

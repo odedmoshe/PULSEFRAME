@@ -27,6 +27,18 @@ export function curveHashTime(i: number): T.RationalTime {
 
 /** sha256: all samples; byEasing: the SHA-256 of each easing's samples alone, so a difference names the curve it is in. */
 export interface CurveHashResult { sha256: string; samples: number; nsPerSample: number; byEasing: Record<string, string> }
+/** Every sample of the hash, in its order (sample i is easing EASINGS[i mod 13]): for measuring a difference in ulps across hosts. */
+export function curveSamples(): number[] {
+  const lists = EASINGS.map(curveHashKeys), range = TRANSFORM_RANGE.x;
+  return Array.from({ length: CURVE_HASH_SAMPLES }, (_, i) => sampleKeyframes(lists[i % EASINGS.length]!, curveHashTime(i), range));
+}
+/** The distance in ulps between two finite doubles (0 when bit-identical; +0 and −0 are 1 apart). */
+export function ulpDistance(a: number, b: number): number {
+  const v = new DataView(new ArrayBuffer(8));
+  const ord = (x: number) => { v.setFloat64(0, x); const n = v.getBigInt64(0); return n < 0n ? -(n & 0x7fffffffffffffffn) - 1n : n; };
+  const d = ord(a) - ord(b);
+  return Number(d < 0n ? -d : d);
+}
 /** The hash of the samples, and the sampler's cost per sample on this host (sampling only, not the hash). */
 export async function curveHash(): Promise<CurveHashResult> {
   const lists = EASINGS.map(curveHashKeys);

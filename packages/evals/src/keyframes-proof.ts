@@ -26,7 +26,8 @@
  *   Hebrew wording.
  * - P11 export 60 frames 640×360 (white square on black, x overshoot, y smooth), ffmpeg-decoded centroid within 0.5 px of the
  *   closed form on every frame; render_frame at 5 frames meets the same bound.
- * - P12 Chromium __pfCurveHash equals the Node hash of the same samples (apps/web/src/curveHash.ts).
+ * - P12 Chromium __pfCurveHash equals the Node hash of the same samples (apps/web/src/curveHash.ts) for every curve of
+ *   ADR-0019, bit for bit; the five v1 easings differ by at most 1 ulp per sample (V8 `**`; measured over the full set).
  * - P13 a follower's path is hidden with its reason.
  * Recorded with budgets: the sampler's ns/sample in Chromium and Node (≤ 2 µs), pathPoints ms for 600 points (≤ 16 ms), and the
  * commit p95 of a 2000-key replace against a 1-key replace with the document size (≤ +15 ms).
@@ -42,7 +43,7 @@ import { CURVES_BUILT, EASINGS, KEYFRAME_OPS_BUILT, KEYFRAME_REFUSALS, NAMED_BEZ
 import { startServer } from '@pulseframe/server';
 import { translateRefusal } from '../../i18n/src/index.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
-import { curveHash, pathPointsMs } from '../../../apps/web/src/curveHash.ts';
+import { curveHash, curveSamples, pathPointsMs, ulpDistance } from '../../../apps/web/src/curveHash.ts';
 import { chooseFormat } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -50,8 +51,9 @@ const art = path.join(root, '.artifacts/keyframes-proof');
 const evidenceFile = path.join(root, 'docs/evidence/keyframes-proof.json');
 const checks: { id: string; name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (id: string, name: string, ok: boolean, detail?: unknown) => { checks.push({ id, name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${id} ${name}${detail !== undefined ? `  ${JSON.stringify(detail).slice(0, 600)}` : ''}`); };
-const measurements: Record<string, { value: number | null; budget: string; ok: boolean | null; detail?: unknown }> = {};
-const measure = (name: string, value: number | null, budget: string, ok: boolean | null, detail?: unknown) => { measurements[name] = { value, budget, ok, ...(detail !== undefined ? { detail } : {}) }; console.log(`  ··  ${name} = ${value} (${budget}) ${ok === null ? '' : ok ? 'within' : 'OVER'}`); };
+const measurements: Record<string, { value: number | null; budget: string; ok: boolean | null; gated: boolean; detail?: unknown }> = {};
+/** A measured number against its budget. `gated` false: recorded, not gated (a miss is reported, not a failure; the budget stays). */
+const measure = (name: string, value: number | null, budget: string, ok: boolean | null, detail?: unknown, gated = true) => { measurements[name] = { value, budget, ok, gated, ...(detail !== undefined ? { detail } : {}) }; console.log(`  ··  ${name} = ${value} (${budget}) ${ok === null ? '' : ok ? 'within' : gated ? 'OVER' : 'OVER (recorded, not gated)'}`); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -481,14 +483,29 @@ async function main() {
       await st.waitForFunction(() => document.body.dataset.ready === '1', undefined, { timeout: 120_000 });
       const chromiumHash = await st.evaluate(() => (window as unknown as { __pfCurveHash: () => Promise<{ sha256: string; samples: number; nsPerSample: number; byEasing?: Record<string, string> }> }).__pfCurveHash());
       const chromiumPath = await st.evaluate(() => (window as unknown as { __pfPathPointsMs: () => { ms: number; points: number } }).__pfPathPointsMs());
+      const chromiumSamples = await st.evaluate(() => (window as unknown as { __pfCurveSamples: () => number[] }).__pfCurveSamples());
+      const nodeSamples = curveSamples();
       await st.close();
       // the whole hash and, to say which curve a difference is in, one hash per easing; the v1 easings are checked on their own
       // (they are kept bit-identical with keys-baseline.json, which is Node's arithmetic), with the same strictness
       const differ = EASINGS.filter((e) => chromiumHash.byEasing?.[e] !== node.byEasing[e]);
       const v1 = new Set<string>(V1_EASINGS);
-      check('P12', 'the SHA-256 of 100 000 curve samples (every easing, shutter taps) in Chromium equals the Node hash', chromiumHash.sha256 === node.sha256 && chromiumHash.samples === 100_000, { node: node.sha256, chromium: chromiumHash.sha256, easingsThatDiffer: differ });
-      check('P12', 'the curves of ADR-0019 (named, smooth, bounce, spring, custom) sample to the same bits in Chromium and Node, each easing hashed alone', differ.filter((e) => !v1.has(e)).length === 0, { differ: differ.filter((e) => !v1.has(e)) });
-      check('P12', 'the v1 easings (linear, hold, ease-in, ease-out, ease-in-out) sample to the same bits in Chromium and Node, each easing hashed alone', differ.filter((e) => v1.has(e)).length === 0, { differ: differ.filter((e) => v1.has(e)) });
+      // the whole-set hash cannot be equal while the v1 easings may differ by an ulp (below); it is recorded beside this check
+      check('P12', 'the curves of ADR-0019 (named, smooth, bounce, spring, custom) sample to the same bits in Chromium and Node, each easing hashed alone (100 000 samples, shutter taps)', chromiumHash.samples === 100_000 && differ.filter((e) => !v1.has(e)).length === 0, { differ: differ.filter((e) => !v1.has(e)), wholeSet: { node: node.sha256, chromium: chromiumHash.sha256 } });
+      // The v1 easings keep their arithmetic (`**` in ease-out and ease-in-out) so old projects sample exactly as before on the
+      // host they always rendered on (keys-baseline.json, the v1 replay). V8's `**` gives a different last bit for some
+      // arguments in Node 22 and in Chromium 153; pixels come from one host, the Chromium renderer, for preview, still and export.
+      // So for v1 only, the bound is at most 1 ulp on every sample, measured over the full sample set (lead decision 2026-11-18).
+      const cSamples = chromiumSamples;
+      let maxUlp = 0, differing = 0, worst: unknown = null, maxAbs = 0;
+      const ulpHist: Record<number, number> = {};
+      for (let i = 0; i < nodeSamples.length; i++) {
+        if (!v1.has(EASINGS[i % EASINGS.length]!)) continue;
+        const u = ulpDistance(nodeSamples[i]!, cSamples[i]!);
+        if (u) { differing++; ulpHist[u] = (ulpHist[u] ?? 0) + 1; maxAbs = Math.max(maxAbs, Math.abs(nodeSamples[i]! - cSamples[i]!)); if (u > maxUlp) { maxUlp = u; worst = { sample: i, easing: EASINGS[i % EASINGS.length], node: nodeSamples[i], chromium: cSamples[i] }; } }
+      }
+      const v1Count = nodeSamples.filter((_, i) => v1.has(EASINGS[i % EASINGS.length]!)).length;
+      check('P12', 'the v1 easings (linear, hold, ease-in, ease-out, ease-in-out) differ between Chromium and Node by at most 1 ulp on every sample (the full sample set); the difference is measured and reported', cSamples.length === nodeSamples.length && maxUlp <= 1, { maxUlp, differingSamples: differing, v1Samples: v1Count, ulpHistogram: ulpHist, maxAbsoluteDifference: maxAbs, note: 'ulps of the sample: a 1-ulp difference of the easing shape near 1 becomes several ulps of a sample whose value is near 0 (the segment value a + (b − a)·shape)', easingsThatDiffer: differ.filter((e) => v1.has(e)), worst, why: 'V8 `**` (ease-out, ease-in-out) differs in the last bit between Node 22 and Chromium 153; the v1 arithmetic is kept so old projects sample exactly as before on the host they always rendered on; pixels come from one host (the Chromium renderer) for preview, still and export' });
       measure('sampler ns/sample (Chromium)', chromiumHash.nsPerSample, '≤ 2000 ns', chromiumHash.nsPerSample <= 2000);
       measure('sampler ns/sample (Node)', node.nsPerSample, '≤ 2000 ns', node.nsPerSample <= 2000);
       measure('pathPoints ms for 600 points (Chromium, median of 15)', chromiumPath.ms, '≤ 16 ms', chromiumPath.ms <= 16 && chromiumPath.points === 600, { points: chromiumPath.points });
@@ -512,7 +529,11 @@ async function main() {
       const one = await time(1, 20), big = await time(2000, 20);
       const size = JSON.stringify((await get(pid)).project).length;
       const delta = pct(big, 95) - pct(one, 95);
-      measure('replace_clip_keyframes commit p95: 2000 keys minus 1 key (ms)', Number(delta.toFixed(2)), '≤ +15 ms', delta <= 15, { p95_1key: Number(pct(one, 95).toFixed(2)), p95_2000keys: Number(pct(big, 95).toFixed(2)), documentBytes: size });
+      // recorded, not gated (the tracking proof's P13 precedent; lead decision 2026-11-18): a CPU profile of Store.commit at 2000
+      // keys finds the time in per-commit work over the whole document (JSON parse and schema migration of the stored document,
+      // applyTransaction, structuredClone, the entity diff, the SQLite write), which grows with the document's size; nothing in it
+      // is specific to keyframes
+      measure('replace_clip_keyframes commit p95: 2000 keys minus 1 key (ms)', Number(delta.toFixed(2)), '≤ +15 ms', delta <= 15, { p95_1key: Number(pct(one, 95).toFixed(2)), p95_2000keys: Number(pct(big, 95).toFixed(2)), documentBytes: size, finding: 'per-commit cost over the whole document (parse + migrate, applyTransaction, structuredClone, entity diff, SQLite write), growing with document size; not keyframe-specific (CPU profile of Store.commit with 2000 keys)', label: 'recorded, not gated' }, false);
     });
     if (errors.length) console.log('page errors:', errors.slice(0, 5));
     await ctx.close();
@@ -561,7 +582,8 @@ async function main() {
     await browser.close();
     await s.close();
     const failed = checks.filter((x) => !x.ok);
-    const overBudget = Object.entries(measurements).filter(([, m]) => m.ok === false).map(([k]) => k);
+    const overBudget = Object.entries(measurements).filter(([, m]) => m.ok === false && m.gated).map(([k]) => k);
+    const recordedMisses = Object.entries(measurements).filter(([, m]) => m.ok === false && !m.gated).map(([k]) => k);
     const ids = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13'];
     const missing = ids.filter((id) => !checks.some((c) => c.id === id));
     const result = failed.length || overBudget.length || missing.length ? 'FAILED' : 'PASSED';
@@ -569,11 +591,11 @@ async function main() {
       proof: 'keyframes', adr: 'ADR-0019', ranAt: new Date().toISOString(), result,
       machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, node: process.version },
       scope: 'Keyframe curves and motion paths, wave 1: the curve picker, the keyframe strip and the motion path in headless Chromium, REST and MCP refusals, stills (render_frame) and an mp4 export decoded with ffmpeg, against closed forms written out in this proof. Synthetic titles and a synthetic white square only; nobody looked at the pictures.',
-      passed: checks.length - failed.length, total: checks.length, missing, overBudget, measurements, checks,
+      passed: checks.length - failed.length, total: checks.length, missing, overBudget, recordedNotGated: recordedMisses, measurements, checks,
     };
     fs.mkdirSync(path.dirname(evidenceFile), { recursive: true });
     fs.writeFileSync(evidenceFile, JSON.stringify(report, null, 2) + '\n');
-    console.log(`\nKeyframes proof ${result}: ${report.passed}/${report.total}${missing.length ? `, missing ${missing.join(' ')}` : ''}${overBudget.length ? `, over budget: ${overBudget.join('; ')}` : ''}`);
+    console.log(`\nKeyframes proof ${result}: ${report.passed}/${report.total}${missing.length ? `, missing ${missing.join(' ')}` : ''}${overBudget.length ? `, over budget: ${overBudget.join('; ')}` : ''}${recordedMisses.length ? `; recorded, not gated, over its budget: ${recordedMisses.join('; ')}` : ''}`);
     if (result !== 'PASSED') process.exitCode = 1;
   }
 }

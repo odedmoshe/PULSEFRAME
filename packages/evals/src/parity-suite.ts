@@ -354,6 +354,24 @@ async function main() {
       ff(['-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${W * 3}x${H}`, '-i', 'pipe:0', '-frames:v', '1', path.join(art, `worst-frame-${n}.png`)], out);
     }
 
+    // Lossless control (lead decision 2026-11-18): the same compositor frames through the same colour conversion and decode
+    // as the export, but encoded with x264 at qp 0. ≥ 50 dB here says the export's lower PSNR is the codec's loss, not a
+    // difference between the compositor and the export path. 4:4:4 is the control; 4:2:0 at qp 0 (what the export's chroma
+    // subsampling alone costs) is reported beside it.
+    const lossless = (pixFmt: 'yuv444p' | 'yuv420p') => {
+      const input = Buffer.concat(T2_FRAMES.map((n) => refRgb.get(n)!));
+      const out = path.join(art, `control-qp0-${pixFmt}.mkv`);
+      ff(['-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${W}x${H}`, '-framerate', '30', '-i', 'pipe:0', '-vf', `scale=out_color_matrix=bt709:out_range=tv,format=${pixFmt}`, '-c:v', 'libx264', '-qp', '0', '-preset', 'medium', '-pix_fmt', pixFmt, '-colorspace', 'bt709', '-color_range', 'tv', out], input);
+      const raw = ff(['-i', out, '-vf', 'scale=in_color_matrix=bt709:in_range=limited:out_range=full', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+      const psnrs = T2_FRAMES.map((n, i) => ({ frame: n, psnr: r4(psnrRgb(refRgb.get(n)!, raw.subarray(i * W * H * 3, (i + 1) * W * H * 3), 3)) }));
+      const worst = psnrs.reduce((a, b) => (b.psnr < a.psnr ? b : a));
+      return { pixFmt, encoder: 'libx264 -qp 0 (lossless)', minPsnr: worst.psnr, worstFrame: worst.frame, frames: psnrs.length };
+    };
+    const control = { yuv444p: lossless('yuv444p'), yuv420p: lossless('yuv420p'), thresholdDb: 50 };
+    const controlOk = control.yuv444p.minPsnr >= 50;
+    if (!controlOk) failures.push(`test2 lossless control: ${control.yuv444p.minPsnr} dB at frame ${control.yuv444p.worstFrame} < 50 (the compositor and the export path differ beyond the codec)`);
+    console.log(`  lossless control (x264 qp 0): 4:4:4 min ${control.yuv444p.minPsnr} dB (f${control.yuv444p.worstFrame}); 4:2:0 min ${control.yuv420p.minPsnr} dB (f${control.yuv420p.worstFrame})`);
+
     // quality ladder (report only)
     const ladder: any = { high: { bytes: high.bytes, wallSeconds: high.wallSeconds, psnr: summary.psnr, ssim: summary.ssim } };
     for (const [key, opts, file] of [['mp4-standard', { format: 'mp4-h264-aac', quality: 'standard' }, 'export-standard.mp4'], ['mp4-draft', { format: 'mp4-h264-aac', quality: 'draft' }, 'export-draft.mp4'], ['webm-vp9-standard', { format: 'webm-vp9-opus', quality: 'standard' }, 'export-standard.webm']] as const) {
@@ -418,6 +436,7 @@ async function main() {
       method: 'PSNR over all RGB samples; SSIM computed in-process on BT.709 luma, 8x8 uniform window, stride 4, L=255, k1=0.01, k2=0.03; export decoded with ffmpeg scale=in_color_matrix=bt709:in_range=limited to rgb24',
       frames: T2_FRAMES, exportVideoStream: { codec: high.video.codec_name, pix_fmt: high.video.pix_fmt, color_space: high.video.color_space, color_range: high.video.color_range },
       summary, worstFramesSavedAsPng: worstFrames, colour, temporal, curveLayer: curves, qualityLadderReportOnly: ladder, rows,
+      losslessControl: { ...control, pass: controlOk, settings: 'The export is the product route with its default quality (high): x264 preset medium, CRF 16, profile high, 4:2:0 (export.ts CRF and exportSegments.ts SEGMENT_CRF agree), BT.709 limited range. The control takes the same compositor frames through the same conversion and decode at qp 0.' },
     };
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.
