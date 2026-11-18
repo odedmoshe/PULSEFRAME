@@ -97,3 +97,36 @@ describe('COMMANDS registry', () => {
     }
   });
 });
+
+describe('keyframe curve commands (ADR-0019)', () => {
+  const byId = (id: string) => COMMANDS.find((c) => c.id === id);
+  it('registers every new command in its group, and view.motionPath in view', () => {
+    for (const id of ['keyframe.focus', 'keyframe.smooth', 'keyframe.linear', 'keyframe.curve', 'keyframe.copy', 'keyframe.paste']) expect(byId(id)?.group, id).toBe('keyframe');
+    expect(byId('view.motionPath')?.group).toBe('view');
+  });
+  it('keyframe.focus is Alt+K and no other chord is shared with it', () => {
+    const km = new Keymap(fakeStorage());
+    expect(km.lookupAll('Alt+KeyK').map((c) => c.id)).toEqual(['keyframe.focus']);
+    for (const id of ['keyframe.smooth', 'keyframe.linear', 'keyframe.curve', 'keyframe.copy', 'keyframe.paste', 'view.motionPath']) expect(km.keysFor(id)).toEqual([]);
+    const chords = COMMANDS.filter((c) => c.context !== 'cut').flatMap((c) => c.keys);
+    expect(new Set(chords).size).toBe(chords.length);
+  });
+  it('K on an adjustment clip emits only opacity ops; on a picture clip all five channels', async () => {
+    const run = async (clip: object, kind: string) => {
+      const sent: { op: string; args: { property: string } }[][] = [];
+      const e = {
+        selected: { clip, track: { id: 't', kind, locked: false } },
+        getState: () => ({ selection: ['c'], viewVariantId: null }),
+        transformNow: () => ({ x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }),
+        playhead: { value: '0', timescale: 1 },
+        player: undefined,
+        commit: (ops: never) => { sent.push(ops); return Promise.resolve(null); },
+      };
+      await byId('keyframe.add')!.run(e as never);
+      return sent[0]!.map((o) => o.args.property);
+    };
+    const base = { id: 'c', start: { value: '0', timescale: 1 }, duration: { value: '3', timescale: 1 } };
+    expect(await run({ ...base, type: 'adjustment' }, 'adjustment')).toEqual(['opacity']);
+    expect(await run({ ...base, type: 'text' }, 'text')).toEqual(['x', 'y', 'scale', 'rotation', 'opacity']);
+  });
+});

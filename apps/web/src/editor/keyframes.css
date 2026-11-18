@@ -1,0 +1,51 @@
+/* Keyframe strip, key menu and curve picker (ADR-0019). Tokens of ds/tokens.css; light and dark follow them. */
+.timeline .key-strip { position: absolute; z-index: 4; pointer-events: none; direction: ltr; }
+.timeline .key-strip button { pointer-events: auto; }
+.timeline .key-dot { position: absolute; inset-block-start: 50%; inline-size: 11px; block-size: 11px; margin: -5.5px 0 0 -5.5px; padding: 0; border: 1.5px solid var(--pf-frame-ink); background: var(--pf-frame); cursor: grab; touch-action: none; box-shadow: none; }
+.timeline .key-dot:active { cursor: grabbing; }
+.timeline .key-dot:focus-visible, .timeline .key-outside:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+/* the glyph shows the curve after the key (the shape carries it, not the colour) */
+.timeline .key-dot.glyph-diamond { transform: rotate(45deg); }
+.timeline .key-dot.glyph-soft { transform: rotate(45deg); border-radius: 45%; }
+.timeline .key-dot.glyph-hold { border-radius: 1px; }
+.timeline .key-dot.glyph-burst { border: 0; inline-size: 14px; block-size: 14px; margin: -7px 0 0 -7px; clip-path: polygon(50% 0, 62% 35%, 100% 38%, 70% 60%, 80% 100%, 50% 76%, 20% 100%, 30% 60%, 0 38%, 38% 35%); }
+.timeline .key-dot.glyph-custom { border-radius: 50% 50% 2px 50%; transform: rotate(45deg); }
+.timeline .key-dot.glyph-mixed { transform: rotate(45deg); box-shadow: inset 0 0 0 2px var(--pf-surface-2); }
+.timeline .key-dot.is-selected { background: var(--pf-text); border-color: var(--pf-frame); box-shadow: 0 0 0 2px var(--pf-frame); }
+.timeline .key-dot.is-refused { background: var(--pf-danger, #e5484d); }
+.timeline .key-strip.readonly .key-dot { cursor: default; opacity: 0.7; }
+.timeline .key-outside { position: absolute; inset-block-start: 0; block-size: 14px; min-inline-size: 18px; padding: 0 3px; font-size: 10px; line-height: 14px; border: 1px solid var(--pf-line-strong); border-radius: 7px; background: var(--pf-surface-3); color: var(--pf-text); cursor: pointer; }
+.timeline .key-outside.before { inset-inline-start: 0; }
+.timeline .key-outside.after { inset-inline-end: 0; }
+.key-menu { position: fixed; z-index: 1000; min-inline-size: 150px; padding: 4px; display: grid; background: var(--pf-surface-3); border-radius: 8px; box-shadow: var(--pf-e2); }
+.key-menu-item { text-align: start; padding: 6px 10px; border: 0; background: transparent; color: var(--pf-text); border-radius: 5px; cursor: pointer; font: inherit; }
+.key-menu-item:hover, .key-menu-item:focus-visible { background: var(--pf-frame-soft); outline: none; }
+.key-menu-item:focus-visible { box-shadow: 0 0 0 2px var(--pf-focus) inset; }
+.key-menu-item[aria-disabled='true'] { color: var(--pf-text-disabled); cursor: not-allowed; }
+
+/* the curve picker */
+.curve-picker-scrim { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; background: rgba(0, 0, 0, 0.45); }
+.curve-picker { inline-size: min(460px, calc(100vw - 32px)); max-block-size: calc(100vh - 32px); overflow: auto; padding: 16px; display: grid; gap: 12px; background: var(--pf-surface-2); color: var(--pf-text); border-radius: 12px; box-shadow: var(--pf-e2); }
+.curve-picker header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.curve-picker h2 { margin: 0; font-size: 16px; }
+.curve-picker .curve-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.curve-picker fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+.curve-picker .curve-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+.curve-picker .curve-tile { display: grid; gap: 4px; justify-items: center; padding: 6px; border: 1px solid var(--pf-line-strong); border-radius: 8px; background: var(--pf-surface-1); color: var(--pf-text); cursor: pointer; font: inherit; font-size: 12px; }
+.curve-picker .curve-tile[aria-pressed='true'] { border-color: var(--pf-frame); box-shadow: 0 0 0 2px var(--pf-frame); }
+.curve-picker .curve-tile[aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
+.curve-picker .curve-tile:focus-visible, .curve-picker button:focus-visible, .curve-picker input:focus-visible, .curve-picker .curve-handle:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.curve-picker svg { display: block; direction: ltr; }
+.curve-picker .curve-line { fill: none; stroke: var(--pf-frame); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.curve-picker .curve-guide { stroke: var(--pf-line-strong); stroke-width: 1; stroke-dasharray: 3 3; }
+.curve-picker .curve-handle { fill: var(--pf-text); stroke: var(--pf-frame); stroke-width: 2; cursor: grab; touch-action: none; }
+.curve-picker .curve-stem { stroke: var(--pf-text-3); stroke-width: 1; }
+.curve-picker .curve-custom { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.curve-picker .curve-fields { display: grid; grid-template-columns: repeat(2, 7em); gap: 6px; }
+.curve-picker .curve-fields label { display: grid; gap: 2px; font-size: 12px; }
+.curve-picker input[type='number'] { inline-size: 100%; }
+.curve-picker .curve-note { margin: 0; font-size: 12px; color: var(--pf-text-2); }
+.curve-chip { padding: 0 6px; min-block-size: 22px; max-inline-size: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; border: 1px solid var(--pf-line-strong); border-radius: 11px; background: transparent; color: var(--pf-text-2); cursor: pointer; }
+.curve-chip:hover:not(:disabled) { color: var(--pf-text); border-color: var(--pf-frame); }
+.curve-chip:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.curve-chip:disabled { opacity: 0.5; cursor: not-allowed; }

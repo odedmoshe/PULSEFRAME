@@ -4,14 +4,15 @@
  * and are remappable; overrides are personal settings in localStorage, never in the project.
  */
 import * as T from '@pulseframe/time';
-import type { Key } from '@pulseframe/i18n';
-import { adjustmentRefusal, COLOR_LOOKS, findClip, getOp, type Clip, type OpCall, type ProjectDocument, type Track, clipEnd } from '@pulseframe/core';
+import { effectParamLabel, type Key } from '@pulseframe/i18n';
+import { adjustmentRefusal, carriedChannels, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, findEffect, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd } from '@pulseframe/core';
 import type { Editor, Notice } from './store.ts';
 import { COMMAND_STRINGS } from './commands.strings.ts';
 import { cutBefore } from './inspector.model.ts';
 import { cutToBeat, rollCut } from './cutActions.ts';
 import { arrangeByEvents, canArrange, freezeSelectedTitle, liveTitleId, openPeopleSheet, readCaptureDates } from './lifeline/lifeCommands.ts';
 import { sourceFromSelection } from './familyFilm.logic.ts';
+import { channelName, clampDelta, remapKeySel } from './keyStrip.math.ts';
 
 export interface Command {
   id: string;
@@ -89,7 +90,11 @@ export function coverEditOps(doc: ProjectDocument, clipId: string): OpCall[] | n
   return ops.length ? ops : null;
 }
 /** The transform properties a clip's keyframes may use: an adjustment clip has opacity only (ADR-0016). */
-export const keyframeProps = (c: Clip) => (c.type === 'adjustment' ? (['opacity'] as const) : (['x', 'y', 'scale', 'rotation', 'opacity'] as const));
+export const keyframeProps = (c: Clip, track?: Track): readonly ('x' | 'y' | 'scale' | 'rotation' | 'opacity')[] => {
+  // with the clip's track: exactly the transform channels the clip carries (keyEdits.ts carriedChannels, the rule of channelsFor)
+  if (track) return carriedChannels(c, track).flatMap((ch) => ('property' in ch ? [ch.property] : []));
+  return c.type === 'adjustment' ? ['opacity'] : ['x', 'y', 'scale', 'rotation', 'opacity'];
+};
 /** Selected clips that still exist, read when the command runs. */
 const selectedClips = (e: Editor) => { const doc = e.doc; return doc ? e.getState().selection.map((id) => findClip(doc, id)?.clip).filter((c): c is Clip => !!c) : []; };
 /** Slip: the selected clip stays where it is and shows source material `frames` later (or earlier). A refusal (no material that far) is shown like any other. */
@@ -252,7 +257,7 @@ const addKeyframe = (e: Editor) => {
   // that follows a motion track (ADR-0015) these are its offset from the tracked point
   const now = e.transformNow(c);
   const time = T.sub(e.playhead, c.start);
-  return e.commit(keyframeProps(c).map((property) => ({ op: 'set_keyframe', args: { clipId: c.id, property, time, value: now[property] } })), 'Add keyframe');
+  return e.commit(keyframeProps(c, e.selected?.track).map((property) => ({ op: 'set_keyframe', args: { clipId: c.id, property, time, value: now[property] } })), 'Add keyframe');
 };
 const removeKeyframe = (e: Editor) => {
   const c = sel(e);
@@ -262,13 +267,75 @@ const removeKeyframe = (e: Editor) => {
   return ops.length ? e.commit(ops, 'Remove keyframe') : undefined;
 };
 /** Jump to the previous/next keyframe of the selected clip. */
+const hasAnyKey = (c: Clip | undefined) => !!c && c.type !== 'caption' && (!!c.keyframes || (c.effects ?? []).some((x) => Object.keys(x.keyframes ?? {}).length > 0));
 const gotoKeyframe = (dir: 1 | -1) => (e: Editor) => {
   const c = sel(e);
-  if (!c?.keyframes) return;
-  const frames = [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.frameIndexAt(T.add(c.start, k.time), e.rate))))].sort((a, b) => a - b);
+  if (!c || !hasAnyKey(c)) return;
+  const tr = e.selected?.track;
+  // transform and effect keys alike (keyEdits.ts keyTimes)
+  const frames = tr ? keyTimes(c, tr, e.rate).map((k) => T.frameIndexAt(c.start, e.rate) + k.frame) : [...new Set(Object.values(c.keyframes ?? {}).flatMap((ks) => (ks ?? []).map((k) => T.frameIndexAt(T.add(c.start, k.time), e.rate))))].sort((a, b) => a - b);
   const next = dir > 0 ? frames.find((f) => f > e.frame) : [...frames].reverse().find((f) => f < e.frame);
   if (next !== undefined) e.seek(next);
 };
+// ---------- selected keys: curve, delete, nudge, copy, paste (ADR-0019; the keyframe strip, the picker and the commands share them) ----------
+/** The key selection counts only while its clip is the one selected clip: keys never outlive the clip selection as a hidden edit target. */
+const keysOnSelection = (e: Editor) => { const ks = e.getState().keySel, s = e.getState().selection; return !!ks && s.length === 1 && s[0] === ks.clipId; };
+/** The clip the key selection belongs to, with its track, read from the live document; null when it is gone or the track is locked or a format is viewed. */
+export const keyTarget = (e: Editor): { clip: Clip; track: Track; sel: NonNullable<ReturnType<Editor['getState']>['keySel']> } | null => {
+  const ks = e.getState().keySel, doc = e.doc;
+  if (!ks || !doc || e.getState().viewVariantId || !keysOnSelection(e)) return null;
+  const f = findClip(doc, ks.clipId);
+  return f && !f.track.locked ? { clip: f.clip, track: f.track, sel: ks } : null;
+};
+/** Set one curve on the selected keys (the segment after each key, or `side`): one transaction. */
+export const curveSelected = (e: Editor, easing: Easing, bezier?: CurveHandles, side: 'after' | 'before' | 'both' = 'after') =>
+  e.commit(() => { const t = keyTarget(e); return t ? curveOps(t.clip, e.rate, t.sel.keys, side, easing, bezier) : null; }, 'Keyframe curve');
+export const deleteSelectedKeys = (e: Editor) => e.commit(() => { const t = keyTarget(e); return t ? deleteKeysOps(t.clip, e.rate, t.sel.keys) : null; }, 'Remove keyframes');
+/** Move the selected keys by whole frames (a keyboard nudge, or the strip's release); the selection follows the keys. A refusal is said, not silent. */
+export const nudgeSelectedKeys = (e: Editor, frames: number) => e.commit(() => {
+  const t = keyTarget(e);
+  if (!t) return null;
+  const r = moveKeysOps(t.clip, t.track, e.rate, t.sel.keys, frames);
+  if ('refused' in r) { e.notify({ kind: 'info', title: e.t('keys.crosses') }); return null; }
+  if (!r.ops.length) return null;
+  const count = T.frameIndexAt(t.clip.duration, e.rate);
+  e.setKeySel(remapKeySel(t.sel, clampDelta(frames, t.sel.keys.map((k) => k.frame), count), count));
+  return r.ops;
+}, 'Move keyframes');
+export const copySelectedKeys = (e: Editor) => {
+  const ks = e.getState().keySel, doc = e.doc;
+  const clip = ks && doc && keysOnSelection(e) ? findClip(doc, ks.clipId)?.clip : undefined;
+  if (!ks || !clip) return;
+  const cb = copyKeys(clip, e.rate, ks.keys);
+  if (!cb.entries.length) return;
+  e.setKeyClipboard(cb);
+  e.notify({ kind: 'info', title: e.t('keys.copied') });
+};
+/** A skipped channel named for a person: the clipboard knows the effect type, the target clip may not have the effect. */
+const skippedName = (cb: NonNullable<ReturnType<Editor['getState']>['keyClipboard']>, ch: ChannelRef, t: (k: Key) => string, lang: 'he' | 'en'): string => {
+  if ('property' in ch) return channelName({} as Clip, ch, t, lang);
+  const type = cb.entries.find((x) => channelKey(x.channel) === channelKey(ch))?.effectType;
+  const def = type ? findEffect(type) : undefined;
+  return `${def ? def.name[lang] : ch.effectId} · ${effectParamLabel(ch.param, lang, type)}`;
+};
+/** Paste the copied keys at the playhead of the selected clip. Channels the clip cannot take are skipped and named in a notice. */
+export const pasteKeys = (e: Editor) => {
+  const cb = e.getState().keyClipboard, s = e.selected;
+  if (!cb || !s) return;
+  const id = s.clip.id;
+  let skipped: ChannelRef[] = [];
+  const r = e.commit(() => {
+    const f = e.doc ? findClip(e.doc, id) : undefined;
+    if (!f || f.track.locked) return null;
+    const at = Math.max(0, T.frameIndexAt(e.playhead, e.rate) - T.frameIndexAt(f.clip.start, e.rate));
+    const out = pasteKeysOps(f.clip, f.track, e.rate, cb, at);
+    skipped = out.skipped;
+    return out.ops;
+  }, 'Paste keyframes');
+  return r.then((res) => { if (skipped.length) e.notify({ kind: 'info', title: `${e.t('keys.pasteSkipped')} ${skipped.map((ch) => skippedName(cb, ch, e.t, e.getState().lang)).join(', ')}` }); return res; });
+};
+const canEditKeys = (e: Editor) => keyTarget(e) !== null && keyTarget(e)!.sel.keys.length > 0;
+
 /** User markers of the main sequence as frame numbers, ascending. */
 export const markerFrames = (e: Editor) => {
   const doc = e.doc;
@@ -358,8 +425,16 @@ export const COMMANDS: Command[] = [
   { id: 'cut.rollEarlier5', label: 'cmd.rollEarlier', text: { he: COMMAND_STRINGS.he.cutRollEarlier5, en: COMMAND_STRINGS.en.cutRollEarlier5 }, context: 'cut', group: 'edit', keys: ['Shift+Comma'], enabled: cutChosen, run: rollChosen(-5) },
   { id: 'cut.rollLater5', label: 'cmd.rollLater', text: { he: COMMAND_STRINGS.he.cutRollLater5, en: COMMAND_STRINGS.en.cutRollLater5 }, context: 'cut', group: 'edit', keys: ['Shift+Period'], enabled: cutChosen, run: rollChosen(5) },
   { id: 'cut.toBeat', label: 'cmd.rollLater', text: { he: COMMAND_STRINGS.he.cutToBeat, en: COMMAND_STRINGS.en.cutToBeat }, context: 'cut', group: 'edit', keys: ['Shift+KeyB'], enabled: (e) => cutChosen(e) && !!cutToBeat(e, e.getState().cutClipId!), run: (e) => { const id = e.getState().cutClipId; const f = id ? cutToBeat(e, id) : null; return id && f ? rollCut(e, id, f) : undefined; } },
-  { id: 'keyframe.prev', label: 'cmd.keyframePrev', group: 'keyframe', keys: ['Comma'], enabled: (e) => !!sel(e)?.keyframes, run: gotoKeyframe(-1) },
-  { id: 'keyframe.next', label: 'cmd.keyframeNext', group: 'keyframe', keys: ['Period'], enabled: (e) => !!sel(e)?.keyframes, run: gotoKeyframe(1) },
+  { id: 'keyframe.prev', label: 'cmd.keyframePrev', group: 'keyframe', keys: ['Comma'], enabled: (e) => hasAnyKey(sel(e)), run: gotoKeyframe(-1) },
+  { id: 'keyframe.next', label: 'cmd.keyframeNext', group: 'keyframe', keys: ['Period'], enabled: (e) => hasAnyKey(sel(e)), run: gotoKeyframe(1) },
+  // keyframe curves and strip (ADR-0019). Only focus has a default chord; the rest are remappable and in the palette.
+  { id: 'keyframe.focus', label: 'cmd.keyframeFocus', group: 'keyframe', keys: ['Alt+KeyK'], enabled: (e) => hasAnyKey(sel(e)), run: () => document.querySelector<HTMLElement>('[data-testid=key-strip-key]')?.focus() },
+  { id: 'keyframe.smooth', label: 'cmd.keyframeSmooth', group: 'keyframe', keys: [], enabled: (e) => CURVES_BUILT && canEditKeys(e), run: (e) => curveSelected(e, 'smooth') },
+  { id: 'keyframe.linear', label: 'cmd.keyframeLinear', group: 'keyframe', keys: [], enabled: canEditKeys, run: (e) => curveSelected(e, 'linear') },
+  { id: 'keyframe.curve', label: 'cmd.keyframeCurve', group: 'keyframe', keys: [], enabled: canEditKeys, run: (e) => { const ks = e.getState().keySel; if (keysOnSelection(e) && ks?.keys.length) e.openCurvePicker(ks.clipId, ks.keys[0]!.frame, ks.keys.filter((k) => k.frame === ks.keys[0]!.frame).map((k) => k.channel)); } },
+  { id: 'keyframe.copy', label: 'cmd.keyframeCopy', group: 'keyframe', keys: [], enabled: (e) => keysOnSelection(e) && !!e.getState().keySel?.keys.length, run: copySelectedKeys },
+  { id: 'keyframe.paste', label: 'cmd.keyframePaste', group: 'keyframe', keys: [], enabled: (e) => !!e.getState().keyClipboard && !e.selectionLocked && !e.getState().viewVariantId && e.playheadOnSelection, run: pasteKeys },
+  { id: 'view.motionPath', label: 'cmd.motionPath', group: 'view', keys: [], run: (e) => e.setPathOn(!e.getState().pathOn) },
   { id: 'history.undo', label: 'undo', group: 'history', keys: ['Mod+KeyZ'], run: (e) => e.history('undo') },
   { id: 'history.redo', label: 'redo', group: 'history', keys: ['Mod+Shift+KeyZ', 'Mod+KeyY'], run: (e) => e.history('redo') },
   // Export always opens the export sheet (owner decision): the sheet starts the export (ExportSheet.tsx).

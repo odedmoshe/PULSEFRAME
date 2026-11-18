@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import {
-  toSourceSpan, clipEnd, fieldsToDisplay, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
+  toSourceSpan, clipEnd, fieldsToDisplay, keyTimes, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
   type Clip, type Marker, type ProjectDocument, type Track,
 } from '@pulseframe/core';
 import { duckEnvelope, flashSchedule, speechRanges } from '@pulseframe/engine';
@@ -13,6 +13,7 @@ import { api, readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
 import { IconButton, Seg, Tooltip } from '../ds/index.ts';
 import { VolumeLine } from './VolumeLine.tsx';
+import { KeyStrip } from './KeyStrip.tsx';
 import { ASSET_DRAG_TYPE, useEditor, useEditorState, type Editor, type EditorState } from './store.ts';
 import { useTimelineDrag, type TimelineGhost } from './TimelineDrag.tsx';
 import { COMMANDS, chordLabel } from './commands.ts';
@@ -401,7 +402,9 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
           const before = beforeOf.get(c.id) ?? null;
           const hasCut = isVideo && c.type === 'media' && (!!c.transition || !!before);
           const room = cutRoom(before ? T.toSeconds(before.duration) * pps : null, T.toSeconds(c.duration) * pps);
-          const kfs = c.keyframes ? [...new Set(Object.values(c.keyframes).flatMap((ks) => (ks ?? []).map((k) => T.frameIndexAt(k.time, rate))))].filter((f) => f >= 0 && f <= T.frameIndexAt(c.duration, rate)) : [];
+          // keyframe diamonds (ADR-0019): one per exact frame, effect keys included; the selected clip shows the keyframe strip instead
+          const stripOn = only && c.type !== 'caption' && tr.kind !== 'audio';
+          const kfs = stripOn ? [] : keyTimes(c, tr, rate).filter((k) => k.frame >= 0 && k.frame <= T.frameIndexAt(c.duration, rate)).map((k) => k.frame);
           const startFrame = T.frameIndexAt(c.start, rate);
           const said = tr.kind === 'audio' && c.type === 'media' && clipH >= 30 ? spokenChips(doc, c, pps) : null;
           return (
@@ -445,6 +448,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                 {kfs.map((f) => <i key={f} className={`kf${p.grid?.at(startFrame + f)?.onBeat ? ' on-beat' : ''}`} style={{ left: T.toSeconds(T.frameTime(f, rate)) * pps }} aria-hidden="true" />)}
                 {selected && p.selectedCut !== c.id && !tr.locked && width >= 16 && <><i className="clip-grip start" data-grip="start" aria-hidden="true" /><i className="clip-grip end" data-grip="end" aria-hidden="true" /></>}
               </button>
+              {stripOn && <KeyStrip clip={c} track={tr} selected={only} editable={!tr.locked} pps={pps} left={left} width={width} clipHeight={clipH} clipTop={CLIP_PAD} />}
               {volLine && <VolumeLine clip={c as MediaClip} selected={only} editable={!tr.locked} pps={pps} left={left} width={width} clipHeight={clipH} clipTop={CLIP_PAD} />}
               {tailS > 0 && <div className="clip-tail" aria-hidden="true" data-testid="clip-tail" data-tail-of={c.id} data-cut={tail!.cut ? 'true' : undefined} style={{ left: T.toSeconds(clipEnd(c)) * pps, width: Math.max(2, tailS * pps), top: CLIP_PAD + clipH * 0.25, height: clipH * 0.5 }} />}
               {hasCut && (
