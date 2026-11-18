@@ -122,7 +122,7 @@ export function FieldMenu({ clipId, caret }: { clipId: string; caret: number | n
             <div role="group" aria-label={P.fieldPeopleGroup} className="pf-fm-group">
               <p className="pf-fm-gh" aria-hidden="true">{P.fieldPeopleGroup}</p>
               {people.map((p) => item(p.token, fill(p.kind === 'age' ? P.fieldAge : p.kind === 'ageWords' ? P.fieldAgeWords : P.fieldName, { name: p.person.name })))}
-              <button type="button" role="menuitem" className="pf-mc-item pf-fm-item" data-testid="field-item-add-person" onClick={() => { setMenu(null); openPeople(null); }}><span className="pf-fm-name">{P.fieldAddPerson}</span></button>
+              <button type="button" role="menuitem" className="pf-mc-item pf-fm-item" data-testid="field-item-add-person" onClick={() => { setMenu(null); btn.current?.focus(); openPeople(null); }}><span className="pf-fm-name">{P.fieldAddPerson}</span></button>
             </div>
           </div>
         </div>, document.body)}

@@ -28,10 +28,11 @@
 
 /* ---- events ---- */
 .pf-ev-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-5); }
-.pf-ev { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "strip strip" "head actions" "rest rest"; gap: var(--pf-sp-4) var(--pf-sp-4); padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: var(--pf-e1); min-inline-size: 0; }
+/* one column: beside the name, the «add the event» button (auto width) left the name ~13 px in the media drawer, one letter per line */
+.pf-ev { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "strip" "head" "actions"; gap: var(--pf-sp-4) var(--pf-sp-4); padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: var(--pf-e1); min-inline-size: 0; }
 .pf-ev > .pf-ev-strip { grid-area: strip; }
 .pf-ev > .pf-ev-head { grid-area: head; }
-.pf-ev > .pf-ev-actions { grid-area: actions; align-self: start; }
+.pf-ev > .pf-ev-actions { grid-area: actions; align-self: start; justify-content: space-between; }
 .pf-ev > :not(.pf-ev-strip):not(.pf-ev-head):not(.pf-ev-actions) { grid-column: 1 / -1; }
 .pf-ev-strip { display: flex; gap: var(--pf-sp-2); min-inline-size: 0; overflow: hidden; border-radius: var(--pf-r-sm); }
 .pf-ev-th { flex: 1 1 0; min-inline-size: 0; aspect-ratio: 16 / 9; object-fit: cover; background: #000; display: grid; place-items: center; color: var(--pf-text-3); }
@@ -62,6 +63,8 @@
 .pf-life-file { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-sm); overflow-wrap: anywhere; }
 .pf-life-field { display: flex; flex-direction: column; gap: var(--pf-sp-2); color: var(--pf-text-2); font-size: var(--pf-fs-xs); min-inline-size: 0; }
 .pf-life-field input, .pf-life-field select { inline-size: 100%; min-inline-size: 0; }
+/* a visible ring on every field of the life screens; a date input is focused in its parts and its calendar button, where only :focus-within reaches the input */
+.pf-life-field :is(input, select):focus-visible, .pf-life-field input[type='date']:focus-within { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 .pf-life-field.is-num { flex: 1 1 0; }
 .pf-life-row { display: flex; gap: var(--pf-sp-4); }
 .pf-life-check { display: flex; align-items: center; gap: var(--pf-sp-4); min-block-size: var(--pf-h-md); color: var(--pf-text); font-size: var(--pf-fs-sm); cursor: pointer; min-inline-size: 0; }

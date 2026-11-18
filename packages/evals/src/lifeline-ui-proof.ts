@@ -5,11 +5,15 @@
  * the test ids of apps/web/src/editor/lifeline/lifeline.testids.ts, people.testids.ts and packs.testids.ts.
  *
  *   pnpm build && pnpm proof:lifeline-ui          needs ffmpeg and Playwright's Chromium; port 8890 free
+ *   evidence: docs/evidence/lifeline-ui-proof.json (screenshots stay in the temp folder)
  *   exit 0 = every check passed · 1 = a check failed · 2 = blocked (the web bundle is not built)
  *
  * Fixtures are generated here (a JPEG with EXIF dates from the server's own fixture writer; nothing binary is committed).
- * Every expected word is typed in this file, never computed by the code under test. Written by W3 and NOT run by its
- * author (the lead runs it after merging): a check whose selector does not resolve fails loudly, it never passes silently.
+ * Every expected word is typed in this file, never computed by the code under test. Written by W3 without being run; its
+ * first runs (regression 19c and after) corrected the fixtures (delete_clip, sizeFrac, a stamp text that is not the capture
+ * date, a second evening picture so the capture order is measured, the revision from the response), clicked the controlled
+ * sunset radio instead of check(), and found the product bug that Ctrl+Z did nothing with the focus on a radio. A check whose
+ * selector does not resolve fails loudly, it never passes silently.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -22,6 +26,7 @@ import { startServer } from '@pulseframe/server';
 import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 import { LIFE_TESTIDS, fieldSlug } from '../../../apps/web/src/editor/lifeline/lifeline.testids.ts';
 import { PEOPLE_TESTIDS } from '../../../apps/web/src/editor/lifeline/people.testids.ts';
+import { openInspectorPage } from './editor-ui.ts';
 
 const PORT = 8890;
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -64,6 +69,8 @@ async function main() {
     return b.assetId;
   };
   const doc = async (pid: string) => (await call(`/projects/${pid}`)).body.project as any;
+  /** The project's revision: GET /projects/:id answers { project, revision } (the document itself has no revision field). */
+  const revision = async (pid: string) => (await call(`/projects/${pid}`)).body.revision as number;
   const still = async (pid: string, i: number) => { const r = await call(`/projects/${pid}/frame?index=${i}`); if (r.status !== 200) throw new Error(`still ${i}: ${r.status}`); return r.body as Buffer; };
   const until = async (pred: () => Promise<boolean>, ms = 15000) => { const t = Date.now(); for (;;) { if (await pred()) return true; if (Date.now() - t > ms) return false; await sleep(100); } };
   const browser = await chromium.launch();
@@ -95,6 +102,8 @@ async function main() {
     const pid = (await call('/projects', { name: 'שנים', width: 640, height: 360 })).body.project.id as string;
     const a23 = await upload(pid, photo('a23.jpg', '2023:03:10 12:00:00'));
     const evening = await upload(pid, photo('evening.jpg', '2024:12:25 18:00:00'));
+    // a second picture of the same evening, taken half an hour EARLIER but uploaded later: «add the event» must put it first
+    const evening0 = await upload(pid, photo('evening0.jpg', '2024:12:25 17:30:00'));
     const day = await upload(pid, photo('day.jpg', '2024:12:26 12:00:00'));
     const undated = await upload(pid, photo('nodate.jpg', null));
     {
@@ -125,23 +134,41 @@ async function main() {
       const checkedBefore = await radios.evaluateAll((els) => els.filter((e) => (e as HTMLInputElement).checked).length);
       check('the sunset choice of an evening event shows two options and starts unselected', (await radios.count()) === 2 && checkedBefore === 0 && ev.afterSunset == null, { options: await radios.count(), checkedBefore });
       const nameBefore = (await page.getByTestId(LIFE_TESTIDS.eventName(ev.id)).textContent()) ?? '';
-      await page.getByTestId(LIFE_TESTIDS.sunset(ev.id)).locator('input[data-value=after]').check();
-      await until(async () => (await doc(pid)).events[ev.id].afterSunset === true);
+      // the radios are controlled by the document (checked = the event's stored answer), so a click shows its mark once the
+      // commit has come back: click, then wait for the document and for the radio to be checked (Playwright's check() asserts
+      // the state at once and fails on a controlled input)
+      await page.getByTestId(LIFE_TESTIDS.sunset(ev.id)).locator('input[data-value=after]').click();
+      const answered = await until(async () => (await doc(pid)).events[ev.id].afterSunset === true);
+      const shownChecked = await page.waitForFunction((id) => (document.querySelector(`[data-testid="life-sunset-${id}"] input[data-value=after]`) as HTMLInputElement | null)?.checked === true, ev.id, { timeout: 10000 }).then(() => true, () => false);
       await page.waitForFunction((id) => /חנוכה/.test(document.querySelector(`[data-testid="life-event-name-${id}"]`)?.textContent ?? ''), ev.id, { timeout: 10000 }).catch(() => undefined);
       const nameAfter = (await page.getByTestId(LIFE_TESTIDS.eventName(ev.id)).textContent()) ?? '';
       await page.screenshot({ path: path.join(art, 'life-events-he.png') });
       await page.keyboard.press('Control+z');
+      const focusedAtUndo = await page.evaluate(() => { const a = document.activeElement as HTMLInputElement | null; return a ? `${a.tagName.toLowerCase()}${a.type ? `[type=${a.type}]` : ''}` : null; });
       const undone = await until(async () => (await doc(pid)).events[ev.id].afterSunset == null);
-      check('one click on «אחרי השקיעה» names the event by its holiday, and Ctrl+Z restores it (answer unset, name as before)', /חנוכה/.test(nameAfter) && undone && !/חנוכה/.test(nameBefore) && (await radios.evaluateAll((els) => els.filter((e) => (e as HTMLInputElement).checked).length)) === 0, { nameBefore, nameAfter });
+      check('one click on «אחרי השקיעה» stores the answer and shows it checked, names the event by its holiday, and Ctrl+Z restores it (answer unset, name as before)', answered && shownChecked && /חנוכה/.test(nameAfter) && undone && !/חנוכה/.test(nameBefore) && (await radios.evaluateAll((els) => els.filter((e) => (e as HTMLInputElement).checked).length)) === 0, { answered, shownChecked, nameBefore, nameAfter, focusedAtUndo, undone, afterSunsetAfterUndo: (await doc(pid)).events[ev.id].afterSunset ?? null });
       check('the media drawer by event has no horizontal scroll at 1440x900', await noHScroll(page, '[data-testid=life-events]'));
+      // no scroll is not enough: a squeezed column breaks a name one letter per line without any scroll. The event's name and its
+      // count must each sit on one line (height under two line heights) and be wider than they are tall
+      const [evName, evCount] = await page.evaluate((id) => ['.pf-ev-name', '.pf-ev-count'].map((sel) => {
+        const el = document.querySelector(`[data-testid="life-event-${id}"] ${sel}`) as HTMLElement | null;
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { w: Math.round(r.width), h: Math.round(r.height), lh: parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.5 };
+      }), ev.id);
+      const evLayout = { name: evName ?? null, count: evCount ?? null };
+      const oneLine = (b: { w: number; h: number; lh: number } | null) => !!b && b.h < 2 * b.lh && b.w > b.h;
+      check('the event row at 1440x900 lays its name and its file count out on one line each (not one letter per line)', oneLine(evLayout.name) && oneLine(evLayout.count), evLayout);
 
       // ---- add the event to the timeline: existing add_clip ops, ONE transaction
-      const rev0 = (await doc(pid)).revision;
+      const rev0 = await revision(pid);
       await page.getByTestId(LIFE_TESTIDS.eventAdd(ev.id)).click();
       await until(async () => (await doc(pid)).sequences.seq_main.tracks.flatMap((t: any) => t.clips).length >= ev.assetIds.length);
-      const d2 = await doc(pid);
+      const d2 = await doc(pid), rev1 = await revision(pid);
       const clips = d2.sequences.seq_main.tracks.flatMap((t: any) => t.clips).filter((c: any) => c.assetId && ev.assetIds.includes(c.assetId));
-      check('"add the event to the timeline" puts every file of the event on the timeline in capture order as ONE transaction', clips.length === ev.assetIds.length && d2.revision === rev0 + 1, { clips: clips.length, revisionDelta: d2.revision - rev0 });
+      const clipOrder = [...clips].sort((x: any, y: any) => T.cmp(x.start, y.start)).map((c: any) => c.assetId);
+      const want = [evening0, evening]; // capture order, typed here: 17:30 before 18:00 (upload order was the other way)
+      check('"add the event to the timeline" puts every file of the event on the timeline in capture order as ONE transaction', ev.assetIds.length === 2 && want.every((a) => ev.assetIds.includes(a)) && clips.length === 2 && clipOrder.join() === want.join() && rev1 === rev0 + 1, { files: ev.assetIds.length, clips: clips.length, inCaptureOrder: clipOrder.join() === want.join(), revisionDelta: rev1 - rev0 });
       await page.keyboard.press('Control+z');
       await until(async () => (await doc(pid)).sequences.seq_main.tracks.flatMap((t: any) => t.clips).length === 0);
 
@@ -149,7 +176,9 @@ async function main() {
       await page.getByTestId(LIFE_TESTIDS.viewOption('date')).click();
       await page.getByTestId(LIFE_TESTIDS.readDates).click();
       await page.getByTestId('life-read-dates-said').filter({ hasText: /\S/ }).waitFor({ timeout: 15000 });
-      check('«קריאת תאריכים מהקבצים» answers in words (honestly: the file has no date inside it)', (await page.getByTestId('life-read-dates-said').getAttribute('data-ok')) !== null);
+      const said = { ok: await page.getByTestId('life-read-dates-said').getAttribute('data-ok'), text: ((await page.getByTestId('life-read-dates-said').textContent()) ?? '').trim() };
+      // one file has no date (nodate.jpg, no date in its bytes or its name): it is looked at and gets none, and stays undated
+      check('«קריאת תאריכים מהקבצים» answers in words (honestly: the file has no date inside it)', said.ok === 'true' && said.text === 'נבדקו 1 קבצים; ל־0 נמצא תאריך' && !(await doc(pid)).assets[undated].capture, said);
       await page.context().close();
     }
 
@@ -158,7 +187,7 @@ async function main() {
     const ph = await upload(tp, photo('t-dated.jpg', '2024:06:15 12:00:00'));
     const pn = await upload(tp, photo('t-undated.jpg', null));
     const dated = (await tx(tp, [{ op: 'add_clip', args: { assetId: ph, start: f(0), duration: f(60) } }])).results[0].output.clipId as string;
-    const text = (await tx(tp, [{ op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60), style: { fontFamily: 'Heebo', fontWeight: 700, fontSize: 64, color: '#ffffff' }, transform: { y: 0.2 } } }])).results[0].output.clipId as string;
+    const text = (await tx(tp, [{ op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60), style: { fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.18, color: '#ffffff' }, transform: { y: 0.2 } } }])).results[0].output.clipId as string;
     const plainStill = sha(await still(tp, 5));
     // the built-in agent token reads and writes names only (peoplePrivacy.ts), so the person, with a birth date, is added by a grant that has people: 'full'
     {
@@ -184,7 +213,7 @@ async function main() {
       check('the title tab has no horizontal scroll at 1440x900', await noHScroll(page, '.inspector'));
 
       // the undated picture: move the title over it and add a date field, the live line shows an anchored error with a fix
-      await tx(tp, [{ op: 'remove_clip', args: { clipId: dated } }]).catch(() => undefined);
+      await tx(tp, [{ op: 'delete_clip', args: { clipId: dated } }]); // (there is no remove_clip op: a fixture step that fails throws)
       await tx(tp, [{ op: 'add_clip', args: { assetId: pn, start: f(0), duration: f(60) } }]);
       await page.reload();
       await page.getByTestId('timecode').waitFor();
@@ -219,20 +248,25 @@ async function main() {
     const sp = (await call('/projects', { name: 'חותמת', width: 320, height: 180 })).body.project.id as string;
     const mv = await upload(sp, stampVideo);
     const vclip = (await tx(sp, [{ op: 'add_clip', args: { assetId: mv, start: f(0), withLinkedAudio: false } }])).results[0].output.clipId as string;
-    const effectId = (await tx(sp, [{ op: 'add_effect', args: { clipId: vclip, type: 'stylize.date-stamp', params: { source: 'text', text: "'24 12 25" } } }])).results[0].output.effectId as string;
+    const effectId = (await tx(sp, [{ op: 'add_effect', args: { clipId: vclip, type: 'stylize.date-stamp', params: { source: 'text', text: "'99 01 01" } } }])).results[0].output.effectId as string;
     {
       const page = await open(sp, 'he');
       await page.locator(`.clip[data-clip-id="${vclip}"]`).click();
-      await page.getByTestId('inspector-tab-all').click().catch(() => undefined);
+      // the typed text is NOT the capture date: the clip was filmed on 25.12.2024 and the stamp's default order would print
+      // '24 12 25 from it, so a typed '24 12 25 could not tell the two sources apart in a still
+      await openInspectorPage(page, 'all');
       const typedStill = sha(await still(sp, 0));
       await page.getByTestId(LIFE_TESTIDS.stampSource).waitFor({ timeout: 10000 });
       await page.getByTestId(`${LIFE_TESTIDS.stampSource}-capture`).click();
       await until(async () => (await doc(sp)).sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === vclip).effects.find((e: any) => e.id === effectId).params.source === 'capture');
+      const fxOf = async () => (await doc(sp)).sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === vclip).effects.find((e: any) => e.id === effectId).params;
       const capStill = sha(await still(sp, 0));
       await page.getByTestId(LIFE_TESTIDS.stampClock).waitFor({ timeout: 5000 });
-      check('the stamp source switch changes the effect to the capture date (a different still), shows the clock switch and the date order, and Ctrl+Z restores the typed text', capStill !== typedStill && (await page.getByTestId(LIFE_TESTIDS.stampClock).count()) === 1 && (await page.getByTestId(LIFE_TESTIDS.stampOrder).count()) === 1);
+      const shown = { clock: await page.getByTestId(LIFE_TESTIDS.stampClock).count(), order: await page.getByTestId(LIFE_TESTIDS.stampOrder).count() };
+      check('the stamp source switch changes the effect to the capture date (a different still) and shows the clock switch and the date order', (await fxOf()).source === 'capture' && capStill !== typedStill && shown.clock === 1 && shown.order === 1, { ...shown, differentStill: capStill !== typedStill });
       await page.keyboard.press('Control+z');
-      check('undo of the source switch restores the typed stamp still', await until(async () => sha(await still(sp, 0)) === typedStill));
+      const back = await until(async () => (await fxOf()).source === 'text' && sha(await still(sp, 0)) === typedStill);
+      check('Ctrl+Z after the source switch restores the typed stamp (source text, the typed still again, unlike the capture still)', back && capStill !== typedStill, { source: (await fxOf()).source, text: (await fxOf()).text });
       await page.context().close();
     }
 
@@ -250,7 +284,7 @@ async function main() {
       const strings = fs.readFileSync(path.join(root, 'apps/web/src/editor/lifeline/people.strings.ts'), 'utf8');
       check('the palette opens the people sheet with the privacy line exactly as in people.strings.ts, the people of the project, and an add action', strings.includes(privacy) && privacy.length > 20 && rows >= 1 && (await page.getByTestId(PEOPLE_TESTIDS.peopleCopy).count()) === 1, { rows });
       await page.keyboard.press('Escape');
-      await page.getByTestId('inspector-tab-deliver').click().catch(() => undefined);
+      await openInspectorPage(page, 'deliver'); // the archive link is in the Deliver mode's panel (UX_REDESIGN §8)
       const fam = page.getByTestId(PEOPLE_TESTIDS.archiveFamily);
       await fam.waitFor({ timeout: 10000 });
       const hrefBefore = await page.getByTestId('archive-download').getAttribute('href');
@@ -308,13 +342,14 @@ async function main() {
       check('English: the events view lists the arranged event', (await page.locator('[data-testid^="life-event-"][data-event-id]').count()) >= 1);
       await page.context().close();
     }
-    void fieldSlug; void a23; void day;
+    void fieldSlug; void a23; void day; void evening0;
     check('no page error or console error in any run', errors.length === 0, errors.slice(0, 5));
   } finally {
     await browser.close();
     await s.close();
   }
   const failed = checks.filter((c) => !c.ok);
+  fs.writeFileSync(path.join(root, 'docs/evidence/lifeline-ui-proof.json'), `${JSON.stringify({ ranAt: new Date().toISOString(), machine: `${os.type()} ${os.release()} ${os.arch()}`, browser: 'Playwright Chromium (headless)', checks, result: failed.length === 0 ? 'PASS' : 'FAIL', passed: checks.length - failed.length, total: checks.length }, null, 2)}\n`);
   console.log(failed.length === 0 ? `\nPASSED (${checks.length} checks). Screenshots: ${art}` : `\nFAILED: ${failed.length} of ${checks.length}`);
   process.exit(failed.length === 0 ? 0 : 1);
 }
