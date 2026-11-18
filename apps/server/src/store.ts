@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { applyTransaction, canonical, createProject, diffEntities, entityMap, migrateProject, OpError, referencedIds, sameEntity, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { docForReader } from './peoplePrivacy.ts';
+import { privacyChanged } from './privacyPurge.ts';
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
@@ -70,6 +71,11 @@ const now = () => new Date().toISOString();
 export class Store {
   readonly db: Database.Database;
   readonly events = new EventEmitter();
+  /**
+   * Called synchronously from the commit path, after a commit that adds, changes or removes a privacy region (privacyPurge.ts),
+   * with the project's revision after it. The server sets it to the render cache's purge (ADR-0024): privacy over speed.
+   */
+  onPrivacyChange: ((projectId: string, revision: number) => void) | null = null;
   readonly blobDir: string;
   readonly outDir: string;
   readonly tmpDir: string;
@@ -164,7 +170,7 @@ export class Store {
 
   // ---------- commits ----------
   commit(req: CommitRequest): CommitResult {
-    const run = this.db.transaction((): CommitResult => {
+    const run = this.db.transaction((): CommitResult & { privacyChanged?: true } => {
       const { doc, revision } = this.wholeProject(req.projectId); // a write: the whole document, whoever commits
       if (req.idempotencyKey && !req.dryRun) {
         const prior = this.db.prepare('SELECT id, revision, ops, result FROM transactions WHERE project_id = ? AND actor = ? AND idempotency_key = ?').get(req.projectId, req.actor, req.idempotencyKey) as any;
@@ -209,6 +215,7 @@ export class Store {
         if (c.length) throw conflict(c);
       }
       req.guard?.({ changes, before: doc, after: applied.doc });
+      const privacy = !req.dryRun && changes.length > 0 && privacyChanged(changes, doc, applied.doc);
       const affectedIds = [...new Set([...applied.affectedIds, ...changes.map((c) => c.id)])];
       const base = { affectedIds, summary: applied.summary, results: applied.results, warnings: [] as string[], ...(req.kind && req.kind !== 'edit' ? { kind: req.kind, undoes: req.undoes } : {}), ...(stale ? { rebasedFrom: req.baseRevision } : {}) };
       if (req.dryRun) return { ...base, transactionId: null, revision, committed: false, replayed: false };
@@ -225,9 +232,13 @@ export class Store {
       for (const c of changes) setVersion.run(req.projectId, c.id, next, c.after ? 0 : 1, req.actor);
       const event: Omit<RevisionEvent, 'seq'> = { projectId: req.projectId, revision: next, transactionId: txId, actor: req.actor, label: req.label ?? null, summary: applied.summary, affectedIds, at, kind: req.kind ?? 'edit', ops: [...new Set(req.ops.map((o) => o.op))] };
       this.db.prepare('INSERT INTO outbox (project_id, kind, payload, created_at) VALUES (?, ?, ?, ?)').run(req.projectId, 'revision', JSON.stringify(event), at);
-      return { ...base, transactionId: txId, revision: next, committed: true, replayed: false };
+      return { ...base, transactionId: txId, revision: next, committed: true, replayed: false, ...(privacy ? { privacyChanged: true } : {}) };
     });
-    const result = run.immediate();
+    const { privacyChanged: purge, ...result } = run.immediate();
+    // In the same commit path, before anyone is told of the revision: pictures rendered before the change may show what is now hidden.
+    if (purge && this.onPrivacyChange) {
+      try { this.onPrivacyChange(req.projectId, result.revision); } catch (e) { console.error('privacy purge of the render cache failed', e); }
+    }
     if (result.committed && !result.replayed) this.drainOutbox();
     return result;
   }

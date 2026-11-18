@@ -28,11 +28,13 @@ import { PROJECT_RESOURCE_KINDS, registerResourcesAndPrompts } from './mcpResour
 import type { Derivatives } from './derive.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { assertMayTakeRendered, forPrincipal, peopleAccess, peopleNote, readingAs } from './peoplePrivacy.ts';
+import { assertMayHandleImportJob, IMPORT_JOB_TYPE, type ImportQueue } from './importContracts.ts';
+import type { RenderCacheService } from './renderCacheRoutes.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
 
 /** `derivatives` lets tracking jobs read an asset's editing proxy; without it they read the stored media. */
-export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives) {
+export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { imports?: ImportQueue; renderCache?: RenderCacheService } = {}) {
   const gov = governance ?? new Governance(store);
   const factory: Parameters<typeof createMcpHandler>[0] = (ctx) => {
     const principal = (ctx.authInfo?.extra?.principal as Principal | undefined) ?? { actor: 'anonymous', kind: 'agent' as const, scopes: [] as Scope[] };
@@ -155,10 +157,20 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     );
     server.registerTool('export_project', { description: 'Start a durable export of the current revision (immutable snapshot). Formats: mp4-h264-aac (default), webm-vp9-opus, wav (audio only), png (one frame). Optional frame range, scale and quality. Refused with a list of render blockers if media or fonts are missing, and with storage_quota_exceeded once the storage ceiling of the data directory is reached. Returns a jobId and a labelled size estimate; poll get_job.', inputSchema: z.object({ projectId: pid, ...ExportOptionsSchema.shape }) }, ({ projectId, ...options }) =>
       run('edit', () => { gov.assertMayAct(principal, projectId, 'job'); gov.takeExportQuota(principal, 1, true); assertMayTakeRendered(principal, store.wholeProject(projectId).doc, 'export this project'); const job = exporter.start(projectId, principal.actor, options); gov.takeExportQuota(principal); return { jobId: job.id, status: job.status, revision: job.input.revision, estimate: job.input.manifest.estimate, warnings: job.input.warnings }; }));
-    server.registerTool('plan_export', { description: 'Preflight an export without starting it: resolved output size and frame count, the exact asset and font manifest, render blockers and warnings, and a labelled size estimate.', inputSchema: z.object({ projectId: pid, ...ExportOptionsSchema.shape }), annotations: ro }, ({ projectId, ...options }) =>
-      run('observe', () => { const p = read(projectId); return { ...exporter.plan(p.doc, p.revision, options), ...peopleNote(principal, p.doc) }; }));
-    server.registerTool('retry_job', { description: 'Retry a failed or canceled export from the same immutable snapshot and options. Creates a new job.', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
-      run('edit', () => { const old = store.getJob(jobId); gov.assertMayAct(principal, old.projectId, 'job'); assertMayTakeJobOutput(principal, old, 'retry this export'); const job = exporter.retry(jobId, principal.actor); return { jobId: job.id, status: job.status, retryOf: job.input.retryOf }; }));
+    server.registerTool('plan_export', { description: 'Preflight an export without starting it: resolved output size and frame count, the exact asset and font manifest, render blockers and warnings, and a labelled size estimate. With mode=incremental (the fast export) and no blockers, also `segments`: which 2-second segments are stored in the render cache and would be reused, which would be rendered, and which can never be stored (with the reason); the same plan as POST …/exports/segments/plan.', inputSchema: z.object({ projectId: pid, ...ExportOptionsSchema.shape }), annotations: ro }, ({ projectId, ...options }) =>
+      run('observe', async () => {
+        const p = read(projectId);
+        const plan = exporter.plan(p.doc, p.revision, options);
+        const segments = options.mode === 'incremental' && plan.blockers.length === 0 && extras.renderCache ? await extras.renderCache.plan(principal, projectId, options) : undefined;
+        return { ...plan, ...(segments ? { segments } : {}), ...peopleNote(principal, p.doc) };
+      }));
+    if (extras.renderCache) {
+      const cache = extras.renderCache;
+      server.registerTool('get_render_cache', { description: 'The render cache of the fast export on this machine (ADR-0024): whether it is on, its size limit, the bytes and segments it holds, its high-water mark and the auto-clear setting. It is derived data (pictures already rendered), counted against the storage ceiling, never backed up or archived, and purged with its project or when a privacy region changes. Clearing it is the owner\'s action in the editor. Read-only.', inputSchema: z.object({}), annotations: ro }, () => run('observe', () => cache.status()));
+    }
+    server.registerTool('retry_job', { description: 'Retry a failed or canceled export from the same immutable snapshot and options, or a failed or canceled import of a file you sent (its stored original is converted again). Creates a new job.', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
+      run('edit', () => { const old = store.getJob(jobId);
+        if (old.type === IMPORT_JOB_TYPE && extras.imports) { gov.assertMayAct(principal, old.projectId, 'observe'); assertMayHandleImportJob(gov, principal, old, 'retry'); const job = extras.imports.retry(jobId, principal.actor); return { jobId: job.id, status: job.status, retryOf: jobId }; } gov.assertMayAct(principal, old.projectId, 'job'); assertMayTakeJobOutput(principal, old, 'retry this export'); const job = exporter.retry(jobId, principal.actor); return { jobId: job.id, status: job.status, retryOf: job.input.retryOf }; }));
     server.registerTool('get_job', { description: 'Status, stage and result of a job.', inputSchema: z.object({ jobId: z.string() }), annotations: ro }, ({ jobId }) =>
       run('observe', () => { const j = store.getJob(jobId); gov.assertMayAct(principal, j.projectId, 'observe'); return jobView(j); }));
     server.registerTool('list_capabilities', { description: 'Optional provider capabilities (reviewed workflows) with their qualification status, blockers, resource data and provider readiness. Listing never starts a worker.', inputSchema: z.object({}), annotations: ro }, () =>
@@ -196,10 +208,11 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       }));
     server.registerTool('request_model_download', { description: 'Ask the project owner to approve downloading a capability\'s missing model files. It only creates a pending approval bound to the exact byte count and file hashes shown by list_capabilities; nothing is downloaded until the owner approves it in the editor. Agents cannot start a download themselves.', inputSchema: z.object({ projectId: pid, capabilityId: z.string() }) }, ({ projectId, capabilityId }) =>
       run('observe', async () => ({ approval: await requestModelDownload(capabilities, gov, principal, projectId, capabilityId) })));
-    server.registerTool('cancel_job', { description: 'Request cancellation of a job (export, capability, analysis, transcription, narration, model download, motion tracking). The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
+    server.registerTool('cancel_job', { description: 'Request cancellation of a job (export, capability, analysis, transcription, narration, model download, motion tracking, import). The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
       run('edit', () => {
         const j = store.getJob(jobId);
         gov.assertMayAct(principal, j.projectId, 'observe');
+        if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, principal, j, 'cancel'); return extras.imports.cancel(jobId, principal.actor); }
         assertMayCancel(gov, principal, j);
         // the same dispatch as POST /jobs/:jobId/cancel (http.ts)
         if (j.type === 'analysis') return cancelAnalysisJob(store, jobId, principal.actor);

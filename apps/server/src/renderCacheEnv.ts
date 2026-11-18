@@ -4,11 +4,17 @@
  * job and per plan, never once at server start (the render page is read from disk per request, so a rebuild while the server
  * runs changes the bundle).
  */
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { EngineFingerprint } from '@pulseframe/core';
-import type { WorkerIdentity } from '@pulseframe/renderer';
+import { promisify } from 'node:util';
+import { findEffect, type EngineFingerprint, type ProjectDocument } from '@pulseframe/core';
+import { frameKey } from '@pulseframe/engine';
+import type { RenderHost, WorkerIdentity } from '@pulseframe/renderer';
+import { usesGpuEffects, type Manifest } from './export.ts';
+import { segmentEncodeArgs, type FrameKeyFn, type SegmentEnv } from './exportSegments.ts';
+import { ApiError } from './store.ts';
 
 export const sha256Hex = (text: string | Uint8Array): string => createHash('sha256').update(text).digest('hex');
 
@@ -54,3 +60,50 @@ export function engineFingerprint(bundle: string, id: Pick<WorkerIdentity, 'vers
  * output size and path replaced by fixed placeholders by the caller). Measured: -threads 2 and -threads 4 give different bytes.
  */
 export const encoderIdOf = (ffmpegVersion: string, encodeArgs: readonly string[]): string => sha256Hex(`${ffmpegVersion}\n${JSON.stringify(encodeArgs)}`);
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The SegmentEnv of one job or plan (lead wiring): what the frame and segment keys read besides the document.
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const execFileP = promisify(execFile);
+let ffmpegVersion: Promise<string> | null = null;
+/** `ffmpeg -version` of the ffmpeg this process runs (detected once per process, never assumed). */
+export function ffmpegVersionText(): Promise<string> {
+  ffmpegVersion ??= execFileP('ffmpeg', ['-version'], { timeout: 30_000 }).then((r) => r.stdout, (e) => { ffmpegVersion = null; throw new ApiError(503, 'incremental_unavailable', `ffmpeg could not be started to identify the segment encoder: ${String(e?.message ?? e).slice(0, 200)}`); });
+  return ffmpegVersion;
+}
+/**
+ * The encoder id of a job: `ffmpeg -version` and the segment encode arguments with THIS job's quality and the configured threads,
+ * the output size, the segment length and the output path replaced by fixed placeholders (the key covers the size through its
+ * output parameters and the length through the number of frame keys). Draft and high exports therefore never share segments.
+ */
+export function encoderIdFor(versionText: string, manifest: Pick<Manifest, 'options' | 'output'>, threads: number): string {
+  return encoderIdOf(versionText, segmentEncodeArgs({ width: 0, height: 0, frameRate: manifest.output.frameRate, quality: manifest.options.quality, segFrames: 0, threads, outFile: '<out>' }));
+}
+export interface SegmentEnvSource {
+  host: Pick<RenderHost, 'identity'>;
+  webDist: string;
+  threads: number;
+  /** Exporter.fontHash: the hash of a bundled family's font files, null when it is not bundled. */
+  fontHash(family: string): string | null;
+}
+/** The env of `doc` (the job's render document) for this manifest. Names are looked up with Object.hasOwn, never `table[name]`. */
+export async function segmentEnvFor(src: SegmentEnvSource, doc: ProjectDocument, manifest: Manifest): Promise<SegmentEnv> {
+  const bundle = bundleDigest(src.webDist);
+  if (!bundle) throw new ApiError(503, 'renderer_unavailable', 'the web bundle containing the render page has not been built', {}, 'Run `pnpm build` and retry.');
+  const id = await src.host.identity(usesGpuEffects(doc));
+  const version = await ffmpegVersionText();
+  return {
+    digest: sha256Hex,
+    engine: engineFingerprint(bundle, id, doc.schemaVersion),
+    encoderId: encoderIdFor(version, manifest, src.threads),
+    threads: src.threads,
+    gpu: id.adapter ? { adapter: id.adapter, software: id.softwareAdapter } : null,
+    assetHash: (assetId) => (Object.hasOwn(doc.assets, assetId) ? doc.assets[assetId]!.contentHash : null),
+    fontHash: (family) => src.fontHash(family),
+    effectVersion: (type) => findEffect(type)?.version ?? 0,
+  };
+}
+/** The engine frame key of each programme frame of `doc` at the manifest's output size. Throws engine UnkeyableError. */
+export const frameKeyFor = (doc: ProjectDocument, manifest: Pick<Manifest, 'output'>, env: SegmentEnv): FrameKeyFn => (frame) =>
+  frameKey(doc, frame, { digest: env.digest, output: { width: manifest.output.width, height: manifest.output.height }, assetHash: env.assetHash, fontHash: env.fontHash, effectVersion: env.effectVersion, gpu: env.gpu });

@@ -135,8 +135,3 @@ describe('assertMayHandleImportJob (cancel, retry and dismiss of an import)', ()
     expect(may(owner, job('user:local', { type: 'export' }))).toBe('409 not_an_import');
   });
 });
-
-describe('what the workers build (their own test files)', () => {
-  it.todo('W1 drop.test.ts / dropNet.test.ts: every case of plan §8 W1 with the verifier corrections (re-claim from the same IP, early refusal read by a still-writing client, /status, invalid address, Hebrew x-filename)');
-  it.todo('W2 importQueue.test.ts: every case of plan §8 W2 with the verifier corrections (recovery step 0 by idempotency key, original deleted on unsupported_media, pinned ffmpeg argv)');
-});

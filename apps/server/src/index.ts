@@ -18,9 +18,23 @@ import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 import { recoverTrackingJobs, stopTrackingJobs } from './tracking.ts';
+import { createDropDoor } from './drop.ts';
+import { loadDropPage } from './drop-page/index.ts';
+import { dropLimitsFrom, type DropDoor, type ImportQueue } from './importContracts.ts';
+import { createImportQueue } from './importQueue.ts';
+import { incrementalAvailable, runSegmentedExport } from './exportSegments.ts';
+import { frameKeyFor } from './renderCacheEnv.ts';
+import { createRenderCacheService, type RenderCacheService } from './renderCacheRoutes.ts';
+import { RENDER_CACHE_DIR, SegmentStore } from './segmentStore.ts';
+import { dataDirBytes, setStorageHooks } from './storage.ts';
 
 export { loadConfig, type Config } from './config.ts';
-export interface RunningServer { url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; backup: BackupScheduler; close(): Promise<void> }
+export interface RunningServer {
+  url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; backup: BackupScheduler;
+  /** The import queue and the phone drop door (ADR-0023), the render cache (ADR-0024): for proofs and tests that look inside. */
+  imports: ImportQueue; door: DropDoor; renderCache: RenderCacheService;
+  close(): Promise<void>;
+}
 
 export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
@@ -48,8 +62,30 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
     if (!/^(speech recognition|narration) /.test(label)) await speech.releaseKept();
     if (!/^local\./.test(label)) await localTools.releaseKept();
   });
-  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives);
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech);
+  // ---- import queue and phone drop (ADR-0023, amends ADR-0002) ----
+  const imports = createImportQueue({ store, lane, derivatives, maxUploadBytes: cfg.maxUploadBytes, reserveBytes: cfg.importReserveBytes, homeZone: cfg.homeZone });
+  const projectExists = (id: string) => !!store.db.prepare('SELECT 1 FROM projects WHERE id = ?').get(id);
+  // preferredAddress is left unset: the door runs the route probe itself (drop.ts). The door listens only while a code is live.
+  const door = createDropDoor({ queue: imports, projectExists, page: loadDropPage, port: cfg.dropPort, limits: dropLimitsFrom(cfg), admitAddresses: cfg.dropAdmitAddresses });
+  // ---- segmented export and render cache (ADR-0024) ----
+  const segments = new SegmentStore({
+    dir: path.join(cfg.dataDir, RENDER_CACHE_DIR), capBytes: cfg.renderCacheBytes, autoClear: cfg.renderCacheAutoClear, minFreeBytes: cfg.renderCacheMinFreeBytes,
+    // index.sqlite and its WAL count as other bytes (usedBytes counts the segment files only); no walk without a ceiling
+    quota: () => { const quotaBytes = store.maxStorageBytes; return { quotaBytes, otherBytes: quotaBytes ? Math.max(0, dataDirBytes(cfg.dataDir) - segments.status().usedBytes) : 0 }; },
+  });
+  setStorageHooks(store, { reclaim: (n) => void segments.trim(n), purgeProject: (id) => void segments.purgeProject(id), status: () => segments.status() });
+  // Privacy over speed (owner decision): a commit that changes a privacy region purges the project's segments in the same commit path.
+  store.onPrivacyChange = (projectId, revision) => void segments.purgeProject(projectId, { revision });
+  const envSource = { host, webDist: cfg.webDist, threads: cfg.segmentThreads, fontHash: (family: string) => exporter.fontHash(family) };
+  let joinResult: { ok: true } | { ok: false; reason: string } | null = null;
+  void incrementalAvailable().then((r) => { joinResult = r; }); // one tiny two-segment encode and join, about a second, at start
+  // enabled: a cap above 0 and a join this ffmpeg can make exactly (unknown for the second the check takes: blockers say so)
+  const cacheStatus = () => { const st = segments.status(); return { ...st, enabled: st.capBytes > 0 && joinResult?.ok !== false }; };
+  const renderCache = createRenderCacheService({ store, exporter, segments, envSource, status: cacheStatus });
+  exporter.incremental = { status: cacheStatus, join: () => joinResult };
+  exporter.segmented = { store: segments, env: renderCache.env, keyOf: frameKeyFor, run: runSegmentedExport };
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');
@@ -61,13 +97,14 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
     else exporter.enqueue(job);
   }
   await capabilities.recover();
+  imports.recover(); // after the capability jobs: an interrupted conversion takes the lane only once they are back in line
   recoverAnalysisJobs(store);
   recoverTrackingJobs(store, { derivatives });
   speech.recover();
   derivatives.recover();
   backup.start();
   return {
-    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup,
+    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache,
     async close() {
       (app as any).browserExport?.stop();
       await mcp.close();
@@ -76,11 +113,16 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       await localTools.stop();
       await speech.stop();
       await stopTrackingJobs(store); // the rows stay running: they are tracked again after a restart
+      await door.stop(); // the code closes ('shutdown') and the second listener with it; uploads in flight are aborted
+      await imports.stop(); // the running ffmpeg is killed; the rows stay running for recover()
       await derivatives.stop();
       // Stop accepting, then drop connections that are still open (event streams of pages that were not closed, idle keep-alives):
       // without this, shutdown waited for them indefinitely.
       await new Promise((r) => { server.close(r); (server as unknown as { closeAllConnections?: () => void }).closeAllConnections?.(); });
       await host.close();
+      store.onPrivacyChange = null;
+      setStorageHooks(store, null);
+      segments.close();
       store.close();
     },
   };
