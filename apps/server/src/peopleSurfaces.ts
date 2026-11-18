@@ -138,6 +138,12 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/templates/:templateId/apply`]: ['reader-document', 'write'],
   [`POST ${P}/template-runs/:runId/regenerate`]: ['reader-document', 'write'],
   [`POST ${P}/variants/:variantId/translation/review`]: ['owner-only'],
+  // shorts (ADR-0018): computed from the reader's document (transcript quotes, measured values, sequence summaries; no people data)
+  [`GET ${P}/sequences`]: ['reader-document'],
+  [`POST ${P}/shorts/candidates`]: ['reader-document'],
+  [`POST ${P}/shorts/plan`]: ['reader-document'],
+  [`POST ${P}/shorts`]: ['reader-document', 'write'],
+  [`POST ${P}/sequences/:sequenceId/reframe-plan`]: ['reader-document'],
   // proposals and approvals
   [`GET ${P}/proposals`]: ['rows-scrubbed'],
   [`POST ${P}/proposals`]: ['write'],
@@ -193,6 +199,9 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   export_project: ['rendered-refused', 'reader-document'], plan_export: ['reader-document'], retry_job: ['rendered-refused'], get_job: ['no-document'],
   list_capabilities: ['no-document'], run_capability: ['reader-document', 'write'], estimate_capability: ['reader-document'], translate_captions: ['reader-document', 'write'],
   request_model_download: ['no-document'], cancel_job: ['no-document'],
+  // shorts (ADR-0018)
+  list_sequences: ['reader-document'], find_short_candidates: ['reader-document'], plan_shorts: ['reader-document'], make_shorts: ['reader-document', 'write'],
+  plan_reframe: ['reader-document'], export_batch: ['rendered-refused', 'reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

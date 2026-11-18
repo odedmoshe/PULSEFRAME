@@ -31,17 +31,18 @@ const kinds = (doc: ProjectDocument) => doc.sequences[doc.mainSequenceId]!.track
 const adjustments = (doc: ProjectDocument) => doc.sequences[doc.mainSequenceId]!.tracks.flatMap((t) => t.clips.filter((c): c is AdjustmentClip => c.type === 'adjustment').map((clip) => ({ track: t, clip })));
 
 describe('schema version 2', () => {
-  it('new documents are version 2; a version-1 document migrates unchanged apart from its version; a newer one is refused', () => {
-    expect(SCHEMA_VERSION).toBe(2);
+  // Wave 4 (ADR-0018) bumped the version to 3 with an identity MIGRATIONS[2]; a version-1 document now passes through both steps.
+  it('a version-1 document migrates unchanged apart from its version (through v2 to the current version); a newer one is refused', () => {
+    expect(SCHEMA_VERSION).toBe(3);
     const doc = createProject({ id: 'prj_m', name: 'M' });
-    expect(doc.schemaVersion).toBe(2);
+    expect(doc.schemaVersion).toBe(SCHEMA_VERSION);
     const v1 = { ...JSON.parse(JSON.stringify(edit().doc)), schemaVersion: 1 };
     const migrated = migrateProject(v1);
-    expect(migrated.schemaVersion).toBe(2);
-    expect(migrated).toEqual({ ...v1, schemaVersion: 2 });
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(migrated).toEqual({ ...v1, schemaVersion: SCHEMA_VERSION });
     expect(validateProject(migrated)).toEqual([]);
     expect(ProjectSchema.safeParse(v1).success).toBe(false); // only through the migration
-    expect(() => migrateProject({ ...doc, schemaVersion: 3 })).toThrow(/newer than supported 2/);
+    expect(() => migrateProject({ ...doc, schemaVersion: SCHEMA_VERSION + 1 })).toThrow(/newer than supported 3/);
   });
   it('a recipe run may carry template slot records; older runs without them stay valid', () => {
     const run = { id: 'run_1', recipeId: 'template:tpl.x', params: {}, createdIds: ['clp_1'], fingerprints: {}, steps: [] };

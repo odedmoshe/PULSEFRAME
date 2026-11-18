@@ -5,6 +5,7 @@ import { HE_PEOPLE, HE_PEOPLE_SERVER } from './people.ts';
 import { HE_RENDER_CACHE, HE_RENDER_CACHE_PURGE } from './renderCache.ts';
 import { HE_IMPORT_QUEUE } from './phoneDrop.ts';
 import { HE_FAMILY_FILM } from './familyFilm.ts';
+import { HE_SHORTS } from './shorts.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -234,7 +235,7 @@ const HE_TIMELINE: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -271,3 +272,5 @@ export const RENDER_CACHE_REFUSAL_PATTERNS: readonly RegExp[] = HE_RENDER_CACHE.
 export const WAVE5_REFUSAL_PATTERNS: readonly RegExp[] = [...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE].map(([re]) => re);
 /** The family film's and measured moments' patterns (familyFilm.ts HE_FAMILY_FILM), for family-film-wording.test.ts. */
 export const FAMILY_FILM_REFUSAL_PATTERNS: readonly RegExp[] = HE_FAMILY_FILM.map(([re]) => re);
+/** The shorts patterns (ADR-0018: sequence operations and shorts routes), for packages/evals/src/shorts-wording.test.ts. */
+export const SHORTS_REFUSAL_PATTERNS: readonly RegExp[] = HE_SHORTS.map(([re]) => re);

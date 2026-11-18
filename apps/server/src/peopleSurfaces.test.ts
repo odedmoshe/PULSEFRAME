@@ -176,6 +176,8 @@ const PARAMS: Record<string, () => string> = {
   id: () => pid, jobId: () => exportJobId, proposalId: () => proposalId, assetId: () => assetId, token: () => 'rnd_none', kind: () => 'thumb', motionTrackId: () => 'mtk_none',
   capabilityId: () => 'none.cap', recipeId: () => 'none', runId: () => 'run_none', templateId: () => 'none', variantId: () => 'var_none', approvalId: () => 'apr_none', grantId: () => 'grt_none',
   sfxId: () => 'none', modelId: () => 'none', index: () => '0', styleId: () => 'none',
+  // shorts (ADR-0018): the main sequence of the walked project (every project made by createProject has it)
+  sequenceId: () => 'seq_main',
 };
 /** Queries and bodies that reach the part of a route that reads the project; any other POST gets a body its schema refuses. */
 const QUERY: Record<string, () => string> = {

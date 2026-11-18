@@ -25,7 +25,7 @@ const refused = (asset: ReturnType<typeof picture>): string => {
 
 describe('import provenance (optional field, no version bump)', () => {
   it('the schema version is unchanged; an asset without the field parses as before', () => {
-    expect(SCHEMA_VERSION).toBe(2);
+    expect(SCHEMA_VERSION).toBe(3); // wave 4's one bump (ADR-0018, identity MIGRATIONS[2]); this track added no version of its own
     expect(AssetSchema.omit({ id: true }).safeParse(picture()).success).toBe(true);
   });
   it('the three ways in parse, and a phone file carries its drop id, not a secret', () => {

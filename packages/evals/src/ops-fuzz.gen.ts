@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -38,6 +38,8 @@ const LIFE_CAPTURES: (Capture | undefined)[] = [
 /** The operations of the life line that the fuzz draws (the public ones; attach_asset_capture is internal). */
 /** The operations on people that the fuzz draws (ADR-0021, people section), once they are built (PEOPLE_OPS_BUILT). */
 export const PEOPLE_FUZZ_OPS = ['add_person', 'update_person', 'remove_person'] as const;
+/** The sequence lifecycle (ADR-0018) that the fuzz draws, once W1 has built the bodies (SEQUENCE_OPS_BUILT). */
+export const SEQUENCE_FUZZ_OPS = SEQUENCE_OPS;
 export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_text_fields', 'cluster_events', 'add_event', 'update_event', 'remove_event'] as const;
 
 /**
@@ -52,6 +54,8 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * `genMusic()` returns a random add_builtin_music call (internal; ADR-0022), for packs-fuzz.test.ts.
  * `genPeople(doc)` returns a random call on the people of the project (ADR-0021, people section): its three operations and the
  * title edits that name a person. `gen` draws from these rows too once those operations are built (PEOPLE_OPS_BUILT).
+ * `genSequence(doc)` returns a random call of the sequence lifecycle (ADR-0018 shorts): add/update/remove_sequence and
+ * replace_clip_keyframes. `gen` draws from these rows too once W1 has built them (SEQUENCE_OPS_BUILT).
  */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
@@ -166,6 +170,40 @@ export function createFuzz(seed: number) {
     ];
   };
   const genPeople = (doc: ProjectDocument): OpCall => pick(peopleMenu(doc))();
+  /**
+   * The rows of the sequence lifecycle (ADR-0018 shorts). Lead rows (contracts pre-pass): every call has arguments its
+   * operation's schema accepts; what is refused is refused by the operation: the main sequence (removed, or given a format),
+   * a sequence that is not there, an odd frame, a sequence that still has clips, keys out of order or off a frame boundary,
+   * an x value outside the transform's range, keys on a caption cue. W1 completes them with its bodies and the 65th sequence.
+   */
+  const sequenceMenu = (doc: ProjectDocument): (() => OpCall)[] => {
+    const ids = Object.keys(doc.sequences);
+    const others = ids.filter((id) => id !== doc.mainSequenceId);
+    const sequenceId = () => { const r = rnd(); return r < 0.6 && others.length ? pick(others) : r < 0.85 ? doc.mainSequenceId : 'seq_none'; };
+    const format = () => pick([
+      { width: 720, height: 1280, fit: 'cover' as const, profileId: 'vertical-9x16', safeArea: { top: 0.1, bottom: 0.2, left: 0.05, right: 0.12 } },
+      { width: 1080, height: 1080, fit: 'contain' as const, profileId: null, safeArea: null, loudness: null },
+      { width: 721, height: 1280, fit: 'cover' as const, profileId: null, safeArea: null, loudness: { target: -14, truePeak: -1 } },
+    ]);
+    const all = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips));
+    const clipId = () => (all.length && rnd() < 0.9 ? pick(all).id : 'clp_none');
+    const keys = () => {
+      const n = 1 + int(6), step = 1 + int(20);
+      const ks = Array.from({ length: n }, (_, i) => ({ time: T.frameTime(i * step, rate), value: Number((rnd() * 1.2 - 0.6).toFixed(3)), easing: pick(['linear', 'hold', 'ease-in-out'] as const) }));
+      const r = rnd();
+      if (r < 0.1 && n > 1) ks.reverse(); // out of order
+      else if (r < 0.18) ks[0] = { ...ks[0]!, time: T.rt(1, 1000) }; // off a frame boundary (refused at every fuzz rate)
+      else if (r < 0.24) ks[n - 1] = { ...ks[n - 1]!, value: 4.5 }; // outside the range of x
+      return ks;
+    };
+    return [
+      () => ({ op: 'add_sequence', args: { name: pick(['Short 1', 'קטע קצר', 'B']), ...(rnd() < 0.7 ? { format: format() } : {}), ...(rnd() < 0.4 ? { tracks: pick(['standard', 'empty'] as const) } : {}) } }),
+      () => ({ op: 'update_sequence', args: { sequenceId: sequenceId(), ...(rnd() < 0.5 ? { name: 'שם אחר' } : {}), ...(rnd() < 0.6 ? { format: rnd() < 0.3 ? null : format() } : {}) } }),
+      () => ({ op: 'remove_sequence', args: { sequenceId: sequenceId(), ...(rnd() < 0.6 ? { withContents: rnd() < 0.8 } : {}) } }),
+      () => ({ op: 'replace_clip_keyframes', args: { clipId: clipId(), property: pick(['x', 'x', 'y', 'scale', 'opacity'] as const), keys: rnd() < 0.15 ? null : keys(), ...(rnd() < 0.2 ? { at: T.frameTime(int(30), rate) } : {}) } }),
+    ];
+  };
+  const genSequence = (doc: ProjectDocument): OpCall => pick(sequenceMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
 
   const gen = (doc: ProjectDocument): OpCall => {
@@ -426,6 +464,8 @@ export function createFuzz(seed: number) {
       ...(LIFE_OPS_BUILT ? lifeMenu(doc) : []),
       // people (ADR-0021, people section): once their operations are built
       ...(PEOPLE_OPS_BUILT ? peopleMenu(doc) : []),
+      // the sequence lifecycle (ADR-0018 shorts): once W1 has built the bodies
+      ...(SEQUENCE_OPS_BUILT ? sequenceMenu(doc) : []),
     ];
     return pick(menu)();
   };
@@ -492,5 +532,5 @@ export function createFuzz(seed: number) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence };
 }

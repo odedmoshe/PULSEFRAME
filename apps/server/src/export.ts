@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
-import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
@@ -42,6 +42,8 @@ export const ExportOptionsSchema = z
     range: z.object({ startFrame: z.number().int().nonnegative(), endFrame: z.number().int().positive() }).strict().optional().describe('Half-open frame range [startFrame, endFrame); default is the whole sequence'),
     frame: z.number().int().nonnegative().optional().describe('Frame index for format=png'),
     variantId: z.string().optional().describe('Export this linked format instead of the master frame size'),
+    // shorts (ADR-0018): optional without a default, so the options of every job made before stay as they were
+    sequenceId: z.string().optional().describe('Export this sequence of the project (for example a short) instead of the main edit; with variantId, the linked format is applied over it'),
     // segmented export and render cache (ADR-0024). Optional without a default, so the options of every job made before stay as they were.
     mode: z.enum(EXPORT_MODES).optional().describe('single-pass (the default) = one encoder run over every frame; incremental = the fast export: only the segments (2 seconds each, never under 3 frames) whose picture changed since they were stored are rendered, and the segments are joined by stream copy (MP4 only)'),
     selfCheck: z.enum(SELF_CHECK_MODES).optional().describe('incremental only: before rendering, frames of reused segments are rendered again and compared with what was stored; auto (the default) = 3 frames of every reused segment until 20 clean fast exports with this build, then one frame of a sample of them. It proves the frames it checks, nothing more'),
@@ -69,15 +71,26 @@ function captionSidecar(doc: ProjectDocument, manifest: Manifest): { format: 'sr
  * The document a job renders and a segment plan keys (ADR-0024, verifier: the plan route and the export must key the same document):
  * the master or its projected linked format, with caption tracks hidden for a clean picture (sidecar or none).
  */
-export function renderDocFor(doc: ProjectDocument, options: Pick<ExportOptions, 'variantId' | 'captions'>): ProjectDocument {
-  const resolved = variantDoc(doc, options.variantId);
+export function renderDocFor(doc: ProjectDocument, options: Pick<ExportOptions, 'variantId' | 'sequenceId' | 'captions'>): ProjectDocument {
+  const resolved = outputDoc(doc, { sequenceId: options.sequenceId, variantId: options.variantId });
   return options.captions === 'burned' ? resolved : hideCaptions(resolved);
 }
-/** The document to render: the master, or the master projected into one of its linked formats. */
+/**
+ * The document an output renders (ADR-0018, ADR-0005): core projectOutput — the sequence alone (default the main one), then its
+ * linked format. The ONLY way a route reaches a non-main sequence. An unknown sequence or variant is 404 not_found. The same
+ * object for a single-sequence project without a variant.
+ */
+export function outputDoc(doc: ProjectDocument, t: OutputTarget): ProjectDocument {
+  try {
+    return projectOutput(doc, { ...(t.sequenceId !== undefined ? { sequenceId: t.sequenceId } : {}), ...(t.variantId ? { variantId: t.variantId } : {}) });
+  } catch (e) {
+    if (e instanceof OutputTargetError) throw new ApiError(404, 'not_found', e.message, e.details, e.code === 'sequence_not_found' ? 'list_sequences lists the sequences of the project.' : 'get_summary lists the variants.');
+    throw e;
+  }
+}
+/** The document to render: the main edit, or the main edit projected into one of its linked formats (outputDoc without a sequence). */
 export function variantDoc(doc: ProjectDocument, variantId?: string): ProjectDocument {
-  if (!variantId) return doc;
-  if (!doc.variants?.[variantId]) throw new ApiError(404, 'not_found', `format variant ${variantId} not found`, { variantId, available: Object.keys(doc.variants ?? {}) }, 'get_summary lists the variants.');
-  return projectVariant(doc, variantId);
+  return outputDoc(doc, { variantId });
 }
 /**
  * How the rendered RGBA frames become the picture a video codec encodes: BT.709, limited range, 4:2:0 (two chroma samples
@@ -213,11 +226,14 @@ export class Exporter {
     const parsed = ExportOptionsSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
     const options = parsed.data;
-    doc = variantDoc(doc, options.variantId);
+    const target = { sequenceId: options.sequenceId, variantId: options.variantId };
+    const targetWarnings = outputWarnings(doc, target);
+    doc = outputDoc(doc, target);
     const { width, height, frameRate, sampleRate } = doc.settings;
     const total = T.frameCount(sequenceDuration(doc), frameRate);
     const blockers: Blocker[] = [];
     const warnings: Blocker[] = [];
+    if (targetWarnings.includes('variant_over_sequence_format')) warnings.push({ code: 'variant_over_sequence_format', message: `format variant ${options.variantId} replaces the own frame of sequence ${options.sequenceId}`, ids: [options.sequenceId!, options.variantId!] });
     const even = (n: number) => Math.max(2, Math.round((n * options.scale) / 2) * 2);
     const outWidth = even(width);
     const outHeight = even(height);
@@ -363,7 +379,7 @@ export class Exporter {
     // A variant export snapshots the PROJECTED document, so the job renders exactly what was planned even if the variant changes later.
     // Snapshot what will be rendered. For a clean picture, caption tracks are hidden in the snapshot; a requested subtitle file
     // is fixed now from the same document, so later edits cannot change it.
-    const resolved = retryOf ? p.doc : variantDoc(p.doc, manifest.options.variantId);
+    const resolved = retryOf ? p.doc : outputDoc(p.doc, { sequenceId: manifest.options.sequenceId, variantId: manifest.options.variantId });
     const snapshot = retryOf ? p.doc : renderDocFor(p.doc, manifest.options);
     const sidecar = retryOf ? retryOf.input.sidecar ?? null : captionSidecar(resolved, manifest);
     const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot, sidecar, manifest, warnings, retryOf: retryOf?.id ?? null });

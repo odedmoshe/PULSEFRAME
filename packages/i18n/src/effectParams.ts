@@ -115,6 +115,8 @@ const STAGE_WORDS: Record<string, { he: string; en: string }> = {
   'tracking backward': { he: 'עוקב אחורה', en: 'tracking backward' }, 'saving track': { he: 'שומר את המסלול', en: 'saving the track' },
   // measured moments (core momentsStage, ADR-0026); 'measuring moments 12/31' keeps its count
   'measuring moments': { he: 'מודד רגעים', en: 'measuring moments' },
+  // the shorts finder's measuring job (core shortsContract.ts SHORTS_STAGES, ADR-0018)
+  'measuring audio features': { he: 'מודד את הקול', en: 'measuring the sound' }, 'ranking moments': { he: 'מדרג רגעים', en: 'ranking moments' },
 };
 export function jobStageLabel(stage: string | null | undefined, lang: 'he' | 'en'): string {
   if (!stage) return '';

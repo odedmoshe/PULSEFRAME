@@ -33,7 +33,7 @@ const refusedWith = (fn: () => unknown): OpError => { try { fn(); } catch (e) { 
 
 describe('people: schema (optional field, no version bump)', () => {
   it('the schema version is unchanged; a new project and a document from before this build have no people key and stay valid', () => {
-    expect(SCHEMA_VERSION).toBe(2);
+    expect(SCHEMA_VERSION).toBe(3); // wave 4's one bump (ADR-0018, identity MIGRATIONS[2]); this track added no version of its own
     const doc = createProject({ id: 'p', name: 'P' });
     expect('people' in doc).toBe(false);
     expect('people' in ProjectSchema.parse(doc)).toBe(false); // no default: a project without people is stored as before
