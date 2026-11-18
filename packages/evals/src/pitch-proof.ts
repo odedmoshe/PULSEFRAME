@@ -109,7 +109,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
-    await page.addInitScript(() => { (window as any).__pfAudioTap = true; try { localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+    await page.addInitScript(() => { (window as any).__pfAudioTap = true; try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     await page.goto(`${s.ownerUrl}&project=${pid}`);
     await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame === '0', undefined, { timeout: 30000 });
     await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
@@ -186,7 +186,7 @@ async function main() {
     const rpage = await browser.newPage({ viewport: { width: 1500, height: 950 } });
     const rerrors: string[] = [];
     rpage.on('pageerror', (e) => rerrors.push(String(e)));
-    await rpage.addInitScript(() => { (window as any).__pfAudioTap = true; try { localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+    await rpage.addInitScript(() => { (window as any).__pfAudioTap = true; try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     await rpage.goto(`${s.ownerUrl}&project=${rp}`);
     await rpage.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame === '0', undefined, { timeout: 30000 });
     const seen: Record<number, number> = {};
