@@ -207,3 +207,14 @@ export function placementStep(s: PlacementState, ev: PlacementEvent): { state: P
   }
   return { state, place: null };
 }
+
+/** The sentences the cards' live region holds: one per card that is ready or failed, never one per percent. */
+export function announcementsOf(jobs: readonly ImportJobView[], lang: 'he' | 'en'): { id: string; text: string }[] {
+  const S = IMPORTS_STRINGS[lang];
+  const out: { id: string; text: string }[] = [];
+  for (const j of jobs) {
+    if (j.state === 'ready') out.push({ id: j.jobId, text: fill(S.announceReady, { name: j.name }) });
+    else if (j.state === 'failed') out.push({ id: j.jobId, text: fill(S.announceFailed, { name: j.name }) });
+  }
+  return out;
+}
