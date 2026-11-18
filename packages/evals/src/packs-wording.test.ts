@@ -12,8 +12,14 @@ import {
   OpError, PACK_FIELD_KEYS, PACK_REFUSALS, TEMPLATE_NOTICE_CODES, TemplateError, TITLE_FONT_ROWS, type PackRefusalKey, type ProjectDocument, type TemplateDef,
 } from '@pulseframe/core';
 import { planTemplate } from '../../core/src/templatePlan.ts';
-import { musicNotBuilt } from '../../../apps/server/src/music.ts';
-import { knownByConstruction } from '../../../apps/server/src/http.ts';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { addMusic, createMusicQueue, musicNotBuilt, musicPreview, resolveMusicRequest, validateMusic } from '../../../apps/server/src/music.ts';
+import { MusicCancelled, type RenderedMusic } from '../../../apps/server/src/music/render.ts';
+import { knownByConstruction, packSuggestions } from '../../../apps/server/src/http.ts';
+import { Governance, type Principal } from '../../../apps/server/src/governance.ts';
+import { Store } from '../../../apps/server/src/store.ts';
 import { dictionaries, PACK_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
 
 const caught = (fn: () => unknown): Error => { try { fn(); } catch (e) { if (e instanceof OpError || e instanceof TemplateError) return e; throw e; } throw new Error('not refused'); };
@@ -51,13 +57,50 @@ function provokedPlannerRefusals(): string[] {
   ];
 }
 
+/** The music routes' own refusals (apps/server/src/music.ts) and the suggestion route's day, each provoked through the server's functions. */
+async function provokedServerRefusals(): Promise<string[]> {
+  const rejected = async (p: Promise<unknown> | (() => unknown)): Promise<string> => { try { await (typeof p === 'function' ? p() : p); } catch (e) { return (e as Error).message; } throw new Error('not refused'); };
+  const L = musicLayout('music.pop', 4);
+  const silent = (): RenderedMusic => { const wav = Buffer.alloc(44 + 4 * L.totalFrames); return { wav, layout: L, peak: 0, rms: 0 } as RenderedMusic; };
+  // a renderer that waits until it is cancelled (the queue's time limit or the caller going away)
+  const waits = (_s: string, _b: number, _seed: number, o: { cancel: { cancelled: boolean } }) => new Promise<RenderedMusic>((_ok, fail) => { const t = setInterval(() => { if (o.cancel.cancelled) { clearInterval(t); fail(new MusicCancelled()); } }, 2); });
+  const busyQueue = createMusicQueue({ maxWaitingPreviews: 0, previewTimeoutMs: 50 }, waits);
+  const running: Promise<string> = busyQueue.render('music.pop', 4, 1, 'preview').then(() => 'not refused', (e: Error) => e.message);
+  const busy = await rejected(busyQueue.render('music.pop', 4, 2, 'preview'));
+  const timeout = await running;
+  const aborted = new AbortController();
+  aborted.abort();
+  const cancelled = await rejected(createMusicQueue({}, waits).render('music.pop', 4, 1, 'preview', aborted.signal));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-packs-wording-'));
+  const store = new Store(dir);
+  try {
+    const proposer: Principal = { actor: 'agent:p', kind: 'agent', scopes: ['observe'], mode: 'propose' } as Principal;
+    const pid = store.createProject({ name: 'w' }).doc.id;
+    return [
+      await rejected(() => resolveMusicRequest({ styleId: 'music.pop', bars: 4, fitSeconds: '8', seed: 1 })),
+      await rejected(() => resolveMusicRequest({ styleId: 'music.pop', bars: 4, seed: 2_000_000 })),
+      await rejected(() => resolveMusicRequest({ styleId: 'music.pop', fitSeconds: '0', seed: 1 })),
+      await rejected(musicPreview('music.pop', 33, 1)),
+      await rejected(musicPreview('music.pop', 2, 1)),
+      await rejected(() => resolveMusicRequest({ styleId: 'music.pop', bars: 600, seed: 1 })),
+      busy, timeout, cancelled,
+      await rejected(() => validateMusic({ ...silent(), wav: silent().wav.subarray(0, 100) })),
+      await rejected(addMusic(store, new Governance(store), proposer, pid, { styleId: 'music.pop', bars: 4, seed: 1 })),
+      await rejected(() => packSuggestions(store, new Governance(store), proposer, '2026-02-30')),
+    ];
+  } finally { store.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
 describe('Hebrew wording of the content-pack and built-in-music refusals (ADR-0022)', () => {
-  it('every refusal, provoked for real, is worded in Hebrew with its numbers kept; every pattern of the table is used; English shows the server\'s sentence', () => {
+  it('every refusal, provoked for real, is worded in Hebrew with its numbers kept; every pattern of the table is used; English shows the server\'s sentence', async () => {
     const ops = provokedOpRefusals();
+    const routes = await provokedServerRefusals();
+    expect(routes.slice(0, 3)).toEqual(['give exactly one of bars and fitSeconds', 'a seed is a whole number from 0 to 1000000', 'fitSeconds is a positive number of seconds written "n" or "n/d"']);
+    expect(routes.slice(6, 9)).toEqual(['too many pieces of built-in music are being made at the moment; this one was not started', 'making the built-in music took too long and was stopped', 'the built-in music was not made: the request was cancelled']);
     expect(Object.keys(ops).sort()).toEqual(Object.keys(PACK_REFUSALS).sort());
     for (const [key, message] of Object.entries(ops)) expect(message, key).toBe(PACK_REFUSALS[key as PackRefusalKey].message('ast_pw'));
     const planner = provokedPlannerRefusals();
-    const server = [musicNotBuilt().message, knownByConstruction().message];
+    const server = [musicNotBuilt().message, knownByConstruction().message, ...routes];
     const used = new Set<number>();
     for (const message of [...Object.values(ops), ...planner, ...server]) {
       const he = translateRefusal('he', message);
@@ -69,10 +112,15 @@ describe('Hebrew wording of the content-pack and built-in-music refusals (ADR-00
     expect(PACK_REFUSAL_PATTERNS.some((re) => re.test(ops.gridAssetMissing))).toBe(false);
     expect(PACK_REFUSAL_PATTERNS.filter((_, i) => !used.has(i)).map((re) => re.source)).toEqual([]);
     expect(translateRefusal('he', planner[2]!)).toMatch(/534.*160.*300/);
-  });
+    expect(translateRefusal('he', routes[1]!)).toContain('1000000');
+    expect(translateRefusal('he', routes[3]!)).toContain('32');
+    expect(translateRefusal('he', routes[4]!)).toMatch(/4.*2/);
+    expect(translateRefusal('he', routes[5]!)).toMatch(/600.*1125.*300.*160/);
+  }, 30_000);
   it('the shared strings of the track exist in both languages and differ: notices, pack fields, sections, moods, font categories and tags; the unheard label is the core one', () => {
     const keys = [
       'op.add_builtin_music', 'error.code.known_by_construction', 'error.code.music_not_built', 'error.code.synthesis_busy', 'error.code.music_invalid',
+      'error.code.music_timeout', 'error.code.music_cancelled', 'error.code.invalid_option',
       ...TEMPLATE_NOTICE_CODES.map((c) => `template.notice.${c}`), 'pack.fields', ...PACK_FIELD_KEYS.map((k) => `pack.field.${k}`), 'pack.field.date', 'pack.field.atLighting', 'pack.source',
       'music.unheard', 'music.approved', 'music.knownFromRecipe', 'music.source.none', 'music.source.library', 'music.source.builtin', 'music.fitNote',
       ...MUSIC_SECTION_KINDS.map((k) => `music.section.${k}`), ...[...new Set(MUSIC_STYLES.map((s) => s.mood))].map((m) => `music.mood.${m}`),
