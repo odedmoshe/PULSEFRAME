@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T02:36:44.824Z",
+  "ranAt": "2026-11-18T04:19:56.652Z",
   "result": "PASSED",
   "passed": 92,
   "total": 92,
@@ -66,7 +66,7 @@
       "meanChange": 77.563
     },
     "lutPreviewRecovery": {
-      "seconds": 1.3,
+      "seconds": 1.4,
       "meanDifferenceFromStill": 0
     },
     "lutPreviewVsStill": {
@@ -906,14 +906,59 @@
       }
     },
     {
-      "name": "Strobes together, in the editor shuttled at 8x: the preview keeps flashing but shows at most three flashes in any second of real time (sampled on every animation frame); the player's safety guard held flashes back, so without it there would have been more",
+      "name": "Strobes together, in the editor shuttled at 8x: the preview keeps flashing but shows at most three flashes in any second of real time (sampled on every animation frame); the frames it showed would have flashed five or more times in a second without the player's safety guard and more than three through a guard with a wrong gap of 0.25 s or 0.2 s, and the guard held flashes back",
       "ok": true,
       "detail": {
+        "verdict": "ok",
         "shuttle": "▶▶ ×8",
-        "samples": 167,
-        "flashesOnScreen": 7,
+        "seconds": 6.5,
+        "samples": 408,
+        "windowSeconds": 6.79,
+        "paints": 125,
+        "paintsPerSecond": 18.5,
+        "flashesOnScreen": 12,
+        "flashesPerSecond": 1.77,
         "mostInOneSecond": 3,
-        "framesHeldBack": 6
+        "closestOnScreen": 0.334,
+        "pictureBrightness": 127.4,
+        "unexplained": 0,
+        "heldOnScreen": 14,
+        "flashesWithoutGuard": 18,
+        "mostInOneSecondWithoutGuard": 5,
+        "guardNeeded": true,
+        "flashesWithRightGuard": 11,
+        "wrongGuards": [
+          {
+            "gap": 0.2,
+            "flashes": 18,
+            "mostInOneSecond": 4,
+            "unsafe": true
+          },
+          {
+            "gap": 0.25,
+            "flashes": 16,
+            "mostInOneSecond": 4,
+            "unsafe": true
+          },
+          {
+            "gap": 0.3,
+            "flashes": 13,
+            "mostInOneSecond": 3,
+            "unsafe": false
+          }
+        ],
+        "wrongGapsCaught": [
+          0.2,
+          0.25
+        ],
+        "margin": true,
+        "flashFloor": 6,
+        "framesHeldBack": 16,
+        "load1Before": 3.04,
+        "load1After": 3.28,
+        "cpus": 4,
+        "childCpuPerSecond": 3.01,
+        "childCpuSecondsPerPaint": 0.163
       }
     },
     {
@@ -1181,7 +1226,7 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_0f5b846f660 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_623acdf4780 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
       }
@@ -1190,7 +1235,7 @@
       "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
       "ok": true,
       "detail": {
-        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_0f5b846f660 could not be loaded: Missing LUT_3D_SIZE",
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_623acdf4780 could not be loaded: Missing LUT_3D_SIZE",
         "previewVsPlain": 0
       }
     },
@@ -1198,7 +1243,7 @@
       "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
       "ok": true,
       "detail": {
-        "seconds": 1.3,
+        "seconds": 1.4,
         "meanDifferenceFromStill": 0,
         "errors": []
       }
@@ -1215,10 +1260,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_0f5b846f660",
+        "value": "ast_623acdf4780",
         "options": [
           "",
-          "ast_0f5b846f660"
+          "ast_623acdf4780"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -1231,7 +1276,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_fb97d69d600",
+        "selected": "ast_424d2fcc5e0",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47
