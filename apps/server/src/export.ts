@@ -13,8 +13,8 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SELF_CHECK_MODES, type RenderCacheStatus } from '@pulseframe/core';
-import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, projectVariant, sequenceDuration, serializeSrt, serializeVtt, type ProjectDocument } from '@pulseframe/core';
+import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
@@ -27,6 +27,9 @@ import { FrameFlashCheck, type PhotosensitivityReport } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import type { ComputeLane } from './aiContracts.ts';
 import { fieldIssues } from './preflight.fields.ts';
+import type { FrameKeyFn, runSegmentedExport, SegmentEnv } from './exportSegments.ts';
+import type { SegmentStore } from './segmentStore.ts';
+import { RENDER_CACHE_PURGED } from './segmentStore.ts';
 
 const exec = promisify(execFile);
 
@@ -39,6 +42,8 @@ export const ExportOptionsSchema = z
     range: z.object({ startFrame: z.number().int().nonnegative(), endFrame: z.number().int().positive() }).strict().optional().describe('Half-open frame range [startFrame, endFrame); default is the whole sequence'),
     frame: z.number().int().nonnegative().optional().describe('Frame index for format=png'),
     variantId: z.string().optional().describe('Export this linked format instead of the master frame size'),
+    // shorts (ADR-0018): optional without a default, so the options of every job made before stay as they were
+    sequenceId: z.string().optional().describe('Export this sequence of the project (for example a short) instead of the main edit; with variantId, the linked format is applied over it'),
     // segmented export and render cache (ADR-0024). Optional without a default, so the options of every job made before stay as they were.
     mode: z.enum(EXPORT_MODES).optional().describe('single-pass (the default) = one encoder run over every frame; incremental = the fast export: only the segments (2 seconds each, never under 3 frames) whose picture changed since they were stored are rendered, and the segments are joined by stream copy (MP4 only)'),
     selfCheck: z.enum(SELF_CHECK_MODES).optional().describe('incremental only: before rendering, frames of reused segments are rendered again and compared with what was stored; auto (the default) = 3 frames of every reused segment until 20 clean fast exports with this build, then one frame of a sample of them. It proves the frames it checks, nothing more'),
@@ -66,15 +71,26 @@ function captionSidecar(doc: ProjectDocument, manifest: Manifest): { format: 'sr
  * The document a job renders and a segment plan keys (ADR-0024, verifier: the plan route and the export must key the same document):
  * the master or its projected linked format, with caption tracks hidden for a clean picture (sidecar or none).
  */
-export function renderDocFor(doc: ProjectDocument, options: Pick<ExportOptions, 'variantId' | 'captions'>): ProjectDocument {
-  const resolved = variantDoc(doc, options.variantId);
+export function renderDocFor(doc: ProjectDocument, options: Pick<ExportOptions, 'variantId' | 'sequenceId' | 'captions'>): ProjectDocument {
+  const resolved = outputDoc(doc, { sequenceId: options.sequenceId, variantId: options.variantId });
   return options.captions === 'burned' ? resolved : hideCaptions(resolved);
 }
-/** The document to render: the master, or the master projected into one of its linked formats. */
+/**
+ * The document an output renders (ADR-0018, ADR-0005): core projectOutput — the sequence alone (default the main one), then its
+ * linked format. The ONLY way a route reaches a non-main sequence. An unknown sequence or variant is 404 not_found. The same
+ * object for a single-sequence project without a variant.
+ */
+export function outputDoc(doc: ProjectDocument, t: OutputTarget): ProjectDocument {
+  try {
+    return projectOutput(doc, { ...(t.sequenceId !== undefined ? { sequenceId: t.sequenceId } : {}), ...(t.variantId ? { variantId: t.variantId } : {}) });
+  } catch (e) {
+    if (e instanceof OutputTargetError) throw new ApiError(404, 'not_found', e.message, e.details, e.code === 'sequence_not_found' ? 'list_sequences lists the sequences of the project.' : 'get_summary lists the variants.');
+    throw e;
+  }
+}
+/** The document to render: the main edit, or the main edit projected into one of its linked formats (outputDoc without a sequence). */
 export function variantDoc(doc: ProjectDocument, variantId?: string): ProjectDocument {
-  if (!variantId) return doc;
-  if (!own(doc.variants, variantId)) throw new ApiError(404, 'not_found', `format variant ${variantId} not found`, { variantId, available: Object.keys(doc.variants ?? {}) }, 'get_summary lists the variants.');
-  return projectVariant(doc, variantId);
+  return outputDoc(doc, { variantId });
 }
 /**
  * How the rendered RGBA frames become the picture a video codec encodes: BT.709, limited range, 4:2:0 (two chroma samples
@@ -129,6 +145,21 @@ export interface IncrementalRoute {
   /** The last result of the one-time join self-test (exportSegments.incrementalAvailable); null while it has not finished. */
   join(): { ok: true } | { ok: false; reason: string } | null;
 }
+/**
+ * What Exporter.run needs to take the segmented route (ADR-0024), set by the server with the render cache (index.ts). Injected,
+ * not imported, so export.ts and exportSegments.ts (which reads export.ts's encoder constants) do not import each other.
+ */
+export interface SegmentedRoute {
+  store: SegmentStore;
+  /** The machine, build and encoder part of the keys of this job (renderCacheEnv.ts segmentEnvFor). */
+  env(doc: ProjectDocument, manifest: Manifest): Promise<SegmentEnv>;
+  /** The engine frame key of one programme frame of `doc` with this env. */
+  keyOf(doc: ProjectDocument, manifest: Manifest, env: SegmentEnv): FrameKeyFn;
+  run: typeof runSegmentedExport;
+}
+/** 'auto' resolved (ADR-0024): three frames of every reused segment until the build has made enough clean fast exports, then a sample. */
+export const resolveSelfCheck = (mode: ExportOptions['selfCheck'], cleanExports: number): 'sample' | 'every-segment' =>
+  mode === 'sample' || mode === 'every-segment' ? mode : cleanExports < AUTO_SELF_CHECK_CLEAN_EXPORTS ? 'every-segment' : 'sample';
 const unavailableBlocker = (reason: string): Blocker => ({ code: RENDER_CACHE_BLOCKERS.unavailable.code, message: RENDER_CACHE_BLOCKERS.unavailable.message(reason), ids: [], hint: RENDER_CACHE_BLOCKERS.unavailable.hint });
 /** Blockers of a fast export (ADR-0024 plan §1), in the order they are checked, each with its own hint. Empty for a single-pass export. */
 export function incrementalBlockers(options: Pick<ExportOptions, 'mode' | 'format'>, route: IncrementalRoute | null): Blocker[] {
@@ -178,11 +209,13 @@ export class Exporter {
   readonly sessions = new Map<string, RenderSession>();
   private queue: Promise<void> = Promise.resolve();
   private cancelRequested = new Set<string>();
-  private running: { jobId: string; ff?: ChildProcessWithoutNullStreams; abort?: () => void } | null = null;
+  private running: { jobId: string; ff?: { kill(signal?: NodeJS.Signals): boolean }; abort?: () => void } | null = null;
   /** The compute lane (ADR-0017), set by the server: while a server export runs, frame jobs dispatch no new chunk. */
   lane: Pick<ComputeLane, 'setExportActive'> | null = null;
   /** The incremental route (ADR-0024), set by the server when the render cache is wired; null = the fast export is refused as not available. */
   incremental: IncrementalRoute | null = null;
+  /** The segmented route itself (ADR-0024), set with `incremental`; null = a fast export job fails honestly as not available. */
+  segmented: SegmentedRoute | null = null;
   constructor(private store: Store, private host: RenderHost, private renderPageUrl: () => string, private webDist: string) {}
 
   /**
@@ -193,11 +226,14 @@ export class Exporter {
     const parsed = ExportOptionsSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
     const options = parsed.data;
-    doc = variantDoc(doc, options.variantId);
+    const target = { sequenceId: options.sequenceId, variantId: options.variantId };
+    const targetWarnings = outputWarnings(doc, target);
+    doc = outputDoc(doc, target);
     const { width, height, frameRate, sampleRate } = doc.settings;
     const total = T.frameCount(sequenceDuration(doc), frameRate);
     const blockers: Blocker[] = [];
     const warnings: Blocker[] = [];
+    if (targetWarnings.includes('variant_over_sequence_format')) warnings.push({ code: 'variant_over_sequence_format', message: `format variant ${options.variantId} replaces the own frame of sequence ${options.sequenceId}`, ids: [options.sequenceId!, options.variantId!] });
     const even = (n: number) => Math.max(2, Math.round((n * options.scale) / 2) * 2);
     const outWidth = even(width);
     const outHeight = even(height);
@@ -310,6 +346,12 @@ export class Exporter {
     if (reachesEnd) for (const t of ap.cutTails) warnings.push({ code: 'audio_tail_cut', message: `the echo or reverb of clip ${t.clipId} would ring on ${t.seconds} s past the end of the video; it is cut there with a short fade (the video is not made longer)`, ids: [t.clipId] });
     return [...used.values()].sort((x, y) => (x.type < y.type ? -1 : x.type > y.type ? 1 : x.version - y.version));
   }
+  /** The hash of a bundled family's font files for the frame key (ADR-0024); null when the family is not bundled or the bundle is not built. */
+  fontHash(family: string): string | null {
+    if (!ENGINE.fontFamilies.includes(family)) return null;
+    const files = this.fontFiles(family);
+    return files.length ? createHash('sha256').update(JSON.stringify(files)).digest('hex') : null;
+  }
   private fontCache = new Map<string, { name: string; sha256: string }[]>();
   private fontFiles(family: string) {
     let f = this.fontCache.get(family);
@@ -337,7 +379,7 @@ export class Exporter {
     // A variant export snapshots the PROJECTED document, so the job renders exactly what was planned even if the variant changes later.
     // Snapshot what will be rendered. For a clean picture, caption tracks are hidden in the snapshot; a requested subtitle file
     // is fixed now from the same document, so later edits cannot change it.
-    const resolved = retryOf ? p.doc : variantDoc(p.doc, manifest.options.variantId);
+    const resolved = retryOf ? p.doc : outputDoc(p.doc, { sequenceId: manifest.options.sequenceId, variantId: manifest.options.variantId });
     const snapshot = retryOf ? p.doc : renderDocFor(p.doc, manifest.options);
     const sidecar = retryOf ? retryOf.input.sidecar ?? null : captionSidecar(resolved, manifest);
     const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot, sidecar, manifest, warnings, retryOf: retryOf?.id ?? null });
@@ -348,6 +390,9 @@ export class Exporter {
     const j = this.store.getJob(jobId);
     if (j.type !== 'export') throw new ApiError(409, 'retry_not_supported', `retrying ${j.type} jobs is not supported`);
     if (!['failed', 'canceled'].includes(j.status)) throw new ApiError(409, 'job_not_retryable', `job is ${j.status}`, { status: j.status });
+    // The project's render cache was purged for privacy while this export ran: its snapshot shows what the owner has since hidden,
+    // so no route may render it again (ADR-0024). A new export renders the project with its current privacy regions.
+    if (j.error?.code === RENDER_CACHE_PURGED.code) throw new ApiError(409, RENDER_CACHE_PURGED.code, 'this export was stopped because the project\'s privacy regions changed while it ran; retrying it would render the old picture again', { jobId, projectId: j.projectId, retryable: false }, RENDER_CACHE_PURGED.hint);
     return this.start(j.projectId, actor, undefined, j); // same immutable snapshot and options, new job id
   }
   /** Queued: removed. Running: encoder and render page are stopped and partial output deleted. */
@@ -429,8 +474,14 @@ export class Exporter {
     if (s.jobId) this.store.updateJob(s.jobId, { stage: `rendering ${s.nextFrame}/${s.totalFrames}` });
   }
 
-  /** Sample-exact audio mix of the snapshot as a WAV file (separate stream from video), following the shared audio plan. */
+  /**
+   * Sample-exact audio mix of the snapshot as a WAV file (separate stream from video), following the shared audio plan.
+   * The mix writes a 32-bit float stereo file and then the 16-bit WAV, both in the data directory, before the float one is
+   * removed: under a storage ceiling that room is asked for first, so an export stops with a typed 507 and publishes nothing
+   * instead of passing the ceiling (lead run 2026-11-18, proof:incremental I11d: 31 MB over the start for a 60 s mix).
+   */
   private renderAudio(doc: ProjectDocument, firstSample: number, totalSamples: number, outFile: string, isCanceled: () => boolean) {
+    assertStorageRoom(this.store, Math.max(1, totalSamples) * 2 * (4 + 2), 'mix the sound of this export');
     return renderMix(audioPlan(doc), (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled, (assetId) => timeOriginSeconds(doc.assets[assetId]), (assetId) => doc.assets[assetId]?.audio?.channels === 1);
   }
 
@@ -468,11 +519,41 @@ export class Exporter {
       let audioMix: MixResult | null = null;
       let renderStageMs: unknown = null;
       let validation: Record<string, unknown>;
+      let segmentsReport: SegmentedExportReport | null = null;
 
       // The fast export runs only through the segmented route (ADR-0024), which is wired after its workers; until then a job asking
       // for it (planning refuses it, so only a hand-made job could) fails honestly instead of being exported another way.
-      if (options.mode === 'incremental') { const b = unavailableBlocker(INCREMENTAL_NOT_BUILT_REASON); throw new ApiError(422, 'render_blocked', b.message, { blockers: [b] }, b.hint); }
-      if (options.format === 'png') {
+      if (options.mode === 'incremental') {
+        // The segmented route (ADR-0024): the same snapshot, the same render page and compositor, only the changed segments rendered.
+        const seg = this.segmented;
+        const b = !seg ? unavailableBlocker(INCREMENTAL_NOT_BUILT_REASON) : incrementalBlockers(options, this.incremental)[0];
+        if (b) throw new ApiError(422, 'render_blocked', b.message, { blockers: [b] }, b.hint ?? GENERIC_BLOCKER_HINT);
+        const env = await seg!.env(doc, manifest);
+        if (canceled()) throw new Error('canceled');
+        const result = await seg!.run({
+          doc, manifest, projectId: job.projectId, jobId, attempt, env, store: seg!.store, keyOf: seg!.keyOf(doc, manifest, env),
+          selfCheck: resolveSelfCheck(options.selfCheck, seg!.store.cleanSelfChecks(env.engine)), workDir: work, outFile: partial,
+          render: async (runs, sink, onAbort) => {
+            const opened = this.open(doc, job.input.revision, jobId, { width: output.width, height: output.height, firstFrame: output.firstFrame, frames: output.frames }, runs);
+            token = opened.token;
+            opened.session.segments = sink;
+            try {
+              const stats = await this.host.renderAll(opened.url, (abort) => { if (this.running) this.running.abort = abort; onAbort(abort); }, { gpu: usesGpuEffects(doc) });
+              return { stageMs: stats.stageMs };
+            } finally { this.sessions.delete(opened.token); token = undefined; }
+          },
+          mixAudio: (wavFile) => this.renderAudio(doc, firstSample, totalSamples, wavFile, canceled),
+          canceled,
+          stage: (text) => this.store.updateJob(jobId, { stage: text }),
+          onProcess: (p) => { if (this.running) this.running.ff = p ?? undefined; },
+        });
+        audioMix = result.audio;
+        audioClips = result.audio.clips;
+        flashReport = result.photosensitivity;
+        renderStageMs = result.renderStageMs;
+        validation = result.validation;
+        segmentsReport = result.report;
+      } else if (options.format === 'png') {
         this.store.updateJob(jobId, { stage: 'rendering still' });
         fs.writeFileSync(partial, await this.renderStill(doc, job.input.revision, output.firstFrame, options.scale));
         const p = await ffprobe(partial);
@@ -556,13 +637,14 @@ export class Exporter {
       this.store.updateJob(jobId, {
         status: 'succeeded', stage: null,
         output: {
-          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, bytes, revision: job.input.revision, route: 'server-software-canvas2d', options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
+          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, bytes, revision: job.input.revision, route: segmentsReport ? SEGMENTED_ROUTE : 'server-software-canvas2d', ...(segmentsReport ? { segments: segmentsReport } : {}), options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
           estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });
     } catch (e: any) {
       if (canceled()) this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'export was canceled; partial output was discarded', retryable: true } });
-      else this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'export_failed', message: String(e?.message ?? e), retryable: true } });
+      // A typed failure says itself whether a retry can help (the fast export's job errors carry details.retryable, ADR-0024).
+      else this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? { ...e.toJSON().error, ...(typeof e.details?.retryable === 'boolean' ? { retryable: e.details.retryable } : {}) } : { code: 'export_failed', message: String(e?.message ?? e), retryable: true } });
     } finally {
       this.lane?.setExportActive(false);
       this.running = null;

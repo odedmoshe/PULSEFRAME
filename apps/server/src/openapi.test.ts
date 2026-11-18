@@ -15,6 +15,13 @@ import { Store } from './store.ts';
 import { RenderHost } from '@pulseframe/renderer';
 import { startServer, type RunningServer } from './index.ts';
 import { buildOpenApi } from './openapi.ts';
+import { createImportQueue } from './importQueue.ts';
+import { createDropDoor } from './drop.ts';
+import { loadDropPage } from './drop-page/index.ts';
+import { dropLimitsFrom } from './importContracts.ts';
+import { FifoComputeLane } from './lane.ts';
+import { SegmentStore } from './segmentStore.ts';
+import { createRenderCacheService } from './renderCacheRoutes.ts';
 
 const doc = buildOpenApi() as any;
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
@@ -93,7 +100,7 @@ describe('openapi against the real server', () => {
   it('every documented route exists (not the catch-all 404)', async () => {
     for (const { path: p, method } of entries) {
       const url = p.replace(/\{[^}]+\}/g, 'dummy');
-      const init: RequestInit = method === 'post' ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' } : { method: 'GET' };
+      const init: RequestInit = method === 'post' ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' } : method === 'delete' ? { method: 'DELETE' } : { method: 'GET' };
       const res = await f(url, init);
       const text = await res.text().catch(() => '');
       const isCatchAll = res.status === 404 && (() => { try { const e = JSON.parse(text).error; return e.code === 'not_found' && e.message === 'no such API route'; } catch { return false; } })();
@@ -134,8 +141,14 @@ describe('openapi vs the registered route table', () => {
     const capabilities = new Capabilities(store, cfg);
     const derivatives = new Derivatives(store);
     const presence = new Presence();
+    let segments: SegmentStore | null = null;
     try {
-      const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, createMcp(store, auth, exporter, capabilities, presence));
+      // the services index.ts wires (ADR-0023, ADR-0024): their routes are registered only when they are given
+      const imports = createImportQueue({ store, lane: new FifoComputeLane(), derivatives, maxUploadBytes: cfg.maxUploadBytes, reserveBytes: cfg.importReserveBytes, homeZone: cfg.homeZone, freeBytes: () => null });
+      const door = createDropDoor({ queue: imports, projectExists: () => true, page: loadDropPage, port: 0, limits: dropLimitsFrom(cfg), admitAddresses: [], interfaces: () => ({}), preferredAddress: () => null });
+      segments = new SegmentStore({ dir: path.join(dir, 'render-cache'), capBytes: 1 << 20, autoClear: false, minFreeBytes: 0, quota: () => ({ quotaBytes: 0, otherBytes: 0 }) });
+      const renderCache = createRenderCacheService({ store, exporter, segments, envSource: { host, webDist: cfg.webDist, threads: 1, fontHash: () => null } });
+      const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, createMcp(store, auth, exporter, capabilities, presence), undefined, undefined, undefined, { imports, door, renderCache });
       const toDoc = (p: string) => p.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
       const registered = new Set<string>();
       for (const r of app.routes) {
@@ -156,6 +169,7 @@ describe('openapi vs the registered route table', () => {
       await capabilities.stop();
       await derivatives.stop();
       await host.close();
+      segments?.close();
       store.close();
       fs.rmSync(dir, { recursive: true, force: true });
     }

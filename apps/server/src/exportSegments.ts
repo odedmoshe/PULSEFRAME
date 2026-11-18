@@ -142,9 +142,28 @@ export const SEGMENT_CRF = { draft: 28, standard: 21, high: 16 } as const;
 export const segmentPreset = (quality: 'draft' | 'standard' | 'high') => (quality === 'draft' ? 'veryfast' : 'medium');
 
 /**
- * rawvideo rgba on stdin -> one closed-GOP H.264 segment in MP4, no sound: today's EXPORT_PIXEL_FILTER, libx264 preset/CRF and
- * EXPORT_COLOR_TAGS of export.ts, plus -threads N -g S -keyint_min S -sc_threshold 0 -x264-params open-gop=0
- * -video_track_timescale TS -bitexact -an -f mp4. `segFrames` here is the segment's own length (the GOP covers it whole).
+ * Frames appended after a segment's own frames, behind a forced IDR, and cut off again after the encode (segmentCutArgs): copies
+ * of the segment's last frame, so the segment's bytes still depend only on its own frames. Without them the segment's last frames
+ * are the end of the stream for x264: MB-tree has nothing after them and their quantiser climbs (measured on proof fixture A at
+ * CRF 21: +0.3 to +3.2 QP over the last five frames, the frame before a join 37.29 dB against the source where the single pass
+ * has 39.26). With one frame after a keyframe there the climb is gone; more frames changed nothing measurable.
+ */
+export const SEGMENT_TAIL_PAD = 1;
+/**
+ * x264's I/P quantiser ratio (its default --ipratio, which the single pass uses). x264 applies it to an I-frame only after a P-frame
+ * has been coded, so the IDR that starts every segment (a fresh encoder) was quantised like a P-frame (fixture A: QP 25.5 where a
+ * mid-stream keyframe gets 22.6). A zone on frame 0 with this bitrate factor gives it the offset a mid-stream keyframe gets.
+ */
+export const X264_IPRATIO = 1.4;
+
+/**
+ * rawvideo rgba on stdin -> one H.264 segment in MP4, no sound: today's EXPORT_PIXEL_FILTER, libx264 preset/CRF and
+ * EXPORT_COLOR_TAGS of export.ts with the single pass's GOP and scene-cut settings (x264 defaults: keyint 250, min-keyint auto,
+ * scenecut 40), plus -threads N, a forced keyframe at frame `segFrames` (the first tail-pad frame, so every own frame precedes it
+ * in decode order and the cut is clean), closed GOPs, the start zone, -video_track_timescale TS -bitexact -an -f mp4.
+ * The encoder takes segFrames + SEGMENT_TAIL_PAD frames and writes `outFile` (the padded file); segmentCutArgs keeps the first
+ * segFrames. Scene-cut keyframes stay on: with them off a frame before a cut was coded as a B-frame where the single pass codes a
+ * P-frame before its keyframe (fixture A frame 1649: 37.87 dB against the single pass, the proof's worst frame).
  */
 export function segmentEncodeArgs(o: { width: number; height: number; frameRate: { num: number; den: number }; quality: 'draft' | 'standard' | 'high'; segFrames: number; threads: number; outFile: string }): string[] {
   const { timescale } = trackTimescale(o.frameRate);
@@ -153,10 +172,21 @@ export function segmentEncodeArgs(o: { width: number; height: number; frameRate:
     '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${o.width}x${o.height}`, '-framerate', `${o.frameRate.num}/${o.frameRate.den}`, '-i', 'pipe:0',
     '-vf', EXPORT_PIXEL_FILTER,
     '-c:v', 'libx264', '-preset', segmentPreset(o.quality), '-crf', String(SEGMENT_CRF[o.quality]), '-profile:v', 'high',
-    '-threads', String(o.threads), '-g', String(o.segFrames), '-keyint_min', String(o.segFrames), '-sc_threshold', '0', '-x264-params', 'open-gop=0',
+    '-threads', String(o.threads), '-force_key_frames', `expr:eq(n,${o.segFrames})`, '-x264-params', `open-gop=0:zones=0,0,b=${X264_IPRATIO}`,
     ...EXPORT_COLOR_TAGS,
     '-video_track_timescale', String(timescale), '-bitexact', '-an', '-f', 'mp4', o.outFile,
   ];
+}
+/** The padded segment -> its first `frames` packets by stream copy (decode order: every own frame precedes the pad's keyframe). */
+export function segmentCutArgs(o: { padded: string; frames: number; frameRate: { num: number; den: number }; outFile: string }): string[] {
+  const { timescale } = trackTimescale(o.frameRate);
+  return ['-hide_banner', '-v', 'error', '-y', '-i', o.padded, '-map', '0:v:0', '-c', 'copy', '-frames:v', String(o.frames), '-video_track_timescale', String(timescale), '-bitexact', '-f', 'mp4', o.outFile];
+}
+/** The padded file an encoder writes before the cut. */
+export const paddedPath = (outFile: string) => outFile.replace(/(\.mp4)?$/, '.pad.mp4');
+/** Cuts the padded encode to the segment's own frames and removes the padded file. */
+async function cutSegment(padded: string, frames: number, frameRate: { num: number; den: number }, outFile: string, onProcess?: (p: { kill(signal?: NodeJS.Signals): boolean } | null) => void): Promise<void> {
+  try { await runFfmpeg(segmentCutArgs({ padded, frames, frameRate, outFile }), onProcess); } finally { fs.rmSync(padded, { force: true }); }
 }
 
 /** ffconcat list (absolute paths) + WAV -> final MP4 by stream copy with -bsf:v setts=dts=STARTDTS+N*D:pts=STARTDTS+N*D+PTS-DTS:duration=D, -c:a aac -b:a 192k -movflags +faststart. */
@@ -244,11 +274,14 @@ export function silentWav(file: string, sampleRate: number, samples: number, cha
 }
 /** Encodes these RGBA frames as one segment (the self-test and tests use it; the export streams through the sink instead). */
 export async function encodeSegmentFile(frames: readonly Uint8Array[], o: Omit<Parameters<typeof segmentEncodeArgs>[0], 'segFrames'>): Promise<void> {
-  const enc = startEncoder(segmentEncodeArgs({ ...o, segFrames: frames.length }));
+  const padded = paddedPath(o.outFile);
+  const enc = startEncoder(segmentEncodeArgs({ ...o, segFrames: frames.length, outFile: padded }));
   for (const f of frames) await writeFrame(enc.proc, f);
+  for (let i = 0; i < SEGMENT_TAIL_PAD; i++) await writeFrame(enc.proc, frames[frames.length - 1]!);
   enc.proc.stdin.end();
   const code = await enc.exited;
-  if (code !== 0) throw new Error(`ffmpeg exited ${code}: ${enc.stderr().slice(-800)}`);
+  if (code !== 0) { fs.rmSync(padded, { force: true }); throw new Error(`ffmpeg exited ${code}: ${enc.stderr().slice(-800)}`); }
+  await cutSegment(padded, frames.length, o.frameRate, o.outFile);
 }
 
 let joinCheck: Promise<{ ok: true } | { ok: false; reason: string }> | null = null;
@@ -447,7 +480,7 @@ class SegmentedSink implements SegmentSink {
       // At most two encoders: the one flushing (if any) and this one.
       const { output, options } = this.d.manifest;
       const outFile = path.join(this.d.workDir, `seg-${String(r.index).padStart(6, '0')}.mp4`);
-      const enc = startEncoder(segmentEncodeArgs({ width: output.width, height: output.height, frameRate: output.frameRate, quality: options.quality, segFrames: r.seg.frames, threads: this.d.env.threads, outFile }));
+      const enc = startEncoder(segmentEncodeArgs({ width: output.width, height: output.height, frameRate: output.frameRate, quality: options.quality, segFrames: r.seg.frames, threads: this.d.env.threads, outFile: paddedPath(outFile) }));
       this.encodersStarted++;
       this.live.add(enc.proc);
       this.d.onProcess(enc.proc);
@@ -462,6 +495,10 @@ class SegmentedSink implements SegmentSink {
     }
     cur.received++;
     if (cur.received === r.seg.frames) {
+      try { for (let i = 0; i < SEGMENT_TAIL_PAD; i++) await writeFrame(cur.enc.proc, frame); } catch (e) {
+        if (this.typed) throw this.typed;
+        throw new Error(`segment encoder for frames ${r.seg.first}–${r.seg.first + r.seg.frames - 1} stopped: ${(e as Error).message} ${cur.enc.stderr().slice(-400)}`);
+      }
       cur.enc.proc.stdin.end();
       const renderMs = performance.now() - cur.startedMs;
       this.lastMark = performance.now();
@@ -483,7 +520,9 @@ class SegmentedSink implements SegmentSink {
   private async finish(cur: Encoding, renderMs: number) {
     const code = await cur.enc.exited;
     this.live.delete(cur.enc.proc);
-    if (code !== 0) throw new Error(`ffmpeg exited ${code} for the segment at frame ${cur.seg.first}: ${cur.enc.stderr().slice(-800)}`);
+    if (code !== 0) { fs.rmSync(paddedPath(cur.outFile), { force: true }); throw new Error(`ffmpeg exited ${code} for the segment at frame ${cur.seg.first}: ${cur.enc.stderr().slice(-800)}`); }
+    let cut: ChildProcessWithoutNullStreams | null = null; // killed with the encoders when the session fails
+    await cutSegment(paddedPath(cur.outFile), cur.seg.frames, this.d.manifest.output.frameRate, cur.outFile, (p) => { if (p) this.live.add((cut = p as ChildProcessWithoutNullStreams)); else if (cut) this.live.delete(cut); });
     const offset = await firstPacketOffset(cur.outFile);
     if (this.ptsOffset === null) this.ptsOffset = offset;
     else if (offset !== this.ptsOffset) {

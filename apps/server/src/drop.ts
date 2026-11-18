@@ -21,7 +21,11 @@
  * limits.drainBytes before the socket is destroyed, so a phone browser still sending a large body reads the refusal instead of
  * a reset.
  * Connections: one device holds at most half of limits.maxConnections; after the claim the other devices share the other half
- * and lose every connection they held at the moment of the claim (admit(), cutOthers()).
+ * and lose every connection they held at the moment of the claim (admit(), cutOthers()). Before the claim nothing can keep the
+ * phone out: a connection from a peer that has not claimed the code lives limits.unclaimedConnectionMs at most (a socket held
+ * by pipelined requests whose answers are never read has no other clock), a connection may leave at most
+ * limits.maxUnreadResponseBytes of answers unread (or one answer larger than that), and when every slot is taken a new peer's
+ * connection takes the oldest one of the peer holding the most.
  */
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { EventEmitter } from 'node:events';
@@ -82,7 +86,10 @@ interface Code {
   uploads: Set<Upload>; buckets: Map<string, Buckets>; lifeTimer: unknown; page: DropPage | null;
   /** The open sockets by peer IP (connection admission, see admit()). */
   sockets: Map<string, Set<Socket>>;
+  /** Per open socket: its order of arrival, its lifetime timer (peers that have not claimed), its unread answer bytes. */
+  conns: Map<Socket, Conn>;
 }
+interface Conn { peer: string; seq: number; lifeTimer: unknown; unread: number }
 
 export function createDropDoor(deps: DropDoorOptions): DropDoor {
   const events = new EventEmitter();
@@ -160,6 +167,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
     c.closedAt = now();
     c.token = null; c.pin = null; c.sessionDigest = null;
     timers.clearTimer(c.lifeTimer);
+    for (const conn of c.conns.values()) timers.clearTimer(conn.lifeTimer);
     for (const u of c.uploads) u.controller.abort(new ApiError(410, 'code_closed', `the drop code closed (${reason})`));
     c.server.close();
     if (live === c) live = null;
@@ -270,24 +278,82 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
    * however long it keeps its own connections open.
    */
   const perPeer = Math.max(1, Math.floor(limits.maxConnections / 2));
+  let connSeq = 0;
+  /**
+   * The door is full and `peer` (holding `holds` connections) asks for one more: the oldest connection of the peer holding the
+   * most goes, when that peer holds at least as many as `peer` would (never the claimed phone's). False when nothing may go.
+   */
+  const evictFor = (c: Code, peer: string, holds: number): boolean => {
+    let victim: Socket | null = null, victimCount = 0, victimSeq = Infinity;
+    for (const [ip, set] of c.sockets) {
+      if (ip === peer || (c.state === 'connected' && ip === c.claimIp)) continue;
+      for (const s of set) {
+        const seq = c.conns.get(s)?.seq ?? 0;
+        if (set.size > victimCount || (set.size === victimCount && seq < victimSeq)) { victim = s; victimCount = set.size; victimSeq = seq; }
+      }
+    }
+    if (!victim || victimCount < holds + 1) return false;
+    forget(c, victim);
+    victim.destroy();
+    return true;
+  };
+  /** Takes a socket out of the door's books at once (its 'close' may come later). */
+  const forget = (c: Code, socket: Socket) => {
+    const conn = c.conns.get(socket);
+    if (!conn) return;
+    timers.clearTimer(conn.lifeTimer);
+    c.conns.delete(socket);
+    const set = c.sockets.get(conn.peer);
+    if (set) { set.delete(socket); if (set.size === 0) c.sockets.delete(conn.peer); }
+  };
   const admit = (c: Code, socket: Socket) => {
     const peer = plainIPv4(socket.remoteAddress);
     if (!sameSubnet(peer, c.address, c.netmask)) { socket.destroy(); return; }
-    let set = c.sockets.get(peer);
-    if ((set?.size ?? 0) >= perPeer) { socket.destroy(); return; }
+    const held = c.sockets.get(peer)?.size ?? 0;
+    if (held >= perPeer) { socket.destroy(); return; }
     if (c.state === 'connected' && peer !== c.claimIp) {
       let others = 0;
       for (const [ip, s] of c.sockets) if (ip !== c.claimIp) others += s.size;
       if (others >= limits.maxConnections - perPeer) { socket.destroy(); return; }
     }
+    // server.maxConnections leaves one slot over so a newcomer reaches this point when the door is full
+    if (c.conns.size >= limits.maxConnections && !evictFor(c, peer, held)) { socket.destroy(); return; }
+    let set = c.sockets.get(peer);
     if (!set) c.sockets.set(peer, set = new Set());
-    const mine = set;
-    mine.add(socket);
-    socket.once('close', () => { mine.delete(socket); if (mine.size === 0 && c.sockets.get(peer) === mine) c.sockets.delete(peer); });
+    set.add(socket);
+    const conn: Conn = { peer, seq: ++connSeq, lifeTimer: null, unread: 0 };
+    if (!(c.state === 'connected' && peer === c.claimIp)) conn.lifeTimer = timers.setTimer(() => { forget(c, socket); socket.destroy(); }, limits.unclaimedConnectionMs);
+    c.conns.set(socket, conn);
+    socket.once('close', () => forget(c, socket));
   };
   /** At the claim: every connection of every other device goes, so the phone's half of the slots is free whatever they held. */
   const cutOthers = (c: Code, phone: string) => {
-    for (const [ip, set] of c.sockets) if (ip !== phone) for (const s of set) s.destroy();
+    for (const [ip, set] of [...c.sockets]) {
+      if (ip === phone) { for (const s of set) { const conn = c.conns.get(s); if (conn) { timers.clearTimer(conn.lifeTimer); conn.lifeTimer = null; } } continue; }
+      for (const s of [...set]) { forget(c, s); s.destroy(); }
+    }
+  };
+  /**
+   * Counts an answer of `bytes` against its connection's unread bytes until it has been handed to the network; false (and the
+   * socket destroyed) when the connection already leaves answers unread and this one would pass maxUnreadResponseBytes.
+   */
+  const reserveUnread = (c: Code, req: IncomingMessage, res: ServerResponse, bytes: number): boolean => {
+    // req.socket: a pipelined answer waiting behind another has no res.socket yet
+    const socket = req.socket;
+    const conn = socket ? c.conns.get(socket) : undefined;
+    if (!socket || !conn) return true;
+    if (conn.unread > 0 && conn.unread + bytes > limits.maxUnreadResponseBytes) {
+      log(`[drop] code ${c.dropId}: a connection left ${conn.unread} bytes of answers unread and was closed`);
+      forget(c, socket);
+      socket.destroy();
+      return false;
+    }
+    conn.unread += bytes;
+    let done = false;
+    const release = () => { if (!done) { done = true; conn.unread -= bytes; } };
+    res.once('finish', release);
+    res.once('close', release);
+    return true;
   };
 
   // ---------- routes ----------
@@ -297,6 +363,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
     const length = req.headers['content-length'];
     if (req.headers['transfer-encoding'] !== undefined || (length !== undefined && parseContentLength(length) !== 0)) return refuse(req, res, 400, 'invalid_request');
     const page = c.page ?? (c.page = deps.page());
+    if (!reserveUnread(c, req, res, page.body.length)) return;
     res.writeHead(200, { ...BASE_HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': page.body.length, 'Content-Security-Policy': page.csp });
     res.end(page.body);
   };
@@ -528,7 +595,8 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
       requireHostHeader: true,
       joinDuplicateHeaders: false,
     }, (req, res) => onRequest(c, req, res, false));
-    server.maxConnections = limits.maxConnections;
+    // one over the door's own limit: admit() sees the newcomer at a full door and makes room for it (evictFor) or drops it
+    server.maxConnections = limits.maxConnections + 1;
     // Expect: 100-continue is answered only when the upload is accepted, so a refused body is never invited.
     server.on('checkContinue', (req, res) => onRequest(c, req, res, true));
     server.on('connection', (socket: Socket) => admit(c, socket));
@@ -563,7 +631,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
       server: null as unknown as http.Server, closed,
       token, pin, tokenDigest: digest(token), pinDigest: digest(pin), sessionDigest: null, claimIp: null,
       state: 'waiting', closeReason: null, issuedAt: at, lastActivity: at, closedAt: null,
-      badHellos: 0, files: 0, bytes: 0, inFlightBytes: 0, uploads: new Set(), buckets: new Map(), lifeTimer: null, page: null, sockets: new Map(),
+      badHellos: 0, files: 0, bytes: 0, inFlightBytes: 0, uploads: new Set(), buckets: new Map(), lifeTimer: null, page: null, sockets: new Map(), conns: new Map(),
     };
     c.server = createServer(c);
     c.server.once('close', () => resolveClosed());

@@ -1,3 +1,4 @@
+import { sequenceList } from './sequences.ts';
 import * as T from '@pulseframe/time';
 import type { MediaClip, ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
@@ -50,6 +51,8 @@ export function summarize(doc: ProjectDocument) {
       // life line (ADR-0021): the file's own capture date; `circa` = an estimate (a file-name date)
       ...(a.capture ? { capture: { at: a.capture.at, source: a.capture.source, circa: a.capture.circa === true } } : {}), notices: assetNotices(a) })),
     tracks: seq.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, locked: t.locked, muted: t.muted, clipCount: t.clips.length, ...(t.caption ? { caption: { mode: t.caption.mode, linkedTrackId: t.caption.linkedTrackId, preset: t.caption.style.preset } } : {}) })),
+    // shorts (ADR-0018): every sequence of the project, the main edit first; `tracks` above are the main edit's
+    sequences: sequenceList(doc),
     recipeRuns: Object.values(doc.recipeRuns ?? {}).map((r) => ({ id: r.id, recipeId: r.recipeId, created: r.createdIds.length, steps: r.steps })),
     variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.keys(v.overrides).length })),
     analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null, bars: a.beats?.downbeats?.length ?? null, meter: a.beats?.meter ?? null })),

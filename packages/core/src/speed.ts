@@ -13,6 +13,22 @@ import type { Asset, Clip, MediaClip } from './schema.ts';
  */
 export const startOffsetFrames = (video: { frameRate: { num: number; den: number }; startTime?: T.RationalTime }): number =>
   video.startTime ? Math.round((T.toSeconds(video.startTime) * video.frameRate.num) / video.frameRate.den) : 0;
+/**
+ * Source time at which source frame `frame` of an asset's picture is shown: (frame + startOffsetFrames) / rate, exact. The ONE
+ * conversion from a frame of the video stream (motion tracks, measured moments, the family film's windows) to source time:
+ * T.frameTime(frame, rate) alone is wrong for a file whose picture starts after its time zero (remuxed files, Matroska/TS,
+ * B-frames without an edit list), whose sound is drawn from the file's own start (wave 5 family film, verifier finding).
+ */
+export const sourceTimeOfFrame = (asset: { video?: { frameRate: { num: number; den: number }; startTime?: T.RationalTime } | null }, frame: number): T.RationalTime => {
+  if (!asset.video) throw new RangeError('sourceTimeOfFrame: the asset has no video stream');
+  if (!Number.isSafeInteger(frame) || frame < 0) throw new RangeError(`sourceTimeOfFrame: ${frame} is not a source frame`);
+  return T.frameTime(frame + startOffsetFrames(asset.video), asset.video.frameRate);
+};
+/** The source frame shown at source time `t` (the inverse of sourceTimeOfFrame, flooring; frames before the first picture are 0). */
+export const sourceFrameOfTime = (asset: { video?: { frameRate: { num: number; den: number }; startTime?: T.RationalTime } | null }, t: T.RationalTime): number => {
+  if (!asset.video) throw new RangeError('sourceFrameOfTime: the asset has no video stream');
+  return Math.max(0, T.frameIndexAt(t, asset.video.frameRate) - startOffsetFrames(asset.video));
+};
 /** The file's own start time in seconds (0 for most files; see Asset.timeOrigin). Raw timestamps minus this are the asset's times. */
 export const timeOriginSeconds = (asset: { timeOrigin?: T.RationalTime } | undefined): number => (asset?.timeOrigin ? T.toSeconds(asset.timeOrigin) : 0);
 /** A freeze-frame clip shows one source picture for its whole length: it covers no stretch of source time. */

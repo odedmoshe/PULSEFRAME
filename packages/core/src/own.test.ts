@@ -305,6 +305,7 @@ describe('every registered op', () => {
       set_asset_capture: { assetId: s.assetId, capture: { at: '2026-05-02' } },
       update_event: { eventId: s.eventId, name: 'Renamed trip' },
       set_text_fields: { clipId: s.textId, enabled: true },
+      set_timeline_behaviour: { mainMagnet: true },
       attach_asset_capture: { assetId: s.assetId, capture: { at: '2026-05-03T09:00:00', utcOffsetMinutes: null, source: 'exif' }, overwrite: true },
       update_audio_effect: { clipId: s.audioClipId, effectId: s.audioEffectId, enabled: false },
       apply_audio_preset: { clipId: s.audioClipId, presetId: 'telephone' },
@@ -335,10 +336,13 @@ describe('every registered op', () => {
     expect(ops.length).toBeGreaterThan(80);
     const attempt = (op: string, args: unknown) => { try { return { doc: tx(s.doc, [{ op, args }], true).doc }; } catch (error) { return { error }; } };
     let tried = 0;
-    const worked: string[] = [], faults: string[] = [];
+    const worked: string[] = [], stubs: string[] = [], faults: string[] = [];
     for (const o of ops) {
       const base = exact[o.name] ?? sample(o.argsSchema as Json, '', { ...ids, ...about[o.name] });
-      if ('doc' in attempt(o.name, base)) worked.push(o.name);
+      const first = attempt(o.name, base);
+      if ('doc' in first) worked.push(o.name);
+      // an op whose contract is registered before its body: no argument can make it do its work (it is swept all the same)
+      else if (first.error instanceof OpError && /\bnot built yet\b/.test(first.error.message)) stubs.push(o.name);
       const paths = stringPaths(base);
       const variants: [string, unknown][] = [];
       for (const id of HOSTILE) {
@@ -357,7 +361,8 @@ describe('every registered op', () => {
     expect(faults).toEqual([]);
     // The sweep is only worth something if the unmodified calls get past argument checks: most ops must do their work with them.
     expect(tried).toBeGreaterThan(400);
-    expect(worked.length / ops.length).toBeGreaterThan(0.75);
+    expect(worked.length / (ops.length - stubs.length)).toBeGreaterThan(0.75);
+    expect(stubs.length).toBeLessThan(ops.length / 10); // a stub-only registry would make the floor meaningless
     for (const must of ['rename_asset', 'add_clip', 'remove_marker', 'add_effect', 'apply_lut', 'update_variant', 'set_variant_override', 'set_variant_phrase_text', 'edit_analysis', 'correct_transcript', 'delete_transcript_range', 'delete_effect_keyframe', 'apply_recipe', 'restore_entities']) expect(worked).toContain(must);
   });
 });

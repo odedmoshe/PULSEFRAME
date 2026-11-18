@@ -32,7 +32,7 @@ export interface RenderCacheCtx {
 export function makeRenderCacheCtx(o: { page: Page; lang: Lang; api: Api; owner: Api; pid: string; titleClipId: string }): RenderCacheCtx {
   return {
     ...o,
-    async fillCache() { const r = await o.api.call(`/projects/${o.pid}/exports`, { format: 'mp4-h264-aac', mode: 'incremental', quality: 'standard' }); await o.api.waitJob(r.body.jobId); },
+    async fillCache() { const r = await o.api.call(`/projects/${o.pid}/exports`, { format: 'mp4-h264-aac', mode: 'incremental' } /* the sheet's first pick (high quality): its line and the lane plan with it */); await o.api.waitJob(r.body.jobId); },
     async clearCache() { await o.owner.call('/storage/render-cache', undefined, 'DELETE'); },
     async editTitle(text) { await o.api.tx(o.pid, [{ op: 'update_text', args: { clipId: o.titleClipId, text } }]); },
   };
@@ -73,8 +73,8 @@ export const renderCacheA11yScenarios: RenderCacheScenario[] = [
   },
   {
     id: 'cache-sheet-disabled', describe: 'the switch disabled with its visible reason (a format the fast export cannot make)',
-    async prepare(c) { await openSheet(c.page); const fmt = c.page.locator('[data-testid=export-format][data-key*=webm]').first(); if (await fmt.count()) await fmt.click(); await c.page.getByTestId(TID.fastReason).waitFor({ timeout: 8000 }).catch(() => {}); return { shown: (await c.page.getByTestId(TID.fastReason).count()) === 1, detail: { reason: await c.page.getByTestId(TID.fastReason).textContent().catch(() => null) } }; },
-    leave: (c) => closeSheet(c.page),
+    async prepare(c) { await openSheet(c.page); const fmt = c.page.getByTestId('export-type-webm'); /* the sheet's file type WebM (the export-format cards are the formats of the project, not file types) */ if (await fmt.count()) await fmt.click(); await c.page.getByTestId(TID.fastReason).waitFor({ timeout: 8000 }).catch(() => {}); return { shown: (await c.page.getByTestId(TID.fastReason).count()) === 1, detail: { reason: await c.page.getByTestId(TID.fastReason).textContent().catch(() => null) } }; },
+    leave: async (c) => { const mp4 = c.page.getByTestId('export-type-mp4'); if (await mp4.count()) await mp4.click(); await closeSheet(c.page); },
   },
   {
     id: 'cache-lane-stale', describe: 'the timeline lane with a stale stretch (dashed amber) and the one focusable summary',
@@ -109,6 +109,7 @@ export async function runRenderCacheUiChecks(o: { browser: Browser; ownerUrl: st
   const S = renderCacheStrings(o.lang);
   const ctx = await o.browser.newContext({ viewport: { width: 1440, height: 900 } });
   await ctx.addInitScript(() => { try { localStorage.setItem('pf.fastExport', '1'); } catch { /* storage unavailable */ } });
+  await ctx.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate (as a11y-audit.ts does)
   const page = await ctx.newPage();
   try {
     await page.goto(`${o.ownerUrl}&project=${o.pid}`);
@@ -117,10 +118,16 @@ export async function runRenderCacheUiChecks(o: { browser: Browser; ownerUrl: st
     const lane = page.getByTestId(TID.lane);
     await lane.waitFor({ timeout: 25000 }).catch(() => {});
     if ((await lane.count()) === 0) return { lang: o.lang, mounted: false, ok: false, reason: `no [data-testid=${TID.lane}] in the editor (RenderCacheLane is not mounted in Timeline.tsx, or the plan never became ready)` };
+    // the lane exists (aria-busy, no stretches) while its first plan is asked for: it is read once the summary is there and the
+    // lane is no longer busy (run 5: the Hebrew context, the first to ask, was counted while busy; English, served the memoised
+    // keys, was ready at once)
+    await page.waitForFunction((ids) => { const l = document.querySelector(`[data-testid=${ids.lane}]`); return !!l && !l.getAttribute('aria-busy') && !!l.querySelector(`[data-testid=${ids.summary}]`); }, { lane: TID.lane, summary: TID.summary }, { timeout: 30000 }).catch(() => {});
     const sum = o.plan.segments;
     const stretch = page.locator(`[data-testid=${TID.stretch}][data-state=render]`);
     const staleRuns = o.plan.runs.filter((r) => r.state === 'render');
-    const laneOk = (await stretch.count()) === staleRuns.length && (await stretch.first().getAttribute('data-first-frame')) === String(o.plan.firstFrame + (staleRuns[0]?.firstFrame ?? -1)) && (await stretch.first().getAttribute('data-frames')) === String(staleRuns[0]?.frames);
+    // the stale stretch the proof typed (expectedStale: the segment numbers of the edited title), not only what the plan says
+    const typedOk = staleRuns.length === 1 && staleRuns[0]!.firstSegment === o.expectedStale[0] && staleRuns[0]!.segments === o.expectedStale.length;
+    const laneOk = typedOk && (await stretch.count()) === staleRuns.length && (await stretch.first().getAttribute('data-first-frame')) === String(o.plan.firstFrame + (staleRuns[0]?.firstFrame ?? -1)) && (await stretch.first().getAttribute('data-frames')) === String(staleRuns[0]?.frames);
     const label = await page.getByTestId(TID.summary).getAttribute('aria-label');
     const labelOk = label === S.laneSummary(sum.cached, sum.total);
     fs.mkdirSync(o.shotDir, { recursive: true });
@@ -146,7 +153,7 @@ export async function runRenderCacheUiChecks(o: { browser: Browser; ownerUrl: st
     await page.getByTestId('export-sheet').screenshot({ path: path.join(o.shotDir, `incremental-export-sheet-full-${o.lang}.png`) });
     const found = await page.evaluate(inspectInPage, { lane: TID.lane, summary: TID.summary, reuseLine: TID.reuseLine });
     const a11yOk = found.unnamed.length === 0 && found.tabStopsInLane === 1 && found.statusRole === 'status' && found.statusLive === 'polite' && found.laneDir === 'ltr';
-    return { lang: o.lang, mounted: true, ok: laneOk && labelOk && popoverOk && lineOk && a11yOk, laneOk, labelOk, label, popoverOk, staleItems: stale, lineOk, lineText: text, a11y: found, viewport: '1440x900', dir: await page.evaluate(() => document.documentElement.dir) };
+    return { lang: o.lang, mounted: true, ok: laneOk && labelOk && popoverOk && lineOk && a11yOk, laneOk, typedOk, staleRuns, laneDrawn: { renderStretches: await page.locator(`[data-testid=${TID.stretch}][data-state=render]`).count() }, labelOk, label, popoverOk, staleItems: stale, lineOk, lineText: text, a11y: found, viewport: '1440x900', dir: await page.evaluate(() => document.documentElement.dir) };
   } finally { await ctx.close(); }
 }
 

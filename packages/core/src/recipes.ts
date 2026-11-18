@@ -13,6 +13,7 @@ import { defineOp, findClip, getOp, OpError, type OpCall } from './ops.ts';
 import { own } from './own.ts';
 import { flashGapFrames } from './flashSafety.ts';
 import { clipEnd } from './validate.ts';
+import { FAMILY_FILM_RECIPE_ID, FamilyFilmParamsSchema } from './familyFilmContract.ts';
 
 export class RecipeError extends Error {
   constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do', message: string, public hint?: string) { super(message); }
@@ -68,6 +69,9 @@ export const RECIPES = [
   { id: 'tidy-speech', name: { he: 'הידוק דיבור', en: 'Tidy speech' }, description: 'Remove measured silences from a speech recording on every track, set a loudness target and show its transcript as captions.', params: TidySpeech, needs: 'silence measurement (done by the server when the recipe is planned)', regenerable: false, aiInput: null },
   { id: 'portrait-blur', name: { he: 'טשטוש רקע לתמונה', en: 'Portrait blur' }, description: 'Blur the background of a still picture behind its subject: the clip shows the cut-out of the subject, and a blurred copy of the picture goes on a new picture track directly below it, with the same timing, position and keyframes. The blur radius stays editable.', params: PortraitBlur, needs: 'a cut-out of the picture, made by the background-removal tool (AI tools)', regenerable: false,
     aiInput: 'the cut-out: made earlier by the background-removal tool (BiRefNet, an AI model), which is run on its own (run_capability) and whose result is validated before it enters the project' },
+  // the family film (ADR-0026): planned by planFamilyFilm and applied through apply_template (familyFilmContract.ts), so a
+  // run of it is recorded as 'template:tpl.family-film'
+  { id: FAMILY_FILM_RECIPE_ID, name: { he: 'סרט משפחתי בלחיצה', en: 'Family film in one click' }, description: 'An editable first cut of an event: the measured moment of each clip, in capture order, cut on the beats and bars of the music, with an opening title and a closing card. Every clip states its measured reason. Heuristic; no model; faces are not used.', params: FamilyFilmParamsSchema, needs: 'measured moments of the videos (measure_moments); beats of the music when music is chosen', regenerable: true, aiInput: null },
 ] as const;
 /**
  * method: how the plan is made. No recipe runs a model when it is planned or applied; aiInput names the project data a recipe
@@ -289,5 +293,6 @@ export function planRecipe(doc: ProjectDocument, recipeId: string, params: unkno
   if (recipeId === 'social-pack') return planSocialPack(doc, params);
   if (recipeId === 'tidy-speech') return planTidySpeech(doc, params, ctx);
   if (recipeId === 'portrait-blur') return planPortraitBlur(doc, params);
+  if (recipeId === FAMILY_FILM_RECIPE_ID) throw new RecipeError('invalid_args', 'family-film is planned by planFamilyFilm; the server applies it through apply_template', 'Use the recipe routes (POST /api/v1/projects/{id}/recipes/family-film/plan or /apply) or the MCP recipe tools, which the server answers with the film planner.');
   throw new RecipeError('not_found', `recipe "${recipeId}" does not exist`, `Available: ${RECIPES.map((r) => r.id).join(', ')}`);
 }

@@ -18,6 +18,7 @@ export const PHONE_DROP_HE = {
   'error.code.import_not_finished': 'הייבוא עדיין פעיל', 'error.code.no_private_network': 'המחשב אינו מחובר לרשת ביתית',
   'error.code.invalid_address': 'הכתובת שנבחרה אינה כתובת של המחשב ברשת הביתית', 'error.code.drop_listen_failed': 'לא הצלחנו לפתוח את הפתח לטלפון',
   'error.code.drop_not_found': 'אין קוד פתוח לטלפון',
+  'error.code.shutting_down': 'השרת נסגר כרגע; אפשר לנסות שוב כשהוא יחזור',
   // command palette (apps/web/src/editor/commands.ts; the lead adds the commands at the mount step, their labels are these keys)
   'cmd.importFolder': 'ייבוא תיקייה', 'cmd.phoneDrop': 'ייבוא מהטלפון',
 } as const;
@@ -32,5 +33,16 @@ export const PHONE_DROP_EN: Record<keyof typeof PHONE_DROP_HE, string> = {
   'error.code.import_not_finished': 'The import is still running', 'error.code.no_private_network': 'This computer is not connected to a home network',
   'error.code.invalid_address': 'The chosen address is not one of this computer\'s home-network addresses', 'error.code.drop_listen_failed': 'The door for the phone could not be opened',
   'error.code.drop_not_found': 'No code for a phone is open',
+  'error.code.shutting_down': 'The server is shutting down; try again once it is back',
   'cmd.importFolder': 'Import a folder', 'cmd.phoneDrop': 'Import from a phone',
 };
+
+/**
+ * Hebrew detail of the import queue's refusals that have their own sentence (apps/server/src/importQueue.ts), added to
+ * translateRefusal (refusals.ts). packages/evals/src/wave5-wording.test.ts provokes each.
+ */
+export const HE_IMPORT_QUEUE: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^the server is stopping; send the file again once it is back$/, () => 'השרת נסגר כרגע, והקובץ לא נשמר. אפשר לשלוח אותו שוב כשהשרת יחזור'],
+  [/^the server is stopping; retry once it is back$/, () => 'השרת נסגר כרגע. אפשר לנסות שוב כשהשרת יחזור'],
+  [/^the server (?:is stopping|stopped); the import continues after it restarts$/, () => 'השרת נסגר. הקובץ כבר נשמר, והייבוא שלו ימשיך כשהשרת יעלה שוב'],
+];

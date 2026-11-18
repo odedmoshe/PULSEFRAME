@@ -41,3 +41,5 @@
 .rc-done, .rc-failed { margin: 0; font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
 .rc-failed { color: var(--pf-text); }
 .rc-export bdi, .rc-popover bdi, .rc-done bdi { unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+/* the fast export's switch when it cannot be used: its label stays readable (the reason under it says why), not dimmed */
+.rc-export .pf-switch-row.is-disabled { color: var(--pf-text-2); }

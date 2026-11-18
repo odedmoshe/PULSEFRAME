@@ -122,7 +122,9 @@ describe('SegmentStore: eviction', () => {
     // Shrink the cap by reopening on the same directory: 2.5 entries.
     const small = new SegmentStore({ dir: (store as any).opts.dir, capBytes: Math.floor(2.5 * E), autoClear: true, minFreeBytes: 0, quota: () => ({ quotaBytes: 0, otherBytes: 0 }), freeDiskBytes: () => 1e15, now: clock.now });
     stores.push(small);
-    expect(small.trim(0)).toEqual({ evicted: 2, bytes: 2 * E });
+    // the store trims as it opens (a lowered cap holds at once); the least recently used went
+    expect(small.status().usedBytes).toBe(2 * E);
+    expect(small.trim(0)).toEqual({ evicted: 0, bytes: 0 });
     expect(keysIn(small, ['a', 'b', 'c', 'd'])).toEqual(['a', 'd']);
   });
 
@@ -142,9 +144,12 @@ describe('SegmentStore: eviction', () => {
     const { store, opts, put } = makeStore();
     for (const n of ['a', 'b', 'c']) await put(n);
     const E = store.status().usedBytes / 3;
-    const s2 = new SegmentStore({ ...opts, capBytes: 0 });
+    // no ceiling while it opens (so nothing is trimmed then), then a 1-byte ceiling once a and c are pinned
+    let quotaBytes = 0;
+    const s2 = new SegmentStore({ ...opts, quota: () => ({ quotaBytes, otherBytes: 0 }) });
     stores.push(s2);
     const pin = s2.pin([key('a'), key('c')]);
+    quotaBytes = 1;
     expect(s2.trim(0)).toEqual({ evicted: 1, bytes: E });
     expect(keysIn(s2, ['a', 'b', 'c'])).toEqual(['a', 'c']);
     expect(s2.clear()).toEqual({ removed: 0, bytes: 0, keptPinned: 2 });
@@ -160,10 +165,12 @@ describe('SegmentStore: eviction', () => {
     expect(Number.isInteger(E)).toBe(true);
     const reopen = (o: Partial<SegmentStoreOptions>) => { const s = new SegmentStore({ ...base.opts, ...o }); stores.push(s); return s; };
 
-    // Cap 3.5 E: 3 entries stay (3 E <= 3.5 E < 4 E).
+    // Cap 3.5 E: 3 entries stay (3 E <= 3.5 E < 4 E). A store opened with a lower cap trims as it opens, so it is never above
+    // the cap, also at its high-water mark (lead run 2026-11-18, proof I11c); a trim afterwards has nothing left to do.
     let s = reopen({ capBytes: Math.floor(3.5 * E) });
-    expect(s.trim(0).evicted).toBe(2);
     expect(s.status().usedBytes).toBe(3 * E);
+    expect(s.status().highWaterBytes).toBeLessThanOrEqual(Math.floor(3.5 * E));
+    expect(s.trim(0).evicted).toBe(0);
     s.close();
 
     // No ceiling (quota 0): a huge reserve evicts nothing (the term is ∞, never negative).
@@ -171,12 +178,13 @@ describe('SegmentStore: eviction', () => {
     expect(s.trim(1e12)).toEqual({ evicted: 0, bytes: 0 });
     expect(s.status().segments).toBe(3);
 
-    // Ceiling: quota − other − reserve = 2 E + 1 → 2 entries stay.
+    // Ceiling: quota − other = 3 E (the 3 entries fit as it opens); with a reserve, quota − other − reserve < 3 E → 2 entries stay.
     const other = 50_000, reserve = 7_000;
-    s = reopen({ quota: () => ({ quotaBytes: other + reserve + 2 * E + 1, otherBytes: other }) });
+    s = reopen({ quota: () => ({ quotaBytes: other + 3 * E, otherBytes: other }) });
+    expect(s.status().usedBytes).toBe(3 * E);
     expect(s.trim(reserve)).toEqual({ evicted: 1, bytes: E });
     expect(s.status().usedBytes).toBe(2 * E);
-    expect(other + s.status().usedBytes + reserve).toBeLessThanOrEqual(other + reserve + 2 * E + 1);
+    expect(other + s.status().usedBytes + reserve).toBeLessThanOrEqual(other + 3 * E);
     s.close();
   });
 
@@ -191,8 +199,7 @@ describe('SegmentStore: eviction', () => {
     off.close();
     const on = new SegmentStore({ ...base.opts, autoClear: true, freeDiskBytes: () => Math.floor(0.5 * E), minFreeBytes: 2 * E });
     stores.push(on);
-    expect(on.trim(0)).toEqual({ evicted: 2, bytes: 2 * E });
-    expect(on.status().usedBytes).toBe(3 * E);
+    expect(on.status().usedBytes).toBe(3 * E); // trimmed as it opened (the injected free space is fixed, so a second trim is not asked)
   });
 
   it('put evicts to make room within the cap, and returns null (never throws) when no room can be made', async () => {

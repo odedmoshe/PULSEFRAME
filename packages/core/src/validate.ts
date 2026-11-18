@@ -7,6 +7,7 @@ import { personNameKey } from './people.ts';
 import { lifeIssues } from './fields.ts';
 import { isInheritedName, own } from './own.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
+import { momentsProblem } from './momentsContract.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -306,6 +307,13 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     // music sections (ADR-0022): each ends where the next starts, so they are ascending and the first starts with the file
     const sections = an.beats?.sections;
     if (sections?.length && (!T.isZero(sections[0]!.start) || sections.some((x, i) => i > 0 && !T.lt(sections[i - 1]!.start, x.start)))) issues.push({ code: 'analysis_sections', message: `music sections of asset ${key} must start at 0 and be strictly ascending`, ids: [key] });
+    // measured moments (wave 5 family film, ADR-0026): windows of a video, inside its frames, each around its own peak
+    const mo = an.moments;
+    if (mo) {
+      const asset = Object.hasOwn(doc.assets, an.assetId) ? doc.assets[an.assetId] : undefined;
+      const why = momentsProblem(asset, mo);
+      if (why) issues.push({ code: 'analysis_moments', message: `moments of asset ${key}: ${why}`, ids: [key] });
+    }
   }
   for (const [key, tr] of Object.entries(doc.transcripts ?? {})) {
     if (key !== tr.assetId) issues.push({ code: 'key_mismatch', message: `transcript key ${key} != assetId ${tr.assetId}`, ids: [key] });

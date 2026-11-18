@@ -118,6 +118,8 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/analysis/voice`]: ['reader-document'],
   [`GET ${P}/motion-tracks/:motionTrackId`]: ['reader-document'],
   [`POST ${P}/motion-tracks/:motionTrackId/track`]: ['reader-document', 'write'],
+  // measured moments (ADR-0026): the job reads media, attaches analyses; nothing about people
+  [`POST ${P}/moments`]: ['reader-document', 'write'],
   // edits
   [`POST ${P}/transactions`]: ['write'],
   [`POST ${P}/operations`]: ['write'],
@@ -136,6 +138,12 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/templates/:templateId/apply`]: ['reader-document', 'write'],
   [`POST ${P}/template-runs/:runId/regenerate`]: ['reader-document', 'write'],
   [`POST ${P}/variants/:variantId/translation/review`]: ['owner-only'],
+  // shorts (ADR-0018): computed from the reader's document (transcript quotes, measured values, sequence summaries; no people data)
+  [`GET ${P}/sequences`]: ['reader-document'],
+  [`POST ${P}/shorts/candidates`]: ['reader-document'],
+  [`POST ${P}/shorts/plan`]: ['reader-document'],
+  [`POST ${P}/shorts`]: ['reader-document', 'write'],
+  [`POST ${P}/sequences/:sequenceId/reframe-plan`]: ['reader-document'],
   // proposals and approvals
   [`GET ${P}/proposals`]: ['rows-scrubbed'],
   [`POST ${P}/proposals`]: ['write'],
@@ -182,6 +190,7 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   add_graphic_element: ['write'], add_sound_effect: ['write'], add_builtin_music: ['write'], suggest_packs: ['reader-document'], get_speech_status: ['no-document'], transcribe_asset: ['reader-document'],
   generate_narration: ['reader-document', 'write'], narrate_script: ['reader-document', 'write'], analyze_asset: ['reader-document'], get_analysis: ['reader-document'],
   track_motion: ['reader-document', 'write'], get_motion_track: ['reader-document'],
+  measure_moments: ['reader-document', 'write'],
   plan_recipe: ['reader-document'], apply_recipe: ['reader-document', 'write'], regenerate_recipe: ['reader-document', 'write'],
   plan_template: ['reader-document'], apply_template: ['reader-document', 'write'], regenerate_template: ['reader-document', 'write'],
   preflight: ['reader-document'], measure_loudness: ['reader-document'], measure_voice: ['reader-document'], match_colour: ['reader-document'],
@@ -190,6 +199,9 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   export_project: ['rendered-refused', 'reader-document'], plan_export: ['reader-document'], retry_job: ['rendered-refused'], get_job: ['no-document'],
   list_capabilities: ['no-document'], run_capability: ['reader-document', 'write'], estimate_capability: ['reader-document'], translate_captions: ['reader-document', 'write'],
   request_model_download: ['no-document'], cancel_job: ['no-document'],
+  // shorts (ADR-0018)
+  list_sequences: ['reader-document'], find_short_candidates: ['reader-document'], plan_shorts: ['reader-document'], make_shorts: ['reader-document', 'write'],
+  plan_reframe: ['reader-document'], export_batch: ['rendered-refused', 'reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

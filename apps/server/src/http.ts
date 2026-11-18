@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { MOMENTS_JOB_TYPE, StartMomentsBodySchema, TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
+import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
@@ -30,16 +30,21 @@ import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { applyTemplateFor, listTemplates, planTemplateFor, probeElements, regenerateTemplateFor, templateCatalog } from './templates.ts';
-import { variantDoc } from './export.ts';
+import { outputDoc } from './export.ts';
+import { applyShorts, cachedShortCandidates, findShortCandidates, planReframeFor, planShortsFor, shortsApiError, withShortsErrors } from './shorts.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
+import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
 import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
 import { ApplyModeSchema, RunSourceSchema, type RunRequest } from './aiContracts.ts';
 import { assertMayTakeRendered, forPrincipal, mayHoldPeople, peopleAccess, peopleNote, readingAs, scrubPeople, withoutFamily } from './peoplePrivacy.ts';
+import { assertMayHandleImportJob, decodeUploadHeader, IMPORT_JOB_TYPE, type DropDoor, type ImportQueue } from './importContracts.ts';
+import { declaredLength, registerImportRoutes } from './importRoutes.ts';
+import { registerRenderCacheRoutes, type RenderCacheService } from './renderCacheRoutes.ts';
 import { peopleSuggestions } from './lifeline.ts';
 
 const TxBody = z
@@ -107,7 +112,9 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 /** Policy of every non-page response (JSON, media, exports): nothing may load or run if it is ever opened as a document. */
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
-export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech) {
+/** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService }
+export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
   const speech = speechService ?? new Speech(store, cfg);
@@ -137,7 +144,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       c.header('Vary', 'Origin');
       if (c.req.method === 'OPTIONS') {
         c.header('Access-Control-Allow-Headers', 'content-type, authorization, x-filename, x-pf-via, x-pf-relative-path, x-pf-last-modified, x-pf-batch'); // x-pf-*: the import queue's upload headers (ADR-0023)
-        c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+        c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         return c.body(null, 204);
       }
     }
@@ -301,7 +308,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/projects/:id/captions', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
-    const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt', c.req.query('variant'));
+    const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt', c.req.query('variant'), c.req.query('sequence'));
     return c.body(out.text, 200, { 'content-type': `${out.mime}; charset=utf-8`, 'content-disposition': `attachment; filename="captions.${out.format}"`, 'x-pulseframe-revision': String(p.revision), 'x-pulseframe-cues': String(out.cues) });
   });
   app.post('/api/v1/projects/:id/analysis/fillers', async (c) => { need(c, 'observe'); return c.json(findFillerWords(store, c.req.param('id'), await body(c, FillerBody))); });
@@ -345,13 +352,20 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const j = startTrackingJob(store, gov, p, c.req.param('id'), c.req.param('motionTrackId'), b, { derivatives });
     return c.json({ jobId: j.id, status: j.status }, 202);
   });
+  // ----- measured moments (wave 5 family film, ADR-0026): a durable, model-free job; attached by the internal op attach_moments -----
+  app.post('/api/v1/projects/:id/moments', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, StartMomentsBodySchema);
+    const r = startMomentsJob(store, gov, p, c.req.param('id'), b, { derivatives, lane: momentsLaneOf(exporter.lane) });
+    return 'cached' in r ? c.json(r, 200) : c.json({ jobId: r.id, status: r.status }, 202);
+  });
   app.get('/api/v1/projects/:id/motion-tracks/:motionTrackId', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     return c.json(motionTrackView(p.doc, p.revision, c.req.param('motionTrackId')));
   });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
-  app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params)); });
+  app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { const p = need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params, gov, p)); });
   app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/recipe-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await regenerateRecipe(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params)); });
   // Templates (ADR-0016): the gallery, a read-only plan, apply as one undoable step, regenerate keeping hand edits. Edit rights and
@@ -360,32 +374,46 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/templates/:templateId/plan', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await planTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params)); });
   app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
+  // ----- shorts (ADR-0018): sequences of the project, candidate moments, plan, make (one undoable step), reframe -----
+  app.get('/api/v1/projects/:id/sequences', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, sequences: sequenceList(p.doc) }); });
+  app.post('/api/v1/projects/:id/shorts/candidates', async (c) => {
+    const who = need(c, 'observe');
+    const projectId = c.req.param('id');
+    const b = await body(c, FindShortsBodySchema);
+    const p = store.getProject(projectId); // 404 before anything else
+    if (!Object.hasOwn(p.doc.assets, b.assetId)) throw shortsApiError(shortsRefusal('assetNotFound', { assetId: b.assetId }, b.assetId));
+    const cached = withShortsErrors(() => cachedShortCandidates(store, projectId, b));
+    if (cached) return c.json(cached);
+    const j = startMeasurementJob(store, who, projectId, SHORTS_MEASUREMENT_KIND, b);
+    return c.json({ jobId: j.id, status: j.status }, 202);
+  });
+  app.post('/api/v1/projects/:id/shorts/plan', async (c) => { need(c, 'observe'); const projectId = c.req.param('id'); store.getProject(projectId); const b = await c.req.json().catch(() => undefined); return c.json(await withShortsErrors(() => planShortsFor(store, projectId, b))); });
+  app.post('/api/v1/projects/:id/shorts', async (c) => { const pr = need(c, 'edit'); const projectId = c.req.param('id'); store.getProject(projectId); const b = await c.req.json().catch(() => undefined); return c.json(await withShortsErrors(() => applyShorts(store, gov, pr, projectId, b))); });
+  app.post('/api/v1/projects/:id/sequences/:sequenceId/reframe-plan', async (c) => {
+    need(c, 'observe');
+    const projectId = c.req.param('id');
+    outputDoc(store.getProject(projectId).doc, { sequenceId: c.req.param('sequenceId') }); // 404 for an unknown sequence
+    const b = await c.req.json().catch(() => undefined);
+    return c.json(withShortsErrors(() => planReframeFor(store, projectId, c.req.param('sequenceId'), b)));
+  });
   app.get('/api/v1/projects/:id/preflight', (c) => {
     const who = need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     const cps = c.req.query('maxCharsPerSecond');
-    return c.json({ ...preflight(exporter, p.doc, p.revision, { variantId: c.req.query('variant'), ...(cps ? { maxCharsPerSecond: Number(cps) } : {}) }), ...peopleNote(who, p.doc) });
+    return c.json({ ...preflight(exporter, p.doc, p.revision, { variantId: c.req.query('variant'), sequenceId: c.req.query('sequence'), ...(cps ? { maxCharsPerSecond: Number(cps) } : {}) }), ...peopleNote(who, p.doc) });
   });
   app.post('/api/v1/projects/:id/exports/batch', async (c) => {
     const pr = need(c, 'edit');
-    const projectId = c.req.param('id');
-    gov.assertMayAct(pr, projectId, 'job');
-    assertStorageRoom(store, 1, 'start exports'); // once for the whole batch, before any job exists (each start below is told so)
-    const b = await body(c, z.object({ variantIds: z.array(z.string()).min(1).max(8), options: z.record(z.string(), z.unknown()).optional() }).strict());
-    assertMayTakeRendered(pr, store.wholeProject(projectId).doc, 'export this project');
-    const doc = store.getProject(projectId).doc;
-    // All-or-nothing: every variant must exist and plan without blockers before any job is created.
-    for (const id of b.variantIds) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, variantId: id }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `format ${id} cannot be exported: ${plan.blockers[0]!.message}`, { variantId: id, blockers: plan.blockers }); }
-    gov.takeExportQuota(pr, b.variantIds.length, true);
-    const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }, undefined, { roomChecked: true }));
-    gov.takeExportQuota(pr, jobs.length);
-    return c.json({ jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, status: j.status })) }, 202);
+    return c.json(startExportBatch(store, gov, exporter, pr, c.req.param('id'), await c.req.json().catch(() => undefined)), 202);
   });
   app.post('/api/v1/projects/:id/analysis/loudness', async (c) => {
     const p = need(c, 'observe');
     const b = await c.req.json().catch(() => ({}));
-    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', {}); return c.json({ jobId: j.id, status: j.status }, 202); }
-    return c.json(await programmeLoudness(store, c.req.param('id')));
+    // { sequenceId } measures that sequence (a short) as it exports (ADR-0018); absent = the main edit
+    const sequenceId = b && typeof b === 'object' && typeof (b as { sequenceId?: unknown }).sequenceId === 'string' ? (b as { sequenceId: string }).sequenceId : undefined;
+    if (sequenceId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, { sequenceId }); // 404 before any job exists
+    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', sequenceId !== undefined ? { sequenceId } : {}); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await programmeLoudness(store, c.req.param('id'), sequenceId));
   });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
 
@@ -439,6 +467,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       for (const [k, fn] of govHandlers) store.events.on(k, fn);
       const onPresence = (p: any) => p.projectId === projectId && void stream.writeSSE({ event: 'presence', data: JSON.stringify(seen(p)) });
       presence.events.on('presence', onPresence);
+      // The phone drop's public view (no token, PIN or session: drop.ts), to the owner's own session only: it is the owner's dialog.
+      const onDrop = (d: { projectId: string }) => d.projectId === projectId && void stream.writeSSE({ event: 'drop', data: JSON.stringify(d) });
+      if (listener.kind === 'user') extras.door?.events.on('drop', onDrop);
       try {
         await stream.writeSSE({ event: 'hello', data: JSON.stringify({ revision: current }) });
         for (const e of store.eventsSince(projectId, since)) await send(e);
@@ -451,6 +482,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
         store.events.off('derivative', onDerivative);
         for (const [k, fn] of govHandlers) store.events.off(k, fn);
         presence.events.off('presence', onPresence);
+        extras.door?.events.off('drop', onDrop);
       }
     });
   });
@@ -532,7 +564,21 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     gov.assertMayAct(p, projectId, 'edit');
     gov.assertUnrestricted(p, 'add media to the library');
     if (!c.req.raw.body) throw new ApiError(400, 'empty_upload', 'request has no body');
-    const name = decodeURIComponent(c.req.header('x-filename') ?? 'upload');
+    const name = decodeUploadHeader(c.req.header('x-filename')) ?? 'upload';
+    // Media goes through the import queue (ADR-0023) and this route waits for its job, so it answers as it always did: 201 with the
+    // asset, or the import's own error. Its commit kind is 'edit', as before. A colour table (.cube) keeps the direct path.
+    if (extras.imports && !/\.cube$/i.test(name)) {
+      const job = await extras.imports.receive({ projectId, actor: p.actor, body: Readable.fromWeb(c.req.raw.body as any), name, via: 'browser', declaredBytes: declaredLength(c.req.header('content-length')), maxBytes: cfg.maxUploadBytes, commitKind: 'edit', signal: c.req.raw.signal });
+      const done = await extras.imports.wait(job.id);
+      const head = { 'X-PF-Import-Job': job.id };
+      if (done.status !== 'succeeded') {
+        const e = (done.error ?? {}) as { code?: string; message?: string; status?: number; details?: Record<string, unknown>; hint?: string };
+        const err = new ApiError(typeof e.status === 'number' && e.status >= 400 ? e.status : 500, e.code ?? 'internal_error', e.message ?? `the import ended ${done.status}`, e.details ?? {}, e.hint);
+        return c.json(err.toJSON(), err.status as any, head);
+      }
+      const out = done.output as { assetId: string; revision: number; deduplicated: boolean };
+      return c.json({ assetId: out.assetId, revision: out.revision, deduplicated: out.deduplicated, asset: store.getProject(projectId).doc.assets[out.assetId] }, 201, head);
+    }
     // Storage ceiling: refuse up front when the declared size cannot fit, and cut a stream of unknown size off at the room left.
     const room = assertStorageRoom(store, Number(c.req.header('content-length') ?? 0) || 1, 'store this upload');
     const asset = await ingestUpload(store, c.req.raw.body, name, p.actor, Math.min(cfg.maxUploadBytes, room), { homeZone: cfg.homeZone, now: new Date() });
@@ -644,9 +690,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     const index = c.req.query('index') !== undefined ? Number(c.req.query('index')) : T.frameIndexAt(T.fromSeconds(c.req.query('seconds') ?? '0'), p.doc.settings.frameRate);
-    // ?variant= renders the frame as that linked format would export it.
+    // ?sequence= renders a sequence of the project (a short) and ?variant= the frame as that linked format would export it (ADR-0018).
     // `p.doc` is what this credential may read: for one without the people scope the frame is drawn without ages, and says so.
-    const png = await exporter.renderStill(variantDoc(p.doc, c.req.query('variant')), p.revision, index);
+    const png = await exporter.renderStill(outputDoc(p.doc, { sequenceId: c.req.query('sequence'), variantId: c.req.query('variant') }), p.revision, index);
     return c.body(new Uint8Array(png), 200, { 'Content-Type': 'image/png', 'X-PF-Revision': String(p.revision), 'X-PF-Frame-Index': String(index), ...(peopleNote(c.var.principal, p.doc).peopleAccess ? { 'X-PF-People': 'names; age fields are drawn empty' } : {}) });
   });
 
@@ -669,7 +715,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return c.json({ ...exporter.plan(p.doc, p.revision, await c.req.json().catch(() => ({}))), ...peopleNote(who, p.doc) });
   });
   app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); gov.releaseUnknown(p, c.req.param('jobId')); return c.json({ jobId: c.req.param('jobId'), ledger: gov.ledgerFor(c.req.param('jobId')) }); });
-  app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId')); gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
+  app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId'));
+    if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => { need(c, 'observe'); return c.json(jobView(store.getJob(c.req.param('jobId')))); });
   app.get('/api/v1/jobs/:jobId/output', (c) => {
     const who = need(c, 'observe');
@@ -688,6 +735,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ----- browser export route: the tab renders and encodes; the server holds the durable job and a tab lease -----
   const browserExport = registerBrowserExportRoutes(app, store, exporter);
   (app as any).browserExport = browserExport;
+  // ----- import queue and phone drop (ADR-0023); render cache (ADR-0024) -----
+  if (extras.imports) registerImportRoutes(app, { cfg, store, gov, imports: extras.imports, door: extras.door ?? null, need });
+  if (extras.renderCache) registerRenderCacheRoutes(app, extras.renderCache, need);
 
   // ----- optional provider capabilities (Amendment A1). No route accepts a raw graph for execution. -----
   app.get('/api/v1/catalog', (c) => { need(c, 'observe'); return c.json(catalog()); });
@@ -753,10 +803,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
     const p = need(c, 'edit');
     const j = store.getJob(c.req.param('jobId'));
+    if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
     assertMayCancel(gov, p, j);
     if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
+    if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
   });
@@ -778,12 +830,40 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   return app;
 }
 
+/** One output of a batch: a sequence of the project (default the main edit), in a linked format (default its own frame). */
+export const BatchItemSchema = z.object({ sequenceId: z.string().optional(), variantId: z.string().optional() }).strict();
+/** Formats of the main edit (variantIds), or outputs of any sequence (items: a short, a short in a linked format; ADR-0018). Exactly one of the two. */
+export const ExportBatchBody = z.object({ variantIds: z.array(z.string()).min(1).max(8).optional(), items: z.array(BatchItemSchema).min(1).max(8).optional(), options: z.record(z.string(), z.unknown()).optional() }).strict()
+  .refine((x) => (x.variantIds === undefined) !== (x.items === undefined), { message: 'give variantIds or items, not both' });
+/**
+ * Start one export job per output, all-or-nothing: every item must exist and plan without blockers before any job is created
+ * (REST POST /exports/batch and MCP export_batch). The same admission as one export: the job right, the storage ceiling once
+ * for the whole batch, the people rule for films, the export quota.
+ */
+export function startExportBatch(store: Store, gov: Governance, exporter: Exporter, pr: Principal, projectId: string, raw: unknown) {
+  gov.assertMayAct(pr, projectId, 'job');
+  assertStorageRoom(store, 1, 'start exports'); // once for the whole batch, before any job exists (each start below is told so)
+  const parsed = ExportBatchBody.safeParse(raw ?? {});
+  if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
+  const b = parsed.data;
+  const items = b.items ?? b.variantIds!.map((variantId) => ({ variantId }));
+  assertMayTakeRendered(pr, store.wholeProject(projectId).doc, 'export this project');
+  const doc = store.getProject(projectId).doc;
+  const what = (it: z.infer<typeof BatchItemSchema>) => (it.sequenceId ? `sequence ${it.sequenceId}${it.variantId ? ` in format ${it.variantId}` : ''}` : `format ${it.variantId ?? 'of the main edit'}`);
+  for (const it of items) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, ...it }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `${what(it)} cannot be exported: ${plan.blockers[0]!.message}`, { ...it, blockers: plan.blockers }); }
+  gov.takeExportQuota(pr, items.length, true);
+  const jobs = items.map((it) => exporter.start(projectId, pr.actor, { ...b.options, ...it }, undefined, { roomChecked: true }));
+  gov.takeExportQuota(pr, jobs.length);
+  return { jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, ...(j.input.manifest.options.sequenceId ? { sequenceId: j.input.manifest.options.sequenceId } : {}), status: j.status })) };
+}
+
 /** Serialize one caption track (default: the first) as it plays on the timeline. */
-export function exportCaptions(master: ProjectDocument, trackId: string | undefined, format: string, variantId?: string) {
+export function exportCaptions(master: ProjectDocument, trackId: string | undefined, format: string, variantId?: string, sequenceId?: string) {
   if (format !== 'srt' && format !== 'vtt' && format !== 'ass') throw new ApiError(400, 'invalid_args', 'format must be srt, vtt or ass');
   if (variantId && !own(master.variants, variantId)) throw new ApiError(404, 'not_found', `format ${variantId} not found`, { variantId });
-  // A linked format has its own caption style, hidden or reworded cues and reworded transcript phrases.
-  const doc = variantId ? projectVariant(master, variantId) : master;
+  // A linked format has its own caption style, hidden or reworded cues and reworded transcript phrases; a sequence (a short,
+  // ADR-0018) is its own timeline with its own frame.
+  const doc = outputDoc(master, { sequenceId, variantId });
   const seq = doc.sequences[doc.mainSequenceId]!;
   const track = trackId ? seq.tracks.find((t) => t.id === trackId && t.kind === 'caption') : seq.tracks.find((t) => t.kind === 'caption');
   if (!track) throw new ApiError(404, 'not_found', trackId ? `caption track ${trackId} not found` : 'the project has no caption track');
@@ -875,8 +955,10 @@ export const catalog = () => ({
 });
 
 /** Mix the current timeline exactly as export would and measure it (EBU R128). Read-only. */
-export async function programmeLoudness(store: Store, projectId: string) {
-  const p = store.getProject(projectId);
+export async function programmeLoudness(store: Store, projectId: string, sequenceId?: string) {
+  const stored = store.getProject(projectId);
+  // a sequence (a short, ADR-0018) is measured as it exports: alone, with its own loudness target
+  const p = { revision: stored.revision, doc: outputDoc(stored.doc, { sequenceId }) };
   const plan = audioPlan(p.doc);
   if (plan.totalSamples === 0 || plan.clips.length === 0) return { revision: p.revision, integratedLufs: null, truePeakDbtp: null, rangeLu: null, clips: 0, note: 'The timeline has no audible sound.' };
   if (plan.totalSamples > plan.sampleRate * 3600) throw new ApiError(422, 'too_long', 'loudness measurement is limited to one hour of programme');
@@ -1049,8 +1131,8 @@ const exporterForMeasurement = (): Exporter => {
   if (!measurementExporter) throw new ApiError(503, 'unavailable', 'colour match needs the renderer, which is not running in this process');
   return measurementExporter;
 };
-export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour';
-/** Start a silence, loudness, voice (ADR-0013) or colour-match (ADR-0014) measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
+export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour' | typeof SHORTS_MEASUREMENT_KIND;
+/** Start a silence, loudness, voice (ADR-0013), colour-match (ADR-0014) or shorts-candidates (ADR-0018) measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
 export function startMeasurementJob(store: Store, principal: Principal, projectId: string, kind: MeasurementKind, options: unknown): JobRow {
   const p = store.getProject(projectId); // 404 before any job exists
   if (kind === 'silences' && !own(p.doc.assets, (options as { assetId: string }).assetId)) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
@@ -1065,10 +1147,12 @@ async function runAnalysisJob(store: Store, jobId: string) {
   const j = store.getJob(jobId);
   try {
     // Measurements that attach nothing to the project (silence candidates, programme loudness, voice and colour checks): the result is the job's output.
-    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour') {
+    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour' || j.input.kind === SHORTS_MEASUREMENT_KIND) {
       const kind = j.input.kind as MeasurementKind;
       const result = kind === 'silences' ? await findSilences(store, j.projectId, j.input.options)
-        : kind === 'loudness' ? await programmeLoudness(store, j.projectId)
+        : kind === 'loudness' ? await programmeLoudness(store, j.projectId, typeof j.input.options?.sequenceId === 'string' ? j.input.options.sequenceId : undefined)
+        // shorts (ADR-0018): measure the audio features that are missing, then rank; stops between windows once cancel is requested
+        : kind === SHORTS_MEASUREMENT_KIND ? await withShortsErrors(() => findShortCandidates(store, j.projectId, FindShortsBodySchema.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested'))
         : kind === 'voice' ? await measureVoiceCheck(store, j.projectId, VoiceMeasureBody.parse(j.input.options))
         : await matchColour(store, exporterForMeasurement(), j.projectId, ColourMatchBody.parse(j.input.options));
       if (store.getJob(jobId).status === 'cancel-requested') { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled while measuring; the result was discarded' } }); return; }

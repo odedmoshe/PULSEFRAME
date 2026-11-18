@@ -15,6 +15,7 @@ export * from './align.ts';
 export * from './fonts.ts';
 export * from './effects.ts';
 export * from './variants.ts';
+export * from './sequences.ts';
 export * from './recipes.ts';
 export * from './speed.ts';
 export * from './speedCurves.ts';
@@ -65,3 +66,16 @@ export * from './peopleOps.ts';
 export * from './importView.ts';
 // segmented export and render cache (ADR-0024)
 export * from './renderCache.ts';
+// family film maker (ADR-0026)
+export * from './momentsContract.ts';
+export * from './momentsOps.ts';
+export * from './familyFilmContract.ts';
+export * from './familyFilm.ts';
+// shorts (ADR-0018): the sequence lifecycle and the shorts contract; statements/highlights/shortsPlan/reframe/quotes are worker stubs
+export * from './shortsContract.ts';
+export * from './sequenceOps.ts';
+export * from './statements.ts';
+export * from './highlights.ts';
+export * from './shortsPlan.ts';
+export * from './reframe.ts';
+export * from './quotes.ts';

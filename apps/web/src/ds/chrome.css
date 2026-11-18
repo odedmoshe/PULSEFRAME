@@ -286,3 +286,16 @@
 .pf-bw-legacy .pf-ai { inline-size: 100%; overflow-x: hidden; }
 .pf-bw-legacy .pf-ai :is(.pf-ai-tabs, .pf-ai-row, .pf-ai-badges) { flex-wrap: wrap; }
 .pf-bw-legacy .pf-ai :is(button, select, input) { white-space: normal; }
+
+/* ---- the import queue and the phone drop (ADR-0023): «ייבוא» with its menu of other ways in, the live-code chip ---- */
+.pf-bw-import-group { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.pf-bw-import-more { background: var(--pf-surface-3); color: var(--pf-text); box-shadow: 0 0 0 1px var(--pf-line-strong); padding-inline: 6px; min-inline-size: 28px; }
+.pf-bw-import-more:hover { background: var(--pf-surface-4); }
+.pf-bw-import-more svg { color: var(--pf-frame); }
+.pf-bw-import-more:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.pf-pd-chip-wrap { display: inline-flex; align-items: center; gap: 2px; margin-inline-end: var(--pf-sp-2); }
+.pf-pd-chip .num { margin-inline-start: 4px; }
+/* ---- the render cache's storage row in the status centre (ADR-0024) ---- */
+.rc-storage { flex-wrap: wrap; gap: var(--pf-sp-2); }
+.rc-storage .rc-confirm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-2); }
+.rc-storage > p { flex-basis: 100%; margin: 0; }

@@ -1670,6 +1670,21 @@ export function createdIdsOf(out: Readonly<Record<string, unknown>>): string[] {
   return ids;
 }
 /**
+ * The output keys that name an id a step made (ADR-0018): createdIdsOf's keys plus the sequence lifecycle's (add_sequence
+ * returns AddSequenceOutput). W1 switches apply_recipe to collectCreated / isLiveCreated (its behaviour unchanged: no recipe
+ * step makes a sequence); apply_sequence_plan uses them from the start.
+ */
+export const CREATED_OUTPUT_KEYS = ['clipId', 'audioClipId', 'trackId', 'variantId', 'sequenceId', 'videoTrackId', 'textTrackId', 'audioTrackId'] as const;
+/** Push the ids an operation's output names as made by it (CREATED_OUTPUT_KEYS and createdClipIds) onto `into`. */
+export function collectCreated(output: Readonly<Record<string, unknown>> | undefined, into: string[]): void {
+  const out = output ?? {};
+  for (const k of CREATED_OUTPUT_KEYS) if (Object.hasOwn(out, k) && typeof out[k] === 'string') into.push(out[k] as string);
+  if (Object.hasOwn(out, 'createdClipIds') && Array.isArray(out.createdClipIds)) into.push(...(out.createdClipIds as unknown[]).filter((x): x is string => typeof x === 'string'));
+}
+/** True while a created id still names something: a clip, a variant, a sequence or a track of any sequence (own properties only). */
+export const isLiveCreated = (d: ProjectDocument, id: string): boolean =>
+  !!findClip(d, id) || Object.hasOwn(d.variants ?? {}, id) || Object.hasOwn(d.sequences, id) || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === id));
+/**
  * What a run record keeps of the ids a run made: those that still exist (clips, variants, tracks), and the content
  * fingerprint of each clip among them. Clips kept from an earlier run keep their ORIGINAL fingerprint (`previous`), so they
  * stay recognisable as hand-edited next time too.

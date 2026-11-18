@@ -101,14 +101,14 @@ const nic = (address: string, netmask: string): NetworkInterfaceInfo => ({ addre
 const doors: DropDoor[] = [];
 afterEach(async () => { for (const d of doors.splice(0)) await d.stop(); });
 
-function setup(over: Partial<DropLimits> = {}, opts: { netmask?: string; admit?: string[]; port?: number } = {}) {
+function setup(over: Partial<DropLimits> = {}, opts: { netmask?: string; admit?: string[]; port?: number; page?: DropPage } = {}) {
   const clock = new FakeClock();
   const queue = new FakeQueue();
   const logs: string[] = [];
   const events: DropPublicView[] = [];
   const netmask = opts.netmask ?? '255.0.0.0';
   const door = createDropDoor({
-    queue, projectExists: (id) => id === PROJECT, page: () => PAGE, port: opts.port ?? PORT,
+    queue, projectExists: (id) => id === PROJECT, page: () => opts.page ?? PAGE, port: opts.port ?? PORT,
     limits: { ...DROP_DEFAULTS, ...over }, admitAddresses: opts.admit ?? [BIND, ALT],
     interfaces: () => ({ lo: [nic(BIND, netmask), nic(ALT, netmask)], eth0: [nic('192.0.2.10', '255.255.255.0')] }),
     preferredAddress: () => null, now: clock.now, timers: clock,
@@ -201,6 +201,32 @@ function trickle(text: string, from = PHONE): { data: () => string; how: () => s
   s.on('close', () => { if (how === 'open') how = 'closed'; clearInterval(drip); });
   const drip = setInterval(() => { if (!s.destroyed && s.writable) s.write('x'); }, 200);
   return { data: () => Buffer.concat(parts).toString('utf8'), how: () => how, stop: () => { clearInterval(drip); s.destroy(); } };
+}
+/** A page far larger than what the kernel buffers on loopback hold for a reader that never reads (one answer cannot finish). */
+const BIG_PAGE: DropPage = { body: Buffer.alloc(24 * 1024 * 1024, 0x61), csp: PAGE.csp };
+/**
+ * A raw socket that asks for GET / `n` times in one write (pipelined) and reads nothing. A paused socket cannot see the door
+ * close it, so drain() resumes it and reads what comes: `complete` when every page asked for arrived (the door kept the
+ * connection until then), else what arrived before the door closed it (less than one page: it was destroyed while held).
+ */
+function pipeliner(from: string, n: number): { drain: () => Promise<{ bytes: number; complete: boolean; how: string }>; stop: () => void } {
+  const s = net.connect({ host: BIND, port: PORT, localAddress: from });
+  let how = 'open';
+  let bytes = 0;
+  s.on('connect', () => { s.pause(); s.write(`GET / HTTP/1.1\r\nHost: ${BIND}:${PORT}\r\n\r\n`.repeat(n)); });
+  s.on('error', (e: NodeJS.ErrnoException) => { if (how === 'open') how = e.code ?? 'error'; });
+  s.on('close', () => { if (how === 'open') how = 'closed'; });
+  const drain = () => new Promise<{ bytes: number; complete: boolean; how: string }>((resolve) => {
+    const want = n * BIG_PAGE.body.length;
+    let settled = false;
+    const settle = () => { if (!settled) { settled = true; clearTimeout(t); resolve({ bytes, complete: bytes >= want, how }); } };
+    const t = setTimeout(settle, 8000);
+    s.on('data', (d: Buffer) => { bytes += d.length; if (bytes >= want) settle(); });
+    s.on('close', settle);
+    if (s.destroyed) settle();
+    s.resume();
+  });
+  return { drain, stop: () => { s.destroy(); } };
 }
 /** A raw socket that connects and sends nothing; how() is 'open' until the door drops it. */
 function hold(from: string): { how: () => string; stop: () => void } {
@@ -512,6 +538,60 @@ describe('GET / serves the page and nothing else is served', { timeout: 60_000 }
     expect((await upload(session, Buffer.from('abc'))).status).toBe(201);
     expect((await send({ method: 'POST', path: '/status', headers: bearer(session) })).status).toBe(200);
     for (const s of [...a, a3, ...b, ...c, c3]) s.stop();
+  });
+
+  it('before the claim, pipelined GET / whose answers are never read cannot hold a connection: past maxUnreadResponseBytes of unread answers it is closed', async () => {
+    const { door, logs } = setup({}, { page: BIG_PAGE });
+    await openCode(door);
+    const s = pipeliner(OTHER, 3); // three 24 MiB pages asked for in one write, none read
+    await until(() => logs.some((l) => l.includes('answers unread and was closed')));
+    const got = await s.drain();
+    expect(got.complete).toBe(false);
+    expect(got.bytes).toBeLessThan(BIG_PAGE.body.length); // destroyed while the first page was still unread
+    s.stop();
+  });
+
+  it('before the claim, a connection held by one unread answer lives unclaimedConnectionMs at most', async () => {
+    const { door, clock } = setup({}, { page: BIG_PAGE });
+    await openCode(door);
+    const early = pipeliner(OTHER, 1), late = pipeliner(OTHER, 1); // one page each, never read: no other clock runs on them
+    await new Promise((r) => setTimeout(r, 500));
+    clock.advance(DROP_DEFAULTS.unclaimedConnectionMs - 1);
+    await new Promise((r) => setTimeout(r, 200));
+    expect((await early.drain()).complete).toBe(true); // still there 1 ms before its lifetime: the whole page arrives
+    clock.advance(1);
+    await new Promise((r) => setTimeout(r, 200));
+    const got = await late.drain();
+    expect(got.complete).toBe(false);
+    expect(got.bytes).toBeLessThan(BIG_PAGE.body.length);
+    early.stop(); late.stop();
+  });
+
+  it('two addresses of one device filling every slot before the claim cannot keep the phone out: it connects and claims within their lifetime', async () => {
+    const OTHER2 = '127.0.0.5';
+    const { door } = setup({ maxConnections: 4 }, { page: BIG_PAGE });
+    const { token } = await openCode(door);
+    const held = [pipeliner(OTHER, 1), pipeliner(OTHER, 1), pipeliner(OTHER2, 1), pipeliner(OTHER2, 1)]; // 2 + 2 of 4 slots
+    await new Promise((r) => setTimeout(r, 500));
+    const session = await claim(token); // no clock moved: well within the held connections' lifetime
+    expect((await upload(session, Buffer.from('abc'))).status).toBe(201);
+    for (const s of held) expect((await s.drain()).complete).toBe(false); // the room made for the phone, then the claim, cut them all
+    for (const s of held) s.stop();
+  });
+
+  it('a phone that claimed keeps its connections past unclaimedConnectionMs; other devices\' connections after the claim do not', async () => {
+    const { door, clock } = setup({}, { page: BIG_PAGE });
+    const { token } = await openCode(door);
+    const session = await claim(token);
+    const phone = pipeliner(PHONE, 1);
+    const other = pipeliner(OTHER, 1);
+    await new Promise((r) => setTimeout(r, 500));
+    clock.advance(DROP_DEFAULTS.unclaimedConnectionMs);
+    await new Promise((r) => setTimeout(r, 200));
+    expect((await other.drain()).complete).toBe(false);
+    expect((await phone.drain()).complete).toBe(true);
+    expect((await send({ method: 'POST', path: '/status', headers: bearer(session) })).status).toBe(200);
+    phone.stop(); other.stop();
   });
 
   it('oversized headers are refused (maxHeaderSize)', async () => {

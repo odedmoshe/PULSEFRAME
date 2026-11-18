@@ -243,9 +243,13 @@ async function constsOf(file: string, src: string): Promise<Consts> {
   return out;
 }
 
-/** The web source the ids are looked for in: apps/web/src (tests excluded) and the pages beside it. */
+/**
+ * The web source the ids are looked for in: apps/web/src (tests excluded) and the pages beside it, and the phone's upload page
+ * (ADR-0023), which the drop door serves from apps/server/src/drop-page (it has no build step; its ids are in page.html and page.js).
+ */
 export function webSources(): { file: string; src: string }[] {
-  const files = [...walk(path.join(WEB, 'src'), (f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('.test.ts')), ...fs.readdirSync(WEB).filter((f) => f.endsWith('.html')).map((f) => path.join(WEB, f))];
+  const dropPage = path.join(root, 'apps/server/src/drop-page');
+  const files = [...walk(path.join(WEB, 'src'), (f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('.test.ts')), ...fs.readdirSync(WEB).filter((f) => f.endsWith('.html')).map((f) => path.join(WEB, f)), ...fs.readdirSync(dropPage).filter((f) => /^page\.(html|js)$/.test(f)).map((f) => path.join(dropPage, f))];
   return files.map((file) => ({ file: rel(file), src: fs.readFileSync(file, 'utf8') }));
 }
 /** The committed report, or null before the first run. */

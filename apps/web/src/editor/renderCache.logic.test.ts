@@ -139,6 +139,23 @@ describe('RefreshPolicy', () => {
     t.advance(1500); await tick();
     expect(signals).toHaveLength(2); expect(signals[1]!.aborted).toBe(false);
   });
+  it('a superseded request that rejects with its abort is swallowed, never an unhandled rejection; a real failure still rejects (review item)', async () => {
+    const t = new FakeTimers();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown) => unhandled.push(e);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      // the documented use: the signal goes to fetch, which rejects with an AbortError when it is aborted
+      const p = new RefreshPolicy((s) => new Promise((_r, reject) => s.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))), t);
+      p.changed(1); t.advance(1500); await tick();
+      p.changed(2); // aborts the first
+      await tick(); await new Promise((r) => setTimeout(r, 10));
+      expect(unhandled).toEqual([]);
+      // control: a failure of a request nobody aborted is not hidden
+      const failing = new RefreshPolicy(async () => { throw new Error('plan route 500'); }, t);
+      await expect(failing.now(3)).rejects.toThrow('plan route 500');
+    } finally { process.off('unhandledRejection', onUnhandled); }
+  });
   it('stops scheduling by itself after a slow keying; the button still asks', async () => {
     const t = new FakeTimers(); const calls: number[] = [];
     const p = new RefreshPolicy(async (_s, rev) => { calls.push(rev); return { keyingMs: 4500 }; }, t);
