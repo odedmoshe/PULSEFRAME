@@ -12,7 +12,12 @@ import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { EASINGS, isV1Easing, KEYFRAME_OPS_BUILT } from '@pulseframe/core';
 import { createFuzz } from './ops-fuzz.gen.ts';
+
+/** The curves of ADR-0019 (keyframe curves): the dressing step puts them on picture clips so every session renders them. */
+const NEW_EASINGS = EASINGS.filter((e) => !isV1Easing(e));
+const CUSTOM_HANDLES = [[0.2, -0.3, 0.6, 1.4], [0.42, 0, 0.58, 1], [0.1, 0.8, 0.3, 1.2]];
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/render-fuzz');
@@ -71,7 +76,9 @@ async function main() {
       // touches the clip before it, and put an effect, a mask and a blend mode on some clips. Refusals are fine.
       {
         const d0 = await doc();
-        let dressed = 0;
+        let dressed = 0, curved = 0;
+        const curveRefusals: string[] = [];
+        const fIdx0 = (t: T.RationalTime) => T.frameIndexAt(t, rate);
         for (const t of d0.sequences.seq_main.tracks.filter((x: any) => x.kind === 'video')) {
           const sorted = [...t.clips].sort((x: any, y: any) => T.cmp(x.start, y.start));
           for (let i = 1; i < sorted.length; i++) {
@@ -88,9 +95,28 @@ async function main() {
             }
             if (i % 4 === 1 && c.type === 'media') await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_clip_mask', args: { clipId: c.id, mask: { shape: 'ellipse', x: 0, y: 0, width: 0.7, height: 0.7, feather: 0.1, invert: false } } }] });
             if (i % 5 === 2) await call(`/projects/${pid}/transactions`, { ops: [{ op: 'set_clip_blend', args: { clipId: c.id, mode: 'screen' } }] });
+            // keyframe curves (ADR-0019): x, scale and rotation over the first half of the clip with the new curves (opacity keeps
+            // the v1 ones: turn-back curves are refused there by the flash rule). A refusal (a locked track) is fine.
+            const len = fIdx0(c.duration);
+            if (KEYFRAME_OPS_BUILT && len >= 4) {
+              const at = (k: number) => T.frameTime(k, rate);
+              const e = (k: number) => NEW_EASINGS[(seed + i + k) % NEW_EASINGS.length]!;
+              const key = (property: string, k: number, value: number, easing: string) => ({ op: 'set_keyframe', args: { clipId: c.id, property, time: at(k), value, easing, ...(easing === 'bezier' ? { bezier: CUSTOM_HANDLES[(seed + i + k) % CUSTOM_HANDLES.length] } : {}) } });
+              const mid = Math.floor(len / 2);
+              const r = await call(`/projects/${pid}/transactions`, { ops: [
+                key('x', 0, -0.2, e(0)), key('x', mid, 0.2, 'linear'),
+                key('scale', 0, 0.8, e(1)), key('scale', mid, 1.1, 'linear'),
+                key('rotation', 0, 0, e(2)), key('rotation', mid, 12, 'linear'),
+              ] });
+              // a refusal the session made (a locked track, a clip that takes no transform keys) is fine and counted; a curve
+              // rule refusing these allowed curves (invalid_args) is a fault
+              if (r.status === 200) curved++;
+              else if (r.body?.error?.code === 'invalid_args') throw new Error(`seed ${seed}: curve keys on ${c.id} were refused: ${JSON.stringify(r.body).slice(0, 300)}`);
+              else curveRefusals.push(String(r.body?.error?.code ?? r.status));
+            }
           }
         }
-        row.dressing = { transitionsAdded: dressed };
+        row.dressing = { transitionsAdded: dressed, clipsWithCurves: curved, curveRefusals };
       }
       const d = await doc();
       const tl = (await call(`/projects/${pid}/timeline`)).body;
@@ -155,6 +181,7 @@ async function main() {
             if (c.mask) out.add('mask');
             if (c.blend) out.add('blend');
             if (c.keyframes) out.add('keyframes');
+            if (Object.values(c.keyframes ?? {}).some((ks: any) => ks?.some((k: any) => !isV1Easing(k.easing)))) out.add('curves');
             if (c.transition && i < a + c.transition.frames) out.add('transition');
           }
           return [...out].sort();
@@ -170,6 +197,13 @@ async function main() {
         // …and the middle of up to two transitions (the dressing step above adds them where two picture clips touch).
         for (const c of vclips.filter((c: any) => c.transition).slice(0, 2)) {
           const i = Math.min(frames - 1, fIdx(c.start) + Math.floor(c.transition.frames / 2));
+          if (stills.has(i)) continue;
+          const st = await stillOf(i);
+          if (level(st) > 0.6) stills.set(i, st);
+        }
+        // …and a frame inside the curved first half of up to two clips (ADR-0019: the new curves on the three routes).
+        for (const c of vclips.filter((c: any) => Object.values(c.keyframes ?? {}).some((ks: any) => ks?.some((k: any) => !isV1Easing(k.easing)))).slice(0, 2)) {
+          const i = Math.min(frames - 1, fIdx(c.start) + Math.max(1, Math.floor(fIdx(c.duration) / 5)));
           if (stills.has(i)) continue;
           const st = await stillOf(i);
           if (level(st) > 0.6) stills.set(i, st);
