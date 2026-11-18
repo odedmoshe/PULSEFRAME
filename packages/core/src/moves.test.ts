@@ -192,6 +192,42 @@ describe('planPerformance through the real apply_take', () => {
   });
 });
 
+describe('envelopes and fades on light channels (lead: held flash_limit, never stretched)', () => {
+  const gap = flashGapFrames(30); // 11
+  type Adjust = Extract<MoveSpec, { kind: 'adjust' }>;
+  const custom = (over: Partial<Adjust>, envelope?: { shape: 'decay' | 'release'; seconds: number }): Adjust => ({
+    id: 'move.custom', kind: 'adjust', minSeconds: 0.1, fadeOutSeconds: 0,
+    effects: [{ type: 'color.grayscale', params: { amount: 1 }, ...(envelope ? { envelope: { param: 'amount', from: 1, to: 0, ...envelope } } : {}) }], ...over,
+  });
+  const one = (spec: MoveSpec, frames = 30) => { const { doc } = project(); return take(doc, input([hit(0, 0, 60, frames)], bankWith({ 0: spec }))); };
+  it('a decay, a release or a fade-out whose inner key would sit inside the gap is held flash_limit with how close it came; nothing is planned', () => {
+    // decay of 3 frames: its end key would be 3 frames after the hit starts
+    const decay = one(custom({}, { shape: 'decay', seconds: 0.1 }));
+    expect([decay.plan.chips[0]!.state, decay.plan.chips[0]!.reason, decay.plan.chips[0]!.since]).toEqual(['held', 'flash_limit', 3]);
+    expect(decay.plan.args).toBeNull();
+    // release of 3 frames over a 30-frame hit: its first key would be 3 frames before the hit ends
+    const release = one(custom({}, { shape: 'release', seconds: 0.1 }));
+    expect([release.plan.chips[0]!.state, release.plan.chips[0]!.reason, release.plan.chips[0]!.since]).toEqual(['held', 'flash_limit', 3]);
+    // a fade-out of 3 frames on a light-changing adjustment: never widened to the gap
+    const fade = one(custom({ fadeOutSeconds: 0.1 }));
+    expect([fade.plan.chips[0]!.state, fade.plan.chips[0]!.reason, fade.plan.chips[0]!.since]).toEqual(['held', 'flash_limit', 3]);
+  });
+  it('the same shapes that keep the gap are kept exactly as designed (keys where the shape puts them), and the op agrees', () => {
+    const decay = one(custom({}, { shape: 'decay', seconds: 0.5 })); // 15 frames: 15 after the start, 15 before the end
+    expect(decay.plan.chips[0]!.state).toBe('kept');
+    const keys = decay.plan.args!.steps.filter((s) => s.op === 'set_effect_keyframe').map((s) => T.frameIndexAt((s.args as { time: T.RationalTime }).time, R30));
+    expect(keys).toEqual([0, 15]);
+    const fade = one(custom({ fadeOutSeconds: 0.5 }));
+    expect(fade.plan.chips[0]!.state).toBe('kept');
+    expect(fade.plan.args!.steps.filter((s) => s.op === 'set_keyframe').map((s) => T.frameIndexAt((s.args as { time: T.RationalTime }).time, R30))).toEqual([15, 30]);
+    for (const r of [decay, fade]) expect(validateProject(r.after)).toEqual([]);
+    // a neutral effect (blur) is not judged: its fast decay is kept as designed
+    const blur = one({ ...custom({}, { shape: 'decay', seconds: 0.1 }), effects: [{ type: 'blur.gaussian', params: { radius: 0.04 }, envelope: { param: 'radius', from: 0.04, to: 0, shape: 'decay', seconds: 0.1 } }] });
+    expect(blur.plan.chips[0]!.state).toBe('kept');
+    expect(gap).toBeGreaterThan(3);
+  });
+});
+
 describe('the zoom punch', () => {
   const punchKeys = (doc: ProjectDocument, clipId: string) => clipsOf(doc).find((x) => x.clip.id === clipId)!.clip.keyframes?.scale ?? [];
   it('reproduces the exact envelope on a constant stretch: rest on a − 1, zoomed from a, eased back to rest at b', () => {
@@ -227,6 +263,25 @@ describe('the zoom punch', () => {
     // a curve that depends on its neighbours (smooth) next to the hit counts as motion
     const smooth = tx(doc, [{ op: 'set_keyframe', args: { clipId, property: 'scale', time: f(0), value: 1, easing: 'smooth' } }, { op: 'set_keyframe', args: { clipId, property: 'scale', time: f(100), value: 1 } }]).doc;
     expect(planPerformance(smooth, input([hit(0, 0, 40, 10)], bankWith({ 0: move('move.punch') }))).chips[0]!.reason).toBe('has_motion');
+  });
+  it('is clamped where a picture on a higher track begins over it; a tap on that picture is its own hit', () => {
+    const { doc, ids, clipId } = project();
+    const v2 = tx(doc, [{ op: 'add_track', args: { kind: 'video' } }]);
+    const over = tx(v2.doc, [{ op: 'add_clip', args: { assetId: ids.video!, trackId: out(v2).trackId!, start: f(70), duration: f(60) } }]);
+    const upper = out(over).clipId!;
+    const bank = bankWith({ 0: move('move.punch') });
+    const { plan, after } = take(over.doc, input([hit(0, 0, 60, 20), hit(1, 0, 74, 6)], bank));
+    const byTap = new Map(plan.chips.map((c) => [c.tap, c]));
+    expect([byTap.get(0)!.state, byTap.get(0)!.frame, byTap.get(0)!.frames]).toEqual(['kept', 60, 10]); // 60..70, where V2 begins
+    expect(byTap.get(1)!.state).toBe('kept'); // its own hit, on the higher picture
+    const lower = punchKeys(after, clipId);
+    expect(Math.max(...lower.map((k) => T.frameIndexAt(k.time, R30)))).toBe(70);
+    for (const n of [70, 75, 100, 500]) expect(sampleKeyframes(lower, f(n), TRANSFORM_RANGE.scale)).toBe(1);
+    expect(punchKeys(after, upper).length).toBeGreaterThan(0);
+    expect(validateProject(after)).toEqual([]);
+    // a hidden higher track does not cover it
+    const hidden = tx(over.doc, [{ op: 'update_track', args: { trackId: out(v2).trackId!, hidden: true } }]).doc;
+    expect(planPerformance(hidden, input([hit(0, 0, 60, 20)], bank)).chips[0]!.frames).toBe(20);
   });
   it('is clamped to its clip, and held no_picture, locked, follows_track or too_many_keys', () => {
     const { doc, clipId } = project({ frames: 100 });

@@ -1,15 +1,15 @@
 /**
  * Perform mode contracts (ADR-0025), lead tests: the one flash rule (performFlash.ts) and the internal op apply_take
  * (takeOps.ts) — refusals with hints, the flash re-check against what is already in the sequence, the run record, replay
- * equality and determinism. The planner (moves.ts, W1) is not built here: its cases are todo. The camera (cameraPath.ts, W2) has its
- * contract case at the end (cameraPath.test.ts holds the rest).
+ * equality and determinism. The planner (moves.ts, W1) has its built contract cases below (moves*.test.ts hold the rest). The
+ * camera (cameraPath.ts, W2) has its contract case at the end (cameraPath.test.ts holds the rest).
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
   applyTransaction, createProject, creativeProjection, DEFAULT_CAMERA, diffEntities, planCamera, restoreEntities, EFFECTS, effectChangesLight, flashClassOf, flashGapFrames, FLASH_NEUTRAL_EFFECTS, FLASH_TABLE_V1, getOp, lightChanges, lightRanges, liveFlashTable, MODULATABLE, OpError,
   PERFORM_RECIPE_ID, PERFORM_REFUSALS, TAKE_SEQUENCE_STEP_OPS, TAKE_STEP_OPS, takeFlashBreach, validateProject, ApplyTakeArgsSchema, TakeRequestSchema, PadBankSchema, MoveSpecSchema, PAD_COUNT,
-  type ApplyTakeArgs, type OpCall, type ProjectDocument, type TemplateStep,
+  transformAt, type ApplyTakeArgs, type OpCall, type ProjectDocument, type TemplateStep,
 } from './index.ts';
 
 const R30 = { num: 30, den: 1 };
@@ -261,8 +261,8 @@ describe('request and bank schemas', () => {
 });
 
 import { defaultBank, planTakeRequest } from './index.ts';
-describe('workers (todo until built)', () => {
-  // W1 (moves.ts): built
+describe('workers (built)', () => {
+  // W1 (moves.ts)
   const mash = (n: number, pads: number[]) => Array.from({ length: n }, (_, i) => ({ pad: pads[i % pads.length]!, down: 0.2 + i / 20, up: 0.2 + i / 20 + 0.03 }));
   const request = (taps: { pad: number; down: number; up: number }[]) => ({ taps, bank: [...defaultBank('canvas')], assets: Array(PAD_COUNT).fill(null), settings: { snap: 'beat' as const, tempo: 'normal' as const, strength: 1, parity: 0 as const }, gpu: false });
   it('W1 moves.ts: planTakeRequest on a seeded take gives args that apply_take accepts and that pass validateProject (perform W1)', () => {
@@ -319,6 +319,8 @@ describe('W2 cameraPath.ts: a camera take', () => {
     expect(clip.keyframes!.x!.filter((k) => T.lt(k.time, f(80)) || T.lt(f(180), k.time))).toEqual(old([0, 0.1, 0.2]).filter((_, i) => i !== 1));
     expect(clip.keyframes!.scale!.filter((k) => T.lt(k.time, f(80)) || T.lt(f(180), k.time))).toEqual(old([1.2, 1.3, 1.4]).filter((_, i) => i !== 1));
     expect(clip.keyframes!.y!.map((k) => k.time)).toEqual(p.keys.map((k) => f(k.frame)));
+    // y had no keys: its edge keys carry the current framing, so every frame outside the range still shows y = 0 (lead decision)
+    for (let j = 0; j < 300; j++) if (j < 80 || j > 180) expect(transformAt(clip, T.add(clip.start, f(j))).y, `frame ${j}`).toBe(0);
     const redactOf = (d: ProjectDocument) => { const x = d.sequences[d.mainSequenceId]!.tracks.find((t) => t.id === trackId)!.clips.find((k) => k.id === clipId)!; return x.type === 'media' ? x.redact : undefined; };
     expect(redactOf(before)).toHaveLength(1);
     expect(redactOf(r.doc)).toEqual(redactOf(before));

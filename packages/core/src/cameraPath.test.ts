@@ -128,14 +128,23 @@ describe('springPath: the critically damped spring', () => {
       expect(Math.abs(p2.u - (b.u + (d1 + (v1 + w * d1) * h) * e))).toBeLessThan(1e-12);
     }
   });
-  it('a constant target is reached within 2 % settleSeconds after it changes, without overshoot, at 12, 30 and 60 fps', () => {
-    for (const rate of RATES) for (const settle of [0.3, 0.6, 1.2]) {
+  it('CAMERA_SETTLE_K solves (1 + k)·e^−k = 0.02 (computed, ≈ 5.8339)', () => {
+    expect(Math.abs((1 + CAMERA_SETTLE_K) * Math.exp(-CAMERA_SETTLE_K) - 0.02)).toBeLessThan(1e-15);
+    expect(CAMERA_SETTLE_K).toBeCloseTo(5.8339, 4);
+  });
+  it('a constant target is within 2 % at exactly settleSeconds after it changes (not a frame later), without overshoot, at 12, 30 and 60 fps', () => {
+    for (const rate of RATES) for (const settle of [0.5, 1, 1.5]) {
       const fps = rate.num, s = { ...DEFAULT_CAMERA, settleSeconds: settle }, k = shiftOf(s, fps);
-      const change = 10; // the target of frames ≥ 10 is b
+      const steps = Math.round(settle * fps);
+      expect(steps / fps).toBe(settle); // whole frames: the frame below is exactly settleSeconds of spring
+      const change = 10; // the target of frames ≥ 10 is b; the pose of frame change + N has taken N + 1 steps toward it
       const samples: CameraSample[] = [{ frame: change + k - 1, u: 0.3, v: 0.5, zoom: 2 }, { frame: change + k, u: 0.7, v: 0.5, zoom: 2 }];
-      const path = springPath(samples, 0, change + Math.ceil(settle * fps) + 10, g, s, fps);
-      const at = change + Math.ceil(settle * fps);
-      expect(Math.abs(path[at]!.u - 0.7) / 0.4, `${fps} fps, settle ${settle}`).toBeLessThanOrEqual(0.02);
+      const path = springPath(samples, 0, change + steps + 10, g, s, fps);
+      const at = change + steps - 1;
+      const err = (j: number) => Math.abs(path[j]!.u - 0.7) / 0.4;
+      expect(err(at), `${fps} fps, settle ${settle}`).toBeLessThanOrEqual(0.02 + 1e-12);
+      expect(err(at), `${fps} fps, settle ${settle}: exactly the 2 % bound`).toBeGreaterThan(0.02 - 1e-9);
+      expect(err(at - 1), `${fps} fps, settle ${settle}: one frame earlier is not yet within 2 %`).toBeGreaterThan(0.02);
       for (let j = 1; j < path.length; j++) { expect(path[j]!.u).toBeLessThanOrEqual(0.7 + 1e-12); expect(path[j]!.u).toBeGreaterThanOrEqual(path[j - 1]!.u - 1e-12); }
     }
   });
@@ -319,6 +328,68 @@ describe('planCamera: keys, the cover on every frame, the partial retake', () =>
       expect(after[q]!.filter((k) => inside(k.time)).map((k) => k.value)).toEqual(r.keys.map((k) => k[q]));
     }
   });
+  it('a retake over part of a clip with no keys: every frame outside [from, to] is drawn as before, the edges carry the current framing', () => {
+    for (const startFrame of [0, 45]) {
+      const p = project({ frames: 300, startFrame });
+      const d0 = tx(p.doc, [{ op: 'set_clip_transform', args: { clipId: p.clipId, transform: { x: 0.02, y: -0.01, scale: 1.1 } } }]).doc;
+      const clip0 = clipOf(d0, p.clipId);
+      expect(clip0.keyframes?.x ?? []).toEqual([]);
+      const samples = Array.from({ length: 101 }, (_, i) => ({ frame: startFrame + 100 + i, u: 0.3, v: 0.3, zoom: 2.5 }));
+      const r = plan(d0, { clipId: p.clipId, from: 100, to: 200, samples, settings: DEFAULT_CAMERA });
+      expect(r.replacedKeys).toBe(0);
+      expect([r.keys[0]!.frame, r.keys.at(-1)!.frame]).toEqual([100, 200]);
+      for (const k of [r.keys[0]!, r.keys.at(-1)!]) expect({ x: k.x, y: k.y, scale: k.scale }).toEqual({ x: 0.02, y: -0.01, scale: 1.1 });
+      const after = tx(d0, r.ops).doc;
+      expect(validateProject(after)).toEqual([]);
+      const clip1 = clipOf(after, p.clipId);
+      for (let j = 0; j < 300; j++) {
+        if (j >= 100 && j <= 200) continue;
+        const t = T.add(clip1.start, T.frameTime(j, R30));
+        expect(transformAt(clip1, t), `frame ${j}`).toEqual(transformAt(clip0, t));
+      }
+      // inside the range the take really films: the middle reaches the pointer's zoom
+      const mid = transformAt(clip1, T.add(clip1.start, T.frameTime(150, R30)));
+      expect(mid.scale).toBeGreaterThan(2.4);
+      // and it blends from the framing outside, no jump on the first frame inside
+      const first = transformAt(clip1, T.add(clip1.start, T.frameTime(101, R30)));
+      expect(Math.abs(first.scale - 1.1)).toBeLessThan(0.05);
+    }
+  });
+  it('keys only inside the range are replaced, and the frames outside keep the values they held', () => {
+    const p = project({ frames: 300 });
+    const inner = tx(p.doc, [
+      { op: 'replace_clip_keyframes', args: { clipId: p.clipId, property: 'scale', keys: [{ time: T.frameTime(120, R30), value: 1.3, easing: 'linear' }, { time: T.frameTime(180, R30), value: 1.6, easing: 'linear' }] } },
+    ]).doc;
+    const clip0 = clipOf(inner, p.clipId);
+    const r = plan(inner, { clipId: p.clipId, from: 100, to: 200, samples: wander(21, 100, 200), settings: DEFAULT_CAMERA });
+    expect(r.replacedKeys).toBe(2);
+    const clip1 = clipOf(tx(inner, r.ops).doc, p.clipId);
+    for (let j = 0; j < 300; j++) {
+      if (j >= 100 && j <= 200) continue;
+      const t = T.frameTime(j, R30);
+      expect(transformAt(clip1, t), `frame ${j}`).toEqual(transformAt(clip0, t));
+    }
+  });
+  it('a wide panorama that covers the frame is filmed at zoom 1 with |x| ≤ 4, and the plan notes that the camera cannot reach its ends', () => {
+    for (const [frame, src] of [[[1080, 1920], [8000, 1000]], [[1080, 1920], [4000, 300]], [[1920, 1080], [300, 6000]]] as [[number, number], [number, number]][]) {
+      const p = project({ frame, src, fit: 'cover', frames: 240, image: true });
+      const g = geometryOf(p.doc, p.clipId);
+      expect(cameraLimits(g).maxZoom).toBeLessThan(1);
+      // the pointer sweeps from one end of the picture to the other
+      const samples = Array.from({ length: 240 }, (_, f) => ({ frame: f, u: f < 120 ? 0 : 1, v: f < 120 ? 0 : 1, zoom: 3 }));
+      const r = plan(p.doc, { clipId: p.clipId, from: 0, to: 239, samples, settings: DEFAULT_CAMERA });
+      expect(r.warnings).toEqual(['cannot_reach_ends']);
+      for (const k of r.keys) { expect(Math.abs(k.x)).toBeLessThanOrEqual(4); expect(Math.abs(k.y)).toBeLessThanOrEqual(4); expect(covers(g, k), `key ${k.frame}`).toBe(true); }
+      expect(Math.max(...r.keys.map((k) => Math.max(Math.abs(k.x), Math.abs(k.y))))).toBeGreaterThan(3.99); // it pans as far as it may
+      const after = tx(p.doc, r.ops).doc;
+      expect(validateProject(after)).toEqual([]);
+      const clip = clipOf(after, p.clipId);
+      for (let j = 0; j < 240; j++) expect(covers(g, transformAt(clip, T.add(clip.start, T.frameTime(j, R30)))), `frame ${j}`).toBe(true);
+    }
+    // an ordinary picture has no such note
+    const q = project({ frames: 120 });
+    expect(plan(q.doc, { clipId: q.clipId, from: 0, to: 119, samples: wander(6, 0, 119), settings: DEFAULT_CAMERA }).warnings).toEqual([]);
+  });
   it('samples are TIMELINE frames: a clip starting at frame 60 reads the samples 60 frames later; samples outside the range are ignored', () => {
     const a = project({ frames: 200 }), b = project({ frames: 200, startFrame: 60 });
     const samples = wander(4, 0, 199);
@@ -390,9 +461,9 @@ describe('planCamera refusals (each one)', () => {
     (clipOf(f, p.clipId) as MediaClip).follow = { motionTrackId: 'mt_x', targetTrackId: 'tt_x', scale: false, smooth: 0 } as unknown as MediaClip['follow'];
     expectRefused(ask(f, p.clipId), 'follows_track');
   });
-  it('no_room: a 13:1 strip cannot cover a 9:16 frame within |x| ≤ 4', () => {
-    const p = project({ frame: [1080, 1920], src: [4000, 300], fit: 'cover', frames: 120, image: true });
-    expect(cameraLimits(geometryOf(p.doc, p.clipId)).maxZoom).toBeLessThan(1);
+  it('no_room: only a picture that cannot cover the frame at all (its fill scale is past 20)', () => {
+    const p = project({ frame: [1080, 1920], src: [4000, 100], fit: 'contain', frames: 120, image: true });
+    expect(cameraLimits(geometryOf(p.doc, p.clipId)).fill).toBeGreaterThan(20);
     expectRefused(ask(p.doc, p.clipId), 'no_room');
   });
   it('no_samples: none in the range, or a range outside the clip', () => {
