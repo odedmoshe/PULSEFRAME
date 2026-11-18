@@ -8,7 +8,7 @@
  * on the sample grid. The effects never run as WebAudio nodes. A voice that cannot run here plays its clip dry and says why.
  */
 import * as T from '@pulseframe/time';
-import { sequenceDuration, type ProjectDocument } from '@pulseframe/core';
+import { canonical, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, drawGraph, evaluate, fillPlayingOrder, FlashGuard, isDecodeBudgetReason, openClipVoice, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf, soundEnd, type PlannedAudioClip } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
@@ -46,6 +46,12 @@ function interleave(b: AudioBuffer): Float32Array {
 }
 /** What a failed voice is remembered by: the clip and its exact chain (a changed chain is tried again). */
 const fxKey = (c: PlannedAudioClip) => `${c.clipId}|${JSON.stringify(c.voice?.chain ?? [])}`;
+
+/** Player options (ADR-0020). */
+export interface PlayerOptions {
+  /** Angle viewer: never plays sound; always draws from pool.draftFrames (proxy) at a scale that keeps the height at most maxHeight px. */
+  draftOnly?: { maxHeight: number };
+}
 
 export class Player {
   /** See drawFrame: effect ids the last painted frame had to leave out. */
@@ -185,10 +191,11 @@ export class Player {
   private requested = 0;
   private now: () => number = () => performance.now() / 1000;
 
-  constructor(private canvas: HTMLCanvasElement, private pool: MediaPool, private onTick: () => void, private onError: (e: unknown) => void) {
-    // Measurement only: with the audio tap on (tests), the first player of the page is reachable for the preview proofs.
+  constructor(private canvas: HTMLCanvasElement, private pool: MediaPool, private onTick: () => void, private onError: (e: unknown) => void, private opts: PlayerOptions = {}) {
+    // Measurement only: with the audio tap on (tests), the first player of the page is reachable for the preview proofs
+    // (the angle viewer's draft-only player is never the one).
     const g = globalThis as { __pfAudioTap?: unknown; __pfPlayer?: Player };
-    if (g.__pfAudioTap && !g.__pfPlayer) g.__pfPlayer = this;
+    if (g.__pfAudioTap && !g.__pfPlayer && !opts.draftOnly) g.__pfPlayer = this;
   }
 
   get frameCount() {
@@ -204,6 +211,27 @@ export class Player {
     this.painted = -1;
     this.request(this.frame);
     if (resume && this.frame < this.frameCount - 1) this.shuttle(resume);
+  }
+  /**
+   * ADR-0020: replace the drawn document WITHOUT stopping playback when the sound plan is unchanged (canonical audioPlan clips,
+   * totalSamples and loudness equal: true for a switch_angles projection in master-sound mode, where only picture clips change);
+   * otherwise exactly setDoc (playback restarts from the same frame). Returns true when no restart happened.
+   */
+  setPictureDoc(doc: ProjectDocument): boolean {
+    const old = this.doc;
+    if (!old || this.opts.draftOnly) { this.doc = doc; this.painted = -1; this.request(this.frame); return true; }
+    const key = (d: ProjectDocument) => { const p = audioPlan(d, undefined, { bypassFx: this.bypassAudioFx }); return canonical({ clips: p.clips, totalSamples: p.totalSamples, loudness: p.loudness }); };
+    if (key(old) !== key(doc)) { this.setDoc(doc); return false; }
+    this.doc = doc;
+    this.frame = Math.min(this.frame, Math.max(0, this.frameCount - 1));
+    this.request(this.frame);
+    return true;
+  }
+  /** Draw `frame` of the current document now (coalesced like request()); no transport, no sound. */
+  follow(frame: number): void {
+    if (!this.doc) return;
+    this.frame = Math.max(0, Math.min(frame, Math.max(0, this.frameCount - 1)));
+    this.request(this.frame);
   }
   seek(frame: number) {
     this.stopAudition();
@@ -227,7 +255,8 @@ export class Player {
         const { width, height, frameRate } = doc.settings;
         // Preview may reduce resolution; layout is resolution-independent so semantics are unchanged.
         // Draft resolution while playing; FULL project resolution when paused, so a still preview is the real picture (SPEC §8).
-        const scale = this.playing ? Math.min(1, 960 / height) : 1;
+        const draftMax = this.opts.draftOnly?.maxHeight;
+        const scale = draftMax ? Math.min(1, draftMax / height) : this.playing ? Math.min(1, 960 / height) : 1;
         const w = Math.round(width * scale);
         const h = Math.round(height * scale);
         if (!this.shown && (this.canvas.width !== w || this.canvas.height !== h)) { this.canvas.width = w; this.canvas.height = h; } // the layout gets the right shape at once
@@ -238,7 +267,7 @@ export class Player {
         // decision: the draw takes as long as it takes), and records what was painted (an effect that could not run drew no light).
         const drawn = await this.flashGuard.paint(evaluate(doc, T.frameTime(frame, frameRate)), {
           now: realTime, // real time, never the audio clock (it can stand still)
-          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames),
+          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, draftMax || scale !== 1 ? this.pool.draftFrames : this.pool.frames),
           copy: () => {
             // the finished frame replaces the one on screen at once (resizing the visible canvas clears it, so only now)
             if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
@@ -260,8 +289,8 @@ export class Player {
         }
         this.canvas.dataset.frame = String(frame);
         this.canvas.dataset.flashesHeld = String(this.flashGuard.leftOut); // frames on which the safety guard held a strobe flash back
-        this.canvas.dataset.quality = scale === 1 ? 'full' : 'draft';
-        this.canvas.dataset.source = scale === 1 ? 'original' : 'proxy-or-original';
+        this.canvas.dataset.quality = draftMax || scale !== 1 ? 'draft' : 'full';
+        this.canvas.dataset.source = draftMax || scale !== 1 ? 'proxy-or-original' : 'original';
         this.onTick();
       }
     } catch (e) {
@@ -306,7 +335,7 @@ export class Player {
   }
 
   async play() {
-    if (!this.doc || this.playing || this.frameCount === 0) return;
+    if (!this.doc || this.playing || this.frameCount === 0 || this.opts.draftOnly) return; // the angle viewer never plays sound
     this.stopAudition();
     const doc = this.doc;
     const rate = doc.settings.frameRate;
