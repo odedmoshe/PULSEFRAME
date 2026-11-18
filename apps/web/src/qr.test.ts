@@ -255,7 +255,7 @@ describe('round trip through a reader', () => {
     const n = m.size;
     const bad: QrMatrix = { ...m, modules: Uint8Array.from(m.modules) };
     let flipped = false;
-    for (let y = n - 1; y > 8 && !flipped; y--) for (let x = n - 1; x > n - 3 && !flipped; x--) if (!isFunction(n, m.version, x, y)) { bad.modules[y * n + x] ^= 1; flipped = true; }
+    for (let y = n - 1; y > 8 && !flipped; y--) for (let x = n - 1; x > n - 3 && !flipped; x--) if (!isFunction(n, m.version, x, y)) { bad.modules[y * n + x] = bad.modules[y * n + x]! ^ 1; flipped = true; }
     expect(read(bad, false).syndromes.some((s) => s !== 0)).toBe(true);
   });
   it('200 seeded ASCII and Hebrew strings of 1-213 bytes come back identical with zero syndromes', () => {
@@ -281,7 +281,7 @@ describe('qrSvgPath', () => {
     expect((d.match(/M/g) ?? []).length).toBeGreaterThan(0);
     // paint the path's rectangles into a grid and compare with the matrix
     const grid = new Uint8Array(m.size * m.size);
-    for (const [, x, y, w] of d.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g).map((h) => h.map(Number) as [number, number, number, number])) for (let k = 0; k < w!; k++) grid[(y! - 4) * m.size + (x! - 4 + k)] = 1;
+    for (const hit of d.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)) { const [x, y, w] = [Number(hit[1]), Number(hit[2]), Number(hit[3])]; for (let k = 0; k < w; k++) grid[(y - 4) * m.size + (x - 4 + k)] = 1; }
     expect(Array.from(grid)).toEqual(Array.from(m.modules));
     expect(qrSvgPath(m, 0).viewBox).toBe(`0 0 ${m.size} ${m.size}`);
   });

@@ -228,7 +228,7 @@ export function encodeQrWithMask(text: string, mask: number): QrMatrix {
   const g = functionPatterns(version);
   place(g, codewords);
   const { size } = g;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!g.fn[y * size + x] && maskFlips(mask, y, x)) g.dark[y * size + x] ^= 1;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!g.fn[y * size + x] && maskFlips(mask, y, x)) g.dark[y * size + x] = g.dark[y * size + x]! ^ 1;
   drawFormat(g, mask);
   drawVersion(g, version);
   return { version, size, modules: g.dark, mask };
