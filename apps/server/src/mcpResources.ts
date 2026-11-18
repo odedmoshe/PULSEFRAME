@@ -72,9 +72,27 @@ const PLAYBOOKS: { name: string; title: string; description: string; extra?: Rec
     body: (a) => `Make a ${a.format || 'vertical'} version of project ${a.projectId} as a linked format; the master edit must not change.\n\n` + step([
       'Call list_catalog and pick the format profile. Call get_summary to see existing variants.',
       'add_variant with that profileId (fit=cover is the default).',
-      'Call preflight with that variant. For each clip where the subject is cut off or a title leaves the safe area, use set_variant_override (position/scale for this format only).',
-      'Check three frames with render_frame for that variant.',
+      'Call preflight with variantId. For each clip where the subject is cut off or a title leaves the safe area, use set_variant_override (position/scale for this format only).',
+      'Check three frames with render_frame passing variantId (without it you see the master).',
       'Report the overrides you made. Export only if asked (export with variantId).',
+    ]),
+  },
+  {
+    name: 'long-to-shorts', title: 'Long video to shorts', description: 'Find moments of a long recording that stand alone, and make each one its own vertical short; the main edit is untouched.',
+    extra: { assetId: { describe: 'The long recording (asset id from get_summary)' }, count: { describe: 'How many shorts to make, e.g. 3' } },
+    body: (a) => `Make ${a.count || 'a few'} shorts from ${a.assetId ? `asset ${a.assetId}` : 'the long recording'} in project ${a.projectId}. Each short becomes its own sequence; the main edit must not change.
+
+` + step([
+      'Call get_summary (assets, sequences, revision) and list_sequences to see the shorts already made.',
+      'Call get_transcript for the recording and read it. Without a transcript the edges follow pauses and scene cuts, and nothing can be quoted: say so.',
+      'Call find_short_candidates with the assetId (add exclude words for topics the user does not want). If the answer is {jobId}, poll get_job until it succeeds. The score is relative within this one video, a heuristic: read the reasons and verbatim quotes of each candidate.',
+      'Choose by meaning: pick moments that make sense on their own, start cleanly and end on a finished sentence. Say in one line per pick why you chose it, quoting the words.',
+      'Call plan_shorts with the picks (assetId, start, end, candidateId). Read the warnings (edges widened to whole words, removals skipped, enlargement) and the revision.',
+      'Call make_shorts with the same body and expectedRevision from the plan. It is one undoable step and returns the new sequenceIds. In propose mode it is refused: report the plan to the user instead.',
+      'For each short, call render_contact_sheet with its sequenceId and look at the frames: the subject in the picture, captions inside the frame.',
+      'Call preflight with the sequenceId of each short and fix what it reports. Always pass sequenceId to range operations on a short (trim_clip, add_text, set_caption_style …): without it they edit the main edit.',
+      'Export only if asked: export_project with sequenceId for one short, or export_batch with items [{ sequenceId }] for several.',
+      'Report the shorts you made (name, length, the first words), what you left out and why.',
     ]),
   },
   {

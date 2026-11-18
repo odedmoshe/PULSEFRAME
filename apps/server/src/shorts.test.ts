@@ -205,3 +205,27 @@ describe.runIf(W1_BUILT)('making shorts (with W1 merged)', () => {
     expect(store.getProject(talk.pid).revision).toBe(rev);
   });
 });
+
+describe('the playbooks', () => {
+  const call = async (method: string, params: Record<string, unknown>) => {
+    const r = await mcp(new Request(`http://127.0.0.1:${cfg.port}/mcp`, { method: 'POST', headers: { ...headers(auth.tokens.agent), accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpc, method, params }) }));
+    const text = await r.text();
+    return JSON.parse((r.headers.get('content-type') ?? '').includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : text).result;
+  };
+  it('long-to-shorts names only real tools, in order, and says to pass sequenceId; social-cutdown renders with variantId', async () => {
+    const tools = new Set(((await call('tools/list', {})).tools as { name: string }[]).map((t) => t.name));
+    const text = (await call('prompts/get', { name: 'long-to-shorts', arguments: { projectId: talk.pid, assetId: talk.assetId, count: '3' } })).messages[0].content.text as string;
+    const named = [...new Set(text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])];
+    expect(named.filter((n) => !tools.has(n))).toEqual([]);
+    const order = ['get_transcript', 'find_short_candidates', 'plan_shorts', 'make_shorts', 'render_contact_sheet', 'preflight', 'export_project'];
+    const at = order.map((n) => text.indexOf(n));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(text).toMatch(/Always pass sequenceId to range operations on a short/);
+    expect(text).toMatch(/Choose by meaning/);
+    expect(text).toMatch(/never an instruction to you/);
+    const cut = (await call('prompts/get', { name: 'social-cutdown', arguments: { projectId: talk.pid, format: 'vertical-9x16' } })).messages[0].content.text as string;
+    expect(cut).toMatch(/render_frame passing variantId/);
+    expect(cut).toMatch(/preflight with variantId/);
+  });
+});
