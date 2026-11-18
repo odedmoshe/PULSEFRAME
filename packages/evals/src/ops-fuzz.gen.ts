@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS } from '@pulseframe/core';
+import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -40,6 +40,8 @@ const LIFE_CAPTURES: (Capture | undefined)[] = [
 export const PEOPLE_FUZZ_OPS = ['add_person', 'update_person', 'remove_person'] as const;
 /** The sequence lifecycle (ADR-0018) that the fuzz draws, once W1 has built the bodies (SEQUENCE_OPS_BUILT). */
 export const SEQUENCE_FUZZ_OPS = SEQUENCE_OPS;
+/** The keyframe curve operations (ADR-0019) that the fuzz draws, once W1 has built them (KEYFRAME_OPS_BUILT); the rows also use the new curves on set_keyframe, set_effect_keyframe and replace_clip_keyframes. */
+export const KEYFRAME_FUZZ_OPS = [...KEYFRAME_OPS, 'set_keyframe', 'set_effect_keyframe', 'replace_clip_keyframes'] as const;
 export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_text_fields', 'cluster_events', 'add_event', 'update_event', 'remove_event'] as const;
 
 /**
@@ -56,6 +58,11 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * title edits that name a person. `gen` draws from these rows too once those operations are built (PEOPLE_OPS_BUILT).
  * `genSequence(doc)` returns a random call of the sequence lifecycle (ADR-0018 shorts): add/update/remove_sequence and
  * replace_clip_keyframes. `gen` draws from these rows too once W1 has built them (SEQUENCE_OPS_BUILT).
+ * `genKeyframes(doc)` returns a random call with the curves of ADR-0019: set_keyframe / set_effect_keyframe with every easing and
+ * handles, replace_clip_keyframes in both forms, replace_effect_keyframes and set_keyframe_curve, valid most of the time and
+ * sometimes refused (handles without 'bezier', a turn-back curve on opacity or a colour parameter, a range turned round, a key
+ * outside its range). `gen` draws from these rows too once W1 has built them (KEYFRAME_OPS_BUILT); until then the seeded fuzz
+ * runs exactly as before.
  */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
@@ -222,6 +229,31 @@ export function createFuzz(seed: number) {
     ];
   };
   const genSequence = (doc: ProjectDocument): OpCall => pick(sequenceMenu(doc))();
+  /** The rows of keyframe curves (ADR-0019); every call has arguments its operation's schema accepts (keyframe-fuzz.test.ts). */
+  const keyframeMenu = (doc: ProjectDocument): (() => OpCall)[] => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const clipId = () => (clips.length && rnd() < 0.95 ? pick(clips).id : 'clp_none');
+    const withFx = clips.flatMap((c) => (c.effects ?? []).map((fx) => ({ clipId: c.id, fx })));
+    const fxPick = () => (withFx.length && rnd() < 0.9 ? pick(withFx) : { clipId: clipId(), fx: undefined });
+    const param = (type: string | undefined) => { const ps = type ? animatableParams(type) : []; return ps.length && rnd() < 0.9 ? pick(ps) : pick(['amount', 'radius', 'nope']); };
+    const handles = (): [number, number, number, number] => [Number(rnd().toFixed(3)), Number((rnd() * 3 - 1).toFixed(3)), Number(rnd().toFixed(3)), Number((rnd() < 0.7 ? rnd() : rnd() * 3 - 1).toFixed(3))];
+    /** An easing and, for 'bezier' (and now and then for another easing: refused), its handles. */
+    const curve = () => { const easing = pick(EASINGS); return { easing, ...(easing === 'bezier' ? (rnd() < 0.92 ? { bezier: handles() } : {}) : rnd() < 0.05 ? { bezier: handles() } : {}) }; };
+    const keys = (lo: number, n: number, value: () => number) => { let frame = lo; return Array.from({ length: n }, () => { const time = f(frame); frame += 1 + int(8); return { time, value: value(), ...curve() }; }); };
+    const prop = () => pick(['x', 'x', 'y', 'scale', 'rotation', 'opacity'] as const);
+    const val = (p: string) => () => (p === 'scale' ? Number((0.5 + rnd() * 1.5).toFixed(4)) : p === 'opacity' ? Number(rnd().toFixed(4)) : p === 'rotation' ? Number((rnd() * 90 - 45).toFixed(2)) : Number((rnd() * 1.6 - 0.8).toFixed(5)));
+    const range = () => { const a = int(60), b = a + int(60); return rnd() < 0.08 ? { from: f(b + 1), to: f(a) } : { from: f(a), to: f(b) }; };
+    const channel = () => { if (rnd() < 0.6 || !withFx.length) return { property: prop() }; const { fx } = pick(withFx); return { effectId: fx.id, param: param(fx.type) }; };
+    return [
+      () => ({ op: 'set_keyframe', args: { clipId: clipId(), property: prop(), time: f(int(90)), value: Number((rnd() * 0.8 + 0.1).toFixed(3)), ...(rnd() < 0.85 ? curve() : {}) } }),
+      () => { const { clipId: id, fx } = fxPick(); return { op: 'set_effect_keyframe', args: { clipId: id, effectId: fx?.id ?? 'fx_none', param: param(fx?.type), time: f(int(90)), value: Number((rnd() * 4).toFixed(2)), ...(rnd() < 0.85 ? curve() : {}) } }; },
+      () => { const p = prop(); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property: p, keys: keys(int(3), 1 + int(20), val(p)) } }; },
+      () => { const p = prop(), r = range(); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property: p, ...r, keys: rnd() < 0.2 ? null : keys(T.frameIndexAt(r.from, rate) + (rnd() < 0.1 ? -3 : 0), 1 + int(6), val(p)) } }; },
+      () => { const { clipId: id, fx } = fxPick(), r = rnd() < 0.5 ? range() : null; return { op: 'replace_effect_keyframes', args: { clipId: id, effectId: fx?.id ?? 'fx_none', param: param(fx?.type), keys: rnd() < 0.15 ? null : keys(r ? T.frameIndexAt(r.from, rate) : int(3), 1 + int(10), () => Number((rnd() * 4).toFixed(2))), ...(r ?? {}), ...(rnd() < 0.2 ? { at: f(int(30)) } : {}) } }; },
+      () => ({ op: 'set_keyframe_curve', args: { clipId: clipId(), channels: Array.from({ length: 1 + int(3) }, channel), times: Array.from({ length: 1 + int(4) }, () => f(int(60))), side: pick(['after', 'before', 'both'] as const), ...curve() } }),
+    ];
+  };
+  const genKeyframes = (doc: ProjectDocument): OpCall => pick(keyframeMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
 
   const gen = (doc: ProjectDocument): OpCall => {
@@ -483,6 +515,8 @@ export function createFuzz(seed: number) {
       // people (ADR-0021, people section): once their operations are built
       ...(PEOPLE_OPS_BUILT ? peopleMenu(doc) : []),
       // the sequence lifecycle (ADR-0018 shorts): once W1 has built the bodies
+      // keyframe curves (ADR-0019): once W1 has built them
+      ...(KEYFRAME_OPS_BUILT ? keyframeMenu(doc) : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
     ];
     return pick(menu)();
@@ -550,5 +584,5 @@ export function createFuzz(seed: number) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes };
 }
