@@ -76,6 +76,7 @@
     "proof:packs": "tsx packages/evals/src/packs-proof.ts",
     "proof:fonts": "tsx packages/evals/src/fonts-proof.ts",
     "proof:music": "tsx packages/evals/src/music-proof.ts",
+    "proof:incremental": "tsx packages/evals/src/incremental-export-proof.ts",
     "packs:sheet": "tsx packages/evals/src/packs-sheet.ts"
   },
   "devDependencies": {

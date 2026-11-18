@@ -2,6 +2,7 @@ import { effectParamLabel } from './effectParams.ts';
 import { HE_LIFE } from './lifeline.ts';
 import { HE_PACKS } from './packs.ts';
 import { HE_PEOPLE, HE_PEOPLE_SERVER } from './people.ts';
+import { HE_RENDER_CACHE } from './renderCache.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -231,7 +232,7 @@ const HE_TIMELINE: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   return undefined;
 }
@@ -259,3 +260,5 @@ export const PEOPLE_REFUSAL_PATTERNS: readonly RegExp[] = HE_PEOPLE.map(([re]) =
 export const PEOPLE_SERVER_REFUSAL_PATTERNS: readonly RegExp[] = HE_PEOPLE_SERVER.map(([re]) => re);
 /** The patterns of the timeline-behaviour operations (set_timeline_behaviour, ripple_delete_clips), for their own case of refusal-wording.test.ts. */
 export const TIMELINE_REFUSAL_PATTERNS: readonly RegExp[] = HE_TIMELINE.map(([re]) => re);
+/** The fast export's blockers and job failures (ADR-0024; the table is in renderCache.ts), for packages/evals/src/render-cache-wording.test.ts. */
+export const RENDER_CACHE_REFUSAL_PATTERNS: readonly RegExp[] = HE_RENDER_CACHE.map(([re]) => re);

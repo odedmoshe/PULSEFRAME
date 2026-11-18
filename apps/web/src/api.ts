@@ -1,4 +1,4 @@
-import type { Asset, OpCall, ProjectDocument } from '@pulseframe/core';
+import type { Asset, ExportMode, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -61,7 +61,7 @@ export function writeSnapBeats(on: boolean): void {
 }
 
 export interface ProjectListItem { id: string; name: string; revision: number; updatedAt?: string }
-export interface StorageReport { projects: number; databaseBytes: number; media: { files: number; bytes: number }; exportsBytes: number; totalBytes: number; quotaBytes: number | null; unreferenced: { files: number; bytes: number; tooNewToJudge?: number }; rule: string }
+export interface StorageReport { projects: number; databaseBytes: number; media: { files: number; bytes: number }; exportsBytes: number; totalBytes: number; quotaBytes: number | null; unreferenced: { files: number; bytes: number; tooNewToJudge?: number }; rule: string; /** Present when the render cache is wired (ADR-0024). */ renderCache?: RenderCacheStatus }
 export interface GcResult { applied: boolean; wouldRemove?: { files: number; bytes: number }; removed?: { files: number; bytes: number }; note?: string }
 export type GrantMode = 'observe' | 'propose' | 'edit' | 'autopilot';
 export interface GrantItem { id: string; name: string; mode: GrantMode; projectIds: string[] | null; trackIds: string[] | null; range: unknown; budgetCents: number; requestsPerMinute?: number | null; exportsPerDay?: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string }
@@ -80,6 +80,11 @@ export const api = {
   backup: () => call<BackupStatus>('/backup'),
   backupNow: () => call<BackupStatus>('/backup', json({})),
   storageGc: (apply: boolean) => call<GcResult>('/storage/gc', json(apply ? { apply: true } : {})),
+  // render cache (ADR-0024): the owner's size row and «ניקוי מטמון הרינדור»; the routes are mounted by the lead's wiring (renderCacheRoutes.ts)
+  renderCache: () => call<RenderCacheStatus>('/storage/render-cache'),
+  clearRenderCache: () => call<{ removed: number; bytes: number; keptPinned: number }>('/storage/render-cache', { method: 'DELETE' }),
+  /** What a fast export of these options would reuse and render (the sheet line and the timeline lane); aborted when a newer revision asks. */
+  planSegments: (id: string, options: object, signal?: AbortSignal) => call<SegmentPlanView>(`/projects/${id}/exports/segments/plan`, { ...json(options), ...(signal ? { signal } : {}) }),
   listGrants: () => call<{ grants: GrantItem[] }>('/grants'),
   createGrant: (body: { name: string; mode: GrantMode; projectIds?: string[]; budgetCents?: number; requestsPerMinute?: number; exportsPerDay?: number }) => call<{ grant: GrantItem; token: string }>('/grants', json(body)),
   revokeGrant: (id: string) => call<{ grant: GrantItem }>(`/grants/${encodeURIComponent(id)}/revoke`, json({})),
@@ -140,7 +145,7 @@ export const api = {
   decideApproval: (id: string, approvalId: string, decision: 'approve' | 'reject') => call<{ approval: Approval; jobId?: string }>(`/projects/${id}/approvals/${approvalId}/${decision}`, json({})),
   proposals: (id: string) => call<{ proposals: Proposal[] }>(`/projects/${id}/proposals?status=open`),
   decideProposal: (id: string, proposalId: string, decision: 'accept' | 'reject') => call<{ proposal: Proposal }>(`/projects/${id}/proposals/${proposalId}/${decision}`, json({})),
-  startExport: (id: string, options?: { variantId?: string }) => call<{ jobId: string }>(`/projects/${id}/exports`, options ? json(options) : { method: 'POST' }),
+  startExport: (id: string, options?: { variantId?: string; mode?: ExportMode; selfCheck?: SelfCheckMode }) => call<{ jobId: string }>(`/projects/${id}/exports`, options ? json(options) : { method: 'POST' }),
   exportBatch: (id: string, variantIds: string[]) => call<{ jobs: { jobId: string; variantId: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ variantIds })),
   job: (jobId: string) => call<JobEvent & { status: string; /** an export's stored options (POST /exports body) */ options?: { variantId?: string; format?: string; scale?: number; quality?: string; captions?: string } }>(`/jobs/${jobId}`),
   preflight: (id: string, variantId: string | null) => call<PreflightReport>(`/projects/${id}/preflight${variantId ? `?variant=${encodeURIComponent(variantId)}` : ''}`),
