@@ -1,4 +1,4 @@
-import type { Asset, ExportMode, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode } from '@pulseframe/core';
+import type { Asset, ExportMode, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -161,6 +161,15 @@ export const api = {
   addElement: (id: string, body: { elementId: string; color?: string; color2?: string; start?: unknown; duration?: unknown; trackId?: string }) => call<{ assetId: string; revision: number; placed: unknown }>(`/projects/${id}/elements`, json(body)),
   addSoundEffect: (id: string, body: { sfxId: string; start?: unknown; trackId?: string }) => call<{ assetId: string; revision: number; placed: unknown }>(`/projects/${id}/sfx`, json(body)),
   events: (id: string, since: number) => new EventSource(`/api/v1/projects/${id}/events?since=${since}`, { withCredentials: true }),
+  // ----- the family film (ADR-0026): measured moments and the film recipe -----
+  /** Start measuring moments (202 → job; poll it as any job, cancel with cancelJob), or { cached: true } when every file already has a current measurement. */
+  measureMoments: (projectId: string, body: StartMomentsBody) => call<{ jobId: string; status: string } | { cached: true; revision: number }>(`/projects/${projectId}/moments`, json(body)),
+  /** The per-sample series of one file (the derivative of kind moments); 404 derivative_not_ready until it is measured. */
+  momentsData: (projectId: string, assetId: string) => call<MomentsData>(`/projects/${projectId}/assets/${assetId}/derivatives/moments`),
+  planFilm: (projectId: string, params: FamilyFilmParams) => call<FamilyFilmPlanView>(`/projects/${projectId}/recipes/family-film/plan`, json({ params })),
+  applyFilm: (projectId: string, params: FamilyFilmParams, expectedRevision: number) => call<FamilyFilmApplyResult>(`/projects/${projectId}/recipes/family-film/apply`, json({ params, expectedRevision })),
+  /** Regenerate a film run (from this tab's filmRun or the document's run after a reload) with changed parameters. */
+  regenerateFilm: (projectId: string, runId: string, params?: Partial<FamilyFilmParams>) => call<FamilyFilmRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

@@ -42,7 +42,8 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
 
 /**
  * `setup(doc)` returns the operations that add analysis data, a transcript and a motion track; `gen(doc)` returns the next random
- * call. `setupInternal(doc)` returns the internal operation (needs allowInternal) that attaches measured samples to that motion
+ * call. `setupInternal(doc)` returns the internal operations (need allowInternal) that attach measured moments of the video (ADR-0026)
+ * and measured samples to that motion
  * track, as the tracking job does (ADR-0015); a driver that commits it after `setup` exercises attach_motion_track as well.
  * `genInternal(doc)` returns a random apply_template call (internal: a driver commits it with allowInternal, as the server
  * does; ADR-0016): a small plan with bindings, sometimes malformed, sometimes the regeneration of an earlier template run.
@@ -97,7 +98,10 @@ export function createFuzz(seed: number) {
     const t = Object.values(doc.motionTracks ?? {}).find((m) => m.assetId === vid);
     if (!t) return [];
     const k = 199, st = Array.from({ length: k }, (_, i) => (i % 50 >= 40 ? 3 : i % 50 >= 35 ? 2 : i % 97 === 5 ? 0 : 1));
-    return [{ op: 'attach_motion_track', args: { motionTrackId: t.id, from: 1, x: Array.from({ length: k }, (_, i) => 3000 + i * 20), y: Array.from({ length: k }, (_, i) => 5000 + Math.round(1500 * Math.sin(i / 15))), s: Array.from({ length: k }, (_, i) => 900 + (i % 40) * 5), q: st.map((v) => (v === 1 ? 90 : 30)), st, method: 'fuzz', params: {}, createdAt: '2026-11-17T00:00:00Z' } }];
+    // measured moments of the video (ADR-0026), as the moments job attaches them: a full record (two windows, both bases, a burst)
+    const moments: OpCall = { op: 'attach_moments', args: { method: 'fuzz moments', createdAt: '2026-11-18T00:00:00Z', items: [{ assetId: vid, algo: 1, data: `sha256:${'b'.repeat(64)}`, measured: { picture: true, sound: true }, file: { motion: 18, level: -300 }, flat: false,
+      windows: [{ peakFrame: 60, fromFrame: 20, toFrame: 110, basis: ['inner-motion', 'sound'], motion: 70, level: 8.5, sharp: 1.4, luma: 120, burstFrame: 64 }, { peakFrame: 190, fromFrame: 150, toFrame: 240, basis: ['inner-motion'], motion: 30, level: null, sharp: 1.1, luma: 90 }] }] } };
+    return [moments, { op: 'attach_motion_track', args: { motionTrackId: t.id, from: 1, x: Array.from({ length: k }, (_, i) => 3000 + i * 20), y: Array.from({ length: k }, (_, i) => 5000 + Math.round(1500 * Math.sin(i / 15))), s: Array.from({ length: k }, (_, i) => 900 + (i % 40) * 5), q: st.map((v) => (v === 1 ? 90 : 30)), st, method: 'fuzz', params: {}, createdAt: '2026-11-17T00:00:00Z' } }];
   };
   const EFFECTS = ['blur.gaussian', 'color.grayscale', 'color.adjust', 'light.vignette', 'time.echo', 'overlay.snow'];
   /** Looks for adjustment layers; the last three are refused on an adjustment (time effect, chroma key, drop shadow). */
