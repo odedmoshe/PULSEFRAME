@@ -28,6 +28,9 @@ const EASE: Record<V1Easing, (u: number) => number> = {
   'ease-in-out': (u) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2),
 };
 
+/** The shape of a v1 easing at u in [0, 1] (the one sampleKeyframes uses; for the cross-host measure of keyframes-proof P12). */
+export const v1Shape = (easing: V1Easing, u: number): number => EASE[easing](u);
+
 /**
  * Value of one channel at clip-local time `t`. Before the first key: first value. After the last: last value.
  * `range` is the channel's declared range (TRANSFORM_RANGE[p], effectParamRange): only the curves of ADR-0019 are clamped to

@@ -19,7 +19,9 @@
  *   otherwise unsure (it holds the shot).
  * - Hysteresis: cut to speaker k's shot (shotAngleId, else the wide angle) once "speaker k" has held switchHold, landing
  *   preRoll before it started; to the wide angle after bothHold of "both" or silenceHold of "silence" (no wide angle: hold).
- *   No shot shorter than minShot (a cut waits; one that would leave less than minShot before the end is dropped); with
+ *   No shot shorter than minShot (a cut waits; one that would leave less than minShot before the end is dropped). A
+ *   single-speaker shot that a "both" stretch (≥ bothHold) would begin inside within minShot is not started: the cut goes
+ *   wide instead (lookahead; the planner is offline). With
  *   maxShot, a shot that long cuts to the wide angle (or back from it to the last speaker). All frame-snapped.
  * - Decisions whose margin is below 3 dB are flagged unsure.
  * - Two speakers on the same mic and channel, or whose levels move together (correlation > 0.9 over the frames where either
@@ -252,21 +254,31 @@ export function planMulticamAuto(doc: ProjectDocument, raw: unknown, ctx: PlanCo
   };
   /** The first frame in [from, to) the angle has picture for, or `to`. Frames without data (gAt NaN) keep what is there and count as covered. */
   const firstCovered = (angleId: string, from: number, to: number): number => { const c = coveredBy(angleId); let i = Math.max(0, from); while (i < to && !c[i] && !Number.isNaN(gAt[i]!)) i++; return i; };
+  // Lookahead (the planner works offline; lead decision 2026-11-18): the starts of the stretches where both voices talk long
+  // enough to go wide. A single-speaker shot that one of them would begin inside, within minShot, is not started: the cut
+  // goes wide instead, so the overlap is shown wide without a shot shorter than minShot.
+  const overlapStarts: number[] = [];
+  for (let a = 0; a < N;) { let b = a + 1; while (b < N && cls[b] === cls[a]) b++; if (cls[a] === BOTH && b - a >= hold(BOTH)) overlapStarts.push(a); a = b; }
+  const overlapWithin = (from: number) => overlapStarts.some((o) => o >= from && o < from + minShot);
   for (let a = 0; a < N;) {
     let b = a + 1;
     while (b < N && cls[b] === cls[a]) b++;
     const c = cls[a]!;
     longShots(a);
     if (c >= 0 && b - a >= hold(c)) {
-      const target = c < S ? shotOf(speakers[c]!) : wide;
+      let target = c < S ? shotOf(speakers[c]!) : wide;
+      let reason: AutoDecision['reason'] = c < S ? 'speaker' : c === BOTH ? 'both' : 'silence';
       if (c < S) lastSpeaker = c;
       if (target && target !== cur) {
         let at = cur === null ? 0 : Math.max(c < S ? a - preRoll : a, last + minShot);
-        // the cut waits until the target angle has picture (switch_angles 'clip' keeps the old angle where it has none, which
-        // would leave a shot shorter than minShot); before the first cut the program shows what it shows now, for minShot too
-        at = firstCovered(target, at, b);
-        if (cur === null && at > 0) at = firstCovered(target, Math.max(at, minShot), b);
-        if (at < b && (cur === null || N - at >= minShot)) decide(at, target, c < S ? 'speaker' : c === BOTH ? 'both' : 'silence', c < S ? c : null, c < S ? margin[a]! : null);
+        if (c < S && wide && target !== wide && overlapWithin(at)) { target = wide; reason = 'both'; }
+        if (target !== cur) {
+          // the cut waits until the target angle has picture (switch_angles 'clip' keeps the old angle where it has none, which
+          // would leave a shot shorter than minShot); before the first cut the program shows what it shows now, for minShot too
+          at = firstCovered(target, at, b);
+          if (cur === null && at > 0) at = firstCovered(target, Math.max(at, minShot), b);
+          if (at < b && (cur === null || N - at >= minShot)) decide(at, target, reason, reason === 'speaker' ? c : null, reason === 'speaker' ? margin[a]! : null);
+        }
       }
     }
     a = b;

@@ -50,16 +50,26 @@ const NEEDLES: readonly RegExp[] = [
  * checksum as octal digits, which can spell "2014" by chance (the clock decides), so the leak search reads only what the
  * archive carries.
  */
-function tarContents(buf: Buffer): string {
-  const parts: string[] = [];
+function tarFiles(buf: Buffer): { name: string; bytes: Buffer }[] {
+  const files: { name: string; bytes: Buffer }[] = [];
   for (let at = 0; at + 512 <= buf.length;) {
     const header = buf.subarray(at, at + 512);
     if (header.every((b) => b === 0)) break;
     const size = parseInt(header.subarray(124, 136).toString('ascii').replace(/\0/g, '').trim() || '0', 8);
-    parts.push(buf.subarray(at + 512, at + 512 + size).toString('utf8'));
+    files.push({ name: header.subarray(0, 100).toString('utf8').replace(/\0.*$/s, ''), bytes: buf.subarray(at + 512, at + 512 + size) });
     at += 512 + Math.ceil(size / 512) * 512;
   }
-  return parts.join('\n');
+  return files;
+}
+const tarContents = (buf: Buffer): string => tarFiles(buf).map((f) => f.bytes.toString('utf8')).join('\n');
+/**
+ * What the REST walk searches in an answer: JSON parsed (so keys are searched); a tar archive file by file (JSON files parsed,
+ * every file also as text in both encodings), never its headers; anything else as text in both encodings a reader could use.
+ */
+function answerContent(type: string, buf: Buffer): unknown {
+  if (type.includes('json')) return JSON.parse(buf.toString('utf8') || 'null');
+  if (type.includes('x-tar')) return tarFiles(buf).map((f) => ({ name: f.name, utf8: f.bytes.toString('utf8'), latin1: f.bytes.toString('latin1'), ...(f.name.endsWith('.json') ? (() => { try { return { json: JSON.parse(f.bytes.toString('utf8')) }; } catch { return {}; } })() : {}) }));
+  return { utf8: buf.toString('utf8'), latin1: buf.toString('latin1') };
 }
 function familyLeak(...values: unknown[]): string | null {
   let found: string | null = null;
@@ -210,8 +220,7 @@ async function call(who: Who, key: string): Promise<{ status: number; body: unkn
   const type = r.headers.get('content-type') ?? '';
   const buf = Buffer.from(await r.arrayBuffer());
   const headers = Object.fromEntries(r.headers.entries());
-  // JSON parsed (so keys are searched); anything else as text, both encodings a reader could use
-  const content = type.includes('json') ? JSON.parse(buf.toString('utf8') || 'null') : { utf8: buf.toString('utf8'), latin1: buf.toString('latin1') };
+  const content = answerContent(type, buf);
   return { status: r.status, body: { headers, content } };
 }
 let rpcId = 0;
@@ -273,6 +282,27 @@ async function walkMcp(who: Who) {
   if (rendered) leaks.push(`a document handed to the renderer: ${rendered}`);
   expect(leaks).toEqual([]);
 }
+
+describe('the search of an archive answer', () => {
+  /** One tar entry: a 512-byte header (name, size and an mtime whose octal digits spell 2014) and the content, padded. */
+  const entry = (name: string, text: string) => {
+    const body = Buffer.from(text, 'utf8'), h = Buffer.alloc(512);
+    h.write(name, 0, 'utf8');
+    h.write(body.length.toString(8).padStart(11, '0') + '\0', 124, 'ascii');
+    h.write('00000020143\0', 136, 'ascii'); // mtime: "2014" by chance, as a header can
+    h.write('0002014311\0', 148, 'ascii'); // checksum field (not checked by the reader): "2014" again
+    return Buffer.concat([h, body, Buffer.alloc((512 - (body.length % 512)) % 512)]);
+  };
+  const tar = (...es: Buffer[]) => Buffer.concat([...es, Buffer.alloc(1024)]);
+  it('the headers are never searched: "2014" in an mtime or a checksum field is not a leak', () => {
+    expect(familyLeak(answerContent('application/x-tar', tar(entry('project.json', JSON.stringify({ name: 'נועה' })), entry('media/a.txt', 'plain'))))).toBeNull();
+  });
+  it('control: a birth year planted in any file of the archive is found (JSON or not)', () => {
+    expect(familyLeak(answerContent('application/x-tar', tar(entry('project.json', '{}'), entry('media/notes.txt', 'born 2014'))))).not.toBeNull();
+    expect(familyLeak(answerContent('application/x-tar', tar(entry('project.json', JSON.stringify({ people: { p: { birthDate: '2014-11-04' } } })))))).not.toBeNull();
+    expect(familyLeak(answerContent('application/x-tar', tar(entry('a.json', '{}'), entry('b.json', '{}'), entry('z.json', JSON.stringify({ year: 2014 })))))).not.toBeNull();
+  });
+});
 
 describe('every surface an agent can reach is classified (peopleSurfaces.ts)', () => {
   it('the REST table lists exactly the registered routes', () => {

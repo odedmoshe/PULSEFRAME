@@ -85,6 +85,15 @@ describe('multicam auto-switch planner', () => {
     expect(cuts.slice(0, 2)).toEqual([[0, 'host'], [234, 'guest']]);
     expect(cuts[2]?.[1]).toBe('wide');
   });
+  it('lookahead: a single-speaker shot an overlap would begin inside within minShot goes wide instead (the M6 fixture patterns)', () => {
+    const { doc, MIC } = setup();
+    const cuts = (script: [number, number, number, number][]) => cutsOf(planMulticamAuto(doc, { groupId: 'mcg_a' }, { multicamLevels: { [MIC]: envelope(MIC, 120, script) } }).ops);
+    // 30.77/30.99: a new voice starts alone 0.7 s before both talk; cutting to it would leave the overlap inside its 2 s shot.
+    // The cut goes wide (200 ms early, as the speaker cut would have); the guest follows once the wide has lasted minShot.
+    expect(cuts([[0, 20, -20, -80], [20, 20.7, -80, -20], [20.7, 21.9, -20, -20], [21.9, 40, -80, -20]]).slice(0, 3)).toEqual([[0, 'host'], [594, 'wide'], [654, 'guest']]);
+    // 59.50/60.21: after a wide for one overlap, the host would come back 0.5 s before a second overlap: the wide stays
+    expect(cuts([[0, 10, -20, -80], [10, 11.5, -20, -20], [11.5, 12.5, -20, -80], [12.5, 13.5, -20, -20], [13.5, 40, -20, -80]]).slice(0, 3)).toEqual([[0, 'host'], [300, 'wide'], [399, 'host']]);
+  });
   it('the same input gives byte-identical operations', () => {
     const { doc, MIC } = setup();
     const ctx = { multicamLevels: { [MIC]: envelope(MIC, 120, SCRIPT) } };
