@@ -38,7 +38,14 @@ vi.mock('@pulseframe/engine', async (importOriginal) => {
 
 const { FrameFlashCheck, reportFromCells } = await import('./flashCheck.ts');
 const { flashCells, UnkeyableError } = await import('@pulseframe/engine');
-const { SegmentStore } = await import('./segmentStore.ts');
+const { SegmentStore, RENDER_CACHE_PURGED } = await import('./segmentStore.ts');
+const Database = (await import('better-sqlite3')).default;
+/** Rows of render_segment_projects that reference this project, read through a second connection to the store's index. */
+const storeDirs = new WeakMap<object, string>();
+function projectRefs(store: object, projectId: string): number {
+  const db = new Database(path.join(storeDirs.get(store)!, 'index.sqlite'), { readonly: true });
+  try { return (db.prepare('SELECT COUNT(*) AS n FROM render_segment_projects WHERE project_id = ?').get(projectId) as { n: number }).n; } finally { db.close(); }
+}
 const X = await import('./exportSegments.ts');
 const { ApiError } = await import('./store.ts');
 type Manifest = import('./export.ts').Manifest;
@@ -84,8 +91,10 @@ function manifestOf(o: { frames: number; firstFrame?: number; rate?: { num: numb
 const ENGINE = { bundle: 'bundle-test', browser: 'fake|launch=test', schemaVersion: 2 };
 const env = (threads = 2): import('./exportSegments.ts').SegmentEnv => ({ digest: (t) => sha(t), engine: ENGINE, encoderId: `enc-test-${threads}`, threads, gpu: null, assetHash: () => 'a', fontHash: () => 'f', effectVersion: () => 1 });
 function newStore(over: Partial<import('./segmentStore.ts').SegmentStoreOptions> = {}) {
-  const s = new SegmentStore({ dir: path.join(tmp('pf-segx-'), 'render-cache'), capBytes: 1 << 30, autoClear: true, minFreeBytes: 0, quota: () => ({ quotaBytes: 0, otherBytes: 0 }), freeDiskBytes: () => 1e15, ...over });
+  const dir = path.join(tmp('pf-segx-'), 'render-cache');
+  const s = new SegmentStore({ dir, capBytes: 1 << 30, autoClear: true, minFreeBytes: 0, quota: () => ({ quotaBytes: 0, otherBytes: 0 }), freeDiskBytes: () => 1e15, ...over });
   openStores.push(s);
+  storeDirs.set(s, dir);
   return s;
 }
 
@@ -311,7 +320,7 @@ describe('selectSelfCheck', () => {
 
 // ---------- runSegmentedExport with a fake render page ----------
 interface Programme { version: Map<number, number>; /** pixels drawn differently from what the key says (a planted keying bug) */ bug?: Map<number, number> }
-function makeExport(o: { store: InstanceType<typeof SegmentStore>; frames: number; firstFrame?: number; prog: Programme; selfCheck?: 'sample' | 'every-segment'; canceledAfterFrames?: number; jobId?: string; tamperStream?: boolean; threads?: number }) {
+function makeExport(o: { store: InstanceType<typeof SegmentStore>; frames: number; firstFrame?: number; prog: Programme; selfCheck?: 'sample' | 'every-segment'; canceledAfterFrames?: number; jobId?: string; tamperStream?: boolean; threads?: number; beforeBatch?: (pos: number) => Promise<void> | void }) {
   const work = tmp('pf-work-');
   const manifest = manifestOf({ frames: o.frames, firstFrame: o.firstFrame ?? 0 });
   const first = manifest.output.firstFrame;
@@ -330,6 +339,8 @@ function makeExport(o: { store: InstanceType<typeof SegmentStore>; frames: numbe
       const order = runs.flatMap((r) => Array.from({ length: r.count }, (_, k) => r.first + k));
       let pos = 0;
       while (pos < order.length) {
+        if (aborted) throw new Error('render aborted');
+        await o.beforeBatch?.(pos);
         if (aborted) throw new Error('render aborted');
         const batch = order.slice(pos, pos + 4).map((rel) => { drawn.push(rel); const f = first + rel; return rgba(f, o.prog.bug?.get(f) ?? o.prog.version.get(f) ?? 0); });
         try { await sink.accept(o.tamperStream && pos === 8 ? pos + 1 : pos, concat(batch)); } catch (e) { throw new Error(`frame upload failed: ${(e as Error).message}`); }
@@ -411,6 +422,65 @@ describe('runSegmentedExport (fake render page, real store, encoders and join)',
     expect(x.drawn.length).toBe(4); // the page posts 4 frames a request; it was stopped after the first request (6 self-check frames + 20 to render were asked for)
     expect(store.status().segments).toBe(1); // only the two reused entries were purged; the old third segment (not used by this export) stays
     expect(store.cleanSelfChecks(ENGINE)).toBe(0);
+    expect(fs.existsSync(x.deps.outFile)).toBe(false);
+  }, LONG);
+
+  it('a privacy purge part-way through stops the export with render_cache_purged; no segment it renders afterwards is stored or references the project', async () => {
+    const store = newStore();
+    const prog: Programme = { version: new Map() };
+    // Purge while the page is in the second of three 20-frame segments, once the first segment has been committed.
+    let purged: { removed: number; bytes: number } | null = null;
+    const x = makeExport({
+      store, frames: 61, prog,
+      async beforeBatch(pos) {
+        if (pos !== 24) return;
+        for (let i = 0; i < 600 && store.status().segments < 1; i++) await new Promise((r) => setTimeout(r, 25));
+        expect(store.status().segments).toBe(1);
+        purged = store.purgeProject('prj_a');
+      },
+    });
+    let err: unknown;
+    try { await X.runSegmentedExport(x.deps); } catch (e) { err = e; }
+    expect(purged).toMatchObject({ removed: 1 });
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 409, code: RENDER_CACHE_PURGED.code, hint: RENDER_CACHE_PURGED.hint, details: { projectId: 'prj_a', retryable: false } });
+    expect((err as Error).message).toBe(RENDER_CACHE_PURGED.message('prj_a'));
+    expect(store.status().segments).toBe(0);
+    expect(projectRefs(store, 'prj_a')).toBe(0);
+    expect(fs.existsSync(x.deps.outFile)).toBe(false);
+    // A new export (pinned after the purge) stores again.
+    const r = await X.runSegmentedExport(makeExport({ store, frames: 61, prog, jobId: 'job_after' }).deps);
+    expect(r.report).toMatchObject({ reused: 0, rendered: 3 });
+    expect(store.status().segments).toBe(3);
+  }, LONG);
+
+  it('a purge with a revision fence refuses an export of an older snapshot (a retry), and one during reuse names the purge instead of a missing segment', async () => {
+    const store = newStore();
+    const prog: Programme = { version: new Map() };
+    await X.runSegmentedExport(makeExport({ store, frames: 61, prog }).deps); // revision 7, 3 segments stored
+    // The privacy change committed as revision 8: a retry of the revision-7 snapshot is refused and stores nothing.
+    store.purgeProject('prj_a', { revision: 8 });
+    expect(store.status().segments).toBe(0);
+    await expect(X.runSegmentedExport(makeExport({ store, frames: 61, prog, jobId: 'job_retry' }).deps)).rejects.toMatchObject({ code: RENDER_CACHE_PURGED.code });
+    expect(store.status().segments).toBe(0);
+    expect(projectRefs(store, 'prj_a')).toBe(0);
+    // Reuse: a later snapshot stores 3 segments; the next export reuses them and a purge runs during its render.
+    const later = (x: ReturnType<typeof makeExport>) => { x.manifest.revision = 9; return x; };
+    await X.runSegmentedExport(later(makeExport({ store, frames: 61, prog, jobId: 'job_9' })).deps);
+    // (a) every segment reused, the purge during the self-check: no put follows, so the cells read would have failed untyped.
+    const y = later(makeExport({ store, frames: 61, prog, jobId: 'job_9a', beforeBatch: (pos) => { if (pos === 4) store.purgeProject('prj_a'); } }));
+    await expect(X.runSegmentedExport(y.deps)).rejects.toMatchObject({ code: RENDER_CACHE_PURGED.code, hint: RENDER_CACHE_PURGED.hint });
+    expect(store.status().segments).toBe(0);
+    expect(projectRefs(store, 'prj_a')).toBe(0);
+    expect(fs.existsSync(y.deps.outFile)).toBe(false);
+    // (b) two reused and one to render, the purge while it renders: its put is refused.
+    await X.runSegmentedExport(later(makeExport({ store, frames: 61, prog, jobId: 'job_9c' })).deps);
+    prog.version.set(45, 1);
+    const x = later(makeExport({ store, frames: 61, prog, jobId: 'job_9b', beforeBatch: (pos) => { if (pos === 8) store.purgeProject('prj_a'); } }));
+    await expect(X.runSegmentedExport(x.deps)).rejects.toMatchObject({ code: RENDER_CACHE_PURGED.code });
+    expect(x.drawn.length).toBeGreaterThan(8);
+    expect(store.status().segments).toBe(0);
+    expect(projectRefs(store, 'prj_a')).toBe(0);
     expect(fs.existsSync(x.deps.outFile)).toBe(false);
   }, LONG);
 

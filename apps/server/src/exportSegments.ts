@@ -20,7 +20,7 @@ import type { MixResult } from './audiomix.ts';
 import { decodeCells, encodeCells } from './cellsCodec.ts';
 import { EXPORT_COLOR_TAGS, EXPORT_PIXEL_FILTER, type FrameRun, type Manifest, type SegmentSink } from './export.ts';
 import { reportFromCells, type PhotosensitivityReport } from './flashCheck.ts';
-import type { SegmentHandle, SegmentPin, SegmentStore } from './segmentStore.ts';
+import { renderCachePurgedError, type SegmentHandle, type SegmentPin, type SegmentStore } from './segmentStore.ts';
 import { ApiError } from './store.ts';
 
 export type { FrameRun, SegmentSink } from './export.ts';
@@ -472,6 +472,8 @@ class SegmentedSink implements SegmentSink {
       if (this.asyncError) throw this.asyncError;
       this.flushing = this.finish(cur, renderMs).catch((e) => {
         if (e instanceof ApiError && this.typed === e) return;
+        // A typed refusal of the store (RENDER_CACHE_PURGED: the project was purged while this export ran) stops the session as itself.
+        if (e instanceof ApiError) { try { this.fail(e); } catch { /* recorded as the typed failure */ } return; }
         this.asyncError ??= e instanceof Error ? e : new Error(String(e));
         this.kill();
       });
@@ -516,9 +518,27 @@ class SegmentedSink implements SegmentSink {
  * Throws ApiError render_cache_self_check_failed (after dropping every key this export reused and resetting the clean counter),
  * segment_join_mismatch, or storage_quota_exceeded (only when the joined file cannot be written); throws Error('canceled') on
  * cancel (committed segments stay, so a retry resumes). A failure the sink raised is rethrown as its typed ApiError, not as the
- * page's upload error.
+ * page's upload error. Throws RENDER_CACHE_PURGED (render_cache_purged, segmentStore.ts) when the project's cache is purged while
+ * the export runs (or its snapshot is older than a privacy purge's revision fence): no segment of it is stored or referenced after
+ * the purge, and nothing is published.
  */
 export async function runSegmentedExport(deps: SegmentedExportDeps): Promise<SegmentedExportResult> {
+  const { manifest, store } = deps;
+  // The pin is taken first: a privacy purge of this project from here on refuses every put and touch of this export
+  // (RENDER_CACHE_PURGED), and the snapshot revision lets a purge's revision fence refuse a retry of an older snapshot.
+  const pin = store.pin([], { projectId: deps.projectId, revision: manifest.revision });
+  try {
+    return await segmentedExport(deps, pin);
+  } catch (e) {
+    // Files the purge removed under this export make later steps fail untyped (missing cells, a join of vanished segments): name the cause.
+    if (!(e instanceof ApiError) && !(e instanceof Error && e.message === 'canceled') && store.purgedSince(pin, deps.projectId)) throw renderCachePurgedError(deps.projectId);
+    throw e;
+  } finally {
+    pin.release();
+  }
+}
+
+async function segmentedExport(deps: SegmentedExportDeps, pin: SegmentPin): Promise<SegmentedExportResult> {
   const { manifest, store, env } = deps;
   const { output } = manifest;
   const rate = output.frameRate;
@@ -534,7 +554,7 @@ export async function runSegmentedExport(deps: SegmentedExportDeps): Promise<Seg
   // 2. Key every frame.
   deps.stage('keying');
   const plan = await planSegments(deps.doc, manifest, env, store, deps.keyOf, deps.canceled);
-  const pin = store.pin(plan.segments.filter((s) => s.state === 'cached' && s.key).map((s) => s.key!));
+  for (const s of plan.segments) if (s.state === 'cached' && s.key) pin.add(s.key);
   let sink: SegmentedSink | null = null;
   try {
     // 3. Integrity on every reuse: a damaged or vanished entry becomes a miss.
@@ -597,6 +617,8 @@ export async function runSegmentedExport(deps: SegmentedExportDeps): Promise<Seg
       await s.settle();
       checkCancel();
     }
+    // Reused segments may have been removed by a purge while the page rendered: refuse before reading their cells.
+    store.assertNotPurged(pin, deps.projectId);
     const renderEnded = performance.now();
     const selfCheckMs = Math.round((sink.selfCheckEndMs ?? renderEnded) - renderStarted);
 
@@ -628,7 +650,7 @@ export async function runSegmentedExport(deps: SegmentedExportDeps): Promise<Seg
 
     // 10. Book-keeping: every key the file was made from is used now; the checked ones are verified.
     const usedKeys = [...[...handles.values()].map((h) => h.key), ...[...sink.outcomes.values()].flatMap((o) => (o.storedKey ? [o.storedKey] : []))];
-    store.touch(usedKeys, deps.projectId);
+    store.touch(usedKeys, deps.projectId, pin); // throws RENDER_CACHE_PURGED when a purge ran during the join: nothing is published
     const checkedKeys = [...new Set(checks.map((c) => c.segment.key!))];
     store.markVerified(checkedKeys);
     if (checks.length) store.noteCleanSelfCheck(env.engine);
@@ -654,8 +676,6 @@ export async function runSegmentedExport(deps: SegmentedExportDeps): Promise<Seg
     sink?.kill();
     if (deps.canceled() && !(e instanceof ApiError && e === sink?.failure())) throw canceledError();
     throw e;
-  } finally {
-    pin.release();
   }
 }
 

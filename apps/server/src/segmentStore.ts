@@ -14,6 +14,11 @@
  * transaction. A crash between them leaves files without a row, which reconcile() (run at construction) removes.
  *
  * The lead registers the store with storage.ts setStorageHooks (reclaim = trim, purgeProject, status) when it wires the route.
+ *
+ * A purge is final for the exports already running (privacy over speed): every pin remembers the store's purge sequence when it
+ * was taken, and the revision of the snapshot it renders. `put` and `touch` refuse (RENDER_CACHE_PURGED, a typed ApiError) to
+ * store or reference a segment for a project purged after the pin was taken, or whose purge fenced off that snapshot's revision,
+ * so a running export or a retry of an old snapshot cannot put pre-redaction pictures back into the cache.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -22,6 +27,7 @@ import Database from 'better-sqlite3';
 import type { EngineFingerprint, RenderCacheStatus } from '@pulseframe/core';
 import type { FlashCells } from '@pulseframe/engine';
 import { decodeCells, encodeCells } from './cellsCodec.ts';
+import { ApiError } from './store.ts';
 
 export const RENDER_CACHE_DIR = 'render-cache';
 export const SEGMENT_SIDECAR_MAGIC = 'PFSEG1\n';
@@ -46,8 +52,31 @@ export interface SegmentMeta {
   renderMs: number;
 }
 export interface SegmentHandle { key: string; videoPath: string; meta: SegmentMeta }
-/** Keys held for one export: never evicted or cleared until released. `put` adds the keys it stores to the caller's pin. */
-export interface SegmentPin { readonly keys: ReadonlySet<string>; add(key: string): void; release(): void }
+/**
+ * Keys held for one export: never evicted or cleared until released. `put` adds the keys it stores to the caller's pin.
+ * `since` is the store's purge sequence when the pin was taken; `owner` the project and snapshot revision the export renders.
+ */
+export interface SegmentPin {
+  readonly keys: ReadonlySet<string>;
+  readonly since: number;
+  readonly owner: { projectId: string; revision?: number } | null;
+  add(key: string): void;
+  release(): void;
+}
+/**
+ * The failure of an export whose project's cache was purged while it ran (a privacy region added or changed, or the project
+ * deleted), or of a retry whose snapshot is older than that purge's revision fence. Not retryable as is: the same snapshot would
+ * render the old picture again; a new export renders the project as it is now.
+ */
+export const RENDER_CACHE_PURGED = {
+  code: 'render_cache_purged',
+  message: (projectId: string) => `the render cache of project ${projectId} was cleared for privacy while this export ran (a privacy region changed, or the project was deleted); the export renders the project as it was before, so it was stopped, nothing was published and none of its segments were kept`,
+  retryable: false,
+  hint: 'Start a new export: it renders the project with its current privacy regions. Retrying this one would render the old picture again.',
+} as const;
+export const renderCachePurgedError = (projectId: string) =>
+  new ApiError(409, RENDER_CACHE_PURGED.code, RENDER_CACHE_PURGED.message(projectId), { projectId, retryable: RENDER_CACHE_PURGED.retryable }, RENDER_CACHE_PURGED.hint);
+const FENCE_PREFIX = 'privacy-fence:';
 
 export interface SegmentStoreOptions {
   /** `<dataDir>/render-cache`; created when missing. The index lives in `<dir>/index.sqlite`. */
@@ -106,6 +135,9 @@ export class SegmentStore {
   private readonly pins = new Map<string, number>();
   private highWater = 0;
   private readonly now: () => number;
+  /** Bumped by every purgeProject; projectId -> the sequence of its latest purge (in memory: a restart has no running export). */
+  private purgeSeq = 0;
+  private readonly purgedAt = new Map<string, number>();
 
   constructor(opts: SegmentStoreOptions) {
     this.opts = opts;
@@ -241,9 +273,11 @@ export class SegmentStore {
   async put(key: string, input: SegmentPutInput, pin: SegmentPin): Promise<SegmentHandle | null> {
     if (!KEY_RE.test(key)) throw new Error(`render cache: bad segment key ${key}`);
     if (input.rgbaSha256.length !== input.frames || input.cells.length !== input.frames) throw new Error(`render cache: segment ${key} has ${input.rgbaSha256.length} hashes and ${input.cells.length} cell grids for ${input.frames} frames`);
+    this.assertNotPurged(pin, input.projectId);
     if (this.has(key)) {
       // Content-addressed: the same key holds the same frames. Keep the stored one.
       const h = await this.open(key, { verify: false });
+      this.assertNotPurged(pin, input.projectId); // a purge may have run while open awaited
       if (h) {
         pin.add(key);
         this.db.prepare('INSERT OR IGNORE INTO render_segment_projects (key, project_id) VALUES (?, ?)').run(key, input.projectId);
@@ -253,6 +287,8 @@ export class SegmentStore {
     if (this.opts.capBytes <= 0) return null;
     const videoBytes = fs.statSync(input.videoFile).size;
     const videoSha256 = await sha256File(input.videoFile);
+    // The last await of put: from here to the index row everything is synchronous, so no purge can slip in between.
+    this.assertNotPurged(pin, input.projectId);
     const cellsBlob = encodeCells(input.cells);
     const createdAt = this.now();
     const meta: SegmentMeta = { v: 1, key, frames: input.frames, width: input.width, height: input.height, videoBytes, videoSha256, rgbaSha256: input.rgbaSha256, ptsOffsetTicks: input.ptsOffsetTicks, cellsBytes: cellsBlob.length, createdAt, renderMs: Math.round(input.renderMs) };
@@ -302,8 +338,12 @@ export class SegmentStore {
     this.highWater = Math.max(this.highWater, this.usedBytes());
     return { key, videoPath: this.videoPath(key), meta };
   }
-  /** Marks the keys used now (LRU) and referenced by this project. */
-  touch(keys: readonly string[], projectId: string): void {
+  /**
+   * Marks the keys used now (LRU) and referenced by this project. With the export's pin, refuses (RENDER_CACHE_PURGED) when the
+   * project was purged after the pin was taken: the reference would bring the project's old pictures back.
+   */
+  touch(keys: readonly string[], projectId: string, pin?: SegmentPin): void {
+    if (pin) this.assertNotPurged(pin, projectId);
     const t = this.now();
     this.db.transaction(() => {
       for (const k of keys) {
@@ -323,7 +363,11 @@ export class SegmentStore {
     const at = (k: string) => this.row(k)?.verified_at ?? -1;
     return [...new Set(keys)].map((k) => [k, at(k)] as const).sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map(([k]) => k);
   }
-  pin(keys: readonly string[]): SegmentPin {
+  /**
+   * Holds these keys for one export. `owner` is the project and the snapshot revision the export renders: `put` and `touch`
+   * then refuse once that project is purged (see purgedSince).
+   */
+  pin(keys: readonly string[], owner?: { projectId: string; revision?: number }): SegmentPin {
     const held = new Set<string>();
     let released = false;
     const add = (k: string) => {
@@ -334,6 +378,8 @@ export class SegmentStore {
     for (const k of keys) add(k);
     return {
       keys: held,
+      since: this.purgeSeq,
+      owner: owner ? { ...owner } : null,
       add,
       release: () => {
         if (released) return;
@@ -365,13 +411,38 @@ export class SegmentStore {
   /**
    * Remove segments referenced by this project only (deleted project, or a privacy region added or changed: privacy over speed,
    * pinned or not). Segments another project also references stay, without this project's reference.
+   * Exports of this project already running are refused from now on (put and touch with their pin throw RENDER_CACHE_PURGED).
+   * `revision` (when a privacy region changed: the project's revision after that commit) also fences off every snapshot of an
+   * older revision, persistently, so a retry or a recovered job of a pre-redaction snapshot cannot store its segments either.
    */
-  purgeProject(projectId: string): { removed: number; bytes: number } {
+  purgeProject(projectId: string, opts: { revision?: number } = {}): { removed: number; bytes: number } {
+    this.purgedAt.set(projectId, ++this.purgeSeq);
+    if (opts.revision !== undefined && Number.isInteger(opts.revision) && opts.revision > this.revisionFence(projectId))
+      this.db.prepare('INSERT INTO render_cache_meta (name, value) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value').run(FENCE_PREFIX + projectId, String(opts.revision));
     const only = (this.db.prepare(`SELECT p.key FROM render_segment_projects p WHERE p.project_id = ?
       AND NOT EXISTS (SELECT 1 FROM render_segment_projects q WHERE q.key = p.key AND q.project_id <> p.project_id)`).all(projectId) as { key: string }[]).map((r) => r.key);
     const r = this.remove(only);
     this.db.prepare('DELETE FROM render_segment_projects WHERE project_id = ?').run(projectId);
     return r;
+  }
+  /** Snapshots of this project with a revision below this were fenced off by a privacy purge (0 = none). */
+  revisionFence(projectId: string): number {
+    const r = this.db.prepare('SELECT value FROM render_cache_meta WHERE name = ?').get(FENCE_PREFIX + projectId) as { value: string } | undefined;
+    const n = Number(r?.value ?? 0);
+    return Number.isInteger(n) && n > 0 ? n : 0;
+  }
+  /**
+   * True when the export holding `pin` may no longer store or reference segments of `projectId`: the project was purged after
+   * the pin was taken, or the pin's snapshot revision (for this project) is below the project's revision fence.
+   */
+  purgedSince(pin: SegmentPin, projectId: string): boolean {
+    if ((this.purgedAt.get(projectId) ?? 0) > pin.since) return true;
+    const rev = pin.owner?.projectId === projectId ? pin.owner.revision : undefined;
+    return rev !== undefined && rev < this.revisionFence(projectId);
+  }
+  /** Throws RENDER_CACHE_PURGED (ApiError 409) when purgedSince(pin, projectId). */
+  assertNotPurged(pin: SegmentPin, projectId: string): void {
+    if (this.purgedSince(pin, projectId)) throw renderCachePurgedError(projectId);
   }
   /** Files without rows, rows without files (or with files of the wrong size), stale temp files; run at construction. */
   reconcile(): { orphanFiles: number; orphanRows: number } {

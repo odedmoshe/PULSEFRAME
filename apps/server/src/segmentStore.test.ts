@@ -9,7 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { FlashCells } from '@pulseframe/engine';
-import { SEGMENT_SIDECAR_MAGIC, SegmentStore, type SegmentStoreOptions } from './segmentStore.ts';
+import Database from 'better-sqlite3';
+import { RENDER_CACHE_PURGED, SEGMENT_SIDECAR_MAGIC, SegmentStore, type SegmentStoreOptions } from './segmentStore.ts';
 
 const dirs: string[] = [];
 const tmp = (p: string) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), p)); dirs.push(d); return d; };
@@ -44,6 +45,11 @@ function makeStore(over: Partial<SegmentStoreOptions> = {}) {
   return { store, opts, root, work, clock, put };
 }
 const keysIn = (s: SegmentStore, names: string[]) => names.filter((n) => s.has(key(n)));
+/** Rows of render_segment_projects that reference this project, read through a second connection to the store's index. */
+function projectRefs(dir: string, projectId: string): number {
+  const db = new Database(path.join(dir, 'index.sqlite'), { readonly: true });
+  try { return (db.prepare('SELECT COUNT(*) AS n FROM render_segment_projects WHERE project_id = ?').get(projectId) as { n: number }).n; } finally { db.close(); }
+}
 
 describe('SegmentStore: put and open', () => {
   it('round-trips a segment through <dir>/<key[0..2]>/<key>.mp4 and .side (magic, u32le header length, meta JSON, cells)', async () => {
@@ -268,6 +274,51 @@ describe('SegmentStore: reconcile, purge, history', () => {
     expect(store.purgeProject('prj_a').removed).toBe(1);
     expect(store.has(a.k)).toBe(false);
     pin.release();
+  });
+
+  it('after purgeProject, an export pinned before it can neither put nor touch segments of that project (typed, hinted refusal)', async () => {
+    const { store, put, opts } = makeStore();
+    const pin = store.pin([], { projectId: 'prj_a', revision: 7 });
+    await put('before', { projectId: 'prj_a', pin });
+    await put('other', { projectId: 'prj_b' });
+    store.touch([key('other')], 'prj_a', pin); // still allowed: no purge yet
+    expect(store.purgeProject('prj_a')).toMatchObject({ removed: 1 });
+    expect(store.purgedSince(pin, 'prj_a')).toBe(true);
+    expect(store.purgedSince(pin, 'prj_b')).toBe(false);
+    let err: unknown;
+    try { await put('after', { projectId: 'prj_a', pin }); } catch (e) { err = e; }
+    expect(err).toMatchObject({ status: 409, code: RENDER_CACHE_PURGED.code, hint: RENDER_CACHE_PURGED.hint, details: { projectId: 'prj_a', retryable: false } });
+    expect((err as Error).message).toBe(RENDER_CACHE_PURGED.message('prj_a'));
+    // a key already stored (another project's) is not referenced either
+    await expect(put('other', { projectId: 'prj_a', pin })).rejects.toMatchObject({ code: 'render_cache_purged' });
+    expect(() => store.touch([key('other')], 'prj_a', pin)).toThrow(RENDER_CACHE_PURGED.message('prj_a'));
+    expect(store.has(key('after'))).toBe(false);
+    expect(store.status().segments).toBe(1); // only prj_b's
+    expect(projectRefs(opts.dir, 'prj_a')).toBe(0);
+    // the same pin may still store segments of another project; a pin taken after the purge (a new export) stores again
+    expect((await put('b2', { projectId: 'prj_b', pin })).h).not.toBeNull();
+    pin.release();
+    expect((await put('fresh', { projectId: 'prj_a', pin: store.pin([], { projectId: 'prj_a', revision: 8 }) })).h).not.toBeNull();
+    expect(projectRefs(opts.dir, 'prj_a')).toBe(1);
+  });
+
+  it("a purge's revision fence refuses snapshots older than the privacy change, also after a restart", async () => {
+    const { store, put, opts } = makeStore();
+    store.purgeProject('prj_a', { revision: 12 });
+    expect(store.revisionFence('prj_a')).toBe(12);
+    const old = store.pin([], { projectId: 'prj_a', revision: 11 }); // a retry of a pre-redaction snapshot, pinned after the purge
+    await expect(put('old', { projectId: 'prj_a', pin: old })).rejects.toMatchObject({ code: 'render_cache_purged' });
+    expect((await put('new', { projectId: 'prj_a', pin: store.pin([], { projectId: 'prj_a', revision: 12 }) })).h).not.toBeNull();
+    store.purgeProject('prj_b'); // a purge without a revision (deleted project) sets no fence and never lowers one
+    store.purgeProject('prj_a', { revision: 5 });
+    expect([store.revisionFence('prj_a'), store.revisionFence('prj_b')]).toEqual([12, 0]);
+    store.close();
+    const again = new SegmentStore(opts);
+    stores.push(again);
+    expect(again.revisionFence('prj_a')).toBe(12);
+    expect(again.purgedSince(again.pin([], { projectId: 'prj_a', revision: 11 }), 'prj_a')).toBe(true);
+    expect(again.purgedSince(again.pin([], { projectId: 'prj_a', revision: 12 }), 'prj_a')).toBe(false);
+    expect(again.status().segments).toBe(0); // 'new' was purged by the second purge of prj_a
   });
 
   it('verifyOrder: least recently verified first, ties by key; markVerified moves a key back', async () => {
