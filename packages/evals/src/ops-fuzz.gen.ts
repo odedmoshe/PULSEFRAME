@@ -68,7 +68,12 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * `genMulticam(doc)` returns a random call of the eight public multicam operations (ADR-0020). `gen` draws from these rows too
  * once W1 has built them (MULTICAM_OPS_BUILT).
  */
-export function createFuzz(seed: number) {
+/**
+ * Options of createFuzz. `v1Replay` (ADR-0019): draw no keyframe-curve rows and no multicam rows, so the seeded corpus is the one
+ * recorded before the keyframe curves were built (keyframe-replay.test.ts compares the documents it makes, byte for byte).
+ */
+export interface FuzzOptions { v1Replay?: boolean }
+export function createFuzz(seed: number, opts: FuzzOptions = {}) {
   const rnd = mulberry32(seed);
   const int = (n: number) => Math.floor(rnd() * n);
   const pick = <X,>(xs: readonly X[]): X => xs[int(xs.length)]!;
@@ -557,9 +562,9 @@ export function createFuzz(seed: number) {
       ...(PEOPLE_OPS_BUILT ? peopleMenu(doc) : []),
       // the sequence lifecycle (ADR-0018 shorts): once W1 has built the bodies
       // keyframe curves (ADR-0019): once W1 has built them
-      ...(KEYFRAME_OPS_BUILT ? keyframeMenu(doc) : []),
+      ...(KEYFRAME_OPS_BUILT && !opts.v1Replay ? keyframeMenu(doc) : []),
       // multicam (ADR-0020): once W1 has built the bodies
-      ...(MULTICAM_OPS_BUILT ? multicamMenu(doc) : []),
+      ...(MULTICAM_OPS_BUILT && !opts.v1Replay ? multicamMenu(doc) : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
     ];
     return pick(menu)();
