@@ -42,6 +42,8 @@ export interface ImportsHost {
   place(assetId: string, frame: number, trackId: string | null): Promise<number | null>;
   /** The local file is byte-identical to the stored asset (not converted): let the media pool use it. */
   provideLocal(assetId: string, file: File): void;
+  /** Optional: the server's own record of one job (GET /jobs/:id), used to settle a job of this tab that left the open list unseen. */
+  getJob?(jobId: string): Promise<ImportJobEvent>;
 }
 /** A job event as the editor's SSE stream delivers it (apps/server/src/http.ts: no input, output and error as stored). */
 export interface ImportJobEvent { id: string; type: string; status: string; stage: string | null; output: unknown; error: unknown }
@@ -73,7 +75,11 @@ export class ImportsStore {
   private current: { localId: string; abort(): void } | null = null;
   /** The file this tab sent for a job, until the job ends: placement and provideLocal need it. */
   private sent = new Map<string, { file: File; localId: string }>();
-  private placement: PlacementState | null = null;
+  /** One placement chain per timeline drop (batch); a chain is the object itself, so a late `place` result of a replaced or finished chain is ignored. */
+  private chains = new Map<string, { state: PlacementState }>();
+  private localBatch = new Map<string, string>(); // localId -> batchId
+  /** The last event of a job id this tab does not know yet (SSE can beat the upload response); applied when the upload returns that job. */
+  private earlyEvents = new Map<string, ImportJobEvent>();
   private placementLocal = new Map<string, string>(); // jobId -> localId
   private refetchTimer: ReturnType<typeof setTimeout> | null = null;
   private lingerTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -98,7 +104,10 @@ export class ImportsStore {
     const batchId = newId('b');
     const projectId = this.host.projectId();
     const added: Pending[] = files.map((file) => ({ localId: newId('l'), file, via: opts.via, ...(opts.via === 'folder' && pathOf(file) ? { relativePath: pathOf(file)! } : {}), batchId }));
-    if (opts.place && added.length) this.placement = startPlacement(added.map((p) => p.localId), opts.place);
+    if (opts.place && added.length) {
+      this.chains.set(batchId, { state: startPlacement(added.map((p) => p.localId), opts.place) });
+      for (const p of added) this.localBatch.set(p.localId, batchId);
+    }
     if (projectId === null) {
       for (const p of added) this.local.push({ localId: p.localId, name: p.file.name, byteSize: p.file.size, via: p.via, state: 'not-uploaded', percent: 0, jobId: null, reason: 'no_project' });
       for (const p of added) this.settlePlacement(p.localId, null);
@@ -150,6 +159,8 @@ export class ImportsStore {
         this.upsertJob(job);
         this.emit();
         this.afterJob(job);
+        const early = this.earlyEvents.get(job.jobId);
+        if (early) { this.earlyEvents.delete(job.jobId); this.onJobEvent(early); }
         this.pump();
       },
       (e) => {
@@ -190,7 +201,13 @@ export class ImportsStore {
   onJobEvent(e: ImportJobEvent): void {
     if (e.type !== 'import') return;
     const old = this.jobs.find((j) => j.jobId === e.id);
-    if (!old) { this.refreshSoon(); return; }
+    if (!old) {
+      this.earlyEvents.delete(e.id); // re-insert so the oldest is the first to go
+      this.earlyEvents.set(e.id, e);
+      if (this.earlyEvents.size > 200) this.earlyEvents.delete(this.earlyEvents.keys().next().value as string);
+      this.refreshSoon();
+      return;
+    }
     const card = importCardState({ status: e.status, stage: e.stage });
     const out = (e.output && typeof e.output === 'object' ? e.output : {}) as { assetId?: unknown; deduplicated?: unknown; converted?: unknown; reasons?: unknown };
     const err = (e.error && typeof e.error === 'object' ? e.error : null) as { code?: unknown; message?: unknown; retryable?: unknown } | null;
@@ -236,20 +253,25 @@ export class ImportsStore {
     }
   }
   private settlePlacement(localId: string | undefined, assetId: string | null): void {
-    if (!localId || !this.placement) return;
-    this.runPlacement({ kind: 'finished', localId, assetId });
+    const batchId = localId ? this.localBatch.get(localId) : undefined;
+    const chain = batchId ? this.chains.get(batchId) : undefined;
+    if (!localId || !batchId || !chain) return;
+    this.runPlacement(batchId, chain, { kind: 'finished', localId, assetId });
   }
-  private runPlacement(ev: PlacementEvent): void {
-    if (!this.placement) return;
-    const { state, place } = placementStep(this.placement, ev);
-    this.placement = state;
+  private runPlacement(batchId: string, chain: { state: PlacementState }, ev: PlacementEvent): void {
+    if (this.chains.get(batchId) !== chain) return;
+    const { state, place } = placementStep(chain.state, ev);
+    chain.state = state;
     if (place) {
       const epoch = this.epoch;
       Promise.resolve().then(() => this.host.place(place.assetId, place.frame, place.trackId)).then((n) => n, () => null).then((nextFrame) => {
         if (epoch !== this.epoch) return;
-        this.runPlacement({ kind: 'placed', nextFrame });
+        this.runPlacement(batchId, chain, { kind: 'placed', nextFrame });
       });
-    } else if (state.nextIndex >= state.order.length) this.placement = null;
+    } else if (state.nextIndex >= state.order.length) {
+      this.chains.delete(batchId);
+      for (const id of state.order) this.localBatch.delete(id);
+    }
   }
 
   private refreshSoon(): void {
@@ -263,13 +285,24 @@ export class ImportsStore {
     const { imports, room } = await this.host.list(projectId);
     if (epoch !== this.epoch) return;
     // The server lists open jobs and failed or canceled ones not yet dismissed; a finished one this tab still shows stays for its linger.
-    const keepReady = this.jobs.filter((j) => j.state === 'ready' && !imports.some((s) => s.jobId === j.jobId));
+    const inList = (j: ImportJobView) => imports.some((s) => s.jobId === j.jobId);
+    // A job of this tab that is not in the list and has not ended here either ended while this tab was not looking (an event lost
+    // before the job was known, or during an SSE gap): keep its card and ask the server how it ended; never drop it silently.
+    const keepReady = this.jobs.filter((j) => !inList(j) && (j.state === 'ready' || this.sent.has(j.jobId)));
+    const vanished = keepReady.filter((j) => j.state !== 'ready');
     const known = new Map(this.jobs.map((j) => [j.jobId, j] as const));
     const fresh = imports.map((s) => this.mergeJob(known.get(s.jobId), s));
     this.jobs = [...fresh, ...keepReady];
     this.room = room;
     this.emit();
     for (const j of fresh) if (j.state === 'failed' || j.state === 'canceled') this.afterJob(j);
+    for (const j of vanished) void this.settleVanished(j.jobId, epoch);
+  }
+  private async settleVanished(jobId: string, epoch: number): Promise<void> {
+    try {
+      const ev = await this.host.getJob?.(jobId);
+      if (ev && epoch === this.epoch) this.onJobEvent(ev);
+    } catch { /* stays on its card; the next refresh asks again */ }
   }
   async retry(jobId: string): Promise<void> { await this.host.retry(jobId); await this.refresh(); }
   async cancel(jobId: string): Promise<void> { await this.host.cancel(jobId); await this.refresh(); }
@@ -285,7 +318,7 @@ export class ImportsStore {
     try { this.current?.abort(); } catch { /* already finished */ }
     this.current = null;
     this.queue = []; this.local = []; this.jobs = []; this.room = null; this.skipped = null;
-    this.sent.clear(); this.placement = null; this.placementLocal.clear();
+    this.sent.clear(); this.chains.clear(); this.localBatch.clear(); this.earlyEvents.clear(); this.placementLocal.clear();
     if (this.refetchTimer) { clearTimeout(this.refetchTimer); this.refetchTimer = null; }
     for (const t of this.lingerTimers.values()) clearTimeout(t);
     this.lingerTimers.clear();

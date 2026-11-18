@@ -155,6 +155,38 @@ describe('ImportsStore', () => {
     await flush();
     expect(h.calls.place).toEqual([['A1', 100, 't1'], ['A3', 160, 't1']]);
   });
+  const ok = (id: string, assetId: string) => ({ id, type: 'import', status: 'succeeded', stage: null, output: { assetId, converted: false }, error: null });
+  it('two overlapping timeline drops each keep their own placement chain', async () => {
+    const h = fakeHost(); const s = new ImportsStore(h.host);
+    h.setPlace((a) => ({ A1: 10, A2: 20, B1: 1100, B2: 1200 })[a] ?? null);
+    s.enqueueLocal([file('a1.mp4'), file('a2.mp4')], { via: 'browser', place: { frame: 0, trackId: 't' } });
+    h.ups[0]!.resolve(job('ja1')); await flush(); h.ups[1]!.resolve(job('ja2')); await flush();
+    s.enqueueLocal([file('b1.mp4'), file('b2.mp4')], { via: 'browser', place: { frame: 1000, trackId: 't' } });
+    h.ups[2]!.resolve(job('jb1')); await flush(); h.ups[3]!.resolve(job('jb2')); await flush();
+    for (const [id, a] of [['ja1', 'A1'], ['ja2', 'A2'], ['jb1', 'B1'], ['jb2', 'B2']] as const) { s.onJobEvent(ok(id, a)); await flush(); }
+    expect(h.calls.place).toEqual([['A1', 0, 't'], ['A2', 10, 't'], ['B1', 1000, 't'], ['B2', 1100, 't']]);
+  });
+  it('a job that ended before its upload response arrived is applied when the upload returns it', async () => {
+    const h = fakeHost(); const s = new ImportsStore(h.host);
+    h.setPlace(() => 50);
+    s.enqueueLocal([file('a.mp4'), file('b.mp4')], { via: 'browser', place: { frame: 0, trackId: 't' } });
+    s.onJobEvent(ok('j1', 'A1'));
+    h.ups[0]!.resolve(job('j1')); await flush();
+    h.ups[1]!.resolve(job('j2')); await flush();
+    s.onJobEvent(ok('j2', 'A2')); await flush();
+    expect(h.calls.provide).toEqual(['A1', 'A2']);
+    expect(h.calls.place).toEqual([['A1', 0, 't'], ['A2', 50, 't']]);
+  });
+  it('a job of this tab missing from the list is asked for, not dropped, and settles the placement', async () => {
+    const h = fakeHost(); const s = new ImportsStore({ ...h.host, getJob: async (id) => ok(id, 'A' + id) });
+    h.setPlace(() => 50);
+    s.enqueueLocal([file('a.mp4')], { via: 'browser', place: { frame: 0, trackId: 't' } });
+    h.ups[0]!.resolve(job('j1')); await flush();
+    h.setListing([]);
+    await s.refresh(); await flush();
+    expect(h.calls.place).toEqual([['Aj1', 0, 't']]);
+    expect(h.calls.provide).toEqual(['Aj1']);
+  });
   it('without a project nothing is uploaded and the cards say why; reset aborts the upload and forgets everything', async () => {
     const h = fakeHost();
     const s = new ImportsStore({ ...h.host, projectId: () => null });
