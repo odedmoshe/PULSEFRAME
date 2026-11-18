@@ -22,9 +22,11 @@ export type Mode = 'pro' | 'color' | 'sound' | 'captions' | 'deliver' | 'quick' 
 
 /** Chooses a workspace. The five on the mode bar are clicked; quick, motion and custom are set as the editor keeps them and the page reloads. */
 export async function setWorkspace(page: Page, ws: Mode): Promise<void> {
+  // the mode bar keeps the id of the old select (workspace-switch, UX_REDESIGN §8); its radios are workspace-<mode>
+  const modes = () => page.getByTestId('workspace-switch');
   const bar: Record<string, () => ReturnType<Page['getByTestId']>> = {
-    pro: () => page.getByTestId('workspace-pro'), color: () => page.getByTestId('workspace-color'), sound: () => page.getByTestId('workspace-sound'),
-    captions: () => page.getByTestId('workspace-captions'), deliver: () => page.getByTestId('workspace-deliver'),
+    pro: () => modes().getByTestId('workspace-pro'), color: () => modes().getByTestId('workspace-color'), sound: () => modes().getByTestId('workspace-sound'),
+    captions: () => modes().getByTestId('workspace-captions'), deliver: () => modes().getByTestId('workspace-deliver'),
   };
   const b = bar[ws];
   if (b) { await b().click(); await page.waitForFunction((w) => document.querySelector(`[data-testid="workspace-${w}"]`)?.getAttribute('aria-checked') === 'true', ws, { timeout: 10000 }); return; }
