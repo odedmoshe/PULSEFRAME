@@ -15,7 +15,9 @@
  * - P4 the path overlay's points within 0.5 px of the mapped transformAt on every frame, and the layer box centre on the path
  *   at the playhead (motion-path-he.png, motion-path-en.png).
  * - P5 a 40 px vertex drag is one revision; Δx = 40/rect.width ± 1e-4; the untouched axis is exact at every frame, and the
- *   axis keyed by the drag keeps its static value exactly outside the two segments around the vertex.
+ *   axis keyed by the drag keeps its static value exactly outside the two segments around the vertex. The untouched y key at
+ *   the vertex is off the 1e-4 grid (a value set over REST), so a move that rounded both axes would rewrite it; then
+ *   ArrowRight on the vertex is one more revision, Δx = 0.01 ± 1e-4, and y is still exact on every frame.
  * - P6 the bend grip inserts at the middle frame, smooth on both sides, within 1 px of the pointer (before/after screenshots).
  * - P7 keyboard walk (Alt+K, Comma/Period, ←/→ one revision each, Delete); clip count and clip start unchanged.
  * - P8 copy and paste keys to a second clip at exact offsets, one revision.
@@ -150,7 +152,7 @@ async function main() {
     // ---------- the editor project: one title per check, one after another on the text track ----------
     const pid = (await call('/projects', { name: 'keyframes', width: W0, height: H0 })).body.project.id as string;
     const A = await textClip(pid, 0, 60, { x: 0, y: 0 }, [['x', 0, -0.3, 'linear'], ['x', 30, 0.3, 'linear']]);
-    const B = await textClip(pid, 60, 60, { x: 0.1, y: 0 }, [['y', 0, -0.2, 'linear'], ['y', 15, 0.1, 'linear'], ['y', 30, -0.1, 'linear']]);
+    const B = await textClip(pid, 60, 60, { x: 0.1, y: 0 }, [['y', 0, -0.2, 'linear'], ['y', 15, 0.0987654321, 'linear'], ['y', 30, -0.1, 'linear']]);
     const C = await textClip(pid, 120, 60, { x: 0, y: 0 }, [['x', 0, -0.3, 'linear'], ['x', 40, 0.3, 'linear']]);
     const D = await textClip(pid, 180, 60, { x: 0, y: 0 }, [['x', 0, -0.2, 'ease-in'], ['x', 10, 0.1, 'ease-out'], ['x', 20, 0.25, 'linear'], ['y', 10, 0.05, 'linear']]);
     const E = await textClip(pid, 240, 60, { x: 0, y: 0 }, [['x', 0, 0, 'linear']]);
@@ -312,7 +314,17 @@ async function main() {
         if (!Object.is(at(c, k).y, at(before, k).y)) yExact = false;
         if ((k <= 0 || k >= 30) && !Object.is(at(c, k).x, at(before, k).x)) xOutside = false;
       }
-      check('P5', 'a 40 px vertex drag is one revision; Δx = 40 / rect.width ± 1e-4; y (untouched) is unchanged on every frame, and x (keyed by the drag) keeps its static value outside the two segments around the vertex', g.revision === r0 + 1 && after.revision === r0 + 1 && Math.abs(dx - 40 / box.width) <= 1e-4 && yExact && xOutside, { revisions: after.revision - r0, dx, want: 40 / box.width, yExact, xOutside, xKeys: (c.keyframes?.x ?? []).map((k) => [fr(k.time), k.value, k.easing]) });
+      check('P5', 'a 40 px vertex drag is one revision; Δx = 40 / rect.width ± 1e-4; y (untouched, its key at the vertex off the 1e-4 grid) is unchanged on every frame, and x (keyed by the drag) keeps its static value outside the two segments around the vertex', g.revision === r0 + 1 && after.revision === r0 + 1 && Math.abs(dx - 40 / box.width) <= 1e-4 && yExact && xOutside, { revisions: after.revision - r0, dx, want: 40 / box.width, yExact, xOutside, xKeys: (c.keyframes?.x ?? []).map((k) => [fr(k.time), k.value, k.easing]), yKeys: (c.keyframes?.y ?? []).map((k) => [fr(k.time), k.value, k.easing]) });
+      await vertex(15).focus();
+      await page.keyboard.press('ArrowRight');
+      const g2 = await untilRev(pid, r0 + 2);
+      await sleep(400);
+      const after2 = await get(pid);
+      const c2 = clipIn(after2.project, B)!;
+      const nx = at(c2, 15).x - at(c, 15).x;
+      let yExact2 = true;
+      for (let k = 0; k < 60; k++) if (!Object.is(at(c2, k).y, at(before, k).y)) yExact2 = false;
+      check('P5', 'ArrowRight on the vertex is one revision; Δx = 0.01 ± 1e-4; y (untouched) is still unchanged on every frame, so no op was made for it', g2.revision === r0 + 2 && after2.revision === r0 + 2 && Math.abs(nx - 0.01) <= 1e-4 && yExact2, { revisions: after2.revision - r0, nx, yExact: yExact2, yKeys: (c2.keyframes?.y ?? []).map((k) => [fr(k.time), k.value, k.easing]) });
     });
 
     console.log('\n# P6 the bend grip');
