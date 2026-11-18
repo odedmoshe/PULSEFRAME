@@ -169,6 +169,36 @@ describe('rankShortCandidates', () => {
       for (const k of ['complete', 'opening', 'pace'] as const) expect(c.components[k]).toBeNull();
     }
   });
+  it('a mostly approximate transcript: an excluded word still removes every window over its statement, and the candidates say approximate_timing, not no_transcript', () => {
+    // the same talk, but every phrase approximate and without words: the units become speech blocks between silences
+    const tr: Transcript = { ...t.tr, segments: t.tr.segments.map((sg) => ({ ...sg, timing: 'approximate' as const, words: [] })) };
+    const inp: HighlightInputsWithWords = { ...inputs(t), statements: transcriptStatements(tr, { fileDuration: t.duration }), fillers: findFillers(tr).candidates, words: null };
+    const st = inp.statements!.find((x) => x.segmentId === 'seg_18')!;
+    const r = rankShortCandidates(inp, body({ exclude: ['פוליטיקה'], count: 40 }));
+    expect(r.candidates.length).toBeGreaterThan(0);
+    expect(r.excluded.length).toBe(1);
+    expect(r.excluded[0]!.word).toBe('ופוליטיקה');
+    expect(T.eq(r.excluded[0]!.at, st.start)).toBe(true);
+    for (const c of r.candidates) {
+      expect(T.lte(c.end, st.start) || T.lte(st.end, c.start)).toBe(true);
+      expect(c.warnings).toContain('approximate_timing');
+      expect(c.warnings).not.toContain('no_transcript');
+      expect(codes(c.reasons)).not.toContain('no_transcript');
+    }
+    expect(r.basis.some((b) => b.startsWith('include/exclude: matched in every statement that overlaps'))).toBe(true);
+    // an include word is found the same way, quoted verbatim
+    const inc = rankShortCandidates(inp, body({ include: ['מהטעויות'], count: 40 }));
+    const withTopic = inc.candidates.filter((c) => codes(c.reasons).includes('topic_word'));
+    expect(withTopic.length).toBeGreaterThan(0);
+    for (const c of withTopic) expect(c.reasons.find((x) => x.code === 'topic_word')!.quote).toBe('מהטעויות');
+  });
+  it('no transcript: include/exclude cannot be matched and the basis says so', () => {
+    const r = rankShortCandidates(inputs(t, { transcript: false }), body({ exclude: ['פוליטיקה'], count: 40 }));
+    expect(r.candidates.length).toBeGreaterThan(0);
+    expect(r.excluded).toEqual([]);
+    expect(r.basis).toContain('include/exclude: not applied, there is no transcript to match the words in; the candidates may hold an excluded word');
+    expect(rankShortCandidates(inputs(t, { transcript: false }), body({ count: 40 })).basis.some((b) => b.startsWith('include/exclude'))).toBe(false);
+  });
   it('with features null, voice and moments are null, missing_input is listed and the weights rescale to 100', () => {
     const r = rankShortCandidates(inputs(t, { features: false }), body({ count: 40 }));
     expect(r.candidates.length).toBeGreaterThan(0);

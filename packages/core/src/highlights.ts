@@ -15,7 +15,10 @@
  * - "moments" is the reaction-burst heuristic: at least 0.6 s of noise-like sound (flatness ≥ 0.5) at least 6 dB above the
  *   median speech level, where no word is spoken. It also fires on music, applause and crowd noise.
  * - include words add a topic_word reason; exclude words remove the window and list it in `excluded` (never dropped silently).
- *   Both are matched with fillers.ts bareWord, also after one Hebrew prefix letter.
+ *   Both are matched with fillers.ts bareWord, also after one Hebrew prefix letter. With speech blocks over a mostly
+ *   approximate transcript they are matched in every statement that overlaps the window (its words have no exact time: the
+ *   time given is the statement's start), so a window next to the word can be removed too; the basis says so. With no
+ *   transcript they cannot be matched: the basis says they were not applied.
  * - Selection is greedy by score with no overlap (at most 25% of the shorter window when allowOverlap).
  */
 import * as T from '@pulseframe/time';
@@ -108,7 +111,8 @@ interface Unit {
   pauseSeconds: number; firstPause: T.RationalTime | null;
   lowConf: number; level: number | null;
 }
-interface Occurrence { unit: number; tok: number; at: T.RationalTime; text: string }
+/** One match of an include or exclude term; `key` names the spoken word (a unit's token, or a statement's token). */
+interface Occurrence { key: string; at: T.RationalTime; text: string }
 /** One window with its raw measurements and components (exported for the tests and the proof). */
 export interface ScoredWindow {
   first: number; anchor: number; last: number;
@@ -205,7 +209,11 @@ function measure(inp: HighlightInputsWithWords) {
   const cuts = [...(inp.sceneCuts ?? [])].sort(T.cmp);
   const cutsSec = cuts.map(secs);
   const fillers = [...(inp.fillers ?? [])].sort((a, b) => T.cmp(a.start, b.start));
-  return { mode, units, gapAfter, bursts, burstPrefix, cuts, cutsSec, fillers, silences, assetLevel, timedShare, statements };
+  // speech blocks over a (mostly approximate) transcript: the statements' words, at their statement's start, for include/exclude
+  const heard = mode === 'speech_blocks'
+    ? statements.map((s) => ({ statement: s, toks: s.text.split(/\s+/u).filter(Boolean).map((text): Tok => ({ text, bare: bareWord(text), at: s.start, end: null, confidence: null })) }))
+    : [];
+  return { mode, units, gapAfter, bursts, burstPrefix, cuts, cutsSec, fillers, silences, assetLevel, timedShare, statements, heard };
 }
 type Measured = ReturnType<typeof measure>;
 
@@ -304,10 +312,13 @@ export function scoreWindows(inp: HighlightInputsWithWords, body: FindShortsBody
 const tokensOf = (m: Measured, w: ScoredWindow) => m.units.slice(w.first, w.last + 1).flatMap((u, ui) => u.toks.map((t, ti) => ({ t, unit: w.first + ui, tok: ti })));
 function occurrences(m: Measured, w: ScoredWindow, terms: string[][]): Occurrence[] {
   const out: Occurrence[] = [];
-  for (let ui = w.first; ui <= w.last; ui++) {
-    const toks = m.units[ui]!.toks, bares = toks.map((t) => t.bare);
-    for (let i = 0; i < toks.length; i++) for (const term of terms) if (matchesAt(bares, i, term)) { out.push({ unit: ui, tok: i, at: toks[i]!.at, text: toks.slice(i, i + term.length).map((t) => t.text).join(' ') }); break; }
-  }
+  const scan = (prefix: string, toks: Tok[]) => {
+    const bares = toks.map((t) => t.bare);
+    for (let i = 0; i < toks.length; i++) for (const term of terms) if (matchesAt(bares, i, term)) { out.push({ key: `${prefix}:${i}`, at: toks[i]!.at, text: toks.slice(i, i + term.length).map((t) => t.text).join(' ') }); break; }
+  };
+  for (let ui = w.first; ui <= w.last; ui++) scan(`u${ui}`, m.units[ui]!.toks);
+  // speech blocks: every statement that overlaps the window (approximate timing cannot say where in it the word is)
+  for (const h of m.heard) if (T.lt(h.statement.start, w.end) && T.lt(w.start, h.statement.end)) scan(`s${h.statement.id}`, h.toks);
   return out;
 }
 const quote = (s: string) => (s.length > 200 ? s.slice(0, 200) : s);
@@ -363,7 +374,8 @@ function reasonsOf(m: Measured, inp: HighlightInputsWithWords, w: ScoredWindow, 
   if (w.timing.approximate) minus.push({ r: reason('approximate_timing', 'minus', SCORE_PENALTIES.approximateTiming, null, null, null), weight: SCORE_PENALTIES.approximateTiming });
   if (w.timing.segment) minus.push({ r: reason('segment_timing', 'minus', SCORE_PENALTIES.segmentTiming, null, null, null), weight: SCORE_PENALTIES.segmentTiming });
   if (missing.length) notes.push(reason('missing_input', 'note', missing.reduce((n, c) => n + SCORE_WEIGHTS[c], 0), 'percent', null, null));
-  if (m.mode !== 'statements') notes.push(reason('no_transcript', 'note', null, null, null, null));
+  // speech blocks: over a mostly approximate transcript (its words are not where the units are), or with none at all
+  if (m.mode !== 'statements') notes.push(m.statements.length ? reason('approximate_timing', 'note', null, null, null, null) : reason('no_transcript', 'note', null, null, null, null));
   const byWeight = (x: { weight: number }, y: { weight: number }) => y.weight - x.weight;
   // one plus per kind of evidence (the opening's strongest sign only), so the three shown say different things
   const groupOf = (c: ShortReason['code']) => (['opens_with_question', 'hook_word', 'number_in_opening', 'speaks_to_viewer'].includes(c) ? 'opening' : c);
@@ -387,6 +399,12 @@ export function rankShortCandidates(inp: HighlightInputsWithWords, body: FindSho
   const note = 'Nothing was changed. The score is relative within this one video: weighted percentiles of measured signals (a heuristic). Read the quotes and choose by meaning.';
   if (s.mode === 'none') return { candidates: [], excluded: [], basis: [...s.basis, 'no transcript and no measured sound: nothing to rank'], method: SHORTS_RANK_METHOD, note };
   const excludeTerms = body.exclude.map(termTokens).filter((t) => t.length), includeTerms = body.include.map(termTokens).filter((t) => t.length);
+  const basis = [...s.basis];
+  if ((excludeTerms.length || includeTerms.length) && s.mode === 'speech_blocks') {
+    basis.push(m.statements.length
+      ? 'include/exclude: matched in every statement that overlaps a window (approximate timing), so a window next to an excluded word is removed too; the time given is the statement\'s start'
+      : 'include/exclude: not applied, there is no transcript to match the words in; the candidates may hold an excluded word');
+  }
   const order = [...s.windows].sort((a, b) => b.score - a.score || T.cmp(a.start, b.start) || T.cmp(a.end, b.end));
   const chosen: ScoredWindow[] = [], excluded: ExcludedWindow[] = [];
   const seen = new Set<string>();
@@ -394,7 +412,7 @@ export function rankShortCandidates(inp: HighlightInputsWithWords, body: FindSho
     const hits = excludeTerms.length ? occurrences(m, w, excludeTerms) : [];
     if (hits.length) {
       // listed once per occurrence of an excluded word, with the best window it removed
-      for (const h of hits) { const k = `${h.unit}:${h.tok}`; if (!seen.has(k)) { seen.add(k); excluded.push({ start: w.start, end: w.end, word: h.text, at: h.at }); } }
+      for (const h of hits) if (!seen.has(h.key)) { seen.add(h.key); excluded.push({ start: w.start, end: w.end, word: h.text, at: h.at }); }
       continue;
     }
     if (chosen.length >= body.count) continue;
@@ -414,7 +432,7 @@ export function rankShortCandidates(inp: HighlightInputsWithWords, body: FindSho
     if (w.reference) warnings.push('starts_with_reference');
     if (w.timing.approximate) warnings.push('approximate_timing');
     if (w.timing.segment) warnings.push('segment_timing');
-    if (s.mode !== 'statements') warnings.push('no_transcript');
+    if (s.mode !== 'statements') warnings.push(m.statements.length ? 'approximate_timing' : 'no_transcript');
     if (!inp.sceneCuts) warnings.push('no_scene_cuts');
     if (inp.existingShorts.some((x) => overlapShare(x, w) > 0)) warnings.push('overlaps_existing_short');
     if (inp.features?.partial && secs(w.end) > inp.features.analysedSeconds) warnings.push('partial_analysis');
@@ -429,5 +447,5 @@ export function rankShortCandidates(inp: HighlightInputsWithWords, body: FindSho
       warnings,
     };
   });
-  return { candidates, excluded, basis: s.basis, method: SHORTS_RANK_METHOD, note };
+  return { candidates, excluded, basis, method: SHORTS_RANK_METHOD, note };
 }
