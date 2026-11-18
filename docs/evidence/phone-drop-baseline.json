@@ -1,0 +1,414 @@
+{
+  "commit": "9bd3d96a62317e04ae7875c5ad8bdef257875ef1",
+  "recordedAt": "2026-11-18T06:18:47.122Z",
+  "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+  "freeDiskBytes": 5281132544,
+  "compareIgnores": [
+    "id",
+    "provenance.importedAt",
+    "capture",
+    "provenance.upload"
+  ],
+  "files": {
+    "A": {
+      "name": "A-hevc-rotated-vfr.mp4",
+      "expect": "conform: variable-frame-rate, rotation, codec",
+      "source": {
+        "sha256": "dcd692efe9c224d0c96b4449a349fc55439197b18a84bb8a77b09e547489082e",
+        "bytes": 77745,
+        "facts": {
+          "codec": "hevc",
+          "width": 320,
+          "height": 240,
+          "avg": "1200/59",
+          "r": "30/1",
+          "rotation": 90,
+          "sar": "1:1",
+          "transfer": null,
+          "tags": {
+            "compatible_brands": "isomiso2mp41",
+            "major_brand": "isom",
+            "minor_version": "512",
+            "creation_time": "2025-08-14T15:03:22.000000Z",
+            "com.apple.quicktime.creationdate": "2025-08-14T18:03:22+0300"
+          }
+        }
+      },
+      "status": 201,
+      "body": {
+        "assetId": "ast_d75898a43a0",
+        "revision": 1,
+        "deduplicated": false,
+        "asset": {
+          "id": "ast_d75898a43a0",
+          "kind": "video",
+          "name": "A-hevc-rotated-vfr.mp4",
+          "contentHash": "sha256:43b7036b4df2741c8b40d71bee1cf8e815cac4bb794b2a8baef3064ba583983e",
+          "byteSize": 173384,
+          "container": "mp4",
+          "mimeType": "video/mp4",
+          "duration": {
+            "value": "1001",
+            "timescale": 500
+          },
+          "video": {
+            "width": 240,
+            "height": 320,
+            "frameRate": {
+              "num": 24000,
+              "den": 1001
+            },
+            "codec": "h264",
+            "rotation": 0,
+            "frameCount": 48
+          },
+          "audio": {
+            "sampleRate": 48000,
+            "channels": 1,
+            "codec": "aac"
+          },
+          "capture": {
+            "at": "2025-08-14T18:03:22",
+            "utcOffsetMinutes": 180,
+            "source": "container"
+          },
+          "conform": {
+            "originalContentHash": "sha256:dcd692efe9c224d0c96b4449a349fc55439197b18a84bb8a77b09e547489082e",
+            "originalByteSize": 77745,
+            "reasons": [
+              "variable-frame-rate",
+              "rotation",
+              "codec"
+            ],
+            "original": {
+              "codec": "hevc",
+              "width": 320,
+              "height": 240,
+              "avgFrameRate": "1200/59",
+              "rFrameRate": "30/1",
+              "rotation": 90,
+              "frameCount": 40,
+              "durationSeconds": 2
+            },
+            "frameMapping": "cfr-nearest-timestamp",
+            "method": "ffmpeg libx264 crf 15, constant rate 24000/1001 (fps filter), display rotation applied"
+          },
+          "provenance": {
+            "origin": "upload",
+            "importedAt": "2026-11-18T06:18:47.220Z",
+            "importedBy": "agent:local"
+          }
+        }
+      },
+      "conformedSha256": "43b7036b4df2741c8b40d71bee1cf8e815cac4bb794b2a8baef3064ba583983e",
+      "originalSha256": "dcd692efe9c224d0c96b4449a349fc55439197b18a84bb8a77b09e547489082e"
+    },
+    "B": {
+      "name": "B-h264.mp4",
+      "expect": "stored as it is",
+      "source": {
+        "sha256": "128af7d26d02ea7996787c5a605b979e1e06f6244a9eb98790bdd4d48c584eeb",
+        "bytes": 99259,
+        "facts": {
+          "codec": "h264",
+          "width": 320,
+          "height": 240,
+          "avg": "30/1",
+          "r": "30/1",
+          "rotation": 0,
+          "sar": "1:1",
+          "transfer": null,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "creation_time": "2024-03-01T09:30:00.000000Z"
+          }
+        }
+      },
+      "status": 201,
+      "body": {
+        "assetId": "ast_f1a2bc9fb00",
+        "revision": 2,
+        "deduplicated": false,
+        "asset": {
+          "id": "ast_f1a2bc9fb00",
+          "kind": "video",
+          "name": "B-h264.mp4",
+          "contentHash": "sha256:128af7d26d02ea7996787c5a605b979e1e06f6244a9eb98790bdd4d48c584eeb",
+          "byteSize": 99259,
+          "container": "mp4",
+          "mimeType": "video/mp4",
+          "duration": {
+            "value": "2",
+            "timescale": 1
+          },
+          "video": {
+            "width": 320,
+            "height": 240,
+            "frameRate": {
+              "num": 30,
+              "den": 1
+            },
+            "codec": "h264",
+            "rotation": 0,
+            "frameCount": 60,
+            "untaggedColour": true
+          },
+          "audio": {
+            "sampleRate": 48000,
+            "channels": 1,
+            "codec": "aac"
+          },
+          "capture": {
+            "at": "2024-03-01T11:30:00",
+            "utcOffsetMinutes": null,
+            "source": "container",
+            "assumedZone": "Asia/Jerusalem"
+          },
+          "provenance": {
+            "origin": "upload",
+            "importedAt": "2026-11-18T06:18:47.781Z",
+            "importedBy": "agent:local"
+          }
+        }
+      },
+      "conformedSha256": null,
+      "originalSha256": "128af7d26d02ea7996787c5a605b979e1e06f6244a9eb98790bdd4d48c584eeb"
+    },
+    "C": {
+      "name": "C-h264-sar43.mp4",
+      "expect": "conform: pixel-aspect",
+      "source": {
+        "sha256": "0641c350c07ef48358b4de0bec1cb0edad71c20a0748badbb11873c2f68d2472",
+        "bytes": 99259,
+        "facts": {
+          "codec": "h264",
+          "width": 320,
+          "height": 240,
+          "avg": "30/1",
+          "r": "30/1",
+          "rotation": 0,
+          "sar": "4:3",
+          "transfer": null,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41"
+          }
+        }
+      },
+      "status": 201,
+      "body": {
+        "assetId": "ast_d021f155a30",
+        "revision": 3,
+        "deduplicated": false,
+        "asset": {
+          "id": "ast_d021f155a30",
+          "kind": "video",
+          "name": "C-h264-sar43.mp4",
+          "contentHash": "sha256:2a8891a70682153d0ca3bbebc8a55c5813066641db7d736c96923e4b479fa26d",
+          "byteSize": 210446,
+          "container": "mp4",
+          "mimeType": "video/mp4",
+          "duration": {
+            "value": "2",
+            "timescale": 1
+          },
+          "video": {
+            "width": 426,
+            "height": 240,
+            "frameRate": {
+              "num": 30,
+              "den": 1
+            },
+            "codec": "h264",
+            "rotation": 0,
+            "frameCount": 60
+          },
+          "audio": {
+            "sampleRate": 48000,
+            "channels": 1,
+            "codec": "aac"
+          },
+          "conform": {
+            "originalContentHash": "sha256:0641c350c07ef48358b4de0bec1cb0edad71c20a0748badbb11873c2f68d2472",
+            "originalByteSize": 99259,
+            "reasons": [
+              "pixel-aspect"
+            ],
+            "original": {
+              "codec": "h264",
+              "width": 320,
+              "height": 240,
+              "avgFrameRate": "30/1",
+              "rFrameRate": "30/1",
+              "rotation": 0,
+              "frameCount": 60,
+              "durationSeconds": 2
+            },
+            "frameMapping": "identity",
+            "method": "ffmpeg libx264 crf 15, constant rate 30/1 (fps filter), display rotation applied"
+          },
+          "provenance": {
+            "origin": "upload",
+            "importedAt": "2026-11-18T06:18:47.955Z",
+            "importedBy": "agent:local"
+          }
+        }
+      },
+      "conformedSha256": "2a8891a70682153d0ca3bbebc8a55c5813066641db7d736c96923e4b479fa26d",
+      "originalSha256": "0641c350c07ef48358b4de0bec1cb0edad71c20a0748badbb11873c2f68d2472"
+    },
+    "D": {
+      "name": "D-hevc-hdr-pq.mp4",
+      "expect": "conform: codec, hdr",
+      "source": {
+        "sha256": "90eed5c84ccbb2786e100ccfd9bd034b62d5808c1bbc20559acb90b533ba837d",
+        "bytes": 37388,
+        "facts": {
+          "codec": "hevc",
+          "width": 320,
+          "height": 240,
+          "avg": "30/1",
+          "r": "30/1",
+          "rotation": 0,
+          "sar": "1:1",
+          "transfer": "smpte2084",
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2mp41"
+          }
+        }
+      },
+      "status": 201,
+      "body": {
+        "assetId": "ast_4cdf12382e0",
+        "revision": 4,
+        "deduplicated": false,
+        "asset": {
+          "id": "ast_4cdf12382e0",
+          "kind": "video",
+          "name": "D-hevc-hdr-pq.mp4",
+          "contentHash": "sha256:2e0373e7c2083295e48d61ba9b6981079801af96fc95beda0172bfd97e652677",
+          "byteSize": 97623,
+          "container": "mp4",
+          "mimeType": "video/mp4",
+          "duration": {
+            "value": "1",
+            "timescale": 1
+          },
+          "video": {
+            "width": 320,
+            "height": 240,
+            "frameRate": {
+              "num": 30,
+              "den": 1
+            },
+            "codec": "h264",
+            "rotation": 0,
+            "frameCount": 30
+          },
+          "conform": {
+            "originalContentHash": "sha256:90eed5c84ccbb2786e100ccfd9bd034b62d5808c1bbc20559acb90b533ba837d",
+            "originalByteSize": 37388,
+            "reasons": [
+              "codec",
+              "hdr"
+            ],
+            "original": {
+              "codec": "hevc",
+              "width": 320,
+              "height": 240,
+              "avgFrameRate": "30/1",
+              "rFrameRate": "30/1",
+              "rotation": 0,
+              "frameCount": 30,
+              "durationSeconds": 1
+            },
+            "frameMapping": "identity",
+            "method": "ffmpeg libx264 crf 15, constant rate 30/1 (fps filter), display rotation applied; high dynamic range tone-mapped to standard range (reference white 203 nits, mobius roll-off of highlights, BT.709)"
+          },
+          "provenance": {
+            "origin": "upload",
+            "importedAt": "2026-11-18T06:18:48.556Z",
+            "importedBy": "agent:local"
+          }
+        }
+      },
+      "conformedSha256": "2e0373e7c2083295e48d61ba9b6981079801af96fc95beda0172bfd97e652677",
+      "originalSha256": "90eed5c84ccbb2786e100ccfd9bd034b62d5808c1bbc20559acb90b533ba837d"
+    },
+    "E": {
+      "name": "E-still.bmp",
+      "expect": "still-format: lossless PNG copy",
+      "source": {
+        "sha256": "7052f1250b93f5d0fdeef857612d295873588cbdf547910210ea1d12f231c9e8",
+        "bytes": 9270,
+        "facts": {
+          "codec": "bmp",
+          "width": 64,
+          "height": 48,
+          "avg": "25/1",
+          "r": "25/1",
+          "rotation": 0,
+          "sar": null,
+          "transfer": null,
+          "tags": {}
+        }
+      },
+      "status": 201,
+      "body": {
+        "assetId": "ast_e5ccb549270",
+        "revision": 5,
+        "deduplicated": false,
+        "asset": {
+          "id": "ast_e5ccb549270",
+          "kind": "image",
+          "name": "E-still.bmp",
+          "contentHash": "sha256:92823d6e7e5b8b0d5b64c9465de59b34e5d09e6b6ab9b50dae22765ece96eaff",
+          "byteSize": 554,
+          "container": "png",
+          "mimeType": "image/png",
+          "duration": {
+            "value": "0",
+            "timescale": 1
+          },
+          "image": {
+            "width": 64,
+            "height": 48,
+            "codec": "png",
+            "hasAlpha": false
+          },
+          "conform": {
+            "originalContentHash": "sha256:7052f1250b93f5d0fdeef857612d295873588cbdf547910210ea1d12f231c9e8",
+            "originalByteSize": 9270,
+            "reasons": [
+              "still-format"
+            ],
+            "original": {
+              "codec": "bmp",
+              "width": 64,
+              "height": 48,
+              "avgFrameRate": "0/0",
+              "rFrameRate": "0/0",
+              "rotation": 0,
+              "frameCount": 1,
+              "durationSeconds": 0
+            },
+            "frameMapping": "identity",
+            "method": "ffmpeg, first picture to PNG (lossless)"
+          },
+          "provenance": {
+            "origin": "upload",
+            "importedAt": "2026-11-18T06:18:48.922Z",
+            "importedBy": "agent:local"
+          }
+        }
+      },
+      "conformedSha256": "92823d6e7e5b8b0d5b64c9465de59b34e5d09e6b6ab9b50dae22765ece96eaff",
+      "originalSha256": "7052f1250b93f5d0fdeef857612d295873588cbdf547910210ea1d12f231c9e8"
+    }
+  }
+}
