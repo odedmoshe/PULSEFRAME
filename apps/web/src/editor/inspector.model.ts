@@ -162,16 +162,8 @@ export function keyframeSummary(clip: Clip): { count: number; props: string[] } 
   return { count: props.reduce((n, p) => n + ((k as Record<string, unknown[] | undefined>)[p]?.length ?? 0), 0), props };
 }
 
-/** What an audio track carries, for the mixer strip's name: music (its sound was analysed for beats), speech (it has a transcript), the sound of video clips (linked to them), or null (the strip shows its first file's name). */
-export type TrackRole = 'music' | 'speech' | 'linked';
-export function trackRole(doc: ProjectDocument, track: { clips: readonly Clip[] }): TrackRole | null {
-  const media = track.clips.filter((c): c is Extract<Clip, { type: 'media' }> => c.type === 'media');
-  if (!media.length) return null;
-  if (media.some((c) => doc.analyses?.[c.assetId]?.beats)) return 'music';
-  if (media.some((c) => doc.transcripts?.[c.assetId])) return 'speech';
-  if (media.every((c) => !!c.linkGroupId)) return 'linked';
-  return null;
-}
+// trackRole moved to core (editHelpers.ts, ADR-0027 lead contract (e)): the mixer strip and the command bar's «המוזיקה» read one rule.
+export { trackRole, type TrackRole } from '@pulseframe/core';
 
 /** The ready text style a title's own style matches (font, weight, colour, box and outline as the style set them), or null. */
 export function matchingPreset<P extends { id: string; style: { fontFamily: string; fontWeight: number; color: string; background: string | null; stroke: string | null; strokeFrac: number } }>(

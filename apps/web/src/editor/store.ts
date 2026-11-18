@@ -9,6 +9,7 @@ import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { groupTimeAt, multicamGroupOf, projectVariant, type SwitchAnglesOutput } from '@pulseframe/core';
 import type { TakeRequest, TakeResult } from '@pulseframe/core';
+import { defaultTitleDuration } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -1072,7 +1073,7 @@ export class Editor {
   }
   async addText() {
     const rate = this.rate;
-    const r = await this.commit([{ op: 'add_text', args: { text: this.t('text.default'), start: this.playhead, duration: T.frameTime(Math.round((2 * rate.num) / rate.den), rate) } }], 'Add text');
+    const r = await this.commit([{ op: 'add_text', args: { text: this.t('text.default'), start: this.playhead, duration: defaultTitleDuration(rate) } }], 'Add text');
     const id = r?.results[0]?.output?.clipId;
     if (id) this.select(id);
   }
