@@ -154,7 +154,7 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
   );
 }
 
-export function MediaGrid({ onView, query = '', filter = 'all' }: { onView: (id: string) => void; query?: string; filter?: MediaFilter }) {
+export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView: (id: string) => void; query?: string; filter?: MediaFilter; only?: readonly string[] }) {
   const { editor, state, t } = useEditorState();
   const { doc, derivativeTick } = state;
   const S = MEDIA_STRINGS[state.lang];
@@ -163,7 +163,7 @@ export function MediaGrid({ onView, query = '', filter = 'all' }: { onView: (id:
   const used = usedAssets(doc);
   const all = Object.values(doc.assets);
   if (all.length === 0) return null; // the drawer shows the drop zone (Library.tsx)
-  const assets = filterAssets(doc, query, filter);
+  const assets = only ? only.flatMap((id) => (Object.hasOwn(doc.assets, id) ? [doc.assets[id]!] : [])) : filterAssets(doc, query, filter); // `only`: the files of one group of the life-line views, in the order given
   if (assets.length === 0) return <p className="pf-mc-none" role="status" data-testid="media-nomatch">{C.noMatch(query.trim() || C.filters)}</p>;
   return (
     <ul className="assets media-grid pf-mc-grid" aria-label={S.grid}>
