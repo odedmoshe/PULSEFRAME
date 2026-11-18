@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T10:37:28.174Z",
+  "ranAt": "2026-11-18T17:34:49.799Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 49,
-  "total": 49,
+  "passed": 56,
+  "total": 56,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -270,7 +270,7 @@
         "sh1": "▶▶ ×2",
         "fwd2": 1.98,
         "sh2": "◀◀ ×1",
-        "back1": -0.99,
+        "back1": -1,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -284,9 +284,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1,
+        "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.96,
+        "shuttleSpeed": 2.04,
         "staysPaused": true
       }
     },
@@ -314,30 +314,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_226c374eac0",
-          "clp_226c374eac1"
+          "clp_5ea62fe0820",
+          "clp_5ea62fe0821"
         ],
         "afterAB": [
-          "clp_226c374eac0",
-          "clp_226c374eac1"
+          "clp_5ea62fe0820",
+          "clp_5ea62fe0821"
         ],
         "afterAdd": [
-          "clp_226c374eac0",
-          "clp_226c374eac1",
-          "clp_226c374eac2"
+          "clp_5ea62fe0820",
+          "clp_5ea62fe0821",
+          "clp_5ea62fe0822"
         ],
         "midEscape": [
-          "clp_226c374eac1"
+          "clp_5ea62fe0821"
         ],
         "afterEscape": [
-          "clp_226c374eac0",
-          "clp_226c374eac1",
-          "clp_226c374eac2"
+          "clp_5ea62fe0820",
+          "clp_5ea62fe0821",
+          "clp_5ea62fe0822"
         ],
         "afterEscapeUp": [
-          "clp_226c374eac0",
-          "clp_226c374eac1",
-          "clp_226c374eac2"
+          "clp_5ea62fe0820",
+          "clp_5ea62fe0821",
+          "clp_5ea62fe0822"
         ]
       }
     },
@@ -499,7 +499,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 26/1799",
+        "valueText": "עוקב קדימה 9/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -760,18 +760,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_e4712d0d4c0",
-          "ast_079578c1430",
-          "ast_2462e66e6f0",
-          "ast_9ec52d22350",
-          "ast_cbb7bc1b6b0"
+          "ast_e8d2fd5c640",
+          "ast_2b62d3e9b00",
+          "ast_c766ce71aa0",
+          "ast_09292e37f30",
+          "ast_a537e005c40"
         ],
         "order1": [
-          "ast_e4712d0d4c0",
-          "ast_9ec52d22350",
-          "ast_079578c1430",
-          "ast_2462e66e6f0",
-          "ast_cbb7bc1b6b0"
+          "ast_e8d2fd5c640",
+          "ast_09292e37f30",
+          "ast_2b62d3e9b00",
+          "ast_c766ce71aa0",
+          "ast_a537e005c40"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -795,7 +795,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T10:37:20.222Z",
+          "createdAt": "2026-11-18T17:32:04.457Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -869,7 +869,7 @@
         "statusText": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "want": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "statusRole": "status",
-        "describedBy": "_r_34_",
+        "describedBy": "_r_36_",
         "announced": 1,
         "onVelocity": "transition-velocity",
         "opt3": {
@@ -890,6 +890,91 @@
     },
     {
       "name": "no uncaught errors in the page with the transition options",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "shorts, step 1 to 3 by keyboard: the panel shows its four steps; Enter on «מדוד» lists candidates, each with its relative score «ציון יחסי N (היוריסטיקה)» (no «viral», no prediction)",
+      "ok": true,
+      "detail": {
+        "stepsShown": 4,
+        "rows": 7,
+        "scoreText": "ציון יחסי 72 (היוריסטיקה)"
+      }
+    },
+    {
+      "name": "shorts, review keys: [ ] Shift+[ ] and Alt move the edges of the focused candidate (its range changes, a live region names the new edge in Hebrew) and commit NO trim_clip and no revision",
+      "ok": true,
+      "detail": {
+        "trimsBefore": 0,
+        "trimsAfter": 0,
+        "r0": "0:25.9–0:53.0 · 27.0 שניות",
+        "r1": "0:26.3–0:52.6 · 26.2 שניות",
+        "live": "הסוף של רגע 1 זז אל 0:52.6, המילה מתחיל"
+      }
+    },
+    {
+      "name": "shorts, plan and create by keyboard: 2 selected; the plan dialog shows operations; Enter on «צור 2 קטעים» makes 2 sequences as ONE revision; the focus lands on the first new short's tab (aria-selected)",
+      "ok": true,
+      "detail": {
+        "picked": 2,
+        "dialog": true,
+        "planOps": 4,
+        "newIds": [
+          "seq_dfd10df6de0",
+          "seq_dfd10df6de7"
+        ],
+        "revisions": 1,
+        "transactions": [
+          [
+            "apply_sequence_plan"
+          ]
+        ],
+        "focused": {
+          "id": "sequence-tab",
+          "seq": "seq_dfd10df6de0",
+          "selected": "true"
+        }
+      }
+    },
+    {
+      "name": "shorts, the canvas of the active short is 720:1280 (9:16) within 1 px",
+      "ok": true,
+      "detail": {
+        "w": 308.25,
+        "h": 548
+      }
+    },
+    {
+      "name": "shorts, a title added (T) while the short is active lands in that sequence; the main sequence is exactly as before",
+      "ok": true,
+      "detail": {
+        "landed": true,
+        "mainUnchanged": true
+      }
+    },
+    {
+      "name": "shorts, the sequence tabs by keyboard only: Home reaches the main tab; the arrow toward the end goes to the short next to it and the arrow toward the start (RTL: ArrowRight) comes back to the main tab",
+      "ok": true,
+      "detail": {
+        "byHome": {
+          "id": "sequence-tab-main",
+          "seq": "seq_main"
+        },
+        "forward": {
+          "id": "sequence-tab",
+          "seq": "seq_dfd10df6de0"
+        },
+        "secondTab": "seq_dfd10df6de0",
+        "byArrow": {
+          "id": "sequence-tab-main",
+          "seq": "seq_main"
+        },
+        "rtl": true
+      }
+    },
+    {
+      "name": "no uncaught errors in the page with the shorts run",
       "ok": true,
       "detail": []
     }
