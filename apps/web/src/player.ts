@@ -819,4 +819,57 @@ export class Player {
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     void this.actx?.close();
   }
+  // ---- perform mode (ADR-0025): the two methods of perform/contract.ts PerformPlayerPort (W3; nothing else of the player changed) ----
+  private monitorCache = new Map<string, AudioBuffer[] | Promise<void>>();
+  /**
+   * Timeline seconds HEARD at a `performance` time (a key's or pointer's event.timeStamp): playback's own clock, the audio clock
+   * when sound plays (AudioContext.getOutputTimestamp: the context time being output at a performance time), else the monotonic
+   * one. null when nothing plays at normal speed (stopped, paused, shuttling). The tap calibration is subtracted by the caller.
+   */
+  timelineSecondsAt(perfMs: number): number | null {
+    if (!this.playing || this.shuttleRate || !this.doc) return null;
+    const t0 = T.toSeconds(T.frameTime(this.origin.frame, this.doc.settings.frameRate));
+    let clock = perfMs / 1000;
+    const ctx = this.actx;
+    if (this.clock === 'audio' && ctx) {
+      const ts = typeof ctx.getOutputTimestamp === 'function' ? ctx.getOutputTimestamp() : null;
+      if (ts && typeof ts.contextTime === 'number' && typeof ts.performanceTime === 'number' && ts.performanceTime > 0) clock = ts.contextTime + (perfMs - ts.performanceTime) / 1000;
+      else clock = ctx.currentTime - (ctx.outputLatency || 0) + (perfMs - performance.now()) / 1000; // no output timestamp in this browser: the context's clock less its stated output latency
+    }
+    return t0 + (clock - this.origin.clock);
+  }
+  /**
+   * Play a library sound once, now, for monitoring during a take: straight to the output, never in the mix and never exported.
+   * The first call for an asset decodes it (gain 0 decodes without a sound: the view warms its sound pads that way when a take
+   * is armed); a tap that arrives while it is still decoding is silent rather than late.
+   */
+  monitorSound(assetId: string, gain: number): void {
+    const ctx = this.actx;
+    if (!ctx || ctx.state !== 'running') return;
+    const have = this.monitorCache.get(assetId);
+    if (Array.isArray(have)) {
+      if (gain <= 0) return;
+      let when = ctx.currentTime;
+      for (const b of have) {
+        const src = ctx.createBufferSource(), g = ctx.createGain();
+        src.buffer = b; g.gain.value = gain;
+        src.connect(g); g.connect(ctx.destination);
+        src.start(when);
+        when += b.duration;
+      }
+      return;
+    }
+    if (have) return;
+    const bufs: AudioBuffer[] = [];
+    const pending = (async () => {
+      const opened = await this.pool.openAudio(assetId).catch(() => null);
+      if (!opened) { this.monitorCache.delete(assetId); return; }
+      try {
+        for await (const raw of opened.sink.buffers(opened.origin, opened.origin + 10)) bufs.push(raw.buffer);
+        this.monitorCache.set(assetId, bufs);
+      } catch { this.monitorCache.delete(assetId); } finally { opened.dispose(); }
+    })();
+    this.monitorCache.set(assetId, pending);
+  }
+  // ---- end of the perform block ----
 }
