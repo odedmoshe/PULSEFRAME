@@ -7,6 +7,7 @@
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
+import { groupTimeAt, multicamGroupOf, projectVariant, type SwitchAnglesOutput } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -20,6 +21,8 @@ import { addAssetArgs, dropAssetArgs } from './placement.ts';
 import { injectSequenceId } from './shorts.view.ts';
 import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
 import { wholeEditOps, type WholeEditPick } from './commands.ts';
+import { commitParts, projectionResult, record, reportNotes, reportOf, startSession, type MulticamSession } from './multicamSession.ts';
+import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { cutBefore, type ObjectTab } from './inspector.model.ts';
 import { ImportsStore, type ImportJobEvent, type ImportsState } from './imports.ts';
 import { dropApi, importsApi } from './imports.api.ts';
@@ -139,6 +142,13 @@ export interface EditorState {
   dropProblem: PhoneDropProblem | null;
   /** Blocker codes of the last segment plan (422 render_blocked): the sheet's switch says why the fast export is unavailable. */
   planBlockers: string[];
+  // ---- multicam live switching (ADR-0020): session state, never stored or sent in presence ----
+  /** The recording of switches in progress (cuts in group time), or null/absent. */
+  multicamRec?: MulticamSession | null;
+  /** The polite live region's latest sentence (start, stop, «N חתכים נשמרו»); `n` makes each one new. */
+  multicamLive?: { text: string; n: number } | null;
+  /** The reaction offset in frames (0–10) a new recording starts with. */
+  multicamReaction?: number;
   /** The family film dialog (ADR-0026) is open. Session state only. */
   filmOpen: boolean;
   /** What the dialog was opened with: an event's files or the library selection (openFilm). */
@@ -279,6 +289,14 @@ export class Editor {
   /** The document the preview shows: the master, or the master projected into the viewed format (same projection as export). */
   get viewDoc(): ProjectDocument | null {
     const { doc, rawDoc, activeSequenceId: seq, viewVariantId: id } = this.state;
+    const proj = this.sessionDoc(); // a recording of switches shows its local projection (never saved)
+    if (proj && doc) {
+      if (!id || !proj.variants?.[id]) return proj;
+      if (this.viewCache?.doc === proj && this.viewCache.id === id) return this.viewCache.out;
+      const o = projectVariant(proj, id);
+      this.viewCache = { doc: proj, id, out: o };
+      return o;
+    }
     if (!doc || !rawDoc || !id || !doc.variants?.[id]) return doc;
     if (this.viewCache?.doc === doc && this.viewCache.id === id) return this.viewCache.out;
     const out = projectOutput(rawDoc, { sequenceId: seq || rawDoc.mainSequenceId, variantId: id });
@@ -335,7 +353,8 @@ export class Editor {
       const curvePicker = this.state.curvePicker && !findClip(projected, this.state.curvePicker.clipId) ? null : this.state.curvePicker;
       this.set({ doc: projected, rawDoc: p.project, activeSequenceId, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone, keySel, curvePicker });
       const vd = this.viewDoc;
-      if (vd) this.player?.setDoc(vd);
+      // while switches are being recorded (or committed) the sound plan is unchanged, so playback is not stopped (ADR-0020)
+      if (vd) { if (this.state.multicamRec || this.committingSession) this.player?.setPictureDoc(vd); else this.player?.setDoc(vd); }
     }
     return p;
   }
@@ -391,7 +410,7 @@ export class Editor {
       // Preview decodes the frame-identical proxy once it exists; export always uses the original.
       previewUrl: async (assetId) => ((await api.derivatives(projectId, assetId)).derivatives.find((d) => d.kind === 'proxy')?.status === 'ready' ? `/api/v1/projects/${projectId}/assets/${assetId}/derivatives/proxy` : null),
     });
-    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); }, this.fail);
+    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); }, this.fail);
     (window as any).__pfMedia = () => this.pool?.stats();
     (window as any).__pfSync = () => this.player?.syncStats();
     const p = await this.load(projectId);
@@ -474,6 +493,152 @@ export class Editor {
     this.es?.close();
     this.player?.dispose();
     void this.pool?.dispose();
+  }
+
+  // ---------- multicam live switching (ADR-0020) ----------
+  private sessCache: { doc: ProjectDocument; rec: MulticamSession; out: ProjectDocument } | null = null;
+  private committingSession = false;
+  private recSaw = false;
+  private recTimer = 0;
+  /** The local projection of the recording in progress (null when none, or when it has no cuts yet). Memoised on the document and the session. */
+  private sessionDoc(): ProjectDocument | null {
+    const rec = this.state.multicamRec, doc = this.state.doc;
+    if (!rec || !doc || !rec.cuts.length) return null;
+    if (this.sessCache?.doc === doc && this.sessCache.rec === rec) return this.sessCache.out;
+    const out = projectionResult(doc, rec).doc;
+    this.sessCache = { doc, rec, out };
+    return out;
+  }
+  /** What the multicam commands act on: the video target track, when it holds segments of a group (the one under the playhead, else the first). */
+  multicamProgram(): { groupId: string; sequenceId: string; trackId: string } | null {
+    const d = this.state.doc, trackId = this.target('video');
+    if (!d || !trackId) return null;
+    const track = d.sequences[d.mainSequenceId]?.tracks.find((t) => t.id === trackId);
+    const tagged = (track?.clips ?? []).filter((c) => c.type === 'media' && c.multicam && multicamGroupOf(d, c.multicam.groupId));
+    if (!tagged.length) return null;
+    const t = this.playhead;
+    const under = tagged.find((c) => T.lte(c.start, t) && T.lt(t, clipEnd(c))) ?? tagged[0]!;
+    return { groupId: (under as { multicam: { groupId: string } }).multicam.groupId, sequenceId: d.mainSequenceId, trackId };
+  }
+  /** A session is recording only until stop begins to commit it: from then on digits, Escape and a second stop do nothing. */
+  get recordingSwitches(): boolean { return !!this.state.multicamRec && !this.committingSession; }
+  private say(text: string) { this.set({ multicamLive: { text, n: (this.state.multicamLive?.n ?? 0) + 1 } }); }
+  private ms() { return MULTICAM_STRINGS[this.state.lang]; }
+  setMulticamReaction(frames: number) {
+    const r = Math.max(0, Math.min(10, Math.round(frames) || 0));
+    const rec = this.state.multicamRec;
+    this.set({ multicamReaction: r, ...(rec ? { multicamRec: { ...rec, reactionFrames: r } } : {}) });
+  }
+  /** «הקלטת החלפות» on: digits record cuts in group time while the program plays. Starts playback when it is stopped. */
+  startRecording(): void {
+    const prog = this.multicamProgram(), doc = this.state.doc;
+    if (!prog || !doc || this.state.multicamRec) return;
+    this.recSaw = false;
+    this.set({ multicamRec: startSession(doc, { ...prog, revision: this.state.revision, reactionFrames: this.state.multicamReaction ?? 0 }) });
+    this.say(this.ms().announceStart);
+    if (this.player && !this.player.active) void this.player.play();
+  }
+  /** Record a cut to `angleId` at the group time of the frame on screen minus the reaction offset. Never pauses or restarts anything. */
+  recordCut(angleId: string): void {
+    const s = this.state.multicamRec, p = this.player, doc = this.state.doc;
+    if (!s || !p || !doc || this.committingSession) return;
+    const shown = p.painted >= 0 ? p.painted : p.frame;
+    const f = Math.max(0, shown - s.reactionFrames);
+    const gt = groupTimeAt(doc, s.sequenceId, s.trackId, T.frameTime(f, this.rate));
+    if (!gt || gt.groupId !== s.groupId) return;
+    this.set({ multicamRec: record(s, gt.g, angleId) });
+    const vd = this.viewDoc;
+    if (vd) p.setPictureDoc(vd);
+  }
+  /** Called on every player tick: a pause or the end of the program (not a pause-and-resume inside setDoc) commits the recording. */
+  private multicamTick() {
+    const s = this.state.multicamRec, p = this.player;
+    if (!s || !p || this.committingSession) return;
+    if (p.active) { this.recSaw = true; if (this.recTimer) { clearTimeout(this.recTimer); this.recTimer = 0; } return; }
+    if (!this.recSaw || this.recTimer) return;
+    this.recTimer = window.setTimeout(() => { this.recTimer = 0; if (this.state.multicamRec && !this.player?.active) void this.stopRecording(); }, 200);
+  }
+  /** One switch_angles (or labelled parts over MAX_CUTS cuts) from the session. A 409 re-sends once at the fresh revision: group-time cuts stay valid. */
+  stopRecording(): Promise<void> {
+    const s = this.state.multicamRec;
+    if (!s || this.committingSession) return Promise.resolve();
+    if (this.recTimer) { clearTimeout(this.recTimer); this.recTimer = 0; }
+    const S = this.ms();
+    const parts = commitParts(s);
+    if (!parts.length) { this.set({ multicamRec: null }); this.say(S.announceStop); return Promise.resolve(); }
+    this.committingSession = true;
+    return this.enqueue(async () => {
+      const id = this.state.doc?.id;
+      if (!id) { this.committingSession = false; return; }
+      const outputs: (SwitchAnglesOutput | undefined)[] = [];
+      let revision = s.baseRevision, failed = false;
+      this.set({ save: 'save.saving', error: null });
+      for (const part of parts) {
+        let r: CommitResult | null = null;
+        try { r = await api.commit(id, revision, part.ops, part.label); }
+        catch (e) {
+          if (e instanceof ApiFailure && (e.status === 409 || e.code === 'stale_revision' || e.code === 'conflict')) {
+            await this.load(id);
+            try { r = await api.commit(id, this.state.revision, part.ops, part.label); } catch (e2) { this.fail(e2); }
+          } else this.fail(e);
+        }
+        if (!r) { failed = true; break; }
+        outputs.push(r.results[0]?.output as SwitchAnglesOutput | undefined);
+        await this.load(id);
+        revision = this.state.revision;
+      }
+      this.committingSession = false;
+      this.set({ multicamRec: null, save: 'save.saved' });
+      const vd = this.viewDoc;
+      if (vd) this.player?.setPictureDoc(vd);
+      const rep = reportOf(outputs);
+      const skipped = rep.skipped.reduce((n, k) => n + k.count, 0);
+      const why = rep.skipped.map((k) => (dictionaries[this.state.lang] as Record<string, string>)[`multicam.skip.${k.reason}`] ?? k.reason).join(', ');
+      const notes = reportNotes(rep, dictionaries[this.state.lang] as Record<string, string>, S.droppedLine);
+      this.say(failed ? S.commitFailed : [S.saved(rep.saved), skipped ? S.skippedSome(skipped, why) : '', ...notes, parts.length > 1 ? S.partsNote(parts.length) : ''].filter(Boolean).join('. '));
+    });
+  }
+  /** Escape: the recording is dropped, nothing is saved, and the program shows as it is. */
+  discardRecording(): void {
+    if (!this.state.multicamRec || this.committingSession) return;
+    if (this.recTimer) { clearTimeout(this.recTimer); this.recTimer = 0; }
+    this.set({ multicamRec: null });
+    const vd = this.viewDoc;
+    if (vd) this.player?.setPictureDoc(vd);
+    this.say(this.ms().announceDiscard);
+  }
+  /** The tagged segment of the program track under the playhead. */
+  multicamSegmentAtPlayhead() {
+    const prog = this.multicamProgram(), d = this.state.doc;
+    if (!prog || !d) return null;
+    const t = this.playhead;
+    const c = d.sequences[d.mainSequenceId]!.tracks.find((x) => x.id === prog.trackId)?.clips.find((x) => x.type === 'media' && x.multicam && T.lte(x.start, t) && T.lt(t, clipEnd(x)));
+    return c && c.type === 'media' ? c : null;
+  }
+  /**
+   * A digit while recording: a cut in group time. While paused: the segment under the playhead takes the angle (one commit);
+   * `atPlayhead`: cut there instead (the rest of the program follows, as the default `until` does).
+   */
+  switchAngle(angleId: string, atPlayhead = false): Promise<unknown> | void {
+    if (this.state.multicamRec) return this.recordCut(angleId);
+    const prog = this.multicamProgram();
+    if (!prog) return;
+    if (this.player?.playing) { this.sayOnStage(this.ms().recordHint); return; }
+    const base = { groupId: prog.groupId, sequenceId: prog.sequenceId, trackId: prog.trackId, coverage: 'clip' as const };
+    if (atPlayhead) return this.commitSwitch({ ...base, cuts: [{ at: this.playhead, angleId }] });
+    const seg = this.multicamSegmentAtPlayhead();
+    if (!seg) return;
+    return this.commitSwitch({ ...base, cuts: [{ at: seg.start, angleId }], until: { at: clipEnd(seg) } });
+  }
+  private async commitSwitch(args: Record<string, unknown>) {
+    const r = await this.commit([{ op: 'switch_angles', args }], 'Switch angles');
+    const o = r?.results[0]?.output as SwitchAnglesOutput | undefined;
+    if (o) {
+      const D = dictionaries[this.state.lang] as Record<string, string>;
+      const text = [...o.skipped.map((k) => D[`multicam.skip.${k.reason}`] ?? k.reason), ...reportNotes(o, D, this.ms().droppedLine)].join('. ');
+      if (text) this.sayOnStage(text);
+    }
+    return r;
   }
 
   // ---------- persistent edits ----------

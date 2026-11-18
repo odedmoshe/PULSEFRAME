@@ -1,3 +1,4 @@
+import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   AudioLines, Captions, Clapperboard, Film, Layers, Link2, MapPin, Metronome, Mic, MousePointer2, Music, Pencil, Plus, Rewind, Scissors, Snowflake, Sparkles, TrendingUp, Type, Zap,
@@ -35,6 +36,18 @@ import './timeline.css';
 const MAX_MARKERS = 3000;
 type MediaClip = Extract<Clip, { type: 'media' }>;
 
+/** «N · label» of a multicam tag: N is the angle's place among the group's picture angles (a sound angle has the mark ♪). */
+/** Whether the clip's badge strip renders at all: the multicam «N · label» badge is one of its reasons (a plain switched segment has no other). */
+export function hasClipBadges(b: { mcBadge: string | null; fxCount: number; speed: number; ai: unknown; onBeatFx: unknown; media: boolean }): boolean {
+  return !!b.mcBadge || b.fxCount > 0 || b.speed !== 1 || !!b.ai || !!b.onBeatFx || b.media;
+}
+export function mcBadgeText(doc: ProjectDocument, tag: { groupId: string; angleId: string }, lang: 'he' | 'en'): string | null {
+  const g = doc.multicam?.[tag.groupId];
+  const a = g?.angles.find((x) => x.id === tag.angleId);
+  if (!g || !a) return null;
+  const n = a.kind === 'picture' ? String(g.angles.filter((x) => x.kind === 'picture').indexOf(a) + 1) : '♪';
+  return MULTICAM_STRINGS[lang].badge(n, a.label);
+}
 export const clipLabel = (doc: ProjectDocument, c: Clip, lang: 'he' | 'en' = 'he') => (c.type === 'media' ? assetDisplayName(doc.assets[c.assetId], lang) ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.type === 'text' && c.fields ? fieldsToDisplay(lang, c.text, doc) : c.text); // a title with live fields shows the readable form, `{תאריך}`, never the stored `{date}`
 /** A file name as the timeline shows it: without its extension. */
 const bare = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '');
@@ -391,6 +404,8 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
           // an adjustment clip (ADR-0016) is named by its label, else by the track kind and its effects
           const adjFx = c.type === 'adjustment' ? (c.effects ?? []).filter((x) => x.enabled).map((x) => findEffect(x.type)?.name[lang] ?? x.type) : [];
           const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : c.type === 'media' ? bare(clipLabel(doc, c, lang)) : clipLabel(doc, c, lang);
+          // multicam (ADR-0020): a tagged segment says which angle it shows, in words: «2 · רחב»
+          const mcBadge = c.type === 'media' && c.multicam ? mcBadgeText(doc, c.multicam, lang) : null;
           const tailS = tail && tail.seconds >= 0.05 ? tail.seconds : 0;
           const fxLabel = `${fxNames.length ? `; ${t('timeline.fx')}: ${fxNames.join(', ')}` : ''}${tailS ? `; ${t('timeline.fx.tail')} ${tailS.toFixed(1)} ${t('sound.fx.seconds')}` : ''}`;
           const kind = kindOf(doc, lane, c);
@@ -423,7 +438,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                   editor.select(c.id, e.shiftKey || e.ctrlKey || e.metaKey ? 'toggle' : 'replace');
                 }}
                 onContextMenu={(e) => { e.preventDefault(); p.onMenu(c.id, e.clientX, e.clientY); }}
-                aria-label={`${label} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}${fxLabel}${missing ? `; ${s.clipMissing}` : ''}`} data-fx={fxNames.length ? 'true' : undefined}>
+                aria-label={`${label} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}${fxLabel}${mcBadge ? `; ${mcBadge}` : ''}${missing ? `; ${s.clipMissing}` : ''}`} data-fx={fxNames.length ? 'true' : undefined}>
                 {asset?.kind === 'image' && tr.kind === 'video' && <span className="clip-still" aria-hidden="true" style={{ backgroundImage: `url("/api/v1/projects/${encodeURIComponent(doc.id)}/assets/${encodeURIComponent(asset.id)}/content")` }} />}
                 {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                   <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as MediaClip).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={clipH} reverse={c.type === 'media' && !!c.reverse} tintKey={kind} />
@@ -433,8 +448,9 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                   {fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿</span> : null}
                   <span dir="auto" className="clip-label">{label || (missing ? s.clipMissing : '')}</span>
                 </span>
-                {(fxCount > 0 || speed !== 1 || ai || onBeatFx || (c.type === 'media' && (c.freeze || c.reverse || c.speedEnd))) && (
+                {hasClipBadges({ mcBadge, fxCount, speed, ai, onBeatFx, media: c.type === 'media' && !!(c.freeze || c.reverse || c.speedEnd) }) && (
                   <span className="clip-badges" aria-hidden="true">
+                    {mcBadge && <span className="clip-badge mc-clip-badge" data-testid="multicam-badge" data-angle-id={c.type === 'media' ? c.multicam?.angleId : undefined}>{mcBadge}</span>}
                     {c.type === 'media' && c.freeze && <span className="clip-badge" title={s.clipFreeze}><Snowflake size={11} strokeWidth={1.75} /></span>}
                     {c.type === 'media' && c.reverse && <span className="clip-badge" title={s.clipReverse}><Rewind size={11} strokeWidth={1.75} /></span>}
                     {c.type === 'media' && c.speedEnd && <span className="clip-badge" title={s.clipRamp}><TrendingUp size={11} strokeWidth={1.75} /></span>}
