@@ -117,7 +117,12 @@ export function SpeedCurveField({ clip }: { clip: Media }) {
     about.current = null; setStatus(null); setBusy(true);
     try {
       const r = await curve.apply(clip.id, { ...args, ...(ripple ? {} : { ripple: false }) }, label);
-      if (r.kind === 'applied') say(r.partIds.length > 1 ? S.done(r.partIds.length) : S.doneOne, r.partIds);
+      if (r.kind === 'applied') {
+        say(r.partIds.length > 1 ? S.done(r.partIds.length) : S.doneOne, r.partIds);
+        // the parts are selected together, and a selection of several clips shows the shared tab, not this panel: the result
+        // is said on the stage as well, so it is not lost with the panel
+        if (r.partIds.length > 1) editor.sayOnStage(S.done(r.partIds.length));
+      }
     } finally { setBusy(false); }
   };
 
