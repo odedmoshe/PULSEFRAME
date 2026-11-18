@@ -62,7 +62,7 @@ describe.skipIf(!MULTICAM_OPS_BUILT)('against core switch_angles (needs W1 merge
   const tx = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => applyTransaction(doc, ops, { idSeed: `t${Math.random()}_`, actor: 'test', allowInternal });
   function program() {
     const asset = (c: string, kind: 'video' | 'audio') => kind === 'video'
-      ? { kind, name: `cam-${c}.mp4`, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(60, 1), video: { width: 640, height: 360, codec: 'h264', frameRate: R, hasAudio: false }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 'test' } }
+      ? { kind, name: `cam-${c}.mp4`, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(60, 1), video: { width: 640, height: 360, codec: 'h264', frameRate: R, rotation: 0, frameCount: 1800 }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 'test' } }
       : { kind, name: 'mic.wav', contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(60, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 'test' } };
     let r = tx(createProject({ id: 'prj_s', name: 'S', width: 640, height: 360, frameRate: R }), [{ op: 'import_asset', args: { asset: asset('a', 'video') } }, { op: 'import_asset', args: { asset: asset('b', 'video') } }, { op: 'import_asset', args: { asset: asset('c', 'audio') } }] as OpCall[], true);
     const [A, B, M] = r.results.map((x) => x.output!.assetId as string) as [string, string, string];

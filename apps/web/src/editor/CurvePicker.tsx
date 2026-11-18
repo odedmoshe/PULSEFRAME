@@ -26,7 +26,7 @@ import type { Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { KF_TESTIDS } from './keyframes.testids.ts';
 import { channelName } from './KeyStrip.tsx';
-import { dragHandle, handlesDiffer, nudgeHandle, pointFromHandle, polyline, previewPoints, setHandleField, tilePoints, turnsBackLocal, TILE_RANGE } from './curvePicker.math.ts';
+import { dragHandle, fieldDraft, handlesDiffer, nudgeHandle, pointFromHandle, polyline, previewPoints, setHandleField, tilePoints, turnsBackLocal, TILE_RANGE } from './curvePicker.math.ts';
 import './keyframes.css';
 
 const BOX = 128;
@@ -68,7 +68,13 @@ function PickerDialog(): ReactElement | null {
   const at = useMemo(() => (clip && track ? keyTimes(clip, track, rate).find((k) => k.frame === cp.frame) : undefined), [clip, track, rate, cp.frame]);
   const readOnly = !!state.viewVariantId || !!track?.locked;
   const [custom, setCustom] = useState<CurveHandles>(DEFAULT_CUSTOM);
+  // the text of a custom field while it is typed in (curvePicker.math.ts fieldDraft); null shows the handle's value
+  const [drafts, setDrafts] = useState<readonly (string | null)[]>([null, null, null, null]);
+  const setDraft = (i: number, d: string | null) => setDrafts((x) => x.map((v, j) => (j === i ? d : v)));
   const customSeeded = useRef(false);
+  // once the user edits the handles, the stored key never seeds them again: a commit of one field (on blur) arriving while the
+  // next field is typed in would otherwise put the stored handles back over what is being typed (keyframes-proof P2)
+  const editCustom = (h: CurveHandles) => { customSeeded.current = true; setCustom(h); };
   // a field commits on blur only when its handles differ from the last applied ones: tabbing through must not turn a key into a custom curve
   const applied = useRef<CurveHandles>(DEFAULT_CUSTOM);
   const all = at?.channels ?? [];
@@ -143,14 +149,14 @@ function PickerDialog(): ReactElement | null {
       </div>
       {(light || !CURVES_BUILT) && <p className="curve-note" id={reasonId}>{!CURVES_BUILT ? t('curve.notBuilt') : t('curve.flashDisabled')}</p>}
       <div className="curve-custom" data-testid={KF_TESTIDS.custom}>
-        <CustomEditor handles={custom} setHandles={setCustom} disabled={readOnly || !CURVES_BUILT} onCommit={(h) => apply('bezier', h)} label={t('curve.custom')} t={t} />
+        <CustomEditor handles={custom} setHandles={editCustom} disabled={readOnly || !CURVES_BUILT} onCommit={(h) => apply('bezier', h)} label={t('curve.custom')} t={t} />
         <div className="curve-fields">
           {([0, 1, 2, 3] as const).map((i) => (
             <label key={i}>
               <span>{i % 2 === 0 ? t('curve.handle.time') : t('curve.handle.value')} {i < 2 ? 1 : 2}</span>
-              <input type="number" dir="ltr" step={0.01} min={i % 2 === 0 ? 0 : -1} max={i % 2 === 0 ? 1 : 2} value={custom[i]} disabled={readOnly || !CURVES_BUILT} data-testid={KF_TESTIDS.customInput(i)}
-                onChange={(e) => setCustom(setHandleField(custom, i, e.target.value))}
-                onBlur={() => { if (handlesDiffer(custom, applied.current)) apply('bezier', custom); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); apply('bezier', custom); } }} />
+              <input type="number" dir="ltr" step={0.01} min={i % 2 === 0 ? 0 : -1} max={i % 2 === 0 ? 1 : 2} value={drafts[i] ?? custom[i]} disabled={readOnly || !CURVES_BUILT} data-testid={KF_TESTIDS.customInput(i)}
+                onChange={(e) => { setDraft(i, fieldDraft(e.target.value, e.target.validity.badInput)); editCustom(setHandleField(custom, i, e.target.value)); }}
+                onBlur={() => { setDraft(i, null); if (handlesDiffer(custom, applied.current)) apply('bezier', custom); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); apply('bezier', custom); } }} />
             </label>
           ))}
           {customBlock && CURVES_BUILT && <p className="curve-note" role="note">{customBlock}</p>}

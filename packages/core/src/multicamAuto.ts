@@ -43,6 +43,22 @@ const CORRELATED = 0.9;
 /** ...and they are told apart when at least this share of those frames differs by the margin. */
 const APART_SHARE = 0.05;
 
+/** The longest dip in a speaker's level that is bridged as part of the same speech (syllable and word gaps). */
+const BRIDGE_MS = 400;
+/** Running max (dilate) or min (erode) over [i − h, i + h]; NaN (no data) frames stay NaN and bound the window. */
+function runExtreme(x: Float64Array, h: number, max: boolean): Float64Array {
+  const out = new Float64Array(x.length).fill(NaN);
+  for (let i = 0; i < x.length; i++) {
+    if (Number.isNaN(x[i]!)) continue;
+    let v = x[i]!;
+    for (let j = i - 1; j >= Math.max(0, i - h) && !Number.isNaN(x[j]!); j--) v = max ? Math.max(v, x[j]!) : Math.min(v, x[j]!);
+    for (let j = i + 1; j <= Math.min(x.length - 1, i + h) && !Number.isNaN(x[j]!); j++) v = max ? Math.max(v, x[j]!) : Math.min(v, x[j]!);
+    out[i] = v;
+  }
+  return out;
+}
+/** Morphological closing with a flat window of 2h + 1 frames: fills dips narrower than the window, keeps steps and peaks. */
+export const closing = (x: Float64Array, h: number): Float64Array => runExtreme(runExtreme(x, h, true), h, false);
 /** Float map of a placed piece in seconds (reading envelopes only). */
 type SecMap = { s: number; g: number }[];
 const secMap = (p: MulticamPiece): SecMap => p.anchors.map((a) => ({ s: T.toSeconds(a.source), g: T.toSeconds(a.group) }));
@@ -144,13 +160,22 @@ export function planMulticamAuto(doc: ProjectDocument, raw: unknown, ctx: PlanCo
       for (const mp of micPieces[k]!) {
         const s = lin(mp.map, g, 'g', 's');
         if (s < 0 || s >= mp.duration) continue;
-        v = levelAtFrame(mp.env, speakers[k]!.channel, Math.round(s * 100)) / 100;
+        // the loudest 10 ms envelope frame within this program frame (one point would alias: 3 of every 10 ms frames unseen)
+        const e0 = Math.round(s * 100), e1 = Math.max(e0 + 1, Math.round((s + 1 / fps) * 100));
+        let m = -Infinity;
+        for (let e = e0; e < e1; e++) m = Math.max(m, levelAtFrame(mp.env, speakers[k]!.channel, e));
+        v = m / 100;
         if (mp.spans.some(([a, b]) => s >= a && s < b)) said[k]![i] = 1;
         break;
       }
       db[k]![i] = v;
     }
   }
+  // Speech is syllables with short dips between them; read frame by frame, a talker's turn breaks into runs far shorter than
+  // switchHold, and an overlap into alternating single-speaker frames. A morphological closing of each speaker's level
+  // (running max, then running min, over BRIDGE frames; never across frames without data) fills every dip narrower than
+  // BRIDGE_MS and leaves steps, plateaus and peaks exactly where they were, so a level that holds for longer is unchanged.
+  for (let k = 0; k < S; k++) db[k] = closing(db[k]!, Math.max(1, Math.round((BRIDGE_MS / 1000) * fps / 2)));
   const speech = db.map((series) => {
     const vals = [...series].filter((v) => !Number.isNaN(v));
     const floor = quantile(vals, 0.1);
@@ -208,6 +233,19 @@ export function planMulticamAuto(doc: ProjectDocument, raw: unknown, ctx: PlanCo
       decide(at, to, 'max-shot', null, null);
     }
   };
+  // which program frames each angle has picture for (a placed piece whose file covers the frame's group time)
+  const coverage = new Map<string, Uint8Array>();
+  const coveredBy = (angleId: string): Uint8Array => {
+    let c = coverage.get(angleId);
+    if (c) return c;
+    c = new Uint8Array(N);
+    const pieces = (angleOf(angleId)?.pieces ?? []).filter((x) => x.anchors.length).map((x) => ({ map: secMap(x), duration: Object.hasOwn(doc.assets, x.assetId) ? T.toSeconds(doc.assets[x.assetId]!.duration) : 0 }));
+    for (let i = 0; i < N; i++) { const g = gAt[i]!; if (!Number.isNaN(g) && pieces.some((x) => { const src = lin(x.map, g, 'g', 's'); return src >= 0 && src < x.duration; })) c[i] = 1; }
+    coverage.set(angleId, c);
+    return c;
+  };
+  /** The first frame in [from, to) the angle has picture for, or `to`. Frames without data (gAt NaN) keep what is there and count as covered. */
+  const firstCovered = (angleId: string, from: number, to: number): number => { const c = coveredBy(angleId); let i = Math.max(0, from); while (i < to && !c[i] && !Number.isNaN(gAt[i]!)) i++; return i; };
   for (let a = 0; a < N;) {
     let b = a + 1;
     while (b < N && cls[b] === cls[a]) b++;
@@ -217,7 +255,11 @@ export function planMulticamAuto(doc: ProjectDocument, raw: unknown, ctx: PlanCo
       const target = c < S ? shotOf(speakers[c]!) : wide;
       if (c < S) lastSpeaker = c;
       if (target && target !== cur) {
-        const at = cur === null ? 0 : Math.max(c < S ? a - preRoll : a, last + minShot);
+        let at = cur === null ? 0 : Math.max(c < S ? a - preRoll : a, last + minShot);
+        // the cut waits until the target angle has picture (switch_angles 'clip' keeps the old angle where it has none, which
+        // would leave a shot shorter than minShot); before the first cut the program shows what it shows now, for minShot too
+        at = firstCovered(target, at, b);
+        if (cur === null && at > 0) at = firstCovered(target, Math.max(at, minShot), b);
         if (at < b && (cur === null || N - at >= minShot)) decide(at, target, c < S ? 'speaker' : c === BOTH ? 'both' : 'silence', c < S ? c : null, c < S ? margin[a]! : null);
       }
     }
@@ -234,7 +276,9 @@ export function planMulticamAuto(doc: ProjectDocument, raw: unknown, ctx: PlanCo
   if (pos < F1) free.push([pos, F1]);
   const ops: OpCall[] = [];
   const at = (f: number) => T.frameTime(f, rate);
-  const angleAt = (f: number) => { let d = decisions[0]!; for (const x of decisions) { if (x.frame <= f) d = x; else break; } return d.angleId; };
+  // before the first decision the program keeps the angle it shows (the first cut may wait for the target's picture)
+  const startAngle = segs.find((c) => T.frameIndexAt(c.start, rate) <= F0)?.multicam?.angleId ?? decisions[0]!.angleId;
+  const angleAt = (f: number) => { if (f < decisions[0]!.frame) return startAngle; let d = decisions[0]!; for (const x of decisions) { if (x.frame <= f) d = x; else break; } return d.angleId; };
   for (const [s, e] of free) {
     const cuts = [{ frame: s, angleId: angleAt(s) }, ...decisions.filter((d) => d.frame > s && d.frame < e).map((d) => ({ frame: d.frame, angleId: d.angleId }))];
     for (let i = 0; i < cuts.length; i += MAX_CUTS) {

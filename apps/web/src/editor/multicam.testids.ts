@@ -31,7 +31,5 @@ export const MULTICAM_TESTIDS = {
   // the timeline badge «N · label» on a tagged segment (data-angle-id), and the inspector block of a tagged clip
   // (MulticamClipBlock.tsx): the angle radio list and «החל מראה זה על כל הזווית»
   badge: 'multicam-badge', clipBlock: 'multicam-clip-block', angleRadio: 'multicam-angle-radio', applyLook: 'multicam-apply-look',
-  // a placeholder of this pre-pass: the part is not built yet (removed by W3)
-  notBuilt: 'multicam-not-built',
 } as const;
 export type MulticamTestId = (typeof MULTICAM_TESTIDS)[keyof typeof MULTICAM_TESTIDS];

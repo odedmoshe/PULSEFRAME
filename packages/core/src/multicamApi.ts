@@ -2,7 +2,7 @@
  * REST shapes of multicam (ADR-0020), shared by the server (routes, sync job, MCP) and the editor (api.ts); the trackingApi.ts
  * precedent. Lead contract; W2 builds the routes' bodies, W3 the calls.
  *
- * Routes (apps/server/src/http.ts; 501 not_built until W2):
+ * Routes (apps/server/src/http.ts; bodies in multicamSync.ts):
  *   POST /api/v1/projects/:id/multicam/:groupId/sync   (edit; dryRun: observe) -> MulticamSyncReport | 202 { jobId, status }
  *        background:true runs a durable job of type 'analysis' with input.kind MULTICAM_SYNC_KIND (the runAnalysisJob family),
  *        cancelled between pieces and recovered after a restart. A hand-synced file measured again without overwrite answers

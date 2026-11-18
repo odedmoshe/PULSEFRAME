@@ -88,7 +88,7 @@ describe('setPictureDoc', () => {
   // A switch_angles projection only changes picture clips (master-sound mode), so audioPlan is equal and nothing restarts.
   // Runs once W1's ops are in the registry (MULTICAM_OPS_BUILT); until then it is skipped and says so.
   it.skipIf(!MULTICAM_OPS_BUILT)('a switch_angles projection does not restart (needs W1 merged)', () => {
-    const vid = (c: string) => ({ kind: 'video' as const, name: `cam-${c}.mp4`, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(60, 1), video: { width: 320, height: 180, codec: 'h264', frameRate: R, hasAudio: false }, provenance: prov });
+    const vid = (c: string) => ({ kind: 'video' as const, name: `cam-${c}.mp4`, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(60, 1), video: { width: 320, height: 180, codec: 'h264', frameRate: R, rotation: 0, frameCount: 1800 }, provenance: prov });
     const mic = { kind: 'audio' as const, name: 'mic.wav', contentHash: `sha256:${'c'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(60, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: prov };
     let r = tx(createProject({ id: 'prj_pg', name: 'PG', frameRate: R, width: 320, height: 180 }), [{ op: 'import_asset', args: { asset: vid('a') } }, { op: 'import_asset', args: { asset: vid('b') } }, { op: 'import_asset', args: { asset: mic } }], true);
     const [A, B, M] = r.results.map((x) => x.output!.assetId as string) as [string, string, string];

@@ -23,7 +23,9 @@ const owner: Principal = { actor: 'user:owner', kind: 'user', scopes: ['observe'
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const prov = { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 'test' };
-const fake = (c: string, kind: 'video' | 'audio'): Omit<Asset, 'id'> => ({ kind, name: `${c}`, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: kind === 'video' ? 'mp4' : 'wav', mimeType: kind === 'video' ? 'video/mp4' : 'audio/wav', duration: T.rt(60, 1), ...(kind === 'video' ? { video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: 1800 } } : { audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' } }), provenance: prov });
+/** A content hash for a one-letter name: the import_asset schema wants 64 lowercase hex digits. */
+const hashOf = (c: string) => `sha256:${c.charCodeAt(0).toString(16).padStart(2, '0').repeat(32)}`;
+const fake = (c: string, kind: 'video' | 'audio'): Omit<Asset, 'id'> => ({ kind, name: `${c}`, contentHash: hashOf(c), byteSize: 1, container: kind === 'video' ? 'mp4' : 'wav', mimeType: kind === 'video' ? 'video/mp4' : 'audio/wav', duration: T.rt(60, 1), ...(kind === 'video' ? { video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: 1800 } } : { audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' } }), provenance: prov });
 function realWav(pid: string, name: string, x: Float32Array, channels: number): string {
   const bytes = wav(x, 48000, channels), hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
   const tmp = path.join(dir, `${name}.wav`);

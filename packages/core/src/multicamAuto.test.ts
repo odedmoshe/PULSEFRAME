@@ -14,7 +14,7 @@ const rec = (c: string): Omit<Asset, 'id'> => ({ kind: 'audio', name: `${c}.wav`
 const q = (verdict: 'reference' | 'confident') => ({ verdict, peakZ: null, peakRatio: null, anchorsUsed: 0, anchorsRejected: 0, residualSamples: null, driftPpm: null, overlapSeconds: null, candidates: [], chainDepth: 0, jobId: null });
 
 /** A wide camera, two close-ups and a dual-channel recorder (host ch 1, guest ch 2); a program of one wide segment of `seconds`. */
-function setup(seconds = 60, speakers?: MulticamGroup['speakers']) {
+function setup(seconds = 60, speakers?: MulticamGroup['speakers'], hostOffsetSeconds = -0.5) {
   const r = applyTransaction(createProject({ id: 'prj_auto', name: 'auto', width: 1280, height: 720, frameRate: R }), [
     { op: 'import_asset', args: { asset: cam('a') } }, { op: 'import_asset', args: { asset: cam('b') } }, { op: 'import_asset', args: { asset: cam('c') } }, { op: 'import_asset', args: { asset: rec('d') } },
   ], { idSeed: 'au_', actor: 'test', allowInternal: true });
@@ -28,7 +28,7 @@ function setup(seconds = 60, speakers?: MulticamGroup['speakers']) {
     angles: [
       { id: 'mic', label: 'Recorder', kind: 'sound', pieces: [{ assetId: MIC, anchors: off(0), quality: q('reference') }] },
       { id: 'wide', label: 'Wide', kind: 'picture', pieces: [{ assetId: W, anchors: off(0), quality: q('confident') }] },
-      { id: 'host', label: 'Host', kind: 'picture', pieces: [{ assetId: H, anchors: off(1), quality: q('confident') }] },
+      { id: 'host', label: 'Host', kind: 'picture', pieces: [{ assetId: H, anchors: off(hostOffsetSeconds), quality: q('confident') }] },
       { id: 'guest', label: 'Guest', kind: 'picture', pieces: [{ assetId: G, anchors: off(-1), quality: q('confident') }] },
     ],
     speakers: speakers ?? [
@@ -65,6 +65,25 @@ describe('multicam auto-switch planner', () => {
     expect(plan.basis.join('\n')).toMatch(/Screen time: Host .* s \(\d+%\)/);
     expect(plan.basis.join('\n')).toMatch(/6 shot\(s\), 5 cut\(s\); mean shot 10\.0 s/);
     expect(plan.basis.join('\n')).toMatch(/Unsure decisions \(margin below 3 dB\): 0/);
+  });
+  it('a cut waits for its angle\'s picture: a host camera that starts 1 s into the program is cut to at minShot, not at 0', () => {
+    // switch_angles with coverage 'clip' keeps the wide where the host has no picture, so a cut at 0 would leave a 1 s wide shot
+    const { doc, MIC } = setup(60, undefined, 1);
+    const ctx: PlanContext = { multicamLevels: { [MIC]: envelope(MIC, 120, SCRIPT) } };
+    const cuts = cutsOf(planMulticamAuto(doc, { groupId: 'mcg_a' }, ctx).ops);
+    expect(cuts.slice(0, 2)).toEqual([[0, 'wide'], [60, 'host']]);
+    const frames = cuts.map((c) => c[0] as number), ends = [...frames.slice(1), 1800];
+    frames.forEach((c, i) => expect(ends[i]! - c).toBeGreaterThanOrEqual(60));
+  });
+  it('speech in syllables (150 ms on, 120 ms off) is one turn: the switch follows the turns, not the syllables', () => {
+    const { doc, MIC } = setup();
+    const script: [number, number, number, number][] = [];
+    for (let t = 0; t < 8; t += 0.27) script.push([t, t + 0.15, -20, -35]);
+    for (let t = 8; t < 16; t += 0.27) script.push([t, t + 0.15, -35, -20]);
+    const cuts = cutsOf(planMulticamAuto(doc, { groupId: 'mcg_a' }, { multicamLevels: { [MIC]: envelope(MIC, 120, script) } }).ops);
+    // host from 0; guest 200 ms before the first guest syllable at 8 s (frame 240 − 6); wide once the talk stops (silence ≥ 2 s)
+    expect(cuts.slice(0, 2)).toEqual([[0, 'host'], [234, 'guest']]);
+    expect(cuts[2]?.[1]).toBe('wide');
   });
   it('the same input gives byte-identical operations', () => {
     const { doc, MIC } = setup();

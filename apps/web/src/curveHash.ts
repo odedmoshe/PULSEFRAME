@@ -25,7 +25,8 @@ export function curveHashTime(i: number): T.RationalTime {
   return T.add(T.frameTime(fr, R), T.rt(j % n, 30 * n));
 }
 
-export interface CurveHashResult { sha256: string; samples: number; nsPerSample: number }
+/** sha256: all samples; byEasing: the SHA-256 of each easing's samples alone, so a difference names the curve it is in. */
+export interface CurveHashResult { sha256: string; samples: number; nsPerSample: number; byEasing: Record<string, string> }
 /** The hash of the samples, and the sampler's cost per sample on this host (sampling only, not the hash). */
 export async function curveHash(): Promise<CurveHashResult> {
   const lists = EASINGS.map(curveHashKeys);
@@ -36,8 +37,14 @@ export async function curveHash(): Promise<CurveHashResult> {
   const t0 = performance.now();
   for (let i = 0; i < CURVE_HASH_SAMPLES; i++) view.setFloat64(i * 8, sampleKeyframes(lists[i % EASINGS.length]!, times[i]!, range), true);
   const ms = performance.now() - t0;
-  const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', buf));
-  return { sha256: Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join(''), samples: CURVE_HASH_SAMPLES, nsPerSample: Number(((ms * 1e6) / CURVE_HASH_SAMPLES).toFixed(1)) };
+  const hex = async (b: ArrayBuffer) => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', b)), (x) => x.toString(16).padStart(2, '0')).join('');
+  const byEasing: Record<string, string> = {};
+  for (let e = 0; e < EASINGS.length; e++) {
+    const n = Math.ceil((CURVE_HASH_SAMPLES - e) / EASINGS.length), own = new DataView(new ArrayBuffer(n * 8));
+    for (let i = e, m = 0; i < CURVE_HASH_SAMPLES; i += EASINGS.length, m++) own.setFloat64(m * 8, view.getFloat64(i * 8, true), true);
+    byEasing[EASINGS[e]!] = await hex(own.buffer);
+  }
+  return { sha256: await hex(buf), samples: CURVE_HASH_SAMPLES, nsPerSample: Number(((ms * 1e6) / CURVE_HASH_SAMPLES).toFixed(1)), byEasing };
 }
 
 /** A 600-frame title with x and y keyed on new curves (only the fields pathPoints reads matter). */

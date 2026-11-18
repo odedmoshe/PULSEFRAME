@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { dictionaries } from '@pulseframe/i18n';
+import * as T from '@pulseframe/time';
+import { applyTransaction, createProject } from '@pulseframe/core';
 import { COMMANDS, Keymap, chordLabel, chordOf, type Command } from './commands.ts';
+import { MULTICAM_SHARED_CHORDS } from './multicam.keys.ts';
 
 const ev = (code: string, m: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({ code, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...m });
 const fakeStorage = (initial?: string) => {
@@ -109,8 +112,38 @@ describe('keyframe curve commands (ADR-0019)', () => {
     const km = new Keymap(fakeStorage());
     expect(km.lookupAll('Alt+KeyK').map((c) => c.id)).toEqual(['keyframe.focus']);
     for (const id of ['keyframe.smooth', 'keyframe.linear', 'keyframe.curve', 'keyframe.copy', 'keyframe.paste', 'view.motionPath']) expect(km.keysFor(id)).toEqual([]);
-    const chords = COMMANDS.filter((c) => c.context !== 'cut').flatMap((c) => c.keys);
+    // every chord outside the cut context has one command, except the one shared on purpose (multicam.keys.ts
+    // MULTICAM_SHARED_CHORDS: Escape is multicam.discard while recording and edit.deselect otherwise, never both enabled)
+    const chords = COMMANDS.filter((c) => c.context !== 'cut').flatMap((c) => c.keys.filter((k) => !(Object.hasOwn(MULTICAM_SHARED_CHORDS, k) && c.id.startsWith('multicam.'))));
     expect(new Set(chords).size).toBe(chords.length);
+    expect(COMMANDS.filter((c) => c.keys.includes('Escape')).map((c) => c.id).sort()).toEqual(['edit.deselect', 'multicam.discard']);
+    // the sharing is safe only because the two are never enabled together: recording or not, with or without a selection
+    const deselect = byId('edit.deselect')!, discard = byId('multicam.discard')!;
+    for (const recordingSwitches of [false, true]) for (const selected of [null, { clip: { id: 'c' } }]) for (const cutPending of [[], ['x']]) {
+      const e = { recordingSwitches, selected, getState: () => ({ cutPending, paletteOpen: false }) } as never;
+      const on = [deselect, discard].filter((c) => !c.enabled || c.enabled(e)).map((c) => c.id);
+      expect(on.length, JSON.stringify({ recordingSwitches, selected, cutPending, on })).toBeLessThanOrEqual(1);
+      if (recordingSwitches) expect(on).toEqual(['multicam.discard']);
+    }
+  });
+  it('keyframe.smooth and keyframe.linear (S and L) set the curve on both sides of the selected key', async () => {
+    const R = { num: 30, den: 1 };
+    let r = applyTransaction(createProject({ id: 'prj_sl', name: 'sl', width: 640, height: 360, frameRate: R }), [{ op: 'add_text', args: { text: 'א', start: T.frameTime(0, R), duration: T.frameTime(60, R) } }], { idSeed: 'sl_', actor: 'test' });
+    const clipId = r.results[0]!.output!.clipId as string;
+    r = applyTransaction(r.doc, [{ op: 'replace_clip_keyframes', args: { clipId, property: 'x', keys: [0, 15, 30].map((k, i) => ({ time: T.frameTime(k, R), value: [-0.3, 0.1, 0.3][i]!, easing: 'linear' as const })) } }], { idSeed: 'sl2_', actor: 'test' });
+    const doc = r.doc;
+    const run = async (id: string) => {
+      const sent: { op: string; args: { side?: string; easing?: string } }[][] = [];
+      const e = {
+        doc, rate: R,
+        getState: () => ({ selection: [clipId], viewVariantId: null, keySel: { clipId, keys: [{ channel: { property: 'x' }, frame: 15 }] } }),
+        commit: (make: () => never) => { sent.push(make()); return Promise.resolve(null); },
+      };
+      await byId(id)!.run(e as never);
+      return sent[0]!.map((o) => [o.op, o.args.side, o.args.easing]);
+    };
+    expect(await run('keyframe.smooth')).toEqual([['set_keyframe_curve', 'both', 'smooth']]);
+    expect(await run('keyframe.linear')).toEqual([['set_keyframe_curve', 'both', 'linear']]);
   });
   it('K on an adjustment clip emits only opacity ops; on a picture clip all five channels', async () => {
     const run = async (clip: object, kind: string) => {

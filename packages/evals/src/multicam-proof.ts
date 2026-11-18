@@ -76,6 +76,22 @@ function lagOf(a: Float32Array, a0: number, b: Float32Array, b0: number, n: numb
   }
   return best;
 }
+/** RMS of a[a0 .. a0 + n). */
+const rms = (a: Float32Array, a0: number, n: number) => { let e = 0; for (let i = 0; i < n; i++) e += (a[a0 + i] ?? 0) ** 2; return Math.sqrt(e / n); };
+/**
+ * A window where both signals have sound: the lag is meaningless in a pause (every lag correlates to 0 and the search answers
+ * its first candidate, −maxLag). From the planned timeline time, step forward a quarter second at a time (at most 4 s) to the
+ * first window where both RMS are ≥ 0.005; null when there is none. `at` gives the reference sample for a timeline time.
+ */
+function soundedWindow(a: Float32Array, b: Float32Array, t0: number, n: number, at: (t: number) => number | null): { a0: number; b0: number } | null {
+  for (let k = 0; k <= 16; k++) {
+    const t = t0 + k * 0.25, b0 = at(t);
+    if (b0 === null) continue;
+    const a0 = Math.round(t * SR);
+    if (rms(a, a0, n) >= 0.005 && rms(b, b0, n) >= 0.005) return { a0, b0 };
+  }
+  return null;
+}
 
 async function main() {
   fs.rmSync(art, { recursive: true, force: true });
@@ -117,7 +133,7 @@ async function main() {
     const out = r.results[0].output as { groupId: string; angleIds: string[] };
     return { pid, groupId: out.groupId, angleIds: out.angleIds, assets };
   };
-  const commitP95 = async (pid: string, trackId: string, n = 30) => { const ms: number[] = []; for (let i = 0; i < n; i++) { const t0 = performance.now(); await tx(pid, [{ op: 'update_track', args: { trackId, name: `V ${i}` } }]); ms.push(performance.now() - t0); } return r2(pct(ms, 95)); };
+  const commitP95 = async (pid: string, sequenceId: string, trackId: string, n = 30) => { const ms: number[] = []; for (let i = 0; i < n; i++) { const t0 = performance.now(); await tx(pid, [{ op: 'update_track', args: { sequenceId, trackId, name: `V ${i}` } }]); ms.push(performance.now() - t0); } return r2(pct(ms, 95)); };
 
   try {
     const main = await groupOf('multicam proof', fx);
@@ -230,25 +246,33 @@ async function main() {
       // sound: export vs the recorder at 20 windows
       const out = pcm(mp4), rec = pcm(fx.angles[0]!.files[0]!.path);
       const lags: number[] = [];
+      let silentM = 0;
       for (let k = 0; k < 20; k++) {
-        const fr = Math.round(((k + 0.5) * end()) / 20), t = f(fr);
-        const g = masterGroupTimeAt(d, seqId, main.groupId, t);
-        if (!g) continue;
-        lags.push(lagOf(out, Math.round(T.toSeconds(t) * SR), rec, Math.round(T.toSeconds(g) * SR), SR / 2, 200));
+        const fr = Math.round(((k + 0.5) * end()) / 20);
+        // the recorder sample at the master's group time of a timeline time (whole seconds of timeline → the nearest frame time)
+        const w = soundedWindow(out, rec, fr / 30, SR / 2, (ts) => { const g = masterGroupTimeAt(d, seqId, main.groupId, T.rt(Math.round(ts * SR), SR)); return g ? Math.round(T.toSeconds(g) * SR) : null; });
+        if (!w) { silentM++; continue; }
+        lags.push(lagOf(out, w.a0, rec, w.b0, SR / 2, 200));
       }
-      check('M4', 'exported sound against the recorder (avsync method)', lags.length >= 15 && lags.every((l) => Math.abs(l) <= 1), { windows: lags.length, lags }, 'lag 0 ± 1 sample');
+      check('M4', 'exported sound against the recorder (avsync method)', lags.length >= 15 && lags.every((l) => Math.abs(l) <= 1), { windows: lags.length, noSoundedWindow: silentM, lags }, 'lag 0 ± 1 sample at ≥ 15 windows with sound');
       // a drifting camera's sound laid as chunks, alone in a new sequence
       const chunked = (await tx(main.pid, [{ op: 'place_multicam', args: { groupId: main.groupId, newSequence: { name: 'chunks' }, at: T.ZERO, angleId: cam(3), sound: [cam(3)] } }])).results[0].output as { sequenceId: string; soundChunks: number; maxSoundErrorSeconds: number };
       d = await doc(main.pid);
       const wav = await exportFile(main.pid, { sequenceId: chunked.sequenceId, format: 'wav' }, 'wav');
       const cw = pcm(wav), cl: number[] = [];
+      // The reference is the truth, not the document: this sequence has no master sound (masterGroupTimeAt is null there), and
+      // its picture's group time moves in whole frames of the drifting camera. The program starts where camera 3's first file
+      // starts (fixture groupStartSamples) and runs at one group second per timeline second, so timeline t is group time g0 + t.
+      const g0 = fx.angles[3]!.files[0]!.groupStartSamples;
+      const firstPicture = groupTimeAt(d, chunked.sequenceId, d.sequences[chunked.sequenceId]!.tracks.find((t) => t.kind === 'video' && t.clips.length)!.id, T.ZERO);
+      let silentC = 0;
       for (let k = 0; k < 20; k++) {
-        const t = f(Math.round(((k + 0.5) * (cw.length / SR) * 30) / 20));
-        const g = masterGroupTimeAt(d, chunked.sequenceId, main.groupId, t) ?? t;
-        cl.push(lagOf(cw, Math.round(T.toSeconds(t) * SR), rec, Math.round(T.toSeconds(g) * SR), SR / 4, 96));
+        const w = soundedWindow(cw, rec, ((k + 0.5) * (cw.length / SR)) / 20, SR / 4, (ts) => g0 + Math.round(ts * SR));
+        if (!w) { silentC++; continue; }
+        cl.push(lagOf(cw, w.a0, rec, w.b0, SR / 4, 96));
       }
       measurements.soundChunks = { chunks: chunked.soundChunks, maxSoundErrorSeconds: chunked.maxSoundErrorSeconds, listened: false };
-      check('M4', 'sound chunks of the drifting camera against the recorder', chunked.soundChunks > 1 && cl.every((l) => Math.abs(l) <= 48), { chunks: chunked.soundChunks, lagsSamples: cl, listened: 'NOT done' }, '± 1 ms (48 samples) at 20 windows');
+      check('M4', 'sound chunks of the drifting camera against the recorder', chunked.soundChunks > 1 && cl.length >= 15 && cl.every((l) => Math.abs(l) <= 48), { chunks: chunked.soundChunks, windows: cl.length, noSoundedWindow: silentC, lagsSamples: cl, g0Samples: g0, pictureGroupTimeAtZero: firstPicture ? T.toSeconds(firstPicture.g) : null, listened: 'NOT done' }, '± 1 ms (48 samples) at ≥ 15 windows with sound');
     });
 
     // ---------- M5, M8: 1000 cuts ----------
@@ -263,7 +287,7 @@ async function main() {
       const segments = d.sequences[placed.sequenceId]!.tracks.find((t) => t.id === placed.videoTrackId)!.clips.length;
       // M8 at this size
       const bytes = JSON.stringify(d).length;
-      const p95 = await commitP95(main.pid, placed.videoTrackId);
+      const p95 = await commitP95(main.pid, placed.sequenceId, placed.videoTrackId);
       const gets: number[] = [];
       for (let i = 0; i < 10; i++) { const g0 = performance.now(); await doc(main.pid); gets.push(performance.now() - g0); }
       measurements.m8 = { segments, documentBytes: bytes, commitP95Ms: p95, getProjectP95Ms: r2(pct(gets, 95)) };

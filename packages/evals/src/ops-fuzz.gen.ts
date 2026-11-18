@@ -253,14 +253,30 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     const val = (p: string) => () => (p === 'scale' ? Number((0.5 + rnd() * 1.5).toFixed(4)) : p === 'opacity' ? Number(rnd().toFixed(4)) : p === 'rotation' ? Number((rnd() * 90 - 45).toFixed(2)) : Number((rnd() * 1.6 - 0.8).toFixed(5)));
     const range = () => { const a = int(60), b = a + int(60); return rnd() < 0.08 ? { from: f(b + 1), to: f(a) } : { from: f(a), to: f(b) }; };
     const channel = () => { if (rnd() < 0.6 || !withFx.length) return { property: prop() }; const { fx } = pick(withFx); return { effectId: fx.id, param: param(fx.type) }; };
-    return [
+    /** Channels that hold keys now (transform properties and effect parameters), with their key times. */
+    const keyedChannels = clips.flatMap((c) => [
+      ...Object.entries(c.keyframes ?? {}).filter(([, ks]) => ks?.length).map(([property, ks]) => ({ clipId: c.id, channel: { property } as Record<string, string>, times: ks!.map((x) => x.time) })),
+      ...(c.effects ?? []).flatMap((fx) => Object.entries(fx.keyframes ?? {}).filter(([, ks]) => ks?.length).map(([param, ks]) => ({ clipId: c.id, channel: { effectId: fx.id, param } as Record<string, string>, times: ks.map((x) => x.time) }))),
+    ]);
+    const rows: (() => OpCall)[] = [
       () => ({ op: 'set_keyframe', args: { clipId: clipId(), property: prop(), time: f(int(90)), value: Number((rnd() * 0.8 + 0.1).toFixed(3)), ...(rnd() < 0.85 ? curve() : {}) } }),
       () => { const { clipId: id, fx } = fxPick(); return { op: 'set_effect_keyframe', args: { clipId: id, effectId: fx?.id ?? 'fx_none', param: param(fx?.type), time: f(int(90)), value: Number((rnd() * 4).toFixed(2)), ...(rnd() < 0.85 ? curve() : {}) } }; },
       () => { const p = prop(); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property: p, keys: keys(int(3), 1 + int(20), val(p)) } }; },
       () => { const p = prop(), r = range(); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property: p, ...r, keys: rnd() < 0.2 ? null : keys(T.frameIndexAt(r.from, rate) + (rnd() < 0.1 ? -3 : 0), 1 + int(6), val(p)) } }; },
       () => { const { clipId: id, fx } = fxPick(), r = rnd() < 0.5 ? range() : null; return { op: 'replace_effect_keyframes', args: { clipId: id, effectId: fx?.id ?? 'fx_none', param: param(fx?.type), keys: rnd() < 0.15 ? null : keys(r ? T.frameIndexAt(r.from, rate) : int(3), 1 + int(10), () => Number((rnd() * 4).toFixed(2))), ...(r ?? {}), ...(rnd() < 0.2 ? { at: f(int(30)) } : {}) } }; },
-      () => ({ op: 'set_keyframe_curve', args: { clipId: clipId(), channels: Array.from({ length: 1 + int(3) }, channel), times: Array.from({ length: 1 + int(4) }, () => f(int(60))), side: pick(['after', 'before', 'both'] as const), ...curve() } }),
+      () => {
+        // most calls aim at channels that have keys and at times that are keys (else the op answers noKeysAtTimes);
+        // the rest are blind, so the refusals stay exercised too
+        const k = keyedChannels.length && rnd() < 0.8 ? pick(keyedChannels) : null;
+        if (!k) return { op: 'set_keyframe_curve', args: { clipId: clipId(), channels: Array.from({ length: 1 + int(3) }, channel), times: Array.from({ length: 1 + int(4) }, () => f(int(60))), side: pick(['after', 'before', 'both'] as const), ...curve() } };
+        const same = keyedChannels.filter((x) => x.clipId === k.clipId);
+        const chans = [k, ...(rnd() < 0.3 ? [pick(same)] : [])];
+        const times = Array.from({ length: 1 + int(3) }, () => (rnd() < 0.85 ? pick(pick(chans).times) : f(int(60))));
+        return { op: 'set_keyframe_curve', args: { clipId: k.clipId, channels: chans.map((x) => x.channel), times, side: pick(['after', 'before', 'both'] as const), ...curve() } };
+      },
     ];
+    // set_keyframe_curve needs keys to be there first: once some are, it gets a second draw
+    return keyedChannels.length ? [...rows, rows[rows.length - 1]!] : rows;
   };
   const genKeyframes = (doc: ProjectDocument): OpCall => pick(keyframeMenu(doc))();
   /**
@@ -313,7 +329,7 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     const unsynced = groups.some((x) => x.angles.some((a) => a.id !== x.referenceAngleId && !a.pieces.some((pc) => pc.anchors.length)));
     const placed = groups.some((x) => x.angles.some((a) => a.kind === 'picture' && a.pieces.some((pc) => pc.anchors.length)));
     const [create, sync, , look, place, cut, detach] = rows as (() => OpCall)[] as [() => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall];
-    return [...rows, ...(groups.length ? [] : [create]), ...(unsynced ? [sync, sync, sync] : []), ...(placed && !programGroups.length ? [place, place, place, place] : []), ...(programGroups.length ? [cut, cut, cut, cut, cut, cut, look, detach, detach] : [])];
+    return [...rows, ...(groups.length ? [] : [create]), ...(unsynced ? [sync, sync, sync] : []), ...(placed && !programGroups.length ? [place, place, place, place] : []), ...(programGroups.length ? [cut, cut, cut, cut, cut, cut, look, detach, detach, detach] : [])];
   };
   const genMulticam = (doc: ProjectDocument): OpCall => pick(multicamMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });

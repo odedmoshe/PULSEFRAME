@@ -1,8 +1,9 @@
 /**
- * Lead contracts of multicam (ADR-0020) on the server: the three routes are registered and documented, check the credential's
- * scope (a sync that commits needs edit; a dryRun only observe), the body and that the project, group or file exists, and then
- * answer 501 not_built until W2 builds them (multicamSync.ts). Nothing is measured or committed here. The recipe route answers
- * the auto-switch's not-built refusal with 501 too.
+ * Contracts of multicam (ADR-0020) on the server: the three routes are registered, check the credential's scope (a sync that
+ * commits needs edit; a dryRun only observe), the body and that the project, group or file exists, and then run W2's bodies
+ * (multicamSync.ts). The files here have content hashes with no bytes behind them, so every measurement honestly refuses
+ * 422 analysis_failed (nothing is fabricated or attached); the group view answers 200 without measuring anything; the
+ * auto-switch recipe refuses 400 because the group maps no speakers to mics.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -63,28 +64,46 @@ afterAll(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-describe('multicam routes (contract; bodies are W2\'s)', () => {
+describe('multicam routes (contract and the built bodies)', () => {
   it('the group exists in the stored project, put there through an operation', () => {
     expect(store.getProject(pid).doc.multicam?.mcg_1?.angles).toHaveLength(2);
   });
-  it('sync: a commit needs edit, a dryRun only observe; a bad body is 400; an unknown group 404; then 501 not_built', async () => {
+  it('sync: a commit needs edit, a dryRun only observe; a bad body is 400; an unknown group 404; a file with no bytes 422, nothing attached', async () => {
     expect((await rest('POST', `/projects/${pid}/multicam/mcg_1/sync`, {}, auth.tokens.observer)).status).toBe(403);
     expect((await rest('POST', `/projects/${pid}/multicam/mcg_1/sync`, { nope: 1 })).status).toBe(400);
     const missing = await rest('POST', `/projects/${pid}/multicam/mcg_none/sync`, {});
     expect([missing.status, missing.body.error.code, missing.body.error.message]).toEqual([404, 'not_found', 'multicam group mcg_none not found']);
-    for (const [body, t] of [[{ dryRun: true }, auth.tokens.observer], [{}, auth.tokens.agent], [{ background: true }, auth.tokens.agent]] as const) {
+    const before = store.getProject(pid).revision;
+    // the reference file's sound cannot be decoded (its hash has no blob), so the measurement refuses instead of guessing
+    for (const [body, t] of [[{ dryRun: true }, auth.tokens.observer], [{}, auth.tokens.agent]] as const) {
       const r = await rest('POST', `/projects/${pid}/multicam/mcg_1/sync`, body, t);
-      expect([r.status, r.body.error.code]).toEqual([501, 'not_built']);
+      expect([r.status, r.body.error.code, r.body.error.details.assetId]).toEqual([422, 'analysis_failed', A]);
     }
+    // background: a durable job (202) that ends failed with the same refusal
+    const bg = await rest('POST', `/projects/${pid}/multicam/mcg_1/sync`, { background: true });
+    expect(bg.status).toBe(202);
+    expect(typeof bg.body.jobId).toBe('string');
+    await expect.poll(() => store.getJob(bg.body.jobId).status, { timeout: 10_000 }).toBe('failed');
+    expect((store.getJob(bg.body.jobId).error as { code: string }).code).toBe('analysis_failed');
+    expect(store.getProject(pid).revision).toBe(before);
+    expect(store.getProject(pid).doc.multicam?.mcg_1?.angles[1]?.pieces[0]?.anchors).toEqual([]);
   });
-  it('the group view and the envelope: observe, 404 for what is not there, then 501 not_built', async () => {
+  it('the group view and the envelope: observe, 404 for what is not there; the view answers 200, an envelope of a file with no bytes 422', async () => {
     expect((await rest('GET', `/projects/${pid}/multicam/toString`, undefined, auth.tokens.observer)).status).toBe(404);
-    expect((await rest('GET', `/projects/${pid}/multicam/mcg_1`, undefined, auth.tokens.observer)).status).toBe(501);
+    const v = await rest('GET', `/projects/${pid}/multicam/mcg_1`, undefined, auth.tokens.observer);
+    expect(v.status).toBe(200);
+    expect(v.body.group.id).toBe('mcg_1');
+    expect(v.body.coverage).toEqual([{ angleId: 'ang_a', pieceIndex: 0, startSeconds: 0, endSeconds: 60 }]);
+    expect(v.body.programTracks).toEqual([]);
+    expect(v.body.outOfSync).toEqual([]);
+    expect(v.body.envelopes.map((e: { assetId: string }) => e.assetId)).toHaveLength(2);
+    expect(v.body.capturePriors.map((c: { angleId: string; why: string }) => [c.angleId, c.why])).toEqual([['ang_a', 'reference'], ['ang_b', 'reference_no_capture']]);
     expect((await rest('POST', `/projects/${pid}/assets/ast_none/derivatives/envelope`, undefined, auth.tokens.observer)).status).toBe(404);
-    expect((await rest('POST', `/projects/${pid}/assets/${A}/derivatives/envelope`, undefined, auth.tokens.observer)).status).toBe(501);
+    const env = await rest('POST', `/projects/${pid}/assets/${A}/derivatives/envelope`, undefined, auth.tokens.observer);
+    expect([env.status, env.body.error.code]).toEqual([422, 'analysis_failed']);
   });
-  it('the auto-switch recipe is listed and its plan answers 501 not_built', async () => {
+  it('the auto-switch recipe is listed and its plan refuses 400 while the group maps no speakers to mics', async () => {
     const r = await rest('POST', `/projects/${pid}/recipes/multicam-auto/plan`, { params: { groupId: 'mcg_1' } });
-    expect([r.status, r.body.error.code]).toEqual([501, 'not_built']);
+    expect([r.status, r.body.error.code, r.body.error.message]).toEqual([400, 'invalid_request', 'the group has no speakers mapped to mics']);
   });
 });
