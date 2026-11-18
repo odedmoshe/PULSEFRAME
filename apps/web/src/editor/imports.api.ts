@@ -9,7 +9,7 @@
  *   GET  /projects/:id/drop (owner) → { drop | null } · POST /projects/:id/drop/:dropId/close (owner) → { drop }
  * Every persistent edit stays an operation through Editor.commit; the import's own commit is the server's.
  */
-import type { DropAddress, DropCodeView, ImportJobView, ImportRoom } from '@pulseframe/core';
+import { cutUploadName, MAX_RELATIVE_PATH_CHARS, type DropAddress, type DropCodeView, type ImportJobView, type ImportRoom } from '@pulseframe/core';
 import { ApiFailure } from '../api.ts';
 
 async function call<R>(path: string, init?: RequestInit): Promise<R> {
@@ -21,14 +21,11 @@ async function call<R>(path: string, init?: RequestInit): Promise<R> {
 const post = (body: unknown = {}): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const p = encodeURIComponent;
 
-/** A name cut to `max` characters (by code point) keeping its extension, so the header stays within the server's 2048 bytes. */
-export function cutUploadName(name: string, max = 256): string {
-  const chars = [...name];
-  if (chars.length <= max) return name;
-  const dot = name.lastIndexOf('.');
-  const ext = dot > 0 && name.length - dot <= 10 ? [...name.slice(dot)] : [];
-  return chars.slice(0, max - ext.length).join('') + ext.join('');
-}
+/**
+ * The name cut of the upload headers (core importView.ts): at most `max` characters AND at most MAX_NAME_HEADER_BYTES once
+ * percent-encoded, extension kept, no code point split. x-filename uses 256, x-pf-relative-path 512 (the schema's limits).
+ */
+export { cutUploadName };
 
 export const importsApi = {
   list: (projectId: string) => call<{ imports: ImportJobView[]; room: ImportRoom }>(`/projects/${p(projectId)}/imports`),
@@ -45,7 +42,7 @@ export const importsApi = {
       xhr.setRequestHeader('x-filename', encodeURIComponent(cutUploadName(file.name)));
       xhr.setRequestHeader('x-pf-via', meta.via);
       xhr.setRequestHeader('x-pf-batch', encodeURIComponent(meta.batchId));
-      if (meta.relativePath) xhr.setRequestHeader('x-pf-relative-path', encodeURIComponent(cutUploadName(meta.relativePath, 512)));
+      if (meta.relativePath) xhr.setRequestHeader('x-pf-relative-path', encodeURIComponent(cutUploadName(meta.relativePath, MAX_RELATIVE_PATH_CHARS)));
       if (Number.isFinite(file.lastModified) && file.lastModified > 0) xhr.setRequestHeader('x-pf-last-modified', String(Math.floor(file.lastModified)));
       xhr.upload.onprogress = (e) => onProgress(e.loaded, e.lengthComputable ? e.total : file.size);
       xhr.onload = () => {

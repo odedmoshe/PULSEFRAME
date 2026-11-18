@@ -46,7 +46,52 @@ describe('cutUploadName', () => {
     expect(decodeUploadHeader(header)).toBe(cut);
     // a code point is never split (an emoji is two UTF-16 units)
     const emoji = cutUploadName('😀'.repeat(300), 256);
-    expect([...emoji].length).toBe(256);
+    expect(emoji.length).toBeLessThanOrEqual(256);
     expect(() => encodeURIComponent(emoji)).not.toThrow();
+  });
+  // reviewer: the cut counted code points, so names of 3- and 4-byte characters and long Hebrew folder paths that were already
+  // cut still went over the 2048-byte header and were refused (400 invalid_filename) instead of imported.
+  const fits = (cut: string, what?: string) => {
+    const header = encodeURIComponent(cut);
+    expect(header.length).toBeLessThanOrEqual(MAX_NAME_HEADER_BYTES);
+    expect(decodeUploadHeader(header, what)).toBe(cut);
+  };
+  it('a 256-character name of emoji (4 bytes each) is cut so its header fits, whole emoji only, the extension kept', () => {
+    const cut = cutUploadName('😀'.repeat(300) + '.jpg');
+    fits(cut);
+    expect(cut.endsWith('.jpg')).toBe(true);
+    expect(cut.length).toBeLessThanOrEqual(256); // what Asset.name (z.string().max(256), UTF-16 units) accepts
+    expect(cut.slice(0, -4)).toBe('😀'.repeat((cut.length - 4) / 2));
+  });
+  it('a long CJK name (3 bytes each) is cut so its header fits', () => {
+    const cut = cutUploadName('写真'.repeat(200) + '.HEIC');
+    fits(cut);
+    expect(cut.endsWith('.HEIC')).toBe(true);
+    expect(cut.length).toBeLessThanOrEqual(256);
+  });
+  it('a long Hebrew folder path is cut to 512 characters and to the header limit', () => {
+    const path = 'תיקייה של המשפחה/'.repeat(24) + 'IMG_0001.jpg';
+    const cut = cutUploadName(path, 512);
+    fits(cut, 'folder path');
+    expect(cut.endsWith('.jpg')).toBe(true);
+    expect(cut.length).toBeLessThanOrEqual(512); // UploadProvenanceSchema.relativePath max(512)
+    expect(path.startsWith(cut.slice(0, -4))).toBe(true);
+    // an ASCII path is cut to 512 characters too (the schema's limit; the header would allow 2048)
+    const ascii = cutUploadName('a/'.repeat(400) + 'IMG_0001.jpg', 512);
+    expect(ascii.length).toBe(512);
+    expect(ascii.endsWith('.jpg')).toBe(true);
+  });
+  it('the cut uses the whole budget: a name just inside both limits is kept as it is', () => {
+    const name = 'א'.repeat(337) + '.mp4'; // 337 × 6 + 4 = 2026 bytes encoded, 341 characters
+    expect(cutUploadName(name, 512)).toBe(name);
+    const over = 'א'.repeat(341) + '.mp4'; // 2050 bytes
+    const cut = cutUploadName(over, 512);
+    fits(cut);
+    expect(cut).toBe('א'.repeat(340) + '.mp4');
+  });
+  it('a name holding a lone surrogate (invalid UTF-16 from a file system) still encodes', () => {
+    const cut = cutUploadName('IMG\uD800_1.jpg');
+    expect(cut).toBe('IMG\uFFFD_1.jpg');
+    fits(cut);
   });
 });

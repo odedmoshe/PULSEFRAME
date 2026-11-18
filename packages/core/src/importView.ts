@@ -56,6 +56,45 @@ export interface ImportJobView {
 /** Room for the next file. null = no ceiling configured / free space not measurable on this machine. */
 export interface ImportRoom { ceilingRoomBytes: number | null; freeDiskBytes: number | null; reserveBytes: number; maxFileBytes: number }
 
+/** Upload headers that carry a name (x-filename, x-pf-relative-path) are percent-encoded UTF-8 and at most this many bytes as sent. */
+export const MAX_NAME_HEADER_BYTES = 2048;
+/** Asset.name holds at most this many characters (UTF-16 units, as z.string().max counts them). */
+export const MAX_UPLOAD_NAME_CHARS = 256;
+/** UploadProvenance.relativePath holds at most this many characters (UTF-16 units). */
+export const MAX_RELATIVE_PATH_CHARS = 512;
+
+/** Bytes that encodeURIComponent writes for one code point (the unreserved ASCII characters stay as they are). */
+const encodedCost = (cp: number): number =>
+  cp < 0x80 ? (/[A-Za-z0-9\-_.!~*'()]/.test(String.fromCharCode(cp)) ? 1 : 3) : cp < 0x800 ? 6 : cp < 0x10000 ? 9 : 12;
+
+/**
+ * A name or folder path cut so that it is at most `maxChars` characters (UTF-16 units, what the schema counts) AND its
+ * percent-encoded form (encodeURIComponent) is at most `maxEncodedBytes`, keeping an extension of up to 10 characters and never
+ * splitting a code point. A lone surrogate (invalid UTF-16 a file system may hand over) becomes U+FFFD, so encoding never
+ * throws. A name inside both limits comes back unchanged. The editor cuts x-filename with (256) and x-pf-relative-path with
+ * (512) before encoding; the phone page (no imports) does the same with its own copy of this rule; the server's receive() cuts
+ * what it is sent with the same limits, so a REST client that sends a longer value is cut, never refused at commit.
+ */
+export function cutUploadName(name: string, maxChars: number = MAX_UPLOAD_NAME_CHARS, maxEncodedBytes: number = MAX_NAME_HEADER_BYTES): string {
+  const points = [...name].map((c) => (c.length === 1 && c.charCodeAt(0) >= 0xd800 && c.charCodeAt(0) <= 0xdfff ? '\uFFFD' : c));
+  const clean = points.join('');
+  const cost = (cs: string[]) => cs.reduce((n, c) => n + encodedCost(c.codePointAt(0)!), 0);
+  if (clean.length <= maxChars && cost(points) <= maxEncodedBytes) return clean;
+  const dot = clean.lastIndexOf('.');
+  let ext = dot > 0 && clean.length - dot <= 10 ? [...clean.slice(dot)] : [];
+  let chars = maxChars - ext.join('').length;
+  let bytes = maxEncodedBytes - cost(ext);
+  if (chars <= 0 || bytes <= 0) { ext = []; chars = maxChars; bytes = maxEncodedBytes; }
+  const head = points.slice(0, dot > 0 && ext.length ? [...clean.slice(0, dot)].length : points.length);
+  let out = '';
+  for (const c of head) {
+    const b = encodedCost(c.codePointAt(0)!);
+    if (c.length > chars || b > bytes) break;
+    out += c; chars -= c.length; bytes -= b;
+  }
+  return out + ext.join('');
+}
+
 /** Job stages the import queue writes (status 'running' unless said otherwise). */
 export const IMPORT_STAGE = { recovered: 'recovered-after-restart', probing: 'probing', waitingExport: 'waiting-export', waitingCompute: 'waiting-compute' } as const;
 /** The stage of a running conversion at `percent` (an integer 0–99; 100 is never written: the stage stays 99 through the commit). */

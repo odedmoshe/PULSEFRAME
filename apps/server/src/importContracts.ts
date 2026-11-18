@@ -44,13 +44,19 @@
  * - Retry, dismiss and cancel of an import job follow assertMayHandleImportJob. A retried job runs as the retrier's actor and
  *   keeps via, dropId and issuedBy in its input (the code may be closed by then; the retry is the retrier's act).
  * - Headers: x-filename and x-pf-relative-path are percent-encoded UTF-8, at most MAX_NAME_HEADER_BYTES each; decode them with
- *   decodeUploadHeader (400 invalid_filename). The page and the editor cut a long name (keeping its extension) before encoding.
+ *   decodeUploadHeader (400 invalid_filename). The page and the editor cut a long name before encoding with cutUploadName
+ *   (core): x-filename to 256 characters, x-pf-relative-path to 512, and each to MAX_NAME_HEADER_BYTES encoded, extension kept.
+ * - receive() never lets a name or path reach the commit longer than the schema allows (a REST client need not cut): after
+ *   cleaning, it cuts the name to MAX_UPLOAD_NAME_CHARS (a `.cube` suffix kept) and relativePath to MAX_RELATIVE_PATH_CHARS
+ *   characters (UTF-16 units, as the schema counts; no code point split; cutUploadName(value, max, Infinity)), drops a
+ *   relativePath that is empty after cleaning, and keeps relativePath only when via is 'folder' (validate.ts import_provenance).
+ *   Otherwise the import_asset commit would fail on UploadProvenanceSchema or AssetSchema with a code outside IMPORT_ERROR_CODES.
  */
 import type { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
 import type { NetworkInterfaceInfo } from 'node:os';
 import type { Readable } from 'node:stream';
-import { isPhoneActor, type DropAddress, type DropCloseReason, type DropCodeView, type DropState, type ImportJobView, type ImportRoom, type ImportVia } from '@pulseframe/core';
+import { isPhoneActor, MAX_NAME_HEADER_BYTES, type DropAddress, type DropCloseReason, type DropCodeView, type DropState, type ImportJobView, type ImportRoom, type ImportVia } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import type { Config } from './config.ts';
 import type { Governance } from './governance.ts';
@@ -76,6 +82,7 @@ export interface ImportJobInput {
   dropId?: string;
   /** The owner session that issued the drop code (phone uploads only). */
   issuedBy?: string;
+  /** Cleaned like the name (no C0 controls, no bidi overrides), at most 512 characters (UTF-16 units), 'folder' only. */
   relativePath?: string;
   /**
    * ISO UTC from the uploader's File.lastModified. Declared by the client and recorded only: it is NOT a capture date (phone
@@ -95,7 +102,7 @@ export interface ReceiveRequest {
   /** From the credential: 'user:local', an agent actor, or 'phone:<dropId>'. Never from a request body. */
   actor: string;
   body: Readable;
-  /** As sent (already percent-decoded with decodeUploadHeader); receive() cleans it. */
+  /** As sent (already percent-decoded with decodeUploadHeader); receive() cleans it and cuts it to MAX_UPLOAD_NAME_CHARS. */
   name: string;
   via: ImportVia;
   /** Content-Length, or null when the sender gave none (the main routes allow that; the door does not). */
@@ -103,7 +110,13 @@ export interface ReceiveRequest {
   /** Cap for this file, already the minimum of the caller's own limits. receive() additionally applies the ceiling and the disk reserve. */
   maxBytes: number;
   commitKind: 'edit' | 'background';
-  dropId?: string; issuedBy?: string; relativePath?: string; declaredLastModified?: string; batchId?: string;
+  dropId?: string; issuedBy?: string;
+  /**
+   * As sent (already percent-decoded). receive() cleans it like the name, cuts it to MAX_RELATIVE_PATH_CHARS characters
+   * (UTF-16 units, no code point split) and keeps it only when via is 'folder'; ImportJobInput.relativePath is the result.
+   */
+  relativePath?: string;
+  declaredLastModified?: string; batchId?: string;
   /** Aborting it stops the stream and deletes the partial file; nothing is enqueued. */
   signal?: AbortSignal;
 }
@@ -144,8 +157,12 @@ export interface ImportQueueDeps {
   spawnFfmpeg?: (args: string[]) => ChildProcess;
 }
 
-/** Headers carrying a name are percent-encoded UTF-8 and at most this many bytes as sent (a 256-character Hebrew name is about 1.5 kB). */
-export const MAX_NAME_HEADER_BYTES = 2048;
+/**
+ * Headers carrying a name are percent-encoded UTF-8 and at most this many bytes as sent (core). A 256-character Hebrew name is
+ * about 1.5 kB, but a 256-character name of emoji or CJK, or a 512-character Hebrew path, is more: senders cut with
+ * cutUploadName (core), which counts the encoded bytes as well as the characters.
+ */
+export { MAX_NAME_HEADER_BYTES };
 /**
  * The value of an upload header that carries a name (x-filename, x-pf-relative-path): percent-decoded UTF-8, or null when the
  * header is absent or empty. Refuses with 400 invalid_filename a value longer than `maxBytes`, one with characters a header
@@ -153,7 +170,7 @@ export const MAX_NAME_HEADER_BYTES = 2048;
  */
 export function decodeUploadHeader(raw: string | null | undefined, what = 'file name', maxBytes = MAX_NAME_HEADER_BYTES): string | null {
   if (raw === null || raw === undefined || raw === '') return null;
-  const bad = (why: string) => new ApiError(400, 'invalid_filename', `the ${what} header ${why}`, { maxBytes }, 'Send the name percent-encoded as UTF-8 (encodeURIComponent), cut to 256 characters.');
+  const bad = (why: string) => new ApiError(400, 'invalid_filename', `the ${what} header ${why}`, { maxBytes }, `Send the name percent-encoded as UTF-8 (encodeURIComponent), cut to 256 characters and to ${maxBytes} bytes encoded.`);
   if (raw.length > maxBytes) throw bad(`is longer than ${maxBytes} bytes`);
   if (!/^[\x20-\x7e]*$/.test(raw)) throw bad('is not percent-encoded');
   let value: string;

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  actorKind, applyTransaction, AssetSchema, convertingStage, createProject, diffEntities, IMPORT_ERROR_CODES, IMPORT_RETRYABLE, importCardState, importErrorRetryable, isPhoneActor, OpError, phoneActor, ProjectSchema,
+  actorKind, applyTransaction, AssetSchema, convertingStage, createProject, cutUploadName, MAX_NAME_HEADER_BYTES, MAX_RELATIVE_PATH_CHARS, MAX_UPLOAD_NAME_CHARS, diffEntities, IMPORT_ERROR_CODES, IMPORT_RETRYABLE, importCardState, importErrorRetryable, isPhoneActor, OpError, phoneActor, ProjectSchema,
   restoreEntities, SCHEMA_VERSION, UploadProvenanceSchema, validateProject, type OpCall, type ProjectDocument, type UploadProvenance,
 } from './index.ts';
 
@@ -97,5 +97,25 @@ describe('retry and actors', () => {
     expect(isPhoneActor('phone:drp_1')).toBe(true);
     expect(isPhoneActor('user:local')).toBe(false);
     expect(['user:local', 'agent:local', 'agent:observer', 'phone:drp_1', 'system'].map(actorKind)).toEqual(['user', 'agent', 'agent', 'phone', 'other']);
+  });
+});
+
+describe('cutUploadName (the name cut of the upload headers and of receive())', () => {
+  const longNames = ['😀'.repeat(300) + '.jpg', '写真'.repeat(200) + '.HEIC', 'תמונה'.repeat(100) + '.png', 'x'.repeat(3000) + '.cube'];
+  it('what it leaves always passes the schema (Asset.name, provenance.upload.relativePath), whatever the sender sent', () => {
+    for (const long of longNames) {
+      const name = cutUploadName(long, MAX_UPLOAD_NAME_CHARS, Infinity);
+      expect(name.length).toBeLessThanOrEqual(256);
+      expect(AssetSchema.shape.name.safeParse(name).success).toBe(true);
+      expect(name.slice(-5).includes('.')).toBe(true); // the extension survives
+      const rel = cutUploadName(`folder/${long}`, MAX_RELATIVE_PATH_CHARS, Infinity);
+      expect(UploadProvenanceSchema.safeParse({ via: 'folder', jobId: 'job_1', relativePath: rel }).success).toBe(true);
+    }
+  });
+  it('with the default header budget the encoded form fits MAX_NAME_HEADER_BYTES; a short name is returned as is', () => {
+    for (const long of longNames) for (const max of [MAX_UPLOAD_NAME_CHARS, MAX_RELATIVE_PATH_CHARS])
+      expect(encodeURIComponent(cutUploadName(long, max)).length).toBeLessThanOrEqual(MAX_NAME_HEADER_BYTES);
+    expect(cutUploadName('IMG_0001.MOV')).toBe('IMG_0001.MOV');
+    expect(cutUploadName('טיול/יום 1/IMG_0001.HEIC', MAX_RELATIVE_PATH_CHARS)).toBe('טיול/יום 1/IMG_0001.HEIC');
   });
 });
