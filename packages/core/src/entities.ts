@@ -1,6 +1,7 @@
 /**
  * Entity-level view of a project (SPEC §6): the unit of change tracking, undo and stale-result checks.
- * Entities: the project header, each asset, each track (without its clips) and each clip.
+ * Entities: the project header, each asset, each sequence's own fields (without its tracks), each track (without its clips)
+ * and each clip, and the other records listed in EntityState.
  * `diffEntities` is the exact creative difference between two documents; `restoreEntities` applies
  * target states. Undo is "restore the before-states of the entities a transaction changed, but only
  * if nobody changed them since" — a compensating transaction, never a history rewrite.
@@ -74,6 +75,8 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
   for (const e of Object.values(doc.events ?? {})) m.set(e.id, { kind: 'lifeEvent', event: e });
   for (const p of Object.values(doc.people ?? {})) m.set(p.id, { kind: 'person', person: p });
   for (const seq of Object.values(doc.sequences)) {
+    const { tracks: _tracks, ...own } = seq;
+    m.set(seq.id, { kind: 'sequence', sequence: own });
     m.set(trackOrderEntityId(seq.id), { kind: 'trackOrder', sequenceId: seq.id, ids: seq.tracks.map((t) => t.id) });
     seq.tracks.forEach((t, index) => {
       const { clips, ...track } = t;
@@ -133,9 +136,23 @@ export interface RestoreTarget { id: string; state: EntityState | null }
 /** Set each listed entity to the given state (null = absent). Mutates `draft`. Order-independent. */
 export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]): void {
   const removeClip = (id: string) => { for (const s of Object.values(draft.sequences)) for (const t of s.tracks) { const i = t.clips.findIndex((c) => c.id === id); if (i >= 0) t.clips.splice(i, 1); } };
+  const targeted = new Set(targets.map((t) => t.id));
+  const removedSequences: string[] = [];
+  // 0. sequences' own fields (ADR-0018), so restored tracks have a home: a missing sequence is created with no tracks, an
+  //    existing one has its own fields replaced (a field absent from the target goes; its tracks are never touched here)
+  for (const { id, state } of targets) {
+    if (state?.kind !== 'sequence') continue;
+    const fields = structuredClone(state.sequence);
+    const existing = Object.hasOwn(draft.sequences, id) ? draft.sequences[id] : undefined;
+    if (existing) {
+      for (const k of Object.keys(existing)) if (k !== 'tracks' && !(k in fields)) delete (existing as Record<string, unknown>)[k];
+      Object.assign(existing, fields);
+    } else draft.sequences[id] = { ...fields, tracks: [] };
+  }
   // 1. removals and in-place header/asset changes
   for (const { id, state } of targets) {
     const cur = entityMap(draft).get(id);
+    if (state === null && cur?.kind === 'sequence') { removedSequences.push(id); continue; }
     if (cur?.kind === 'clip') removeClip(id);
     if (state === null) {
       if (cur?.kind === 'asset') delete draft.assets[id];
@@ -148,7 +165,16 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
       if (cur?.kind === 'lifeEvent') delete draft.events[cur.event.id];
       // a project without people has no `people` key at all, so undoing the first add_person gives the stored document back exactly
       if (cur?.kind === 'person' && draft.people) { delete draft.people[cur.person.id]; if (Object.keys(draft.people).length === 0) delete draft.people; }
-      if (cur?.kind === 'track') { const seq = draft.sequences[cur.sequenceId]!; seq.tracks.splice(seq.tracks.findIndex((t) => t.id === id), 1); }
+      if (cur?.kind === 'track') {
+        const seq = draft.sequences[cur.sequenceId]!;
+        const track = seq.tracks.find((t) => t.id === id)!;
+        // The stricter undo rule (wave4-decisions.md, project-wide): a track goes only together with every clip it holds. A
+        // clip the targets do not name was added later, and removing the track would delete it silently: refuse instead
+        // (restore_entities turns this into invalid_result, the store into 409 undo_conflict).
+        const later = track.clips.find((c) => !targeted.has(c.id));
+        if (later) throw new Error(`track ${id} holds clips added later`);
+        seq.tracks.splice(seq.tracks.indexOf(track), 1);
+      }
     } else if (state.kind === 'project') { draft.name = state.name; draft.settings = structuredClone(state.settings); }
     else if (state.kind === 'asset') draft.assets[id] = structuredClone(state.asset);
     else if (state.kind === 'transcript') draft.transcripts[state.transcript.assetId] = structuredClone(state.transcript);
@@ -191,6 +217,14 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
     if (!track) throw new Error(`track ${state.trackId} missing`);
     track.clips.push(structuredClone(state.clip));
     track.clips.sort((x, y) => T.cmp(x.start, y.start) || (x.id < y.id ? -1 : 1));
+  }
+  // 4. sequences whose target is absent (ADR-0018): never the main one, and only once every track of it has gone
+  for (const id of removedSequences) {
+    if (id === draft.mainSequenceId) throw new Error(`sequence ${id} is the main sequence and cannot be removed`);
+    const seq = draft.sequences[id];
+    if (!seq) continue;
+    if (seq.tracks.length) throw new Error(`sequence ${id} still holds tracks added later`);
+    delete draft.sequences[id];
   }
 }
 
