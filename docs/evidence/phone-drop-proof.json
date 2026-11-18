@@ -1,16 +1,16 @@
 {
-  "ranAt": "2026-11-18T10:29:24.171Z",
+  "ranAt": "2026-11-18T12:01:51.800Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
     "cpus": 4,
     "memoryGiB": 15.7,
     "loadAtStart": [
-      1.76,
-      2.77,
-      3.29
+      3.53,
+      1.93,
+      1.6
     ]
   },
-  "freeDiskBytesAtStart": 5232324608,
+  "freeDiskBytesAtStart": 4669161472,
   "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
   "notVerifiedHere": [
     "a real phone and its pickers (iOS, Android; whether they hand over the original HEVC with its date)",
@@ -113,10 +113,17 @@
     },
     {
       "id": "P4b",
-      "name": "the QR pixels decoded by an independent decoder",
-      "pass": null,
-      "numbers": {},
-      "blocked": "no independent QR decoder is installed here (adding jsqr@1.4.0 as a dev dependency was refused by the permission system in this session); the encoder is held by qr.test.ts against a reader written from the standard"
+      "name": "the QR as shown on screen, read by an independent decoder (jsQR), gives exactly the issued URL; with one finder corner wiped it does not",
+      "pass": true,
+      "numbers": {
+        "size": [
+          280,
+          281
+        ],
+        "decodedVersion": 4,
+        "equalsUrl": true,
+        "controlRead": null
+      }
     },
     {
       "id": "P4c",
@@ -138,8 +145,8 @@
           "state": "waiting",
           "waitingFor": "check"
         },
-        "aSavedMs": 81,
-        "allSavedMs": 100
+        "aSavedMs": 75,
+        "allSavedMs": 363
       }
     },
     {
@@ -250,15 +257,18 @@
           "card-hevc.mp4": [
             "ממתין",
             "ממיר 0%",
-            "ממיר 25%",
-            "ממיר 61%",
+            "ממיר 15%",
+            "ממיר 39%",
+            "ממיר 59%",
+            "ממיר 98%",
             "מוכן"
           ],
           "card2-hevc.mp4": [
             "ממתין",
             "ממיר 0%",
-            "ממיר 11%",
-            "ממיר 98%",
+            "ממיר 4%",
+            "ממיר 25%",
+            "ממיר 71%",
             "מוכן"
           ]
         },
@@ -378,7 +388,7 @@
       "name": "killed with SIGKILL during a conversion and restarted: the code is gone (its port refuses), all 20 files import exactly once (20 assets whose originals are the 20 sources), the interrupted job ran again (attempt 2), and no temporary file is left once any orphan ffmpeg has exited",
       "pass": true,
       "numbers": {
-        "killedPid": 30632,
+        "killedPid": 16101,
         "convertingSeen": true,
         "doorClosed": true,
         "jobs": 20,
@@ -386,9 +396,9 @@
         "assets": 20,
         "distinctOriginals": 20,
         "interruptedAttempt": 2,
-        "orphanFfmpegAfterKill": "30674",
+        "orphanFfmpegAfterKill": "16171",
         "leftovers": [],
-        "secondsToAllImported": 9.163
+        "secondsToAllImported": 13.699
       }
     },
     {
@@ -397,26 +407,26 @@
       "pass": true,
       "numbers": {
         "idle": {
-          "p50": 3.1,
-          "p95": 7.6,
-          "max": 17.1
+          "p50": 3.2,
+          "p95": 10.8,
+          "max": 19.8
         },
         "convertingImports": {
-          "p50": 3.3,
-          "p95": 8.7,
-          "max": 31.3
+          "p50": 3.2,
+          "p95": 14.3,
+          "max": 44.5
         },
         "during300MBUpload": {
-          "p50": 4.3,
-          "p95": 12.7,
-          "max": 18.8
+          "p50": 5.8,
+          "p95": 24.6,
+          "max": 51.2
         },
         "limitMs": 120,
         "upload": 201,
         "load": [
-          2.25,
-          2.36,
-          3.05
+          5.85,
+          3.1,
+          2.06
         ]
       }
     },
@@ -489,12 +499,11 @@
     "p18Frames": "barcode frames at three positions between preview, server still and export: not run in this proof (the parity suite and proof:phase4 hold the shared compositor)",
     "pageLanguage": "the page follows navigator.language: an English-locale phone gets the English page first (review item; the owner decides whether a Hebrew household with en-US phones should get Hebrew first)"
   },
-  "seconds": 135,
+  "seconds": 151,
   "summary": {
-    "passed": 30,
+    "passed": 31,
     "failed": [],
     "blocked": [
-      "P4b",
       "P15c",
       "P14b"
     ]

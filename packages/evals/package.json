@@ -8,9 +8,12 @@
     "@pulseframe/core": "workspace:*",
     "@pulseframe/engine": "workspace:*",
     "@pulseframe/fixtures": "workspace:*",
+    "@pulseframe/providers": "workspace:*",
     "@pulseframe/server": "workspace:*",
     "@pulseframe/time": "workspace:*",
-    "playwright": "1.63.0",
-    "@pulseframe/providers": "workspace:*"
+    "playwright": "1.63.0"
+  },
+  "devDependencies": {
+    "jsqr": "1.4.0"
   }
 }

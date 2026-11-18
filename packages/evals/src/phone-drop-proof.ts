@@ -33,6 +33,7 @@ import { buildOpenApi } from '../../../apps/server/src/openapi.ts';
 import { Store } from '../../../apps/server/src/store.ts';
 import { DROP_PAGE_TESTIDS } from '../../../apps/server/src/drop-page/testids.ts';
 import { encodeQr, qrSvgPath } from '../../../apps/web/src/qr.ts';
+import jsQR from 'jsqr';
 import { IMPORT_TESTIDS, PHONE_DROP_TESTIDS } from '../../../apps/web/src/editor/imports.testids.ts';
 import { makeApi, ownerApi, sleep, type Api } from './incremental-fixtures.ts';
 import { makeBaselineFixtures } from './phone-drop-baseline.ts';
@@ -274,7 +275,18 @@ async function main() {
     fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
     await page.screenshot({ path: path.join(art, 'p4-dialog-he.png') });
     check('P4', 'the dialog (1440×900, Hebrew): the QR drawn is the encoding of exactly the issued URL (same modules), the typed address and the PIN match the code, the dialog is named and holds the focus', d === expected && typed === `${DOOR}:${DROP_PORT}` && pinText === code.pin && dialogName.startsWith('dialog|') && dialogName.length > 7 && focusInside, { qrPathEqual: d === expected, typed, pinMatches: pinText === code.pin, dialogName, focusInside });
-    blocked('P4b', 'the QR pixels decoded by an independent decoder', 'no independent QR decoder is installed here (adding jsqr@1.4.0 as a dev dependency was refused by the permission system in this session); the encoder is held by qr.test.ts against a reader written from the standard');
+    // P4b: the QR as the screen shows it (a screenshot of the dialog's QR element), read by an independent decoder (jsQR 1.4.0,
+    // Apache-2.0, test-only) — the encoder in apps/web/src/qr.ts is ours, so this is the check that a phone's camera reader agrees
+    const qrPng = await page.getByTestId(PHONE_DROP_TESTIDS.qr).screenshot();
+    const qrPath = path.join(art, 'p4b-qr.png'); fs.writeFileSync(qrPath, qrPng);
+    const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', qrPath], { encoding: 'utf8' }).stdout.trim().split(',').map(Number);
+    const [qw, qh] = probe as [number, number];
+    const rgba = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-i', qrPath, '-f', 'rawvideo', '-pix_fmt', 'rgba', '-'], { maxBuffer: 1 << 28 }).stdout as Buffer;
+    const decoded = qw > 0 && qh > 0 && rgba.length === qw * qh * 4 ? jsQR(new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.length), qw, qh) : null;
+    // control: the same pixels with the finder patterns' corner wiped must not decode to the URL (the decoder really reads the picture)
+    const wiped = Buffer.from(rgba); for (let y = 0; y < Math.floor(qh / 3); y++) for (let x = 0; x < Math.floor(qw / 3); x++) wiped.fill(255, (y * qw + x) * 4, (y * qw + x) * 4 + 3);
+    const wipedRead = qw > 0 ? jsQR(new Uint8ClampedArray(wiped.buffer, wiped.byteOffset, wiped.length), qw, qh) : null;
+    check('P4b', 'the QR as shown on screen, read by an independent decoder (jsQR), gives exactly the issued URL; with one finder corner wiped it does not', decoded?.data === code.url && wipedRead?.data !== code.url, { size: [qw, qh], decodedVersion: decoded?.version ?? null, equalsUrl: decoded?.data === code.url, controlRead: wipedRead ? (wipedRead.data === code.url ? 'url' : 'other') : null });
     // Esc hides the dialog and leaves the chip with the time left; the chip reopens it
     await page.keyboard.press('Escape');
     await page.getByTestId(PHONE_DROP_TESTIDS.chip).waitFor({ timeout: 8000 });
