@@ -79,7 +79,8 @@
     "packs:sheet": "tsx packages/evals/src/packs-sheet.ts",
     "proof:phone-drop": "tsx packages/evals/src/phone-drop-proof.ts",
     "proof:phone-drop-baseline": "tsx packages/evals/src/phone-drop-baseline.ts",
-    "proof:incremental": "tsx packages/evals/src/incremental-export-proof.ts"
+    "proof:incremental": "tsx packages/evals/src/incremental-export-proof.ts",
+    "proof:shorts": "tsx packages/evals/src/shorts-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
