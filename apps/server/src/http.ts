@@ -136,7 +136,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       c.header('Access-Control-Allow-Credentials', 'true');
       c.header('Vary', 'Origin');
       if (c.req.method === 'OPTIONS') {
-        c.header('Access-Control-Allow-Headers', 'content-type, authorization, x-filename');
+        c.header('Access-Control-Allow-Headers', 'content-type, authorization, x-filename, x-pf-via, x-pf-relative-path, x-pf-last-modified, x-pf-batch'); // x-pf-*: the import queue's upload headers (ADR-0023)
         c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
         return c.body(null, 204);
       }

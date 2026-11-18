@@ -73,7 +73,26 @@ export interface Config {
    * material filmed elsewhere is corrected with the clock shift (shift_asset_captures).
    */
   homeZone: string;
+  // ---- phone drop and the import queue (ADR-0023, amends ADR-0002) ----
+  /**
+   * Port of the phone drop listener (PF_DROP_PORT, default 8788; 0 = any free port). It listens only while an owner-issued code
+   * is live, on the one private address the owner confirmed, and serves only the upload page and the upload routes.
+   */
+  dropPort: number;
+  /** Minutes a code waits for a phone, and a connected phone may stay idle before the code closes (PF_DROP_TTL_MINUTES, default 10, 1–60). */
+  dropTtlMinutes: number;
+  /** Bytes one code may receive in all (PF_DROP_CODE_BYTES, default 16 GiB). */
+  dropCodeBytes: number;
+  /** Free disk space the door and the import queue leave for everything else (PF_IMPORT_RESERVE_BYTES, default 2 GiB; see importContracts.ts diskReserveRefuses). */
+  importReserveBytes: number;
+  /**
+   * NEVER read from the environment: addresses outside the private ranges that a proof may bind the door to (a launcher script in
+   * packages/evals passes them to startServer from its own argv). [] in the product: the door binds only RFC 1918 addresses.
+   */
+  dropAdmitAddresses: string[];
 }
+/** The drop port when PF_DROP_PORT is not set. */
+export const DEFAULT_DROP_PORT = 8788;
 /** The home zone when PF_HOME_TZ is not set. */
 export const DEFAULT_HOME_ZONE = 'Asia/Jerusalem';
 /** The zone as given when this machine's Intl knows it; refuses to start otherwise (a wrong zone would silently date every import wrongly). */
@@ -125,5 +144,10 @@ export function loadConfig(env = process.env): Config {
     agentMaxFramesPerJob: Math.floor(num(env.PF_AI_AGENT_MAX_FRAMES, 300)),
     agentMaxQueuedJobs: Math.floor(num(env.PF_AI_AGENT_MAX_QUEUED, 2)),
     homeZone: homeZoneOf(env.PF_HOME_TZ),
+    dropPort: Math.floor(num(env.PF_DROP_PORT, DEFAULT_DROP_PORT)) <= 65535 ? Math.floor(num(env.PF_DROP_PORT, DEFAULT_DROP_PORT)) : DEFAULT_DROP_PORT,
+    dropTtlMinutes: Math.min(60, Math.max(1, Math.floor(num(env.PF_DROP_TTL_MINUTES, 10, 1)))),
+    dropCodeBytes: Math.floor(num(env.PF_DROP_CODE_BYTES, 16 * 1024 ** 3, 1)),
+    importReserveBytes: Math.floor(num(env.PF_IMPORT_RESERVE_BYTES, 2 * 1024 ** 3)),
+    dropAdmitAddresses: [],
   };
 }

@@ -103,6 +103,22 @@ export const CaptureSchema = z
   })
   .strict();
 export type Capture = z.infer<typeof CaptureSchema>;
+// ---------- phone drop and the import queue (ADR-0023). Optional fields only; no schema version bump. ----------
+/** How a file arrived through the import queue: this browser's picker, a dropped folder, or a phone drop code. */
+export const IMPORT_VIA = ['browser', 'folder', 'phone'] as const;
+/** Asset.provenance.upload (ADR-0023). Ids are the server's own (job_…, drp_…); never a secret of the drop code. */
+export const UploadProvenanceSchema = z
+  .object({
+    via: z.enum(IMPORT_VIA),
+    /** The import job that brought the file in (a job row of type 'import'). */
+    jobId: z.string().min(1).max(40),
+    /** The drop code the phone used (phone only). An id, never the code's token, PIN or session. */
+    dropId: z.string().min(1).max(40).optional(),
+    /** The path inside the dropped folder (folder only), as the browser reported it, cut to 512 characters. */
+    relativePath: z.string().min(1).max(512).optional(),
+  })
+  .strict();
+export type UploadProvenance = z.infer<typeof UploadProvenanceSchema>;
 /** A project holds at most this many events. */
 export const MAX_LIFE_EVENTS = 2000;
 /** An event holds at most this many files (and at least one). */
@@ -219,6 +235,12 @@ export const AssetSchema = z
          */
         procedural: z.object({ id: z.string(), version: z.number().int(), generator: z.string(),
           params: z.record(z.string().min(1).max(24), z.union([z.number(), z.string().max(64)])).refine((r) => Object.keys(r).length <= 8, { message: 'at most 8 entries' }).optional() }).strict().optional(),
+        /**
+         * Present for files that arrived through the import queue (ADR-0023): how they arrived. `origin` stays 'upload' and
+         * `importedBy` is the credential's actor ('phone:<dropId>' for a phone drop). `dropId` is present exactly for 'phone';
+         * `relativePath` (the path inside a dropped folder, cut to 512 characters) only for 'folder' (validate.ts import_provenance).
+         */
+        upload: UploadProvenanceSchema.optional(),
         /** Present for generated speech (SPEC §17): what was said, by which engine and model, in which voice. A voice taken from a recording carries the consent statement its owner made; an agent cannot make one. */
         voice: z
           .object({

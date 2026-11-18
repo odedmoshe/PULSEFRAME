@@ -14,10 +14,12 @@ function mulberry32(seed: number) {
 
 const SRC = { num: 30, den: 1 };
 const prov = { origin: 'fixture' as const, importedAt: '2026-11-15T00:00:00Z', importedBy: 'fuzz' };
+const phoneProv = { origin: 'upload' as const, importedAt: '2026-11-18T10:00:00.000Z', importedBy: 'phone:drp_fuzz', upload: { via: 'phone' as const, jobId: 'job_fuzz3', dropId: 'drp_fuzz' } };
 const ASSETS = [
   { kind: 'video' as const, name: 'v.mp4', contentHash: `sha256:${'1'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(8, 1), video: { width: 640, height: 360, frameRate: SRC, codec: 'h264', rotation: 0, frameCount: 240 }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: prov },
   { kind: 'audio' as const, name: 'm.wav', contentHash: `sha256:${'2'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(10, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm' }, provenance: prov },
-  { kind: 'image' as const, name: 'p.png', contentHash: `sha256:${'3'.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 800, height: 600, codec: 'png', hasAlpha: false }, provenance: prov },
+  // a picture that came from a phone drop (ADR-0023): the operations carry its upload provenance through copies, removal and undo
+  { kind: 'image' as const, name: 'p.png', contentHash: `sha256:${'3'.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 800, height: 600, codec: 'png', hasAlpha: false }, provenance: phoneProv },
   { kind: 'video' as const, name: 'late.mkv', contentHash: `sha256:${'4'.repeat(64)}`, byteSize: 1, container: 'matroska', mimeType: 'video/x-matroska', duration: T.frameTime(135, SRC), video: { width: 640, height: 360, frameRate: SRC, codec: 'h264', rotation: 0, frameCount: 120, startTime: T.fromSeconds('0.5'), untaggedColour: true as const }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: prov },
 ];
 
