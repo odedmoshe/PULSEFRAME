@@ -19,7 +19,7 @@ function fakeHost() {
   const host: ImportsHost = {
     projectId: () => 'p',
     upload: (_p, f, meta, onProgress) => {
-      const up = { name: f.name, aborted: false, meta } as Up;
+      const up = { name: f.name, aborted: false, meta } as unknown as Up;
       const done = new Promise<{ job: ImportJobView }>((res, rej) => { up.resolve = (j) => res({ job: j }); up.reject = rej; });
       up.progress = onProgress;
       ups.push(up);
