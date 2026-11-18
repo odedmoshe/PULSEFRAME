@@ -2,13 +2,14 @@
  * Validation of multicam groups and tags (ADR-0020 plan §2). Lead-built; validate.ts validateProject calls it. These rules
  * fire only on documents that hold the new keys, so an older project stays editable. Ids are looked up as own properties.
  *
- * Left to W1 (needs the map maths of multicam.ts): "the pieces of one angle do not overlap in group time" (code
- * multicam_sync), added here once pieceCoverage is built.
+ * W1 (with the map maths of multicam.ts): the placed pieces of one angle do not overlap in group time (code multicam_sync): one
+ * camera or recorder records one file at a time, so a group time never names two files of one angle.
  */
 import * as T from '@pulseframe/time';
 import type { Issue } from './validate.ts';
 import type { ProjectDocument } from './schema.ts';
 import { isPlacedVerdict, MAX_MULTICAM_GROUPS, MAX_PROJECT_ANCHORS } from './multicamLimits.ts';
+import { pieceCoverage, syncGrid } from './multicam.ts';
 
 /** Every multicam issue of the document. `uniq` is validateProject's: a group is an entity of its own (entities.ts), so its id must not be another entity's. */
 export function multicamIssues(doc: ProjectDocument, uniq: (id: string) => void): Issue[] {
@@ -57,6 +58,14 @@ export function multicamIssues(doc: ProjectDocument, uniq: (id: string) => void)
           if (!mt || mt.assetId !== p.assetId) issues.push({ code: 'follow_track', message: `multicam group ${g.id}: angle ${an.id} file ${i} follows motion track ${p.follow.motionTrackId}, which is missing or of another file`, ids: [g.id, p.follow.motionTrackId] });
         }
       });
+    }
+    // the placed files of one angle do not overlap in group time (W1); only once the maps above are well formed
+    if (!issues.some((i) => i.code === 'multicam_sync' && i.ids[0] === g.id)) {
+      const grid = syncGrid(g.sampleRate, doc.settings.frameRate);
+      for (const an of g.angles) {
+        const spans = an.pieces.flatMap((p, i) => { const a = asset(p.assetId); const c = a ? pieceCoverage(p, a.duration, grid) : null; return c ? [{ i, ...c }] : []; }).sort((x, y) => T.cmp(x.start, y.start));
+        for (let k = 1; k < spans.length; k++) if (T.lt(spans[k]!.start, spans[k - 1]!.end)) issues.push({ code: 'multicam_sync', message: `multicam group ${g.id}: files ${spans[k - 1]!.i} and ${spans[k]!.i} of angle ${an.id} overlap in group time`, ids: [g.id] });
+      }
     }
     // the reference: its first file sets group time, exactly {0,0}
     const ref = angleOf(g.referenceAngleId);

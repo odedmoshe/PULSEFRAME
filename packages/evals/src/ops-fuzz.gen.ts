@@ -274,30 +274,46 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     const g = () => (groups.length && rnd() < 0.9 ? pick(groups) : null);
     const groupId = () => g()?.id ?? 'mcg_none';
     const angleOf = (x: ReturnType<typeof g>, kind?: 'picture' | 'sound') => { const as = (x?.angles ?? []).filter((a) => !kind || a.kind === kind); return as.length && rnd() < 0.9 ? pick(as).id : 'ang_none'; };
+    // W1: most draws name an angle the call can work on (a synced camera to lay or cut to; a file other than the reference to sync), so the
+    // chain create → sync → place → switch is reached within a run; the rest still draw any angle, unknown ids included
+    const placedPicture = (x: ReturnType<typeof g>, p = 0.85) => { const as = (x?.angles ?? []).filter((a) => a.kind === 'picture' && a.pieces.some((pc) => pc.anchors.length)); return as.length && rnd() < p ? pick(as).id : angleOf(x, 'picture'); };
+    const syncable = (x: ReturnType<typeof g>) => { const as = (x?.angles ?? []).filter((a) => a.id !== x?.referenceAngleId); return as.length && rnd() < 0.85 ? pick(as).id : angleOf(x); };
     const sr = 48000;
     const samples = (n: number) => T.rt(n, sr);
     const tagged = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips.filter((c) => c.type === 'media' && c.multicam).map((c) => c.id)));
     const late = assetIds[3] ?? vid;
-    return [
+    const taggedPictures = Object.values(doc.sequences).flatMap((sq) => sq.tracks.filter((t) => t.kind === 'video').flatMap((t) => t.clips.flatMap((c) => (c.type === 'media' && c.multicam ? [{ id: c.id, ...c.multicam }] : []))));
+    const programGroups = groups.filter((x) => Object.values(doc.sequences).some((sq) => sq.tracks.some((t) => t.kind === 'video' && t.clips.some((c) => c.type === 'media' && c.multicam?.groupId === x.id))));
+    const rows: (() => OpCall)[] = [
       () => ({ op: 'create_multicam', args: { angles: rnd() < 0.1 ? [{ assetIds: [vid] }, { assetIds: [vid] }] : [{ assetIds: [aud] }, { assetIds: [vid] }, ...(rnd() < 0.6 ? [{ assetIds: [late], ...(rnd() < 0.3 ? { label: 'מצלמה צד' } : {}) }] : []), ...(rnd() < 0.05 ? [{ assetIds: [vid] }] : [])], ...(rnd() < 0.2 ? { referenceAngleIndex: int(3) } : {}), ...(rnd() < 0.3 ? { name: 'פודקאסט' } : {}) } }),
       () => {
         const x = g(); const pieceIndex = rnd() < 0.9 ? 0 : 1 + int(2);
-        const form = int(5);
+        const form = rnd() < 0.4 ? 0 : int(5);
         const a = form === 0 ? { offset: samples(int(sr * 4) - sr) } : form === 1 ? { nudge: rnd() < 0.5 ? T.frameTime(rnd() < 0.5 ? 1 : -1, rate) : T.rt(rnd() < 0.5 ? 1 : -1, 1000) }
           : form === 2 ? { anchors: [{ group: samples(int(sr)), source: T.ZERO }, { group: samples(sr * 6 + int(600) - 300), source: samples(sr * 6) }] } : form === 3 ? { clear: true as const } : { offset: T.rt(1, 96000) };
-        return { op: 'set_multicam_sync', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x), pieceIndex, ...a } };
+        return { op: 'set_multicam_sync', args: { groupId: x?.id ?? 'mcg_none', angleId: syncable(x), pieceIndex, ...a } };
       },
       () => { const x = g(); return { op: 'update_multicam', args: { groupId: x?.id ?? 'mcg_none', ...(rnd() < 0.4 ? { name: 'ראיון' } : {}), ...(rnd() < 0.4 ? { wideAngleId: rnd() < 0.2 ? null : angleOf(x, 'picture') } : {}), ...(rnd() < 0.4 ? { speakers: [{ label: 'דוברת', micAngleId: angleOf(x, 'sound'), channel: rnd() < 0.5 ? null : int(2), shotAngleId: rnd() < 0.3 ? null : angleOf(x, 'picture') }] } : {}) } }; },
-      () => { const x = g(); return { op: 'set_angle_look', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { clear: true as const } : { fromClipId: tagged.length && rnd() < 0.9 ? pick(tagged) : 'clp_none' }), ...(rnd() < 0.4 ? { apply: pick(['unedited', 'all', 'none'] as const) } : {}) } }; },
-      () => { const x = g(); return { op: 'place_multicam', args: { groupId: x?.id ?? 'mcg_none', at: T.frameTime(int(120), rate), angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { range: { from: samples(int(sr * 2)), to: samples(sr * 2 + int(sr * 4)) } } : {}), ...(rnd() < 0.2 ? { newSequence: { name: 'תוכנית' } } : {}), ...(rnd() < 0.2 ? { fill: rnd() < 0.5 } : {}) } }; },
       () => {
-        const x = g(); const k = 1 + int(6);
-        const cuts = Array.from({ length: k }, () => (rnd() < 0.5 ? { at: T.frameTime(int(260), rate), angleId: angleOf(x, 'picture') } : { groupTime: samples(int(sr * 9)), angleId: angleOf(x, 'picture') }));
+        // most draws take the look of a segment of a program, from its own group and angle
+        const seg = taggedPictures.length && rnd() < 0.7 ? pick(taggedPictures) : null;
+        if (seg) return { op: 'set_angle_look', args: { groupId: seg.groupId, angleId: seg.angleId, fromClipId: seg.id, ...(rnd() < 0.4 ? { apply: pick(['unedited', 'all', 'none'] as const) } : {}) } };
+        const x = g(); return { op: 'set_angle_look', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { clear: true as const } : { fromClipId: tagged.length && rnd() < 0.9 ? pick(tagged) : 'clp_none' }), ...(rnd() < 0.4 ? { apply: pick(['unedited', 'all', 'none'] as const) } : {}) } };
+      },
+      () => { const x = g(); return { op: 'place_multicam', args: { groupId: x?.id ?? 'mcg_none', at: T.frameTime(int(120), rate), angleId: placedPicture(x), ...(rnd() < 0.3 ? { range: { from: samples(int(sr * 2)), to: samples(sr * 2 + int(sr * 4)) } } : {}), ...(rnd() < 0.2 ? { newSequence: { name: 'תוכנית' } } : {}), ...(rnd() < 0.2 ? { fill: rnd() < 0.5 } : {}) } }; },
+      () => {
+        const x = programGroups.length && rnd() < 0.85 ? pick(programGroups) : g(); const k = 1 + int(4);
+        const cuts = Array.from({ length: k }, () => (rnd() < 0.5 ? { at: T.frameTime(int(260), rate), angleId: placedPicture(x, 0.95) } : { groupTime: samples(int(sr * 9)), angleId: placedPicture(x, 0.95) }));
         return { op: 'switch_angles', args: { groupId: x?.id ?? 'mcg_none', cuts, ...(rnd() < 0.3 ? { until: { at: T.frameTime(int(300), rate) } } : {}), ...(rnd() < 0.5 ? { coverage: pick(['refuse', 'clip'] as const) } : {}), ...(rnd() < 0.2 ? { heal: false } : {}) } };
       },
       () => ({ op: 'detach_from_multicam', args: { clipIds: tagged.length && rnd() < 0.9 ? [pick(tagged)] : ['clp_none'] } }),
-      () => ({ op: 'remove_multicam', args: { groupId: groupId(), ...(rnd() < 0.6 ? { detach: true } : {}) } }),
+      () => ({ op: 'remove_multicam', args: { groupId: rnd() < 0.4 ? groupId() : 'mcg_none', ...(rnd() < 0.6 ? { detach: true } : {}) } }),
     ];
+    // the chain create → sync → place → switch gets more draws once its previous link is there, so a run reaches the end of it
+    const unsynced = groups.some((x) => x.angles.some((a) => a.id !== x.referenceAngleId && !a.pieces.some((pc) => pc.anchors.length)));
+    const placed = groups.some((x) => x.angles.some((a) => a.kind === 'picture' && a.pieces.some((pc) => pc.anchors.length)));
+    const [create, sync, , look, place, cut, detach] = rows as (() => OpCall)[] as [() => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall];
+    return [...rows, ...(groups.length ? [] : [create]), ...(unsynced ? [sync, sync, sync] : []), ...(placed && !programGroups.length ? [place, place, place, place] : []), ...(programGroups.length ? [cut, cut, cut, cut, cut, cut, look, detach, detach] : [])];
   };
   const genMulticam = (doc: ProjectDocument): OpCall => pick(multicamMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });

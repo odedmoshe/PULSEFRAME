@@ -109,30 +109,16 @@ describe('registry rows', () => {
     for (const op of MULTICAM_OPS) { expect(pub).toContain(op); expect(getOp(op)!.version).toBe(1); expect(getOp(op)!.args).toBe(MulticamOpArgs[op]); }
     expect(pub).not.toContain(MULTICAM_SYNC_OP);
     expect(getOp(MULTICAM_SYNC_OP)!.internal).toBe(true);
-    expect(MULTICAM_OPS_BUILT).toBe(false);
+    expect(MULTICAM_OPS_BUILT).toBe(true); // W1 built the bodies (multicamOps.test.ts)
   });
-  it('until W1 builds them, every operation refuses with the not-built refusal and changes nothing (an internal one only with allowInternal)', () => {
+  it('the internal one runs only with allowInternal; a refused call changes nothing (bodies: multicamOps.test.ts)', () => {
     const s = setup();
     const d = withGroup(s.doc, s.group);
-    const calls: OpCall[] = [
-      { op: 'create_multicam', args: { angles: [{ assetIds: [s.A] }, { assetIds: [s.MIC] }] } },
-      { op: 'set_multicam_sync', args: { groupId: 'mcg_1', angleId: 'ang_b', pieceIndex: 0, offset: T.rt(1, 1) } },
-      { op: 'update_multicam', args: { groupId: 'mcg_1', name: 'x' } },
-      { op: 'set_angle_look', args: { groupId: 'mcg_1', angleId: 'ang_a', clear: true } },
-      { op: 'place_multicam', args: { groupId: 'mcg_1', at: T.ZERO, angleId: 'ang_a' } },
-      { op: 'switch_angles', args: { groupId: 'mcg_1', cuts: [{ at: T.ZERO, angleId: 'ang_b' }] } },
-      { op: 'detach_from_multicam', args: { clipIds: [s.clipId] } },
-      { op: 'remove_multicam', args: { groupId: 'mcg_1' } },
-      { op: 'attach_multicam_sync', args: { groupId: 'mcg_1', createdAt: '2026-11-18T00:00:00Z', method: 'm', params: {}, pieces: [{ angleId: 'ang_b', pieceIndex: 0, anchors: [], quality: quality('ambiguous') }] } },
-    ];
     const json = JSON.stringify(d);
-    for (const call of calls) {
-      const e = refusal(() => tx(d, [call], true));
-      expect(e.code, call.op).toBe('unknown_op');
-      expect(e.message).toBe(MULTICAM_REFUSALS.notBuilt.message(call.op));
-      expect(e.hint).toBe(MULTICAM_REFUSALS.notBuilt.hint);
-    }
-    expect(refusal(() => tx(d, [calls[8]!])).code).toBe('forbidden_op');
+    const attach: OpCall = { op: 'attach_multicam_sync', args: { groupId: 'mcg_1', createdAt: '2026-11-18T00:00:00Z', method: 'm', params: {}, pieces: [{ angleId: 'ang_b', pieceIndex: 0, anchors: [], quality: quality('ambiguous') }] } };
+    expect(refusal(() => tx(d, [attach])).code).toBe('forbidden_op');
+    expect(tx(d, [attach], true).doc.multicam!.mcg_1!.angles[2]!.pieces[0]!.quality.verdict).toBe('ambiguous');
+    expect(refusal(() => tx(d, [{ op: 'set_multicam_sync', args: { groupId: 'mcg_1', angleId: 'ang_mic', pieceIndex: 0, offset: T.rt(1, 1) } }])).message).toBe(MULTICAM_REFUSALS.referenceFixed.message());
     expect(JSON.stringify(d)).toBe(json);
   });
 });
@@ -249,10 +235,4 @@ describe('small fixed parts', () => {
     const s = setup();
     try { planRecipe(withGroup(s.doc, s.group), 'multicam-auto', { groupId: 'mcg_1' }); throw new Error('planned'); } catch (e) { expect(e).toBeInstanceOf(RecipeError); expect((e as RecipeError).code).toBe('not_built'); }
   });
-});
-
-describe('W1 bodies (multicam.ts, multicamOps.ts)', () => {
-  it.todo('maps, remap, coverage, planPicture/planSound, lookOfClip, multiviewDocument: multicam.test.ts');
-  it.todo('the nine operation bodies, their refusals and outputs: multicamOps.test.ts');
-  it.todo('validation: the pieces of one angle do not overlap in group time (multicamValidate.ts, needs pieceCoverage)');
 });
