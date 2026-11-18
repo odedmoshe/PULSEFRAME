@@ -27,7 +27,8 @@
   background: var(--pf-surface-3); color: var(--pf-text); box-shadow: inset 0 0 0 1px var(--pf-line-control); font: inherit; transition: background var(--pf-dur-fast) var(--pf-ease-out), transform var(--pf-dur-press) var(--pf-ease-out); }
 .pf-perform-pad:hover { background: var(--pf-surface-4); }
 .pf-perform-pad:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
-.pf-perform-pad[data-state='held-down'], .pf-perform-pad[aria-pressed='true'] { background: var(--pf-m-perform); color: var(--pf-on-plate); transform: scale(0.97); }
+/* text on the perform tint: the tint is light in the dark tokens the view uses (#FF9CC8), so the text is the canvas colour (audit 2026-11-18: 1.68:1 with the plate foreground) */
+.pf-perform-pad[data-state='held-down'], .pf-perform-pad[aria-pressed='true'] { background: var(--pf-m-perform); color: var(--pf-canvas); transform: scale(0.97); }
 .pf-perform-pad[data-state='empty'] { background: transparent; border: 1px dashed var(--pf-line-strong); color: var(--pf-text-3); }
 .pf-perform-pad[data-state='disabled'] { cursor: not-allowed; color: var(--pf-text-disabled); background: var(--pf-surface-1); border: 1px dashed var(--pf-line-strong); }
 .pf-perform-padkey { font-family: var(--pf-font-mono); font-size: var(--pf-fs-lg); font-weight: var(--pf-fw-semibold); line-height: 1; }
@@ -43,7 +44,7 @@
 
 /* the take lane */
 .pf-perform-lane { display: grid; gap: var(--pf-sp-2); }
-.pf-perform-ghost { margin: 0; padding: var(--pf-sp-2) var(--pf-sp-4); border-radius: var(--pf-r-md); background: var(--pf-m-perform); color: var(--pf-on-plate); font-weight: var(--pf-fw-semibold); font-size: var(--pf-fs-xs); }
+.pf-perform-ghost { margin: 0; padding: var(--pf-sp-2) var(--pf-sp-4); border-radius: var(--pf-r-md); background: var(--pf-m-perform); color: var(--pf-canvas); font-weight: var(--pf-fw-semibold); font-size: var(--pf-fs-xs); }
 .pf-perform-counts { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
 .pf-perform-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--pf-sp-2); max-block-size: 120px; overflow: auto; }
 .pf-perform-chip { display: inline-flex; align-items: center; gap: var(--pf-sp-2); padding: var(--pf-sp-1) var(--pf-sp-3); border-radius: var(--pf-r-md); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); border: 1px solid var(--pf-line-strong); }
