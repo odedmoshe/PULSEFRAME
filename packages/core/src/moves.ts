@@ -11,10 +11,13 @@
  *   frame by frame so a 200-hit take plans without applying anything: strobe hits claim their light first; every change of
  *   light the take makes (the start of a light-changing adjustment, a title or a sticker, and inner key changes on its light
  *   channels) keeps flashGapFrames from every other change of light, stays outside every strobe or light transition widened by
- *   the gap, and lasts at least the gap. An envelope or fade on a light channel whose inner key cannot keep the gap is stretched
- *   over the whole hit (its keys then sit on the clip's first frame and its end, which change no light by rule 5), never held.
+ *   the gap, and lasts at least the gap. An envelope or fade on a light channel whose inner key cannot keep the gap (from the
+ *   hit's start, its end and every other change) is held flash_limit, never stretched into a different look (lead, after the
+ *   build review); `since` says how close the inner key came.
  * - The zoom punch is scale keys on the topmost visible picture clip at the hit (x and y too when they are not 0, so it zooms
- *   about the frame centre), written as one replace_clip_keyframes (range form) per property, exact only where the property is
+ *   about the frame centre), clamped at the clip's end and where a picture on a higher visible track begins over it (the
+ *   visible clip changes there; a tap on that picture is its own hit), written as one replace_clip_keyframes (range form) per
+ *   property, exact only where the property is
  *   constant over [a − 1, b]: its last key copies the easing of the segment it lands in, keys outside [a − 1, b] stay, so every
  *   frame outside [a, b) is drawn as before (moves.property.test.ts samples them).
  * - Sound lanes: unlocked, unmuted sound tracks that earlier perform:take runs made are reused before add_track; at most
@@ -264,13 +267,23 @@ export const planPerformance: PlanPerformance = (doc, input) => {
   const fits = (f: number, mine: readonly number[]) => breachAt(f, mine) === null && mine.every((m) => Math.abs(m - f) >= gap);
 
   /** The topmost visible picture clip under frame `f`: what a punch there keys. */
-  const punchTarget = (f: number): { track: Track; clip: Clip } | null => {
+  const punchTarget = (f: number): { track: Track; index: number; clip: Clip } | null => {
     for (let i = seq.tracks.length - 1; i >= 0; i--) {
       const t = seq.tracks[i]!;
       if (t.kind !== 'video' || t.hidden) continue;
-      for (const c of t.clips) if (pictureAt(doc, c) && startFrame(c, rate) <= f && f < endFrame(c, rate)) return { track: t, clip: c };
+      for (const c of t.clips) if (pictureAt(doc, c) && startFrame(c, rate) <= f && f < endFrame(c, rate)) return { track: t, index: i, clip: c };
     }
     return null;
+  };
+  /** Where a punch from `a` on `t` stops showing: the clip's end, or the first frame after `a` where a picture on a higher visible track begins over it. */
+  const punchEnd = (t: { index: number; clip: Clip }, a: number, b: number): number => {
+    let end = Math.min(b, endFrame(t.clip, rate));
+    for (let i = t.index + 1; i < seq.tracks.length; i++) {
+      const tr = seq.tracks[i]!;
+      if (tr.kind !== 'video' || tr.hidden) continue;
+      for (const c of tr.clips) { const cs = startFrame(c, rate); if (pictureAt(doc, c) && cs > a && cs < end) end = cs; }
+    }
+    return end;
   };
   /**
    * Where a hit of `spec` over [a, b) really ends once realised: a punch at the end of the clip it keys (with no picture under
@@ -280,7 +293,7 @@ export const planPerformance: PlanPerformance = (doc, input) => {
   const realEnd = (spec: MoveSpec, a: number, b: number): number => {
     if (spec.kind === 'punch') {
       const t = punchTarget(a);
-      if (t) return Math.min(b, endFrame(t.clip, rate));
+      if (t) return punchEnd(t, a, b);
       let next = b;
       for (const tr of seq.tracks) if (tr.kind === 'video' && !tr.hidden) for (const c of tr.clips) { const cs = startFrame(c, rate); if (pictureAt(doc, c) && cs > a && cs < next) next = cs; }
       return next;
@@ -367,7 +380,7 @@ export const planPerformance: PlanPerformance = (doc, input) => {
     if (!target) return { held: 'no_picture' };
     if (target.track.locked) return { held: 'locked' };
     if (target.clip.follow) return { held: 'follows_track' };
-    const clip = target.clip, cs = startFrame(clip, rate), b = Math.min(e.b, endFrame(clip, rate));
+    const clip = target.clip, cs = startFrame(clip, rate), b = punchEnd(target, e.a, e.b);
     if (b - e.a < 2) return { held: 'crosses_cut' };
     const la = e.a - cs, lb = b - cs, from = la === 0 ? la : la - 1;
     const r = Math.min(framesOfSeconds(spec.releaseSeconds), lb - la);
@@ -491,29 +504,31 @@ export const planPerformance: PlanPerformance = (doc, input) => {
     const mine: number[] = [e.a];
     // the adjustment's opacity is light when its effects change light; an effect's keys are light when that effect changes light
     const light = e.cls === 'colour';
-    // an inner key change on a light channel keeps the gap from the hit's start, its end and every other change; else it spans the hit
+    // an inner key change on a light channel keeps the gap from the hit's start, its end and every other change; else the hit is
+    // held flash_limit (never stretched into another shape), `since` how close the inner key came
     const inner = (f: number, lit: boolean) => !lit || (f - e.a >= gap && e.a + len - f >= gap && fits(f, mine));
+    const tooClose = (f: number): Planned => ({ held: 'flash_limit', since: f - e.a < gap ? f - e.a : e.a + len - f < gap ? e.a + len - f : breachAt(f, mine)?.since ?? Math.min(...mine.map((m) => Math.abs(m - f))) });
     const key = (k: number, param: string, f: number, value: number, easing: Easing) => out.push({ op: 'set_effect_keyframe', args: { clipId: { $ref: bind }, effectId: { $ref: bind, out: 'effectIds', at: k }, param, time: T.frameTime(f, rate), value: r6(value), easing } });
-    if (e.cls !== 'light') spec.effects.forEach((fx, k) => {
+    if (e.cls !== 'light') for (const [k, fx] of spec.effects.entries()) {
       const env = fx.envelope;
-      if (!env || env.from === env.to) return;
+      if (!env || env.from === env.to) continue;
       const lit = light && effectChangesLightIn(FLASH_TABLE_V1, fx.type);
       const n = framesOfSeconds(env.seconds);
       if (env.shape === 'decay') {
-        let end = Math.min(n, len);
-        if (end < len - 1 && !inner(e.a + end, lit)) end = len;
+        const end = Math.min(n, len);
+        if (end < len - 1 && !inner(e.a + end, lit)) return tooClose(e.a + end);
         if (lit && end < len - 1) mine.push(e.a + end);
         key(k, env.param, 0, env.from, 'ease-out'); key(k, env.param, end, env.to, 'linear');
       } else {
-        let begin = Math.max(0, len - n);
-        if (begin > 0 && !inner(e.a + begin, lit)) begin = 0;
+        const begin = Math.max(0, len - n);
+        if (begin > 0 && !inner(e.a + begin, lit)) return tooClose(e.a + begin);
         if (lit && begin > 0) mine.push(e.a + begin);
         key(k, env.param, begin, env.from, 'linear'); key(k, env.param, len, env.to, 'linear');
       }
-    });
+    }
     if (e.cls !== 'light' && spec.fadeOutSeconds > 0) {
-      let begin = Math.max(0, len - framesOfSeconds(spec.fadeOutSeconds));
-      if (light && begin > 0 && !inner(e.a + begin, true)) { const wider = len - Math.max(len - begin, gap); begin = wider > 0 && inner(e.a + wider, true) ? wider : 0; }
+      const begin = Math.max(0, len - framesOfSeconds(spec.fadeOutSeconds));
+      if (light && begin > 0 && !inner(e.a + begin, true)) return tooClose(e.a + begin);
       if (light && begin > 0) mine.push(e.a + begin);
       out.push({ op: 'set_keyframe', args: { clipId: { $ref: bind }, property: 'opacity', time: T.frameTime(begin, rate), value: 1, easing: 'linear' } });
       out.push({ op: 'set_keyframe', args: { clipId: { $ref: bind }, property: 'opacity', time: T.frameTime(len, rate), value: 0, easing: 'linear' } });
