@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, EASINGS, timeline, transformAt, type ProjectDocument } from '@pulseframe/core';
-import { audioPlan, describeMoment, evaluate, kernelFor, resolveDirection, soundAt, soundTailsOf, type AudioPlan, type PlannedAudioClip } from './index.ts';
+import { audioPlan, describeMoment, evaluate, kernelFor, resolveDirection, soundAt, soundTailsOf, type AudioPlan, type PlannedAudioClip, type VideoLayer } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -87,7 +87,7 @@ describe('keyframe curves in the evaluator (ADR-0019)', () => {
     const clip = doc.sequences.seq_main!.tracks.find((t) => t.kind === 'video')!.clips[0]!;
     let taps = 0;
     for (let fr = 30; fr < 90; fr++) {
-      const layer = evaluate(doc, f(fr)).layers.find((l) => l.clipId === clip.id)!;
+      const layer = evaluate(doc, f(fr)).layers.find((l): l is VideoLayer => l.kind === 'video' && l.clipId === clip.id)!;
       expect(layer.time?.type).toBe('time.shutter');
       for (const tap of layer.time!.taps) {
         const want = transformAt(clip, tap.time);
