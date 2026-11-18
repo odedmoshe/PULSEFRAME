@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
   AnalysisSchema, applyTransaction, createProject, creativeProjection, describeRecipes, diffEntities, FAMILY_FILM_RECIPE_ID, FamilyFilmParamsSchema, FILM_FORBIDDEN_WORDS, FILM_PICK_KEY, FILM_REASON_CODES, FILM_WARNING_CODES,
-  filmReasonsFor, filmRunParams, filmRunPicked, hopOfBucket, listGrid, MOMENTS_ALGO, MOMENTS_GATES, MOMENTS_METHOD, MOMENTS_RECORD_BUDGET_BYTES, MOMENTS_REFUSALS, momentsCacheState, momentsExpectedSamples, momentsStep,
+  filmMix, filmReasonsFor, filmRunParams, filmRunPicked, hopOfBucket, listGrid, MOMENTS_ALGO, MOMENTS_GATES, MOMENTS_METHOD, MOMENTS_RECORD_BUDGET_BYTES, MOMENTS_REFUSALS, momentsCacheState, momentsExpectedSamples, momentsStep,
   OpError, placedMusicGrid, planRecipe, RecipeError, restoreEntities, sourceFrameOfTime, sourceTimeOfFrame, steadyGrid, TemplateError, validateProject,
   type Asset, type MomentsItem, type MomentWindow, type ProjectDocument,
 } from './index.ts';
@@ -142,6 +142,26 @@ describe('reasons a clip states (filmReasonsFor): measured values only, at most 
     expect(filmReasonsFor(d.assets.v1!, { ...rec, flat: true, windows: [], file: { motion: 40, level: null } }, 7, 120)).toEqual([{ code: 'active_throughout', value: 40, unit: 'permille' }]);
     expect(filmReasonsFor(d.assets.v1!, { ...rec, algo: 99 }, 120, 120)[0]!.code).toBe('not_measured');
     expect(filmReasonsFor(d.assets.v1!, rec, 300, 60)).toEqual([]);
+  });
+  it('a window whose values lie under the wording thresholds (a quiet file) still states its measured moment, never nothing', () => {
+    // z is centred on the file's 20th percentile, so a quiet file has real windows with motion < 15 permille and level < 6 dB
+    const quiet = { algo: MOMENTS_ALGO, flat: false, file: { motion: 4, level: -300 }, windows: [win({ motion: 11, level: 4.2, sharp: 1.05, burstFrame: undefined })] };
+    expect(filmReasonsFor(d.assets.v1!, quiet, 102, 120)).toEqual([{ code: 'measured_moment', fromSecond: 3.5, toSecond: 6.5 }]);
+    expect(filmReasonsFor(d.assets.v1!, quiet, 60, 200, { chosenByYou: true }).map((x) => x.code)).toEqual(['chosen_by_you', 'measured_moment', 'past_clean_stretch']);
+    // a moment that is said keeps its own wording, without measured_moment
+    expect(filmReasonsFor(d.assets.v1!, { ...quiet, windows: [win({ motion: 11, level: 4.2, sharp: 1.05 })] }, 102, 120).map((x) => x.code)).toEqual(['sound_burst']);
+  });
+});
+
+describe('the mix a film sounds with (filmMix): what regeneration compares, not the parameter alone', () => {
+  it('under lowers the clips only under music; lead ducks only music; mute and no music change nothing', () => {
+    expect(filmMix('under', true)).toEqual({ ownGain: 0.25, duckDb: null });
+    expect(filmMix('under', false)).toEqual({ ownGain: 1, duckDb: null });
+    expect(filmMix('lead', true)).toEqual({ ownGain: 1, duckDb: 9 });
+    expect(filmMix('lead', false)).toEqual({ ownGain: 1, duckDb: null });
+    expect(filmMix('mute', true)).toEqual({ ownGain: 1, duckDb: null });
+    // the same ownSound with music added on regeneration is a different mix, so the reused own-sound track is set again
+    expect(filmMix('under', true)).not.toEqual(filmMix('under', false));
   });
 });
 

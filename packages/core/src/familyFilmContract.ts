@@ -20,18 +20,27 @@
  *   (reason active_throughout); C = flat otherwise, unmeasured, or a still (one step shorter). 'arc' ranks by window values,
  *   else file values, else last. picks.include: never dropped for no_room; other C picks give way first, then spans shrink,
  *   else the plan warns longer_than_target.
- * - Sound: ownSound 'under' = gain FILM.ownGainUnder on the own-sound track WITH music; WITHOUT music 'under' is gain 1 (no
- *   set_track_audio; one basis line) and 'lead' emits no set_ducking. 'lead' with music: set_ducking FILM.duckDb on the music
- *   track; the existing ducking lowers the music under every sounding clip (engine audio.ts counts an untranscribed clip as speech
- *   throughout), so the music rises over stills and silent clips: the plan then warns lead_music_rises. On regeneration track
- *   settings are emitted only for a track made now or when ownSound differs from ctx.previousOwnSound (a level set by hand survives).
+ * - Sound: the mix is filmMix(ownSound, music chosen) (below). 'under' = gain FILM.ownGainUnder on the own-sound track WITH music;
+ *   WITHOUT music 'under' is gain 1 (one basis line) and 'lead' emits no set_ducking. 'lead' with music: set_ducking FILM.duckDb
+ *   on the music track; the existing ducking lowers the music under every sounding clip (engine audio.ts counts an untranscribed
+ *   clip as speech throughout), so the music rises over stills and silent clips: the plan then warns lead_music_rises.
+ * - Tracks: a track named in ctx.reuseTracks for its role (the previous run's, regeneration) is used again when it is unlocked;
+ *   else a completely empty track of the kind with no audio settings; else add_track. Track settings follow the mix as it
+ *   SOUNDS, not the parameter alone: a track made now gets set_track_audio only when filmMix(...).ownGain !== 1 and set_ducking
+ *   only when duckDb !== null. A track reused from ctx.reuseTracks gets set_track_audio { gain } (own-sound track) only when
+ *   ownGain differs from filmMix(ctx.previousOwnSound, ctx.previousMusic).ownGain, and set_ducking (music track; sourceTrackIds
+ *   null turns it off) only when duckDb differs from the previous one or the own-sound track it ducks under is made now. So a
+ *   level set by hand survives a regeneration that does not change the mix, and adding or removing music changes it. Without
+ *   ctx.previousOwnSound a reused track counts as made now; an empty track with no audio settings counts as gain 1, no ducking.
  * - Keys: filmPickKey(assetId, ordinal) with the next free ordinal: a new pick never takes a key a kept slot holds.
  * - Regeneration: kept pictures are occupied intervals; a kept picture beyond the new target stays and the layout runs up to it
  *   (warning kept_by_hand with the real length). predicted.gapFrames counts frames without a picture over
  *   [first slot start, last slot end); the closing card lies outside that range.
  * - Reasons come from filmReasonsFor (below); at most 3 per pick; English text never contains best, score, quality or viral.
  * - Titles: ctx.title / ctx.closing (built by the server from life-line's live fields and the event); without them the text is
- *   fixed and the plan warns title_resolved_static.
+ *   fixed and the plan warns title_resolved_static. A FilmText with live: true is added as add_text { text, fields: true } (its
+ *   text is in the field grammar: fields, plain braces doubled); live: false is added WITHOUT fields (no `fields`, no
+ *   set_text_fields): its text is shown exactly as it is, so braces in an event name are never read as a field.
  *
  * CHILDREN'S DATA (ADR-0021 people section): the server plans from the document the credential may read (an agent without the
  * people scope: names only, no birth dates; peoplePrivacy.ts) and refuses (403 people_scope_required) a film whose opening or
@@ -65,7 +74,10 @@ export const FILM = {
   /** The run record (params with picked) stays at most this many JSON bytes. */
   runRecordBytes: 16_000,
 } as const;
-/** Thresholds of the reason wording (filmReasonsFor). A window's value at or above them is said; below them it is not. */
+/**
+ * Thresholds of the reason wording (filmReasonsFor). A window's value at or above them is said as a number; below them it is not,
+ * and a window none of whose moment values is said states measured_moment (its seconds) instead, so a measured pick always says why.
+ */
 export const FILM_REASON_RULES = { motionPermille: MOMENTS_GATES.activeMotionPermille, loudDb: 6, sharpRatio: 1.15 } as const;
 /** Bind names the planner gives to what is not a pick. A pick key ('m' + 12 hex) never equals one of these. */
 export const FILM_BINDS = { pictures: 'pictures-track', ownSound: 'own-sound-track', musicTrack: 'music-track', music: 'music', title: 'title', closing: 'closing' } as const;
@@ -100,7 +112,7 @@ export type ResolvedFilmParams = Required<Omit<FamilyFilmParams, 'event' | 'open
 /** Defaults of the resolved params. */
 export const FILM_DEFAULTS = { targetSeconds: 60, order: 'capture', ownSound: 'under', openingTitle: true, closingCard: true, lang: 'he', motion: 'full' } as const;
 
-export const FILM_REASON_CODES = ['inner_motion', 'loud_sound', 'sound_burst', 'sharp', 'active_throughout', 'second_moment', 'chosen_by_you', 'past_clean_stretch', 'not_measured', 'no_clear_moment', 'default_middle', 'whole_clip', 'still'] as const;
+export const FILM_REASON_CODES = ['inner_motion', 'measured_moment', 'loud_sound', 'sound_burst', 'sharp', 'active_throughout', 'second_moment', 'chosen_by_you', 'past_clean_stretch', 'not_measured', 'no_clear_moment', 'default_middle', 'whole_clip', 'still'] as const;
 export type FilmReasonCode = (typeof FILM_REASON_CODES)[number];
 export interface FilmReason { code: FilmReasonCode; /** seconds inside the file, one decimal, for wording only */ fromSecond?: number; toSecond?: number; value?: number; unit?: 'permille' | 'db' | 'ratio' }
 export const FILM_EXCLUSION_CODES = ['no_room', 'too_short', 'excluded_by_you', 'no_picture', 'kept_by_hand'] as const;
@@ -120,7 +132,11 @@ export interface FilmPick {
 /** What the run record keeps of a pick (params.picked), so "why this clip" survives a reload. */
 export type FilmPicked = Pick<FilmPick, 'key' | 'assetId' | 'kind' | 'windowIndex' | 'reasons'>;
 
-/** A title of the film. `text` is what the title clip holds (live fields when life-line has them); `resolved` what it shows now, when the server could work it out. */
+/**
+ * A title of the film. `text` is what the title clip holds; `resolved` what it shows now, when the server could work it out.
+ * live: true = `text` is in the field grammar (fields such as {hebrewDate}, plain braces doubled) and the title is added with
+ * add_text fields: true; live: false = plain text shown as it is, added without fields.
+ */
 export interface FilmText { text: string; resolved: string | null; live: boolean }
 export interface FilmKeptClip { key: string | null; clipId: string; assetId: string | null; kind: 'picture' | 'text' | 'music' | 'sound'; startFrame: number; endFrame: number }
 /** Everything the planner needs that is not in the document. Built by the server from life-line and content-pack. */
@@ -134,10 +150,12 @@ export interface FilmPlanContext {
   kept?: readonly FilmKeptClip[];
   /** Regeneration: the keys of the slots the kept clips hold (a new pick never takes one). */
   keptKeys?: readonly string[];
-  /** Regeneration: tracks the previous run made, to be used again when they are unlocked and free. */
+  /** Regeneration: tracks the previous run made, by role (the server finds them from the run's slots), used again when unlocked. */
   reuseTracks?: { pictures?: string; ownSound?: string; musicTrack?: string };
-  /** Regeneration: the previous run's ownSound; track settings are emitted again only when it differs or the track is new. */
+  /** Regeneration: the previous run's ownSound; with previousMusic it gives the mix the reused tracks were set to (filmMix). */
   previousOwnSound?: ResolvedFilmParams['ownSound'];
+  /** Regeneration: whether the previous run had music (its musicAssetId was not null). */
+  previousMusic?: boolean;
 }
 export class FilmError extends Error {
   constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do', message: string, public hint?: string) { super(message); }
@@ -161,6 +179,13 @@ export type PlanFamilyFilm = (doc: ProjectDocument, params: unknown, ctx: FilmPl
 export type FamilyFilmPlanView = Omit<FamilyFilmPlan, 'ops' | 'slots'> & { revision: number; operations: number; label: typeof FAMILY_FILM_DRAFT_LABEL; note: string };
 export interface FamilyFilmApplyResult { revision: number; runId: string; createdIds: string[]; slots: SlotRecord[]; steps: string[]; warnings: FilmWarning[]; picks: FilmPick[]; excluded: FilmExclusion[] }
 export interface FamilyFilmRegenerateResult extends FamilyFilmApplyResult { replaced: number; protected: string[] }
+/**
+ * The mix a film sounds with: the own-sound track's gain and the music track's ducking (null = none). 'under' lowers the clips
+ * only under music; 'lead' ducks only music; 'mute' adds no own sound (gain 1, no ducking). Pure.
+ */
+export function filmMix(ownSound: ResolvedFilmParams['ownSound'], music: boolean): { ownGain: number; duckDb: number | null } {
+  return { ownGain: music && ownSound === 'under' ? FILM.ownGainUnder : 1, duckDb: music && ownSound === 'lead' ? FILM.duckDb : null };
+}
 /** The run's params without what the run record adds (picked, templateVersion), ready to parse with FamilyFilmParamsSchema. */
 export function filmRunParams(params: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const { picked: _p, templateVersion: _v, ...rest } = params;
@@ -184,7 +209,9 @@ const sec = (asset: Pick<Asset, 'video'>, frame: number) => Math.round(T.toSecon
  * - a flat record: [active_throughout] when file.motion >= FILM_REASON_RULES.motionPermille, else [no_clear_moment] (+ default_middle);
  * - otherwise the window that overlaps the clip most (lowest index on ties): inner_motion (its motion, seconds of the moment),
  *   sound_burst (the burst inside the clip) or loud_sound (level), past_clean_stretch (the clip reads outside the clean stretch),
- *   sharp, whole_clip — in that order, cut to FILM.maxReasons;
+ *   sharp, whole_clip — in that order, cut to FILM.maxReasons. When none of inner_motion, sound_burst and loud_sound is said
+ *   (a quiet file: its windows are found against its own 20th percentile, so their values can lie under FILM_REASON_RULES),
+ *   measured_moment (seconds of the moment, no value) takes their place, first: a clip on a measured window always has a reason;
  * - no window overlaps the clip: [] (the clip shows none of the measured moments, e.g. after a hand edit).
  * `opts.chosenByYou` / `opts.second` put chosen_by_you / second_moment first (the planner knows them, the clip does not).
  */
@@ -213,6 +240,7 @@ export function filmReasonsFor(asset: Pick<Asset, 'kind' | 'video' | 'duration'>
   if (w.basis.includes('inner-motion') && w.motion !== null && w.motion >= FILM_REASON_RULES.motionPermille) out.push({ code: 'inner_motion', fromSecond: sec(asset, a), toSecond: sec(asset, b), value: w.motion, unit: 'permille' });
   if (w.burstFrame !== undefined && w.burstFrame >= from && w.burstFrame < to) out.push({ code: 'sound_burst', fromSecond: sec(asset, w.burstFrame) });
   else if (w.basis.includes('sound') && w.level !== null && w.level >= FILM_REASON_RULES.loudDb) out.push({ code: 'loud_sound', value: Math.round(w.level * 10) / 10, unit: 'db' });
+  if (out.length === 0) out.push({ code: 'measured_moment', fromSecond: sec(asset, a), toSecond: sec(asset, b) });
   if (from < w.fromFrame || to > w.toFrame) out.push({ code: 'past_clean_stretch' });
   if (w.sharp !== null && w.sharp >= FILM_REASON_RULES.sharpRatio) out.push({ code: 'sharp', value: Math.round(w.sharp * 100) / 100, unit: 'ratio' });
   if (whole) out.push({ code: 'whole_clip' });
