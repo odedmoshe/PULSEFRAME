@@ -46,7 +46,7 @@ export interface Rich {
   shape: Shape;
   assets: { A: string; B: string; IMG: string; LUT: string; SONG: string; SFX: string };
   clips: { A1: string; B1: string; C1: string; C2: string; IMG: string; E: string; D: string; ADJ: string; T1: string; T2: string; T3: string; T4: string; music: string; sfx: string; cue: string };
-  effects: { T1blur: string; C1echo: string; Esplit: string; Dstutter: string; Dgrain: string; Dsnow: string; IMGlut: string; IMGwave: string; T4strobe: string };
+  effects: { T1blur: string; C1echo: string; Esplit: string; Dstutter: string; Dgrain: string; Dsnow: string; IMGlut: string; IMGwave: string; T4strobe: string; sfxEcho: string };
   tracks: { V1: string; V2: string; captions: string };
   motionTrack: string;
   person: string;
@@ -112,8 +112,9 @@ export function richDoc(partial: Partial<Shape> = {}): Rich {
   const captionTrack = r.doc.sequences[r.doc.mainSequenceId]!.tracks.find((t) => t.kind === 'caption')!;
   const cue = captionTrack.clips[0]!.id;
   r = tx(r.doc, [
-    { op: 'set_keyframe', args: { clipId: T1, property: 'x', time: f(20), value: -0.2 } },
-    { op: 'set_keyframe', args: { clipId: T1, property: 'x', time: f(60), value: 0.2 } },
+    // keyframe times are clip-local: timeline frames 20 and 60
+    { op: 'set_keyframe', args: { clipId: T1, property: 'x', time: f(0), value: -0.2 } },
+    { op: 'set_keyframe', args: { clipId: T1, property: 'x', time: f(40), value: 0.2 } },
     { op: 'add_effect', args: { clipId: T1, type: 'blur.gaussian', params: { radius: 0.01 } } },
     { op: 'add_effect', args: { clipId: T4, type: 'light.strobe', params: { amount: 1, rate: 2 } } },
   ]);
@@ -126,6 +127,7 @@ export function richDoc(partial: Partial<Shape> = {}): Rich {
   r = tx(r.doc, [{ op: 'add_clip', args: { assetId: SFX, start: f(60), duration: f(30), trackId: out(r, 0, 'trackId') } }]);
   const sfx = out(r, 0, 'clipId');
   r = tx(r.doc, [{ op: 'add_audio_effect', args: { clipId: sfx, type: 'space.echo', params: { delayMs: 250, repeats: 4 } } }]);
+  const sfxEcho = (r.results[0]!.output!.effects as { effectId: string }[])[0]!.effectId;
   // motion track on file A: a title follows it, and A1 hides a region that moves with it
   r = tx(r.doc, [{ op: 'create_motion_track', args: { assetId: A, kind: 'region', frame: 30, x: 5000, y: 5000, w: 1500, h: 1500 } }]);
   const motionTrack = out(r, 0, 'motionTrackId');
@@ -147,7 +149,7 @@ export function richDoc(partial: Partial<Shape> = {}): Rich {
     shape,
     assets: { A, B, IMG, LUT, SONG, SFX },
     clips: { A1, B1, C1, C2, IMG: IMGc, E, D, ADJ, T1, T2, T3, T4, music, sfx, cue },
-    effects: { T1blur, C1echo, Esplit, Dstutter, Dgrain, Dsnow, IMGlut, IMGwave, T4strobe },
+    effects: { T1blur, C1echo, Esplit, Dstutter, Dgrain, Dsnow, IMGlut, IMGwave, T4strobe, sfxEcho },
     tracks: { V1, V2, captions: captionTrack.id },
     motionTrack,
     person,
