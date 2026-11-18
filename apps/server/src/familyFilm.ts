@@ -38,6 +38,7 @@ export const FILM_API_ERRORS = {
   blocked: (first: string, blocking: unknown) => new ApiError(409, 'film_blocked', `the film cannot be made like this: ${first}`, { blocking }, 'See the plan: choose another length, other music or other clips.'),
   runNotFound: (runId: string) => new ApiError(404, 'not_found', `family film run ${runId} not found`, { runId }, 'A film run id is returned by apply (runId).'),
   badParams: () => new ApiError(400, 'invalid_request', 'params must be an object of family film parameters to change'),
+  keyClash: (key: string) => new ApiError(500, 'invalid_result', `the film plan gave a new slot the key ${key}, which a clip kept by hand holds`, { key }, 'This is a fault in this build; nothing was changed.'),
 } as const;
 
 const STATUS: Record<FilmError['code'], number> = { not_found: 404, needs_analysis: 409, invalid_args: 400, nothing_to_do: 409 };
@@ -174,6 +175,9 @@ export async function regenerateFamilyFilmFor(store: Store, gov: Governance, pri
   const previousOwnSound = run.params.ownSound === 'lead' || run.params.ownSound === 'mute' || run.params.ownSound === 'under' ? run.params.ownSound : undefined;
   const ctx = filmContext(without, params, { kept: keptClips(p.doc, protectedIds, run.slots ?? []), keptKeys: keepSlots.map((s) => s.key), previousOwnSound });
   const plan = wrap(() => planFamilyFilm(without, params, ctx));
+  // a new slot never takes a key a kept slot holds (apply_template drops a slot only when key AND clip match): a planner fault, not the request's
+  const clash = plan.slots.find((s) => keepSlots.some((k) => k.key === s.key));
+  if (clash) throw FILM_API_ERRORS.keyClash(clash.key);
   refuseBlocked(plan);
   const r = gov.commitAs(principal, {
     projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Regenerate family film: ${plan.steps[0] ?? ''}`.slice(0, 120),

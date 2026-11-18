@@ -42,7 +42,7 @@ describe('family film and moments wording', () => {
   it('every refusal of the film and moments routes is worded in Hebrew, and every pattern of the table is used', () => {
     const server = [
       FILM_API_ERRORS.notBuilt(), FILM_API_ERRORS.propose(), FILM_API_ERRORS.ages(), FILM_API_ERRORS.badTitle('{nope}'),
-      FILM_API_ERRORS.blocked('the music is shorter than the film', []), FILM_API_ERRORS.runNotFound('run_1'), FILM_API_ERRORS.badParams(), momentsNotBuilt(),
+      FILM_API_ERRORS.blocked('the music is shorter than the film', []), FILM_API_ERRORS.runNotFound('run_1'), FILM_API_ERRORS.badParams(), FILM_API_ERRORS.keyClash('m0123456789ab'), momentsNotBuilt(),
     ];
     const op = [refusalOf([item('img')]), refusalOf([item('v1'), item('v1')]), refusalOf([item('v1', [{ peakFrame: 99, fromFrame: 0, toFrame: 60, basis: ['inner-motion'], motion: 40, level: null, sharp: 1, luma: 100 }])])];
     const messages = [...server.map((e) => e.message), ...op];

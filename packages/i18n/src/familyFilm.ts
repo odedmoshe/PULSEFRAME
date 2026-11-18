@@ -27,7 +27,7 @@ export const FAMILY_FILM_HE = {
   'error.code.moments_not_built': 'מדידת רגעים עדיין לא נבנתה', 'error.code.moments_in_progress': 'הרגעים כבר נמדדים',
   'error.code.busy': 'המחשב עסוק כרגע; אפשר לנסות שוב בעוד רגע',
   // the generic code of a malformed request (a film's title text or parameters); no dictionary had it yet
-  'error.code.invalid_request': 'הבקשה אינה בצורה הנכונה',
+  'error.code.invalid_request': 'הבקשה אינה בצורה הנכונה', 'error.code.invalid_result': 'התוצאה לא עברה בדיקה; שום דבר לא השתנה',
 } as const;
 export const FAMILY_FILM_EN: Record<keyof typeof FAMILY_FILM_HE, string> = {
   'op.attach_moments': 'Measured moments',
@@ -44,7 +44,7 @@ export const FAMILY_FILM_EN: Record<keyof typeof FAMILY_FILM_HE, string> = {
   'error.code.film_not_built': 'Making a family film is not built yet', 'error.code.film_blocked': 'The film cannot be made like this',
   'error.code.moments_not_built': 'Measuring moments is not built yet', 'error.code.moments_in_progress': 'The moments are already being measured',
   'error.code.busy': 'The computer is busy; try again in a moment',
-  'error.code.invalid_request': 'The request is not in the right form',
+  'error.code.invalid_request': 'The request is not in the right form', 'error.code.invalid_result': 'The result did not pass its check; nothing was changed',
 };
 
 type Say = [RegExp, (m: RegExpExecArray) => string][];
@@ -61,4 +61,5 @@ export const HE_FAMILY_FILM: Say = [
   [/^the film cannot be made like this: (.+)$/, () => 'הסרט אינו יכול להיווצר כך. אפשר לבחור אורך אחר, מוזיקה אחרת או קליפים אחרים (ראו בתוכנית)'],
   [/^family film run \S+ not found$/, () => 'הסרט הזה כבר אינו בפרויקט'],
   [/^params must be an object of family film parameters to change$/, () => 'השינויים לסרט אינם בצורה הנכונה'],
+  [/^the film plan gave a new slot the key \S+, which a clip kept by hand holds$/, () => 'תקלה בגרסה הזו: התוכנית החדשה התנגשה בקליפ שנערך ידנית. שום דבר לא השתנה'],
 ];
