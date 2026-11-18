@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowUpFromLine, Captions as CaptionsIcon, ImagePlus, Plus, Search, Sparkles, Type } from 'lucide-react';
 import { COLOR_LOOKS, EFFECTS, TRANSITIONS, type Clip } from '@pulseframe/core';
-import { Button, Chip } from '../ds/index.ts';
+import { Button, Chip, Tabs } from '../ds/index.ts';
 import { AiTools } from './AiTools.tsx';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { useChrome, type RailCategory } from './chromeState.ts';
@@ -20,6 +20,11 @@ import { SourceViewer } from './SourceViewer.tsx';
 import { useEditorState } from './store.ts';
 import { TemplatesDrawer } from './TemplatesDrawer.tsx';
 import { TextStyles } from './TextStyles.tsx';
+import { LifeHost, LifeLibrary, LifeViewSwitch } from './lifeline/LifeLibrary.tsx';
+import { FontsSection, MusicTab, PacksSection } from './lifeline/PacksMount.tsx';
+import { PACKS_MOUNT_STRINGS } from './lifeline/packs.mount.strings.ts';
+import { setLifeView, useLifeUi } from './lifeline/lifeUi.ts';
+import { MUSIC_TESTIDS } from './packs.testids.ts';
 import '../ds/chrome.css';
 
 const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp,.cube';
@@ -41,6 +46,7 @@ export function Library() {
       onDrop={(e) => { setOver(false); const fs = [...(e.dataTransfer.files ?? [])]; if (!fs.length) return; e.preventDefault(); if (!uploading && doc) void editor.importFiles(fs); }}>
       {over && <div className="pf-drop-veil" aria-hidden="true"><ImagePlus size={28} />{S.dropTitle}</div>}
       {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`)?.focus(), 0); }} />}
+      <LifeHost />
       {rail === 'media' && <MediaDrawer onView={setViewing} />}
       {rail === 'audio' && <AudioDrawer onView={setViewing} />}
       {rail === 'text' && (
@@ -48,7 +54,7 @@ export function Library() {
           <p className="pf-bw-lead">{S.textLead}</p>
           <Button variant="primary" size="md" icon={<Type size={16} aria-hidden="true" />} disabled={!doc} onClick={() => void editor.addText()} data-testid="add-text">{t('text.add')}</Button>
           {/* the text styles as tiles: they apply to the selected title (apply_text_preset) and say so while none is selected */}
-          <div className="pf-bw-scroll"><TextStyles testId="text-preset-drawer" /></div>
+          <div className="pf-bw-scroll"><TextStyles testId="text-preset-drawer" /><FontsSection /></div>
         </Pane>
       )}
       {rail === 'captions' && (
@@ -59,7 +65,7 @@ export function Library() {
       )}
       {(rail === 'effects' || rail === 'transitions' || rail === 'looks') && <CatalogueDrawer kind={rail} />}
       {rail === 'elements' && <div className="pf-bw-legacy"><ElementsBrowser /></div>}
-      {rail === 'templates' && <div className="pf-bw-legacy"><TemplatesDrawer /></div>}
+      {rail === 'templates' && <div className="pf-bw-legacy"><PacksSection /><TemplatesDrawer /></div>}
       {rail === 'ai' && <div className="pf-bw-legacy"><AiTools /></div>}
     </aside>
   );
@@ -95,18 +101,20 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
   const n = (f: MediaFilter) => (doc ? filterAssets(doc, '', f).length : 0);
   const total = doc ? Object.keys(doc.assets).length : 0;
   const chips: [MediaFilter, string][] = [['all', S.filterAll], ['video', S.filterVideo], ['audio', S.filterAudio], ['image', S.filterImage], ['unused', S.filterUnused]];
+  const { view } = useLifeUi(); // life line (ADR-0021): the library by date and by event; the chips and the search belong to the plain view
   return (
     <Pane title={S.rail.media} count={total || undefined} action={<ImportButton />}>
       {total === 0 ? <DropZone /> : (
         <>
           <label className="pf-bw-search">
             <Search size={16} strokeWidth={1.75} aria-hidden="true" />
-            <input type="search" dir="auto" value={q} onChange={(e) => setQ(e.target.value)} placeholder={S.searchMedia} aria-label={S.searchPlaceholder} data-testid="media-search" />
+            <input type="search" dir="auto" value={q} disabled={view !== 'all'} onChange={(e) => setQ(e.target.value)} placeholder={S.searchMedia} aria-label={S.searchPlaceholder} data-testid="media-search" />
           </label>
           <div className="pf-bw-chips" role="group" aria-label={S.filters}>
-            {chips.filter(([f]) => f === 'all' || n(f) > 0).map(([f, label]) => <Chip key={f} pressed={filter === f} count={n(f)} onClick={() => setFilter(f)} data-testid={`media-filter-${f}`}>{label}</Chip>)}
+            {chips.filter(([f]) => f === 'all' || n(f) > 0).map(([f, label]) => <Chip key={f} pressed={filter === f} count={n(f)} disabled={view !== 'all'} onClick={() => setFilter(f)} data-testid={`media-filter-${f}`}>{label}</Chip>)}
           </div>
-          <div className="pf-bw-scroll"><MediaGrid onView={onView} query={q} filter={filter} /></div>
+          <LifeViewSwitch view={view} onChange={setLifeView} />
+          <div className="pf-bw-scroll">{view === 'all' ? <MediaGrid onView={onView} query={q} filter={filter} /> : <LifeLibrary view={view} onView={onView} />}</div>
         </>
       )}
     </Pane>
@@ -131,11 +139,17 @@ function DropZone() {
 function AudioDrawer({ onView }: { onView: (id: string) => void }) {
   const { state } = useEditorState();
   const S = CHROME_STRINGS[state.lang];
+  const M = PACKS_MOUNT_STRINGS[state.lang];
   const hasAudio = !!state.doc && filterAssets(state.doc, '', 'audio').length > 0;
+  const [tab, setTab] = useState<'effects' | 'music'>('effects'); // per visit; the built-in music is the drawer's second tab (ADR-0022)
   return (
     <div className="pf-bw-audio">
       {hasAudio && <Pane title={S.rail.audio}><div className="pf-bw-scroll"><MediaGrid onView={onView} filter="audio" /></div></Pane>}
-      <SfxBrowser />
+      <Tabs label={M.audioTabs} value={tab} onChange={(id) => setTab(id === 'music' ? 'music' : 'effects')} panelPrefix="pf-audio-panel"
+        tabs={[{ id: 'effects', label: M.tabEffects, testId: 'audio-tab-effects' }, { id: 'music', label: M.tabMusic, testId: MUSIC_TESTIDS.tab }]} />
+      <div role="tabpanel" id={`pf-audio-panel-${tab}`} aria-labelledby={`pf-audio-panel-tab-${tab}`} tabIndex={0} data-testid={tab === 'music' ? MUSIC_TESTIDS.panel : 'audio-panel-effects'}>
+        {tab === 'music' ? <MusicTab /> : <SfxBrowser />}
+      </div>
     </div>
   );
 }

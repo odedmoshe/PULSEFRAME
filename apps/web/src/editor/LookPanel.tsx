@@ -13,6 +13,7 @@ import { SectionsContext } from './Section.tsx';
 import { Seg } from '../ds/index.ts';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } from './icons.tsx';
+import { StampSource, STAMP_SOURCE_PARAMS } from './lifeline/StampSource.tsx';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
@@ -282,6 +283,8 @@ function EffectRow({ clipId, fx, index, count, timeFirst, run }: { clipId: strin
         {fx.type === 'time.stutter' && <p className="muted" role="note" data-testid="time-note">{t('look.time.stutterNote')}</p>}
         {Object.entries(props).map(([name, prop]) => {
           if (fx.type === 'color.lut' && name === 'lut') return <LutControl key={name} value={typeof fx.params.lut === 'string' ? fx.params.lut : ''} onCommit={(assetId) => update({ params: { lut: assetId } })} />;
+          // life line (ADR-0021): the source, the clock and the date order of a date stamp are one control, not three generic ones
+          if (fx.type === 'stylize.date-stamp' && STAMP_SOURCE_PARAMS.includes(name)) return name === 'source' ? <StampSource key={name} clipId={clipId} effectId={fx.id} /> : null;
           if (fx.type === 'stylize.date-stamp' && name === 'text') return <StampControl key={name} value={typeof fx.params.text === 'string' ? fx.params.text : String(prop.default ?? '')} onCommit={(text) => run([{ op: 'update_effect', args: { clipId, effectId: fx.id, params: { text } } }], 'Date stamp', true)} />;
           if (!animatable.has(name) || prop.type !== 'number') return <ParamControl key={name} name={name} prop={prop} effectType={fx.type} value={fx.params[name]} onCommit={(v) => update({ params: { [name]: v } })} />;
           const keys = fx.keyframes?.[name] ?? [];

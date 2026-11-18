@@ -331,7 +331,7 @@ async function main() {
     await page2.locator(`.clip[data-clip-id="${tid}"]`).click();
     await page2.getByTestId('animate-in').selectOption('pop');
     await page2.getByTestId('animate-apply').click();
-    await page2.getByTestId('text-font').selectOption('Frank Ruhl Libre');
+    await page2.locator('[data-testid=font-option][data-family="Frank Ruhl Libre"]').first().click(); // the font picker (ADR-0022) replaced the text-font select
     await page2.waitForFunction(async ([id, c]) => { const d = (await (await fetch(`/api/v1/projects/${id}`)).json()).project; const clip = d.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((x: any) => x.id === c); return !!clip?.keyframes?.scale && clip.style.fontFamily === 'Frank Ruhl Libre'; }, [pid5, tid] as const);
     await page2.screenshot({ path: path.join(art, 'editor-phase6b.png'), fullPage: false });
     check('editor: entrance preset writes keyframes on the selected title; font picker changes its family; no uncaught errors', errors2.length === 0, errors2.slice(0, 4));

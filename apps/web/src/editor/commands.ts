@@ -10,6 +10,7 @@ import type { Editor, Notice } from './store.ts';
 import { COMMAND_STRINGS } from './commands.strings.ts';
 import { cutBefore } from './inspector.model.ts';
 import { cutToBeat, rollCut } from './cutActions.ts';
+import { arrangeByEvents, canArrange, freezeSelectedTitle, liveTitleId, openPeopleSheet, readCaptureDates } from './lifeline/lifeCommands.ts';
 
 export interface Command {
   id: string;
@@ -339,6 +340,11 @@ export const COMMANDS: Command[] = [
   // An adjustment layer over the whole edit (ADR-0016): empty until an effect is added to it in the Look panel (it is selected).
   { id: 'edit.addAdjustment', label: 'cmd.addAdjustment', group: 'edit', keys: [], enabled: (e) => !!e.doc && T.lt(T.ZERO, editEnd(e.doc)), run: (e) => e.addWholeEditAdjustment() },
   { id: 'view.openTemplates', label: 'cmd.openTemplates', group: 'view', keys: [], enabled: (e) => !!e.doc, run: (e) => e.openTemplates() },
+  // life line (ADR-0021): arrange the library by events, read capture dates, make the selected title plain text, the people sheet
+  { id: 'life.arrangeEvents', label: 'cmd.arrangeEvents', group: 'edit', keys: [], enabled: canArrange, run: (e) => arrangeByEvents(e) },
+  { id: 'life.readDates', label: 'cmd.readCaptureDates', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: (e) => readCaptureDates(e) },
+  { id: 'life.freezeFields', label: 'cmd.freezeFields', group: 'edit', keys: [], enabled: (e) => liveTitleId(e) !== null, run: (e) => freezeSelectedTitle(e) },
+  { id: 'life.people', label: 'cmd.people', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: () => openPeopleSheet() },
   // K stops playback or a shuttle (the J K L convention); when nothing is playing it adds a keyframe.
   { id: 'keyframe.add', label: 'cmd.keyframeAddOrStop', group: 'keyframe', keys: ['KeyK'], enabled: (e) => !!e.player?.playing || (!e.selectionLocked && e.playheadOnSelection), run: (e) => (e.player?.playing ? e.player.pause() : addKeyframe(e)) }, // stopping is allowed whatever is selected; adding a key is not on a locked track
   { id: 'keyframe.remove', label: 'cmd.keyframeRemove', group: 'keyframe', keys: ['Shift+KeyK'], enabled: (e) => e.playheadOnSelection && !!sel(e)?.keyframes, run: removeKeyframe },

@@ -7,6 +7,7 @@ import { openExportSheet, useRecentExports } from './ExportSheet.tsx';
 import { EXPORT_STRINGS } from './exportSheet.strings.ts';
 import { formatFileSize } from './exportSheet.logic.ts';
 import './deliverPanel.css';
+import { ArchiveFamilyOption } from './lifeline/ArchiveFamilyOption.tsx';
 
 interface BatchJob { jobId: string; variantId: string; status: string; stage: string | null }
 const ACTIVE = ['queued', 'running', 'cancel-requested'];
@@ -50,6 +51,7 @@ function ProjectFrame() {
 
 export function DeliverPanel() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveHref, setArchiveHref] = useState<string | null>(null); // the archive without family details, when chosen (ArchiveFamilyOption)
   const { editor, state, t } = useEditorState();
   const { doc, viewVariantId, lang, revision, exportJob } = state;
   const variants = doc ? Object.values(doc.variants ?? {}) : [];
@@ -213,11 +215,12 @@ export function DeliverPanel() {
         <h3>{t('archive.title')}</h3>
         <p className="muted small">{t('archive.note')}</p>
         <div className="row">
-          {doc && <a className="ghost" href={`/api/v1/projects/${doc.id}/archive`} download data-testid="archive-download">{t('archive.download')}</a>}
+          {doc && <a className="ghost" href={archiveHref ?? `/api/v1/projects/${doc.id}/archive`} download data-testid="archive-download">{t('archive.download')}</a>}
           <label className="ghost file">{t('archive.import')}
             <input type="file" accept=".tar,application/x-tar" data-testid="archive-import" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void importArchiveFile(file, (m) => setArchiveError(m)); }} />
           </label>
         </div>
+        {doc && <ArchiveFamilyOption projectId={doc.id} onHref={setArchiveHref} />}
         {archiveError && <p className="danger" role="alert" data-testid="archive-error">{archiveError}</p>}
       </section>
     </div>
