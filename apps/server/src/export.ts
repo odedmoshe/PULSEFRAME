@@ -458,8 +458,14 @@ export class Exporter {
     if (s.jobId) this.store.updateJob(s.jobId, { stage: `rendering ${s.nextFrame}/${s.totalFrames}` });
   }
 
-  /** Sample-exact audio mix of the snapshot as a WAV file (separate stream from video), following the shared audio plan. */
+  /**
+   * Sample-exact audio mix of the snapshot as a WAV file (separate stream from video), following the shared audio plan.
+   * The mix writes a 32-bit float stereo file and then the 16-bit WAV, both in the data directory, before the float one is
+   * removed: under a storage ceiling that room is asked for first, so an export stops with a typed 507 and publishes nothing
+   * instead of passing the ceiling (lead run 2026-11-18, proof:incremental I11d: 31 MB over the start for a 60 s mix).
+   */
   private renderAudio(doc: ProjectDocument, firstSample: number, totalSamples: number, outFile: string, isCanceled: () => boolean) {
+    assertStorageRoom(this.store, Math.max(1, totalSamples) * 2 * (4 + 2), 'mix the sound of this export');
     return renderMix(audioPlan(doc), (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled, (assetId) => timeOriginSeconds(doc.assets[assetId]), (assetId) => doc.assets[assetId]?.audio?.channels === 1);
   }
 

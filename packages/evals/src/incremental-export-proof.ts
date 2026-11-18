@@ -815,9 +815,13 @@ function mutationCheck(A: FixtureA, control: { stale: boolean; differingFrames: 
 /** I18: the sheet line and the lane in the editor (they exist only once the lead has mounted them). */
 async function runUi(A: FixtureA) {
   await clearCache();
-  const fill = await exportRun(A.pid, INC, 'ui-fill');
+  // the editor plans with the export sheet's own first pick (the computer: high quality, every other option the default), and
+  // the quality is part of every segment key: the cache is filled and the plan asked with exactly that (run 4 filled it at
+  // standard quality, so the sheet truthfully showed a first export and the check compared two different plans)
+  const UI = { format: 'mp4-h264-aac', mode: 'incremental', selfCheck: 'every-segment' } as const;
+  const fill = await exportRun(A.pid, UI, 'ui-fill');
   await api.tx(A.pid, [{ op: 'update_text', args: { clipId: A.titles.t1, text: 'כותרת לבדיקת הממשק' } }]);
-  const pl = await planOf(A.pid);
+  const pl = await planOf(A.pid, UI);
   if (fill.job?.status !== 'succeeded') { blocked('I18', 'UI: the sheet line and the lane', `the export that fills the cache failed: ${JSON.stringify(fill.job?.error)}`); return; }
   const browser = await chromium.launch();
   try {

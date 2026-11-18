@@ -32,7 +32,7 @@ export interface RenderCacheCtx {
 export function makeRenderCacheCtx(o: { page: Page; lang: Lang; api: Api; owner: Api; pid: string; titleClipId: string }): RenderCacheCtx {
   return {
     ...o,
-    async fillCache() { const r = await o.api.call(`/projects/${o.pid}/exports`, { format: 'mp4-h264-aac', mode: 'incremental', quality: 'standard' }); await o.api.waitJob(r.body.jobId); },
+    async fillCache() { const r = await o.api.call(`/projects/${o.pid}/exports`, { format: 'mp4-h264-aac', mode: 'incremental' } /* the sheet's first pick (high quality): its line and the lane plan with it */); await o.api.waitJob(r.body.jobId); },
     async clearCache() { await o.owner.call('/storage/render-cache', undefined, 'DELETE'); },
     async editTitle(text) { await o.api.tx(o.pid, [{ op: 'update_text', args: { clipId: o.titleClipId, text } }]); },
   };

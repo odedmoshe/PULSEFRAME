@@ -200,7 +200,7 @@ export class Editor {
     trackJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
     templatesOpen: false, templatesFocus: 0, templateRun: null,
     cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
-    segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: { quality: 'standard' },
+    segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
     imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [],
   };
   /**
