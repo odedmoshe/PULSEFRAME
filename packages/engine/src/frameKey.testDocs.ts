@@ -167,8 +167,8 @@ export function ctxFor(doc: ProjectDocument, env: TestEnv = baseEnv()): FrameKey
     digest: sha256,
     output: env.output,
     assetHash: (id) => (Object.hasOwn(env.assetOverride, id) ? env.assetOverride[id]! : doc.assets[id]?.contentHash ?? null),
-    fontHash: (family) => env.fonts[family] ?? null,
-    effectVersion: (type) => env.versions[type] ?? 1,
+    fontHash: (family) => (Object.hasOwn(env.fonts, family) ? env.fonts[family]! : null),
+    effectVersion: (type) => (Object.hasOwn(env.versions, type) ? env.versions[type]! : 1),
     gpu: env.gpu,
   };
 }

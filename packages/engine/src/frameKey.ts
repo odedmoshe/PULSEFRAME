@@ -136,9 +136,9 @@ export interface FrameKeyContext {
   sequenceId?: string;
   /** The raster size the page draws at (render.ts: `{ ...g, width: outWidth, height: outHeight }`). */
   output: { width: number; height: number };
-  /** Content hash of the stored bytes of an asset; null = not available (the frame is then unkeyable: asset_unhashed). */
+  /** Content hash of the stored bytes of an asset; null = not available (the frame is then unkeyable: asset_unhashed, as for anything but a non-empty string). Ids are free text: look them up with Object.hasOwn or a Map, never `table[id]`. */
   assetHash(assetId: string): string | null;
-  /** Hash of the font files of a family; null = not bundled (asset_unhashed). */
+  /** Hash of the font files of a family; null = not bundled (asset_unhashed, as for anything but a non-empty string). Families are free text ("__proto__" included): look them up with Object.hasOwn or a Map. */
   fontHash(family: string): string | null;
   /** Registry version of an effect type (0 = unknown). */
   effectVersion(type: string): number;
@@ -184,21 +184,25 @@ type Look = { effects?: { type: string; params: Record<string, unknown> }[] };
  * Paths in errors are those of the key text (`$.g.layers[i]…`, `$.in.fonts…`).
  */
 function inputsOf(doc: ProjectDocument, graph: RenderGraph, ctx: FrameKeyContext, strings: ReadonlySet<string>): FrameInputs {
-  const assets: Record<string, string> = {};
-  const fonts: Record<string, string> = {};
-  const effects: Record<string, number> = {};
+  // null-prototype records: an asset id, font family or effect type is free text, and on a `{}` an assignment to "__proto__"
+  // goes to the prototype setter (a string is ignored there), so that input would never be keyed. canonicalJson accepts them.
+  const assets: Record<string, string> = Object.create(null) as Record<string, string>;
+  const fonts: Record<string, string> = Object.create(null) as Record<string, string>;
+  const effects: Record<string, number> = Object.create(null) as Record<string, number>;
+  /** Only a non-empty string is a hash: a lookup that answers a prototype member (table["constructor"] on a `{}`) is not one. */
+  const isHash = (h: unknown): h is string => typeof h === 'string' && h.length > 0;
   const transitions = new Set<string>();
   let gpuPass: string | null = null;
   const asset = (id: string, at: string) => {
     if (!id || Object.hasOwn(assets, id)) return;
     const hash = ctx.assetHash(id);
-    if (hash === null || hash === undefined) throw new UnkeyableError('asset_unhashed', `${at} (asset ${id})`);
+    if (!isHash(hash)) throw new UnkeyableError('asset_unhashed', `${at} (asset ${id})`);
     assets[id] = hash;
   };
   const font = (family: string, at: string) => {
     if (Object.hasOwn(fonts, family)) return;
     const hash = ctx.fontHash(family);
-    if (hash === null || hash === undefined) throw new UnkeyableError('asset_unhashed', `${at} (font ${family})`);
+    if (!isHash(hash)) throw new UnkeyableError('asset_unhashed', `${at} (font ${family})`);
     fonts[family] = hash;
   };
   const effect = (type: string, params: Record<string, unknown>, at: string) => {

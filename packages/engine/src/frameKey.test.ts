@@ -155,6 +155,47 @@ describe('frame inputs', () => {
     expect(() => frameKey(doc, 250, ctxFor(doc, noFonts))).not.toThrow();
   });
 
+  it('a font family, asset id or effect type named after an Object.prototype member is keyed like any other (reviewer: "__proto__" was dropped)', () => {
+    const g = evaluate(doc, f(250));
+    const v = g.layers.findIndex((l) => l.kind === 'video');
+    expect(v).toBeGreaterThanOrEqual(0);
+    const text: TextLayer = { kind: 'text', id: 'proto-title', text: 'x', style: { fontFamily: 'Heebo' } } as unknown as TextLayer;
+    const tables = (fonts: Record<string, string>, versions: Record<string, number>, files: Record<string, string>): typeof ctx => ({
+      ...ctx,
+      assetHash: (id) => (Object.hasOwn(files, id) ? files[id]! : doc.assets[id]?.contentHash ?? null),
+      fontHash: (family) => (Object.hasOwn(fonts, family) ? fonts[family]! : null),
+      effectVersion: (type) => (Object.hasOwn(versions, type) ? versions[type]! : 1),
+    });
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+      const titled: RenderGraph = { ...g, layers: [...g.layers, { ...text, style: { ...text.style, fontFamily: name } }] };
+      const fontA = tables({ [name]: 'A' }, {}, {}), fontB = tables({ [name]: 'B' }, {}, {});
+      expect(Object.hasOwn(frameInputs(doc, titled, fontA).fonts, name)).toBe(true);
+      expect(frameInputs(doc, titled, fontA).fonts[name]).toBe('A');
+      expect(frameKeyOfGraph(doc, titled, fontA)).not.toBe(frameKeyOfGraph(doc, titled, fontB));
+      expect(canonicalJson(frameInputs(doc, titled, fontA))).toContain(`"fonts":{${JSON.stringify(name)}:"A"}`);
+
+      const filed: RenderGraph = { ...g, layers: g.layers.map((l, i) => (i === v ? { ...l, assetId: name } as Layer : l)) };
+      const fileA = tables({}, {}, { [name]: 'A' }), fileB = tables({}, {}, { [name]: 'B' });
+      expect(frameInputs(doc, filed, fileA).assets[name]).toBe('A');
+      expect(Object.hasOwn(frameInputs(doc, filed, fileA).assets, name)).toBe(true);
+      expect(frameKeyOfGraph(doc, filed, fileA)).not.toBe(frameKeyOfGraph(doc, filed, fileB));
+
+      const looked: RenderGraph = { ...g, layers: g.layers.map((l, i) => (i === v && l.kind === 'video' ? { ...l, effects: [{ type: name, params: {} }] } : l)) };
+      const v1 = tables({}, { [name]: 1 }, {}), v2 = tables({}, { [name]: 2 }, {});
+      expect(frameInputs(doc, looked, v2).effects[name]).toBe(2);
+      expect(Object.hasOwn(frameInputs(doc, looked, v2).effects, name)).toBe(true);
+      expect(frameKeyOfGraph(doc, looked, v1)).not.toBe(frameKeyOfGraph(doc, looked, v2));
+    }
+    // a lookup that answers a prototype member (a plain-object table read with table[family]) is not a hash: asset_unhashed, never keyed as {}
+    const titled: RenderGraph = { ...g, layers: [...g.layers, { ...text, style: { ...text.style, fontFamily: '__proto__' } }] };
+    const plain = {} as Record<string, string>;
+    expectUnkeyable(() => frameKeyOfGraph(doc, titled, { ...ctx, fontHash: (family) => plain[family] ?? null }), 'asset_unhashed', /font __proto__/);
+    const filed: RenderGraph = { ...g, layers: g.layers.map((l, i) => (i === v ? { ...l, assetId: 'constructor' } as Layer : l)) };
+    const leakyFiles: typeof ctx = { ...ctx, assetHash: (id) => (id === 'constructor' ? plain[id]! : ctx.assetHash(id)) };
+    expectUnkeyable(() => frameKeyOfGraph(doc, filed, leakyFiles), 'asset_unhashed', /asset constructor/);
+    expectUnkeyable(() => frameKeyOfGraph(doc, titled, { ...ctx, fontHash: () => '' }), 'asset_unhashed', /font __proto__/);
+  });
+
   it('a GPU pass is keyable only on a software adapter (gpu_not_reproducible otherwise); a frame without one needs no adapter', () => {
     for (const gpu of [null, { adapter: 'nvidia|ampere', software: false }]) {
       const env = baseEnv();
