@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { creativeProjection, PAD_COUNT, PERFORM_PLANNER_BUILT, PERFORM_RECIPE_ID, type OpCall } from '@pulseframe/core';
+import { creativeProjection, defaultBank, PAD_COUNT, PERFORM_PLANNER_BUILT, PERFORM_RECIPE_ID, planTakeRequest, TakeRequestSchema, type OpCall } from '@pulseframe/core';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
@@ -95,16 +95,30 @@ describe('POST /takes and perform_take: refusals before planning (wired by the l
     expect(pt.isError).toBe(true);
     expect(revision(pid)).toBe(before);
   });
-  it.runIf(!PERFORM_PLANNER_BUILT)('while the planner is not built: 501 take_not_built after the permission checks, for a take and a dry run; nothing changes', async () => {
-    const pid = seed('t-501');
+  it.runIf(PERFORM_PLANNER_BUILT)('built: a dry run plans without committing; a take commits one revision with one run; a take whose every tap is held is 409 take_empty', async () => {
+    const pid = seed('t-built');
     const before = revision(pid);
-    for (const b of [body(), body({ dryRun: true })]) {
-      const r = await rest('POST', `/projects/${pid}/takes`, b, auth.tokens.agent);
-      expect([r.status, r.body.error?.code]).toEqual([501, 'take_not_built']);
-    }
-    const t = await tool('perform_take', { projectId: pid, ...body() }, auth.tokens.agent);
-    expect(t.isError).toBe(true);
+    const bank = defaultBank('canvas'); // pad 4: black and white, pad 0: the zoom punch (no picture here)
+    const plain = body({ bank, taps: [{ pad: 4, down: 1, up: 1.2 }, { pad: 4, down: 2, up: 2.1 }] });
+    const dry = await rest('POST', `/projects/${pid}/takes`, { ...plain, dryRun: true }, auth.tokens.agent);
+    expect(dry.status).toBe(200);
+    expect(dry.body.revision).toBe(before);
+    expect(dry.body.chips.map((c: { state: string }) => c.state)).toEqual(['kept', 'kept']);
+    expect(JSON.stringify(dry.body.args)).toBe(JSON.stringify(planTakeRequest(store.getProject(pid).doc, TakeRequestSchema.parse(plain)).args));
     expect(revision(pid)).toBe(before);
+    const done = await rest('POST', `/projects/${pid}/takes`, { ...plain, expectedRevision: before }, auth.tokens.agent);
+    expect([done.status, done.body.revision]).toEqual([200, before + 1]);
+    expect(Object.values(store.getProject(pid).doc.recipeRuns).filter((x) => x.recipeId === PERFORM_RECIPE_ID)).toHaveLength(1);
+    expect(done.body.createdIds.length).toBeGreaterThanOrEqual(2);
+    const empty = await rest('POST', `/projects/${pid}/takes`, body({ bank, taps: [{ pad: 0, down: 1, up: 1.2 }] }), auth.tokens.agent);
+    expect([empty.status, empty.body.error?.code]).toEqual([409, 'take_empty']);
+    expect(empty.body.error.details.chips.map((c: { reason: string }) => c.reason)).toEqual(['no_picture']);
+    expect(revision(pid)).toBe(before + 1);
+    // the MCP tool plans the same way (a dry run, so nothing changes): the same taps again now sit on the take's own changes of light
+    const viaMcp = await tool('perform_take', { projectId: pid, ...plain, dryRun: true }, auth.tokens.agent);
+    expect(viaMcp.isError).toBe(false);
+    expect(viaMcp.body.chips.map((c: { reason?: string; since?: number }) => [c.reason, c.since])).toEqual([['flash_limit', 0], ['flash_limit', 0]]);
+    expect(revision(pid)).toBe(before + 1);
   });
   it.todo('W1: a seeded take through POST /takes commits ONE revision with one perform:take run; dryRun gives the same args as the browser (perform W1)');
   it.todo('W1: a take whose every tap is held answers 409 take_empty with the chips, and nothing changes');
