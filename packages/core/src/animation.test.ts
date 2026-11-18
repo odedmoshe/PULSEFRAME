@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, findClip, OpError, sampleKeyframes, transformAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
+import { applyTransaction, createProject, findClip, NO_RANGE, OpError, sampleKeyframes, transformAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -34,10 +34,10 @@ describe('keyframes', () => {
     for (const easing of ['ease-in', 'ease-out', 'ease-in-out'] as const) {
       const keys = [{ time: f(0), value: 10, easing }, { time: f(100), value: 20, easing: 'linear' as const }];
       let prev = 10;
-      for (let i = 0; i <= 100; i++) { const v = sampleKeyframes(keys, f(i)); expect(v).toBeGreaterThanOrEqual(prev - 1e-12); prev = v; }
-      expect(sampleKeyframes(keys, f(0))).toBe(10);
-      expect(sampleKeyframes(keys, f(100))).toBe(20);
-      expect(sampleKeyframes(keys, f(50))).toBeCloseTo(easing === 'ease-in' ? 11.25 : easing === 'ease-out' ? 18.75 : 15, 10);
+      for (let i = 0; i <= 100; i++) { const v = sampleKeyframes(keys, f(i), NO_RANGE); expect(v).toBeGreaterThanOrEqual(prev - 1e-12); prev = v; }
+      expect(sampleKeyframes(keys, f(0), NO_RANGE)).toBe(10);
+      expect(sampleKeyframes(keys, f(100), NO_RANGE)).toBe(20);
+      expect(sampleKeyframes(keys, f(50), NO_RANGE)).toBeCloseTo(easing === 'ease-in' ? 11.25 : easing === 'ease-out' ? 18.75 : 15, 10);
     }
   });
   it('upsert replaces a key at the same time; delete freezes the last value; clear samples at the given time', () => {

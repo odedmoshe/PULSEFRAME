@@ -4,6 +4,13 @@ export * from './ops.ts';
 export * from './queries.ts';
 export * from './entities.ts';
 export * from './animation.ts';
+// keyframe curves and motion paths (ADR-0019)
+export * from './keyframe.ts';
+export * from './curves.ts';
+export * from './keyframeChannels.ts';
+export * from './keyframeOps.ts';
+export * from './keyEdits.ts';
+export * from './pathEdits.ts';
 export * from './subtitles.ts';
 export * from './cleanup.ts';
 export * from './fillers.ts';

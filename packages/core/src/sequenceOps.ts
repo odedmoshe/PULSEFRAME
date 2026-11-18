@@ -29,12 +29,12 @@
  */
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { assertAligned, collectCreated, defineOp, dissolveLoneLinks, findClip, getOp, isLiveCreated, linkIdsOf, mustClip, newTrack, OpError, refuseAdjustmentTransform, refuseInheritedIds, type OpContext } from './ops.ts';
+import { assertAligned, collectCreated, defineOp, keyframeRefusal, refuseUnbuiltCurve, dissolveLoneLinks, findClip, getOp, isLiveCreated, linkIdsOf, mustClip, newTrack, OpError, refuseAdjustmentTransform, refuseInheritedIds, type OpContext } from './ops.ts';
 import { MAX_SEQUENCES, TransformSchema, type Keyframe, type ProjectDocument, type Sequence, type SequenceFormat } from './schema.ts';
 import { ApplySequencePlanArgsSchema, SEQUENCE_PLAN_OP, SEQUENCE_SUMMARIES, SequenceOpArgs, sequenceRefusal, SHORTS_RUN_ID, type AddSequenceOutput, type ApplySequencePlanOutput, type RemoveSequenceOutput, type ReplaceClipKeyframesOutput } from './shortsContract.ts';
 import { sequenceOf } from './sequences.ts';
 import { fingerprint, trackOrderEntityId } from './entities.ts';
-import { sampleKeyframes } from './animation.ts';
+import { sampleKeyframes, TRANSFORM_RANGE } from './animation.ts';
 import { resolveBindings } from './templateOps.ts';
 
 /** True once W1 has built the bodies: the operations fuzz (packages/evals/src/ops-fuzz.gen.ts) then draws the sequence rows. */
@@ -139,11 +139,14 @@ defineOp({
     if (clip.type === 'caption') throw sequenceRefusal('captionKeys', { clipId: clip.id });
     if (a.property !== 'opacity') refuseAdjustmentTransform(clip, { [a.property]: NaN }, 'animated'); // any key on these properties
     const p = a.property;
+    // ADR-0019 contracts: the range form and the new curves are refused as not built until keyframe W1 builds them here
+    if (a.from !== undefined || a.to !== undefined) throw keyframeRefusal('notBuilt', { clipId: clip.id }, 'the range form of replace_clip_keyframes');
+    for (const k of a.keys ?? []) refuseUnbuiltCurve(k.easing, k.bezier);
     if (a.keys === null) {
       // as clear_keyframes: the property keeps the value it had at `at`
       const old = clip.keyframes?.[p];
       if (old?.length) {
-        clip.transform = { ...clip.transform, [p]: sampleKeyframes(old, a.at ?? T.ZERO) };
+        clip.transform = { ...clip.transform, [p]: sampleKeyframes(old, a.at ?? T.ZERO, TRANSFORM_RANGE[p]) };
         const kf = { ...clip.keyframes };
         delete kf[p];
         if (Object.keys(kf).length) clip.keyframes = kf; else delete clip.keyframes;

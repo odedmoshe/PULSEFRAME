@@ -8,17 +8,14 @@ import { z } from 'zod';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
+import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 
 export const SCHEMA_VERSION = 3;
 
-export const RationalTimeSchema = z
-  .object({
-    value: z.string().regex(/^-?\d+$/).describe('Integer numerator as a decimal string'),
-    timescale: z.number().int().positive().describe('Ticks per second'),
-  })
-  .strict()
-  .describe('Exact time = value / timescale seconds');
+// RationalTimeSchema, ANIMATABLE, EASINGS and KeyframeSchema live in keyframe.ts (ADR-0019: one keyframe definition, shared with
+// effects.ts, which this file imports); they are re-exported here so every existing import keeps working.
+export { RationalTimeSchema } from './keyframe.ts';
 export const RateSchema = z.object({ num: z.number().int().positive(), den: z.number().int().positive() }).strict();
 
 const Id = z.string().min(1).max(64);
@@ -337,20 +334,9 @@ export const DEFAULT_TEXT_STYLE = {
   fontFamily: 'Heebo', fontWeight: 700, sizeFrac: 0.06, color: '#FFFFFF', align: 'center', direction: 'auto', lineHeight: 1.2, background: null, stroke: '#000000', strokeFrac: 0.08,
 } as const satisfies z.infer<typeof TextStyleSchema>;
 
-export const ANIMATABLE = ['x', 'y', 'scale', 'rotation', 'opacity'] as const;
-export type Animatable = (typeof ANIMATABLE)[number];
-export const EASINGS = ['linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out'] as const;
-export const KeyframeSchema = z
-  .object({
-    /** Offset from the clip start. May lie outside [0, duration): after a trim or split the curve keeps its exact shape. */
-    time: RationalTimeSchema,
-    value: z.number(),
-    /** Shape of the segment that STARTS at this key. */
-    easing: z.enum(EASINGS),
-  })
-  .strict();
+export { ANIMATABLE, EASINGS, KeyframeSchema, type Animatable } from './keyframe.ts';
 /** Per-property keyframe lists, strictly increasing in time. A property without keys uses the static transform value. */
-export const KeyframesSchema = z.object(Object.fromEntries(ANIMATABLE.map((p) => [p, z.array(KeyframeSchema).max(2000).optional()])) as Record<Animatable, z.ZodOptional<z.ZodArray<typeof KeyframeSchema>>>).strict();
+export const KeyframesSchema = z.object(Object.fromEntries(ANIMATABLE.map((p) => [p, z.array(KeyframeSchema).max(MAX_TRANSFORM_KEYS).optional()])) as Record<Animatable, z.ZodOptional<z.ZodArray<typeof KeyframeSchema>>>).strict();
 const ClipBase = {
   id: Id, start: RationalTimeSchema, duration: RationalTimeSchema, transform: TransformSchema, keyframes: KeyframesSchema.optional(),
   /** Applied in order after the layer is placed (with its transform and opacity), before its mask, transition and blend mode. A time effect (time.*) is always first (ops.ts effectSlot). */
@@ -746,7 +732,7 @@ export const ProjectSchema = z
 export type RationalTimeJson = z.infer<typeof RationalTimeSchema>;
 export type Asset = z.infer<typeof AssetSchema>;
 export type Transform = z.infer<typeof TransformSchema>;
-export type Keyframe = z.infer<typeof KeyframeSchema>;
+export type { Keyframe } from './keyframe.ts';
 export type Keyframes = z.infer<typeof KeyframesSchema>;
 export type TextStyle = z.infer<typeof TextStyleSchema>;
 export type MediaClip = z.infer<typeof MediaClipSchema>;

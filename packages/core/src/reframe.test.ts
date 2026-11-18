@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, backdropScale, backdropScales, cameraPath, coverLimit, createProject, fitScale, placed, planReframe, REFRAME_DEFAULTS, reframeOps, sampleKeyframes, ShortsError, sourceToFrame, TRACK_UNIT,
+  applyTransaction, backdropScale, backdropScales, cameraPath, coverLimit, createProject, fitScale, placed, planReframe, REFRAME_DEFAULTS, reframeOps, sampleKeyframes, ShortsError, TRANSFORM_RANGE, type Keyframe, sourceToFrame, TRACK_UNIT,
   type OpCall, type ProjectDocument, type ReframeInput, type ReframeSample,
 } from './index.ts';
 
@@ -30,7 +30,7 @@ function subject(seed: number, n: number): ReframeSample[] {
     return { u, conf: 0.9 };
   });
 }
-const valueAt = (r: { x: number; keys: { time: T.RationalTime; value: number; easing: 'linear' | 'hold' | 'ease-in' | 'ease-out' | 'ease-in-out' }[] | null }, j: number, rate: { num: number; den: number }) => (r.keys ? sampleKeyframes(r.keys, T.frameTime(j, rate)) : r.x);
+const valueAt = (r: { x: number; keys: Keyframe[] | null }, j: number, rate: { num: number; den: number }) => (r.keys ? sampleKeyframes(r.keys, T.frameTime(j, rate), TRANSFORM_RANGE.x) : r.x);
 
 describe('planReframe: 500 random subject paths, 1920×1080 into 1080×1920', () => {
   it('coverage, speed limit, ε bound, whole-frame linear keys and the key cap hold at every frame', () => {
