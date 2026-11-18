@@ -1,11 +1,11 @@
 {
-  "ranAt": "2026-11-17T17:45:24.410Z",
-  "commit": "faa7c63170ecd66449a500617f9b112171618412",
+  "ranAt": "2026-11-18T01:53:41.520Z",
+  "commit": "03df9562ece563d5e5bd1067629fa2e68db76063",
   "result": "PASSED",
   "passed": 15,
   "total": 15,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
@@ -406,34 +406,34 @@
       }
     },
     "timing1080x1920": {
-      "plainStillMs": 403,
+      "plainStillMs": 261,
       "film-burn": {
-        "stillMs": 1324,
-        "passMsEstimate": 921
+        "stillMs": 882,
+        "passMsEstimate": 621
       },
       "light-leak": {
-        "stillMs": 1517,
-        "passMsEstimate": 1114
+        "stillMs": 1010,
+        "passMsEstimate": 749
       },
       "ink-bleed": {
-        "stillMs": 1872,
-        "passMsEstimate": 1469
+        "stillMs": 1267,
+        "passMsEstimate": 1006
       },
       "brush-left": {
-        "stillMs": 1394,
-        "passMsEstimate": 991
+        "stillMs": 912,
+        "passMsEstimate": 652
       },
       "brush-right": {
-        "stillMs": 1358,
-        "passMsEstimate": 955
+        "stillMs": 835,
+        "passMsEstimate": 574
       },
       "page-turn-left": {
-        "stillMs": 1064,
-        "passMsEstimate": 662
+        "stillMs": 678,
+        "passMsEstimate": 417
       },
       "page-turn-right": {
-        "stillMs": 1012,
-        "passMsEstimate": 609
+        "stillMs": 670,
+        "passMsEstimate": 409
       }
     }
   },
@@ -1002,34 +1002,34 @@
       "name": "L7 time per pass at 1080x1920 recorded for each kernel (median of 3 still round trips with the transition, minus the same still without one; software adapter, no speed claim)",
       "ok": true,
       "detail": {
-        "plainStillMs": 403,
+        "plainStillMs": 261,
         "film-burn": {
-          "stillMs": 1324,
-          "passMsEstimate": 921
+          "stillMs": 882,
+          "passMsEstimate": 621
         },
         "light-leak": {
-          "stillMs": 1517,
-          "passMsEstimate": 1114
+          "stillMs": 1010,
+          "passMsEstimate": 749
         },
         "ink-bleed": {
-          "stillMs": 1872,
-          "passMsEstimate": 1469
+          "stillMs": 1267,
+          "passMsEstimate": 1006
         },
         "brush-left": {
-          "stillMs": 1394,
-          "passMsEstimate": 991
+          "stillMs": 912,
+          "passMsEstimate": 652
         },
         "brush-right": {
-          "stillMs": 1358,
-          "passMsEstimate": 955
+          "stillMs": 835,
+          "passMsEstimate": 574
         },
         "page-turn-left": {
-          "stillMs": 1064,
-          "passMsEstimate": 662
+          "stillMs": 678,
+          "passMsEstimate": 417
         },
         "page-turn-right": {
-          "stillMs": 1012,
-          "passMsEstimate": 609
+          "stillMs": 670,
+          "passMsEstimate": 409
         }
       }
     },
