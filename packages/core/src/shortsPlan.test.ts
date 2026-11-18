@@ -100,7 +100,7 @@ describe('planShorts: seeded property tests at six frame rates', () => {
         const seqId = (r.results[0]!.output as unknown as ApplySequencePlanOutput).sequenceIds[0]!;
         const { seq, pieces, sounds, captions } = shortOf(r.doc, seqId);
         const kept = seq.origin!.kind === 'short' ? seq.origin!.kept : [];
-        const excerpt = seq.origin!.excerpt;
+        const excerpt = seq.origin!.kind === 'short' ? seq.origin!.excerpt : null!;
         if (kept.length > 1) removedSome++;
         // starts and durations on whole frames, contiguous from 0; the sequence lasts the sum of its pieces
         let at = T.ZERO;

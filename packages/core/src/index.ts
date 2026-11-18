@@ -78,3 +78,12 @@ export * from './highlights.ts';
 export * from './shortsPlan.ts';
 export * from './reframe.ts';
 export * from './quotes.ts';
+// multicam (ADR-0020): the contract, the lead-built validation and capture priors; multicam.ts / multicamOps.ts / envelope / auto are worker stubs
+export * from './multicamContract.ts';
+export * from './multicamApi.ts';
+export * from './multicamPrior.ts';
+export * from './multicamValidate.ts';
+export * from './multicam.ts';
+export * from './multicamOps.ts';
+export * from './multicamEnvelope.ts';
+export * from './multicamAuto.ts';

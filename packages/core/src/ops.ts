@@ -31,6 +31,7 @@ import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, tra
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 import { detachAssetFromEvents } from './events.ts';
 import { handDownCapture } from './capture.ts';
+import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
@@ -46,6 +47,17 @@ export class OpError extends Error {
     return { code: this.code, message: this.message, details: this.details, hint: this.hint };
   }
 }
+
+/** A multicam refusal (ADR-0020, multicamRefusals.ts) raised by an op of this file; multicamContract.ts multicamRefusal is the same for multicamOps.ts. */
+function mcRefusal<K extends MulticamRefusalKey>(key: K, details: Record<string, unknown>, ...values: Parameters<(typeof MULTICAM_REFUSALS)[K]['message']>): OpError {
+  const r = MULTICAM_REFUSALS[key] as MulticamRefusalRow<unknown[]>;
+  return new OpError(r.code, r.message(...values), details, r.hint);
+}
+/** Multicam groups (ADR-0020) whose files include the asset. */
+const groupsUsingAsset = (d: ProjectDocument, assetId: string): string[] =>
+  Object.values(d.multicam ?? {}).filter((g) => g.angles.some((an) => an.pieces.some((p) => p.assetId === assetId))).map((g) => g.id);
+/** A clip tagged as a multicam segment cannot be given another file: its file is set by its group (ADR-0020; wave 1 refuses AI-derived copies on it). */
+const refuseTagged = (c: Clip) => { if (c.type === 'media' && c.multicam) throw mcRefusal('taggedClip', { clipId: c.id, groupId: c.multicam.groupId, angleId: c.multicam.angleId }); };
 
 export interface OpContext {
   /** Deterministic id source: ids are a pure function of the logged transaction seed. */
@@ -364,7 +376,7 @@ defineOp({
 defineOp({
   name: 'remove_asset',
   version: 1,
-  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks; it also leaves the event it was in (an event left without files is removed), and a copy made from it that took its capture date from it keeps that date. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks; it also leaves the event it was in (an event left without files is removed), and a copy made from it that took its capture date from it keeps that date. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one), or while a multicam group has it as a file of an angle. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
     const asset = d.assets[a.assetId];
@@ -373,6 +385,9 @@ defineOp({
     if (users.length) throw new OpError('incompatible', `${users.length} clip(s) on the timeline still use this file`, { assetId: asset.id, clipIds: users.slice(0, 50) }, 'Delete those clips first.');
     const graded = lutUsers(d, asset.id);
     if (graded.length) throw new OpError('incompatible', `${graded.length} clip(s) still use this colour table in a colour table (LUT) effect`, { assetId: asset.id, clipIds: graded.slice(0, 50) }, 'Remove that effect from those clips, or choose another table for it, first.');
+    // multicam (ADR-0020): a file of a group's angle stays while the group names it
+    const groups = groupsUsingAsset(d, asset.id);
+    if (groups.length) throw mcRefusal('assetInGroup', { assetId: asset.id, groupIds: groups }, groups.length);
     // motion tracks of the file (ADR-0015) go with it, unless a clip still follows one or hides a region with one
     const tracks = Object.values(d.motionTracks ?? {}).filter((t) => t.assetId === asset.id).map((t) => t.id);
     const bound = motionTrackUsers(d, new Set(tracks));
@@ -1889,11 +1904,12 @@ const nextAdjacent = (track: Track, clip: Clip): Clip | undefined => track.clips
 defineOp({
   name: 'replace_clip_asset',
   version: 1,
-  description: 'Show a derived copy of a clip\'s file in the clip, for example an enhanced picture or a cleaned-up voice a tool made from it. The clip keeps its place, length, speed, effects and everything else; linked clips keep their own file. The new file must have been made from the file the clip shows now and keep its timing, and it must cover the whole stretch of source the clip uses (plus the frames a transition into the next clip needs), so the clip shows exactly the same moments. A still picture may take a still made from it. Refused for freeze frames, reversed clips and clips that change speed gradually.',
+  description: 'Show a derived copy of a clip\'s file in the clip, for example an enhanced picture or a cleaned-up voice a tool made from it. The clip keeps its place, length, speed, effects and everything else; linked clips keep their own file. The new file must have been made from the file the clip shows now and keep its timing, and it must cover the whole stretch of source the clip uses (plus the frames a transition into the next clip needs), so the clip shows exactly the same moments. A still picture may take a still made from it. Refused for freeze frames, reversed clips, clips that change speed gradually, and multicam segments (their file is set by the group; detach them first).',
   args: z.object({ clipId: z.string(), assetId: z.string() }).strict(),
   apply(d, a) {
     const { clip, track } = mustClip(d, a.clipId);
     if (clip.type !== 'media') throw new OpError('incompatible', 'only a picture or sound clip shows a file', { clipId: a.clipId });
+    refuseTagged(clip);
     if (clip.freeze) throw new OpError('incompatible', 'a freeze frame cannot be given another file', { clipId: clip.id }, 'Give the clip the new file first, then make the freeze frame.');
     refuseRamped(clip, 'given another file');
     if (clip.reverse) throw new OpError('incompatible', 'a clip that plays backwards cannot be given another file', { clipId: clip.id }, 'Play it forwards (set_clip_reverse), give it the new file, then reverse it again.');
@@ -2773,6 +2789,8 @@ const startsWithTimeEffect = (c: MediaClip) => { const first = c.effects?.find((
  * The one check of a transition at the start of a picture clip, shared by set_transition and set_transition_options
  * (ADR-0012). Without options its codes and messages are exactly those set_transition always had.
  */
+/** Re-check the transition AT THE START of `clip` (if any) against its current handles, with set_transition's codes and words. Exported for switch_angles (ADR-0020), which re-checks every touched clip and the clip after it. */
+export function checkTransitionAt(d: ProjectDocument, track: Track, clip: MediaClip): void { if (clip.transition) checkTransition(d, track, clip, clip.transition); }
 function checkTransition(d: ProjectDocument, track: Track, clip: MediaClip, tr: Transition): void {
   const rate = d.settings.frameRate;
   const n = tr.frames, v = tr.velocity;
@@ -3087,10 +3105,14 @@ defineOp({
 defineOp({
   name: 'remove_motion_track',
   version: 1,
-  description: 'Delete a motion track (ADR-0015). Refused while a clip follows it or a privacy region on a clip follows it, unless unbind=true: then those clips stop following it and those regions are removed, in the same step (a clip that follows keeps its own position, which was an offset from the tracked point).',
+  description: 'Delete a motion track (ADR-0015). Refused while a clip follows it or a privacy region on a clip follows it, unless unbind=true: then those clips stop following it and those regions are removed, in the same step (a clip that follows keeps its own position, which was an offset from the tracked point). Refused, unbind or not, while a file of a multicam group hides a region with it or follows it (clear that angle\'s look first).',
   args: TrackOpArgs.remove_motion_track,
   apply(d, a) {
     const t = mustMotionTrack(d, a.motionTrackId);
+    // multicam (ADR-0020): a group's file that hides a region with this track or follows it keeps it, unbind or not (the
+    // group is not changed behind its owner's back)
+    const pieces = Object.values(d.multicam ?? {}).flatMap((g) => g.angles.flatMap((an) => an.pieces.filter((p) => p.follow?.motionTrackId === t.id || p.redact?.some((r) => r.motionTrackId === t.id)).map((p) => ({ groupId: g.id, angleId: an.id, assetId: p.assetId }))));
+    if (pieces.length) throw mcRefusal('motionTrackInGroup', { motionTrackId: t.id, pieces: pieces.slice(0, 50) }, pieces.length);
     const users = motionTrackUsers(d, new Set([t.id]));
     const ids = [...new Set([...users.follow, ...users.redact])];
     if (ids.length && !a.unbind) throw new OpError('incompatible', `${ids.length} clip(s) follow this motion track or hide a region with it`, { motionTrackId: t.id, follow: users.follow.slice(0, 50), redact: users.redact.slice(0, 50) }, 'Pass unbind=true to detach them in the same step, or detach them first (set_clip_follow follow=null, set_redact_region region=null).');
@@ -3240,7 +3262,7 @@ export const ReplaceClipMediaArgsSchema = z.object({
 defineOp({
   name: 'replace_clip_media',
   version: 1,
-  description: 'Give a clip another file from the library and keep everything else about it: its id (so per-format overrides and template slots stay), place and length on the timeline, transform and keyframes, effects, blend mode, mask, transition, speed and direction, fades and volume. Only the file and the point of it the clip starts from (sourceIn) change. sourceIn defaults to the current one when the new file is long enough from there, else 0 (always 0 for a still picture). A picture clip needs a file with a picture, a sound clip one with sound, and the file must be long enough for the clip from sourceIn; a transition into the next clip needs that many spare frames after it. A still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed. linked=follow (default): the clips linked to this one take the same file and sourceIn (refused when the file lacks what one of them plays); linked=detach: they are unlinked and left as they are.',
+  description: 'Give a clip another file from the library and keep everything else about it: its id (so per-format overrides and template slots stay), place and length on the timeline, transform and keyframes, effects, blend mode, mask, transition, speed and direction, fades and volume. Only the file and the point of it the clip starts from (sourceIn) change. sourceIn defaults to the current one when the new file is long enough from there, else 0 (always 0 for a still picture). A picture clip needs a file with a picture, a sound clip one with sound, and the file must be long enough for the clip from sourceIn; a transition into the next clip needs that many spare frames after it. A still picture cannot replace a clip that plays at another speed, backwards, as a freeze frame or with a gradual change of speed. linked=follow (default): the clips linked to this one take the same file and sourceIn (refused when the file lacks what one of them plays); linked=detach: they are unlinked and left as they are. Refused for multicam segments (their file is set by the group; detach them first or switch angles).',
   args: ReplaceClipMediaArgsSchema,
   apply(d, a) {
     const f = mustClip(d, a.clipId);
@@ -3257,6 +3279,7 @@ defineOp({
     const follow = a.linked !== 'detach';
     if (follow) for (const p of partners) if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, 'Unlock the track, or pass linked:detach to leave that clip as it is.');
     const targets = [{ track: f.track, clip }, ...(follow ? partners : [])];
+    for (const t of targets) refuseTagged(t.clip); // multicam segments (ADR-0020): the group sets their file
     // What each clip plays on its track: a picture on a video track, sound on a sound track.
     const plays = (t: Track) => (t.kind === 'video' ? 'shows a picture' : 'plays sound');
     for (const [i, { track, clip: c }] of targets.entries()) {

@@ -20,7 +20,7 @@
  */
 import { z } from 'zod';
 import type * as T from '@pulseframe/time';
-import { ANIMATABLE, KeyframeSchema, LoudnessTargetSchema, RationalTimeSchema, SequenceFormatSchema, SequenceOriginSchema, CANDIDATE_ID, MAX_SEQUENCES, type Keyframe, type SequenceOrigin, type ShortReason } from './schema.ts';
+import { ANIMATABLE, KeyframeSchema, LoudnessTargetSchema, RationalTimeSchema, SequenceFormatSchema, SequenceOriginSchema, CANDIDATE_ID, MAX_SEQUENCES, type Keyframe, type ShortOrigin, type ShortReason } from './schema.ts';
 import { RefSchema, TemplateStepSchema, type TemplateStep } from './templateContract.ts';
 import type { FillerCandidate } from './fillers.ts';
 import { OpError, type OpCall, type OpErrorCode } from './ops.ts';
@@ -293,7 +293,7 @@ export interface PlannedShort {
 export interface ShortsPlan {
   steps: string[]; basis: string[];
   ops: TemplateStep[];
-  origins: { sequence: { $ref: string; out: 'sequenceId' }; origin: SequenceOrigin }[];
+  origins: { sequence: { $ref: string; out: 'sequenceId' }; origin: ShortOrigin }[];
   shorts: PlannedShort[]; warnings: PlanWarning[];
 }
 export interface ShortsPlanContext { createdAt: string; candidates: ReadonlyMap<string, ShortCandidate>; features: ReadonlyMap<string, AudioFeatures> }

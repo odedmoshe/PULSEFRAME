@@ -7,7 +7,7 @@
  * if nobody changed them since" — a compensating transaction, never a history rewrite.
  */
 import * as T from '@pulseframe/time';
-import type { Analysis, Asset, Clip, LifeEvent, Marker, Person, ProjectDocument, RecipeRun, Sequence, Track, Transcript, Variant } from './schema.ts';
+import type { Analysis, Asset, Clip, LifeEvent, Marker, MulticamGroup, Person, ProjectDocument, RecipeRun, Sequence, Track, Transcript, Variant } from './schema.ts';
 import type { MotionTrack } from './tracking.ts';
 
 export type EntityState =
@@ -42,6 +42,12 @@ export type EntityState =
    *   restore_entities and then 409 undo_conflict in apps/server/src/store.ts undo(), so nothing is ever deleted silently.
    */
   | { kind: 'sequence'; sequence: Omit<Sequence, 'tracks'> }
+  /**
+   * A multicam group (ADR-0020), keyed by its own id like a motion track, so a correction sent from an out-of-date view of it
+   * conflicts. Its program segments are ordinary clip entities (they carry the tag). A project without groups has no
+   * `multicam` key: undoing the first create_multicam deletes the emptied map (the people precedent).
+   */
+  | { kind: 'multicamGroup'; group: MulticamGroup }
   /** The stacking order of a sequence's tracks. Compared only over the tracks both sides have, so adding or removing a track is not an order change. */
   | { kind: 'trackOrder'; sequenceId: string; ids: string[] };
 /** Entity id of an asset's analysis results. */
@@ -74,6 +80,7 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
   for (const k of Object.values(doc.motionTracks ?? {})) m.set(k.id, { kind: 'motionTrack', track: k });
   for (const e of Object.values(doc.events ?? {})) m.set(e.id, { kind: 'lifeEvent', event: e });
   for (const p of Object.values(doc.people ?? {})) m.set(p.id, { kind: 'person', person: p });
+  for (const g of Object.values(doc.multicam ?? {})) m.set(g.id, { kind: 'multicamGroup', group: g });
   for (const seq of Object.values(doc.sequences)) {
     const { tracks: _tracks, ...own } = seq;
     m.set(seq.id, { kind: 'sequence', sequence: own });
@@ -165,6 +172,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
       if (cur?.kind === 'lifeEvent') delete draft.events[cur.event.id];
       // a project without people has no `people` key at all, so undoing the first add_person gives the stored document back exactly
       if (cur?.kind === 'person' && draft.people) { delete draft.people[cur.person.id]; if (Object.keys(draft.people).length === 0) delete draft.people; }
+      if (cur?.kind === 'multicamGroup' && draft.multicam) { delete draft.multicam[cur.group.id]; if (Object.keys(draft.multicam).length === 0) delete draft.multicam; }
       if (cur?.kind === 'track') {
         const seq = draft.sequences[cur.sequenceId]!;
         const track = seq.tracks.find((t) => t.id === id)!;
@@ -185,6 +193,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
     else if (state.kind === 'motionTrack') (draft.motionTracks ??= {})[state.track.id] = structuredClone(state.track);
     else if (state.kind === 'lifeEvent') (draft.events ??= {})[state.event.id] = structuredClone(state.event);
     else if (state.kind === 'person') (draft.people ??= {})[state.person.id] = structuredClone(state.person);
+    else if (state.kind === 'multicamGroup') (draft.multicam ??= {})[state.group.id] = structuredClone(state.group);
   }
   // 2. tracks (so restored clips have a home), lowest original index first
   for (const { id, state } of targets.filter((t) => t.state?.kind === 'track').sort((x, y) => (x.state as any).index - (y.state as any).index)) {

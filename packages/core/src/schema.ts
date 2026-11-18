@@ -9,6 +9,7 @@ import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
+import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
 
 export const SCHEMA_VERSION = 3;
 
@@ -359,6 +360,11 @@ const ClipBase = {
   /** Follow a motion track (ADR-0015): a title, or a picture on a video track, moves with the tracked point; its own transform is then an offset from that point. */
   follow: FollowSchema.optional(),
 };
+/**
+ * Tag of a multicam program segment (ADR-0020): this clip shows angle `angleId` of group `groupId`. Inert for rendering
+ * (evaluate, the compositor, audioPlan and the render cache never read it); validate.ts multicam_tag checks it.
+ */
+export const MulticamTagSchema = z.object({ groupId: Id, angleId: Id }).strict();
 export const MediaClipSchema = z
   .object({
     ...ClipBase,
@@ -393,6 +399,8 @@ export const MediaClipSchema = z
     /** Privacy regions (ADR-0015): blurred, pixelated or covered parts of the picture, fixed or following a motion track of this clip's asset. Drawn on each picture of the clip before its effects. */
     redact: z.array(RedactRegionSchema).min(1).max(MAX_REDACT_REGIONS).optional(),
     transition: TransitionSchema.optional(),
+    /** Multicam (ADR-0020): the group and angle this program segment shows. Absent = an ordinary clip. */
+    multicam: MulticamTagSchema.optional(),
   })
   .strict();
 /**
@@ -565,6 +573,91 @@ export const AnalysisSchema = z
   })
   .strict();
 
+// ---------- multicam groups (ADR-0020): optional, absent until the first group; no schema version bump (wave 4 shares v3) ----------
+/** One sync point of a file: group time `group` shows this file's source time `source`. Both sample-aligned on group.sampleRate. */
+export const SyncAnchorSchema = z.object({ group: RationalTimeSchema, source: RationalTimeSchema }).strict();
+/** How well a file is placed in group time, as measured (or 'manual', 'reference', 'unsynced'). */
+export const SyncQualitySchema = z.object({
+  verdict: z.enum(SYNC_VERDICTS),
+  peakZ: z.number().nullable(),
+  peakRatio: z.number().nullable(),
+  anchorsUsed: z.number().int().min(0).max(MAX_ANCHORS_PER_PIECE),
+  anchorsRejected: z.number().int().min(0).max(10000),
+  residualSamples: z.number().int().min(0).nullable(),
+  driftPpm: z.number().min(-2000).max(2000).nullable(),
+  overlapSeconds: z.number().min(0).nullable(),
+  /** Ambiguous results: the best lags, as offset = group time of source time 0. Never anchors. */
+  candidates: z.array(z.object({ offset: RationalTimeSchema, score: z.number() }).strict()).max(MAX_SYNC_CANDIDATES),
+  /** 0 = matched against the reference; k = through k already placed pieces. */
+  chainDepth: z.number().int().min(0).max(8),
+  jobId: z.string().max(64).nullable(),
+}).strict();
+export const MulticamPieceSchema = z.object({
+  assetId: Id,
+  /** Strictly increasing in group AND source, sample-aligned on group.sampleRate; [] = not placed; one anchor = pure offset; end slopes extend. */
+  anchors: z.array(SyncAnchorSchema).max(MAX_ANCHORS_PER_PIECE),
+  quality: SyncQualitySchema,
+  /**
+   * Privacy regions for THIS file (a motion track belongs to one asset, tracking.ts). Every segment showing this piece gets
+   * them (switch_angles, place_multicam); a region that follows a motion track follows one of this piece's asset (validate.ts).
+   */
+  redact: z.array(RedactRegionSchema).min(1).max(MAX_REDACT_REGIONS).optional(),
+  /** Follow for THIS file (its motion track is one of this piece's asset): the part of an angle's look that is per file. */
+  follow: FollowSchema.optional(),
+}).strict();
+/**
+ * The look of an angle (ADR-0020 D7, wave4-decisions.md "a look stays with the angle"): a switch gives a segment the target
+ * angle's transform, effects, mask, blend and per-format transforms, and its piece's redact and follow. Per-shot punch-ins are
+ * dropped and reported (SwitchAnglesOutput.dropped).
+ */
+export const AngleLookSchema = z.object({
+  transform: TransformSchema,
+  effects: z.array(EffectInstanceSchema).max(16).optional(),
+  mask: MaskSchema.optional(),
+  blend: z.enum(BLEND_MODES).optional(),
+  /** By variant id: the VariantOverride.transform segments of this angle get in that format. */
+  variantTransforms: z.record(Id, TransformSchema.partial()).optional(),
+}).strict();
+export const MulticamAngleSchema = z.object({
+  id: Id,
+  label: z.string().min(1).max(40),
+  kind: z.enum(ANGLE_KINDS),
+  pieces: z.array(MulticamPieceSchema).min(1).max(MAX_PIECES),
+  look: AngleLookSchema.optional(),
+}).strict();
+export const MulticamSpeakerSchema = z.object({
+  id: Id,
+  label: z.string().min(1).max(40),
+  /** Angle whose sound tells when this person speaks, and the channel of its pieces (null = mixdown). */
+  micAngleId: Id,
+  channel: z.number().int().min(0).max(7).nullable(),
+  /** Picture angle that frames this person; null = use the wide angle. */
+  shotAngleId: Id.nullable(),
+  transcriptSpeaker: z.string().min(1).max(80).optional(),
+}).strict();
+export const MulticamGroupSchema = z.object({
+  id: Id,
+  name: z.string().min(1).max(80),
+  sampleRate: z.number().int().min(8000).max(192000),
+  /**
+   * Group time IS the source time of this angle's piece 0 (anchors exactly [{0,0}], verdict 'reference'). Default the first
+   * sound angle (wave4-decisions.md: group time follows the main sound recorder, so it never needs chunking).
+   */
+  referenceAngleId: Id,
+  angles: z.array(MulticamAngleSchema).min(2).max(MAX_ANGLES),
+  speakers: z.array(MulticamSpeakerSchema).max(MAX_SPEAKERS),
+  wideAngleId: Id.nullable(),
+  origin: AnalysisOrigin,
+}).strict();
+export type MulticamTag = z.infer<typeof MulticamTagSchema>;
+export type SyncAnchor = z.infer<typeof SyncAnchorSchema>;
+export type SyncQuality = z.infer<typeof SyncQualitySchema>;
+export type MulticamPiece = z.infer<typeof MulticamPieceSchema>;
+export type AngleLook = z.infer<typeof AngleLookSchema>;
+export type MulticamAngle = z.infer<typeof MulticamAngleSchema>;
+export type MulticamSpeaker = z.infer<typeof MulticamSpeakerSchema>;
+export type MulticamGroup = z.infer<typeof MulticamGroupSchema>;
+
 /**
  * Adjustment clip (ADR-0016). It has no picture of its own: its enabled effects, mask, opacity and blend act on everything
  * already drawn below it in its sequence at that time. Captions are drawn last and are never affected.
@@ -667,7 +760,7 @@ export const CANDIDATE_ID = /^cand_[0-9a-f]{16}$/;
  * Measured provenance of a sequence (ADR-0018). Written ONLY by the internal apply_sequence_plan, onto sequences created by
  * that same op; no public op sets it, so nobody can type a score or a reason. Informational: ids in it are NOT validated as
  * references (the asset or motion track may be removed later). The score is a relative heuristic within ONE video, never a
- * prediction (SPEC.md:624). ADR-0020 (multicam) adds its own member; wave 2 adds 'cover'.
+ * prediction (SPEC.md:624). ADR-0020 (multicam) adds the member 'multicam' (written by place_multicam); wave 2 adds 'cover'.
  */
 export const SequenceOriginSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -683,8 +776,15 @@ export const SequenceOriginSchema = z.discriminatedUnion('kind', [
     method: z.string().max(200),
     createdAt: z.string().max(40),
   }).strict(),
+  /**
+   * ADR-0020: a sequence that place_multicam made for a multicam program (PlaceMulticamArgs.newSequence). Informational like
+   * the short's: the group may be removed later, so groupId is not validated as a reference.
+   */
+  z.object({ kind: z.literal('multicam'), groupId: Id }).strict(),
 ]);
 export type SequenceOrigin = z.infer<typeof SequenceOriginSchema>;
+/** The measured origin of a short (ADR-0018); a shorts plan writes only this member. */
+export type ShortOrigin = Extract<SequenceOrigin, { kind: 'short' }>;
 export const SequenceSchema = z
   .object({
     id: Id,
@@ -740,6 +840,11 @@ export const ProjectSchema = z
      * (no default, so a project without people is stored exactly as before); read it as `doc.people ?? {}` (people.ts peopleOf).
      */
     people: z.record(Id, PersonSchema).optional(),
+    /**
+     * Multicam groups (ADR-0020), by group id. OPTIONAL and absent until the first group (no default, so a project without
+     * groups is stored exactly as before, the people precedent); read it as `doc.multicam ?? {}`.
+     */
+    multicam: z.record(Id, MulticamGroupSchema).optional(),
   })
   .strict();
 
@@ -832,5 +937,7 @@ export function migrateProject(raw: unknown): ProjectDocument {
   // A project without people has no `people` key (entities.ts: undoing the first add_person deletes the emptied map), so a
   // stored or imported `people: {}` reads as absent and the undo of the first add_person gives the document back exactly.
   if (out.people && Object.keys(out.people).length === 0) delete out.people;
+  // the same for multicam groups (ADR-0020): undoing the first create_multicam deletes the emptied map
+  if (out.multicam && Object.keys(out.multicam).length === 0) delete out.multicam;
   return out;
 }

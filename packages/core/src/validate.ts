@@ -7,6 +7,7 @@ import { personNameKey } from './people.ts';
 import { lifeIssues } from './fields.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 import { momentsProblem } from './momentsContract.ts';
+import { multicamIssues } from './multicamValidate.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -370,5 +371,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   }
   if (Object.keys(doc.people ?? {}).length > MAX_PEOPLE) issues.push({ code: 'life_person_limit', message: `the project has more than ${MAX_PEOPLE} people`, ids: [] });
   issues.push(...lifeIssues(doc));
+  // multicam groups and the tags of their program segments (ADR-0020)
+  if (doc.multicam || hasTags(doc)) issues.push(...multicamIssues(doc, uniq));
   return issues;
 }
+const hasTags = (doc: ProjectDocument) => Object.values(doc.sequences).some((s) => s.tracks.some((t) => t.clips.some((c) => c.type === 'media' && !!c.multicam)));

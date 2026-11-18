@@ -9,7 +9,7 @@ import * as T from '@pulseframe/time';
 import {
   applyTransaction, collectCreated, createProject, CREATED_OUTPUT_KEYS, frameOf, isLiveCreated, migrateProject, OutputTargetError, outputSafeArea, outputWarnings,
   projectOutput, projectSequence, ProjectSchema, SCHEMA_VERSION, SequenceFormatSchema, SequenceOriginSchema, SequenceSchema, sequenceList, validateProject,
-  type MediaClip, type OpCall, type ProjectDocument, type Sequence, type SequenceFormat, type SequenceOrigin,
+  type MediaClip, type OpCall, type ProjectDocument, type Sequence, type SequenceFormat, type ShortOrigin,
 } from './index.ts';
 
 const R = { num: 30, den: 1 };
@@ -19,7 +19,7 @@ const tx = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => apply
 const provenance = { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 'test' };
 const video = { kind: 'video' as const, name: 'talk.mp4', contentHash: `sha256:${'a'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(240, 1), video: { width: 1920, height: 1080, frameRate: R, codec: 'h264', rotation: 0, frameCount: 7200 }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance };
 const FORMAT: SequenceFormat = { width: 720, height: 1280, fit: 'cover', profileId: 'vertical-9x16', safeArea: { top: 0.1, bottom: 0.2, left: 0.05, right: 0.12 }, loudness: { target: -14, truePeak: -1 } };
-const ORIGIN: SequenceOrigin = {
+const ORIGIN: ShortOrigin = {
   kind: 'short', assetId: 'ast_1', candidateId: 'cand_0123456789abcdef', excerpt: { start: T.rt(10, 1), end: T.rt(40, 1) }, kept: [{ start: T.rt(10, 1), end: T.rt(40, 1) }],
   score: 74, reasons: [{ code: 'louder_than_usual', sign: 'plus', value: 6, unit: 'dB', at: T.rt(12, 1), quote: 'שלום' }], reframe: 'centre', motionTrackId: null,
   method: 'shorts-rank 1', createdAt: '2026-11-18T00:00:00Z',

@@ -26,7 +26,7 @@
  * window and the excerpt overlap by at least SHORTS_CANDIDATE_OVERLAP of the longer one); nothing is typed or made up.
  */
 import * as T from '@pulseframe/time';
-import type { Asset, MediaClip, ProjectDocument, SequenceFormat, SequenceOrigin, ShortReason, Transcript } from './schema.ts';
+import type { Asset, MediaClip, ProjectDocument, SequenceFormat, ShortOrigin, ShortReason, Transcript } from './schema.ts';
 import {
   BACKDROP, JOIN_FADE, PAUSE_KEEP_SECONDS, SHORTS_CAPS, SHORTS_RANK_METHOD, ShortsError, shortsRefusal,
   type BuildShortsBody, type PlannedShort, type PlanWarning, type PlanWarningCode, type ShortPick, type ShortsPlan, type ShortsPlanContext,
@@ -378,7 +378,7 @@ export function planShorts(doc: ProjectDocument, body: BuildShortsBody, ctx: Sho
     const longer = candSpan ? Math.max(T.toSeconds(T.sub(candSpan.end, candSpan.start)), T.toSeconds(T.sub(excerpt.end, excerpt.start))) : 0;
     const measured = cand && candSpan && cand.assetId === asset.id && overlapSeconds(candSpan, excerpt) >= SHORTS_CANDIDATE_OVERLAP * longer ? cand : undefined;
     const candNote = cand && !measured ? `; candidate ${cand.id} was measured for ${cand.assetId === asset.id ? `${fmtS(cand.start)}–${fmtS(cand.end)} s` : 'another file'}, not this excerpt, so its score is not used` : '';
-    const origin: SequenceOrigin = {
+    const origin: ShortOrigin = {
       kind: 'short', assetId: asset.id, candidateId: measured ? measured.id : null,
       excerpt: { start: excerpt.start, end: excerpt.end }, kept: spans.map((x) => ({ start: x.start, end: x.end })),
       score: measured ? Math.max(0, Math.min(100, Math.round(measured.score))) : null,
