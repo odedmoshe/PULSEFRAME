@@ -16,7 +16,9 @@
  * - create_multicam takes each angle's kind from its first file when not given; a sound angle needs files with sound, a
  *   picture angle video files (angleKind); a file is named at most once (assetTwice). sampleRate = settings.sampleRate.
  * - set_angle_look with fromClipId: the clip's piece receives its redact and follow (privacy regions follow each angle's OWN
- *   file); clear: removes the look and every piece's redact and follow.
+ *   file); clear: removes the look and every piece's redact and follow. Privacy regions are per file, outside the 'unedited'
+ *   comparison: every writable segment showing the piece gets them; one that cannot be written (locked track, apply 'none') and
+ *   lacks one, or one that loses a region, is reported as redaction_missing.
  * - Every op refuses when its changed entities exceed MAX_TOUCHED_ENTITIES (tooManyChanges).
  * - Ids from ctx.newId: 'mcg' (group), 'ang' (angle), 'spk' (speaker), 'clp' / 'trk' through the composed ops, 'fx' (effects).
  */
@@ -228,14 +230,22 @@ function applyLook(d: ProjectDocument, clip: MediaClip, angle: MulticamAngle, pi
   if (hadRegions && !piece.redact) warn(rep, 'redaction_missing', clip.id);
   if (speedValue(clip) !== 1) warn(rep, 'speed_not_following_sound', clip.id);
 }
-/** A look compared with ids ignored (set_angle_look apply 'unedited'): framing without opacity, effects, mask, blend, per-format framing, privacy regions and follow. */
-function lookKey(look: { transform?: { x: number; y: number; scale: number; rotation: number }; effects?: { type: string; enabled: boolean; params: unknown; modulate?: unknown }[]; mask?: unknown; blend?: unknown; variantTransforms?: unknown } | undefined, redact: { id: string }[] | undefined, follow: unknown): string {
+/**
+ * A look compared with ids ignored (set_angle_look apply 'unedited'): framing without opacity, effects, mask, blend, per-format
+ * framing and follow. Privacy regions are not part of it: they belong to the file (MulticamPiece.redact), and every segment
+ * showing the file gets them whatever its look.
+ */
+function lookKey(look: { transform?: { x: number; y: number; scale: number; rotation: number }; effects?: { type: string; enabled: boolean; params: unknown; modulate?: unknown }[]; mask?: unknown; blend?: unknown; variantTransforms?: unknown } | undefined, follow: unknown): string {
   const t = look?.transform ?? DEFAULT_TRANSFORM;
   return canonical({
     t: [t.x, t.y, t.scale, t.rotation], e: (look?.effects ?? []).map((e) => ({ type: e.type, enabled: e.enabled, params: e.params, modulate: e.modulate ?? null })),
-    m: look?.mask ?? null, b: look?.blend ?? null, v: look?.variantTransforms ?? null, r: (redact ?? []).map(({ id: _id, ...rest }) => rest), f: follow ?? null,
+    m: look?.mask ?? null, b: look?.blend ?? null, v: look?.variantTransforms ?? null, f: follow ?? null,
   });
 }
+/** Privacy regions compared with ids ignored. */
+const regionKeys = (list: readonly { id: string }[] | undefined) => (list ?? []).map(({ id: _id, ...rest }) => canonical(rest));
+/** True when `from` has a region (ids ignored) that `to` lacks: a picture area that was, or should be, hidden and is not. */
+const regionsLacking = (from: readonly { id: string }[] | undefined, to: readonly { id: string }[] | undefined) => { const have = new Set(regionKeys(to)); return regionKeys(from).some((k) => !have.has(k)); };
 
 // ---------- splitting a program segment (split_clip itself, as split_at_scenes does) ----------
 const SCRATCH = 'trk_mc_scratch';
@@ -380,7 +390,7 @@ function setAngleLook(d: ProjectDocument, a: z.infer<typeof MulticamOpArgs.set_a
   if ((a.fromClipId === undefined) === (a.clear === undefined)) throw multicamRefusal('lookForm', {});
   const g = mustGroup(d, a.groupId), angle = mustAngle(g, a.angleId);
   if (angle.kind !== 'picture') throw multicamRefusal('soundAngleLook', { angleId: angle.id }, angle.label);
-  const oldKeys = angle.pieces.map((p) => lookKey(angle.look, p.redact, p.follow));
+  const oldKeys = angle.pieces.map((p) => lookKey(angle.look, p.follow));
   const rep = newReport();
   if (a.fromClipId !== undefined) {
     const f = findClip(d, a.fromClipId);
@@ -407,12 +417,20 @@ function setAngleLook(d: ProjectDocument, a: z.infer<typeof MulticamOpArgs.set_a
     const seg = segmentOf(d, seq.id, track, clip);
     if (!seg || seg.angle.id !== angle.id || track.kind !== 'video') continue;
     if (clip.id === a.fromClipId) { applied.push(clip.id); continue; }
-    const { look } = lookOfClip(d, clip);
-    const unedited = lookKey(look, clip.redact, clip.follow) === oldKeys[seg.pieceIndex];
-    if (mode === 'none' || track.locked || (mode === 'unedited' && !unedited)) { kept.push(clip.id); continue; }
+    const piece = angle.pieces[seg.pieceIndex]!, before = clip.redact;
+    // a segment this step cannot write keeps its look and its regions: named when it lacks a region of its file
+    if (mode === 'none' || track.locked) { kept.push(clip.id); if (regionsLacking(piece.redact, before)) warn(rep, 'redaction_missing', clip.id); continue; }
     ledger.clip(seq.id, track.id, clip);
-    applyLook(d, clip, angle, angle.pieces[seg.pieceIndex]!, ctx, rep);
-    applied.push(clip.id);
+    const { look } = lookOfClip(d, clip);
+    if (mode === 'unedited' && lookKey(look, clip.follow) !== oldKeys[seg.pieceIndex]) {
+      // a hand-edited look is kept; the privacy regions are the file's and are written all the same
+      kept.push(clip.id);
+      if (canonical(regionKeys(before)) !== canonical(regionKeys(piece.redact))) { if (piece.redact) clip.redact = structuredClone(piece.redact); else delete clip.redact; }
+    } else {
+      applyLook(d, clip, angle, piece, ctx, rep);
+      applied.push(clip.id);
+    }
+    if (regionsLacking(before, clip.redact)) warn(rep, 'redaction_missing', clip.id);
   }
   const affected = ledger.guard(d);
   const output: SetAngleLookOutput = { appliedClipIds: applied, keptClipIds: kept, dropped: droppedOf(rep), warnings: warningsOf(rep) };
@@ -724,7 +742,7 @@ const DESCRIPTIONS: Record<keyof typeof MulticamOpArgs, string> = {
   attach_multicam_sync: 'Store measured sync maps from the server\'s sync job. Internal. A file synced by hand is kept unless overwrite is true. Program segments showing a changed file keep their group time.',
   set_multicam_sync: 'Correct one file\'s sync by hand: nudge it (rounded to a whole sample), set its offset, give its anchors, or clear it. The file then counts as synced by hand. Program segments showing it keep their group time, so the edit follows the correction. Refused on the reference angle\'s first file, which sets group time.',
   update_multicam: 'Rename a multicam group or its angles, set the wide angle, or set who speaks on which mic and which angle frames them.',
-  set_angle_look: 'Make a segment\'s look (framing, grade, effects, mask, per-format framing) the look of its angle, and its privacy regions and follow those of its file; apply them to that angle\'s segments (by default only those still showing the old look). clear removes them.',
+  set_angle_look: 'Make a segment\'s look (framing, grade, effects, mask, per-format framing) the look of its angle, and its privacy regions and follow those of its file; apply them to that angle\'s segments (by default only those still showing the old look). The privacy regions go to every segment showing that file, whatever its look; a segment on a locked track or under apply none that lacks one is named in warnings (redaction_missing). clear removes them.',
   place_multicam: 'Lay a multicam program: picture segments of one angle on a video track (stretches it does not cover filled from the other synced cameras unless fill=false, each fill reported) and continuous sound of the chosen sources (default the first sound recorder), all in sync, with clock drift corrected by invisible cuts (picture) and short consecutive sound parts (a second recorder that drifts). On new tracks, a given empty track, or a new sequence.',
   switch_angles: 'Cut a multicam program to other angles: one cut, a range or a whole list of cuts (at a timeline frame or a group time; the last cut on a frame wins), each lasting to the next cut or `until` (default: the end of the program run). Each segment is re-mapped in group time, so sync is kept after any edit; the segment takes the new angle\'s look; neighbours that become one stretch are healed. One undoable step.',
   detach_from_multicam: 'Turn multicam segments into ordinary clips (they keep their file, timing and look).',

@@ -128,6 +128,36 @@ describe('update_multicam and set_angle_look', () => {
     expect(group(cleared, p.groupId).angles[2]!.look).toBeUndefined();
     expect([clip(cleared, s2)!.transform.scale, clip(cleared, s2)!.redact]).toEqual([1, undefined]);
   });
+  it('privacy regions are per file: a hand-edited segment of that file keeps its look yet gets the regions; a locked track or apply none reports redaction_missing', () => {
+    const p = program();
+    const first = sw(p.doc, { groupId: p.groupId, cuts: [{ at: f(300), angleId: p.camB }, { at: f(600), angleId: p.camA }, { at: f(900), angleId: p.camB }, { at: f(1200), angleId: p.camA }] });
+    const [s1, s2] = first.out.switchedClipIds as [string, string];
+    const mt = tx(first.doc, [{ op: 'create_motion_track', args: { assetId: p.files.b, kind: 'region', frame: 0, x: 5000, y: 5000, w: 2000, h: 2000 } }]);
+    const trackId = mt.results[0]!.output!.motionTrackId as string;
+    const d = tx(mt.doc, [{ op: 'set_redact_region', args: { clipId: s1, region: { motionTrackId: trackId } } }, { op: 'set_clip_transform', args: { clipId: s2, transform: { x: 0.2 } } }]).doc;
+    type Out = { appliedClipIds: string[]; keptClipIds: string[]; warnings: SwitchAnglesOutput['warnings'] };
+    const look = (doc: ProjectDocument, extra: Record<string, unknown> = {}) => { const r = tx(doc, [{ op: 'set_angle_look', args: { groupId: p.groupId, angleId: p.camB, fromClipId: s1, ...extra } }]); return { doc: r.doc, out: r.results[0]!.output as unknown as Out, affected: r.affectedIds }; };
+    // the edited framing is kept, the file's region is not optional
+    const r = look(d);
+    expect(r.out.keptClipIds).toEqual([s2]);
+    expect(clip(r.doc, s2)!.transform.x).toBe(0.2);
+    expect(clip(r.doc, s2)!.redact!.map((x) => x.motionTrackId)).toEqual([trackId]);
+    expect(r.out.warnings).toEqual([]);
+    expect(r.affected).toContain(s2);
+    expect(validateProject(r.doc)).toEqual([]);
+    // where the region cannot be written, the segment is named
+    expect(look(d, { apply: 'none' }).out.warnings).toEqual([{ code: 'redaction_missing', clipIds: [s2] }]);
+    const locked = structuredClone(d);
+    Object.values(locked.sequences).flatMap((s) => s.tracks).find((t) => t.id === p.out.videoTrackId)!.locked = true;
+    const l = look(locked);
+    expect([l.out.keptClipIds, l.out.warnings]).toEqual([[s2], [{ code: 'redaction_missing', clipIds: [s2] }]]);
+    expect(clip(l.doc, s2)!.redact).toBeUndefined();
+    // a region the segment had on its own and the file no longer has is reported when it goes
+    const own = tx(d, [{ op: 'set_redact_region', args: { clipId: s2, region: { motionTrackId: trackId, pad: 0.1 } } }]).doc;
+    const o = look(own);
+    expect(clip(o.doc, s2)!.redact!.map((x) => x.pad)).toEqual(clip(o.doc, s1)!.redact!.map((x) => x.pad));
+    expect(o.out.warnings).toEqual([{ code: 'redaction_missing', clipIds: [s2] }]);
+  });
 });
 
 describe('place_multicam', () => {
