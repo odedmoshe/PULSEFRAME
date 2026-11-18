@@ -263,7 +263,7 @@ import { defaultBank, planTakeRequest } from './index.ts';
 describe('workers (todo until built)', () => {
   // W1 (moves.ts): built
   const mash = (n: number, pads: number[]) => Array.from({ length: n }, (_, i) => ({ pad: pads[i % pads.length]!, down: 0.2 + i / 20, up: 0.2 + i / 20 + 0.03 }));
-  const request = (taps: { pad: number; down: number; up: number }[]) => ({ taps, bank: defaultBank('canvas'), assets: Array(PAD_COUNT).fill(null), settings: { snap: 'beat' as const, tempo: 'normal' as const, strength: 1, parity: 0 as const }, gpu: false });
+  const request = (taps: { pad: number; down: number; up: number }[]) => ({ taps, bank: [...defaultBank('canvas')], assets: Array(PAD_COUNT).fill(null), settings: { snap: 'beat' as const, tempo: 'normal' as const, strength: 1, parity: 0 as const }, gpu: false });
   it('W1 moves.ts: planTakeRequest on a seeded take gives args that apply_take accepts and that pass validateProject (perform W1)', () => {
     const d0 = base();
     const plan = planTakeRequest(d0, request(mash(60, [1, 2, 3, 4, 5, 7])));
