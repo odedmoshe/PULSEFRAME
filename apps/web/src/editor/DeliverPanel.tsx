@@ -71,7 +71,7 @@ export function DeliverPanel() {
     if (!doc) return;
     setBusy(true);
     try {
-      const r = await api.preflight(doc.id, viewVariantId);
+      const r = await api.preflight(doc.id, viewVariantId, isShortActive(state.rawDoc, state.activeSequenceId) ? state.activeSequenceId : null);
       setReport({ r, at: r.revision, variantId: viewVariantId });
     } catch (e) { editor.fail(e); } finally { setBusy(false); }
   };

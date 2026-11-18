@@ -159,7 +159,10 @@ export const api = {
   makeShorts: (id: string, body: Partial<BuildShortsBody>) => call<ShortsApplyResult>(`/projects/${id}/shorts`, json(body)),
   planReframe: (id: string, sequenceId: string, body: Partial<ReframePlanBody>) => call<ReframePlanView>(`/projects/${id}/sequences/${encodeURIComponent(sequenceId)}/reframe-plan`, json(body)),
   job: (jobId: string) => call<JobEvent & { status: string; /** an export's stored options (POST /exports body) */ options?: { variantId?: string; format?: string; scale?: number; quality?: string; captions?: string } }>(`/jobs/${jobId}`),
-  preflight: (id: string, variantId: string | null) => call<PreflightReport>(`/projects/${id}/preflight${variantId ? `?variant=${encodeURIComponent(variantId)}` : ''}`),
+  preflight: (id: string, variantId: string | null, sequenceId?: string | null) => {
+    const q = [variantId ? `variant=${encodeURIComponent(variantId)}` : '', sequenceId ? `sequence=${encodeURIComponent(sequenceId)}` : ''].filter(Boolean).join('&');
+    return call<PreflightReport>(`/projects/${id}/preflight${q ? `?${q}` : ''}`);
+  },
   planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
   applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),
   regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),

@@ -717,7 +717,10 @@ export class Editor {
   async startExport(options: ExportRequest = {}): Promise<string | null> {
     const { doc } = this.state;
     if (!doc) return null;
-    const j = await api.startExport(doc.id, Object.keys(options).length ? options : undefined);
+    // a short on screen exports as that short (preview = export through one projection); an explicit sequenceId is kept
+    const { activeSequenceId, rawDoc } = this.state;
+    const opts: ExportRequest = rawDoc && activeSequenceId && activeSequenceId !== rawDoc.mainSequenceId && options.sequenceId === undefined ? { ...options, sequenceId: activeSequenceId } : options;
+    const j = await api.startExport(doc.id, Object.keys(opts).length ? opts : undefined);
     this.trackExport(j.jobId);
     return j.jobId;
   }

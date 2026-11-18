@@ -187,9 +187,11 @@ export function ShortsPanel() {
       const r = await api.makeShorts(pid, { ...plan.body, expectedRevision: plan.view.revision });
       await editor.load(pid);
       const first = r.sequenceIds[0];
-      if (first) { editor.setActiveSequence(first); focusSequenceTab(first); }
+      if (first) editor.setActiveSequence(first);
       editor.notify({ kind: 'info', title: S.madeNotice(r.sequenceIds.length) });
+      // close the dialog first: while it is open the page behind is inert and its cleanup returns the focus to the opener
       setPlan(null); setSelected([]);
+      if (first) requestAnimationFrame(() => focusSequenceTab(first));
     } catch (e) { setPlanError(sentence(lang, e)); } finally { setCreating(false); }
   };
 

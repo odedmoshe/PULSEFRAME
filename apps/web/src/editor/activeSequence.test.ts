@@ -114,6 +114,25 @@ describe('the Editor store', () => {
     expect(e.getState().activeSequenceId).toBe(raw.mainSequenceId);
     expect(e.getState().doc).toBe(e.getState().rawDoc);
   });
+  it('startExport sends the active short as sequenceId; the main edit sends none; an explicit id is kept', async () => {
+    const raw = withShort();
+    const bodies: unknown[] = [];
+    (globalThis as { fetch?: unknown }).fetch = async (url: string, init?: { body?: string }) => {
+      if (String(url).includes('/exports')) { bodies.push(init?.body ? JSON.parse(init.body) : null); return new Response(JSON.stringify({ jobId: 'job_1' }), { status: 200, headers: { 'content-type': 'application/json' } }); }
+      return new Response(JSON.stringify({ project: raw, revision: 1 }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const e = new Editor();
+    await e.load(raw.id);
+    await e.startExport({});
+    e.setActiveSequence('seq_short');
+    await e.startExport({});
+    await e.startExport({ format: 'mp4' });
+    await e.startExport({ sequenceId: 'seq_other' });
+    expect(bodies[0]).toBeNull();
+    expect(bodies[1]).toEqual({ sequenceId: 'seq_short' });
+    expect(bodies[2]).toEqual({ format: 'mp4', sequenceId: 'seq_short' });
+    expect(bodies[3]).toEqual({ sequenceId: 'seq_other' });
+  });
 });
 
 describe('guards of the project-level writers while a short is active', () => {

@@ -16,11 +16,17 @@ import { SHORTS_TESTIDS as ID } from './shorts.testids.ts';
 import { clock } from './shorts.view.ts';
 import './shorts.css';
 
-/** Moves the keyboard focus to the tab of a sequence once it is on screen (a new short: the Shorts panel calls this). */
+/**
+ * Moves the keyboard focus to the tab of a sequence (main or a short) once it is on screen and focusable (a new short: the Shorts
+ * panel calls this after its dialog closed). It retries until the tab really holds the focus (an inert page behind a dialog
+ * refuses it); when the switcher is gone (only the main sequence is left) the focus goes to the main landmark.
+ */
 export function focusSequenceTab(id: string, tries = 20): void {
-  const el = document.querySelector<HTMLElement>(`[data-testid="${ID.tab}"][data-sequence-id="${CSS.escape(id)}"]`);
-  if (el) { el.focus(); return; }
-  if (tries > 0) requestAnimationFrame(() => focusSequenceTab(id, tries - 1));
+  const el = document.querySelector<HTMLElement>(`[data-testid="${ID.switcher}"] [role="tab"][data-sequence-id="${CSS.escape(id)}"]`);
+  if (el) { el.focus(); if (document.activeElement === el) return; }
+  if (tries > 0) { requestAnimationFrame(() => focusSequenceTab(id, tries - 1)); return; }
+  const main = document.querySelector<HTMLElement>('main, [role="main"]');
+  if (main && (!document.activeElement || document.activeElement === document.body)) { if (!main.hasAttribute('tabindex')) main.tabIndex = -1; main.focus(); }
 }
 
 /** The confirmation before a short is removed with everything in it (also used by the built-shorts list). */

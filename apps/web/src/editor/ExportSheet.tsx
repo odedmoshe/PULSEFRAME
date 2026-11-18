@@ -351,7 +351,7 @@ function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: E
   const variantId = lead.variantId;
   const run = async () => {
     setBusy(true); setFailed(false);
-    try { setRep(await api.preflight(doc.id, variantId)); } catch { setFailed(true); } finally { setBusy(false); }
+    try { setRep(await api.preflight(doc.id, variantId, state.rawDoc && state.activeSequenceId !== state.rawDoc.mainSequenceId ? state.activeSequenceId : null)); } catch { setFailed(true); } finally { setBusy(false); }
   };
   useEffect(() => { void run(); }, [state.revision, variantId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
