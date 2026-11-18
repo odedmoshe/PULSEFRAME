@@ -49,6 +49,7 @@ import { ApiError, type JobRow, type Store } from './store.ts';
 // ---------- the derivative store (set by createApp, so recovered jobs have it too) ----------
 let derivativeStore: Derivatives | null = null;
 export function setMulticamDerivatives(d: Derivatives | null): void { derivativeStore = d; }
+export const multicamDerivatives = (): Derivatives | null => derivativeStore;
 
 // ---------- parameters ----------
 export const SYNC_BETA = 0.75;
