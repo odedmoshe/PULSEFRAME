@@ -23,7 +23,10 @@
  *   hop = 20 log10(max(1e-5, mean of its buckets' peaks)) dBFS, stored x 10, floor -1000. Peak level, NOT loudness (LUFS).
  *   A picture sample takes the maximum over the hops its source time [sourceTimeOfFrame(k*S), sourceTimeOfFrame((k+1)*S)) covers.
  * - Gates (g = 0 or 1; MOMENTS_GATES): dark (luma < darkLuma), blown (> blownLuma), whip pan (pan > whipPanPermillePerSecond
- *   OR the best shift lies on the border of the search; widened by one sample each side), blur (sharp < blurRatio x median),
+ *   OR the best shift lies on the border of the search; widened by one sample each side; W2 adds, as a heuristic beyond this rule:
+ *   a nonzero best shift that removes less than a fifth of a clear unshifted difference reaching at least 90 % of the box columns
+ *   and rows that have detail — flat bands do not count, so over a still detailed background a moving subject trips it only when
+ *   its swept area spans 90 % of both the width and the height), blur (sharp < blurRatio x median),
  *   hard cut (change > cutChangePermille and inner > cutInnerPermille): splits the clean stretch AND gives that sample zero interest.
  * - Ranking quantity (internal; never stored, never shown): z(x) = (x - p20) / (1.4826 * median|x - p20| + madFloorShare of
  *   full scale), clipped to [0, zClip] — centred on the 20th percentile, so a clip lively for most of its length is not "flat";

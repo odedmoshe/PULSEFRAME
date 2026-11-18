@@ -123,7 +123,7 @@ export interface FilmWarning { code: FilmWarningCode; message: string; details: 
 export interface FilmPick {
   key: string; assetId: string; order: number;
   startFrame: number; frames: number;                                  // project frames
-  span: { count: number; unit: 'beat' | 'bar' } | null;                // null next to a kept clip (off grid)
+  span: { count: number; unit: 'beat' | 'bar' } | null;                // null off the grid: next to a kept clip, or the first pick when music kept by hand was moved off the film start
   sourceInFrame: number | null; sourceFrames: number | null;           // asset frames; null for a still
   kind: 'measured' | 'default-middle' | 'whole-clip' | 'still';
   windowIndex: number | null; windowsAvailable: number;
