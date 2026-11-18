@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
+import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 
 export const SCHEMA_VERSION = 2;
 
@@ -551,6 +552,15 @@ export const AnalysisSchema = z
     beats: z.object({ origin: AnalysisOrigin, bpm: z.number().min(20).max(400).nullable(), confidence: z.number().min(0).max(1).nullable(), beats: z.array(RationalTimeSchema).max(50000), /** Beats that start a bar (each is one of `beats`); absent when no bar pattern was found or entered. */ downbeats: z.array(RationalTimeSchema).max(50000).optional(), /** Beats per bar behind `downbeats`, when known. */ meter: z.number().int().min(2).max(12).nullable().optional(),
       /** Sections of the music, ascending, the first at 0 (validate.ts). Present for built-in music; attach_analysis (a measurement) never writes them. */
       sections: z.array(MusicSectionSchema).max(MAX_MUSIC_SECTIONS).optional() }).strict().optional(),
+    /**
+     * Candidate moments of a video (wave 5 family film, ADR-0026): measured by the model-free moments job, heuristic, in SOURCE
+     * FRAMES of the video stream (sourceTimeOfFrame gives their times). The per-sample series is the derivative file `data`;
+     * only these few windows and two file-level values live in the document. Replaced whole by attach_moments (momentsOps.ts).
+     * Optional, so documents and logs written before it read unchanged (no schema version change).
+     */
+    moments: z.object({ origin: AnalysisOrigin, algo: z.number().int().min(1).max(1000), data: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+      measured: MomentsMeasuredSchema, file: MomentsFileSchema, flat: z.boolean(), windows: z.array(MomentWindowSchema).max(MOMENTS_MAX_WINDOWS),
+      truncated: z.literal(true).optional() }).strict().optional(),
   })
   .strict();
 

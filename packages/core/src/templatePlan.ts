@@ -95,8 +95,8 @@ const parseSeconds = (s: string): RT => { const m = /^(\d+)(?:\/(\d+))?$/.exec(s
 const halve = (t: RT): RT => T.rt(BigInt(t.value), t.timescale * 2);
 const twice = (t: RT): RT => T.add(t, t);
 
-// ---------- the grid ----------
-interface Grid {
+// ---------- the grid (exported for the family film planner, familyFilm.ts; no behaviour change) ----------
+export interface Grid {
   /** The n-th beat (n >= 1) strictly after c, or null when the grid ends first. */
   beatAfter(c: RT, n: number): RT | null;
   /** The n-th bar start (n >= 1) strictly after c, or null. */
@@ -108,7 +108,7 @@ interface Grid {
   last: RT | null;
   meter: number;
 }
-function listGrid(beats: readonly RT[], bars: readonly RT[] | null, meter: number): Grid {
+export function listGrid(beats: readonly RT[], bars: readonly RT[] | null, meter: number): Grid {
   const firstAfter = (list: readonly RT[], c: RT) => { let lo = 0, hi = list.length; while (lo < hi) { const m = (lo + hi) >> 1; if (T.lt(c, list[m]!)) hi = m; else lo = m + 1; } return lo; };
   const firstAtOrAfter = (list: readonly RT[], c: RT) => { let lo = 0, hi = list.length; while (lo < hi) { const m = (lo + hi) >> 1; if (T.lte(c, list[m]!)) hi = m; else lo = m + 1; } return lo; };
   return {
@@ -120,8 +120,8 @@ function listGrid(beats: readonly RT[], bars: readonly RT[] | null, meter: numbe
     meter,
   };
 }
-/** Beats every 60/bpm seconds from `at` (exact), a bar every `meter` beats; endless. */
-function steadyGrid(at: RT, bpm: number): Grid {
+/** Beats every 60/bpm seconds from `at` (exact), a bar every 4 beats; endless. */
+export function steadyGrid(at: RT, bpm: number): Grid {
   const b = big(T.fromSeconds(bpm.toFixed(6)));
   // one beat lasts 60/bpm = 60·b.d/b.n seconds
   const beatAt = (k: bigint): RT => T.add(at, T.rt(k * 60n * b.d, Number(b.n)));
@@ -262,14 +262,16 @@ interface Kept {
   beats?: { from: number; count: number; unit: 'beat' | 'bar' };
   assetId: string; sourceInFrame: number | null; handle: number; cropShare: number;
 }
-interface Music { asset: Asset; sourceIn: RT; grid: Grid; beatCount: number; bpm: number | null; bars: boolean; confidence: number | null; method: string; edited: boolean }
+/** A music file placed at `at` on the timeline: its grid in TIMELINE time, exact (timeline beat = at + (b − sourceIn)). */
+export interface PlacedMusic { asset: Asset; sourceIn: RT; grid: Grid; beatCount: number; bpm: number | null; bars: boolean; confidence: number | null; method: string; edited: boolean }
+type Music = PlacedMusic;
 
 const isPicture = (a: Asset) => !!a.video || (a.kind === 'image' && !!a.image);
 const accepts = (accept: SlotDef['accept'], a: Asset) => accept === 'any' || (accept === 'video' ? !!a.video && a.kind !== 'image' : a.kind === 'image');
 const mulberry = (a: number) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 
-/** Default start: 0 on an empty main sequence, else the end of the last picture or title clip. */
-function anchorOf(doc: ProjectDocument, at: RT | undefined): RT {
+/** Default start: 0 on an empty main sequence, else the end of the last picture or title clip. Throws TemplateError (invalid_args). */
+export function anchorOf(doc: ProjectDocument, at: RT | undefined): RT {
   const rate = doc.settings.frameRate;
   if (at) {
     if (T.isNegative(at)) throw new TemplateError('invalid_args', 'at must be 0 or later');
@@ -288,8 +290,18 @@ function musicOf(doc: ProjectDocument, def: TemplateDef, p: TemplateInput, at: R
     if (def.music.need === 'beats' && !builtin) throw new TemplateError('invalid_args', `template ${def.id} cuts on the beats of music: choose a music file`, 'Pass musicAssetId: a sound file whose beats were measured.');
     return null;
   }
-  const asset = Object.hasOwn(doc.assets, p.musicAssetId) ? doc.assets[p.musicAssetId] : undefined;
-  if (!asset) throw new TemplateError('not_found', `music asset ${p.musicAssetId} is not in this project`);
+  return placedMusicGrid(doc, p.musicAssetId, at, def.music.startAt, usesBars);
+}
+/**
+ * The grid of a music file placed at `at` (the body of musicOf without the template definition; the family film uses it too).
+ * startAt 'first-downbeat': the music clip starts at its first bar start, else its first beat; 'zero': at the file's start.
+ * Throws TemplateError: not_found (not in the project), invalid_args (not a sound-only file), needs_analysis (no beats, fewer
+ * than two after the start, or no bar starts while `needBars`).
+ */
+export function placedMusicGrid(doc: ProjectDocument, musicAssetId: string, at: RT, startAt: 'first-downbeat' | 'zero', needBars: boolean): PlacedMusic {
+  const usesBars = needBars;
+  const asset = Object.hasOwn(doc.assets, musicAssetId) ? doc.assets[musicAssetId] : undefined;
+  if (!asset) throw new TemplateError('not_found', `music asset ${musicAssetId} is not in this project`);
   if (!asset.audio || asset.video || asset.kind === 'image') throw new TemplateError('invalid_args', `asset ${asset.id} is not a sound file`, 'Choose a sound-only file as the music.');
   const an = doc.analyses?.[asset.id]?.beats;
   const hint = 'Measure the beat of the music first (מדידת קצב, ללא בינה מלאכותית): POST /api/v1/projects/{id}/assets/{assetId}/analyze with {"kind":"beats"}, or analyze_asset kind=beats.';
@@ -298,7 +310,7 @@ function musicOf(doc: ProjectDocument, def: TemplateDef, p: TemplateInput, at: R
   const inFile = (b: RT) => !T.isNegative(b) && T.lt(b, asset.duration);
   const beats = [...an.beats].filter(inFile).sort(T.cmp);
   const downs = [...(an.downbeats ?? [])].filter(inFile).sort(T.cmp);
-  const sourceIn = def.music.startAt === 'zero' ? T.ZERO : downs[0] ?? beats[0]!;
+  const sourceIn = startAt === 'zero' ? T.ZERO : downs[0] ?? beats[0]!;
   const toTimeline = (list: RT[]) => list.filter((b) => !T.lt(b, sourceIn)).map((b) => T.add(at, T.sub(b, sourceIn))).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
   const tb = toTimeline(beats);
   if (tb.length < 2) throw new TemplateError('needs_analysis', 'fewer than two measured beats lie after the music\'s start', hint);

@@ -64,3 +64,8 @@ export * from './peopleOps.ts';
 export * from './importView.ts';
 // segmented export and render cache (ADR-0024)
 export * from './renderCache.ts';
+// family film maker (ADR-0026)
+export * from './momentsContract.ts';
+export * from './momentsOps.ts';
+export * from './familyFilmContract.ts';
+export * from './familyFilm.ts';
