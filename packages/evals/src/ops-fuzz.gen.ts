@@ -67,6 +67,7 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * { v1Replay: true }) leaves them out, so the seeded corpus without the new curves runs exactly as before (keyframe-replay.test.ts).
  * `genMulticam(doc)` returns a random call of the eight public multicam operations (ADR-0020). `gen` draws from these rows too
  * once W1 has built them (MULTICAM_OPS_BUILT).
+ * `genTake(doc)` returns a random apply_take call (perform mode, ADR-0025; internal), for perform-fuzz.test.ts; `gen` never draws it.
  */
 /**
  * Options of createFuzz. `v1Replay` (ADR-0019): draw no keyframe-curve rows and no multicam rows, so the seeded corpus is the one
@@ -624,6 +625,42 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     };
   };
   /**
+   * A random apply_take call (perform mode, ADR-0025; internal: a driver commits it with allowInternal, as POST /takes does): a
+   * take's steps as the planner would emit them — adjustment hits that change light or not, a title, a sound on a lane bound to
+   * an add_track, a punch written with replace_clip_keyframes (range form) on a picture clip — at random frames, so the flash rule
+   * accepts some and refuses others; now and then a malformed take (a step a take may not run, an $asset, a repeated bind, a
+   * binding to nothing, seven tracks). Not drawn by `gen` (the shared stream stays as it was).
+   */
+  const genTake = (doc: ProjectDocument): OpCall => {
+    const steps: { op: string; args: unknown; bind?: string }[] = [];
+    const hits = 1 + int(6);
+    let at = int(200);
+    for (let h = 0; h < hits; h++) {
+      at += int(25);
+      const len = 1 + int(30), kind = rnd();
+      if (kind < 0.4) steps.push({ op: 'add_adjustment', args: { span: { start: f(at), duration: f(len) }, effects: [{ type: pick(['color.grayscale', 'color.invert', 'blur.gaussian', 'stylize.pixelate', 'digital.rgb-split', 'overlay.confetti']) }] }, bind: `a${h}` });
+      else if (kind < 0.55) steps.push({ op: 'add_text', args: { text: pick(['הופ', 'בום!', 'Yes']), start: f(at), duration: f(len) }, bind: `t${h}` });
+      else if (kind < 0.75) {
+        steps.push({ op: 'add_track', args: { kind: 'audio', name: 'הופעה' }, bind: `l${h}` });
+        steps.push({ op: 'add_clip', args: { assetId: aud || pick(assetIds), start: f(at), duration: f(len), trackId: { $ref: `l${h}`, out: 'trackId' } }, bind: `s${h}` });
+        if (rnd() < 0.7) steps.push({ op: 'set_clip_gain', args: { clipId: { $ref: `s${h}` }, gain: Number((0.2 + rnd() * 1.5).toFixed(2)) } });
+      } else {
+        const pictures = Object.values(doc.sequences).flatMap((sq) => sq.tracks.filter((t) => t.kind === 'video').flatMap((t) => t.clips)).filter((c) => c.type === 'media');
+        const c = pictures.length ? pick(pictures) : null;
+        const n = c ? Math.max(4, T.frameIndexAt(c.duration, rate)) : 30, a = int(n - 3);
+        steps.push({ op: 'replace_clip_keyframes', args: { clipId: c?.id ?? 'clp_none', property: 'scale', from: f(a), to: f(a + 3), keys: [{ time: f(a), value: 1, easing: 'hold' }, { time: f(a + 1), value: 1.18, easing: 'hold' }, { time: f(a + 2), value: 1.18, easing: 'ease-out' }, { time: f(a + 3), value: 1 }] } });
+      }
+    }
+    const fault = rnd();
+    if (fault < 0.03) steps.push({ op: 'freeze_frame', args: { clipId: 'clp_none', at: f(0), duration: f(10) } });
+    else if (fault < 0.06) steps.push({ op: 'add_clip', args: { assetId: { $asset: 'boom' }, start: f(0) } });
+    else if (fault < 0.09) steps.push({ op: 'add_track', args: { kind: 'audio' }, bind: steps.find((x) => x.bind)?.bind ?? 'x' }, { op: 'add_track', args: { kind: 'audio' }, bind: 'x' });
+    else if (fault < 0.12) steps.push({ op: 'set_clip_gain', args: { clipId: { $ref: 'nobody' }, gain: 0.5 } });
+    else if (fault < 0.14) for (let i = 0; i < 7; i++) steps.push({ op: 'add_track', args: { kind: 'audio' } });
+    if (!steps.length) steps.push({ op: 'add_text', args: { text: 'הופ', start: f(at), duration: f(15) } });
+    return { op: 'apply_take', args: { take: { snap: pick(['off', 'beat', 'half'] as const), tempo: pick(['half', 'normal', 'double'] as const), parity: pick([0, 1] as const), strength: Number(rnd().toFixed(2)), taps: hits + int(3), hits, held: int(3), summary: [`fuzz take of ${hits} hits`] }, steps } };
+  };
+  /**
    * A random add_builtin_music call (ADR-0022; internal: a driver commits it with allowInternal, as the server does): a track of
    * a style, a number of bars and a seed with its known grid, sometimes placed on the timeline; now and then the same track
    * again (deduplicated), or a malformed grid or a file that is not built-in music (refused).
@@ -648,5 +685,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake };
 }
