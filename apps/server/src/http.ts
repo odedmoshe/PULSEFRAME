@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND } from '@pulseframe/core';
+import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
@@ -47,6 +47,7 @@ import { assertMayHandleImportJob, decodeUploadHeader, IMPORT_JOB_TYPE, type Dro
 import { declaredLength, registerImportRoutes } from './importRoutes.ts';
 import { registerRenderCacheRoutes, type RenderCacheService } from './renderCacheRoutes.ts';
 import { peopleSuggestions } from './lifeline.ts';
+import { takeFor } from './perform.ts';
 
 const TxBody = z
   .object({
@@ -375,6 +376,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/templates/:templateId/plan', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await planTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params)); });
   app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
+  // ----- perform mode (ADR-0025): a take's raw taps, planned here and committed as ONE internal apply_take (dryRun: plan only) -----
+  app.post('/api/v1/projects/:id/takes', async (c) => {
+    // edit rights and the propose-mode refusal are checked inside (perform.ts), so the refusal names the mode
+    const p = need(c, 'observe');
+    return c.json(takeFor(store, gov, p, c.req.param('id'), await body(c, TakeRequestSchema)));
+  });
   // ----- multicam (ADR-0020): sync a group by sound (edit; dryRun observe), the group view, a file's level envelope -----
   setMulticamDerivatives(derivatives); // the sync job and the envelope route store envelopes there (recovered jobs too)
   const mustGroup = (projectId: string, groupId: string) => {
