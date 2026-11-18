@@ -682,6 +682,7 @@ function switchAngles(d: ProjectDocument, a: z.infer<typeof MulticamOpArgs.switc
     const prev = track.clips[i - 1]!, cur = track.clips[i]!;
     if ((a.heal ?? true) && (touched.has(prev.id) || touched.has(cur.id)) && healable(d, prev, cur, driftStarts)) {
       ledger.clip(seq.id, track.id, prev);
+      ledger.clip(seq.id, track.id, cur); // an untouched neighbour healed away is a deleted entity of this step
       prev.duration = T.add(prev.duration, cur.duration);
       track.clips.splice(i, 1);
       for (const v of Object.values(d.variants ?? {})) if (Object.hasOwn(v.overrides, cur.id)) delete v.overrides[cur.id];

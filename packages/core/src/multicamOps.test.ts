@@ -261,6 +261,17 @@ describe('switch_angles', () => {
     expect(same.out.cuts.map((c) => c.angleId)).toEqual([p.camB]);
     expect(same.out.skipped.map((s) => s.reason)).toEqual(['same_frame']);
   });
+  it('a heal into a touched segment that removes an untouched neighbour names it: affectedIds is the exact entity diff', () => {
+    const p = program();
+    const b = sw(p.doc, { groupId: p.groupId, cuts: [{ at: f(300), angleId: p.camB }], until: { at: f(600) } });
+    const neighbour = clipsOf(b.doc, p.out.videoTrackId).find((c) => c.multicam!.angleId === p.camB)!.id;
+    const r = sw(b.doc, { groupId: p.groupId, cuts: [{ at: f(150), angleId: p.camB }], until: { at: f(300) } });
+    const track = clipsOf(r.doc, p.out.videoTrackId);
+    expect(track.map((c) => c.multicam!.angleId)).toEqual([p.camA, p.camB, p.camA]); // the new B part and the old B segment are one
+    expect(clip(r.doc, neighbour)).toBeUndefined();
+    expect(r.out.healedClipIds).toContain(neighbour);
+    expect([...r.affected].sort()).toEqual(diffEntities(b.doc, r.doc).map((c) => c.id).sort());
+  });
   it('coverage refuse names {coveredFrom, coveredTo}; clip reports what was skipped', () => {
     // camera B ends at group 300 s: the program runs to 400 s
     const p = program(podcast({ anchorsB: [{ group: sec(-300), source: T.ZERO }] }));
