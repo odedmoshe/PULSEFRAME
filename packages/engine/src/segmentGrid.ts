@@ -39,6 +39,7 @@ export function segmentGrid(firstFrame: number, frames: number, segFrames: numbe
   if (!Number.isSafeInteger(segFrames) || segFrames < MIN_SEGMENT_FRAMES) throw new RangeError(`segmentGrid: segFrames ${segFrames} is below ${MIN_SEGMENT_FRAMES}`);
   const end = firstFrame + frames;
   const out: Segment[] = [];
+  if (!frames) return out;
   for (let cell = Math.floor(firstFrame / segFrames); cell * segFrames < end; cell++) {
     const a = Math.max(firstFrame, cell * segFrames), b = Math.min(end, (cell + 1) * segFrames);
     out.push({ index: cell, first: a - firstFrame, frames: b - a });
