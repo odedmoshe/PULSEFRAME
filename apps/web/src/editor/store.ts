@@ -523,11 +523,13 @@ export class Editor {
   /** ONE POST /takes (one transaction, one undo) against the editor's revision, then reload; null when refused (the refusal is shown). */
   async commitTake(req: Omit<TakeRequest, 'expectedRevision' | 'dryRun'>): Promise<TakeResult | null> {
     return this.enqueue(async () => {
-      const { doc, revision } = this.state;
+      const { doc, revision, rawDoc, activeSequenceId } = this.state;
       if (!doc) return null;
+      // the taps are seconds of the sequence shown: a take on another sequence than the main one names it (the server defaults to the main)
+      const sequenceId = req.sequenceId ?? (rawDoc && activeSequenceId && activeSequenceId !== rawDoc.mainSequenceId ? activeSequenceId : undefined);
       this.set({ save: 'save.saving', error: null });
       try {
-        const r = await api.performTake(doc.id, { ...req, expectedRevision: revision }) as TakeResult;
+        const r = await api.performTake(doc.id, { ...req, ...(sequenceId ? { sequenceId } : {}), expectedRevision: revision }) as TakeResult;
         this.set({ performGhost: null });
         await this.load(doc.id);
         this.set({ save: 'save.saved' });
