@@ -188,6 +188,8 @@ export class Player {
   painted = -1;
   /** Playback instrumentation: how late (seconds) each painted frame appeared relative to the clock that drives audio. */
   private late: number[] = [];
+  /** Measurement only (ADR-0020 U4): the frame and how late (seconds) it was painted, for the last playback, so lateness at chosen frames can be read. */
+  private lateFrames: [number, number][] = [];
   private requested = 0;
   private now: () => number = () => performance.now() / 1000;
 
@@ -286,7 +288,10 @@ export class Player {
         this.painted = frame;
         if (this.playing) {
           const { num, den } = frameRate;
-          this.late.push(this.now() - (this.origin.clock + ((frame - this.origin.frame) * den) / num));
+          const lateBy = this.now() - (this.origin.clock + ((frame - this.origin.frame) * den) / num);
+          this.late.push(lateBy);
+          this.lateFrames.push([frame, lateBy]);
+          if (this.lateFrames.length > 3000) this.lateFrames.shift();
           if (this.late.length > 3000) this.late.shift();
         }
         this.canvas.dataset.frame = String(frame);
@@ -355,6 +360,7 @@ export class Player {
     const now = () => (audioOk ? this.actx!.currentTime : performance.now() / 1000);
     this.now = now;
     this.late = [];
+    this.lateFrames = [];
     this.requested = 0;
     if (audioOk) {
       const session = await this.startSound(plan.clips, plan.sampleRate, t0, T.nearestSampleIndex(T.frameTime(startFrame, rate), plan.sampleRate), gen);
@@ -805,7 +811,7 @@ export class Player {
   syncStats() {
     const v = [...this.late].sort((a, b) => a - b);
     const q = (p: number) => (v.length ? +(v[Math.min(v.length - 1, Math.floor(v.length * p))]! * 1000).toFixed(2) : null);
-    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', audioSampleRate: this.actx?.sampleRate ?? null, outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, loops: this.loops, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) }, fxVoices: this.fxVoices, fxPrimeMs: this.fxPrimeMs, fxPrimeTimedOut: this.fxPrimeTimedOut, fxLateStarts: this.fxLateStarts, fxLateSkips: this.fxLateSkips, bypassAudioFx: this.bypassAudioFx, auditioning: this.auditioning, unavailableAudioFx: { ...this.unavailableAudioFx } };
+    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', audioSampleRate: this.actx?.sampleRate ?? null, outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, loops: this.loops, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessByFrameMs: this.lateFrames.map(([f, v]) => [f, +(v * 1000).toFixed(2)] as [number, number]), paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) }, fxVoices: this.fxVoices, fxPrimeMs: this.fxPrimeMs, fxPrimeTimedOut: this.fxPrimeTimedOut, fxLateStarts: this.fxLateStarts, fxLateSkips: this.fxLateSkips, bypassAudioFx: this.bypassAudioFx, auditioning: this.auditioning, unavailableAudioFx: { ...this.unavailableAudioFx } };
   }
   dispose() {
     this.pause();
