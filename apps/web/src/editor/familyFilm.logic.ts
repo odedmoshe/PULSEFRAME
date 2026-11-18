@@ -184,20 +184,28 @@ export function warningText(w: FilmWarning, lang: Lang): string { return familyF
 export interface FilmFailure { status: number; code: string; message: string }
 export function filmFailure(lang: Lang, e: unknown): FilmFailure {
   const f = templateRefusal(lang, e);
-  return { status: e instanceof ApiFailure ? e.status : 0, code: f.code ?? 'error', message: f.hint ? `${f.message} ${f.hint}` : f.message };
+  // in Hebrew a hint that has no Hebrew wording is left out rather than shown in the server's English
+  const hint = f.hint && !(lang === 'he' && e instanceof ApiFailure && f.hint === e.hint) ? f.hint : null;
+  // «headline: headline detail» (the server's message already opens with the headline) is said once
+  const cut = f.message.indexOf(': ');
+  const head = cut > 0 ? f.message.slice(0, cut) : '';
+  const said = head && f.message.slice(cut + 2).startsWith(head) ? f.message.slice(cut + 2) : f.message;
+  return { status: e instanceof ApiFailure ? e.status : 0, code: f.code ?? 'error', message: hint ? `${said} ${hint}` : said };
 }
 
 // ---------- the measure / plan state machine ----------
+export interface FilmNote { code: string; message: string }
 export type FilmFlowState =
   | { phase: 'idle' }
-  | { phase: 'planning'; measured: readonly string[] }
+  /** `note`: the measurement was refused, the film is planned without it (unmeasured clips enter from the middle) */
+  | { phase: 'planning'; measured: readonly string[]; note?: FilmNote }
   | { phase: 'measuring'; jobId: string | null; done: number; total: number; measured: readonly string[] }
-  | { phase: 'ready'; view: FamilyFilmPlanView; measured: readonly string[] }
+  | { phase: 'ready'; view: FamilyFilmPlanView; measured: readonly string[]; note?: FilmNote }
   | { phase: 'applying'; view: FamilyFilmPlanView; measured: readonly string[] }
   /** `at` is the step that was refused: the plan call, the measurement or the apply call (the message is shown next to its control). */
   | { phase: 'refused'; code: string; message: string; at: 'plan' | 'measure' | 'apply'; measured: readonly string[] };
 export type FilmFlowEvent =
-  | { type: 'enter-plan' } | { type: 'params-changed' }
+  | { type: 'enter-plan' } | { type: 'params-changed' } | { type: 'retry' }
   | { type: 'planned'; view: FamilyFilmPlanView }
   | { type: 'measure-started'; jobId: string; total: number } | { type: 'measure-cached' }
   | { type: 'measure-progress'; done: number; total: number } | { type: 'cancel' }
@@ -211,13 +219,14 @@ const plan = (s: FilmFlowState): { state: FilmFlowState; effect: FilmFlowEffect 
 export function filmFlow(state: FilmFlowState, event: FilmFlowEvent): { state: FilmFlowState; effect: FilmFlowEffect } {
   const same = { state, effect: null as FilmFlowEffect };
   switch (event.type) {
+    case 'retry': return state.phase === 'refused' ? plan(state) : same;
     case 'enter-plan': case 'params-changed': return state.phase === 'applying' || state.phase === 'measuring' ? same : plan(state);
     case 'planned': {
-      if (state.phase === 'ready') return { state: { phase: 'ready', view: event.view, measured: state.measured }, effect: null };
+      if (state.phase === 'ready') return { state: { phase: 'ready', view: event.view, measured: state.measured, ...(state.note ? { note: state.note } : {}) }, effect: null };
       if (state.phase !== 'planning') return same;
       const todo = event.view.needsMeasurement.filter((id) => !state.measured.includes(id));
       if (todo.length) return { state: { phase: 'measuring', jobId: null, done: 0, total: todo.length, measured: [...state.measured, ...todo] }, effect: { kind: 'measure', assetIds: todo } };
-      return { state: { phase: 'ready', view: event.view, measured: state.measured }, effect: null };
+      return { state: { phase: 'ready', view: event.view, measured: state.measured, ...(state.note ? { note: state.note } : {}) }, effect: null };
     }
     case 'measure-started':
       if (state.phase === 'measuring') return { state: { ...state, jobId: event.jobId, total: event.total }, effect: null };
@@ -230,6 +239,8 @@ export function filmFlow(state: FilmFlowState, event: FilmFlowEvent): { state: F
     case 'refused': {
       // the project changed since the plan: plan again (only after an apply, so a server that always says so cannot loop)
       if (state.phase === 'applying' && (event.code === 'stale_revision' || event.code === 'conflict')) return plan(state);
+      // the measurement itself was refused (nothing started): the film is still planned, without it, and the refusal is shown beside the plan
+      if (state.phase === 'measuring' && !state.jobId) return { state: { phase: 'planning', measured: state.measured, note: { code: event.code, message: event.message } }, effect: { kind: 'plan' } };
       const at = state.phase === 'applying' ? 'apply' : state.phase === 'measuring' ? 'measure' : 'plan';
       return { state: { phase: 'refused', code: event.code, message: event.message, at, measured: measuredOf(state) }, effect: state.phase === 'measuring' && state.jobId ? { kind: 'cancel', jobId: state.jobId } : null };
     }
@@ -413,6 +424,7 @@ export function otherMomentsParams(params: FamilyFilmParams, picked: readonly Fi
 }
 export const otherLengths = (current: number | undefined): (30 | 60 | 90)[] => FILM_LENGTHS.filter((s) => s !== (current ?? FILM_DEFAULTS.targetSeconds));
 /** The transaction of the film's apply, from the activity list (newest first): the newest apply_template that touched the run's clips. */
+/** Undo of the film is offered only when its transaction is still in the activity list (the newest 50 events); the editor's newest edit is never undone in its place. */
 export function findFilmTransaction(activity: readonly RevisionEvent[], createdIds: readonly string[]): string | null {
   const ids = new Set(createdIds);
   return activity.find((e) => e.ops?.includes('apply_template') && e.affectedIds.some((id) => ids.has(id)))?.transactionId ?? null;

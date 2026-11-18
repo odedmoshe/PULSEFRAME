@@ -188,7 +188,7 @@ function FilmDialogBody({ lang }: FamilyFilmDialogProps): ReactElement | null {
   const view = flow.phase === 'ready' || flow.phase === 'applying' ? flow.view : null;
   const rows = view ? planRows(view, doc, lang) : [];
   const warnings = view ? [...view.blocking.map((w) => ({ w, blocking: true })), ...view.warnings.map((w) => ({ w, blocking: false }))] : [];
-  const applyBlocked = flow.phase !== 'ready' && flow.phase !== 'applying' ? S.planning : view && view.blocking.length ? S.blockedTitle : rows.length === 0 ? S.emptyPlan : undefined;
+  const applyBlocked = flow.phase === 'refused' ? S.notPlanned : flow.phase !== 'ready' && flow.phase !== 'applying' ? S.planning : view && view.blocking.length ? S.blockedTitle : rows.length === 0 ? S.emptyPlan : undefined;
   const refused = flow.phase === 'refused' ? flow : null;
   const onBeat = !!view && !!view.params.musicAssetId && view.predicted.offGridCuts.length === 0;
 
@@ -284,6 +284,8 @@ function FilmDialogBody({ lang }: FamilyFilmDialogProps): ReactElement | null {
           )}
           {flow.phase === 'planning' && <p role="status">{S.planning}</p>}
           {refused && refused.at !== 'apply' && <FilmError message={refused.message} blocking />}
+          {refused && <Button size="sm" data-testid={TID.retry} onClick={() => send({ type: 'retry' })}>{S.retry}</Button>}
+          {(flow.phase === 'planning' || flow.phase === 'ready') && flow.note && <FilmError message={flow.note.message} />}
           {view && (
             <>
               <p className="pf-film-muted">{S.planNote}</p>

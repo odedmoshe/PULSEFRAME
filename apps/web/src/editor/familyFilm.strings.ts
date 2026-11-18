@@ -28,7 +28,7 @@ export interface FamilyFilmStrings {
   orderLabel: string; order: { capture: string; given: string; arc: string }; orderNote: { capture: string; given: string; arc: string };
   titleLabel: string; titleHint: string; titlePlaceholder(eventName: string | null): string;
   // step 3
-  planning: string; planNote: string;
+  planning: string; planNote: string; notPlanned: string; retry: string; undoUnavailable: string;
   /** «מודד רגעים 12/31 · היוריסטיקה, בלי בינה מלאכותית» */
   measuring(done: number, total: number): string;
   measureState: string; measureCancel: string; measureCanceled: string;
@@ -80,6 +80,7 @@ const he: FamilyFilmStrings = {
   orderNote: { capture: 'לפי מועד הצילום שנקרא מהקובץ. קובץ בלי זמן צילום יושב בסוף.', given: 'כמו בסדר שבו הקבצים מופיעים כאן.', arc: 'רגוע בהתחלה, והערוך ביותר בשני השליש של הסרט. הדירוג לפי תנועה וקול שנמדדו, לא לפי תוכן.' },
   titleLabel: 'כותרת פתיחה', titleHint: 'השאירו ריק לכותרת אוטומטית עם שם האירוע והתאריך. טקסט שתקלידו יוצג בדיוק כפי שהוא.',
   titlePlaceholder: (name) => (name ? `ברירת מחדל: ${name}` : 'ברירת מחדל: כותרת לפי תאריך הצילום'),
+  notPlanned: 'אין עדיין תוכנית. אפשר לנסות שוב.', retry: 'ניסיון חוזר', undoUnavailable: 'אי אפשר לבטל את הסרט מכאן: יצירתו כבר רחוקה ברשימת העריכות.',
   planning: 'מתכנן את הסרט…', planNote: 'התוכנית היא טיוטה שאפשר לשנות כאן, ואחרי היצירה אפשר לערוך אותה כמו כל עריכה.',
   measuring: (d, t) => `מודד רגעים ${d}/${t} · היוריסטיקה, בלי בינה מלאכותית`,
   measureState: 'בעבודה', measureCancel: 'ביטול המדידה', measureCanceled: 'המדידה בוטלה. קליפים שלא נמדדו נכנסים מאמצע הקליפ.',
@@ -166,6 +167,7 @@ const en: FamilyFilmStrings = {
   orderNote: { capture: 'By the time each file was captured, read from the file. A file with no capture time goes last.', given: 'In the order the files are listed here.', arc: 'Calm at first, the liveliest at two thirds of the film, ranked by measured motion and sound, not by content.' },
   titleLabel: 'Opening title', titleHint: 'Leave empty for an automatic title with the event name and date. Text you type is shown exactly as typed.',
   titlePlaceholder: (name) => (name ? `Default: ${name}` : 'Default: a title from the capture date'),
+  notPlanned: 'There is no plan yet. You can try again.', retry: 'Try again', undoUnavailable: 'The film cannot be undone from here: its creation is too far back in the edit list.',
   planning: 'Planning the film…', planNote: 'The plan is a draft you can change here; once made, edit it like any other edit.',
   measuring: (d, t) => `Measuring moments ${d}/${t} · heuristic, no AI`,
   measureState: 'Working', measureCancel: 'Cancel measuring', measureCanceled: 'Measuring was canceled. Files not measured enter from the middle of the clip.',

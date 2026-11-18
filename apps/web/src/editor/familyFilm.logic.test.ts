@@ -1,9 +1,10 @@
 /** Pure logic of the family film UI (ADR-0026): params, rows, window cycle, pick edits, the measure/plan state machine, the poller, sprite tile, strip geometry, swaps. */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
+import { ApiFailure } from '../api.ts';
 import { FamilyFilmParamsSchema, type Asset, type FamilyFilmParams, type FamilyFilmPlanView, type FilmExclusion, type MediaClip, type MomentsData, type ProjectDocument } from '@pulseframe/core';
 import {
-  buildParams, choicesOf, defaultChoices, filmFlow, findFilmTransaction, formatCapture, nextBlocked, nextWindow, otherLengths, otherMomentsParams, parseStage, planRows, progressDue, runMeasurement, spriteStyle, spriteTileIndex, stripGeometry,
+  buildParams, choicesOf, defaultChoices, filmFailure, filmFlow, findFilmTransaction, formatCapture, nextBlocked, nextWindow, otherLengths, otherMomentsParams, parseStage, planRows, progressDue, runMeasurement, spriteStyle, spriteTileIndex, stripGeometry,
   windowSourceIn, withIncluded, withNextWindow, withOtherClip, withRemoved, MAX_FILM_ASSETS, FILM_PROGRESS_EVERY_MS,
   type FilmFlowEvent, type FilmFlowState,
 } from './familyFilm.logic.ts';
@@ -121,6 +122,16 @@ describe('the measure / plan state machine', () => {
     const c = run({ phase: 'idle' }, [{ type: 'enter-plan' }, { type: 'planned', view: view({ needsMeasurement: ['a'] }) }, { type: 'measure-started', jobId: 'j', total: 1 }, { type: 'refused', status: 403, code: 'x', message: 'y' }]);
     expect(c.st).toMatchObject({ phase: 'refused', at: 'measure' }); expect(c.effects[3]).toEqual({ kind: 'cancel', jobId: 'j' });
   });
+  it('a refused measurement start still plans the film, with the refusal as a note; every refusal can be retried', () => {
+    const m = run({ phase: 'idle' }, [{ type: 'enter-plan' }, { type: 'planned', view: view({ needsMeasurement: ['a'] }) }, { type: 'refused', status: 501, code: 'moments_not_built', message: 'nm' }]);
+    expect(m.st).toEqual({ phase: 'planning', measured: ['a'], note: { code: 'moments_not_built', message: 'nm' } });
+    expect(m.effects[2]).toEqual({ kind: 'plan' });
+    const r = filmFlow(m.st, { type: 'planned', view: view({ needsMeasurement: ['a'] }) });
+    expect(r.state).toMatchObject({ phase: 'ready', note: { code: 'moments_not_built' } }); expect(r.effect).toBeNull();
+    const p = run({ phase: 'idle' }, [{ type: 'enter-plan' }, { type: 'refused', status: 500, code: 'x', message: 'y' }]);
+    expect(filmFlow(p.st, { type: 'retry' })).toEqual({ state: { phase: 'planning', measured: [] }, effect: { kind: 'plan' } });
+    expect(filmFlow({ phase: 'idle' }, { type: 'retry' }).effect).toBeNull();
+  });
   it('a revision conflict on apply plans again, with the revision of the plan on a good apply, and closes', () => {
     const ready: FilmFlowState = { phase: 'ready', view: view({ revision: 12 }), measured: ['a'] };
     const ap = filmFlow(ready, { type: 'apply' });
@@ -204,5 +215,17 @@ describe('the film transaction', () => {
     const ev = (transactionId: string, ops: string[], affectedIds: string[]) => ({ transactionId, ops, affectedIds, revision: 1 }) as never;
     expect(findFilmTransaction([ev('t3', ['trim_clip'], ['c1']), ev('t2', ['apply_template'], ['x', 'c1']), ev('t1', ['apply_template'], ['c1'])], ['c1'])).toBe('t2');
     expect(findFilmTransaction([ev('t1', ['apply_template'], ['other'])], ['c1'])).toBeNull();
+    expect(findFilmTransaction([], ['c1'])).toBeNull(); // the bar then disables its undo instead of undoing the newest edit
   });
+});
+
+describe('refusal wording', () => {
+  const f = (code: string, message: string, hint: string) => new ApiFailure(501, code, message, undefined, hint);
+  it('Hebrew refusals carry no English hint and do not repeat the headline', () => {
+    const m = filmFailure('he', f('film_not_built', 'the family film maker is not built in this version yet', 'Nothing was changed. Recipes and templates still work.')).message;
+    expect(m).not.toMatch(/[A-Za-z]{4}/); expect(m.split('יצירת סרט משפחתי עדיין לא נבנתה').length).toBe(3 - 1); // the headline once
+    const h = filmFailure('he', f('film_blocked', 'the plan has a blocking problem', 'See the plan: choose another length, other music or other clips.')).message;
+    expect(h).not.toContain('See the plan');
+  });
+  it('English keeps the hint', () => { expect(filmFailure('en', f('film_blocked', 'm', 'See the plan.')).message).toContain('See the plan.'); });
 });

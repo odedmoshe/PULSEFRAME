@@ -29,10 +29,11 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
   const params = view.params;
   const others = otherMomentsParams(params, view.picked, doc);
 
+  const filmTxn = findFilmTransaction(state.activity, view.run.createdIds);
   const undo = async () => {
     setError(null);
-    const txn = findFilmTransaction(state.activity, view.run.createdIds);
-    if (txn) await editor.undoTransaction(txn); else await editor.history('undo');
+    if (!filmTxn) return;
+    await editor.undoTransaction(filmTxn);
     editor.setFilmRun(null);
   };
   const regenerate = async (change: Partial<FamilyFilmParams>) => {
@@ -48,7 +49,7 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
   return (
     <div className="pf-film-bar" data-testid={TID.bar} role="region" aria-label={S.made}>
       <b className="pf-film-bar-title">{S.made}</b>
-      <Button size="sm" data-testid={TID.barUndo} disabled={busy} onClick={() => void undo()}>{S.undo}</Button>
+      <Button size="sm" data-testid={TID.barUndo} disabled={busy} disabledReason={filmTxn ? undefined : S.undoUnavailable} onClick={() => void undo()}>{S.undo}</Button>
       <Button size="sm" data-testid={TID.barMoments} busy={busy} disabledReason={others ? undefined : S.noOtherMoments} onClick={() => { if (others) void regenerate({ picks: others.picks ?? {} }); }}>{S.otherMoments}</Button>
       <Menu label={S.otherLength} onSelect={(id) => void regenerate({ targetSeconds: Number(id) as 30 | 60 | 90 })}
         items={otherLengths(params.targetSeconds).map((s) => ({ id: String(s), label: S.lengthMenu(s) }))}
