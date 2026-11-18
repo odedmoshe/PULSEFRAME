@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -40,6 +40,10 @@ const LIFE_CAPTURES: (Capture | undefined)[] = [
 export const PEOPLE_FUZZ_OPS = ['add_person', 'update_person', 'remove_person'] as const;
 /** The sequence lifecycle (ADR-0018) that the fuzz draws, once W1 has built the bodies (SEQUENCE_OPS_BUILT). */
 export const SEQUENCE_FUZZ_OPS = SEQUENCE_OPS;
+/** The keyframe curve operations (ADR-0019) that the fuzz draws, once W1 has built them (KEYFRAME_OPS_BUILT); the rows also use the new curves on set_keyframe, set_effect_keyframe and replace_clip_keyframes. */
+export const KEYFRAME_FUZZ_OPS = [...KEYFRAME_OPS, 'set_keyframe', 'set_effect_keyframe', 'replace_clip_keyframes'] as const;
+/** The public multicam operations (ADR-0020) that the fuzz draws, once W1 has built the bodies (MULTICAM_OPS_BUILT). */
+export const MULTICAM_FUZZ_OPS = MULTICAM_OPS;
 export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_text_fields', 'cluster_events', 'add_event', 'update_event', 'remove_event'] as const;
 
 /**
@@ -56,6 +60,13 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * title edits that name a person. `gen` draws from these rows too once those operations are built (PEOPLE_OPS_BUILT).
  * `genSequence(doc)` returns a random call of the sequence lifecycle (ADR-0018 shorts): add/update/remove_sequence and
  * replace_clip_keyframes. `gen` draws from these rows too once W1 has built them (SEQUENCE_OPS_BUILT).
+ * `genKeyframes(doc)` returns a random call with the curves of ADR-0019: set_keyframe / set_effect_keyframe with every easing and
+ * handles, replace_clip_keyframes in both forms, replace_effect_keyframes and set_keyframe_curve, valid most of the time and
+ * sometimes refused (handles without 'bezier', a turn-back curve on opacity or a colour parameter, a range turned round, a key
+ * outside its range). `gen` draws from these rows too once W1 has built them (KEYFRAME_OPS_BUILT); until then the seeded fuzz
+ * runs exactly as before.
+ * `genMulticam(doc)` returns a random call of the eight public multicam operations (ADR-0020). `gen` draws from these rows too
+ * once W1 has built them (MULTICAM_OPS_BUILT).
  */
 export function createFuzz(seed: number) {
   const rnd = mulberry32(seed);
@@ -103,7 +114,7 @@ export function createFuzz(seed: number) {
     if (!t) return [];
     const k = 199, st = Array.from({ length: k }, (_, i) => (i % 50 >= 40 ? 3 : i % 50 >= 35 ? 2 : i % 97 === 5 ? 0 : 1));
     // measured moments of the video (ADR-0026), as the moments job attaches them: a full record (two windows, both bases, a burst)
-    const moments: OpCall = { op: 'attach_moments', args: { method: 'fuzz moments', createdAt: '2026-11-18T00:00:00Z', items: [{ assetId: vid, algo: 1, data: `sha256:${'b'.repeat(64)}`, measured: { picture: true, sound: true }, file: { motion: 18, level: -300 }, flat: false,
+    const moments: OpCall = { op: 'attach_moments', args: { method: 'fuzz moments', createdAt: '2026-11-18T00:00:00Z', items: [{ assetId: vid, algo: MOMENTS_ALGO, data: `sha256:${'b'.repeat(64)}`, measured: { picture: true, sound: true }, file: { motion: 18, level: -300 }, flat: false,
       windows: [{ peakFrame: 60, fromFrame: 20, toFrame: 110, basis: ['inner-motion', 'sound'], motion: 70, level: 8.5, sharp: 1.4, luma: 120, burstFrame: 64 }, { peakFrame: 190, fromFrame: 150, toFrame: 240, basis: ['inner-motion'], motion: 30, level: null, sharp: 1.1, luma: 90 }] }] } };
     return [moments, { op: 'attach_motion_track', args: { motionTrackId: t.id, from: 1, x: Array.from({ length: k }, (_, i) => 3000 + i * 20), y: Array.from({ length: k }, (_, i) => 5000 + Math.round(1500 * Math.sin(i / 15))), s: Array.from({ length: k }, (_, i) => 900 + (i % 40) * 5), q: st.map((v) => (v === 1 ? 90 : 30)), st, method: 'fuzz', params: {}, createdAt: '2026-11-17T00:00:00Z' } }];
   };
@@ -174,7 +185,9 @@ export function createFuzz(seed: number) {
    * The rows of the sequence lifecycle (ADR-0018 shorts). Lead rows (contracts pre-pass): every call has arguments its
    * operation's schema accepts; what is refused is refused by the operation: the main sequence (removed, or given a format),
    * a sequence that is not there, an odd frame, a sequence that still has clips, keys out of order or off a frame boundary,
-   * an x value outside the transform's range, keys on a caption cue. W1 completes them with its bodies and the 65th sequence.
+   * an x value outside the transform's range, keys on a caption cue. W1 rows: key lists every rule accepts on every
+   * property (also opacity on an adjustment, and refused off-opacity there), a rename, the removal of an empty short. A
+   * marker on a short is a row of `gen` (add_marker with sequenceId). The 65th sequence is refused in packages/core/src/sequenceOps.test.ts (the fuzz never holds 64).
    */
   const sequenceMenu = (doc: ProjectDocument): (() => OpCall)[] => {
     const ids = Object.keys(doc.sequences);
@@ -196,14 +209,92 @@ export function createFuzz(seed: number) {
       else if (r < 0.24) ks[n - 1] = { ...ks[n - 1]!, value: 4.5 }; // outside the range of x
       return ks;
     };
+    /** A key list every rule accepts (W1 rows): whole frames, strictly increasing, values inside the property's range, any easing. */
+    const validKeys = (property: 'x' | 'y' | 'scale' | 'rotation' | 'opacity') => {
+      const n = 1 + int(40);
+      let frame = int(3);
+      return Array.from({ length: n }, () => {
+        const time = T.frameTime(frame, rate);
+        frame += 1 + int(8);
+        const value = property === 'scale' ? Number((0.5 + rnd() * 1.5).toFixed(4)) : property === 'opacity' ? Number(rnd().toFixed(4)) : property === 'rotation' ? Number((rnd() * 90 - 45).toFixed(2)) : Number((rnd() * 1.6 - 0.8).toFixed(5));
+        return { time, value, easing: pick(['linear', 'linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out'] as const) };
+      });
+    };
     return [
       () => ({ op: 'add_sequence', args: { name: pick(['Short 1', 'קטע קצר', 'B']), ...(rnd() < 0.7 ? { format: format() } : {}), ...(rnd() < 0.4 ? { tracks: pick(['standard', 'empty'] as const) } : {}) } }),
+      // W1 rows: edits that succeed most of the time, so later steps meet sequences that hold keys and markers
+      () => { const property = pick(['x', 'x', 'y', 'scale', 'rotation', 'opacity'] as const); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property, keys: validKeys(property) } }; },
+      () => ({ op: 'update_sequence', args: { sequenceId: others.length ? pick(others) : sequenceId(), name: pick(['Short A', 'קטע ב', 'x']) } }),
+      // an empty sequence goes without withContents; one with clips is refused without it
+      () => ({ op: 'remove_sequence', args: { sequenceId: others.length ? pick(others) : 'seq_none' } }),
       () => ({ op: 'update_sequence', args: { sequenceId: sequenceId(), ...(rnd() < 0.5 ? { name: 'שם אחר' } : {}), ...(rnd() < 0.6 ? { format: rnd() < 0.3 ? null : format() } : {}) } }),
       () => ({ op: 'remove_sequence', args: { sequenceId: sequenceId(), ...(rnd() < 0.6 ? { withContents: rnd() < 0.8 } : {}) } }),
       () => ({ op: 'replace_clip_keyframes', args: { clipId: clipId(), property: pick(['x', 'x', 'y', 'scale', 'opacity'] as const), keys: rnd() < 0.15 ? null : keys(), ...(rnd() < 0.2 ? { at: T.frameTime(int(30), rate) } : {}) } }),
     ];
   };
   const genSequence = (doc: ProjectDocument): OpCall => pick(sequenceMenu(doc))();
+  /** The rows of keyframe curves (ADR-0019); every call has arguments its operation's schema accepts (keyframe-fuzz.test.ts). */
+  const keyframeMenu = (doc: ProjectDocument): (() => OpCall)[] => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const clipId = () => (clips.length && rnd() < 0.95 ? pick(clips).id : 'clp_none');
+    const withFx = clips.flatMap((c) => (c.effects ?? []).map((fx) => ({ clipId: c.id, fx })));
+    const fxPick = () => (withFx.length && rnd() < 0.9 ? pick(withFx) : { clipId: clipId(), fx: undefined });
+    const param = (type: string | undefined) => { const ps = type ? animatableParams(type) : []; return ps.length && rnd() < 0.9 ? pick(ps) : pick(['amount', 'radius', 'nope']); };
+    const handles = (): [number, number, number, number] => [Number(rnd().toFixed(3)), Number((rnd() * 3 - 1).toFixed(3)), Number(rnd().toFixed(3)), Number((rnd() < 0.7 ? rnd() : rnd() * 3 - 1).toFixed(3))];
+    /** An easing and, for 'bezier' (and now and then for another easing: refused), its handles. */
+    const curve = () => { const easing = pick(EASINGS); return { easing, ...(easing === 'bezier' ? (rnd() < 0.92 ? { bezier: handles() } : {}) : rnd() < 0.05 ? { bezier: handles() } : {}) }; };
+    const keys = (lo: number, n: number, value: () => number) => { let frame = lo; return Array.from({ length: n }, () => { const time = f(frame); frame += 1 + int(8); return { time, value: value(), ...curve() }; }); };
+    const prop = () => pick(['x', 'x', 'y', 'scale', 'rotation', 'opacity'] as const);
+    const val = (p: string) => () => (p === 'scale' ? Number((0.5 + rnd() * 1.5).toFixed(4)) : p === 'opacity' ? Number(rnd().toFixed(4)) : p === 'rotation' ? Number((rnd() * 90 - 45).toFixed(2)) : Number((rnd() * 1.6 - 0.8).toFixed(5)));
+    const range = () => { const a = int(60), b = a + int(60); return rnd() < 0.08 ? { from: f(b + 1), to: f(a) } : { from: f(a), to: f(b) }; };
+    const channel = () => { if (rnd() < 0.6 || !withFx.length) return { property: prop() }; const { fx } = pick(withFx); return { effectId: fx.id, param: param(fx.type) }; };
+    return [
+      () => ({ op: 'set_keyframe', args: { clipId: clipId(), property: prop(), time: f(int(90)), value: Number((rnd() * 0.8 + 0.1).toFixed(3)), ...(rnd() < 0.85 ? curve() : {}) } }),
+      () => { const { clipId: id, fx } = fxPick(); return { op: 'set_effect_keyframe', args: { clipId: id, effectId: fx?.id ?? 'fx_none', param: param(fx?.type), time: f(int(90)), value: Number((rnd() * 4).toFixed(2)), ...(rnd() < 0.85 ? curve() : {}) } }; },
+      () => { const p = prop(); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property: p, keys: keys(int(3), 1 + int(20), val(p)) } }; },
+      () => { const p = prop(), r = range(); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property: p, ...r, keys: rnd() < 0.2 ? null : keys(T.frameIndexAt(r.from, rate) + (rnd() < 0.1 ? -3 : 0), 1 + int(6), val(p)) } }; },
+      () => { const { clipId: id, fx } = fxPick(), r = rnd() < 0.5 ? range() : null; return { op: 'replace_effect_keyframes', args: { clipId: id, effectId: fx?.id ?? 'fx_none', param: param(fx?.type), keys: rnd() < 0.15 ? null : keys(r ? T.frameIndexAt(r.from, rate) : int(3), 1 + int(10), () => Number((rnd() * 4).toFixed(2))), ...(r ?? {}), ...(rnd() < 0.2 ? { at: f(int(30)) } : {}) } }; },
+      () => ({ op: 'set_keyframe_curve', args: { clipId: clipId(), channels: Array.from({ length: 1 + int(3) }, channel), times: Array.from({ length: 1 + int(4) }, () => f(int(60))), side: pick(['after', 'before', 'both'] as const), ...curve() } }),
+    ];
+  };
+  const genKeyframes = (doc: ProjectDocument): OpCall => pick(keyframeMenu(doc))();
+  /**
+   * Multicam (ADR-0020): groups of the fuzz files (the two videos and the sound file), hand syncs (sample-aligned offsets,
+   * nudges by a frame or a millisecond, anchors with drift, clears; some refused: the reference, off-sample, too much drift),
+   * looks, programs laid on new tracks or a new sequence, switches at frames and group times (some at the same frame, some
+   * past the end), detach and removal. Ids that do not exist now and then.
+   */
+  const multicamMenu = (doc: ProjectDocument): (() => OpCall)[] => {
+    const groups = Object.values(doc.multicam ?? {});
+    const g = () => (groups.length && rnd() < 0.9 ? pick(groups) : null);
+    const groupId = () => g()?.id ?? 'mcg_none';
+    const angleOf = (x: ReturnType<typeof g>, kind?: 'picture' | 'sound') => { const as = (x?.angles ?? []).filter((a) => !kind || a.kind === kind); return as.length && rnd() < 0.9 ? pick(as).id : 'ang_none'; };
+    const sr = 48000;
+    const samples = (n: number) => T.rt(n, sr);
+    const tagged = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips.filter((c) => c.type === 'media' && c.multicam).map((c) => c.id)));
+    const late = assetIds[3] ?? vid;
+    return [
+      () => ({ op: 'create_multicam', args: { angles: rnd() < 0.1 ? [{ assetIds: [vid] }, { assetIds: [vid] }] : [{ assetIds: [aud] }, { assetIds: [vid] }, ...(rnd() < 0.6 ? [{ assetIds: [late], ...(rnd() < 0.3 ? { label: 'מצלמה צד' } : {}) }] : []), ...(rnd() < 0.05 ? [{ assetIds: [vid] }] : [])], ...(rnd() < 0.2 ? { referenceAngleIndex: int(3) } : {}), ...(rnd() < 0.3 ? { name: 'פודקאסט' } : {}) } }),
+      () => {
+        const x = g(); const pieceIndex = rnd() < 0.9 ? 0 : 1 + int(2);
+        const form = int(5);
+        const a = form === 0 ? { offset: samples(int(sr * 4) - sr) } : form === 1 ? { nudge: rnd() < 0.5 ? T.frameTime(rnd() < 0.5 ? 1 : -1, rate) : T.rt(rnd() < 0.5 ? 1 : -1, 1000) }
+          : form === 2 ? { anchors: [{ group: samples(int(sr)), source: T.ZERO }, { group: samples(sr * 6 + int(600) - 300), source: samples(sr * 6) }] } : form === 3 ? { clear: true as const } : { offset: T.rt(1, 96000) };
+        return { op: 'set_multicam_sync', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x), pieceIndex, ...a } };
+      },
+      () => { const x = g(); return { op: 'update_multicam', args: { groupId: x?.id ?? 'mcg_none', ...(rnd() < 0.4 ? { name: 'ראיון' } : {}), ...(rnd() < 0.4 ? { wideAngleId: rnd() < 0.2 ? null : angleOf(x, 'picture') } : {}), ...(rnd() < 0.4 ? { speakers: [{ label: 'דוברת', micAngleId: angleOf(x, 'sound'), channel: rnd() < 0.5 ? null : int(2), shotAngleId: rnd() < 0.3 ? null : angleOf(x, 'picture') }] } : {}) } }; },
+      () => { const x = g(); return { op: 'set_angle_look', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { clear: true as const } : { fromClipId: tagged.length && rnd() < 0.9 ? pick(tagged) : 'clp_none' }), ...(rnd() < 0.4 ? { apply: pick(['unedited', 'all', 'none'] as const) } : {}) } }; },
+      () => { const x = g(); return { op: 'place_multicam', args: { groupId: x?.id ?? 'mcg_none', at: T.frameTime(int(120), rate), angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { range: { from: samples(int(sr * 2)), to: samples(sr * 2 + int(sr * 4)) } } : {}), ...(rnd() < 0.2 ? { newSequence: { name: 'תוכנית' } } : {}), ...(rnd() < 0.2 ? { fill: rnd() < 0.5 } : {}) } }; },
+      () => {
+        const x = g(); const k = 1 + int(6);
+        const cuts = Array.from({ length: k }, () => (rnd() < 0.5 ? { at: T.frameTime(int(260), rate), angleId: angleOf(x, 'picture') } : { groupTime: samples(int(sr * 9)), angleId: angleOf(x, 'picture') }));
+        return { op: 'switch_angles', args: { groupId: x?.id ?? 'mcg_none', cuts, ...(rnd() < 0.3 ? { until: { at: T.frameTime(int(300), rate) } } : {}), ...(rnd() < 0.5 ? { coverage: pick(['refuse', 'clip'] as const) } : {}), ...(rnd() < 0.2 ? { heal: false } : {}) } };
+      },
+      () => ({ op: 'detach_from_multicam', args: { clipIds: tagged.length && rnd() < 0.9 ? [pick(tagged)] : ['clp_none'] } }),
+      () => ({ op: 'remove_multicam', args: { groupId: groupId(), ...(rnd() < 0.6 ? { detach: true } : {}) } }),
+    ];
+  };
+  const genMulticam = (doc: ProjectDocument): OpCall => pick(multicamMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
 
   const gen = (doc: ProjectDocument): OpCall => {
@@ -465,7 +556,11 @@ export function createFuzz(seed: number) {
       // people (ADR-0021, people section): once their operations are built
       ...(PEOPLE_OPS_BUILT ? peopleMenu(doc) : []),
       // the sequence lifecycle (ADR-0018 shorts): once W1 has built the bodies
-      ...(SEQUENCE_OPS_BUILT ? sequenceMenu(doc) : []),
+      // keyframe curves (ADR-0019): once W1 has built them
+      ...(KEYFRAME_OPS_BUILT ? keyframeMenu(doc) : []),
+      // multicam (ADR-0020): once W1 has built the bodies
+      ...(MULTICAM_OPS_BUILT ? multicamMenu(doc) : []),
+      ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
     ];
     return pick(menu)();
   };
@@ -532,5 +627,5 @@ export function createFuzz(seed: number) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam };
 }

@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal } from '@pulseframe/core';
+import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
@@ -31,6 +31,7 @@ import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { applyTemplateFor, listTemplates, planTemplateFor, probeElements, regenerateTemplateFor, templateCatalog } from './templates.ts';
 import { outputDoc } from './export.ts';
+import { envelopeDerivative, multicamView, syncMulticam } from './multicamSync.ts';
 import { applyShorts, cachedShortCandidates, findShortCandidates, planReframeFor, planShortsFor, shortsApiError, withShortsErrors } from './shorts.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
@@ -374,6 +375,25 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/templates/:templateId/plan', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await planTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params)); });
   app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
+  // ----- multicam (ADR-0020): sync a group by sound (edit; dryRun observe), the group view, a file's level envelope -----
+  const mustGroup = (projectId: string, groupId: string) => {
+    if (!multicamGroupOf(store.getProject(projectId).doc, groupId)) throw new ApiError(404, 'not_found', MULTICAM_REFUSALS.groupNotFound.message(groupId), { groupId }, MULTICAM_REFUSALS.groupNotFound.hint);
+  };
+  app.post('/api/v1/projects/:id/multicam/:groupId/sync', async (c) => {
+    const b = await body(c, MulticamSyncBody);
+    const p = need(c, b.dryRun ? 'observe' : 'edit');
+    const projectId = c.req.param('id'), groupId = c.req.param('groupId');
+    mustGroup(projectId, groupId);
+    const r = await syncMulticam(store, gov, p, projectId, groupId, b);
+    return 'jobId' in r ? c.json(r, 202) : c.json(r);
+  });
+  app.get('/api/v1/projects/:id/multicam/:groupId', (c) => { need(c, 'observe'); const projectId = c.req.param('id'), groupId = c.req.param('groupId'); mustGroup(projectId, groupId); return c.json(multicamView(store, projectId, groupId)); });
+  app.post('/api/v1/projects/:id/assets/:assetId/derivatives/envelope', async (c) => {
+    need(c, 'observe');
+    const projectId = c.req.param('id'), assetId = c.req.param('assetId');
+    if (!Object.hasOwn(store.getProject(projectId).doc.assets, assetId)) throw new ApiError(404, 'not_found', `asset ${assetId} not found`, { assetId });
+    return c.json(await envelopeDerivative(store, projectId, assetId));
+  });
   // ----- shorts (ADR-0018): sequences of the project, candidate moments, plan, make (one undoable step), reframe -----
   app.get('/api/v1/projects/:id/sequences', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, sequences: sequenceList(p.doc) }); });
   app.post('/api/v1/projects/:id/shorts/candidates', async (c) => {

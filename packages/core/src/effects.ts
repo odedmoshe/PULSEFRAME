@@ -8,6 +8,8 @@
  * Lengths are fractions of the output frame height, so a scaled preview or export looks the same.
  */
 import { z } from 'zod';
+// the one keyframe definition (ADR-0019), shared with transform keys (schema.ts); keyframe.ts imports zod only
+import { CURVES, KeyframeSchema, MAX_EFFECT_KEYS } from './keyframe.ts';
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/).describe('#RRGGBB');
 const frac = (max: number, def: number, what: string) => z.number().min(0).max(max).default(def).describe(what);
@@ -316,8 +318,6 @@ export type Transition = z.infer<typeof TransitionSchema>;
 /** The registry row of a transition type. */
 export const transitionDef = (type: string): TransitionDef | undefined => (TRANSITIONS as readonly TransitionDef[]).find((t) => t.id === type);
 
-/** Same shape as a transform keyframe (schema.ts); repeated here because schema.ts imports this file. */
-const EffectKeySchema = z.object({ time: z.object({ value: z.string().regex(/^-?\d+$/), timescale: z.number().int().positive() }).strict(), value: z.number(), easing: z.enum(['linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out']) }).strict();
 /** A beat modulator on one numeric parameter of an effect instance: value = clamp(base + depth·e^(−decay·seconds since the hit)). */
 export const ModulatorSchema = z.object({
   by: z.literal('beat'),
@@ -330,7 +330,7 @@ export const EffectInstanceSchema = z
   .object({
     id: z.string().min(1).max(64), type: z.string().min(1).max(48), enabled: z.boolean(), params: z.record(z.string(), z.union([z.number(), z.string().max(64), z.boolean()])),
     /** Animation of numeric parameters: clip-local times, strictly increasing. A parameter with keys ignores its static value. */
-    keyframes: z.record(z.string(), z.array(EffectKeySchema).min(1).max(500)).optional(),
+    keyframes: z.record(z.string(), z.array(KeyframeSchema).min(1).max(MAX_EFFECT_KEYS)).optional(),
     /** Parameters that kick on the beats of the music under the clip (render-time; nothing computed is stored). At most 4. */
     modulate: z.record(z.string().max(48), ModulatorSchema).refine((m) => Object.keys(m).length <= 4, 'at most 4 modulated parameters').optional(),
   })
@@ -398,5 +398,16 @@ export function describeCatalog() {
     })),
     blendModes: [...BLEND_MODES],
     mask: { shapes: ['rect', 'ellipse'], defaults: DEFAULT_MASK, paramsSchema: z.toJSONSchema(MaskSchema) },
+    /**
+     * Keyframe curves (ADR-0019), in picker order: the easing ids set_keyframe, set_effect_keyframe, replace_clip_keyframes,
+     * replace_effect_keyframes and set_keyframe_curve accept, plus 'bezier' with four handles [x1, y1, x2, y2] (x 0..1 of the
+     * segment's duration, y -1..2 of its change). Curves that turn back are refused on opacity and on effect parameters that
+     * are not modulatable (effects[].modulatable): a change of brightness that turns back is a flash.
+     */
+    curves: {
+      named: CURVES.map((c) => ({ id: c.id, turnsBack: c.turnsBack, ...(c.handles ? { handles: [...c.handles] } : {}), description: c.description })),
+      custom: { easing: 'bezier', handles: '[x1 0..1, y1 -1..2, x2 0..1, y2 -1..2]', turnsBack: 'when y1 or y2 is outside 0..1' },
+      refusedOn: 'opacity (also of an adjustment clip) and every effect parameter that is not modulatable, for curves that turn back',
+    },
   };
 }

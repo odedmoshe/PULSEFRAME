@@ -12,6 +12,8 @@
 
 export type MotionKind = 'in' | 'out' | 'loop' | 'move';
 export type MotionProperty = 'x' | 'y' | 'scale' | 'rotation' | 'opacity';
+import type { Easing } from './keyframe.ts';
+
 export type MotionEasing = 'linear' | 'hold' | 'ease-in' | 'ease-out' | 'ease-in-out';
 export interface MotionKey { frame: number; value: number; easing: MotionEasing }
 export interface MotionPreset {
@@ -335,7 +337,11 @@ function keysFor(def: Def, ctx: MotionContext): Partial<Record<MotionProperty, M
 }
 
 /** A key as it sits on a clip: `frame` is its clip-local time in frames (after a trim or a cut it can be negative or past the end). */
-export interface PlacedMotionKey { frame: number; value: number; easing: MotionEasing }
+/**
+ * A key already on a clip, as previousMotion reads it. Its easing may be any curve of keyframe.ts (ADR-0019): a key whose curve
+ * is not the motion's own fails the name match (fitProperty), so a later preset treats it as made by hand and leaves it.
+ */
+export interface PlacedMotionKey { frame: number; value: number; easing: Easing }
 const OFF_FRAME = 1e-6;
 const sameValue = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 

@@ -74,12 +74,14 @@ function studio() {
   const effectId = run('add_effect', { clipId, type: 'blur.gaussian' }).effectId as string;
   run('set_asset_capture', { assetId, capture: { at: '2026-05-01T10:00:00' } });
   const eventId = run('add_event', { assetIds: [assetId], name: 'Trip' }).eventId as string;
+  const personId = run('add_person', { name: 'Dana' }).personId as string;
+  const shortId = run('add_sequence', { name: 'Short' }).sequenceId as string;
   const motionTrackId = run('create_motion_track', { assetId, kind: 'point', frame: 0, x: 100, y: 100 }).motionTrackId as string;
   const audioEffectId = (run('add_audio_effect', { clipId: audioClipId, type: 'tone.bassboost' }).effects as { effectId: string }[])[0]!.effectId;
   run('set_effect_keyframe', { clipId, effectId, param: 'radius', time: f(0), value: 0.02 });
   const runId = run('apply_recipe', { recipeId: 'fixture', params: {}, steps: ['add a title'], ops: [{ op: 'add_text', args: { text: 'From a recipe', start: f(150), duration: f(30) } }] }, true).runId as string;
   expect(validateProject(doc)).toEqual([]);
-  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, eventId, runId };
+  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, eventId, personId, shortId, runId };
 }
 
 describe('own', () => {
@@ -278,7 +280,7 @@ describe('every registered op', () => {
     const s = studio();
     const ids: Record<string, unknown> = {
       assetId: s.assetId, clipId: s.clipId, trackId: s.trackId, audioTrackId: s.audioTrackId, linkedTrackId: s.audioTrackId, sequenceId: 'seq_main', variantId: s.variantId, markerId: s.markerId,
-      effectId: s.effectId, motionTrackId: s.motionTrackId, targetTrackId: s.trackId, eventId: s.eventId, segmentId: s.segmentId, fromWordId: s.fromWordId, toWordId: s.toWordId, runId: s.runId, presetId: TEXT_PRESETS[0]!.id, lookId: COLOR_LOOKS[0]!.id, type: 'blur.gaussian', param: 'radius',
+      effectId: s.effectId, motionTrackId: s.motionTrackId, targetTrackId: s.trackId, eventId: s.eventId, personId: s.personId, segmentId: s.segmentId, fromWordId: s.fromWordId, toWordId: s.toWordId, runId: s.runId, presetId: TEXT_PRESETS[0]!.id, lookId: COLOR_LOOKS[0]!.id, type: 'blur.gaussian', param: 'radius',
       language: 'en', clipIds: [s.clipId, s.audioClipId], trackIds: [s.trackId], sourceTrackIds: [s.trackId], preferTrackIds: [s.trackId], removeClipIds: [s.textId], keepIds: [s.clipId],
     };
     // The clip or track an op is about, where it is not the picture clip on the picture track.
@@ -306,6 +308,8 @@ describe('every registered op', () => {
       update_event: { eventId: s.eventId, name: 'Renamed trip' },
       set_text_fields: { clipId: s.textId, enabled: true },
       set_timeline_behaviour: { mainMagnet: true },
+      update_sequence: { sequenceId: 'seq_main', name: 'Main edit' },
+      remove_sequence: { sequenceId: s.shortId, withContents: true },
       attach_asset_capture: { assetId: s.assetId, capture: { at: '2026-05-03T09:00:00', utcOffsetMinutes: null, source: 'exif' }, overwrite: true },
       update_audio_effect: { clipId: s.audioClipId, effectId: s.audioEffectId, enabled: false },
       apply_audio_preset: { clipId: s.audioClipId, presetId: 'telephone' },

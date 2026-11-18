@@ -4,6 +4,13 @@ export * from './ops.ts';
 export * from './queries.ts';
 export * from './entities.ts';
 export * from './animation.ts';
+// keyframe curves and motion paths (ADR-0019)
+export * from './keyframe.ts';
+export * from './curves.ts';
+export * from './keyframeChannels.ts';
+export * from './keyframeOps.ts';
+export * from './keyEdits.ts';
+export * from './pathEdits.ts';
 export * from './subtitles.ts';
 export * from './cleanup.ts';
 export * from './fillers.ts';
@@ -79,3 +86,12 @@ export * from './highlights.ts';
 export * from './shortsPlan.ts';
 export * from './reframe.ts';
 export * from './quotes.ts';
+// multicam (ADR-0020): the contract, the lead-built validation and capture priors; multicam.ts / multicamOps.ts / envelope / auto are worker stubs
+export * from './multicamContract.ts';
+export * from './multicamApi.ts';
+export * from './multicamPrior.ts';
+export * from './multicamValidate.ts';
+export * from './multicam.ts';
+export * from './multicamOps.ts';
+export * from './multicamEnvelope.ts';
+export * from './multicamAuto.ts';

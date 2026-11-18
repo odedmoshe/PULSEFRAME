@@ -26,6 +26,7 @@ import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { toastOf } from './editor/undoToast.ts';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
+import { FamilyFilmDialog } from './editor/FamilyFilmDialog.tsx';
 import { findClip, findEffect } from '@pulseframe/core';
 import { isDecodeBudgetReason } from '@pulseframe/engine';
 import { clipLabel } from './editor/Timeline.tsx';
@@ -128,7 +129,7 @@ function PreviewNotice() {
 }
 
 function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasElement | null>; keymap: Keymap }) {
-  const { t } = useEditorState();
+  const { t, state } = useEditorState();
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
   return (
     // The shell grid (ds/shell.css): top bar, error bar, rail, browser, stage, inspector, splitter, timeline, status bar.
@@ -138,7 +139,8 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
       <ErrorBar />
       <Rail />
       <Library />
-      <main className="stage">
+      {/* the stage and the timeline show the active sequence: the sequence tabs (SequenceSwitcher) control them */}
+      <main className="stage" id="pf-stage">
         <StageHeader />
         <div className="canvas-wrap">
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
@@ -159,6 +161,8 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
       <PhoneDropHost />
       <FolderPicker />
       <GalleryHost />
+      {/* the family film dialog (ADR-0026): draws nothing until an entry, the event card or the palette opens it */}
+      <FamilyFilmDialog lang={state.lang} />
     </div>
   );
 }

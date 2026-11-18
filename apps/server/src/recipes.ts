@@ -11,10 +11,10 @@ import { detectSilences, heavy } from './analysis.ts';
 import type { Governance } from './governance.ts';
 import { ApiError, type Store } from './store.ts';
 
-const STATUS: Record<RecipeError['code'], number> = { not_found: 404, needs_analysis: 409, invalid_args: 400, nothing_to_do: 409 };
+const STATUS: Record<RecipeError['code'], number> = { not_found: 404, needs_analysis: 409, invalid_args: 400, nothing_to_do: 409, not_built: 501 };
 const wrap = <R>(fn: () => R): R => {
   try { return fn(); } catch (e) {
-    if (e instanceof RecipeError) throw new ApiError(STATUS[e.code], e.code === 'nothing_to_do' ? 'nothing_to_do' : e.code === 'needs_analysis' ? 'needs_analysis' : e.code === 'not_found' ? 'not_found' : 'invalid_request', e.message, {}, e.hint);
+    if (e instanceof RecipeError) throw new ApiError(STATUS[e.code], e.code === 'nothing_to_do' ? 'nothing_to_do' : e.code === 'needs_analysis' ? 'needs_analysis' : e.code === 'not_found' ? 'not_found' : e.code === 'not_built' ? 'not_built' : 'invalid_request', e.message, {}, e.hint);
     throw e;
   }
 };

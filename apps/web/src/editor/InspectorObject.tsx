@@ -34,6 +34,7 @@ import { LayoutPicker } from './LayoutPicker.tsx';
 import { TextAnimationField } from './TextAnimationField.tsx';
 import { TextEffectsField } from './TextEffectsField.tsx';
 import { Section, SectionsContext } from './Section.tsx';
+import { FilmWhy } from './FilmWhy.tsx';
 import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } from './icons.tsx';
 import { Menu, ScrubField, Tabs, type MenuItem, type TabSpec } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
@@ -44,6 +45,7 @@ import { CutPanel, TransitionPanel } from './InspectorCut.tsx';
 import { ProjectPanel } from './InspectorProject.tsx';
 import { FontPicker } from './FontPicker.tsx';
 import { FieldLiveLine, FieldMenu, FieldTextBox } from './lifeline/FieldMenu.tsx';
+import { MulticamClipBlock } from './MulticamClipBlock.tsx';
 
 type Media = Extract<Clip, { type: 'media' }>;
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -602,6 +604,8 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
   const reset = () => void editor.setShownTransform(clip, shown, { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }, 'Reset transform');
   return (
     <>
+      {/* why this clip is in the family film (ADR-0026): draws nothing for a clip that is in no film run */}
+      {media && state.selection.length === 1 && <FilmWhy key={`film-why:${media.id}`} clipId={media.id} lang={state.lang} />}
       <Section id="transform" title={S.secPlace} onReset={moved && editor.playheadOnSelection ? reset : undefined}>
         {/* Values shown are the ones rendered at the playhead. Editing an animated property writes a keyframe there. */}
         <FormatScope clip={clip} />
@@ -610,6 +614,7 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
       {media && <Section id="fill" title={S.secFill}><FrameFill clip={media} shown={shown} /></Section>}
       <BeatRow clip={clip} onOpen={() => editor.openInspectorTab('effects')} />
       {media && !variantId && <CutLink clip={media} />}
+      {media && <MulticamClipBlock clip={media} />}
       <Section id="keys" title={S.secKeys} defaultOpen={false} summary={ks.count ? S.keysCount(ks.count) : S.keysNone}><KeyframeButtons clip={clip} keymap={keymap} /></Section>
       <Section id="blend" title={S.secBlend} defaultOpen={false} summary={S.blend[blend] ?? blend}><BlendField clip={clip} /></Section>
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${shortTimecode(T.frameIndexAt(clip.start, editor.rate), fps)} · ${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>

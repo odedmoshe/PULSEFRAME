@@ -513,6 +513,46 @@ async function main() {
       await page.locator('[data-testid^="life-event-"][data-event-id]').first().waitFor({ timeout: 10000 }).catch(() => {});
       const lifeEvents = { events: await page.locator('[data-testid^="life-event-"][data-event-id]').count(), sunsetRadios: await page.locator('[data-testid^="life-sunset-"] input[type=radio]').count() };
       await auditState('life-library-events', { shown: lifeEvents.events >= 2 && lifeEvents.sunsetRadios === 2, ...lifeEvents });
+      // the family film (ADR-0026) from the event card: the dialog's three steps (a modal: focus inside, Escape, focus back to the
+      // card's «סרט מהאירוע»), then the film made, its bar with the «why» list, and the inspector's reasons of a film clip; undone after
+      {
+        const opener = '[data-testid=film-open][data-variant=event-card]';
+        await page.locator(opener).first().waitFor({ timeout: 8000 }).catch(() => {});
+        const hasOpener = (await page.locator(opener).count()) >= 1;
+        await auditState('film-entry-event-card', { shown: hasOpener });
+        if (hasOpener) {
+          const fd = await dialogBehaviour('film-dialog', async () => { await page.locator(opener).first().click(); }, opener);
+          await auditState('film-dialog-what', { startsInside: fd.startsInside, tabStepsThatLeftTheDialog: fd.tabStepsThatLeftTheDialog, shown: (await page.getByTestId('film-step-what').count()) === 1 }, true);
+          await page.getByTestId('film-next').click();
+          await page.getByTestId('film-step-length').waitFor({ timeout: 8000 }).catch(() => {});
+          await auditState('film-dialog-length', { shown: (await page.getByTestId('film-step-length').count()) === 1 }, true);
+          await page.getByTestId('film-next').click();
+          await page.locator('[data-testid=film-plan-row]').first().waitFor({ timeout: 60000 }).catch(() => {});
+          await auditState('film-dialog-plan', { shown: (await page.locator('[data-testid=film-plan-row]').count()) >= 1 && (await page.locator('[data-testid=film-reason]').count()) >= 1 }, true);
+          Object.assign(states.at(-1), await fd.close());
+          // make the film (the same three steps, then «יצירת הסרט»)
+          await page.locator(opener).first().click();
+          await page.getByTestId('film-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+          await page.getByTestId('film-next').click(); await page.getByTestId('film-next').click();
+          await page.locator('[data-testid=film-plan-row]').first().waitFor({ timeout: 60000 }).catch(() => {});
+          await page.getByTestId('film-apply').click();
+          await page.getByTestId('film-bar').waitFor({ timeout: 30000 }).catch(() => {});
+          await auditState('film-bar', { shown: (await page.getByTestId('film-bar').count()) === 1 });
+          await page.getByTestId('film-bar-why').click().catch(() => {});
+          await page.getByTestId('film-bar-why-list').waitFor({ timeout: 5000 }).catch(() => {});
+          await auditState('film-bar-why', { shown: (await page.getByTestId('film-bar-why-list').count()) === 1 });
+          const lifeDoc: any = (await (await fetch(`${s.url}/api/v1/projects/${lifePid}`, { headers: h })).json()).project;
+          const filmRun: any = Object.values(lifeDoc.recipeRuns ?? {}).find((r: any) => r.recipeId === 'template:tpl.family-film');
+          const filmClip = filmRun?.slots?.find((x: any) => x.kind === 'picture')?.clipId as string | undefined;
+          if (filmClip) {
+            await page.locator(`.clip[data-clip-id="${filmClip}"]`).click().catch(() => {});
+            await page.getByTestId('film-why').waitFor({ timeout: 8000 }).catch(() => {});
+          }
+          await auditState('film-why', { shown: (await page.getByTestId('film-why').count()) === 1 && (await page.getByTestId('film-why-reason').count()) === 1 });
+          if (await page.getByTestId('film-bar-undo').count()) { await page.getByTestId('film-bar-undo').click(); await page.getByTestId('film-bar').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {}); }
+          await railOn('media');
+        }
+      }
       await page.getByTestId('life-view-all').click();
       // the title with a live field: its field menu (a menu), then the people sheet opened from it (a modal dialog)
       await page.locator(`.clip[data-clip-id="${lifeTitle}"]`).click();
@@ -561,6 +601,30 @@ async function main() {
       await auditState('cache-storage-row', { shown: (await page.getByTestId('cache-storage-row').count()) === 1 && (await page.getByTestId('cache-clear').count()) === 1 }, true);
       await page.keyboard.press('Escape');
       await page.getByTestId('settings-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      // shorts (ADR-0018): the Shorts panel (its four steps) and the sequence switcher with a short present, with the delete
+      // confirmation. The short is added through the public add_sequence operation and removed again, so every language starts alike.
+      {
+        const shApi = makeApi(s.url, s.auth.tokens.agent);
+        await page.goto(`${s.ownerUrl}&project=${pid}`);
+        await page.getByTestId('timecode').waitFor();
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+        await page.getByTestId('workspace-shorts').click({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('shorts-panel').waitFor({ timeout: 8000 }).catch(() => {});
+        await auditState('shorts-panel', { shown: (await page.getByTestId('shorts-panel').count()) === 1 && (await page.locator('[data-testid=shorts-step]').count()) === 4 });
+        const made = await shApi.tx(pid, [{ op: 'add_sequence', args: { name: lang === 'he' ? 'קטע בדיקה' : 'Test short', format: { width: 720, height: 1280, fit: 'cover', profileId: 'vertical-9x16', safeArea: null } } }]).catch(() => null);
+        const shortId = made?.results?.[0]?.output?.sequenceId as string | undefined;
+        if (shortId) {
+          await page.getByTestId('sequence-switcher').waitFor({ timeout: 8000 }).catch(() => {});
+          await auditState('shorts-switcher', { shown: (await page.getByTestId('sequence-switcher').count()) === 1 && (await page.locator('[data-testid=sequence-switcher] [role=tab]').count()) === 2 });
+          await page.locator(`[data-testid=sequence-tab][data-sequence-id="${shortId}"]`).click();
+          await page.getByTestId('sequence-tab-delete').waitFor({ timeout: 5000 }).catch(() => {});
+          const sd = await dialogBehaviour('sequence-delete-dialog', async () => { await page.getByTestId('sequence-tab-delete').click(); }, '[data-testid=sequence-tab-delete]');
+          await auditState('shorts-delete-dialog', { startsInside: sd.startsInside, tabStepsThatLeftTheDialog: sd.tabStepsThatLeftTheDialog }, true);
+          Object.assign(states.at(-1), await sd.close());
+          await shApi.tx(pid, [{ op: 'remove_sequence', args: { sequenceId: shortId, withContents: true } }]).catch(() => null);
+        }
+        await page.getByTestId('workspace-pro').click().catch(() => {});
+      }
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);
       await page.getByTestId('welcome').waitFor({ timeout: 10000 }).catch(() => {});

@@ -117,13 +117,13 @@ export type FilmReasonCode = (typeof FILM_REASON_CODES)[number];
 export interface FilmReason { code: FilmReasonCode; /** seconds inside the file, one decimal, for wording only */ fromSecond?: number; toSecond?: number; value?: number; unit?: 'permille' | 'db' | 'ratio' }
 export const FILM_EXCLUSION_CODES = ['no_room', 'too_short', 'excluded_by_you', 'no_picture', 'kept_by_hand'] as const;
 export interface FilmExclusion { assetId: string; code: (typeof FILM_EXCLUSION_CODES)[number]; details: Record<string, unknown> }
-export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises'] as const;
+export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing'] as const;
 export type FilmWarningCode = (typeof FILM_WARNING_CODES)[number];
 export interface FilmWarning { code: FilmWarningCode; message: string; details: Record<string, unknown> }
 export interface FilmPick {
   key: string; assetId: string; order: number;
   startFrame: number; frames: number;                                  // project frames
-  span: { count: number; unit: 'beat' | 'bar' } | null;                // null next to a kept clip (off grid)
+  span: { count: number; unit: 'beat' | 'bar' } | null;                // null off the grid: next to a kept clip, or the first pick when music kept by hand was moved off the film start
   sourceInFrame: number | null; sourceFrames: number | null;           // asset frames; null for a still
   kind: 'measured' | 'default-middle' | 'whole-clip' | 'still';
   windowIndex: number | null; windowsAvailable: number;
@@ -207,12 +207,12 @@ const sec = (asset: Pick<Asset, 'video'>, frame: number) => Math.round(T.toSecon
  * - a still: [still];
  * - no record of MOMENTS_ALGO: [not_measured] (+ default_middle when the clip sits in the middle of the file, + whole_clip);
  * - a flat record: [active_throughout] when file.motion >= FILM_REASON_RULES.motionPermille, else [no_clear_moment] (+ default_middle);
- * - otherwise the window that overlaps the clip most (lowest index on ties): inner_motion (its motion, seconds of the moment),
+ * - otherwise the window whose core (peak +- coreSeconds) the clip covers most (lowest index on ties): inner_motion (its motion, seconds of the moment),
  *   sound_burst (the burst inside the clip) or loud_sound (level), past_clean_stretch (the clip reads outside the clean stretch),
  *   sharp, whole_clip — in that order, cut to FILM.maxReasons. When none of inner_motion, sound_burst and loud_sound is said
  *   (a quiet file: its windows are found against its own 20th percentile, so their values can lie under FILM_REASON_RULES),
  *   measured_moment (seconds of the moment, no value) takes their place, first: a clip on a measured window always has a reason;
- * - no window overlaps the clip: [] (the clip shows none of the measured moments, e.g. after a hand edit).
+ * - the clip covers no window's core: [] (it shows none of the measured moments, e.g. after a hand edit).
  * `opts.chosenByYou` / `opts.second` put chosen_by_you / second_moment first (the planner knows them, the clip does not).
  */
 export function filmReasonsFor(asset: Pick<Asset, 'kind' | 'video' | 'duration'>, record: FilmMomentsRecord | null | undefined, sourceInFrame: number, sourceFrames: number, opts: { chosenByYou?: boolean; second?: boolean } = {}): FilmReason[] {
@@ -229,13 +229,17 @@ export function filmReasonsFor(asset: Pick<Asset, 'kind' | 'video' | 'duration'>
     if (record.file.motion !== null && record.file.motion >= FILM_REASON_RULES.motionPermille) return cut([{ code: 'active_throughout', value: record.file.motion, unit: 'permille' }, ...(whole ? [{ code: 'whole_clip' as const }] : [])]);
     return cut([{ code: 'no_clear_moment' }, ...tail()]);
   }
-  let best = -1, overlap = 0;
-  record.windows.forEach((w, i) => { const o = Math.min(to, w.toFrame) - Math.max(from, w.fromFrame); if (o > overlap) { overlap = o; best = i; } });
-  if (best < 0) return head.slice(0, FILM.maxReasons);
-  const w = record.windows[best]!;
+  // the moment the clip shows: the window whose core (peak ± coreSeconds, inside its clean stretch) the clip covers most (lowest
+  // index on ties). Two windows can share one clean stretch, so overlap with the stretch alone would name a moment the clip
+  // does not show, with seconds outside it. A clip that covers no window's core shows none of the measured moments.
   const rate = asset.video.frameRate;
   const core = Math.round((MOMENTS_GATES.coreSeconds * rate.num) / rate.den);
-  const a = Math.max(w.fromFrame, w.peakFrame - core, from), b = Math.max(a + 1, Math.min(w.toFrame, w.peakFrame + core, to));
+  const coreOf = (w: MomentWindow) => [Math.max(w.fromFrame, w.peakFrame - core, from), Math.min(w.toFrame, w.peakFrame + core, to)] as const;
+  let best = -1, overlap = 0;
+  record.windows.forEach((w, i) => { const [p, q] = coreOf(w); if (q - p > overlap) { overlap = q - p; best = i; } });
+  if (best < 0) return head.slice(0, FILM.maxReasons);
+  const w = record.windows[best]!;
+  const [a, b] = coreOf(w);
   const out: FilmReason[] = [];
   if (w.basis.includes('inner-motion') && w.motion !== null && w.motion >= FILM_REASON_RULES.motionPermille) out.push({ code: 'inner_motion', fromSecond: sec(asset, a), toSecond: sec(asset, b), value: w.motion, unit: 'permille' });
   if (w.burstFrame !== undefined && w.burstFrame >= from && w.burstFrame < to) out.push({ code: 'sound_burst', fromSecond: sec(asset, w.burstFrame) });

@@ -20,8 +20,9 @@
  */
 import { z } from 'zod';
 import type * as T from '@pulseframe/time';
-import { ANIMATABLE, KeyframeSchema, LoudnessTargetSchema, RationalTimeSchema, SequenceFormatSchema, SequenceOriginSchema, CANDIDATE_ID, MAX_SEQUENCES, type Keyframe, type SequenceOrigin, type ShortReason } from './schema.ts';
+import { ANIMATABLE, KeyframeSchema, LoudnessTargetSchema, RationalTimeSchema, SequenceFormatSchema, SequenceOriginSchema, CANDIDATE_ID, MAX_SEQUENCES, type Keyframe, type ShortOrigin, type ShortReason } from './schema.ts';
 import { RefSchema, TemplateStepSchema, type TemplateStep } from './templateContract.ts';
+import { MAX_TRANSFORM_KEYS } from './keyframe.ts';
 import type { FillerCandidate } from './fillers.ts';
 import { OpError, type OpCall, type OpErrorCode } from './ops.ts';
 
@@ -51,12 +52,19 @@ export const SequenceOpArgs = {
    * public. Replaces one property's whole key list with set_keyframe's rules plus strictly increasing, frame-aligned,
    * non-negative times; keys null = clear and freeze at `at` (clip-local, default 0) like clear_keyframes. The bulk write path
    * of ADR-0018 (reframe), ADR-0019 (curves) and the tracking bake.
+   * ADR-0019 adds (optional, additive; a call without them behaves exactly as before): keys may carry the curves of
+   * keyframe.ts (easing and `bezier`, with the curve rules), and the RANGE FORM: with `from` and `to` only the keys with
+   * from ≤ time ≤ to are replaced, every new key must lie in [from, to], and the keys outside stay as they are, also keys before
+   * the clip start that a trim or split leaves (keyBeforeStart applies to the new keys only); keys null then removes the keys
+   * in the range, and a property left with no keys keeps its value at `at`. Output `replaced`: how many keys went.
    */
   replace_clip_keyframes: z.object({
     clipId: z.string(),
     property: z.enum(ANIMATABLE),
-    keys: z.array(KeyframeSchema).min(1).max(2000).nullable().describe('the whole new key list of this property, strictly increasing in time; null removes every key and keeps the value at `at`'),
+    keys: z.array(KeyframeSchema).min(1).max(MAX_TRANSFORM_KEYS).nullable().describe('the whole new key list of this property (or of the range), strictly increasing in time; null removes every key (or every key in the range) and keeps the value at `at`'),
     at: RationalTimeSchema.optional().describe('clip-local time whose value a cleared property keeps (keys null); default the clip start'),
+    from: RationalTimeSchema.optional().describe('with `to`: replace only the keys in [from, to] (clip-local); every new key must lie in it, keys outside are kept'),
+    to: RationalTimeSchema.optional(),
   }).strict(),
 } as const;
 export type AddSequenceArgs = z.infer<typeof SequenceOpArgs.add_sequence>;
@@ -65,8 +73,8 @@ export type RemoveSequenceArgs = z.infer<typeof SequenceOpArgs.remove_sequence>;
 export type ReplaceClipKeyframesArgs = z.infer<typeof SequenceOpArgs.replace_clip_keyframes>;
 /** add_sequence's output. The track ids are null for tracks 'empty'. */
 export interface AddSequenceOutput { sequenceId: string; videoTrackId: string | null; textTrackId: string | null; audioTrackId: string | null }
-/** replace_clip_keyframes's output. */
-export interface ReplaceClipKeyframesOutput { keyframeCount: number }
+/** replace_clip_keyframes's output. `replaced` (ADR-0019): the number of keys the call removed or replaced (range form and whole list). */
+export interface ReplaceClipKeyframesOutput { keyframeCount: number; replaced?: number }
 /** remove_sequence's output: what went with it. */
 export interface RemoveSequenceOutput { removedTrackIds: string[]; removedClipIds: string[]; removedMarkerIds: string[] }
 
@@ -293,7 +301,7 @@ export interface PlannedShort {
 export interface ShortsPlan {
   steps: string[]; basis: string[];
   ops: TemplateStep[];
-  origins: { sequence: { $ref: string; out: 'sequenceId' }; origin: SequenceOrigin }[];
+  origins: { sequence: { $ref: string; out: 'sequenceId' }; origin: ShortOrigin }[];
   shorts: PlannedShort[]; warnings: PlanWarning[];
 }
 export interface ShortsPlanContext { createdAt: string; candidates: ReadonlyMap<string, ShortCandidate>; features: ReadonlyMap<string, AudioFeatures> }

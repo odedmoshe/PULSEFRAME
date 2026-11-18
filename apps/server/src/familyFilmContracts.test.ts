@@ -16,7 +16,7 @@ import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
 import { Derivatives } from './derive.ts';
 import { Exporter } from './export.ts';
-import { filmContext, filmRegeneration, filmRunTracks, holdsAgeField, refuseAgesInPlan } from './familyFilm.ts';
+import { applyFamilyFilmFor, filmContext, filmRegeneration, filmRunTracks, holdsAgeField, planFamilyFilmFor, refuseAgesInPlan, regenerateFamilyFilmFor } from './familyFilm.ts';
 import { Governance, type Principal } from './governance.ts';
 import { createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
@@ -174,7 +174,37 @@ describe('the family film through the recipe routes and tools', () => {
     expect([bad.status, bad.body.error?.code]).toEqual([403, 'people_scope_required']);
     expect((await rest('POST', `/projects/${s.pid}/recipe-runs/run_none/regenerate`, {}, auth.tokens.agent)).status).toBe(404);
   });
-  it.todo('W1 + lead: plan, apply as one revision and regenerate a film end to end (after the planner is built)');
+  it('plans, applies as one revision and regenerates end to end; a reused empty A1 stays the film\'s own-sound track and keeps a gain set by hand', async () => {
+    const s = seed('ff-e2e');
+    const tracksOf = (pid: string) => Object.values(store.getProject(pid).doc.sequences).flatMap((q) => q.tracks);
+    const a1 = tracksOf(s.pid).find((t) => t.kind === 'audio' && t.clips.length === 0)!;
+    const nTracks = tracksOf(s.pid).length;
+    const before = revision(s.pid);
+    const plan = await planFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 });
+    expect(plan.picks.length).toBeGreaterThan(0);
+    expect(revision(s.pid)).toBe(before);
+    const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 });
+    expect(applied.revision).toBe(before + 1);
+    // the planner reused the project's empty A1 for the clips' own sound: no step reports that track's id
+    const linkedOnA1 = () => tracksOf(s.pid).find((t) => t.id === a1.id)!.clips.filter((c) => c.type === 'media' && !!c.linkGroupId).length;
+    expect(linkedOnA1()).toBeGreaterThan(0);
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'set_track_audio', args: { trackId: a1.id, gain: 0.6 } }] });
+    const doc = store.getProject(s.pid).doc;
+    expect(filmRunTracks(doc, doc.recipeRuns[applied.runId]!).ownSound).toBe(a1.id);
+    const nAfterApply = tracksOf(s.pid).length;
+    const again = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, { targetSeconds: 60 });
+    expect(again.replaced).toBeGreaterThan(0);
+    // no new own-sound track; the new clips' sound is on A1 again, and the hand-set gain still applies to it
+    expect(tracksOf(s.pid).length).toBe(nAfterApply);
+    expect(linkedOnA1()).toBeGreaterThan(0);
+    expect(tracksOf(s.pid).find((t) => t.id === a1.id)!.audio?.gain).toBe(0.6);
+    // A1 is now recorded in the run, so the next regeneration finds it without the slot search too
+    const run = store.getProject(s.pid).doc.recipeRuns[applied.runId]!;
+    expect(run.createdIds).toContain(a1.id);
+    await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, { targetSeconds: 30 });
+    expect(tracksOf(s.pid).length).toBe(nAfterApply);
+    expect(tracksOf(s.pid).find((t) => t.id === a1.id)!.audio?.gain).toBe(0.6);
+  });
 });
 
 describe('the planner context from the life line (filmContext)', () => {

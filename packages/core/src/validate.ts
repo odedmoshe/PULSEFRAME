@@ -2,12 +2,23 @@ import * as T from '@pulseframe/time';
 import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange, transitionDef } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
-import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE, PersonSchema, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE, MAX_SEQUENCES, PersonSchema, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 import { personNameKey } from './people.ts';
 import { lifeIssues } from './fields.ts';
 import { isInheritedName, own } from './own.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 import { momentsProblem } from './momentsContract.ts';
+import { isV1Easing, type Keyframe } from './keyframe.ts';
+import { CURVES_BUILT } from './curves.ts';
+
+/**
+ * PLACEHOLDER of the ADR-0019 contracts commit, until curves.ts CURVES_BUILT: a key with a curve of ADR-0019 or with handles is
+ * not renderable in this build. These fields are new, so this can only fire on documents that use them. W1 replaces it with
+ * the rules 'keyframe_curve' (bezier present exactly when easing is 'bezier') and 'keyframe_curve_flash' (no turn-back curve
+ * on a light channel: keyframeChannels.ts isLightChannel).
+ */
+const unbuiltCurve = (k: Keyframe) => !CURVES_BUILT && (!isV1Easing(k.easing) || k.bezier !== undefined);
+import { multicamIssues } from './multicamValidate.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -110,9 +121,14 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     const rangeStart = a.provenance.derived?.sourceRangeStart;
     if (rangeStart && T.isNegative(rangeStart)) issues.push({ code: 'derived_range', message: `asset ${a.id}: its source range cannot start before 0`, ids: [a.id] });
   }
+  // Sequences of one project (ADR-0018): at most MAX_SEQUENCES, and the main one takes its frame from the settings and has no
+  // measured origin. Ids inside an origin are informational and deliberately not checked (the file may be removed later).
+  const sequenceCount = Object.keys(doc.sequences).length;
+  if (sequenceCount > MAX_SEQUENCES) issues.push({ code: 'too_many_sequences', message: `a project holds at most ${MAX_SEQUENCES} sequences; this one holds ${sequenceCount}`, ids: [] });
   for (const [key, seq] of Object.entries(doc.sequences)) {
     if (key !== seq.id) issues.push({ code: 'key_mismatch', message: `sequence key ${key} != id ${seq.id}`, ids: [key] });
     uniq(seq.id);
+    if (key === doc.mainSequenceId && (seq.format !== undefined || seq.origin !== undefined)) issues.push({ code: 'main_sequence_format', message: `the main sequence ${seq.id} takes its frame from the project settings and has no format or origin of its own`, ids: [seq.id] });
     for (const tr of seq.tracks) {
       uniq(tr.id);
       if ((tr.kind === 'caption') !== !!tr.caption) issues.push({ code: 'caption_config', message: `track ${tr.id}: caption settings must exist exactly on caption tracks`, ids: [tr.id] });
@@ -144,6 +160,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (i > 0 && !T.lt(keys[i - 1]!.time, k.time)) issues.push({ code: 'unsorted_keyframes', message: `clip ${c.id} ${prop} keyframes are not strictly increasing in time`, ids: [c.id] });
             if (!T.isFrameAligned(k.time, rate)) issues.push({ code: 'not_frame_aligned', message: `clip ${c.id} ${prop} keyframe is not on a frame boundary`, ids: [c.id] });
             if (!TransformSchema.shape[prop].safeParse(k.value).success) issues.push({ code: 'keyframe_out_of_range', message: `clip ${c.id} ${prop} keyframe value ${k.value} is out of range`, ids: [c.id] });
+            if (unbuiltCurve(k)) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} ${prop} keyframe uses the curve "${k.easing}", which this build cannot draw yet`, ids: [c.id] });
           });
         }
         const seenFx = new Set<string>();
@@ -160,6 +177,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (d && NOT_ANIMATABLE[fx.type]?.includes(param)) continue;
             const ok = !!d && animatableParams(fx.type).includes(param) && keys.every((k, i) => (i === 0 || T.lt(keys[i - 1]!.time, k.time)) && T.isFrameAligned(k.time, rate) && d.params.safeParse({ ...fx.params, [param]: k.value }).success);
             if (!ok) issues.push({ code: 'effect_keyframes', message: `clip ${c.id} effect ${fx.type}: keyframes of "${param}" are not animatable, out of range, unsorted or off the frame grid`, ids: [c.id] });
+            const odd = keys.find(unbuiltCurve);
+            if (odd) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} effect ${fx.type}: a keyframe of "${param}" uses the curve "${odd.easing}", which this build cannot draw yet`, ids: [c.id] });
           }
           // Time effects and beat modulators are new fields: these rules can only fire on documents that use them, so an
           // older project stays editable (see the note on NOT_ANIMATABLE keys above).
@@ -380,5 +399,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   }
   if (Object.keys(doc.people ?? {}).length > MAX_PEOPLE) issues.push({ code: 'life_person_limit', message: `the project has more than ${MAX_PEOPLE} people`, ids: [] });
   issues.push(...lifeIssues(doc));
+  // multicam groups and the tags of their program segments (ADR-0020)
+  if (doc.multicam || hasTags(doc)) issues.push(...multicamIssues(doc, uniq));
   return issues;
 }
+const hasTags = (doc: ProjectDocument) => Object.values(doc.sequences).some((s) => s.tracks.some((t) => t.clips.some((c) => c.type === 'media' && !!c.multicam)));

@@ -3,7 +3,7 @@ import fc from 'fast-check';
 import { ANIMATE_CLIP_MOTIONS, animateClipKeys, MOTION_PRESETS, motionKeys, previousMotion, shortestSafeLoopFrames, type AnimateClipMotion, type MotionContext, type MotionKey, type MotionPreset, type MotionProperty } from './motionPresets.ts';
 import { applyTransaction, createProject, diffEntities, findClip, OpError, restoreEntities, transformAt, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 import * as T from '@pulseframe/time';
-import { sampleKeyframes } from './animation.ts';
+import { sampleKeyframes, TRANSFORM_RANGE } from './animation.ts';
 
 type Rest = MotionContext['rest'];
 const RANGE: Record<MotionProperty, [number, number]> = { x: [-4, 4], y: [-4, 4], scale: [0.01, 20], rotation: [-3600, 3600], opacity: [0, 1] };
@@ -127,7 +127,7 @@ describe('motionKeys rules', () => {
 describe('loop.spin keeps turning', () => {
   const rate = { num: 30, den: 1 };
   /** The rotation the keyframe sampler plays at a whole frame. */
-  const play = (keys: MotionKey[], frame: number) => sampleKeyframes(keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing })), T.frameTime(frame, rate));
+  const play = (keys: MotionKey[], frame: number) => sampleKeyframes(keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing })), T.frameTime(frame, rate), TRANSFORM_RANGE.rotation);
   /** Distance between two angles, in degrees, whole turns apart counting as the same angle. */
   const apart = (a: number, b: number) => Math.abs(((((a - b) % 360) + 540) % 360) - 180);
 

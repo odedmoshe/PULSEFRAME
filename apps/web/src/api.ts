@@ -1,4 +1,4 @@
-import type { Asset, ExportMode, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
+import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -120,7 +120,8 @@ export const api = {
   findSilences: (id: string, body: { assetId: string; minSeconds: number; keepSeconds: number }) =>
     call<SilenceResult>(`/projects/${id}/analysis/silences`, json(body)),
   findFillers: (id: string, body: { assetId: string; words?: string[] }) => call<SilenceResult & { words: { kind: 'hesitation' | 'repeat' | 'listed'; text: string; sourceStartSeconds: number; onTimeline: { startSeconds: number }[] }[] }>(`/projects/${id}/analysis/fillers`, json(body)),
-  measureLoudness: (id: string) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json({})),
+  /** The programme loudness of the main edit, or of one sequence (a short) with `sequenceId`. */
+  measureLoudness: (id: string, sequenceId?: string) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json(sequenceId ? { sequenceId } : {})),
   measureVoice: (id: string, body: VoiceMeasureRequest) => call<VoiceCheck>(`/projects/${id}/analysis/voice`, json(body)),
   /** The same measurement as a durable job (its output is { kind: 'voice', result: VoiceCheck }). */
   startVoiceMeasureJob: (id: string, body: VoiceMeasureRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/voice`, json({ ...body, background: true })),
@@ -145,10 +146,23 @@ export const api = {
   decideApproval: (id: string, approvalId: string, decision: 'approve' | 'reject') => call<{ approval: Approval; jobId?: string }>(`/projects/${id}/approvals/${approvalId}/${decision}`, json({})),
   proposals: (id: string) => call<{ proposals: Proposal[] }>(`/projects/${id}/proposals?status=open`),
   decideProposal: (id: string, proposalId: string, decision: 'accept' | 'reject') => call<{ proposal: Proposal }>(`/projects/${id}/proposals/${proposalId}/${decision}`, json({})),
-  startExport: (id: string, options?: { variantId?: string; mode?: ExportMode; selfCheck?: SelfCheckMode }) => call<{ jobId: string }>(`/projects/${id}/exports`, options ? json(options) : { method: 'POST' }),
+  startExport: (id: string, options?: { variantId?: string; sequenceId?: string; format?: string; frame?: number; mode?: ExportMode; selfCheck?: SelfCheckMode }) => call<{ jobId: string }>(`/projects/${id}/exports`, options ? json(options) : { method: 'POST' }),
   exportBatch: (id: string, variantIds: string[]) => call<{ jobs: { jobId: string; variantId: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ variantIds })),
+  /** One export job per sequence (shorts), all or nothing. */
+  exportSequences: (id: string, sequenceIds: string[], options?: { format?: string }) => call<{ jobs: { jobId: string; sequenceId?: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ items: sequenceIds.map((sequenceId) => ({ sequenceId })), ...(options ? { options } : {}) })),
+  // ----- shorts (ADR-0018): sequences, candidate moments, plan, make, reframe -----
+  sequences: (id: string) => call<{ revision: number; sequences: SequenceSummary[] }>(`/projects/${id}/sequences`),
+  /** The ranked candidates when the audio is already measured (200), else a measuring job to poll (202). */
+  findShorts: (id: string, body: Partial<FindShortsBody> & { assetId: string }) => call<ShortCandidatesView | { jobId: string; status: string }>(`/projects/${id}/shorts/candidates`, json(body)),
+  planShorts: (id: string, body: Partial<BuildShortsBody>) => call<ShortsPlanView>(`/projects/${id}/shorts/plan`, json(body)),
+  /** Makes the shorts as ONE undoable step. */
+  makeShorts: (id: string, body: Partial<BuildShortsBody>) => call<ShortsApplyResult>(`/projects/${id}/shorts`, json(body)),
+  planReframe: (id: string, sequenceId: string, body: Partial<ReframePlanBody>) => call<ReframePlanView>(`/projects/${id}/sequences/${encodeURIComponent(sequenceId)}/reframe-plan`, json(body)),
   job: (jobId: string) => call<JobEvent & { status: string; /** an export's stored options (POST /exports body) */ options?: { variantId?: string; format?: string; scale?: number; quality?: string; captions?: string } }>(`/jobs/${jobId}`),
-  preflight: (id: string, variantId: string | null) => call<PreflightReport>(`/projects/${id}/preflight${variantId ? `?variant=${encodeURIComponent(variantId)}` : ''}`),
+  preflight: (id: string, variantId: string | null, sequenceId?: string | null) => {
+    const q = [variantId ? `variant=${encodeURIComponent(variantId)}` : '', sequenceId ? `sequence=${encodeURIComponent(sequenceId)}` : ''].filter(Boolean).join('&');
+    return call<PreflightReport>(`/projects/${id}/preflight${q ? `?${q}` : ''}`);
+  },
   planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
   applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),
   regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),

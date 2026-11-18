@@ -15,6 +15,8 @@ import { Badge, Button, AnchoredError } from '../../ds/index.ts';
 import { useEditorState } from '../store.ts';
 import { onMenuKeyDown } from '../menuKeys.ts';
 import { LifeThumb } from './LifeThumb.tsx';
+import { FamilyFilmEntry } from '../FamilyFilmEntry.tsx';
+import { isPictureAsset } from '../familyFilm.logic.ts';
 import { ClockShift } from './CaptureEditor.tsx';
 import { LIFE_STRINGS, fill } from './lifeline.strings.ts';
 import { LIFE_TESTIDS } from './lifeline.testids.ts';
@@ -58,6 +60,7 @@ export function EventRow({ eventId }: { eventId: string }): ReactElement | null 
   const m = eventModel(doc, event, lang);
   const choice = sunsetChoices(doc, event, lang, { before: S.sunsetBefore, after: S.sunsetAfter });
   const files = eventFilesInOrder(doc, event);
+  const filmFiles = files.filter((id) => isPictureAsset(doc.assets[id]));
   const prev = previousEvent(doc, eventId, lang);
   const heading = eventHeading(m, S.eventUntitled);
   const toast = (title: string, transactionId: string | null | undefined, body?: string) => { if (transactionId) editor.notify({ kind: 'undo', title, ...(body ? { body } : {}), undoes: transactionId }); };
@@ -134,6 +137,8 @@ export function EventRow({ eventId }: { eventId: string }): ReactElement | null 
       </div>
       <div className="pf-ev-actions">
         <Button size="sm" variant="secondary" icon={<Plus size={14} strokeWidth={2} aria-hidden="true" />} data-testid={LIFE_TESTIDS.eventAdd(eventId)} onClick={() => void addToTimeline()}>{S.eventAddToTimeline}</Button>
+        {/* the family film of this event (ADR-0026): its pictures and videos in capture order, with its name and day for the title */}
+        {filmFiles.length > 0 && <FamilyFilmEntry variant="event-card" lang={lang} source={{ assetIds: filmFiles, event: m.name ? { id: eventId, name: m.name.slice(0, 80), ...(m.first && /^\d{4}-\d{2}-\d{2}/.test(m.first) ? { date: m.first.slice(0, 10) } : {}) } : null }} />}
         <button ref={btn} type="button" className="pf-life-more" aria-haspopup="menu" aria-expanded={!!menu} aria-label={`${S.eventMenu}: ${heading}`} title={S.eventMenu} data-testid={`life-event-menu-${eventId}`} onClick={() => (menu ? setMenu(null) : open())}><Ellipsis size={16} strokeWidth={1.75} aria-hidden="true" /></button>
       </div>
       {choice && (

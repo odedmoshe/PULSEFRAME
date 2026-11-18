@@ -81,7 +81,11 @@
     "proof:phone-drop-baseline": "tsx packages/evals/src/phone-drop-baseline.ts",
     "proof:incremental": "tsx packages/evals/src/incremental-export-proof.ts",
     "proof:family-film": "tsx packages/evals/src/family-film-proof.ts",
-    "proof:shorts": "tsx packages/evals/src/shorts-proof.ts"
+    "proof:shorts": "tsx packages/evals/src/shorts-proof.ts",
+    "baseline:keys": "tsx packages/evals/src/keys-baseline.ts",
+    "proof:keyframes": "tsx packages/evals/src/keyframes-proof.ts",
+    "proof:multicam": "tsx packages/evals/src/multicam-proof.ts",
+    "proof:multicam-ui": "tsx packages/evals/src/multicam-ui-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

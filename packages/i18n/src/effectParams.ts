@@ -117,6 +117,9 @@ const STAGE_WORDS: Record<string, { he: string; en: string }> = {
   'measuring moments': { he: 'מודד רגעים', en: 'measuring moments' },
   // the shorts finder's measuring job (core shortsContract.ts SHORTS_STAGES, ADR-0018)
   'measuring audio features': { he: 'מודד את הקול', en: 'measuring the sound' }, 'ranking moments': { he: 'מדרג רגעים', en: 'ranking moments' },
+  // the multicam sync job (core multicamApi.ts MULTICAM_SYNC_STAGES, ADR-0020); 'measuring sound 2/5' keeps its count
+  'measuring sound': { he: 'מודד את הקול של הזוויות', en: 'measuring the angles\' sound' }, 'matching angles': { he: 'מתאים בין הזוויות', en: 'matching the angles' },
+  'fitting sync': { he: 'מחשב את הסנכרון', en: 'fitting the sync' }, 'saving sync': { he: 'שומר את הסנכרון', en: 'saving the sync' },
 };
 export function jobStageLabel(stage: string | null | undefined, lang: 'he' | 'en'): string {
   if (!stage) return '';
