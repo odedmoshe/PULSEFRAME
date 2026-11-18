@@ -265,6 +265,27 @@ describe('cancel, recovery and a removed asset', () => {
   }, 240_000);
 });
 
+describe('stale cache: sound that arrived later', () => {
+  it('measured while the waveform was missing, then measured again: the stored picture series is reused (no decode) and the sound is added', async () => {
+    const p = await project('add-sound', ['film-c.mp4']);
+    await derivatives.idle();
+    const noWave: MomentsDeps['derivatives'] = { get: (h, k) => (k === 'waveform' ? null : derivatives.get(h, k)), put: (...a) => derivatives.put(...a) };
+    const first = await settle((startMomentsJob(store, gov, USER, p.pid, { assetIds: p.ids, overwrite: true }, { derivatives: noWave }) as JobRow).id);
+    expect(first.status).toBe('succeeded');
+    const m1 = doc(p.pid).analyses[p.ids[0]!]!.moments!;
+    expect(m1.measured).toEqual({ picture: true, sound: false });
+    expect(derivatives.get(doc(p.pid).assets[p.ids[0]!]!.contentHash, 'moments')!.meta).toMatchObject({ sound: false, picture: 'proxy' });
+    const c = counted();
+    const second = await settle((startMomentsJob(store, gov, USER, p.pid, { assetIds: p.ids }, deps({ readSamples: c.read })) as JobRow).id);
+    expect(second.status).toBe('succeeded');
+    expect(c.calls()).toBe(0);
+    const m2 = doc(p.pid).analyses[p.ids[0]!]!.moments!;
+    expect(m2.measured).toEqual({ picture: true, sound: true });
+    expect(dataOf(m2.data).data.picture).toEqual(dataOf(m1.data).data.picture);
+    expect(m2.windows[0]!.burstFrame).toBeDefined();
+  }, 240_000);
+});
+
 describe('refusals before anything runs', () => {
   it('an observe-only credential and a track-limited grant are refused; unknown and still-only lists are refused', async () => {
     const p = await project('perm', ['film-e.mp4', truth.still.name]);
