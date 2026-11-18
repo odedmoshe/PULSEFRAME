@@ -171,6 +171,7 @@ async function main() {
       await page.mouse.click(rb.x + frame * 3 + 0.5, rb.y + rb.height / 2); // 90 px/s = 3 px a frame
       await page.waitForFunction((fr0) => document.querySelector('[data-testid=playhead]')?.getAttribute('data-frame') === String(fr0), frame, { timeout: 5000 }).catch(() => {});
     };
+    /** Select a clip, then put the playhead on timeline frame `frame` (inside the clip, so the canvas handles and the path show). */
     const select = async (id: string, frame: number) => {
       await page.locator(`.clip[data-clip-id="${id}"]`).click({ position: { x: 4, y: 4 } });
       await seek(frame);
@@ -237,7 +238,7 @@ async function main() {
       let ok = true;
       for (const via of ['strip', 'path'] as const) {
         await txs(pid, [{ op: 'replace_clip_keyframes', args: { clipId: M, property: 'x', keys: [{ time: f(0), value: -0.3, easing: 'linear' }, { time: f(15), value: 0.1, easing: 'linear' }, { time: f(30), value: 0.3, easing: 'linear' }] } }]);
-        await select(M, 0);
+        await select(M, 360);
         const target = via === 'strip' ? stripKey(15) : vertex(15);
         await target.waitFor({ timeout: 5000 });
         const r0 = (await get(pid)).revision;
@@ -266,7 +267,7 @@ async function main() {
         await page.evaluate((l) => { try { localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
         await page.reload();
         await page.getByTestId('ruler').waitFor();
-        await select(D, 5);
+        await select(D, 185);
         await page.getByTestId(KF_TESTIDS.path).waitFor({ timeout: 5000 });
         const box = await pathBox();
         const pts = JSON.parse((await page.getByTestId(KF_TESTIDS.path).getAttribute('data-points')) ?? '[]') as [number, number, number][];
@@ -275,7 +276,7 @@ async function main() {
         for (const [k, x, y] of pts) { const tr = at(c, k); worst = Math.max(worst, Math.hypot(x - (box.width / 2 + tr.x * box.width), y - (box.height / 2 + tr.y * box.height))); }
         // the layer's box at the playhead sits on the path point of that frame
         const chBox = await page.locator('[data-testid=canvas-handles] .ch-box').boundingBox();
-        const p5 = pts.find((p) => p[0] === 5);
+        const p5 = pts.find((p) => p[0] === 5); // the playhead is on frame 5 of the clip
         const centreErr = chBox && p5 ? Math.hypot(chBox.x + chBox.width / 2 - box.x - p5[1], chBox.y + chBox.height / 2 - box.y - p5[2]) : Infinity;
         const good = pts.length === 60 && worst <= 0.5 && centreErr <= 0.5;
         ok &&= good;
@@ -290,7 +291,7 @@ async function main() {
 
     console.log('\n# P5 a 40 px vertex drag');
     await run('P5', async () => {
-      await select(B, 0);
+      await select(B, 60);
       const before = clipIn((await get(pid)).project, B)!;
       const r0 = (await get(pid)).revision;
       const vb = (await vertex(15).boundingBox())!;
@@ -316,7 +317,7 @@ async function main() {
 
     console.log('\n# P6 the bend grip');
     await run('P6', async () => {
-      await select(C, 0);
+      await select(C, 120);
       const r0 = (await get(pid)).revision;
       await page.screenshot({ path: path.join(art, 'bend-before.png') });
       const grip = page.locator(`[data-testid=${KF_TESTIDS.bend}][data-from="0"][data-to="40"]`);
@@ -343,7 +344,7 @@ async function main() {
 
     console.log('\n# P7 keyboard walk on the keyframe strip');
     await run('P7', async () => {
-      await select(D, 0);
+      await select(D, 180);
       const d0 = (await get(pid));
       const c0 = clipIn(d0.project, D)!;
       const count0 = allClips(d0.project).length;
@@ -376,11 +377,11 @@ async function main() {
 
     console.log('\n# P8 copy and paste keys to a second clip');
     await run('P8', async () => {
-      await select(D, 0);
+      await select(D, 180);
       await stripKey(0).focus();
       await page.keyboard.press('ControlOrMeta+KeyA');
       await page.keyboard.press('ControlOrMeta+KeyC');
-      await select(E, 5);
+      await select(E, 245);
       const r0 = (await get(pid)).revision;
       await stripKey(0).focus();
       await page.keyboard.press('ControlOrMeta+KeyV');
@@ -398,7 +399,7 @@ async function main() {
     console.log('\n# P9 a format view: the path is read-only');
     await run('P9', async () => {
       await chooseFormat(page, tall);
-      await select(M, 0);
+      await select(M, 360);
       await page.getByTestId(KF_TESTIDS.path).waitFor({ timeout: 5000 });
       const r0 = (await get(pid)).revision;
       const editable = await page.getByTestId(KF_TESTIDS.path).getAttribute('data-editable');
@@ -422,7 +423,7 @@ async function main() {
 
     console.log('\n# P10 the opacity picker and the flash rule over REST and MCP');
     await run('P10', async () => {
-      await select(F, 0);
+      await select(F, 300);
       await page.getByTestId(KF_TESTIDS.chip('opacity')).focus();
       await page.keyboard.press('Enter');
       await page.getByTestId(KF_TESTIDS.picker).waitFor({ timeout: 5000 });

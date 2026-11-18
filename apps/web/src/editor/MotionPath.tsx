@@ -47,6 +47,12 @@ export interface MotionPathProps {
   editable: boolean;
   /** The viewer (the clipping layer) in the root's coordinates: points outside it get edge stand-ins. Absent: no stand-ins. */
   view?: { left: number; top: number; right: number; bottom: number };
+  /**
+   * The centre of the layer's box as drawn at the playhead (root coordinates). A vertex or bend grip within LAYER_CLEAR_PX of it
+   * lets the pointer through to the layer's move handle (it stays a keyboard control): dragging the layer there already moves
+   * the path's point at the playhead (a key at the playhead, store.ts setTransformAtPlayhead).
+   */
+  layerCentre?: { x: number; y: number };
 }
 
 const DRAG_THRESHOLD_PX = 3;
@@ -54,6 +60,7 @@ const CENTRE_SNAP_PX = 6;
 const DOT_GAP_PX = 4;
 /** Half the size of a vertex (motionPath.css): stand-ins sit this far inside the viewer edge. */
 const VERTEX_HALF_PX = 6;
+const LAYER_CLEAR_PX = 12;
 const round4 = (v: number) => Math.round(v * 1e4) / 1e4;
 const AXES = [{ property: 'x' as const }, { property: 'y' as const }];
 
@@ -61,7 +68,7 @@ interface PathDrag { kind: 'vertex' | 'bend'; frame: number; a: number; b: numbe
 
 export function MotionPath(props: MotionPathProps): ReactElement | null {
   const { editor, state, t } = useEditorState();
-  const { clip, doc, rect, k, editable, view } = props;
+  const { clip, doc, rect, k, editable, view, layerCentre } = props;
   const drag = useRef<PathDrag | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ x: number; y: number; frame: number; kind: PathDrag['kind'] } | null>(null);
@@ -232,6 +239,7 @@ export function MotionPath(props: MotionPathProps): ReactElement | null {
   const segments = vertices.slice(1).map((b, i) => [vertices[i]!, b] as const).filter(([a, b]) => b - a >= 2);
   const shown = (f: number, kind: PathDrag['kind']) => (preview && preview.kind === kind && preview.frame === f ? toScreen(preview.x, preview.y) : toScreen(atFrame(f).x, atFrame(f).y));
   const disabled = editable ? {} : { 'aria-disabled': true as const };
+  const pass = (p: { x: number; y: number }) => (layerCentre && Math.hypot(p.x - layerCentre.x, p.y - layerCentre.y) < LAYER_CLEAR_PX ? ' mp-pass' : '');
   const dataPoints = JSON.stringify(screen.map((p) => [p.frame, Number(p.x.toFixed(3)), Number(p.y.toFixed(3))]));
   void k; // the scale the handles use: rect.width / frame width; the path maps fractions of the frame straight onto the rect
 
@@ -246,7 +254,7 @@ export function MotionPath(props: MotionPathProps): ReactElement | null {
         const mid = Math.floor((a + b) / 2);
         const p = shown(mid, 'bend');
         return (
-          <button key={`b${a}`} type="button" className="mp-bend" data-testid={KF_TESTIDS.bend} data-from={a} data-to={b} data-frame={mid} style={{ left: p.x, top: p.y }}
+          <button key={`b${a}`} type="button" className={`mp-bend${pass(p)}`} data-testid={KF_TESTIDS.bend} data-from={a} data-to={b} data-frame={mid} style={{ left: p.x, top: p.y }}
             aria-label={`${t('keys.path.bend')} ${tc(a)}–${tc(b)}`} {...disabled}
             onPointerDown={onDown('bend', mid, a, b)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={cancel} onKeyDown={onBendKey(a, b)} />
         );
@@ -255,7 +263,7 @@ export function MotionPath(props: MotionPathProps): ReactElement | null {
         const p = shown(f, 'vertex');
         const v = atFrame(f);
         return (
-          <button key={`v${f}`} type="button" className="mp-vertex" data-testid={KF_TESTIDS.pathPoint} data-frame={f} style={{ left: p.x, top: p.y }}
+          <button key={`v${f}`} type="button" className={`mp-vertex${pass(p)}`} data-testid={KF_TESTIDS.pathPoint} data-frame={f} style={{ left: p.x, top: p.y }}
             aria-pressed={selectedAt(f)} aria-label={`${t('keys.path.point')} ${tc(f)}: ${t('transform.x')} ${fmt(v.x)}, ${t('text.y')} ${fmt(v.y)}`} {...disabled}
             onPointerDown={onDown('vertex', f)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={cancel} onKeyDown={onVertexKey(f)} />
         );
