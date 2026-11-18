@@ -78,3 +78,6 @@ export function setHandleField(h: CurveHandles, index: 0 | 1 | 2 | 3, text: stri
   next[index] = index % 2 === 0 ? clamp(r3(v), 0, 1) : clamp(r3(v), HANDLE_Y[0], HANDLE_Y[1]);
   return next;
 }
+
+/** True when two handle sets differ: a field blur commits only then (tabbing through the dialog must not rewrite a key's curve). */
+export const handlesDiffer = (a: CurveHandles, b: CurveHandles): boolean => a.some((v, i) => v !== b[i]);

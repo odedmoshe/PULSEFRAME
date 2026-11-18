@@ -4,15 +4,15 @@
  * and are remappable; overrides are personal settings in localStorage, never in the project.
  */
 import * as T from '@pulseframe/time';
-import type { Key } from '@pulseframe/i18n';
-import { adjustmentRefusal, carriedChannels, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd } from '@pulseframe/core';
+import { effectParamLabel, type Key } from '@pulseframe/i18n';
+import { adjustmentRefusal, carriedChannels, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, findEffect, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd } from '@pulseframe/core';
 import type { Editor, Notice } from './store.ts';
 import { COMMAND_STRINGS } from './commands.strings.ts';
 import { cutBefore } from './inspector.model.ts';
 import { cutToBeat, rollCut } from './cutActions.ts';
 import { arrangeByEvents, canArrange, freezeSelectedTitle, liveTitleId, openPeopleSheet, readCaptureDates } from './lifeline/lifeCommands.ts';
 import { sourceFromSelection } from './familyFilm.logic.ts';
-import { clampDelta, remapKeySel } from './keyStrip.math.ts';
+import { channelName, clampDelta, remapKeySel } from './keyStrip.math.ts';
 
 export interface Command {
   id: string;
@@ -278,10 +278,12 @@ const gotoKeyframe = (dir: 1 | -1) => (e: Editor) => {
   if (next !== undefined) e.seek(next);
 };
 // ---------- selected keys: curve, delete, nudge, copy, paste (ADR-0019; the keyframe strip, the picker and the commands share them) ----------
+/** The key selection counts only while its clip is the one selected clip: keys never outlive the clip selection as a hidden edit target. */
+const keysOnSelection = (e: Editor) => { const ks = e.getState().keySel, s = e.getState().selection; return !!ks && s.length === 1 && s[0] === ks.clipId; };
 /** The clip the key selection belongs to, with its track, read from the live document; null when it is gone or the track is locked or a format is viewed. */
 export const keyTarget = (e: Editor): { clip: Clip; track: Track; sel: NonNullable<ReturnType<Editor['getState']>['keySel']> } | null => {
   const ks = e.getState().keySel, doc = e.doc;
-  if (!ks || !doc || e.getState().viewVariantId) return null;
+  if (!ks || !doc || e.getState().viewVariantId || !keysOnSelection(e)) return null;
   const f = findClip(doc, ks.clipId);
   return f && !f.track.locked ? { clip: f.clip, track: f.track, sel: ks } : null;
 };
@@ -302,12 +304,19 @@ export const nudgeSelectedKeys = (e: Editor, frames: number) => e.commit(() => {
 }, 'Move keyframes');
 export const copySelectedKeys = (e: Editor) => {
   const ks = e.getState().keySel, doc = e.doc;
-  const clip = ks && doc ? findClip(doc, ks.clipId)?.clip : undefined;
+  const clip = ks && doc && keysOnSelection(e) ? findClip(doc, ks.clipId)?.clip : undefined;
   if (!ks || !clip) return;
   const cb = copyKeys(clip, e.rate, ks.keys);
   if (!cb.entries.length) return;
   e.setKeyClipboard(cb);
   e.notify({ kind: 'info', title: e.t('keys.copied') });
+};
+/** A skipped channel named for a person: the clipboard knows the effect type, the target clip may not have the effect. */
+const skippedName = (cb: NonNullable<ReturnType<Editor['getState']>['keyClipboard']>, ch: ChannelRef, t: (k: Key) => string, lang: 'he' | 'en'): string => {
+  if ('property' in ch) return channelName({} as Clip, ch, t, lang);
+  const type = cb.entries.find((x) => channelKey(x.channel) === channelKey(ch))?.effectType;
+  const def = type ? findEffect(type) : undefined;
+  return `${def ? def.name[lang] : ch.effectId} · ${effectParamLabel(ch.param, lang, type)}`;
 };
 /** Paste the copied keys at the playhead of the selected clip. Channels the clip cannot take are skipped and named in a notice. */
 export const pasteKeys = (e: Editor) => {
@@ -323,7 +332,7 @@ export const pasteKeys = (e: Editor) => {
     skipped = out.skipped;
     return out.ops;
   }, 'Paste keyframes');
-  return r.then((res) => { if (skipped.length) e.notify({ kind: 'info', title: `${e.t('keys.pasteSkipped')} ${skipped.map(channelKey).join(', ')}` }); return res; });
+  return r.then((res) => { if (skipped.length) e.notify({ kind: 'info', title: `${e.t('keys.pasteSkipped')} ${skipped.map((ch) => skippedName(cb, ch, e.t, e.getState().lang)).join(', ')}` }); return res; });
 };
 const canEditKeys = (e: Editor) => keyTarget(e) !== null && keyTarget(e)!.sel.keys.length > 0;
 
@@ -422,8 +431,8 @@ export const COMMANDS: Command[] = [
   { id: 'keyframe.focus', label: 'cmd.keyframeFocus', group: 'keyframe', keys: ['Alt+KeyK'], enabled: (e) => hasAnyKey(sel(e)), run: () => document.querySelector<HTMLElement>('[data-testid=key-strip-key]')?.focus() },
   { id: 'keyframe.smooth', label: 'cmd.keyframeSmooth', group: 'keyframe', keys: [], enabled: (e) => CURVES_BUILT && canEditKeys(e), run: (e) => curveSelected(e, 'smooth') },
   { id: 'keyframe.linear', label: 'cmd.keyframeLinear', group: 'keyframe', keys: [], enabled: canEditKeys, run: (e) => curveSelected(e, 'linear') },
-  { id: 'keyframe.curve', label: 'cmd.keyframeCurve', group: 'keyframe', keys: [], enabled: canEditKeys, run: (e) => { const ks = e.getState().keySel; if (ks?.keys.length) e.openCurvePicker(ks.clipId, ks.keys[0]!.frame, ks.keys.filter((k) => k.frame === ks.keys[0]!.frame).map((k) => k.channel)); } },
-  { id: 'keyframe.copy', label: 'cmd.keyframeCopy', group: 'keyframe', keys: [], enabled: (e) => !!e.getState().keySel?.keys.length, run: copySelectedKeys },
+  { id: 'keyframe.curve', label: 'cmd.keyframeCurve', group: 'keyframe', keys: [], enabled: canEditKeys, run: (e) => { const ks = e.getState().keySel; if (keysOnSelection(e) && ks?.keys.length) e.openCurvePicker(ks.clipId, ks.keys[0]!.frame, ks.keys.filter((k) => k.frame === ks.keys[0]!.frame).map((k) => k.channel)); } },
+  { id: 'keyframe.copy', label: 'cmd.keyframeCopy', group: 'keyframe', keys: [], enabled: (e) => keysOnSelection(e) && !!e.getState().keySel?.keys.length, run: copySelectedKeys },
   { id: 'keyframe.paste', label: 'cmd.keyframePaste', group: 'keyframe', keys: [], enabled: (e) => !!e.getState().keyClipboard && !e.selectionLocked && !e.getState().viewVariantId && e.playheadOnSelection, run: pasteKeys },
   { id: 'view.motionPath', label: 'cmd.motionPath', group: 'view', keys: [], run: (e) => e.setPathOn(!e.getState().pathOn) },
   { id: 'history.undo', label: 'undo', group: 'history', keys: ['Mod+KeyZ'], run: (e) => e.history('undo') },

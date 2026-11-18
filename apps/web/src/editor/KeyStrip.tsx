@@ -13,12 +13,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import * as T from '@pulseframe/time';
-import { CURVES_BUILT, findEffect, keyTimes, moveKeysOps, type ChannelRef, type Clip, type KeyAt, type KeyRef, type Track } from '@pulseframe/core';
+import { CURVES_BUILT, keyTimes, moveKeysOps, type ChannelRef, type Clip, type KeyAt, type KeyRef, type Track } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { copySelectedKeys, curveSelected, deleteSelectedKeys, nudgeSelectedKeys, pasteKeys } from './commands.ts';
 import { KF_TESTIDS } from './keyframes.testids.ts';
-import { clampDelta, framesForPixels, glyphOf, isDrag, isSelected, refsAt, selectFrame, stripLayout, type KeySel } from './keyStrip.math.ts';
+import { channelName, clampDelta, framesForPixels, glyphOf, isDrag, isSelected, refsAt, selectFrame, stripLayout, type KeySel } from './keyStrip.math.ts';
 import './keyframes.css';
 
 export interface KeyStripProps {
@@ -38,16 +38,7 @@ export interface KeyStripProps {
 /** The strip's height; it sits on the clip's lower edge. */
 export const KEY_STRIP_H = 16;
 
-/** A channel named for a person: the transform property, or the effect and its parameter. */
-export function channelName(clip: Clip, ch: ChannelRef, t: (k: Key) => string, lang: 'he' | 'en'): string {
-  if ('property' in ch) {
-    const k = `transform.${ch.property === 'y' ? 'x' : ch.property}` as Key;
-    return ch.property === 'y' ? `${t(k)} (Y)` : t(k);
-  }
-  const fx = clip.type === 'caption' ? undefined : (clip.effects ?? []).find((e) => e.id === ch.effectId);
-  const def = fx ? findEffect(fx.type) : undefined;
-  return `${def ? def.name[lang] : ch.effectId} · ${ch.param}`;
-}
+export { channelName };
 
 export function KeyStrip(props: KeyStripProps): ReactElement | null {
   const { clip, track, selected, editable, pps, left, width, clipHeight, clipTop } = props;

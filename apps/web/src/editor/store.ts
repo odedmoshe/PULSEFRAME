@@ -666,7 +666,10 @@ export class Editor {
     const selection = !id ? [] : mode === 'toggle' ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : [id];
     // a chosen cut belongs to the clip after it: any other selection lets it go
     const cutGone = this.state.cutClipId && !(selection.length === 1 && selection[0] === this.state.cutClipId) ? { cutClipId: null, loupe: false } : {};
-    this.set({ selection, ...cutGone, ...(this.following ? {} : { followAgent: false }) });
+    // keys selected in a clip's strip belong to that clip's selection: any other selection lets them go
+    const ks = this.state.keySel;
+    const keySel = ks && !(selection.length === 1 && selection[0] === ks.clipId) ? { keySel: null } : {};
+    this.set({ selection, ...cutGone, ...keySel, ...(this.following ? {} : { followAgent: false }) });
   }
   /**
    * Choose the cut at the start of `clipId` (that clip is selected with it, so the inspector and the ride bar show the cut),

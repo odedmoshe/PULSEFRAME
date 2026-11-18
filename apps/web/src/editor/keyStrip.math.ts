@@ -3,7 +3,9 @@
  * the nudge bounds, and the selection helpers the editor's session state uses (store.ts keySel). No DOM, no editor.
  */
 import * as T from '@pulseframe/time';
-import { channelKey, keysOf, type ChannelRef, type Clip, type Easing, type KeyAt, type KeyRef } from '@pulseframe/core';
+import { channelKey, findEffect, keysOf, type ChannelRef, type Clip, type Easing, type KeyAt, type KeyRef } from '@pulseframe/core';
+
+import { effectParamLabel, type Key } from '@pulseframe/i18n';
 
 export type KeySel = { clipId: string; keys: KeyRef[] };
 
@@ -84,3 +86,14 @@ export function pruneKeySel(sel: KeySel | null, find: (clipId: string) => Clip |
   return keys.length ? { clipId: sel.clipId, keys } : null;
 }
 export const sameChannelRef = (a: ChannelRef, b: ChannelRef) => channelKey(a) === channelKey(b);
+
+/** A channel named for a person, in the interface language: the transform property, or the effect and its parameter label. */
+export function channelName(clip: Clip, ch: ChannelRef, t: (k: Key) => string, lang: 'he' | 'en'): string {
+  if ('property' in ch) {
+    if (ch.property === 'y') return t('text.y');
+    return t(`transform.${ch.property}` as Key);
+  }
+  const fx = clip.type === 'caption' ? undefined : (clip.effects ?? []).find((e) => e.id === ch.effectId);
+  const def = fx ? findEffect(fx.type) : undefined;
+  return `${def ? def.name[lang] : ch.effectId} · ${effectParamLabel(ch.param, lang, fx?.type)}`;
+}

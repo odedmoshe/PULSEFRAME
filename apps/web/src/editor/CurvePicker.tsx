@@ -26,7 +26,7 @@ import type { Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { KF_TESTIDS } from './keyframes.testids.ts';
 import { channelName } from './KeyStrip.tsx';
-import { dragHandle, nudgeHandle, pointFromHandle, polyline, previewPoints, setHandleField, tilePoints, turnsBackLocal, TILE_RANGE } from './curvePicker.math.ts';
+import { dragHandle, handlesDiffer, nudgeHandle, pointFromHandle, polyline, previewPoints, setHandleField, tilePoints, turnsBackLocal, TILE_RANGE } from './curvePicker.math.ts';
 import './keyframes.css';
 
 const BOX = 128;
@@ -69,13 +69,15 @@ function PickerDialog(): ReactElement | null {
   const readOnly = !!state.viewVariantId || !!track?.locked;
   const [custom, setCustom] = useState<CurveHandles>(DEFAULT_CUSTOM);
   const customSeeded = useRef(false);
+  // a field commits on blur only when its handles differ from the last applied ones: tabbing through must not turn a key into a custom curve
+  const applied = useRef<CurveHandles>(DEFAULT_CUSTOM);
   const all = at?.channels ?? [];
   const mine = cp.channels.filter((c) => all.some((a) => channelKey(a) === channelKey(c)));
   const targets: ChannelRef[] = scope === 'all' || mine.length === 0 ? all : [mine[0]!];
   const first = targets[0];
   const key = clip && first ? keysOf(clip, first).find((k) => T.frameIndexAt(k.time, rate) === cp.frame) : undefined;
   useEffect(() => {
-    if (!customSeeded.current && key?.bezier) { customSeeded.current = true; setCustom([...key.bezier] as unknown as CurveHandles); }
+    if (!customSeeded.current && key?.bezier) { customSeeded.current = true; applied.current = [...key.bezier] as unknown as CurveHandles; setCustom([...key.bezier] as unknown as CurveHandles); }
   }, [key]);
   if (!clip || !track || !at || !first) return <Shell root={root} t={t} onClose={close}><p className="curve-note" role="status">{t('keys.outside')}</p></Shell>;
   const light = targets.some((c) => isLightChannel2(clip, c));
@@ -90,6 +92,7 @@ function PickerDialog(): ReactElement | null {
   };
   const apply = (easing: Easing, bezier?: CurveHandles) => {
     if (readOnly || blocked(easing, bezier)) return;
+    if (easing === 'bezier' && bezier) applied.current = [...bezier] as unknown as CurveHandles;
     const refs = targets.map((channel) => ({ channel, frame: cp.frame }));
     void editor.commit(() => {
       const live = editor.doc ? findClip(editor.doc, clip.id)?.clip : undefined;
@@ -147,7 +150,7 @@ function PickerDialog(): ReactElement | null {
               <span>{i % 2 === 0 ? t('curve.handle.time') : t('curve.handle.value')} {i < 2 ? 1 : 2}</span>
               <input type="number" dir="ltr" step={0.01} min={i % 2 === 0 ? 0 : -1} max={i % 2 === 0 ? 1 : 2} value={custom[i]} disabled={readOnly || !CURVES_BUILT} data-testid={KF_TESTIDS.customInput(i)}
                 onChange={(e) => setCustom(setHandleField(custom, i, e.target.value))}
-                onBlur={() => apply('bezier', custom)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); apply('bezier', custom); } }} />
+                onBlur={() => { if (handlesDiffer(custom, applied.current)) apply('bezier', custom); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); apply('bezier', custom); } }} />
             </label>
           ))}
           {customBlock && CURVES_BUILT && <p className="curve-note" role="note">{customBlock}</p>}
