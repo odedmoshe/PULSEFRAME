@@ -9,7 +9,7 @@ import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { groupTimeAt, multicamGroupOf, projectVariant, type SwitchAnglesOutput } from '@pulseframe/core';
 import type { TakeRequest, TakeResult } from '@pulseframe/core';
-import { defaultTitleDuration } from '@pulseframe/core';
+import { defaultTitleDuration, type ExportDestinationId } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -34,6 +34,15 @@ import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView
 import type { ChannelRef, KeyClipboard, KeyRef } from '@pulseframe/core';
 import { pruneKeySel } from './keyStrip.math.ts';
 
+/**
+ * The activity list after a live revision event: newest first, at most 50. An undo or redo marks the transaction it reversed
+ * (undoneBy), so the command bar's exact undo target stays right without reading the history again (ADR-0027).
+ */
+export function withRevisionEvent(activity: readonly RevisionEvent[], e: RevisionEvent): RevisionEvent[] {
+  return [e, ...activity.map((x) => (e.undoes && x.transactionId === e.undoes ? { ...x, undoneBy: e.transactionId } : x))].slice(0, 50);
+}
+/** What Editor.commitExact answers (the command bar): committed (replayed = a repeated key), stale (409 stale_revision), or failed. */
+export type ExactCommit = { kind: 'committed'; result: CommitResult; replayed: boolean } | { kind: 'stale'; currentRevision: number | null } | { kind: 'failed'; code: string; message: string; hint?: string };
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
 export interface EditorState {
@@ -124,6 +133,8 @@ export interface EditorState {
   stageNote: { text: string; at: number } | null;
   /** Bumped by openExportSheet: the export sheet's host opens the sheet (ExportSheet.tsx). */
   exportSheet: number;
+  /** The destination the last openExportSheet asked to have chosen (the command bar's «ייצא לוואטסאפ»), null = the sheet's own default. */
+  exportSheetDestination?: ExportDestinationId | null;
   /** The last notice for the toast queue (App.tsx ToastBridge); `n` makes each one new. Session state only. */
   notice: (Notice & { n: number }) | null;
   /** Render cache (ADR-0024): the latest segment plan of the fast export. Session state only. */
@@ -436,7 +447,7 @@ export class Editor {
     const es = (this.es = api.events(projectId, p.revision));
     es.addEventListener('revision', (m) => {
       const e: RevisionEvent = JSON.parse((m as MessageEvent).data);
-      if (!this.state.activity.some((x) => x.revision === e.revision)) this.set({ activity: [e, ...this.state.activity].slice(0, 50) });
+      if (!this.state.activity.some((x) => x.revision === e.revision)) this.set({ activity: withRevisionEvent(this.state.activity, e) });
       // Committed remote or local change: converge on the server document. Playhead and selection are local and stay put.
       if (e.revision > this.state.revision) void this.load(projectId).catch(this.fail);
       if (this.state.fastExport) this.planPolicy.changed(e.revision);
@@ -716,6 +727,36 @@ export class Editor {
    * already undone (Ctrl+Z got there first) is left as it is.
    */
   undoTransaction(id: string): Promise<void> { return this.enqueue(() => this.historyNow('undo', id)); }
+  /** Redo exactly the undo `id` (the command bar's «בצע שוב» names it in its preview). */
+  redoTransaction(id: string): Promise<void> { return this.enqueue(() => this.historyNow('redo', id)); }
+  /**
+   * The command bar's commit (ADR-0027, lead contract (b)): exactly `ops` (already injected and previewed: NOT injected again),
+   * as one transaction, STRICT at `expectedRevision` — never rebased onto a newer revision, so nothing runs that the owner did
+   * not see — with the given idempotency key ('bar:' + planHash), so a second Enter replays instead of applying twice. Queued
+   * like commit. 'stale': the project moved on (the document is reloaded; the bar plans again and shows the new preview).
+   * 'failed': refused (an op's own reason, or the network); nothing was applied and the bar shows it (no error bar here).
+   */
+  commitExact(ops: OpCall[], label: string, expectedRevision: number, idempotencyKey: string): Promise<ExactCommit> { return this.enqueue(() => this.commitExactNow(ops, label, expectedRevision, idempotencyKey)); }
+  private async commitExactNow(ops: OpCall[], label: string, expectedRevision: number, idempotencyKey: string): Promise<ExactCommit> {
+    const { doc } = this.state;
+    if (!doc) return { kind: 'failed', code: 'no_project', message: 'no project is open' };
+    if (!ops.length) return { kind: 'failed', code: 'no_change', message: 'nothing to commit' };
+    this.set({ save: 'save.saving', error: null });
+    try {
+      const r = await api.commitExact(doc.id, expectedRevision, ops, label, idempotencyKey);
+      await this.load(doc.id);
+      this.set({ save: 'save.saved' });
+      return { kind: 'committed', result: r, replayed: !!r.replayed };
+    } catch (e) {
+      this.set({ save: 'save.saved' });
+      if (e instanceof ApiFailure && e.code === 'stale_revision') {
+        await this.load(doc.id).catch(() => undefined);
+        const cur = (e.details as { currentRevision?: unknown } | undefined)?.currentRevision;
+        return { kind: 'stale', currentRevision: typeof cur === 'number' ? cur : null };
+      }
+      return e instanceof ApiFailure ? { kind: 'failed', code: e.code, message: e.message, ...(e.hint ? { hint: e.hint } : {}) } : { kind: 'failed', code: 'network', message: e instanceof Error ? e.message : String(e) };
+    }
+  }
   private async commitNow(given: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> {
     const { doc, revision } = this.state;
     if (!doc) return null;
@@ -937,7 +978,12 @@ export class Editor {
   /** Say a quiet line over the viewer; null takes it away. */
   sayOnStage(text: string | null) { this.set({ stageNote: text ? { text, at: Date.now() } : null }); }
   /** Open the export sheet (for callers that do not import ExportSheet.tsx, such as the command registry). */
-  openExportSheet() { this.set({ exportSheet: this.state.exportSheet + 1 }); }
+  /**
+   * Open the export sheet (for callers that do not import ExportSheet.tsx, such as the command registry and the command bar).
+   * With a destination it opens with that destination chosen, exactly as a click on its tile; nothing is exported until the
+   * sheet's own button (the owner's decision: Export always opens the sheet).
+   */
+  openExportSheet(destination: ExportDestinationId | null = null) { this.set({ exportSheet: this.state.exportSheet + 1, exportSheetDestination: destination }); }
   /** Show a toast (App.tsx mounts the queue). */
   notify(notice: Notice) { this.set({ notice: { ...notice, n: ++this.requests } }); }
   selectAll() {
