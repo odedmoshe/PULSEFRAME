@@ -78,11 +78,15 @@ function fixtureFacts(fx: BaselineFixture): { ok: boolean; facts: Record<string,
   }[fx.key];
   return { ok, facts };
 }
-/** What P18 compares: the asset without the fields a queued import may legitimately add or that depend on the moment. */
+const sortKeys = (v: unknown): unknown => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys((v as Record<string, unknown>)[k])])) : v);
+/**
+ * What P18 compares: the asset without the fields a queued import may legitimately add or that depend on the moment, with its
+ * keys sorted (an asset read back from the document has the schema's key order, one built in memory has its own).
+ */
 export function comparableAsset(asset: any): unknown {
   const { id: _id, capture: _capture, provenance, ...rest } = asset ?? {};
   const { importedAt: _at, upload: _upload, ...prov } = provenance ?? {};
-  return { ...rest, provenance: prov };
+  return sortKeys({ ...rest, provenance: prov });
 }
 export interface PhoneDropBaseline {
   commit: string; recordedAt: string; ffmpeg: string; freeDiskBytes: number | null;
