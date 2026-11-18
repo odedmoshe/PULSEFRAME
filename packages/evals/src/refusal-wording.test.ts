@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, effectParams, LIFE_REFUSALS, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS, type Capture, type LifeEvent, type LifeRefusalKey } from '@pulseframe/core';
-import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, TEMPLATE_REFUSAL_PATTERNS, LIFE_REFUSAL_PATTERNS, TIMELINE_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
+import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, effectParams, LIFE_REFUSALS, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS, type Capture, type LifeEvent, type LifeRefusalKey, KEYFRAME_REFUSALS } from '@pulseframe/core';
+import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, TEMPLATE_REFUSAL_PATTERNS, LIFE_REFUSAL_PATTERNS, TIMELINE_REFUSAL_PATTERNS, KEYFRAME_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -506,5 +506,50 @@ describe('Hebrew wording of the refusals of the people operations (ADR-0021, peo
     expect(translateRefusal('he', messages.tooManyPeople!)).toContain(String(MAX_PEOPLE));
     expect(translateRefusal('he', messages.personInUse!)).toContain('1');
     expect(translateRefusal('he', messages.birthDateOutOfRange!)).toMatch(/1900.*2100/);
+  });
+});
+
+describe('Hebrew wording of the refusals of keyframe curves (ADR-0019), provoked through their operations', () => {
+  it('every KEYFRAME_REFUSALS sentence a built operation raises, and the three it shares, is worded in Hebrew; no keyframe pattern is left unprovoked', () => {
+    let doc = createProject({ id: 'prj_kf', name: 'kf' });
+    const t = tx(doc, [{ op: 'add_text', args: { text: 'כותרת', start: f(0), duration: f(90) } }]);
+    const clipId = t.results[0]!.output!.clipId as string;
+    const fx = tx(t.doc, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian' } }, { op: 'add_effect', args: { clipId, type: 'color.grade' } }]);
+    const [blur, grade] = fx.results.map((r) => r.output!.effectId as string) as [string, string];
+    const adj = tx(fx.doc, [{ op: 'add_adjustment', args: { span: { start: f(0), duration: f(30) } } }]);
+    const adjustId = adj.results[0]!.output!.clipId as string;
+    doc = tx(adj.doc, [{ op: 'replace_clip_keyframes', args: { clipId, property: 'x', keys: [{ time: f(0), value: 0, easing: 'linear' }, { time: f(10), value: 0.2, easing: 'linear' }] } }]).doc;
+    const full = tx(doc, [{ op: 'replace_effect_keyframes', args: { clipId, effectId: blur, param: 'radius', keys: Array.from({ length: 500 }, (_, i) => ({ time: f(i), value: 0.01, easing: 'linear' })) } }]).doc;
+    const key = (fr: number, extra: Record<string, unknown> = {}) => ({ time: f(fr), value: 0.1, easing: 'linear', ...extra });
+    const cases: [string, ProjectDocument, OpCall[]][] = [
+      ['bezier without handles', doc, [{ op: 'set_keyframe', args: { clipId, property: 'x', time: f(0), value: 0, easing: 'bezier' } }]],
+      ['handles with a named curve', doc, [{ op: 'set_keyframe', args: { clipId, property: 'x', time: f(0), value: 0, easing: 'gentle', bezier: [0.2, 0, 0.8, 1] } }]],
+      ['overshoot on opacity', doc, [{ op: 'set_keyframe', args: { clipId, property: 'opacity', time: f(0), value: 0.5, easing: 'overshoot' } }]],
+      ['spring on a colour grade', doc, [{ op: 'set_effect_keyframe', args: { clipId, effectId: grade, param: 'exposure', time: f(0), value: 0.5, easing: 'spring' } }]],
+      ['a channel the adjustment cannot carry', doc, [{ op: 'set_keyframe_curve', args: { clipId: adjustId, channels: [{ property: 'x' }], times: [f(0)], side: 'after', easing: 'gentle' } }]],
+      ['from without to', doc, [{ op: 'replace_clip_keyframes', args: { clipId, property: 'y', from: f(0), keys: [key(0)] } }]],
+      ['from after to', doc, [{ op: 'replace_effect_keyframes', args: { clipId, effectId: blur, param: 'radius', from: f(9), to: f(1), keys: [key(2)] } }]],
+      ['a key outside the range', doc, [{ op: 'replace_clip_keyframes', args: { clipId, property: 'y', from: f(0), to: f(5), keys: [key(6)] } }]],
+      ['one key too many', full, [{ op: 'set_effect_keyframe', args: { clipId, effectId: blur, param: 'radius', time: f(700), value: 0.02 } }]],
+      ['no key at these times', doc, [{ op: 'set_keyframe_curve', args: { clipId, channels: [{ property: 'x' }], times: [f(5)], side: 'both', easing: 'smooth' } }]],
+      ['a value out of range', doc, [{ op: 'replace_clip_keyframes', args: { clipId, property: 'x', keys: [{ time: f(0), value: 9, easing: 'smooth' }] } }]],
+      ['a parameter that cannot be animated', doc, [{ op: 'replace_effect_keyframes', args: { clipId, effectId: blur, param: 'nope', keys: [key(0)] } }]],
+      ['an effect that is not there', doc, [{ op: 'replace_effect_keyframes', args: { clipId, effectId: 'fx_none', param: 'radius', keys: null } }]],
+    ];
+    const matched = new Set<number>();
+    const unrecognised: string[] = [];
+    for (const [what, d, ops] of cases) {
+      let message = '';
+      try { tx(d, ops); message = '(not refused)'; } catch (e) { if (!(e instanceof OpError)) throw e; message = e.message; }
+      const he = translateRefusal('he', message);
+      if (!he || !/[֐-׿]/.test(he)) unrecognised.push(`${what}: ${message}`);
+      const hits = KEYFRAME_REFUSAL_PATTERNS.map((re, i) => (re.test(message) ? i : -1)).filter((i) => i >= 0);
+      if (hits.length !== 1) unrecognised.push(`${what}: ${hits.length} keyframe patterns match "${message}"`);
+      hits.forEach((i) => matched.add(i));
+      expect(translateRefusal('en', message)).toBeUndefined();
+    }
+    expect(unrecognised).toEqual([]);
+    expect(KEYFRAME_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
+    expect(translateRefusal('he', KEYFRAME_REFUSALS.curveFlash.message('spring', 'color.grade.exposure'))).toContain('color.grade.exposure');
   });
 });

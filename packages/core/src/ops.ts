@@ -28,9 +28,10 @@ import { velocityNeeds } from './transitionTiming.ts';
 import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { frameOf } from './sequences.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
-import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt, TRANSFORM_RANGE } from './animation.ts';
-import { CurveHandlesSchema, isV1Easing, KEYFRAME_REFUSALS, type CurveHandles, type Easing, type Keyframe, type KeyframeRefusalKey } from './keyframe.ts';
-import { CURVES_BUILT } from './curves.ts';
+import { effectParamRange, effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt, TRANSFORM_RANGE } from './animation.ts';
+import { channelWords, CurveHandlesSchema, isV1Easing, KEYFRAME_REFUSALS, MAX_EFFECT_KEYS, MAX_TRANSFORM_KEYS, type CurveHandles, type Easing, type InsertSplit, type Keyframe, type KeyframeRefusalKey, type ValueRange } from './keyframe.ts';
+import { splitSegment, turnsBack } from './curves.ts';
+import { isLightChannel } from './keyframeChannels.ts';
 import { detachAssetFromEvents } from './events.ts';
 import { handDownCapture } from './capture.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
@@ -166,15 +167,59 @@ export function keyframeRefusal<K extends KeyframeRefusalKey>(key: K, details: R
   return new OpError(r.code, r.message(...values), details, r.hint);
 }
 /**
- * PLACEHOLDER of the ADR-0019 contracts commit, until curves.ts CURVES_BUILT: a key with a curve of ADR-0019 (an easing other
- * than the v1 five) or with handles is refused as not built, so no such key can enter a document before the sampler renders
- * it. v1 easings without handles pass unchanged (they need no curve rule: they never turn back and carry no handles). W1
- * replaces the callers with the curve rules (bezier iff 'bezier', the flash rule per channel). Exported for sequenceOps.ts.
+ * The curve rules of one key (ADR-0019, keyframe.ts FIXED RULES): `bezier` exactly when easing is 'bezier', and no curve that
+ * turns back on a light channel (keyframeChannels.ts isLightChannel). `channel` names the channel in the refusal
+ * (keyframe.ts channelWords). Exported for sequenceOps.ts and keyframeOps.ts.
  */
-export function refuseUnbuiltCurve(easing: Easing | undefined, bezier: CurveHandles | undefined): void {
-  if (CURVES_BUILT) return;
-  if (bezier !== undefined || (easing !== undefined && !isV1Easing(easing))) throw keyframeRefusal('notBuilt', { easing: easing ?? null, bezier: bezier ?? null }, `the curve "${easing ?? 'bezier'}"`);
+export function assertKeyCurve(k: { easing: Easing; bezier?: CurveHandles | undefined }, light: boolean, channel: string, details: Record<string, unknown>): void {
+  if (k.easing === 'bezier' && k.bezier === undefined) throw keyframeRefusal('bezierNeedsHandles', details);
+  if (k.easing !== 'bezier' && k.bezier !== undefined) throw keyframeRefusal('handlesNeedBezier', details, k.easing);
+  if (light && turnsBack(k.easing, k.bezier)) throw keyframeRefusal('curveFlash', details, k.easing, channel);
 }
+/** A key as stored: `bezier` only with easing 'bezier' (no undefined field, so a v1 key is exactly {time, value, easing}). */
+export const storedKey = (time: T.RationalTime, value: number, easing: Easing, bezier?: CurveHandles): Keyframe =>
+  easing === 'bezier' && bezier ? { time, value, easing, bezier: [...bezier] as CurveHandles } : { time, value, easing };
+/**
+ * set_keyframe / set_effect_keyframe (ADR-0019 §3a): write the key at `time` into a channel's keys.
+ * - Easing left out: an existing key keeps its easing AND its handles; handles alone are accepted only on a key that already
+ *   has a custom curve. 'bezier' without handles keeps the key's own handles, if it has them. A named easing drops handles.
+ * - A NEW key strictly inside a segment whose start key has a new curve is placed by curves.ts splitSegment, so the curve keeps
+ *   its shape (the new key then takes the given value); `split` says whether that was exact. Every other new key keeps
+ *   today's rule ('linear' unless given, the earlier key unchanged), so old op logs replay byte-identically.
+ */
+function writeKey(keys: readonly Keyframe[], time: T.RationalTime, value: number, easing: Easing | undefined, bezier: CurveHandles | undefined,
+  o: { rate: T.Rate; range: ValueRange; light: boolean; channel: string; max: number; details: Record<string, unknown> }): { keys: Keyframe[]; split: InsertSplit } {
+  const i = keys.findIndex((k) => T.eq(k.time, time));
+  const old = i >= 0 ? keys[i] : undefined;
+  let curve: { easing: Easing; bezier?: CurveHandles } | undefined;
+  if (easing === undefined) {
+    if (bezier !== undefined) curve = { easing: old?.easing === 'bezier' ? 'bezier' : old?.easing ?? 'linear', bezier };
+  } else curve = { easing, ...(easing === 'bezier' ? { bezier: bezier ?? old?.bezier } : bezier !== undefined ? { bezier } : {}) };
+  if (curve) assertKeyCurve(curve, o.light, o.channel, o.details);
+  if (old) {
+    const next = [...keys];
+    next[i] = curve ? storedKey(time, value, curve.easing, curve.bezier) : storedKey(time, value, old.easing, old.bezier);
+    return { keys: next, split: 'none' };
+  }
+  if (keys.length + 1 > o.max) throw keyframeRefusal('tooManyKeys', o.details, o.max);
+  let lo = -1;
+  for (let j = 0; j + 1 < keys.length; j++) if (T.lt(keys[j]!.time, time) && T.lt(time, keys[j + 1]!.time)) { lo = j; break; }
+  if (lo >= 0 && !isV1Easing(keys[lo]!.easing)) {
+    const r = splitSegment(keys, time, o.rate, o.range);
+    const placed = r.keys[lo + 1]!;
+    r.keys[lo + 1] = curve ? storedKey(time, value, curve.easing, curve.bezier) : storedKey(time, value, placed.easing, placed.bezier);
+    return { keys: r.keys, split: r.exact ? 'exact' : 'approximate' };
+  }
+  const next = [...keys, curve ? storedKey(time, value, curve.easing, curve.bezier) : { time, value, easing: 'linear' as const }];
+  next.sort((x, y) => T.cmp(x.time, y.time));
+  return { keys: next, split: 'none' };
+}
+/**
+ * placeMotion's keys (ADR-0019 §3b): `withCurve(k, from)` is k with the curve of `from` (its easing and, for a custom curve, its
+ * handles); `withCurve(k, 'linear')` resets it. A key whose curve is not one a motion writes is not recognised by
+ * motionPresets.ts previousMotion, so a later preset treats it as hand-made and leaves it.
+ */
+const withCurve = (k: Keyframe, from: Keyframe | 'linear'): Keyframe => (from === 'linear' ? storedKey(k.time, k.value, 'linear') : storedKey(k.time, k.value, from.easing, from.bezier));
 /** A new empty track of `kind` in its stacking slot (default name V1, A1, T1, C1, FX1 …). Exported for add_sequence (sequenceOps.ts). */
 export function newTrack(seq: Sequence, kind: Track['kind'], ctx: OpContext, name?: string): Track {
   const count = seq.tracks.filter((t) => t.kind === kind).length + 1;
@@ -675,22 +720,17 @@ const KfTarget = { clipId: z.string(), property: z.enum(ANIMATABLE), time: RT.de
 defineOp({
   name: 'set_keyframe',
   version: 1,
-  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key. An adjustment clip animates its opacity only.',
+  description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing (curve) of the earlier key: one of list_catalog → curves, or \'bezier\' with four handles. Left out, an existing key keeps its curve. A new key inside a segment with a curve other than linear, hold, ease-in, ease-out or ease-in-out is placed so that the curve keeps its shape (output.split: exact or approximate). Curves that turn back (overshoot, anticipate, bounce, spring, a custom curve with y outside 0..1) are refused on opacity. An adjustment clip animates its opacity only.',
   args: z.object({ ...KfTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear; left out, an existing key keeps its curve'), bezier: CurveHandlesSchema.optional().describe("The four handles [x1, y1, x2, y2] of a custom curve, only with easing 'bezier' (list_catalog → curves)") }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
     if (a.property !== 'opacity') refuseAdjustmentTransform(clip, { [a.property]: NaN }, 'animated'); // any key on these properties, whatever its value
-    refuseUnbuiltCurve(a.easing, a.bezier); // ADR-0019 contracts: W1 replaces this with the curve rules and the shape-keeping insertion
     assertAligned(d, a.time, 'time');
     if (!TransformSchema.shape[a.property].safeParse(a.value).success) throw new OpError('invalid_args', `value ${a.value} is out of range for ${a.property}`, { property: a.property });
-    const keys = [...(clip.keyframes?.[a.property] ?? [])];
-    const i = keys.findIndex((k) => T.eq(k.time, a.time));
-    const key = { time: a.time, value: a.value, easing: a.easing ?? (i >= 0 ? keys[i]!.easing : 'linear') };
-    if (i >= 0) keys[i] = key;
-    else keys.push(key);
-    keys.sort((x, y) => T.cmp(x.time, y.time));
+    const ch = { property: a.property };
+    const { keys, split } = writeKey(clip.keyframes?.[a.property] ?? [], a.time, a.value, a.easing, a.bezier, { rate: d.settings.frameRate, range: TRANSFORM_RANGE[a.property], light: isLightChannel(clip, ch), channel: channelWords(ch), max: MAX_TRANSFORM_KEYS, details: { clipId: clip.id, property: a.property } });
     clip.keyframes = { ...clip.keyframes, [a.property]: keys };
-    return { affectedIds: [clip.id], summary: `Keyframe ${a.property}=${a.value} at +${fmt(a.time)}`, output: { keyframeCount: keys.length } };
+    return { affectedIds: [clip.id], summary: `Keyframe ${a.property}=${a.value} at +${fmt(a.time)}`, output: { keyframeCount: keys.length, split } };
   },
 });
 defineOp({
@@ -1563,7 +1603,7 @@ function placeMotion(clip: Clip, rate: T.Rate, kind: 'in' | 'out' | 'loop' | 'mo
     for (const [p, count] of Object.entries(previousMotion(kind, now, total, clip.transform)) as [(typeof ANIMATABLE)[number], number][]) {
       const rest = kind === 'in' ? keyframes[p]!.slice(count) : keyframes[p]!.slice(0, keyframes[p]!.length - count);
       // the easing on the key an exit started from shaped the exit; with the exit gone that key is the last one and shapes nothing
-      if (kind === 'out' && rest.length) rest[rest.length - 1] = { ...rest[rest.length - 1]!, easing: 'linear' };
+      if (kind === 'out' && rest.length) rest[rest.length - 1] = withCurve(rest[rest.length - 1]!, 'linear');
       if (rest.length) keyframes[p] = rest; else delete keyframes[p];
     }
   }
@@ -1576,7 +1616,7 @@ function placeMotion(clip: Clip, rate: T.Rate, kind: 'in' | 'out' | 'loop' | 'mo
     // The key an entrance ends on is also the key that what follows starts from (an exit that begins right there, a slow zoom):
     // where one was there already, it keeps its easing, so the entrance does not change the shape of what comes after it.
     const meets = kind === 'in' && kept.length ? (keyframes[p] ?? []).find((k) => Math.abs(frameOf(k.time) - hi) <= 1e-9) : undefined;
-    if (meets) fresh[fresh.length - 1]!.easing = meets.easing;
+    if (meets) fresh[fresh.length - 1] = withCurve(fresh[fresh.length - 1]!, meets);
     const next = [...kept, ...fresh].sort((x, y) => T.cmp(x.time, y.time));
     if (next.length > 2000) throw new OpError('out_of_bounds', 'this motion would need more keyframes than a property can hold on a clip this long', { keyframes: next.length }, 'Use a longer period (frames), or a shorter clip.');
     keyframes[p] = next;
@@ -1586,7 +1626,7 @@ function placeMotion(clip: Clip, rate: T.Rate, kind: 'in' | 'out' | 'loop' | 'mo
 defineOp({
   name: 'animate_clip',
   version: 1,
-  description: 'Give a text or picture clip an entrance and/or exit (fade, pop, slide), written as ordinary keyframes on opacity, scale, x or y, so the result stays editable with set_keyframe. Each is placed exactly as an entrance or exit from the motion library is (apply_motion_preset): it replaces the entrance (or exit) the clip already has, whether that came from this operation or from the library, on every property it used, and keeps the other end, a slow move and keys made by hand further in. A side that is left out (or none) stays as it is. Entrance plus exit may not be longer than the clip. The exit is placed against the current clip end; run again after changing the duration.',
+  description: 'Give a text or picture clip an entrance and/or exit (fade, pop, slide), written as ordinary keyframes on opacity, scale, x or y, so the result stays editable with set_keyframe. Each is placed exactly as an entrance or exit from the motion library is (apply_motion_preset): it replaces the entrance (or exit) the clip already has, whether that came from this operation or from the library, on every property it used, and keeps the other end, a slow move and keys made by hand further in. A side that is left out (or none) stays as it is. Entrance plus exit may not be longer than the clip. The exit is placed against the current clip end; run again after changing the duration. A key with a curve the motion library does not write (smooth, gentle, sharp, overshoot, anticipate, bounce, spring or a custom bezier, list_catalog → curves) counts as made by hand: an earlier entrance or exit is not recognised through it.',
   args: z.object({ clipId: z.string(), in: z.enum(MOTION).optional(), out: z.enum(MOTION).optional(), inFrames: z.number().int().min(1).max(600).optional(), outFrames: z.number().int().min(1).max(600).optional() }).strict(),
   apply(d, a) {
     const { clip, track } = mustClip(d, a.clipId);
@@ -1614,7 +1654,7 @@ defineOp({
 defineOp({
   name: 'apply_motion_preset',
   version: 1,
-  description: 'Give a text or picture clip one motion from the motion library (see list_catalog → motionPresets): an entrance (motion.in.*), an exit (motion.out.*), a loop that repeats over the whole clip (motion.loop.*) or one move across the whole clip such as a slow zoom or pan (motion.move.*). It writes ordinary keyframes on the properties the motion uses (x, y, scale, rotation, opacity), measured from the values the clip has now, so the result stays editable with set_keyframe. An entrance replaces the entrance the clip already has at its start (one from this library or from animate_clip), on every property that one used, and otherwise the keys of its own properties in its first frames; an exit does the same with an earlier exit and its last frames, so an entrance and an exit can be combined and each can be changed for another. Animation that goes on after the entrance or before the exit (a slow zoom, keys made by hand) is kept. A loop or a move replaces all keys of its properties. `frames` is the length of an entrance or exit, or the period of a loop. The exit is placed against the current clip end; run again after changing the length.',
+  description: 'Give a text or picture clip one motion from the motion library (see list_catalog → motionPresets): an entrance (motion.in.*), an exit (motion.out.*), a loop that repeats over the whole clip (motion.loop.*) or one move across the whole clip such as a slow zoom or pan (motion.move.*). It writes ordinary keyframes on the properties the motion uses (x, y, scale, rotation, opacity), measured from the values the clip has now, so the result stays editable with set_keyframe. An entrance replaces the entrance the clip already has at its start (one from this library or from animate_clip), on every property that one used, and otherwise the keys of its own properties in its first frames; an exit does the same with an earlier exit and its last frames, so an entrance and an exit can be combined and each can be changed for another. Animation that goes on after the entrance or before the exit (a slow zoom, keys made by hand) is kept. A loop or a move replaces all keys of its properties. `frames` is the length of an entrance or exit, or the period of a loop. The exit is placed against the current clip end; run again after changing the length. A key with a curve the motion library does not write (smooth, gentle, sharp, overshoot, anticipate, bounce, spring or a custom bezier, list_catalog → curves) counts as made by hand: an earlier entrance or exit is not recognised through it.',
   args: z.object({ clipId: z.string(), presetId: z.enum(MOTION_PRESET_IDS), frames: z.number().int().min(1).max(600).optional(), amount: z.number().min(0).max(2).optional().describe('Strength, default 1') }).strict(),
   apply(d, a) {
     const { clip, track } = mustClip(d, a.clipId);
@@ -2461,7 +2501,8 @@ defineOp({
 });
 
 // ---------- effects, blend, mask, transitions (SPEC §8, §13) ----------
-const pictureClip = (d: ProjectDocument, clipId: string) => {
+/** A picture, title or adjustment clip (the effect operations' rule). Exported for keyframeOps.ts. */
+export const pictureClip = (d: ProjectDocument, clipId: string) => {
   const f = mustClip(d, clipId);
   if (f.clip.type === 'caption' || f.track.kind === 'audio') throw new OpError('incompatible', 'effects, blends, masks and transitions apply to picture, title and adjustment clips', { clipId });
   return f;
@@ -2472,7 +2513,8 @@ const pictureClip = (d: ProjectDocument, clipId: string) => {
  */
 const badParamNames = (issues: readonly { code?: string; path?: readonly PropertyKey[]; keys?: readonly string[] }[] | undefined): string[] =>
   [...new Set((issues ?? []).flatMap((i) => (i.code === 'unrecognized_keys' ? (i.keys ?? []) : i.path?.length ? [String(i.path[0])] : [])))].slice(0, 8).map((k) => k.slice(0, 48));
-const parseEffect = (type: string, params: unknown) => {
+/** An effect's parameters through its schema, refused per parameter in the words of add_effect. Exported for keyframeOps.ts. */
+export const parseEffect = (type: string, params: unknown) => {
   if (!findEffect(type)) throw new OpError('not_found', `effect "${type}" does not exist`, { type, available: EFFECTS.map((e) => e.id) }, 'Call list_catalog for the available effects and their parameters.');
   try { return effectParams(type, params); } catch (e: any) {
     const names = badParamNames(e.issues);
@@ -2611,7 +2653,8 @@ const refuseFollowTimeEffect = (clip: Clip, list: readonly EffectInstance[]) => 
   const first = list.find((e) => e.enabled);
   if (clip.follow && first && isTimeEffect(first.type)) throw new OpError('incompatible', FOLLOW_TIME_EFFECT, { clipId: clip.id, effect: first.type }, 'Detach the clip from its motion track first (set_clip_follow follow=null), or put the time effect on another clip.');
 };
-const mustEffect = (clip: Clip, effectId: string) => {
+/** The index of an effect on a clip, refused when it is not there. Exported for keyframeOps.ts. */
+export const mustEffect = (clip: Clip, effectId: string) => {
   const i = (clip.effects ?? []).findIndex((e) => e.id === effectId);
   if (i < 0) throw new OpError('not_found', `effect ${effectId} not found on clip ${clip.id}`, { effectId, clipId: clip.id });
   return i;
@@ -2641,24 +2684,20 @@ const FxKeyTarget = { clipId: z.string(), effectId: z.string(), param: z.string(
 defineOp({
   name: 'set_effect_keyframe',
   version: 1,
-  description: 'Animate a numeric effect parameter: add or replace a keyframe at a clip-local time. The first key on a parameter starts animating it; between keys the value is interpolated with the easing of the earlier key. list_catalog shows each effect\'s parameters and ranges.',
+  description: 'Animate a numeric effect parameter: add or replace a keyframe at a clip-local time. The first key on a parameter starts animating it; between keys the value is interpolated with the easing (curve) of the earlier key, one of list_catalog → curves or \'bezier\' with four handles; left out, an existing key keeps its curve, and a new key inside a segment with a newer curve keeps that curve\'s shape (output.split). Curves that turn back are refused on parameters that cannot follow the beat (brightness and colour). list_catalog shows each effect\'s parameters and ranges.',
   args: z.object({ ...FxKeyTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear; left out, an existing key keeps its curve'), bezier: CurveHandlesSchema.optional().describe("The four handles [x1, y1, x2, y2] of a custom curve, only with easing 'bezier' (list_catalog → curves)") }).strict(),
   apply(d, a) {
     const { clip } = pictureClip(d, a.clipId);
-    refuseUnbuiltCurve(a.easing, a.bezier); // ADR-0019 contracts: W1 replaces this with the curve rules and the shape-keeping insertion
     const i = mustEffect(clip, a.effectId);
     const fx = { ...clip.effects![i]! };
     if (!animatableParams(fx.type).includes(a.param)) throw new OpError('invalid_args', `"${a.param}" is not a numeric parameter of ${fx.type}`, { animatable: animatableParams(fx.type) });
     assertAligned(d, a.time, 'time');
     parseEffect(fx.type, { ...fx.params, [a.param]: a.value }); // range check
-    const keys = [...(fx.keyframes?.[a.param] ?? [])];
-    const k = keys.findIndex((x) => T.eq(x.time, a.time));
-    const key = { time: a.time, value: a.value, easing: a.easing ?? (k >= 0 ? keys[k]!.easing : 'linear') };
-    if (k >= 0) keys[k] = key; else keys.push(key);
-    keys.sort((x, y) => T.cmp(x.time, y.time));
+    const ch = { effectId: fx.id, param: a.param };
+    const { keys, split } = writeKey(fx.keyframes?.[a.param] ?? [], a.time, a.value, a.easing, a.bezier, { rate: d.settings.frameRate, range: effectParamRange(fx.type, a.param), light: isLightChannel(clip, ch), channel: channelWords(ch, fx.type), max: MAX_EFFECT_KEYS, details: { clipId: clip.id, effectId: fx.id, param: a.param } });
     fx.keyframes = { ...fx.keyframes, [a.param]: keys };
     clip.effects = clip.effects!.map((e, n) => (n === i ? fx : e));
-    return { affectedIds: [clip.id], summary: `Keyframe ${fx.type}.${a.param}=${a.value} at +${fmt(a.time)}`, output: { keyframeCount: keys.length } };
+    return { affectedIds: [clip.id], summary: `Keyframe ${fx.type}.${a.param}=${a.value} at +${fmt(a.time)}`, output: { keyframeCount: keys.length, split } };
   },
 });
 defineOp({

@@ -7,6 +7,7 @@ import * as T from '@pulseframe/time';
 import { ANIMATABLE, TransformSchema, type Animatable, type Clip, type Keyframe, type Transform } from './schema.ts';
 import { NOT_ANIMATABLE, paramRange, type EffectInstance } from './effects.ts';
 import { isV1Easing, NO_RANGE, type V1Easing, type ValueRange } from './keyframe.ts';
+import { curveShape, smoothValue } from './curves.ts';
 
 /**
  * The declared range of each transform property (from TransformSchema, the way effects.ts paramRange reads an effect's).
@@ -44,9 +45,11 @@ export function sampleKeyframes(keys: readonly Keyframe[], t: T.RationalTime, ra
   const b = keys[hi]!;
   // Exact rational position inside the segment, converted to a float only for the blend itself.
   const u = T.toSeconds(T.sub(t, a.time)) / T.toSeconds(T.sub(b.time, a.time));
-  // The curves of ADR-0019 (W1: curves.ts curveShape / smoothValue, clamped to `range`). No key with one can enter a document
-  // before they are built (curves.ts CURVES_BUILT), so this refusal is never met by a validated document.
-  if (!isV1Easing(a.easing)) { void range; throw new Error(`curve "${a.easing}" is not built yet (ADR-0019 W1)`); }
+  // The curves of ADR-0019 (curves.ts), clamped to the channel's range. The v1 easings below never are (keys-baseline.json).
+  if (!isV1Easing(a.easing)) {
+    const v = a.easing === 'smooth' ? smoothValue(keys, lo, u) : a.value + (b.value - a.value) * curveShape(a.easing, a.bezier, u);
+    return v < range.min ? range.min : v > range.max ? range.max : v;
+  }
   return a.value + (b.value - a.value) * EASE[a.easing](u);
 }
 
