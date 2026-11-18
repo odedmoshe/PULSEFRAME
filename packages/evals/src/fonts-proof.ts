@@ -58,11 +58,17 @@ export const MARKS: { cp: number; name: string; base: string; zone: Zone }[] = [
   { cp: 0x5b0, name: 'sheva', base: BET, zone: 'below' }, { cp: 0x5b1, name: 'hataf segol', base: BET, zone: 'below' }, { cp: 0x5b2, name: 'hataf patah', base: BET, zone: 'below' },
   { cp: 0x5b3, name: 'hataf qamats', base: BET, zone: 'below' }, { cp: 0x5b4, name: 'hiriq', base: BET, zone: 'below' }, { cp: 0x5b5, name: 'tsere', base: BET, zone: 'below' },
   { cp: 0x5b6, name: 'segol', base: BET, zone: 'below' }, { cp: 0x5b7, name: 'patah', base: BET, zone: 'below' }, { cp: 0x5b8, name: 'qamats', base: BET, zone: 'below' },
-  { cp: 0x5b9, name: 'holam', base: BET, zone: 'above' }, { cp: 0x5ba, name: 'holam haser for vav', base: BET, zone: 'above' }, { cp: 0x5bb, name: 'qubuts', base: BET, zone: 'below' },
+  { cp: 0x5b9, name: 'holam', base: BET, zone: 'holam' }, { cp: 0x5ba, name: 'holam haser for vav', base: BET, zone: 'holam' }, { cp: 0x5bb, name: 'qubuts', base: BET, zone: 'below' },
   { cp: 0x5bc, name: 'dagesh', base: BET, zone: 'inside' }, { cp: 0x5c1, name: 'shin dot', base: SHIN, zone: 'shin' }, { cp: 0x5c2, name: 'sin dot', base: SHIN, zone: 'sin' },
   { cp: 0x5c7, name: 'qamats qatan', base: BET, zone: 'below' },
 ];
-export type Zone = 'below' | 'above' | 'inside' | 'shin' | 'sin';
+/**
+ * Where a point belongs: under the letter, above it, inside it, or (holam, and the dots of shin and sin) above it on one side.
+ * A holam on a letter other than vav sits at the letter's upper left corner, by Hebrew convention: its centre lies on the left
+ * edge of the letter (measured: 0.24–0.33 em left of the middle in every catalogue face), so it is judged by side, like the sin
+ * dot, and not by the distance of its centre from the middle (which every correctly drawn holam broke).
+ */
+export type Zone = 'below' | 'above' | 'inside' | 'shin' | 'sin' | 'holam';
 /** The thresholds, in em (200 px). Written down here and in the header; the evidence records the measured margins. */
 export const RULES = { centreSlack: 0.10, centreFrac: 0.40, belowSlack: 0.04, aboveShare: 0.30, insideSlack: 0.02, halfSlack: 0.03, minChanged: 30, changedThreshold: 24 } as const;
 /** The weights the controls run at: the first weight of each family only (the controls are about the check, not the font). */
@@ -116,8 +122,10 @@ export function checkMark(alone: Img, pointed: Img, mark: { cp: number; name: st
   // the centre lies in the middle of the letter: within centreFrac of the letter's own width of its middle (a point hanging off an edge, which is
   // what a point drawn at the pen origin looks like, has its centre at the edge = 0.5 of the width from the middle, and is rejected)
   const bw = box.x1 - box.x0 + 1, frac = Math.abs(cxm - cx) / bw;
-  r.margins.centreFrac = Number((RULES.centreFrac - frac).toFixed(3));
-  if (frac > RULES.centreFrac) fail(`the point's horizontal centre ${cxm.toFixed(1)} is ${(frac * 100).toFixed(0)} % of the letter's width from its middle ${cx.toFixed(1)} (limit ${RULES.centreFrac * 100} %)`);
+  // points that belong on one side (holam, shin dot, sin dot) are judged by their side rule below, not by their distance from the middle
+  const sided = mark.zone === 'shin' || mark.zone === 'sin' || mark.zone === 'holam';
+  if (!sided) r.margins.centreFrac = Number((RULES.centreFrac - frac).toFixed(3));
+  if (!sided && frac > RULES.centreFrac) fail(`the point's horizontal centre ${cxm.toFixed(1)} is ${(frac * 100).toFixed(0)} % of the letter's width from its middle ${cx.toFixed(1)} (limit ${RULES.centreFrac * 100} %)`);
   if (cxm < box.x0 - slack || cxm > box.x1 + slack) fail(`the point's horizontal centre ${cxm.toFixed(1)} is outside the letter's ink box ${box.x0}..${box.x1} ± ${slack} px`);
   switch (mark.zone) {
     case 'below': {
@@ -137,12 +145,13 @@ export function checkMark(alone: Img, pointed: Img, mark: { cp: number; name: st
       if (ch.x0 < box.x0 - s || ch.x1 > box.x1 + s || ch.y0 < box.y0 - s || ch.y1 > box.y1 + s) fail(`the dagesh (${ch.x0},${ch.y0})..(${ch.x1},${ch.y1}) is not inside the ink box (${box.x0},${box.y0})..(${box.x1},${box.y1})`);
       break;
     }
-    case 'shin': case 'sin': {
+    case 'shin': case 'sin': case 'holam': {
       const s = RULES.halfSlack * EM, row = box.y0 + RULES.aboveShare * h;
       r.margins.halfSide = mark.zone === 'shin' ? ch.x0 - (cx - s) : (cx + s) - ch.x1;
       r.margins.aboveRow = row - ch.y1;
       if (mark.zone === 'shin' && ch.x0 < cx - s) fail(`the shin dot starts at column ${ch.x0}, left of the letter's middle ${cx.toFixed(1)}`);
       if (mark.zone === 'sin' && ch.x1 > cx + s) fail(`the sin dot ends at column ${ch.x1}, right of the letter's middle ${cx.toFixed(1)}`);
+      if (mark.zone === 'holam' && ch.x1 > cx + s) fail(`the holam ends at column ${ch.x1}, right of the letter's middle ${cx.toFixed(1)}`);
       if (ch.y1 > row) fail(`the dot reaches row ${ch.y1}, below the upper ${RULES.aboveShare * 100} % of the letter (row ${row.toFixed(1)})`);
       break;
     }
@@ -168,10 +177,13 @@ export function controlRejects(alone: Img, sideways: Img, up: Img, down: Img, ma
  */
 export function penOriginRejects(alone: Img, atRight: Img, atLeft: Img, mark: { cp: number; name: string; zone: Zone }): { ok: boolean; rightRejected: boolean; leftRejected: boolean; drawn: boolean } {
   const rr = checkMark(alone, atRight, mark), rl = checkMark(alone, atLeft, mark);
-  const horizontal = (x: MarkResult) => !x.pass && x.reasons.some((w) => w.includes('horizontal centre'));
+  const horizontal = (x: MarkResult) => !x.pass && x.reasons.some((w) => w.includes('horizontal centre') || w.includes('of the letter\'s middle'));
   const drawn = rr.changed >= RULES.minChanged && rl.changed >= RULES.minChanged;
   const rightRejected = horizontal(rr), leftRejected = horizontal(rl);
-  return { ok: drawn && rightRejected && leftRejected, rightRejected, leftRejected, drawn };
+  // a point that belongs on one edge (a holam and the sin dot on the left, the shin dot on the right) is drawn there correctly:
+  // only the pen origin on the other edge is a misplacement the check must reject
+  const needRight = mark.zone !== 'shin', needLeft = mark.zone !== 'holam' && mark.zone !== 'sin';
+  return { ok: drawn && (!needRight || rightRejected) && (!needLeft || leftRejected), rightRejected, leftRejected, drawn };
 }
 
 // ---------------------------------------------------------------- goldens
@@ -321,6 +333,9 @@ async function main() {
             // the pen-origin control: the point's centre moved onto the right and onto the left edge of its letter (x measured from the
             // point's own picture, which is above the letter so that nothing overlaps)
             const lb = inkBox(alone), ub = changedBox(alone, up);
+            // a mark that drew nothing above its letter (or a letter that drew nothing) gives no x to move it to: the
+            // pen-origin control cannot be drawn for this face, and is recorded as failed (drawn: false), never skipped
+            if (!lb.count || !ub.count) { control.push({ cp, name: m.name, ...controlRejects(alone, sideways, up, down, m), penOrigin: { ok: false, rightRejected: false, leftRejected: false, drawn: false } }); continue; }
             const cx0 = (ub.x0 + ub.x1) / 2;
             const atRight = await pic({ x: (lb.x1 - cx0) / W, y: 0 }), atLeft = await pic({ x: (lb.x0 - cx0) / W, y: 0 });
             control.push({ cp, name: m.name, ...controlRejects(alone, sideways, up, down, m), penOrigin: penOriginRejects(alone, atRight, atLeft, m) });

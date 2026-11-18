@@ -14,6 +14,7 @@
 export const PACKS_HE = {
   'op.add_builtin_music': 'הוספת מוזיקה מובנית',
   'error.code.known_by_construction': 'הקצב ידוע מהמתכון', 'error.code.music_not_built': 'מוזיקה מובנית עדיין לא נבנתה', 'error.code.synthesis_busy': 'יצירת צלילים עסוקה כרגע', 'error.code.music_invalid': 'המוזיקה שנוצרה לא עברה בדיקה',
+  'error.code.music_timeout': 'יצירת המוזיקה ארכה יותר מדי', 'error.code.music_cancelled': 'יצירת המוזיקה בוטלה', 'error.code.invalid_option': 'הבחירה אינה אפשרית',
   // what a template plan decided by itself (TEMPLATE_NOTICE_CODES); nothing here needs an answer before applying
   'template.notice.field_missing': 'לשדה בכותרת אין ערך, ולכן נכתב הנוסח החלופי שלה',
   'template.notice.field_no_date': 'לתמונה שמתחת לכותרת אין תאריך צילום, ולכן נכתב הנוסח החלופי שלה',
@@ -37,6 +38,7 @@ export const PACKS_HE = {
 export const PACKS_EN: Record<keyof typeof PACKS_HE, string> = {
   'op.add_builtin_music': 'Added built-in music',
   'error.code.known_by_construction': 'The beat is known from the recipe', 'error.code.music_not_built': 'Built-in music is not built yet', 'error.code.synthesis_busy': 'Sound making is busy right now', 'error.code.music_invalid': 'The music made did not pass its check',
+  'error.code.music_timeout': 'Making the music took too long', 'error.code.music_cancelled': 'Making the music was cancelled', 'error.code.invalid_option': 'That choice is not possible',
   'template.notice.field_missing': 'A field of a title has no value, so its fallback words were used',
   'template.notice.field_no_date': 'A picture under a title has no capture date, so its fallback words were used',
   'template.notice.builtin_music_faded': 'The built-in music is longer than the pictures: it is cut at the last picture and fades out',
@@ -74,4 +76,18 @@ export const HE_PACKS: [RegExp, (m: RegExpExecArray) => string][] = [
   // the server
   [/^built-in music is not built in this version yet$/, () => 'מוזיקה מובנית עדיין לא נבנתה בגרסה הזו. אפשר לבחור קובץ מוזיקה מהספרייה, או תבנית בלי מוזיקה'],
   [/^the beats of this built-in music are known from its recipe; measuring them would replace exact beats, bars and sections with an estimate$/, () => 'הקצב של המוזיקה המובנית הזו ידוע מהמתכון שלה; מדידה הייתה מחליפה פעימות, תיבות וחלקים מדויקים בהערכה. אין צורך למדוד'],
+  // the music routes (apps/server/src/music.ts; musicLayout's RangeErrors pass through as 400 invalid_option)
+  [/^give exactly one of bars and fitSeconds$/, () => 'יש לבחור אורך אחד למוזיקה: מספר תיבות או משך בשניות'],
+  [/^a seed is a whole number from 0 to (\d+)$/, (m) => `מספר הגרסה של המוזיקה הוא מספר שלם בין 0 ל־${m[1]}`],
+  [/^fitSeconds is a positive number of seconds written "n" or "n\/d"$/, () => 'משך המוזיקה צריך להיות מספר חיובי של שניות'],
+  [/^a preview is 1 to (\d+) whole bars$/, (m) => `השמעה לפני הוספה היא באורך של 1 עד ${m[1]} תיבות שלמות`],
+  [/^music\.[a-z0-9-]+ is made in whole bars, at least (\d+); got (\S+)$/, (m) => `המוזיקה הזו נבנית בתיבות שלמות, לפחות ${m[1]} (התבקשו ${m[2]})`],
+  [/^(\d+) bars of music\.[a-z0-9-]+ last (\d+) s; a built-in track is at most (\d+) s \((\d+) bars\)$/, (m) => `${m[1]} תיבות של המוזיקה הזו נמשכות ${m[2]} שניות, ומוזיקה מובנית נמשכת לכל היותר ${m[3]} שניות (${m[4]} תיבות)`],
+  [/^too many pieces of built-in music are being made at the moment; this one was not started$/, () => 'יותר מדי קטעי מוזיקה מובנית נוצרים כרגע, ולכן הקטע הזה לא התחיל להיווצר. אפשר לנסות שוב בעוד רגע'],
+  [/^making the built-in music took too long and was stopped$/, () => 'יצירת המוזיקה המובנית ארכה יותר מדי והופסקה. אפשר לנסות שוב בעוד רגע, או לבקש פחות תיבות'],
+  [/^the built-in music was not made: the request was cancelled$/, () => 'המוזיקה המובנית לא נוצרה, כי הבקשה בוטלה'],
+  [/^the built-in music that was made did not pass its check: /, () => 'המוזיקה המובנית שנוצרה לא עברה את הבדיקה שלה, ולכן לא נשמר דבר. זו תקלה בגרסה הזו, לא בבקשה'],
+  [/^this credential may only propose edits, and built-in music cannot be proposed: it is added through an internal step that a proposal does not carry$/, () => 'ההרשאה הזו מאפשרת רק להציע עריכות, ואי אפשר להציע מוזיקה מובנית: היא נוספת בצעד פנימי שהצעה אינה נושאת'],
+  // the day of GET /packs/suggest (and of GET /on-this-day, which says the same)
+  [/^date must be a real day written YYYY-MM-DD \(the day on the viewer's own clock\)$/, () => 'התאריך אינו יום קיים בלוח השנה'],
 ];

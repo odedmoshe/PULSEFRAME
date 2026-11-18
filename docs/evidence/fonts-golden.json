@@ -1,8 +1,38 @@
 {
   "schema": 1,
   "line": "ש שָׁלוֹם, יְלָדִים! חֲנֻכָּה שְׂמֵחָה — תשפ״ז ש",
-  "note": "No recording yet. `pnpm proof:fonts` writes SHA-256 hashes of the decoded pixels of the golden line, one per family and weight, per Chromium version. A first recording proves nothing by itself.",
+  "note": "SHA-256 of the decoded RGBA pixels of the golden line, one per family and weight, per Chromium version. A first recording proves nothing by itself: it only fixes the numbers. A later run on the same Chromium that matches is the first real comparison (runs counts the matches); one that differs fails. Recorded by `pnpm proof:fonts`.",
   "em": 200,
-  "size": { "w": 1920, "h": 1080 },
-  "recordings": {}
+  "size": {
+    "w": 1920,
+    "h": 1080
+  },
+  "recordings": {
+    "153.0.8010.12": {
+      "recordedAt": "2026-11-18T00:30:08.643Z",
+      "commit": "6e2a315e1e67151377c29dc9f289753aab2dbe78",
+      "runs": 1,
+      "hashes": {
+        "Heebo|400": "e371bffabb3e4d5ae471f71e1ba890e3906b320e9d41fde8bc969e6d01c24400",
+        "Heebo|700": "f4c53f75d106851aec03bb6fee5352a465cebf953ca766eac6576f30a537ba24",
+        "Rubik|400": "99c7a54fbd46509a58b94c93533536e8fcee7f4e1d44cdeb9afacaba6203a179",
+        "Rubik|700": "f91955cd88bb37eec6b92f4c74018b4e693fab33ffb54b233a9e608ce524a0b2",
+        "Assistant|400": "198182b650a333e1ec4846e96b2c95371c573180b16bae38a6d243bd8971774f",
+        "Assistant|700": "35d6c37bc34e5482fb0eb85a9c3bcaa10ca75143258335a11f92c3a1962840e4",
+        "Frank Ruhl Libre|400": "58ee47ed2ed41c5604e806a7b2de336b915c8d95df5808036a2281ff2b4f0de6",
+        "Frank Ruhl Libre|700": "100ad880a86cc4cab1b42803ac5594233692caaea4def47921cfb362b8dcf70d",
+        "Secular One|400": "09bd905124c9470e79678860ec0508849627c0b59174dd626e4de60a83d1a624",
+        "Suez One|400": "0628909b05f5a829a8740782de36867ea59f03dbf3e3b30f3b60ac6594be504d",
+        "David Libre|400": "038fdcd5d13002fc021d3d712ebb1d6802306dd1ea607b3e62f1f1ca18796329",
+        "David Libre|700": "b347a28cb668cf1d055ad6e5fc8e435232bc481a77bfd9211e0782956318fad6",
+        "Karantina|400": "7db8b3ca72451ce05a6051f7cffc364a4c3dc5b08b4c9d4c9b42cc6fea84adcc",
+        "Karantina|700": "7e5cf0bbbe560e03f0afd01a3eda54497f4891fff987e73891cecb9269c58cdd",
+        "Amatic SC|400": "f409cdd8b079730e7fc4a3cc43aef76ab0063e29eeda07a3b434ff666cdb5f52",
+        "Amatic SC|700": "206905a93ece27114fafa5a6aa2eb665b8d513a7ba10332beeb8db442cda788a",
+        "Fredoka|400": "fc7b689062dffb3df8336ee88fc1bddb7d6f547d46e3f8569ac4b74f5ec355c7",
+        "Fredoka|700": "ff413c2acea5ecbabb80493570b05bc27ffc2adcba6d10bd971f2e2e2e0078b9",
+        "Gveret Levin|400": "45cadd382eb4068a1a99a37778365bd60fc435442bc73475195e1286082085fa"
+      }
+    }
+  }
 }

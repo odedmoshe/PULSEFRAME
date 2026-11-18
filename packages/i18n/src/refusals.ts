@@ -1,7 +1,7 @@
 import { effectParamLabel } from './effectParams.ts';
 import { HE_LIFE } from './lifeline.ts';
 import { HE_PACKS } from './packs.ts';
-import { HE_PEOPLE } from './people.ts';
+import { HE_PEOPLE, HE_PEOPLE_SERVER } from './people.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -232,6 +232,7 @@ const HE_TIMELINE: [RegExp, (m: RegExpExecArray) => string][] = [
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
   for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   return undefined;
 }
 /** The patterns, for the test that keeps them in step with the server's wording. */
@@ -254,5 +255,7 @@ export const LIFE_REFUSAL_PATTERNS: readonly RegExp[] = HE_LIFE.map(([re]) => re
 export const PACK_REFUSAL_PATTERNS: readonly RegExp[] = HE_PACKS.map(([re]) => re);
 /** The patterns of the people operations (ADR-0021, people section; the table is in people.ts), for packages/evals/src/people-wording.test.ts. */
 export const PEOPLE_REFUSAL_PATTERNS: readonly RegExp[] = HE_PEOPLE.map(([re]) => re);
+/** The server's people refusals (peoplePrivacy.ts), for packages/evals/src/people-wording.test.ts. */
+export const PEOPLE_SERVER_REFUSAL_PATTERNS: readonly RegExp[] = HE_PEOPLE_SERVER.map(([re]) => re);
 /** The patterns of the timeline-behaviour operations (set_timeline_behaviour, ripple_delete_clips), for their own case of refusal-wording.test.ts. */
 export const TIMELINE_REFUSAL_PATTERNS: readonly RegExp[] = HE_TIMELINE.map(([re]) => re);

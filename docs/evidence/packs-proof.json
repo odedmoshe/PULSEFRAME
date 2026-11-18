@@ -1,0 +1,1028 @@
+{
+ "proof": "packs",
+ "when": "2026-11-18T00:52:35.395Z",
+ "node": "v22.23.4",
+ "platform": "linux x64",
+ "ok": true,
+ "checks": [
+  {
+   "name": "P0 each pack worker merge (worker branch built on the contracts) brought no change under packages/engine",
+   "ok": true,
+   "detail": [
+    {
+     "merge": "3af402d",
+     "workerHead": "6bc70e8df79c",
+     "workerCommits": 7,
+     "contractsIsAncestor": true,
+     "engineDiff": ""
+    },
+    {
+     "merge": "c777108",
+     "workerHead": "762e3ee197df",
+     "workerCommits": 6,
+     "contractsIsAncestor": true,
+     "engineDiff": ""
+    },
+    {
+     "merge": "5861d23",
+     "workerHead": "5db5f6b2c4bf",
+     "workerCommits": 5,
+     "contractsIsAncestor": true,
+     "engineDiff": ""
+    }
+   ]
+  },
+  {
+   "name": "GET /packs lists the two packs; together they name the eight templates",
+   "ok": true,
+   "detail": {
+    "packs": [
+     [
+      "pack.hanukkah",
+      [
+       "tpl.hanukkah-candles",
+       "tpl.hanukkah-eight-nights",
+       "tpl.hanukkah-party",
+       "tpl.hanukkah-greeting"
+      ]
+     ],
+     [
+      "pack.birthday",
+      [
+       "tpl.birthday-age",
+       "tpl.birthday-cake",
+       "tpl.birthday-invite",
+       "tpl.birthday"
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "name": "P1 tpl.hanukkah-candles: plan clean, apply is one transaction with its built-in music (music.calm), undo gives the previous document, redo the applied one",
+   "ok": true,
+   "detail": {
+    "style": "music.calm",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  {
+   "name": "P1 tpl.hanukkah-eight-nights: plan clean, apply is one transaction with its built-in music (music.calm), undo gives the previous document, redo the applied one",
+   "ok": true,
+   "detail": {
+    "style": "music.calm",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  {
+   "name": "P1 tpl.hanukkah-party: plan clean, apply is one transaction with its built-in music (music.festive), undo gives the previous document, redo the applied one",
+   "ok": true,
+   "detail": {
+    "style": "music.festive",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  {
+   "name": "P1 tpl.hanukkah-greeting: plan clean, apply is one transaction with its built-in music (music.calm), undo gives the previous document, redo the applied one",
+   "ok": true,
+   "detail": {
+    "style": "music.calm",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  {
+   "name": "P1 tpl.birthday-age: plan clean, apply is one transaction with its built-in music (music.birthday), undo gives the previous document, redo the applied one",
+   "ok": true,
+   "detail": {
+    "style": "music.birthday",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  {
+   "name": "P1 tpl.birthday-cake: plan clean, apply is one transaction with its built-in music (music.birthday), undo gives the previous document, redo the applied one",
+   "ok": true,
+   "detail": {
+    "style": "music.birthday",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  {
+   "name": "P1 tpl.birthday-invite: plan clean, apply is one transaction with its built-in music (music.birthday), undo gives the previous document, redo the applied one",
+   "ok": true,
+   "detail": {
+    "style": "music.birthday",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  {
+   "name": "P1 tpl.birthday: plan clean, apply is one transaction with its built-in music (music.birthday), undo gives the previous document, redo the applied one",
+   "ok": true,
+   "detail": {
+    "style": "music.birthday",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  {
+   "name": "P1 matrix (288 runs): every plan answers, every apply after a clean plan works, every undo is exact",
+   "ok": true,
+   "detail": {
+    "runs": 288,
+    "applied": 288,
+    "blocked": 0,
+    "failures": []
+   }
+  },
+  {
+   "name": "P2 all 50 pack elements rasterise at 1024 px with alpha, cover 2–90 % of their box, each its own picture",
+   "ok": true,
+   "detail": {
+    "count": 50,
+    "failing": [],
+    "duplicates": []
+   }
+  },
+  {
+   "name": "P3 look.hanukkah-candlelight (אור נרות): 600 frames over a bright and a dark still, the flash analyser reports no range",
+   "ok": true,
+   "detail": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 2,
+     "red": 1
+    }
+   }
+  },
+  {
+   "name": "P3 look.hanukkah-winter-night (לילה של חורף): 600 frames over a bright and a dark still, the flash analyser reports no range",
+   "ok": true,
+   "detail": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 1,
+     "red": 5
+    }
+   }
+  },
+  {
+   "name": "P3 look.hanukkah-gold-confetti (קונפטי זהב): 600 frames over a bright and a dark still, the flash analyser reports no range",
+   "ok": true,
+   "detail": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 2,
+     "red": 4
+    }
+   }
+  },
+  {
+   "name": "P3 look.birthday-party-pop (צבעים של מסיבה): 600 frames over a bright and a dark still, the flash analyser reports no range",
+   "ok": true,
+   "detail": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 1,
+     "red": 1
+    }
+   }
+  },
+  {
+   "name": "P3 look.birthday-confetti (גשם קונפטי): 600 frames over a bright and a dark still, the flash analyser reports no range",
+   "ok": true,
+   "detail": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 3,
+     "red": 6
+    }
+   }
+  },
+  {
+   "name": "P3 look.birthday-dreamy (חלומי): 600 frames over a bright and a dark still, the flash analyser reports no range",
+   "ok": true,
+   "detail": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 2,
+     "red": 1
+    }
+   }
+  },
+  {
+   "name": "P3 the packs hold 6 looks and each was measured",
+   "ok": true,
+   "detail": {
+    "looks": [
+     "look.hanukkah-candlelight",
+     "look.hanukkah-winter-night",
+     "look.hanukkah-gold-confetti",
+     "look.birthday-party-pop",
+     "look.birthday-confetti",
+     "look.birthday-dreamy"
+    ]
+   }
+  },
+  {
+   "name": "P5 tpl.hanukkah-candles: at 5 sampled frames the exported H.264 frame is within 36 dB PSNR of the server still (as 4:2:0 holds it)",
+   "ok": true,
+   "detail": {
+    "template": "tpl.hanukkah-candles",
+    "frames": 540,
+    "rows": [
+     {
+      "frame": 0,
+      "psnr": 48.21
+     },
+     {
+      "frame": 135,
+      "psnr": 46.07
+     },
+     {
+      "frame": 270,
+      "psnr": 48.49
+     },
+     {
+      "frame": 405,
+      "psnr": 51.95
+     },
+     {
+      "frame": 539,
+      "psnr": 53.22
+     }
+    ],
+    "previewCanvas": "not measured here (the same evaluate against stills: proof:lifeline check 5)"
+   }
+  },
+  {
+   "name": "P10 check:notices passes, and the bundle's THIRD_PARTY_NOTICES.txt holds each title family's @fontsource package (5.3.0) with its licence",
+   "ok": true,
+   "detail": {
+    "ok": true,
+    "listed": [
+     "Suez One",
+     "David Libre",
+     "Karantina",
+     "Amatic SC",
+     "Fredoka",
+     "Gveret Levin"
+    ],
+    "missing": []
+   }
+  },
+  {
+   "name": "P11 on 2026-11-17 Hanukkah is suggested first, 17 days to the evening of 4 December",
+   "ok": true,
+   "detail": {
+    "packId": "pack.hanukkah",
+    "daysAway": 17,
+    "firstDay": {
+     "y": 2026,
+     "m": 12,
+     "d": 5
+    },
+    "lastDay": {
+     "y": 2026,
+     "m": 12,
+     "d": 12
+    },
+    "eveningBefore": true,
+    "reason": {
+     "he": "חנוכה מתחיל בערב 4 בדצמבר · בעוד 17 ימים",
+     "en": "Hanukkah begins on the evening of 4 December · in 17 days"
+    }
+   }
+  },
+  {
+   "name": "P11 on 2027-01-05 nothing is suggested",
+   "ok": true,
+   "detail": {
+    "suggestions": [],
+    "birthdays": "none",
+    "note": "Packs whose occasion is near this day, nearest first. A dismissal is the viewer's own preference; nothing is stored."
+   }
+  },
+  {
+   "name": "P12 a element from the Hanukkah pack, placed: one undo removes its clip and the file stays in the library",
+   "ok": true,
+   "detail": {
+    "status": 201,
+    "clipsBefore": 1,
+    "undo": 200,
+    "clipsAfter": 0,
+    "assetStays": true
+   }
+  },
+  {
+   "name": "P12 a sound from the Hanukkah pack, placed: one undo removes its clip and the file stays in the library",
+   "ok": true,
+   "detail": {
+    "status": 201,
+    "clipsBefore": 1,
+    "undo": 200,
+    "clipsAfter": 0,
+    "assetStays": true
+   }
+  }
+ ],
+ "measurements": {
+  "p1": {
+   "tpl.hanukkah-candles": {
+    "style": "music.calm",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   },
+   "tpl.hanukkah-eight-nights": {
+    "style": "music.calm",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   },
+   "tpl.hanukkah-party": {
+    "style": "music.festive",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   },
+   "tpl.hanukkah-greeting": {
+    "style": "music.calm",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   },
+   "tpl.birthday-age": {
+    "style": "music.birthday",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   },
+   "tpl.birthday-cake": {
+    "style": "music.birthday",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   },
+   "tpl.birthday-invite": {
+    "style": "music.birthday",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   },
+   "tpl.birthday": {
+    "style": "music.birthday",
+    "plan": 200,
+    "blocking": 0,
+    "apply": 200,
+    "oneTransaction": true,
+    "music": true,
+    "undo": 200,
+    "undoExact": true,
+    "redo": 200,
+    "redoExact": true
+   }
+  },
+  "matrix": {
+   "runs": 288,
+   "applied": 288,
+   "blocked": 0,
+   "failures": []
+  },
+  "elements": [
+   {
+    "id": "element.holiday.hanukkiah-1",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.2789,
+    "hash": "14019a938f58c7f3dd5303dfdea1d2dea809fde6ab18486da05b19f0dd22f078",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.hanukkiah-2",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.2853,
+    "hash": "fd334b614fc81600e7ab0792919746f9afb8fe3ac479acbae3e504d516e13806",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.hanukkiah-3",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.2916,
+    "hash": "666a9e6ca3e86d1c90eca8635ad65a7083852090b69cb0c4e69c1b56495190d9",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.hanukkiah-4",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.298,
+    "hash": "78939dc28e749408fdd335fd447f1ca1d9a9cc3bf46fb8621c12ccc4f657fff8",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.hanukkiah-5",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.3044,
+    "hash": "bc809793aceba422dc876f1eb470433168668c52b5f01ffd6032d5e8c858a355",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.hanukkiah-6",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.3107,
+    "hash": "be1dcf61294344c38f9b31db99150f0eaa74acd3212d2e749d2fc89593edc623",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.hanukkiah-7",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.3171,
+    "hash": "d6366e36ec49b653bdd568577b988f63820f060aa21aeb7d2ae7e5359cea128b",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.hanukkiah-8",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.3234,
+    "hash": "0aae059ab077428a850eb1c400bfbb14f79d3c6f7a4b281087e81142312d7d08",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.hanukkiah-outline",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.2664,
+    "hash": "b7681cbe49fd3a3999b5341e65c80d2f8be6657b9ae2d9ed101fcdf9fad3e6d2",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.candle",
+    "w": 614,
+    "hh": 1024,
+    "coverage": 0.2186,
+    "hash": "1be440a2e5a2eb8539c860e89f0bdce13df6c70008949cd7aff6a2a1793b2905",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.candle-lit",
+    "w": 614,
+    "hh": 1024,
+    "coverage": 0.2541,
+    "hash": "66af6468fce92f1876aaef6bdc23a43a0e1e3a098798efbc34453e9feeb5c95c",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.candle-row",
+    "w": 1024,
+    "hh": 512,
+    "coverage": 0.334,
+    "hash": "ad75ff43b41e974cc31decfed4f9a4c4e32f80f1057712f6048195353a78fa03",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.dreidel",
+    "w": 820,
+    "hh": 1024,
+    "coverage": 0.3223,
+    "hash": "ebf30996128625e440f3d61d936dd1860d74313ad2e9745f38c8b4a606c5be7b",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.dreidel-two-colour",
+    "w": 820,
+    "hh": 1024,
+    "coverage": 0.3451,
+    "hash": "e28944d7b83b70151d70fa9a6f15779e0b1f5d002b8c7d8d071620fa75caeb60",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.dreidel-spinning",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.3276,
+    "hash": "15abc04fa8635c97595c0abc585c8dcbd4504f20ec561d36234c037222b52c10",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.sufganiya",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.3782,
+    "hash": "37369e57ae24ab08654fce5950c2a366e92908f6ce47457af838c91212188339",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.sufganiya-bitten",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.3607,
+    "hash": "9a5ee9e73da3e664c2327ec9ee620ccef82dd5a30b087a5e64624c54eb144412",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.sufganiyot-plate",
+    "w": 1024,
+    "hh": 732,
+    "coverage": 0.3565,
+    "hash": "3632d6327093444cf57ae3485f64d175ede9bdcd7f2805b5c4db820184a44f5c",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.latke",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.4448,
+    "hash": "15d6d9a9b866ec65b86ff41c6bb7eb0334f345d633faec0164ab1932b28dd1c9",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.oil-jug",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.4857,
+    "hash": "f89c647f8fd3db5e29261f197eab00e1abe6ddb71f51003eb8a78ffb9e80011b",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.gelt-coin",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.6377,
+    "hash": "cd689d06bfb9600327abf72094e796d584c47d36f3aa55c69a1aad533d9a7d27",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.gelt-stack",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.4028,
+    "hash": "94a91ec51670245c15028d11ad73f9b8fa871fdcdb24005154d7c1b5ab9b71bc",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.gift",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.49,
+    "hash": "571113e68ad57c425ef945f77844c9e62a4f80ca53e392a73b9851454a3fc446",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.lights-garland",
+    "w": 1024,
+    "hh": 308,
+    "coverage": 0.1489,
+    "hash": "6a06fb7cbda9d49db0ea15cd26d3d73f4356480f5613df430d014661e0210316",
+    "ok": true
+   },
+   {
+    "id": "element.holiday.frame-candles",
+    "w": 1024,
+    "hh": 640,
+    "coverage": 0.1935,
+    "hash": "ec26ef97d56e00ea23a2faf67c11c47d1e2708983c5ad5b99839adbe11384c68",
+    "ok": true
+   },
+   {
+    "id": "element.party.balloon",
+    "w": 614,
+    "hh": 1024,
+    "coverage": 0.4829,
+    "hash": "8d3b3a4090e966b51049d15a687cd57a705ef8662f068bca0a5296db43b70847",
+    "ok": true
+   },
+   {
+    "id": "element.party.balloon-shine",
+    "w": 614,
+    "hh": 1024,
+    "coverage": 0.5003,
+    "hash": "1db19923198c6fee4bb9300b4ce8cf037113fce7039edf473a0a3afda4b82f3d",
+    "ok": true
+   },
+   {
+    "id": "element.party.balloons-bunch",
+    "w": 1024,
+    "hh": 854,
+    "coverage": 0.4834,
+    "hash": "e679e65ce3c8c40cbce5b67670c2e789fbb5eb6ae89b4c3c77f0bafc552b9a38",
+    "ok": true
+   },
+   {
+    "id": "element.party.balloon-heart",
+    "w": 614,
+    "hh": 1024,
+    "coverage": 0.3798,
+    "hash": "33bf654bd3ec903bba4e97160c31296af4e8c1609c3ea9e652ade2408cc45cc3",
+    "ok": true
+   },
+   {
+    "id": "element.party.cake",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.4078,
+    "hash": "c9f860dd98b7fd0cb2c27ee05ffb8da80f9cc88d3c5eab13e6773812726af2c4",
+    "ok": true
+   },
+   {
+    "id": "element.party.cake-candles",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.4354,
+    "hash": "9160e555173c0603e80a0ea45bdeed3ddc6524165bb5734e8202529afacb7f85",
+    "ok": true
+   },
+   {
+    "id": "element.party.cupcake",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.4062,
+    "hash": "b904ca7f04e7840227b455b05471687e1df6024b6e4f72b8507f7dbf634194a7",
+    "ok": true
+   },
+   {
+    "id": "element.party.candle-birthday",
+    "w": 512,
+    "hh": 1024,
+    "coverage": 0.3352,
+    "hash": "93e37b925f1fb12ff8f0230382481aa487e964aab183c83d744cc6627ddb82d7",
+    "ok": true
+   },
+   {
+    "id": "element.party.party-hat",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.3275,
+    "hash": "a3d4041faface8d13062113c488e11f76abd11da1b9aef4120ae135b3c38c054",
+    "ok": true
+   },
+   {
+    "id": "element.party.crown-party",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.4236,
+    "hash": "5197029d6eb4aea460f46f9e3164baa0e39e0434515497b3e226fc258f130e1c",
+    "ok": true
+   },
+   {
+    "id": "element.party.gift-box",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.4361,
+    "hash": "c3bb3743835b9f6f16fa6ca6762fac9fe4345a858aa9b88b9370967ae4bf1d21",
+    "ok": true
+   },
+   {
+    "id": "element.party.gift-bow",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.256,
+    "hash": "c4f008414a2196e3663936ea62653230418df70b5e70eb1855744662cc2fea0f",
+    "ok": true
+   },
+   {
+    "id": "element.party.bunting",
+    "w": 1024,
+    "hh": 308,
+    "coverage": 0.217,
+    "hash": "3eb33fd83f4b342ddbd9a84b989dd6d048d6837ac3b5329dacfea40de499a665",
+    "ok": true
+   },
+   {
+    "id": "element.party.streamer",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.2145,
+    "hash": "2b3d5399eb81541628c8f83a7406bb4061e9a98d73785e813f79d7b37ea55d74",
+    "ok": true
+   },
+   {
+    "id": "element.party.confetti-burst",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.0958,
+    "hash": "7177ea953ddf3097bd668fa4d2ff07df74b6d1157e8e1344bfc06b360794b184",
+    "ok": true
+   },
+   {
+    "id": "element.party.party-popper",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.2303,
+    "hash": "38e7111a03452a173faf47883d857ccbc22babebf1c3e895dcf9c6eed9b6cf83",
+    "ok": true
+   },
+   {
+    "id": "element.party.blower",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.1563,
+    "hash": "54676050c649eb9b269650726643239da041b657791d4f9b4f0bfc4c03f3dde0",
+    "ok": true
+   },
+   {
+    "id": "element.party.star-burst",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.5416,
+    "hash": "8ce3ad1ce5e1aa9e85e7ff1dbcde5dcbc44e8acb364be09e97d2f17b006e3671",
+    "ok": true
+   },
+   {
+    "id": "element.party.number-badge",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.7164,
+    "hash": "a6e3f1f2b51b6c8514feab9d5a3a088297dfd393e53b9e261ebd9c09773d39c9",
+    "ok": true
+   },
+   {
+    "id": "element.party.ribbon-banner",
+    "w": 1024,
+    "hh": 512,
+    "coverage": 0.6023,
+    "hash": "cad22ba519b9097f8ea72e5c6fd208d766f1e4bdb045c8931984077d1ce8436e",
+    "ok": true
+   },
+   {
+    "id": "element.party.frame-polaroid",
+    "w": 854,
+    "hh": 1024,
+    "coverage": 0.4126,
+    "hash": "b4a028a02e3ea9467def7c447efc3f5a72c55d41de042844ff0fef62f6d92e55",
+    "ok": true
+   },
+   {
+    "id": "element.party.frame-bunting",
+    "w": 1024,
+    "hh": 640,
+    "coverage": 0.1853,
+    "hash": "d857b1f80eb881d4d3e19145e9b90e16519548c31de91de02d8c55fa97a92dc6",
+    "ok": true
+   },
+   {
+    "id": "element.party.lollipop",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.3954,
+    "hash": "127dbb65267eded3fdaacb60d424363653a7a1bd52497daf48b63a6deb1a6142",
+    "ok": true
+   },
+   {
+    "id": "element.party.ice-cream",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.3205,
+    "hash": "15357b75ef6c8557e100245cd69e8020b4863716c271e02531da7679c40ba7b4",
+    "ok": true
+   },
+   {
+    "id": "element.party.party-face",
+    "w": 1024,
+    "hh": 1024,
+    "coverage": 0.393,
+    "hash": "d9b7d6ed10f6206c614ca71650b021dacd433ed4654ef8e479af26f94a034f1a",
+    "ok": true
+   }
+  ],
+  "looks": {
+   "look.hanukkah-candlelight": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 2,
+     "red": 1
+    }
+   },
+   "look.hanukkah-winter-night": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 1,
+     "red": 5
+    }
+   },
+   "look.hanukkah-gold-confetti": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 2,
+     "red": 4
+    }
+   },
+   "look.birthday-party-pop": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 1,
+     "red": 1
+    }
+   },
+   "look.birthday-confetti": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 3,
+     "red": 6
+    }
+   },
+   "look.birthday-dreamy": {
+    "frames": 600,
+    "verdict": "pass",
+    "ranges": 0,
+    "peak": {
+     "general": 2,
+     "red": 1
+    }
+   }
+  },
+  "parity": {
+   "template": "tpl.hanukkah-candles",
+   "frames": 540,
+   "rows": [
+    {
+     "frame": 0,
+     "psnr": 48.21
+    },
+    {
+     "frame": 135,
+     "psnr": 46.07
+    },
+    {
+     "frame": 270,
+     "psnr": 48.49
+    },
+    {
+     "frame": 405,
+     "psnr": 51.95
+    },
+    {
+     "frame": 539,
+     "psnr": 53.22
+    }
+   ],
+   "previewCanvas": "not measured here (the same evaluate against stills: proof:lifeline check 5)"
+  },
+  "notices": {
+   "ok": true,
+   "familiesListed": [
+    "Suez One",
+    "David Libre",
+    "Karantina",
+    "Amatic SC",
+    "Fredoka",
+    "Gveret Levin"
+   ],
+   "oflTexts": 13,
+   "bundle": {
+    "files": 39,
+    "woff2Bytes": 284416,
+    "woffBytes": 253280,
+    "totalBytes": 537696
+   },
+   "output": "PASS notices-check: 19 packages listed, 11 font families (38 woff2 files) with OFL text alongside\n"
+  },
+  "addFromPack": {
+   "element": {
+    "status": 201,
+    "clipsBefore": 1,
+    "undo": 200,
+    "clipsAfter": 0,
+    "assetStays": true
+   },
+   "sound": {
+    "status": 201,
+    "clipsBefore": 1,
+    "undo": 200,
+    "clipsAfter": 0,
+    "assetStays": true
+   }
+  }
+ }
+}

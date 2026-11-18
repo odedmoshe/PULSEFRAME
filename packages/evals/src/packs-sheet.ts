@@ -62,7 +62,7 @@ async function stills(): Promise<string> {
     looks.forEach((src, i) => { const f = path.join(tmp, `pic${i}.png`); ff(['-f', 'lavfi', '-i', src, '-frames:v', '1', f]); pics.push(f); });
     const written: string[] = [];
     for (const t of TEMPLATES.filter((x) => x.pack)) {
-      const pid = (await call('/projects', { name: t.id, width: 1080, height: 1920, frameRate: { num: 30, den: 1 } })).body.id as string;
+      const pid = (await call('/projects', { name: t.id, width: 1080, height: 1920, frameRate: { num: 30, den: 1 } })).body.project.id as string; // POST /projects answers { project, revision }
       const ids: string[] = [];
       for (const f of pics) {
         const r = await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(f) }, body: fs.readFileSync(f) });

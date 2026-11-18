@@ -1,19 +1,19 @@
 {
   "proof": "lifeline",
   "adr": "ADR-0021",
-  "ranAt": "2026-11-17T20:44:36.409Z",
+  "ranAt": "2026-11-18T00:54:58.670Z",
   "result": "PASSED",
-  "passed": 14,
-  "total": 14,
+  "passed": 17,
+  "total": 17,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "node": "v22.23.4",
     "icu": "78.3",
     "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
   },
-  "scope": "The life line (ADR-0021) through the real server, the render worker and headless Chromium, on files generated here (ffmpeg -metadata, a hand-built EXIF segment) at 640x360: capture dates at import, title fields and the capture-sourced date stamp against the same words typed by hand, H.264 export and the paused preview against the stills, \"make it plain text\", undo of every operation, the preflight, the calendar in Chromium, cost. Not covered: real phone files (the owner's own clips), cameras that write local time labelled as UTC or the end of the recording, HEIC photos, people (not part of this build), the editor screens (proof:lifeline-ui). Nobody looked at the pictures.",
+  "scope": "The life line (ADR-0021) through the real server, the render worker and headless Chromium, on files generated here (ffmpeg -metadata, a hand-built EXIF segment) at 640x360: capture dates at import, title fields and the capture-sourced date stamp, people (what a credential without the people scope reads on every surface, and the archive without family details on a second server) against the same words typed by hand, H.264 export and the paused preview against the stills, \"make it plain text\", undo of every operation, the preflight, the calendar in Chromium, cost. Not covered: real phone files (the owner's own clips), cameras that write local time labelled as UTC or the end of the recording, HEIC photos, the editor screens (proof:lifeline-ui). Nobody looked at the pictures.",
   "homeZone": "Asia/Jerusalem",
   "measurements": {
     "captures": {
@@ -276,6 +276,60 @@
         }
       ],
       "replayEqual": true
+    },
+    "familyFreeArchive": {
+      "bytes": 48128,
+      "familyCheck": {
+        "varying": [
+          "clp_391d80b6a21"
+        ],
+        "empty": [
+          "clp_391d80b6a25"
+        ]
+      },
+      "frozen": {
+        "name": "נועה (בת שנה)",
+        "cut": "בת שנה · 1 ביוני 2021",
+        "itai": "איתי: "
+      },
+      "stills": [
+        {
+          "frame": 10,
+          "sha256": "6db05a9329dc449ebd5bd3a72df6dd88e12c94a8d9c5935109daa2404fe5371e",
+          "equal": true
+        },
+        {
+          "frame": 45,
+          "sha256": "9bb9c1bf2334db41c24c6aa10f75d2526c336d1808b60b85809f27ee4b7d6e37",
+          "equal": true
+        },
+        {
+          "frame": 95,
+          "sha256": "7701c3f2126b13f3afb4306f0f4b92482ff580ec0955422204cff1522e81f7c0",
+          "equal": true
+        }
+      ]
+    },
+    "peopleWalk": {
+      "routes": 109,
+      "tools": 162,
+      "perCredential": {
+        "agent token": {
+          "answered": 31,
+          "refused": 73,
+          "leaks": 0
+        },
+        "observer token": {
+          "answered": 30,
+          "refused": 74,
+          "leaks": 0
+        },
+        "grant with people left at its default": {
+          "answered": 31,
+          "refused": 73,
+          "leaks": 0
+        }
+      }
     },
     "calendarInChromium": {
       "chromium": "153.0.8010.12",
@@ -1438,20 +1492,20 @@
       "evaluate": {
         "frames": 1000,
         "liveTitles": 20,
-        "medianMsPerFrameLive": 0.024,
-        "medianMsPerFrameTyped": 0.022,
-        "addedMsPerFrame": 0.002,
+        "medianMsPerFrameLive": 0.025,
+        "medianMsPerFrameTyped": 0.023,
+        "addedMsPerFrame": 0.003,
         "budgetMs": 0.2,
         "withinBudget": true,
-        "firstFrameAfterAnEditMs": 0.06
+        "firstFrameAfterAnEditMs": 0.064
       },
       "commit": {
         "datedFiles": 500,
         "events": 60,
         "created": 60,
         "commits": 30,
-        "medianMs": 28.269,
-        "maxMs": 40.063
+        "medianMs": 20.177,
+        "maxMs": 30.784
       }
     }
   },
@@ -1725,8 +1779,8 @@
             "severity": "blocker",
             "message": "the title \"צולם ב־{date}\" has a field without data, so those words would be missing from the film ({date}: there is no capture date to take it from (the picture under the title has none, or no dated picture is on the timeline))",
             "ids": [
-              "clp_30ab73b8e70",
-              "clp_d6a1a023970"
+              "clp_88c417d4090",
+              "clp_67b5e775310"
             ],
             "range": {
               "startFrame": 0,
@@ -1750,8 +1804,8 @@
             "severity": "blocker",
             "message": "the title \"{hebrewDate}\" shows a Hebrew date ({hebrewDate}) for a picture taken around sunset: the Hebrew date depends on whether it was filmed before or after sunset, and that has not been answered. Answer it for the event (update_event afterSunset); it is never guessed",
             "ids": [
-              "clp_f9b97469920",
-              "evt_4d9f7f7a420"
+              "clp_66d05c6b130",
+              "evt_8588865bd00"
             ],
             "range": {
               "startFrame": 0,
@@ -1766,6 +1820,126 @@
         "clearPlan": [],
         "stillEqualsTyped": true,
         "differsFromTheDayBefore": true
+      }
+    },
+    {
+      "name": "10a. privacy: a credential without the people scope (agent token, observer token, a grant left at its default) reads each person as id and name with a null birth date, is refused both owner routes (403) and gets an archive with names and no birth date; its still of «{name} ({age})» equals «נועה ()» typed by hand while the owner's equals «נועה (בת שנה)»; controls: the owner and a grant with people \"full\" read the birth date",
+      "ok": true,
+      "detail": {
+        "reads": {
+          "agent token": {
+            "projectRead": true,
+            "ownerRoutes": [
+              403,
+              403,
+              403
+            ],
+            "archive": {
+              "status": 200,
+              "people": "names",
+              "leak": null
+            }
+          },
+          "observer token": {
+            "projectRead": true,
+            "ownerRoutes": [
+              403,
+              403,
+              403
+            ],
+            "archive": {
+              "status": 200,
+              "people": "names",
+              "leak": null
+            }
+          },
+          "grant with people left at its default": {
+            "projectRead": true,
+            "ownerRoutes": [
+              403,
+              403,
+              403
+            ],
+            "archive": {
+              "status": 200,
+              "people": "names",
+              "leak": null
+            }
+          }
+        },
+        "controls": true,
+        "fullGrantOwnerRoutes": [
+          403,
+          403
+        ],
+        "agentStillEqualsTypedWithoutAge": true,
+        "ownerStillEqualsTypedAge": true
+      }
+    },
+    {
+      "name": "11. the archive «בלי פרטי משפחה» imported on a second server: no people and no birth date in it, no title with a people field, each such title plain text with the words it showed at its first frame («נועה (בת שנה)»), the {date} title still live; the stills of the frames 10, 45, 95 are byte-equal to the source server's; the family check listed the title whose words change (varying) and the one with a field without words (empty)",
+      "ok": true,
+      "detail": {
+        "manifest": {
+          "family": "omit",
+          "people": "none"
+        },
+        "birthLeak": null,
+        "peopleOnSecondServer": null,
+        "peopleFieldLeft": [],
+        "frozen": {
+          "name": "נועה (בת שנה)",
+          "cut": "בת שנה · 1 ביוני 2021",
+          "itai": "איתי: "
+        },
+        "plainFields": true,
+        "stills": [
+          {
+            "frame": 10,
+            "equal": true
+          },
+          {
+            "frame": 45,
+            "equal": true
+          },
+          {
+            "frame": 95,
+            "equal": true
+          }
+        ],
+        "familyCheck": {
+          "varying": [
+            "clp_391d80b6a21"
+          ],
+          "empty": [
+            "clp_391d80b6a25"
+          ]
+        },
+        "afterTheCutTheCopyShowsTheFirstValue": true
+      }
+    },
+    {
+      "name": "10b. the walk: with the birth date planted in the project, a proposal's arguments and entity states and an export job, every REST route of the surface table (109) and every MCP tool (162), resource and prompt, called as each credential without the people scope: 0 answers hold the birth date (any spelling, also on the Hebrew calendar), an age or the word choice",
+      "ok": true,
+      "detail": {
+        "planted": true,
+        "walk": {
+          "agent token": {
+            "answered": 31,
+            "refused": 73,
+            "leaks": []
+          },
+          "observer token": {
+            "answered": 30,
+            "refused": 74,
+            "leaks": []
+          },
+          "grant with people left at its default": {
+            "answered": 31,
+            "refused": 73,
+            "leaks": []
+          }
+        }
       }
     },
     {
@@ -1793,20 +1967,20 @@
         "evaluate": {
           "frames": 1000,
           "liveTitles": 20,
-          "medianMsPerFrameLive": 0.024,
-          "medianMsPerFrameTyped": 0.022,
-          "addedMsPerFrame": 0.002,
+          "medianMsPerFrameLive": 0.025,
+          "medianMsPerFrameTyped": 0.023,
+          "addedMsPerFrame": 0.003,
           "budgetMs": 0.2,
           "withinBudget": true,
-          "firstFrameAfterAnEditMs": 0.06
+          "firstFrameAfterAnEditMs": 0.064
         },
         "commit": {
           "datedFiles": 500,
           "events": 60,
           "created": 60,
           "commits": 30,
-          "medianMs": 28.269,
-          "maxMs": 40.063
+          "medianMs": 20.177,
+          "maxMs": 30.784
         }
       }
     }

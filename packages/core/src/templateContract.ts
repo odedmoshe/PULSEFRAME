@@ -51,7 +51,7 @@ export type ApplyTemplateArgs = z.infer<typeof ApplyTemplateArgsSchema>;
 /** apply_template OpResult.output. The run record: recipeRuns[runId] = { recipeId: `template:${templateId}`, params: {...params, templateVersion}, createdIds, fingerprints, steps, slots }. */
 export interface ApplyTemplateOutput { runId: string; createdIds: string[]; slots: SlotRecord[]; assetIds: Record<string, string> }
 
-export const TEMPLATE_GENRES = ['montage', 'celebration', 'promo', 'quote', 'list', 'memories'] as const;
+export const TEMPLATE_GENRES = ['montage', 'celebration', 'promo', 'quote', 'list', 'memories', 'holiday'] as const;
 /** The id of a content pack (packs/contract.ts). */
 export const PACK_ID = /^pack\.[a-z0-9-]{1,24}$/;
 const Colour = z.string().regex(/^#[0-9A-Fa-f]{6}$/);

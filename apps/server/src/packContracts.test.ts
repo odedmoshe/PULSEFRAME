@@ -2,11 +2,9 @@
  * The server-side contracts of the content packs and built-in music that the lead pre-pass owns (ADR-0022):
  * - the beats of built-in music are known from its recipe, so measuring them is refused (409 known_by_construction) unless
  *   asked for with overwrite, and nothing changes;
- * - a template asked for built-in music while the synthesiser is not built answers 501 music_not_built honestly and commits
- *   nothing (W3's music.ts replaces that answer with the track; this test then becomes its "nothing committed on refusal"
- *   half, see the todo);
- * (Their Hebrew wording is held in packages/evals/src/packs-wording.test.ts.)
- * Nothing here pins the stub: the 501 case is the honest answer of a missing feature, and it is listed as todo for W3.
+ * - a template asked for built-in music plans by style, bars and seed and applies with the track in one transaction (the
+ *   synthesiser is built: nothing answers 501 music_not_built any more); a request the music route refuses commits nothing;
+ * (Their Hebrew wording is held in packages/evals/src/packs-wording.test.ts; the routes in packRoutes.test.ts.)
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -72,7 +70,7 @@ describe('built-in music on the server (ADR-0022)', () => {
     expect(after.doc.analyses[musicId]!.beats!.origin.method).toBe(MUSIC_METHOD);
     expect(after.doc.analyses[musicId]).toEqual(before.doc.analyses[musicId]);
   });
-  it('a template plan asks for the track by style, bars and seed; applying it while the synthesiser is not built answers 501 and commits nothing', async () => {
+  it('a template plan asks for the track by style, bars and seed and applies in one transaction; a refused music request commits nothing', async () => {
     const media = Object.values(store.getProject(pid).doc.assets).filter((a) => a.kind === 'image').map((a) => a.id);
     const plan = await rest('POST', `/projects/${pid}/templates/tpl.photo-dump/plan`, { params: { media, builtinMusic: { styleId: 'music.festive', seed: 3 } } });
     expect(plan.status).toBe(200);
@@ -80,11 +78,12 @@ describe('built-in music on the server (ADR-0022)', () => {
     expect(plan.body.basis[0]).toContain('known from its recipe');
     const before = store.getProject(pid).revision;
     const applied = await rest('POST', `/projects/${pid}/templates/tpl.photo-dump/apply`, { params: { media, builtinMusic: { styleId: 'music.festive', seed: 3 } } });
-    if (applied.status === 501) {
-      expect(applied.body.error.code).toBe('music_not_built');
-    } else expect(applied.status).toBe(200); // once W3's synthesiser is in
-    if (applied.status !== 200) expect(store.getProject(pid).revision).toBe(before);
-  });
+    expect(applied.status).toBe(200);
+    expect(store.getProject(pid).revision).toBe(before + 1);
+    const refused = await rest('POST', `/projects/${pid}/music`, { styleId: 'music.festive', bars: 8, fitSeconds: '10' });
+    expect([refused.status, refused.body.error.code, refused.body.error.message]).toEqual([400, 'invalid_option', 'give exactly one of bars and fitSeconds']);
+    expect(store.getProject(pid).revision).toBe(before + 1);
+  }, 120_000);
   it('both music sources at once are refused before anything is made', async () => {
     const media = Object.values(store.getProject(pid).doc.assets).filter((a) => a.kind === 'image').map((a) => a.id);
     const r = await rest('POST', `/projects/${pid}/templates/tpl.photo-dump/plan`, { params: { media, musicAssetId: musicId, builtinMusic: { styleId: 'music.festive' } } });

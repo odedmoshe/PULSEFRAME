@@ -44,14 +44,27 @@ describe('a point hanging off the letter\'s edge (drawn at the pen origin) is re
   it('below, beside and above the edges', () => {
     expect(checkMark(letter(), withMark(220, 350, 260, 370), M(0x5b7)).pass).toBe(false);
     expect(checkMark(letter(), withMark(340, 350, 380, 370), M(0x5b7)).pass).toBe(false);
-    expect(checkMark(letter(), withMark(225, 160, 245, 190), M(0x5b9)).pass).toBe(false);
+    // a holam belongs at the upper left corner (its centre on the left edge, as every catalogue face draws it); on the right edge it is rejected
+    expect(checkMark(letter(), withMark(235, 160, 265, 190), M(0x5b9)).pass).toBe(true);
+    expect(checkMark(letter(), withMark(335, 160, 365, 190), M(0x5b9)).pass).toBe(false);
     expect(checkMark(letter(), withMark(280, 350, 320, 370), M(0x5b7)).pass).toBe(true);
     expect(checkMark(letter(), withMark(260, 160, 290, 190), M(0x5b9)).pass).toBe(true);
+  });
+  it('a holam is judged by its side, not by its distance from the middle: below the letter or past the ink box it still fails', () => {
+    expect(checkMark(letter(), withMark(235, 350, 265, 370), M(0x5b9)).pass).toBe(false);
+    expect(checkMark(letter(), withMark(180, 160, 210, 190), M(0x5b9)).pass).toBe(false);
   });
   it('penOriginRejects is satisfied by edge-centred points and not by points in place', () => {
     expect(penOriginRejects(letter(), withMark(330, 350, 370, 370), withMark(230, 350, 270, 370), M(0x5b7))).toEqual({ ok: true, rightRejected: true, leftRejected: true, drawn: true });
     const inPlace = withMark(280, 350, 320, 370);
     expect(penOriginRejects(letter(), inPlace, inPlace, M(0x5b7)).ok).toBe(false);
+    // a holam: the right edge must be rejected; the left edge is where it belongs
+    expect(penOriginRejects(letter(), withMark(335, 160, 365, 190), withMark(235, 160, 265, 190), M(0x5b9))).toEqual({ ok: true, rightRejected: true, leftRejected: false, drawn: true });
+    const holamInPlace = withMark(235, 160, 265, 190);
+    expect(penOriginRejects(letter(), holamInPlace, holamInPlace, M(0x5b9)).ok).toBe(false);
+    // the shin dot: the left edge must be rejected
+    expect(penOriginRejects(letter(), withMark(335, 170, 365, 195), withMark(235, 170, 265, 195), M(0x5c1)).ok).toBe(true);
+    expect(penOriginRejects(letter(), withMark(320, 170, 345, 195), withMark(320, 170, 345, 195), M(0x5c1)).ok).toBe(false);
   });
 });
 
