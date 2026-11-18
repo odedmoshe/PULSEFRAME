@@ -11,6 +11,9 @@
  * start), the template dialog (first step and plan step) and the post-apply bar.
  * The trend pack's panels (ADR-0012): the title effects panel with all six look fields on, and the transition options of a light
  * transition (beat lock, velocity, colour, seed, light status).
+ * The life line (ADR-0021) and the content-pack mounts: the media drawer by date and by event (with the sunset choice), the
+ * field menu of a title (a menu), the live line with its anchored error and fix, the people sheet (a modal dialog opened from
+ * the field menu), the Hanukkah pack page, the built-in music tab of the audio drawer and the text drawer with its fonts.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -22,6 +25,7 @@ import * as T from '@pulseframe/time';
 import { sha256Hex } from '@pulseframe/core';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -150,6 +154,32 @@ async function main() {
     const tplAssets = Object.keys(((await (await fetch(`${s.url}/api/v1/projects/${tplPid}`, { headers: h })).json()) as any).project.assets);
     await post(`/projects/${tplPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: tplAssets[0], start: f(0), duration: f(60) } }] });
     const adjClip = (await post(`/projects/${tplPid}/transactions`, { ops: [{ op: 'add_adjustment', args: { span: 'edit', effects: [{ type: 'color.grayscale' }] } }] })).results?.[0]?.output?.clipId as string | undefined;
+    // the life line (ADR-0021): pictures with capture dates (two of one Hanukkah evening, one of 2023, one without a date),
+    // arranged by events; a person (added through a grant with people:'full': the agent token writes names only); and a title
+    // with a live {year} field over the evening picture
+    const lifePid = (await post('/projects', { name: 'a11y-life', width: 640, height: 360 })).project.id as string;
+    const lifeBase = path.join(art, 'life-base.jpg');
+    execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360', '-frames:v', '1', '-q:v', '3', lifeBase]);
+    const lifePhoto = async (name: string, date: string | null, n: number) => {
+      const bytes = Buffer.concat([withExif(fs.readFileSync(lifeBase), date === null ? { date: null } : { date, offset: '+02:00' }), Buffer.from(`\n${n}`)]);
+      const r: any = await (await fetch(`${s.url}/api/v1/projects/${lifePid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': name }, body: new Uint8Array(bytes) })).json();
+      if (!r.assetId) throw new Error(`life fixture ${name}: ${JSON.stringify(r).slice(0, 200)}`);
+      return r.assetId as string;
+    };
+    const lifeEvening = await lifePhoto('evening.jpg', '2024:12:25 18:00:00', 1);
+    await lifePhoto('evening-early.jpg', '2024:12:25 17:30:00', 2);
+    await lifePhoto('spring.jpg', '2023:03:10 12:00:00', 3);
+    const lifeUndated = await lifePhoto('nodate.jpg', null, 4);
+    const lifeTx = async (ops: unknown[]) => { const r = await post(`/projects/${lifePid}/transactions`, { ops }); if (!r.results) throw new Error(`life fixture transaction: ${JSON.stringify(r).slice(0, 300)}`); return r; };
+    let lifePicture = (await lifeTx([{ op: 'add_clip', args: { assetId: lifeEvening, start: f(0), duration: f(60) } }])).results[0].output.clipId as string;
+    const lifeTitle = (await lifeTx([{ op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60) } }])).results[0].output.clipId as string;
+    await lifeTx([{ op: 'update_text', args: { clipId: lifeTitle, text: 'שלום {year}' } }, { op: 'set_text_fields', args: { clipId: lifeTitle, enabled: true } }]);
+    await lifeTx([{ op: 'cluster_events', args: {} }]);
+    {
+      const full = s.governance.createGrant({ name: 'a11y-people', mode: 'edit', people: 'full' }, { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] }).token;
+      const r = await fetch(`${s.url}/api/v1/projects/${lifePid}/transactions`, { method: 'POST', headers: { authorization: `Bearer ${full}`, 'content-type': 'application/json', connection: 'close' }, body: JSON.stringify({ ops: [{ op: 'add_person', args: { name: 'נועה', birthDate: '2023-03-10', form: 'f' } }] }) });
+      if (r.status !== 200) throw new Error(`the people fixture was refused: ${r.status} ${(await r.text()).slice(0, 300)}`);
+    }
     const tplList = (((await (await fetch(`${s.url}/api/v1/templates`, { headers: h })).json()) as any).templates ?? []) as any[];
     const tplPick = tplList.find((t) => t.available && t.needs.music !== 'beats' && t.slots.every((x: any) => x.accept !== 'video')) ?? tplList.find((t) => t.available);
     for (const lang of ['he', 'en'] as const) {
@@ -447,6 +477,47 @@ async function main() {
       if (await page.getByTestId('template-dialog').count()) await page.keyboard.press('Escape');
       await auditState('template-applied', { shown: (await page.getByTestId('template-applied').count()) === 1, template: tplPick?.id ?? null });
       if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
+      // the life line and the pack mounts, in the life project (the picture under the title is restored for the second language)
+      await page.goto(`${s.ownerUrl}&project=${lifePid}`);
+      await page.getByTestId('timecode').waitFor();
+      if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      /** Opens a rail category (a click on the category already open would close its drawer). */
+      const railOn = async (c: string) => { if (!/\bis-on\b/.test((await page.getByTestId(`rail-${c}`).getAttribute('class')) ?? '')) await page.getByTestId(`rail-${c}`).click(); await page.waitForTimeout(300); };
+      await railOn('media');
+      await page.getByTestId('life-view-date').click();
+      await page.getByTestId('life-year-2024').waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('life-library-dates', { shown: (await page.getByTestId('life-year-2024').count()) === 1 && (await page.getByTestId('life-year-2023').count()) === 1 && (await page.getByTestId('life-undated').count()) === 1 && (await page.getByTestId(`life-date-${lifeEvening}`).count()) === 1 });
+      await page.getByTestId('life-view-events').click();
+      await page.locator('[data-testid^="life-event-"][data-event-id]').first().waitFor({ timeout: 10000 }).catch(() => {});
+      const lifeEvents = { events: await page.locator('[data-testid^="life-event-"][data-event-id]').count(), sunsetRadios: await page.locator('[data-testid^="life-sunset-"] input[type=radio]').count() };
+      await auditState('life-library-events', { shown: lifeEvents.events >= 2 && lifeEvents.sunsetRadios === 2, ...lifeEvents });
+      await page.getByTestId('life-view-all').click();
+      // the title with a live field: its field menu (a menu), then the people sheet opened from it (a modal dialog)
+      await page.locator(`.clip[data-clip-id="${lifeTitle}"]`).click();
+      await page.getByTestId('field-add').waitFor({ timeout: 8000 }).catch(() => {});
+      await menuBehaviour('field-menu', '[data-testid=field-add]');
+      const ps = await dialogBehaviour('life-people', async () => { await page.getByTestId('field-add').click(); await page.getByTestId('field-item-add-person').click(); }, '[data-testid=field-add]');
+      await auditState('people-sheet', { startsInside: ps.startsInside, tabStepsThatLeftTheDialog: ps.tabStepsThatLeftTheDialog, shown: (await page.locator('[data-testid^="life-person-"][data-person-id]').count()) >= 1 && (await page.getByTestId('life-people-privacy').count()) === 1 }, true);
+      Object.assign(states.at(-1), await ps.close());
+      // the live line with an anchored error and its fix: the picture under the title is replaced by the one without a date
+      const lifeUnder = (await lifeTx([{ op: 'delete_clip', args: { clipId: lifePicture } }, { op: 'add_clip', args: { assetId: lifeUndated, start: f(0), duration: f(60) } }])).results[1].output.clipId as string;
+      await page.locator('[data-testid=field-live] .pf-anchored').first().waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('field-live-error', { shown: (await page.locator('[data-testid=field-live] .pf-anchored').count()) >= 1 && (await page.locator('[data-testid=field-live] .pf-anchored button').count()) >= 1 });
+      lifePicture = (await lifeTx([{ op: 'delete_clip', args: { clipId: lifeUnder } }, { op: 'add_clip', args: { assetId: lifeEvening, start: f(0), duration: f(60) } }])).results[1].output.clipId as string;
+      // the content packs: the Hanukkah pack page (from the shelf of the Templates drawer), the built-in music tab, the text drawer's fonts
+      await railOn('templates');
+      await page.locator('[data-pack-id="pack.hanukkah"] [data-testid=pack-card]').first().click({ timeout: 10000 }).catch(() => {});
+      await page.getByTestId('pack-page').waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('pack-page', { shown: (await page.getByTestId('pack-page').getAttribute('data-pack-id').catch(() => null)) === 'pack.hanukkah' && (await page.locator('[data-testid^="pack-tab-"]').count()) >= 2 });
+      if (await page.getByTestId('pack-back').count()) await page.getByTestId('pack-back').click();
+      await railOn('audio');
+      await page.getByTestId('music-tab').click({ timeout: 8000 }).catch(() => {});
+      await page.locator('[data-testid=music-row]').first().waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('music-browser', { shown: (await page.locator('[data-testid=music-row]').count()) >= 1 });
+      await railOn('text');
+      await page.locator('[data-testid=font-option]').first().waitFor({ timeout: 8000 }).catch(() => {});
+      await auditState('text-drawer-fonts', { shown: (await page.locator('[data-testid=font-option]').count()) >= 1 });
+      await railOn('media');
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);
       await page.getByTestId('welcome').waitFor({ timeout: 10000 }).catch(() => {});
