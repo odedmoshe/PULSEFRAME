@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, effectParams, LIFE_REFUSALS, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS, type Capture, type LifeEvent, type LifeRefusalKey } from '@pulseframe/core';
-import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, TEMPLATE_REFUSAL_PATTERNS, LIFE_REFUSAL_PATTERNS, TIMELINE_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
+import { REFUSAL_PATTERNS, translateRefusal, TREND_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, TEMPLATE_REFUSAL_PATTERNS, LIFE_REFUSAL_PATTERNS, TIMELINE_REFUSAL_PATTERNS, MULTICAM_W1_REFUSAL_PATTERNS } from '../../i18n/src/index.ts';
 
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -458,6 +458,54 @@ describe('Hebrew wording of common refusals', () => {
     }
     expect(unrecognised).toEqual([]);
     expect(TIMELINE_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
+  });
+});
+
+describe('Hebrew wording of the multicam operation bodies (ADR-0020 W1)', () => {
+  it('every refusal the bodies raise outside the contract table is provoked through its operation and worded in Hebrew by exactly one of their patterns; none is left unprovoked', () => {
+    const mic = { kind: 'audio' as const, name: 'mic.wav', contentHash: `sha256:${'5'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(20, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: prov };
+    const cam2 = { ...video, name: 'b.mp4', contentHash: `sha256:${'6'.repeat(64)}` };
+    const cam3 = { ...video, name: 'c.mp4', contentHash: `sha256:${'7'.repeat(64)}` };
+    let r = tx(createProject({ id: 'prj_mc', name: 'MC', frameRate: R }), [{ op: 'import_asset', args: { asset: mic } }, { op: 'import_asset', args: { asset: video } }, { op: 'import_asset', args: { asset: cam2 } }, { op: 'import_asset', args: { asset: cam3 } }], true);
+    const [M, A, B, C] = r.results.map((x) => x.output!.assetId as string) as [string, string, string, string];
+    r = tx(r.doc, [{ op: 'create_multicam', args: { angles: [{ assetIds: [M] }, { assetIds: [A] }, { assetIds: [B, C] }] } }]);
+    const { groupId, angleIds } = r.results[0]!.output as { groupId: string; angleIds: [string, string, string] };
+    const [mc, ca, cb] = angleIds;
+    r = tx(r.doc, [
+      { op: 'set_multicam_sync', args: { groupId, angleId: ca, pieceIndex: 0, offset: T.ZERO } },
+      { op: 'set_multicam_sync', args: { groupId, angleId: cb, pieceIndex: 0, offset: T.ZERO } },
+      { op: 'place_multicam', args: { groupId, at: T.ZERO, angleId: ca, range: { from: T.ZERO, to: T.rt(6, 1) } } },
+    ]);
+    const placed = r.doc;
+    const quality = { verdict: 'confident' as const, peakZ: 12, peakRatio: 2, anchorsUsed: 3, anchorsRejected: 0, residualSamples: 1, driftPpm: 0, overlapSeconds: 8, candidates: [], chainDepth: 0, jobId: null };
+    const cases: [string, ProjectDocument, OpCall[], boolean?][] = [
+      ['a reference index past the angles', placed, [{ op: 'create_multicam', args: { angles: [{ assetIds: [A] }, { assetIds: [M] }], referenceAngleIndex: 4 } }]],
+      ['a program of a sound angle', placed, [{ op: 'switch_angles', args: { groupId, cuts: [{ at: f(0), angleId: mc }] } }]],
+      ['a range under one frame, before group time 0', placed, [{ op: 'place_multicam', args: { groupId, at: T.ZERO, angleId: ca, range: { from: T.rt(-1, 1), to: T.rt(-1, 1) } } }]],
+      ['a sync change that pushes a segment out of its file', placed, [{ op: 'set_multicam_sync', args: { groupId, angleId: ca, pieceIndex: 0, offset: T.rt(5, 1) } }]],
+      ['two files of one camera at the same time', placed, [{ op: 'set_multicam_sync', args: { groupId, angleId: cb, pieceIndex: 1, offset: T.rt(4, 1) } }]],
+      ['a speaker framed by a sound angle', placed, [{ op: 'update_multicam', args: { groupId, speakers: [{ label: 'מארחת', micAngleId: mc, channel: null, shotAngleId: mc }] } }]],
+      ['two speakers with one id', placed, [{ op: 'update_multicam', args: { groupId, speakers: [{ id: 'spk_a', label: 'א', micAngleId: mc, channel: 0, shotAngleId: null }, { id: 'spk_a', label: 'ב', micAngleId: mc, channel: 1, shotAngleId: null }] } }]],
+      ['a measured result without anchors that says it placed the file', placed, [{ op: 'attach_multicam_sync', args: { groupId, createdAt: 'x', method: 'm', params: {}, overwrite: true, pieces: [{ angleId: cb, pieceIndex: 1, anchors: [], quality }] } }], true],
+      ['a cut to an angle with no picture before group time 0', tx(placed, [{ op: 'set_multicam_sync', args: { groupId, angleId: cb, pieceIndex: 0, offset: T.rt(-5, 1) } }, { op: 'set_multicam_sync', args: { groupId, angleId: ca, pieceIndex: 0, offset: T.rt(-2, 1) } }]).doc, [{ op: 'switch_angles', args: { groupId, cuts: [{ at: f(0), angleId: cb }] } }]],
+      ['a program laid before the timeline starts', placed, [{ op: 'place_multicam', args: { groupId, at: f(-1), angleId: ca } }]],
+    ];
+    const matched = new Set<number>();
+    const unrecognised: string[] = [];
+    for (const [what, doc, ops, internal] of cases) {
+      let message = '';
+      try { tx(doc, ops, internal); message = '(not refused)'; } catch (e) { if (!(e instanceof OpError)) throw e; message = e.message; }
+      const he = translateRefusal('he', message);
+      if (!he || !/[֐-׿]/.test(he) || !/אפשר|יש ל/.test(he)) unrecognised.push(`${what}: ${message}`);
+      const hits = MULTICAM_W1_REFUSAL_PATTERNS.map((re, i) => (re.test(message) ? i : -1)).filter((i) => i >= 0);
+      expect(hits.length, `${what}: ${message}`).toBe(1);
+      matched.add(hits[0]!);
+      expect(translateRefusal('en', message)).toBeUndefined();
+    }
+    expect(unrecognised).toEqual([]);
+    expect(MULTICAM_W1_REFUSAL_PATTERNS.filter((_, i) => !matched.has(i)).map((re) => re.source)).toEqual([]);
+    // the numbers survive, minus signs included
+    expect(translateRefusal('he', 'angle "B" has no picture from -2.500s to 3.000s of group time')).toMatch(/-2\.500.*3\.000/);
   });
 });
 

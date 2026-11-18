@@ -442,8 +442,8 @@ function placeMulticam(d: ProjectDocument, a: z.infer<typeof MulticamOpArgs.plac
   if (angle.kind !== 'picture') throw refuse.soundAngleProgram(angle.label, angle.id);
   if (!anglePlaced(angle)) throw multicamRefusal('notSynced', { groupId: g.id, angleId: angle.id, why: 'not_synced' }, angle.label);
   if (a.newSequence && (a.sequenceId !== undefined || a.trackId !== undefined)) throw multicamRefusal('newSequenceAndTrack', {});
-  // program sound: the given angles, else the first sound angle, else the reference when its files have sound
-  const firstSound = g.angles.find((x) => x.kind === 'sound');
+  // program sound: the given angles, else the first (synced) sound angle, else the reference when its files have sound
+  const firstSound = g.angles.find((x) => x.kind === 'sound' && anglePlaced(x));
   const reference = mustAngle(g, g.referenceAngleId);
   const soundIds = a.sound ?? (firstSound ? [firstSound.id] : hasSound(d, reference) ? [reference.id] : []);
   const sounds = [...new Set(soundIds)].map((id) => mustAngle(g, id));
